@@ -34,7 +34,7 @@ public struct RulerConfiguration: Codable, Hashable, Sendable {
               minorTickMeters > 0.0,
               majorTickMeters > minorTickMeters,
               visibleSpanMeters >= majorTickMeters else {
-            throw RupaDocumentValidationError.invalidProductMetadata(
+            throw DocumentValidationError.invalidProductMetadata(
                 "Ruler distances must be finite, positive, and ordered."
             )
         }

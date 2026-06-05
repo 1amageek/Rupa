@@ -4,13 +4,13 @@ public struct CommandExecutionResult: Equatable, Sendable {
     public var commandName: String
     public var generation: DocumentGeneration
     public var didMutate: Bool
-    public var diagnostics: [RupaDiagnostic]
+    public var diagnostics: [EditorDiagnostic]
 
     public init(
         commandName: String,
         generation: DocumentGeneration,
         didMutate: Bool,
-        diagnostics: [RupaDiagnostic]
+        diagnostics: [EditorDiagnostic]
     ) {
         self.commandName = commandName
         self.generation = generation

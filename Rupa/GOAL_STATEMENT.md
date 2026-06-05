@@ -48,7 +48,7 @@ A task is done only when all of these statements are true.
 |---|---|
 | Does the change preserve one shared CAD model? | Yes. |
 | Does every mutation pass through an intentional command or session boundary? | Yes. |
-| Does the UI distinguish component Browser, canvas tools, logs, and Inspector? | Yes, `NavigationSplitView` owns the component Browser sidebar, modeling tools float on the bottom of the canvas as Liquid Glass controls, `MacComponent` owns the collapsed-by-default logs pane, and SwiftUI `inspector` owns contextual properties while starting hidden. |
+| Does the UI distinguish component Browser, canvas tools, logs, and Inspector? | Yes, `NavigationSplitView` owns the component Browser sidebar, modeling tools float on the bottom of the canvas as Liquid Glass controls, and `MacComponent` owns the collapsed-by-default logs pane plus the right-side Inspector Pane for contextual properties. |
 | Does the change respect the deferred `ApplicationProfile` requirement? | Yes, profiles can later group defaults without changing core semantics. |
 | Do tests prove the behavior rather than only proving construction? | Yes. |
 | Were failed tests or review findings fixed and re-run? | Yes. |

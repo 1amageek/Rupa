@@ -11,7 +11,7 @@ enum AgentSocketAddress {
         address.sun_family = sa_family_t(AF_UNIX)
         let pathCapacity = MemoryLayout.size(ofValue: address.sun_path)
         guard path.utf8.count < pathCapacity else {
-            throw RupaError(
+            throw EditorError(
                 code: .commandInvalid,
                 message: "Agent socket path is too long."
             )

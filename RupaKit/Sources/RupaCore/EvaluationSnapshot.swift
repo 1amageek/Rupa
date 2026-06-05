@@ -5,14 +5,14 @@ public struct EvaluationSnapshot: Codable, Equatable, Sendable {
     public var evaluatedGeneration: DocumentGeneration?
     public var renderInvalidation: RenderInvalidation
     public var bodyCount: Int
-    public var diagnostics: [RupaDiagnostic]
+    public var diagnostics: [EditorDiagnostic]
 
     public init(
         status: EvaluationStatus = .notEvaluated,
         evaluatedGeneration: DocumentGeneration? = nil,
         renderInvalidation: RenderInvalidation = RenderInvalidation(),
         bodyCount: Int = 0,
-        diagnostics: [RupaDiagnostic] = []
+        diagnostics: [EditorDiagnostic] = []
     ) {
         self.status = status
         self.evaluatedGeneration = evaluatedGeneration

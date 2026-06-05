@@ -10,7 +10,7 @@ public struct DocumentGeneration: Codable, Comparable, Hashable, Sendable {
     public func advanced() throws -> DocumentGeneration {
         let (next, overflow) = value.addingReportingOverflow(1)
         guard !overflow else {
-            throw RupaError(
+            throw EditorError(
                 code: .commandFailed,
                 message: "Document generation overflowed."
             )

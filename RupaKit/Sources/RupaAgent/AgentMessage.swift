@@ -20,7 +20,7 @@ public enum AgentRequest: Codable, Equatable, Sendable {
         name: String,
         expression: String,
         kind: QuantityKind,
-        defaults: RupaParameterExpressionDefaults,
+        defaults: ParameterExpressionDefaults,
         expectedGeneration: DocumentGeneration?
     )
     case evaluate(
@@ -43,7 +43,7 @@ public enum AgentRequest: Codable, Equatable, Sendable {
         sessionID: UUID,
         outputPath: String,
         expectedGeneration: DocumentGeneration?,
-        options: RupaExportOptions,
+        options: ExportOptions,
         dryRun: Bool
     )
 }
@@ -52,13 +52,13 @@ public enum AgentResponse: Codable, Equatable, Sendable {
     case status(AgentStatus)
     case sessions([WorkspaceSessionSummary])
     case command(AutomationResult)
-    case parameters(RupaParameterListResult)
+    case parameters(ParameterListResult)
     case evaluation(EvaluationSnapshot)
-    case measurement(RupaMeasurementResult)
-    case meshSummary(RupaMeshSummaryResult)
-    case save(RupaSaveResult)
-    case export(RupaExportResult)
-    case failure(RupaError)
+    case measurement(MeasurementResult)
+    case meshSummary(MeshSummaryResult)
+    case save(SaveResult)
+    case export(ExportResult)
+    case failure(EditorError)
 }
 
 public struct AgentStatus: Codable, Equatable, Sendable {

@@ -3,25 +3,27 @@ import Observation
 
 @Observable
 public final class CADDocumentStore {
-    public private(set) var document: RupaDocument
+    public private(set) var document: DesignDocument
     public private(set) var generation: DocumentGeneration
     public private(set) var isDirty: Bool
-    public private(set) var diagnostics: [RupaDiagnostic]
+    public private(set) var diagnostics: [EditorDiagnostic]
     public private(set) var evaluationStatus: EvaluationStatus
     public private(set) var evaluatedGeneration: DocumentGeneration?
     public private(set) var renderInvalidation: RenderInvalidation
     public private(set) var evaluatedBodyCount: Int
+    public let objectRegistry: ObjectTypeRegistry
     private let evaluationScheduler: EvaluationScheduler
 
     public init(
-        document: RupaDocument = .empty(),
+        document: DesignDocument = .empty(),
         generation: DocumentGeneration = DocumentGeneration(),
         isDirty: Bool = false,
-        diagnostics: [RupaDiagnostic] = [],
+        diagnostics: [EditorDiagnostic] = [],
         evaluationStatus: EvaluationStatus = .notEvaluated,
         evaluatedGeneration: DocumentGeneration? = nil,
         renderInvalidation: RenderInvalidation = RenderInvalidation(),
         evaluatedBodyCount: Int = 0,
+        objectRegistry: ObjectTypeRegistry = .builtIn,
         evaluationScheduler: EvaluationScheduler = EvaluationScheduler()
     ) {
         self.document = document
@@ -32,6 +34,7 @@ public final class CADDocumentStore {
         self.evaluatedGeneration = evaluatedGeneration
         self.renderInvalidation = renderInvalidation
         self.evaluatedBodyCount = evaluatedBodyCount
+        self.objectRegistry = objectRegistry
         self.evaluationScheduler = evaluationScheduler
     }
 
@@ -86,7 +89,7 @@ public final class CADDocumentStore {
             return
         }
         guard expectedGeneration == generation else {
-            throw RupaError(
+            throw EditorError(
                 code: .documentGenerationMismatch,
                 message: "Expected generation \(expectedGeneration.value), but current generation is \(generation.value)."
             )
@@ -133,7 +136,8 @@ public final class CADDocumentStore {
             var updatedDocument = document
             try updatedDocument.createComponentDefinition(
                 name: name,
-                rootSceneNodeIDs: rootSceneNodeIDs
+                rootSceneNodeIDs: rootSceneNodeIDs,
+                objectRegistry: objectRegistry
             )
             document = updatedDocument
             try commitMutation()
@@ -143,56 +147,84 @@ public final class CADDocumentStore {
             try updatedDocument.createComponentInstance(
                 name: name,
                 definitionID: definitionID,
-                localTransform: localTransform
+                localTransform: localTransform,
+                objectRegistry: objectRegistry
             )
             document = updatedDocument
             try commitMutation()
             evaluateCurrentDocument()
         case .setSceneNodeVisibility(let id, let isVisible):
             var updatedDocument = document
-            try updatedDocument.setSceneNodeVisibility(id: id, isVisible: isVisible)
+            try updatedDocument.setSceneNodeVisibility(id: id, isVisible: isVisible, objectRegistry: objectRegistry)
             document = updatedDocument
             try commitMutation()
             evaluateCurrentDocument()
         case .setSceneNodeLock(let id, let isLocked):
             var updatedDocument = document
-            try updatedDocument.setSceneNodeLock(id: id, isLocked: isLocked)
+            try updatedDocument.setSceneNodeLock(id: id, isLocked: isLocked, objectRegistry: objectRegistry)
             document = updatedDocument
             try commitMutation()
             evaluateCurrentDocument()
         case .setSceneNodeTransform(let id, let localTransform):
             var updatedDocument = document
-            try updatedDocument.setSceneNodeTransform(id: id, localTransform: localTransform)
+            try updatedDocument.setSceneNodeTransform(
+                id: id,
+                localTransform: localTransform,
+                objectRegistry: objectRegistry
+            )
             document = updatedDocument
             try commitMutation()
             evaluateCurrentDocument()
         case .setSceneNodeMaterial(let id, let materialID):
             var updatedDocument = document
-            try updatedDocument.setSceneNodeMaterial(id: id, materialID: materialID)
+            try updatedDocument.setSceneNodeMaterial(id: id, materialID: materialID, objectRegistry: objectRegistry)
+            document = updatedDocument
+            try commitMutation()
+            evaluateCurrentDocument()
+        case .setSceneNodeObjectProperty(let id, let propertyID, let value):
+            var updatedDocument = document
+            try updatedDocument.setSceneNodeObjectProperty(
+                id: id,
+                propertyID: propertyID,
+                value: value,
+                objectRegistry: objectRegistry
+            )
             document = updatedDocument
             try commitMutation()
             evaluateCurrentDocument()
         case .setComponentInstanceVisibility(let id, let isVisible):
             var updatedDocument = document
-            try updatedDocument.setComponentInstanceVisibility(id: id, isVisible: isVisible)
+            try updatedDocument.setComponentInstanceVisibility(
+                id: id,
+                isVisible: isVisible,
+                objectRegistry: objectRegistry
+            )
             document = updatedDocument
             try commitMutation()
             evaluateCurrentDocument()
         case .setComponentInstanceLock(let id, let isLocked):
             var updatedDocument = document
-            try updatedDocument.setComponentInstanceLock(id: id, isLocked: isLocked)
+            try updatedDocument.setComponentInstanceLock(
+                id: id,
+                isLocked: isLocked,
+                objectRegistry: objectRegistry
+            )
             document = updatedDocument
             try commitMutation()
             evaluateCurrentDocument()
         case .setComponentInstanceTransform(let id, let localTransform):
             var updatedDocument = document
-            try updatedDocument.setComponentInstanceTransform(id: id, localTransform: localTransform)
+            try updatedDocument.setComponentInstanceTransform(
+                id: id,
+                localTransform: localTransform,
+                objectRegistry: objectRegistry
+            )
             document = updatedDocument
             try commitMutation()
             evaluateCurrentDocument()
         case .createSectionPlane(let name):
             var updatedDocument = document
-            try updatedDocument.createSectionPlane(name: name)
+            try updatedDocument.createSectionPlane(name: name, objectRegistry: objectRegistry)
             document = updatedDocument
             try commitMutation()
             evaluateCurrentDocument()
@@ -202,7 +234,8 @@ public final class CADDocumentStore {
                 name: name,
                 plane: plane,
                 start: start,
-                end: end
+                end: end,
+                objectRegistry: objectRegistry
             )
             document = updatedDocument
             try commitMutation()
@@ -213,7 +246,8 @@ public final class CADDocumentStore {
                 name: name,
                 plane: plane,
                 center: center,
-                radius: radius
+                radius: radius,
+                objectRegistry: objectRegistry
             )
             document = updatedDocument
             try commitMutation()
@@ -224,7 +258,8 @@ public final class CADDocumentStore {
                 name: name,
                 plane: plane,
                 width: width,
-                height: height
+                height: height,
+                objectRegistry: objectRegistry
             )
             document = updatedDocument
             try commitMutation()
@@ -233,7 +268,8 @@ public final class CADDocumentStore {
             var updatedDocument = document
             try updatedDocument.addSketchConstraint(
                 featureID: featureID,
-                constraint: constraint
+                constraint: constraint,
+                objectRegistry: objectRegistry
             )
             document = updatedDocument
             try commitMutation()
@@ -244,7 +280,8 @@ public final class CADDocumentStore {
                 name: name,
                 plane: plane,
                 firstCorner: firstCorner,
-                oppositeCorner: oppositeCorner
+                oppositeCorner: oppositeCorner,
+                objectRegistry: objectRegistry
             )
             document = updatedDocument
             try commitMutation()
@@ -253,7 +290,31 @@ public final class CADDocumentStore {
             var updatedDocument = document
             try updatedDocument.setExtrudeDistance(
                 featureID: featureID,
-                distance: distance
+                distance: distance,
+                objectRegistry: objectRegistry
+            )
+            document = updatedDocument
+            try commitMutation()
+            evaluateCurrentDocument()
+        case .setCubeDimensions(let featureID, let sizeX, let sizeY, let sizeZ):
+            var updatedDocument = document
+            try updatedDocument.setCubeDimensions(
+                featureID: featureID,
+                sizeX: sizeX,
+                sizeY: sizeY,
+                sizeZ: sizeZ,
+                objectRegistry: objectRegistry
+            )
+            document = updatedDocument
+            try commitMutation()
+            evaluateCurrentDocument()
+        case .setCylinderDimensions(let featureID, let radius, let sizeY):
+            var updatedDocument = document
+            try updatedDocument.setCylinderDimensions(
+                featureID: featureID,
+                radius: radius,
+                sizeY: sizeY,
+                objectRegistry: objectRegistry
             )
             document = updatedDocument
             try commitMutation()
@@ -264,7 +325,8 @@ public final class CADDocumentStore {
                 name: name,
                 profile: profile,
                 distance: distance,
-                direction: direction
+                direction: direction,
+                objectRegistry: objectRegistry
             )
             document = updatedDocument
             try commitMutation()
@@ -277,7 +339,8 @@ public final class CADDocumentStore {
                 width: width,
                 height: height,
                 depth: depth,
-                direction: direction
+                direction: direction,
+                objectRegistry: objectRegistry
             )
             document = updatedDocument
             try commitMutation()
@@ -297,7 +360,8 @@ public final class CADDocumentStore {
                 firstCorner: firstCorner,
                 oppositeCorner: oppositeCorner,
                 depth: depth,
-                direction: direction
+                direction: direction,
+                objectRegistry: objectRegistry
             )
             document = updatedDocument
             try commitMutation()
@@ -310,7 +374,8 @@ public final class CADDocumentStore {
                 center: center,
                 radius: radius,
                 depth: depth,
-                direction: direction
+                direction: direction,
+                objectRegistry: objectRegistry
             )
             document = updatedDocument
             try commitMutation()
@@ -335,7 +400,8 @@ public final class CADDocumentStore {
         applyEvaluation(
             evaluationScheduler.evaluate(
                 document: document,
-                generation: generation
+                generation: generation,
+                objectRegistry: objectRegistry
             )
         )
     }

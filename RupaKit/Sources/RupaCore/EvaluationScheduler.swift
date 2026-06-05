@@ -2,18 +2,19 @@ import Foundation
 import SwiftCAD
 
 public struct EvaluationScheduler: Sendable {
-    private let evaluator: DocumentEvaluator
+    private let evaluatorOverride: DocumentEvaluator?
 
-    public init(evaluator: DocumentEvaluator = DocumentEvaluator()) {
-        self.evaluator = evaluator
+    public init(evaluator: DocumentEvaluator? = nil) {
+        self.evaluatorOverride = evaluator
     }
 
     public func evaluate(
-        document: RupaDocument,
-        generation: DocumentGeneration
+        document: DesignDocument,
+        generation: DocumentGeneration,
+        objectRegistry: ObjectTypeRegistry = .builtIn
     ) -> EvaluationSnapshot {
         do {
-            try document.validate()
+            try document.validate(objectRegistry: objectRegistry)
         } catch {
             return failedSnapshot(
                 message: String(describing: error),
@@ -25,6 +26,10 @@ public struct EvaluationScheduler: Sendable {
             return evaluatedEmptyDocument(generation: generation)
         }
 
+        let evaluator = evaluatorOverride ?? .modelingDefault(
+            for: document,
+            objectRegistry: objectRegistry
+        )
         let report = evaluator.evaluateReport(document.cadDocument)
         guard report.isComplete, let evaluatedDocument = report.evaluatedDocument else {
             let message = report.failure?.message ?? "Document evaluation did not complete."
@@ -43,7 +48,7 @@ public struct EvaluationScheduler: Sendable {
             ),
             bodyCount: evaluatedDocument.meshes.count,
             diagnostics: [
-                RupaDiagnostic(
+                EditorDiagnostic(
                     severity: .info,
                     message: "Evaluation completed with \(evaluatedDocument.meshes.count) generated bodies."
                 ),
@@ -63,7 +68,7 @@ public struct EvaluationScheduler: Sendable {
             ),
             bodyCount: 0,
             diagnostics: [
-                RupaDiagnostic(
+                EditorDiagnostic(
                     severity: .info,
                     message: "Document source is valid. No generated bodies."
                 ),
@@ -84,7 +89,7 @@ public struct EvaluationScheduler: Sendable {
             ),
             bodyCount: 0,
             diagnostics: [
-                RupaDiagnostic(
+                EditorDiagnostic(
                     severity: .error,
                     message: message
                 ),

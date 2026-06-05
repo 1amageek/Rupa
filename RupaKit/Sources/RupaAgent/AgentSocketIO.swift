@@ -21,7 +21,7 @@ enum AgentSocketIO {
                 } else if written == -1 && errno == EINTR {
                     continue
                 } else {
-                    throw RupaError(
+                    throw EditorError(
                         code: .agentConnectionFailed,
                         message: "Failed to write agent data. errno=\(errno)"
                     )
@@ -46,7 +46,7 @@ enum AgentSocketIO {
             } else if errno == EINTR {
                 continue
             } else {
-                throw RupaError(
+                throw EditorError(
                     code: .agentConnectionFailed,
                     message: "Failed to read agent data. errno=\(errno)"
                 )

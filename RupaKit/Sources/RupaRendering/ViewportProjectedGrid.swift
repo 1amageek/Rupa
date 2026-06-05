@@ -30,7 +30,7 @@ public struct ViewportProjectedGrid: Equatable {
     public var lines: [Line]
 
     public init(
-        document: RupaDocument,
+        document: DesignDocument,
         size: CGSize,
         camera: ViewportCamera = .identity,
         basis: ViewportProjectionBasis = .isometric

@@ -338,7 +338,7 @@ import SwiftCAD
     let runner = AutomationRunner()
     _ = try runner.execute(.setDisplayUnit(.meter), in: session)
 
-    var caught: RupaError?
+    var caught: EditorError?
     do {
         _ = try runner.executeBatch(
             AutomationBatch(
@@ -347,7 +347,7 @@ import SwiftCAD
             ),
             in: session
         )
-    } catch let error as RupaError {
+    } catch let error as EditorError {
         caught = error
     }
 
@@ -356,7 +356,7 @@ import SwiftCAD
 }
 
 private func automationSketchFeature(
-    in document: RupaDocument,
+    in document: DesignDocument,
     featureID: FeatureID
 ) -> Sketch? {
     guard let feature = document.cadDocument.designGraph.nodes[featureID],
@@ -367,7 +367,7 @@ private func automationSketchFeature(
 }
 
 private func automationSingleSketchEntityID(
-    in document: RupaDocument,
+    in document: DesignDocument,
     featureID: FeatureID
 ) -> SketchEntityID? {
     guard let sketch = automationSketchFeature(in: document, featureID: featureID),

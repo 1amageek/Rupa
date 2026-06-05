@@ -1,16 +1,16 @@
 import Foundation
 
 public struct SelectionModel: Codable, Equatable, Sendable {
-    public private(set) var selectedSceneNodeIDs: [RupaSceneNodeID]
-    public private(set) var hoveredSceneNodeID: RupaSceneNodeID?
+    public private(set) var selectedSceneNodeIDs: [SceneNodeID]
+    public private(set) var hoveredSceneNodeID: SceneNodeID?
 
-    public var primarySceneNodeID: RupaSceneNodeID? {
+    public var primarySceneNodeID: SceneNodeID? {
         selectedSceneNodeIDs.last
     }
 
     public init(
-        selectedSceneNodeIDs: [RupaSceneNodeID] = [],
-        hoveredSceneNodeID: RupaSceneNodeID? = nil
+        selectedSceneNodeIDs: [SceneNodeID] = [],
+        hoveredSceneNodeID: SceneNodeID? = nil
     ) {
         self.selectedSceneNodeIDs = selectedSceneNodeIDs
         self.hoveredSceneNodeID = hoveredSceneNodeID
@@ -20,13 +20,13 @@ public struct SelectionModel: Codable, Equatable, Sendable {
         SelectionModel()
     }
 
-    public func containsSceneNode(_ id: RupaSceneNodeID) -> Bool {
+    public func containsSceneNode(_ id: SceneNodeID) -> Bool {
         selectedSceneNodeIDs.contains(id)
     }
 
     public mutating func selectSceneNode(
-        _ id: RupaSceneNodeID?,
-        in document: RupaDocument
+        _ id: SceneNodeID?,
+        in document: DesignDocument
     ) throws {
         guard let id else {
             clearSelection()
@@ -37,11 +37,11 @@ public struct SelectionModel: Codable, Equatable, Sendable {
     }
 
     public mutating func selectSceneNodes(
-        _ ids: [RupaSceneNodeID],
-        in document: RupaDocument
+        _ ids: [SceneNodeID],
+        in document: DesignDocument
     ) throws {
-        var uniqueIDs: [RupaSceneNodeID] = []
-        var seenIDs: Set<RupaSceneNodeID> = []
+        var uniqueIDs: [SceneNodeID] = []
+        var seenIDs: Set<SceneNodeID> = []
         for id in ids {
             guard seenIDs.insert(id).inserted else {
                 continue
@@ -53,8 +53,8 @@ public struct SelectionModel: Codable, Equatable, Sendable {
     }
 
     public mutating func hoverSceneNode(
-        _ id: RupaSceneNodeID?,
-        in document: RupaDocument
+        _ id: SceneNodeID?,
+        in document: DesignDocument
     ) throws {
         guard let id else {
             hoveredSceneNodeID = nil
@@ -72,7 +72,7 @@ public struct SelectionModel: Codable, Equatable, Sendable {
         hoveredSceneNodeID = nil
     }
 
-    public mutating func pruneMissingReferences(in document: RupaDocument) {
+    public mutating func pruneMissingReferences(in document: DesignDocument) {
         selectedSceneNodeIDs = selectedSceneNodeIDs.filter { id in
             document.productMetadata.sceneNodes[id] != nil
         }
@@ -82,18 +82,18 @@ public struct SelectionModel: Codable, Equatable, Sendable {
         }
     }
 
-    public func selectedSceneNodeReferences(in document: RupaDocument) -> [RupaSceneNodeReference] {
+    public func selectedSceneNodeReferences(in document: DesignDocument) -> [SceneNodeReference] {
         selectedSceneNodeIDs.compactMap { id in
             document.productMetadata.sceneNodes[id]?.reference
         }
     }
 
     private func validateSceneNode(
-        _ id: RupaSceneNodeID,
-        in document: RupaDocument
+        _ id: SceneNodeID,
+        in document: DesignDocument
     ) throws {
         guard document.productMetadata.sceneNodes[id] != nil else {
-            throw RupaError(
+            throw EditorError(
                 code: .referenceUnresolved,
                 message: "Selection references a missing scene node."
             )

@@ -88,7 +88,7 @@ ApplicationProfile switching is deliberately excluded from the initial package g
     Rupa/
       Rupa.xcodeproj
       Rupa/
-        RupaApp.swift
+        ApplicationRoot.swift
 
   RupaKit/
     Package.swift
@@ -121,7 +121,7 @@ ApplicationProfile switching is deliberately excluded from the initial package g
 | Platform integration | WindowGroup, DocumentGroup when introduced, menu commands, app activation. |
 | Security | Entitlements, sandbox, security-scoped file access where required. |
 | Distribution | Assets, signing, provisioning, bundle metadata. |
-| Composition | Import `RupaUI` and start app-level services such as `RupaAgentServer`. |
+| Composition | Import `RupaUI` and start app-level services such as `AgentServer`. |
 
 The app host delegates editor behavior to RupaKit.
 
@@ -141,10 +141,10 @@ import SwiftUI
 import RupaUI
 
 @main
-struct RupaApp: App {
+struct ApplicationRoot: App {
     var body: some Scene {
         WindowGroup {
-            RupaMainView()
+            MainView()
         }
     }
 }
@@ -158,12 +158,12 @@ import RupaUI
 import RupaAgent
 
 @main
-struct RupaApp: App {
-    @StateObject private var appModel = RupaAppModel()
+struct ApplicationRoot: App {
+    @StateObject private var appModel = AppModel()
 
     var body: some Scene {
         WindowGroup {
-            RupaMainView()
+            MainView()
                 .environmentObject(appModel)
                 .task {
                     await appModel.startAgentServerIfNeeded()
@@ -251,8 +251,8 @@ RupaCore owns the editor model and command pipeline.
 | `EditorSession` | Coordinates document state, selection, tools, commands, evaluation, and diagnostics. |
 | `CADDocumentStore` | Owns the current document value, dirty state, document generation, diagnostics, and evaluation snapshot metadata. |
 | `CommandStack` | Applies commands, records undo and redo, and preserves mutation ordering. |
-| `RupaDocument` | Wraps Swift-CAD source with Rupa display settings and universal product metadata. |
-| `RupaProductMetadata` | Persists scene nodes, components, material library, validation rules, export presets, and template defaults. |
+| `DesignDocument` | Wraps Swift-CAD source with Rupa display settings and universal product metadata. |
+| `ProductMetadata` | Persists scene nodes, components, material library, validation rules, export presets, and template defaults. |
 | `ModelingToolActivationResult` | Reports the Core-owned outcome of tool selection or canvas-target activation, including command name, mutation state, selected scene node, and whether diagnostics should be revealed. |
 | `EditorCommand.upsertParameter` | Adds or updates a Swift-CAD parameter by name using typed `CADExpression` and `QuantityKind`. |
 | `EditorCommand.deleteParameter` | Deletes a Swift-CAD parameter by name through the undoable command path and rejects deletion while the parameter is still referenced. |
@@ -275,14 +275,14 @@ RupaCore owns the editor model and command pipeline.
 | `EvaluationScheduler` | Runs deterministic Swift-CAD evaluation after source changes and produces generation-keyed evaluation snapshots. |
 | `EvaluationSnapshot` | Captures evaluation status, evaluated generation, render invalidation, generated body count, and diagnostics. |
 | `RenderInvalidation` | Identifies when renderer-derived state must be rebuilt from an evaluated generation. |
-| `RupaMeshSummaryService` | Evaluates source when needed and computes non-mutating mesh body, vertex, normal, triangle, index, and bounds summaries. |
-| `RupaMeshSummaryResult` | Reports mesh summary totals, per-body mesh details, display unit, bounds, and diagnostics. |
-| `RupaMeasurementService` | Computes structured, non-mutating document measurements from Swift-CAD source intent. |
-| `RupaMeasurementResult` | Reports measurement counts, bounds, profile area, solid volume, measured profile details, measured solid details, display unit, and diagnostics. |
-| `RupaSaveResult` | Reports successful save path, generation, dirty state, and diagnostics without changing document generation. |
-| `RupaDocumentPackageStore` | Reads and writes Rupa `.swcad` packages containing Swift-CAD source plus Rupa metadata. |
+| `MeshSummaryService` | Evaluates source when needed and computes non-mutating mesh body, vertex, normal, triangle, index, and bounds summaries. |
+| `MeshSummaryResult` | Reports mesh summary totals, per-body mesh details, display unit, bounds, and diagnostics. |
+| `MeasurementService` | Computes structured, non-mutating document measurements from Swift-CAD source intent. |
+| `MeasurementResult` | Reports measurement counts, bounds, profile area, solid volume, measured profile details, measured solid details, display unit, and diagnostics. |
+| `SaveResult` | Reports successful save path, generation, dirty state, and diagnostics without changing document generation. |
+| `DocumentPackageStore` | Reads and writes Rupa `.swcad` packages containing Swift-CAD source plus Rupa metadata. |
 | `FileService` | Loads, saves, writes atomically, supports legacy Swift-CAD native packages, and coordinates file access. |
-| `RupaDocumentExportService` | Evaluates a Rupa document and writes Swift-CAD exchange output with typed result metadata. |
+| `DocumentExportService` | Evaluates a Rupa document and writes Swift-CAD exchange output with typed result metadata. |
 | `SelectionModel` | Owns selected and hovered scene-node references, validates them against the current document, and prunes stale references after source or metadata changes. |
 | `ToolController` | Converts active tool state and canvas gestures into commands. The initial implementation is `EditorSession.activateTool`, `EditorSession.activateSelectedToolFromCanvas`, and `EditorSession.activateSelectedToolFromCanvasDrag`, keeping canvas toolbar selection, viewport click, and viewport drag behavior testable without importing SwiftUI. |
 | `Diagnostics` | Stores structured errors, warnings, and notes. |
@@ -308,9 +308,9 @@ Rupa-specific product metadata is generic CAD state. It is not an ApplicationPro
 
 ```mermaid
 flowchart TD
-    RupaDocument["RupaDocument"] --> CAD["Swift-CAD CADDocument"]
-    RupaDocument --> Settings["Display unit and ruler"]
-    RupaDocument --> Metadata["RupaProductMetadata"]
+    DesignDocument["DesignDocument"] --> CAD["Swift-CAD CADDocument"]
+    DesignDocument --> Settings["Display unit and ruler"]
+    DesignDocument --> Metadata["ProductMetadata"]
     Metadata --> Scene["Scene nodes"]
     Metadata --> Components["Component definitions and instances"]
     Metadata --> Materials["Material library"]
@@ -321,15 +321,15 @@ flowchart TD
 
 | Metadata type | Contract |
 |---|---|
-| `RupaSceneNode` | Hierarchical organization for feature, body, sketch, component, and construction references. |
-| `RupaComponentDefinition` | Reusable generic component source grouping scene roots and properties. |
-| `RupaComponentInstance` | Instance transform, visibility, lock state, and overrides. Component creation and instance visibility, lock, and transform state changes must use `EditorCommand`, not direct UI metadata mutation. |
-| `RupaMaterialLibrary` | Document-level material table built from Swift-CAD `Material`. |
-| `RupaValidationRule` | Serializable generic validation rule selection and severity. |
-| `RupaExportPreset` | Format, unit, tessellation, validation, metadata, and destination defaults. |
-| `RupaTemplateDefaults` | Generic defaults that can later be grouped by ApplicationProfile. |
+| `SceneNode` | Hierarchical organization for feature, body, sketch, component, and construction references. |
+| `ComponentDefinition` | Reusable generic component source grouping scene roots and properties. |
+| `ComponentInstance` | Instance transform, visibility, lock state, and overrides. Component creation and instance visibility, lock, and transform state changes must use `EditorCommand`, not direct UI metadata mutation. |
+| `MaterialLibrary` | Document-level material table built from Swift-CAD `Material`. |
+| `ValidationRule` | Serializable generic validation rule selection and severity. |
+| `ExportPreset` | Format, unit, tessellation, validation, metadata, and destination defaults. |
+| `TemplateDefaults` | Generic defaults that can later be grouped by ApplicationProfile. |
 
-`RupaProductMetadata.validate(against:)` checks local hierarchy consistency and references into the Swift-CAD source. Invalid metadata is reported through the same evaluation diagnostics and render invalidation path as CAD source failures.
+`ProductMetadata.validate(against:)` checks local hierarchy consistency and references into the Swift-CAD source. Invalid metadata is reported through the same evaluation diagnostics and render invalidation path as CAD source failures.
 
 ### Parameter Contract
 
@@ -382,11 +382,92 @@ flowchart LR
 | `createExtrudedRectangle` | Adds a rectangle sketch and new-body extrude as one undoable command for the first solid creation workflow. |
 | `createExtrudedRectangleFromCorners` | Adds a model-space corner-defined rectangle sketch and new-body extrude as one undoable command for Canvas footprint-based solid creation. |
 | `createExtrudedCircle` | Adds a circle sketch and new-body extrude as one undoable command. Swift-CAD currently evaluates the circular profile as a tolerance-bounded polygonal solid until analytic cylindrical BRep surfaces are introduced. |
+| `setCubeDimensions` | Edits a Cube object as center-preserving `Size X`, `Size Y`, and `Size Z` CAD dimensions. Internally this updates the rectangle profile width/height and extrude distance, but public object APIs must not expose it as a single depth property. |
+| `setCylinderDimensions` | Edits a Cylinder object as radius plus `Size Y` CAD dimensions. Internally this updates the circle profile radius and extrude distance while preserving the profile center. |
 | Sketch-only evaluation | A document with valid sketch source and no body-producing active feature evaluates as valid with zero generated bodies. |
 | CLI sketch | `rupa sketch line`, `rupa sketch circle`, and `rupa sketch rectangle` expose primitive sketch creation in `auto`, `file`, and `live` modes using numeric length literals. |
 | CLI modeling | `rupa model box`, `rupa model box-corners`, and `rupa model cylinder` expose initial solid workflows in `auto`, `file`, and `live` modes using numeric length literals; `rupa model extrude` extrudes an existing closed sketch profile by Feature ID through the same mode model. |
 
 Constraint solving, dimension annotations, analytic cylindrical BRep surfaces, stable reference resolution, CLI constraint editing, and the broader feature set remain follow-up work.
+
+### Object Type Contract
+
+Rupa exposes creation and inspection as Object types, not as raw implementation features such as extrude depth. An Object type can describe a 2D source representation, a 3D generated representation, or a Text representation while still presenting one object-centered property model.
+
+Rupa uses the common CAD distinction between object occurrence, source definition, feature history, and generated geometry. A selected object is a scene occurrence first. It may point to a body-producing feature, a sketch profile, a component instance, construction geometry, or a future annotation/camera/light object, but the user-facing object identity must not be reduced to a raw Feature ID.
+
+```mermaid
+flowchart TD
+    Node["SceneNode\nObject occurrence"] --> Descriptor["ObjectDescriptor\nObject role and source"]
+    Descriptor --> Source["Swift-CAD source\nSketch, feature, primitive"]
+    Source --> Eval["Evaluation"]
+    Eval --> Geometry["Generated geometry\nBody, mesh, profile"]
+    Node --> Transform["Placement transform"]
+    Node --> Appearance["Material and visibility"]
+```
+
+| Layer | Contract |
+|---|---|
+| `SceneNode` | The selected object occurrence. Owns name, hierarchy, visibility, lock, material binding, local transform, and optional `ObjectDescriptor`. |
+| `ObjectDescriptor` | The CAD object contract. Describes category, geometry role, object type ID, flexible property values, source feature, source profile, or component instance. |
+| Swift-CAD feature source | The parametric source that creates or supports geometry. This is editable through typed commands, but it is not the primary user-facing object identity. |
+| Generated geometry | Derived body/profile/mesh data used for rendering, measurement, picking, and export. It can be regenerated and must not own persistent object identity. |
+| Component definition / instance | Reusable definition plus placed occurrence. Instance transforms and overrides belong to the occurrence; shared source belongs to the definition. |
+
+Object types are protocol-backed definitions, not a closed enum. Built-in 2D-source types such as Line, Rectangle, Circle, Ellipse, Polygon, and Path; 3D types such as Cube, Sphere, Cylinder, Torus, Helix, Cone, Pyramid, Icosahedron, Dodecahedron, and Torus Knot; and Text are provided as an `ObjectTypeDefinition` array in `ObjectTypeCatalog.builtInDefinitions` for the default toolbar/menu. Persistent Object data uses `ObjectTypeID` plus a property bag. New object types must be addable by registering a `ObjectTypeDefinition` that declares source representation, generated representation, Inspector presentation, and rendering bindings.
+
+```mermaid
+flowchart LR
+    Type["ObjectTypeID"] --> Definition["ObjectTypeDefinition"]
+    Definition --> Properties["ObjectPropertyDefinition[]"]
+    Properties --> Inspector["Inspector control contract"]
+    Properties --> Renderer["Render binding contract"]
+    Descriptor["ObjectDescriptor"] --> Type
+    Descriptor --> Values["ObjectPropertySet"]
+```
+
+| Contract | Fixed part | Flexible part |
+|---|---|---|
+| Object type | Stable `ObjectTypeID`, title, icon, source representation, generated representation, category, geometry role | Registered definitions can add new object types without changing document schema. |
+| Source representation | `2D`, `3D`, or `Text` | Describes the editable source shape. Path is a 2D source even when it generates a solid. |
+| Generated representation | `2D`, `3D`, or `Text` | Describes the output pipeline. Closed profiles and Path resolve this from object properties, so zero-extrusion source can remain 2D while non-zero extrusion generates 3D output. |
+| Property value | Typed values: length, number, integer, boolean, angle, text, material | Each object type chooses any number of properties. |
+| Inspector | Controls are declared as text field, text field + slider, toggle, segmented, menu, material picker, or read-only | Groups, labels, order, ranges, and editability are object-definition data. |
+| Rendering | Render bindings are string-backed semantic IDs such as size X/Y/Z, radius, top radius, side segments, angle, caps, hollow, corner radius, subdivisions, extrusion, bevel, bevel sides, stroke width, text content, font family, and material | Renderer chooses which bindings it supports and can ignore unknown future bindings safely. |
+
+Path is not a purely flat drawing primitive. It owns or references path source data such as points, segments, handles, closure, and winding, while Inspector properties control the generated result. A closed Path can remain a 2D profile, generate a filled surface, or generate a 3D body through extrusion and bevel. Path source data must not be stored as arbitrary Inspector property rows; Inspector properties describe dimensions and modifiers, while path topology belongs to the source representation.
+
+Object `Size` is a CAD dimension, not a viewport scale. It is a unit-aware model-space length that participates in exact editing, measurement, constraints, fabrication, export, and downstream validation. Changing `Size` mutates the shape-defining source parameters or features. Changing `Transform.scale` mutates placement only and must not be used as a substitute for dimensional editing.
+
+```mermaid
+flowchart LR
+    Size["Object Size\nCAD dimension"] --> Source["Shape source\nSketch, profile, feature, primitive"]
+    Source --> Geometry["Evaluated geometry"]
+    Scale["Transform scale\nplacement transform"] --> Node["Scene node matrix"]
+    Node --> Placement["Displayed placement"]
+```
+
+| Concept | Contract |
+|---|---|
+| `Center X/Y/Z` | The object-space bounding center after source dimensions and local placement are combined. |
+| `Size X/Y/Z` | The measured object extents along the object local axes. For Cube this is the primary shape definition. |
+| `Transform.scale` | A placement transform for scene-node or instance composition. It can be inspected and edited, but it does not redefine the object's nominal CAD dimensions. |
+| Internal feature values | Sketch width, sketch height, extrude distance, radius, and other kernel parameters are implementation details unless the user explicitly opens source or feature editing. |
+
+| Component | Required object properties | Initial backing |
+|---|---|---|
+| Cube | Center X/Y/Z, Size X/Y/Z, corner controls, material | Rectangle profile plus extrude |
+| Sphere | Center X/Y/Z, Size X/Y/Z or Radius, segment controls, material | Follow-up analytic primitive |
+| Cylinder | Center X/Y/Z, Size X/Y/Z, Top radius, Bottom radius, Sides X/Y, Angle, Caps, Hollow, Corner, Corner Sides, material | Circle profile plus extrude |
+| Torus | Center X/Y/Z, major/minor radius, segment controls, angle, material | Follow-up analytic primitive |
+| Helix | Center X/Y/Z, radius, height, turns, pitch, segment controls, material | Follow-up curve/solid primitive |
+| Cone | Center X/Y/Z, bottom radius, top radius, height, sides, caps, material | Follow-up analytic primitive |
+| Pyramid | Center X/Y/Z, base size, height, sides, material | Follow-up mesh/solid primitive |
+| Icosahedron | Center X/Y/Z, radius/size, material | Follow-up polyhedron primitive |
+| Dodecahedron | Center X/Y/Z, radius/size, material | Follow-up polyhedron primitive |
+| Torus Knot | Center X/Y/Z, major/minor radius, knot parameters, segments, material | Follow-up curve/mesh primitive |
+
+Cube Inspector properties must be represented from the object center and size axes. The Inspector must not show a Cube as only `Depth`; `depth` is an internal extrude parameter and only belongs to source/debug views. Cylinder Inspector properties must expose the Shape group used by the canvas object menu: Size X/Y/Z, Top, Bottom, Sides, Angle, Caps, Hollow, Corner, and Corner Sides. Properties with current kernel support must write through typed RupaCore commands; properties awaiting kernel support may be visible as read-only or disabled controls but must remain part of the component contract.
 
 ### Mesh Summary Contract
 
@@ -394,9 +475,9 @@ Mesh summary is derived state. It reads the same evaluated mesh data used by exp
 
 ```mermaid
 flowchart LR
-    Source["RupaDocument source"] --> Evaluate["Swift-CAD evaluation"]
+    Source["DesignDocument source"] --> Evaluate["Swift-CAD evaluation"]
     Evaluate --> Meshes["EvaluatedDocument.meshes"]
-    Meshes --> Summary["RupaMeshSummaryResult"]
+    Meshes --> Summary["MeshSummaryResult"]
     Summary --> Toolbar["Toolbar diagnostics"]
     Summary --> Agent["Agent response"]
     Summary --> CLI["CLI response"]
@@ -418,8 +499,8 @@ Measurement is derived state. It must not advance document generation or create 
 
 ```mermaid
 flowchart LR
-    Source["RupaDocument source"] --> Measure["RupaMeasurementService"]
-    Measure --> Result["RupaMeasurementResult"]
+    Source["DesignDocument source"] --> Measure["MeasurementService"]
+    Measure --> Result["MeasurementResult"]
     Result --> UI["Toolbar diagnostics"]
     Result --> Agent["Agent response"]
     Result --> CLI["CLI response"]
@@ -430,7 +511,7 @@ flowchart LR
 | Scope | Initial measurement supports sketch primitive counts, closed line-loop profile area, single-circle profile area, rectangular/circular extrude volume, selected sketch/body measurement, and axis-aligned bounds. |
 | Units | Results store canonical meters, square meters, and cubic meters plus the document display unit for readable summaries. |
 | Non-mutation | UI Measure, Agent measure, and CLI measure read source state without changing generation, dirty state, or undo stack. |
-| Scope reporting | `RupaMeasurementResult.scope` reports whether the result was computed for the whole document or the current selection. |
+| Scope reporting | `MeasurementResult.scope` reports whether the result was computed for the whole document or the current selection. |
 | Selection | When a sketch scene node is selected, measurement reports that sketch profile and bounds. When a body scene node is selected, measurement reports the selected solid plus the source profile required to compute area and volume. Non-feature scene nodes return an empty selection measurement with diagnostics. |
 | Unsupported source | Open sketches and unsupported mixed profile primitives remain counted as source/sketch primitives but do not contribute profile area or solid volume. |
 | CLI | `rupa measure` exposes the same `auto`, `file`, and `live` mode model as other document read commands. File mode measures the document; live and auto-live modes use the open session selection when one exists. |
@@ -443,11 +524,11 @@ Export is derived output. It must evaluate the current document source, write at
 
 ```mermaid
 flowchart LR
-    Source["RupaDocument source"] --> Export["RupaDocumentExportService"]
+    Source["DesignDocument source"] --> Export["DocumentExportService"]
     Export --> Evaluate["Swift-CAD evaluation"]
     Evaluate --> Exchange["Swift-CAD exchange writer"]
     Exchange --> Output["Output artifact"]
-    Export --> Result["RupaExportResult"]
+    Export --> Result["ExportResult"]
 ```
 
 | Concern | Contract |
@@ -457,12 +538,12 @@ flowchart LR
 | Auto mode | Prefer a matching open session; otherwise export the closed file. |
 | Safety | File mode rejects open-document conflicts unless explicitly forced. |
 | Dry run | Evaluate and resolve the output format without writing an output file. |
-| Preset selection | `RupaExportOptions` may select a `RupaExportPreset` by ID or name. The selected preset defines the exchange format, output unit, tessellation policy, validation rule references, metadata inclusion preference, and default destination policy. |
+| Preset selection | `ExportOptions` may select a `ExportPreset` by ID or name. The selected preset defines the exchange format, output unit, tessellation policy, validation rule references, metadata inclusion preference, and default destination policy. |
 | Format check | When a preset is selected, the output path extension must resolve to the same `ExchangeFileFormat` as the preset. Mismatches fail before writing. |
 | Output unit | Preset export units are applied to Swift-CAD exchange writers, including micrometer through meter scale workflows. Without a preset, the document unit system is used. |
 | Destination policy | Export resolves `prompt`, `overwrite`, or `versioned` before writing. `prompt` refuses an existing path, `overwrite` replaces it atomically, and `versioned` writes the next available suffixed path. |
 | Errors | Evaluation failures return `evaluation.failed`; output failures return `export.failed`. |
-| Results | `RupaExportResult` includes format, final output path, byte count, generation, dry-run flag, preset name, output unit, destination policy, and diagnostics. |
+| Results | `ExportResult` includes format, final output path, byte count, generation, dry-run flag, preset name, output unit, destination policy, and diagnostics. |
 
 ### Evaluation Contract
 
@@ -470,10 +551,10 @@ Evaluation is derived state and must not advance document generation or write un
 
 ```mermaid
 flowchart LR
-    Source["RupaDocument source"] --> Scheduler["EvaluationScheduler"]
+    Source["DesignDocument source"] --> Scheduler["EvaluationScheduler"]
     Scheduler --> Snapshot["EvaluationSnapshot"]
     Snapshot --> Status["EvaluationStatus"]
-    Snapshot --> Diagnostics["RupaDiagnostic"]
+    Snapshot --> Diagnostics["EditorDiagnostic"]
     Snapshot --> Invalidation["RenderInvalidation"]
     Invalidation --> Viewport["RupaRendering / RupaPreview"]
 ```
@@ -498,7 +579,7 @@ The root editor shell uses SwiftUI's native sidebar model for the leading compon
 
 | File | Responsibility |
 |---|---|
-| `RupaMainView.swift` | Root editor view exported to the app host. |
+| `MainView.swift` | Root editor view exported to the app host. |
 | `MainWindow.swift` | Main composition of viewport, component Browser, bottom canvas tool palette, detail panes, inspector, and app model. |
 | `DocumentToolbar.swift` | Document-level editor actions such as new document, validation, and inspector visibility. |
 | `CanvasToolPalette.swift` | Bottom viewport-hosted Liquid Glass modeling tools and mode controls. |
@@ -541,8 +622,8 @@ flowchart LR
 | Sidebar / Assets | Document-wide reusable assets | Materials, validation rules, export presets | Inspect asset identity; later open asset editors |
 | Inspector / Document | Current document context | Name, document ID, source/display units, source feature count, scene-node count, generated body count, diagnostics, render invalidation state, and asset counts | Validate through toolbar; document mutation through explicit document commands |
 | Inspector / Selection | Current selected scene node or selected scene-node set | Name, kind, scene-node ID, primary object, reference type, reference target, hierarchy parent, child count, descendant count, visibility, lock state, material assignment, and mixed values for multi-selection | Toggle visibility and lock for one or every selected object; assign or clear material through RupaCore commands |
-| Inspector / Transform | Current selected node transform or shared transform state | Local transform summary, position X/Y/Z, scale X/Y/Z, custom-transform count, single-object matrix rows, reset control, and later typed rotation fields | Edit position and scale through paired TextField and Slider controls backed by `setSceneNodeTransform`; reset transform through `setSceneNodeTransform`; later edit decomposed rotation through typed commands |
-| Inspector / Source Geometry | Current selected feature-backed object or selected feature-backed set | Editable source dimensions when a matching feature command exists, including extrude depth; later rectangle width/height, circle radius, and corner operations | Edit supported feature dimensions through paired TextField and Slider controls backed by feature mutation commands |
+| Inspector / Transform | Current selected node transform or shared transform state | Local transform summary, position X/Y/Z, transform scale X/Y/Z, custom-transform count, single-object matrix rows, reset control, and later typed rotation fields | Edit position and transform scale through paired TextField and Slider controls backed by `setSceneNodeTransform`; reset transform through `setSceneNodeTransform`; later edit decomposed rotation through typed commands |
+| Inspector / Shape | Current selected Object type or selected compatible object set | Object type, source representation, generated representation, Center X/Y/Z, Size X/Y/Z, and type-specific properties such as Subdivisions, Corner, Extrusion, Bevel, Bevel Sides, Cylinder Top, Bottom, Sides, Angle, Caps, Hollow, stroke width, text content, text size, and font family | Edit supported object dimensions and type properties through paired TextField and Slider controls backed by typed RupaCore commands; show mixed values for multi-selection; keep unsupported kernel parameters read-only or disabled until backed by commands |
 | Inspector / Viewport | Current viewport context | Projection, grid plane, and in-plane ruler state | Later edit camera/projection/grid settings |
 | Inspector / Units and Ruler | Canvas measurement context | Display unit, ruler minor, major, and visible in-plane spans | Change display unit through `setDisplayUnit`; change ruler configuration through `setRulerConfiguration` |
 
@@ -553,8 +634,8 @@ The Inspector has three explicit states:
 | Selection state | Inspector content | Editing contract |
 |---|---|---|
 | No selected object | Canvas and document properties | Document identity, scene counts, evaluation/diagnostic state, asset counts, display unit, ruler spacing, visible span, grid/projection context, and later camera properties. |
-| One selected object | Object properties | Name, kind, scene-node ID, reference target, hierarchy position, visibility, lock state, transform position/scale, transform matrix summary, source dimensions, material, and object-specific parameters where available. |
-| Multiple selected objects | Shared object properties | Count, primary object, kind/reference/parent summaries, shared or mixed visibility and lock state, aggregate hierarchy counts, shared transform position/scale, source dimensions common to the selected feature type, material assignment, and common editable properties. Edits apply to every selected object through RupaCore commands. Type-specific properties are shown only when all selected objects support that property. |
+| One selected object | Object properties | Name, kind, scene-node ID, reference target, hierarchy position, visibility, lock state, Object type Shape properties, transform position/scale, transform matrix summary, material, and object-specific parameters where available. |
+| Multiple selected objects | Shared object properties | Count, primary object, kind/reference/parent summaries, shared or mixed visibility and lock state, aggregate hierarchy counts, Shape properties common to the selected Object type or compatible property schema, shared transform position/scale, material assignment, and common editable properties. Edits apply to every selected object through RupaCore commands. Type-specific properties are shown only when all selected objects support that property. |
 
 Editable numeric properties must pair a precise `TextField` with a `Slider`. The text field is the exact value entry path; the slider is the coarse adjustment path. Both controls write through the same command-backed property binding, use the active display unit where the value is a length, and must not mutate document state directly from SwiftUI view code.
 
@@ -624,13 +705,13 @@ RupaAgent coordinates the running app and command-line clients.
 
 | Type | Responsibility |
 |---|---|
-| `RupaAgentServer` | Starts and stops IPC, handles requests, dispatches commands. |
-| `RupaMainActorAgentBridge` | Routes app-hosted agent requests to UI-owned sessions on MainActor. |
-| `RupaAgentSocketListener` | Owns Unix domain socket lifecycle and routes socket requests into the agent service. |
-| `RupaAgentSocketService` | Serializes socket request handling and dispatches decoded requests to the in-memory server or MainActor app bridge. |
-| `RupaAgentClient` | Connects from CLI, checks status, lists sessions, applies commands. |
-| `RupaAgentClientProtocol` | Provides a testable boundary for in-memory and socket-backed clients. |
-| `RupaAgentMessage` | Request, response, error, and session summary envelopes. |
+| `AgentServer` | Starts and stops IPC, handles requests, dispatches commands. |
+| `MainActorAgentBridge` | Routes app-hosted agent requests to UI-owned sessions on MainActor. |
+| `AgentSocketListener` | Owns Unix domain socket lifecycle and routes socket requests into the agent service. |
+| `AgentSocketService` | Serializes socket request handling and dispatches decoded requests to the in-memory server or MainActor app bridge. |
+| `AgentClient` | Connects from CLI, checks status, lists sessions, applies commands. |
+| `AgentClientProtocol` | Provides a testable boundary for in-memory and socket-backed clients. |
+| `AgentMessage` | Request, response, error, and session summary envelopes. |
 | `AgentMessageCodec` | Encodes and decodes agent request and response payloads. |
 | `AgentSocketAddress` | Builds Unix socket addresses for client and listener. |
 | `AgentSocketIO` | Provides blocking read/write helpers for socket payloads. |
@@ -646,9 +727,9 @@ RupaCLIKit provides the testable CLI command implementation used by the `rupa` e
 
 | Type | Responsibility |
 |---|---|
-| `RupaCLICommand.swift` | ArgumentParser command tree. |
-| `RupaCLIService.swift` | Testable CLI workflow implementation for file mode, live mode, status, sessions, and conflict checks. |
-| `RupaCLIResponses.swift` | Stable Codable response shapes for JSON output. |
+| `CLICommand.swift` | ArgumentParser command tree. |
+| `CLIService.swift` | Testable CLI workflow implementation for file mode, live mode, status, sessions, and conflict checks. |
+| `CLIResponses.swift` | Stable Codable response shapes for JSON output. |
 | `CLIOutput.swift` | Human and JSON output formatting. |
 | `ExitCode.swift` | Process exit code mapping. |
 
@@ -672,7 +753,7 @@ RupaCLI is a thin executable target.
 
 | Type | Responsibility |
 |---|---|
-| `RupaCLI.swift` | Executable entry point that starts `RupaCLICommand`. |
+| `CLI.swift` | Executable entry point that starts `CLICommand`. |
 
 ## Document Session Model
 
@@ -817,7 +898,7 @@ Rupa uses `.swcad` as the user-facing extension. New saves write a Rupa package 
 |---|---|
 | `manifest.json` | Package format, schema version, document path, Rupa metadata path, and document timestamps. |
 | `document.json` | Swift-CAD `CADDocument` source. |
-| `rupa.json` | Display unit, ruler configuration, and `RupaProductMetadata`. |
+| `rupa.json` | Display unit, ruler configuration, and `ProductMetadata`. |
 
 The file service must validate both the Swift-CAD source and the Rupa metadata after loading.
 
@@ -827,9 +908,9 @@ Live mode routes the command to the running app.
 
 ```mermaid
 flowchart TD
-    CLI["rupa CLI"] --> Client["RupaAgentClient"]
+    CLI["rupa CLI"] --> Client["AgentClient"]
     Client --> IPC["Unix domain socket"]
-    IPC --> Server["RupaAgentServer inside Rupa.app"]
+    IPC --> Server["AgentServer inside Rupa.app"]
     Server --> Registry["WorkspaceRegistry"]
     Registry --> Session["EditorSession"]
     Session --> Stack["CommandStack"]
@@ -866,7 +947,7 @@ Initial implementation uses a local Unix domain socket.
 | Preferred socket path | `~/Library/Application Support/Rupa/Agent/rupa.sock` |
 | Alternate socket path | `$TMPDIR/rupa-agent/rupa.sock` |
 
-The package-level socket listener supports start, stop, stale socket replacement, malformed request recovery, and client/server round trips. App-hosted startup routes open document session mutation through `RupaAgentHost` and `RupaMainActorAgentBridge` so UI-owned `EditorSession` state is read and mutated on MainActor.
+The package-level socket listener supports start, stop, stale socket replacement, malformed request recovery, and client/server round trips. App-hosted startup routes open document session mutation through `AgentHost` and `MainActorAgentBridge` so UI-owned `EditorSession` state is read and mutated on MainActor.
 
 ### Request Envelope
 
@@ -934,7 +1015,7 @@ The package-level socket listener supports start, stop, stale socket replacement
 | `document.evaluate` | Evaluate an open document through its app session. |
 | `document.meshSummary` | Summarize generated meshes for an open document through its app session without mutating source. |
 | `document.measure` | Measure an open document through its app session without mutating source. |
-| `document.export` | Export an open document session to an exchange artifact without mutating source, using the same `RupaExportOptions` as file-mode CLI export. |
+| `document.export` | Export an open document session to an exchange artifact without mutating source, using the same `ExportOptions` as file-mode CLI export. |
 
 ## Stable References
 
@@ -1010,7 +1091,7 @@ Currently implemented command groups:
 | `rupa measure <document>` | Measure a file or matching live session and return counts, bounds, profile area, solid volume, and diagnostics. |
 | `rupa save <document>` | Save a closed document or matching live session without changing generation. |
 | `rupa export <document> --output <path>` | Export a closed or live document to a Swift-CAD exchange format selected by output extension. |
-| `rupa export <document> --output <path> --preset <name>` | Export using a named `RupaExportPreset` for format, output unit, and default destination policy. |
+| `rupa export <document> --output <path> --preset <name>` | Export using a named `ExportPreset` for format, output unit, and default destination policy. |
 | `rupa export <document> --output <path> --destination-policy <policy>` | Override destination behavior with `prompt`, `overwrite`, or `versioned`. |
 | `rupa validate <document>` | Validate a closed document file. |
 

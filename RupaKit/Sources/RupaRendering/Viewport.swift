@@ -18,7 +18,8 @@ public struct Viewport: View {
     @State private var hoveredCanvasHit: ViewportHit?
     @State private var hoveredModelPoint: Point2D?
 
-    private let document: RupaDocument
+    private let document: DesignDocument
+    private let objectRegistry: ObjectTypeRegistry
     private let evaluationStatus: EvaluationStatus
     private let renderInvalidation: RenderInvalidation
     private let selection: SelectionModel
@@ -31,7 +32,8 @@ public struct Viewport: View {
     private let onHover: ((ViewportHit?) -> Void)?
 
     public init(
-        document: RupaDocument,
+        document: DesignDocument,
+        objectRegistry: ObjectTypeRegistry = .builtIn,
         evaluationStatus: EvaluationStatus = .notEvaluated,
         renderInvalidation: RenderInvalidation = RenderInvalidation(),
         selection: SelectionModel = .empty,
@@ -44,6 +46,7 @@ public struct Viewport: View {
         onHover: ((ViewportHit?) -> Void)? = nil
     ) {
         self.document = document
+        self.objectRegistry = objectRegistry
         self.evaluationStatus = evaluationStatus
         self.renderInvalidation = renderInvalidation
         self.selection = selection
@@ -309,6 +312,7 @@ public struct Viewport: View {
         let layout = ViewportModelCoordinateMapper(
             document: document,
             size: size,
+            objectRegistry: objectRegistry,
             camera: camera,
             basis: basis
         ).layout
@@ -380,10 +384,11 @@ public struct Viewport: View {
         camera: ViewportCamera,
         basis: ViewportProjectionBasis
     ) {
-        let scene = ViewportSceneBuilder().build(document: document)
+        let scene = ViewportSceneBuilder(objectRegistry: objectRegistry).build(document: document)
         let layout = ViewportModelCoordinateMapper(
             document: document,
             size: size,
+            objectRegistry: objectRegistry,
             camera: camera,
             basis: basis
         ).layout
@@ -948,6 +953,7 @@ public struct Viewport: View {
         let mapper = ViewportModelCoordinateMapper(
             document: document,
             size: size,
+            objectRegistry: objectRegistry,
             camera: camera,
             basis: basis
         )
@@ -1673,10 +1679,11 @@ public struct Viewport: View {
         at point: CGPoint,
         size: CGSize
     ) -> ViewportAffordanceTarget? {
-        let scene = ViewportSceneBuilder().build(document: document)
+        let scene = ViewportSceneBuilder(objectRegistry: objectRegistry).build(document: document)
         let layout = ViewportModelCoordinateMapper(
             document: document,
             size: size,
+            objectRegistry: objectRegistry,
             camera: camera,
             basis: currentProjectionBasis
         ).layout
@@ -2022,7 +2029,7 @@ public struct Viewport: View {
         current: CGPoint,
         size: CGSize
     ) {
-        let scene = ViewportSceneBuilder().build(document: document)
+        let scene = ViewportSceneBuilder(objectRegistry: objectRegistry).build(document: document)
         let selectedFeatureIDs = selectedFeatureIDs()
         let selectedBodyItems = selectedBodyItems(in: scene, selectedFeatureIDs: selectedFeatureIDs)
         let targetIsSelectionGroup = selectedBodyItems.count > 1
@@ -2060,6 +2067,7 @@ public struct Viewport: View {
         let layout = ViewportModelCoordinateMapper(
             document: document,
             size: size,
+            objectRegistry: objectRegistry,
             camera: camera,
             basis: currentProjectionBasis
         ).layout
@@ -2099,10 +2107,11 @@ public struct Viewport: View {
         guard let onPick else {
             return
         }
-        let scene = ViewportSceneBuilder().build(document: document)
+        let scene = ViewportSceneBuilder(objectRegistry: objectRegistry).build(document: document)
         let mapper = ViewportModelCoordinateMapper(
             document: document,
             size: size,
+            objectRegistry: objectRegistry,
             camera: camera,
             basis: currentProjectionBasis
         )
@@ -2155,6 +2164,7 @@ public struct Viewport: View {
         let mapper = ViewportModelCoordinateMapper(
             document: document,
             size: size,
+            objectRegistry: objectRegistry,
             camera: camera,
             basis: currentProjectionBasis
         )
@@ -2177,10 +2187,11 @@ public struct Viewport: View {
             return
         }
         let rect = dragRect(from: start, to: end)
-        let scene = ViewportSceneBuilder().build(document: document)
+        let scene = ViewportSceneBuilder(objectRegistry: objectRegistry).build(document: document)
         let mapper = ViewportModelCoordinateMapper(
             document: document,
             size: size,
+            objectRegistry: objectRegistry,
             camera: camera,
             basis: currentProjectionBasis
         )
@@ -2278,10 +2289,11 @@ public struct Viewport: View {
     }
 
     private func hover(at point: CGPoint, size: CGSize) {
-        let scene = ViewportSceneBuilder().build(document: document)
+        let scene = ViewportSceneBuilder(objectRegistry: objectRegistry).build(document: document)
         let mapper = ViewportModelCoordinateMapper(
             document: document,
             size: size,
+            objectRegistry: objectRegistry,
             camera: camera,
             basis: currentProjectionBasis
         )
@@ -2401,6 +2413,7 @@ public struct Viewport: View {
         let oldLayout = ViewportModelCoordinateMapper(
             document: document,
             size: size,
+            objectRegistry: objectRegistry,
             camera: camera,
             basis: basis
         ).layout
@@ -2416,6 +2429,7 @@ public struct Viewport: View {
         let nextLayout = ViewportModelCoordinateMapper(
             document: document,
             size: size,
+            objectRegistry: objectRegistry,
             camera: nextCamera,
             basis: basis
         ).layout
@@ -2563,6 +2577,80 @@ private struct ViewportModelPoint3D: Equatable {
     }
 }
 
+private struct ViewportModelVector3D: Equatable {
+    var x: CGFloat
+    var y: CGFloat
+    var z: CGFloat
+
+    static func + (lhs: ViewportModelVector3D, rhs: ViewportModelVector3D) -> ViewportModelVector3D {
+        ViewportModelVector3D(x: lhs.x + rhs.x, y: lhs.y + rhs.y, z: lhs.z + rhs.z)
+    }
+
+    static func * (vector: ViewportModelVector3D, scalar: CGFloat) -> ViewportModelVector3D {
+        ViewportModelVector3D(x: vector.x * scalar, y: vector.y * scalar, z: vector.z * scalar)
+    }
+
+    static func * (scalar: CGFloat, vector: ViewportModelVector3D) -> ViewportModelVector3D {
+        vector * scalar
+    }
+}
+
+private struct ViewportObjectOrientation: Equatable {
+    var xAxis: ViewportModelVector3D
+    var yAxis: ViewportModelVector3D
+    var zAxis: ViewportModelVector3D
+
+    static var identity: ViewportObjectOrientation {
+        ViewportObjectOrientation(
+            xAxis: ViewportModelVector3D(x: 1.0, y: 0.0, z: 0.0),
+            yAxis: ViewportModelVector3D(x: 0.0, y: 1.0, z: 0.0),
+            zAxis: ViewportModelVector3D(x: 0.0, y: 0.0, z: 1.0)
+        )
+    }
+
+    var inverse: ViewportObjectOrientation {
+        ViewportObjectOrientation(
+            xAxis: ViewportModelVector3D(x: xAxis.x, y: yAxis.x, z: zAxis.x),
+            yAxis: ViewportModelVector3D(x: xAxis.y, y: yAxis.y, z: zAxis.y),
+            zAxis: ViewportModelVector3D(x: xAxis.z, y: yAxis.z, z: zAxis.z)
+        )
+    }
+
+    func applied(to vector: ViewportModelVector3D) -> ViewportModelVector3D {
+        xAxis * vector.x + yAxis * vector.y + zAxis * vector.z
+    }
+
+    func concatenating(_ rhs: ViewportObjectOrientation) -> ViewportObjectOrientation {
+        ViewportObjectOrientation(
+            xAxis: applied(to: rhs.xAxis),
+            yAxis: applied(to: rhs.yAxis),
+            zAxis: applied(to: rhs.zAxis)
+        )
+    }
+
+    mutating func rotate(_ axis: ViewportCoordinateAxis, by amount: CGFloat) {
+        let cosine = cos(amount)
+        let sine = sin(amount)
+        switch axis {
+        case .x:
+            let baseY = yAxis
+            let baseZ = zAxis
+            yAxis = baseY * cosine + baseZ * sine
+            zAxis = baseY * -sine + baseZ * cosine
+        case .y:
+            let baseX = xAxis
+            let baseZ = zAxis
+            xAxis = baseX * cosine + baseZ * -sine
+            zAxis = baseX * sine + baseZ * cosine
+        case .z:
+            let baseX = xAxis
+            let baseY = yAxis
+            xAxis = baseX * cosine + baseY * sine
+            yAxis = baseX * -sine + baseY * cosine
+        }
+    }
+}
+
 private struct ViewportProjectedBox {
     var minXMinYMinZ: CGPoint
     var maxXMinYMinZ: CGPoint
@@ -2609,28 +2697,27 @@ private struct ViewportObjectEditState: Equatable {
     var yMax: CGFloat
     var zMin: CGFloat
     var zMax: CGFloat
-    var rotationX: CGFloat
-    var rotationY: CGFloat
-    var rotationZ: CGFloat
+    var orientation: ViewportObjectOrientation
 
     private static let minimumSize: CGFloat = 1.0e-6
 
     init(item: ViewportSceneItem) {
-        let depthMeters: CGFloat
-        if case .body(let depth) = item.kind {
-            depthMeters = max(CGFloat(depth), Self.minimumSize)
+        let yExtents: (min: CGFloat, max: CGFloat)
+        if case .body(let component) = item.kind {
+            yExtents = (
+                min: CGFloat(component.yMinMeters),
+                max: CGFloat(component.yMaxMeters)
+            )
         } else {
-            depthMeters = Self.minimumSize
+            yExtents = (0.0, Self.minimumSize)
         }
         self.xMin = item.modelBounds.minX
         self.xMax = item.modelBounds.maxX
-        self.yMin = 0.0
-        self.yMax = depthMeters
+        self.yMin = yExtents.min
+        self.yMax = max(yExtents.max, yExtents.min + Self.minimumSize)
         self.zMin = item.modelBounds.minY
         self.zMax = item.modelBounds.maxY
-        self.rotationX = 0.0
-        self.rotationY = 0.0
-        self.rotationZ = 0.0
+        self.orientation = .identity
     }
 
     init(
@@ -2647,9 +2734,7 @@ private struct ViewportObjectEditState: Equatable {
         self.yMax = yMax
         self.zMin = zMin
         self.zMax = zMax
-        self.rotationX = 0.0
-        self.rotationY = 0.0
-        self.rotationZ = 0.0
+        self.orientation = .identity
         normalize()
     }
 
@@ -2681,7 +2766,7 @@ private struct ViewportObjectEditState: Equatable {
         case .centerScale(let axis):
             next.resizeFromCenter(axis, by: dragAmount(axis: axis, start: start, current: current, layout: layout))
         case .rotate(let axis):
-            next.rotate(axis, by: rotationAmount(start: start, current: current, layout: layout))
+            next.rotate(axis, by: rotationAmount(axis: axis, start: start, current: current, layout: layout))
         case .vertexMove(let vertex):
             next.moveVertex(vertex, start: start, current: current, layout: layout)
         case .faceMove(let face):
@@ -2738,9 +2823,8 @@ private struct ViewportObjectEditState: Equatable {
             toMin: targetGroup.zMin,
             toMax: targetGroup.zMax
         )
-        next.rotationX += targetGroup.rotationX - baseGroup.rotationX
-        next.rotationY += targetGroup.rotationY - baseGroup.rotationY
-        next.rotationZ += targetGroup.rotationZ - baseGroup.rotationZ
+        let groupRotationDelta = targetGroup.orientation.concatenating(baseGroup.orientation.inverse)
+        next.orientation = groupRotationDelta.concatenating(orientation)
         next.normalize()
         return next
     }
@@ -2936,32 +3020,13 @@ private struct ViewportObjectEditState: Equatable {
     }
 
     private func rotatedPoint(x: CGFloat, y: CGFloat, z: CGFloat) -> (x: CGFloat, y: CGFloat, z: CGFloat) {
-        var px = x - centerX
-        var py = y - centerY
-        var pz = z - centerZ
-
-        let cosX = cos(rotationX)
-        let sinX = sin(rotationX)
-        let yAfterX = py * cosX - pz * sinX
-        let zAfterX = py * sinX + pz * cosX
-        py = yAfterX
-        pz = zAfterX
-
-        let cosY = cos(rotationY)
-        let sinY = sin(rotationY)
-        let xAfterY = px * cosY + pz * sinY
-        let zAfterY = -px * sinY + pz * cosY
-        px = xAfterY
-        pz = zAfterY
-
-        let cosZ = cos(rotationZ)
-        let sinZ = sin(rotationZ)
-        let xAfterZ = px * cosZ - py * sinZ
-        let yAfterZ = px * sinZ + py * cosZ
-        px = xAfterZ
-        py = yAfterZ
-
-        return (centerX + px, centerY + py, centerZ + pz)
+        let local = ViewportModelVector3D(
+            x: x - centerX,
+            y: y - centerY,
+            z: z - centerZ
+        )
+        let rotated = orientation.applied(to: local)
+        return (centerX + rotated.x, centerY + rotated.y, centerZ + rotated.z)
     }
 
     private mutating func translate(_ axis: ViewportCoordinateAxis, by amount: CGFloat) {
@@ -3004,14 +3069,7 @@ private struct ViewportObjectEditState: Equatable {
     }
 
     private mutating func rotate(_ axis: ViewportCoordinateAxis, by amount: CGFloat) {
-        switch axis {
-        case .x:
-            rotationX += amount
-        case .y:
-            rotationY += amount
-        case .z:
-            rotationZ += amount
-        }
+        orientation.rotate(axis, by: amount)
     }
 
     private mutating func moveFace(
@@ -3075,14 +3133,56 @@ private struct ViewportObjectEditState: Equatable {
     }
 
     private func rotationAmount(
+        axis: ViewportCoordinateAxis,
         start: CGPoint,
         current: CGPoint,
         layout: ViewportLayout
     ) -> CGFloat {
-        let center = projectedBodyProjection(layout: layout).center
-        let startAngle = atan2(start.y - center.y, start.x - center.x)
-        let currentAngle = atan2(current.y - center.y, current.x - center.x)
-        return startAngle - currentAngle
+        let center = projectedPoint(centerPoint, layout: layout)
+        let plane = rotationPlaneDirections(for: axis, layout: layout)
+        let startAngle = rotationPlaneAngle(for: start, center: center, plane: plane)
+        let currentAngle = rotationPlaneAngle(for: current, center: center, plane: plane)
+        return normalizedRotationDelta(from: startAngle, to: currentAngle)
+    }
+
+    private func rotationPlaneDirections(
+        for axis: ViewportCoordinateAxis,
+        layout: ViewportLayout
+    ) -> (first: CGVector, second: CGVector) {
+        switch axis {
+        case .x:
+            (projectedAxisDirection(.y, layout: layout), projectedAxisDirection(.z, layout: layout))
+        case .y:
+            (projectedAxisDirection(.z, layout: layout), projectedAxisDirection(.x, layout: layout))
+        case .z:
+            (projectedAxisDirection(.x, layout: layout), projectedAxisDirection(.y, layout: layout))
+        }
+    }
+
+    private func rotationPlaneAngle(
+        for point: CGPoint,
+        center: CGPoint,
+        plane: (first: CGVector, second: CGVector)
+    ) -> CGFloat {
+        let vector = CGVector(dx: point.x - center.x, dy: point.y - center.y)
+        let determinant = plane.first.dx * plane.second.dy - plane.first.dy * plane.second.dx
+        guard abs(determinant) > 1.0e-6 else {
+            return atan2(vector.dy, vector.dx)
+        }
+        let firstAmount = (vector.dx * plane.second.dy - vector.dy * plane.second.dx) / determinant
+        let secondAmount = (plane.first.dx * vector.dy - plane.first.dy * vector.dx) / determinant
+        return atan2(secondAmount, firstAmount)
+    }
+
+    private func normalizedRotationDelta(from startAngle: CGFloat, to currentAngle: CGFloat) -> CGFloat {
+        var delta = startAngle - currentAngle
+        while delta > .pi {
+            delta -= .pi * 2.0
+        }
+        while delta < -.pi {
+            delta += .pi * 2.0
+        }
+        return delta
     }
 
     private mutating func normalize() {

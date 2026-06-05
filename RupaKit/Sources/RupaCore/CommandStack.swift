@@ -66,7 +66,7 @@ public final class CommandStack {
     @discardableResult
     public func undo(in store: CADDocumentStore) throws -> CommandExecutionResult {
         guard let entry = undoEntries.popLast() else {
-            throw RupaError(
+            throw EditorError(
                 code: .commandInvalid,
                 message: "There is no command to undo."
             )
@@ -85,7 +85,7 @@ public final class CommandStack {
     @discardableResult
     public func redo(in store: CADDocumentStore) throws -> CommandExecutionResult {
         guard let entry = redoEntries.popLast() else {
-            throw RupaError(
+            throw EditorError(
                 code: .commandInvalid,
                 message: "There is no command to redo."
             )

@@ -32,13 +32,13 @@ import Testing
     let session = EditorSession()
     _ = try session.execute(.setDisplayUnit(.meter))
 
-    var caught: RupaError?
+    var caught: EditorError?
     do {
         _ = try session.execute(
             .renameDocument(name: "Stale"),
             expectedGeneration: DocumentGeneration(0)
         )
-    } catch let error as RupaError {
+    } catch let error as EditorError {
         caught = error
     }
 
@@ -93,7 +93,7 @@ import Testing
 @Test func productMetadataCommandParticipatesInUndoRedo() async throws {
     let session = EditorSession()
     let initialMetadata = session.document.productMetadata
-    var metadata = RupaProductMetadata.empty()
+    var metadata = ProductMetadata.empty()
     let rootID = try #require(metadata.rootSceneNodeIDs.first)
     metadata.sceneNodes[rootID]?.name = "Universal Product Scene"
 
@@ -253,7 +253,7 @@ import Testing
 @Test func editorSessionSelectionRejectsMissingSceneNodeWithoutEvaluationFailure() async throws {
     let session = EditorSession()
 
-    let didSelect = session.selectSceneNode(RupaSceneNodeID())
+    let didSelect = session.selectSceneNode(SceneNodeID())
 
     #expect(!didSelect)
     #expect(session.selectedSceneNodeID == nil)
@@ -338,7 +338,7 @@ import Testing
     let session = EditorSession()
     _ = try #require(session.createDefaultExtrudedRectangle())
 
-    let result = try RupaMeasurementService().measure(document: session.document)
+    let result = try MeasurementService().measure(document: session.document)
     let bounds = try #require(result.bounds)
 
     #expect(result.counts.sourceFeatures == 2)
@@ -362,7 +362,7 @@ import Testing
     }?.key)
     #expect(session.selectSceneNode(sketchNodeID))
 
-    let result = try RupaMeasurementService().measure(
+    let result = try MeasurementService().measure(
         document: session.document,
         selection: session.selection
     )
@@ -391,7 +391,7 @@ import Testing
     }?.key)
     #expect(session.selectSceneNode(bodyNodeID))
 
-    let result = try RupaMeasurementService().measure(
+    let result = try MeasurementService().measure(
         document: session.document,
         selection: session.selection
     )
@@ -426,7 +426,7 @@ import Testing
         )
     )
 
-    let result = try RupaMeasurementService().measure(document: session.document)
+    let result = try MeasurementService().measure(document: session.document)
     let bounds = try #require(result.bounds)
 
     #expect(result.profiles.first?.kind == .circle)
@@ -456,7 +456,7 @@ import Testing
         )
     )
 
-    let result = try RupaMeasurementService().measure(document: session.document)
+    let result = try MeasurementService().measure(document: session.document)
     let bounds = try #require(result.bounds)
 
     #expect(result.counts.sourceFeatures == 1)
@@ -488,7 +488,7 @@ import Testing
     let session = EditorSession()
     _ = try #require(session.createDefaultExtrudedRectangle())
 
-    let result = try RupaMeshSummaryService().summarize(document: session.document)
+    let result = try MeshSummaryService().summarize(document: session.document)
     let bounds = try #require(result.bounds)
     let body = try #require(result.bodies.first)
 
@@ -508,7 +508,7 @@ import Testing
     let session = EditorSession()
     _ = try #require(session.createDefaultCircleSketch())
 
-    let result = try RupaMeshSummaryService().summarize(document: session.document)
+    let result = try MeshSummaryService().summarize(document: session.document)
 
     #expect(result.bodyCount == 0)
     #expect(result.vertexCount == 0)
@@ -937,7 +937,7 @@ import Testing
 @MainActor
 @Test func rectangleSketchFromCornersCommandRejectsDegenerateCornersBeforeMutation() async throws {
     let session = EditorSession()
-    var error: RupaError?
+    var error: EditorError?
 
     do {
         _ = try session.execute(
@@ -954,7 +954,7 @@ import Testing
                 )
             )
         )
-    } catch let caught as RupaError {
+    } catch let caught as EditorError {
         error = caught
     }
 
@@ -969,7 +969,7 @@ import Testing
 @MainActor
 @Test func extrudedRectangleFromCornersCommandRejectsDegenerateCornersBeforeMutation() async throws {
     let session = EditorSession()
-    var error: RupaError?
+    var error: EditorError?
 
     do {
         _ = try session.execute(
@@ -988,7 +988,7 @@ import Testing
                 direction: .normal
             )
         )
-    } catch let caught as RupaError {
+    } catch let caught as EditorError {
         error = caught
     }
 
@@ -1067,7 +1067,7 @@ import Testing
         )
     )
 
-    var error: RupaError?
+    var error: EditorError?
     do {
         _ = try session.execute(
             .addSketchConstraint(
@@ -1075,7 +1075,7 @@ import Testing
                 constraint: .horizontal(lineID)
             )
         )
-    } catch let caught as RupaError {
+    } catch let caught as EditorError {
         error = caught
     }
 
@@ -1103,7 +1103,7 @@ import Testing
     let featureID = try #require(session.document.cadDocument.designGraph.order.first)
     let circleID = try #require(singleSketchEntityID(in: session.document, featureID: featureID))
 
-    var error: RupaError?
+    var error: EditorError?
     do {
         _ = try session.execute(
             .addSketchConstraint(
@@ -1111,7 +1111,7 @@ import Testing
                 constraint: .horizontal(circleID)
             )
         )
-    } catch let caught as RupaError {
+    } catch let caught as EditorError {
         error = caught
     }
 
@@ -1125,7 +1125,7 @@ import Testing
 @MainActor
 @Test func circleSketchCommandRejectsNonPositiveRadiusBeforeMutation() async throws {
     let session = EditorSession()
-    var error: RupaError?
+    var error: EditorError?
 
     do {
         _ = try session.execute(
@@ -1139,7 +1139,7 @@ import Testing
                 radius: .length(0.0, .meter)
             )
         )
-    } catch let caught as RupaError {
+    } catch let caught as EditorError {
         error = caught
     }
 
@@ -1154,7 +1154,7 @@ import Testing
 @MainActor
 @Test func productMetadataValidationFailurePublishesDiagnostics() async throws {
     let session = EditorSession()
-    var metadata = RupaProductMetadata.empty()
+    var metadata = ProductMetadata.empty()
     let rootID = try #require(metadata.rootSceneNodeIDs.first)
     metadata.sceneNodes[rootID]?.reference = .feature(FeatureID())
 
@@ -1300,13 +1300,13 @@ import Testing
         expectedGeneration: DocumentGeneration(1)
     )
 
-    var caught: RupaError?
+    var caught: EditorError?
     do {
         _ = try session.execute(
             .deleteParameter(name: "width"),
             expectedGeneration: DocumentGeneration(2)
         )
-    } catch let error as RupaError {
+    } catch let error as EditorError {
         caught = error
     }
 
@@ -1626,7 +1626,7 @@ import Testing
     )
     let sketchFeatureID = try #require(session.document.cadDocument.designGraph.order.first)
 
-    var caught: RupaError?
+    var caught: EditorError?
     do {
         _ = try session.execute(
             .extrudeProfile(
@@ -1636,7 +1636,7 @@ import Testing
                 direction: .normal
             )
         )
-    } catch let error as RupaError {
+    } catch let error as EditorError {
         caught = error
     }
 
@@ -1650,7 +1650,7 @@ import Testing
 @Test func unresolvedExtrudeProfileFailsBeforeMutation() async throws {
     let session = EditorSession()
 
-    var caught: RupaError?
+    var caught: EditorError?
     do {
         _ = try session.execute(
             .extrudeProfile(
@@ -1660,7 +1660,7 @@ import Testing
                 direction: .normal
             )
         )
-    } catch let error as RupaError {
+    } catch let error as EditorError {
         caught = error
     }
 
@@ -1815,58 +1815,58 @@ import Testing
 @Test func componentCommandsRejectMissingReferencesBeforeMutation() async throws {
     let session = EditorSession()
 
-    var instanceError: RupaError?
+    var instanceError: EditorError?
     do {
         _ = try session.execute(
             .createComponentInstance(
                 name: "Missing",
-                definitionID: RupaComponentDefinitionID(),
+                definitionID: ComponentDefinitionID(),
                 localTransform: .identity
             )
         )
-    } catch let error as RupaError {
+    } catch let error as EditorError {
         instanceError = error
     }
 
-    var sceneNodeError: RupaError?
+    var sceneNodeError: EditorError?
     do {
         _ = try session.execute(
-            .setSceneNodeVisibility(id: RupaSceneNodeID(), isVisible: false)
+            .setSceneNodeVisibility(id: SceneNodeID(), isVisible: false)
         )
-    } catch let error as RupaError {
+    } catch let error as EditorError {
         sceneNodeError = error
     }
 
-    var sceneNodeTransformError: RupaError?
+    var sceneNodeTransformError: EditorError?
     do {
         _ = try session.execute(
             .setSceneNodeTransform(
-                id: RupaSceneNodeID(),
+                id: SceneNodeID(),
                 localTransform: .identity
             )
         )
-    } catch let error as RupaError {
+    } catch let error as EditorError {
         sceneNodeTransformError = error
     }
 
-    var componentInstanceError: RupaError?
+    var componentInstanceError: EditorError?
     do {
         _ = try session.execute(
-            .setComponentInstanceLock(id: RupaComponentInstanceID(), isLocked: true)
+            .setComponentInstanceLock(id: ComponentInstanceID(), isLocked: true)
         )
-    } catch let error as RupaError {
+    } catch let error as EditorError {
         componentInstanceError = error
     }
 
-    var componentInstanceTransformError: RupaError?
+    var componentInstanceTransformError: EditorError?
     do {
         _ = try session.execute(
             .setComponentInstanceTransform(
-                id: RupaComponentInstanceID(),
+                id: ComponentInstanceID(),
                 localTransform: .identity
             )
         )
-    } catch let error as RupaError {
+    } catch let error as EditorError {
         componentInstanceTransformError = error
     }
 
@@ -1916,7 +1916,7 @@ import Testing
 }
 
 private func sketchFeature(
-    in document: RupaDocument,
+    in document: DesignDocument,
     featureID: FeatureID
 ) -> Sketch? {
     guard let feature = document.cadDocument.designGraph.nodes[featureID],
@@ -1927,7 +1927,7 @@ private func sketchFeature(
 }
 
 private func singleSketchEntityID(
-    in document: RupaDocument,
+    in document: DesignDocument,
     featureID: FeatureID
 ) -> SketchEntityID? {
     guard let sketch = sketchFeature(in: document, featureID: featureID),
@@ -2002,7 +2002,7 @@ private func translationTransform(
 @MainActor
 @Test func evaluationFailurePublishesDiagnosticsAndRenderInvalidation() async throws {
     let missingFeatureID = FeatureID()
-    let document = RupaDocument(
+    let document = DesignDocument(
         cadDocument: CADDocument(
             units: .meters,
             designGraph: DesignGraph(
@@ -2049,8 +2049,8 @@ private func translationTransform(
     }
 
     let url = temporaryDirectory.appendingPathComponent("roundtrip.swcad")
-    let service = RupaDocumentFileService()
-    var document = RupaDocument.empty(named: "Before")
+    let service = DocumentFileService()
+    var document = DesignDocument.empty(named: "Before")
     document.rename("After")
 
     try service.save(document, to: url)

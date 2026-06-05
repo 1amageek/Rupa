@@ -31,7 +31,7 @@ public final class WorkspaceRegistry {
 
     public func session(id: UUID) throws -> EditorSession {
         guard let entry = entries[id] else {
-            throw RupaError(
+            throw EditorError(
                 code: .sessionNotFound,
                 message: "No open session exists for \(id.uuidString)."
             )
@@ -41,13 +41,13 @@ public final class WorkspaceRegistry {
 
     public func documentURL(id: UUID) throws -> URL {
         guard let entry = entries[id] else {
-            throw RupaError(
+            throw EditorError(
                 code: .sessionNotFound,
                 message: "No open session exists for \(id.uuidString)."
             )
         }
         guard let path = entry.path else {
-            throw RupaError(
+            throw EditorError(
                 code: .commandInvalid,
                 message: "The open session does not have a file path to save."
             )

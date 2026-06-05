@@ -1,20 +1,20 @@
 import Foundation
 
 public struct DocumentSnapshot: Sendable {
-    public var document: RupaDocument
+    public var document: DesignDocument
     public var generation: DocumentGeneration
     public var isDirty: Bool
-    public var diagnostics: [RupaDiagnostic]
+    public var diagnostics: [EditorDiagnostic]
     public var evaluationStatus: EvaluationStatus
     public var evaluatedGeneration: DocumentGeneration?
     public var renderInvalidation: RenderInvalidation
     public var evaluatedBodyCount: Int
 
     public init(
-        document: RupaDocument,
+        document: DesignDocument,
         generation: DocumentGeneration,
         isDirty: Bool,
-        diagnostics: [RupaDiagnostic],
+        diagnostics: [EditorDiagnostic],
         evaluationStatus: EvaluationStatus,
         evaluatedGeneration: DocumentGeneration? = nil,
         renderInvalidation: RenderInvalidation = RenderInvalidation(),

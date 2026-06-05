@@ -1,6 +1,7 @@
 import CoreGraphics
 import RupaCore
 import RupaRendering
+import SwiftCAD
 import Testing
 
 @MainActor
@@ -148,7 +149,7 @@ import Testing
 }
 
 @Test func viewportModelCoordinateMapperProvidesEmptyDocumentDragPlane() {
-    var document = RupaDocument.empty()
+    var document = DesignDocument.empty()
     document.setDisplayUnit(.micrometer)
     let mapper = ViewportModelCoordinateMapper(
         document: document,
@@ -216,7 +217,7 @@ import Testing
 }
 
 @Test func viewportCanvasDragPlaceholderUsesCoordinateAlignedFootprintOnEmptyDocument() throws {
-    var document = RupaDocument.empty()
+    var document = DesignDocument.empty()
     document.setDisplayUnit(.millimeter)
     let mapper = ViewportModelCoordinateMapper(
         document: document,
@@ -249,7 +250,7 @@ import Testing
 }
 
 @Test func viewportProjectedGridCreatesCoordinateParallelLines() {
-    var document = RupaDocument.empty()
+    var document = DesignDocument.empty()
     document.setDisplayUnit(.millimeter)
     let grid = ViewportProjectedGrid(
         document: document,

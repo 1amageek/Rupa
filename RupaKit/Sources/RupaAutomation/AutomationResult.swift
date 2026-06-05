@@ -6,14 +6,14 @@ public struct AutomationResult: Codable, Equatable, Sendable {
     public var commandName: String?
     public var generation: DocumentGeneration
     public var didMutate: Bool
-    public var diagnostics: [RupaDiagnostic]
+    public var diagnostics: [EditorDiagnostic]
 
     public init(
         message: String,
         commandName: String? = nil,
         generation: DocumentGeneration = DocumentGeneration(),
         didMutate: Bool = false,
-        diagnostics: [RupaDiagnostic] = []
+        diagnostics: [EditorDiagnostic] = []
     ) {
         self.message = message
         self.commandName = commandName

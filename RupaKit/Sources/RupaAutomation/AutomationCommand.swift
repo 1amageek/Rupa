@@ -8,18 +8,18 @@ public enum AutomationCommand: Codable, Equatable, Sendable {
     case renameDocument(name: String)
     case upsertParameter(name: String, expression: CADExpression, kind: QuantityKind)
     case deleteParameter(name: String)
-    case createComponentDefinition(name: String, rootSceneNodeIDs: [RupaSceneNodeID])
+    case createComponentDefinition(name: String, rootSceneNodeIDs: [SceneNodeID])
     case createComponentInstance(
         name: String,
-        definitionID: RupaComponentDefinitionID,
+        definitionID: ComponentDefinitionID,
         localTransform: Transform3D
     )
-    case setSceneNodeVisibility(id: RupaSceneNodeID, isVisible: Bool)
-    case setSceneNodeLock(id: RupaSceneNodeID, isLocked: Bool)
-    case setSceneNodeTransform(id: RupaSceneNodeID, localTransform: Transform3D)
-    case setComponentInstanceVisibility(id: RupaComponentInstanceID, isVisible: Bool)
-    case setComponentInstanceLock(id: RupaComponentInstanceID, isLocked: Bool)
-    case setComponentInstanceTransform(id: RupaComponentInstanceID, localTransform: Transform3D)
+    case setSceneNodeVisibility(id: SceneNodeID, isVisible: Bool)
+    case setSceneNodeLock(id: SceneNodeID, isLocked: Bool)
+    case setSceneNodeTransform(id: SceneNodeID, localTransform: Transform3D)
+    case setComponentInstanceVisibility(id: ComponentInstanceID, isVisible: Bool)
+    case setComponentInstanceLock(id: ComponentInstanceID, isLocked: Bool)
+    case setComponentInstanceTransform(id: ComponentInstanceID, localTransform: Transform3D)
     case createSectionPlane(name: String)
     case createLineSketch(name: String, plane: SketchPlane, start: SketchPoint, end: SketchPoint)
     case createCircleSketch(name: String, plane: SketchPlane, center: SketchPoint, radius: CADExpression)

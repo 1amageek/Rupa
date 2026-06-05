@@ -9,7 +9,7 @@ public final class EditorSession {
     public private(set) var selection: SelectionModel
     public var selectedTool: ModelingTool
 
-    public var document: RupaDocument {
+    public var document: DesignDocument {
         store.document
     }
 
@@ -21,7 +21,7 @@ public final class EditorSession {
         store.isDirty
     }
 
-    public var diagnostics: [RupaDiagnostic] {
+    public var diagnostics: [EditorDiagnostic] {
         store.diagnostics
     }
 
@@ -45,11 +45,15 @@ public final class EditorSession {
         store.evaluationSnapshot
     }
 
-    public var selectedSceneNodeID: RupaSceneNodeID? {
+    public var objectRegistry: ObjectTypeRegistry {
+        store.objectRegistry
+    }
+
+    public var selectedSceneNodeID: SceneNodeID? {
         selection.primarySceneNodeID
     }
 
-    public var selectedSceneNode: RupaSceneNode? {
+    public var selectedSceneNode: SceneNode? {
         guard let selectedSceneNodeID else {
             return nil
         }
@@ -57,14 +61,16 @@ public final class EditorSession {
     }
 
     public init(
-        document: RupaDocument = .empty(),
+        document: DesignDocument = .empty(),
         selectedTool: ModelingTool = .select,
         selection: SelectionModel = .empty,
-        diagnostics: [RupaDiagnostic] = []
+        diagnostics: [EditorDiagnostic] = [],
+        objectRegistry: ObjectTypeRegistry = .builtIn
     ) {
         self.store = CADDocumentStore(
             document: document,
-            diagnostics: diagnostics
+            diagnostics: diagnostics,
+            objectRegistry: objectRegistry
         )
         self.commandStack = CommandStack()
         self.selectedTool = selectedTool
@@ -79,7 +85,7 @@ public final class EditorSession {
 
     @discardableResult
     public func activateSelectedToolFromCanvas(
-        targetSceneNodeID: RupaSceneNodeID?,
+        targetSceneNodeID: SceneNodeID?,
         modelPoint: Point2D? = nil,
         sketchPlane: SketchPlane = .xy
     ) -> ModelingToolActivationResult {
@@ -368,7 +374,7 @@ public final class EditorSession {
         }
     }
 
-    public func replaceProductMetadata(_ metadata: RupaProductMetadata) {
+    public func replaceProductMetadata(_ metadata: ProductMetadata) {
         do {
             try execute(.replaceProductMetadata(metadata))
         } catch {
@@ -396,7 +402,7 @@ public final class EditorSession {
     @discardableResult
     public func createComponentDefinition(
         name: String,
-        rootSceneNodeIDs: [RupaSceneNodeID] = []
+        rootSceneNodeIDs: [SceneNodeID] = []
     ) -> CommandExecutionResult? {
         perform(
             .createComponentDefinition(
@@ -409,7 +415,7 @@ public final class EditorSession {
     @discardableResult
     public func createComponentInstance(
         name: String,
-        definitionID: RupaComponentDefinitionID,
+        definitionID: ComponentDefinitionID,
         localTransform: Transform3D = .identity
     ) -> CommandExecutionResult? {
         perform(
@@ -422,21 +428,21 @@ public final class EditorSession {
     }
 
     public func setSceneNodeVisibility(
-        _ id: RupaSceneNodeID,
+        _ id: SceneNodeID,
         isVisible: Bool
     ) {
         perform(.setSceneNodeVisibility(id: id, isVisible: isVisible))
     }
 
     public func setSceneNodeLock(
-        _ id: RupaSceneNodeID,
+        _ id: SceneNodeID,
         isLocked: Bool
     ) {
         perform(.setSceneNodeLock(id: id, isLocked: isLocked))
     }
 
     public func setSceneNodeTransform(
-        _ id: RupaSceneNodeID,
+        _ id: SceneNodeID,
         localTransform: Transform3D
     ) {
         perform(
@@ -448,7 +454,7 @@ public final class EditorSession {
     }
 
     public func setSceneNodeMaterial(
-        _ id: RupaSceneNodeID,
+        _ id: SceneNodeID,
         materialID: MaterialID?
     ) {
         perform(
@@ -459,22 +465,36 @@ public final class EditorSession {
         )
     }
 
+    public func setSceneNodeObjectProperty(
+        _ id: SceneNodeID,
+        propertyID: ObjectPropertyID,
+        value: ObjectPropertyValue?
+    ) {
+        perform(
+            .setSceneNodeObjectProperty(
+                id: id,
+                propertyID: propertyID,
+                value: value
+            )
+        )
+    }
+
     public func setComponentInstanceVisibility(
-        _ id: RupaComponentInstanceID,
+        _ id: ComponentInstanceID,
         isVisible: Bool
     ) {
         perform(.setComponentInstanceVisibility(id: id, isVisible: isVisible))
     }
 
     public func setComponentInstanceLock(
-        _ id: RupaComponentInstanceID,
+        _ id: ComponentInstanceID,
         isLocked: Bool
     ) {
         perform(.setComponentInstanceLock(id: id, isLocked: isLocked))
     }
 
     public func setComponentInstanceTransform(
-        _ id: RupaComponentInstanceID,
+        _ id: ComponentInstanceID,
         localTransform: Transform3D
     ) {
         perform(
@@ -766,7 +786,7 @@ public final class EditorSession {
     }
 
     @discardableResult
-    public func createDefaultSolid(fromSceneNode sceneNodeID: RupaSceneNodeID?) -> CommandExecutionResult? {
+    public func createDefaultSolid(fromSceneNode sceneNodeID: SceneNodeID?) -> CommandExecutionResult? {
         guard let sceneNodeID,
               let sceneNode = document.productMetadata.sceneNodes[sceneNodeID],
               sceneNode.reference?.kind == .sketch,
@@ -796,8 +816,38 @@ public final class EditorSession {
         )
     }
 
+    public func setCubeDimensions(
+        featureID: FeatureID,
+        sizeX: CADExpression,
+        sizeY: CADExpression,
+        sizeZ: CADExpression
+    ) {
+        perform(
+            .setCubeDimensions(
+                featureID: featureID,
+                sizeX: sizeX,
+                sizeY: sizeY,
+                sizeZ: sizeZ
+            )
+        )
+    }
+
+    public func setCylinderDimensions(
+        featureID: FeatureID,
+        radius: CADExpression,
+        sizeY: CADExpression
+    ) {
+        perform(
+            .setCylinderDimensions(
+                featureID: featureID,
+                radius: radius,
+                sizeY: sizeY
+            )
+        )
+    }
+
     @discardableResult
-    public func selectSceneNode(_ id: RupaSceneNodeID?) -> Bool {
+    public func selectSceneNode(_ id: SceneNodeID?) -> Bool {
         do {
             try selection.selectSceneNode(id, in: document)
             return true
@@ -808,7 +858,7 @@ public final class EditorSession {
     }
 
     @discardableResult
-    public func selectSceneNodes(_ ids: [RupaSceneNodeID]) -> Bool {
+    public func selectSceneNodes(_ ids: [SceneNodeID]) -> Bool {
         do {
             try selection.selectSceneNodes(ids, in: document)
             return true
@@ -823,7 +873,7 @@ public final class EditorSession {
     }
 
     @discardableResult
-    public func hoverSceneNode(_ id: RupaSceneNodeID?) -> Bool {
+    public func hoverSceneNode(_ id: SceneNodeID?) -> Bool {
         do {
             try selection.hoverSceneNode(id, in: document)
             return true
@@ -834,11 +884,11 @@ public final class EditorSession {
     }
 
     @discardableResult
-    public func selectNewestSceneNode() -> RupaSceneNodeID? {
+    public func selectNewestSceneNode() -> SceneNodeID? {
         let metadata = document.productMetadata
-        var newestID: RupaSceneNodeID?
+        var newestID: SceneNodeID?
 
-        func visit(_ id: RupaSceneNodeID) {
+        func visit(_ id: SceneNodeID) {
             newestID = id
             guard let node = metadata.sceneNodes[id] else {
                 return
@@ -884,7 +934,7 @@ public final class EditorSession {
 
     public func reportMeasurementSummary() {
         do {
-            let result = try RupaMeasurementService().measure(
+            let result = try MeasurementService().measure(
                 document: document,
                 selection: selection
             )
@@ -896,7 +946,10 @@ public final class EditorSession {
 
     public func reportMeshSummary() {
         do {
-            let result = try RupaMeshSummaryService().summarize(document: document)
+            let result = try MeshSummaryService().summarize(
+                document: document,
+                objectRegistry: objectRegistry
+            )
             reportToolStatus(result.message)
         } catch {
             record(error)
@@ -905,7 +958,7 @@ public final class EditorSession {
 
     public func reportToolStatus(
         _ message: String,
-        severity: RupaDiagnostic.Severity = .info
+        severity: EditorDiagnostic.Severity = .info
     ) {
         let snapshot = store.snapshot()
         store.restore(
@@ -914,7 +967,7 @@ public final class EditorSession {
                 generation: snapshot.generation,
                 isDirty: snapshot.isDirty,
                 diagnostics: snapshot.diagnostics + [
-                    RupaDiagnostic(
+                    EditorDiagnostic(
                         severity: severity,
                         message: message
                     ),
@@ -957,7 +1010,7 @@ public final class EditorSession {
                 generation: snapshot.generation,
                 isDirty: snapshot.isDirty,
                 diagnostics: [
-                    RupaDiagnostic(
+                    EditorDiagnostic(
                         severity: .error,
                         message: error.localizedDescription
                     ),

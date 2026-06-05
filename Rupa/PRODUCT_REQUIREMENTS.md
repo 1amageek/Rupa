@@ -86,6 +86,8 @@ The following capabilities are required in the universal CAD model and must be r
 | Area | Requirement |
 |---|---|
 | Scale and units | Rulers, grids, dimensions, inputs, and display formatting must support at least micrometer (μm) detail through meter (m) scale building work. |
+| Object dimensions | Object `Size` values are first-class CAD dimensions, not renderer scale. Shape editing must preserve unit-aware `Size X/Y/Z`, centers, constraints, measurements, and export units separately from scene-node transform scale. |
+| Object semantics | Browser, Canvas, Inspector, CLI, and Agent references must treat Object as the user-selectable occurrence and keep body geometry, feature source, sketch source, component instance, material, and transform as separate but linked layers. Object types must be registry/protocol-backed and property-schema driven so new object types do not require a stored enum or hard-coded Inspector layout. |
 | Parameters | Named parameters, formulas, unit-aware expressions, and bulk parameter editing are required. |
 | Timeline | Feature history must be inspectable, reorderable where safe, suppressible, and command-driven. |
 | Sketching | 2D sketch entities, dimensions, geometric constraints, profiles, and construction geometry are required. |
@@ -107,8 +109,8 @@ Rupa's product requirements need concepts above the Swift-CAD core, but these co
 
 ```mermaid
 flowchart TD
-    RupaDoc["RupaDocument"] --> CAD["Swift-CAD source"]
-    RupaDoc --> Product["Universal product metadata"]
+    DesignDoc["DesignDocument"] --> CAD["Swift-CAD source"]
+    DesignDoc --> Product["Universal product metadata"]
     Product --> Scene["Scene hierarchy"]
     Product --> Materials["Materials"]
     Product --> Views["Views and drawings"]
@@ -119,7 +121,7 @@ flowchart TD
 
 | Model concept | Purpose |
 |---|---|
-| `RupaDocument` | Product-level document wrapper containing Swift-CAD source and Rupa metadata. |
+| `DesignDocument` | Product-level document wrapper containing Swift-CAD source and Rupa metadata. |
 | `SceneNode` | Hierarchical organization for bodies, components, cameras, lights, references, and semantic objects. |
 | `ComponentDefinition` | Reusable parametric component source. |
 | `ComponentInstance` | Transform, overrides, visibility, material bindings, and external reference. |
@@ -197,7 +199,7 @@ flowchart TD
 | Constrain | Sketch dimensions and constraints must surface overdefined, underdefined, and invalid states. |
 | Feature | Feature creation must expose named parameters and stable references. |
 | Evaluate | Evaluation must be cancellable and publish progress for large models. |
-| Inspect | SwiftUI inspector must show contextual dimensions, materials, metadata, references, and diagnostics. |
+| Inspect | The MacComponent Inspector Pane must show contextual Object type dimensions, source and generated 2D/3D/Text representation, materials, metadata, references, and diagnostics. |
 | Validate | Validation must be runnable without export. |
 | Export | Export must refuse unsafe output unless the user explicitly chooses a supported diagnostic override. |
 

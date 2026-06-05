@@ -25,7 +25,7 @@ public enum ViewportSketchPrimitive: Equatable {
 
 public enum ViewportSceneItemKind: Equatable {
     case sketch(primitives: [ViewportSketchPrimitive])
-    case body(depthMeters: Double)
+    case body(component: ViewportBodyComponent)
 
     public var selectableKind: ViewportSelectableKind {
         switch self {
@@ -34,6 +34,71 @@ public enum ViewportSceneItemKind: Equatable {
         case .body:
             return .body
         }
+    }
+}
+
+public struct ViewportBodyComponent: Equatable {
+    public var typeID: ObjectTypeID?
+    public var properties: ObjectPropertySet
+    public var sizeXMeters: Double
+    public var sizeYMeters: Double
+    public var sizeZMeters: Double
+    public var yMinMeters: Double
+    public var yMaxMeters: Double
+    public var cylinder: ViewportCylinderComponent?
+
+    public init(
+        typeID: ObjectTypeID? = nil,
+        properties: ObjectPropertySet = ObjectPropertySet(),
+        sizeXMeters: Double,
+        sizeYMeters: Double,
+        sizeZMeters: Double,
+        yMinMeters: Double,
+        yMaxMeters: Double,
+        cylinder: ViewportCylinderComponent? = nil
+    ) {
+        self.typeID = typeID
+        self.properties = properties
+        self.sizeXMeters = sizeXMeters
+        self.sizeYMeters = sizeYMeters
+        self.sizeZMeters = sizeZMeters
+        self.yMinMeters = yMinMeters
+        self.yMaxMeters = yMaxMeters
+        self.cylinder = cylinder
+    }
+}
+
+public struct ViewportCylinderComponent: Equatable {
+    public var topRadiusMeters: Double
+    public var bottomRadiusMeters: Double
+    public var sideSegments: Int
+    public var verticalSegments: Int
+    public var angleDegrees: Double
+    public var hasCaps: Bool
+    public var hollowMeters: Double
+    public var cornerRadiusMeters: Double
+    public var cornerSideSegments: Int
+
+    public init(
+        topRadiusMeters: Double,
+        bottomRadiusMeters: Double,
+        sideSegments: Int = 64,
+        verticalSegments: Int = 1,
+        angleDegrees: Double = 360.0,
+        hasCaps: Bool = true,
+        hollowMeters: Double = 0.0,
+        cornerRadiusMeters: Double = 0.0,
+        cornerSideSegments: Int = 8
+    ) {
+        self.topRadiusMeters = topRadiusMeters
+        self.bottomRadiusMeters = bottomRadiusMeters
+        self.sideSegments = sideSegments
+        self.verticalSegments = verticalSegments
+        self.angleDegrees = angleDegrees
+        self.hasCaps = hasCaps
+        self.hollowMeters = hollowMeters
+        self.cornerRadiusMeters = cornerRadiusMeters
+        self.cornerSideSegments = cornerSideSegments
     }
 }
 
@@ -417,12 +482,12 @@ public struct ViewportLayout: Equatable {
     }
 
     public func bodyProjection(for item: ViewportSceneItem) -> ViewportBodyProjection? {
-        guard case .body(let depthMeters) = item.kind else {
+        guard case .body(let component) = item.kind else {
             return nil
         }
 
         let footprint = projectedFootprint(item.modelBounds)
-        let depthOffset = max(12.0, min(54.0, CGFloat(depthMeters) * scale * 0.85))
+        let depthOffset = max(12.0, min(54.0, CGFloat(component.sizeYMeters) * scale * 0.85))
         let offset = CGSize(
             width: basis.yDirection.dx * depthOffset,
             height: basis.yDirection.dy * depthOffset
@@ -465,12 +530,13 @@ public struct ViewportModelCoordinateMapper {
     public var layout: ViewportLayout
 
     public init(
-        document: RupaDocument,
+        document: DesignDocument,
         size: CGSize,
+        objectRegistry: ObjectTypeRegistry = .builtIn,
         camera: ViewportCamera = .identity,
         basis: ViewportProjectionBasis = .isometric
     ) {
-        let scene = ViewportSceneBuilder().build(document: document)
+        let scene = ViewportSceneBuilder(objectRegistry: objectRegistry).build(document: document)
         let modelBounds = Self.modelBounds(for: document, scene: scene)
         self.layout = ViewportLayout(
             modelBounds: modelBounds,
@@ -500,7 +566,7 @@ public struct ViewportModelCoordinateMapper {
         )
     }
 
-    private static func emptyModelBounds(for document: RupaDocument) -> CGRect {
+    private static func emptyModelBounds(for document: DesignDocument) -> CGRect {
         let span = max(
             document.ruler.visibleSpanMeters,
             document.ruler.majorTickMeters * 20.0,
@@ -516,7 +582,7 @@ public struct ViewportModelCoordinateMapper {
     }
 
     private static func modelBounds(
-        for document: RupaDocument,
+        for document: DesignDocument,
         scene: ViewportScene
     ) -> CGRect {
         let baseBounds = emptyModelBounds(for: document)
@@ -747,9 +813,13 @@ public struct ViewportHitTester {
 }
 
 public struct ViewportSceneBuilder {
-    public init() {}
+    private let objectRegistry: ObjectTypeRegistry
 
-    public func build(document: RupaDocument) -> ViewportScene {
+    public init(objectRegistry: ObjectTypeRegistry = .builtIn) {
+        self.objectRegistry = objectRegistry
+    }
+
+    public func build(document: DesignDocument) -> ViewportScene {
         let graph = document.cadDocument.designGraph
         let items = graph.order.compactMap { featureID -> ViewportSceneItem? in
             guard let feature = graph.nodes[featureID] else {
@@ -788,19 +858,190 @@ public struct ViewportSceneBuilder {
                       ) else {
                     return nil
                 }
+                let object = objectDescriptor(
+                    featureID: featureID,
+                    kind: .body,
+                    document: document
+                )
+                let component = bodyComponent(
+                    sketch: sketch,
+                    bounds: bounds,
+                    depthMeters: depthMeters,
+                    direction: extrude.direction,
+                    parameters: document.cadDocument.parameters,
+                    declaredObjectTypeID: object?.typeID,
+                    declaredProperties: object?.properties ?? ObjectPropertySet()
+                )
                 return ViewportSceneItem(
                     id: featureID.description,
                     featureID: featureID,
                     sourceFeatureID: extrude.profile.featureID,
                     modelBounds: bounds,
-                    kind: .body(depthMeters: depthMeters)
+                    kind: .body(component: component)
                 )
             }
         }
         return ViewportScene(items: items)
     }
 
-    private func sketchBounds(
+    private func bodyComponent(
+        sketch: Sketch,
+        bounds: CGRect,
+        depthMeters: Double,
+        direction: ExtrudeDirection,
+        parameters: ParameterTable,
+        declaredObjectTypeID: ObjectTypeID?,
+        declaredProperties: ObjectPropertySet
+    ) -> ViewportBodyComponent {
+        let sizeY = abs(depthMeters)
+        let yExtents = bodyYExtents(depthMeters: depthMeters, direction: direction)
+        let rawCylinder = cylinderComponent(sketch: sketch, parameters: parameters)
+        let resolvedTypeID = declaredObjectTypeID ?? (rawCylinder == nil ? .cube : .cylinder)
+        let properties = resolvedProperties(
+            typeID: resolvedTypeID,
+            declaredProperties: declaredProperties
+        )
+        let cylinder = rawCylinder.map {
+            cylinderComponent($0, properties: properties)
+        }
+        if let cylinder {
+            return ViewportBodyComponent(
+                typeID: resolvedTypeID,
+                properties: properties,
+                sizeXMeters: Double(bounds.width),
+                sizeYMeters: sizeY,
+                sizeZMeters: Double(bounds.height),
+                yMinMeters: yExtents.min,
+                yMaxMeters: yExtents.max,
+                cylinder: cylinder
+            )
+        }
+        return ViewportBodyComponent(
+            typeID: resolvedTypeID,
+            properties: properties,
+            sizeXMeters: Double(bounds.width),
+            sizeYMeters: sizeY,
+            sizeZMeters: Double(bounds.height),
+            yMinMeters: yExtents.min,
+            yMaxMeters: yExtents.max
+        )
+    }
+
+    private func resolvedProperties(
+        typeID: ObjectTypeID?,
+        declaredProperties: ObjectPropertySet
+    ) -> ObjectPropertySet {
+        guard let definition = objectRegistry.definition(for: typeID) else {
+            return declaredProperties
+        }
+        var values = definition.defaultProperties.values
+        for (propertyID, value) in declaredProperties.values {
+            values[propertyID] = value
+        }
+        return ObjectPropertySet(values: values)
+    }
+
+    private func objectDescriptor(
+        featureID: FeatureID,
+        kind: SceneNodeReference.Kind,
+        document: DesignDocument
+    ) -> ObjectDescriptor? {
+        document.productMetadata.sceneNodes.values.first { node in
+            node.reference?.kind == kind && node.reference?.featureID == featureID
+        }?.object
+    }
+
+    private func bodyYExtents(
+        depthMeters: Double,
+        direction: ExtrudeDirection
+    ) -> (min: Double, max: Double) {
+        let size = abs(depthMeters)
+        switch direction {
+        case .symmetric:
+            return (-size / 2.0, size / 2.0)
+        case .normal, .vector(_):
+            if depthMeters >= 0.0 {
+                return (0.0, size)
+            }
+            return (-size, 0.0)
+        }
+    }
+
+    private func cylinderComponent(
+        sketch: Sketch,
+        parameters: ParameterTable
+    ) -> ViewportCylinderComponent? {
+        guard sketch.entities.count == 1,
+              let entity = sketch.entities.values.first,
+              case .circle(let circle) = entity,
+              let radius = resolvedLength(circle.radius, parameters: parameters) else {
+            return nil
+        }
+        return ViewportCylinderComponent(
+            topRadiusMeters: radius,
+            bottomRadiusMeters: radius
+        )
+    }
+
+    private func cylinderComponent(
+        _ component: ViewportCylinderComponent,
+        properties: ObjectPropertySet
+    ) -> ViewportCylinderComponent {
+        let radius = lengthProperty("radius", properties: properties) ?? component.topRadiusMeters
+        return ViewportCylinderComponent(
+            topRadiusMeters: max(radius, 1.0e-9),
+            bottomRadiusMeters: max(radius, 1.0e-9),
+            sideSegments: max(integerProperty("sides.x", properties: properties) ?? component.sideSegments, 3),
+            verticalSegments: max(integerProperty("sides.y", properties: properties) ?? component.verticalSegments, 1),
+            angleDegrees: angleProperty("angle", properties: properties) ?? component.angleDegrees,
+            hasCaps: booleanProperty("caps", properties: properties) ?? component.hasCaps,
+            hollowMeters: max(lengthProperty("hollow", properties: properties) ?? component.hollowMeters, 0.0),
+            cornerRadiusMeters: max(lengthProperty("corner.radius", properties: properties) ?? component.cornerRadiusMeters, 0.0),
+            cornerSideSegments: max(integerProperty("corner.sides", properties: properties) ?? component.cornerSideSegments, 1)
+        )
+    }
+
+    private func lengthProperty(
+        _ id: ObjectPropertyID,
+        properties: ObjectPropertySet
+    ) -> Double? {
+        guard case .length(let meters) = properties[id] else {
+            return nil
+        }
+        return meters.isFinite ? meters : nil
+    }
+
+    private func integerProperty(
+        _ id: ObjectPropertyID,
+        properties: ObjectPropertySet
+    ) -> Int? {
+        guard case .integer(let value) = properties[id] else {
+            return nil
+        }
+        return value
+    }
+
+    private func angleProperty(
+        _ id: ObjectPropertyID,
+        properties: ObjectPropertySet
+    ) -> Double? {
+        guard case .angle(let value) = properties[id] else {
+            return nil
+        }
+        return value.isFinite ? value : nil
+    }
+
+    private func booleanProperty(
+        _ id: ObjectPropertyID,
+        properties: ObjectPropertySet
+    ) -> Bool? {
+        guard case .boolean(let value) = properties[id] else {
+            return nil
+        }
+        return value
+    }
+
+	    private func sketchBounds(
         _ sketch: Sketch,
         parameters: ParameterTable
     ) -> CGRect? {

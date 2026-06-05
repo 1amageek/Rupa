@@ -36,7 +36,7 @@ The source of truth is not a view, file handle, renderer buffer, command-line pr
 | `CADDocumentStore` | Owns the editable document source for a session. |
 | `CommandStack` | Owns mutation ordering, undo, redo, and command participation. |
 | `EvaluationScheduler` | Owns deterministic regeneration after source changes and publishes generation-keyed derived state. |
-| `RupaProductMetadata` | Owns generic product metadata that Swift-CAD should not specialize, such as scene organization, components, materials, validation rules, export presets, and template defaults. |
+| `ProductMetadata` | Owns generic product metadata that Swift-CAD should not specialize, such as scene organization, components, materials, validation rules, export presets, and template defaults. |
 | Swift-CAD `DesignGraph` | Owns source-level sketches, feature dependencies, body-producing operations, and parameter references. |
 | `WorkspaceRegistry` | Owns the list of open app sessions visible to the agent layer. |
 | `RenderScene` | Derived view state for interactive display. |
@@ -44,8 +44,8 @@ The source of truth is not a view, file handle, renderer buffer, command-line pr
 
 ```mermaid
 flowchart LR
-    RupaDoc["RupaDocument"] --> Source["Swift-CAD source"]
-    RupaDoc --> Metadata["Universal product metadata"]
+    DesignDoc["DesignDocument"] --> Source["Swift-CAD source"]
+    DesignDoc --> Metadata["Universal product metadata"]
     Metadata --> Presets["Validation, export, template defaults"]
     Metadata --> Organization["Scene, components, materials"]
 ```
@@ -163,7 +163,7 @@ The first IPC contract should be local, inspectable, and easy to test.
 | Message style | JSON-RPC style request and response envelopes. |
 | Command payload | `RupaAutomation` Codable types. |
 | Result payload | `AutomationResult` with diagnostics and document summary. |
-| Session discovery | `WorkspaceRegistry` exposed through `RupaAgentServer`. |
+| Session discovery | `WorkspaceRegistry` exposed through `AgentServer`. |
 
 IPC transports may evolve later. CAD semantics stay in RupaCore and RupaAutomation so transport changes do not redefine commands.
 
@@ -219,7 +219,65 @@ Evaluation output is a snapshot, not source truth.
 | Evaluated geometry artifacts | May be cached, but must be replaceable from the document source and evaluated generation. |
 | Undo history | Does not store running tasks or heavy evaluated artifacts. |
 
-### 8. Automation Is a Stable Product Surface
+### 8. Treat Dimensions as Source, Not Scale
+
+CAD dimensions are product truth. A Cube's `Size X`, `Size Y`, and `Size Z` describe the object itself; they are not a renderer convenience and they are not equivalent to scene-node scale.
+
+```mermaid
+flowchart LR
+    Inspector["Inspector Size field"] --> Command["RupaCore object dimension command"]
+    Command --> Source["Sketch, feature, or primitive source"]
+    Source --> Evaluation["Evaluated geometry and measurements"]
+    Transform["Scene transform scale"] --> Placement["Placement only"]
+```
+
+| Property | Meaning |
+|---|---|
+| `Size` | Unit-aware model-space CAD dimension used by measurement, constraints, fabrication, export, and validation. |
+| `Center` | The object center derived from shape extents plus placement. |
+| `Transform.scale` | A placement transform for instances, groups, and visual composition. It must not replace source dimension edits. |
+| Feature internals | Kernel-specific values such as sketch width, sketch height, radius, and extrude distance. They can back dimensions but should not define the user-facing Object contract. |
+
+Object dimension commands therefore mutate the shape-defining source and then regenerate derived geometry. Rendering may preview transient edits, but persisted dimensional edits must enter RupaCore as typed commands.
+
+### 9. Use CAD Object Semantics
+
+Rupa treats an Object as a selectable occurrence with identity, placement, appearance, hierarchy, and a typed source descriptor. Feature IDs, sketches, bodies, and generated meshes are related layers, not interchangeable names for the same thing.
+
+```mermaid
+flowchart TD
+    Object["Object occurrence"] --> Placement["Transform and pivot"]
+    Object --> Appearance["Material, visibility, lock"]
+    Object --> SourceDescriptor["Object descriptor"]
+    SourceDescriptor --> Feature["Feature history"]
+    Feature --> Geometry["Generated geometry"]
+```
+
+| Term | Product meaning |
+|---|---|
+| Object | The user-selectable occurrence in the scene or assembly. |
+| Body | A generated or source-backed geometric region owned or referenced by an Object. |
+| Feature | A parametric operation in history that can create or modify geometry. |
+| Sketch | A source profile or construction object that can drive features. |
+| Component | A reusable definition and/or placed instance with its own local coordinate system. |
+| Subobject | Face, edge, vertex, sketch entity, or construction reference selected within an Object. |
+
+The Inspector and Browser should therefore speak in Object terms first and source terms second. Feature IDs remain available for traceability, debugging, and advanced source editing, but they must not replace object identity in the default editing experience.
+
+Object types are open. The product must not require a new stored enum case every time a modeling primitive, imported object, plugin object, construction helper, or domain-specific component is introduced. The stable contract is:
+
+| Contract | Responsibility |
+|---|---|
+| `ObjectTypeID` | Stable identifier for the object type. |
+| `ObjectType` | Protocol for code-owned object definitions. |
+| `ObjectTypeDefinition` | Source representation, generated representation, Inspector, and rendering contract for a type. |
+| `ObjectRepresentationKind` | Declares whether source or generated output is represented as 2D, 3D, or Text. |
+| `ObjectPropertyDefinition` | One typed property plus its Inspector control and render binding. |
+| `ObjectPropertySet` | Persisted values for a specific Object occurrence. |
+
+This lets Rupa keep Inspector and renderer interfaces stable while allowing the object catalog to grow beyond the initial built-in list. A Path can have a 2D editable source and resolve to a 3D generated result through extrusion and bevel, while zero extrusion remains 2D. Renderer bindings are semantic IDs, not a closed enum, so new object definitions can extend the catalog without forcing a stored document-schema change.
+
+### 10. Automation Is a Stable Product Surface
 
 Automation commands are not an internal test hook. They are the stable contract for CLI, agents, future MCP servers, and batch operations.
 
@@ -241,7 +299,7 @@ Evaluation and saving keep the same boundary discipline. Evaluation refreshes de
 
 Parameter formulas follow the same source-truth rule. CLI and Agent expression strings are parsed at the command boundary into Swift-CAD `CADExpression` AST values; saved documents persist the typed AST, not the transient input string.
 
-### 9. Keep Dependencies Directional
+### 11. Keep Dependencies Directional
 
 Rupa modules should form a one-way graph.
 
@@ -275,7 +333,7 @@ flowchart TD
 
 Lower-level modules do not import higher-level product shells.
 
-### 10. Prefer Protocol-Oriented Services
+### 12. Prefer Protocol-Oriented Services
 
 Public boundaries should be small protocols with replaceable implementations.
 
@@ -290,7 +348,7 @@ Public boundaries should be small protocols with replaceable implementations.
 
 Concrete implementations belong behind these contracts so tests can exercise core behavior without launching the app or renderer.
 
-### 11. Concurrency Must Protect Ordering
+### 13. Concurrency Must Protect Ordering
 
 Rupa has both high-frequency UI state and ordered asynchronous work.
 
@@ -305,7 +363,7 @@ Rupa has both high-frequency UI state and ordered asynchronous work.
 
 Command ordering, document generation, and diagnostics publication must remain deterministic.
 
-### 12. Errors Are Part of the UX
+### 14. Errors Are Part of the UX
 
 CAD failures are normal product events.
 

@@ -6,22 +6,23 @@ public enum EditorCommand: Codable, Equatable, Sendable {
     case setRulerConfiguration(RulerConfiguration)
     case renameDocument(name: String)
     case resetDocument(name: String)
-    case replaceProductMetadata(RupaProductMetadata)
+    case replaceProductMetadata(ProductMetadata)
     case upsertParameter(name: String, expression: CADExpression, kind: QuantityKind)
     case deleteParameter(name: String)
-    case createComponentDefinition(name: String, rootSceneNodeIDs: [RupaSceneNodeID])
+    case createComponentDefinition(name: String, rootSceneNodeIDs: [SceneNodeID])
     case createComponentInstance(
         name: String,
-        definitionID: RupaComponentDefinitionID,
+        definitionID: ComponentDefinitionID,
         localTransform: Transform3D
     )
-    case setSceneNodeVisibility(id: RupaSceneNodeID, isVisible: Bool)
-    case setSceneNodeLock(id: RupaSceneNodeID, isLocked: Bool)
-    case setSceneNodeTransform(id: RupaSceneNodeID, localTransform: Transform3D)
-    case setSceneNodeMaterial(id: RupaSceneNodeID, materialID: MaterialID?)
-    case setComponentInstanceVisibility(id: RupaComponentInstanceID, isVisible: Bool)
-    case setComponentInstanceLock(id: RupaComponentInstanceID, isLocked: Bool)
-    case setComponentInstanceTransform(id: RupaComponentInstanceID, localTransform: Transform3D)
+    case setSceneNodeVisibility(id: SceneNodeID, isVisible: Bool)
+    case setSceneNodeLock(id: SceneNodeID, isLocked: Bool)
+    case setSceneNodeTransform(id: SceneNodeID, localTransform: Transform3D)
+    case setSceneNodeMaterial(id: SceneNodeID, materialID: MaterialID?)
+    case setSceneNodeObjectProperty(id: SceneNodeID, propertyID: ObjectPropertyID, value: ObjectPropertyValue?)
+    case setComponentInstanceVisibility(id: ComponentInstanceID, isVisible: Bool)
+    case setComponentInstanceLock(id: ComponentInstanceID, isLocked: Bool)
+    case setComponentInstanceTransform(id: ComponentInstanceID, localTransform: Transform3D)
     case createSectionPlane(name: String)
     case createLineSketch(name: String, plane: SketchPlane, start: SketchPoint, end: SketchPoint)
     case createCircleSketch(name: String, plane: SketchPlane, center: SketchPoint, radius: CADExpression)
@@ -34,6 +35,17 @@ public enum EditorCommand: Codable, Equatable, Sendable {
         oppositeCorner: SketchPoint
     )
     case setExtrudeDistance(featureID: FeatureID, distance: CADExpression)
+    case setCubeDimensions(
+        featureID: FeatureID,
+        sizeX: CADExpression,
+        sizeY: CADExpression,
+        sizeZ: CADExpression
+    )
+    case setCylinderDimensions(
+        featureID: FeatureID,
+        radius: CADExpression,
+        sizeY: CADExpression
+    )
     case extrudeProfile(name: String, profile: ProfileReference, distance: CADExpression, direction: ExtrudeDirection)
     case createExtrudedRectangle(
         name: String,
@@ -89,6 +101,8 @@ public enum EditorCommand: Codable, Equatable, Sendable {
             "setSceneNodeTransform"
         case .setSceneNodeMaterial:
             "setSceneNodeMaterial"
+        case .setSceneNodeObjectProperty:
+            "setSceneNodeObjectProperty"
         case .setComponentInstanceVisibility:
             "setComponentInstanceVisibility"
         case .setComponentInstanceLock:
@@ -109,6 +123,10 @@ public enum EditorCommand: Codable, Equatable, Sendable {
             "createRectangleSketchFromCorners"
         case .setExtrudeDistance:
             "setExtrudeDistance"
+        case .setCubeDimensions:
+            "setCubeDimensions"
+        case .setCylinderDimensions:
+            "setCylinderDimensions"
         case .extrudeProfile:
             "extrudeProfile"
         case .createExtrudedRectangle:
@@ -137,6 +155,7 @@ public enum EditorCommand: Codable, Equatable, Sendable {
              .setSceneNodeLock,
              .setSceneNodeTransform,
              .setSceneNodeMaterial,
+             .setSceneNodeObjectProperty,
              .setComponentInstanceVisibility,
              .setComponentInstanceLock,
              .setComponentInstanceTransform,
@@ -147,6 +166,8 @@ public enum EditorCommand: Codable, Equatable, Sendable {
              .addSketchConstraint,
              .createRectangleSketchFromCorners,
              .setExtrudeDistance,
+             .setCubeDimensions,
+             .setCylinderDimensions,
              .extrudeProfile,
              .createExtrudedRectangle,
              .createExtrudedRectangleFromCorners,
