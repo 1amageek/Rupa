@@ -1,0 +1,42 @@
+{
+  "originHash" : "d05fad8135158b1ae95760776f55fca66f9c769c8f9aba03943c4399335538a3",
+  "pins" : [
+    {
+      "identity" : "mac-component",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/1amageek/mac-component",
+      "state" : {
+        "branch" : "main",
+        "revision" : "604851e6d0f137195ad8a14aa9b300470f7fe272"
+      }
+    },
+    {
+      "identity" : "swift-argument-parser",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/apple/swift-argument-parser",
+      "state" : {
+        "revision" : "ca37474853a4b5f59a22c74bfdd449b1f6bc4cc2",
+        "version" : "1.8.1"
+      }
+    },
+    {
+      "identity" : "swift-cad",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/1amageek/swift-CAD",
+      "state" : {
+        "branch" : "main",
+        "revision" : "0b5deb157a9ecba336e94a77ed5156a404aca932"
+      }
+    },
+    {
+      "identity" : "swift-collections",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/apple/swift-collections",
+      "state" : {
+        "revision" : "fea17c02d767f46b23070fdfdacc28a03a39232a",
+        "version" : "1.5.1"
+      }
+    }
+  ],
+  "version" : 3
+}

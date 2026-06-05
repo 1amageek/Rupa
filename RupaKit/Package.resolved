@@ -1,0 +1,33 @@
+{
+  "originHash" : "c36cefd759ecf63931d313dc75c4863fca0a26c1762efae7ac4c43f8fd468d1e",
+  "pins" : [
+    {
+      "identity" : "mac-component",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/1amageek/mac-component",
+      "state" : {
+        "branch" : "main",
+        "revision" : "604851e6d0f137195ad8a14aa9b300470f7fe272"
+      }
+    },
+    {
+      "identity" : "swift-argument-parser",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/apple/swift-argument-parser",
+      "state" : {
+        "revision" : "ca37474853a4b5f59a22c74bfdd449b1f6bc4cc2",
+        "version" : "1.8.1"
+      }
+    },
+    {
+      "identity" : "swift-collections",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/apple/swift-collections",
+      "state" : {
+        "revision" : "fea17c02d767f46b23070fdfdacc28a03a39232a",
+        "version" : "1.5.1"
+      }
+    }
+  ],
+  "version" : 3
+}
