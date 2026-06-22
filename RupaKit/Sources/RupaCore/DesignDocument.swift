@@ -13775,6 +13775,12 @@ public struct DesignDocument: Identifiable, Sendable {
     }
 
     private func validateSweepOptionQuantities(_ options: SweepOptions) throws {
+        if let unsupportedReason = SweepEvaluationCapabilities().unsupportedReason(for: options) {
+            throw EditorError(
+                code: .commandInvalid,
+                message: unsupportedReason
+            )
+        }
         _ = try resolvedAngleValue(options.twistAngle, owner: "Sweep twist angle")
         let endScale = try resolvedScalarValue(options.endScale, owner: "Sweep end scale")
         guard endScale > 0.0 else {

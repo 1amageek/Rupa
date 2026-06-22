@@ -30,13 +30,13 @@ import SwiftCAD
         options: SweepOptions(
             twistAngle: .angle(30.0, .degree),
             endScale: .constant(.scalar(1.25)),
-            alignment: .parallel,
+            alignment: .normal,
             distanceFraction: .constant(.scalar(0.75)),
-            cornerStyle: .round,
+            cornerStyle: .mitre,
             guideMethod: .point,
             booleanOperation: .newBody,
             keepTools: false,
-            simplify: true,
+            simplify: false,
             resultKind: .solid
         )
     )
@@ -64,14 +64,79 @@ import SwiftCAD
     ))
     #expect(sweep.profiles == [ProfileReference(featureID: profileID)])
     #expect(sweep.path == SweepPathReference(featureID: pathID))
-    #expect(sweep.options.alignment == .parallel)
-    #expect(sweep.options.cornerStyle == .round)
+    #expect(sweep.options.alignment == .normal)
+    #expect(sweep.options.cornerStyle == .mitre)
     #expect(sweep.options.keepTools == false)
-    #expect(sweep.options.simplify)
+    #expect(sweep.options.simplify == false)
     #expect(sceneNode.object?.category == .body)
     #expect(sceneNode.object?.sourceFeatureID == sweepID)
     #expect(sceneNode.object?.sourceProfileFeatureID == profileID)
     try document.validate()
+}
+
+@Test func createSweepRejectsUnsupportedEvaluationOptionsBeforeMutation() throws {
+    var document = DesignDocument.empty()
+    let profileID = try document.createRectangleSketch(
+        name: "Unsupported Sweep Profile",
+        plane: .xy,
+        width: .length(4.0, .millimeter),
+        height: .length(2.0, .millimeter)
+    )
+    let pathID = try document.createLineSketch(
+        name: "Unsupported Sweep Path",
+        plane: .xy,
+        start: SketchPoint(
+            x: .length(0.0, .millimeter),
+            y: .length(0.0, .millimeter)
+        ),
+        end: SketchPoint(
+            x: .length(20.0, .millimeter),
+            y: .length(0.0, .millimeter)
+        )
+    )
+    let originalOrder = document.cadDocument.designGraph.order
+
+    do {
+        _ = try document.createSweep(
+            name: "Parallel Sweep",
+            profiles: [ProfileReference(featureID: profileID)],
+            path: SweepPathReference(featureID: pathID),
+            options: SweepOptions(alignment: .parallel)
+        )
+        Issue.record("Sweep command must reject unsupported parallel alignment.")
+    } catch let error as EditorError {
+        #expect(error.code == .commandInvalid)
+        #expect(error.message.contains("parallel alignment"))
+    }
+    #expect(document.cadDocument.designGraph.order == originalOrder)
+
+    do {
+        _ = try document.createSweep(
+            name: "Round Corner Sweep",
+            profiles: [ProfileReference(featureID: profileID)],
+            path: SweepPathReference(featureID: pathID),
+            options: SweepOptions(cornerStyle: .round)
+        )
+        Issue.record("Sweep command must reject unsupported round corners.")
+    } catch let error as EditorError {
+        #expect(error.code == .commandInvalid)
+        #expect(error.message.contains("round"))
+    }
+    #expect(document.cadDocument.designGraph.order == originalOrder)
+
+    do {
+        _ = try document.createSweep(
+            name: "Simplified Sweep",
+            profiles: [ProfileReference(featureID: profileID)],
+            path: SweepPathReference(featureID: pathID),
+            options: SweepOptions(simplify: true)
+        )
+        Issue.record("Sweep command must reject unsupported simplify output.")
+    } catch let error as EditorError {
+        #expect(error.code == .commandInvalid)
+        #expect(error.message.contains("simplify"))
+    }
+    #expect(document.cadDocument.designGraph.order == originalOrder)
 }
 
 @Test func createSweepBooleanStoresTargetBodyInput() throws {
