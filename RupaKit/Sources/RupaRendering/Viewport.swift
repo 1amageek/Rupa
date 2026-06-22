@@ -49,6 +49,7 @@ public struct Viewport: View {
     @State private var selectedAxis: ViewportCoordinateAxis?
     @State private var hoveredCanvasHit: ViewportHit?
     @State private var hoveredModelPoint: Point2D?
+    @State private var identityHitResolver = ViewportIdentityHitResolver()
 
     private let document: DesignDocument
     private let objectRegistry: ObjectTypeRegistry
@@ -7169,7 +7170,7 @@ public struct Viewport: View {
         in scene: ViewportScene,
         layout: ViewportLayout
     ) -> ViewportHit? {
-        ViewportHitTester().hitTest(point: point, in: scene, layout: layout)
+        identityHitResolver.hitTest(point: point, in: scene, layout: layout)
     }
 
     private func polygonBounds(_ polygon: [CGPoint]) -> CGRect {

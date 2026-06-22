@@ -36,6 +36,48 @@ import Testing
 }
 
 @MainActor
+@Test func viewportIdentityHitResolverReturnsIdentityBufferGeneratedTopologyHit() throws {
+    let scene = identityBufferGeneratedTopologyScene()
+    let viewportSize = CGSize(width: 240.0, height: 180.0)
+    let layout = try #require(ViewportLayout(scene: scene, size: viewportSize))
+    let resolver = ViewportIdentityHitResolver()
+    let faceComponentID = SelectionComponentID.generatedTopology(
+        "feature:body:subshape:identity:face:front"
+    )
+
+    let hit = resolver.hitTest(
+        point: layout.project(Point3D(x: 0.0, y: 0.0, z: 0.0)),
+        in: scene,
+        layout: layout
+    )
+
+    #expect(hit?.pickingBackend == .identityBuffer)
+    #expect(hit?.selectionComponent == .face(faceComponentID))
+}
+
+@MainActor
+@Test func viewportIdentityHitResolverFallsBackToProjectedCPUWhenRendererIsUnavailable() throws {
+    let scene = identityBufferGeneratedTopologyScene()
+    let viewportSize = CGSize(width: 240.0, height: 180.0)
+    let layout = try #require(ViewportLayout(scene: scene, size: viewportSize))
+    let resolver = ViewportIdentityHitResolver(rendererFactory: {
+        throw ViewportIdentityBufferRendererError.deviceUnavailable
+    })
+    let faceComponentID = SelectionComponentID.generatedTopology(
+        "feature:body:subshape:identity:face:front"
+    )
+
+    let hit = resolver.hitTest(
+        point: layout.project(Point3D(x: 0.0, y: 0.0, z: 0.0)),
+        in: scene,
+        layout: layout
+    )
+
+    #expect(hit?.pickingBackend == .projectedCPU)
+    #expect(hit?.selectionComponent == .face(faceComponentID))
+}
+
+@MainActor
 @Test func viewportIdentityBufferRendererSamplesProjectedBodyFallbackHits() async throws {
     let session = EditorSession()
     _ = try #require(session.createDefaultExtrudedRectangle())
