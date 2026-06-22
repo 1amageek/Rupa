@@ -13595,6 +13595,7 @@ public struct DesignDocument: Identifiable, Sendable {
         if normalized < 0.0 {
             normalized += 360.0
         }
+        normalized = CADInputValueNormalizer.standard.angleDegrees(normalized)
         return normalized == -0.0 ? 0.0 : normalized
     }
 

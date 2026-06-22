@@ -1195,12 +1195,12 @@ public final class EditorSession {
                 name: nextFeatureName(prefix: "Rectangle Sketch"),
                 plane: sketchPlane,
                 firstCorner: SketchPoint(
-                    x: .length(center.x - halfWidthMeters, .meter),
-                    y: .length(center.y - halfHeightMeters, .meter)
+                    x: lengthExpressionMeters(center.x - halfWidthMeters),
+                    y: lengthExpressionMeters(center.y - halfHeightMeters)
                 ),
                 oppositeCorner: SketchPoint(
-                    x: .length(center.x + halfWidthMeters, .meter),
-                    y: .length(center.y + halfHeightMeters, .meter)
+                    x: lengthExpressionMeters(center.x + halfWidthMeters),
+                    y: lengthExpressionMeters(center.y + halfHeightMeters)
                 )
             )
         )
@@ -1229,12 +1229,12 @@ public final class EditorSession {
         let deltaY = end.y - start.y
         let widthMeters = activeSketchWidthInputMeters ?? abs(deltaX)
         let heightMeters = activeSketchHeightInputMeters ?? abs(deltaY)
-        let endX = start.x + signedDimension(widthMeters, following: deltaX)
-        let endY = start.y + signedDimension(heightMeters, following: deltaY)
-        let minX = min(start.x, endX)
-        let minY = min(start.y, endY)
-        let maxX = max(start.x, endX)
-        let maxY = max(start.y, endY)
+        let endX = normalizedLengthMeters(start.x + signedDimension(widthMeters, following: deltaX))
+        let endY = normalizedLengthMeters(start.y + signedDimension(heightMeters, following: deltaY))
+        let minX = normalizedLengthMeters(min(start.x, endX))
+        let minY = normalizedLengthMeters(min(start.y, endY))
+        let maxX = normalizedLengthMeters(max(start.x, endX))
+        let maxY = normalizedLengthMeters(max(start.y, endY))
         guard maxX > minX, maxY > minY else {
             reportToolStatus(
                 "Canvas rectangle drag requires a non-zero width and height.",
@@ -1248,12 +1248,12 @@ public final class EditorSession {
                 name: nextFeatureName(prefix: "Rectangle Sketch"),
                 plane: sketchPlane,
                 firstCorner: SketchPoint(
-                    x: .length(minX, .meter),
-                    y: .length(minY, .meter)
+                    x: lengthExpressionMeters(minX),
+                    y: lengthExpressionMeters(minY)
                 ),
                 oppositeCorner: SketchPoint(
-                    x: .length(maxX, .meter),
-                    y: .length(maxY, .meter)
+                    x: lengthExpressionMeters(maxX),
+                    y: lengthExpressionMeters(maxY)
                 )
             )
         )
@@ -1468,11 +1468,11 @@ public final class EditorSession {
                 name: nextFeatureName(prefix: "Polygon Sketch"),
                 plane: sketchPlane,
                 center: sketchPoint(draft.center),
-                radius: .length(draft.radiusMeters, .meter),
+                radius: lengthExpressionMeters(draft.radiusMeters),
                 sides: draft.sides,
                 sizingMode: draft.sizingMode,
                 inclinationMode: draft.inclinationMode,
-                rotationAngle: .angle(draft.rotationAngleRadians, .radian)
+                rotationAngle: angleExpressionRadians(draft.rotationAngleRadians)
             )
         )
         rememberPolygonToolState(
@@ -1569,11 +1569,11 @@ public final class EditorSession {
                 name: nextFeatureName(prefix: "Polygon Sketch"),
                 plane: sketchPlane,
                 center: sketchPoint(draft.center),
-                radius: .length(draft.radiusMeters, .meter),
+                radius: lengthExpressionMeters(draft.radiusMeters),
                 sides: draft.sides,
                 sizingMode: draft.sizingMode,
                 inclinationMode: draft.inclinationMode,
-                rotationAngle: .angle(draft.rotationAngleRadians, .radian)
+                rotationAngle: angleExpressionRadians(draft.rotationAngleRadians)
             )
         )
         rememberPolygonToolState(
@@ -1705,7 +1705,7 @@ public final class EditorSession {
                 name: nextFeatureName(prefix: "Arc Sketch"),
                 plane: sketchPlane,
                 center: sketchPoint(x: draft.center.x, y: draft.center.y),
-                radius: .length(draft.radiusMeters, .meter),
+                radius: lengthExpressionMeters(draft.radiusMeters),
                 startAngle: .angle(draft.startAngleRadians, .radian),
                 endAngle: .angle(draft.endAngleRadians, .radian)
             )
@@ -1741,7 +1741,7 @@ public final class EditorSession {
                 name: nextFeatureName(prefix: "Arc Sketch"),
                 plane: sketchPlane,
                 center: sketchPoint(x: draft.center.x, y: draft.center.y),
-                radius: .length(draft.radiusMeters, .meter),
+                radius: lengthExpressionMeters(draft.radiusMeters),
                 startAngle: .angle(draft.startAngleRadians, .radian),
                 endAngle: .angle(draft.endAngleRadians, .radian)
             )
@@ -1755,7 +1755,7 @@ public final class EditorSession {
               lengthMeters > 0.0 else {
             return nil
         }
-        return lengthMeters
+        return CADInputValueNormalizer.standard.lengthMeters(lengthMeters)
     }
 
     private var activeSketchAngleInputRadians: Double? {
@@ -1764,7 +1764,7 @@ public final class EditorSession {
               angleRadians.isFinite else {
             return nil
         }
-        return angleRadians
+        return CADInputValueNormalizer.standard.angleRadians(angleRadians)
     }
 
     private var activeSketchWidthInputMeters: Double? {
@@ -1774,7 +1774,7 @@ public final class EditorSession {
               widthMeters > 0.0 else {
             return nil
         }
-        return widthMeters
+        return CADInputValueNormalizer.standard.lengthMeters(widthMeters)
     }
 
     private var activeSketchHeightInputMeters: Double? {
@@ -1784,7 +1784,7 @@ public final class EditorSession {
               heightMeters > 0.0 else {
             return nil
         }
-        return heightMeters
+        return CADInputValueNormalizer.standard.lengthMeters(heightMeters)
     }
 
     private var isRectangleDimensionInputActive: Bool {
@@ -1899,14 +1899,14 @@ public final class EditorSession {
                 name: nextFeatureName(prefix: "Box"),
                 plane: sketchPlane,
                 firstCorner: SketchPoint(
-                    x: .length(center.x - halfSideMeters, .meter),
-                    y: .length(center.y - halfSideMeters, .meter)
+                    x: lengthExpressionMeters(center.x - halfSideMeters),
+                    y: lengthExpressionMeters(center.y - halfSideMeters)
                 ),
                 oppositeCorner: SketchPoint(
-                    x: .length(center.x + halfSideMeters, .meter),
-                    y: .length(center.y + halfSideMeters, .meter)
+                    x: lengthExpressionMeters(center.x + halfSideMeters),
+                    y: lengthExpressionMeters(center.y + halfSideMeters)
                 ),
-                depth: .length(sideMeters, .meter),
+                depth: lengthExpressionMeters(sideMeters),
                 direction: .normal
             )
         )
@@ -1931,10 +1931,10 @@ public final class EditorSession {
 
         let start = sketchPoint2D(from: startModelPoint, on: sketchPlane)
         let end = sketchPoint2D(from: endModelPoint, on: sketchPlane)
-        let minX = min(start.x, end.x)
-        let minY = min(start.y, end.y)
-        let maxX = max(start.x, end.x)
-        let maxY = max(start.y, end.y)
+        let minX = normalizedLengthMeters(min(start.x, end.x))
+        let minY = normalizedLengthMeters(min(start.y, end.y))
+        let maxX = normalizedLengthMeters(max(start.x, end.x))
+        let maxY = normalizedLengthMeters(max(start.y, end.y))
         guard maxX > minX, maxY > minY else {
             reportToolStatus(
                 "Canvas solid drag requires a non-zero width and height.",
@@ -1948,12 +1948,12 @@ public final class EditorSession {
                 name: nextFeatureName(prefix: "Box"),
                 plane: sketchPlane,
                 firstCorner: SketchPoint(
-                    x: .length(minX, .meter),
-                    y: .length(minY, .meter)
+                    x: lengthExpressionMeters(minX),
+                    y: lengthExpressionMeters(minY)
                 ),
                 oppositeCorner: SketchPoint(
-                    x: .length(maxX, .meter),
-                    y: .length(maxY, .meter)
+                    x: lengthExpressionMeters(maxX),
+                    y: lengthExpressionMeters(maxY)
                 ),
                 depth: .length(10.0, .millimeter),
                 direction: .normal
@@ -3033,26 +3033,44 @@ public final class EditorSession {
         from modelPoint: Point2D,
         on plane: SketchPlane
     ) -> Point2D {
+        let localPoint: Point2D
         switch plane {
         case .xy, .yz, .plane:
-            return modelPoint
+            localPoint = modelPoint
         case .zx:
-            return Point2D(
+            localPoint = Point2D(
                 x: modelPoint.y,
                 y: modelPoint.x
             )
         }
+        return CADInputValueNormalizer.standard.point(localPoint)
     }
 
     private func sketchPoint(x: Double, y: Double) -> SketchPoint {
         SketchPoint(
-            x: .length(x, .meter),
-            y: .length(y, .meter)
+            x: lengthExpressionMeters(x),
+            y: lengthExpressionMeters(y)
         )
     }
 
     private func sketchPoint(_ point: Point2D) -> SketchPoint {
         sketchPoint(x: point.x, y: point.y)
+    }
+
+    private func normalizedLengthMeters(_ value: Double) -> Double {
+        CADInputValueNormalizer.standard.lengthMeters(value)
+    }
+
+    private func normalizedAngleRadians(_ value: Double) -> Double {
+        CADInputValueNormalizer.standard.angleRadians(value)
+    }
+
+    private func lengthExpressionMeters(_ value: Double) -> CADExpression {
+        .length(normalizedLengthMeters(value), .meter)
+    }
+
+    private func angleExpressionRadians(_ value: Double) -> CADExpression {
+        .angle(normalizedAngleRadians(value), .radian)
     }
 
     private func nextSceneNodeName(prefix: String) -> String {

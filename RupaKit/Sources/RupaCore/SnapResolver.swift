@@ -427,8 +427,16 @@ public struct SnapResolver: Sendable {
         let sortedCandidates = candidates
             .filter { !normalizedOptions.suppressedCandidateKinds.contains($0.candidate.kind) }
             .sorted { first, second in
-                if first.priority != second.priority {
-                    return first.priority < second.priority
+                let firstPriority = effectivePriority(
+                    for: first,
+                    suppressedCandidateKinds: normalizedOptions.suppressedCandidateKinds
+                )
+                let secondPriority = effectivePriority(
+                    for: second,
+                    suppressedCandidateKinds: normalizedOptions.suppressedCandidateKinds
+                )
+                if firstPriority != secondPriority {
+                    return firstPriority < secondPriority
                 }
                 if first.candidate.distanceMeters != second.candidate.distanceMeters {
                     return first.candidate.distanceMeters < second.candidate.distanceMeters
@@ -448,6 +456,18 @@ public struct SnapResolver: Sendable {
             selectedCandidate: selectedCandidate,
             candidates: limitedCandidates
         )
+    }
+
+    private func effectivePriority(
+        for candidate: PrioritizedSnapCandidate,
+        suppressedCandidateKinds: Set<SnapCandidateKind>
+    ) -> Int {
+        guard candidate.candidate.kind == .curveCoordinatePlane,
+              suppressedCandidateKinds.contains(.curveAxis) ||
+              suppressedCandidateKinds.contains(.curvePerpendicular) else {
+            return candidate.priority
+        }
+        return -1
     }
 
     private func objectCandidates(
@@ -1010,7 +1030,7 @@ public struct SnapResolver: Sendable {
                     label: axisDirection.kind.label,
                     axis: axisDirection.kind,
                     coordinatePlane: nil,
-                    priority: 2,
+                    priority: axisDirection.priority,
                     points: axisPoints(
                         from: referencePoint,
                         direction: axisDirection.direction,
@@ -1981,9 +2001,14 @@ public struct SnapResolver: Sendable {
             coordinateSystem = try SketchPlaneCoordinateSystem(plane: sourcePlane)
         }
         return [SnapAxisKind.x, .y, .z].compactMap { kind in
-            guard let axisDirection = axisDirection(kind, on: coordinateSystem) else {
+            guard var axisDirection = axisDirection(kind, on: coordinateSystem) else {
                 return nil
             }
+            axisDirection.priority = referenceAxisPriority(
+                kind,
+                sourcePlane: sourcePlane,
+                usesConstructionPlane: constructionPlane != nil
+            )
             if constructionPlane != nil {
                 return axisDirection
             }
@@ -1993,7 +2018,11 @@ public struct SnapResolver: Sendable {
             ) else {
                 return nil
             }
-            return SnapAxisDirection(kind: kind, direction: direction)
+            return SnapAxisDirection(
+                kind: kind,
+                priority: axisDirection.priority,
+                direction: direction
+            )
         }
     }
 
@@ -2038,8 +2067,29 @@ public struct SnapResolver: Sendable {
         }
         return SnapAxisDirection(
             kind: kind,
+            priority: 2,
             direction: Point2D(x: localX / length, y: localY / length)
         )
+    }
+
+    private func referenceAxisPriority(
+        _ kind: SnapAxisKind,
+        sourcePlane: SketchPlane,
+        usesConstructionPlane: Bool
+    ) -> Int {
+        if usesConstructionPlane {
+            return -2
+        }
+        switch sourcePlane {
+        case .xy:
+            return kind == .x ? -2 : 2
+        case .yz:
+            return kind == .y ? -2 : 2
+        case .zx:
+            return kind == .x ? -2 : 2
+        case .plane:
+            return -2
+        }
     }
 
     private func coordinatePlaneDirection(
@@ -3038,6 +3088,7 @@ private struct SnapEntity: Equatable {
 
 private struct SnapAxisDirection: Equatable {
     var kind: SnapAxisKind
+    var priority: Int
     var direction: Point2D
 }
 
