@@ -982,6 +982,57 @@ import Testing
     #expect(index.hit(for: vertexRecord.identity)?.selectionComponent == .vertex(vertexComponentID))
 }
 
+@Test func viewportIdentityPickRenderPlanBuildsGeneratedTopologyDrawItems() throws {
+    let scene = viewportGeneratedTopologyScene()
+    let layout = try #require(
+        ViewportLayout(
+            scene: scene,
+            size: CGSize(width: 800.0, height: 600.0)
+        )
+    )
+    let faceComponentID = SelectionComponentID.generatedTopology(
+        "feature:body:subshape:test:face:front"
+    )
+    let edgeComponentID = SelectionComponentID.generatedTopology(
+        "feature:body:subshape:test:edge:frontBottom"
+    )
+    let vertexComponentID = SelectionComponentID.generatedTopology(
+        "feature:body:subshape:test:vertex:frontBottomLeft"
+    )
+
+    let plan = ViewportIdentityPickRenderPlanBuilder().build(scene: scene, layout: layout)
+    let faceItem = try #require(plan.drawItems.first {
+        $0.geometry == .generatedFace(faceComponentID)
+    })
+    let edgeItem = try #require(plan.drawItems.first {
+        $0.geometry == .generatedEdge(edgeComponentID)
+    })
+    let vertexItem = try #require(plan.drawItems.first {
+        $0.geometry == .generatedVertex(vertexComponentID)
+    })
+
+    #expect(plan.index.count == 4)
+    #expect(plan.drawItems(for: faceItem.identity).isEmpty == false)
+    #expect(faceItem.hit.pickingBackend == .identityBuffer)
+    #expect(faceItem.hit.selectionComponent == .face(faceComponentID))
+    #expect(faceItem.depth != nil)
+    if case .polygon(let points) = faceItem.primitive {
+        #expect(points.count == 4)
+    } else {
+        Issue.record("Expected generated face to render as a polygon.")
+    }
+    if case .segment(_, _, let radius) = edgeItem.primitive {
+        #expect(radius == 4.0)
+    } else {
+        Issue.record("Expected generated edge to render as a segment.")
+    }
+    if case .point(_, let radius) = vertexItem.primitive {
+        #expect(radius == 6.0)
+    } else {
+        Issue.record("Expected generated vertex to render as a point.")
+    }
+}
+
 @MainActor
 @Test func viewportIdentityPickIndexIncludesProjectedBodyFallbackWhenTopologyIsMissing() async throws {
     let session = EditorSession()
@@ -995,6 +1046,49 @@ import Testing
     #expect(index.records.contains { $0.geometry == .projectedBodyVertex(.backTopRight) })
     #expect(index.records.allSatisfy { $0.identity.rawValue > ViewportPickIdentity.backgroundRawValue })
     #expect(index.records.allSatisfy { $0.hit.pickingBackend == .identityBuffer })
+}
+
+@MainActor
+@Test func viewportIdentityPickRenderPlanBuildsProjectedBodyFallbackDrawItems() async throws {
+    let session = EditorSession()
+    _ = try #require(session.createDefaultExtrudedRectangle())
+    let scene = ViewportSceneBuilder().build(document: session.document)
+    let layout = try #require(
+        ViewportLayout(
+            scene: scene,
+            size: CGSize(width: 800.0, height: 600.0)
+        )
+    )
+
+    let plan = ViewportIdentityPickRenderPlanBuilder().build(scene: scene, layout: layout)
+    let faceItem = try #require(plan.drawItems.first {
+        $0.geometry == .projectedBodyFace(.front)
+    })
+    let edgeItem = try #require(plan.drawItems.first {
+        $0.geometry == .projectedBodyEdge(.rightTop)
+    })
+    let vertexItem = try #require(plan.drawItems.first {
+        $0.geometry == .projectedBodyVertex(.backTopRight)
+    })
+
+    #expect(faceItem.hit.pickingBackend == .identityBuffer)
+    #expect(edgeItem.hit.pickingBackend == .identityBuffer)
+    #expect(vertexItem.hit.pickingBackend == .identityBuffer)
+    if case .polygon(let points) = faceItem.primitive {
+        #expect(points.count == 4)
+    } else {
+        Issue.record("Expected projected body face to render as a polygon.")
+    }
+    if case .segment = edgeItem.primitive {
+        #expect(edgeItem.hit.bodyEdge == .rightTop)
+    } else {
+        Issue.record("Expected projected body edge to render as a segment.")
+    }
+    if case .point = vertexItem.primitive {
+        #expect(vertexItem.hit.bodyVertex == .backTopRight)
+    } else {
+        Issue.record("Expected projected body vertex to render as a point.")
+    }
 }
 
 @MainActor
@@ -1027,6 +1121,50 @@ import Testing
     } == false)
     #expect(visibleIndex.records.contains { record in
         if case .sketchControlPoint(_, 1) = record.geometry {
+            return true
+        }
+        return false
+    })
+}
+
+@MainActor
+@Test func viewportIdentityPickRenderPlanUsesProvidedSketchControlPointIndexPolicy() async throws {
+    let session = EditorSession()
+    _ = try session.execute(
+        .createSplineSketch(
+            name: "Viewport Identity Spline Render Policy",
+            plane: .xy,
+            spline: SketchSpline(controlPoints: [
+                SketchPoint(x: .length(0.0, .millimeter), y: .length(0.0, .millimeter)),
+                SketchPoint(x: .length(2.0, .millimeter), y: .length(4.0, .millimeter)),
+                SketchPoint(x: .length(6.0, .millimeter), y: .length(4.0, .millimeter)),
+                SketchPoint(x: .length(8.0, .millimeter), y: .length(0.0, .millimeter)),
+            ])
+        )
+    )
+    let scene = ViewportSceneBuilder().build(document: session.document)
+    let layout = try #require(
+        ViewportLayout(
+            scene: scene,
+            size: CGSize(width: 800.0, height: 600.0)
+        )
+    )
+    let hiddenIndex = ViewportIdentityPickIndexBuilder(includesSketchControlPoints: false)
+        .build(scene: scene)
+    let hiddenPlan = ViewportIdentityPickRenderPlanBuilder()
+        .build(scene: scene, layout: layout, index: hiddenIndex)
+    let visiblePlan = ViewportIdentityPickRenderPlanBuilder()
+        .build(scene: scene, layout: layout)
+
+    #expect(hiddenPlan.drawItems.contains { drawItem in
+        if case .sketchControlPoint = drawItem.geometry {
+            return true
+        }
+        return false
+    } == false)
+    #expect(visiblePlan.drawItems.contains { drawItem in
+        if case .sketchControlPoint(_, 1) = drawItem.geometry,
+           case .point = drawItem.primitive {
             return true
         }
         return false
