@@ -4,15 +4,20 @@ import SwiftCAD
 
 @MainActor
 public final class ViewportIdentityHitResolver {
-    public typealias RendererFactory = () throws -> ViewportIdentityBufferRenderer
+    public typealias RendererFactory = () throws -> any ViewportIdentityBufferRendering
 
-    private struct Cache {
+    private struct CacheKey: Equatable {
         var scene: ViewportScene
         var layout: ViewportLayout
+        var sketchControlPointHitPolicy: ViewportSketchControlPointHitPolicy
+    }
+
+    private struct Cache {
+        var key: CacheKey
         var buffer: ViewportIdentityBuffer
     }
 
-    private var renderer: ViewportIdentityBufferRenderer?
+    private var renderer: (any ViewportIdentityBufferRendering)?
     private var cached: Cache?
     private let rendererFactory: RendererFactory
 
@@ -39,15 +44,10 @@ public final class ViewportIdentityHitResolver {
         sketchControlPointHitPolicy: ViewportSketchControlPointHitPolicy = .all
     ) -> [ViewportHit] {
         do {
-            let index = ViewportIdentityPickIndexBuilder(
+            let buffer = try identityBuffer(
+                for: scene,
+                layout: layout,
                 sketchControlPointHitPolicy: sketchControlPointHitPolicy
-            )
-            .build(scene: scene)
-            let plan = ViewportIdentityPickRenderPlanBuilder()
-                .build(scene: scene, layout: layout, index: index)
-            let buffer = try identityRenderer().render(
-                plan: plan,
-                viewportSize: layout.viewportSize
             )
             return buffer.hits(in: rect)
         } catch {
@@ -69,31 +69,44 @@ public final class ViewportIdentityHitResolver {
         in scene: ViewportScene,
         layout: ViewportLayout
     ) throws -> ViewportHit? {
-        let buffer = try identityBuffer(for: scene, layout: layout)
+        let buffer = try identityBuffer(
+            for: scene,
+            layout: layout,
+            sketchControlPointHitPolicy: .all
+        )
         return try buffer.sample(at: point).hit
     }
 
     private func identityBuffer(
         for scene: ViewportScene,
-        layout: ViewportLayout
+        layout: ViewportLayout,
+        sketchControlPointHitPolicy: ViewportSketchControlPointHitPolicy
     ) throws -> ViewportIdentityBuffer {
+        let key = CacheKey(
+            scene: scene,
+            layout: layout,
+            sketchControlPointHitPolicy: sketchControlPointHitPolicy
+        )
         if let cached,
-           cached.scene == scene,
-           cached.layout == layout {
+           cached.key == key {
             return cached.buffer
         }
 
+        let index = ViewportIdentityPickIndexBuilder(
+            sketchControlPointHitPolicy: sketchControlPointHitPolicy
+        )
+        .build(scene: scene)
         let plan = ViewportIdentityPickRenderPlanBuilder()
-            .build(scene: scene, layout: layout)
+            .build(scene: scene, layout: layout, index: index)
         let buffer = try identityRenderer().render(
             plan: plan,
             viewportSize: layout.viewportSize
         )
-        cached = Cache(scene: scene, layout: layout, buffer: buffer)
+        cached = Cache(key: key, buffer: buffer)
         return buffer
     }
 
-    private func identityRenderer() throws -> ViewportIdentityBufferRenderer {
+    private func identityRenderer() throws -> any ViewportIdentityBufferRendering {
         if let renderer {
             return renderer
         }

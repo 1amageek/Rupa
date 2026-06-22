@@ -123,6 +123,13 @@ public struct ViewportIdentityBuffer: Equatable, Sendable {
     }
 }
 
+public protocol ViewportIdentityBufferRendering: AnyObject {
+    func render(
+        plan: ViewportIdentityPickRenderPlan,
+        viewportSize: CGSize
+    ) throws -> ViewportIdentityBuffer
+}
+
 public final class ViewportIdentityBufferRenderer {
     private let device: any MTLDevice
     private let commandQueue: any MTLCommandQueue
@@ -504,6 +511,8 @@ private struct ViewportIdentityMetalPoint {
         ViewportIdentityMetalPoint(x: 0.0, y: 0.0)
     }
 }
+
+extension ViewportIdentityBufferRenderer: ViewportIdentityBufferRendering {}
 
 private struct ViewportIdentityMetalCommand {
     var kind: UInt32

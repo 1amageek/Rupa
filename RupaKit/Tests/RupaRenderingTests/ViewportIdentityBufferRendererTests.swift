@@ -135,6 +135,74 @@ import Testing
 }
 
 @MainActor
+@Test func viewportIdentityHitResolverReusesIdentityBufferForPointAndRectangleHits() throws {
+    let scene = identityBufferGeneratedTopologyScene()
+    let viewportSize = CGSize(width: 240.0, height: 180.0)
+    let layout = try #require(ViewportLayout(scene: scene, size: viewportSize))
+    let renderer = CountingIdentityBufferRenderer()
+    let resolver = ViewportIdentityHitResolver(rendererFactory: { renderer })
+
+    _ = resolver.hitTest(
+        point: layout.project(Point3D(x: 0.0, y: 0.0, z: 0.0)),
+        in: scene,
+        layout: layout
+    )
+    _ = resolver.selectionHits(
+        in: CGRect(x: 0.0, y: 0.0, width: viewportSize.width, height: viewportSize.height),
+        scene: scene,
+        layout: layout
+    )
+
+    #expect(renderer.renderCount == 1)
+}
+
+@MainActor
+@Test func viewportIdentityHitResolverDoesNotReuseIdentityBufferAcrossSketchPolicies() throws {
+    let scene = try identityBufferSplineScene()
+    let viewportSize = CGSize(width: 240.0, height: 180.0)
+    let layout = try #require(ViewportLayout(scene: scene, size: viewportSize))
+    let renderer = CountingIdentityBufferRenderer()
+    let resolver = ViewportIdentityHitResolver(rendererFactory: { renderer })
+
+    _ = resolver.selectionHits(
+        in: CGRect(x: 0.0, y: 0.0, width: viewportSize.width, height: viewportSize.height),
+        scene: scene,
+        layout: layout,
+        sketchControlPointHitPolicy: .none
+    )
+    _ = resolver.selectionHits(
+        in: CGRect(x: 0.0, y: 0.0, width: viewportSize.width, height: viewportSize.height),
+        scene: scene,
+        layout: layout,
+        sketchControlPointHitPolicy: .all
+    )
+
+    let recordCounts = renderer.renderedRecordCounts
+    #expect(renderer.renderCount == 2)
+    #expect(recordCounts.count == 2)
+    if recordCounts.count == 2 {
+        #expect(recordCounts[0] < recordCounts[1])
+    }
+}
+
+@MainActor
+@Test func viewportIdentityHitResolverInvalidateDropsCachedIdentityBuffer() throws {
+    let scene = identityBufferGeneratedTopologyScene()
+    let viewportSize = CGSize(width: 240.0, height: 180.0)
+    let layout = try #require(ViewportLayout(scene: scene, size: viewportSize))
+    let renderer = CountingIdentityBufferRenderer()
+    let resolver = ViewportIdentityHitResolver(rendererFactory: { renderer })
+    let selectionRect = CGRect(x: 0.0, y: 0.0, width: viewportSize.width, height: viewportSize.height)
+
+    _ = resolver.selectionHits(in: selectionRect, scene: scene, layout: layout)
+    _ = resolver.selectionHits(in: selectionRect, scene: scene, layout: layout)
+    resolver.invalidate()
+    _ = resolver.selectionHits(in: selectionRect, scene: scene, layout: layout)
+
+    #expect(renderer.renderCount == 2)
+}
+
+@MainActor
 @Test func viewportIdentityHitResolverSelectionFallsBackToProjectedCPUWhenRendererIsUnavailable() throws {
     let scene = identityBufferGeneratedTopologyScene()
     let viewportSize = CGSize(width: 240.0, height: 180.0)
@@ -277,4 +345,52 @@ private func identityBufferGeneratedTopologyScene() -> ViewportScene {
         kind: .body(component: component)
     )
     return ViewportScene(items: [item])
+}
+
+@MainActor
+private func identityBufferSplineScene() throws -> ViewportScene {
+    let session = EditorSession()
+    _ = try session.execute(
+        .createSplineSketch(
+            name: "Viewport Identity Cache Spline",
+            plane: .xy,
+            spline: SketchSpline(controlPoints: [
+                SketchPoint(x: .length(0.0, .millimeter), y: .length(0.0, .millimeter)),
+                SketchPoint(x: .length(2.0, .millimeter), y: .length(4.0, .millimeter)),
+                SketchPoint(x: .length(6.0, .millimeter), y: .length(4.0, .millimeter)),
+                SketchPoint(x: .length(8.0, .millimeter), y: .length(0.0, .millimeter)),
+            ])
+        )
+    )
+    return ViewportSceneBuilder().build(document: session.document)
+}
+
+private final class CountingIdentityBufferRenderer: ViewportIdentityBufferRendering {
+    private(set) var renderCount = 0
+    private(set) var renderedRecordCounts: [Int] = []
+
+    func render(
+        plan: ViewportIdentityPickRenderPlan,
+        viewportSize: CGSize
+    ) throws -> ViewportIdentityBuffer {
+        guard viewportSize.width.isFinite,
+              viewportSize.height.isFinite,
+              viewportSize.width > 0.0,
+              viewportSize.height > 0.0 else {
+            throw ViewportIdentityBufferRendererError.invalidViewportSize
+        }
+        renderCount += 1
+        renderedRecordCounts.append(plan.index.count)
+
+        let width = max(Int(ceil(viewportSize.width)), 1)
+        let height = max(Int(ceil(viewportSize.height)), 1)
+        let rawValue = plan.index.records.first?.identity.rawValue
+            ?? ViewportPickIdentity.backgroundRawValue
+        return ViewportIdentityBuffer(
+            width: width,
+            height: height,
+            rawValues: Array(repeating: rawValue, count: width * height),
+            index: plan.index
+        )
+    }
 }
