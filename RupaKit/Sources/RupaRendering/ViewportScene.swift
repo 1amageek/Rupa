@@ -222,6 +222,22 @@ public struct ViewportBodyTopology: Equatable {
     }
 }
 
+public struct ViewportBodyTopologyHit: Equatable, Sendable {
+    public var component: SelectionComponent
+    public var score: CGFloat
+    public var depth: Double?
+
+    public init(
+        component: SelectionComponent,
+        score: CGFloat,
+        depth: Double? = nil
+    ) {
+        self.component = component
+        self.score = score
+        self.depth = depth
+    }
+}
+
 public struct ViewportCylinderComponent: Equatable {
     public var topRadiusMeters: Double
     public var bottomRadiusMeters: Double
@@ -1198,18 +1214,30 @@ public struct ViewportBodyTopologyHitTester {
         component: ViewportBodyComponent,
         point: CGPoint,
         layout: ViewportLayout
-    ) -> (component: SelectionComponent, score: CGFloat)? {
+    ) -> ViewportBodyTopologyHit? {
         guard let topology = component.topology else {
             return nil
         }
         if let vertex = hitVertex(in: topology, point: point, layout: layout) {
-            return (.vertex(vertex.componentID), vertex.score)
+            return ViewportBodyTopologyHit(
+                component: .vertex(vertex.componentID),
+                score: vertex.score,
+                depth: vertex.depth
+            )
         }
         if let edge = hitEdge(in: topology, point: point, layout: layout) {
-            return (.edge(edge.componentID), edge.score)
+            return ViewportBodyTopologyHit(
+                component: .edge(edge.componentID),
+                score: edge.score,
+                depth: edge.depth
+            )
         }
         if let face = hitFace(in: topology, point: point, layout: layout) {
-            return (.face(face.componentID), face.score)
+            return ViewportBodyTopologyHit(
+                component: .face(face.componentID),
+                score: 6.0,
+                depth: face.depth
+            )
         }
         return nil
     }
@@ -1218,19 +1246,21 @@ public struct ViewportBodyTopologyHitTester {
         in topology: ViewportBodyTopology,
         point: CGPoint,
         layout: ViewportLayout
-    ) -> (componentID: SelectionComponentID, score: CGFloat)? {
-        var bestVertex: (componentID: SelectionComponentID, score: CGFloat)?
+    ) -> (componentID: SelectionComponentID, score: CGFloat, depth: Double?)? {
+        var bestVertex: (componentID: SelectionComponentID, score: CGFloat, depth: Double?)?
         for vertex in topology.vertices {
             let distance = point.distance(to: layout.project(vertex.point))
             guard distance <= tolerance else {
                 continue
             }
+            let depth = projectedDepth(vertex.point, layout: layout)
+            let candidate = (componentID: vertex.componentID, score: distance, depth: depth)
             if let current = bestVertex {
-                if distance < current.score {
-                    bestVertex = (vertex.componentID, distance)
+                if isDistanceCandidate(candidate, betterThan: current) {
+                    bestVertex = candidate
                 }
             } else {
-                bestVertex = (vertex.componentID, distance)
+                bestVertex = candidate
             }
         }
         return bestVertex
@@ -1240,22 +1270,31 @@ public struct ViewportBodyTopologyHitTester {
         in topology: ViewportBodyTopology,
         point: CGPoint,
         layout: ViewportLayout
-    ) -> (componentID: SelectionComponentID, score: CGFloat)? {
-        var bestEdge: (componentID: SelectionComponentID, score: CGFloat)?
+    ) -> (componentID: SelectionComponentID, score: CGFloat, depth: Double?)? {
+        var bestEdge: (componentID: SelectionComponentID, score: CGFloat, depth: Double?)?
         for edge in topology.edges {
-            let distance = point.distanceToSegment(
-                start: layout.project(edge.start),
-                end: layout.project(edge.end)
-            )
+            let projectedStart = layout.project(edge.start)
+            let projectedEnd = layout.project(edge.end)
+            let distance = point.distanceToSegment(start: projectedStart, end: projectedEnd)
             guard distance <= tolerance else {
                 continue
             }
+            let parameter = closestSegmentParameter(
+                point: point,
+                start: projectedStart,
+                end: projectedEnd
+            )
+            let depth = projectedDepth(
+                interpolatedPoint(from: edge.start, to: edge.end, parameter: parameter),
+                layout: layout
+            )
+            let candidate = (componentID: edge.componentID, score: distance, depth: depth)
             if let current = bestEdge {
-                if distance < current.score {
-                    bestEdge = (edge.componentID, distance)
+                if isDistanceCandidate(candidate, betterThan: current) {
+                    bestEdge = candidate
                 }
             } else {
-                bestEdge = (edge.componentID, distance)
+                bestEdge = candidate
             }
         }
         return bestEdge
@@ -1265,21 +1304,23 @@ public struct ViewportBodyTopologyHitTester {
         in topology: ViewportBodyTopology,
         point: CGPoint,
         layout: ViewportLayout
-    ) -> (componentID: SelectionComponentID, score: CGFloat)? {
-        var bestFace: (componentID: SelectionComponentID, score: CGFloat)?
+    ) -> (componentID: SelectionComponentID, score: CGFloat, depth: Double?)? {
+        var bestFace: (componentID: SelectionComponentID, score: CGFloat, depth: Double?)?
         for face in topology.faces {
             let polygon = face.points.map { layout.project($0) }
             guard contains(point, in: polygon, tolerance: tolerance) else {
                 continue
             }
             let center = polygonCenter(polygon)
-            let score = 6.0 + min(point.distance(to: center) * 0.001, 1.0)
+            let score = min(point.distance(to: center) * 0.001, 1.0)
+            let depth = faceDepth(face, point: point, layout: layout)
+            let candidate = (componentID: face.componentID, score: score, depth: depth)
             if let current = bestFace {
-                if score < current.score {
-                    bestFace = (face.componentID, score)
+                if isFaceCandidate(candidate, betterThan: current) {
+                    bestFace = candidate
                 }
             } else {
-                bestFace = (face.componentID, score)
+                bestFace = candidate
             }
         }
         return bestFace
@@ -1343,6 +1384,106 @@ public struct ViewportBodyTopologyHitTester {
         }
         let count = max(CGFloat(polygon.count), 1.0)
         return CGPoint(x: sum.x / count, y: sum.y / count)
+    }
+
+    private func isDistanceCandidate(
+        _ candidate: (componentID: SelectionComponentID, score: CGFloat, depth: Double?),
+        betterThan current: (componentID: SelectionComponentID, score: CGFloat, depth: Double?)
+    ) -> Bool {
+        let scoreDelta = candidate.score - current.score
+        if abs(scoreDelta) > 1.0e-6 {
+            return scoreDelta < 0.0
+        }
+        return isNearer(candidate.depth, than: current.depth)
+    }
+
+    private func isFaceCandidate(
+        _ candidate: (componentID: SelectionComponentID, score: CGFloat, depth: Double?),
+        betterThan current: (componentID: SelectionComponentID, score: CGFloat, depth: Double?)
+    ) -> Bool {
+        if let candidateDepth = candidate.depth,
+           let currentDepth = current.depth,
+           abs(candidateDepth - currentDepth) > 1.0e-9 {
+            return candidateDepth > currentDepth
+        }
+        let scoreDelta = candidate.score - current.score
+        if abs(scoreDelta) > 1.0e-6 {
+            return scoreDelta < 0.0
+        }
+        return isNearer(candidate.depth, than: current.depth)
+    }
+
+    private func isNearer(_ candidateDepth: Double?, than currentDepth: Double?) -> Bool {
+        guard let candidateDepth else {
+            return false
+        }
+        guard let currentDepth else {
+            return true
+        }
+        return candidateDepth > currentDepth
+    }
+
+    private func faceDepth(
+        _ face: ViewportBodyTopology.Face,
+        point: CGPoint,
+        layout: ViewportLayout
+    ) -> Double? {
+        if let worldPoint = ViewportFaceSurfacePointResolver().worldPoint(
+            for: point,
+            face: face,
+            layout: layout
+        ) {
+            return projectedDepth(worldPoint, layout: layout)
+        }
+        guard !face.points.isEmpty else {
+            return nil
+        }
+        let sum = face.points.reduce(Point3D(x: 0.0, y: 0.0, z: 0.0)) { partial, point in
+            Point3D(
+                x: partial.x + point.x,
+                y: partial.y + point.y,
+                z: partial.z + point.z
+            )
+        }
+        let count = Double(face.points.count)
+        return projectedDepth(
+            Point3D(x: sum.x / count, y: sum.y / count, z: sum.z / count),
+            layout: layout
+        )
+    }
+
+    private func projectedDepth(_ point: Point3D, layout: ViewportLayout) -> Double? {
+        guard let viewNormal = layout.basis.viewNormal else {
+            return nil
+        }
+        return point.x * viewNormal.x + point.y * viewNormal.y + point.z * viewNormal.z
+    }
+
+    private func closestSegmentParameter(
+        point: CGPoint,
+        start: CGPoint,
+        end: CGPoint
+    ) -> Double {
+        let dx = end.x - start.x
+        let dy = end.y - start.y
+        let lengthSquared = dx * dx + dy * dy
+        guard lengthSquared > 1.0e-12 else {
+            return 0.0
+        }
+        let raw = ((point.x - start.x) * dx + (point.y - start.y) * dy) / lengthSquared
+        return Double(min(max(raw, 0.0), 1.0))
+    }
+
+    private func interpolatedPoint(
+        from start: Point3D,
+        to end: Point3D,
+        parameter: Double
+    ) -> Point3D {
+        Point3D(
+            x: start.x + (end.x - start.x) * parameter,
+            y: start.y + (end.y - start.y) * parameter,
+            z: start.z + (end.z - start.z) * parameter
+        )
     }
 }
 
@@ -1621,6 +1762,12 @@ public struct ViewportSketchDimensionDragTarget: Equatable, Sendable {
 public struct ViewportHitTester {
     public var tolerance: CGFloat
 
+    private struct HitCandidate {
+        var hit: ViewportHit
+        var score: CGFloat
+        var depth: Double?
+    }
+
     public init(tolerance: CGFloat = 8.0) {
         self.tolerance = tolerance
     }
@@ -1643,13 +1790,13 @@ public struct ViewportHitTester {
         in scene: ViewportScene,
         layout: ViewportLayout
     ) -> ViewportHit? {
-        var bestHit: (hit: ViewportHit, score: CGFloat)?
+        var bestHit: HitCandidate?
         for item in scene.items {
             guard let itemHit = hitCandidate(for: item, point: point, layout: layout) else {
                 continue
             }
             if let current = bestHit {
-                if itemHit.score < current.score {
+                if isHitCandidate(itemHit, betterThan: current) {
                     bestHit = itemHit
                 }
             } else {
@@ -1663,31 +1810,31 @@ public struct ViewportHitTester {
         for item: ViewportSceneItem,
         point: CGPoint,
         layout: ViewportLayout
-    ) -> (hit: ViewportHit, score: CGFloat)? {
+    ) -> HitCandidate? {
         switch item.kind {
         case .sketch(let primitives):
             if let sketchHit = hitScoreForSketch(primitives, point: point, layout: layout) {
-                return (
-                    ViewportHit(
+                return HitCandidate(
+                    hit: ViewportHit(
                         featureID: item.featureID,
                         kind: item.kind.selectableKind,
                         sketchEntityID: sketchHit.entityID,
                         sketchPointHandle: sketchHit.pointHandle,
                         sketchControlPointIndex: sketchHit.controlPointIndex
                     ),
-                    sketchHit.score
+                    score: sketchHit.score
                 )
             }
             guard let regionHit = hitScoreForSketchRegion(item.sketchRegions, point: point, layout: layout) else {
                 return nil
             }
-            return (
-                ViewportHit(
+            return HitCandidate(
+                hit: ViewportHit(
                     featureID: item.featureID,
                     kind: item.kind.selectableKind,
                     selectionComponent: .region(regionHit.componentID)
                 ),
-                regionHit.score
+                score: regionHit.score
             )
         case .body(let component):
             if let topologyHit = ViewportBodyTopologyHitTester(tolerance: tolerance).hitTest(
@@ -1695,35 +1842,50 @@ public struct ViewportHitTester {
                 point: point,
                 layout: layout
             ) {
-                return (
-                    ViewportHit(
+                return HitCandidate(
+                    hit: ViewportHit(
                         featureID: item.featureID,
                         kind: item.kind.selectableKind,
                         selectionComponent: topologyHit.component
                     ),
-                    topologyHit.score
+                    score: topologyHit.score,
+                    depth: topologyHit.depth
                 )
             }
             if let bodyVertex = hitBodyVertex(for: item, point: point, layout: layout) {
-                return (
-                    ViewportHit(featureID: item.featureID, kind: item.kind.selectableKind, bodyVertex: bodyVertex.vertex),
-                    bodyVertex.score
+                return HitCandidate(
+                    hit: ViewportHit(featureID: item.featureID, kind: item.kind.selectableKind, bodyVertex: bodyVertex.vertex),
+                    score: bodyVertex.score
                 )
             }
             if let bodyEdge = hitBodyEdge(for: item, point: point, layout: layout) {
-                return (
-                    ViewportHit(featureID: item.featureID, kind: item.kind.selectableKind, bodyEdge: bodyEdge.edge),
-                    bodyEdge.score
+                return HitCandidate(
+                    hit: ViewportHit(featureID: item.featureID, kind: item.kind.selectableKind, bodyEdge: bodyEdge.edge),
+                    score: bodyEdge.score
                 )
             }
             if let bodyFace = hitBodyFace(for: item, point: point, layout: layout) {
-                return (
-                    ViewportHit(featureID: item.featureID, kind: item.kind.selectableKind, bodyFace: bodyFace.face),
-                    bodyFace.score
+                return HitCandidate(
+                    hit: ViewportHit(featureID: item.featureID, kind: item.kind.selectableKind, bodyFace: bodyFace.face),
+                    score: bodyFace.score
                 )
             }
             return nil
         }
+    }
+
+    private func isHitCandidate(_ candidate: HitCandidate, betterThan current: HitCandidate) -> Bool {
+        let scoreDelta = candidate.score - current.score
+        if abs(scoreDelta) > 1.0e-6 {
+            return scoreDelta < 0.0
+        }
+        guard let candidateDepth = candidate.depth else {
+            return false
+        }
+        guard let currentDepth = current.depth else {
+            return true
+        }
+        return candidateDepth > currentDepth
     }
 
     private func hitBodyVertex(

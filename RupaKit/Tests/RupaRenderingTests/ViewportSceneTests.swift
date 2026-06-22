@@ -913,6 +913,54 @@ import Testing
     #expect(hit?.selectionComponent == .vertex(vertexComponentID))
 }
 
+@Test func viewportHitTesterSelectsNearestGeneratedFaceWhenFacesOverlapInProjection() throws {
+    let fixture = try overlappingGeneratedFaceScene()
+    let layout = try #require(
+        ViewportLayout(
+            scene: fixture.scene,
+            size: CGSize(width: 800.0, height: 600.0)
+        )
+    )
+
+    let hit = ViewportHitTester(tolerance: 0.0).hitTest(
+        point: layout.project(fixture.nearCenter),
+        in: fixture.scene,
+        layout: layout
+    )
+
+    #expect(hit?.featureID == fixture.nearFeatureID)
+    #expect(hit?.selectionComponent == .face(fixture.nearFaceComponentID))
+}
+
+@Test func viewportBodyTopologyHitTesterDepthBreaksTiesForOverlappingTopologyPrimitives() throws {
+    let fixture = try overlappingGeneratedPrimitiveComponent()
+    let layout = ViewportLayout(
+        modelBounds: fixture.modelBounds,
+        size: CGSize(width: 800.0, height: 600.0)
+    )
+    let hitPoint = layout.project(fixture.nearCenter)
+
+    let vertexHit = ViewportBodyTopologyHitTester().hitTest(
+        component: fixture.vertexComponent,
+        point: hitPoint,
+        layout: layout
+    )
+    let edgeHit = ViewportBodyTopologyHitTester().hitTest(
+        component: fixture.edgeComponent,
+        point: hitPoint,
+        layout: layout
+    )
+    let faceHit = ViewportBodyTopologyHitTester(tolerance: 0.0).hitTest(
+        component: fixture.faceComponent,
+        point: hitPoint,
+        layout: layout
+    )
+
+    #expect(vertexHit?.component == .vertex(fixture.nearVertexComponentID))
+    #expect(edgeHit?.component == .edge(fixture.nearEdgeComponentID))
+    #expect(faceHit?.component == .face(fixture.nearFaceComponentID))
+}
+
 @MainActor
 @Test func viewportSceneBuilderCreatesSketchRegionSelectionCandidates() async throws {
     let session = EditorSession()
@@ -1794,6 +1842,251 @@ private func viewportGeneratedTopologyScene() -> ViewportScene {
         kind: .body(component: component)
     )
     return ViewportScene(items: [item])
+}
+
+private struct OverlappingGeneratedFaceScene {
+    var scene: ViewportScene
+    var nearCenter: Point3D
+    var nearFeatureID: FeatureID
+    var nearFaceComponentID: SelectionComponentID
+}
+
+private struct OverlappingGeneratedPrimitiveComponent {
+    var modelBounds: CGRect
+    var nearCenter: Point3D
+    var vertexComponent: ViewportBodyComponent
+    var edgeComponent: ViewportBodyComponent
+    var faceComponent: ViewportBodyComponent
+    var nearVertexComponentID: SelectionComponentID
+    var nearEdgeComponentID: SelectionComponentID
+    var nearFaceComponentID: SelectionComponentID
+}
+
+private func overlappingGeneratedFaceScene() throws -> OverlappingGeneratedFaceScene {
+    let basis = ViewportProjectionBasis.isometric
+    let centers = try overlappingDepthCenters(basis: basis)
+    let farFeatureID = FeatureID()
+    let nearFeatureID = FeatureID()
+    let farFaceComponentID = SelectionComponentID.generatedTopology(
+        "feature:body:subshape:test:face:far"
+    )
+    let nearFaceComponentID = SelectionComponentID.generatedTopology(
+        "feature:body:subshape:test:face:near"
+    )
+    let farFace = ViewportBodyTopology.Face(
+        componentID: farFaceComponentID,
+        points: screenPlaneFacePoints(center: centers.far, basis: basis)
+    )
+    let nearFace = ViewportBodyTopology.Face(
+        componentID: nearFaceComponentID,
+        points: screenPlaneFacePoints(center: centers.near, basis: basis)
+    )
+    let farItem = viewportBodyItem(
+        featureID: farFeatureID,
+        topology: ViewportBodyTopology(faces: [farFace]),
+        points: farFace.points
+    )
+    let nearItem = viewportBodyItem(
+        featureID: nearFeatureID,
+        topology: ViewportBodyTopology(faces: [nearFace]),
+        points: nearFace.points
+    )
+    return OverlappingGeneratedFaceScene(
+        scene: ViewportScene(items: [farItem, nearItem]),
+        nearCenter: centers.near,
+        nearFeatureID: nearFeatureID,
+        nearFaceComponentID: nearFaceComponentID
+    )
+}
+
+private func overlappingGeneratedPrimitiveComponent() throws -> OverlappingGeneratedPrimitiveComponent {
+    let basis = ViewportProjectionBasis.isometric
+    let centers = try overlappingDepthCenters(basis: basis)
+    let farVertexComponentID = SelectionComponentID.generatedTopology(
+        "feature:body:subshape:test:vertex:far"
+    )
+    let nearVertexComponentID = SelectionComponentID.generatedTopology(
+        "feature:body:subshape:test:vertex:near"
+    )
+    let farEdgeComponentID = SelectionComponentID.generatedTopology(
+        "feature:body:subshape:test:edge:far"
+    )
+    let nearEdgeComponentID = SelectionComponentID.generatedTopology(
+        "feature:body:subshape:test:edge:near"
+    )
+    let farFaceComponentID = SelectionComponentID.generatedTopology(
+        "feature:body:subshape:test:face:far"
+    )
+    let nearFaceComponentID = SelectionComponentID.generatedTopology(
+        "feature:body:subshape:test:face:near"
+    )
+    let farFacePoints = screenPlaneFacePoints(center: centers.far, basis: basis)
+    let nearFacePoints = screenPlaneFacePoints(center: centers.near, basis: basis)
+    let farEdge = screenPlaneEdgePoints(center: centers.far, basis: basis)
+    let nearEdge = screenPlaneEdgePoints(center: centers.near, basis: basis)
+    let allPoints = farFacePoints + nearFacePoints
+
+    return OverlappingGeneratedPrimitiveComponent(
+        modelBounds: modelBounds(for: allPoints),
+        nearCenter: centers.near,
+        vertexComponent: viewportBodyComponent(
+            topology: ViewportBodyTopology(
+                vertices: [
+                    ViewportBodyTopology.Vertex(
+                        componentID: farVertexComponentID,
+                        point: centers.far
+                    ),
+                    ViewportBodyTopology.Vertex(
+                        componentID: nearVertexComponentID,
+                        point: centers.near
+                    ),
+                ]
+            ),
+            points: [centers.far, centers.near]
+        ),
+        edgeComponent: viewportBodyComponent(
+            topology: ViewportBodyTopology(
+                edges: [
+                    ViewportBodyTopology.Edge(
+                        componentID: farEdgeComponentID,
+                        start: farEdge.start,
+                        end: farEdge.end
+                    ),
+                    ViewportBodyTopology.Edge(
+                        componentID: nearEdgeComponentID,
+                        start: nearEdge.start,
+                        end: nearEdge.end
+                    ),
+                ]
+            ),
+            points: [farEdge.start, farEdge.end, nearEdge.start, nearEdge.end]
+        ),
+        faceComponent: viewportBodyComponent(
+            topology: ViewportBodyTopology(
+                faces: [
+                    ViewportBodyTopology.Face(
+                        componentID: farFaceComponentID,
+                        points: farFacePoints
+                    ),
+                    ViewportBodyTopology.Face(
+                        componentID: nearFaceComponentID,
+                        points: nearFacePoints
+                    ),
+                ]
+            ),
+            points: allPoints
+        ),
+        nearVertexComponentID: nearVertexComponentID,
+        nearEdgeComponentID: nearEdgeComponentID,
+        nearFaceComponentID: nearFaceComponentID
+    )
+}
+
+private func overlappingDepthCenters(
+    basis: ViewportProjectionBasis
+) throws -> (far: Point3D, near: Point3D) {
+    let normal = try #require(basis.viewNormal)
+    let offset = 0.006
+    return (
+        far: Point3D(
+            x: -normal.x * offset,
+            y: -normal.y * offset,
+            z: -normal.z * offset
+        ),
+        near: Point3D(
+            x: normal.x * offset,
+            y: normal.y * offset,
+            z: normal.z * offset
+        )
+    )
+}
+
+private func screenPlaneFacePoints(
+    center: Point3D,
+    basis: ViewportProjectionBasis
+) -> [Point3D] {
+    let half = 0.008
+    return [
+        screenPlanePoint(center: center, basis: basis, u: -half, v: -half),
+        screenPlanePoint(center: center, basis: basis, u: half, v: -half),
+        screenPlanePoint(center: center, basis: basis, u: half, v: half),
+        screenPlanePoint(center: center, basis: basis, u: -half, v: half),
+    ]
+}
+
+private func screenPlaneEdgePoints(
+    center: Point3D,
+    basis: ViewportProjectionBasis
+) -> (start: Point3D, end: Point3D) {
+    let half = 0.008
+    return (
+        start: screenPlanePoint(center: center, basis: basis, u: -half, v: 0.0),
+        end: screenPlanePoint(center: center, basis: basis, u: half, v: 0.0)
+    )
+}
+
+private func screenPlanePoint(
+    center: Point3D,
+    basis: ViewportProjectionBasis,
+    u: Double,
+    v: Double
+) -> Point3D {
+    Point3D(
+        x: center.x + Double(basis.xDirection.dx) * u + Double(basis.xDirection.dy) * v,
+        y: center.y + Double(basis.yDirection.dx) * u + Double(basis.yDirection.dy) * v,
+        z: center.z + Double(basis.zDirection.dx) * u + Double(basis.zDirection.dy) * v
+    )
+}
+
+private func viewportBodyItem(
+    featureID: FeatureID,
+    topology: ViewportBodyTopology,
+    points: [Point3D]
+) -> ViewportSceneItem {
+    ViewportSceneItem(
+        id: featureID.description,
+        featureID: featureID,
+        modelBounds: modelBounds(for: points),
+        kind: .body(component: viewportBodyComponent(topology: topology, points: points))
+    )
+}
+
+private func viewportBodyComponent(
+    topology: ViewportBodyTopology,
+    points: [Point3D]
+) -> ViewportBodyComponent {
+    let xValues = points.map(\.x)
+    let yValues = points.map(\.y)
+    let zValues = points.map(\.z)
+    let minX = xValues.min() ?? 0.0
+    let maxX = xValues.max() ?? 0.001
+    let minY = yValues.min() ?? 0.0
+    let maxY = yValues.max() ?? 0.001
+    let minZ = zValues.min() ?? 0.0
+    let maxZ = zValues.max() ?? 0.001
+    return ViewportBodyComponent(
+        sizeXMeters: max(maxX - minX, 1.0e-9),
+        sizeYMeters: max(maxY - minY, 1.0e-9),
+        sizeZMeters: max(maxZ - minZ, 1.0e-9),
+        yMinMeters: minY,
+        yMaxMeters: maxY,
+        topology: topology
+    )
+}
+
+private func modelBounds(for points: [Point3D]) -> CGRect {
+    let xValues = points.map(\.x)
+    let zValues = points.map(\.z)
+    let minX = xValues.min() ?? 0.0
+    let maxX = xValues.max() ?? 0.001
+    let minZ = zValues.min() ?? 0.0
+    let maxZ = zValues.max() ?? 0.001
+    return CGRect(
+        x: minX,
+        y: minZ,
+        width: max(maxX - minX, 1.0e-9),
+        height: max(maxZ - minZ, 1.0e-9)
+    )
 }
 
 private func projectedBounds(
