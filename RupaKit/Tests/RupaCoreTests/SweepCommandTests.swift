@@ -162,6 +162,80 @@ import SwiftCAD
     #expect(document.cadDocument.designGraph.order == originalOrder)
 }
 
+@Test func createSweepNormalAlignmentAcceptsProfilePlaneStraightPath() throws {
+    var document = DesignDocument.empty()
+    let profileID = try document.createRectangleSketch(
+        name: "Profile Plane Normal Sweep Profile",
+        plane: .xy,
+        width: .length(4.0, .millimeter),
+        height: .length(2.0, .millimeter)
+    )
+    let pathID = try document.createLineSketch(
+        name: "Profile Plane Normal Sweep Path",
+        plane: .xy,
+        start: SketchPoint(
+            x: .length(0.0, .millimeter),
+            y: .length(0.0, .millimeter)
+        ),
+        end: SketchPoint(
+            x: .length(20.0, .millimeter),
+            y: .length(0.0, .millimeter)
+        )
+    )
+
+    let sweepID = try document.createSweep(
+        name: "Profile Plane Normal Sweep",
+        profiles: [ProfileReference(featureID: profileID)],
+        path: SweepPathReference(featureID: pathID),
+        options: SweepOptions(alignment: .normal)
+    )
+
+    let feature = try #require(document.cadDocument.designGraph.nodes[sweepID])
+    guard case .sweep(let sweep) = feature.operation else {
+        Issue.record("Sweep command must create a sweep feature.")
+        return
+    }
+    #expect(sweep.options.alignment == .normal)
+    try document.validate()
+}
+
+@Test func createSweepParallelAlignmentRejectsProfilePlaneDegenerateSolidSweep() throws {
+    var document = DesignDocument.empty()
+    let profileID = try document.createRectangleSketch(
+        name: "Profile Plane Parallel Sweep Profile",
+        plane: .xy,
+        width: .length(4.0, .millimeter),
+        height: .length(2.0, .millimeter)
+    )
+    let pathID = try document.createLineSketch(
+        name: "Profile Plane Parallel Sweep Path",
+        plane: .xy,
+        start: SketchPoint(
+            x: .length(0.0, .millimeter),
+            y: .length(0.0, .millimeter)
+        ),
+        end: SketchPoint(
+            x: .length(20.0, .millimeter),
+            y: .length(0.0, .millimeter)
+        )
+    )
+    let originalOrder = document.cadDocument.designGraph.order
+
+    do {
+        _ = try document.createSweep(
+            name: "Profile Plane Parallel Sweep",
+            profiles: [ProfileReference(featureID: profileID)],
+            path: SweepPathReference(featureID: pathID),
+            options: SweepOptions(alignment: .parallel)
+        )
+        Issue.record("Sweep command must reject profile-plane parallel solid sweeps.")
+    } catch let error as EditorError {
+        #expect(error.code == .commandInvalid)
+        #expect(error.message.contains("nonzero profile-normal component"))
+    }
+    #expect(document.cadDocument.designGraph.order == originalOrder)
+}
+
 @Test func createSweepBooleanStoresTargetBodyInput() throws {
     var document = DesignDocument.empty()
     let targetProfileID = try document.createRectangleSketch(
