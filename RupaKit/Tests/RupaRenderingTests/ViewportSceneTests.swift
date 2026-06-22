@@ -926,11 +926,13 @@ import Testing
     #expect(summary.generatedFaceTargetCount == 1)
     #expect(summary.generatedEdgeTargetCount == 1)
     #expect(summary.generatedVertexTargetCount == 1)
+    #expect(summary.identityTargetCount == 4)
     #expect(summary.supportsObjectTargets)
     #expect(summary.supportsGeneratedFaceTargets)
     #expect(summary.supportsGeneratedEdgeTargets)
     #expect(summary.supportsGeneratedVertexTargets)
     #expect(summary.supportsGeneratedTopologyTargets)
+    #expect(summary.supportsIdentityTargetIndex)
     #expect(summary.isExactIdentityBacked == false)
     #expect(summary.activeBackendTitle == "CPU")
     #expect(summary.nextBackendTitle == "Identity")
@@ -946,6 +948,89 @@ import Testing
     #expect(summary.isExactIdentityBacked)
     #expect(summary.activeBackendTitle == "Identity")
     #expect(summary.nextBackendTitle == "Ready")
+}
+
+@Test func viewportIdentityPickIndexBuildsDecodableGeneratedTopologyRecords() throws {
+    let scene = viewportGeneratedTopologyScene()
+    let faceComponentID = SelectionComponentID.generatedTopology(
+        "feature:body:subshape:test:face:front"
+    )
+    let edgeComponentID = SelectionComponentID.generatedTopology(
+        "feature:body:subshape:test:edge:frontBottom"
+    )
+    let vertexComponentID = SelectionComponentID.generatedTopology(
+        "feature:body:subshape:test:vertex:frontBottomLeft"
+    )
+
+    let index = ViewportIdentityPickIndexBuilder().build(scene: scene)
+    let faceRecord = try #require(index.records.first {
+        $0.geometry == .generatedFace(faceComponentID)
+    })
+    let edgeRecord = try #require(index.records.first {
+        $0.geometry == .generatedEdge(edgeComponentID)
+    })
+    let vertexRecord = try #require(index.records.first {
+        $0.geometry == .generatedVertex(vertexComponentID)
+    })
+
+    #expect(ViewportPickIdentity(rawValue: ViewportPickIdentity.backgroundRawValue) == nil)
+    #expect(index.count == 4)
+    #expect(index.records.map(\.identity.rawValue) == [1, 2, 3, 4])
+    #expect(index.hit(for: faceRecord.identity)?.pickingBackend == .identityBuffer)
+    #expect(index.hit(for: faceRecord.identity)?.selectionComponent == .face(faceComponentID))
+    #expect(index.hit(for: edgeRecord.identity)?.selectionComponent == .edge(edgeComponentID))
+    #expect(index.hit(for: vertexRecord.identity)?.selectionComponent == .vertex(vertexComponentID))
+}
+
+@MainActor
+@Test func viewportIdentityPickIndexIncludesProjectedBodyFallbackWhenTopologyIsMissing() async throws {
+    let session = EditorSession()
+    _ = try #require(session.createDefaultExtrudedRectangle())
+    let scene = ViewportSceneBuilder().build(document: session.document)
+
+    let index = ViewportIdentityPickIndexBuilder().build(scene: scene)
+
+    #expect(index.records.contains { $0.geometry == .projectedBodyFace(.front) })
+    #expect(index.records.contains { $0.geometry == .projectedBodyEdge(.rightTop) })
+    #expect(index.records.contains { $0.geometry == .projectedBodyVertex(.backTopRight) })
+    #expect(index.records.allSatisfy { $0.identity.rawValue > ViewportPickIdentity.backgroundRawValue })
+    #expect(index.records.allSatisfy { $0.hit.pickingBackend == .identityBuffer })
+}
+
+@MainActor
+@Test func viewportIdentityPickIndexCanOmitSketchControlPointRecords() async throws {
+    let session = EditorSession()
+    _ = try session.execute(
+        .createSplineSketch(
+            name: "Viewport Identity Spline Policy",
+            plane: .xy,
+            spline: SketchSpline(controlPoints: [
+                SketchPoint(x: .length(0.0, .millimeter), y: .length(0.0, .millimeter)),
+                SketchPoint(x: .length(2.0, .millimeter), y: .length(4.0, .millimeter)),
+                SketchPoint(x: .length(6.0, .millimeter), y: .length(4.0, .millimeter)),
+                SketchPoint(x: .length(8.0, .millimeter), y: .length(0.0, .millimeter)),
+            ])
+        )
+    )
+    let scene = ViewportSceneBuilder().build(document: session.document)
+
+    let hiddenIndex = ViewportIdentityPickIndexBuilder(includesSketchControlPoints: false)
+        .build(scene: scene)
+    let visibleIndex = ViewportIdentityPickIndexBuilder(includesSketchControlPoints: true)
+        .build(scene: scene)
+
+    #expect(hiddenIndex.records.contains { record in
+        if case .sketchControlPoint = record.geometry {
+            return true
+        }
+        return false
+    } == false)
+    #expect(visibleIndex.records.contains { record in
+        if case .sketchControlPoint(_, 1) = record.geometry {
+            return true
+        }
+        return false
+    })
 }
 
 @Test func viewportHitCarriesPickingBackendForGeneratedTopologyHit() throws {

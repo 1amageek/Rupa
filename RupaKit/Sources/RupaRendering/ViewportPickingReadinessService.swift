@@ -5,6 +5,9 @@ public struct ViewportPickingReadinessService: Sendable {
         scene: ViewportScene,
         activeBackend: ViewportPickingBackend = .projectedCPU
     ) -> ViewportPickingReadinessSummary {
+        let identityTargetCount = ViewportIdentityPickIndexBuilder()
+            .build(scene: scene)
+            .count
         var bodyTargetCount = 0
         var generatedFaceTargetCount = 0
         var generatedEdgeTargetCount = 0
@@ -28,7 +31,8 @@ public struct ViewportPickingReadinessService: Sendable {
             bodyTargetCount: bodyTargetCount,
             generatedFaceTargetCount: generatedFaceTargetCount,
             generatedEdgeTargetCount: generatedEdgeTargetCount,
-            generatedVertexTargetCount: generatedVertexTargetCount
+            generatedVertexTargetCount: generatedVertexTargetCount,
+            identityTargetCount: identityTargetCount
         )
     }
 }

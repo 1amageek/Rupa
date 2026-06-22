@@ -5,6 +5,7 @@ public struct ViewportPickingReadinessSummary: Codable, Equatable, Sendable {
     public var generatedFaceTargetCount: Int
     public var generatedEdgeTargetCount: Int
     public var generatedVertexTargetCount: Int
+    public var identityTargetCount: Int
 
     public init(
         activeBackend: ViewportPickingBackend,
@@ -12,7 +13,8 @@ public struct ViewportPickingReadinessSummary: Codable, Equatable, Sendable {
         bodyTargetCount: Int,
         generatedFaceTargetCount: Int,
         generatedEdgeTargetCount: Int,
-        generatedVertexTargetCount: Int
+        generatedVertexTargetCount: Int,
+        identityTargetCount: Int = 0
     ) {
         self.activeBackend = activeBackend
         self.requiredBackend = requiredBackend
@@ -20,6 +22,7 @@ public struct ViewportPickingReadinessSummary: Codable, Equatable, Sendable {
         self.generatedFaceTargetCount = generatedFaceTargetCount
         self.generatedEdgeTargetCount = generatedEdgeTargetCount
         self.generatedVertexTargetCount = generatedVertexTargetCount
+        self.identityTargetCount = identityTargetCount
     }
 
     public var supportsObjectTargets: Bool {
@@ -40,6 +43,10 @@ public struct ViewportPickingReadinessSummary: Codable, Equatable, Sendable {
 
     public var supportsGeneratedTopologyTargets: Bool {
         supportsGeneratedFaceTargets || supportsGeneratedEdgeTargets || supportsGeneratedVertexTargets
+    }
+
+    public var supportsIdentityTargetIndex: Bool {
+        identityTargetCount > 0
     }
 
     public var isExactIdentityBacked: Bool {
