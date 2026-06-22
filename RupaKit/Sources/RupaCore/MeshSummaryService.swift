@@ -142,6 +142,16 @@ private extension CADDocument {
                 return false
             case .extrude:
                 return true
+            case .sweep:
+                return true
+            case .polySpline:
+                return true
+            case .faceLoopOffset:
+                return true
+            case .edgeOffset:
+                return true
+            case .faceKnife:
+                return true
             }
         }
     }

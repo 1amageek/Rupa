@@ -9,6 +9,12 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
     public var materialLibrary: MaterialLibrary
     public var validationRules: [ValidationRuleID: ValidationRule]
     public var exportPresets: [ExportPresetID: ExportPreset]
+    public var bridgeCurveSources: [BridgeCurveSourceID: BridgeCurveSource]
+    public var constructionPlanes: [ConstructionPlaneSourceID: ConstructionPlaneSource]
+    public var activeConstructionPlaneID: ConstructionPlaneSourceID?
+    public var curveCurvatureDisplays: [SelectionComponentID: CurveCurvatureDisplay]
+    public var pointDisplays: [SelectionComponentID: PointDisplay]
+    public var measurements: [MeasurementAnnotationID: MeasurementAnnotation]
     public var templateDefaults: TemplateDefaults
 
     public init(
@@ -19,6 +25,12 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
         materialLibrary: MaterialLibrary = MaterialLibrary(),
         validationRules: [ValidationRuleID: ValidationRule] = [:],
         exportPresets: [ExportPresetID: ExportPreset] = [:],
+        bridgeCurveSources: [BridgeCurveSourceID: BridgeCurveSource] = [:],
+        constructionPlanes: [ConstructionPlaneSourceID: ConstructionPlaneSource] = [:],
+        activeConstructionPlaneID: ConstructionPlaneSourceID? = nil,
+        curveCurvatureDisplays: [SelectionComponentID: CurveCurvatureDisplay] = [:],
+        pointDisplays: [SelectionComponentID: PointDisplay] = [:],
+        measurements: [MeasurementAnnotationID: MeasurementAnnotation] = [:],
         templateDefaults: TemplateDefaults = TemplateDefaults()
     ) {
         self.sceneNodes = sceneNodes
@@ -28,7 +40,104 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
         self.materialLibrary = materialLibrary
         self.validationRules = validationRules
         self.exportPresets = exportPresets
+        self.bridgeCurveSources = bridgeCurveSources
+        self.constructionPlanes = constructionPlanes
+        self.activeConstructionPlaneID = activeConstructionPlaneID
+        self.curveCurvatureDisplays = curveCurvatureDisplays
+        self.pointDisplays = pointDisplays
+        self.measurements = measurements
         self.templateDefaults = templateDefaults
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case sceneNodes
+        case rootSceneNodeIDs
+        case componentDefinitions
+        case componentInstances
+        case materialLibrary
+        case validationRules
+        case exportPresets
+        case bridgeCurveSources
+        case constructionPlanes
+        case activeConstructionPlaneID
+        case curveCurvatureDisplays
+        case pointDisplays
+        case measurements
+        case templateDefaults
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(
+            sceneNodes: try container.decode([SceneNodeID: SceneNode].self, forKey: .sceneNodes),
+            rootSceneNodeIDs: try container.decode([SceneNodeID].self, forKey: .rootSceneNodeIDs),
+            componentDefinitions: try container.decodeIfPresent(
+                [ComponentDefinitionID: ComponentDefinition].self,
+                forKey: .componentDefinitions
+            ) ?? [:],
+            componentInstances: try container.decodeIfPresent(
+                [ComponentInstanceID: ComponentInstance].self,
+                forKey: .componentInstances
+            ) ?? [:],
+            materialLibrary: try container.decodeIfPresent(
+                MaterialLibrary.self,
+                forKey: .materialLibrary
+            ) ?? MaterialLibrary(),
+            validationRules: try container.decodeIfPresent(
+                [ValidationRuleID: ValidationRule].self,
+                forKey: .validationRules
+            ) ?? [:],
+            exportPresets: try container.decodeIfPresent(
+                [ExportPresetID: ExportPreset].self,
+                forKey: .exportPresets
+            ) ?? [:],
+            bridgeCurveSources: try container.decodeIfPresent(
+                [BridgeCurveSourceID: BridgeCurveSource].self,
+                forKey: .bridgeCurveSources
+            ) ?? [:],
+            constructionPlanes: try container.decodeIfPresent(
+                [ConstructionPlaneSourceID: ConstructionPlaneSource].self,
+                forKey: .constructionPlanes
+            ) ?? [:],
+            activeConstructionPlaneID: try container.decodeIfPresent(
+                ConstructionPlaneSourceID.self,
+                forKey: .activeConstructionPlaneID
+            ),
+            curveCurvatureDisplays: try container.decodeIfPresent(
+                [SelectionComponentID: CurveCurvatureDisplay].self,
+                forKey: .curveCurvatureDisplays
+            ) ?? [:],
+            pointDisplays: try container.decodeIfPresent(
+                [SelectionComponentID: PointDisplay].self,
+                forKey: .pointDisplays
+            ) ?? [:],
+            measurements: try container.decodeIfPresent(
+                [MeasurementAnnotationID: MeasurementAnnotation].self,
+                forKey: .measurements
+            ) ?? [:],
+            templateDefaults: try container.decodeIfPresent(
+                TemplateDefaults.self,
+                forKey: .templateDefaults
+            ) ?? TemplateDefaults()
+        )
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(sceneNodes, forKey: .sceneNodes)
+        try container.encode(rootSceneNodeIDs, forKey: .rootSceneNodeIDs)
+        try container.encode(componentDefinitions, forKey: .componentDefinitions)
+        try container.encode(componentInstances, forKey: .componentInstances)
+        try container.encode(materialLibrary, forKey: .materialLibrary)
+        try container.encode(validationRules, forKey: .validationRules)
+        try container.encode(exportPresets, forKey: .exportPresets)
+        try container.encode(bridgeCurveSources, forKey: .bridgeCurveSources)
+        try container.encode(constructionPlanes, forKey: .constructionPlanes)
+        try container.encodeIfPresent(activeConstructionPlaneID, forKey: .activeConstructionPlaneID)
+        try container.encode(curveCurvatureDisplays, forKey: .curveCurvatureDisplays)
+        try container.encode(pointDisplays, forKey: .pointDisplays)
+        try container.encode(measurements, forKey: .measurements)
+        try container.encode(templateDefaults, forKey: .templateDefaults)
     }
 
     public static func empty() -> ProductMetadata {
@@ -49,12 +158,17 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
         try materialLibrary.validate()
         try validateValidationRules()
         try validateExportPresets()
+        try validateBridgeCurveSources(against: cadDocument)
+        try validateConstructionPlanes()
+        try validateCurveCurvatureDisplays(against: cadDocument)
+        try validatePointDisplays(against: cadDocument)
+        try validateMeasurements()
         try validateTemplateDefaults()
     }
 
     public mutating func appendSceneNodeToFirstRoot(
         name: String,
-        reference: SceneNodeReference,
+        reference: SceneNodeReference?,
         object: ObjectDescriptor? = nil
     ) throws -> SceneNodeID {
         guard let rootSceneNodeID = rootSceneNodeIDs.first else {
@@ -137,17 +251,17 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
         case .body:
             guard let featureID = reference.featureID,
                   let feature = cadDocument.designGraph.nodes[featureID],
-                  feature.outputs.contains(where: { $0.role == .body }) else {
+                  feature.producesSceneGeometry else {
                 throw DocumentValidationError.invalidProductMetadata(
-                    "Scene node body references must point to an existing CAD body-producing feature."
+                    "Scene node body references must point to an existing CAD geometry-producing feature."
                 )
             }
         case .sketch:
             guard let featureID = reference.featureID,
                   let feature = cadDocument.designGraph.nodes[featureID],
-                  feature.outputs.contains(where: { $0.role == .profile }) else {
+                  feature.outputs.contains(where: { $0.role == .profile || $0.role == .curve }) else {
                 throw DocumentValidationError.invalidProductMetadata(
-                    "Scene node sketch references must point to an existing CAD sketch profile feature."
+                    "Scene node sketch references must point to an existing CAD sketch profile or curve feature."
                 )
             }
         case .componentInstance:
@@ -158,6 +272,12 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
                 )
             }
         case .construction:
+            if let constructionPlaneID = reference.constructionPlaneID,
+               constructionPlanes[constructionPlaneID] == nil {
+                throw DocumentValidationError.invalidProductMetadata(
+                    "Construction plane scene references must point to an existing construction plane source."
+                )
+            }
             return
         }
     }
@@ -201,10 +321,24 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
                   reference?.featureID == object.sourceFeatureID,
                   let sourceFeatureID = object.sourceFeatureID,
                   let feature = cadDocument.designGraph.nodes[sourceFeatureID],
-                  feature.outputs.contains(where: { $0.role == .body }) else {
+                  feature.producesSceneGeometry else {
                 throw DocumentValidationError.invalidProductMetadata(
-                    "Body objects must point to a body-producing CAD feature."
+                    "Body objects must point to a geometry-producing CAD feature."
                 )
+            }
+            if object.geometryRole == .solid {
+                guard feature.outputs.contains(where: { $0.role == .body }) else {
+                    throw DocumentValidationError.invalidProductMetadata(
+                        "Solid body objects must point to a solid-producing CAD feature."
+                    )
+                }
+            }
+            if object.geometryRole == .surface {
+                guard feature.outputs.contains(where: { $0.role == .sheet }) else {
+                    throw DocumentValidationError.invalidProductMetadata(
+                        "Surface body objects must point to a sheet-producing CAD feature."
+                    )
+                }
             }
             if let sourceProfileFeatureID = object.sourceProfileFeatureID {
                 guard let profileFeature = cadDocument.designGraph.nodes[sourceProfileFeatureID],
@@ -219,7 +353,7 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
                   reference?.featureID == object.sourceFeatureID,
                   let sourceFeatureID = object.sourceFeatureID,
                   let feature = cadDocument.designGraph.nodes[sourceFeatureID],
-                  feature.outputs.contains(where: { $0.role == .profile }) else {
+                  feature.outputs.contains(where: { $0.role == .profile || $0.role == .curve }) else {
                 throw DocumentValidationError.invalidProductMetadata(
                     "Sketch objects must point to a CAD sketch profile or curve feature."
                 )
@@ -271,6 +405,322 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
                 "Every scene node must be reachable from the root scene nodes."
             )
         }
+    }
+
+    private func validateBridgeCurveSources(against cadDocument: CADDocument) throws {
+        for (sourceID, source) in bridgeCurveSources {
+            guard source.id == sourceID else {
+                throw DocumentValidationError.invalidProductMetadata(
+                    "Bridge curve source keys must match bridge curve source IDs."
+                )
+            }
+            guard let feature = cadDocument.designGraph.nodes[source.featureID],
+                  case .sketch(let sketch) = feature.operation else {
+                throw DocumentValidationError.invalidProductMetadata(
+                    "Bridge curve sources must point to existing sketch features."
+                )
+            }
+            guard case .spline(let spline) = sketch.entities[source.entityID] else {
+                throw DocumentValidationError.invalidProductMetadata(
+                    "Bridge curve source entities must point to spline sketch entities."
+                )
+            }
+            guard spline.controlPoints.count >= 7,
+                  (spline.controlPoints.count - 1).isMultiple(of: 3) else {
+                throw DocumentValidationError.invalidProductMetadata(
+                    "Bridge curve source entities must be multi-span cubic Bezier splines with 3n + 1 control points."
+                )
+            }
+            guard bridgeEndpointLocationSignature(source.firstEndpoint) !=
+                bridgeEndpointLocationSignature(source.secondEndpoint) else {
+                throw DocumentValidationError.invalidProductMetadata(
+                    "Bridge curve source endpoints must be distinct."
+                )
+            }
+            let firstEndpointKind = try validateBridgeEndpoint(
+                source.firstEndpoint,
+                source: source,
+                sketch: sketch,
+                cadDocument: cadDocument
+            )
+            let secondEndpointKind = try validateBridgeEndpoint(
+                source.secondEndpoint,
+                source: source,
+                sketch: sketch,
+                cadDocument: cadDocument
+            )
+            try validateBridgeEndpointContinuity(
+                source.continuity.first,
+                endpointKind: firstEndpointKind,
+                owner: "Bridge curve first continuity"
+            )
+            try validateBridgeEndpointContinuity(
+                source.continuity.second,
+                endpointKind: secondEndpointKind,
+                owner: "Bridge curve second continuity"
+            )
+            try validateBridgeTension(
+                source.firstEndpoint.tension,
+                owner: "Bridge curve first tension",
+                cadDocument: cadDocument
+            )
+            try validateBridgeTension(
+                source.secondEndpoint.tension,
+                owner: "Bridge curve second tension",
+                cadDocument: cadDocument
+            )
+        }
+    }
+
+    private func validateConstructionPlanes() throws {
+        var names: Set<String> = []
+        for (sourceID, source) in constructionPlanes {
+            guard source.id == sourceID else {
+                throw DocumentValidationError.invalidProductMetadata(
+                    "Construction plane source keys must match source IDs."
+                )
+            }
+            try source.validate()
+            let trimmedName = source.name.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard names.insert(trimmedName).inserted else {
+                throw DocumentValidationError.invalidProductMetadata(
+                    "Construction plane names must be unique."
+                )
+            }
+        }
+        if let activeConstructionPlaneID,
+           constructionPlanes[activeConstructionPlaneID] == nil {
+            throw DocumentValidationError.invalidProductMetadata(
+                "The active construction plane must reference an existing construction plane source."
+            )
+        }
+    }
+
+    private func validateCurveCurvatureDisplays(against cadDocument: CADDocument) throws {
+        for (componentID, display) in curveCurvatureDisplays {
+            guard componentID == display.componentID else {
+                throw DocumentValidationError.invalidProductMetadata(
+                    "Curve curvature display keys must match display component IDs."
+                )
+            }
+            try display.validate(against: cadDocument)
+        }
+    }
+
+    private func validatePointDisplays(against cadDocument: CADDocument) throws {
+        for (componentID, display) in pointDisplays {
+            guard componentID == display.componentID else {
+                throw DocumentValidationError.invalidProductMetadata(
+                    "Point display keys must match display component IDs."
+                )
+            }
+            try display.validate(against: cadDocument)
+        }
+    }
+
+    private func validateMeasurements() throws {
+        for (measurementID, measurement) in measurements {
+            guard measurementID == measurement.id else {
+                throw DocumentValidationError.invalidProductMetadata(
+                    "Measurement annotation keys must match annotation IDs."
+                )
+            }
+            try measurement.validate()
+            if let sceneNodeID = measurement.sceneNodeID {
+                guard let sceneNode = sceneNodes[sceneNodeID],
+                      sceneNode.object?.category == .annotation else {
+                    throw DocumentValidationError.invalidProductMetadata(
+                        "Measurement annotation scene nodes must point to annotation objects."
+                    )
+                }
+            }
+        }
+    }
+
+    private enum BridgeEndpointKind {
+        case lineEndpoint
+        case lineInterior
+        case arcEndpoint
+        case arcInterior
+        case splineEndpoint
+        case splineInterior
+    }
+
+    private func validateBridgeEndpoint(
+        _ endpoint: BridgeCurveEndpoint,
+        source: BridgeCurveSource,
+        sketch: Sketch,
+        cadDocument: CADDocument
+    ) throws -> BridgeEndpointKind {
+        if let parameter = endpoint.parameter {
+            let resolvedParameter = try validateBridgeParameter(
+                parameter,
+                owner: "Bridge curve endpoint parameter",
+                cadDocument: cadDocument
+            )
+            guard let entityID = bridgeEndpointEntityID(endpoint.reference),
+                  entityID != source.entityID,
+                  let entity = sketch.entities[entityID] else {
+                throw invalidBridgeEndpointReference()
+            }
+            switch entity {
+            case .line:
+                return isEndpointParameter(resolvedParameter) ? .lineEndpoint : .lineInterior
+            case .arc:
+                return isEndpointParameter(resolvedParameter) ? .arcEndpoint : .arcInterior
+            case .spline:
+                return isEndpointParameter(resolvedParameter) ? .splineEndpoint : .splineInterior
+            case .point,
+                 .circle:
+                throw invalidBridgeEndpointReference()
+            }
+        } else {
+            switch endpoint.reference {
+            case let .lineStart(entityID),
+                 let .lineEnd(entityID):
+                guard entityID != source.entityID,
+                      case .line = sketch.entities[entityID] else {
+                    throw invalidBridgeEndpointReference()
+                }
+                return .lineEndpoint
+            case let .arcStart(entityID),
+                 let .arcEnd(entityID):
+                guard entityID != source.entityID,
+                      case .arc = sketch.entities[entityID] else {
+                    throw invalidBridgeEndpointReference()
+                }
+                return .arcEndpoint
+            case let .splineControlPoint(entityID, index):
+                guard entityID != source.entityID,
+                      case .spline(let spline) = sketch.entities[entityID],
+                      index == 0 || index == spline.controlPoints.count - 1 else {
+                    throw invalidBridgeEndpointReference()
+                }
+                return .splineEndpoint
+            case .entity,
+                 .circleCenter,
+                 .circleRadius,
+                 .arcCenter,
+                 .arcRadius:
+                throw invalidBridgeEndpointReference()
+            }
+        }
+    }
+
+    private func validateBridgeEndpointContinuity(
+        _ continuity: BridgeCurveEndpointContinuity,
+        endpointKind: BridgeEndpointKind,
+        owner: String
+    ) throws {
+        switch continuity {
+        case .g0:
+            return
+        case .g1:
+            guard endpointKind == .lineEndpoint || endpointKind == .splineEndpoint else {
+                throw invalidBridgeContinuity(
+                    "\(owner) G1 sources must use line or spline endpoints."
+                )
+            }
+        case .g2:
+            guard endpointKind == .splineEndpoint else {
+                throw invalidBridgeContinuity(
+                    "\(owner) G2 sources must use spline endpoints."
+                )
+            }
+        case .g3:
+            throw invalidBridgeContinuity(
+                "\(owner) G3 is not supported by the current bridge source model."
+            )
+        }
+    }
+
+    private func validateBridgeTension(
+        _ tension: BridgeCurveTension,
+        owner: String,
+        cadDocument: CADDocument
+    ) throws {
+        try validateBridgeTensionScalar(
+            tension.first,
+            owner: "\(owner) 1",
+            cadDocument: cadDocument
+        )
+        try validateBridgeTensionScalar(
+            tension.second,
+            owner: "\(owner) 2",
+            cadDocument: cadDocument
+        )
+        try validateBridgeTensionScalar(
+            tension.third,
+            owner: "\(owner) 3",
+            cadDocument: cadDocument
+        )
+    }
+
+    private func validateBridgeTensionScalar(
+        _ expression: CADExpression,
+        owner: String,
+        cadDocument: CADDocument
+    ) throws {
+        let quantity = try cadDocument.parameters.resolvedValue(for: expression)
+        guard quantity.kind == .scalar,
+              quantity.value.isFinite,
+              quantity.value > 0.0 else {
+            throw DocumentValidationError.invalidProductMetadata(
+                "\(owner) must resolve to a positive finite scalar."
+            )
+        }
+    }
+
+    private func validateBridgeParameter(
+        _ expression: CADExpression,
+        owner: String,
+        cadDocument: CADDocument
+    ) throws -> Double {
+        let quantity = try cadDocument.parameters.resolvedValue(for: expression)
+        guard quantity.kind == .scalar,
+              quantity.value.isFinite,
+              quantity.value >= 0.0,
+              quantity.value <= 1.0 else {
+            throw DocumentValidationError.invalidProductMetadata(
+                "\(owner) must resolve to a finite scalar from 0 through 1."
+            )
+        }
+        return quantity.value
+    }
+
+    private func bridgeEndpointEntityID(_ reference: SketchReference) -> SketchEntityID? {
+        switch reference {
+        case let .entity(entityID),
+             let .lineStart(entityID),
+             let .lineEnd(entityID),
+             let .arcStart(entityID),
+             let .arcEnd(entityID),
+             let .splineControlPoint(entityID, _):
+            return entityID
+        case .circleCenter,
+             .circleRadius,
+             .arcCenter,
+             .arcRadius:
+            return nil
+        }
+    }
+
+    private func bridgeEndpointLocationSignature(_ endpoint: BridgeCurveEndpoint) -> String {
+        "\(endpoint.reference)|\(String(describing: endpoint.parameter))"
+    }
+
+    private func isEndpointParameter(_ parameter: Double) -> Bool {
+        parameter <= 1.0e-12 || parameter >= 1.0 - 1.0e-12
+    }
+
+    private func invalidBridgeEndpointReference() -> DocumentValidationError {
+        DocumentValidationError.invalidProductMetadata(
+            "Bridge curve endpoints must reference line, arc, or external spline curve positions in the same sketch."
+        )
+    }
+
+    private func invalidBridgeContinuity(_ message: String) -> DocumentValidationError {
+        DocumentValidationError.invalidProductMetadata(message)
     }
 
     private func visitSceneNode(
@@ -411,6 +861,14 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
                     "Template defaults must reference existing export presets."
                 )
             }
+        }
+    }
+}
+
+private extension FeatureNode {
+    var producesSceneGeometry: Bool {
+        outputs.contains { output in
+            output.role == .body || output.role == .sheet
         }
     }
 }

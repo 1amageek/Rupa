@@ -12,6 +12,24 @@ public enum ObjectTypeCatalog {
             properties: lineProperties
         ),
         definition(
+            id: .arc,
+            title: "Arc",
+            systemImage: "circle.dashed",
+            representation: .twoDimensional,
+            category: .sketch,
+            geometryRole: .curve,
+            properties: arcProperties
+        ),
+        definition(
+            id: .spline,
+            title: "Spline",
+            systemImage: "point.topleft.down.curvedto.point.bottomright.up",
+            representation: .twoDimensional,
+            category: .sketch,
+            geometryRole: .curve,
+            properties: splineProperties
+        ),
+        definition(
             id: .rectangle,
             title: "Rectangle",
             systemImage: "rectangle",
@@ -32,6 +50,26 @@ public enum ObjectTypeCatalog {
             properties: circleProperties
         ),
         definition(
+            id: .polygon,
+            title: "Polygon",
+            systemImage: "hexagon",
+            representation: .twoDimensional,
+            generatedRepresentationRule: extruded2DRule,
+            category: .sketch,
+            geometryRole: .sketchProfile,
+            properties: polygonProperties
+        ),
+        definition(
+            id: .slot,
+            title: "Slot",
+            systemImage: "capsule",
+            representation: .twoDimensional,
+            generatedRepresentationRule: extruded2DRule,
+            category: .sketch,
+            geometryRole: .sketchProfile,
+            properties: slotProperties
+        ),
+        definition(
             id: .cube,
             title: "Cube",
             systemImage: "cube",
@@ -48,6 +86,15 @@ public enum ObjectTypeCatalog {
             category: .body,
             geometryRole: .solid,
             properties: cylinderProperties
+        ),
+        definition(
+            id: .polySpline,
+            title: "PolySpline",
+            systemImage: "point.3.connected.trianglepath.dotted",
+            representation: .threeDimensional,
+            category: .body,
+            geometryRole: .surface,
+            properties: polySplineProperties
         ),
     ]
 
@@ -103,6 +150,18 @@ public enum ObjectTypeCatalog {
         .length(id: "stroke.width", title: "Stroke", binding: .strokeWidth, defaultValue: 0.001),
     ]
 
+    private static let arcProperties: [ObjectPropertyDefinition] = [
+        .length(id: "radius", title: "Radius", binding: .radius, defaultValue: 0.5),
+        .angle(id: "start.angle", title: "Start", binding: .angle, defaultValue: 0.0),
+        .angle(id: "end.angle", title: "End", binding: .angle, defaultValue: 90.0),
+        .length(id: "stroke.width", title: "Stroke", binding: .strokeWidth, defaultValue: 0.001),
+    ]
+
+    private static let splineProperties: [ObjectPropertyDefinition] = [
+        .integer(id: "control.point.count", title: "Control Points", binding: nil, defaultValue: 4),
+        .length(id: "stroke.width", title: "Stroke", binding: .strokeWidth, defaultValue: 0.001),
+    ]
+
     private static let rectangleProperties: [ObjectPropertyDefinition] = [
         .length(id: "size.x", title: "Size X", binding: .sizeX, defaultValue: 1.0),
         .length(id: "size.y", title: "Size Y", binding: .sizeY, defaultValue: 1.0),
@@ -117,6 +176,31 @@ public enum ObjectTypeCatalog {
     private static let circleProperties: [ObjectPropertyDefinition] = [
         .length(id: "radius", title: "Radius", binding: .radius, defaultValue: 0.5),
         .integer(id: "sides.x", title: "Sides", binding: .sideSegments, defaultValue: 64),
+        .length(id: "extrusion", title: "Extrusion", binding: .extrusion, defaultValue: 0.0),
+        .length(id: "bevel", title: "Bevel", binding: .bevel, defaultValue: 0.0),
+        .integer(id: "bevel.sides", title: "Bevel Sides", binding: .bevelSideSegments, defaultValue: 3),
+        .length(id: "stroke.width", title: "Stroke", binding: .strokeWidth, defaultValue: 0.001),
+    ]
+
+    private static let polygonProperties: [ObjectPropertyDefinition] = [
+        .length(id: "radius", title: "Radius", binding: .radius, defaultValue: 0.5),
+        .length(id: "sizing.radius", title: "Sizing Radius", binding: nil, defaultValue: 0.5),
+        .boolean(id: "radius.is.inradius", title: "Use Inradius", binding: nil, defaultValue: false),
+        .text(id: "inclination.mode", title: "Inclination", defaultValue: PolygonInclinationMode.vertical.rawValue),
+        .length(id: "side.length", title: "Side Length", binding: nil, defaultValue: 0.5),
+        .integer(id: "sides.x", title: "Sides", binding: .sideSegments, defaultValue: 6),
+        .angle(id: "angle", title: "Rotation", binding: .angle, defaultValue: 0.0),
+        .length(id: "extrusion", title: "Extrusion", binding: .extrusion, defaultValue: 0.0),
+        .length(id: "bevel", title: "Bevel", binding: .bevel, defaultValue: 0.0),
+        .integer(id: "bevel.sides", title: "Bevel Sides", binding: .bevelSideSegments, defaultValue: 3),
+        .length(id: "stroke.width", title: "Stroke", binding: .strokeWidth, defaultValue: 0.001),
+    ]
+
+    private static let slotProperties: [ObjectPropertyDefinition] = [
+        .length(id: "width", title: "Width", binding: nil, defaultValue: 0.1),
+        .length(id: "path.length", title: "Path", binding: nil, defaultValue: 1.0),
+        .length(id: "radius", title: "Cap Radius", binding: .radius, defaultValue: 0.05),
+        .integer(id: ProfileTessellationPolicy.arcSegmentsPropertyID, title: "Arc Segments", binding: .sideSegments, defaultValue: 32),
         .length(id: "extrusion", title: "Extrusion", binding: .extrusion, defaultValue: 0.0),
         .length(id: "bevel", title: "Bevel", binding: .bevel, defaultValue: 0.0),
         .integer(id: "bevel.sides", title: "Bevel Sides", binding: .bevelSideSegments, defaultValue: 3),
@@ -143,6 +227,14 @@ public enum ObjectTypeCatalog {
         .length(id: "hollow", title: "Hollow", binding: .hollow, defaultValue: 0.0),
         .length(id: "corner.radius", title: "Corner", binding: .cornerRadius, defaultValue: 0.0),
         .integer(id: "corner.sides", title: "Corner Sides", binding: .cornerSideSegments, defaultValue: 8),
+    ]
+
+    private static let polySplineProperties: [ObjectPropertyDefinition] = [
+        .integer(id: "patch.count", title: "Patches", binding: nil, defaultValue: 1),
+        .integer(id: "control.point.u", title: "U Control Points", binding: nil, defaultValue: 4),
+        .integer(id: "control.point.v", title: "V Control Points", binding: nil, defaultValue: 4),
+        .boolean(id: "merge.patches", title: "Merge Patches", binding: nil, defaultValue: true),
+        .boolean(id: "interpolate.boundary", title: "Boundary Exact", binding: nil, defaultValue: true),
     ]
 }
 
@@ -215,6 +307,22 @@ private extension ObjectPropertyDefinition {
             defaultValue: .boolean(defaultValue),
             inspectorControl: .segmented,
             renderBinding: binding
+        )
+    }
+
+    static func text(
+        id: ObjectPropertyID,
+        title: String,
+        defaultValue: String
+    ) -> ObjectPropertyDefinition {
+        ObjectPropertyDefinition(
+            id: id,
+            title: title,
+            group: "Shape",
+            valueKind: .text,
+            defaultValue: .text(defaultValue),
+            inspectorControl: .readOnly,
+            isEditable: false
         )
     }
 

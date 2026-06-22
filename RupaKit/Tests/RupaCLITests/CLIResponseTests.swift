@@ -2811,6 +2811,9 @@ func cliExecutableReturnsDataExitForLiveGenerationMismatch() async throws {
     #expect(response.measurement.counts.solids == 1)
     #expect(abs(response.measurement.totals.profileAreaSquareMeters - 0.0002) < 0.000_000_000_001)
     #expect(abs(response.measurement.totals.solidVolumeCubicMeters - 0.000001) < 0.000_000_000_001)
+    let solid = try #require(response.measurement.solids.first)
+    let height = try #require(solid.linearDimensions.first { $0.kind == .extrusionHeight })
+    #expect(abs(height.meters - 0.005) < 0.000_000_000_001)
     #expect(response.message.contains("Measurement summary"))
 }
 
@@ -2850,6 +2853,9 @@ func cliExecutableReturnsDataExitForLiveGenerationMismatch() async throws {
     #expect(response.measurement.counts.sourceFeatures == 2)
     #expect(response.measurement.counts.solids == 1)
     #expect(abs(response.measurement.totals.solidVolumeCubicMeters - 0.000000216) < 0.000_000_000_001)
+    let solid = try #require(response.measurement.solids.first)
+    let height = try #require(solid.linearDimensions.first { $0.kind == .extrusionHeight })
+    #expect(abs(height.meters - 0.003) < 0.000_000_000_001)
     #expect(loaded.cadDocument.designGraph.order.isEmpty)
 }
 
@@ -2895,6 +2901,9 @@ func cliExecutableReturnsDataExitForLiveGenerationMismatch() async throws {
     #expect(response.measurement.counts.sourceFeatures == 2)
     #expect(response.measurement.counts.solids == 1)
     #expect(abs(response.measurement.totals.solidVolumeCubicMeters - 0.000000216) < 0.000_000_000_001)
+    let solid = try #require(response.measurement.solids.first)
+    let height = try #require(solid.linearDimensions.first { $0.kind == .extrusionHeight })
+    #expect(abs(height.meters - 0.003) < 0.000_000_000_001)
     #expect(response.message.contains("Selection measurement"))
     #expect(loaded.cadDocument.designGraph.order.isEmpty)
 }

@@ -14,10 +14,13 @@ public struct ObjectTypeID: RawRepresentable, Codable, Hashable, Sendable, Expre
 
 public extension ObjectTypeID {
     static let line: ObjectTypeID = "line"
+    static let arc: ObjectTypeID = "arc"
+    static let spline: ObjectTypeID = "spline"
     static let rectangle: ObjectTypeID = "rectangle"
     static let circle: ObjectTypeID = "circle"
     static let ellipse: ObjectTypeID = "ellipse"
     static let polygon: ObjectTypeID = "polygon"
+    static let slot: ObjectTypeID = "slot"
     static let path: ObjectTypeID = "path"
     static let text: ObjectTypeID = "text"
     static let cube: ObjectTypeID = "cube"
@@ -30,4 +33,5 @@ public extension ObjectTypeID {
     static let icosahedron: ObjectTypeID = "icosahedron"
     static let dodecahedron: ObjectTypeID = "dodecahedron"
     static let torusKnot: ObjectTypeID = "torusKnot"
+    static let polySpline: ObjectTypeID = "polySpline"
 }

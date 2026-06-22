@@ -97,6 +97,7 @@ public final class CADDocumentStore {
     }
 
     public func apply(_ command: EditorCommand) throws -> CommandExecutionResult {
+        var curveRebuildReport: CurveRebuildReport?
         switch command {
         case .setDisplayUnit(let unit):
             document.setDisplayUnit(unit)
@@ -228,6 +229,92 @@ public final class CADDocumentStore {
             document = updatedDocument
             try commitMutation()
             evaluateCurrentDocument()
+        case .createConstructionPlane(let name, let plane, let activates):
+            var updatedDocument = document
+            try updatedDocument.createConstructionPlane(
+                name: name,
+                plane: plane,
+                activates: activates,
+                objectRegistry: objectRegistry
+            )
+            document = updatedDocument
+            try commitMutation()
+            evaluateCurrentDocument()
+        case .createConstructionPlaneFromTarget(let name, let target, let activates):
+            var updatedDocument = document
+            try updatedDocument.createConstructionPlaneFromTarget(
+                name: name,
+                target: target,
+                activates: activates,
+                objectRegistry: objectRegistry
+            )
+            document = updatedDocument
+            try commitMutation()
+            evaluateCurrentDocument()
+        case .createConstructionPlaneFromTargets(let name, let targets, let viewNormal, let activates):
+            var updatedDocument = document
+            try updatedDocument.createConstructionPlaneFromTargets(
+                name: name,
+                targets: targets,
+                viewNormal: viewNormal,
+                activates: activates,
+                objectRegistry: objectRegistry
+            )
+            document = updatedDocument
+            try commitMutation()
+            evaluateCurrentDocument()
+        case .createViewAlignedConstructionPlane(let name, let origin, let viewNormal, let activates):
+            var updatedDocument = document
+            try updatedDocument.createViewAlignedConstructionPlane(
+                name: name,
+                origin: origin,
+                viewNormal: viewNormal,
+                activates: activates,
+                objectRegistry: objectRegistry
+            )
+            document = updatedDocument
+            try commitMutation()
+            evaluateCurrentDocument()
+        case .setActiveConstructionPlane(let id):
+            var updatedDocument = document
+            try updatedDocument.setActiveConstructionPlane(
+                id: id,
+                objectRegistry: objectRegistry
+            )
+            document = updatedDocument
+            try commitMutation()
+            evaluateCurrentDocument()
+        case .renameConstructionPlane(let id, let name):
+            var updatedDocument = document
+            try updatedDocument.renameConstructionPlane(
+                id: id,
+                name: name,
+                objectRegistry: objectRegistry
+            )
+            document = updatedDocument
+            try commitMutation()
+            evaluateCurrentDocument()
+        case .setCurveCurvatureDisplay(let target, let isVisible, let combScale):
+            var updatedDocument = document
+            try updatedDocument.setCurveCurvatureDisplay(
+                target: target,
+                isVisible: isVisible,
+                combScale: combScale,
+                objectRegistry: objectRegistry
+            )
+            document = updatedDocument
+            try commitMutation()
+            evaluateCurrentDocument()
+        case .setPointDisplay(let target, let isVisible):
+            var updatedDocument = document
+            try updatedDocument.setPointDisplay(
+                target: target,
+                isVisible: isVisible,
+                objectRegistry: objectRegistry
+            )
+            document = updatedDocument
+            try commitMutation()
+            evaluateCurrentDocument()
         case .createLineSketch(let name, let plane, let start, let end):
             var updatedDocument = document
             try updatedDocument.createLineSketch(
@@ -252,6 +339,31 @@ public final class CADDocumentStore {
             document = updatedDocument
             try commitMutation()
             evaluateCurrentDocument()
+        case .createArcSketch(let name, let plane, let center, let radius, let startAngle, let endAngle):
+            var updatedDocument = document
+            try updatedDocument.createArcSketch(
+                name: name,
+                plane: plane,
+                center: center,
+                radius: radius,
+                startAngle: startAngle,
+                endAngle: endAngle,
+                objectRegistry: objectRegistry
+            )
+            document = updatedDocument
+            try commitMutation()
+            evaluateCurrentDocument()
+        case .createSplineSketch(let name, let plane, let spline):
+            var updatedDocument = document
+            try updatedDocument.createSplineSketch(
+                name: name,
+                plane: plane,
+                spline: spline,
+                objectRegistry: objectRegistry
+            )
+            document = updatedDocument
+            try commitMutation()
+            evaluateCurrentDocument()
         case .createRectangleSketch(let name, let plane, let width, let height):
             var updatedDocument = document
             try updatedDocument.createRectangleSketch(
@@ -264,11 +376,73 @@ public final class CADDocumentStore {
             document = updatedDocument
             try commitMutation()
             evaluateCurrentDocument()
+        case .createPolygonSketch(
+            let name,
+            let plane,
+            let center,
+            let radius,
+            let sides,
+            let sizingMode,
+            let inclinationMode,
+            let rotationAngle
+        ):
+            var updatedDocument = document
+            try updatedDocument.createPolygonSketch(
+                name: name,
+                plane: plane,
+                center: center,
+                radius: radius,
+                sides: sides,
+                sizingMode: sizingMode,
+                inclinationMode: inclinationMode,
+                rotationAngle: rotationAngle,
+                objectRegistry: objectRegistry
+            )
+            document = updatedDocument
+            try commitMutation()
+            evaluateCurrentDocument()
+        case .createFaceKnife(let name, let target, let loop):
+            var updatedDocument = document
+            try updatedDocument.createFaceKnife(
+                name: name,
+                target: target,
+                loop: loop,
+                objectRegistry: objectRegistry
+            )
+            document = updatedDocument
+            try commitMutation()
+            evaluateCurrentDocument()
         case .addSketchConstraint(let featureID, let constraint):
             var updatedDocument = document
             try updatedDocument.addSketchConstraint(
                 featureID: featureID,
                 constraint: constraint,
+                objectRegistry: objectRegistry
+            )
+            document = updatedDocument
+            try commitMutation()
+            evaluateCurrentDocument()
+        case .createBridgeCurve(let featureID, let firstEndpoint, let secondEndpoint, let continuity, let trimsSourceCurves):
+            var updatedDocument = document
+            try updatedDocument.createBridgeCurve(
+                featureID: featureID,
+                firstEndpoint: firstEndpoint,
+                secondEndpoint: secondEndpoint,
+                continuity: continuity,
+                trimsSourceCurves: trimsSourceCurves,
+                objectRegistry: objectRegistry
+            )
+            document = updatedDocument
+            try commitMutation()
+            evaluateCurrentDocument()
+        case .setBridgeCurveParameters(let sourceID, let firstEndpoint, let secondEndpoint, let continuity, let trimsSourceCurves):
+            var updatedDocument = document
+            try updatedDocument.setBridgeCurveParameters(
+                sourceID: sourceID,
+                firstEndpoint: firstEndpoint,
+                secondEndpoint: secondEndpoint,
+                continuity: continuity,
+                trimsSourceCurves: trimsSourceCurves,
                 objectRegistry: objectRegistry
             )
             document = updatedDocument
@@ -319,6 +493,277 @@ public final class CADDocumentStore {
             document = updatedDocument
             try commitMutation()
             evaluateCurrentDocument()
+        case .setObjectDimension(let target, let kind, let value):
+            var updatedDocument = document
+            try updatedDocument.setObjectDimension(
+                target: target,
+                kind: kind,
+                value: value,
+                objectRegistry: objectRegistry
+            )
+            document = updatedDocument
+            try commitMutation()
+            evaluateCurrentDocument()
+        case .offsetCurve(let target, let distance, let options, let vertexHandle):
+            var updatedDocument = document
+            try updatedDocument.offsetCurve(
+                target: target,
+                distance: distance,
+                options: options,
+                vertexHandle: vertexHandle,
+                objectRegistry: objectRegistry
+            )
+            document = updatedDocument
+            try commitMutation()
+            evaluateCurrentDocument()
+        case .offsetRegions(let targets, let distance, let options, let combinesRegions):
+            var updatedDocument = document
+            try updatedDocument.offsetRegions(
+                targets: targets,
+                distance: distance,
+                options: options,
+                combinesRegions: combinesRegions,
+                objectRegistry: objectRegistry
+            )
+            document = updatedDocument
+            try commitMutation()
+            evaluateCurrentDocument()
+        case .offsetSketchVertex(let target, let handle, let distance):
+            var updatedDocument = document
+            try updatedDocument.offsetSketchVertex(
+                target: target,
+                handle: handle,
+                distance: distance,
+                objectRegistry: objectRegistry
+            )
+            document = updatedDocument
+            try commitMutation()
+            evaluateCurrentDocument()
+        case .applySketchCornerTreatment(let target, let adjacentTarget, let distance, let treatment):
+            var updatedDocument = document
+            try updatedDocument.applySketchCornerTreatment(
+                target: target,
+                adjacentTarget: adjacentTarget,
+                distance: distance,
+                treatment: treatment,
+                objectRegistry: objectRegistry
+            )
+            document = updatedDocument
+            try commitMutation()
+            evaluateCurrentDocument()
+        case .createSlotSketch(let target, let width):
+            var updatedDocument = document
+            try updatedDocument.createSlotSketch(
+                target: target,
+                width: width,
+                objectRegistry: objectRegistry
+            )
+            document = updatedDocument
+            try commitMutation()
+            evaluateCurrentDocument()
+        case .offsetBodyFace(let target, let distance):
+            var updatedDocument = document
+            try updatedDocument.offsetBodyFace(
+                target: target,
+                distance: distance,
+                objectRegistry: objectRegistry
+            )
+            document = updatedDocument
+            try commitMutation()
+            evaluateCurrentDocument()
+        case .chamferBodyEdges(let targets, let distance):
+            var updatedDocument = document
+            try updatedDocument.chamferBodyEdges(
+                targets: targets,
+                distance: distance,
+                objectRegistry: objectRegistry
+            )
+            document = updatedDocument
+            try commitMutation()
+            evaluateCurrentDocument()
+        case .filletBodyEdges(let targets, let radius, let segmentCount):
+            var updatedDocument = document
+            try updatedDocument.filletBodyEdges(
+                targets: targets,
+                radius: radius,
+                segmentCount: segmentCount,
+                objectRegistry: objectRegistry
+            )
+            document = updatedDocument
+            try commitMutation()
+            evaluateCurrentDocument()
+        case .moveBodyVertex(let target, let deltaX, let deltaY):
+            var updatedDocument = document
+            try updatedDocument.moveBodyVertex(
+                target: target,
+                deltaX: deltaX,
+                deltaY: deltaY,
+                objectRegistry: objectRegistry
+            )
+            document = updatedDocument
+            try commitMutation()
+            evaluateCurrentDocument()
+        case .moveSketchEntityPoint(let target, let handle, let deltaX, let deltaY):
+            var updatedDocument = document
+            try updatedDocument.moveSketchEntityPoint(
+                target: target,
+                handle: handle,
+                deltaX: deltaX,
+                deltaY: deltaY,
+                objectRegistry: objectRegistry
+            )
+            document = updatedDocument
+            try commitMutation()
+            evaluateCurrentDocument()
+        case .moveSketchSplineControlPoint(let target, let controlPointIndex, let deltaX, let deltaY):
+            var updatedDocument = document
+            try updatedDocument.moveSketchSplineControlPoint(
+                target: target,
+                controlPointIndex: controlPointIndex,
+                deltaX: deltaX,
+                deltaY: deltaY,
+                objectRegistry: objectRegistry
+            )
+            document = updatedDocument
+            try commitMutation()
+            evaluateCurrentDocument()
+        case .slideSketchSplineControlPoints(let target, let controlPointIndexes, let direction, let distance):
+            var updatedDocument = document
+            try updatedDocument.slideSketchSplineControlPoints(
+                target: target,
+                controlPointIndexes: controlPointIndexes,
+                direction: direction,
+                distance: distance,
+                objectRegistry: objectRegistry
+            )
+            document = updatedDocument
+            try commitMutation()
+            evaluateCurrentDocument()
+        case .insertSketchSplineControlPoint(let target, let fraction):
+            var updatedDocument = document
+            try updatedDocument.insertSketchSplineControlPoint(
+                target: target,
+                fraction: fraction,
+                objectRegistry: objectRegistry
+            )
+            document = updatedDocument
+            try commitMutation()
+            evaluateCurrentDocument()
+        case .setSketchCircleParameters(let target, let center, let radius):
+            var updatedDocument = document
+            try updatedDocument.setSketchCircleParameters(
+                target: target,
+                center: center,
+                radius: radius,
+                objectRegistry: objectRegistry
+            )
+            document = updatedDocument
+            try commitMutation()
+            evaluateCurrentDocument()
+        case .setSketchArcParameters(let target, let center, let radius, let startAngle, let endAngle):
+            var updatedDocument = document
+            try updatedDocument.setSketchArcParameters(
+                target: target,
+                center: center,
+                radius: radius,
+                startAngle: startAngle,
+                endAngle: endAngle,
+                objectRegistry: objectRegistry
+            )
+            document = updatedDocument
+            try commitMutation()
+            evaluateCurrentDocument()
+        case .setSketchEntityDimension(let target, let kind, let value):
+            var updatedDocument = document
+            try updatedDocument.setSketchEntityDimension(
+                target: target,
+                kind: kind,
+                value: value,
+                objectRegistry: objectRegistry
+            )
+            document = updatedDocument
+            try commitMutation()
+            evaluateCurrentDocument()
+        case .convertSketchLineToArc(let target, let sagitta):
+            var updatedDocument = document
+            try updatedDocument.convertSketchLineToArc(
+                target: target,
+                sagitta: sagitta,
+                objectRegistry: objectRegistry
+            )
+            document = updatedDocument
+            try commitMutation()
+            evaluateCurrentDocument()
+        case .convertSketchLineToSpline(let target):
+            var updatedDocument = document
+            try updatedDocument.convertSketchLineToSpline(
+                target: target,
+                objectRegistry: objectRegistry
+            )
+            document = updatedDocument
+            try commitMutation()
+            evaluateCurrentDocument()
+        case .reverseSketchCurve(let target):
+            var updatedDocument = document
+            try updatedDocument.reverseSketchCurve(
+                target: target,
+                objectRegistry: objectRegistry
+            )
+            document = updatedDocument
+            try commitMutation()
+            evaluateCurrentDocument()
+        case .rebuildSketchCurve(let target, let options):
+            var updatedDocument = document
+            let report = try updatedDocument.rebuildSketchCurve(
+                target: target,
+                options: options,
+                objectRegistry: objectRegistry
+            )
+            curveRebuildReport = report
+            document = updatedDocument
+            try commitMutation()
+            evaluateCurrentDocument()
+        case .extendSketchCurve(let target, let distance, let shape):
+            var updatedDocument = document
+            try updatedDocument.extendSketchCurve(
+                target: target,
+                distance: distance,
+                shape: shape,
+                objectRegistry: objectRegistry
+            )
+            document = updatedDocument
+            try commitMutation()
+            evaluateCurrentDocument()
+        case .splitSketchCurve(let target, let fraction):
+            var updatedDocument = document
+            try updatedDocument.splitSketchCurve(
+                target: target,
+                fraction: fraction,
+                objectRegistry: objectRegistry
+            )
+            document = updatedDocument
+            try commitMutation()
+            evaluateCurrentDocument()
+        case .trimSketchCurveSegment(let target):
+            var updatedDocument = document
+            try updatedDocument.trimSketchCurveSegment(
+                target: target,
+                objectRegistry: objectRegistry
+            )
+            document = updatedDocument
+            try commitMutation()
+            evaluateCurrentDocument()
+        case .cutSketchCurve(let target, let cutter, let options):
+            var updatedDocument = document
+            try updatedDocument.cutSketchCurve(
+                target: target,
+                cutter: cutter,
+                options: options,
+                objectRegistry: objectRegistry
+            )
+            document = updatedDocument
+            try commitMutation()
+            evaluateCurrentDocument()
         case .extrudeProfile(let name, let profile, let distance, let direction):
             var updatedDocument = document
             try updatedDocument.extrudeProfile(
@@ -326,6 +771,54 @@ public final class CADDocumentStore {
                 profile: profile,
                 distance: distance,
                 direction: direction,
+                objectRegistry: objectRegistry
+            )
+            document = updatedDocument
+            try commitMutation()
+            evaluateCurrentDocument()
+        case .createSweep(let name, let profiles, let path, let guides, let targets, let options):
+            var updatedDocument = document
+            try updatedDocument.createSweep(
+                name: name,
+                profiles: profiles,
+                path: path,
+                guides: guides,
+                targets: targets,
+                options: options,
+                objectRegistry: objectRegistry
+            )
+            document = updatedDocument
+            try commitMutation()
+            evaluateCurrentDocument()
+        case .createPolySplineSurface(let name, let sourceMesh, let options):
+            var updatedDocument = document
+            try updatedDocument.createPolySplineSurface(
+                name: name,
+                sourceMesh: sourceMesh,
+                options: options,
+                objectRegistry: objectRegistry
+            )
+            document = updatedDocument
+            try commitMutation()
+            evaluateCurrentDocument()
+        case .movePolySplineSurfaceVertex(let target, let deltaX, let deltaY, let deltaZ):
+            var updatedDocument = document
+            try updatedDocument.movePolySplineSurfaceVertex(
+                target: target,
+                deltaX: deltaX,
+                deltaY: deltaY,
+                deltaZ: deltaZ,
+                objectRegistry: objectRegistry
+            )
+            document = updatedDocument
+            try commitMutation()
+            evaluateCurrentDocument()
+        case .slidePolySplineSurfaceVertices(let targets, let direction, let distance):
+            var updatedDocument = document
+            try updatedDocument.slidePolySplineSurfaceVertices(
+                targets: targets,
+                direction: direction,
+                distance: distance,
                 objectRegistry: objectRegistry
             )
             document = updatedDocument
@@ -388,7 +881,8 @@ public final class CADDocumentStore {
             commandName: command.name,
             generation: generation,
             didMutate: command.mutatesDocument,
-            diagnostics: diagnostics
+            diagnostics: diagnostics,
+            curveRebuildReport: curveRebuildReport
         )
     }
 

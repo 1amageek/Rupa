@@ -3,9 +3,11 @@ import SwiftCAD
 
 public struct MeasurementService {
     private let tolerance: ModelingTolerance
+    private let splineTessellator: CubicBezierSplineTessellator
 
     public init(tolerance: ModelingTolerance = .standard) {
         self.tolerance = tolerance
+        self.splineTessellator = CubicBezierSplineTessellator(tolerance: tolerance)
     }
 
     public func measure(document: DesignDocument) throws -> MeasurementResult {
@@ -48,12 +50,42 @@ public struct MeasurementService {
         var includedSketchFeatureIDs: Set<FeatureID> = []
         var includedSourceFeatureIDs: Set<FeatureID> = []
         var diagnostics: [EditorDiagnostic] = []
+        var didAttemptEvaluation = false
+        var cachedEvaluatedDocument: EvaluatedDocument?
+        let supersededBodyFeatureIDs = bodyFeatureIDsSupersededByDirectEdits(
+            in: document.cadDocument
+        )
 
         func shouldMeasure(_ featureID: FeatureID) -> Bool {
             guard let selectedFeatureIDs else {
                 return true
             }
             return selectedFeatureIDs.contains(featureID)
+        }
+
+        func isSupersededInDocumentScope(_ featureID: FeatureID) -> Bool {
+            selectedFeatureIDs == nil && supersededBodyFeatureIDs.contains(featureID)
+        }
+
+        func evaluatedDocument() -> EvaluatedDocument? {
+            if didAttemptEvaluation {
+                return cachedEvaluatedDocument
+            }
+            didAttemptEvaluation = true
+            do {
+                cachedEvaluatedDocument = try CADPipeline
+                    .modelingDefault(for: document)
+                    .evaluate(document.cadDocument)
+            } catch {
+                diagnostics.append(
+                    EditorDiagnostic(
+                        severity: .warning,
+                        message: "Measurement could not read evaluated geometry: \(String(describing: error))"
+                    )
+                )
+                cachedEvaluatedDocument = nil
+            }
+            return cachedEvaluatedDocument
         }
 
         func includeProfile(
@@ -120,6 +152,9 @@ public struct MeasurementService {
                     )
                 }
             case .extrude(let extrude):
+                guard !isSupersededInDocumentScope(featureID) else {
+                    continue
+                }
                 guard shouldMeasure(featureID) else {
                     continue
                 }
@@ -173,6 +208,240 @@ public struct MeasurementService {
                 solids.append(solid)
                 totals.solidVolumeCubicMeters += solid.volumeCubicMeters
                 bounds.include(solid.bounds)
+            case .sweep(let sweep):
+                guard !isSupersededInDocumentScope(featureID) else {
+                    continue
+                }
+                guard shouldMeasure(featureID) else {
+                    continue
+                }
+                includedSourceFeatureIDs.insert(featureID)
+                guard let profileReference = sweep.profiles.first,
+                      let sourceNode = document.cadDocument.designGraph.nodes[profileReference.featureID],
+                      case .sketch(let sourceSketch) = sourceNode.operation,
+                      let pathNode = document.cadDocument.designGraph.nodes[sweep.path.featureID],
+                      case .sketch(let pathSketch) = pathNode.operation else {
+                    diagnostics.append(
+                        EditorDiagnostic(
+                            severity: .warning,
+                            message: "Measurement skipped a sweep feature with unresolved profile or path references."
+                        )
+                    )
+                    continue
+                }
+                let sourceSketchBounds = try boundsForSketch(
+                    sourceSketch,
+                    parameters: document.cadDocument.parameters
+                )
+                let pathSketchBounds = try boundsForSketch(
+                    pathSketch,
+                    parameters: document.cadDocument.parameters
+                )
+                let profile = try profileCache[profileReference.featureID] ?? measureProfile(
+                    featureID: profileReference.featureID,
+                    featureName: sourceNode.name,
+                    sketch: sourceSketch,
+                    parameters: document.cadDocument.parameters
+                )
+                guard let profile else {
+                    diagnostics.append(
+                        EditorDiagnostic(
+                            severity: .warning,
+                            message: "Measurement skipped a sweep feature with an unsupported profile."
+                        )
+                    )
+                    continue
+                }
+                profileCache[profileReference.featureID] = profile
+                includeSketch(
+                    featureID: profileReference.featureID,
+                    sketch: sourceSketch,
+                    sketchBounds: sourceSketchBounds,
+                    profile: profile
+                )
+                includeSketch(
+                    featureID: sweep.path.featureID,
+                    sketch: pathSketch,
+                    sketchBounds: pathSketchBounds,
+                    profile: nil
+                )
+                for guide in sweep.guides {
+                    guard let guideNode = document.cadDocument.designGraph.nodes[guide.featureID],
+                          case .sketch(let guideSketch) = guideNode.operation else {
+                        diagnostics.append(
+                            EditorDiagnostic(
+                                severity: .warning,
+                                message: "Measurement skipped a sweep guide with an unresolved sketch reference."
+                            )
+                        )
+                        continue
+                    }
+                    let guideSketchBounds = try boundsForSketch(
+                        guideSketch,
+                        parameters: document.cadDocument.parameters
+                    )
+                    includeSketch(
+                        featureID: guide.featureID,
+                        sketch: guideSketch,
+                        sketchBounds: guideSketchBounds,
+                        profile: nil
+                    )
+                }
+                let straightSolid = try measureStraightSweepSolid(
+                    featureID: featureID,
+                    featureName: node.name,
+                    sourceFeatureID: profileReference.featureID,
+                    sourceFeatureName: sourceNode.name,
+                    profile: profile,
+                    sweep: sweep,
+                    pathSketch: pathSketch,
+                    parameters: document.cadDocument.parameters
+                )
+                var evaluatedSweepSkipReason: String?
+                let solid = try straightSolid ?? measureEvaluatedSweepSolid(
+                        featureID: featureID,
+                        featureName: node.name,
+                        sourceFeatureID: profileReference.featureID,
+                        sourceFeatureName: sourceNode.name,
+                        sweep: sweep,
+                        pathSketch: pathSketch,
+                        parameters: document.cadDocument.parameters,
+                        evaluatedDocument: evaluatedDocument(),
+                        unsupportedReason: &evaluatedSweepSkipReason
+                    )
+                guard let solid else {
+                    let detail = evaluatedSweepSkipReason.map { " \($0)" } ?? ""
+                    diagnostics.append(
+                        EditorDiagnostic(
+                            severity: .info,
+                            message: "Measurement skipped a sweep feature outside the supported solid evaluation subset.\(detail)"
+                        )
+                    )
+                    continue
+                }
+                counts.solids += 1
+                solids.append(solid)
+                totals.solidVolumeCubicMeters += solid.volumeCubicMeters
+                bounds.include(solid.bounds)
+            case .polySpline(let polySpline):
+                guard !isSupersededInDocumentScope(featureID) else {
+                    continue
+                }
+                guard shouldMeasure(featureID) else {
+                    continue
+                }
+                includedSourceFeatureIDs.insert(featureID)
+                for point in polySpline.sourceMesh.positions {
+                    bounds.include(point)
+                }
+                diagnostics.append(
+                    EditorDiagnostic(
+                        severity: .info,
+                        message: "Measurement included PolySpline source bounds; B-spline sheet area and curvature measurement remain unsupported."
+                    )
+                )
+            case .faceLoopOffset:
+                guard !isSupersededInDocumentScope(featureID) else {
+                    continue
+                }
+                guard shouldMeasure(featureID) else {
+                    continue
+                }
+                includedSourceFeatureIDs.insert(featureID)
+                guard case .faceLoopOffset(let faceLoopOffset) = node.operation else {
+                    continue
+                }
+                let sourceNode = document.cadDocument.designGraph.nodes[faceLoopOffset.target.featureID]
+                var evaluatedSkipReason: String?
+                let solid = try measureEvaluatedSolid(
+                    featureID: featureID,
+                    featureName: node.name,
+                    sourceFeatureID: faceLoopOffset.target.featureID,
+                    sourceFeatureName: sourceNode?.name,
+                    evaluatedDocument: evaluatedDocument(),
+                    unsupportedReason: &evaluatedSkipReason
+                )
+                guard let solid else {
+                    let detail = evaluatedSkipReason.map { " \($0)" } ?? ""
+                    diagnostics.append(
+                        EditorDiagnostic(
+                            severity: .info,
+                            message: "Measurement skipped Offset Face Loop direct-edit solid.\(detail)"
+                        )
+                    )
+                    continue
+                }
+                counts.solids += 1
+                solids.append(solid)
+                totals.solidVolumeCubicMeters += solid.volumeCubicMeters
+                bounds.include(solid.bounds)
+            case .edgeOffset:
+                guard !isSupersededInDocumentScope(featureID) else {
+                    continue
+                }
+                guard shouldMeasure(featureID) else {
+                    continue
+                }
+                includedSourceFeatureIDs.insert(featureID)
+                guard case .edgeOffset(let edgeOffset) = node.operation else {
+                    continue
+                }
+                let sourceNode = document.cadDocument.designGraph.nodes[edgeOffset.target.featureID]
+                var evaluatedSkipReason: String?
+                let solid = try measureEvaluatedSolid(
+                    featureID: featureID,
+                    featureName: node.name,
+                    sourceFeatureID: edgeOffset.target.featureID,
+                    sourceFeatureName: sourceNode?.name,
+                    evaluatedDocument: evaluatedDocument(),
+                    unsupportedReason: &evaluatedSkipReason
+                )
+                guard let solid else {
+                    let detail = evaluatedSkipReason.map { " \($0)" } ?? ""
+                    diagnostics.append(
+                        EditorDiagnostic(
+                            severity: .info,
+                            message: "Measurement skipped Offset Edge direct-edit solid.\(detail)"
+                        )
+                    )
+                    continue
+                }
+                counts.solids += 1
+                solids.append(solid)
+                totals.solidVolumeCubicMeters += solid.volumeCubicMeters
+                bounds.include(solid.bounds)
+            case .faceKnife(let faceKnife):
+                guard !isSupersededInDocumentScope(featureID) else {
+                    continue
+                }
+                guard shouldMeasure(featureID) else {
+                    continue
+                }
+                includedSourceFeatureIDs.insert(featureID)
+                let sourceNode = document.cadDocument.designGraph.nodes[faceKnife.target.featureID]
+                var evaluatedSkipReason: String?
+                let solid = try measureEvaluatedSolid(
+                    featureID: featureID,
+                    featureName: node.name,
+                    sourceFeatureID: faceKnife.target.featureID,
+                    sourceFeatureName: sourceNode?.name,
+                    evaluatedDocument: evaluatedDocument(),
+                    unsupportedReason: &evaluatedSkipReason
+                )
+                guard let solid else {
+                    let detail = evaluatedSkipReason.map { " \($0)" } ?? ""
+                    diagnostics.append(
+                        EditorDiagnostic(
+                            severity: .info,
+                            message: "Measurement skipped Face Knife direct-edit solid.\(detail)"
+                        )
+                    )
+                    continue
+                }
+                counts.solids += 1
+                solids.append(solid)
+                totals.solidVolumeCubicMeters += solid.volumeCubicMeters
+                bounds.include(solid.bounds)
             }
         }
 
@@ -210,6 +479,27 @@ public struct MeasurementService {
         )
     }
 
+    private func bodyFeatureIDsSupersededByDirectEdits(in document: CADDocument) -> Set<FeatureID> {
+        var result: Set<FeatureID> = []
+        for featureID in document.designGraph.order {
+            guard let node = document.designGraph.nodes[featureID],
+                  !node.isSuppressed else {
+                continue
+            }
+            switch node.operation {
+            case .sketch, .extrude, .sweep, .polySpline:
+                continue
+            case .faceLoopOffset(let faceLoopOffset):
+                result.insert(faceLoopOffset.target.featureID)
+            case .edgeOffset(let edgeOffset):
+                result.insert(edgeOffset.target.featureID)
+            case .faceKnife(let faceKnife):
+                result.insert(faceKnife.target.featureID)
+            }
+        }
+        return result
+    }
+
     private func measureProfile(
         featureID: FeatureID,
         featureName: String?,
@@ -241,19 +531,14 @@ public struct MeasurementService {
             )
         }
 
-        let lines = try sketch.entities.values.compactMap { entity -> ResolvedLine? in
-            guard case .line(let line) = entity else {
-                return nil
-            }
-            return ResolvedLine(
-                start: try resolvedPoint(line.start, parameters: parameters),
-                end: try resolvedPoint(line.end, parameters: parameters)
-            )
-        }
-        guard lines.count >= 3, lines.count == sketch.entities.count else {
+        let segments = try resolvedProfileSegments(
+            in: sketch,
+            parameters: parameters
+        )
+        guard !segments.isEmpty else {
             return nil
         }
-        guard let loop = orderedClosedLineLoop(from: lines) else {
+        guard let loop = orderedClosedLoop(from: segments) else {
             return nil
         }
         let area = abs(polygonArea(loop))
@@ -270,7 +555,7 @@ public struct MeasurementService {
         let result = MeasurementResult.Profile(
             featureID: featureID.description,
             featureName: featureName,
-            kind: .lineLoop,
+            kind: segments.contains { $0.kind != .line } ? .curveLoop : .lineLoop,
             areaSquareMeters: area,
             bounds: bounds
         )
@@ -331,10 +616,350 @@ public struct MeasurementService {
             featureName: featureName,
             sourceFeatureID: sourceFeatureID.description,
             sourceFeatureName: sourceFeatureName,
-            heightMeters: height,
+            linearDimensions: [
+                MeasurementResult.Solid.LinearDimension(
+                    kind: .extrusionHeight,
+                    meters: height
+                ),
+            ],
             volumeCubicMeters: profile.result.areaSquareMeters * height,
             bounds: solidBounds
         )
+    }
+
+    private func measureStraightSweepSolid(
+        featureID: FeatureID,
+        featureName: String?,
+        sourceFeatureID: FeatureID,
+        sourceFeatureName: String?,
+        profile: MeasuredProfile,
+        sweep: SweepFeature,
+        pathSketch: Sketch,
+        parameters: ParameterTable
+    ) throws -> MeasurementResult.Solid? {
+        guard sweep.profiles.count == 1,
+              sweep.guides.isEmpty,
+              sweep.options.resultKind == .solid,
+              sweep.options.booleanOperation == .newBody,
+              sweep.options.keepTools == false else {
+            return nil
+        }
+        let twistAngle = try resolvedAngle(sweep.options.twistAngle, parameters: parameters)
+        guard abs(twistAngle) <= tolerance.angle else {
+            return nil
+        }
+        let endScale = try resolvedScalar(sweep.options.endScale, parameters: parameters)
+        guard abs(endScale - 1.0) <= tolerance.distance else {
+            return nil
+        }
+        let distanceFraction = try resolvedScalar(sweep.options.distanceFraction, parameters: parameters)
+        guard distanceFraction > 0.0,
+              distanceFraction <= 1.0 else {
+            return nil
+        }
+        guard let pathVector = try straightOpenPathVector(pathSketch, parameters: parameters) else {
+            return nil
+        }
+        let fullDistance = pathVector.length
+        guard fullDistance > tolerance.distance else {
+            return nil
+        }
+        let direction = try pathVector.normalized(tolerance: tolerance.distance)
+        let sweepDistance = fullDistance * distanceFraction
+        let sweepVector = direction * sweepDistance
+        let height = abs(sweepVector.dot(profile.frame.normal))
+        guard height > tolerance.distance else {
+            return nil
+        }
+
+        var bounds = BoundsAccumulator()
+        bounds.include(profile.baseBounds)
+        bounds.include(profile.baseBounds.translated(by: sweepVector))
+        guard let solidBounds = bounds.bounds else {
+            throw EditorError(
+                code: .commandFailed,
+                message: "Measurement could not compute sweep solid bounds."
+            )
+        }
+        return MeasurementResult.Solid(
+            featureID: featureID.description,
+            featureName: featureName,
+            sourceFeatureID: sourceFeatureID.description,
+            sourceFeatureName: sourceFeatureName,
+            linearDimensions: [
+                MeasurementResult.Solid.LinearDimension(
+                    kind: .sweepNormalHeight,
+                    meters: height
+                ),
+                MeasurementResult.Solid.LinearDimension(
+                    kind: .sweepPathLength,
+                    meters: sweepDistance
+                ),
+            ],
+            volumeCubicMeters: profile.result.areaSquareMeters * height,
+            bounds: solidBounds
+        )
+    }
+
+    private func measureEvaluatedSweepSolid(
+        featureID: FeatureID,
+        featureName: String?,
+        sourceFeatureID: FeatureID,
+        sourceFeatureName: String?,
+        sweep: SweepFeature,
+        pathSketch: Sketch,
+        parameters: ParameterTable,
+        evaluatedDocument: EvaluatedDocument?,
+        unsupportedReason: inout String?
+    ) throws -> MeasurementResult.Solid? {
+        guard sweep.options.resultKind == .solid else {
+            unsupportedReason = "The sweep result kind is not solid."
+            return nil
+        }
+        guard let evaluatedDocument else {
+            unsupportedReason = "Evaluated geometry is unavailable."
+            return nil
+        }
+        guard let bodyID = evaluatedBodyID(for: featureID, in: evaluatedDocument) else {
+            unsupportedReason = "The evaluated document is missing the sweep generated body name."
+            return nil
+        }
+        guard let mesh = evaluatedDocument.meshes[bodyID] else {
+            unsupportedReason = "The evaluated document is missing the sweep generated body mesh."
+            return nil
+        }
+        let distanceFraction = try resolvedScalar(sweep.options.distanceFraction, parameters: parameters)
+        guard distanceFraction > 0.0,
+              distanceFraction <= 1.0 else {
+            unsupportedReason = "The sweep distance fraction is outside the measurable range."
+            return nil
+        }
+        guard let pathLength = try pathLength(pathSketch, parameters: parameters) else {
+            unsupportedReason = "The sweep path length could not be measured."
+            return nil
+        }
+        let meshMeasurement = try evaluatedMeshMeasurement(mesh)
+        let brepVolume = try evaluatedBRepVolume(bodyID: bodyID, in: evaluatedDocument.brep)
+        let volumeCubicMeters = brepVolume ?? meshMeasurement.volumeCubicMeters
+        guard volumeCubicMeters > tolerance.distance * tolerance.distance * tolerance.distance else {
+            unsupportedReason = "The evaluated sweep solid volume is below tolerance."
+            return nil
+        }
+        return MeasurementResult.Solid(
+            featureID: featureID.description,
+            featureName: featureName,
+            sourceFeatureID: sourceFeatureID.description,
+            sourceFeatureName: sourceFeatureName,
+            linearDimensions: [
+                MeasurementResult.Solid.LinearDimension(
+                    kind: .sweepPathLength,
+                    meters: pathLength * distanceFraction
+                ),
+            ],
+            volumeCubicMeters: volumeCubicMeters,
+            surfaceAreaSquareMeters: meshMeasurement.surfaceAreaSquareMeters,
+            bounds: meshMeasurement.bounds
+        )
+    }
+
+    private func measureEvaluatedSolid(
+        featureID: FeatureID,
+        featureName: String?,
+        sourceFeatureID: FeatureID,
+        sourceFeatureName: String?,
+        evaluatedDocument: EvaluatedDocument?,
+        unsupportedReason: inout String?
+    ) throws -> MeasurementResult.Solid? {
+        guard let evaluatedDocument else {
+            unsupportedReason = "Evaluated geometry is unavailable."
+            return nil
+        }
+        guard let bodyID = evaluatedBodyID(for: featureID, in: evaluatedDocument) else {
+            unsupportedReason = "The evaluated document is missing the generated body name."
+            return nil
+        }
+        guard let mesh = evaluatedDocument.meshes[bodyID] else {
+            unsupportedReason = "The evaluated document is missing the generated body mesh."
+            return nil
+        }
+        let meshMeasurement = try evaluatedMeshMeasurement(mesh)
+        let brepVolume = try evaluatedBRepVolume(bodyID: bodyID, in: evaluatedDocument.brep)
+        let volumeCubicMeters = brepVolume ?? meshMeasurement.volumeCubicMeters
+        guard volumeCubicMeters > tolerance.distance * tolerance.distance * tolerance.distance else {
+            unsupportedReason = "The evaluated solid volume is below tolerance."
+            return nil
+        }
+        return MeasurementResult.Solid(
+            featureID: featureID.description,
+            featureName: featureName,
+            sourceFeatureID: sourceFeatureID.description,
+            sourceFeatureName: sourceFeatureName,
+            linearDimensions: [],
+            volumeCubicMeters: volumeCubicMeters,
+            surfaceAreaSquareMeters: meshMeasurement.surfaceAreaSquareMeters,
+            bounds: meshMeasurement.bounds
+        )
+    }
+
+    private func evaluatedBodyID(
+        for featureID: FeatureID,
+        in evaluatedDocument: EvaluatedDocument
+    ) -> BodyID? {
+        let bodyName = PersistentName(components: [
+            .feature(featureID),
+            .generated(GeneratedSubshapeRole.body.rawValue),
+        ])
+        guard case .body(let bodyID) = evaluatedDocument.generatedNames[bodyName] else {
+            return nil
+        }
+        return bodyID
+    }
+
+    private func evaluatedMeshMeasurement(_ mesh: Mesh) throws -> EvaluatedMeshMeasurement {
+        guard !mesh.positions.isEmpty,
+              !mesh.indices.isEmpty,
+              mesh.indices.count.isMultiple(of: 3) else {
+            throw EditorError(
+                code: .commandFailed,
+                message: "Measurement expected a non-empty triangle mesh."
+            )
+        }
+        var bounds = BoundsAccumulator()
+        for point in mesh.positions {
+            bounds.include(point)
+        }
+        guard let measuredBounds = bounds.bounds else {
+            return EvaluatedMeshMeasurement(
+                surfaceAreaSquareMeters: 0.0,
+                volumeCubicMeters: 0.0,
+                bounds: MeasurementResult.Bounds(
+                    minX: 0.0,
+                    minY: 0.0,
+                    minZ: 0.0,
+                    maxX: 0.0,
+                    maxY: 0.0,
+                    maxZ: 0.0
+                )
+            )
+        }
+
+        var surfaceArea = 0.0
+        var signedVolume = 0.0
+        var index = 0
+        while index + 2 < mesh.indices.count {
+            let firstIndex = Int(mesh.indices[index])
+            let secondIndex = Int(mesh.indices[index + 1])
+            let thirdIndex = Int(mesh.indices[index + 2])
+            guard firstIndex < mesh.positions.count,
+                  secondIndex < mesh.positions.count,
+                  thirdIndex < mesh.positions.count else {
+                throw EditorError(
+                    code: .commandFailed,
+                    message: "Measurement encountered a mesh index outside the position table."
+                )
+            }
+            let first = mesh.positions[firstIndex]
+            let second = mesh.positions[secondIndex]
+            let third = mesh.positions[thirdIndex]
+            let triangleNormal = (second - first).cross(third - first)
+            surfaceArea += triangleNormal.length * 0.5
+            signedVolume += vector(first).dot(vector(second).cross(vector(third))) / 6.0
+            index += 3
+        }
+
+        return EvaluatedMeshMeasurement(
+            surfaceAreaSquareMeters: surfaceArea,
+            volumeCubicMeters: abs(signedVolume),
+            bounds: measuredBounds
+        )
+    }
+
+    private func evaluatedBRepVolume(
+        bodyID: BodyID,
+        in model: BRepModel
+    ) throws -> Double? {
+        guard let body = model.bodies[bodyID] else {
+            throw EditorError(
+                code: .commandFailed,
+                message: "Measurement expected an evaluated B-rep body for the sweep feature."
+            )
+        }
+        guard body.kind == .solid else {
+            return nil
+        }
+
+        var signedVolume = 0.0
+        for shellID in body.shellIDs {
+            guard let shell = model.shells[shellID] else {
+                throw EditorError(
+                    code: .commandFailed,
+                    message: "Measurement encountered a missing B-rep shell."
+                )
+            }
+            for faceID in shell.faceIDs {
+                guard let face = model.faces[faceID] else {
+                    throw EditorError(
+                        code: .commandFailed,
+                        message: "Measurement encountered a missing B-rep face."
+                    )
+                }
+                guard face.loops.count == 1,
+                      let loopID = face.loops.first,
+                      let loop = model.loops[loopID],
+                      loop.role == .outer,
+                      try isLineOnly(loop: loop, in: model) else {
+                    return nil
+                }
+                var points = try model.orderedPoints(for: loopID)
+                if (shell.orientation == .reversed) != (face.orientation == .reversed) {
+                    points.reverse()
+                }
+                signedVolume += try signedVolumeContribution(points)
+            }
+        }
+
+        let volume = abs(signedVolume)
+        guard volume.isFinite else {
+            return nil
+        }
+        return volume
+    }
+
+    private func isLineOnly(loop: Loop, in model: BRepModel) throws -> Bool {
+        for orientedEdge in loop.edges {
+            guard let edge = model.edges[orientedEdge.edgeID],
+                  let curve = model.geometry.curves[edge.curveID] else {
+                throw EditorError(
+                    code: .commandFailed,
+                    message: "Measurement encountered missing B-rep edge geometry."
+                )
+            }
+            guard case .line = curve else {
+                return false
+            }
+        }
+        return true
+    }
+
+    private func signedVolumeContribution(_ points: [Point3D]) throws -> Double {
+        guard points.count >= 3 else {
+            throw EditorError(
+                code: .commandFailed,
+                message: "Measurement encountered a degenerate B-rep face."
+            )
+        }
+        let anchor = vector(points[0])
+        var signedVolume = 0.0
+        for index in 1..<(points.count - 1) {
+            signedVolume += anchor.dot(
+                vector(points[index]).cross(vector(points[index + 1]))
+            ) / 6.0
+        }
+        return signedVolume
+    }
+
+    private func vector(_ point: Point3D) -> Vector3D {
+        Vector3D(x: point.x, y: point.y, z: point.z)
     }
 
     private func boundsForSketch(
@@ -354,6 +979,14 @@ public struct MeasurementService {
                 let center = frame.map(try resolvedPoint(circle.center, parameters: parameters))
                 let radius = try resolvedLength(circle.radius, parameters: parameters)
                 bounds.include(circleBounds(center: center, radius: radius, frame: frame))
+            case .arc(let arc):
+                for point in try arcBoundsPoints(arc, parameters: parameters) {
+                    bounds.include(frame.map(point))
+                }
+            case .spline(let spline):
+                for point in try splineSamplePoints(spline, parameters: parameters) {
+                    bounds.include(frame.map(point))
+                }
             }
         }
         return bounds.bounds
@@ -383,38 +1016,265 @@ public struct MeasurementService {
         return quantity.value
     }
 
-    private func orderedClosedLineLoop(from lines: [ResolvedLine]) -> [Point2D]? {
-        var remaining = lines
+    private func resolvedAngle(
+        _ expression: CADExpression,
+        parameters: ParameterTable
+    ) throws -> Double {
+        let quantity = try parameters.resolvedValue(for: expression)
+        guard quantity.kind == .angle else {
+            throw EditorError(
+                code: .commandFailed,
+                message: "Measurement expected an angle expression."
+            )
+        }
+        return quantity.value
+    }
+
+    private func resolvedScalar(
+        _ expression: CADExpression,
+        parameters: ParameterTable
+    ) throws -> Double {
+        let quantity = try parameters.resolvedValue(for: expression)
+        guard quantity.kind == .scalar else {
+            throw EditorError(
+                code: .commandFailed,
+                message: "Measurement expected a scalar expression."
+            )
+        }
+        return quantity.value
+    }
+
+    private func straightOpenPathVector(
+        _ sketch: Sketch,
+        parameters: ParameterTable
+    ) throws -> Vector3D? {
+        let lines = sketch.entities.values.compactMap(\.line)
+        guard lines.count == 1,
+              sketch.entities.count == 1,
+              let line = lines.first else {
+            return nil
+        }
+        let frame = try planeFrame(for: sketch.plane)
+        let start = frame.map(try resolvedPoint(line.start, parameters: parameters))
+        let end = frame.map(try resolvedPoint(line.end, parameters: parameters))
+        return end - start
+    }
+
+    private func pathLength(
+        _ sketch: Sketch,
+        parameters: ParameterTable
+    ) throws -> Double? {
+        let frame = try planeFrame(for: sketch.plane)
+        var totalLength = 0.0
+        for entity in sketch.entities.values {
+            switch entity {
+            case .point:
+                return nil
+            case .line(let line):
+                let start = frame.map(try resolvedPoint(line.start, parameters: parameters))
+                let end = frame.map(try resolvedPoint(line.end, parameters: parameters))
+                totalLength += (end - start).length
+            case .circle(let circle):
+                let radius = try resolvedLength(circle.radius, parameters: parameters)
+                guard radius > tolerance.distance else {
+                    return nil
+                }
+                totalLength += Double.pi * 2.0 * radius
+            case .arc(let arc):
+                let radius = try resolvedLength(arc.radius, parameters: parameters)
+                let startAngle = try resolvedAngle(arc.startAngle, parameters: parameters)
+                let endAngle = try resolvedAngle(arc.endAngle, parameters: parameters)
+                let span = normalizedAngleSpan(startAngle: startAngle, endAngle: endAngle)
+                guard radius > tolerance.distance, span > tolerance.angle else {
+                    return nil
+                }
+                totalLength += radius * span
+            case .spline(let spline):
+                let points = try splineSamplePoints(spline, parameters: parameters)
+                guard points.count >= 2 else {
+                    return nil
+                }
+                for index in 0..<(points.count - 1) {
+                    let start = frame.map(points[index])
+                    let end = frame.map(points[index + 1])
+                    totalLength += (end - start).length
+                }
+            }
+        }
+        return totalLength > tolerance.distance ? totalLength : nil
+    }
+
+    private func resolvedProfileSegments(
+        in sketch: Sketch,
+        parameters: ParameterTable
+    ) throws -> [ResolvedProfileSegment] {
+        var segments: [ResolvedProfileSegment] = []
+        for entity in sketch.entities.values {
+            switch entity {
+            case .line(let line):
+                segments.append(ResolvedProfileSegment(
+                    kind: .line,
+                    points: [
+                        try resolvedPoint(line.start, parameters: parameters),
+                        try resolvedPoint(line.end, parameters: parameters),
+                    ]
+                ))
+            case .arc(let arc):
+                segments.append(try resolvedArcSegment(arc, parameters: parameters))
+            case .spline(let spline):
+                let points = try splineSamplePoints(spline, parameters: parameters)
+                if spline.isClosed {
+                    guard let first = points.first,
+                          let last = points.last,
+                          isClose(first, last) else {
+                        return []
+                    }
+                }
+                guard points.count >= 2 else {
+                    return []
+                }
+                segments.append(ResolvedProfileSegment(kind: .spline, points: points))
+            case .point, .circle:
+                return []
+            }
+        }
+        return segments
+    }
+
+    private func splineSamplePoints(
+        _ spline: SketchSpline,
+        parameters: ParameterTable
+    ) throws -> [Point2D] {
+        guard spline.controlPoints.count >= 4,
+              (spline.controlPoints.count - 1).isMultiple(of: 3) else {
+            return []
+        }
+        let controlPoints = try spline.controlPoints.map { point in
+            try resolvedPoint(point, parameters: parameters)
+        }
+        let kernelControlPoints: [CADCore.Point2D] = controlPoints.map { point in
+            CADCore.Point2D(x: point.x, y: point.y)
+        }
+        return try splineTessellator.points(for: kernelControlPoints).map { point in
+            Point2D(x: point.x, y: point.y)
+        }
+    }
+
+    private func resolvedArcSegment(
+        _ arc: SketchArc,
+        parameters: ParameterTable
+    ) throws -> ResolvedProfileSegment {
+        let center = try resolvedPoint(arc.center, parameters: parameters)
+        let radius = try resolvedLength(arc.radius, parameters: parameters)
+        let startAngle = try resolvedAngle(arc.startAngle, parameters: parameters)
+        let span = normalizedAngleSpan(
+            startAngle: startAngle,
+            endAngle: try resolvedAngle(arc.endAngle, parameters: parameters)
+        )
+        guard radius > tolerance.distance, span > tolerance.angle else {
+            return ResolvedProfileSegment(kind: .arc, points: [])
+        }
+        let fullCircleSegmentCount = 64
+        let segmentCount = max(
+            Int(ceil(Double(fullCircleSegmentCount) * span / (Double.pi * 2.0))),
+            2
+        )
+        let points = (0 ... segmentCount).map { index in
+            let ratio = Double(index) / Double(segmentCount)
+            let angle = startAngle + span * ratio
+            return Point2D(
+                x: center.x + cos(angle) * radius,
+                y: center.y + sin(angle) * radius
+            )
+        }
+        return ResolvedProfileSegment(kind: .arc, points: points)
+    }
+
+    private func orderedClosedLoop(from segments: [ResolvedProfileSegment]) -> [Point2D]? {
+        var remaining = segments.filter { $0.points.count >= 2 }
         guard let first = remaining.first else {
             return nil
         }
         remaining.removeFirst()
-        var points = [first.start, first.end]
-        var current = first.end
+        var points = first.points
+        guard let start = points.first,
+              let firstEnd = points.last else {
+            return nil
+        }
+        var current = firstEnd
 
         while !remaining.isEmpty {
-            guard let index = remaining.firstIndex(where: { line in
-                isClose(line.start, current) || isClose(line.end, current)
+            guard let index = remaining.firstIndex(where: { segment in
+                isClose(segment.start, current) || isClose(segment.end, current)
             }) else {
                 return nil
             }
-            let line = remaining.remove(at: index)
-            if isClose(line.start, current) {
-                current = line.end
-                points.append(line.end)
-            } else {
-                current = line.start
-                points.append(line.start)
+            let segment = remaining.remove(at: index)
+            let segmentPoints = isClose(segment.start, current)
+                ? segment.points
+                : Array(segment.points.reversed())
+            guard let segmentEnd = segmentPoints.last else {
+                return nil
             }
+            current = segmentEnd
+            points.append(contentsOf: segmentPoints.dropFirst())
         }
 
-        guard isClose(current, points[0]) else {
+        guard isClose(current, start) else {
             return nil
         }
-        if let last = points.last, isClose(last, points[0]) {
+        if let last = points.last, isClose(last, start) {
             points.removeLast()
         }
         return points.count >= 3 ? points : nil
+    }
+
+    private func arcBoundsPoints(
+        _ arc: SketchArc,
+        parameters: ParameterTable
+    ) throws -> [Point2D] {
+        let center = try resolvedPoint(arc.center, parameters: parameters)
+        let radius = try resolvedLength(arc.radius, parameters: parameters)
+        let startAngle = try resolvedAngle(arc.startAngle, parameters: parameters)
+        let span = normalizedAngleSpan(
+            startAngle: startAngle,
+            endAngle: try resolvedAngle(arc.endAngle, parameters: parameters)
+        )
+        let angles = arcSamplingAngles(startAngle: startAngle, span: span)
+        return angles.map { angle in
+            Point2D(
+                x: center.x + cos(angle) * radius,
+                y: center.y + sin(angle) * radius
+            )
+        }
+    }
+
+    private func arcSamplingAngles(startAngle: Double, span: Double) -> [Double] {
+        let fullCircle = Double.pi * 2.0
+        var angles = [startAngle, startAngle + span]
+        let cardinalAngles = [0.0, Double.pi / 2.0, Double.pi, Double.pi * 1.5, fullCircle]
+        for baseAngle in cardinalAngles {
+            var angle = baseAngle
+            while angle < startAngle - tolerance.angle {
+                angle += fullCircle
+            }
+            if angle <= startAngle + span + tolerance.angle {
+                angles.append(angle)
+            }
+        }
+        return angles
+    }
+
+    private func normalizedAngleSpan(startAngle: Double, endAngle: Double) -> Double {
+        let fullCircle = Double.pi * 2.0
+        var span = endAngle - startAngle
+        while span <= tolerance.angle {
+            span += fullCircle
+        }
+        while span > fullCircle + tolerance.angle {
+            span -= fullCircle
+        }
+        return min(span, fullCircle)
     }
 
     private func polygonArea(_ points: [Point2D]) -> Double {
@@ -508,6 +1368,12 @@ private struct MeasuredProfile {
     var baseBounds: MeasurementResult.Bounds
 }
 
+private struct EvaluatedMeshMeasurement {
+    var surfaceAreaSquareMeters: Double
+    var volumeCubicMeters: Double
+    var bounds: MeasurementResult.Bounds
+}
+
 private struct PlaneFrame {
     var origin: Point3D
     var normal: Vector3D
@@ -519,9 +1385,23 @@ private struct PlaneFrame {
     }
 }
 
-private struct ResolvedLine {
-    var start: Point2D
-    var end: Point2D
+private enum ResolvedProfileSegmentKind: Equatable {
+    case line
+    case arc
+    case spline
+}
+
+private struct ResolvedProfileSegment {
+    var kind: ResolvedProfileSegmentKind
+    var points: [Point2D]
+
+    var start: Point2D {
+        points[0]
+    }
+
+    var end: Point2D {
+        points[points.count - 1]
+    }
 }
 
 private struct Point2D: Equatable {
@@ -575,6 +1455,13 @@ private extension MeasurementResult.Bounds {
 }
 
 private extension SketchEntity {
+    var line: SketchLine? {
+        if case .line(let line) = self {
+            return line
+        }
+        return nil
+    }
+
     var circle: SketchCircle? {
         if case .circle(let circle) = self {
             return circle

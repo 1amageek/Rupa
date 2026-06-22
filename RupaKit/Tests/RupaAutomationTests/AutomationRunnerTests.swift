@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 import RupaCore
 import SwiftCAD
@@ -174,6 +175,1242 @@ import SwiftCAD
 }
 
 @MainActor
+@Test func automationCanSetSelectedObjectDimension() async throws {
+    let session = EditorSession()
+    let runner = AutomationRunner()
+
+    _ = try runner.execute(
+        .createExtrudedRectangle(
+            name: "Dimensioned Automation Box",
+            plane: .xy,
+            width: .length(30.0, .millimeter),
+            height: .length(12.0, .millimeter),
+            depth: .length(6.0, .millimeter),
+            direction: .normal
+        ),
+        in: session
+    )
+    let bodyNode = try #require(session.document.productMetadata.sceneNodes.values.first {
+        $0.reference?.kind == .body
+    })
+
+    let result = try runner.execute(
+        .setObjectDimension(
+            target: SelectionTarget(sceneNodeID: bodyNode.id, component: .face(.bodyFaceTop)),
+            kind: .sizeY,
+            value: .length(10.0, .millimeter)
+        ),
+        in: session
+    )
+
+    #expect(result.message == "Object dimension updated.")
+    #expect(result.commandName == "setObjectDimension")
+    #expect(result.didMutate)
+    #expect(result.generation == DocumentGeneration(2))
+    let editedBodyNode = try #require(session.document.productMetadata.sceneNodes[bodyNode.id])
+    #expect(editedBodyNode.object?.properties["size.y"] == .length(0.01))
+    #expect(session.evaluationStatus == .valid)
+    #expect(session.evaluatedBodyCount == 1)
+}
+
+@MainActor
+@Test func automationCanToggleCurveCurvatureDisplay() async throws {
+    let session = EditorSession()
+    let runner = AutomationRunner()
+    _ = try runner.execute(
+        .createCircleSketch(
+            name: "Automation Curvature Display Circle",
+            plane: .xy,
+            center: SketchPoint(
+                x: .length(0.0, .millimeter),
+                y: .length(0.0, .millimeter)
+            ),
+            radius: .length(5.0, .millimeter)
+        ),
+        in: session
+    )
+    let summary = try SketchEntitySummaryService().summarize(document: session.document)
+    let circle = try #require(summary.entries.first { $0.entityKind == "circle" })
+    let target = try #require(circle.selectionTarget())
+    let componentID = try #require(automationSketchEntityComponentID(from: target))
+
+    let result = try runner.execute(
+        .setCurveCurvatureDisplay(
+            target: target,
+            isVisible: true,
+            combScale: 0.3
+        ),
+        in: session
+    )
+
+    #expect(result.message == "Curve curvature display enabled at comb scale 0.3.")
+    #expect(result.commandName == "setCurveCurvatureDisplay")
+    #expect(result.didMutate)
+    #expect(result.generation == DocumentGeneration(2))
+    #expect(session.document.productMetadata.curveCurvatureDisplays[componentID]?.combScale == 0.3)
+
+    let hideResult = try runner.execute(
+        .setCurveCurvatureDisplay(
+            target: target,
+            isVisible: false,
+            combScale: nil
+        ),
+        in: session
+    )
+    #expect(hideResult.message == "Curve curvature display disabled.")
+    #expect(hideResult.didMutate)
+    #expect(session.document.productMetadata.curveCurvatureDisplays[componentID] == nil)
+}
+
+@MainActor
+@Test func automationCanTogglePointDisplay() async throws {
+    let session = EditorSession()
+    let runner = AutomationRunner()
+    _ = try runner.execute(
+        .createSplineSketch(
+            name: "Automation Point Display Spline",
+            plane: .xy,
+            spline: SketchSpline(controlPoints: [
+                SketchPoint(x: .length(0.0, .meter), y: .length(0.0, .meter)),
+                SketchPoint(x: .length(0.002, .meter), y: .length(0.004, .meter)),
+                SketchPoint(x: .length(0.006, .meter), y: .length(0.004, .meter)),
+                SketchPoint(x: .length(0.008, .meter), y: .length(0.0, .meter)),
+            ])
+        ),
+        in: session
+    )
+    let summary = try SketchEntitySummaryService().summarize(document: session.document)
+    let spline = try #require(summary.entries.first { $0.entityKind == "spline" })
+    let target = try #require(spline.selectionTarget())
+    let componentID = try #require(automationSketchEntityComponentID(from: target))
+
+    let hideResult = try runner.execute(
+        .setPointDisplay(target: target, isVisible: nil),
+        in: session
+    )
+
+    #expect(hideResult.message == "Point display toggled.")
+    #expect(hideResult.commandName == "setPointDisplay")
+    #expect(hideResult.didMutate)
+    #expect(hideResult.generation == DocumentGeneration(2))
+    #expect(session.document.productMetadata.pointDisplays[componentID]?.isVisible == false)
+
+    let showResult = try runner.execute(
+        .setPointDisplay(target: target, isVisible: nil),
+        in: session
+    )
+    #expect(showResult.message == "Point display toggled.")
+    #expect(showResult.didMutate)
+    #expect(session.document.productMetadata.pointDisplays[componentID]?.isVisible == true)
+}
+
+@MainActor
+@Test func automationCanCreateSweepSourceFeature() async throws {
+    var document = DesignDocument.empty()
+    let profileID = try document.createRectangleSketch(
+        name: "Automation Sweep Profile",
+        plane: .xy,
+        width: .length(4.0, .millimeter),
+        height: .length(2.0, .millimeter)
+    )
+    let pathID = try document.createLineSketch(
+        name: "Automation Sweep Path",
+        plane: .yz,
+        start: SketchPoint(
+            x: .length(0.0, .millimeter),
+            y: .length(0.0, .millimeter)
+        ),
+        end: SketchPoint(
+            x: .length(0.0, .millimeter),
+            y: .length(20.0, .millimeter)
+        )
+    )
+    let session = EditorSession(document: document)
+    let runner = AutomationRunner()
+
+    let result = try runner.execute(
+        .createSweep(
+            name: "Automation Sweep",
+            profiles: [ProfileReference(featureID: profileID)],
+            path: SweepPathReference(featureID: pathID),
+            guides: [],
+            targets: [],
+            options: SweepOptions()
+        ),
+        in: session
+    )
+
+    let sweepID = try #require(session.document.cadDocument.designGraph.order.last)
+    let feature = try #require(session.document.cadDocument.designGraph.nodes[sweepID])
+    guard case .sweep(let sweep) = feature.operation else {
+        Issue.record("Automation must create a sweep feature.")
+        return
+    }
+    #expect(result.message == "Sweep Automation Sweep source created.")
+    #expect(result.commandName == "createSweep")
+    #expect(result.didMutate)
+    #expect(result.generation == DocumentGeneration(1))
+    #expect(sweep.profiles == [ProfileReference(featureID: profileID)])
+    #expect(sweep.path == SweepPathReference(featureID: pathID))
+    #expect(feature.inputs == [
+        FeatureInput(featureID: profileID, role: .profile),
+        FeatureInput(featureID: pathID, role: .path),
+    ])
+    #expect(session.evaluatedBodyCount == 1)
+    #expect(session.evaluationStatus == .valid)
+    #expect(result.diagnostics.contains { diagnostic in diagnostic.severity == .error } == false)
+}
+
+@MainActor
+@Test func automationCanMovePolySplineSurfaceVertex() async throws {
+    let session = EditorSession()
+    let runner = AutomationRunner()
+    _ = try runner.execute(
+        .createPolySplineSurface(
+            name: "Automation Editable Surface",
+            sourceMesh: automationPolySplineQuadMesh(),
+            options: PolySplineOptions()
+        ),
+        in: session
+    )
+    let featureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let topology = try TopologySummaryService().summarize(document: session.document)
+    let vertexEntry = try #require(topology.entries.first {
+        $0.kind == .vertex
+            && $0.subshapeRole == "patch:0:vertex:uMax:vMax"
+    })
+    let target = try #require(vertexEntry.selectionTarget())
+
+    let result = try runner.execute(
+        .movePolySplineSurfaceVertex(
+            target: target,
+            deltaX: .length(0.0, .millimeter),
+            deltaY: .length(0.0, .millimeter),
+            deltaZ: .length(1.0, .millimeter)
+        ),
+        in: session
+    )
+
+    let feature = try #require(session.document.cadDocument.designGraph.nodes[featureID])
+    guard case let .polySpline(polySpline) = feature.operation else {
+        Issue.record("Automation must keep a PolySpline feature.")
+        return
+    }
+    #expect(result.message == "PolySpline surface vertex moved.")
+    #expect(result.commandName == "movePolySplineSurfaceVertex")
+    #expect(result.didMutate)
+    #expect(result.generation == DocumentGeneration(2))
+    #expect(abs(polySpline.sourceMesh.positions[2].z - 0.005) <= 1.0e-12)
+    #expect(session.evaluationStatus == .valid)
+}
+
+@MainActor
+@Test func automationCanSlidePolySplineSurfaceVertices() async throws {
+    let session = EditorSession()
+    let runner = AutomationRunner()
+    _ = try runner.execute(
+        .createPolySplineSurface(
+            name: "Automation Slide Surface",
+            sourceMesh: automationPolySplineQuadMesh(),
+            options: PolySplineOptions()
+        ),
+        in: session
+    )
+    let featureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let topology = try TopologySummaryService().summarize(document: session.document)
+    let vertexEntry = try #require(topology.entries.first {
+        $0.kind == .vertex
+            && $0.subshapeRole == "patch:0:vertex:uMax:vMin"
+    })
+    let target = try #require(vertexEntry.selectionTarget())
+
+    let result = try runner.execute(
+        .slidePolySplineSurfaceVertices(
+            targets: [target],
+            direction: .positiveV,
+            distance: .length(1.0, .millimeter)
+        ),
+        in: session
+    )
+
+    let feature = try #require(session.document.cadDocument.designGraph.nodes[featureID])
+    guard case let .polySpline(polySpline) = feature.operation else {
+        Issue.record("Automation must keep a PolySpline feature.")
+        return
+    }
+    let length = sqrt((0.02 * 0.02) + (0.004 * 0.004))
+    #expect(result.message == "PolySpline surface vertices slid.")
+    #expect(result.commandName == "slidePolySplineSurfaceVertices")
+    #expect(result.didMutate)
+    #expect(result.generation == DocumentGeneration(2))
+    #expect(abs(polySpline.sourceMesh.positions[1].y - (0.02 / length * 0.001)) <= 1.0e-12)
+    #expect(abs(polySpline.sourceMesh.positions[1].z - (0.004 / length * 0.001)) <= 1.0e-12)
+    #expect(session.evaluationStatus == .valid)
+}
+
+@MainActor
+@Test func automationCanOffsetBodyFace() async throws {
+    let session = EditorSession()
+    let runner = AutomationRunner()
+    _ = try runner.execute(
+        .createExtrudedRectangle(
+            name: "Automation Box",
+            plane: .xy,
+            width: .length(10.0, .millimeter),
+            height: .length(8.0, .millimeter),
+            depth: .length(6.0, .millimeter),
+            direction: .normal
+        ),
+        in: session
+    )
+    let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let bodyNodeID = try #require(automationSceneNodeID(for: bodyFeatureID, in: session.document))
+
+    let result = try runner.execute(
+        .offsetBodyFace(
+            target: SelectionTarget(sceneNodeID: bodyNodeID, component: .face(.bodyFaceRight)),
+            distance: .length(2.0, .millimeter)
+        ),
+        in: session
+    )
+
+    #expect(result.message == "Body face offset applied.")
+    #expect(result.commandName == "offsetBodyFace")
+    #expect(result.didMutate)
+    #expect(result.generation == DocumentGeneration(2))
+    #expect(session.evaluationStatus == .valid)
+}
+
+@MainActor
+@Test func automationCanCreateFaceKnifeFromGeneratedFaceTarget() async throws {
+    let session = EditorSession()
+    let runner = AutomationRunner()
+    _ = try runner.execute(
+        .createExtrudedRectangle(
+            name: "Automation Knife Box",
+            plane: .xy,
+            width: .length(10.0, .millimeter),
+            height: .length(8.0, .millimeter),
+            depth: .length(6.0, .millimeter),
+            direction: .normal
+        ),
+        in: session
+    )
+    let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let bodyNodeID = try #require(automationSceneNodeID(for: bodyFeatureID, in: session.document))
+    let topology = try TopologySummaryService().summarize(document: session.document)
+    let startFaceEntry = try #require(
+        topology.entries.first {
+            $0.kind == .face &&
+                $0.sceneNodeID == bodyNodeID.description &&
+                $0.generatedRole == "startFace"
+        }
+    )
+    let target = try #require(startFaceEntry.selectionTarget())
+
+    let result = try runner.execute(
+        .createFaceKnife(
+            name: "Automation Face Knife",
+            target: target,
+            loop: [
+                Point3D(x: -0.0015, y: -0.0010, z: 0.0),
+                Point3D(x: 0.0015, y: -0.0010, z: 0.0),
+                Point3D(x: 0.0015, y: 0.0010, z: 0.0),
+                Point3D(x: -0.0015, y: 0.0010, z: 0.0),
+            ]
+        ),
+        in: session
+    )
+
+    let faceKnifeFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let faceKnifeSceneNodeID = try #require(automationSceneNodeID(for: faceKnifeFeatureID, in: session.document))
+    let afterTopology = try TopologySummaryService().summarize(document: session.document)
+    let faceKnifeFaces = afterTopology.entries.filter {
+        $0.kind == .face && $0.sceneNodeID == faceKnifeSceneNodeID.description
+    }
+
+    #expect(result.message == "Face Knife Automation Face Knife applied.")
+    #expect(result.commandName == "createFaceKnife")
+    #expect(result.didMutate)
+    #expect(result.generation == DocumentGeneration(2))
+    #expect(faceKnifeFaces.count == 7)
+    #expect(faceKnifeFaces.contains {
+        $0.generatedRole == "faceKnife" && $0.subshapeRole == "centerFace"
+    })
+    #expect(session.evaluationStatus == .valid)
+}
+
+@MainActor
+@Test func automationCanOffsetSketchCurveSymmetrically() async throws {
+    let session = EditorSession()
+    let runner = AutomationRunner()
+    _ = try runner.execute(
+        .createLineSketch(
+            name: "Automation Offset Source Line",
+            plane: .xy,
+            start: SketchPoint(
+                x: .length(0.0, .millimeter),
+                y: .length(0.0, .millimeter)
+            ),
+            end: SketchPoint(
+                x: .length(10.0, .millimeter),
+                y: .length(0.0, .millimeter)
+            )
+        ),
+        in: session
+    )
+    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let sourceLine = try #require(before.entries.first { $0.entityKind == "line" })
+    let target = try #require(sourceLine.selectionTarget())
+
+    let result = try runner.execute(
+        .offsetCurve(
+            target: target,
+            distance: .length(2.0, .millimeter),
+            options: OffsetCurveOptions(isSymmetric: true, gapFill: .natural),
+            vertexHandle: nil
+        ),
+        in: session
+    )
+
+    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let lines = after.entries.filter { $0.entityKind == "line" }
+    #expect(result.message == "Sketch curve offset created.")
+    #expect(result.commandName == "offsetCurve")
+    #expect(result.didMutate)
+    #expect(result.generation == DocumentGeneration(2))
+    #expect(lines.count == 3)
+    #expect(lines.contains { entry in
+        abs((entry.start?.y ?? -1.0) - 0.002) < 1.0e-12 &&
+            abs((entry.end?.y ?? -1.0) - 0.002) < 1.0e-12
+    })
+    #expect(lines.contains { entry in
+        abs((entry.start?.y ?? -1.0) + 0.002) < 1.0e-12 &&
+            abs((entry.end?.y ?? -1.0) + 0.002) < 1.0e-12
+    })
+    #expect(session.evaluationStatus == .valid)
+}
+
+@MainActor
+@Test func automationCanOffsetSketchVertex() async throws {
+    let session = EditorSession()
+    let runner = AutomationRunner()
+    _ = try runner.execute(
+        .createRectangleSketch(
+            name: "Automation Offset Vertex Rectangle",
+            plane: .xy,
+            width: .length(10.0, .millimeter),
+            height: .length(6.0, .millimeter)
+        ),
+        in: session
+    )
+    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let bottomLine = try #require(before.entries.first { entry in
+        entry.entityKind == "line" &&
+            abs((entry.start?.y ?? -1.0) + 0.003) < 1.0e-12 &&
+            abs((entry.end?.y ?? -1.0) + 0.003) < 1.0e-12
+    })
+    let target = try #require(bottomLine.selectionTarget())
+
+    let result = try runner.execute(
+        .offsetSketchVertex(
+            target: target,
+            handle: .lineEnd,
+            distance: .length(2.0, .millimeter)
+        ),
+        in: session
+    )
+
+    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let lines = after.entries.filter { $0.sourceFeatureID == bottomLine.sourceFeatureID && $0.entityKind == "line" }
+    #expect(result.message == "Sketch vertex offset created.")
+    #expect(result.commandName == "offsetSketchVertex")
+    #expect(result.didMutate)
+    #expect(result.generation == DocumentGeneration(2))
+    #expect(lines.count == 6)
+    #expect(session.evaluationStatus == .valid)
+}
+
+@MainActor
+@Test func automationCanCreateSymmetricNaturalOffsetRegions() async throws {
+    let session = EditorSession()
+    let runner = AutomationRunner()
+    _ = try runner.execute(
+        .createRectangleSketch(
+            name: "Automation Symmetric Offset Region",
+            plane: .xy,
+            width: .length(10.0, .millimeter),
+            height: .length(6.0, .millimeter)
+        ),
+        in: session
+    )
+    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let sourceRegion = try #require(before.regions.first)
+    let target = try #require(sourceRegion.selectionTarget())
+
+    let result = try runner.execute(
+        .offsetCurve(
+            target: target,
+            distance: .length(1.0, .millimeter),
+            options: OffsetCurveOptions(isSymmetric: true, gapFill: .natural),
+            vertexHandle: nil
+        ),
+        in: session
+    )
+
+    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let offsetRegions = after.regions.filter { $0.sourceFeatureID != sourceRegion.sourceFeatureID }
+    let areas = offsetRegions.map(\.areaSquareMeters).sorted()
+    #expect(result.commandName == "offsetCurve")
+    #expect(result.didMutate)
+    #expect(result.generation == DocumentGeneration(2))
+    #expect(after.counts.regionCount == before.counts.regionCount + 2)
+    #expect(abs((areas.first ?? 0.0) - 0.000_032) < 1.0e-12)
+    #expect(abs((areas.last ?? 0.0) - 0.000_096) < 1.0e-12)
+    #expect(session.evaluationStatus == .valid)
+}
+
+@MainActor
+@Test func automationCanCreateCombinedOffsetRegions() async throws {
+    let session = EditorSession()
+    let runner = AutomationRunner()
+    _ = try runner.execute(
+        .createRectangleSketch(
+            name: "Automation Combined Region A",
+            plane: .xy,
+            width: .length(10.0, .millimeter),
+            height: .length(6.0, .millimeter)
+        ),
+        in: session
+    )
+    _ = try session.execute(
+        .createRectangleSketchFromCorners(
+            name: "Automation Combined Region B",
+            plane: .xy,
+            firstCorner: SketchPoint(
+                x: .length(6.0, .millimeter),
+                y: .length(-3.0, .millimeter)
+            ),
+            oppositeCorner: SketchPoint(
+                x: .length(16.0, .millimeter),
+                y: .length(3.0, .millimeter)
+            )
+        )
+    )
+    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let targets = try before.regions.map { region in
+        try #require(region.selectionTarget())
+    }
+
+    let result = try runner.execute(
+        .offsetRegions(
+            targets: targets,
+            distance: .length(1.0, .millimeter),
+            options: OffsetCurveOptions(gapFill: .natural),
+            combinesRegions: true
+        ),
+        in: session
+    )
+
+    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let newRegions = after.regions.filter { region in
+        before.regions.contains { $0.sourceFeatureID == region.sourceFeatureID } == false
+    }
+    #expect(result.message == "Combined sketch regions offset created.")
+    #expect(result.commandName == "offsetRegions")
+    #expect(result.didMutate)
+    #expect(result.generation == DocumentGeneration(3))
+    #expect(newRegions.count == 1)
+    let unionRegion = try #require(newRegions.first)
+    #expect(unionRegion.boundaryPointCount == 4)
+    #expect(unionRegion.boundarySegmentCount == 4)
+    #expect(abs(unionRegion.areaSquareMeters - 0.000_184) < 1.0e-12)
+    #expect(session.evaluationStatus == .valid)
+}
+
+@MainActor
+@Test func automationCanDispatchOffsetCurveToOffsetVertex() async throws {
+    let session = EditorSession()
+    let runner = AutomationRunner()
+    _ = try runner.execute(
+        .createRectangleSketch(
+            name: "Automation Offset Curve Vertex Rectangle",
+            plane: .xy,
+            width: .length(10.0, .millimeter),
+            height: .length(6.0, .millimeter)
+        ),
+        in: session
+    )
+    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let bottomLine = try #require(before.entries.first { entry in
+        entry.entityKind == "line" &&
+            abs((entry.start?.y ?? -1.0) + 0.003) < 1.0e-12 &&
+            abs((entry.end?.y ?? -1.0) + 0.003) < 1.0e-12
+    })
+    let target = try #require(bottomLine.selectionTarget())
+
+    let result = try runner.execute(
+        .offsetCurve(
+            target: target,
+            distance: .length(2.0, .millimeter),
+            options: OffsetCurveOptions(),
+            vertexHandle: .lineEnd
+        ),
+        in: session
+    )
+
+    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let lines = after.entries.filter { $0.sourceFeatureID == bottomLine.sourceFeatureID && $0.entityKind == "line" }
+    #expect(result.message == "Sketch vertex offset created.")
+    #expect(result.commandName == "offsetCurve")
+    #expect(result.didMutate)
+    #expect(result.generation == DocumentGeneration(2))
+    #expect(lines.count == 6)
+    #expect(session.evaluationStatus == .valid)
+}
+
+@MainActor
+@Test func automationCanDispatchOffsetCurveArcEndpointToOffsetVertex() async throws {
+    let setup = try automationLineArcOffsetVertexSketchDocument()
+    let session = EditorSession(document: setup.document)
+    let runner = AutomationRunner()
+    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let sourceArc = try #require(before.entries.first { $0.entityID == setup.arcID.description })
+    let target = try #require(sourceArc.selectionTarget())
+
+    let result = try runner.execute(
+        .offsetCurve(
+            target: target,
+            distance: .length(1.0, .millimeter),
+            options: OffsetCurveOptions(),
+            vertexHandle: .arcStart
+        ),
+        in: session
+    )
+
+    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let sourceEntries = after.entries.filter { $0.sourceFeatureID == setup.featureID.description }
+    #expect(result.message == "Sketch vertex offset created.")
+    #expect(result.commandName == "offsetCurve")
+    #expect(result.didMutate)
+    #expect(result.generation == DocumentGeneration(1))
+    #expect(sourceEntries.filter { $0.entityKind == "line" }.count == 4)
+    #expect(sourceEntries.filter { $0.entityKind == "arc" }.count == 2)
+    #expect(session.evaluationStatus == .valid)
+}
+
+@MainActor
+@Test func automationCanDispatchOffsetCurveArcArcEndpointToOffsetVertex() async throws {
+    let setup = try automationArcArcOffsetVertexSketchDocument()
+    let session = EditorSession(document: setup.document)
+    let runner = AutomationRunner()
+    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let sourceArc = try #require(before.entries.first { $0.entityID == setup.upperArcID.description })
+    let target = try #require(sourceArc.selectionTarget())
+
+    let result = try runner.execute(
+        .offsetCurve(
+            target: target,
+            distance: .length(1.0, .millimeter),
+            options: OffsetCurveOptions(),
+            vertexHandle: .arcEnd
+        ),
+        in: session
+    )
+
+    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let sourceEntries = after.entries.filter { $0.sourceFeatureID == setup.featureID.description }
+    #expect(result.message == "Sketch vertex offset created.")
+    #expect(result.commandName == "offsetCurve")
+    #expect(result.didMutate)
+    #expect(result.generation == DocumentGeneration(1))
+    #expect(sourceEntries.filter { $0.entityKind == "line" }.isEmpty)
+    #expect(sourceEntries.filter { $0.entityKind == "arc" }.count == 4)
+    #expect(session.evaluationStatus == .valid)
+}
+
+@MainActor
+@Test func automationCanCreateSlotSketchFromSourceLine() async throws {
+    let session = EditorSession()
+    let runner = AutomationRunner()
+    _ = try runner.execute(
+        .createLineSketch(
+            name: "Automation Slot Source Line",
+            plane: .xy,
+            start: SketchPoint(
+                x: .length(0.0, .millimeter),
+                y: .length(0.0, .millimeter)
+            ),
+            end: SketchPoint(
+                x: .length(12.0, .millimeter),
+                y: .length(0.0, .millimeter)
+            )
+        ),
+        in: session
+    )
+    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let sourceLine = try #require(before.entries.first { $0.entityKind == "line" })
+    let target = try #require(sourceLine.selectionTarget())
+
+    let result = try runner.execute(
+        .createSlotSketch(
+            target: target,
+            width: .length(3.0, .millimeter)
+        ),
+        in: session
+    )
+
+    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let slotFeature = try #require(
+        session.document.cadDocument.designGraph.nodes.values.first { $0.name == "Automation Slot Source Line Slot" }
+    )
+    let slotEntries = after.entries.filter { $0.sourceFeatureID == slotFeature.id.description }
+    #expect(result.message == "Slot sketch profile created.")
+    #expect(result.commandName == "createSlotSketch")
+    #expect(result.didMutate)
+    #expect(result.generation == DocumentGeneration(2))
+    #expect(slotEntries.filter { $0.entityKind == "line" }.count == 2)
+    #expect(slotEntries.filter { $0.entityKind == "arc" }.count == 2)
+    #expect(session.evaluationStatus == .valid)
+}
+
+@MainActor
+@Test func automationCanCreateSlotSketchFromOpenLineChain() async throws {
+    let runner = AutomationRunner()
+    let setup = try automationOpenLineChainSlotDocument(name: "Automation Slot Source Chain")
+    let session = EditorSession(document: setup.document)
+    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let sourceLine = try #require(before.entries.first { $0.entityID == setup.lineIDs[0].description })
+    let target = try #require(sourceLine.selectionTarget())
+
+    let result = try runner.execute(
+        .createSlotSketch(
+            target: target,
+            width: .length(2.0, .millimeter)
+        ),
+        in: session
+    )
+
+    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let slotFeature = try #require(
+        session.document.cadDocument.designGraph.nodes.values.first { $0.name == "Automation Slot Source Chain Slot" }
+    )
+    let slotEntries = after.entries.filter { $0.sourceFeatureID == slotFeature.id.description }
+    #expect(result.message == "Slot sketch profile created.")
+    #expect(result.commandName == "createSlotSketch")
+    #expect(result.didMutate)
+    #expect(result.generation == DocumentGeneration(1))
+    #expect(slotEntries.filter { $0.entityKind == "line" }.count == 4)
+    #expect(slotEntries.filter { $0.entityKind == "arc" }.count == 2)
+
+    let extrudeResult = try runner.execute(
+        .extrudeProfile(
+            name: "Automation Extruded Slot Chain",
+            profile: ProfileReference(featureID: slotFeature.id),
+            distance: .length(3.0, .millimeter),
+            direction: .normal
+        ),
+        in: session
+    )
+    #expect(extrudeResult.commandName == "extrudeProfile")
+    #expect(extrudeResult.didMutate)
+    #expect(extrudeResult.generation == DocumentGeneration(2))
+    #expect(session.evaluationStatus == .valid)
+    #expect(session.evaluatedBodyCount == 1)
+}
+
+@MainActor
+@Test func automationCanCreateSlotSketchFromSourceArcAndExtrudeIt() async throws {
+    let session = EditorSession()
+    let runner = AutomationRunner()
+    _ = try runner.execute(
+        .createArcSketch(
+            name: "Automation Slot Source Arc",
+            plane: .xy,
+            center: SketchPoint(
+                x: .length(0.0, .millimeter),
+                y: .length(0.0, .millimeter)
+            ),
+            radius: .length(5.0, .millimeter),
+            startAngle: .angle(0.0, .radian),
+            endAngle: .angle(Double.pi / 2.0, .radian)
+        ),
+        in: session
+    )
+    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let sourceArc = try #require(before.entries.first { $0.entityKind == "arc" })
+    let target = try #require(sourceArc.selectionTarget())
+
+    let result = try runner.execute(
+        .createSlotSketch(
+            target: target,
+            width: .length(1.0, .millimeter)
+        ),
+        in: session
+    )
+
+    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let slotFeature = try #require(
+        session.document.cadDocument.designGraph.nodes.values.first { $0.name == "Automation Slot Source Arc Slot" }
+    )
+    let slotEntries = after.entries.filter { $0.sourceFeatureID == slotFeature.id.description }
+    #expect(result.message == "Slot sketch profile created.")
+    #expect(result.commandName == "createSlotSketch")
+    #expect(result.didMutate)
+    #expect(result.generation == DocumentGeneration(2))
+    #expect(slotEntries.filter { $0.entityKind == "line" }.isEmpty)
+    #expect(slotEntries.filter { $0.entityKind == "arc" }.count == 4)
+
+    let extrudeResult = try runner.execute(
+        .extrudeProfile(
+            name: "Automation Extruded Arc Slot",
+            profile: ProfileReference(featureID: slotFeature.id),
+            distance: .length(3.0, .millimeter),
+            direction: .normal
+        ),
+        in: session
+    )
+    #expect(extrudeResult.commandName == "extrudeProfile")
+    #expect(extrudeResult.didMutate)
+    #expect(extrudeResult.generation == DocumentGeneration(3))
+    #expect(session.evaluationStatus == .valid)
+    #expect(session.evaluatedBodyCount == 1)
+}
+
+@MainActor
+@Test func automationCanCreateSlotSketchFromOpenLineArcChainAndExtrudeIt() async throws {
+    let runner = AutomationRunner()
+    let setup = try automationOpenLineArcChainSlotDocument(name: "Automation Slot Source Line Arc Chain")
+    let session = EditorSession(document: setup.document)
+    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let sourceLine = try #require(before.entries.first { $0.entityID == setup.lineID.description })
+    let target = try #require(sourceLine.selectionTarget())
+
+    let result = try runner.execute(
+        .createSlotSketch(
+            target: target,
+            width: .length(2.0, .millimeter)
+        ),
+        in: session
+    )
+
+    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let slotFeature = try #require(
+        session.document.cadDocument.designGraph.nodes.values.first { $0.name == "Automation Slot Source Line Arc Chain Slot" }
+    )
+    let slotEntries = after.entries.filter { $0.sourceFeatureID == slotFeature.id.description }
+    #expect(result.message == "Slot sketch profile created.")
+    #expect(result.commandName == "createSlotSketch")
+    #expect(result.didMutate)
+    #expect(result.generation == DocumentGeneration(1))
+    #expect(slotEntries.filter { $0.entityKind == "line" }.count == 2)
+    #expect(slotEntries.filter { $0.entityKind == "arc" }.count == 4)
+
+    let extrudeResult = try runner.execute(
+        .extrudeProfile(
+            name: "Automation Extruded Line Arc Slot",
+            profile: ProfileReference(featureID: slotFeature.id),
+            distance: .length(3.0, .millimeter),
+            direction: .normal
+        ),
+        in: session
+    )
+    #expect(extrudeResult.commandName == "extrudeProfile")
+    #expect(extrudeResult.didMutate)
+    #expect(extrudeResult.generation == DocumentGeneration(2))
+    #expect(session.evaluationStatus == .valid)
+    #expect(session.evaluatedBodyCount == 1)
+}
+
+@MainActor
+@Test func automationCanActivateSlotModeThroughOffsetCurve() async throws {
+    let session = EditorSession()
+    let runner = AutomationRunner()
+    _ = try runner.execute(
+        .createLineSketch(
+            name: "Automation Offset Slot Source Line",
+            plane: .xy,
+            start: SketchPoint(
+                x: .length(0.0, .millimeter),
+                y: .length(0.0, .millimeter)
+            ),
+            end: SketchPoint(
+                x: .length(12.0, .millimeter),
+                y: .length(0.0, .millimeter)
+            )
+        ),
+        in: session
+    )
+    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let sourceLine = try #require(before.entries.first { $0.entityKind == "line" })
+    let target = try #require(sourceLine.selectionTarget())
+
+    let result = try runner.execute(
+        .offsetCurve(
+            target: target,
+            distance: .length(3.0, .millimeter),
+            options: OffsetCurveOptions(mode: .slot),
+            vertexHandle: nil
+        ),
+        in: session
+    )
+
+    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let slotFeature = try #require(
+        session.document.cadDocument.designGraph.nodes.values.first { $0.name == "Automation Offset Slot Source Line Slot" }
+    )
+    let slotEntries = after.entries.filter { $0.sourceFeatureID == slotFeature.id.description }
+    #expect(result.message == "Slot sketch profile created.")
+    #expect(result.commandName == "offsetCurve")
+    #expect(result.didMutate)
+    #expect(result.generation == DocumentGeneration(2))
+    #expect(slotEntries.filter { $0.entityKind == "line" }.count == 2)
+    #expect(slotEntries.filter { $0.entityKind == "arc" }.count == 2)
+    #expect(session.evaluationStatus == .valid)
+}
+
+@MainActor
+@Test func automationCanOffsetCylinderSideFaceThroughGeneratedTopology() async throws {
+    let session = EditorSession()
+    let runner = AutomationRunner()
+    _ = try runner.execute(
+        .createExtrudedCircle(
+            name: "Automation Editable Cylinder",
+            plane: .xy,
+            center: SketchPoint(
+                x: .length(0.0, .millimeter),
+                y: .length(0.0, .millimeter)
+            ),
+            radius: .length(5.0, .millimeter),
+            depth: .length(8.0, .millimeter),
+            direction: .normal
+        ),
+        in: session
+    )
+    let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let beforeRadius = try automationCylinderRadius(forBody: bodyFeatureID, in: session.document)
+    let topology = try TopologySummaryService().summarize(document: session.document)
+    let sideFaceEntry = try #require(topology.entries.first { entry in
+        entry.kind == .face && entry.surfaceKind == "cylinder"
+    })
+    let target = try #require(sideFaceEntry.selectionTarget())
+
+    let result = try runner.execute(
+        .offsetBodyFace(
+            target: target,
+            distance: .length(1.5, .millimeter)
+        ),
+        in: session
+    )
+
+    #expect(result.message == "Body face offset applied.")
+    #expect(result.commandName == "offsetBodyFace")
+    #expect(result.didMutate)
+    #expect(result.generation == DocumentGeneration(2))
+    #expect(nearlyEqualAutomation(try automationCylinderRadius(forBody: bodyFeatureID, in: session.document), beforeRadius + 0.0015))
+    #expect(session.evaluationStatus == .valid)
+}
+
+@MainActor
+@Test func automationCanChamferBodyEdges() async throws {
+    let session = EditorSession()
+    let runner = AutomationRunner()
+    _ = try runner.execute(
+        .createExtrudedRectangle(
+            name: "Automation Chamfer Box",
+            plane: .xy,
+            width: .length(10.0, .millimeter),
+            height: .length(8.0, .millimeter),
+            depth: .length(6.0, .millimeter),
+            direction: .normal
+        ),
+        in: session
+    )
+    let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let bodyNodeID = try #require(automationSceneNodeID(for: bodyFeatureID, in: session.document))
+
+    let result = try runner.execute(
+        .chamferBodyEdges(
+            targets: [
+                SelectionTarget(sceneNodeID: bodyNodeID, component: .edge(.bodyEdgeLeftBottom)),
+                SelectionTarget(sceneNodeID: bodyNodeID, component: .edge(.bodyEdgeRightBottom)),
+            ],
+            distance: .length(1.0, .millimeter)
+        ),
+        in: session
+    )
+
+    #expect(result.message == "Body edge chamfer applied.")
+    #expect(result.commandName == "chamferBodyEdges")
+    #expect(result.didMutate)
+    #expect(result.generation == DocumentGeneration(2))
+    #expect(session.evaluationStatus == .valid)
+}
+
+@MainActor
+@Test func automationCanFilletBodyEdges() async throws {
+    let session = EditorSession()
+    let runner = AutomationRunner()
+    _ = try runner.execute(
+        .createExtrudedRectangle(
+            name: "Automation Fillet Box",
+            plane: .xy,
+            width: .length(10.0, .millimeter),
+            height: .length(8.0, .millimeter),
+            depth: .length(6.0, .millimeter),
+            direction: .normal
+        ),
+        in: session
+    )
+    let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let bodyNodeID = try #require(automationSceneNodeID(for: bodyFeatureID, in: session.document))
+
+    let result = try runner.execute(
+        .filletBodyEdges(
+            targets: [
+                SelectionTarget(sceneNodeID: bodyNodeID, component: .edge(.bodyEdgeRightTop)),
+            ],
+            radius: .length(1.0, .millimeter),
+            segmentCount: 8
+        ),
+        in: session
+    )
+
+    #expect(result.message == "Body edge fillet applied.")
+    #expect(result.commandName == "filletBodyEdges")
+    #expect(result.didMutate)
+    #expect(result.generation == DocumentGeneration(2))
+    #expect(session.evaluationStatus == .valid)
+}
+
+@MainActor
+@Test func automationCanFilletGeneratedEdgeAfterPriorChamfer() async throws {
+    let session = EditorSession()
+    let runner = AutomationRunner()
+    _ = try runner.execute(
+        .createExtrudedRectangle(
+            name: "Automation Refillet Box",
+            plane: .xy,
+            width: .length(10.0, .millimeter),
+            height: .length(8.0, .millimeter),
+            depth: .length(6.0, .millimeter),
+            direction: .normal
+        ),
+        in: session
+    )
+    let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let bodyNodeID = try #require(automationSceneNodeID(for: bodyFeatureID, in: session.document))
+    _ = try runner.execute(
+        .chamferBodyEdges(
+            targets: [
+                SelectionTarget(sceneNodeID: bodyNodeID, component: .edge(.bodyEdgeRightTop)),
+            ],
+            distance: .length(1.0, .millimeter)
+        ),
+        in: session
+    )
+    let topology = try TopologySummaryService().summarize(document: session.document)
+    let edgeEntry = try #require(topology.entries.first(where: isAutomationVerticalGeneratedEdge))
+    let target = try #require(edgeEntry.selectionTarget())
+
+    let result = try runner.execute(
+        .filletBodyEdges(
+            targets: [target],
+            radius: .length(0.25, .millimeter),
+            segmentCount: 8
+        ),
+        in: session
+    )
+
+    #expect(result.message == "Body edge fillet applied.")
+    #expect(result.commandName == "filletBodyEdges")
+    #expect(result.didMutate)
+    #expect(result.generation == DocumentGeneration(3))
+    #expect(session.evaluationStatus == .valid)
+}
+
+@MainActor
+@Test func automationCanFilletSharpGeneratedEdgeAfterPriorFillet() async throws {
+    let session = EditorSession()
+    let runner = AutomationRunner()
+    _ = try runner.execute(
+        .createExtrudedRectangle(
+            name: "Automation Curve Loop Refillet Box",
+            plane: .xy,
+            width: .length(40.0, .millimeter),
+            height: .length(20.0, .millimeter),
+            depth: .length(10.0, .millimeter),
+            direction: .normal
+        ),
+        in: session
+    )
+    let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let bodyNodeID = try #require(automationSceneNodeID(for: bodyFeatureID, in: session.document))
+    _ = try runner.execute(
+        .filletBodyEdges(
+            targets: [
+                SelectionTarget(sceneNodeID: bodyNodeID, component: .edge(.bodyEdgeRightTop)),
+            ],
+            radius: .length(1.0, .millimeter),
+            segmentCount: 8
+        ),
+        in: session
+    )
+    let topology = try TopologySummaryService().summarize(document: session.document)
+    let edgeEntry = try #require(topology.entries.first {
+        isAutomationVerticalGeneratedEdge($0, x: -0.020, y: -0.010)
+    })
+    let target = try #require(edgeEntry.selectionTarget())
+
+    let result = try runner.execute(
+        .filletBodyEdges(
+            targets: [target],
+            radius: .length(0.5, .millimeter),
+            segmentCount: 8
+        ),
+        in: session
+    )
+
+    #expect(result.message == "Body edge fillet applied.")
+    #expect(result.commandName == "filletBodyEdges")
+    #expect(result.didMutate)
+    #expect(result.generation == DocumentGeneration(3))
+    #expect(session.evaluationStatus == .valid)
+}
+
+@MainActor
+@Test func automationCanChamferArcAdjacentGeneratedEdgeAfterPriorFillet() async throws {
+    let session = EditorSession()
+    let runner = AutomationRunner()
+    _ = try runner.execute(
+        .createExtrudedRectangle(
+            name: "Automation Curve Loop Rechamfer Box",
+            plane: .xy,
+            width: .length(40.0, .millimeter),
+            height: .length(20.0, .millimeter),
+            depth: .length(10.0, .millimeter),
+            direction: .normal
+        ),
+        in: session
+    )
+    let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let bodyNodeID = try #require(automationSceneNodeID(for: bodyFeatureID, in: session.document))
+    _ = try runner.execute(
+        .filletBodyEdges(
+            targets: [
+                SelectionTarget(sceneNodeID: bodyNodeID, component: .edge(.bodyEdgeRightTop)),
+            ],
+            radius: .length(1.0, .millimeter),
+            segmentCount: 8
+        ),
+        in: session
+    )
+    let topology = try TopologySummaryService().summarize(document: session.document)
+    let edgeEntry = try #require(topology.entries.first {
+        isAutomationVerticalGeneratedEdge($0, x: 0.020, y: 0.009)
+    })
+    let target = try #require(edgeEntry.selectionTarget())
+
+    let result = try runner.execute(
+        .chamferBodyEdges(
+            targets: [target],
+            distance: .length(0.25, .millimeter)
+        ),
+        in: session
+    )
+
+    #expect(result.message == "Body edge chamfer applied.")
+    #expect(result.commandName == "chamferBodyEdges")
+    #expect(result.didMutate)
+    #expect(result.generation == DocumentGeneration(3))
+    #expect(session.evaluationStatus == .valid)
+}
+
+@MainActor
+@Test func automationCanMoveBodyVertex() async throws {
+    let session = EditorSession()
+    let runner = AutomationRunner()
+    _ = try runner.execute(
+        .createExtrudedRectangle(
+            name: "Automation Vertex Box",
+            plane: .xy,
+            width: .length(10.0, .millimeter),
+            height: .length(8.0, .millimeter),
+            depth: .length(6.0, .millimeter),
+            direction: .normal
+        ),
+        in: session
+    )
+    let topology = try TopologySummaryService().summarize(document: session.document)
+    let vertexEntry = try #require(topology.entries.first { $0.kind == .vertex })
+    let target = try #require(vertexEntry.selectionTarget())
+
+    let result = try runner.execute(
+        .moveBodyVertex(
+            target: target,
+            deltaX: .length(1.0, .millimeter),
+            deltaY: .length(1.0, .millimeter)
+        ),
+        in: session
+    )
+
+    #expect(result.message == "Body vertex moved.")
+    #expect(result.commandName == "moveBodyVertex")
+    #expect(result.didMutate)
+    #expect(result.generation == DocumentGeneration(2))
+    #expect(session.evaluationStatus == .valid)
+}
+
+@MainActor
+@Test func automationCanMoveSharpGeneratedVertexAfterPriorFillet() async throws {
+    let session = EditorSession()
+    let runner = AutomationRunner()
+    _ = try runner.execute(
+        .createExtrudedRectangle(
+            name: "Automation Curve Loop Vertex Box",
+            plane: .xy,
+            width: .length(40.0, .millimeter),
+            height: .length(20.0, .millimeter),
+            depth: .length(10.0, .millimeter),
+            direction: .normal
+        ),
+        in: session
+    )
+    let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let bodyNodeID = try #require(automationSceneNodeID(for: bodyFeatureID, in: session.document))
+    _ = try runner.execute(
+        .filletBodyEdges(
+            targets: [
+                SelectionTarget(sceneNodeID: bodyNodeID, component: .edge(.bodyEdgeRightTop)),
+            ],
+            radius: .length(1.0, .millimeter),
+            segmentCount: 8
+        ),
+        in: session
+    )
+    let topology = try TopologySummaryService().summarize(document: session.document)
+    let vertexEntry = try #require(topology.entries.first {
+        isAutomationGeneratedVertex($0, x: -0.020, y: -0.010)
+    })
+    let target = try #require(vertexEntry.selectionTarget())
+
+    let result = try runner.execute(
+        .moveBodyVertex(
+            target: target,
+            deltaX: .length(1.0, .millimeter),
+            deltaY: .length(0.5, .millimeter)
+        ),
+        in: session
+    )
+
+    #expect(result.message == "Body vertex moved.")
+    #expect(result.commandName == "moveBodyVertex")
+    #expect(result.didMutate)
+    #expect(result.generation == DocumentGeneration(3))
+    #expect(session.evaluationStatus == .valid)
+}
+
+@MainActor
 @Test func automationCanCreateSketchPrimitives() async throws {
     let session = EditorSession()
     let runner = AutomationRunner()
@@ -205,14 +1442,69 @@ import SwiftCAD
         ),
         in: session
     )
+    let arcResult = try runner.execute(
+        .createArcSketch(
+            name: "Automation Arc",
+            plane: .xy,
+            center: SketchPoint(
+                x: .length(2.0, .millimeter),
+                y: .length(2.0, .millimeter)
+            ),
+            radius: .length(4.0, .millimeter),
+            startAngle: .angle(0.0, .degree),
+            endAngle: .angle(90.0, .degree)
+        ),
+        in: session
+    )
+    let splineResult = try runner.execute(
+        .createSplineSketch(
+            name: "Automation Spline",
+            plane: .xy,
+            spline: SketchSpline(controlPoints: [
+                SketchPoint(x: .length(0.0, .millimeter), y: .length(0.0, .millimeter)),
+                SketchPoint(x: .length(2.0, .millimeter), y: .length(4.0, .millimeter)),
+                SketchPoint(x: .length(6.0, .millimeter), y: .length(4.0, .millimeter)),
+                SketchPoint(x: .length(8.0, .millimeter), y: .length(0.0, .millimeter)),
+            ])
+        ),
+        in: session
+    )
+    let polygonResult = try runner.execute(
+        .createPolygonSketch(
+            name: "Automation Polygon",
+            plane: .xy,
+            center: SketchPoint(
+                x: .length(1.0, .millimeter),
+                y: .length(2.0, .millimeter)
+            ),
+            radius: .length(6.0, .millimeter),
+            sides: 6,
+            sizingMode: .inradius,
+            inclinationMode: .horizontal,
+            rotationAngle: .angle(0.0, .degree)
+        ),
+        in: session
+    )
 
     #expect(lineResult.message == "Line sketch Automation Line created.")
     #expect(lineResult.commandName == "createLineSketch")
     #expect(circleResult.message == "Circle sketch Automation Circle created.")
     #expect(circleResult.commandName == "createCircleSketch")
-    #expect(session.document.cadDocument.designGraph.order.count == 2)
-    #expect(session.generation == DocumentGeneration(2))
+    #expect(arcResult.message == "Arc sketch Automation Arc created.")
+    #expect(arcResult.commandName == "createArcSketch")
+    #expect(splineResult.message == "Spline sketch Automation Spline created.")
+    #expect(splineResult.commandName == "createSplineSketch")
+    #expect(polygonResult.message == "Polygon sketch Automation Polygon created.")
+    #expect(polygonResult.commandName == "createPolygonSketch")
+    #expect(session.document.cadDocument.designGraph.order.count == 5)
+    #expect(session.generation == DocumentGeneration(5))
     #expect(session.evaluationStatus == .valid)
+    let polygonFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let polygonNode = try #require(session.document.productMetadata.sceneNodes.values.first {
+        $0.reference?.featureID == polygonFeatureID
+    })
+    #expect(polygonNode.object?.properties["radius.is.inradius"] == .boolean(true))
+    #expect(polygonNode.object?.properties["inclination.mode"] == .text(PolygonInclinationMode.horizontal.rawValue))
 }
 
 @MainActor
@@ -250,6 +1542,1498 @@ import SwiftCAD
     #expect(result.didMutate)
     #expect(result.generation == DocumentGeneration(2))
     #expect(sketch.constraints == [.horizontal(lineID)])
+    #expect(session.evaluationStatus == .valid)
+}
+
+@MainActor
+@Test func automationCanEditBridgeCurveParameters() async throws {
+    let setup = try automationTwoLineUnequalLengthDocument(name: "Automation Bridge Source")
+    let session = EditorSession(document: setup.document)
+    let runner = AutomationRunner()
+
+    let createResult = try runner.execute(
+        .createBridgeCurve(
+            featureID: setup.featureID,
+            firstEndpoint: BridgeCurveEndpoint(
+                reference: .lineEnd(setup.firstLineID)
+            ),
+            secondEndpoint: BridgeCurveEndpoint(
+                reference: .lineStart(setup.secondLineID)
+            ),
+            continuity: .g1
+        ),
+        in: session
+    )
+    let source = try #require(session.document.productMetadata.bridgeCurveSources.values.first)
+
+    let updateResult = try runner.execute(
+        .setBridgeCurveParameters(
+            sourceID: source.id,
+            firstEndpoint: BridgeCurveEndpoint(
+                reference: .entity(setup.firstLineID),
+                parameter: .scalar(0.5),
+                reversesSense: true
+            ),
+            secondEndpoint: BridgeCurveEndpoint(
+                reference: .entity(setup.secondLineID),
+                parameter: .scalar(0.25)
+            ),
+            continuity: .g1,
+            trimsSourceCurves: true
+        ),
+        in: session
+    )
+
+    let sketch = try #require(automationSketchFeature(in: session.document, featureID: setup.featureID))
+    let updatedSource = try #require(session.document.productMetadata.bridgeCurveSources[source.id])
+    let bridgeEntity = try #require(sketch.entities[source.entityID])
+    guard case .spline(let spline) = bridgeEntity else {
+        Issue.record("Automation bridge source must keep a generated spline entity.")
+        return
+    }
+    let controlPoints = try spline.controlPoints.map {
+        try automationResolvedPoint($0, parameters: session.document.cadDocument.parameters)
+    }
+
+    #expect(createResult.commandName == "createBridgeCurve")
+    #expect(createResult.generation == DocumentGeneration(1))
+    #expect(updateResult.commandName == "setBridgeCurveParameters")
+    #expect(updateResult.message == "Bridge curve \(source.id.description) updated.")
+    #expect(updateResult.didMutate)
+    #expect(updateResult.generation == DocumentGeneration(2))
+    #expect(updatedSource.entityID == source.entityID)
+    #expect(updatedSource.trimsSourceCurves)
+    #expect(updatedSource.firstEndpoint.reference == .lineStart(setup.firstLineID))
+    #expect(updatedSource.firstEndpoint.parameter == nil)
+    #expect(updatedSource.firstEndpoint.reversesSense == false)
+    #expect(updatedSource.secondEndpoint.reference == .lineEnd(setup.secondLineID))
+    #expect(updatedSource.secondEndpoint.parameter == nil)
+    #expect(updatedSource.continuity == .g1)
+    #expect(sketch.constraints.contains(.coincident(
+        .splineControlPoint(entity: source.entityID, index: 0),
+        .lineStart(setup.firstLineID)
+    )))
+    #expect(sketch.constraints.contains(.coincident(
+        .splineControlPoint(entity: source.entityID, index: 6),
+        .lineEnd(setup.secondLineID)
+    )))
+    #expect(sketch.constraints.contains(.splineEndpointTangent(
+        spline: source.entityID,
+        endpoint: .start,
+        line: setup.firstLineID
+    )))
+    #expect(sketch.constraints.contains(.splineEndpointTangent(
+        spline: source.entityID,
+        endpoint: .end,
+        line: setup.secondLineID
+    )))
+    #expect(controlPoints.count == 7)
+    #expect(nearlyEqualAutomation(controlPoints[0].x, 0.0025))
+    #expect(nearlyEqualAutomation(controlPoints[0].y, 0.0))
+    #expect(nearlyEqualAutomation(controlPoints[1].x, 0.001182384266129633))
+    #expect(nearlyEqualAutomation(controlPoints[1].y, 0.0))
+    #expect(nearlyEqualAutomation(controlPoints[2].x, 0.0016666666666666668))
+    #expect(nearlyEqualAutomation(controlPoints[2].y, 0.0025))
+    #expect(nearlyEqualAutomation(controlPoints[3].x, 0.00125))
+    #expect(nearlyEqualAutomation(controlPoints[3].y, 0.00375))
+    #expect(nearlyEqualAutomation(controlPoints[4].x, 0.0008333333333333334))
+    #expect(nearlyEqualAutomation(controlPoints[4].y, 0.005))
+    #expect(nearlyEqualAutomation(controlPoints[5].x, 0.0))
+    #expect(nearlyEqualAutomation(controlPoints[5].y, 0.008817615733870367))
+    #expect(nearlyEqualAutomation(controlPoints[6].x, 0.0))
+    #expect(nearlyEqualAutomation(controlPoints[6].y, 0.0075))
+    #expect(session.evaluationStatus == .valid)
+}
+
+@MainActor
+@Test func automationCanInsertSketchSplineControlPoint() async throws {
+    let session = EditorSession()
+    let runner = AutomationRunner()
+    _ = try runner.execute(
+        .createSplineSketch(
+            name: "Automation Insert CV Spline",
+            plane: .xy,
+            spline: SketchSpline(controlPoints: [
+                SketchPoint(x: .length(0.0, .millimeter), y: .length(0.0, .millimeter)),
+                SketchPoint(x: .length(0.0, .millimeter), y: .length(4.0, .millimeter)),
+                SketchPoint(x: .length(8.0, .millimeter), y: .length(4.0, .millimeter)),
+                SketchPoint(x: .length(8.0, .millimeter), y: .length(0.0, .millimeter)),
+            ])
+        ),
+        in: session
+    )
+    let summary = try SketchEntitySummaryService().summarize(document: session.document)
+    let spline = try #require(summary.entries.first { $0.entityKind == "spline" })
+    let target = try #require(spline.selectionTarget())
+
+    let result = try runner.execute(
+        .insertSketchSplineControlPoint(
+            target: target,
+            fraction: .scalar(0.5)
+        ),
+        in: session
+    )
+
+    let updatedSummary = try SketchEntitySummaryService().summarize(document: session.document)
+    let updatedSpline = try #require(updatedSummary.entries.first { $0.entityID == spline.entityID })
+    #expect(result.message == "Sketch spline control point inserted.")
+    #expect(result.commandName == "insertSketchSplineControlPoint")
+    #expect(result.didMutate)
+    #expect(result.generation == DocumentGeneration(2))
+    #expect(updatedSpline.controlPoints.count == 7)
+    #expect(abs(updatedSpline.controlPoints[3].x - 0.004) < 1.0e-12)
+    #expect(abs(updatedSpline.controlPoints[3].y - 0.003) < 1.0e-12)
+    #expect(session.evaluationStatus == .valid)
+}
+
+@MainActor
+@Test func automationCanSlideSketchSplineControlPoints() async throws {
+    let session = EditorSession()
+    let runner = AutomationRunner()
+    _ = try runner.execute(
+        .createSplineSketch(
+            name: "Automation Slide CV Spline",
+            plane: .xy,
+            spline: SketchSpline(controlPoints: [
+                SketchPoint(x: .length(0.0, .millimeter), y: .length(0.0, .millimeter)),
+                SketchPoint(x: .length(2.0, .millimeter), y: .length(0.0, .millimeter)),
+                SketchPoint(x: .length(6.0, .millimeter), y: .length(0.0, .millimeter)),
+                SketchPoint(x: .length(8.0, .millimeter), y: .length(0.0, .millimeter)),
+            ])
+        ),
+        in: session
+    )
+    let summary = try SketchEntitySummaryService().summarize(document: session.document)
+    let spline = try #require(summary.entries.first { $0.entityKind == "spline" })
+    let target = try #require(spline.selectionTarget())
+
+    let result = try runner.execute(
+        .slideSketchSplineControlPoints(
+            target: target,
+            controlPointIndexes: [1, 2],
+            direction: .normal,
+            distance: .length(1.0, .millimeter)
+        ),
+        in: session
+    )
+
+    let updatedSummary = try SketchEntitySummaryService().summarize(document: session.document)
+    let updatedSpline = try #require(updatedSummary.entries.first { $0.entityID == spline.entityID })
+    #expect(result.message == "Sketch spline control points slid.")
+    #expect(result.commandName == "slideSketchSplineControlPoints")
+    #expect(result.didMutate)
+    #expect(result.generation == DocumentGeneration(2))
+    #expect(abs(updatedSpline.controlPoints[1].x - 0.002) < 1.0e-12)
+    #expect(abs(updatedSpline.controlPoints[1].y - 0.001) < 1.0e-12)
+    #expect(abs(updatedSpline.controlPoints[2].x - 0.006) < 1.0e-12)
+    #expect(abs(updatedSpline.controlPoints[2].y - 0.001) < 1.0e-12)
+    #expect(session.evaluationStatus == .valid)
+}
+
+@MainActor
+@Test func automationCanRebuildSketchCurveByPointCount() async throws {
+    let session = EditorSession()
+    let runner = AutomationRunner()
+    _ = try runner.execute(
+        .createSplineSketch(
+            name: "Automation Rebuild Spline",
+            plane: .xy,
+            spline: SketchSpline(controlPoints: [
+                SketchPoint(x: .length(0.0, .millimeter), y: .length(0.0, .millimeter)),
+                SketchPoint(x: .length(1.0, .millimeter), y: .length(2.0, .millimeter)),
+                SketchPoint(x: .length(2.0, .millimeter), y: .length(3.0, .millimeter)),
+                SketchPoint(x: .length(3.0, .millimeter), y: .length(0.0, .millimeter)),
+                SketchPoint(x: .length(4.0, .millimeter), y: .length(-3.0, .millimeter)),
+                SketchPoint(x: .length(6.0, .millimeter), y: .length(-3.0, .millimeter)),
+                SketchPoint(x: .length(7.0, .millimeter), y: .length(0.0, .millimeter)),
+            ])
+        ),
+        in: session
+    )
+    let summary = try SketchEntitySummaryService().summarize(document: session.document)
+    let spline = try #require(summary.entries.first { $0.entityKind == "spline" })
+    let target = try #require(spline.selectionTarget())
+
+    let result = try runner.execute(
+        .rebuildSketchCurve(
+            target: target,
+            options: .points(controlPointCount: 4)
+        ),
+        in: session
+    )
+
+    let updatedSummary = try SketchEntitySummaryService().summarize(document: session.document)
+    let rebuiltSpline = try #require(updatedSummary.entries.first { $0.entityID == spline.entityID })
+    #expect(result.message == "Sketch curve rebuilt.")
+    #expect(result.commandName == "rebuildSketchCurve")
+    #expect(result.didMutate)
+    #expect(result.generation == DocumentGeneration(2))
+    let report = try #require(result.curveRebuildReport)
+    #expect(report.method == .points)
+    #expect(report.sourceFeatureID == spline.sourceFeatureID)
+    #expect(report.entityID == spline.entityID)
+    #expect(report.originalControlPointCount == 7)
+    #expect(report.rebuiltControlPointCount == 4)
+    #expect(report.originalSpanCount == 2)
+    #expect(report.rebuiltSpanCount == 1)
+    #expect(report.deviationMeasurement == .analyticCubicBezier)
+    #expect(report.evaluatedIntervalCount == 2)
+    #expect(report.criticalPointCount >= 0)
+    #expect(report.maximumDeviationMeters >= report.rootMeanSquareDeviationMeters)
+    #expect(rebuiltSpline.controlPoints.count == 4)
+    #expect(abs((rebuiltSpline.controlPoints.first?.x ?? -1.0) - 0.000) < 1.0e-12)
+    #expect(abs((rebuiltSpline.controlPoints.last?.x ?? -1.0) - 0.007) < 1.0e-12)
+    #expect(session.evaluationStatus == .valid)
+}
+
+@MainActor
+@Test func automationCanRefitSketchCurve() async throws {
+    let session = EditorSession()
+    let runner = AutomationRunner()
+    _ = try runner.execute(
+        .createSplineSketch(
+            name: "Automation Refit Spline",
+            plane: .xy,
+            spline: SketchSpline(controlPoints: [
+                SketchPoint(x: .length(0.0, .millimeter), y: .length(0.0, .millimeter)),
+                SketchPoint(x: .length(1.0, .millimeter), y: .length(1.0, .millimeter)),
+                SketchPoint(x: .length(2.0, .millimeter), y: .length(1.0, .millimeter)),
+                SketchPoint(x: .length(3.0, .millimeter), y: .length(0.0, .millimeter)),
+                SketchPoint(x: .length(4.0, .millimeter), y: .length(-1.0, .millimeter)),
+                SketchPoint(x: .length(6.0, .millimeter), y: .length(-1.0, .millimeter)),
+                SketchPoint(x: .length(7.0, .millimeter), y: .length(0.0, .millimeter)),
+            ])
+        ),
+        in: session
+    )
+    let summary = try SketchEntitySummaryService().summarize(document: session.document)
+    let spline = try #require(summary.entries.first { $0.entityKind == "spline" })
+    let target = try #require(spline.selectionTarget())
+
+    let result = try runner.execute(
+        .rebuildSketchCurve(
+            target: target,
+            options: .refit(
+                tolerance: .length(20.0, .millimeter),
+                keepsCorners: false
+            )
+        ),
+        in: session
+    )
+
+    let updatedSummary = try SketchEntitySummaryService().summarize(document: session.document)
+    let rebuiltSpline = try #require(updatedSummary.entries.first { $0.entityID == spline.entityID })
+    #expect(result.message == "Sketch curve rebuilt.")
+    #expect(result.commandName == "rebuildSketchCurve")
+    #expect(result.didMutate)
+    #expect(result.generation == DocumentGeneration(2))
+    let report = try #require(result.curveRebuildReport)
+    #expect(report.method == .refit)
+    #expect(report.sourceFeatureID == spline.sourceFeatureID)
+    #expect(report.entityID == spline.entityID)
+    #expect(report.originalControlPointCount == 7)
+    #expect(report.rebuiltControlPointCount == 4)
+    #expect(report.originalSpanCount == 2)
+    #expect(report.rebuiltSpanCount == 1)
+    #expect(report.deviationMeasurement == .analyticCubicBezier)
+    #expect(report.evaluatedIntervalCount == 2)
+    #expect(report.criticalPointCount >= 0)
+    #expect(report.maximumDeviationMeters >= report.rootMeanSquareDeviationMeters)
+    #expect(rebuiltSpline.controlPoints.count == 4)
+    #expect(abs((rebuiltSpline.controlPoints.first?.x ?? -1.0) - 0.000) < 1.0e-12)
+    #expect(abs((rebuiltSpline.controlPoints.last?.x ?? -1.0) - 0.007) < 1.0e-12)
+    #expect(session.evaluationStatus == .valid)
+}
+
+@MainActor
+@Test func automationCanExplicitlyRebuildSketchCurve() async throws {
+    let session = EditorSession()
+    let runner = AutomationRunner()
+    _ = try runner.execute(
+        .createSplineSketch(
+            name: "Automation Explicit Rebuild Spline",
+            plane: .xy,
+            spline: SketchSpline(controlPoints: [
+                SketchPoint(x: .length(0.0, .millimeter), y: .length(0.0, .millimeter)),
+                SketchPoint(x: .length(1.0, .millimeter), y: .length(2.0, .millimeter)),
+                SketchPoint(x: .length(2.0, .millimeter), y: .length(3.0, .millimeter)),
+                SketchPoint(x: .length(3.0, .millimeter), y: .length(0.0, .millimeter)),
+                SketchPoint(x: .length(4.0, .millimeter), y: .length(-3.0, .millimeter)),
+                SketchPoint(x: .length(6.0, .millimeter), y: .length(-3.0, .millimeter)),
+                SketchPoint(x: .length(7.0, .millimeter), y: .length(0.0, .millimeter)),
+            ])
+        ),
+        in: session
+    )
+    let summary = try SketchEntitySummaryService().summarize(document: session.document)
+    let spline = try #require(summary.entries.first { $0.entityKind == "spline" })
+    let target = try #require(spline.selectionTarget())
+
+    let result = try runner.execute(
+        .rebuildSketchCurve(
+            target: target,
+            options: .explicitControl(
+                degree: 3,
+                spanCount: 1,
+                weight: 0.5
+            )
+        ),
+        in: session
+    )
+
+    let updatedSummary = try SketchEntitySummaryService().summarize(document: session.document)
+    let rebuiltSpline = try #require(updatedSummary.entries.first { $0.entityID == spline.entityID })
+    #expect(result.message == "Sketch curve rebuilt.")
+    #expect(result.commandName == "rebuildSketchCurve")
+    #expect(result.didMutate)
+    #expect(result.generation == DocumentGeneration(2))
+    #expect(rebuiltSpline.controlPoints.count == 4)
+    #expect(abs((rebuiltSpline.controlPoints.first?.x ?? -1.0) - 0.000) < 1.0e-12)
+    #expect(abs((rebuiltSpline.controlPoints.last?.x ?? -1.0) - 0.007) < 1.0e-12)
+    #expect(session.evaluationStatus == .valid)
+}
+
+@MainActor
+@Test func automationCanAddFixedSplineControlPointConstraint() async throws {
+    let session = EditorSession()
+    let runner = AutomationRunner()
+    _ = try session.execute(
+        .createSplineSketch(
+            name: "Automation Fixed Spline Point",
+            plane: .xy,
+            spline: SketchSpline(controlPoints: [
+                SketchPoint(x: .length(0.0, .millimeter), y: .length(0.0, .millimeter)),
+                SketchPoint(x: .length(2.0, .millimeter), y: .length(3.0, .millimeter)),
+                SketchPoint(x: .length(6.0, .millimeter), y: .length(3.0, .millimeter)),
+                SketchPoint(x: .length(8.0, .millimeter), y: .length(0.0, .millimeter)),
+            ])
+        )
+    )
+    let summary = try SketchEntitySummaryService().summarize(document: session.document)
+    let spline = try #require(summary.entries.first { $0.entityKind == "spline" })
+    let target = try #require(spline.selectionTarget())
+    let featureID = try #require(UUID(uuidString: spline.sourceFeatureID)).featureID
+    let entityID = try #require(UUID(uuidString: spline.entityID)).sketchEntityID
+
+    let result = try runner.execute(
+        .addSketchConstraint(
+            featureID: featureID,
+            constraint: .fixed(.splineControlPoint(entity: entityID, index: 0))
+        ),
+        in: session
+    )
+
+    #expect(result.message == "Sketch constraint added to \(featureID.description).")
+    #expect(result.commandName == "addSketchConstraint")
+    #expect(result.didMutate)
+    #expect(result.generation == DocumentGeneration(2))
+    #expect(session.evaluationStatus == .valid)
+
+    do {
+        _ = try runner.execute(
+            .moveSketchSplineControlPoint(
+                target: target,
+                controlPointIndex: 0,
+                deltaX: .length(1.0, .millimeter),
+                deltaY: .length(0.0, .millimeter)
+            ),
+            in: session
+        )
+        Issue.record("Automation fixed spline control point move must fail before mutation.")
+    } catch let error as EditorError {
+        #expect(error.code == .commandInvalid)
+        #expect(error.message == "Sketch spline control point move cannot move a fixed sketch point.")
+    }
+    #expect(session.generation == DocumentGeneration(2))
+}
+
+@MainActor
+@Test func automationCanAddCoincidentSplineControlPointConstraint() async throws {
+    let setup = try automationSplinePointConstraintDocument(name: "Automation Coincident Spline Point")
+    let session = EditorSession(document: setup.document)
+    let runner = AutomationRunner()
+
+    let result = try runner.execute(
+        .addSketchConstraint(
+            featureID: setup.featureID,
+            constraint: .coincident(
+                .splineControlPoint(entity: setup.splineID, index: 0),
+                .entity(setup.pointID)
+            )
+        ),
+        in: session
+    )
+    let summary = try SketchEntitySummaryService().summarize(document: session.document)
+    let point = try #require(summary.entries.first { $0.entityID == setup.pointID.description })
+    let center = try #require(point.center)
+
+    #expect(result.message == "Sketch constraint added to \(setup.featureID.description).")
+    #expect(result.commandName == "addSketchConstraint")
+    #expect(result.didMutate)
+    #expect(result.generation == DocumentGeneration(1))
+    #expect(abs(center.x - 0.0) < 1.0e-12)
+    #expect(abs(center.y - 0.0) < 1.0e-12)
+    #expect(session.evaluationStatus == .valid)
+}
+
+@MainActor
+@Test func automationCanAddSmoothSplineControlPointConstraint() async throws {
+    let session = EditorSession()
+    let runner = AutomationRunner()
+    _ = try runner.execute(
+        .createSplineSketch(
+            name: "Automation Smooth Spline",
+            plane: .xy,
+            spline: SketchSpline(controlPoints: [
+                SketchPoint(x: .length(0.0, .millimeter), y: .length(0.0, .millimeter)),
+                SketchPoint(x: .length(1.0, .millimeter), y: .length(1.0, .millimeter)),
+                SketchPoint(x: .length(3.0, .millimeter), y: .length(1.0, .millimeter)),
+                SketchPoint(x: .length(4.0, .millimeter), y: .length(0.0, .millimeter)),
+                SketchPoint(x: .length(6.0, .millimeter), y: .length(1.0, .millimeter)),
+                SketchPoint(x: .length(7.0, .millimeter), y: .length(1.0, .millimeter)),
+                SketchPoint(x: .length(8.0, .millimeter), y: .length(0.0, .millimeter)),
+            ])
+        ),
+        in: session
+    )
+    let summary = try SketchEntitySummaryService().summarize(document: session.document)
+    let spline = try #require(summary.entries.first { $0.entityKind == "spline" })
+    let featureID = try #require(UUID(uuidString: spline.sourceFeatureID)).featureID
+    let entityID = try #require(UUID(uuidString: spline.entityID)).sketchEntityID
+
+    let result = try runner.execute(
+        .addSketchConstraint(
+            featureID: featureID,
+            constraint: .smoothSplineControlPoint(entity: entityID, index: 3)
+        ),
+        in: session
+    )
+
+    let updatedSummary = try SketchEntitySummaryService().summarize(document: session.document)
+    let updatedSpline = try #require(updatedSummary.entries.first { $0.entityID == spline.entityID })
+    let outgoingHandle = try #require(updatedSpline.controlPoints.dropFirst(4).first)
+    #expect(result.message == "Sketch constraint added to \(featureID.description).")
+    #expect(result.commandName == "addSketchConstraint")
+    #expect(result.didMutate)
+    #expect(result.generation == DocumentGeneration(2))
+    #expect(abs(outgoingHandle.x - 0.005) < 1.0e-12)
+    #expect(abs(outgoingHandle.y - (-0.001)) < 1.0e-12)
+    #expect(session.evaluationStatus == .valid)
+}
+
+@MainActor
+@Test func automationCanAddEqualLengthSketchConstraint() async throws {
+    let setup = try automationTwoLineUnequalLengthDocument(name: "Automation Equal Length Source")
+    let session = EditorSession(document: setup.document)
+    let runner = AutomationRunner()
+
+    let result = try runner.execute(
+        .addSketchConstraint(
+            featureID: setup.featureID,
+            constraint: .equalLength(setup.firstLineID, setup.secondLineID)
+        ),
+        in: session
+    )
+
+    let sketch = try #require(automationSketchFeature(in: session.document, featureID: setup.featureID))
+    let first = try #require(automationLine(setup.firstLineID, in: sketch))
+    let second = try #require(automationLine(setup.secondLineID, in: sketch))
+    let firstLength = try automationLineLength(first, parameters: session.document.cadDocument.parameters)
+    let secondLength = try automationLineLength(second, parameters: session.document.cadDocument.parameters)
+    #expect(result.message == "Sketch constraint added to \(setup.featureID.description).")
+    #expect(result.commandName == "addSketchConstraint")
+    #expect(result.didMutate)
+    #expect(sketch.constraints == [.equalLength(setup.firstLineID, setup.secondLineID)])
+    #expect(abs(firstLength - secondLength) < 1.0e-12)
+    #expect(session.evaluationStatus == .valid)
+}
+
+@MainActor
+@Test func automationCanAddTangentSketchConstraint() async throws {
+    let setup = try automationLineCircleTangentDocument(name: "Automation Tangent Source")
+    let session = EditorSession(document: setup.document)
+    let runner = AutomationRunner()
+
+    let result = try runner.execute(
+        .addSketchConstraint(
+            featureID: setup.featureID,
+            constraint: .tangent(setup.lineID, setup.circleID)
+        ),
+        in: session
+    )
+
+    let sketch = try #require(automationSketchFeature(in: session.document, featureID: setup.featureID))
+    let circle = try #require(automationCircle(setup.circleID, in: sketch))
+    let center = try automationResolvedPoint(circle.center, parameters: session.document.cadDocument.parameters)
+    let radius = try automationLengthValue(circle.radius, parameters: session.document.cadDocument.parameters)
+    #expect(result.message == "Sketch constraint added to \(setup.featureID.description).")
+    #expect(result.commandName == "addSketchConstraint")
+    #expect(result.didMutate)
+    #expect(sketch.constraints == [.tangent(setup.lineID, setup.circleID)])
+    #expect(abs(center.x - 0.005) < 1.0e-12)
+    #expect(abs(center.y - radius) < 1.0e-12)
+    #expect(abs(radius - 0.002) < 1.0e-12)
+    #expect(session.evaluationStatus == .valid)
+}
+
+@MainActor
+@Test func automationCanAddCircularSketchConstraints() async throws {
+    let setup = try automationTwoCircleDocument(name: "Automation Circular Constraint Source")
+    let session = EditorSession(document: setup.document)
+    let runner = AutomationRunner()
+
+    let concentricResult = try runner.execute(
+        .addSketchConstraint(
+            featureID: setup.featureID,
+            constraint: .concentric(setup.firstCircleID, setup.secondCircleID)
+        ),
+        in: session
+    )
+    let radiusResult = try runner.execute(
+        .addSketchConstraint(
+            featureID: setup.featureID,
+            constraint: .equalRadius(setup.firstCircleID, setup.secondCircleID)
+        ),
+        in: session
+    )
+
+    let sketch = try #require(automationSketchFeature(in: session.document, featureID: setup.featureID))
+    let first = try #require(automationCircle(setup.firstCircleID, in: sketch))
+    let second = try #require(automationCircle(setup.secondCircleID, in: sketch))
+    let firstCenter = try automationResolvedPoint(first.center, parameters: session.document.cadDocument.parameters)
+    let secondCenter = try automationResolvedPoint(second.center, parameters: session.document.cadDocument.parameters)
+    let firstRadius = try automationLengthValue(first.radius, parameters: session.document.cadDocument.parameters)
+    let secondRadius = try automationLengthValue(second.radius, parameters: session.document.cadDocument.parameters)
+    #expect(concentricResult.commandName == "addSketchConstraint")
+    #expect(radiusResult.commandName == "addSketchConstraint")
+    #expect(concentricResult.didMutate)
+    #expect(radiusResult.didMutate)
+    #expect(abs(firstCenter.x - secondCenter.x) < 1.0e-12)
+    #expect(abs(firstCenter.y - secondCenter.y) < 1.0e-12)
+    #expect(abs(firstRadius - secondRadius) < 1.0e-12)
+    #expect(session.evaluationStatus == .valid)
+}
+
+@MainActor
+@Test func automationCanEditSketchEntityParameters() async throws {
+    let session = EditorSession()
+    let runner = AutomationRunner()
+    _ = try runner.execute(
+        .createArcSketch(
+            name: "Automation Editable Arc",
+            plane: .xy,
+            center: SketchPoint(
+                x: .length(0.0, .millimeter),
+                y: .length(0.0, .millimeter)
+            ),
+            radius: .length(4.0, .millimeter),
+            startAngle: .angle(0.0, .degree),
+            endAngle: .angle(90.0, .degree)
+        ),
+        in: session
+    )
+    let summary = try SketchEntitySummaryService().summarize(document: session.document)
+    let arc = try #require(summary.entries.first { $0.entityKind == "arc" })
+    let target = try #require(arc.selectionTarget())
+
+    let result = try runner.execute(
+        .setSketchArcParameters(
+            target: target,
+            center: nil,
+            radius: .length(6.0, .millimeter),
+            startAngle: nil,
+            endAngle: .angle(135.0, .degree)
+        ),
+        in: session
+    )
+
+    let updatedSummary = try SketchEntitySummaryService().summarize(document: session.document)
+    let updatedArc = try #require(updatedSummary.entries.first { $0.entityKind == "arc" })
+    #expect(result.message == "Sketch arc parameters updated.")
+    #expect(result.commandName == "setSketchArcParameters")
+    #expect(result.didMutate)
+    #expect(result.generation == DocumentGeneration(2))
+    #expect(abs((updatedArc.radius ?? -1.0) - 0.006) < 1.0e-12)
+    #expect(abs((updatedArc.endAngle ?? -1.0) - (Double.pi * 0.75)) < 1.0e-12)
+    #expect(session.evaluationStatus == .valid)
+}
+
+@MainActor
+@Test func automationCanSetSketchEntityDimension() async throws {
+    let session = EditorSession()
+    let runner = AutomationRunner()
+    _ = try runner.execute(
+        .createLineSketch(
+            name: "Automation Dimensioned Line",
+            plane: .xy,
+            start: SketchPoint(
+                x: .length(0.0, .millimeter),
+                y: .length(0.0, .millimeter)
+            ),
+            end: SketchPoint(
+                x: .length(10.0, .millimeter),
+                y: .length(0.0, .millimeter)
+            )
+        ),
+        in: session
+    )
+    let summary = try SketchEntitySummaryService().summarize(document: session.document)
+    let line = try #require(summary.entries.first { $0.entityKind == "line" })
+    let target = try #require(line.selectionTarget())
+
+    let result = try runner.execute(
+        .setSketchEntityDimension(
+            target: target,
+            kind: .length,
+            value: .length(25.0, .millimeter)
+        ),
+        in: session
+    )
+
+    let updatedSummary = try SketchEntitySummaryService().summarize(document: session.document)
+    let updatedLine = try #require(updatedSummary.entries.first { $0.entityID == line.entityID })
+    let dimension = try #require(updatedLine.dimensions.first { $0.kind == "distance" })
+    #expect(result.message == "Sketch entity dimension updated.")
+    #expect(result.commandName == "setSketchEntityDimension")
+    #expect(result.didMutate)
+    #expect(result.generation == DocumentGeneration(2))
+    #expect(abs((updatedLine.end?.x ?? -1.0) - 0.025) < 1.0e-12)
+    #expect(abs(dimension.resolvedValue - 0.025) < 1.0e-12)
+    #expect(session.evaluationStatus == .valid)
+}
+
+@MainActor
+@Test func automationCanSetSketchArcAngleDimension() async throws {
+    let session = EditorSession()
+    let runner = AutomationRunner()
+    _ = try runner.execute(
+        .createArcSketch(
+            name: "Automation Angle Dimensioned Arc",
+            plane: .xy,
+            center: SketchPoint(
+                x: .length(0.0, .millimeter),
+                y: .length(0.0, .millimeter)
+            ),
+            radius: .length(5.0, .millimeter),
+            startAngle: .angle(10.0, .degree),
+            endAngle: .angle(80.0, .degree)
+        ),
+        in: session
+    )
+    let summary = try SketchEntitySummaryService().summarize(document: session.document)
+    let arc = try #require(summary.entries.first { $0.entityKind == "arc" })
+    let target = try #require(arc.selectionTarget())
+
+    let result = try runner.execute(
+        .setSketchEntityDimension(
+            target: target,
+            kind: .angle,
+            value: .angle(120.0, .degree)
+        ),
+        in: session
+    )
+
+    let updatedSummary = try SketchEntitySummaryService().summarize(document: session.document)
+    let updatedArc = try #require(updatedSummary.entries.first { $0.entityID == arc.entityID })
+    let dimension = try #require(updatedArc.dimensions.first { $0.kind == "angle" })
+    #expect(result.message == "Sketch entity dimension updated.")
+    #expect(result.commandName == "setSketchEntityDimension")
+    #expect(result.didMutate)
+    #expect(result.generation == DocumentGeneration(2))
+    #expect(abs((updatedArc.startAngle ?? -1.0) - (10.0 * Double.pi / 180.0)) < 1.0e-12)
+    #expect(abs((updatedArc.endAngle ?? -1.0) - (130.0 * Double.pi / 180.0)) < 1.0e-12)
+    #expect(abs(dimension.resolvedValue - (120.0 * Double.pi / 180.0)) < 1.0e-12)
+    #expect(session.evaluationStatus == .valid)
+}
+
+@MainActor
+@Test func automationCanSetFixedEndSketchArcAngleDimension() async throws {
+    let session = EditorSession()
+    let runner = AutomationRunner()
+    _ = try runner.execute(
+        .createArcSketch(
+            name: "Automation Fixed End Span Arc",
+            plane: .xy,
+            center: SketchPoint(
+                x: .length(0.0, .millimeter),
+                y: .length(0.0, .millimeter)
+            ),
+            radius: .length(5.0, .millimeter),
+            startAngle: .angle(10.0, .degree),
+            endAngle: .angle(80.0, .degree)
+        ),
+        in: session
+    )
+    let summary = try SketchEntitySummaryService().summarize(document: session.document)
+    let arc = try #require(summary.entries.first { $0.entityKind == "arc" })
+    let target = try #require(arc.selectionTarget())
+    let featureID = try #require(UUID(uuidString: arc.sourceFeatureID)).featureID
+    let entityID = try #require(UUID(uuidString: arc.entityID)).sketchEntityID
+    _ = try runner.execute(
+        .addSketchConstraint(
+            featureID: featureID,
+            constraint: .fixed(.arcEnd(entityID))
+        ),
+        in: session
+    )
+
+    let result = try runner.execute(
+        .setSketchEntityDimension(
+            target: target,
+            kind: .angle,
+            value: .angle(120.0, .degree)
+        ),
+        in: session
+    )
+
+    let updatedSummary = try SketchEntitySummaryService().summarize(document: session.document)
+    let updatedArc = try #require(updatedSummary.entries.first { $0.entityID == arc.entityID })
+    let dimension = try #require(updatedArc.dimensions.first { $0.kind == "angle" })
+    #expect(result.message == "Sketch entity dimension updated.")
+    #expect(result.commandName == "setSketchEntityDimension")
+    #expect(result.didMutate)
+    #expect(result.generation == DocumentGeneration(3))
+    #expect(abs((updatedArc.startAngle ?? -1.0) - (-40.0 * Double.pi / 180.0)) < 1.0e-12)
+    #expect(abs((updatedArc.endAngle ?? -1.0) - (80.0 * Double.pi / 180.0)) < 1.0e-12)
+    #expect(abs(dimension.resolvedValue - (120.0 * Double.pi / 180.0)) < 1.0e-12)
+    #expect(session.evaluationStatus == .valid)
+}
+
+@MainActor
+@Test func automationCanSetSketchLineAngleDimension() async throws {
+    let session = EditorSession()
+    let runner = AutomationRunner()
+    _ = try runner.execute(
+        .createLineSketch(
+            name: "Automation Angled Line",
+            plane: .xy,
+            start: SketchPoint(
+                x: .length(0.0, .millimeter),
+                y: .length(0.0, .millimeter)
+            ),
+            end: SketchPoint(
+                x: .length(10.0, .millimeter),
+                y: .length(0.0, .millimeter)
+            )
+        ),
+        in: session
+    )
+    let summary = try SketchEntitySummaryService().summarize(document: session.document)
+    let line = try #require(summary.entries.first { $0.entityKind == "line" })
+    let target = try #require(line.selectionTarget())
+
+    let result = try runner.execute(
+        .setSketchEntityDimension(
+            target: target,
+            kind: .angle,
+            value: .angle(90.0, .degree)
+        ),
+        in: session
+    )
+
+    let updatedSummary = try SketchEntitySummaryService().summarize(document: session.document)
+    let updatedLine = try #require(updatedSummary.entries.first { $0.entityID == line.entityID })
+    let dimension = try #require(updatedLine.dimensions.first { $0.kind == "angle" })
+    #expect(result.message == "Sketch entity dimension updated.")
+    #expect(result.commandName == "setSketchEntityDimension")
+    #expect(result.didMutate)
+    #expect(result.generation == DocumentGeneration(2))
+    #expect(abs((updatedLine.end?.x ?? -1.0) - 0.0) < 1.0e-12)
+    #expect(abs((updatedLine.end?.y ?? -1.0) - 0.010) < 1.0e-12)
+    #expect(abs(dimension.resolvedValue - (Double.pi / 2.0)) < 1.0e-12)
+    #expect(session.evaluationStatus == .valid)
+}
+
+@MainActor
+@Test func automationCanConvertSketchLineToArc() async throws {
+    let session = EditorSession()
+    let runner = AutomationRunner()
+    _ = try runner.execute(
+        .createLineSketch(
+            name: "Automation Bendable Line",
+            plane: .xy,
+            start: SketchPoint(
+                x: .length(0.0, .millimeter),
+                y: .length(0.0, .millimeter)
+            ),
+            end: SketchPoint(
+                x: .length(10.0, .millimeter),
+                y: .length(0.0, .millimeter)
+            )
+        ),
+        in: session
+    )
+    let summary = try SketchEntitySummaryService().summarize(document: session.document)
+    let line = try #require(summary.entries.first { $0.entityKind == "line" })
+    let target = try #require(line.selectionTarget())
+
+    let result = try runner.execute(
+        .convertSketchLineToArc(
+            target: target,
+            sagitta: .length(2.0, .millimeter)
+        ),
+        in: session
+    )
+
+    let updatedSummary = try SketchEntitySummaryService().summarize(document: session.document)
+    let arc = try #require(updatedSummary.entries.first { $0.entityID == line.entityID })
+    #expect(result.message == "Sketch line converted to an arc.")
+    #expect(result.commandName == "convertSketchLineToArc")
+    #expect(result.didMutate)
+    #expect(result.generation == DocumentGeneration(2))
+    #expect(arc.entityKind == "arc")
+    #expect(abs((arc.radius ?? -1.0) - 0.00725) < 1.0e-12)
+    #expect(session.evaluationStatus == .valid)
+}
+
+@MainActor
+@Test func automationCanConvertSketchLineToSpline() async throws {
+    let session = EditorSession()
+    let runner = AutomationRunner()
+    _ = try runner.execute(
+        .createLineSketch(
+            name: "Automation Spline Line",
+            plane: .xy,
+            start: SketchPoint(
+                x: .length(0.0, .millimeter),
+                y: .length(0.0, .millimeter)
+            ),
+            end: SketchPoint(
+                x: .length(9.0, .millimeter),
+                y: .length(0.0, .millimeter)
+            )
+        ),
+        in: session
+    )
+    let summary = try SketchEntitySummaryService().summarize(document: session.document)
+    let line = try #require(summary.entries.first { $0.entityKind == "line" })
+    let target = try #require(line.selectionTarget())
+
+    let result = try runner.execute(
+        .convertSketchLineToSpline(target: target),
+        in: session
+    )
+
+    let updatedSummary = try SketchEntitySummaryService().summarize(document: session.document)
+    let spline = try #require(updatedSummary.entries.first { $0.entityID == line.entityID })
+    #expect(result.message == "Sketch line converted to a spline.")
+    #expect(result.commandName == "convertSketchLineToSpline")
+    #expect(result.didMutate)
+    #expect(result.generation == DocumentGeneration(2))
+    #expect(spline.entityKind == "spline")
+    #expect(spline.controlPoints.count == 4)
+    #expect(session.evaluationStatus == .valid)
+}
+
+@MainActor
+@Test func automationCanReverseSketchCurve() async throws {
+    let session = EditorSession()
+    let runner = AutomationRunner()
+    _ = try runner.execute(
+        .createLineSketch(
+            name: "Automation Reverse Line",
+            plane: .xy,
+            start: SketchPoint(
+                x: .length(0.0, .millimeter),
+                y: .length(0.0, .millimeter)
+            ),
+            end: SketchPoint(
+                x: .length(8.0, .millimeter),
+                y: .length(0.0, .millimeter)
+            )
+        ),
+        in: session
+    )
+    let summary = try SketchEntitySummaryService().summarize(document: session.document)
+    let line = try #require(summary.entries.first { $0.entityKind == "line" })
+    let target = try #require(line.selectionTarget())
+
+    let result = try runner.execute(
+        .reverseSketchCurve(target: target),
+        in: session
+    )
+
+    let updatedSummary = try SketchEntitySummaryService().summarize(document: session.document)
+    let reversedLine = try #require(updatedSummary.entries.first { $0.entityID == line.entityID })
+    #expect(result.message == "Sketch curve direction reversed.")
+    #expect(result.commandName == "reverseSketchCurve")
+    #expect(result.didMutate)
+    #expect(result.generation == DocumentGeneration(2))
+    #expect(abs((reversedLine.start?.x ?? -1.0) - 0.008) < 1.0e-12)
+    #expect(abs((reversedLine.end?.x ?? -1.0) - 0.0) < 1.0e-12)
+    #expect(session.evaluationStatus == .valid)
+}
+
+@MainActor
+@Test func automationCanExtendSketchCurve() async throws {
+    let session = EditorSession()
+    let runner = AutomationRunner()
+    _ = try runner.execute(
+        .createLineSketch(
+            name: "Automation Extend Line",
+            plane: .xy,
+            start: SketchPoint(
+                x: .length(0.0, .millimeter),
+                y: .length(0.0, .millimeter)
+            ),
+            end: SketchPoint(
+                x: .length(8.0, .millimeter),
+                y: .length(0.0, .millimeter)
+            )
+        ),
+        in: session
+    )
+    let summary = try SketchEntitySummaryService().summarize(document: session.document)
+    let line = try #require(summary.entries.first { $0.entityKind == "line" })
+    let target = try automationPointHandleSelectionTarget(line, handle: .lineEnd)
+
+    let result = try runner.execute(
+        .extendSketchCurve(
+            target: target,
+            distance: .length(2.0, .millimeter),
+            shape: .natural
+        ),
+        in: session
+    )
+
+    let updatedSummary = try SketchEntitySummaryService().summarize(document: session.document)
+    let extendedLine = try #require(updatedSummary.entries.first { $0.entityID == line.entityID })
+    #expect(result.message == "Sketch curve extended.")
+    #expect(result.commandName == "extendSketchCurve")
+    #expect(result.didMutate)
+    #expect(result.generation == DocumentGeneration(2))
+    #expect(abs((extendedLine.end?.x ?? -1.0) - 0.010) < 1.0e-12)
+    #expect(abs((extendedLine.end?.y ?? -1.0) - 0.0) < 1.0e-12)
+    #expect(session.evaluationStatus == .valid)
+}
+
+@MainActor
+@Test func automationCanApplySketchCornerTreatment() async throws {
+    let session = EditorSession()
+    let runner = AutomationRunner()
+    _ = try session.execute(
+        .createRectangleSketchFromCorners(
+            name: "Automation Source Fillet Rectangle",
+            plane: .xy,
+            firstCorner: SketchPoint(
+                x: .length(0.0, .millimeter),
+                y: .length(0.0, .millimeter)
+            ),
+            oppositeCorner: SketchPoint(
+                x: .length(10.0, .millimeter),
+                y: .length(6.0, .millimeter)
+            )
+        )
+    )
+    let summary = try SketchEntitySummaryService().summarize(document: session.document)
+    let bottomLine = try #require(automationBottomRectangleLine(in: summary))
+    let target = try automationPointHandleSelectionTarget(bottomLine, handle: .lineEnd)
+
+    let result = try runner.execute(
+        .applySketchCornerTreatment(
+            target: target,
+            adjacentTarget: nil,
+            distance: .length(2.0, .millimeter),
+            treatment: .fillet
+        ),
+        in: session
+    )
+
+    let updatedSummary = try SketchEntitySummaryService().summarize(document: session.document)
+    let arcs = updatedSummary.entries.filter { $0.sourceFeatureID == bottomLine.sourceFeatureID && $0.entityKind == "arc" }
+    let filletArc = try #require(arcs.first)
+    #expect(result.message == "Sketch corner fillet applied.")
+    #expect(result.commandName == "applySketchCornerTreatment")
+    #expect(result.didMutate)
+    #expect(result.generation == DocumentGeneration(2))
+    #expect(arcs.count == 1)
+    #expect(abs((filletArc.center?.x ?? -1.0) - 0.008) < 1.0e-12)
+    #expect(abs((filletArc.center?.y ?? -1.0) - 0.002) < 1.0e-12)
+    #expect(abs((filletArc.radius ?? -1.0) - 0.002) < 1.0e-12)
+    #expect(session.evaluationStatus == .valid)
+}
+
+@MainActor
+@Test func automationCanApplySketchCornerTreatmentToLineArcCorner() async throws {
+    let setup = try automationLineArcCornerTreatmentSketchDocument()
+    let session = EditorSession(document: setup.document)
+    let runner = AutomationRunner()
+    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let sourceLine = try #require(before.entries.first { $0.entityID == setup.lineID.description })
+    let target = try automationPointHandleSelectionTarget(sourceLine, handle: .lineEnd)
+
+    let result = try runner.execute(
+        .applySketchCornerTreatment(
+            target: target,
+            adjacentTarget: nil,
+            distance: .length(0.001, .meter),
+            treatment: .fillet
+        ),
+        in: session
+    )
+
+    let updatedSummary = try SketchEntitySummaryService().summarize(document: session.document)
+    let sourceEntries = updatedSummary.entries.filter { $0.sourceFeatureID == setup.featureID.description }
+    let lines = sourceEntries.filter { $0.entityKind == "line" }
+    let arcs = sourceEntries.filter { $0.entityKind == "arc" }
+    let insertedArc = try #require(arcs.first { abs(($0.radius ?? -1.0) - 0.001) < 1.0e-12 })
+    let sourceArc = try #require(arcs.first { $0.entityID == setup.arcID.description })
+    #expect(result.message == "Sketch corner fillet applied.")
+    #expect(result.commandName == "applySketchCornerTreatment")
+    #expect(result.didMutate)
+    #expect(result.generation == DocumentGeneration(1))
+    #expect(lines.count == 3)
+    #expect(arcs.count == 2)
+    #expect(insertedArc.center != nil)
+    #expect((sourceArc.startAngle ?? 0.0) > 0.0)
+    #expect(abs((sourceArc.endAngle ?? -1.0) - (Double.pi / 2.0)) < 1.0e-12)
+    #expect(session.evaluationStatus == .valid)
+}
+
+@MainActor
+@Test func automationCanApplySketchCornerTreatmentToCurvePair() async throws {
+    let setup = try automationLineArcCornerTreatmentSketchDocument()
+    let session = EditorSession(document: setup.document)
+    let runner = AutomationRunner()
+    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let sourceLine = try #require(before.entries.first { $0.entityID == setup.lineID.description })
+    let sourceArc = try #require(before.entries.first { $0.entityID == setup.arcID.description })
+    let target = try #require(sourceLine.selectionTarget())
+    let adjacentTarget = try #require(sourceArc.selectionTarget())
+
+    let result = try runner.execute(
+        .applySketchCornerTreatment(
+            target: target,
+            adjacentTarget: adjacentTarget,
+            distance: .length(0.001, .meter),
+            treatment: .fillet
+        ),
+        in: session
+    )
+
+    let updatedSummary = try SketchEntitySummaryService().summarize(document: session.document)
+    let sourceEntries = updatedSummary.entries.filter { $0.sourceFeatureID == setup.featureID.description }
+    let lines = sourceEntries.filter { $0.entityKind == "line" }
+    let arcs = sourceEntries.filter { $0.entityKind == "arc" }
+    let insertedArc = try #require(arcs.first { abs(($0.radius ?? -1.0) - 0.001) < 1.0e-12 })
+    let sourceArcAfter = try #require(arcs.first { $0.entityID == setup.arcID.description })
+    #expect(result.message == "Sketch corner fillet applied.")
+    #expect(result.commandName == "applySketchCornerTreatment")
+    #expect(result.didMutate)
+    #expect(result.generation == DocumentGeneration(1))
+    #expect(lines.count == 3)
+    #expect(arcs.count == 2)
+    #expect(insertedArc.center != nil)
+    #expect((sourceArcAfter.startAngle ?? 0.0) > 0.0)
+    #expect(abs((sourceArcAfter.endAngle ?? -1.0) - (Double.pi / 2.0)) < 1.0e-12)
+    #expect(session.evaluationStatus == .valid)
+}
+
+@MainActor
+@Test func automationCanSplitSketchCurve() async throws {
+    let session = EditorSession()
+    let runner = AutomationRunner()
+    _ = try runner.execute(
+        .createLineSketch(
+            name: "Automation Split Line",
+            plane: .xy,
+            start: SketchPoint(
+                x: .length(0.0, .millimeter),
+                y: .length(0.0, .millimeter)
+            ),
+            end: SketchPoint(
+                x: .length(8.0, .millimeter),
+                y: .length(0.0, .millimeter)
+            )
+        ),
+        in: session
+    )
+    let summary = try SketchEntitySummaryService().summarize(document: session.document)
+    let line = try #require(summary.entries.first { $0.entityKind == "line" })
+    let target = try #require(line.selectionTarget())
+
+    let result = try runner.execute(
+        .splitSketchCurve(
+            target: target,
+            fraction: .scalar(0.25)
+        ),
+        in: session
+    )
+
+    let updatedSummary = try SketchEntitySummaryService().summarize(document: session.document)
+    let lines = updatedSummary.entries.filter { $0.entityKind == "line" }
+    #expect(result.message == "Sketch curve segment split.")
+    #expect(result.commandName == "splitSketchCurve")
+    #expect(result.didMutate)
+    #expect(result.generation == DocumentGeneration(2))
+    #expect(lines.count == 2)
+    #expect(lines.contains { entry in
+        abs((entry.start?.x ?? -1.0) - 0.0) < 1.0e-12 &&
+            abs((entry.end?.x ?? -1.0) - 0.002) < 1.0e-12
+    })
+    #expect(lines.contains { entry in
+        abs((entry.start?.x ?? -1.0) - 0.002) < 1.0e-12 &&
+            abs((entry.end?.x ?? -1.0) - 0.008) < 1.0e-12
+    })
+    #expect(session.evaluationStatus == .valid)
+}
+
+@MainActor
+@Test func automationCanSplitSketchArcCurve() async throws {
+    let session = EditorSession()
+    let runner = AutomationRunner()
+    _ = try runner.execute(
+        .createArcSketch(
+            name: "Automation Split Arc",
+            plane: .xy,
+            center: SketchPoint(
+                x: .length(0.0, .millimeter),
+                y: .length(0.0, .millimeter)
+            ),
+            radius: .length(4.0, .millimeter),
+            startAngle: .angle(0.0, .degree),
+            endAngle: .angle(120.0, .degree)
+        ),
+        in: session
+    )
+    let summary = try SketchEntitySummaryService().summarize(document: session.document)
+    let arc = try #require(summary.entries.first { $0.entityKind == "arc" })
+    let target = try #require(arc.selectionTarget())
+
+    let result = try runner.execute(
+        .splitSketchCurve(
+            target: target,
+            fraction: .scalar(0.5)
+        ),
+        in: session
+    )
+
+    let updatedSummary = try SketchEntitySummaryService().summarize(document: session.document)
+    let arcs = updatedSummary.entries.filter { $0.entityKind == "arc" }
+    #expect(result.message == "Sketch curve segment split.")
+    #expect(result.commandName == "splitSketchCurve")
+    #expect(result.didMutate)
+    #expect(result.generation == DocumentGeneration(2))
+    #expect(arcs.count == 2)
+    #expect(session.evaluationStatus == .valid)
+}
+
+@MainActor
+@Test func automationCanTrimSketchCurveSegment() async throws {
+    let session = EditorSession()
+    let runner = AutomationRunner()
+    _ = try runner.execute(
+        .createLineSketch(
+            name: "Automation Trim Line",
+            plane: .xy,
+            start: SketchPoint(
+                x: .length(0.0, .millimeter),
+                y: .length(0.0, .millimeter)
+            ),
+            end: SketchPoint(
+                x: .length(8.0, .millimeter),
+                y: .length(0.0, .millimeter)
+            )
+        ),
+        in: session
+    )
+    let summary = try SketchEntitySummaryService().summarize(document: session.document)
+    let line = try #require(summary.entries.first { $0.entityKind == "line" })
+    let target = try #require(line.selectionTarget())
+    _ = try runner.execute(
+        .splitSketchCurve(
+            target: target,
+            fraction: .scalar(0.25)
+        ),
+        in: session
+    )
+    let splitSummary = try SketchEntitySummaryService().summarize(document: session.document)
+    let trimmedLine = try #require(splitSummary.entries.first { entry in
+        entry.entityKind == "line" && entry.entityID != line.entityID
+    })
+    let trimmedTarget = try #require(trimmedLine.selectionTarget())
+
+    let result = try runner.execute(
+        .trimSketchCurveSegment(target: trimmedTarget),
+        in: session
+    )
+
+    let updatedSummary = try SketchEntitySummaryService().summarize(document: session.document)
+    let lines = updatedSummary.entries.filter { $0.entityKind == "line" }
+    #expect(result.message == "Sketch curve segment trimmed.")
+    #expect(result.commandName == "trimSketchCurveSegment")
+    #expect(result.didMutate)
+    #expect(result.generation == DocumentGeneration(3))
+    #expect(lines.count == 1)
+    #expect(lines.first?.entityID == line.entityID)
+    #expect(abs((lines.first?.start?.x ?? -1.0) - 0.0) < 1.0e-12)
+    #expect(abs((lines.first?.end?.x ?? -1.0) - 0.002) < 1.0e-12)
+    #expect(session.evaluationStatus == .valid)
+}
+
+@MainActor
+@Test func automationCanCutSketchCurveWithLineCutter() async throws {
+    let session = EditorSession()
+    let runner = AutomationRunner()
+    _ = try runner.execute(
+        .createLineSketch(
+            name: "Automation Cut Target",
+            plane: .xy,
+            start: SketchPoint(
+                x: .length(0.0, .millimeter),
+                y: .length(0.0, .millimeter)
+            ),
+            end: SketchPoint(
+                x: .length(8.0, .millimeter),
+                y: .length(0.0, .millimeter)
+            )
+        ),
+        in: session
+    )
+    _ = try runner.execute(
+        .createLineSketch(
+            name: "Automation Cut Cutter",
+            plane: .xy,
+            start: SketchPoint(
+                x: .length(3.0, .millimeter),
+                y: .length(-2.0, .millimeter)
+            ),
+            end: SketchPoint(
+                x: .length(3.0, .millimeter),
+                y: .length(2.0, .millimeter)
+            )
+        ),
+        in: session
+    )
+    let summary = try SketchEntitySummaryService().summarize(document: session.document)
+    let targetLine = try #require(summary.entries.first { $0.sourceFeatureName == "Automation Cut Target" })
+    let cutterLine = try #require(summary.entries.first { $0.sourceFeatureName == "Automation Cut Cutter" })
+    let target = try #require(targetLine.selectionTarget())
+    let cutter = try #require(cutterLine.selectionTarget())
+
+    let result = try runner.execute(
+        .cutSketchCurve(
+            target: target,
+            cutter: cutter,
+            options: CutCurveOptions()
+        ),
+        in: session
+    )
+
+    let updatedSummary = try SketchEntitySummaryService().summarize(document: session.document)
+    let targetSegments = updatedSummary.entries.filter { $0.sourceFeatureName == "Automation Cut Target" }
+    #expect(result.message == "Cut Curve applied.")
+    #expect(result.commandName == "cutSketchCurve")
+    #expect(result.didMutate)
+    #expect(result.generation == DocumentGeneration(3))
+    #expect(targetSegments.count == 2)
+    #expect(targetSegments.contains { entry in
+        abs((entry.start?.x ?? -1.0) - 0.0) < 1.0e-12 &&
+            abs((entry.end?.x ?? -1.0) - 0.003) < 1.0e-12
+    })
+    #expect(targetSegments.contains { entry in
+        abs((entry.start?.x ?? -1.0) - 0.003) < 1.0e-12 &&
+            abs((entry.end?.x ?? -1.0) - 0.008) < 1.0e-12
+    })
+    #expect(session.evaluationStatus == .valid)
+}
+
+@MainActor
+@Test func automationCanCutSketchCurveWithCircleCutter() async throws {
+    let session = EditorSession()
+    let runner = AutomationRunner()
+    _ = try runner.execute(
+        .createLineSketch(
+            name: "Automation Circle Cut Target",
+            plane: .xy,
+            start: SketchPoint(
+                x: .length(0.0, .millimeter),
+                y: .length(0.0, .millimeter)
+            ),
+            end: SketchPoint(
+                x: .length(8.0, .millimeter),
+                y: .length(0.0, .millimeter)
+            )
+        ),
+        in: session
+    )
+    _ = try runner.execute(
+        .createCircleSketch(
+            name: "Automation Circle Cut Cutter",
+            plane: .xy,
+            center: SketchPoint(
+                x: .length(4.0, .millimeter),
+                y: .length(0.0, .millimeter)
+            ),
+            radius: .length(1.0, .millimeter)
+        ),
+        in: session
+    )
+    let summary = try SketchEntitySummaryService().summarize(document: session.document)
+    let targetLine = try #require(summary.entries.first { $0.sourceFeatureName == "Automation Circle Cut Target" })
+    let cutterCircle = try #require(summary.entries.first { $0.sourceFeatureName == "Automation Circle Cut Cutter" })
+    let target = try #require(targetLine.selectionTarget())
+    let cutter = try #require(cutterCircle.selectionTarget())
+
+    let result = try runner.execute(
+        .cutSketchCurve(
+            target: target,
+            cutter: cutter,
+            options: CutCurveOptions()
+        ),
+        in: session
+    )
+
+    let updatedSummary = try SketchEntitySummaryService().summarize(document: session.document)
+    let targetSegments = updatedSummary.entries.filter { $0.sourceFeatureName == "Automation Circle Cut Target" }
+    #expect(result.message == "Cut Curve applied.")
+    #expect(result.commandName == "cutSketchCurve")
+    #expect(result.didMutate)
+    #expect(result.generation == DocumentGeneration(3))
+    #expect(targetSegments.count == 3)
+    #expect(targetSegments.contains { entry in
+        abs((entry.start?.x ?? -1.0) - 0.0) < 1.0e-12 &&
+            abs((entry.end?.x ?? -1.0) - 0.003) < 1.0e-12
+    })
+    #expect(targetSegments.contains { entry in
+        abs((entry.start?.x ?? -1.0) - 0.003) < 1.0e-12 &&
+            abs((entry.end?.x ?? -1.0) - 0.005) < 1.0e-12
+    })
+    #expect(targetSegments.contains { entry in
+        abs((entry.start?.x ?? -1.0) - 0.005) < 1.0e-12 &&
+            abs((entry.end?.x ?? -1.0) - 0.008) < 1.0e-12
+    })
+    #expect(session.evaluationStatus == .valid)
+}
+
+@MainActor
+@Test func automationCanCutSketchCircleTargetWithLineCutter() async throws {
+    let session = EditorSession()
+    let runner = AutomationRunner()
+    _ = try runner.execute(
+        .createCircleSketch(
+            name: "Automation Circle Target Cut Target",
+            plane: .xy,
+            center: SketchPoint(
+                x: .length(0.0, .millimeter),
+                y: .length(0.0, .millimeter)
+            ),
+            radius: .length(5.0, .millimeter)
+        ),
+        in: session
+    )
+    _ = try runner.execute(
+        .createLineSketch(
+            name: "Automation Circle Target Cut Cutter",
+            plane: .xy,
+            start: SketchPoint(
+                x: .length(0.0, .millimeter),
+                y: .length(-6.0, .millimeter)
+            ),
+            end: SketchPoint(
+                x: .length(0.0, .millimeter),
+                y: .length(6.0, .millimeter)
+            )
+        ),
+        in: session
+    )
+    let summary = try SketchEntitySummaryService().summarize(document: session.document)
+    let targetCircle = try #require(summary.entries.first { $0.sourceFeatureName == "Automation Circle Target Cut Target" })
+    let cutterLine = try #require(summary.entries.first { $0.sourceFeatureName == "Automation Circle Target Cut Cutter" })
+    let target = try #require(targetCircle.selectionTarget())
+    let cutter = try #require(cutterLine.selectionTarget())
+
+    let result = try runner.execute(
+        .cutSketchCurve(
+            target: target,
+            cutter: cutter,
+            options: CutCurveOptions()
+        ),
+        in: session
+    )
+
+    let updatedSummary = try SketchEntitySummaryService().summarize(document: session.document)
+    let targetSegments = updatedSummary.entries.filter { $0.sourceFeatureName == "Automation Circle Target Cut Target" }
+    #expect(result.message == "Cut Curve applied.")
+    #expect(result.commandName == "cutSketchCurve")
+    #expect(result.didMutate)
+    #expect(result.generation == DocumentGeneration(3))
+    #expect(targetSegments.count == 2)
+    #expect(targetSegments.allSatisfy { $0.entityKind == "arc" })
+    #expect(targetSegments.contains { entry in
+        abs((entry.startAngle ?? -1.0) - Double.pi / 2.0) < 1.0e-12 &&
+            abs((entry.endAngle ?? -1.0) - Double.pi * 1.5) < 1.0e-12
+    })
+    #expect(targetSegments.contains { entry in
+        abs((entry.startAngle ?? -1.0) - Double.pi * 1.5) < 1.0e-12 &&
+            abs((entry.endAngle ?? -1.0) - Double.pi / 2.0) < 1.0e-12
+    })
+    #expect(session.evaluationStatus == .valid)
+}
+
+@MainActor
+@Test func automationCanCutSketchArcCurveWithLineCutter() async throws {
+    let session = EditorSession()
+    let runner = AutomationRunner()
+    _ = try runner.execute(
+        .createArcSketch(
+            name: "Automation Arc Cut Target",
+            plane: .xy,
+            center: SketchPoint(
+                x: .length(0.0, .millimeter),
+                y: .length(0.0, .millimeter)
+            ),
+            radius: .length(5.0, .millimeter),
+            startAngle: .angle(0.0, .radian),
+            endAngle: .angle(Double.pi, .radian)
+        ),
+        in: session
+    )
+    _ = try runner.execute(
+        .createLineSketch(
+            name: "Automation Arc Cut Cutter",
+            plane: .xy,
+            start: SketchPoint(
+                x: .length(0.0, .millimeter),
+                y: .length(-2.0, .millimeter)
+            ),
+            end: SketchPoint(
+                x: .length(0.0, .millimeter),
+                y: .length(6.0, .millimeter)
+            )
+        ),
+        in: session
+    )
+    let summary = try SketchEntitySummaryService().summarize(document: session.document)
+    let targetArc = try #require(summary.entries.first { $0.sourceFeatureName == "Automation Arc Cut Target" })
+    let cutterLine = try #require(summary.entries.first { $0.sourceFeatureName == "Automation Arc Cut Cutter" })
+    let target = try #require(targetArc.selectionTarget())
+    let cutter = try #require(cutterLine.selectionTarget())
+
+    let result = try runner.execute(
+        .cutSketchCurve(
+            target: target,
+            cutter: cutter,
+            options: CutCurveOptions()
+        ),
+        in: session
+    )
+
+    let updatedSummary = try SketchEntitySummaryService().summarize(document: session.document)
+    let targetSegments = updatedSummary.entries.filter { $0.sourceFeatureName == "Automation Arc Cut Target" }
+    #expect(result.message == "Cut Curve applied.")
+    #expect(result.commandName == "cutSketchCurve")
+    #expect(result.didMutate)
+    #expect(result.generation == DocumentGeneration(3))
+    #expect(targetSegments.count == 2)
+    #expect(targetSegments.contains { entry in
+        abs((entry.startAngle ?? -1.0) - 0.0) < 1.0e-12 &&
+            abs((entry.endAngle ?? -1.0) - Double.pi / 2.0) < 1.0e-12
+    })
+    #expect(targetSegments.contains { entry in
+        abs((entry.startAngle ?? -1.0) - Double.pi / 2.0) < 1.0e-12 &&
+            abs((entry.endAngle ?? -1.0) - Double.pi) < 1.0e-12
+    })
     #expect(session.evaluationStatus == .valid)
 }
 
@@ -333,6 +3117,185 @@ import SwiftCAD
 }
 
 @MainActor
+@Test func automationCanCreateDescribeAndActivateConstructionPlanes() async throws {
+    let session = EditorSession()
+    let runner = AutomationRunner()
+
+    let createResult = try runner.execute(
+        .createConstructionPlane(
+            name: "Automation CPlane",
+            plane: .zx,
+            activates: true
+        ),
+        in: session
+    )
+    let activeID = try #require(session.document.productMetadata.activeConstructionPlaneID)
+    let renameResult = try runner.execute(
+        .renameConstructionPlane(
+            id: activeID,
+            name: "Renamed CPlane"
+        ),
+        in: session
+    )
+    let summaryResult = try runner.execute(.describeConstructionPlanes, in: session)
+    let clearResult = try runner.execute(
+        .setActiveConstructionPlane(id: nil),
+        in: session
+    )
+
+    #expect(createResult.message == "Construction plane Automation CPlane created.")
+    #expect(createResult.commandName == "createConstructionPlane")
+    #expect(createResult.didMutate)
+    #expect(renameResult.message == "Construction plane renamed to Renamed CPlane.")
+    #expect(renameResult.commandName == "renameConstructionPlane")
+    #expect(renameResult.didMutate)
+    #expect(summaryResult.message == "1 construction plane(s). Active: Renamed CPlane.")
+    #expect(summaryResult.commandName == nil)
+    #expect(!summaryResult.didMutate)
+    #expect(session.document.productMetadata.constructionPlanes[activeID]?.plane == .zx)
+    #expect(session.document.productMetadata.constructionPlanes[activeID]?.name == "Renamed CPlane")
+    #expect(session.document.productMetadata.activeConstructionPlaneID == nil)
+    #expect(clearResult.message == "Active construction plane set to none.")
+    #expect(clearResult.commandName == "setActiveConstructionPlane")
+    #expect(clearResult.didMutate)
+    #expect(session.generation == DocumentGeneration(3))
+}
+
+@MainActor
+@Test func automationCreatesViewAlignedConstructionPlane() async throws {
+    let session = EditorSession()
+    let runner = AutomationRunner()
+    let origin = Point3D(x: 0.010, y: 0.020, z: 0.030)
+
+    let result = try runner.execute(
+        .createViewAlignedConstructionPlane(
+            name: "Automation View Plane",
+            origin: origin,
+            viewNormal: Vector3D(x: 0.0, y: 0.0, z: 2.0),
+            activates: true
+        ),
+        in: session
+    )
+
+    let source = try #require(session.activeConstructionPlane)
+    #expect(result.message == "View-aligned construction plane Automation View Plane created.")
+    #expect(result.commandName == "createViewAlignedConstructionPlane")
+    #expect(result.didMutate)
+    guard case .plane(let plane) = source.plane else {
+        Issue.record("View-aligned construction plane should create a custom plane.")
+        return
+    }
+    #expect(plane.origin == origin)
+    #expect(plane.normal == .unitZ)
+}
+
+@MainActor
+@Test func automationCreatesConstructionPlaneFromGeneratedFaceTarget() async throws {
+    let session = EditorSession()
+    let runner = AutomationRunner()
+    _ = try #require(session.createDefaultExtrudedRectangle())
+    let topology = try TopologySummaryService().summarize(document: session.document)
+    let faceTarget = try #require(topology.entries.first {
+        $0.kind == .face && $0.center != nil && $0.normal != nil
+    }?.selectionTarget())
+
+    let result = try runner.execute(
+        .createConstructionPlaneFromTarget(
+            name: "Automation Face CPlane",
+            target: faceTarget,
+            activates: true
+        ),
+        in: session
+    )
+
+    let source = try #require(session.activeConstructionPlane)
+    #expect(result.message.contains("Automation Face CPlane"))
+    #expect(result.commandName == "createConstructionPlaneFromTarget")
+    #expect(result.didMutate)
+    #expect(source.name == "Automation Face CPlane")
+    guard case .plane = source.plane else {
+        Issue.record("Generated face target should create a custom construction plane.")
+        return
+    }
+}
+
+@MainActor
+@Test func automationCreatesMidplaneConstructionPlaneFromGeneratedFaceTargets() async throws {
+    let session = EditorSession()
+    let runner = AutomationRunner()
+    _ = try #require(session.createDefaultExtrudedRectangle())
+    let topology = try TopologySummaryService().summarize(document: session.document)
+    let targets = try automationParallelFaceTargets(in: topology)
+
+    let result = try runner.execute(
+        .createConstructionPlaneFromTargets(
+            name: "Automation Midplane",
+            targets: targets,
+            viewNormal: nil,
+            activates: true
+        ),
+        in: session
+    )
+
+    let source = try #require(session.activeConstructionPlane)
+    #expect(result.message == "Construction plane Automation Midplane created from 2 targets.")
+    #expect(result.commandName == "createConstructionPlaneFromTargets")
+    #expect(result.didMutate)
+    #expect(source.name == "Automation Midplane")
+    guard case .plane = source.plane else {
+        Issue.record("Parallel generated face targets should create a custom midplane.")
+        return
+    }
+}
+
+@MainActor
+@Test func automationCreatesTwoPointConstructionPlaneFromGeneratedVertexTargets() async throws {
+    let session = EditorSession()
+    let runner = AutomationRunner()
+    _ = try #require(session.createDefaultExtrudedRectangle())
+    let topology = try TopologySummaryService().summarize(document: session.document)
+    let targets = try automationTwoPointVertexTargets(in: topology, viewNormal: .unitZ)
+
+    let result = try runner.execute(
+        .createConstructionPlaneFromTargets(
+            name: "Automation Two Point Plane",
+            targets: targets,
+            viewNormal: .unitZ,
+            activates: true
+        ),
+        in: session
+    )
+
+    let source = try #require(session.activeConstructionPlane)
+    #expect(result.message == "Construction plane Automation Two Point Plane created from 2 targets.")
+    #expect(result.commandName == "createConstructionPlaneFromTargets")
+    #expect(result.didMutate)
+    #expect(source.name == "Automation Two Point Plane")
+}
+
+@MainActor
+@Test func automationCreatesTwoPointConstructionPlaneFromSourcePointTargets() async throws {
+    let runner = AutomationRunner()
+    let setup = try automationSourcePointSession()
+
+    let result = try runner.execute(
+        .createConstructionPlaneFromTargets(
+            name: "Automation Source Point Plane",
+            targets: setup.targets,
+            viewNormal: .unitZ,
+            activates: true
+        ),
+        in: setup.session
+    )
+
+    let source = try #require(setup.session.activeConstructionPlane)
+    #expect(result.message == "Construction plane Automation Source Point Plane created from 2 targets.")
+    #expect(result.commandName == "createConstructionPlaneFromTargets")
+    #expect(result.didMutate)
+    #expect(source.name == "Automation Source Point Plane")
+}
+
+@MainActor
 @Test func automationBatchRejectsGenerationMismatch() async throws {
     let session = EditorSession()
     let runner = AutomationRunner()
@@ -377,6 +3340,714 @@ private func automationSingleSketchEntityID(
     return sketch.entities.keys.first
 }
 
+private func automationParallelFaceTargets(
+    in topology: TopologySummaryResult
+) throws -> [SelectionTarget] {
+    let faces = topology.entries.filter { $0.kind == .face }
+    for firstIndex in faces.indices {
+        let first = faces[firstIndex]
+        guard let firstCenter = first.center,
+              let firstNormal = first.normal,
+              let firstTarget = first.selectionTarget() else {
+            continue
+        }
+        let firstNormalVector = try automationVector(firstNormal).normalized(tolerance: 1.0e-12)
+        for second in faces.dropFirst(firstIndex + 1) {
+            guard let secondCenter = second.center,
+                  let secondNormal = second.normal,
+                  let secondTarget = second.selectionTarget() else {
+                continue
+            }
+            let secondNormalVector = try automationVector(secondNormal).normalized(tolerance: 1.0e-12)
+            guard abs(abs(firstNormalVector.dot(secondNormalVector)) - 1.0) <= 1.0e-8 else {
+                continue
+            }
+            let centerDelta = automationPoint3D(secondCenter) - automationPoint3D(firstCenter)
+            guard abs(centerDelta.dot(firstNormalVector)) > 1.0e-9 else {
+                continue
+            }
+            return [firstTarget, secondTarget]
+        }
+    }
+    throw EditorError(
+        code: .referenceUnresolved,
+        message: "Automation construction-plane test requires parallel generated faces."
+    )
+}
+
+private func automationTwoPointVertexTargets(
+    in topology: TopologySummaryResult,
+    viewNormal: Vector3D
+) throws -> [SelectionTarget] {
+    let vertices = topology.entries.compactMap { entry -> (target: SelectionTarget, point: Point3D)? in
+        guard entry.kind == .vertex,
+              let target = entry.selectionTarget(),
+              let point = entry.start else {
+            return nil
+        }
+        return (target, automationPoint3D(point))
+    }
+    let unitViewNormal = try viewNormal.normalized(tolerance: 1.0e-12)
+    for firstIndex in vertices.indices {
+        for second in vertices.dropFirst(firstIndex + 1) {
+            let first = vertices[firstIndex]
+            do {
+                let direction = try (second.point - first.point).normalized(tolerance: 1.0e-12)
+                let projectedNormal = unitViewNormal - direction * unitViewNormal.dot(direction)
+                _ = try projectedNormal.normalized(tolerance: 1.0e-12)
+                return [first.target, second.target]
+            } catch {
+                continue
+            }
+        }
+    }
+    throw EditorError(
+        code: .referenceUnresolved,
+        message: "Automation construction-plane test requires two generated vertex targets compatible with the view normal."
+    )
+}
+
+private func automationSourcePointSession() throws -> (
+    session: EditorSession,
+    targets: [SelectionTarget]
+) {
+    var document = DesignDocument.empty()
+    let featureID = try document.createLineSketch(
+        name: "Automation Source Point CPlane Seeds",
+        plane: .xy,
+        start: SketchPoint(x: .length(0.0, .meter), y: .length(0.0, .meter)),
+        end: SketchPoint(x: .length(0.010, .meter), y: .length(0.0, .meter))
+    )
+    let firstID = SketchEntityID()
+    let secondID = SketchEntityID()
+    guard var feature = document.cadDocument.designGraph.nodes[featureID],
+          case var .sketch(sketch) = feature.operation else {
+        throw EditorError(
+            code: .referenceUnresolved,
+            message: "Automation source point construction-plane test requires a sketch feature."
+        )
+    }
+    sketch.entities = [
+        firstID: .point(SketchPoint(x: .length(0.0, .meter), y: .length(0.0, .meter))),
+        secondID: .point(SketchPoint(x: .length(0.010, .meter), y: .length(0.0, .meter))),
+    ]
+    feature.operation = .sketch(sketch)
+    document.cadDocument.designGraph.nodes[featureID] = feature
+    document.cadDocument.designGraph.revision = document.cadDocument.designGraph.revision.advanced()
+
+    let summary = try SketchEntitySummaryService().summarize(document: document)
+    let entries = summary.entries.filter { $0.entityKind == "point" }
+    #expect(entries.count == 2)
+    let targets = try entries.map { entry in
+        try #require(entry.selectionTarget())
+    }
+    return (EditorSession(document: document), targets)
+}
+
+private func automationVector(_ point: TopologySummaryResult.Entry.Point) -> Vector3D {
+    Vector3D(x: point.x, y: point.y, z: point.z)
+}
+
+private func automationPoint3D(_ point: TopologySummaryResult.Entry.Point) -> Point3D {
+    Point3D(x: point.x, y: point.y, z: point.z)
+}
+
+private func automationTwoLineUnequalLengthDocument(
+    name: String
+) throws -> (
+    document: DesignDocument,
+    featureID: FeatureID,
+    firstLineID: SketchEntityID,
+    secondLineID: SketchEntityID
+) {
+    var document = DesignDocument.empty()
+    let featureID = try document.createLineSketch(
+        name: name,
+        plane: .xy,
+        start: SketchPoint(
+            x: .length(0.0, .meter),
+            y: .length(0.0, .meter)
+        ),
+        end: SketchPoint(
+            x: .length(0.005, .meter),
+            y: .length(0.0, .meter)
+        )
+    )
+    guard var feature = document.cadDocument.designGraph.nodes[featureID],
+          case var .sketch(sketch) = feature.operation,
+          let firstLineID = sketch.entities.keys.first else {
+        throw EditorError(
+            code: .referenceUnresolved,
+            message: "Automation two line setup requires a line sketch."
+        )
+    }
+    let secondLineID = SketchEntityID()
+    sketch.entities[secondLineID] = .line(
+        SketchLine(
+            start: SketchPoint(
+                x: .length(0.0, .meter),
+                y: .length(0.005, .meter)
+            ),
+            end: SketchPoint(
+                x: .length(0.0, .meter),
+                y: .length(0.015, .meter)
+            )
+        )
+    )
+    feature.operation = .sketch(sketch)
+    document.cadDocument.designGraph.nodes[featureID] = feature
+    document.cadDocument.designGraph.revision = document.cadDocument.designGraph.revision.advanced()
+    return (document, featureID, firstLineID, secondLineID)
+}
+
+private func automationOpenLineChainSlotDocument(
+    name: String
+) throws -> (
+    document: DesignDocument,
+    featureID: FeatureID,
+    lineIDs: [SketchEntityID]
+) {
+    let points = [
+        SketchPoint(x: .length(0.0, .meter), y: .length(0.0, .meter)),
+        SketchPoint(x: .length(0.010, .meter), y: .length(0.0, .meter)),
+        SketchPoint(x: .length(0.010, .meter), y: .length(0.006, .meter)),
+    ]
+    var document = DesignDocument.empty()
+    let featureID = try document.createLineSketch(
+        name: name,
+        plane: .xy,
+        start: points[0],
+        end: points[1]
+    )
+    guard var feature = document.cadDocument.designGraph.nodes[featureID],
+          case var .sketch(sketch) = feature.operation,
+          let firstLineID = sketch.entities.keys.first else {
+        throw EditorError(
+            code: .referenceUnresolved,
+            message: "Automation line-chain Slot setup requires a source line sketch."
+        )
+    }
+    let secondLineID = SketchEntityID()
+    let lineIDs = [firstLineID, secondLineID]
+    sketch.entities = [
+        firstLineID: .line(SketchLine(start: points[0], end: points[1])),
+        secondLineID: .line(SketchLine(start: points[1], end: points[2])),
+    ]
+    sketch.constraints = [
+        .coincident(.lineEnd(firstLineID), .lineStart(secondLineID)),
+    ]
+    feature.operation = .sketch(sketch)
+    document.cadDocument.designGraph.nodes[featureID] = feature
+    document.cadDocument.designGraph.revision = document.cadDocument.designGraph.revision.advanced()
+    return (document, featureID, lineIDs)
+}
+
+private func automationOpenLineArcChainSlotDocument(
+    name: String
+) throws -> (
+    document: DesignDocument,
+    featureID: FeatureID,
+    lineID: SketchEntityID,
+    arcID: SketchEntityID
+) {
+    var document = DesignDocument.empty()
+    let featureID = try document.createLineSketch(
+        name: name,
+        plane: .xy,
+        start: SketchPoint(x: .length(0.0, .meter), y: .length(0.0, .meter)),
+        end: SketchPoint(x: .length(0.010, .meter), y: .length(0.0, .meter))
+    )
+    guard var feature = document.cadDocument.designGraph.nodes[featureID],
+          case var .sketch(sketch) = feature.operation,
+          let lineID = sketch.entities.keys.first else {
+        throw EditorError(
+            code: .referenceUnresolved,
+            message: "Automation line-arc Slot setup requires a source line sketch."
+        )
+    }
+    let arcID = SketchEntityID()
+    sketch.entities = [
+        lineID: .line(SketchLine(
+            start: SketchPoint(x: .length(0.0, .meter), y: .length(0.0, .meter)),
+            end: SketchPoint(x: .length(0.010, .meter), y: .length(0.0, .meter))
+        )),
+        arcID: .arc(SketchArc(
+            center: SketchPoint(x: .length(0.010, .meter), y: .length(0.005, .meter)),
+            radius: .length(0.005, .meter),
+            startAngle: .angle(-Double.pi / 2.0, .radian),
+            endAngle: .angle(0.0, .radian)
+        )),
+    ]
+    sketch.constraints = [
+        .coincident(.lineEnd(lineID), .arcStart(arcID)),
+    ]
+    feature.operation = .sketch(sketch)
+    document.cadDocument.designGraph.nodes[featureID] = feature
+    document.cadDocument.designGraph.revision = document.cadDocument.designGraph.revision.advanced()
+    return (document, featureID, lineID, arcID)
+}
+
+private func automationLineArcCornerTreatmentSketchDocument() throws -> (
+    document: DesignDocument,
+    featureID: FeatureID,
+    lineID: SketchEntityID,
+    arcID: SketchEntityID,
+    diagonalID: SketchEntityID
+) {
+    var document = DesignDocument.empty()
+    let featureID = try document.createLineSketch(
+        name: "Automation Corner Treatment Line Arc Profile",
+        plane: .xy,
+        start: automationSketchPoint(x: 0.0, y: 0.0),
+        end: automationSketchPoint(x: 0.010, y: 0.0)
+    )
+    guard var feature = document.cadDocument.designGraph.nodes[featureID],
+          case var .sketch(sketch) = feature.operation,
+          let lineID = sketch.entities.keys.first else {
+        throw EditorError(
+            code: .referenceUnresolved,
+            message: "Automation line arc corner treatment setup requires a line sketch."
+        )
+    }
+    let arcID = SketchEntityID()
+    let diagonalID = SketchEntityID()
+    let leftID = SketchEntityID()
+    sketch.entities[arcID] = .arc(
+        SketchArc(
+            center: automationSketchPoint(x: 0.005, y: 0.0),
+            radius: .length(0.005, .meter),
+            startAngle: .angle(0.0, .radian),
+            endAngle: .angle(Double.pi / 2.0, .radian)
+        )
+    )
+    sketch.entities[diagonalID] = .line(
+        SketchLine(
+            start: automationSketchPoint(x: 0.005, y: 0.005),
+            end: automationSketchPoint(x: 0.0, y: 0.0025)
+        )
+    )
+    sketch.entities[leftID] = .line(
+        SketchLine(
+            start: automationSketchPoint(x: 0.0, y: 0.0025),
+            end: automationSketchPoint(x: 0.0, y: 0.0)
+        )
+    )
+    sketch.constraints = [
+        .coincident(.lineEnd(lineID), .arcStart(arcID)),
+        .coincident(.arcEnd(arcID), .lineStart(diagonalID)),
+        .coincident(.lineEnd(diagonalID), .lineStart(leftID)),
+        .coincident(.lineEnd(leftID), .lineStart(lineID)),
+    ]
+    feature.operation = .sketch(sketch)
+    document.cadDocument.designGraph.nodes[featureID] = feature
+    document.cadDocument.designGraph.revision = document.cadDocument.designGraph.revision.advanced()
+    return (document, featureID, lineID, arcID, diagonalID)
+}
+
+private func automationLine(
+    _ entityID: SketchEntityID,
+    in sketch: Sketch
+) -> SketchLine? {
+    guard case let .line(line) = sketch.entities[entityID] else {
+        return nil
+    }
+    return line
+}
+
+private func automationCircle(
+    _ entityID: SketchEntityID,
+    in sketch: Sketch
+) -> SketchCircle? {
+    guard case let .circle(circle) = sketch.entities[entityID] else {
+        return nil
+    }
+    return circle
+}
+
+private func automationLineArcOffsetVertexSketchDocument() throws -> (
+    document: DesignDocument,
+    featureID: FeatureID,
+    lineID: SketchEntityID,
+    arcID: SketchEntityID
+) {
+    var document = DesignDocument.empty()
+    let featureID = try document.createLineSketch(
+        name: "Automation Offset Vertex Line Arc Profile",
+        plane: .xy,
+        start: automationSketchPoint(x: 0.0, y: 0.0),
+        end: automationSketchPoint(x: 0.010, y: 0.0)
+    )
+    guard var feature = document.cadDocument.designGraph.nodes[featureID],
+          case var .sketch(sketch) = feature.operation,
+          let lineID = sketch.entities.keys.first else {
+        throw EditorError(
+            code: .referenceUnresolved,
+            message: "Automation line arc offset vertex setup requires a line sketch."
+        )
+    }
+    let arcID = SketchEntityID()
+    let topID = SketchEntityID()
+    let leftID = SketchEntityID()
+    sketch.entities[arcID] = .arc(
+        SketchArc(
+            center: automationSketchPoint(x: 0.010, y: 0.002),
+            radius: .length(0.002, .meter),
+            startAngle: .angle(-Double.pi / 2.0, .radian),
+            endAngle: .angle(0.0, .radian)
+        )
+    )
+    sketch.entities[topID] = .line(
+        SketchLine(
+            start: automationSketchPoint(x: 0.012, y: 0.002),
+            end: automationSketchPoint(x: 0.0, y: 0.002)
+        )
+    )
+    sketch.entities[leftID] = .line(
+        SketchLine(
+            start: automationSketchPoint(x: 0.0, y: 0.002),
+            end: automationSketchPoint(x: 0.0, y: 0.0)
+        )
+    )
+    sketch.constraints = [
+        .coincident(.lineEnd(lineID), .arcStart(arcID)),
+        .coincident(.arcEnd(arcID), .lineStart(topID)),
+        .coincident(.lineEnd(topID), .lineStart(leftID)),
+        .coincident(.lineEnd(leftID), .lineStart(lineID)),
+    ]
+    feature.operation = .sketch(sketch)
+    document.cadDocument.designGraph.nodes[featureID] = feature
+    document.cadDocument.designGraph.revision = document.cadDocument.designGraph.revision.advanced()
+    return (document, featureID, lineID, arcID)
+}
+
+private func automationArcArcOffsetVertexSketchDocument() throws -> (
+    document: DesignDocument,
+    featureID: FeatureID,
+    upperArcID: SketchEntityID,
+    lowerArcID: SketchEntityID
+) {
+    var document = DesignDocument.empty()
+    let featureID = try document.createArcSketch(
+        name: "Automation Offset Vertex Arc Arc Profile",
+        plane: .xy,
+        center: automationSketchPoint(x: 0.005, y: 0.005),
+        radius: .length(0.002, .meter),
+        startAngle: .angle(0.0, .radian),
+        endAngle: .angle(Double.pi, .radian)
+    )
+    guard var feature = document.cadDocument.designGraph.nodes[featureID],
+          case var .sketch(sketch) = feature.operation,
+          let upperArcID = sketch.entities.keys.first else {
+        throw EditorError(
+            code: .referenceUnresolved,
+            message: "Automation arc arc offset vertex setup requires an arc sketch."
+        )
+    }
+    let lowerArcID = SketchEntityID()
+    sketch.entities[lowerArcID] = .arc(
+        SketchArc(
+            center: automationSketchPoint(x: 0.005, y: 0.005),
+            radius: .length(0.002, .meter),
+            startAngle: .angle(Double.pi, .radian),
+            endAngle: .angle(Double.pi * 2.0, .radian)
+        )
+    )
+    sketch.constraints = [
+        .coincident(.arcEnd(upperArcID), .arcStart(lowerArcID)),
+        .coincident(.arcEnd(lowerArcID), .arcStart(upperArcID)),
+    ]
+    feature.operation = .sketch(sketch)
+    document.cadDocument.designGraph.nodes[featureID] = feature
+    document.cadDocument.designGraph.revision = document.cadDocument.designGraph.revision.advanced()
+    return (document, featureID, upperArcID, lowerArcID)
+}
+
+private func automationSketchPoint(x: Double, y: Double) -> SketchPoint {
+    SketchPoint(
+        x: .length(x, .meter),
+        y: .length(y, .meter)
+    )
+}
+
+private func automationLineCircleTangentDocument(
+    name: String
+) throws -> (
+    document: DesignDocument,
+    featureID: FeatureID,
+    lineID: SketchEntityID,
+    circleID: SketchEntityID
+) {
+    var document = DesignDocument.empty()
+    let featureID = try document.createLineSketch(
+        name: name,
+        plane: .xy,
+        start: SketchPoint(
+            x: .length(0.0, .meter),
+            y: .length(0.0, .meter)
+        ),
+        end: SketchPoint(
+            x: .length(0.010, .meter),
+            y: .length(0.0, .meter)
+        )
+    )
+    guard var feature = document.cadDocument.designGraph.nodes[featureID],
+          case var .sketch(sketch) = feature.operation,
+          let lineID = sketch.entities.keys.first else {
+        throw EditorError(
+            code: .referenceUnresolved,
+            message: "Automation line circle tangent setup requires a line sketch."
+        )
+    }
+    let circleID = SketchEntityID()
+    sketch.entities[circleID] = .circle(
+        SketchCircle(
+            center: SketchPoint(
+                x: .length(0.005, .meter),
+                y: .length(0.006, .meter)
+            ),
+            radius: .length(0.002, .meter)
+        )
+    )
+    feature.operation = .sketch(sketch)
+    document.cadDocument.designGraph.nodes[featureID] = feature
+    document.cadDocument.designGraph.revision = document.cadDocument.designGraph.revision.advanced()
+    return (document, featureID, lineID, circleID)
+}
+
+private func automationSplinePointConstraintDocument(
+    name: String
+) throws -> (
+    document: DesignDocument,
+    featureID: FeatureID,
+    splineID: SketchEntityID,
+    pointID: SketchEntityID
+) {
+    var document = DesignDocument.empty()
+    let featureID = try document.createSplineSketch(
+        name: name,
+        plane: .xy,
+        spline: SketchSpline(controlPoints: [
+            SketchPoint(x: .length(0.0, .meter), y: .length(0.0, .meter)),
+            SketchPoint(x: .length(0.002, .meter), y: .length(0.003, .meter)),
+            SketchPoint(x: .length(0.006, .meter), y: .length(0.003, .meter)),
+            SketchPoint(x: .length(0.008, .meter), y: .length(0.0, .meter)),
+        ])
+    )
+    guard var feature = document.cadDocument.designGraph.nodes[featureID],
+          case var .sketch(sketch) = feature.operation,
+          let splineID = sketch.entities.keys.first else {
+        throw EditorError(
+            code: .referenceUnresolved,
+            message: "Automation spline point constraint setup requires a spline sketch."
+        )
+    }
+    let pointID = SketchEntityID()
+    sketch.entities[pointID] = .point(
+        SketchPoint(x: .length(0.004, .meter), y: .length(0.002, .meter))
+    )
+    feature.operation = .sketch(sketch)
+    document.cadDocument.designGraph.nodes[featureID] = feature
+    document.cadDocument.designGraph.revision = document.cadDocument.designGraph.revision.advanced()
+    return (document, featureID, splineID, pointID)
+}
+
+private func automationTwoCircleDocument(
+    name: String
+) throws -> (
+    document: DesignDocument,
+    featureID: FeatureID,
+    firstCircleID: SketchEntityID,
+    secondCircleID: SketchEntityID
+) {
+    var document = DesignDocument.empty()
+    let featureID = try document.createCircleSketch(
+        name: name,
+        plane: .xy,
+        center: SketchPoint(
+            x: .length(0.002, .meter),
+            y: .length(0.003, .meter)
+        ),
+        radius: .length(0.004, .meter)
+    )
+    guard var feature = document.cadDocument.designGraph.nodes[featureID],
+          case var .sketch(sketch) = feature.operation,
+          let firstCircleID = sketch.entities.keys.first else {
+        throw EditorError(
+            code: .referenceUnresolved,
+            message: "Automation two circle setup requires a circle sketch."
+        )
+    }
+    let secondCircleID = SketchEntityID()
+    sketch.entities[secondCircleID] = .circle(
+        SketchCircle(
+            center: SketchPoint(
+                x: .length(0.010, .meter),
+                y: .length(0.011, .meter)
+            ),
+            radius: .length(0.001, .meter)
+        )
+    )
+    feature.operation = .sketch(sketch)
+    document.cadDocument.designGraph.nodes[featureID] = feature
+    document.cadDocument.designGraph.revision = document.cadDocument.designGraph.revision.advanced()
+    return (document, featureID, firstCircleID, secondCircleID)
+}
+
+private func automationLineLength(
+    _ line: SketchLine,
+    parameters: ParameterTable
+) throws -> Double {
+    let start = try automationResolvedPoint(line.start, parameters: parameters)
+    let end = try automationResolvedPoint(line.end, parameters: parameters)
+    let deltaX = end.x - start.x
+    let deltaY = end.y - start.y
+    return (deltaX * deltaX + deltaY * deltaY).squareRoot()
+}
+
+private func automationResolvedPoint(
+    _ point: SketchPoint,
+    parameters: ParameterTable
+) throws -> Point2D {
+    let x = try automationLengthValue(point.x, parameters: parameters)
+    let y = try automationLengthValue(point.y, parameters: parameters)
+    return Point2D(x: x, y: y)
+}
+
+private func automationLengthValue(
+    _ expression: CADExpression,
+    parameters: ParameterTable
+) throws -> Double {
+    let quantity = try parameters.resolvedValue(for: expression)
+    #expect(quantity.kind == .length)
+    return quantity.value
+}
+
+private func automationSceneNodeID(
+    for featureID: FeatureID,
+    in document: DesignDocument
+) -> SceneNodeID? {
+    document.productMetadata.sceneNodes.first { _, node in
+        node.reference == .body(featureID)
+    }?.key
+}
+
+private func automationSketchEntityComponentID(from target: SelectionTarget) -> SelectionComponentID? {
+    guard case .sketchEntity(let componentID) = target.component else {
+        return nil
+    }
+    return componentID
+}
+
+private func automationPointHandleSelectionTarget(
+    _ entry: SketchEntitySummaryResult.EntityEntry,
+    handle: SketchEntityPointHandle
+) throws -> SelectionTarget {
+    let sceneNodeID = try #require(entry.sceneNodeID.flatMap(UUID.init(uuidString:)))
+    let handleEntry = try #require(entry.pointHandles.first { $0.handle == handle })
+    return SelectionTarget(
+        sceneNodeID: SceneNodeID(sceneNodeID),
+        component: .sketchEntity(SelectionComponentID(rawValue: handleEntry.selectionComponentID))
+    )
+}
+
+private func automationBottomRectangleLine(
+    in summary: SketchEntitySummaryResult
+) -> SketchEntitySummaryResult.EntityEntry? {
+    summary.entries.first { entry in
+        entry.entityKind == "line" &&
+            abs((entry.start?.x ?? -1.0) - 0.0) < 1.0e-12 &&
+            abs((entry.start?.y ?? -1.0) - 0.0) < 1.0e-12 &&
+            abs((entry.end?.x ?? -1.0) - 0.010) < 1.0e-12 &&
+            abs((entry.end?.y ?? -1.0) - 0.0) < 1.0e-12
+    }
+}
+
+private func automationPolySplineQuadMesh() -> Mesh {
+    Mesh(
+        positions: [
+            Point3D(x: 0.0, y: 0.0, z: 0.0),
+            Point3D(x: 0.02, y: 0.0, z: 0.0),
+            Point3D(x: 0.02, y: 0.02, z: 0.004),
+            Point3D(x: 0.0, y: 0.02, z: 0.0),
+        ],
+        indices: [0, 1, 2, 0, 2, 3]
+    )
+}
+
+private func automationCylinderRadius(
+    forBody featureID: FeatureID,
+    in document: DesignDocument
+) throws -> Double {
+    guard let feature = document.cadDocument.designGraph.nodes[featureID],
+          case let .extrude(extrude) = feature.operation,
+          let profileFeature = document.cadDocument.designGraph.nodes[extrude.profile.featureID],
+          case let .sketch(sketch) = profileFeature.operation else {
+        throw EditorError(
+            code: .referenceUnresolved,
+            message: "Automation cylinder radius setup requires an extruded circle body."
+        )
+    }
+    for entity in sketch.entities.values {
+        guard case .circle(let circle) = entity else {
+            continue
+        }
+        return try automationLengthValue(circle.radius, parameters: document.cadDocument.parameters)
+    }
+    throw EditorError(
+        code: .referenceUnresolved,
+        message: "Automation cylinder radius setup requires a circle profile."
+    )
+}
+
+private func nearlyEqualAutomation(
+    _ lhs: Double,
+    _ rhs: Double,
+    tolerance: Double = 1.0e-9
+) -> Bool {
+    abs(lhs - rhs) <= tolerance
+}
+
+private func isAutomationVerticalGeneratedEdge(_ entry: TopologySummaryResult.Entry) -> Bool {
+    guard entry.kind == .edge,
+          let start = entry.start,
+          let end = entry.end else {
+        return false
+    }
+    let tolerance = 1.0e-9
+    return abs(start.x - end.x) <= tolerance
+        && abs(start.y - end.y) <= tolerance
+        && abs(start.z - end.z) > tolerance
+}
+
+private func isAutomationVerticalGeneratedEdge(
+    _ entry: TopologySummaryResult.Entry,
+    x: Double,
+    y: Double
+) -> Bool {
+    guard isAutomationVerticalGeneratedEdge(entry),
+          let start = entry.start,
+          let end = entry.end else {
+        return false
+    }
+    let tolerance = 1.0e-9
+    return abs(((start.x + end.x) / 2.0) - x) <= tolerance
+        && abs(((start.y + end.y) / 2.0) - y) <= tolerance
+}
+
+private func isAutomationGeneratedVertex(
+    _ entry: TopologySummaryResult.Entry,
+    x: Double,
+    y: Double
+) -> Bool {
+    guard entry.kind == .vertex,
+          let point = entry.start else {
+        return false
+    }
+    let tolerance = 1.0e-9
+    return abs(point.x - x) <= tolerance
+        && abs(point.y - y) <= tolerance
+}
+
 private func automationTranslationTransform(
     x: Double,
     y: Double,
@@ -392,4 +4063,14 @@ private func automationTranslationTransform(
             ]
         )
     )
+}
+
+private extension UUID {
+    var featureID: FeatureID {
+        FeatureID(self)
+    }
+
+    var sketchEntityID: SketchEntityID {
+        SketchEntityID(self)
+    }
 }

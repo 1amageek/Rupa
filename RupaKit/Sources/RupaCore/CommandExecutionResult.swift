@@ -5,16 +5,19 @@ public struct CommandExecutionResult: Equatable, Sendable {
     public var generation: DocumentGeneration
     public var didMutate: Bool
     public var diagnostics: [EditorDiagnostic]
+    public var curveRebuildReport: CurveRebuildReport?
 
     public init(
         commandName: String,
         generation: DocumentGeneration,
         didMutate: Bool,
-        diagnostics: [EditorDiagnostic]
+        diagnostics: [EditorDiagnostic],
+        curveRebuildReport: CurveRebuildReport? = nil
     ) {
         self.commandName = commandName
         self.generation = generation
         self.didMutate = didMutate
         self.diagnostics = diagnostics
+        self.curveRebuildReport = curveRebuildReport
     }
 }

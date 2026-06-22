@@ -20,6 +20,15 @@
       }
     },
     {
+      "identity" : "swift-cad",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/1amageek/swift-CAD",
+      "state" : {
+        "branch" : "main",
+        "revision" : "0b5deb157a9ecba336e94a77ed5156a404aca932"
+      }
+    },
+    {
       "identity" : "swift-collections",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/apple/swift-collections",

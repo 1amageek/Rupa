@@ -1,19 +1,32 @@
 import Foundation
+import SwiftCAD
 
 public struct SelectionModel: Codable, Equatable, Sendable {
-    public private(set) var selectedSceneNodeIDs: [SceneNodeID]
-    public private(set) var hoveredSceneNodeID: SceneNodeID?
+    public private(set) var selectedTargets: [SelectionTarget]
+    public private(set) var hoveredTarget: SelectionTarget?
+
+    public var selectedSceneNodeIDs: [SceneNodeID] {
+        Self.sceneNodeIDs(from: selectedTargets)
+    }
+
+    public var hoveredSceneNodeID: SceneNodeID? {
+        hoveredTarget?.sceneNodeID
+    }
 
     public var primarySceneNodeID: SceneNodeID? {
-        selectedSceneNodeIDs.last
+        primaryTarget?.sceneNodeID
+    }
+
+    public var primaryTarget: SelectionTarget? {
+        selectedTargets.last
     }
 
     public init(
-        selectedSceneNodeIDs: [SceneNodeID] = [],
-        hoveredSceneNodeID: SceneNodeID? = nil
+        selectedTargets: [SelectionTarget] = [],
+        hoveredTarget: SelectionTarget? = nil
     ) {
-        self.selectedSceneNodeIDs = selectedSceneNodeIDs
-        self.hoveredSceneNodeID = hoveredSceneNodeID
+        self.selectedTargets = Self.uniqueTargets(selectedTargets)
+        self.hoveredTarget = hoveredTarget
     }
 
     public static var empty: SelectionModel {
@@ -22,6 +35,10 @@ public struct SelectionModel: Codable, Equatable, Sendable {
 
     public func containsSceneNode(_ id: SceneNodeID) -> Bool {
         selectedSceneNodeIDs.contains(id)
+    }
+
+    public func containsTarget(_ target: SelectionTarget) -> Bool {
+        selectedTargets.contains(target)
     }
 
     public mutating func selectSceneNode(
@@ -33,23 +50,39 @@ public struct SelectionModel: Codable, Equatable, Sendable {
             return
         }
         try validateSceneNode(id, in: document)
-        selectedSceneNodeIDs = [id]
+        selectValidatedTargets([SelectionTarget(sceneNodeID: id)])
     }
 
     public mutating func selectSceneNodes(
         _ ids: [SceneNodeID],
         in document: DesignDocument
     ) throws {
-        var uniqueIDs: [SceneNodeID] = []
-        var seenIDs: Set<SceneNodeID> = []
-        for id in ids {
-            guard seenIDs.insert(id).inserted else {
-                continue
-            }
-            try validateSceneNode(id, in: document)
-            uniqueIDs.append(id)
+        let targets = ids.map { id in
+            SelectionTarget(sceneNodeID: id)
         }
-        selectedSceneNodeIDs = uniqueIDs
+        try selectTargets(targets, in: document)
+    }
+
+    public mutating func selectTarget(
+        _ target: SelectionTarget?,
+        in document: DesignDocument
+    ) throws {
+        guard let target else {
+            clearSelection()
+            return
+        }
+        try selectTargets([target], in: document)
+    }
+
+    public mutating func selectTargets(
+        _ targets: [SelectionTarget],
+        in document: DesignDocument
+    ) throws {
+        let uniqueTargets = Self.uniqueTargets(targets)
+        for target in uniqueTargets {
+            try validateTarget(target, in: document)
+        }
+        selectValidatedTargets(uniqueTargets)
     }
 
     public mutating func hoverSceneNode(
@@ -57,28 +90,40 @@ public struct SelectionModel: Codable, Equatable, Sendable {
         in document: DesignDocument
     ) throws {
         guard let id else {
-            hoveredSceneNodeID = nil
+            clearHover()
             return
         }
         try validateSceneNode(id, in: document)
-        hoveredSceneNodeID = id
+        setValidatedHover(SelectionTarget(sceneNodeID: id))
+    }
+
+    public mutating func hoverTarget(
+        _ target: SelectionTarget?,
+        in document: DesignDocument
+    ) throws {
+        guard let target else {
+            clearHover()
+            return
+        }
+        try validateTarget(target, in: document)
+        setValidatedHover(target)
     }
 
     public mutating func clearSelection() {
-        selectedSceneNodeIDs = []
+        selectedTargets = []
     }
 
     public mutating func clearHover() {
-        hoveredSceneNodeID = nil
+        hoveredTarget = nil
     }
 
     public mutating func pruneMissingReferences(in document: DesignDocument) {
-        selectedSceneNodeIDs = selectedSceneNodeIDs.filter { id in
-            document.productMetadata.sceneNodes[id] != nil
+        selectedTargets = selectedTargets.filter { target in
+            isTargetValid(target, in: document)
         }
-        if let hoveredSceneNodeID,
-           document.productMetadata.sceneNodes[hoveredSceneNodeID] == nil {
-            self.hoveredSceneNodeID = nil
+        if let hoveredTarget,
+           !isTargetValid(hoveredTarget, in: document) {
+            clearHover()
         }
     }
 
@@ -98,5 +143,171 @@ public struct SelectionModel: Codable, Equatable, Sendable {
                 message: "Selection references a missing scene node."
             )
         }
+    }
+
+    private func validateTarget(
+        _ target: SelectionTarget,
+        in document: DesignDocument
+    ) throws {
+        guard let sceneNode = document.productMetadata.sceneNodes[target.sceneNodeID] else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "Selection references a missing scene node."
+            )
+        }
+        guard isComponent(target.component, compatibleWith: sceneNode.reference, in: document) else {
+            throw incompatibleTargetError()
+        }
+    }
+
+    private func incompatibleTargetError() -> EditorError {
+        EditorError(
+            code: .referenceUnresolved,
+            message: "Selection target is not compatible with the scene node."
+        )
+    }
+
+    private func isTargetValid(
+        _ target: SelectionTarget,
+        in document: DesignDocument
+    ) -> Bool {
+        guard let sceneNode = document.productMetadata.sceneNodes[target.sceneNodeID] else {
+            return false
+        }
+        return isComponent(target.component, compatibleWith: sceneNode.reference, in: document)
+    }
+
+    private func isComponent(
+        _ component: SelectionComponent,
+        compatibleWith reference: SceneNodeReference?,
+        in document: DesignDocument
+    ) -> Bool {
+        switch component {
+        case .object:
+            return true
+        case .face, .edge, .vertex:
+            return reference?.kind == .body
+        case .sketchEntity(let componentID):
+            guard reference?.kind == .sketch,
+                  let featureID = reference?.featureID,
+                  let sketchReference = componentID.sketchEntityBaseReference,
+                  sketchReference.featureID == featureID,
+                  let feature = document.cadDocument.designGraph.nodes[featureID],
+                  case .sketch(let sketch) = feature.operation else {
+                return false
+            }
+            return isSketchComponent(componentID, validIn: sketch)
+        case .region(let componentID):
+            guard reference?.kind == .sketch,
+                  let featureID = reference?.featureID,
+                  let regionReference = componentID.profileRegionReference,
+                  regionReference.featureID == featureID,
+                  let feature = document.cadDocument.designGraph.nodes[featureID],
+                  feature.outputs.contains(where: { $0.role == .profile }),
+                  case .sketch(let sketch) = feature.operation else {
+                return false
+            }
+            return hasProfileRegion(
+                regionReference.profileIndex,
+                in: sketch,
+                sourceFeatureID: featureID,
+                document: document
+            )
+        }
+    }
+
+    private func isSketchComponent(
+        _ componentID: SelectionComponentID,
+        validIn sketch: Sketch
+    ) -> Bool {
+        if let reference = componentID.sketchEntityReference {
+            return sketch.entities[reference.entityID] != nil
+        }
+        if let reference = componentID.sketchPointHandleReference,
+           let entity = sketch.entities[reference.entityID] {
+            return isSketchPointHandle(reference.handle, validFor: entity)
+        }
+        if let reference = componentID.sketchControlPointReference,
+           let entity = sketch.entities[reference.entityID],
+           case .spline(let spline) = entity {
+            return spline.controlPoints.indices.contains(reference.index)
+        }
+        return false
+    }
+
+    private func isSketchPointHandle(
+        _ handle: SketchEntityPointHandle,
+        validFor entity: SketchEntity
+    ) -> Bool {
+        switch (handle, entity) {
+        case (.point, .point),
+             (.lineStart, .line),
+             (.lineEnd, .line),
+             (.circleCenter, .circle),
+             (.arcCenter, .arc),
+             (.arcStart, .arc),
+             (.arcEnd, .arc):
+            return true
+        default:
+            return false
+        }
+    }
+
+    private func hasProfileRegion(
+        _ profileIndex: Int,
+        in sketch: Sketch,
+        sourceFeatureID: FeatureID,
+        document: DesignDocument
+    ) -> Bool {
+        do {
+            let resolvedParameters = try ParameterResolver().resolve(document.cadDocument.parameters)
+            let extractor = CircleAwareSketchProfileExtractor(
+                circleSegmentCountsByFeatureID: document.profileSegmentCounts()
+            )
+            let profiles = try extractor.extractProfiles(
+                from: sketch,
+                sourceFeatureID: sourceFeatureID,
+                parameters: resolvedParameters
+            )
+            return profiles.indices.contains(profileIndex)
+        } catch {
+            return false
+        }
+    }
+
+    private mutating func selectValidatedTargets(_ targets: [SelectionTarget]) {
+        selectedTargets = Self.uniqueTargets(targets)
+    }
+
+    private mutating func setValidatedHover(_ target: SelectionTarget) {
+        hoveredTarget = target
+    }
+
+    private static func uniqueTargets(_ targets: [SelectionTarget]) -> [SelectionTarget] {
+        var uniqueTargets: [SelectionTarget] = []
+        var seenTargets: Set<SelectionTarget> = []
+        for target in targets {
+            guard seenTargets.insert(target).inserted else {
+                continue
+            }
+            uniqueTargets.append(target)
+        }
+        return uniqueTargets
+    }
+
+    private static func sceneNodeIDs(from targets: [SelectionTarget]) -> [SceneNodeID] {
+        uniqueSceneNodeIDs(targets.map(\.sceneNodeID))
+    }
+
+    private static func uniqueSceneNodeIDs(_ ids: [SceneNodeID]) -> [SceneNodeID] {
+        var uniqueIDs: [SceneNodeID] = []
+        var seenIDs: Set<SceneNodeID> = []
+        for id in ids {
+            guard seenIDs.insert(id).inserted else {
+                continue
+            }
+            uniqueIDs.append(id)
+        }
+        return uniqueIDs
     }
 }

@@ -1,8 +1,8 @@
 import CoreGraphics
 import RupaCore
-import RupaRendering
 import SwiftCAD
 import Testing
+@testable import RupaRendering
 
 @MainActor
 @Test func viewportSceneBuilderCreatesSelectableSketchAndBodyItems() async throws {
@@ -25,6 +25,924 @@ import Testing
         return false
     })
     #expect(scene.modelBounds != nil)
+}
+
+@Test func viewportFaceSurfacePointResolverRestoresPointInsideProjectedFace() throws {
+    let componentID = SelectionComponentID.generatedTopology("feature:body:subshape:test:face:front")
+    let face = ViewportBodyTopology.Face(
+        componentID: componentID,
+        points: [
+            Point3D(x: -0.010, y: 0.0, z: -0.010),
+            Point3D(x: 0.010, y: 0.0, z: -0.010),
+            Point3D(x: 0.010, y: 0.0, z: 0.010),
+            Point3D(x: -0.010, y: 0.0, z: 0.010),
+        ]
+    )
+    let expected = Point3D(x: 0.003, y: 0.0, z: 0.004)
+    let layout = ViewportLayout(
+        modelBounds: CGRect(x: -0.02, y: -0.02, width: 0.04, height: 0.04),
+        size: CGSize(width: 640.0, height: 480.0)
+    )
+    let viewportPoint = layout.project(expected)
+
+    let resolved = try #require(
+        ViewportFaceSurfacePointResolver().worldPoint(
+            for: viewportPoint,
+            face: face,
+            layout: layout
+        )
+    )
+
+    #expect(abs(resolved.x - expected.x) < 1.0e-12)
+    #expect(abs(resolved.y - expected.y) < 1.0e-12)
+    #expect(abs(resolved.z - expected.z) < 1.0e-12)
+}
+
+@MainActor
+@Test func viewportSurfaceContinuityOverlayShowsSelectedSurfaceObjectAdjacency() async throws {
+    var document = DesignDocument.empty()
+    let featureID = try document.createPolySplineSurface(
+        name: "Viewport Surface Continuity",
+        sourceMesh: viewportSurfaceContinuityPatchNetworkMesh(centerZ: 0.0),
+        options: PolySplineOptions(mergePatches: false)
+    )
+    let surfaceNodeID = try #require(bodySceneNodeID(for: featureID, in: document))
+    let summary = try SurfaceContinuityService().summarize(document: document)
+    let scene = ViewportSceneBuilder().build(document: document)
+    var selection = SelectionModel()
+    try selection.selectTarget(
+        SelectionTarget(sceneNodeID: surfaceNodeID),
+        in: document
+    )
+
+    let overlay = ViewportSurfaceContinuityOverlay.build(
+        result: summary,
+        scene: scene,
+        selection: selection,
+        document: document
+    )
+
+    let item = try #require(overlay.items.first)
+    #expect(overlay.items.count == 1)
+    #expect(item.continuity == .g1)
+    #expect(item.requiresCurvatureContinuitySolve == false)
+    #expect(item.edgePersistentName.contains("subshape:patch:0:edge:uMax")
+        || item.edgePersistentName.contains("subshape:patch:2:edge:uMin"))
+    #expect(abs(item.start.x - 0.01) <= 1.0e-12)
+    #expect(abs(item.end.x - 0.01) <= 1.0e-12)
+}
+
+@MainActor
+@Test func viewportSurfaceContinuityOverlayFiltersToSelectedGeneratedFace() async throws {
+    var document = DesignDocument.empty()
+    let featureID = try document.createPolySplineSurface(
+        name: "Viewport Surface Face Continuity",
+        sourceMesh: viewportSurfaceContinuityPatchNetworkMesh(centerZ: 0.0),
+        options: PolySplineOptions(mergePatches: false)
+    )
+    let surfaceNodeID = try #require(bodySceneNodeID(for: featureID, in: document))
+    let summary = try SurfaceContinuityService().summarize(document: document)
+    let adjacency = try #require(summary.adjacencies.first)
+    let faceName = try #require(adjacency.firstFacePersistentName)
+    let scene = ViewportSceneBuilder().build(document: document)
+    var selection = SelectionModel()
+    try selection.selectTarget(
+        SelectionTarget(
+            sceneNodeID: surfaceNodeID,
+            component: .face(.generatedTopology(faceName))
+        ),
+        in: document
+    )
+
+    let overlay = ViewportSurfaceContinuityOverlay.build(
+        result: summary,
+        scene: scene,
+        selection: selection,
+        document: document
+    )
+
+    #expect(overlay.items.count == 1)
+    #expect(overlay.items.first?.continuity == .g1)
+}
+
+@MainActor
+@Test func viewportSurfaceAnalysisOverlayShowsSelectedSurfaceObjectCombs() async throws {
+    var document = DesignDocument.empty()
+    let featureID = try document.createPolySplineSurface(
+        name: "Viewport Surface Analysis",
+        sourceMesh: viewportSurfaceContinuityPatchNetworkMesh(centerZ: 0.0),
+        options: PolySplineOptions(mergePatches: false)
+    )
+    let surfaceNodeID = try #require(bodySceneNodeID(for: featureID, in: document))
+    let analysis = try SurfaceAnalysisService(options: SurfaceAnalysisOptions(sampleDensity: .low))
+        .analyze(document: document)
+    var selection = SelectionModel()
+    try selection.selectTarget(
+        SelectionTarget(sceneNodeID: surfaceNodeID),
+        in: document
+    )
+
+    let overlay = ViewportSurfaceAnalysisOverlay.build(
+        result: analysis,
+        selection: selection,
+        document: document
+    )
+
+    #expect(overlay.items.count == 36)
+    #expect(overlay.principalDirectionItems.count == 18)
+    #expect(overlay.boundaryItems.count == 2)
+    #expect(overlay.items.contains { $0.direction == .u })
+    #expect(overlay.items.contains { $0.direction == .v })
+    #expect(overlay.boundaryItems.allSatisfy { $0.role == .outer })
+    #expect(overlay.boundaryItems.allSatisfy { $0.points.count == 4 })
+    #expect(overlay.boundaryItems.allSatisfy { $0.isClosed })
+    #expect(overlay.items.allSatisfy { $0.normalChangePerLength <= 1.0e-8 })
+    #expect(overlay.items.allSatisfy { abs($0.normalCurvature) <= 1.0e-8 })
+    #expect(overlay.principalDirectionItems.allSatisfy { abs($0.minimumPrincipalCurvature) <= 1.0e-8 })
+    #expect(overlay.principalDirectionItems.allSatisfy { abs($0.maximumPrincipalCurvature) <= 1.0e-8 })
+}
+
+@MainActor
+@Test func viewportSurfaceAnalysisOverlayFiltersToSelectedGeneratedFace() async throws {
+    var document = DesignDocument.empty()
+    let featureID = try document.createPolySplineSurface(
+        name: "Viewport Surface Face Analysis",
+        sourceMesh: viewportSurfaceContinuityPatchNetworkMesh(centerZ: 0.0),
+        options: PolySplineOptions(mergePatches: false)
+    )
+    let surfaceNodeID = try #require(bodySceneNodeID(for: featureID, in: document))
+    let analysis = try SurfaceAnalysisService(options: SurfaceAnalysisOptions(sampleDensity: .low))
+        .analyze(document: document)
+    let face = try #require(analysis.faces.first)
+    let faceName = try #require(face.facePersistentNames.first)
+    var selection = SelectionModel()
+    try selection.selectTarget(
+        SelectionTarget(
+            sceneNodeID: surfaceNodeID,
+            component: .face(.generatedTopology(faceName))
+        ),
+        in: document
+    )
+
+    let overlay = ViewportSurfaceAnalysisOverlay.build(
+        result: analysis,
+        selection: selection,
+        document: document
+    )
+
+    #expect(overlay.items.count == 18)
+    #expect(overlay.principalDirectionItems.count == 9)
+    #expect(overlay.boundaryItems.count == 1)
+    #expect(Set(overlay.items.map(\.faceID)) == [face.faceID])
+    #expect(Set(overlay.principalDirectionItems.map(\.faceID)) == [face.faceID])
+    #expect(Set(overlay.boundaryItems.map(\.faceID)) == [face.faceID])
+}
+
+@MainActor
+@Test func viewportSurfaceAnalysisOverlayRespectsDisplayOptions() async throws {
+    var document = DesignDocument.empty()
+    let featureID = try document.createPolySplineSurface(
+        name: "Viewport Surface Analysis Options",
+        sourceMesh: viewportSurfaceContinuityPatchNetworkMesh(centerZ: 0.0),
+        options: PolySplineOptions(mergePatches: false)
+    )
+    let surfaceNodeID = try #require(bodySceneNodeID(for: featureID, in: document))
+    let analysis = try SurfaceAnalysisService(options: SurfaceAnalysisOptions(sampleDensity: .low))
+        .analyze(document: document)
+    var selection = SelectionModel()
+    try selection.selectTarget(
+        SelectionTarget(sceneNodeID: surfaceNodeID),
+        in: document
+    )
+
+    let principalOnly = ViewportSurfaceAnalysisOverlay.build(
+        result: analysis,
+        selection: selection,
+        document: document,
+        options: ViewportSurfaceAnalysisOptions(
+            showsCurvatureCombs: false,
+            showsPrincipalDirections: true,
+            showsTrimBoundaries: false
+        )
+    )
+    let hidden = ViewportSurfaceAnalysisOverlay.build(
+        result: analysis,
+        selection: selection,
+        document: document,
+        options: ViewportSurfaceAnalysisOptions(
+            showsCurvatureCombs: false,
+            showsPrincipalDirections: false,
+            showsTrimBoundaries: false
+        )
+    )
+
+    #expect(principalOnly.items.isEmpty)
+    #expect(principalOnly.principalDirectionItems.count == 18)
+    #expect(principalOnly.boundaryItems.isEmpty)
+    #expect(hidden.items.isEmpty)
+    #expect(hidden.principalDirectionItems.isEmpty)
+    #expect(hidden.boundaryItems.isEmpty)
+}
+
+@MainActor
+@Test func viewportSurfaceAnalysisOverlayReportsPrincipalDirectionsForNonPlanarSurface() async throws {
+    var document = DesignDocument.empty()
+    let featureID = try document.createPolySplineSurface(
+        name: "Viewport Nonplanar Principal Directions",
+        sourceMesh: viewportSurfaceAnalysisSingleQuadMesh(topRightZ: 0.004),
+        options: PolySplineOptions()
+    )
+    let surfaceNodeID = try #require(bodySceneNodeID(for: featureID, in: document))
+    let analysis = try SurfaceAnalysisService(options: SurfaceAnalysisOptions(sampleDensity: .low))
+        .analyze(document: document)
+    var selection = SelectionModel()
+    try selection.selectTarget(
+        SelectionTarget(sceneNodeID: surfaceNodeID),
+        in: document
+    )
+
+    let overlay = ViewportSurfaceAnalysisOverlay.build(
+        result: analysis,
+        selection: selection,
+        document: document
+    )
+
+    #expect(overlay.principalDirectionItems.count == 9)
+    #expect(overlay.principalDirectionItems.contains { abs($0.minimumPrincipalCurvature) > 1.0e-6 })
+    #expect(overlay.principalDirectionItems.contains { abs($0.maximumPrincipalCurvature) > 1.0e-6 })
+    #expect(overlay.principalDirectionItems.allSatisfy {
+        abs($0.minimumPrincipalDirection.length - 1.0) <= 1.0e-8
+    })
+    #expect(overlay.principalDirectionItems.allSatisfy {
+        abs($0.maximumPrincipalDirection.length - 1.0) <= 1.0e-8
+    })
+}
+
+@MainActor
+@Test func viewportSceneBuilderCreatesBodyItemForSupportedStraightPathSweep() async throws {
+    var document = DesignDocument.empty()
+    let profileID = try document.createRectangleSketch(
+        name: "Viewport Sweep Profile",
+        plane: .xy,
+        width: .length(4.0, .millimeter),
+        height: .length(2.0, .millimeter)
+    )
+    let pathID = try document.createLineSketch(
+        name: "Viewport Sweep Path",
+        plane: .yz,
+        start: SketchPoint(
+            x: .length(0.0, .millimeter),
+            y: .length(0.0, .millimeter)
+        ),
+        end: SketchPoint(
+            x: .length(0.0, .millimeter),
+            y: .length(20.0, .millimeter)
+        )
+    )
+    let session = EditorSession(document: document)
+    let result = try session.execute(.createSweep(
+        name: "Viewport Sweep",
+        profiles: [ProfileReference(featureID: profileID)],
+        path: SweepPathReference(featureID: pathID),
+        guides: [],
+        targets: [],
+        options: SweepOptions()
+    ))
+
+    let scene = ViewportSceneBuilder().build(document: session.document)
+    let bodyItem = try #require(scene.items.first { item in
+        if case .body = item.kind {
+            return true
+        }
+        return false
+    })
+    guard case .body(let component) = bodyItem.kind else {
+        Issue.record("Expected a sweep body scene item.")
+        return
+    }
+
+    #expect(result.commandName == "createSweep")
+    #expect(session.evaluationStatus == .valid)
+    #expect(abs(component.sizeXMeters - 0.004) <= 1.0e-12)
+    #expect(abs(component.sizeYMeters - 0.02) <= 1.0e-12)
+    #expect(abs(component.sizeZMeters - 0.002) <= 1.0e-12)
+    #expect(bodyItem.sourceFeatureID == profileID)
+}
+
+@MainActor
+@Test func viewportSceneBuilderCreatesMeshBodyItemForTwistedScaledStraightPathSweep() async throws {
+    var document = DesignDocument.empty()
+    let profileID = try document.createRectangleSketch(
+        name: "Viewport Twisted Sweep Profile",
+        plane: .xy,
+        width: .length(4.0, .millimeter),
+        height: .length(2.0, .millimeter)
+    )
+    let pathID = try document.createLineSketch(
+        name: "Viewport Twisted Sweep Path",
+        plane: .yz,
+        start: SketchPoint(
+            x: .length(0.0, .millimeter),
+            y: .length(0.0, .millimeter)
+        ),
+        end: SketchPoint(
+            x: .length(0.0, .millimeter),
+            y: .length(20.0, .millimeter)
+        )
+    )
+    let session = EditorSession(document: document)
+    let result = try session.execute(.createSweep(
+        name: "Viewport Twisted Scaled Sweep",
+        profiles: [ProfileReference(featureID: profileID)],
+        path: SweepPathReference(featureID: pathID),
+        guides: [],
+        targets: [],
+        options: SweepOptions(
+            twistAngle: .angle(90.0, .degree),
+            endScale: .constant(.scalar(0.5))
+        )
+    ))
+
+    let scene = ViewportSceneBuilder().build(document: session.document)
+    let bodyItem = try #require(scene.items.first { item in
+        if case .body = item.kind {
+            return true
+        }
+        return false
+    })
+    guard case .body(let component) = bodyItem.kind else {
+        Issue.record("Expected a twisted sweep body scene item.")
+        return
+    }
+    let mesh = try #require(component.mesh)
+
+    #expect(result.commandName == "createSweep")
+    #expect(session.evaluationStatus == .valid)
+    #expect(mesh.positions.count > 0)
+    #expect(mesh.indices.count > 0)
+    #expect(mesh.indices.count % 3 == 0)
+    #expect(bodyItem.sourceFeatureID == profileID)
+}
+
+@MainActor
+@Test func viewportSceneBuilderCreatesMeshBodyItemForSheetSweep() async throws {
+    var document = DesignDocument.empty()
+    let profileID = try document.createRectangleSketch(
+        name: "Viewport Sheet Sweep Profile",
+        plane: .xy,
+        width: .length(4.0, .millimeter),
+        height: .length(2.0, .millimeter)
+    )
+    let pathID = try document.createLineSketch(
+        name: "Viewport Sheet Sweep Path",
+        plane: .yz,
+        start: SketchPoint(
+            x: .length(0.0, .millimeter),
+            y: .length(0.0, .millimeter)
+        ),
+        end: SketchPoint(
+            x: .length(0.0, .millimeter),
+            y: .length(20.0, .millimeter)
+        )
+    )
+    let session = EditorSession(document: document)
+    let result = try session.execute(.createSweep(
+        name: "Viewport Sheet Sweep",
+        profiles: [ProfileReference(featureID: profileID)],
+        path: SweepPathReference(featureID: pathID),
+        guides: [],
+        targets: [],
+        options: SweepOptions(resultKind: .sheet)
+    ))
+
+    let scene = ViewportSceneBuilder().build(document: session.document)
+    let bodyItem = try #require(scene.items.first { item in
+        if case .body = item.kind {
+            return true
+        }
+        return false
+    })
+    guard case .body(let component) = bodyItem.kind else {
+        Issue.record("Expected a sheet sweep body scene item.")
+        return
+    }
+    let mesh = try #require(component.mesh)
+
+    #expect(result.commandName == "createSweep")
+    #expect(session.evaluationStatus == .valid)
+    #expect(mesh.positions.count > 0)
+    #expect(mesh.indices.count > 0)
+    #expect(mesh.indices.count % 3 == 0)
+    #expect(bodyItem.sourceFeatureID == profileID)
+}
+
+@MainActor
+@Test func viewportSceneBuilderCreatesMeshBodyItemForPointGuidedStraightPathSweep() async throws {
+    var document = DesignDocument.empty()
+    let profileID = try document.createRectangleSketch(
+        name: "Viewport Guided Sweep Profile",
+        plane: .xy,
+        width: .length(4.0, .millimeter),
+        height: .length(2.0, .millimeter)
+    )
+    let pathID = try document.createLineSketch(
+        name: "Viewport Guided Sweep Path",
+        plane: .yz,
+        start: SketchPoint(
+            x: .length(0.0, .millimeter),
+            y: .length(0.0, .millimeter)
+        ),
+        end: SketchPoint(
+            x: .length(0.0, .millimeter),
+            y: .length(20.0, .millimeter)
+        )
+    )
+    let guideID = try document.createLineSketch(
+        name: "Viewport Guided Sweep Guide",
+        plane: .yz,
+        start: SketchPoint(
+            x: .length(1.0, .millimeter),
+            y: .length(0.0, .millimeter)
+        ),
+        end: SketchPoint(
+            x: .length(2.0, .millimeter),
+            y: .length(20.0, .millimeter)
+        )
+    )
+    let session = EditorSession(document: document)
+    let result = try session.execute(.createSweep(
+        name: "Viewport Point Guided Sweep",
+        profiles: [ProfileReference(featureID: profileID)],
+        path: SweepPathReference(featureID: pathID),
+        guides: [SweepGuideReference(featureID: guideID)],
+        targets: [],
+        options: SweepOptions(guideMethod: .point)
+    ))
+
+    let scene = ViewportSceneBuilder().build(document: session.document)
+    let bodyItem = try #require(scene.items.first { item in
+        if case .body = item.kind {
+            return true
+        }
+        return false
+    })
+    guard case .body(let component) = bodyItem.kind else {
+        Issue.record("Expected a guided sweep body scene item.")
+        return
+    }
+    let mesh = try #require(component.mesh)
+
+    #expect(result.commandName == "createSweep")
+    #expect(session.evaluationStatus == .valid)
+    #expect(mesh.positions.count > 0)
+    #expect(mesh.indices.count > 0)
+    #expect(mesh.indices.count % 3 == 0)
+    #expect(bodyItem.sourceFeatureID == profileID)
+}
+
+@MainActor
+@Test func viewportSceneBuilderCreatesMeshBodyItemForCurvedPathSweep() async throws {
+    let setup = try makeCurvedSweepViewportSession()
+
+    let scene = ViewportSceneBuilder().build(document: setup.session.document)
+    let bodyItem = try #require(scene.items.first { item in
+        if case .body = item.kind {
+            return true
+        }
+        return false
+    })
+    guard case .body(let component) = bodyItem.kind else {
+        Issue.record("Expected a curved sweep body scene item.")
+        return
+    }
+    let mesh = try #require(component.mesh)
+    let topology = try #require(component.topology)
+
+    #expect(setup.commandResult.commandName == "createSweep")
+    #expect(setup.session.evaluationStatus == .valid)
+    #expect(bodyItem.sourceFeatureID == setup.profileID)
+    #expect(mesh.positions.count > 8)
+    #expect(mesh.indices.count > 36)
+    #expect(topology.faces.count > 6)
+    #expect(topology.edges.count > 12)
+    #expect(topology.vertices.count > 8)
+    #expect(component.sizeYMeters > 0.05)
+    #expect(component.sizeZMeters > 0.05)
+}
+
+@MainActor
+@Test func viewportHitTesterReturnsGeneratedTopologyForCurvedSweepMesh() async throws {
+    let setup = try makeCurvedSweepViewportSession()
+    let scene = ViewportSceneBuilder().build(document: setup.session.document)
+    let bodyItem = try #require(scene.items.first { item in
+        if case .body = item.kind {
+            return true
+        }
+        return false
+    })
+    guard case .body(let component) = bodyItem.kind else {
+        Issue.record("Expected a curved sweep body scene item.")
+        return
+    }
+    let topology = try #require(component.topology)
+    let layout = try #require(ViewportLayout(
+        scene: scene,
+        size: CGSize(width: 900.0, height: 700.0)
+    ))
+    let vertex = try #require(topology.vertices.first)
+    let edgeHitTarget = try #require(generatedEdgeHitTarget(in: topology, scene: scene, layout: layout))
+    let faceHitTarget = try #require(generatedFaceHitTarget(
+        in: topology,
+        scene: scene,
+        layout: layout,
+        tolerance: 0.0
+    ))
+
+    let vertexHit = ViewportHitTester().hitTest(
+        point: layout.project(vertex.point),
+        in: scene,
+        layout: layout
+    )
+    let edgeHit = ViewportHitTester().hitTest(
+        point: edgeHitTarget.point,
+        in: scene,
+        layout: layout
+    )
+    let faceHit = ViewportHitTester(tolerance: 0.0).hitTest(
+        point: faceHitTarget.point,
+        in: scene,
+        layout: layout
+    )
+
+    #expect(vertexHit?.selectionComponent == .vertex(vertex.componentID))
+    #expect(edgeHit?.selectionComponent == .edge(edgeHitTarget.edge.componentID))
+    #expect(faceHit?.selectionComponent == .face(faceHitTarget.face.componentID))
+}
+
+@MainActor
+@Test func viewportHitTesterReturnsGeneratedPolySplineVertexBeforeFace() async throws {
+    var document = DesignDocument.empty()
+    _ = try document.createPolySplineSurface(
+        name: "Viewport PolySpline Vertex Hit",
+        sourceMesh: viewportSurfaceAnalysisSingleQuadMesh(topRightZ: 0.004),
+        options: PolySplineOptions()
+    )
+    let scene = ViewportSceneBuilder().build(document: document)
+    let bodyItem = try #require(scene.items.first { item in
+        if case .body = item.kind {
+            return true
+        }
+        return false
+    })
+    guard case .body(let component) = bodyItem.kind else {
+        Issue.record("Expected a PolySpline body scene item.")
+        return
+    }
+    let topology = try #require(component.topology)
+    let vertex = try #require(topology.vertices.first { vertex in
+        vertex.componentID.generatedTopologyPersistentName?.contains("generated:polySpline") == true
+    })
+    let layout = try #require(ViewportLayout(
+        scene: scene,
+        size: CGSize(width: 900.0, height: 700.0)
+    ))
+
+    let hit = ViewportHitTester().hitTest(
+        point: layout.project(vertex.point),
+        in: scene,
+        layout: layout
+    )
+
+    #expect(hit?.selectionComponent == .vertex(vertex.componentID))
+}
+
+@MainActor
+@Test func viewportSurfaceVertexAxisDragMappingProjectsOntoSelectedAxis() async throws {
+    let horizontalAmount = ViewportSurfaceVertexAxisDragMapping.modelAmount(
+        axisVector: CGVector(dx: 2.0, dy: 0.0),
+        start: CGPoint(x: 10.0, y: 10.0),
+        current: CGPoint(x: 20.0, y: 10.0)
+    )
+    let orthogonalAmount = ViewportSurfaceVertexAxisDragMapping.modelAmount(
+        axisVector: CGVector(dx: 2.0, dy: 0.0),
+        start: CGPoint(x: 10.0, y: 10.0),
+        current: CGPoint(x: 10.0, y: 20.0)
+    )
+    let diagonalAmount = ViewportSurfaceVertexAxisDragMapping.modelAmount(
+        axisVector: CGVector(dx: 3.0, dy: 4.0),
+        start: CGPoint(x: 0.0, y: 0.0),
+        current: CGPoint(x: 6.0, y: 8.0)
+    )
+    let yDelta = ViewportSurfaceVertexAxisDragMapping.delta(axis: .y, amount: -1.25)
+    let localDelta = ViewportSurfaceVertexAxisDragMapping.delta(
+        direction: Vector3D(x: 0.0, y: -1.0, z: 0.0),
+        amount: 0.75
+    )
+
+    #expect(abs(horizontalAmount - 5.0) < 1.0e-12)
+    #expect(abs(orthogonalAmount) < 1.0e-12)
+    #expect(abs(diagonalAmount - 2.0) < 1.0e-12)
+    #expect(yDelta.x == 0.0)
+    #expect(yDelta.y == -1.25)
+    #expect(yDelta.z == 0.0)
+    #expect(localDelta.x == 0.0)
+    #expect(localDelta.y == -0.75)
+    #expect(localDelta.z == 0.0)
+}
+
+@MainActor
+@Test func viewportSceneBuilderPreservesFilletArcPrimitive() async throws {
+    let session = EditorSession()
+    _ = try #require(session.createDefaultExtrudedRectangle())
+    let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let bodyNodeID = try #require(session.document.productMetadata.sceneNodes.first { _, node in
+        node.reference == .body(bodyFeatureID)
+    }?.key)
+    _ = try session.execute(.filletBodyEdges(
+        targets: [SelectionTarget(sceneNodeID: bodyNodeID, component: .edge(.bodyEdgeRightTop))],
+        radius: .length(1.0, .millimeter),
+        segmentCount: 6
+    ))
+
+    let scene = ViewportSceneBuilder().build(document: session.document)
+    let sketchItem = try #require(scene.items.first { item in
+        if case .sketch = item.kind {
+            return true
+        }
+        return false
+    })
+    guard case .sketch(let primitives) = sketchItem.kind else {
+        Issue.record("Expected a sketch scene item.")
+        return
+    }
+
+    #expect(primitives.contains { primitive in
+        if case .arc(_, _, let radiusMeters, let startAngle, let endAngle) = primitive {
+            return abs(radiusMeters - 0.001) <= 1.0e-9
+                && abs(startAngle) <= 1.0e-9
+                && abs(endAngle - Double.pi / 2.0) <= 1.0e-9
+        }
+        return false
+    })
+}
+
+@MainActor
+@Test func viewportSceneBuilderPreservesDirectArcSketchPrimitive() async throws {
+    let session = EditorSession()
+    _ = try session.execute(
+        .createArcSketch(
+            name: "Viewport Arc",
+            plane: .xy,
+            center: SketchPoint(
+                x: .length(2.0, .millimeter),
+                y: .length(3.0, .millimeter)
+            ),
+            radius: .length(4.0, .millimeter),
+            startAngle: .angle(0.0, .degree),
+            endAngle: .angle(120.0, .degree)
+        )
+    )
+
+    let scene = ViewportSceneBuilder().build(document: session.document)
+    let sketchItem = try #require(scene.items.first { item in
+        if case .sketch = item.kind {
+            return true
+        }
+        return false
+    })
+    guard case .sketch(let primitives) = sketchItem.kind else {
+        Issue.record("Expected a sketch scene item.")
+        return
+    }
+
+    #expect(primitives.contains { primitive in
+        if case .arc(_, let center, let radiusMeters, let startAngle, let endAngle) = primitive {
+            return abs(center.x - 0.002) <= 1.0e-9
+                && abs(center.y - 0.003) <= 1.0e-9
+                && abs(radiusMeters - 0.004) <= 1.0e-9
+                && abs(startAngle) <= 1.0e-9
+                && abs(endAngle - Double.pi * 2.0 / 3.0) <= 1.0e-9
+        }
+        return false
+    })
+}
+
+@MainActor
+@Test func viewportSceneBuilderPreservesSplineSketchPrimitive() async throws {
+    let session = EditorSession()
+    _ = try session.execute(
+        .createSplineSketch(
+            name: "Viewport Spline",
+            plane: .xy,
+            spline: SketchSpline(controlPoints: [
+                SketchPoint(x: .length(0.0, .millimeter), y: .length(0.0, .millimeter)),
+                SketchPoint(x: .length(2.0, .millimeter), y: .length(4.0, .millimeter)),
+                SketchPoint(x: .length(6.0, .millimeter), y: .length(4.0, .millimeter)),
+                SketchPoint(x: .length(8.0, .millimeter), y: .length(0.0, .millimeter)),
+            ])
+        )
+    )
+
+    let scene = ViewportSceneBuilder().build(document: session.document)
+    let sketchItem = try #require(scene.items.first { item in
+        if case .sketch = item.kind {
+            return true
+        }
+        return false
+    })
+    guard case .sketch(let primitives) = sketchItem.kind else {
+        Issue.record("Expected a sketch scene item.")
+        return
+    }
+
+    #expect(primitives.contains { primitive in
+        if case .spline(_, let points, let controlPoints, let sketchPlane) = primitive {
+            return points.count == 33
+                && controlPoints.count == 4
+                && sketchPlane == .xy
+                && abs(points.first?.x ?? -1.0) <= 1.0e-12
+                && abs((points.last?.x ?? -1.0) - 0.008) <= 1.0e-12
+                && abs(controlPoints[1].x - 0.002) <= 1.0e-12
+                && abs(controlPoints[1].y - 0.004) <= 1.0e-12
+        }
+        return false
+    })
+}
+
+@MainActor
+@Test func viewportHitTesterReportsSplineControlPointIndex() async throws {
+    let session = EditorSession()
+    _ = try session.execute(
+        .createSplineSketch(
+            name: "Viewport Spline Hit",
+            plane: .xy,
+            spline: SketchSpline(controlPoints: [
+                SketchPoint(x: .length(0.0, .millimeter), y: .length(0.0, .millimeter)),
+                SketchPoint(x: .length(2.0, .millimeter), y: .length(4.0, .millimeter)),
+                SketchPoint(x: .length(6.0, .millimeter), y: .length(4.0, .millimeter)),
+                SketchPoint(x: .length(8.0, .millimeter), y: .length(0.0, .millimeter)),
+            ])
+        )
+    )
+    let scene = ViewportSceneBuilder().build(document: session.document)
+    let size = CGSize(width: 800.0, height: 600.0)
+    let layout = try #require(ViewportLayout(scene: scene, size: size))
+    let sketchItem = try #require(scene.items.first { item in
+        if case .sketch = item.kind {
+            return true
+        }
+        return false
+    })
+    guard case .sketch(let primitives) = sketchItem.kind,
+          case .spline(let entityID, _, let controlPoints, _) = try #require(primitives.first) else {
+        Issue.record("Expected a spline sketch primitive.")
+        return
+    }
+
+    let hit = ViewportHitTester().hitTest(
+        point: layout.project(controlPoints[1]),
+        in: scene,
+        layout: layout
+    )
+
+    #expect(hit?.featureID == sketchItem.featureID)
+    #expect(hit?.kind == .sketch)
+    #expect(hit?.sketchEntityID == entityID)
+    #expect(hit?.sketchControlPointIndex == 1)
+}
+
+@MainActor
+@Test func viewportHitTesterReportsSketchPointHandle() async throws {
+    let session = EditorSession()
+    _ = try session.execute(
+        .createLineSketch(
+            name: "Viewport Line Hit",
+            plane: .xy,
+            start: SketchPoint(
+                x: .length(0.0, .millimeter),
+                y: .length(0.0, .millimeter)
+            ),
+            end: SketchPoint(
+                x: .length(10.0, .millimeter),
+                y: .length(0.0, .millimeter)
+            )
+        )
+    )
+    let scene = ViewportSceneBuilder().build(document: session.document)
+    let size = CGSize(width: 800.0, height: 600.0)
+    let layout = try #require(ViewportLayout(scene: scene, size: size))
+    let sketchItem = try #require(scene.items.first { item in
+        if case .sketch = item.kind {
+            return true
+        }
+        return false
+    })
+    guard case .sketch(let primitives) = sketchItem.kind,
+          case .line(let entityID, _, let end) = try #require(primitives.first) else {
+        Issue.record("Expected a line sketch primitive.")
+        return
+    }
+
+    let hit = ViewportHitTester().hitTest(
+        point: layout.project(end),
+        in: scene,
+        layout: layout
+    )
+
+    #expect(hit?.featureID == sketchItem.featureID)
+    #expect(hit?.kind == .sketch)
+    #expect(hit?.sketchEntityID == entityID)
+    #expect(hit?.sketchPointHandle == .lineEnd)
+    #expect(hit?.sketchControlPointIndex == nil)
+}
+
+@MainActor
+@Test func viewportSceneBuilderCreatesSketchRegionSelectionCandidates() async throws {
+    let session = EditorSession()
+    _ = try session.execute(
+        .createRectangleSketchFromCorners(
+            name: "Viewport Selectable Region",
+            plane: .xy,
+            firstCorner: SketchPoint(
+                x: .length(0.0, .millimeter),
+                y: .length(0.0, .millimeter)
+            ),
+            oppositeCorner: SketchPoint(
+                x: .length(10.0, .millimeter),
+                y: .length(6.0, .millimeter)
+            )
+        )
+    )
+    let scene = ViewportSceneBuilder().build(document: session.document)
+    let sketchItem = try #require(scene.items.first { item in
+        if case .sketch = item.kind {
+            return true
+        }
+        return false
+    })
+    let region = try #require(sketchItem.sketchRegions.first)
+
+    #expect(sketchItem.sketchRegions.count == 1)
+    #expect(region.componentID == .profileRegion(featureID: sketchItem.featureID, profileIndex: 0))
+    #expect(region.points.count == 4)
+}
+
+@MainActor
+@Test func viewportHitTesterReportsSketchRegionInteriorWithoutStealingEdges() async throws {
+    let session = EditorSession()
+    _ = try session.execute(
+        .createRectangleSketchFromCorners(
+            name: "Viewport Hit Region",
+            plane: .xy,
+            firstCorner: SketchPoint(
+                x: .length(0.0, .millimeter),
+                y: .length(0.0, .millimeter)
+            ),
+            oppositeCorner: SketchPoint(
+                x: .length(10.0, .millimeter),
+                y: .length(6.0, .millimeter)
+            )
+        )
+    )
+    let scene = ViewportSceneBuilder().build(document: session.document)
+    let size = CGSize(width: 800.0, height: 600.0)
+    let layout = try #require(ViewportLayout(scene: scene, size: size))
+    let sketchItem = try #require(scene.items.first { item in
+        if case .sketch = item.kind {
+            return true
+        }
+        return false
+    })
+    let region = try #require(sketchItem.sketchRegions.first)
+    guard case .sketch(let primitives) = sketchItem.kind,
+          case .line(let edgeEntityID, let edgeStart, let edgeEnd) = try #require(primitives.first) else {
+        Issue.record("Expected a line sketch primitive.")
+        return
+    }
+
+    let interiorHit = ViewportHitTester().hitTest(
+        point: layout.project(center(of: region.points)),
+        in: scene,
+        layout: layout
+    )
+    let edgeMidpoint = CGPoint(
+        x: (edgeStart.x + edgeEnd.x) / 2.0,
+        y: (edgeStart.y + edgeEnd.y) / 2.0
+    )
+    let edgeHit = ViewportHitTester().hitTest(
+        point: layout.project(edgeMidpoint),
+        in: scene,
+        layout: layout
+    )
+
+    #expect(interiorHit?.featureID == sketchItem.featureID)
+    #expect(interiorHit?.kind == .sketch)
+    #expect(interiorHit?.selectionComponent == .region(region.componentID))
+    #expect(interiorHit?.sketchEntityID == nil)
+    #expect(edgeHit?.featureID == sketchItem.featureID)
+    #expect(edgeHit?.kind == .sketch)
+    #expect(edgeHit?.sketchEntityID == edgeEntityID)
+    #expect(edgeHit?.selectionComponent == nil)
 }
 
 @MainActor
@@ -74,7 +992,37 @@ import Testing
     #expect(bodyHit?.featureID == bodyItem.featureID)
     #expect(bodyHit?.kind == .body)
     #expect(bodyHit?.bodyFace != nil)
-    #expect(sketchHit == ViewportHit(featureID: sketchItem.featureID, kind: .sketch))
+    #expect(sketchHit?.featureID == sketchItem.featureID)
+    #expect(sketchHit?.kind == .sketch)
+    #expect(sketchHit?.sketchEntityID != nil)
+}
+
+@MainActor
+@Test func viewportHitTesterSelectsBodyVertexBeforeEdgesAndFaces() async throws {
+    let session = EditorSession()
+    _ = try #require(session.createDefaultExtrudedRectangle())
+    let scene = ViewportSceneBuilder().build(document: session.document)
+    let size = CGSize(width: 800.0, height: 600.0)
+    let layout = try #require(ViewportLayout(scene: scene, size: size))
+    let bodyItem = try #require(scene.items.first { item in
+        if case .body = item.kind {
+            return true
+        }
+        return false
+    })
+    let projection = try #require(layout.bodyProjection(for: bodyItem))
+
+    let hit = ViewportHitTester().hitTest(
+        point: projection.point(for: .backTopRight),
+        in: scene,
+        layout: layout
+    )
+
+    #expect(hit?.featureID == bodyItem.featureID)
+    #expect(hit?.kind == .body)
+    #expect(hit?.bodyVertex == .backTopRight)
+    #expect(hit?.bodyEdge == nil)
+    #expect(hit?.bodyFace == nil)
 }
 
 @MainActor
@@ -148,6 +1096,106 @@ import Testing
     #expect(footprint.bounds.height > 0.0)
 }
 
+@Test func viewportProfileFaceDragMappingMatchesFaceOffsetCommandSigns() {
+    #expect(ViewportProfileFaceDragMapping.distance(for: .right, xDelta: 0.003, yDelta: 0.002, zDelta: 0.004) == 0.003)
+    #expect(ViewportProfileFaceDragMapping.distance(for: .side, xDelta: 0.003, yDelta: 0.002, zDelta: 0.004) == 0.003)
+    #expect(ViewportProfileFaceDragMapping.distance(for: .left, xDelta: 0.003, yDelta: 0.002, zDelta: 0.004) == -0.003)
+    #expect(ViewportProfileFaceDragMapping.distance(for: .top, xDelta: 0.003, yDelta: 0.002, zDelta: 0.004) == 0.004)
+    #expect(ViewportProfileFaceDragMapping.distance(for: .bottom, xDelta: 0.003, yDelta: 0.002, zDelta: 0.004) == -0.004)
+    #expect(ViewportProfileFaceDragMapping.distance(for: .front, xDelta: 0.003, yDelta: 0.002, zDelta: 0.004) == -0.002)
+    #expect(ViewportProfileFaceDragMapping.distance(for: .back, xDelta: 0.003, yDelta: 0.002, zDelta: 0.004) == 0.002)
+}
+
+@Test func viewportProfileEdgeChamferMappingUsesCornerInwardDirections() {
+    #expect(ViewportProfileEdgeChamferMapping.distance(for: .leftBottom, xDelta: 0.002, zDelta: 0.002) == 0.002)
+    #expect(ViewportProfileEdgeChamferMapping.distance(for: .rightBottom, xDelta: -0.002, zDelta: 0.002) == 0.002)
+    #expect(ViewportProfileEdgeChamferMapping.distance(for: .rightTop, xDelta: -0.002, zDelta: -0.002) == 0.002)
+    #expect(ViewportProfileEdgeChamferMapping.distance(for: .leftTop, xDelta: 0.002, zDelta: -0.002) == 0.002)
+    #expect(ViewportProfileEdgeChamferMapping.distance(for: .leftBottom, xDelta: -0.002, zDelta: -0.002) == nil)
+    #expect(ViewportProfileEdgeChamferMapping.distance(for: .rightTop, xDelta: 0.002, zDelta: 0.002) == nil)
+}
+
+@Test func viewportProfileEdgeFilletMappingUsesCornerInwardDirectionsAsRadius() {
+    #expect(ViewportProfileEdgeFilletMapping.radius(for: .leftBottom, xDelta: 0.002, zDelta: 0.002) == 0.002)
+    #expect(ViewportProfileEdgeFilletMapping.radius(for: .rightBottom, xDelta: -0.002, zDelta: 0.002) == 0.002)
+    #expect(ViewportProfileEdgeFilletMapping.radius(for: .rightTop, xDelta: -0.002, zDelta: -0.002) == 0.002)
+    #expect(ViewportProfileEdgeFilletMapping.radius(for: .leftTop, xDelta: 0.002, zDelta: -0.002) == 0.002)
+    #expect(ViewportProfileEdgeFilletMapping.radius(for: .leftBottom, xDelta: -0.002, zDelta: -0.002) == nil)
+    #expect(ViewportProfileEdgeFilletMapping.radius(for: .rightTop, xDelta: 0.002, zDelta: 0.002) == nil)
+}
+
+@Test func viewportRegionOffsetAffordanceMapsArrowDragToSignedDistance() throws {
+    let layout = ViewportLayout(
+        modelBounds: CGRect(x: 0.0, y: 0.0, width: 2.0, height: 2.0),
+        size: CGSize(width: 800.0, height: 600.0)
+    )
+    let geometry = try #require(
+        ViewportRegionOffsetAffordanceGeometry(
+            points: [
+                CGPoint(x: 0.0, y: 0.0),
+                CGPoint(x: 1.0, y: 0.0),
+                CGPoint(x: 1.0, y: 1.0),
+                CGPoint(x: 0.0, y: 1.0),
+            ],
+            layout: layout
+        )
+    )
+
+    let start = geometry.projectedTip(layout: layout)
+    let outwardEnd = geometry.projectedTip(layout: layout, distanceMeters: 0.25)
+    let inwardEnd = geometry.projectedTip(layout: layout, distanceMeters: -0.125)
+
+    #expect(geometry.modelDirection.x > 0.0)
+    #expect(abs(geometry.offsetDistance(start: start, current: outwardEnd, layout: layout) - 0.25) < 1.0e-12)
+    #expect(abs(geometry.offsetDistance(start: start, current: inwardEnd, layout: layout) + 0.125) < 1.0e-12)
+}
+
+@Test func viewportSlotWidthAffordanceMapsArrowDragToFullWidth() throws {
+    let layout = ViewportLayout(
+        modelBounds: CGRect(x: 0.0, y: 0.0, width: 2.0, height: 2.0),
+        size: CGSize(width: 800.0, height: 600.0)
+    )
+    let geometry = try #require(
+        ViewportSlotWidthAffordanceGeometry(
+            lineStart: CGPoint(x: 0.0, y: 0.0),
+            lineEnd: CGPoint(x: 1.0, y: 0.0),
+            widthMeters: 1.0,
+            layout: layout
+        )
+    )
+
+    let start = geometry.projectedTip(layout: layout)
+    let widerEnd = geometry.projectedTip(layout: layout, widthMeters: 1.4)
+    let narrowerEnd = geometry.projectedTip(layout: layout, widthMeters: 0.8)
+
+    #expect(abs(geometry.modelDirection.x) < 1.0e-12)
+    #expect(abs(geometry.slotWidth(start: start, current: widerEnd, layout: layout) - 1.4) < 1.0e-12)
+    #expect(abs(geometry.slotWidth(start: start, current: narrowerEnd, layout: layout) - 0.8) < 1.0e-12)
+}
+
+@Test func viewportSketchVertexOffsetAffordanceMapsArrowDragToPositiveDistance() throws {
+    let layout = ViewportLayout(
+        modelBounds: CGRect(x: 0.0, y: 0.0, width: 2.0, height: 2.0),
+        size: CGSize(width: 800.0, height: 600.0)
+    )
+    let geometry = try #require(
+        ViewportSketchVertexOffsetAffordanceGeometry(
+            baseModelPoint: CGPoint(x: 0.25, y: 0.25),
+            modelDirection: CGPoint(x: 1.0, y: 0.0),
+            distanceMeters: 1.0,
+            layout: layout
+        )
+    )
+
+    let start = geometry.projectedTip(layout: layout)
+    let fartherEnd = geometry.projectedTip(layout: layout, distanceMeters: 1.25)
+    let nearerEnd = geometry.projectedTip(layout: layout, distanceMeters: 0.75)
+
+    #expect(abs(geometry.modelDirection.x - 1.0) < 1.0e-12)
+    #expect(abs(geometry.offsetDistance(start: start, current: fartherEnd, layout: layout) - 1.25) < 1.0e-12)
+    #expect(abs(geometry.offsetDistance(start: start, current: nearerEnd, layout: layout) - 0.75) < 1.0e-12)
+}
+
 @Test func viewportModelCoordinateMapperProvidesEmptyDocumentDragPlane() {
     var document = DesignDocument.empty()
     document.setDisplayUnit(.micrometer)
@@ -160,9 +1208,14 @@ import Testing
         from: CGPoint(x: 360.0, y: 320.0),
         to: CGPoint(x: 440.0, y: 280.0)
     )
+    let expectedSpan = max(
+        document.ruler.visibleSpanMeters,
+        document.ruler.majorTickMeters * 20.0,
+        document.ruler.minorTickMeters * 40.0
+    )
 
-    #expect(abs(mapper.layout.modelBounds.width - 0.000_2) < 1.0e-18)
-    #expect(abs(mapper.layout.modelBounds.height - 0.000_2) < 1.0e-18)
+    #expect(abs(mapper.layout.modelBounds.width - expectedSpan) < 1.0e-18)
+    #expect(abs(mapper.layout.modelBounds.height - expectedSpan) < 1.0e-18)
     #expect(abs(centerPoint.x) < 1.0e-15)
     #expect(abs(centerPoint.y) < 1.0e-15)
     #expect(drag.start != drag.end)
@@ -249,6 +1302,236 @@ import Testing
     #expect(placeholder.footprint.handlePoints.count == 8)
 }
 
+@Test func viewportCanvasDragPlaceholderAppliesWidthAndHeightOverrides() throws {
+    let layout = ViewportLayout(
+        modelBounds: CGRect(x: -0.1, y: -0.1, width: 0.2, height: 0.2),
+        size: CGSize(width: 800.0, height: 600.0)
+    )
+    let drag = ViewportModelDrag(
+        start: Point2D(x: 0.03, y: 0.04),
+        end: Point2D(x: -0.01, y: 0.01)
+    )
+
+    let placeholder = try #require(
+        ViewportCanvasDragPlaceholder(
+            drag: drag,
+            layout: layout,
+            widthMeters: 0.05,
+            heightMeters: 0.02
+        )
+    )
+    let wrappedPreview = try #require(
+        ViewportCanvasDragPreview(
+            kind: .rectangle(widthMeters: 0.05, heightMeters: 0.02),
+            drag: drag,
+            layout: layout
+        )
+    )
+    guard case .rectangle(let wrappedPlaceholder) = wrappedPreview else {
+        Issue.record("Expected rectangle preview.")
+        return
+    }
+
+    #expect(abs(placeholder.modelBounds.minX - (-0.02)) < 1.0e-12)
+    #expect(abs(placeholder.modelBounds.minY - 0.02) < 1.0e-12)
+    #expect(abs(placeholder.modelBounds.width - 0.05) < 1.0e-12)
+    #expect(abs(placeholder.modelBounds.height - 0.02) < 1.0e-12)
+    #expect(wrappedPlaceholder.modelBounds == placeholder.modelBounds)
+}
+
+@Test func viewportCanvasPolygonDragPreviewUsesToolState() throws {
+    let layout = ViewportLayout(
+        modelBounds: CGRect(x: -0.1, y: -0.1, width: 0.2, height: 0.2),
+        size: CGSize(width: 800.0, height: 600.0)
+    )
+    let drag = ViewportModelDrag(
+        start: Point2D(x: 0.01, y: -0.02),
+        end: Point2D(x: 0.04, y: 0.02)
+    )
+    let state = try PolygonToolState(
+        sideCount: 8,
+        sizingMode: .inradius,
+        inclinationMode: .horizontal
+    )
+
+    let preview = try #require(
+        ViewportCanvasPolygonDragPreview(
+            drag: drag,
+            layout: layout,
+            sideCount: state.sideCount,
+            sizingMode: state.sizingMode,
+            inclinationMode: state.inclinationMode
+        )
+    )
+    let wrappedPreview = try #require(
+        ViewportCanvasDragPreview(
+            kind: .polygon(state, radiusMeters: nil, rotationAngleRadians: nil),
+            drag: drag,
+            layout: layout
+        )
+    )
+    guard case .polygon(let wrappedPolygonPreview) = wrappedPreview else {
+        Issue.record("Expected polygon preview.")
+        return
+    }
+
+    let draft = try CanvasSketchCurveDrafts.polygon(
+        fromCenter: drag.start,
+        toRadiusPoint: drag.end,
+        sides: state.sideCount,
+        sizingMode: state.sizingMode,
+        inclinationMode: state.inclinationMode
+    )
+
+    #expect(preview.sides == 8)
+    #expect(preview.sizingMode == .inradius)
+    #expect(preview.inclinationMode == .horizontal)
+    #expect(preview.modelVertices == draft.vertices)
+    #expect(preview.projectedVertices.count == 8)
+    #expect(abs(preview.modelRadiusMeters - draft.circumradiusMeters) < 1.0e-12)
+    #expect(wrappedPolygonPreview.sides == preview.sides)
+    #expect(wrappedPolygonPreview.sizingMode == preview.sizingMode)
+    #expect(wrappedPolygonPreview.inclinationMode == preview.inclinationMode)
+}
+
+@Test func viewportCanvasPolygonDragPreviewAppliesDimensionInputOverrides() throws {
+    let layout = ViewportLayout(
+        modelBounds: CGRect(x: -0.1, y: -0.1, width: 0.2, height: 0.2),
+        size: CGSize(width: 800.0, height: 600.0)
+    )
+    let drag = ViewportModelDrag(
+        start: Point2D(x: 0.01, y: -0.02),
+        end: Point2D(x: 0.04, y: 0.02)
+    )
+    let state = try PolygonToolState(sideCount: 5)
+    let angle = Double.pi / 6.0
+
+    let preview = try #require(
+        ViewportCanvasDragPreview(
+            kind: .polygon(state, radiusMeters: 0.018, rotationAngleRadians: angle),
+            drag: drag,
+            layout: layout
+        )
+    )
+    guard case .polygon(let polygonPreview) = preview else {
+        Issue.record("Expected polygon preview.")
+        return
+    }
+
+    #expect(abs(polygonPreview.sizingRadiusMeters - 0.018) < 1.0e-12)
+    #expect(abs(polygonPreview.rotationAngleRadians - angle) < 1.0e-12)
+}
+
+@Test func viewportModelDragAppliesSketchAxisConstraint() {
+    let drag = ViewportModelDrag(
+        start: Point2D(x: 0.01, y: -0.02),
+        end: Point2D(x: 0.04, y: 0.03),
+        sketchPlane: .yz
+    )
+
+    let constrained = drag.constrained(by: .z)
+
+    #expect(constrained.start == drag.start)
+    #expect(abs(constrained.end.x - 0.01) < 1.0e-12)
+    #expect(abs(constrained.end.y - 0.03) < 1.0e-12)
+    #expect(constrained.sketchPlane == .yz)
+}
+
+@Test func viewportCanvasArcDragPreviewUsesSharedCurveConstruction() throws {
+    let layout = ViewportLayout(
+        modelBounds: CGRect(x: -0.1, y: -0.1, width: 0.2, height: 0.2),
+        size: CGSize(width: 800.0, height: 600.0)
+    )
+    let drag = ViewportModelDrag(
+        start: Point2D(x: 0.01, y: -0.02),
+        end: Point2D(x: 0.04, y: 0.02)
+    )
+
+    let preview = try #require(
+        ViewportCanvasArcDragPreview(drag: drag, layout: layout)
+    )
+    let wrappedPreview = try #require(
+        ViewportCanvasDragPreview(
+            kind: .arc(radiusMeters: nil, spanAngleRadians: nil),
+            drag: drag,
+            layout: layout
+        )
+    )
+    guard case .arc = wrappedPreview else {
+        Issue.record("Expected arc preview.")
+        return
+    }
+
+    let draft = try CanvasSketchCurveDrafts.arc(
+        fromCenter: drag.start,
+        toRadiusPoint: drag.end
+    )
+    #expect(preview.modelCenter == CGPoint(x: draft.center.x, y: draft.center.y))
+    #expect(abs(preview.modelRadiusMeters - draft.radiusMeters) < 1.0e-12)
+    #expect(abs(preview.startAngleRadians - draft.startAngleRadians) < 1.0e-12)
+    #expect(abs(preview.endAngleRadians - draft.endAngleRadians) < 1.0e-12)
+    #expect(preview.projectedPoints.count == 25)
+    #expect(preview.modelBounds.width > 0.0)
+    #expect(preview.modelBounds.height > 0.0)
+}
+
+@Test func viewportCanvasArcDragPreviewAppliesDimensionInputOverrides() throws {
+    let layout = ViewportLayout(
+        modelBounds: CGRect(x: -0.1, y: -0.1, width: 0.2, height: 0.2),
+        size: CGSize(width: 800.0, height: 600.0)
+    )
+    let drag = ViewportModelDrag(
+        start: Point2D(x: 0.01, y: -0.02),
+        end: Point2D(x: 0.04, y: 0.02)
+    )
+    let span = Double.pi / 3.0
+
+    let preview = try #require(
+        ViewportCanvasArcDragPreview(
+            drag: drag,
+            layout: layout,
+            radiusMeters: 0.017,
+            spanAngleRadians: span
+        )
+    )
+
+    #expect(abs(preview.modelRadiusMeters - 0.017) < 1.0e-12)
+    #expect(abs((preview.endAngleRadians - preview.startAngleRadians) - span) < 1.0e-12)
+}
+
+@Test func viewportCanvasSplineDragPreviewUsesSharedCurveConstruction() throws {
+    let layout = ViewportLayout(
+        modelBounds: CGRect(x: -0.1, y: -0.1, width: 0.2, height: 0.2),
+        size: CGSize(width: 800.0, height: 600.0)
+    )
+    let drag = ViewportModelDrag(
+        start: Point2D(x: 0.0, y: 0.0),
+        end: Point2D(x: 0.03, y: 0.04)
+    )
+
+    let preview = try #require(
+        ViewportCanvasSplineDragPreview(drag: drag, layout: layout)
+    )
+    let wrappedPreview = try #require(
+        ViewportCanvasDragPreview(kind: .spline, drag: drag, layout: layout)
+    )
+    guard case .spline = wrappedPreview else {
+        Issue.record("Expected spline preview.")
+        return
+    }
+
+    let draft = try CanvasSketchCurveDrafts.spline(
+        from: drag.start,
+        to: drag.end
+    )
+
+    #expect(preview.modelControlPoints == draft.controlPoints)
+    #expect(preview.projectedControlPoints.count == 4)
+    #expect(preview.projectedCurvePoints.count == 33)
+    #expect(preview.modelBounds.width > 0.0)
+    #expect(preview.modelBounds.height > 0.0)
+}
+
 @Test func viewportProjectedGridCreatesCoordinateParallelLines() {
     var document = DesignDocument.empty()
     document.setDisplayUnit(.millimeter)
@@ -290,6 +1573,114 @@ private func isParallel(_ lhs: CGVector, _ rhs: CGVector) -> Bool {
     return abs(crossProduct / scale) < 1.0e-9
 }
 
+@MainActor
+private func makeCurvedSweepViewportSession() throws -> (
+    session: EditorSession,
+    profileID: FeatureID,
+    commandResult: CommandExecutionResult
+) {
+    var document = DesignDocument.empty()
+    let profileID = try document.createRectangleSketch(
+        name: "Viewport Curved Sweep Profile",
+        plane: .xy,
+        width: .length(4.0, .millimeter),
+        height: .length(2.0, .millimeter)
+    )
+    let pathID = try document.createArcSketch(
+        name: "Viewport Curved Sweep Path",
+        plane: .yz,
+        center: SketchPoint(
+            x: .length(0.0, .millimeter),
+            y: .length(0.0, .millimeter)
+        ),
+        radius: .length(60.0, .millimeter),
+        startAngle: .angle(0.0, .degree),
+        endAngle: .angle(90.0, .degree)
+    )
+    let session = EditorSession(document: document)
+    let result = try session.execute(.createSweep(
+        name: "Viewport Curved Sweep",
+        profiles: [ProfileReference(featureID: profileID)],
+        path: SweepPathReference(featureID: pathID),
+        guides: [],
+        targets: [],
+        options: SweepOptions()
+    ))
+    return (session, profileID, result)
+}
+
+private func projectedCenter(
+    of points: [Point3D],
+    layout: ViewportLayout
+) -> CGPoint {
+    let projectedPoints = points.map { layout.project($0) }
+    let sum = projectedPoints.reduce(CGPoint.zero) { partial, point in
+        CGPoint(x: partial.x + point.x, y: partial.y + point.y)
+    }
+    let count = max(CGFloat(projectedPoints.count), 1.0)
+    return CGPoint(x: sum.x / count, y: sum.y / count)
+}
+
+private func generatedEdgeHitTarget(
+    in topology: ViewportBodyTopology,
+    scene: ViewportScene,
+    layout: ViewportLayout
+) -> (edge: ViewportBodyTopology.Edge, point: CGPoint)? {
+    let tester = ViewportHitTester()
+    for edge in topology.edges {
+        for ratio in [0.5, 0.35, 0.65] {
+            let point = Point3D(
+                x: edge.start.x + (edge.end.x - edge.start.x) * ratio,
+                y: edge.start.y + (edge.end.y - edge.start.y) * ratio,
+                z: edge.start.z + (edge.end.z - edge.start.z) * ratio
+            )
+            let projectedPoint = layout.project(point)
+            let hit = tester.hitTest(point: projectedPoint, in: scene, layout: layout)
+            if hit?.selectionComponent == .edge(edge.componentID) {
+                return (edge, projectedPoint)
+            }
+        }
+    }
+    return nil
+}
+
+private func generatedFaceHitTarget(
+    in topology: ViewportBodyTopology,
+    scene: ViewportScene,
+    layout: ViewportLayout,
+    tolerance: CGFloat = 8.0
+) -> (face: ViewportBodyTopology.Face, point: CGPoint)? {
+    let tester = ViewportHitTester(tolerance: tolerance)
+    for face in topology.faces {
+        guard face.points.count >= 3 else {
+            continue
+        }
+        for point in generatedFaceCandidatePoints(face.points, layout: layout) {
+            let hit = tester.hitTest(point: point, in: scene, layout: layout)
+            if hit?.selectionComponent == .face(face.componentID) {
+                return (face, point)
+            }
+        }
+    }
+    return nil
+}
+
+private func generatedFaceCandidatePoints(
+    _ points: [Point3D],
+    layout: ViewportLayout
+) -> [CGPoint] {
+    let projectedPoints = points.map { layout.project($0) }
+    let center = projectedCenter(of: points, layout: layout)
+    var candidates = [center]
+    for projectedPoint in projectedPoints {
+        candidates.append(CGPoint(
+            x: center.x * 0.72 + projectedPoint.x * 0.28,
+            y: center.y * 0.72 + projectedPoint.y * 0.28
+        ))
+    }
+    return candidates
+}
+
 private func projectedBounds(
     width: CGFloat,
     height: CGFloat,
@@ -313,5 +1704,53 @@ private func projectedBounds(
         y: minY,
         width: maxX - minX,
         height: maxY - minY
+    )
+}
+
+private func center(of points: [CGPoint]) -> CGPoint {
+    let sum = points.reduce(CGPoint.zero) { partial, point in
+        CGPoint(x: partial.x + point.x, y: partial.y + point.y)
+    }
+    let count = max(CGFloat(points.count), 1.0)
+    return CGPoint(x: sum.x / count, y: sum.y / count)
+}
+
+private func bodySceneNodeID(
+    for featureID: FeatureID,
+    in document: DesignDocument
+) -> SceneNodeID? {
+    document.productMetadata.sceneNodes.first { entry in
+        entry.value.reference?.kind == .body && entry.value.reference?.featureID == featureID
+    }?.key
+}
+
+private func viewportSurfaceContinuityPatchNetworkMesh(centerZ: Double) -> Mesh {
+    Mesh(
+        positions: [
+            Point3D(x: 0.0, y: 0.0, z: 0.0),
+            Point3D(x: 0.01, y: 0.0, z: 0.0),
+            Point3D(x: 0.02, y: 0.0, z: 0.0),
+            Point3D(x: 0.0, y: 0.01, z: 0.0),
+            Point3D(x: 0.01, y: 0.01, z: centerZ),
+            Point3D(x: 0.02, y: 0.01, z: 0.0),
+        ],
+        indices: [
+            0, 1, 4,
+            0, 4, 3,
+            1, 2, 5,
+            1, 5, 4,
+        ]
+    )
+}
+
+private func viewportSurfaceAnalysisSingleQuadMesh(topRightZ: Double) -> Mesh {
+    Mesh(
+        positions: [
+            Point3D(x: 0.0, y: 0.0, z: 0.0),
+            Point3D(x: 0.02, y: 0.0, z: 0.0),
+            Point3D(x: 0.02, y: 0.02, z: topRightZ),
+            Point3D(x: 0.0, y: 0.02, z: 0.0),
+        ],
+        indices: [0, 1, 2, 0, 2, 3]
     )
 }

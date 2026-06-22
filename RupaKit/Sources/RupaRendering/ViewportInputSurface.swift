@@ -1,6 +1,34 @@
 import AppKit
 import SwiftUI
 
+public struct ViewportInputModifierFlags: Equatable, Sendable {
+    public var containsShift: Bool
+    public var containsControl: Bool
+    public var containsCommand: Bool
+    public var containsOption: Bool
+
+    public init(
+        containsShift: Bool = false,
+        containsControl: Bool = false,
+        containsCommand: Bool = false,
+        containsOption: Bool = false
+    ) {
+        self.containsShift = containsShift
+        self.containsControl = containsControl
+        self.containsCommand = containsCommand
+        self.containsOption = containsOption
+    }
+
+    init(_ flags: NSEvent.ModifierFlags) {
+        self.init(
+            containsShift: flags.contains(.shift),
+            containsControl: flags.contains(.control),
+            containsCommand: flags.contains(.command),
+            containsOption: flags.contains(.option)
+        )
+    }
+}
+
 struct ViewportInputSurface: NSViewRepresentable {
     var onPress: (CGPoint, CGSize, ViewportSelectionIntent) -> Void
     var onPick: (CGPoint, CGSize, ViewportSelectionIntent) -> Void
@@ -10,6 +38,10 @@ struct ViewportInputSurface: NSViewRepresentable {
     var onPan: (CGSize) -> Void
     var onZoom: (CGFloat, CGPoint, CGSize) -> Void
     var onOrbit: (CGSize) -> Void
+    var onModifierFlagsChange: (ViewportInputModifierFlags, CGSize) -> Void
+    var onSecondaryClick: (CGPoint, CGSize) -> Void
+    var onShiftScroll: (ViewportScrollDirection) -> Bool
+    var onShiftTap: (CGPoint, CGSize) -> Bool
 
     func makeNSView(context: Context) -> InputView {
         let view = InputView()
@@ -27,6 +59,10 @@ struct ViewportInputSurface: NSViewRepresentable {
         nsView.onPan = onPan
         nsView.onZoom = onZoom
         nsView.onOrbit = onOrbit
+        nsView.onModifierFlagsChange = onModifierFlagsChange
+        nsView.onSecondaryClick = onSecondaryClick
+        nsView.onShiftScroll = onShiftScroll
+        nsView.onShiftTap = onShiftTap
     }
 }
 
@@ -40,10 +76,17 @@ extension ViewportInputSurface {
         var onPan: ((CGSize) -> Void)?
         var onZoom: ((CGFloat, CGPoint, CGSize) -> Void)?
         var onOrbit: ((CGSize) -> Void)?
+        var onModifierFlagsChange: ((ViewportInputModifierFlags, CGSize) -> Void)?
+        var onSecondaryClick: ((CGPoint, CGSize) -> Void)?
+        var onShiftScroll: ((ViewportScrollDirection) -> Bool)?
+        var onShiftTap: ((CGPoint, CGSize) -> Bool)?
 
         private var dragStart: CGPoint?
+        private var secondaryDragStart: CGPoint?
         private var isOrbiting = false
         private var lastOrbitCentroid: CGPoint?
+        private var shiftScrollAccumulator: CGFloat = 0.0
+        private var isShiftPressed = false
 
         override var isFlipped: Bool {
             true
@@ -80,6 +123,7 @@ extension ViewportInputSurface {
         }
 
         override func mouseDown(with event: NSEvent) {
+            publishModifierFlags(from: event)
             window?.makeFirstResponder(self)
             dragStart = location(from: event)
             if let dragStart {
@@ -88,6 +132,7 @@ extension ViewportInputSurface {
         }
 
         override func mouseDragged(with event: NSEvent) {
+            publishModifierFlags(from: event)
             guard let dragStart else {
                 return
             }
@@ -95,6 +140,7 @@ extension ViewportInputSurface {
         }
 
         override func mouseUp(with event: NSEvent) {
+            publishModifierFlags(from: event)
             let end = location(from: event)
             let intent = selectionIntent(from: event)
             guard let start = dragStart else {
@@ -113,30 +159,48 @@ extension ViewportInputSurface {
         }
 
         override func rightMouseDown(with event: NSEvent) {
-            dragStart = location(from: event)
+            publishModifierFlags(from: event)
+            let location = location(from: event)
+            dragStart = location
+            secondaryDragStart = location
         }
 
         override func rightMouseDragged(with event: NSEvent) {
+            publishModifierFlags(from: event)
             panDrag(to: location(from: event))
         }
 
         override func rightMouseUp(with event: NSEvent) {
+            publishModifierFlags(from: event)
+            let end = location(from: event)
+            if let start = secondaryDragStart {
+                let dragDistance = hypot(end.x - start.x, end.y - start.y)
+                if dragDistance <= 4.0 {
+                    onSecondaryClick?(end, bounds.size)
+                }
+            }
             dragStart = nil
+            secondaryDragStart = nil
         }
 
         override func otherMouseDown(with event: NSEvent) {
+            publishModifierFlags(from: event)
             dragStart = location(from: event)
         }
 
         override func otherMouseDragged(with event: NSEvent) {
+            publishModifierFlags(from: event)
             panDrag(to: location(from: event))
         }
 
         override func otherMouseUp(with event: NSEvent) {
+            publishModifierFlags(from: event)
             dragStart = nil
         }
 
         override func mouseMoved(with event: NSEvent) {
+            publishModifierFlags(from: event)
+            window?.makeFirstResponder(self)
             onHover?(location(from: event), bounds.size)
         }
 
@@ -145,11 +209,16 @@ extension ViewportInputSurface {
         }
 
         override func scrollWheel(with event: NSEvent) {
+            publishModifierFlags(from: event)
             resetOrbitTracking()
+            if handleShiftScroll(event) {
+                return
+            }
             handlePanZoomScroll(event)
         }
 
         private func handlePanZoomScroll(_ event: NSEvent) {
+            shiftScrollAccumulator = 0.0
             let location = location(from: event)
             let shouldZoom = event.modifierFlags.contains(.command)
                 || event.modifierFlags.contains(.option)
@@ -169,13 +238,64 @@ extension ViewportInputSurface {
             }
         }
 
+        override func flagsChanged(with event: NSEvent) {
+            publishModifierFlags(from: event)
+            let isPressed = event.modifierFlags.contains(.shift)
+            defer {
+                isShiftPressed = isPressed
+            }
+            guard isPressed, !isShiftPressed else {
+                return
+            }
+            let location = location(from: event)
+            guard bounds.contains(location) else {
+                return
+            }
+            _ = onShiftTap?(location, bounds.size)
+        }
+
+        private func handleShiftScroll(_ event: NSEvent) -> Bool {
+            guard let onShiftScroll,
+                  event.modifierFlags.contains(.shift),
+                  !event.modifierFlags.contains(.command),
+                  !event.modifierFlags.contains(.control),
+                  !event.modifierFlags.contains(.option) else {
+                shiftScrollAccumulator = 0.0
+                return false
+            }
+
+            let vertical = event.scrollingDeltaY
+            let horizontal = event.scrollingDeltaX
+            let dominant = abs(vertical) >= abs(horizontal) ? vertical : horizontal
+            guard dominant != 0.0 else {
+                return true
+            }
+
+            let threshold: CGFloat = event.hasPreciseScrollingDeltas ? 8.0 : 1.0
+            shiftScrollAccumulator += dominant
+            while shiftScrollAccumulator >= threshold {
+                _ = onShiftScroll(.up)
+                shiftScrollAccumulator -= threshold
+            }
+            while shiftScrollAccumulator <= -threshold {
+                _ = onShiftScroll(.down)
+                shiftScrollAccumulator += threshold
+            }
+            return true
+        }
+
         override func magnify(with event: NSEvent) {
+            publishModifierFlags(from: event)
             guard !isOrbiting else {
                 return
             }
 
             let factor = min(max(1.0 + event.magnification, 0.20), 5.0)
             onZoom?(factor, location(from: event), bounds.size)
+        }
+
+        private func publishModifierFlags(from event: NSEvent) {
+            onModifierFlagsChange?(ViewportInputModifierFlags(event.modifierFlags), bounds.size)
         }
 
         override func touchesBegan(with event: NSEvent) {
@@ -218,6 +338,7 @@ extension ViewportInputSurface {
 
             isOrbiting = true
             dragStart = nil
+            secondaryDragStart = nil
             onDragPreview?(nil, nil, bounds.size)
 
             let current = averagePosition(touches.map(\.normalizedPosition))

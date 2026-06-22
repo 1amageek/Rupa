@@ -140,6 +140,7 @@ public extension MeasurementResult {
     struct Profile: Codable, Equatable, Sendable {
         public enum Kind: String, Codable, Sendable {
             case lineLoop
+            case curveLoop
             case circle
         }
 
@@ -165,12 +166,29 @@ public extension MeasurementResult {
     }
 
     struct Solid: Codable, Equatable, Sendable {
+        public struct LinearDimension: Codable, Equatable, Sendable {
+            public enum Kind: String, Codable, Sendable {
+                case extrusionHeight
+                case sweepNormalHeight
+                case sweepPathLength
+            }
+
+            public var kind: Kind
+            public var meters: Double
+
+            public init(kind: Kind, meters: Double) {
+                self.kind = kind
+                self.meters = meters
+            }
+        }
+
         public var featureID: String
         public var featureName: String?
         public var sourceFeatureID: String
         public var sourceFeatureName: String?
-        public var heightMeters: Double
+        public var linearDimensions: [LinearDimension]
         public var volumeCubicMeters: Double
+        public var surfaceAreaSquareMeters: Double?
         public var bounds: Bounds
 
         public init(
@@ -178,16 +196,18 @@ public extension MeasurementResult {
             featureName: String?,
             sourceFeatureID: String,
             sourceFeatureName: String?,
-            heightMeters: Double,
+            linearDimensions: [LinearDimension],
             volumeCubicMeters: Double,
+            surfaceAreaSquareMeters: Double? = nil,
             bounds: Bounds
         ) {
             self.featureID = featureID
             self.featureName = featureName
             self.sourceFeatureID = sourceFeatureID
             self.sourceFeatureName = sourceFeatureName
-            self.heightMeters = heightMeters
+            self.linearDimensions = linearDimensions
             self.volumeCubicMeters = volumeCubicMeters
+            self.surfaceAreaSquareMeters = surfaceAreaSquareMeters
             self.bounds = bounds
         }
     }

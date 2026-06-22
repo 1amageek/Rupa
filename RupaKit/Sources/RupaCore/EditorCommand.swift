@@ -24,10 +24,62 @@ public enum EditorCommand: Codable, Equatable, Sendable {
     case setComponentInstanceLock(id: ComponentInstanceID, isLocked: Bool)
     case setComponentInstanceTransform(id: ComponentInstanceID, localTransform: Transform3D)
     case createSectionPlane(name: String)
+    case createConstructionPlane(name: String, plane: SketchPlane, activates: Bool)
+    case createConstructionPlaneFromTarget(name: String, target: SelectionTarget, activates: Bool)
+    case createConstructionPlaneFromTargets(
+        name: String,
+        targets: [SelectionTarget],
+        viewNormal: Vector3D?,
+        activates: Bool
+    )
+    case createViewAlignedConstructionPlane(
+        name: String,
+        origin: Point3D,
+        viewNormal: Vector3D,
+        activates: Bool
+    )
+    case setActiveConstructionPlane(id: ConstructionPlaneSourceID?)
+    case renameConstructionPlane(id: ConstructionPlaneSourceID, name: String)
+    case setCurveCurvatureDisplay(target: SelectionTarget, isVisible: Bool?, combScale: Double?)
+    case setPointDisplay(target: SelectionTarget, isVisible: Bool?)
     case createLineSketch(name: String, plane: SketchPlane, start: SketchPoint, end: SketchPoint)
     case createCircleSketch(name: String, plane: SketchPlane, center: SketchPoint, radius: CADExpression)
+    case createArcSketch(
+        name: String,
+        plane: SketchPlane,
+        center: SketchPoint,
+        radius: CADExpression,
+        startAngle: CADExpression,
+        endAngle: CADExpression
+    )
+    case createSplineSketch(name: String, plane: SketchPlane, spline: SketchSpline)
     case createRectangleSketch(name: String, plane: SketchPlane, width: CADExpression, height: CADExpression)
+    case createPolygonSketch(
+        name: String,
+        plane: SketchPlane,
+        center: SketchPoint,
+        radius: CADExpression,
+        sides: Int,
+        sizingMode: PolygonSizingMode,
+        inclinationMode: PolygonInclinationMode,
+        rotationAngle: CADExpression
+    )
+    case createFaceKnife(name: String, target: SelectionTarget, loop: [Point3D])
     case addSketchConstraint(featureID: FeatureID, constraint: SketchConstraint)
+    case createBridgeCurve(
+        featureID: FeatureID,
+        firstEndpoint: BridgeCurveEndpoint,
+        secondEndpoint: BridgeCurveEndpoint,
+        continuity: BridgeCurveContinuity,
+        trimsSourceCurves: Bool = false
+    )
+    case setBridgeCurveParameters(
+        sourceID: BridgeCurveSourceID,
+        firstEndpoint: BridgeCurveEndpoint?,
+        secondEndpoint: BridgeCurveEndpoint?,
+        continuity: BridgeCurveContinuity?,
+        trimsSourceCurves: Bool? = nil
+    )
     case createRectangleSketchFromCorners(
         name: String,
         plane: SketchPlane,
@@ -46,7 +98,107 @@ public enum EditorCommand: Codable, Equatable, Sendable {
         radius: CADExpression,
         sizeY: CADExpression
     )
+    case setObjectDimension(
+        target: SelectionTarget,
+        kind: ObjectDimensionKind,
+        value: CADExpression
+    )
+    case offsetCurve(
+        target: SelectionTarget,
+        distance: CADExpression,
+        options: OffsetCurveOptions,
+        vertexHandle: SketchEntityPointHandle?
+    )
+    case offsetRegions(
+        targets: [SelectionTarget],
+        distance: CADExpression,
+        options: OffsetCurveOptions,
+        combinesRegions: Bool
+    )
+    case offsetSketchVertex(target: SelectionTarget, handle: SketchEntityPointHandle, distance: CADExpression)
+    case applySketchCornerTreatment(
+        target: SelectionTarget,
+        adjacentTarget: SelectionTarget?,
+        distance: CADExpression,
+        treatment: SketchCornerTreatment
+    )
+    case createSlotSketch(target: SelectionTarget, width: CADExpression)
+    case offsetBodyFace(target: SelectionTarget, distance: CADExpression)
+    case chamferBodyEdges(targets: [SelectionTarget], distance: CADExpression)
+    case filletBodyEdges(targets: [SelectionTarget], radius: CADExpression, segmentCount: Int)
+    case moveBodyVertex(target: SelectionTarget, deltaX: CADExpression, deltaY: CADExpression)
+    case moveSketchEntityPoint(
+        target: SelectionTarget,
+        handle: SketchEntityPointHandle,
+        deltaX: CADExpression,
+        deltaY: CADExpression
+    )
+    case moveSketchSplineControlPoint(
+        target: SelectionTarget,
+        controlPointIndex: Int,
+        deltaX: CADExpression,
+        deltaY: CADExpression
+    )
+    case slideSketchSplineControlPoints(
+        target: SelectionTarget,
+        controlPointIndexes: [Int],
+        direction: SplineControlPointSlideDirection,
+        distance: CADExpression
+    )
+    case insertSketchSplineControlPoint(target: SelectionTarget, fraction: CADExpression)
+    case setSketchCircleParameters(
+        target: SelectionTarget,
+        center: SketchPoint?,
+        radius: CADExpression?
+    )
+    case setSketchArcParameters(
+        target: SelectionTarget,
+        center: SketchPoint?,
+        radius: CADExpression?,
+        startAngle: CADExpression?,
+        endAngle: CADExpression?
+    )
+    case setSketchEntityDimension(
+        target: SelectionTarget,
+        kind: SketchEntityDimensionKind,
+        value: CADExpression
+    )
+    case convertSketchLineToArc(
+        target: SelectionTarget,
+        sagitta: CADExpression
+    )
+    case convertSketchLineToSpline(target: SelectionTarget)
+    case reverseSketchCurve(target: SelectionTarget)
+    case rebuildSketchCurve(target: SelectionTarget, options: CurveRebuildOptions)
+    case extendSketchCurve(target: SelectionTarget, distance: CADExpression, shape: ExtendCurveShape)
+    case splitSketchCurve(target: SelectionTarget, fraction: CADExpression)
+    case trimSketchCurveSegment(target: SelectionTarget)
+    case cutSketchCurve(target: SelectionTarget, cutter: SelectionTarget, options: CutCurveOptions)
     case extrudeProfile(name: String, profile: ProfileReference, distance: CADExpression, direction: ExtrudeDirection)
+    case createSweep(
+        name: String,
+        profiles: [ProfileReference],
+        path: SweepPathReference,
+        guides: [SweepGuideReference],
+        targets: [SweepTargetReference],
+        options: SweepOptions
+    )
+    case createPolySplineSurface(
+        name: String,
+        sourceMesh: Mesh,
+        options: PolySplineOptions
+    )
+    case movePolySplineSurfaceVertex(
+        target: SelectionTarget,
+        deltaX: CADExpression,
+        deltaY: CADExpression,
+        deltaZ: CADExpression
+    )
+    case slidePolySplineSurfaceVertices(
+        targets: [SelectionTarget],
+        direction: PolySplineSurfaceVertexSlideDirection,
+        distance: CADExpression
+    )
     case createExtrudedRectangle(
         name: String,
         plane: SketchPlane,
@@ -111,14 +263,42 @@ public enum EditorCommand: Codable, Equatable, Sendable {
             "setComponentInstanceTransform"
         case .createSectionPlane:
             "createSectionPlane"
+        case .createConstructionPlane:
+            "createConstructionPlane"
+        case .createConstructionPlaneFromTarget:
+            "createConstructionPlaneFromTarget"
+        case .createConstructionPlaneFromTargets:
+            "createConstructionPlaneFromTargets"
+        case .createViewAlignedConstructionPlane:
+            "createViewAlignedConstructionPlane"
+        case .setActiveConstructionPlane:
+            "setActiveConstructionPlane"
+        case .renameConstructionPlane:
+            "renameConstructionPlane"
+        case .setCurveCurvatureDisplay:
+            "setCurveCurvatureDisplay"
+        case .setPointDisplay:
+            "setPointDisplay"
         case .createLineSketch:
             "createLineSketch"
         case .createCircleSketch:
             "createCircleSketch"
+        case .createArcSketch:
+            "createArcSketch"
+        case .createSplineSketch:
+            "createSplineSketch"
         case .createRectangleSketch:
             "createRectangleSketch"
+        case .createPolygonSketch:
+            "createPolygonSketch"
+        case .createFaceKnife:
+            "createFaceKnife"
         case .addSketchConstraint:
             "addSketchConstraint"
+        case .createBridgeCurve:
+            "createBridgeCurve"
+        case .setBridgeCurveParameters:
+            "setBridgeCurveParameters"
         case .createRectangleSketchFromCorners:
             "createRectangleSketchFromCorners"
         case .setExtrudeDistance:
@@ -127,8 +307,66 @@ public enum EditorCommand: Codable, Equatable, Sendable {
             "setCubeDimensions"
         case .setCylinderDimensions:
             "setCylinderDimensions"
+        case .setObjectDimension:
+            "setObjectDimension"
+        case .offsetCurve:
+            "offsetCurve"
+        case .offsetRegions:
+            "offsetRegions"
+        case .offsetSketchVertex:
+            "offsetSketchVertex"
+        case .applySketchCornerTreatment:
+            "applySketchCornerTreatment"
+        case .createSlotSketch:
+            "createSlotSketch"
+        case .offsetBodyFace:
+            "offsetBodyFace"
+        case .chamferBodyEdges:
+            "chamferBodyEdges"
+        case .filletBodyEdges:
+            "filletBodyEdges"
+        case .moveBodyVertex:
+            "moveBodyVertex"
+        case .moveSketchEntityPoint:
+            "moveSketchEntityPoint"
+        case .moveSketchSplineControlPoint:
+            "moveSketchSplineControlPoint"
+        case .slideSketchSplineControlPoints:
+            "slideSketchSplineControlPoints"
+        case .insertSketchSplineControlPoint:
+            "insertSketchSplineControlPoint"
+        case .setSketchCircleParameters:
+            "setSketchCircleParameters"
+        case .setSketchArcParameters:
+            "setSketchArcParameters"
+        case .setSketchEntityDimension:
+            "setSketchEntityDimension"
+        case .convertSketchLineToArc:
+            "convertSketchLineToArc"
+        case .convertSketchLineToSpline:
+            "convertSketchLineToSpline"
+        case .reverseSketchCurve:
+            "reverseSketchCurve"
+        case .rebuildSketchCurve:
+            "rebuildSketchCurve"
+        case .extendSketchCurve:
+            "extendSketchCurve"
+        case .splitSketchCurve:
+            "splitSketchCurve"
+        case .trimSketchCurveSegment:
+            "trimSketchCurveSegment"
+        case .cutSketchCurve:
+            "cutSketchCurve"
         case .extrudeProfile:
             "extrudeProfile"
+        case .createSweep:
+            "createSweep"
+        case .createPolySplineSurface:
+            "createPolySplineSurface"
+        case .movePolySplineSurfaceVertex:
+            "movePolySplineSurfaceVertex"
+        case .slidePolySplineSurfaceVertices:
+            "slidePolySplineSurfaceVertices"
         case .createExtrudedRectangle:
             "createExtrudedRectangle"
         case .createExtrudedRectangleFromCorners:
@@ -160,15 +398,58 @@ public enum EditorCommand: Codable, Equatable, Sendable {
              .setComponentInstanceLock,
              .setComponentInstanceTransform,
              .createSectionPlane,
+             .createConstructionPlane,
+             .createConstructionPlaneFromTarget,
+             .createConstructionPlaneFromTargets,
+             .createViewAlignedConstructionPlane,
+             .setActiveConstructionPlane,
+             .renameConstructionPlane,
+             .setCurveCurvatureDisplay,
+             .setPointDisplay,
              .createLineSketch,
              .createCircleSketch,
+             .createArcSketch,
+             .createSplineSketch,
              .createRectangleSketch,
+             .createPolygonSketch,
+             .createFaceKnife,
              .addSketchConstraint,
+             .createBridgeCurve,
+             .setBridgeCurveParameters,
              .createRectangleSketchFromCorners,
              .setExtrudeDistance,
              .setCubeDimensions,
              .setCylinderDimensions,
+             .setObjectDimension,
+             .offsetCurve,
+             .offsetRegions,
+             .offsetSketchVertex,
+             .applySketchCornerTreatment,
+             .createSlotSketch,
+             .offsetBodyFace,
+             .chamferBodyEdges,
+             .filletBodyEdges,
+             .moveBodyVertex,
+             .moveSketchEntityPoint,
+             .moveSketchSplineControlPoint,
+             .slideSketchSplineControlPoints,
+             .insertSketchSplineControlPoint,
+             .setSketchCircleParameters,
+             .setSketchArcParameters,
+             .setSketchEntityDimension,
+             .convertSketchLineToArc,
+             .convertSketchLineToSpline,
+             .reverseSketchCurve,
+             .rebuildSketchCurve,
+             .extendSketchCurve,
+             .splitSketchCurve,
+             .trimSketchCurveSegment,
+             .cutSketchCurve,
              .extrudeProfile,
+             .createSweep,
+             .createPolySplineSurface,
+             .movePolySplineSurfaceVertex,
+             .slidePolySplineSurfaceVertices,
              .createExtrudedRectangle,
              .createExtrudedRectangleFromCorners,
              .createExtrudedCircle:

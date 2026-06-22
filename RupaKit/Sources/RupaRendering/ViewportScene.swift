@@ -17,10 +17,100 @@ public enum ViewportBodyFace: String, CaseIterable, Equatable, Sendable {
     case side
 }
 
+public enum ViewportBodyEdge: String, CaseIterable, Equatable, Sendable {
+    case leftBottom
+    case rightBottom
+    case rightTop
+    case leftTop
+}
+
+public enum ViewportBodyVertex: String, CaseIterable, Equatable, Sendable {
+    case frontBottomLeft
+    case frontBottomRight
+    case frontTopRight
+    case frontTopLeft
+    case backBottomLeft
+    case backBottomRight
+    case backTopRight
+    case backTopLeft
+}
+
+public extension ViewportBodyEdge {
+    static var verticalCases: [ViewportBodyEdge] {
+        [.leftBottom, .rightBottom, .rightTop, .leftTop]
+    }
+}
+
+public extension ViewportBodyVertex {
+    var usesMinX: Bool {
+        switch self {
+        case .frontBottomLeft, .frontTopLeft, .backBottomLeft, .backTopLeft:
+            true
+        case .frontBottomRight, .frontTopRight, .backBottomRight, .backTopRight:
+            false
+        }
+    }
+
+    var usesMinY: Bool {
+        switch self {
+        case .frontBottomLeft, .frontBottomRight, .frontTopRight, .frontTopLeft:
+            true
+        case .backBottomLeft, .backBottomRight, .backTopRight, .backTopLeft:
+            false
+        }
+    }
+
+    var usesMinZ: Bool {
+        switch self {
+        case .frontBottomLeft, .frontBottomRight, .backBottomLeft, .backBottomRight:
+            true
+        case .frontTopRight, .frontTopLeft, .backTopRight, .backTopLeft:
+            false
+        }
+    }
+}
+
 public enum ViewportSketchPrimitive: Equatable {
-    case point(CGPoint)
-    case line(start: CGPoint, end: CGPoint)
-    case circle(center: CGPoint, radiusMeters: Double)
+    case point(entityID: SketchEntityID, point: CGPoint)
+    case line(entityID: SketchEntityID, start: CGPoint, end: CGPoint)
+    case circle(entityID: SketchEntityID, center: CGPoint, radiusMeters: Double)
+    case arc(
+        entityID: SketchEntityID,
+        center: CGPoint,
+        radiusMeters: Double,
+        startAngleRadians: Double,
+        endAngleRadians: Double
+    )
+    case spline(
+        entityID: SketchEntityID,
+        points: [CGPoint],
+        controlPoints: [CGPoint],
+        sketchPlane: SketchPlane
+    )
+
+    public var entityID: SketchEntityID {
+        switch self {
+        case .point(let entityID, _),
+             .line(let entityID, _, _),
+             .circle(let entityID, _, _),
+             .arc(let entityID, _, _, _, _),
+             .spline(let entityID, _, _, _):
+            entityID
+        }
+    }
+}
+
+public struct ViewportSketchRegion: Equatable, Sendable {
+    public var componentID: SelectionComponentID
+    public var points: [CGPoint]
+
+    public init(
+        componentID: SelectionComponentID,
+        points: [CGPoint]
+    ) {
+        self.componentID = componentID
+        self.points = points
+    }
 }
 
 public enum ViewportSceneItemKind: Equatable {
@@ -46,6 +136,8 @@ public struct ViewportBodyComponent: Equatable {
     public var yMinMeters: Double
     public var yMaxMeters: Double
     public var cylinder: ViewportCylinderComponent?
+    public var mesh: ViewportBodyMesh?
+    public var topology: ViewportBodyTopology?
 
     public init(
         typeID: ObjectTypeID? = nil,
@@ -55,7 +147,9 @@ public struct ViewportBodyComponent: Equatable {
         sizeZMeters: Double,
         yMinMeters: Double,
         yMaxMeters: Double,
-        cylinder: ViewportCylinderComponent? = nil
+        cylinder: ViewportCylinderComponent? = nil,
+        mesh: ViewportBodyMesh? = nil,
+        topology: ViewportBodyTopology? = nil
     ) {
         self.typeID = typeID
         self.properties = properties
@@ -65,6 +159,66 @@ public struct ViewportBodyComponent: Equatable {
         self.yMinMeters = yMinMeters
         self.yMaxMeters = yMaxMeters
         self.cylinder = cylinder
+        self.mesh = mesh
+        self.topology = topology
+    }
+}
+
+public struct ViewportBodyMesh: Equatable {
+    public var positions: [Point3D]
+    public var indices: [UInt32]
+
+    public init(positions: [Point3D], indices: [UInt32]) {
+        self.positions = positions
+        self.indices = indices
+    }
+}
+
+public struct ViewportBodyTopology: Equatable {
+    public var faces: [Face]
+    public var edges: [Edge]
+    public var vertices: [Vertex]
+
+    public init(
+        faces: [Face] = [],
+        edges: [Edge] = [],
+        vertices: [Vertex] = []
+    ) {
+        self.faces = faces
+        self.edges = edges
+        self.vertices = vertices
+    }
+
+    public struct Face: Equatable {
+        public var componentID: SelectionComponentID
+        public var points: [Point3D]
+
+        public init(componentID: SelectionComponentID, points: [Point3D]) {
+            self.componentID = componentID
+            self.points = points
+        }
+    }
+
+    public struct Edge: Equatable {
+        public var componentID: SelectionComponentID
+        public var start: Point3D
+        public var end: Point3D
+
+        public init(componentID: SelectionComponentID, start: Point3D, end: Point3D) {
+            self.componentID = componentID
+            self.start = start
+            self.end = end
+        }
+    }
+
+    public struct Vertex: Equatable {
+        public var componentID: SelectionComponentID
+        public var point: Point3D
+
+        public init(componentID: SelectionComponentID, point: Point3D) {
+            self.componentID = componentID
+            self.point = point
+        }
     }
 }
 
@@ -108,19 +262,22 @@ public struct ViewportSceneItem: Equatable, Identifiable {
     public var sourceFeatureID: FeatureID?
     public var modelBounds: CGRect
     public var kind: ViewportSceneItemKind
+    public var sketchRegions: [ViewportSketchRegion]
 
     public init(
         id: String,
         featureID: FeatureID,
         sourceFeatureID: FeatureID? = nil,
         modelBounds: CGRect,
-        kind: ViewportSceneItemKind
+        kind: ViewportSceneItemKind,
+        sketchRegions: [ViewportSketchRegion] = []
     ) {
         self.id = id
         self.featureID = featureID
         self.sourceFeatureID = sourceFeatureID
         self.modelBounds = modelBounds
         self.kind = kind
+        self.sketchRegions = sketchRegions
     }
 }
 
@@ -147,15 +304,115 @@ public struct ViewportModelDrag: Equatable, Sendable {
     public var start: Point2D
     public var end: Point2D
     public var sketchPlane: SketchPlane
+    public var modifierFlags: ViewportInputModifierFlags
+    public var startWorldPoint: Point3D?
+    public var endWorldPoint: Point3D?
 
     public init(
         start: Point2D,
         end: Point2D,
-        sketchPlane: SketchPlane = .xy
+        sketchPlane: SketchPlane = .xy,
+        modifierFlags: ViewportInputModifierFlags = ViewportInputModifierFlags(),
+        startWorldPoint: Point3D? = nil,
+        endWorldPoint: Point3D? = nil
     ) {
         self.start = start
         self.end = end
         self.sketchPlane = sketchPlane
+        self.modifierFlags = modifierFlags
+        self.startWorldPoint = startWorldPoint
+        self.endWorldPoint = endWorldPoint
+    }
+
+    public func constrained(by axisConstraint: SketchAxisConstraint?) -> ViewportModelDrag {
+        guard let axisConstraint else {
+            return self
+        }
+        return ViewportModelDrag(
+            start: start,
+            end: axisConstraint.constrainedCanvasPoint(end, from: start, on: sketchPlane),
+            sketchPlane: sketchPlane,
+            modifierFlags: modifierFlags,
+            startWorldPoint: startWorldPoint
+        )
+    }
+}
+
+public struct ViewportFaceSurfacePointResolver: Sendable {
+    public init() {}
+
+    public func worldPoint(
+        for viewportPoint: CGPoint,
+        face: ViewportBodyTopology.Face,
+        layout: ViewportLayout,
+        tolerance: CGFloat = 1.0e-6
+    ) -> Point3D? {
+        guard face.points.count >= 3 else {
+            return nil
+        }
+        let projectedPoints = face.points.map { layout.project($0) }
+        let origin2D = projectedPoints[0]
+        let origin3D = face.points[0]
+        for index in 1 ..< projectedPoints.count - 1 {
+            guard let weights = barycentricWeights(
+                point: viewportPoint,
+                a: origin2D,
+                b: projectedPoints[index],
+                c: projectedPoints[index + 1],
+                tolerance: tolerance
+            ) else {
+                continue
+            }
+            return weightedPoint(
+                origin3D,
+                face.points[index],
+                face.points[index + 1],
+                weights: weights
+            )
+        }
+        return nil
+    }
+
+    private func barycentricWeights(
+        point: CGPoint,
+        a: CGPoint,
+        b: CGPoint,
+        c: CGPoint,
+        tolerance: CGFloat
+    ) -> (a: Double, b: Double, c: Double)? {
+        let denominator = (b.y - c.y) * (a.x - c.x) + (c.x - b.x) * (a.y - c.y)
+        guard abs(denominator) > tolerance else {
+            return nil
+        }
+        let aWeight = ((b.y - c.y) * (point.x - c.x) + (c.x - b.x) * (point.y - c.y)) / denominator
+        let bWeight = ((c.y - a.y) * (point.x - c.x) + (a.x - c.x) * (point.y - c.y)) / denominator
+        let cWeight = 1.0 - aWeight - bWeight
+        guard aWeight >= -tolerance,
+              bWeight >= -tolerance,
+              cWeight >= -tolerance,
+              aWeight <= 1.0 + tolerance,
+              bWeight <= 1.0 + tolerance,
+              cWeight <= 1.0 + tolerance else {
+            return nil
+        }
+        return (
+            a: Double(aWeight),
+            b: Double(bWeight),
+            c: Double(cWeight)
+        )
+    }
+
+    private func weightedPoint(
+        _ a: Point3D,
+        _ b: Point3D,
+        _ c: Point3D,
+        weights: (a: Double, b: Double, c: Double)
+    ) -> Point3D {
+        Point3D(
+            x: a.x * weights.a + b.x * weights.b + c.x * weights.c,
+            y: a.y * weights.a + b.y * weights.b + c.y * weights.c,
+            z: a.z * weights.a + b.z * weights.b + c.z * weights.c
+        )
     }
 }
 
@@ -165,19 +422,25 @@ public struct ViewportCanvasDragPlaceholder: Equatable {
 
     public init?(
         drag: ViewportModelDrag,
-        layout: ViewportLayout
+        layout: ViewportLayout,
+        widthMeters widthOverrideMeters: Double? = nil,
+        heightMeters heightOverrideMeters: Double? = nil
     ) {
         self.init(
             start: drag.start,
             end: drag.end,
-            layout: layout
+            layout: layout,
+            widthMeters: widthOverrideMeters,
+            heightMeters: heightOverrideMeters
         )
     }
 
     public init?(
         start: Point2D,
         end: Point2D,
-        layout: ViewportLayout
+        layout: ViewportLayout,
+        widthMeters widthOverrideMeters: Double? = nil,
+        heightMeters heightOverrideMeters: Double? = nil
     ) {
         guard start.x.isFinite,
               start.y.isFinite,
@@ -186,10 +449,22 @@ public struct ViewportCanvasDragPlaceholder: Equatable {
             return nil
         }
 
-        let minX = min(start.x, end.x)
-        let minY = min(start.y, end.y)
-        let maxX = max(start.x, end.x)
-        let maxY = max(start.y, end.y)
+        let deltaX = end.x - start.x
+        let deltaY = end.y - start.y
+        let width = widthOverrideMeters ?? abs(deltaX)
+        let height = heightOverrideMeters ?? abs(deltaY)
+        guard width.isFinite,
+              height.isFinite,
+              width > 0.0,
+              height > 0.0 else {
+            return nil
+        }
+        let endX = start.x + Self.signedDimension(width, following: deltaX)
+        let endY = start.y + Self.signedDimension(height, following: deltaY)
+        let minX = min(start.x, endX)
+        let minY = min(start.y, endY)
+        let maxX = max(start.x, endX)
+        let maxY = max(start.y, endY)
         guard minX < maxX, minY < maxY else {
             return nil
         }
@@ -202,6 +477,231 @@ public struct ViewportCanvasDragPlaceholder: Equatable {
         )
         self.modelBounds = modelBounds
         self.footprint = layout.projectedFootprint(modelBounds)
+    }
+
+    private static func signedDimension(_ dimension: Double, following delta: Double) -> Double {
+        delta < 0.0 ? -dimension : dimension
+    }
+}
+
+public enum ViewportCanvasDragPreviewKind: Equatable, Sendable {
+    case rectangle(widthMeters: Double?, heightMeters: Double?)
+    case polygon(PolygonToolState, radiusMeters: Double?, rotationAngleRadians: Double?)
+    case arc(radiusMeters: Double?, spanAngleRadians: Double?)
+    case spline
+}
+
+public enum ViewportCanvasDragPreview: Equatable {
+    case rectangle(ViewportCanvasDragPlaceholder)
+    case polygon(ViewportCanvasPolygonDragPreview)
+    case arc(ViewportCanvasArcDragPreview)
+    case spline(ViewportCanvasSplineDragPreview)
+
+    public init?(
+        kind: ViewportCanvasDragPreviewKind,
+        drag: ViewportModelDrag,
+        layout: ViewportLayout
+    ) {
+        switch kind {
+        case .rectangle(let widthMeters, let heightMeters):
+            guard let placeholder = ViewportCanvasDragPlaceholder(
+                drag: drag,
+                layout: layout,
+                widthMeters: widthMeters,
+                heightMeters: heightMeters
+            ) else {
+                return nil
+            }
+            self = .rectangle(placeholder)
+        case .polygon(let state, let radiusMeters, let rotationAngleRadians):
+            guard let preview = ViewportCanvasPolygonDragPreview(
+                drag: drag,
+                layout: layout,
+                sideCount: state.sideCount,
+                sizingMode: state.sizingMode,
+                inclinationMode: state.inclinationMode,
+                radiusMeters: radiusMeters,
+                rotationAngleRadians: rotationAngleRadians
+            ) else {
+                return nil
+            }
+            self = .polygon(preview)
+        case .arc(let radiusMeters, let spanAngleRadians):
+            guard let preview = ViewportCanvasArcDragPreview(
+                drag: drag,
+                layout: layout,
+                radiusMeters: radiusMeters,
+                spanAngleRadians: spanAngleRadians
+            ) else {
+                return nil
+            }
+            self = .arc(preview)
+        case .spline:
+            guard let preview = ViewportCanvasSplineDragPreview(
+                drag: drag,
+                layout: layout
+            ) else {
+                return nil
+            }
+            self = .spline(preview)
+        }
+    }
+}
+
+public struct ViewportCanvasPolygonDragPreview: Equatable {
+    public var modelCenter: CGPoint
+    public var modelRadiusMeters: Double
+    public var sizingRadiusMeters: Double
+    public var sizingMode: PolygonSizingMode
+    public var inclinationMode: PolygonInclinationMode
+    public var sides: Int
+    public var rotationAngleRadians: Double
+    public var modelVertices: [Point2D]
+    public var projectedCenter: CGPoint
+    public var projectedVertices: [CGPoint]
+    public var projectedRadiusEnd: CGPoint
+    public var modelBounds: CGRect
+
+    public init?(
+        drag: ViewportModelDrag,
+        layout: ViewportLayout,
+        sideCount: Int = CanvasSketchCurveDrafts.defaultPolygonSides,
+        sizingMode: PolygonSizingMode = .circumradius,
+        inclinationMode: PolygonInclinationMode = .vertical,
+        radiusMeters radiusOverrideMeters: Double? = nil,
+        rotationAngleRadians rotationAngleOverrideRadians: Double? = nil
+    ) {
+        let draft: CanvasSketchCurveDrafts.Polygon
+        do {
+            draft = try CanvasSketchCurveDrafts.polygon(
+                fromCenter: drag.start,
+                toRadiusPoint: drag.end,
+                sides: sideCount,
+                sizingMode: sizingMode,
+                inclinationMode: inclinationMode,
+                radiusMeters: radiusOverrideMeters,
+                rotationAngleRadians: rotationAngleOverrideRadians
+            )
+        } catch {
+            return nil
+        }
+
+        self.modelCenter = CGPoint(x: draft.center.x, y: draft.center.y)
+        self.modelRadiusMeters = draft.circumradiusMeters
+        self.sizingRadiusMeters = draft.radiusMeters
+        self.sizingMode = draft.sizingMode
+        self.inclinationMode = draft.inclinationMode
+        self.sides = draft.sides
+        self.rotationAngleRadians = draft.rotationAngleRadians
+        self.modelVertices = draft.vertices
+        self.projectedCenter = layout.project(modelCenter)
+        self.projectedVertices = draft.vertices.map {
+            layout.project(CGPoint(x: $0.x, y: $0.y))
+        }
+        self.projectedRadiusEnd = layout.project(
+            CGPoint(
+                x: draft.center.x + cos(draft.rotationAngleRadians) * draft.circumradiusMeters,
+                y: draft.center.y + sin(draft.rotationAngleRadians) * draft.circumradiusMeters
+            )
+        )
+        self.modelBounds = bounds(
+            for: draft.vertices.map {
+                CGPoint(x: $0.x, y: $0.y)
+            }
+        )
+    }
+}
+
+public struct ViewportCanvasArcDragPreview: Equatable {
+    public var modelCenter: CGPoint
+    public var modelRadiusMeters: Double
+    public var startAngleRadians: Double
+    public var endAngleRadians: Double
+    public var projectedCenter: CGPoint
+    public var projectedPoints: [CGPoint]
+    public var projectedRadiusEnd: CGPoint
+    public var modelBounds: CGRect
+
+    public init?(
+        drag: ViewportModelDrag,
+        layout: ViewportLayout,
+        radiusMeters radiusOverrideMeters: Double? = nil,
+        spanAngleRadians spanAngleOverrideRadians: Double? = nil
+    ) {
+        let draft: CanvasSketchCurveDrafts.Arc
+        do {
+            draft = try CanvasSketchCurveDrafts.arc(
+                fromCenter: drag.start,
+                toRadiusPoint: drag.end,
+                radiusMeters: radiusOverrideMeters,
+                spanAngleRadians: spanAngleOverrideRadians
+            )
+        } catch {
+            return nil
+        }
+
+        let center = CGPoint(x: draft.center.x, y: draft.center.y)
+        let boundsPoints = arcBoundsPoints(
+            center: center,
+            radiusMeters: draft.radiusMeters,
+            startAngleRadians: draft.startAngleRadians,
+            endAngleRadians: draft.endAngleRadians
+        )
+        self.modelCenter = center
+        self.modelRadiusMeters = draft.radiusMeters
+        self.startAngleRadians = draft.startAngleRadians
+        self.endAngleRadians = draft.endAngleRadians
+        self.projectedCenter = layout.project(center)
+        self.projectedPoints = projectedArcPoints(
+            center: center,
+            radiusMeters: draft.radiusMeters,
+            startAngleRadians: draft.startAngleRadians,
+            endAngleRadians: draft.endAngleRadians,
+            layout: layout,
+            segmentCount: 24
+        )
+        self.projectedRadiusEnd = layout.project(
+            CGPoint(
+                x: draft.center.x + cos(draft.endAngleRadians) * draft.radiusMeters,
+                y: draft.center.y + sin(draft.endAngleRadians) * draft.radiusMeters
+            )
+        )
+        self.modelBounds = bounds(for: boundsPoints)
+    }
+}
+
+public struct ViewportCanvasSplineDragPreview: Equatable {
+    public var modelControlPoints: [Point2D]
+    public var modelCurvePoints: [CGPoint]
+    public var projectedControlPoints: [CGPoint]
+    public var projectedCurvePoints: [CGPoint]
+    public var modelBounds: CGRect
+
+    public init?(
+        drag: ViewportModelDrag,
+        layout: ViewportLayout
+    ) {
+        let draft: CanvasSketchCurveDrafts.Spline
+        do {
+            draft = try CanvasSketchCurveDrafts.spline(
+                from: drag.start,
+                to: drag.end
+            )
+        } catch {
+            return nil
+        }
+
+        let curvePoints = cubicBezierSamplePoints(
+            controlPoints: draft.controlPoints,
+            segmentCount: 32
+        )
+        self.modelControlPoints = draft.controlPoints
+        self.modelCurvePoints = curvePoints
+        self.projectedControlPoints = draft.controlPoints.map {
+            layout.project(CGPoint(x: $0.x, y: $0.y))
+        }
+        self.projectedCurvePoints = curvePoints.map(layout.project)
+        self.modelBounds = bounds(for: curvePoints)
     }
 }
 
@@ -396,6 +896,40 @@ public struct ViewportBodyProjection: Equatable {
             )
         }
     }
+
+    public func segment(for edge: ViewportBodyEdge) -> (start: CGPoint, end: CGPoint) {
+        switch edge {
+        case .leftBottom:
+            (frontFootprint.bottomLeft, backFootprint.bottomLeft)
+        case .rightBottom:
+            (frontFootprint.bottomRight, backFootprint.bottomRight)
+        case .rightTop:
+            (frontFootprint.topRight, backFootprint.topRight)
+        case .leftTop:
+            (frontFootprint.topLeft, backFootprint.topLeft)
+        }
+    }
+
+    public func point(for vertex: ViewportBodyVertex) -> CGPoint {
+        switch vertex {
+        case .frontBottomLeft:
+            frontFootprint.bottomLeft
+        case .frontBottomRight:
+            frontFootprint.bottomRight
+        case .frontTopRight:
+            frontFootprint.topRight
+        case .frontTopLeft:
+            frontFootprint.topLeft
+        case .backBottomLeft:
+            backFootprint.bottomLeft
+        case .backBottomRight:
+            backFootprint.bottomRight
+        case .backTopRight:
+            backFootprint.topRight
+        case .backTopLeft:
+            backFootprint.topLeft
+        }
+    }
 }
 
 public struct ViewportLayout: Equatable {
@@ -453,6 +987,18 @@ public struct ViewportLayout: Equatable {
         return CGPoint(
             x: center.x + (basis.xDirection.dx * x + basis.zDirection.dx * y) * scale,
             y: center.y + (basis.xDirection.dy * x + basis.zDirection.dy * y) * scale
+        )
+    }
+
+    public func project(_ point: Point3D) -> CGPoint {
+        let x = CGFloat(point.x) - modelBounds.midX
+        let y = CGFloat(point.y)
+        let z = CGFloat(point.z) - modelBounds.midY
+        return CGPoint(
+            x: center.x
+                + (basis.xDirection.dx * x + basis.yDirection.dx * y + basis.zDirection.dx * z) * scale,
+            y: center.y
+                + (basis.xDirection.dy * x + basis.yDirection.dy * y + basis.zDirection.dy * z) * scale
         )
     }
 
@@ -557,12 +1103,18 @@ public struct ViewportModelCoordinateMapper {
     public func modelDrag(
         from start: CGPoint,
         to end: CGPoint,
-        sketchPlane: SketchPlane = .xy
+        sketchPlane: SketchPlane = .xy,
+        modifierFlags: ViewportInputModifierFlags = ViewportInputModifierFlags(),
+        startWorldPoint: Point3D? = nil,
+        endWorldPoint: Point3D? = nil
     ) -> ViewportModelDrag {
         ViewportModelDrag(
             start: modelPoint(for: start),
             end: modelPoint(for: end),
-            sketchPlane: sketchPlane
+            sketchPlane: sketchPlane,
+            modifierFlags: modifierFlags,
+            startWorldPoint: startWorldPoint,
+            endWorldPoint: endWorldPoint
         )
     }
 
@@ -596,16 +1148,34 @@ public struct ViewportModelCoordinateMapper {
 public struct ViewportHit: Equatable, Sendable {
     public var featureID: FeatureID
     public var kind: ViewportSelectableKind
+    public var sketchEntityID: SketchEntityID?
+    public var sketchPointHandle: SketchEntityPointHandle?
+    public var sketchControlPointIndex: Int?
     public var bodyFace: ViewportBodyFace?
+    public var bodyEdge: ViewportBodyEdge?
+    public var bodyVertex: ViewportBodyVertex?
+    public var selectionComponent: SelectionComponent?
 
     public init(
         featureID: FeatureID,
         kind: ViewportSelectableKind,
-        bodyFace: ViewportBodyFace? = nil
+        sketchEntityID: SketchEntityID? = nil,
+        sketchPointHandle: SketchEntityPointHandle? = nil,
+        sketchControlPointIndex: Int? = nil,
+        bodyFace: ViewportBodyFace? = nil,
+        bodyEdge: ViewportBodyEdge? = nil,
+        bodyVertex: ViewportBodyVertex? = nil,
+        selectionComponent: SelectionComponent? = nil
     ) {
         self.featureID = featureID
         self.kind = kind
+        self.sketchEntityID = sketchEntityID
+        self.sketchPointHandle = sketchPointHandle
+        self.sketchControlPointIndex = sketchControlPointIndex
         self.bodyFace = bodyFace
+        self.bodyEdge = bodyEdge
+        self.bodyVertex = bodyVertex
+        self.selectionComponent = selectionComponent
     }
 }
 
@@ -614,22 +1184,187 @@ public enum ViewportSelectionIntent: Equatable, Sendable {
     case toggle
 }
 
+public struct ViewportBodyTopologyHitTester {
+    public var tolerance: CGFloat
+
+    public init(tolerance: CGFloat = 8.0) {
+        self.tolerance = tolerance
+    }
+
+    public func hitTest(
+        component: ViewportBodyComponent,
+        point: CGPoint,
+        layout: ViewportLayout
+    ) -> (component: SelectionComponent, score: CGFloat)? {
+        guard let topology = component.topology else {
+            return nil
+        }
+        if let vertex = hitVertex(in: topology, point: point, layout: layout) {
+            return (.vertex(vertex.componentID), vertex.score)
+        }
+        if let edge = hitEdge(in: topology, point: point, layout: layout) {
+            return (.edge(edge.componentID), edge.score)
+        }
+        if let face = hitFace(in: topology, point: point, layout: layout) {
+            return (.face(face.componentID), face.score)
+        }
+        return nil
+    }
+
+    private func hitVertex(
+        in topology: ViewportBodyTopology,
+        point: CGPoint,
+        layout: ViewportLayout
+    ) -> (componentID: SelectionComponentID, score: CGFloat)? {
+        var bestVertex: (componentID: SelectionComponentID, score: CGFloat)?
+        for vertex in topology.vertices {
+            let distance = point.distance(to: layout.project(vertex.point))
+            guard distance <= tolerance else {
+                continue
+            }
+            if let current = bestVertex {
+                if distance < current.score {
+                    bestVertex = (vertex.componentID, distance)
+                }
+            } else {
+                bestVertex = (vertex.componentID, distance)
+            }
+        }
+        return bestVertex
+    }
+
+    private func hitEdge(
+        in topology: ViewportBodyTopology,
+        point: CGPoint,
+        layout: ViewportLayout
+    ) -> (componentID: SelectionComponentID, score: CGFloat)? {
+        var bestEdge: (componentID: SelectionComponentID, score: CGFloat)?
+        for edge in topology.edges {
+            let distance = point.distanceToSegment(
+                start: layout.project(edge.start),
+                end: layout.project(edge.end)
+            )
+            guard distance <= tolerance else {
+                continue
+            }
+            if let current = bestEdge {
+                if distance < current.score {
+                    bestEdge = (edge.componentID, distance)
+                }
+            } else {
+                bestEdge = (edge.componentID, distance)
+            }
+        }
+        return bestEdge
+    }
+
+    private func hitFace(
+        in topology: ViewportBodyTopology,
+        point: CGPoint,
+        layout: ViewportLayout
+    ) -> (componentID: SelectionComponentID, score: CGFloat)? {
+        var bestFace: (componentID: SelectionComponentID, score: CGFloat)?
+        for face in topology.faces {
+            let polygon = face.points.map { layout.project($0) }
+            guard contains(point, in: polygon, tolerance: tolerance) else {
+                continue
+            }
+            let center = polygonCenter(polygon)
+            let score = 6.0 + min(point.distance(to: center) * 0.001, 1.0)
+            if let current = bestFace {
+                if score < current.score {
+                    bestFace = (face.componentID, score)
+                }
+            } else {
+                bestFace = (face.componentID, score)
+            }
+        }
+        return bestFace
+    }
+
+    private func contains(
+        _ point: CGPoint,
+        in polygon: [CGPoint],
+        tolerance: CGFloat
+    ) -> Bool {
+        guard polygon.count >= 3 else {
+            return false
+        }
+        if tolerance > 0.0,
+           polygonBounds(polygon).insetBy(dx: -tolerance, dy: -tolerance).contains(point) == false {
+            return false
+        }
+
+        var isInside = false
+        for index in polygon.indices {
+            let current = polygon[index]
+            let previous = polygon[(index + polygon.count - 1) % polygon.count]
+            let crossesY = (current.y > point.y) != (previous.y > point.y)
+            guard crossesY else {
+                continue
+            }
+            let crossingX = (previous.x - current.x) * (point.y - current.y)
+                / (previous.y - current.y)
+                + current.x
+            if point.x < crossingX {
+                isInside.toggle()
+            }
+        }
+        if isInside {
+            return true
+        }
+        guard tolerance > 0.0 else {
+            return false
+        }
+        for index in polygon.indices {
+            let start = polygon[index]
+            let end = polygon[(index + 1) % polygon.count]
+            if point.distanceToSegment(start: start, end: end) <= tolerance {
+                return true
+            }
+        }
+        return false
+    }
+
+    private func polygonBounds(_ polygon: [CGPoint]) -> CGRect {
+        var bounds = CGRect.null
+        for point in polygon {
+            bounds = bounds.union(CGRect(x: point.x, y: point.y, width: 0.0, height: 0.0))
+        }
+        return bounds
+    }
+
+    private func polygonCenter(_ polygon: [CGPoint]) -> CGPoint {
+        let sum = polygon.reduce(CGPoint.zero) { partial, point in
+            CGPoint(x: partial.x + point.x, y: partial.y + point.y)
+        }
+        let count = max(CGFloat(polygon.count), 1.0)
+        return CGPoint(x: sum.x / count, y: sum.y / count)
+    }
+}
+
 public struct ViewportCanvasTarget: Equatable, Sendable {
     public var hit: ViewportHit?
     public var modelPoint: Point2D
+    public var modelWorldPoint: Point3D?
     public var sketchPlane: SketchPlane
     public var selectionIntent: ViewportSelectionIntent
+    public var modifierFlags: ViewportInputModifierFlags
 
     public init(
         hit: ViewportHit?,
         modelPoint: Point2D,
+        modelWorldPoint: Point3D? = nil,
         sketchPlane: SketchPlane = .xy,
-        selectionIntent: ViewportSelectionIntent = .replace
+        selectionIntent: ViewportSelectionIntent = .replace,
+        modifierFlags: ViewportInputModifierFlags = ViewportInputModifierFlags()
     ) {
         self.hit = hit
         self.modelPoint = modelPoint
+        self.modelWorldPoint = modelWorldPoint
         self.sketchPlane = sketchPlane
         self.selectionIntent = selectionIntent
+        self.modifierFlags = modifierFlags
     }
 }
 
@@ -643,6 +1378,240 @@ public struct ViewportSelectionDragTarget: Equatable, Sendable {
     ) {
         self.hits = hits
         self.selectionIntent = selectionIntent
+    }
+}
+
+public struct ViewportVertexDragTarget: Equatable, Sendable {
+    public var target: SelectionTarget
+    public var deltaX: Double
+    public var deltaY: Double
+
+    public init(
+        target: SelectionTarget,
+        deltaX: Double,
+        deltaY: Double
+    ) {
+        self.target = target
+        self.deltaX = deltaX
+        self.deltaY = deltaY
+    }
+}
+
+public struct ViewportPolySplineSurfaceVertexDragTarget: Equatable, Sendable {
+    public var target: SelectionTarget
+    public var deltaX: Double
+    public var deltaY: Double
+    public var deltaZ: Double
+
+    public init(
+        target: SelectionTarget,
+        deltaX: Double,
+        deltaY: Double,
+        deltaZ: Double
+    ) {
+        self.target = target
+        self.deltaX = deltaX
+        self.deltaY = deltaY
+        self.deltaZ = deltaZ
+    }
+}
+
+public struct ViewportPolySplineSurfaceVertexSlideDragTarget: Equatable, Sendable {
+    public var targets: [SelectionTarget]
+    public var direction: PolySplineSurfaceVertexSlideDirection
+    public var distance: Double
+
+    public init(
+        targets: [SelectionTarget],
+        direction: PolySplineSurfaceVertexSlideDirection,
+        distance: Double
+    ) {
+        self.targets = targets
+        self.direction = direction
+        self.distance = distance
+    }
+}
+
+public struct ViewportFaceDragTarget: Equatable, Sendable {
+    public var target: SelectionTarget
+    public var distance: Double
+
+    public init(
+        target: SelectionTarget,
+        distance: Double
+    ) {
+        self.target = target
+        self.distance = distance
+    }
+}
+
+public struct ViewportRegionOffsetDragTarget: Equatable, Sendable {
+    public var target: SelectionTarget
+    public var distance: Double
+
+    public init(
+        target: SelectionTarget,
+        distance: Double
+    ) {
+        self.target = target
+        self.distance = distance
+    }
+}
+
+public struct ViewportSlotWidthDragTarget: Equatable, Sendable {
+    public var target: SelectionTarget
+    public var width: Double
+
+    public init(
+        target: SelectionTarget,
+        width: Double
+    ) {
+        self.target = target
+        self.width = width
+    }
+}
+
+public struct ViewportSketchVertexOffsetDragTarget: Equatable, Sendable {
+    public var target: SelectionTarget
+    public var handle: SketchEntityPointHandle
+    public var distance: Double
+
+    public init(
+        target: SelectionTarget,
+        handle: SketchEntityPointHandle,
+        distance: Double
+    ) {
+        self.target = target
+        self.handle = handle
+        self.distance = distance
+    }
+}
+
+public struct ViewportEdgeChamferDragTarget: Equatable, Sendable {
+    public var target: SelectionTarget
+    public var distance: Double
+
+    public init(
+        target: SelectionTarget,
+        distance: Double
+    ) {
+        self.target = target
+        self.distance = distance
+    }
+}
+
+public struct ViewportEdgeFilletDragTarget: Equatable, Sendable {
+    public var target: SelectionTarget
+    public var radius: Double
+
+    public init(
+        target: SelectionTarget,
+        radius: Double
+    ) {
+        self.target = target
+        self.radius = radius
+    }
+}
+
+public struct ViewportSplineControlPointDragTarget: Equatable, Sendable {
+    public var target: SelectionTarget
+    public var controlPointIndex: Int
+    public var deltaX: Double
+    public var deltaY: Double
+
+    public init(
+        target: SelectionTarget,
+        controlPointIndex: Int,
+        deltaX: Double,
+        deltaY: Double
+    ) {
+        self.target = target
+        self.controlPointIndex = controlPointIndex
+        self.deltaX = deltaX
+        self.deltaY = deltaY
+    }
+}
+
+public struct ViewportSplineControlPointSlideDragTarget: Equatable, Sendable {
+    public var target: SelectionTarget
+    public var controlPointIndexes: [Int]
+    public var direction: SplineControlPointSlideDirection
+    public var distance: Double
+
+    public init(
+        target: SelectionTarget,
+        controlPointIndexes: [Int],
+        direction: SplineControlPointSlideDirection,
+        distance: Double
+    ) {
+        self.target = target
+        self.controlPointIndexes = controlPointIndexes
+        self.direction = direction
+        self.distance = distance
+    }
+}
+
+public struct ViewportSketchPointHandleDragTarget: Equatable, Sendable {
+    public var target: SelectionTarget
+    public var handle: SketchEntityPointHandle
+    public var deltaX: Double
+    public var deltaY: Double
+
+    public init(
+        target: SelectionTarget,
+        handle: SketchEntityPointHandle,
+        deltaX: Double,
+        deltaY: Double
+    ) {
+        self.target = target
+        self.handle = handle
+        self.deltaX = deltaX
+        self.deltaY = deltaY
+    }
+}
+
+public enum ViewportSketchCurveHandleKind: String, Equatable, Sendable {
+    case circleRadius
+    case arcRadius
+    case arcStartAngle
+    case arcEndAngle
+}
+
+public struct ViewportSketchCurveHandleDragTarget: Equatable, Sendable {
+    public var target: SelectionTarget
+    public var handle: ViewportSketchCurveHandleKind
+    public var radiusMeters: Double?
+    public var startAngleRadians: Double?
+    public var endAngleRadians: Double?
+
+    public init(
+        target: SelectionTarget,
+        handle: ViewportSketchCurveHandleKind,
+        radiusMeters: Double? = nil,
+        startAngleRadians: Double? = nil,
+        endAngleRadians: Double? = nil
+    ) {
+        self.target = target
+        self.handle = handle
+        self.radiusMeters = radiusMeters
+        self.startAngleRadians = startAngleRadians
+        self.endAngleRadians = endAngleRadians
+    }
+}
+
+public struct ViewportSketchDimensionDragTarget: Equatable, Sendable {
+    public var target: SelectionTarget
+    public var kind: SketchEntityDimensionKind
+    public var value: CADExpression
+
+    public init(
+        target: SelectionTarget,
+        kind: SketchEntityDimensionKind,
+        value: CADExpression
+    ) {
+        self.target = target
+        self.kind = kind
+        self.value = value
     }
 }
 
@@ -694,22 +1663,115 @@ public struct ViewportHitTester {
     ) -> (hit: ViewportHit, score: CGFloat)? {
         switch item.kind {
         case .sketch(let primitives):
-            guard let score = hitScoreForSketch(primitives, point: point, layout: layout) else {
+            if let sketchHit = hitScoreForSketch(primitives, point: point, layout: layout) {
+                return (
+                    ViewportHit(
+                        featureID: item.featureID,
+                        kind: item.kind.selectableKind,
+                        sketchEntityID: sketchHit.entityID,
+                        sketchPointHandle: sketchHit.pointHandle,
+                        sketchControlPointIndex: sketchHit.controlPointIndex
+                    ),
+                    sketchHit.score
+                )
+            }
+            guard let regionHit = hitScoreForSketchRegion(item.sketchRegions, point: point, layout: layout) else {
                 return nil
             }
             return (
-                ViewportHit(featureID: item.featureID, kind: item.kind.selectableKind),
-                score
+                ViewportHit(
+                    featureID: item.featureID,
+                    kind: item.kind.selectableKind,
+                    selectionComponent: .region(regionHit.componentID)
+                ),
+                regionHit.score
             )
-        case .body:
-            guard let bodyFace = hitBodyFace(for: item, point: point, layout: layout) else {
-                return nil
+        case .body(let component):
+            if let topologyHit = ViewportBodyTopologyHitTester(tolerance: tolerance).hitTest(
+                component: component,
+                point: point,
+                layout: layout
+            ) {
+                return (
+                    ViewportHit(
+                        featureID: item.featureID,
+                        kind: item.kind.selectableKind,
+                        selectionComponent: topologyHit.component
+                    ),
+                    topologyHit.score
+                )
             }
-            return (
-                ViewportHit(featureID: item.featureID, kind: item.kind.selectableKind, bodyFace: bodyFace.face),
-                bodyFace.score
-            )
+            if let bodyVertex = hitBodyVertex(for: item, point: point, layout: layout) {
+                return (
+                    ViewportHit(featureID: item.featureID, kind: item.kind.selectableKind, bodyVertex: bodyVertex.vertex),
+                    bodyVertex.score
+                )
+            }
+            if let bodyEdge = hitBodyEdge(for: item, point: point, layout: layout) {
+                return (
+                    ViewportHit(featureID: item.featureID, kind: item.kind.selectableKind, bodyEdge: bodyEdge.edge),
+                    bodyEdge.score
+                )
+            }
+            if let bodyFace = hitBodyFace(for: item, point: point, layout: layout) {
+                return (
+                    ViewportHit(featureID: item.featureID, kind: item.kind.selectableKind, bodyFace: bodyFace.face),
+                    bodyFace.score
+                )
+            }
+            return nil
         }
+    }
+
+    private func hitBodyVertex(
+        for item: ViewportSceneItem,
+        point: CGPoint,
+        layout: ViewportLayout
+    ) -> (vertex: ViewportBodyVertex, score: CGFloat)? {
+        guard let projection = layout.bodyProjection(for: item) else {
+            return nil
+        }
+        var bestVertex: (vertex: ViewportBodyVertex, score: CGFloat)?
+        for vertex in ViewportBodyVertex.allCases {
+            let distance = point.distance(to: projection.point(for: vertex))
+            guard distance <= tolerance else {
+                continue
+            }
+            if let current = bestVertex {
+                if distance < current.score {
+                    bestVertex = (vertex, distance)
+                }
+            } else {
+                bestVertex = (vertex, distance)
+            }
+        }
+        return bestVertex
+    }
+
+    private func hitBodyEdge(
+        for item: ViewportSceneItem,
+        point: CGPoint,
+        layout: ViewportLayout
+    ) -> (edge: ViewportBodyEdge, score: CGFloat)? {
+        guard let projection = layout.bodyProjection(for: item) else {
+            return nil
+        }
+        var bestEdge: (edge: ViewportBodyEdge, score: CGFloat)?
+        for edge in ViewportBodyEdge.verticalCases {
+            let segment = projection.segment(for: edge)
+            let distance = point.distanceToSegment(start: segment.start, end: segment.end)
+            guard distance <= tolerance else {
+                continue
+            }
+            if let current = bestEdge {
+                if distance < current.score {
+                    bestEdge = (edge, distance)
+                }
+            } else {
+                bestEdge = (edge, distance)
+            }
+        }
+        return bestEdge
     }
 
     private func hitBodyFace(
@@ -743,40 +1805,253 @@ public struct ViewportHitTester {
         _ primitives: [ViewportSketchPrimitive],
         point: CGPoint,
         layout: ViewportLayout
-    ) -> CGFloat? {
-        var bestDistance: CGFloat?
+    ) -> (entityID: SketchEntityID, pointHandle: SketchEntityPointHandle?, controlPointIndex: Int?, score: CGFloat)? {
+        var bestHit: (
+            entityID: SketchEntityID,
+            pointHandle: SketchEntityPointHandle?,
+            controlPointIndex: Int?,
+            score: CGFloat
+        )?
         for primitive in primitives {
             let distance: CGFloat?
+            let pointHandle: SketchEntityPointHandle?
+            let controlPointIndex: Int?
             switch primitive {
-            case .point(let modelPoint):
+            case .point(_, let modelPoint):
                 distance = point.distance(to: layout.project(modelPoint))
-            case .line(let start, let end):
-                distance = point.distanceToSegment(
+                pointHandle = .point
+                controlPointIndex = nil
+            case .line(_, let start, let end):
+                let curveDistance = point.distanceToSegment(
                     start: layout.project(start),
                     end: layout.project(end)
                 )
-            case .circle(let center, let radiusMeters):
-                distance = distanceToProjectedCircle(
+                let handles: [(handle: SketchEntityPointHandle, point: CGPoint)] = [
+                    (handle: .lineStart, point: start),
+                    (handle: .lineEnd, point: end),
+                ]
+                let handleHit = nearestSketchPointHandle(
+                    handles,
+                    point: point,
+                    layout: layout
+                )
+                if let handleHit,
+                   handleHit.distance <= curveDistance {
+                    distance = handleHit.distance
+                    pointHandle = handleHit.handle
+                } else {
+                    distance = curveDistance
+                    pointHandle = nil
+                }
+                controlPointIndex = nil
+            case .circle(_, let center, let radiusMeters):
+                let curveDistance = distanceToProjectedCircle(
                     center: center,
                     radiusMeters: radiusMeters,
                     point: point,
                     layout: layout
                 )
+                let handles: [(handle: SketchEntityPointHandle, point: CGPoint)] = [
+                    (handle: .circleCenter, point: center),
+                ]
+                let handleHit = nearestSketchPointHandle(
+                    handles,
+                    point: point,
+                    layout: layout
+                )
+                if let handleHit,
+                   handleHit.distance <= curveDistance {
+                    distance = handleHit.distance
+                    pointHandle = handleHit.handle
+                } else {
+                    distance = curveDistance
+                    pointHandle = nil
+                }
+                controlPointIndex = nil
+            case .arc(_, let center, let radiusMeters, let startAngle, let endAngle):
+                let curveDistance = distanceToProjectedArc(
+                    center: center,
+                    radiusMeters: radiusMeters,
+                    startAngleRadians: startAngle,
+                    endAngleRadians: endAngle,
+                    point: point,
+                    layout: layout
+                )
+                let handles: [(handle: SketchEntityPointHandle, point: CGPoint)] = [
+                    (handle: .arcCenter, point: center),
+                    (handle: .arcStart, point: pointOnArc(center: center, radiusMeters: radiusMeters, angle: startAngle)),
+                    (handle: .arcEnd, point: pointOnArc(center: center, radiusMeters: radiusMeters, angle: endAngle)),
+                ]
+                let handleHit = nearestSketchPointHandle(
+                    handles,
+                    point: point,
+                    layout: layout
+                )
+                if let handleHit,
+                   handleHit.distance <= curveDistance {
+                    distance = handleHit.distance
+                    pointHandle = handleHit.handle
+                } else {
+                    distance = curveDistance
+                    pointHandle = nil
+                }
+                controlPointIndex = nil
+            case .spline(_, let points, let controlPoints, _):
+                guard let curveDistance = distanceToProjectedPolyline(
+                    points: points,
+                    point: point,
+                    layout: layout
+                ) else {
+                    distance = nil
+                    pointHandle = nil
+                    controlPointIndex = nil
+                    break
+                }
+                let controlPointHit = nearestProjectedControlPoint(
+                    controlPoints,
+                    point: point,
+                    layout: layout
+                )
+                if let controlPointHit,
+                   controlPointHit.distance <= curveDistance {
+                    distance = controlPointHit.distance
+                    pointHandle = nil
+                    controlPointIndex = controlPointHit.index
+                } else {
+                    distance = curveDistance
+                    pointHandle = nil
+                    controlPointIndex = nil
+                }
             }
             guard let distance else {
                 continue
             }
-            if let current = bestDistance {
-                bestDistance = min(current, distance)
+            if let current = bestHit {
+                if distance < current.score {
+                    bestHit = (primitive.entityID, pointHandle, controlPointIndex, distance)
+                }
             } else {
-                bestDistance = distance
+                bestHit = (primitive.entityID, pointHandle, controlPointIndex, distance)
             }
         }
 
-        guard let bestDistance, bestDistance <= tolerance else {
+        guard let bestHit, bestHit.score <= tolerance else {
             return nil
         }
-        return bestDistance
+        return bestHit
+    }
+
+    private func hitScoreForSketchRegion(
+        _ regions: [ViewportSketchRegion],
+        point: CGPoint,
+        layout: ViewportLayout
+    ) -> (componentID: SelectionComponentID, score: CGFloat)? {
+        var bestHit: (componentID: SelectionComponentID, score: CGFloat)?
+        for region in regions {
+            let polygon = region.points.map(layout.project)
+            guard contains(point, in: polygon) else {
+                continue
+            }
+            let center = polygonCenter(polygon)
+            let score = 12.0 + min(point.distance(to: center) * 0.001, 1.0)
+            if let current = bestHit {
+                if score < current.score {
+                    bestHit = (region.componentID, score)
+                }
+            } else {
+                bestHit = (region.componentID, score)
+            }
+        }
+        return bestHit
+    }
+
+    private func contains(
+        _ point: CGPoint,
+        in polygon: [CGPoint]
+    ) -> Bool {
+        guard polygon.count >= 3 else {
+            return false
+        }
+        var isInside = false
+        for index in polygon.indices {
+            let current = polygon[index]
+            let previous = polygon[(index + polygon.count - 1) % polygon.count]
+            let crossesY = (current.y > point.y) != (previous.y > point.y)
+            guard crossesY else {
+                continue
+            }
+            let crossingX = (previous.x - current.x) * (point.y - current.y)
+                / (previous.y - current.y)
+                + current.x
+            if point.x < crossingX {
+                isInside.toggle()
+            }
+        }
+        return isInside
+    }
+
+    private func polygonCenter(_ polygon: [CGPoint]) -> CGPoint {
+        let sum = polygon.reduce(CGPoint.zero) { partial, point in
+            CGPoint(x: partial.x + point.x, y: partial.y + point.y)
+        }
+        let count = max(CGFloat(polygon.count), 1.0)
+        return CGPoint(x: sum.x / count, y: sum.y / count)
+    }
+
+    private func pointOnArc(
+        center: CGPoint,
+        radiusMeters: Double,
+        angle: Double
+    ) -> CGPoint {
+        let radius = CGFloat(max(radiusMeters, 1.0e-12))
+        return CGPoint(
+            x: center.x + cos(CGFloat(angle)) * radius,
+            y: center.y + sin(CGFloat(angle)) * radius
+        )
+    }
+
+    private func nearestSketchPointHandle(
+        _ handles: [(handle: SketchEntityPointHandle, point: CGPoint)],
+        point: CGPoint,
+        layout: ViewportLayout
+    ) -> (handle: SketchEntityPointHandle, distance: CGFloat)? {
+        var bestHit: (handle: SketchEntityPointHandle, distance: CGFloat)?
+        for handle in handles {
+            let distance = point.distance(to: layout.project(handle.point))
+            guard distance <= tolerance else {
+                continue
+            }
+            if let current = bestHit {
+                if distance < current.distance {
+                    bestHit = (handle.handle, distance)
+                }
+            } else {
+                bestHit = (handle.handle, distance)
+            }
+        }
+        return bestHit
+    }
+
+    private func nearestProjectedControlPoint(
+        _ controlPoints: [CGPoint],
+        point: CGPoint,
+        layout: ViewportLayout
+    ) -> (index: Int, distance: CGFloat)? {
+        var bestHit: (index: Int, distance: CGFloat)?
+        for (index, controlPoint) in controlPoints.enumerated() {
+            let distance = point.distance(to: layout.project(controlPoint))
+            guard distance <= tolerance else {
+                continue
+            }
+            if let current = bestHit {
+                if distance < current.distance {
+                    bestHit = (index, distance)
+                }
+            } else {
+                bestHit = (index, distance)
+            }
+        }
+        return bestHit
     }
 
     private func distanceToProjectedCircle(
@@ -810,6 +2085,64 @@ public struct ViewportHitTester {
 
         return bestDistance
     }
+
+    private func distanceToProjectedArc(
+        center: CGPoint,
+        radiusMeters: Double,
+        startAngleRadians: Double,
+        endAngleRadians: Double,
+        point: CGPoint,
+        layout: ViewportLayout
+    ) -> CGFloat {
+        var bestDistance = CGFloat.greatestFiniteMagnitude
+        var previousPoint: CGPoint?
+        for projectedPoint in projectedArcPoints(
+            center: center,
+            radiusMeters: radiusMeters,
+            startAngleRadians: startAngleRadians,
+            endAngleRadians: endAngleRadians,
+            layout: layout,
+            segmentCount: 64
+        ) {
+            if let previousPoint {
+                bestDistance = min(
+                    bestDistance,
+                    point.distanceToSegment(
+                        start: previousPoint,
+                        end: projectedPoint
+                    )
+                )
+            }
+            previousPoint = projectedPoint
+        }
+        return bestDistance
+    }
+
+    private func distanceToProjectedPolyline(
+        points: [CGPoint],
+        point: CGPoint,
+        layout: ViewportLayout
+    ) -> CGFloat? {
+        guard points.count >= 2 else {
+            return nil
+        }
+        var bestDistance = CGFloat.greatestFiniteMagnitude
+        var previousPoint: CGPoint?
+        for modelPoint in points {
+            let projectedPoint = layout.project(modelPoint)
+            if let previousPoint {
+                bestDistance = min(
+                    bestDistance,
+                    point.distanceToSegment(
+                        start: previousPoint,
+                        end: projectedPoint
+                    )
+                )
+            }
+            previousPoint = projectedPoint
+        }
+        return bestDistance
+    }
 }
 
 public struct ViewportSceneBuilder {
@@ -821,6 +2154,23 @@ public struct ViewportSceneBuilder {
 
     public func build(document: DesignDocument) -> ViewportScene {
         let graph = document.cadDocument.designGraph
+        var cachedEvaluatedDocument: EvaluatedDocument?
+        var didAttemptEvaluation = false
+        func evaluatedDocument() -> EvaluatedDocument? {
+            if didAttemptEvaluation {
+                return cachedEvaluatedDocument
+            }
+            didAttemptEvaluation = true
+            do {
+                cachedEvaluatedDocument = try CADPipeline
+                    .modelingDefault(for: document, objectRegistry: objectRegistry)
+                    .evaluate(document.cadDocument)
+            } catch {
+                cachedEvaluatedDocument = nil
+            }
+            return cachedEvaluatedDocument
+        }
+
         let items = graph.order.compactMap { featureID -> ViewportSceneItem? in
             guard let feature = graph.nodes[featureID] else {
                 return nil
@@ -843,6 +2193,11 @@ public struct ViewportSceneBuilder {
                             sketch,
                             parameters: document.cadDocument.parameters
                         )
+                    ),
+                    sketchRegions: sketchRegions(
+                        sketch,
+                        featureID: featureID,
+                        parameters: document.cadDocument.parameters
                     )
                 )
             case .extrude(let extrude):
@@ -879,9 +2234,342 @@ public struct ViewportSceneBuilder {
                     modelBounds: bounds,
                     kind: .body(component: component)
                 )
+            case .sweep(let sweep):
+                guard let profile = sweep.profiles.first,
+                      let sourceFeature = graph.nodes[profile.featureID],
+                      case .sketch(let sketch) = sourceFeature.operation,
+                      let bounds = sketchBounds(
+                          sketch,
+                          parameters: document.cadDocument.parameters
+                      ) else {
+                    return nil
+                }
+                if let pathFeature = graph.nodes[sweep.path.featureID],
+                   case .sketch(let pathSketch) = pathFeature.operation,
+                   let pathVector = straightOpenPathVector(
+                       pathSketch,
+                       parameters: document.cadDocument.parameters
+                   ),
+                   canUseViewportPrismSweep(
+                       sweep,
+                       parameters: document.cadDocument.parameters
+                   ),
+                   isIdentityViewportSweepSectionTransform(
+                       sweep,
+                       parameters: document.cadDocument.parameters
+                   ),
+                   let distanceFraction = resolvedScalar(
+                       sweep.options.distanceFraction,
+                       parameters: document.cadDocument.parameters
+                   ) {
+                    let pathLength = pathVector.length
+                    guard pathLength > 1.0e-9 else {
+                        return nil
+                    }
+                    let object = objectDescriptor(
+                        featureID: featureID,
+                        kind: .body,
+                        document: document
+                    )
+                    let component = bodyComponent(
+                        sketch: sketch,
+                        bounds: bounds,
+                        depthMeters: pathLength * distanceFraction,
+                        direction: .vector(pathVector / pathLength),
+                        parameters: document.cadDocument.parameters,
+                        declaredObjectTypeID: object?.typeID,
+                        declaredProperties: object?.properties ?? ObjectPropertySet()
+                    )
+                    return ViewportSceneItem(
+                        id: featureID.description,
+                        featureID: featureID,
+                        sourceFeatureID: profile.featureID,
+                        modelBounds: bounds,
+                        kind: .body(component: component)
+                    )
+                }
+
+                return evaluatedMeshBodyItem(
+                    featureID: featureID,
+                    sourceFeatureID: profile.featureID,
+                    document: document,
+                    evaluatedDocument: evaluatedDocument()
+                )
+            case .polySpline:
+                return evaluatedMeshBodyItem(
+                    featureID: featureID,
+                    sourceFeatureID: nil,
+                    document: document,
+                    evaluatedDocument: evaluatedDocument()
+                )
+            case .faceLoopOffset:
+                return evaluatedMeshBodyItem(
+                    featureID: featureID,
+                    sourceFeatureID: objectDescriptor(
+                        featureID: featureID,
+                        kind: .body,
+                        document: document
+                    )?.sourceProfileFeatureID,
+                    document: document,
+                    evaluatedDocument: evaluatedDocument()
+                )
+            case .edgeOffset:
+                return evaluatedMeshBodyItem(
+                    featureID: featureID,
+                    sourceFeatureID: objectDescriptor(
+                        featureID: featureID,
+                        kind: .body,
+                        document: document
+                    )?.sourceProfileFeatureID,
+                    document: document,
+                    evaluatedDocument: evaluatedDocument()
+                )
+            case .faceKnife:
+                return evaluatedMeshBodyItem(
+                    featureID: featureID,
+                    sourceFeatureID: objectDescriptor(
+                        featureID: featureID,
+                        kind: .body,
+                        document: document
+                    )?.sourceProfileFeatureID,
+                    document: document,
+                    evaluatedDocument: evaluatedDocument()
+                )
             }
         }
         return ViewportScene(items: items)
+    }
+
+    private func canUseViewportPrismSweep(
+        _ sweep: SweepFeature,
+        parameters: ParameterTable
+    ) -> Bool {
+        guard sweep.profiles.count == 1,
+              sweep.guides.isEmpty,
+              sweep.options.resultKind == .solid,
+              sweep.options.booleanOperation == .newBody,
+              sweep.options.keepTools == false,
+              let twistAngle = resolvedAngle(sweep.options.twistAngle, parameters: parameters),
+              twistAngle.isFinite,
+              let endScale = resolvedScalar(sweep.options.endScale, parameters: parameters),
+              endScale.isFinite,
+              endScale > 1.0e-9,
+              let distanceFraction = resolvedScalar(sweep.options.distanceFraction, parameters: parameters),
+              distanceFraction > 0.0,
+              distanceFraction <= 1.0 else {
+            return false
+        }
+        return true
+    }
+
+    private func isIdentityViewportSweepSectionTransform(
+        _ sweep: SweepFeature,
+        parameters: ParameterTable
+    ) -> Bool {
+        guard let twistAngle = resolvedAngle(sweep.options.twistAngle, parameters: parameters),
+              let endScale = resolvedScalar(sweep.options.endScale, parameters: parameters) else {
+            return false
+        }
+        return abs(twistAngle) <= 1.0e-9
+            && abs(endScale - 1.0) <= 1.0e-9
+    }
+
+    private func evaluatedMeshBodyItem(
+        featureID: FeatureID,
+        sourceFeatureID: FeatureID?,
+        document: DesignDocument,
+        evaluatedDocument: EvaluatedDocument?
+    ) -> ViewportSceneItem? {
+        guard let evaluatedDocument,
+              let mesh = evaluatedMesh(
+                  for: featureID,
+                  in: evaluatedDocument
+              ),
+              let bounds = viewportMeshBounds(mesh) else {
+            return nil
+        }
+        let object = objectDescriptor(
+            featureID: featureID,
+            kind: .body,
+            document: document
+        )
+        let resolvedTypeID = object?.typeID ?? .cube
+        let properties = resolvedProperties(
+            typeID: resolvedTypeID,
+            declaredProperties: object?.properties ?? ObjectPropertySet()
+        )
+        let component = ViewportBodyComponent(
+            typeID: resolvedTypeID,
+            properties: properties,
+            sizeXMeters: max(bounds.maxX - bounds.minX, 1.0e-9),
+            sizeYMeters: max(bounds.maxY - bounds.minY, 1.0e-9),
+            sizeZMeters: max(bounds.maxZ - bounds.minZ, 1.0e-9),
+            yMinMeters: bounds.minY,
+            yMaxMeters: bounds.maxY,
+            mesh: ViewportBodyMesh(
+                positions: mesh.positions,
+                indices: mesh.indices
+            ),
+            topology: evaluatedTopology(
+                for: featureID,
+                in: evaluatedDocument
+            )
+        )
+        return ViewportSceneItem(
+            id: featureID.description,
+            featureID: featureID,
+            sourceFeatureID: sourceFeatureID,
+            modelBounds: CGRect(
+                x: bounds.minX,
+                y: bounds.minZ,
+                width: max(bounds.maxX - bounds.minX, 1.0e-9),
+                height: max(bounds.maxZ - bounds.minZ, 1.0e-9)
+            ),
+            kind: .body(component: component)
+        )
+    }
+
+    private func evaluatedTopology(
+        for featureID: FeatureID,
+        in evaluatedDocument: EvaluatedDocument
+    ) -> ViewportBodyTopology {
+        let model = evaluatedDocument.brep
+        var faces: [ViewportBodyTopology.Face] = []
+        var edges: [ViewportBodyTopology.Edge] = []
+        var vertices: [ViewportBodyTopology.Vertex] = []
+
+        for (name, reference) in evaluatedDocument.generatedNames.sorted(by: {
+            persistentNameString($0.key) < persistentNameString($1.key)
+        }) {
+            guard persistentNameSourceFeatureID(name) == featureID else {
+                continue
+            }
+            let componentID = SelectionComponentID.generatedTopology(
+                persistentNameString(name)
+            )
+            switch reference {
+            case .body:
+                continue
+            case .face(let faceID):
+                guard let face = model.faces[faceID],
+                      let points = orderedOuterLoopPoints(for: face, in: model),
+                      points.count >= 3 else {
+                    continue
+                }
+                faces.append(ViewportBodyTopology.Face(
+                    componentID: componentID,
+                    points: points
+                ))
+            case .edge(let edgeID):
+                guard let edge = model.edges[edgeID],
+                      let start = model.vertices[edge.startVertexID]?.point,
+                      let end = model.vertices[edge.endVertexID]?.point else {
+                    continue
+                }
+                edges.append(ViewportBodyTopology.Edge(
+                    componentID: componentID,
+                    start: start,
+                    end: end
+                ))
+            case .vertex(let vertexID):
+                guard let vertex = model.vertices[vertexID] else {
+                    continue
+                }
+                vertices.append(ViewportBodyTopology.Vertex(
+                    componentID: componentID,
+                    point: vertex.point
+                ))
+            }
+        }
+
+        return ViewportBodyTopology(
+            faces: faces,
+            edges: edges,
+            vertices: vertices
+        )
+    }
+
+    private func orderedOuterLoopPoints(
+        for face: Face,
+        in model: BRepModel
+    ) -> [Point3D]? {
+        guard let loopID = face.loops.first(where: { loopID in
+            model.loops[loopID]?.role == .outer
+        }) else {
+            return nil
+        }
+        do {
+            return try model.orderedPoints(for: loopID)
+        } catch {
+            return nil
+        }
+    }
+
+    private func persistentNameSourceFeatureID(_ name: PersistentName) -> FeatureID? {
+        for component in name.components {
+            if case .feature(let featureID) = component {
+                return featureID
+            }
+        }
+        return nil
+    }
+
+    private func persistentNameString(_ name: PersistentName) -> String {
+        name.components.map { component in
+            switch component {
+            case .feature(let featureID):
+                return "feature:\(featureID.description)"
+            case .generated(let value):
+                return "generated:\(value)"
+            case .subshape(let value):
+                return "subshape:\(value)"
+            case .index(let index):
+                return "index:\(index)"
+            }
+        }
+        .joined(separator: "/")
+    }
+
+    private func evaluatedMesh(
+        for featureID: FeatureID,
+        in evaluatedDocument: EvaluatedDocument
+    ) -> Mesh? {
+        guard let bodyID = generatedBodyID(
+            for: featureID,
+            in: evaluatedDocument.generatedNames
+        ) else {
+            return nil
+        }
+        return evaluatedDocument.meshes[bodyID]
+    }
+
+    private func generatedBodyID(
+        for featureID: FeatureID,
+        in generatedNames: [PersistentName: TopologyReference]
+    ) -> BodyID? {
+        generatedNames
+            .sorted { persistentNameString($0.key) < persistentNameString($1.key) }
+            .compactMap { entry -> BodyID? in
+                guard persistentNameSourceFeatureID(entry.key) == featureID,
+                      case .body(let bodyID) = entry.value else {
+                    return nil
+                }
+                return bodyID
+            }
+            .first
+    }
+
+    private func viewportMeshBounds(_ mesh: Mesh) -> ViewportMeshBounds? {
+        var bounds: ViewportMeshBounds?
+        for point in mesh.positions {
+            if var current = bounds {
+                current.include(point)
+                bounds = current
+            } else {
+                bounds = ViewportMeshBounds(point)
+            }
+        }
+        return bounds
     }
 
     private func bodyComponent(
@@ -1082,7 +2770,7 @@ public struct ViewportSceneBuilder {
         _ sketch: Sketch,
         parameters: ParameterTable
     ) -> [ViewportSketchPrimitive] {
-        sketch.entities.values.compactMap { entity in
+        sketch.entities.compactMap { entityID, entity in
             switch entity {
             case .point(let point):
                 guard let resolved = resolvedViewportPoint(
@@ -1092,7 +2780,7 @@ public struct ViewportSceneBuilder {
                 ) else {
                     return nil
                 }
-                return .point(resolved)
+                return .point(entityID: entityID, point: resolved)
             case .line(let line):
                 guard let start = resolvedViewportPoint(
                     line.start,
@@ -1106,7 +2794,7 @@ public struct ViewportSceneBuilder {
                       ) else {
                     return nil
                 }
-                return .line(start: start, end: end)
+                return .line(entityID: entityID, start: start, end: end)
             case .circle(let circle):
                 guard let center = resolvedViewportPoint(
                     circle.center,
@@ -1116,8 +2804,82 @@ public struct ViewportSceneBuilder {
                       let radius = resolvedLength(circle.radius, parameters: parameters) else {
                     return nil
                 }
-                return .circle(center: center, radiusMeters: radius)
+                return .circle(entityID: entityID, center: center, radiusMeters: radius)
+            case .arc(let arc):
+                guard let center = resolvedViewportPoint(
+                    arc.center,
+                    plane: sketch.plane,
+                    parameters: parameters
+                ),
+                      let radius = resolvedLength(arc.radius, parameters: parameters),
+                      let startAngle = resolvedAngle(arc.startAngle, parameters: parameters),
+                      let endAngle = resolvedAngle(arc.endAngle, parameters: parameters) else {
+                    return nil
+                }
+                return .arc(
+                    entityID: entityID,
+                    center: center,
+                    radiusMeters: radius,
+                    startAngleRadians: startAngle,
+                    endAngleRadians: endAngle
+                )
+            case .spline(let spline):
+                let controlPoints = resolvedSplineControlPoints(
+                    spline,
+                    plane: sketch.plane,
+                    parameters: parameters
+                )
+                let points = splineSamplePoints(controlPoints: controlPoints)
+                guard points.count >= 2 else {
+                    return nil
+                }
+                return .spline(
+                    entityID: entityID,
+                    points: points,
+                    controlPoints: controlPoints,
+                    sketchPlane: sketch.plane
+                )
             }
+        }
+    }
+
+    private func sketchRegions(
+        _ sketch: Sketch,
+        featureID: FeatureID,
+        parameters: ParameterTable
+    ) -> [ViewportSketchRegion] {
+        let profiles: [Profile]
+        do {
+            let resolvedParameters = try ParameterResolver().resolve(parameters)
+            profiles = try CircleAwareSketchProfileExtractor().extractProfiles(
+                from: sketch,
+                sourceFeatureID: featureID,
+                parameters: resolvedParameters
+            )
+        } catch {
+            return []
+        }
+        return profiles.enumerated().compactMap { profileIndex, profile in
+            let points = viewportRegionPoints(for: profile)
+            guard points.count >= 3 else {
+                return nil
+            }
+            return ViewportSketchRegion(
+                componentID: .profileRegion(
+                    featureID: featureID,
+                    profileIndex: profileIndex
+                ),
+                points: points
+            )
+        }
+    }
+
+    private func viewportRegionPoints(for profile: Profile) -> [CGPoint] {
+        profile.vertices.compactMap { vertex in
+            guard let localPoint = localPoint(vertex, on: profile.plane) else {
+                return nil
+            }
+            return viewportPoint(from: localPoint, on: profile.plane)
         }
     }
 
@@ -1164,7 +2926,107 @@ public struct ViewportSceneBuilder {
                 CGPoint(x: center.x - radiusValue, y: center.y - radiusValue),
                 CGPoint(x: center.x + radiusValue, y: center.y + radiusValue),
             ]
+        case .arc(let arc):
+            guard let center = resolvedViewportPoint(
+                arc.center,
+                plane: plane,
+                parameters: parameters
+            ),
+                  let radius = resolvedLength(arc.radius, parameters: parameters),
+                  let startAngle = resolvedAngle(arc.startAngle, parameters: parameters),
+                  let endAngle = resolvedAngle(arc.endAngle, parameters: parameters) else {
+                return []
+            }
+            return arcBoundsPoints(
+                center: center,
+                radiusMeters: radius,
+                startAngleRadians: startAngle,
+                endAngleRadians: endAngle
+            )
+        case .spline(let spline):
+            return resolvedSplinePoints(
+                spline,
+                plane: plane,
+                parameters: parameters
+            )
         }
+    }
+
+    private func resolvedSplinePoints(
+        _ spline: SketchSpline,
+        plane: SketchPlane,
+        parameters: ParameterTable
+    ) -> [CGPoint] {
+        splineSamplePoints(
+            controlPoints: resolvedSplineControlPoints(
+                spline,
+                plane: plane,
+                parameters: parameters
+            )
+        )
+    }
+
+    private func resolvedSplineControlPoints(
+        _ spline: SketchSpline,
+        plane: SketchPlane,
+        parameters: ParameterTable
+    ) -> [CGPoint] {
+        guard spline.controlPoints.count >= 4,
+              (spline.controlPoints.count - 1).isMultiple(of: 3) else {
+            return []
+        }
+        let controlPoints = spline.controlPoints.compactMap { point in
+            resolvedViewportPoint(
+                point,
+                plane: plane,
+                parameters: parameters
+            )
+        }
+        guard controlPoints.count == spline.controlPoints.count else {
+            return []
+        }
+        return controlPoints
+    }
+
+    private func splineSamplePoints(controlPoints: [CGPoint]) -> [CGPoint] {
+        guard controlPoints.count >= 4,
+              (controlPoints.count - 1).isMultiple(of: 3) else {
+            return []
+        }
+        var samples: [CGPoint] = []
+        let samplesPerSegment = 32
+        for segmentStart in stride(from: 0, to: controlPoints.count - 1, by: 3) {
+            let p0 = controlPoints[segmentStart]
+            let p1 = controlPoints[segmentStart + 1]
+            let p2 = controlPoints[segmentStart + 2]
+            let p3 = controlPoints[segmentStart + 3]
+            for index in 0 ... samplesPerSegment {
+                if segmentStart > 0, index == 0 {
+                    continue
+                }
+                let t = CGFloat(index) / CGFloat(samplesPerSegment)
+                samples.append(cubicBezierPoint(p0, p1, p2, p3, t: t))
+            }
+        }
+        return samples
+    }
+
+    private func cubicBezierPoint(
+        _ p0: CGPoint,
+        _ p1: CGPoint,
+        _ p2: CGPoint,
+        _ p3: CGPoint,
+        t: CGFloat
+    ) -> CGPoint {
+        let oneMinusT = 1.0 - t
+        let b0 = oneMinusT * oneMinusT * oneMinusT
+        let b1 = 3.0 * oneMinusT * oneMinusT * t
+        let b2 = 3.0 * oneMinusT * t * t
+        let b3 = t * t * t
+        return CGPoint(
+            x: p0.x * b0 + p1.x * b1 + p2.x * b2 + p3.x * b3,
+            y: p0.y * b0 + p1.y * b1 + p2.y * b2 + p3.y * b3
+        )
     }
 
     private func resolvedViewportPoint(
@@ -1193,6 +3055,35 @@ public struct ViewportSceneBuilder {
         }
     }
 
+    private func localPoint(
+        _ point: Point3D,
+        on plane: SketchPlane
+    ) -> CGPoint? {
+        switch plane {
+        case .xy:
+            return CGPoint(x: CGFloat(point.x), y: CGFloat(point.y))
+        case .yz:
+            return CGPoint(x: CGFloat(point.y), y: CGFloat(point.z))
+        case .zx:
+            return CGPoint(x: CGFloat(point.z), y: CGFloat(point.x))
+        case .plane(let plane):
+            do {
+                let normal = try plane.normal.normalized(tolerance: 1.0e-9)
+                let helper = abs(normal.z) < 0.9 ? Vector3D.unitZ : Vector3D.unitY
+                let u = try helper.cross(normal).normalized(tolerance: 1.0e-9)
+                let v = normal.cross(u)
+                let delta = Vector3D(
+                    x: point.x - plane.origin.x,
+                    y: point.y - plane.origin.y,
+                    z: point.z - plane.origin.z
+                )
+                return CGPoint(x: CGFloat(delta.dot(u)), y: CGFloat(delta.dot(v)))
+            } catch {
+                return nil
+            }
+        }
+    }
+
     private func resolvedPoint(
         _ point: SketchPoint,
         parameters: ParameterTable
@@ -1202,6 +3093,46 @@ public struct ViewportSceneBuilder {
             return nil
         }
         return CGPoint(x: CGFloat(x), y: CGFloat(y))
+    }
+
+    private func straightOpenPathVector(
+        _ sketch: Sketch,
+        parameters: ParameterTable
+    ) -> Vector3D? {
+        guard sketch.entities.count == 1,
+              let entity = sketch.entities.values.first,
+              case .line(let line) = entity,
+              let start = resolvedPoint(line.start, parameters: parameters),
+              let end = resolvedPoint(line.end, parameters: parameters),
+              let startPoint = modelPoint(from: start, on: sketch.plane),
+              let endPoint = modelPoint(from: end, on: sketch.plane) else {
+            return nil
+        }
+        let vector = endPoint - startPoint
+        return vector.length > 1.0e-9 ? vector : nil
+    }
+
+    private func modelPoint(from localPoint: CGPoint, on plane: SketchPlane) -> Point3D? {
+        let x = Double(localPoint.x)
+        let y = Double(localPoint.y)
+        switch plane {
+        case .xy:
+            return Point3D(x: x, y: y, z: 0.0)
+        case .yz:
+            return Point3D(x: 0.0, y: x, z: y)
+        case .zx:
+            return Point3D(x: y, y: 0.0, z: x)
+        case .plane(let plane):
+            do {
+                let normal = try plane.normal.normalized(tolerance: 1.0e-9)
+                let helper = abs(normal.z) < 0.9 ? Vector3D.unitZ : Vector3D.unitY
+                let u = try helper.cross(normal).normalized(tolerance: 1.0e-9)
+                let v = normal.cross(u)
+                return plane.origin + (u * x) + (v * y)
+            } catch {
+                return nil
+            }
+        }
     }
 
     private func resolvedLength(
@@ -1218,6 +3149,187 @@ public struct ViewportSceneBuilder {
             return nil
         }
     }
+
+    private func resolvedAngle(
+        _ expression: CADExpression,
+        parameters: ParameterTable
+    ) -> Double? {
+        do {
+            let quantity = try parameters.resolvedValue(for: expression)
+            guard quantity.kind == .angle else {
+                return nil
+            }
+            return quantity.value
+        } catch {
+            return nil
+        }
+    }
+
+    private func resolvedScalar(
+        _ expression: CADExpression,
+        parameters: ParameterTable
+    ) -> Double? {
+        do {
+            let quantity = try parameters.resolvedValue(for: expression)
+            guard quantity.kind == .scalar else {
+                return nil
+            }
+            return quantity.value
+        } catch {
+            return nil
+        }
+    }
+}
+
+private struct ViewportMeshBounds {
+    var minX: Double
+    var minY: Double
+    var minZ: Double
+    var maxX: Double
+    var maxY: Double
+    var maxZ: Double
+
+    init(_ point: Point3D) {
+        self.minX = point.x
+        self.minY = point.y
+        self.minZ = point.z
+        self.maxX = point.x
+        self.maxY = point.y
+        self.maxZ = point.z
+    }
+
+    mutating func include(_ point: Point3D) {
+        minX = min(minX, point.x)
+        minY = min(minY, point.y)
+        minZ = min(minZ, point.z)
+        maxX = max(maxX, point.x)
+        maxY = max(maxY, point.y)
+        maxZ = max(maxZ, point.z)
+    }
+}
+
+private func projectedArcPoints(
+    center: CGPoint,
+    radiusMeters: Double,
+    startAngleRadians: Double,
+    endAngleRadians: Double,
+    layout: ViewportLayout,
+    segmentCount: Int
+) -> [CGPoint] {
+    arcSamplePoints(
+        center: center,
+        radiusMeters: radiusMeters,
+        startAngleRadians: startAngleRadians,
+        endAngleRadians: endAngleRadians,
+        segmentCount: segmentCount
+    ).map { layout.project($0) }
+}
+
+private func arcSamplePoints(
+    center: CGPoint,
+    radiusMeters: Double,
+    startAngleRadians: Double,
+    endAngleRadians: Double,
+    segmentCount: Int
+) -> [CGPoint] {
+    let radius = max(CGFloat(radiusMeters), 1.0e-12)
+    let span = normalizedArcSpan(startAngle: startAngleRadians, endAngle: endAngleRadians)
+    let count = max(segmentCount, 2)
+    return (0 ... count).map { index in
+        let ratio = Double(index) / Double(count)
+        let angle = startAngleRadians + span * ratio
+        return CGPoint(
+            x: center.x + cos(CGFloat(angle)) * radius,
+            y: center.y + sin(CGFloat(angle)) * radius
+        )
+    }
+}
+
+private func arcBoundsPoints(
+    center: CGPoint,
+    radiusMeters: Double,
+    startAngleRadians: Double,
+    endAngleRadians: Double
+) -> [CGPoint] {
+    let radius = max(CGFloat(radiusMeters), 1.0e-12)
+    let span = normalizedArcSpan(startAngle: startAngleRadians, endAngle: endAngleRadians)
+    let angles = arcBoundsAngles(startAngle: startAngleRadians, span: span)
+    return angles.map { angle in
+        CGPoint(
+            x: center.x + cos(CGFloat(angle)) * radius,
+            y: center.y + sin(CGFloat(angle)) * radius
+        )
+    }
+}
+
+private func arcBoundsAngles(startAngle: Double, span: Double) -> [Double] {
+    let fullCircle = Double.pi * 2.0
+    let tolerance = 1.0e-12
+    var angles = [startAngle, startAngle + span]
+    for baseAngle in [0.0, Double.pi / 2.0, Double.pi, Double.pi * 1.5, fullCircle] {
+        var angle = baseAngle
+        while angle < startAngle - tolerance {
+            angle += fullCircle
+        }
+        if angle <= startAngle + span + tolerance {
+            angles.append(angle)
+        }
+    }
+    return angles
+}
+
+private func normalizedArcSpan(startAngle: Double, endAngle: Double) -> Double {
+    let fullCircle = Double.pi * 2.0
+    let tolerance = 1.0e-12
+    var span = endAngle - startAngle
+    while span <= tolerance {
+        span += fullCircle
+    }
+    while span > fullCircle + tolerance {
+        span -= fullCircle
+    }
+    return min(span, fullCircle)
+}
+
+private func cubicBezierSamplePoints(
+    controlPoints: [Point2D],
+    segmentCount: Int
+) -> [CGPoint] {
+    guard controlPoints.count == 4 else {
+        return []
+    }
+    let count = max(segmentCount, 2)
+    return (0 ... count).map { index in
+        let t = Double(index) / Double(count)
+        let inverse = 1.0 - t
+        let first = inverse * inverse * inverse
+        let second = 3.0 * inverse * inverse * t
+        let third = 3.0 * inverse * t * t
+        let fourth = t * t * t
+        return CGPoint(
+            x: CGFloat(controlPoints[0].x * first
+                + controlPoints[1].x * second
+                + controlPoints[2].x * third
+                + controlPoints[3].x * fourth),
+            y: CGFloat(controlPoints[0].y * first
+                + controlPoints[1].y * second
+                + controlPoints[2].y * third
+                + controlPoints[3].y * fourth)
+        )
+    }
+}
+
+private func bounds(for points: [CGPoint]) -> CGRect {
+    let minX = points.map(\.x).min() ?? 0.0
+    let minY = points.map(\.y).min() ?? 0.0
+    let maxX = points.map(\.x).max() ?? 0.0
+    let maxY = points.map(\.y).max() ?? 0.0
+    return CGRect(
+        x: minX,
+        y: minY,
+        width: maxX - minX,
+        height: maxY - minY
+    )
 }
 
 private extension CGPoint {

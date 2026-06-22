@@ -6,6 +6,7 @@ public struct CircleAwareSketchProfileExtractor: SketchProfileExtracting {
     private let tolerance: ModelingTolerance
     private let circleSegmentCount: Int
     private let circleSegmentCountsByFeatureID: [FeatureID: Int]
+    private let splineTessellator: CubicBezierSplineTessellator
 
     public init(
         resolver: ParameterResolving = ParameterResolver(),
@@ -17,6 +18,7 @@ public struct CircleAwareSketchProfileExtractor: SketchProfileExtracting {
         self.tolerance = tolerance
         self.circleSegmentCount = max(circleSegmentCount, 3)
         self.circleSegmentCountsByFeatureID = circleSegmentCountsByFeatureID.mapValues { max($0, 3) }
+        self.splineTessellator = CubicBezierSplineTessellator(tolerance: tolerance)
     }
 
     public func extractProfiles(
@@ -26,6 +28,8 @@ public struct CircleAwareSketchProfileExtractor: SketchProfileExtracting {
     ) throws -> [Profile] {
         try tolerance.validate()
         var lines: [ResolvedSketchLine] = []
+        var arcs: [ResolvedSketchArc] = []
+        var splines: [ResolvedSketchSpline] = []
         var circles: [ResolvedSketchCircle] = []
         for (entityID, entity) in sketch.entities.sorted(by: { $0.key.description < $1.key.description }) {
             switch entity {
@@ -37,37 +41,104 @@ public struct CircleAwareSketchProfileExtractor: SketchProfileExtracting {
                 ))
             case .point:
                 throw SketchError.unsupportedProfile("Point entities are not supported in profile extraction.")
+            case .spline(let spline):
+                splines.append(ResolvedSketchSpline(
+                    id: entityID,
+                    controlPoints: try spline.controlPoints.map { point in
+                        try resolve(point, parameters: parameters)
+                    },
+                    isClosed: spline.isClosed
+                ))
+            case let .arc(arc):
+                arcs.append(ResolvedSketchArc(
+                    id: entityID,
+                    center: try resolve(arc.center, parameters: parameters),
+                    radius: try resolvePositiveLength(
+                        arc.radius,
+                        operation: "sketch.arc.radius",
+                        parameters: parameters
+                    ),
+                    startAngle: try resolveAngle(
+                        arc.startAngle,
+                        operation: "sketch.arc.startAngle",
+                        parameters: parameters
+                    ),
+                    endAngle: try resolveAngle(
+                        arc.endAngle,
+                        operation: "sketch.arc.endAngle",
+                        parameters: parameters
+                    )
+                ))
             case let .circle(circle):
                 circles.append(ResolvedSketchCircle(
                     id: entityID,
                     center: try resolve(circle.center, parameters: parameters),
-                    radius: try resolvePositiveLength(circle.radius, parameters: parameters)
+                    radius: try resolvePositiveLength(
+                        circle.radius,
+                        operation: "sketch.circle.radius",
+                        parameters: parameters
+                    )
                 ))
             }
         }
 
-        if let circle = circles.first, circles.count == 1, lines.isEmpty {
+        if let circle = circles.first, circles.count == 1, lines.isEmpty, arcs.isEmpty, splines.isEmpty {
             let vertices = try circlePoints(
                 for: circle,
                 segmentCount: circleSegmentCount(for: sourceFeatureID)
             ).map { point in
                 try mapTo3D(point, on: sketch.plane)
             }
-            return [Profile(sourceFeatureID: sourceFeatureID, plane: sketch.plane, vertices: vertices)]
+            return [Profile(
+                sourceFeatureID: sourceFeatureID,
+                plane: sketch.plane,
+                vertices: vertices,
+                boundarySegments: [
+                    try circularArcBoundarySegment(
+                        center: circle.center,
+                        radius: circle.radius,
+                        start: Point2D(x: circle.center.x + circle.radius, y: circle.center.y),
+                        end: Point2D(x: circle.center.x + circle.radius, y: circle.center.y),
+                        sweepAngle: Double.pi * 2.0,
+                        on: sketch.plane
+                    )
+                ]
+            )]
         }
 
         guard circles.isEmpty else {
             throw SketchError.unsupportedProfile("Mixed or multiple circle profiles are not supported.")
         }
-        guard !lines.isEmpty else {
+        guard !lines.isEmpty || !arcs.isEmpty || !splines.isEmpty else {
             throw SketchError.emptyProfile
         }
 
-        let orderedPoints = try normalizedSupportedLoop(from: try orderClosedLoop(lines))
-        let vertices = try orderedPoints.map { point in
-            try mapTo3D(point, on: sketch.plane)
+        let segments = try resolvedProfileSegments(
+            lines: lines,
+            arcs: arcs,
+            splines: splines,
+            sourceFeatureID: sourceFeatureID
+        )
+        let orderedLoops = try orderClosedLoops(segments).map { segments in
+            try normalizedSupportedSegments(from: segments)
         }
-        return [Profile(sourceFeatureID: sourceFeatureID, plane: sketch.plane, vertices: vertices)]
+        let orderedLoopPoints = try orderedLoops.map { try loopPoints(from: $0) }
+        try validateIndependentLoops(orderedLoopPoints)
+        return try orderedLoops.map { orderedSegments in
+            let orderedPoints = try loopPoints(from: orderedSegments)
+            let vertices = try orderedPoints.map { point in
+                try mapTo3D(point, on: sketch.plane)
+            }
+            let boundarySegments = try orderedSegments.flatMap { segment in
+                try boundarySegments(from: segment, on: sketch.plane)
+            }
+            return Profile(
+                sourceFeatureID: sourceFeatureID,
+                plane: sketch.plane,
+                vertices: vertices,
+                boundarySegments: boundarySegments
+            )
+        }
     }
 
     private func resolve(_ point: SketchPoint, parameters: ResolvedParameterTable) throws -> Point2D {
@@ -84,14 +155,30 @@ public struct CircleAwareSketchProfileExtractor: SketchProfileExtracting {
 
     private func resolvePositiveLength(
         _ expression: CADExpression,
+        operation: String,
         parameters: ResolvedParameterTable
     ) throws -> Double {
         let value = try resolver.evaluate(expression, parameters: parameters, variables: [:])
         guard value.kind == .length else {
-            throw UnitError.expectedQuantity(operation: "circle.radius", expected: .length, actual: value.kind)
+            throw UnitError.expectedQuantity(operation: operation, expected: .length, actual: value.kind)
         }
         guard value.value.isFinite, value.value > tolerance.distance else {
             throw SketchError.degenerateProfile
+        }
+        return value.value
+    }
+
+    private func resolveAngle(
+        _ expression: CADExpression,
+        operation: String,
+        parameters: ResolvedParameterTable
+    ) throws -> Double {
+        let value = try resolver.evaluate(expression, parameters: parameters, variables: [:])
+        guard value.kind == .angle else {
+            throw UnitError.expectedQuantity(operation: operation, expected: .angle, actual: value.kind)
+        }
+        guard value.value.isFinite else {
+            throw GeometryError.invalidCoordinate(value.value)
         }
         return value.value
     }
@@ -113,41 +200,145 @@ public struct CircleAwareSketchProfileExtractor: SketchProfileExtracting {
         }
     }
 
-    private func orderClosedLoop(_ lines: [ResolvedSketchLine]) throws -> [Point2D] {
-        var unused = lines
-        guard let first = unused.first else {
-            throw SketchError.emptyProfile
+    private func resolvedProfileSegments(
+        lines: [ResolvedSketchLine],
+        arcs: [ResolvedSketchArc],
+        splines: [ResolvedSketchSpline],
+        sourceFeatureID: FeatureID
+    ) throws -> [ResolvedProfileSegment] {
+        var segments = lines.map { line in
+            ResolvedProfileSegment(
+                id: line.id,
+                kind: .line,
+                points: [line.start, line.end]
+            )
         }
-        unused.removeFirst()
+        for arc in arcs {
+            segments.append(try polygonizedArcSegment(arc, sourceFeatureID: sourceFeatureID))
+        }
+        for spline in splines {
+            segments.append(try polygonizedSplineSegment(spline))
+        }
+        return segments
+    }
 
-        var ordered: [Point2D] = [first.start, first.end]
-        var current = first.end
-
-        while !unused.isEmpty {
-            guard let matchIndex = unused.firstIndex(where: {
-                isClose($0.start, current) || isClose($0.end, current)
-            }) else {
+    private func polygonizedSplineSegment(_ spline: ResolvedSketchSpline) throws -> ResolvedProfileSegment {
+        let points = try splineTessellator.points(for: spline.controlPoints)
+        if spline.isClosed {
+            guard let first = points.first,
+                  let last = points.last,
+                  isClose(first, last) else {
                 throw SketchError.openProfile
             }
+        }
+        guard points.count >= 2 else {
+            throw SketchError.degenerateProfile
+        }
+        return ResolvedProfileSegment(
+            id: spline.id,
+            kind: .spline,
+            points: points
+        )
+    }
 
-            let match = unused.remove(at: matchIndex)
-            if isClose(match.start, current) {
-                current = match.end
-                ordered.append(match.end)
-            } else {
-                current = match.start
-                ordered.append(match.start)
+    private func polygonizedArcSegment(
+        _ arc: ResolvedSketchArc,
+        sourceFeatureID: FeatureID
+    ) throws -> ResolvedProfileSegment {
+        let span = try normalizedAngleSpan(startAngle: arc.startAngle, endAngle: arc.endAngle)
+        let segmentCount = arcSegmentCount(
+            angleSpan: span,
+            sourceFeatureID: sourceFeatureID
+        )
+        let points = (0 ... segmentCount).map { index in
+            let ratio = Double(index) / Double(segmentCount)
+            let angle = arc.startAngle + span * ratio
+            return Point2D(
+                x: arc.center.x + cos(angle) * arc.radius,
+                y: arc.center.y + sin(angle) * arc.radius
+            )
+        }
+        return ResolvedProfileSegment(
+            id: arc.id,
+            kind: .arc(center: arc.center, radius: arc.radius, sweepAngle: span),
+            points: points
+        )
+    }
+
+    private func normalizedAngleSpan(startAngle: Double, endAngle: Double) throws -> Double {
+        guard startAngle.isFinite, endAngle.isFinite else {
+            throw GeometryError.invalidCoordinate(endAngle)
+        }
+        let fullCircle = Double.pi * 2.0
+        var span = endAngle - startAngle
+        while span <= tolerance.angle {
+            span += fullCircle
+        }
+        while span > fullCircle + tolerance.angle {
+            span -= fullCircle
+        }
+        guard span > tolerance.angle else {
+            throw SketchError.degenerateProfile
+        }
+        return min(span, fullCircle)
+    }
+
+    private func arcSegmentCount(
+        angleSpan: Double,
+        sourceFeatureID: FeatureID
+    ) -> Int {
+        let fullCircleSegmentCount = circleSegmentCount(for: sourceFeatureID)
+        let proportionalCount = Int(ceil(Double(fullCircleSegmentCount) * angleSpan / (Double.pi * 2.0)))
+        return max(proportionalCount, 2)
+    }
+
+    private func orderClosedLoops(_ segments: [ResolvedProfileSegment]) throws -> [[ResolvedProfileSegment]] {
+        var unused = segments
+        var loops: [[ResolvedProfileSegment]] = []
+        while !unused.isEmpty {
+            let first = unused.removeFirst()
+            var ordered = [first]
+            var current = first.end
+
+            while !isClose(first.start, current) {
+                guard let matchIndex = unused.firstIndex(where: {
+                    isClose($0.start, current) || isClose($0.end, current)
+                }) else {
+                    throw SketchError.openProfile
+                }
+
+                let match = unused.remove(at: matchIndex)
+                let segment = isClose(match.start, current)
+                    ? match
+                    : match.reversed()
+                current = segment.end
+                ordered.append(segment)
             }
-        }
 
-        guard let start = ordered.first, isClose(start, current) else {
-            throw SketchError.openProfile
+            let points = try loopPoints(from: ordered)
+            guard points.count >= 3 else {
+                throw SketchError.openProfile
+            }
+            loops.append(ordered)
         }
-        ordered.removeLast()
-        guard ordered.count >= 3 else {
-            throw SketchError.openProfile
+        guard loops.isEmpty == false else {
+            throw SketchError.emptyProfile
         }
-        return ordered
+        return loops
+    }
+
+    private func loopPoints(from segments: [ResolvedProfileSegment]) throws -> [Point2D] {
+        guard let first = segments.first else {
+            throw SketchError.emptyProfile
+        }
+        var points = first.points
+        for segment in segments.dropFirst() {
+            points.append(contentsOf: segment.points.dropFirst())
+        }
+        if let start = points.first, let end = points.last, isClose(start, end) {
+            points.removeLast()
+        }
+        return points
     }
 
     private func normalizedSupportedLoop(from points: [Point2D]) throws -> [Point2D] {
@@ -158,26 +349,186 @@ public struct CircleAwareSketchProfileExtractor: SketchProfileExtracting {
         }
 
         let normalized = area > 0.0 ? points : Array(points.reversed())
-        try validateConvex(normalized)
+        try validateSimpleLoop(normalized)
         return normalized
     }
 
-    private func validateConvex(_ points: [Point2D]) throws {
+    private func normalizedSupportedSegments(
+        from segments: [ResolvedProfileSegment]
+    ) throws -> [ResolvedProfileSegment] {
+        let points = try loopPoints(from: segments)
+        let area = signedArea(of: points)
         let areaTolerance = tolerance.distance * tolerance.distance
+        guard abs(area) > areaTolerance else {
+            throw SketchError.degenerateProfile
+        }
+
+        let normalized = area > 0.0
+            ? segments
+            : segments.reversed().map { $0.reversed() }
+        try validateSimpleLoop(try loopPoints(from: normalized))
+        return normalized
+    }
+
+    private func validateSimpleLoop(_ points: [Point2D]) throws {
+        guard points.count >= 3 else {
+            throw SketchError.degenerateProfile
+        }
+        let areaTolerance = tolerance.distance * tolerance.distance
+        let edgeTolerance = tolerance.distance * tolerance.distance
         for index in points.indices {
             let previous = points[(index + points.count - 1) % points.count]
             let current = points[index]
             let next = points[(index + 1) % points.count]
-            let first = Point2D(x: current.x - previous.x, y: current.y - previous.y)
             let second = Point2D(x: next.x - current.x, y: next.y - current.y)
-            let cross = first.x * second.y - first.y * second.x
-            if cross < -areaTolerance {
-                throw SketchError.unsupportedProfile("Concave profiles are not supported.")
+            let edgeLengthSquared = second.x * second.x + second.y * second.y
+            if edgeLengthSquared <= edgeTolerance {
+                throw SketchError.degenerateProfile
             }
-            if abs(cross) <= areaTolerance {
+            let previousLengthSquared = (current.x - previous.x) * (current.x - previous.x)
+                + (current.y - previous.y) * (current.y - previous.y)
+            if previousLengthSquared <= edgeTolerance {
                 throw SketchError.degenerateProfile
             }
         }
+
+        for leftIndex in points.indices {
+            let leftStart = points[leftIndex]
+            let leftEnd = points[(leftIndex + 1) % points.count]
+            for rightIndex in points.indices where rightIndex > leftIndex {
+                let isAdjacent = rightIndex == leftIndex + 1
+                    || (leftIndex == 0 && rightIndex == points.count - 1)
+                guard isAdjacent == false else {
+                    continue
+                }
+                let rightStart = points[rightIndex]
+                let rightEnd = points[(rightIndex + 1) % points.count]
+                if segmentsIntersectOrTouch(leftStart, leftEnd, rightStart, rightEnd) {
+                    throw SketchError.unsupportedProfile("Self-intersecting profiles are not supported.")
+                }
+            }
+        }
+        guard abs(signedArea(of: points)) > areaTolerance else {
+            throw SketchError.degenerateProfile
+        }
+    }
+
+    private func validateIndependentLoops(_ loops: [[Point2D]]) throws {
+        for leftIndex in loops.indices {
+            let left = loops[leftIndex]
+            for rightIndex in loops.indices where rightIndex > leftIndex {
+                let right = loops[rightIndex]
+                try validateLoopsDoNotIntersect(left, right)
+                if containsPoint(right[0], in: left) || containsPoint(left[0], in: right) {
+                    throw SketchError.unsupportedProfile("Nested profile loops require hole-aware profile extraction.")
+                }
+            }
+        }
+    }
+
+    private func validateLoopsDoNotIntersect(
+        _ left: [Point2D],
+        _ right: [Point2D]
+    ) throws {
+        for leftIndex in left.indices {
+            let leftStart = left[leftIndex]
+            let leftEnd = left[(leftIndex + 1) % left.count]
+            for rightIndex in right.indices {
+                let rightStart = right[rightIndex]
+                let rightEnd = right[(rightIndex + 1) % right.count]
+                if segmentsIntersectOrTouch(leftStart, leftEnd, rightStart, rightEnd) {
+                    throw SketchError.unsupportedProfile("Intersecting or touching profile loops require region-union extraction.")
+                }
+            }
+        }
+    }
+
+    private func containsPoint(_ point: Point2D, in polygon: [Point2D]) -> Bool {
+        guard polygon.count >= 3 else {
+            return false
+        }
+        var inside = false
+        var previousIndex = polygon.count - 1
+        for currentIndex in polygon.indices {
+            let current = polygon[currentIndex]
+            let previous = polygon[previousIndex]
+            if abs(orientation(previous, current, point)) <= tolerance.distance * tolerance.distance,
+               isPoint(point, onSegmentFrom: previous, to: current) {
+                return true
+            }
+            let crosses = (current.y > point.y) != (previous.y > point.y)
+            if crosses {
+                let xIntersection = (previous.x - current.x) * (point.y - current.y)
+                    / (previous.y - current.y) + current.x
+                if point.x < xIntersection {
+                    inside.toggle()
+                }
+            }
+            previousIndex = currentIndex
+        }
+        return inside
+    }
+
+    private func segmentsIntersectOrTouch(
+        _ firstStart: Point2D,
+        _ firstEnd: Point2D,
+        _ secondStart: Point2D,
+        _ secondEnd: Point2D
+    ) -> Bool {
+        let areaTolerance = tolerance.distance * tolerance.distance
+        let firstSecondStart = orientation(firstStart, firstEnd, secondStart)
+        let firstSecondEnd = orientation(firstStart, firstEnd, secondEnd)
+        let secondFirstStart = orientation(secondStart, secondEnd, firstStart)
+        let secondFirstEnd = orientation(secondStart, secondEnd, firstEnd)
+
+        if abs(firstSecondStart) <= areaTolerance,
+           isPoint(secondStart, onSegmentFrom: firstStart, to: firstEnd) {
+            return true
+        }
+        if abs(firstSecondEnd) <= areaTolerance,
+           isPoint(secondEnd, onSegmentFrom: firstStart, to: firstEnd) {
+            return true
+        }
+        if abs(secondFirstStart) <= areaTolerance,
+           isPoint(firstStart, onSegmentFrom: secondStart, to: secondEnd) {
+            return true
+        }
+        if abs(secondFirstEnd) <= areaTolerance,
+           isPoint(firstEnd, onSegmentFrom: secondStart, to: secondEnd) {
+            return true
+        }
+
+        return valuesHaveOppositeSigns(firstSecondStart, firstSecondEnd, tolerance: areaTolerance)
+            && valuesHaveOppositeSigns(secondFirstStart, secondFirstEnd, tolerance: areaTolerance)
+    }
+
+    private func valuesHaveOppositeSigns(
+        _ left: Double,
+        _ right: Double,
+        tolerance: Double
+    ) -> Bool {
+        (left > tolerance && right < -tolerance) ||
+            (left < -tolerance && right > tolerance)
+    }
+
+    private func orientation(
+        _ start: Point2D,
+        _ end: Point2D,
+        _ point: Point2D
+    ) -> Double {
+        (end.x - start.x) * (point.y - start.y)
+            - (end.y - start.y) * (point.x - start.x)
+    }
+
+    private func isPoint(
+        _ point: Point2D,
+        onSegmentFrom start: Point2D,
+        to end: Point2D
+    ) -> Bool {
+        point.x >= min(start.x, end.x) - tolerance.distance
+            && point.x <= max(start.x, end.x) + tolerance.distance
+            && point.y >= min(start.y, end.y) - tolerance.distance
+            && point.y <= max(start.y, end.y) + tolerance.distance
     }
 
     private func signedArea(of points: [Point2D]) -> Double {
@@ -212,6 +563,76 @@ public struct CircleAwareSketchProfileExtractor: SketchProfileExtracting {
             return plane.origin + (u * point.x) + (v * point.y)
         }
     }
+
+    private func normal(for plane: SketchPlane) throws -> Vector3D {
+        switch plane {
+        case .xy:
+            return .unitZ
+        case .yz:
+            return .unitX
+        case .zx:
+            return .unitY
+        case let .plane(plane):
+            return try plane.normal.normalized(tolerance: tolerance.distance)
+        }
+    }
+
+    private func boundarySegments(
+        from segment: ResolvedProfileSegment,
+        on plane: SketchPlane
+    ) throws -> [ProfileBoundarySegment] {
+        switch segment.kind {
+        case .line:
+            return [.line(ProfileLineSegment(
+                start: try mapTo3D(segment.start, on: plane),
+                end: try mapTo3D(segment.end, on: plane)
+            ))]
+        case let .arc(center, radius, sweepAngle):
+            return [try circularArcBoundarySegment(
+                center: center,
+                radius: radius,
+                start: segment.start,
+                end: segment.end,
+                sweepAngle: sweepAngle,
+                on: plane
+            )]
+        case .spline:
+            return try lineBoundarySegments(from: segment.points, on: plane)
+        }
+    }
+
+    private func lineBoundarySegments(
+        from points: [Point2D],
+        on plane: SketchPlane
+    ) throws -> [ProfileBoundarySegment] {
+        guard points.count >= 2 else {
+            throw SketchError.degenerateProfile
+        }
+        return try (0..<(points.count - 1)).map { index in
+            .line(ProfileLineSegment(
+                start: try mapTo3D(points[index], on: plane),
+                end: try mapTo3D(points[index + 1], on: plane)
+            ))
+        }
+    }
+
+    private func circularArcBoundarySegment(
+        center: Point2D,
+        radius: Double,
+        start: Point2D,
+        end: Point2D,
+        sweepAngle: Double,
+        on plane: SketchPlane
+    ) throws -> ProfileBoundarySegment {
+        .circularArc(ProfileCircularArcSegment(
+            center: try mapTo3D(center, on: plane),
+            normal: try normal(for: plane),
+            radius: radius,
+            start: try mapTo3D(start, on: plane),
+            end: try mapTo3D(end, on: plane),
+            sweepAngle: sweepAngle
+        ))
+    }
 }
 
 private struct ResolvedSketchLine {
@@ -224,4 +645,57 @@ private struct ResolvedSketchCircle {
     var id: SketchEntityID
     var center: Point2D
     var radius: Double
+}
+
+private struct ResolvedSketchArc {
+    var id: SketchEntityID
+    var center: Point2D
+    var radius: Double
+    var startAngle: Double
+    var endAngle: Double
+}
+
+private struct ResolvedSketchSpline {
+    var id: SketchEntityID
+    var controlPoints: [Point2D]
+    var isClosed: Bool
+}
+
+private struct ResolvedProfileSegment {
+    var id: SketchEntityID
+    var kind: ResolvedProfileSegmentKind
+    var points: [Point2D]
+
+    var start: Point2D {
+        points[0]
+    }
+
+    var end: Point2D {
+        points[points.count - 1]
+    }
+
+    func reversed() -> ResolvedProfileSegment {
+        ResolvedProfileSegment(
+            id: id,
+            kind: kind.reversed(),
+            points: Array(points.reversed())
+        )
+    }
+}
+
+private enum ResolvedProfileSegmentKind {
+    case line
+    case arc(center: Point2D, radius: Double, sweepAngle: Double)
+    case spline
+
+    func reversed() -> ResolvedProfileSegmentKind {
+        switch self {
+        case .line:
+            return .line
+        case let .arc(center, radius, sweepAngle):
+            return .arc(center: center, radius: radius, sweepAngle: -sweepAngle)
+        case .spline:
+            return .spline
+        }
+    }
 }

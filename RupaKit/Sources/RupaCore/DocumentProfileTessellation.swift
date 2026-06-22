@@ -2,7 +2,7 @@ import Foundation
 import SwiftCAD
 
 extension DesignDocument {
-    func circleProfileSegmentCounts(
+    func profileSegmentCounts(
         objectRegistry: ObjectTypeRegistry = .builtIn
     ) -> [FeatureID: Int] {
         var counts: [FeatureID: Int] = [:]
@@ -23,6 +23,16 @@ extension DesignDocument {
 
         for node in productMetadata.sceneNodes.values {
             guard let object = node.object,
+                  object.category == .sketch,
+                  let featureID = object.sourceFeatureID ?? node.reference?.featureID,
+                  let segmentCount = ProfileTessellationPolicy.arcSegmentCount(from: object) else {
+                continue
+            }
+            counts[featureID] = segmentCount
+        }
+
+        for node in productMetadata.sceneNodes.values {
+            guard let object = node.object,
                   object.category == .body,
                   object.typeID == .cylinder,
                   let sourceProfileFeatureID = object.sourceProfileFeatureID,
@@ -36,6 +46,16 @@ extension DesignDocument {
                 counts[sourceProfileFeatureID] == nil {
                 counts[sourceProfileFeatureID] = segmentCount.value
             }
+        }
+
+        for node in productMetadata.sceneNodes.values {
+            guard let object = node.object,
+                  object.category == .body,
+                  let sourceProfileFeatureID = object.sourceProfileFeatureID,
+                  let segmentCount = ProfileTessellationPolicy.arcSegmentCount(from: object) else {
+                continue
+            }
+            counts[sourceProfileFeatureID] = segmentCount
         }
 
         return counts

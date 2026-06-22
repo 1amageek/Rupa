@@ -38,11 +38,465 @@ import Testing
     #expect(ObjectTypeCatalog.definition(for: .line) != nil)
     #expect(ObjectTypeCatalog.definition(for: .rectangle) != nil)
     #expect(ObjectTypeCatalog.definition(for: .circle) != nil)
+    #expect(ObjectTypeCatalog.definition(for: .polygon) != nil)
     #expect(ObjectTypeCatalog.definition(for: .cube) != nil)
     #expect(ObjectTypeCatalog.definition(for: .cylinder) != nil)
+    #expect(ObjectTypeCatalog.definition(for: .polySpline) != nil)
     #expect(ObjectTypeCatalog.definition(for: .path) == nil)
     #expect(ObjectTypeCatalog.definition(for: .sphere) == nil)
     #expect(ObjectTypeCatalog.definition(for: .torus) == nil)
+}
+
+@Test func polygonSketchCreatesClosedEqualLengthLineLoop() async throws {
+    var document = DesignDocument.empty()
+
+    let featureID = try document.createPolygonSketch(
+        name: "Hexagon",
+        plane: .xy,
+        center: SketchPoint(
+            x: .length(1.0, .millimeter),
+            y: .length(2.0, .millimeter)
+        ),
+        radius: .length(10.0, .millimeter),
+        sides: 6,
+        rotationAngle: .angle(-90.0, .degree)
+    )
+
+    let feature = try #require(document.cadDocument.designGraph.nodes[featureID])
+    guard case .sketch(let sketch) = feature.operation else {
+        Issue.record("Expected a sketch feature.")
+        return
+    }
+    let lines = sketch.entities.values.compactMap { entity -> SketchLine? in
+        if case .line(let line) = entity {
+            return line
+        }
+        return nil
+    }
+    let node = try #require(document.productMetadata.sceneNodes.values.first {
+        $0.reference?.featureID == featureID
+    })
+
+    #expect(lines.count == 6)
+    #expect(sketch.constraints.count == 11)
+    #expect(sketch.constraints.filter { constraint in
+        if case .coincident = constraint {
+            return true
+        }
+        return false
+    }.count == 6)
+    #expect(sketch.constraints.filter { constraint in
+        if case .equalLength = constraint {
+            return true
+        }
+        return false
+    }.count == 5)
+    #expect(node.object?.typeID == .polygon)
+    #expect(node.object?.geometryRole == .sketchProfile)
+    #expect(node.object?.properties["radius"] == .length(0.01))
+    #expect(node.object?.properties["sizing.radius"] == .length(0.01))
+    #expect(node.object?.properties["radius.is.inradius"] == .boolean(false))
+    #expect(node.object?.properties["inclination.mode"] == .text(PolygonInclinationMode.vertical.rawValue))
+    #expect(node.object?.properties["sides.x"] == .integer(6))
+    #expect(node.object?.properties["angle"] == .angle(270.0))
+
+    let centerX = 0.001
+    let centerY = 0.002
+    let radius = 0.01
+    for line in lines {
+        let start = try resolvedSketchPoint(line.start, in: document)
+        let end = try resolvedSketchPoint(line.end, in: document)
+        #expect(abs(distance(from: start, to: (centerX, centerY)) - radius) <= 1.0e-12)
+        #expect(abs(distance(from: end, to: (centerX, centerY)) - radius) <= 1.0e-12)
+        #expect(abs(distance(from: start, to: end) - radius) <= 1.0e-12)
+    }
+}
+
+@Test func polygonSketchSupportsInradiusSizingMode() async throws {
+    var document = DesignDocument.empty()
+
+    let featureID = try document.createPolygonSketch(
+        name: "Inradius Square",
+        plane: .xy,
+        center: SketchPoint(
+            x: .length(0.0, .millimeter),
+            y: .length(0.0, .millimeter)
+        ),
+        radius: .length(10.0, .millimeter),
+        sides: 4,
+        sizingMode: .inradius,
+        rotationAngle: .angle(45.0, .degree)
+    )
+
+    let feature = try #require(document.cadDocument.designGraph.nodes[featureID])
+    guard case .sketch(let sketch) = feature.operation else {
+        Issue.record("Expected a sketch feature.")
+        return
+    }
+    let lines = sketch.entities.values.compactMap { entity -> SketchLine? in
+        if case .line(let line) = entity {
+            return line
+        }
+        return nil
+    }
+    let node = try #require(document.productMetadata.sceneNodes.values.first {
+        $0.reference?.featureID == featureID
+    })
+    let inradius = 0.01
+    let expectedCircumradius = inradius / cos(Double.pi / 4.0)
+    let expectedSideLength = inradius * 2.0 * tan(Double.pi / 4.0)
+
+    #expect(lines.count == 4)
+    #expect(node.object?.properties["radius"] == .length(expectedCircumradius))
+    #expect(node.object?.properties["sizing.radius"] == .length(inradius))
+    #expect(node.object?.properties["radius.is.inradius"] == .boolean(true))
+    #expect(node.object?.properties["inclination.mode"] == .text(PolygonInclinationMode.vertical.rawValue))
+    #expect(node.object?.properties["side.length"] == .length(expectedSideLength))
+
+    for line in lines {
+        let start = try resolvedSketchPoint(line.start, in: document)
+        let end = try resolvedSketchPoint(line.end, in: document)
+        #expect(abs(distance(from: start, to: (0.0, 0.0)) - expectedCircumradius) <= 1.0e-12)
+        #expect(abs(distance(from: end, to: (0.0, 0.0)) - expectedCircumradius) <= 1.0e-12)
+        #expect(abs(distance(from: start, to: end) - expectedSideLength) <= 1.0e-12)
+        #expect(abs(distanceFromOrigin(toLineFrom: start, to: end) - inradius) <= 1.0e-12)
+    }
+}
+
+@Test func polygonSketchRejectsInvalidSideCounts() async throws {
+    var document = DesignDocument.empty()
+
+    #expect(throws: EditorError.self) {
+        _ = try document.createPolygonSketch(
+            name: "Invalid Polygon",
+            plane: .xy,
+            center: SketchPoint(
+                x: .length(0.0, .millimeter),
+                y: .length(0.0, .millimeter)
+            ),
+            radius: .length(10.0, .millimeter),
+            sides: 2
+        )
+    }
+}
+
+@Test func polySplineSurfaceCreatesTypedSheetObject() async throws {
+    var document = DesignDocument.empty()
+
+    let featureID = try document.createPolySplineSurface(
+        name: "Quad Surface",
+        sourceMesh: designDocumentPolySplineQuadMesh()
+    )
+
+    let feature = try #require(document.cadDocument.designGraph.nodes[featureID])
+    guard case let .polySpline(polySpline) = feature.operation else {
+        Issue.record("Expected a PolySpline feature.")
+        return
+    }
+    #expect(polySpline.sourceMesh.positions.count == 4)
+    #expect(feature.outputs == [FeatureOutput(role: .sheet)])
+    let node = try #require(document.productMetadata.sceneNodes.values.first {
+        $0.reference?.featureID == featureID
+    })
+    #expect(node.reference?.kind == .body)
+    #expect(node.object?.typeID == .polySpline)
+    #expect(node.object?.category == .body)
+    #expect(node.object?.geometryRole == .surface)
+    #expect(node.object?.properties["patch.count"] == .integer(1))
+    #expect(node.object?.properties["control.point.u"] == .integer(4))
+    #expect(node.object?.properties["control.point.v"] == .integer(4))
+    #expect(node.object?.properties["merge.patches"] == .boolean(true))
+    #expect(node.object?.properties["interpolate.boundary"] == .boolean(true))
+}
+
+@Test func polySplineSurfaceVertexMoveMutatesSourceBoundaryVertex() async throws {
+    var document = DesignDocument.empty()
+
+    let featureID = try document.createPolySplineSurface(
+        name: "Editable Quad Surface",
+        sourceMesh: designDocumentPolySplineQuadMesh()
+    )
+    let topology = try TopologySummaryService().summarize(document: document)
+    let vertexEntry = try #require(topology.entries.first {
+        $0.kind == .vertex
+            && $0.subshapeRole == "patch:0:vertex:uMax:vMax"
+    })
+    let target = try #require(vertexEntry.selectionTarget())
+
+    try document.movePolySplineSurfaceVertex(
+        target: target,
+        deltaX: .length(0.0, .millimeter),
+        deltaY: .length(0.0, .millimeter),
+        deltaZ: .length(1.0, .millimeter)
+    )
+
+    let feature = try #require(document.cadDocument.designGraph.nodes[featureID])
+    guard case let .polySpline(polySpline) = feature.operation else {
+        Issue.record("Expected a PolySpline feature.")
+        return
+    }
+    #expect(abs(polySpline.sourceMesh.positions[2].z - 0.005) <= 1.0e-12)
+
+    let analysis = try SurfaceAnalysisService(options: SurfaceAnalysisOptions(sampleDensity: .low))
+        .analyze(document: document)
+    let face = try #require(analysis.faces.first)
+    let trimBoundary = try #require(face.trimBoundaries.first)
+    #expect(trimBoundary.points.contains { point in
+        abs(point.x - 0.02) <= 1.0e-12
+            && abs(point.y - 0.02) <= 1.0e-12
+            && abs(point.z - 0.005) <= 1.0e-12
+    })
+}
+
+@Test func polySplineSurfaceVertexMoveRejectsNonVertexTargets() async throws {
+    var document = DesignDocument.empty()
+
+    _ = try document.createPolySplineSurface(
+        name: "Rejected Quad Surface",
+        sourceMesh: designDocumentPolySplineQuadMesh()
+    )
+    let topology = try TopologySummaryService().summarize(document: document)
+    let faceEntry = try #require(topology.entries.first {
+        $0.kind == .face
+            && $0.subshapeRole == "patch:0:face"
+    })
+    let target = try #require(faceEntry.selectionTarget())
+
+    var caught: EditorError?
+    do {
+        try document.movePolySplineSurfaceVertex(
+            target: target,
+            deltaX: .length(0.0, .millimeter),
+            deltaY: .length(0.0, .millimeter),
+            deltaZ: .length(1.0, .millimeter)
+        )
+    } catch let error as EditorError {
+        caught = error
+    }
+
+    #expect(caught?.code == .commandInvalid)
+    #expect(caught?.message.contains("generated topology vertex") == true)
+}
+
+@Test func polySplineSurfaceVertexSlideMovesBoundaryVertexAlongPositiveU() async throws {
+    var document = DesignDocument.empty()
+
+    let featureID = try document.createPolySplineSurface(
+        name: "Slide U Quad Surface",
+        sourceMesh: designDocumentPolySplineQuadMesh()
+    )
+    let target = try polySplineVertexTarget(
+        role: "patch:0:vertex:uMin:vMin",
+        in: document
+    )
+
+    try document.slidePolySplineSurfaceVertices(
+        targets: [target],
+        direction: .positiveU,
+        distance: .length(1.0, .millimeter)
+    )
+
+    let feature = try #require(document.cadDocument.designGraph.nodes[featureID])
+    guard case let .polySpline(polySpline) = feature.operation else {
+        Issue.record("Expected a PolySpline feature.")
+        return
+    }
+    #expect(abs(polySpline.sourceMesh.positions[0].x - 0.001) <= 1.0e-12)
+    #expect(abs(polySpline.sourceMesh.positions[0].y) <= 1.0e-12)
+    #expect(abs(polySpline.sourceMesh.positions[0].z) <= 1.0e-12)
+}
+
+@Test func polySplineSurfaceVertexSlideMovesBoundaryVertexAlongPositiveV() async throws {
+    var document = DesignDocument.empty()
+
+    let featureID = try document.createPolySplineSurface(
+        name: "Slide V Quad Surface",
+        sourceMesh: designDocumentPolySplineQuadMesh()
+    )
+    let target = try polySplineVertexTarget(
+        role: "patch:0:vertex:uMax:vMin",
+        in: document
+    )
+
+    try document.slidePolySplineSurfaceVertices(
+        targets: [target],
+        direction: .positiveV,
+        distance: .length(1.0, .millimeter)
+    )
+
+    let feature = try #require(document.cadDocument.designGraph.nodes[featureID])
+    guard case let .polySpline(polySpline) = feature.operation else {
+        Issue.record("Expected a PolySpline feature.")
+        return
+    }
+    let length = sqrt((0.02 * 0.02) + (0.004 * 0.004))
+    #expect(abs(polySpline.sourceMesh.positions[1].x - 0.02) <= 1.0e-12)
+    #expect(abs(polySpline.sourceMesh.positions[1].y - (0.02 / length * 0.001)) <= 1.0e-12)
+    #expect(abs(polySpline.sourceMesh.positions[1].z - (0.004 / length * 0.001)) <= 1.0e-12)
+}
+
+@Test func polySplineSurfaceVertexSlideMovesBoundaryVertexAlongNormal() async throws {
+    var document = DesignDocument.empty()
+
+    let featureID = try document.createPolySplineSurface(
+        name: "Slide Normal Quad Surface",
+        sourceMesh: designDocumentPolySplineQuadMesh()
+    )
+    let target = try polySplineVertexTarget(
+        role: "patch:0:vertex:uMin:vMin",
+        in: document
+    )
+
+    try document.slidePolySplineSurfaceVertices(
+        targets: [target],
+        direction: .normal,
+        distance: .length(1.0, .millimeter)
+    )
+
+    let feature = try #require(document.cadDocument.designGraph.nodes[featureID])
+    guard case let .polySpline(polySpline) = feature.operation else {
+        Issue.record("Expected a PolySpline feature.")
+        return
+    }
+    #expect(abs(polySpline.sourceMesh.positions[0].x) <= 1.0e-12)
+    #expect(abs(polySpline.sourceMesh.positions[0].y) <= 1.0e-12)
+    #expect(abs(polySpline.sourceMesh.positions[0].z - 0.001) <= 1.0e-12)
+}
+
+@Test func polySplineSurfaceVertexSlideRejectsDuplicateSourceTargets() async throws {
+    var document = DesignDocument.empty()
+
+    _ = try document.createPolySplineSurface(
+        name: "Rejected Slide Quad Surface",
+        sourceMesh: designDocumentPolySplineQuadMesh()
+    )
+    let target = try polySplineVertexTarget(
+        role: "patch:0:vertex:uMin:vMin",
+        in: document
+    )
+
+    var caught: EditorError?
+    do {
+        try document.slidePolySplineSurfaceVertices(
+            targets: [target, target],
+            direction: .positiveU,
+            distance: .length(1.0, .millimeter)
+        )
+    } catch let error as EditorError {
+        caught = error
+    }
+
+    #expect(caught?.code == .commandInvalid)
+    #expect(caught?.message.contains("duplicate targets") == true)
+}
+
+@Test func polySplineSurfaceCreatesPlanarUnmergedPatchNetworkTypedSheetObject() async throws {
+    var document = DesignDocument.empty()
+
+    let featureID = try document.createPolySplineSurface(
+        name: "Planar Patch Network",
+        sourceMesh: designDocumentPolySplinePatchNetworkMesh(centerZ: 0.0),
+        options: PolySplineOptions(mergePatches: false)
+    )
+
+    let feature = try #require(document.cadDocument.designGraph.nodes[featureID])
+    guard case let .polySpline(polySpline) = feature.operation else {
+        Issue.record("Expected a PolySpline feature.")
+        return
+    }
+    #expect(polySpline.options.mergePatches == false)
+    #expect(feature.outputs == [FeatureOutput(role: .sheet)])
+    let node = try #require(document.productMetadata.sceneNodes.values.first {
+        $0.reference?.featureID == featureID
+    })
+    #expect(node.object?.typeID == .polySpline)
+    #expect(node.object?.geometryRole == .surface)
+    #expect(node.object?.properties["patch.count"] == .integer(2))
+    #expect(node.object?.properties["control.point.u"] == .integer(4))
+    #expect(node.object?.properties["control.point.v"] == .integer(4))
+    #expect(node.object?.properties["merge.patches"] == .boolean(false))
+    #expect(node.object?.properties["interpolate.boundary"] == .boolean(true))
+}
+
+@Test func polySplineMeshAnalysisServiceReportsPreflightDiagnostics() async throws {
+    let result = PolySplineMeshAnalysisService().analyze(
+        sourceMesh: designDocumentPolySplineQuadMesh(),
+        options: PolySplineOptions(roundedCorners: true)
+    )
+
+    #expect(!result.isSupported)
+    #expect(result.candidateKind == .singleQuad)
+    #expect(result.supportedPatchCount == 1)
+    #expect(result.candidatePatchCount == 1)
+    #expect(result.patchGraph?.candidates.count == 1)
+    #expect(result.patchGraph?.partition?.selectedCandidateIDs == [0])
+    #expect(result.errors.contains { $0.code == .unsupportedRoundedCorners })
+}
+
+@Test func polySplineMeshAnalysisServiceReportsPatchGraphCandidates() async throws {
+    let result = PolySplineMeshAnalysisService().analyze(
+        sourceMesh: designDocumentPolySplinePatchNetworkMesh()
+    )
+
+    #expect(!result.isSupported)
+    #expect(result.candidateKind == .quadPatchGraph)
+    #expect(result.supportedPatchCount == 0)
+    #expect(result.candidatePatchCount == 3)
+    #expect(result.patchGraph?.ambiguousTriangleIndices == [0, 3])
+    #expect(result.patchGraph?.partition?.isComplete == true)
+    #expect(result.patchGraph?.partition?.selectedCandidateIDs == [0, 2])
+    #expect(result.patchGraph?.partition?.rejectedCandidateIDs == [1])
+    let adjacency = try #require(result.patchGraph?.selectedAdjacencies.first)
+    #expect(result.patchGraph?.selectedAdjacencies.count == 1)
+    #expect(adjacency.firstCandidateID == 0)
+    #expect(adjacency.secondCandidateID == 2)
+    #expect(adjacency.sharedVertexIndices == [1, 4])
+    #expect(adjacency.continuityLevel == .positional)
+    #expect(adjacency.requiresCurvatureContinuitySolve)
+    #expect(result.diagnostics.contains { $0.code == .patchGraphIdentified })
+    #expect(result.diagnostics.contains { $0.code == .patchGraphPartitioned })
+    #expect(result.diagnostics.contains { $0.code == .patchAdjacencyIdentified })
+    #expect(result.diagnostics.contains { $0.code == .patchTangentPlaneDiscontinuity })
+    #expect(result.diagnostics.contains { $0.code == .patchCurvatureContinuityUnresolved })
+}
+
+@Test func polySplineMeshAnalysisServiceSupportsPlanarUnmergedPatchNetwork() async throws {
+    let result = PolySplineMeshAnalysisService().analyze(
+        sourceMesh: designDocumentPolySplinePatchNetworkMesh(centerZ: 0.0),
+        options: PolySplineOptions(mergePatches: false)
+    )
+
+    #expect(result.isSupported)
+    #expect(result.candidateKind == .quadPatchGraph)
+    #expect(result.supportedPatchCount == 2)
+    #expect(result.candidatePatchCount == 3)
+    #expect(result.patchGraph?.partition?.selectedCandidateIDs == [0, 2])
+    #expect(result.patchGraph?.selectedAdjacencies.count == 1)
+    #expect(result.patchGraph?.selectedAdjacencies.first?.continuityLevel == .tangentPlane)
+    #expect(result.patchGraph?.selectedAdjacencies.first?.requiresCurvatureContinuitySolve == false)
+    #expect(result.diagnostics.contains { $0.code == .planarPatchNetworkSupported })
+    #expect(!result.diagnostics.contains { $0.code == .patchCurvatureContinuityUnresolved })
+    #expect(result.errors.isEmpty)
+}
+
+@Test func polySplineSurfaceRejectsUnsupportedOptionsBeforeMutation() async throws {
+    var document = DesignDocument.empty()
+    var caught: EditorError?
+
+    do {
+        _ = try document.createPolySplineSurface(
+            name: "Rounded Surface",
+            sourceMesh: designDocumentPolySplineQuadMesh(),
+            options: PolySplineOptions(roundedCorners: true)
+        )
+    } catch let error as EditorError {
+        caught = error
+    }
+
+    #expect(caught?.code == .commandInvalid)
+    #expect(caught?.message.contains("rounded-corner") == true)
+    #expect(document.cadDocument.designGraph.order.isEmpty)
+    #expect(document.productMetadata.sceneNodes.values.allSatisfy { $0.reference == nil })
 }
 
 @Test func sketchObjectsReceiveTypedProperties() async throws {
@@ -271,6 +725,242 @@ import Testing
     #expect(abs(bounds.height - 1.0) < 0.000_000_000_001)
 }
 
+@Test func objectDimensionCommandUpdatesBoxSourceGeometryFromSelectionTarget() async throws {
+    var document = DesignDocument.empty()
+    try document.createExtrudedRectangle(
+        name: "Dimensioned Block",
+        plane: .xy,
+        width: .length(1.0, .meter),
+        height: .length(1.5, .meter),
+        depth: .length(0.5, .meter),
+        direction: .normal
+    )
+    let bodyNode = try #require(document.productMetadata.sceneNodes.values.first {
+        $0.reference?.kind == .body
+    })
+
+    try document.setObjectDimension(
+        target: SelectionTarget(sceneNodeID: bodyNode.id),
+        kind: .sizeX,
+        value: .length(2.0, .meter)
+    )
+    try document.setObjectDimension(
+        target: SelectionTarget(sceneNodeID: bodyNode.id, component: .face(.bodyFaceTop)),
+        kind: .sizeY,
+        value: .length(0.75, .meter)
+    )
+
+    let editedBodyNode = try #require(document.productMetadata.sceneNodes[bodyNode.id])
+    #expect(editedBodyNode.object?.properties["size.x"] == .length(2.0))
+    #expect(editedBodyNode.object?.properties["size.y"] == .length(0.75))
+    let bodyFeatureID = try #require(editedBodyNode.reference?.featureID)
+    let bodyFeature = try #require(document.cadDocument.designGraph.nodes[bodyFeatureID])
+    guard case let .extrude(extrude) = bodyFeature.operation else {
+        Issue.record("Expected an extrude feature.")
+        return
+    }
+    let depth = try resolvedLength(extrude.distance, parameters: document.cadDocument.parameters)
+    #expect(abs(depth - 0.75) < 0.000_000_000_001)
+    let profileFeature = try #require(document.cadDocument.designGraph.nodes[extrude.profile.featureID])
+    guard case let .sketch(sketch) = profileFeature.operation else {
+        Issue.record("Expected a sketch profile.")
+        return
+    }
+    let bounds = try sketchBounds(sketch, parameters: document.cadDocument.parameters)
+    #expect(abs(bounds.width - 2.0) < 0.000_000_000_001)
+    #expect(abs(bounds.height - 1.5) < 0.000_000_000_001)
+}
+
+@Test func objectDimensionCommandUpdatesCylinderSourceGeometryFromFaceTarget() async throws {
+    var document = DesignDocument.empty()
+    try document.createExtrudedCircle(
+        name: "Dimensioned Cylinder",
+        plane: .xy,
+        center: SketchPoint(
+            x: .length(0.0, .meter),
+            y: .length(0.0, .meter)
+        ),
+        radius: .length(0.5, .meter),
+        depth: .length(1.0, .meter),
+        direction: .normal
+    )
+    let bodyNode = try #require(document.productMetadata.sceneNodes.values.first {
+        $0.reference?.kind == .body && $0.object?.typeID == .cylinder
+    })
+
+    try document.setObjectDimension(
+        target: SelectionTarget(sceneNodeID: bodyNode.id, component: .face(.bodyFaceSide)),
+        kind: .diameter,
+        value: .length(2.0, .meter)
+    )
+    try document.setObjectDimension(
+        target: SelectionTarget(sceneNodeID: bodyNode.id),
+        kind: .sizeY,
+        value: .length(2.5, .meter)
+    )
+
+    let editedBodyNode = try #require(document.productMetadata.sceneNodes[bodyNode.id])
+    #expect(editedBodyNode.object?.properties["radius"] == .length(1.0))
+    #expect(editedBodyNode.object?.properties["size.x"] == .length(2.0))
+    #expect(editedBodyNode.object?.properties["size.y"] == .length(2.5))
+    #expect(editedBodyNode.object?.properties["size.z"] == .length(2.0))
+    let bodyFeatureID = try #require(editedBodyNode.reference?.featureID)
+    let bodyFeature = try #require(document.cadDocument.designGraph.nodes[bodyFeatureID])
+    guard case let .extrude(extrude) = bodyFeature.operation else {
+        Issue.record("Expected an extrude feature.")
+        return
+    }
+    let depth = try resolvedLength(extrude.distance, parameters: document.cadDocument.parameters)
+    #expect(abs(depth - 2.5) < 0.000_000_000_001)
+    let profileFeature = try #require(document.cadDocument.designGraph.nodes[extrude.profile.featureID])
+    guard case let .sketch(sketch) = profileFeature.operation else {
+        Issue.record("Expected a sketch profile.")
+        return
+    }
+    let circle = try #require(sketch.entities.values.compactMap { entity -> SketchCircle? in
+        if case .circle(let circle) = entity {
+            return circle
+        }
+        return nil
+    }.first)
+    let radius = try resolvedLength(circle.radius, parameters: document.cadDocument.parameters)
+    #expect(abs(radius - 1.0) < 0.000_000_000_001)
+}
+
+@Test func objectDimensionSummaryListsBoxCandidatesFromObjectTarget() async throws {
+    var document = DesignDocument.empty()
+    try document.createExtrudedRectangle(
+        name: "Dimension Summary Box",
+        plane: .xy,
+        width: .length(1.0, .meter),
+        height: .length(1.5, .meter),
+        depth: .length(0.5, .meter),
+        direction: .normal
+    )
+    let bodyNode = try #require(document.productMetadata.sceneNodes.values.first {
+        $0.reference?.kind == .body
+    })
+
+    let summary = try ObjectDimensionSummaryService().summarize(
+        document: document,
+        targets: [SelectionTarget(sceneNodeID: bodyNode.id)]
+    )
+
+    #expect(summary.counts.targetCount == 1)
+    #expect(summary.counts.entryCount == 3)
+    #expect(summary.entries.map(\.kind) == [.sizeX, .sizeY, .sizeZ])
+    #expect(summary.entries.allSatisfy { $0.sourceKind == .box })
+    #expect(summary.entries.first?.isPrimaryForTarget == true)
+    let values = Dictionary(uniqueKeysWithValues: summary.entries.map { ($0.kind, $0.resolvedMeters) })
+    #expect(abs((values[.sizeX] ?? 0.0) - 1.0) < 0.000_000_000_001)
+    #expect(abs((values[.sizeY] ?? 0.0) - 0.5) < 0.000_000_000_001)
+    #expect(abs((values[.sizeZ] ?? 0.0) - 1.5) < 0.000_000_000_001)
+    #expect(summary.entries.first { $0.kind == .sizeY }?.sourceExpression == .length(0.5, .meter))
+}
+
+@Test func objectDimensionSummaryListsCylinderCandidatesFromFaceTarget() async throws {
+    var document = DesignDocument.empty()
+    try document.createExtrudedCircle(
+        name: "Dimension Summary Cylinder",
+        plane: .xy,
+        center: SketchPoint(
+            x: .length(0.0, .meter),
+            y: .length(0.0, .meter)
+        ),
+        radius: .length(0.5, .meter),
+        depth: .length(1.0, .meter),
+        direction: .normal
+    )
+    let bodyNode = try #require(document.productMetadata.sceneNodes.values.first {
+        $0.reference?.kind == .body && $0.object?.typeID == .cylinder
+    })
+
+    let summary = try ObjectDimensionSummaryService().summarize(
+        document: document,
+        targets: [
+            SelectionTarget(
+                sceneNodeID: bodyNode.id,
+                component: .face(.bodyFaceSide)
+            ),
+        ]
+    )
+
+    #expect(summary.counts.targetCount == 1)
+    #expect(summary.counts.entryCount == 3)
+    #expect(summary.entries.map(\.kind) == [.diameter, .radius, .sizeY])
+    #expect(summary.entries.allSatisfy { $0.sourceKind == .cylinder })
+    let primary = try #require(summary.entries.first { $0.isPrimaryForTarget })
+    #expect(primary.kind == .diameter)
+    let values = Dictionary(uniqueKeysWithValues: summary.entries.map { ($0.kind, $0.resolvedMeters) })
+    #expect(abs((values[.diameter] ?? 0.0) - 1.0) < 0.000_000_000_001)
+    #expect(abs((values[.radius] ?? 0.0) - 0.5) < 0.000_000_000_001)
+    #expect(abs((values[.sizeY] ?? 0.0) - 1.0) < 0.000_000_000_001)
+    #expect(summary.entries.first { $0.kind == .radius }?.sourceExpression == .length(0.5, .meter))
+    #expect(summary.entries.first { $0.kind == .sizeY }?.sourceExpression == .length(1.0, .meter))
+}
+
+@Test func objectDimensionSummaryListsDepthCandidateFromGeneratedEdgeTarget() async throws {
+    var document = DesignDocument.empty()
+    try document.createExtrudedRectangle(
+        name: "Dimension Summary Edge Box",
+        plane: .xy,
+        width: .length(1.0, .meter),
+        height: .length(1.5, .meter),
+        depth: .length(0.5, .meter),
+        direction: .normal
+    )
+    let topology = try TopologySummaryService().summarize(document: document)
+    let depthEdge = try #require(generatedDepthEdge(in: topology))
+    let target = try #require(depthEdge.selectionTarget())
+
+    let summary = try ObjectDimensionSummaryService().summarize(
+        document: document,
+        targets: [target]
+    )
+
+    #expect(summary.counts.targetCount == 1)
+    #expect(summary.counts.entryCount == 3)
+    #expect(summary.entries.map(\.kind) == [.sizeX, .sizeY, .sizeZ])
+    #expect(summary.entries.allSatisfy { $0.sourceKind == .box })
+    let primary = try #require(summary.entries.first { $0.isPrimaryForTarget })
+    #expect(primary.kind == .sizeY)
+    #expect(primary.target == target)
+    let values = Dictionary(uniqueKeysWithValues: summary.entries.map { ($0.kind, $0.resolvedMeters) })
+    #expect(abs((values[.sizeY] ?? 0.0) - 0.5) < 0.000_000_000_001)
+}
+
+@Test func objectDimensionCommandUpdatesDepthFromGeneratedEdgeTarget() async throws {
+    var document = DesignDocument.empty()
+    try document.createExtrudedRectangle(
+        name: "Dimensioned Edge Box",
+        plane: .xy,
+        width: .length(1.0, .meter),
+        height: .length(1.5, .meter),
+        depth: .length(0.5, .meter),
+        direction: .normal
+    )
+    let topology = try TopologySummaryService().summarize(document: document)
+    let depthEdge = try #require(generatedDepthEdge(in: topology))
+    let target = try #require(depthEdge.selectionTarget())
+
+    try document.setObjectDimension(
+        target: target,
+        kind: .sizeY,
+        value: .length(0.75, .meter)
+    )
+
+    let bodyNode = try #require(document.productMetadata.sceneNodes[target.sceneNodeID])
+    #expect(bodyNode.object?.properties["size.y"] == .length(0.75))
+    let bodyFeatureID = try #require(bodyNode.reference?.featureID)
+    let bodyFeature = try #require(document.cadDocument.designGraph.nodes[bodyFeatureID])
+    guard case let .extrude(extrude) = bodyFeature.operation else {
+        Issue.record("Expected an extrude feature.")
+        return
+    }
+    let depth = try resolvedLength(extrude.distance, parameters: document.cadDocument.parameters)
+    #expect(abs(depth - 0.75) < 0.000_000_000_001)
+}
+
 @Test func sketchExtrusionPropertyCreatesAndRemovesGeneratedBody() async throws {
     var document = DesignDocument.empty()
     let featureID = try document.createRectangleSketch(
@@ -343,6 +1033,14 @@ import Testing
     )
 
     #expect(profiles.first?.vertices.count == 12)
+    #expect(profiles.first?.boundarySegments.count == 1)
+    #expect(profiles.first?.boundarySegments.contains { segment in
+        if case .circularArc(let arc) = segment {
+            return abs(arc.radius - 1.0) <= 1.0e-12
+                && abs(arc.sweepAngle - Double.pi * 2.0) <= 1.0e-12
+        }
+        return false
+    } == true)
 }
 
 @Test func cylinderSideSegmentsParticipateInEvaluationProfileExtraction() async throws {
@@ -369,7 +1067,7 @@ import Testing
         value: .integer(12)
     )
 
-    #expect(document.circleProfileSegmentCounts()[sourceProfileFeatureID] == 12)
+    #expect(document.profileSegmentCounts()[sourceProfileFeatureID] == 12)
 }
 
 @Test func productMetadataRoundTripsThroughProductPackage() async throws {
@@ -749,6 +1447,15 @@ private func sketchBounds(
             let radius = try resolvedLength(circle.radius, parameters: parameters)
             points.append((x: center.x - radius, y: center.y - radius))
             points.append((x: center.x + radius, y: center.y + radius))
+        case .arc(let arc):
+            let center = try resolvedPoint(arc.center, parameters: parameters)
+            let radius = try resolvedLength(arc.radius, parameters: parameters)
+            points.append((x: center.x - radius, y: center.y - radius))
+            points.append((x: center.x + radius, y: center.y + radius))
+        case .spline(let spline):
+            for point in spline.controlPoints {
+                points.append(try resolvedPoint(point, parameters: parameters))
+            }
         }
     }
     let first = try #require(points.first)
@@ -757,6 +1464,24 @@ private func sketchBounds(
     let minY = points.dropFirst().reduce(first.y) { min($0, $1.y) }
     let maxY = points.dropFirst().reduce(first.y) { max($0, $1.y) }
     return (width: maxX - minX, height: maxY - minY)
+}
+
+private func generatedDepthEdge(
+    in topology: TopologySummaryResult
+) -> TopologySummaryResult.Entry? {
+    topology.entries.first { entry in
+        guard entry.kind == .edge,
+              entry.generatedRole == "edge",
+              entry.curveKind == "line",
+              let start = entry.start,
+              let end = entry.end else {
+            return false
+        }
+        let tolerance = 1.0e-9
+        return abs(start.x - end.x) <= tolerance &&
+            abs(start.y - end.y) <= tolerance &&
+            abs(start.z - end.z) > tolerance
+    }
 }
 
 private func resolvedPoint(
@@ -775,6 +1500,77 @@ private func resolvedLength(
 ) throws -> Double {
     let quantity = try parameters.resolvedValue(for: expression)
     return quantity.value
+}
+
+private func resolvedSketchPoint(
+    _ point: SketchPoint,
+    in document: DesignDocument
+) throws -> (x: Double, y: Double) {
+    (
+        x: try resolvedLength(point.x, parameters: document.cadDocument.parameters),
+        y: try resolvedLength(point.y, parameters: document.cadDocument.parameters)
+    )
+}
+
+private func distance(
+    from first: (x: Double, y: Double),
+    to second: (x: Double, y: Double)
+) -> Double {
+    let deltaX = first.x - second.x
+    let deltaY = first.y - second.y
+    return sqrt(deltaX * deltaX + deltaY * deltaY)
+}
+
+private func distanceFromOrigin(
+    toLineFrom start: (x: Double, y: Double),
+    to end: (x: Double, y: Double)
+) -> Double {
+    let numerator = abs((end.x - start.x) * start.y - (end.y - start.y) * start.x)
+    let denominator = distance(from: start, to: end)
+    return numerator / denominator
+}
+
+private func designDocumentPolySplineQuadMesh() -> Mesh {
+    Mesh(
+        positions: [
+            Point3D(x: 0.0, y: 0.0, z: 0.0),
+            Point3D(x: 0.02, y: 0.0, z: 0.0),
+            Point3D(x: 0.02, y: 0.02, z: 0.004),
+            Point3D(x: 0.0, y: 0.02, z: 0.0),
+        ],
+        indices: [0, 1, 2, 0, 2, 3]
+    )
+}
+
+private func polySplineVertexTarget(
+    role: String,
+    in document: DesignDocument
+) throws -> SelectionTarget {
+    let topology = try TopologySummaryService().summarize(document: document)
+    let entry = try #require(topology.entries.first {
+        $0.kind == .vertex
+            && $0.subshapeRole == role
+    })
+    return try #require(entry.selectionTarget())
+}
+
+private func designDocumentPolySplinePatchNetworkMesh(centerZ: Double = 0.001) -> Mesh {
+    Mesh(
+        positions: [
+            Point3D(x: 0.0, y: 0.0, z: 0.0),
+            Point3D(x: 0.01, y: 0.0, z: 0.0),
+            Point3D(x: 0.02, y: 0.0, z: 0.0),
+            Point3D(x: 0.0, y: 0.01, z: 0.0),
+            Point3D(x: 0.01, y: 0.01, z: centerZ),
+            Point3D(x: 0.02, y: 0.01, z: 0.0),
+        ],
+        indices: [
+            0, 1, 4,
+            0, 4, 3,
+            1, 2, 5,
+            1, 5, 4,
+        ]
+    )
 }
 
 private func makeTemporaryDirectory() throws -> URL {

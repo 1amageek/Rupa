@@ -167,6 +167,127 @@ public struct AutomationRunner {
                 didMutate: result.didMutate,
                 diagnostics: result.diagnostics
             )
+        case .describeConstructionPlanes:
+            let summary = ConstructionPlaneSummaryService().summarize(
+                document: session.document
+            )
+            let activeName = summary.planes.first { $0.isActive }?.name ?? "none"
+            return AutomationResult(
+                message: "\(summary.planes.count) construction plane(s). Active: \(activeName).",
+                generation: session.generation,
+                diagnostics: session.diagnostics
+            )
+        case .createConstructionPlane(let name, let plane, let activates):
+            let result = try session.execute(
+                .createConstructionPlane(
+                    name: name,
+                    plane: plane,
+                    activates: activates
+                )
+            )
+            return AutomationResult(
+                message: "Construction plane \(name) created.",
+                commandName: result.commandName,
+                generation: result.generation,
+                didMutate: result.didMutate,
+                diagnostics: result.diagnostics
+            )
+        case .createConstructionPlaneFromTarget(let name, let target, let activates):
+            let result = try session.execute(
+                .createConstructionPlaneFromTarget(
+                    name: name,
+                    target: target,
+                    activates: activates
+                )
+            )
+            return AutomationResult(
+                message: "Construction plane \(name) created from target \(target.component).",
+                commandName: result.commandName,
+                generation: result.generation,
+                didMutate: result.didMutate,
+                diagnostics: result.diagnostics
+            )
+        case .createConstructionPlaneFromTargets(let name, let targets, let viewNormal, let activates):
+            let result = try session.execute(
+                .createConstructionPlaneFromTargets(
+                    name: name,
+                    targets: targets,
+                    viewNormal: viewNormal,
+                    activates: activates
+                )
+            )
+            return AutomationResult(
+                message: "Construction plane \(name) created from \(targets.count) targets.",
+                commandName: result.commandName,
+                generation: result.generation,
+                didMutate: result.didMutate,
+                diagnostics: result.diagnostics
+            )
+        case .createViewAlignedConstructionPlane(let name, let origin, let viewNormal, let activates):
+            let result = try session.execute(
+                .createViewAlignedConstructionPlane(
+                    name: name,
+                    origin: origin,
+                    viewNormal: viewNormal,
+                    activates: activates
+                )
+            )
+            return AutomationResult(
+                message: "View-aligned construction plane \(name) created.",
+                commandName: result.commandName,
+                generation: result.generation,
+                didMutate: result.didMutate,
+                diagnostics: result.diagnostics
+            )
+        case .setActiveConstructionPlane(let id):
+            let result = try session.execute(.setActiveConstructionPlane(id: id))
+            let activeName = session.activeConstructionPlane?.name ?? "none"
+            return AutomationResult(
+                message: "Active construction plane set to \(activeName).",
+                commandName: result.commandName,
+                generation: result.generation,
+                didMutate: result.didMutate,
+                diagnostics: result.diagnostics
+            )
+        case .renameConstructionPlane(let id, let name):
+            let result = try session.execute(.renameConstructionPlane(id: id, name: name))
+            let renamedName = session.document.productMetadata.constructionPlanes[id]?.name ?? name
+            return AutomationResult(
+                message: "Construction plane renamed to \(renamedName).",
+                commandName: result.commandName,
+                generation: result.generation,
+                didMutate: result.didMutate,
+                diagnostics: result.diagnostics
+            )
+        case .setCurveCurvatureDisplay(let target, let isVisible, let combScale):
+            let result = try session.execute(
+                .setCurveCurvatureDisplay(
+                    target: target,
+                    isVisible: isVisible,
+                    combScale: combScale
+                )
+            )
+            let visibility = isVisible.map { $0 ? "enabled" : "disabled" } ?? "toggled"
+            let scale = combScale.map { " at comb scale \($0)" } ?? ""
+            return AutomationResult(
+                message: "Curve curvature display \(visibility)\(scale).",
+                commandName: result.commandName,
+                generation: result.generation,
+                didMutate: result.didMutate,
+                diagnostics: result.diagnostics
+            )
+        case .setPointDisplay(let target, let isVisible):
+            let result = try session.execute(
+                .setPointDisplay(target: target, isVisible: isVisible)
+            )
+            let visibility = isVisible.map { $0 ? "visible" : "hidden" } ?? "toggled"
+            return AutomationResult(
+                message: "Point display \(visibility).",
+                commandName: result.commandName,
+                generation: result.generation,
+                didMutate: result.didMutate,
+                diagnostics: result.diagnostics
+            )
         case .createLineSketch(let name, let plane, let start, let end):
             let result = try session.execute(
                 .createLineSketch(
@@ -199,6 +320,39 @@ public struct AutomationRunner {
                 didMutate: result.didMutate,
                 diagnostics: result.diagnostics
             )
+        case .createArcSketch(let name, let plane, let center, let radius, let startAngle, let endAngle):
+            let result = try session.execute(
+                .createArcSketch(
+                    name: name,
+                    plane: plane,
+                    center: center,
+                    radius: radius,
+                    startAngle: startAngle,
+                    endAngle: endAngle
+                )
+            )
+            return AutomationResult(
+                message: "Arc sketch \(name) created.",
+                commandName: result.commandName,
+                generation: result.generation,
+                didMutate: result.didMutate,
+                diagnostics: result.diagnostics
+            )
+        case .createSplineSketch(let name, let plane, let spline):
+            let result = try session.execute(
+                .createSplineSketch(
+                    name: name,
+                    plane: plane,
+                    spline: spline
+                )
+            )
+            return AutomationResult(
+                message: "Spline sketch \(name) created.",
+                commandName: result.commandName,
+                generation: result.generation,
+                didMutate: result.didMutate,
+                diagnostics: result.diagnostics
+            )
         case .createRectangleSketch(let name, let plane, let width, let height):
             let result = try session.execute(
                 .createRectangleSketch(
@@ -210,6 +364,65 @@ public struct AutomationRunner {
             )
             return AutomationResult(
                 message: "Rectangle sketch \(name) created.",
+                commandName: result.commandName,
+                generation: result.generation,
+                didMutate: result.didMutate,
+                diagnostics: result.diagnostics
+            )
+        case .createPolygonSketch(
+            let name,
+            let plane,
+            let center,
+            let radius,
+            let sides,
+            let sizingMode,
+            let inclinationMode,
+            let rotationAngle
+        ):
+            let result = try session.execute(
+                .createPolygonSketch(
+                    name: name,
+                    plane: plane,
+                    center: center,
+                    radius: radius,
+                    sides: sides,
+                    sizingMode: sizingMode,
+                    inclinationMode: inclinationMode,
+                    rotationAngle: rotationAngle
+                )
+            )
+            return AutomationResult(
+                message: "Polygon sketch \(name) created.",
+                commandName: result.commandName,
+                generation: result.generation,
+                didMutate: result.didMutate,
+                diagnostics: result.diagnostics
+            )
+        case .createFaceKnife(let name, let target, let loop):
+            let result = try session.execute(
+                .createFaceKnife(
+                    name: name,
+                    target: target,
+                    loop: loop
+                )
+            )
+            return AutomationResult(
+                message: "Face Knife \(name) applied.",
+                commandName: result.commandName,
+                generation: result.generation,
+                didMutate: result.didMutate,
+                diagnostics: result.diagnostics
+            )
+        case .setObjectDimension(let target, let kind, let value):
+            let result = try session.execute(
+                .setObjectDimension(
+                    target: target,
+                    kind: kind,
+                    value: value
+                )
+            )
+            return AutomationResult(
+                message: "Object dimension updated.",
                 commandName: result.commandName,
                 generation: result.generation,
                 didMutate: result.didMutate,
@@ -229,6 +442,398 @@ public struct AutomationRunner {
                 didMutate: result.didMutate,
                 diagnostics: result.diagnostics
             )
+        case .createBridgeCurve(let featureID, let firstEndpoint, let secondEndpoint, let continuity, let trimsSourceCurves):
+            let result = try session.execute(
+                .createBridgeCurve(
+                    featureID: featureID,
+                    firstEndpoint: firstEndpoint,
+                    secondEndpoint: secondEndpoint,
+                    continuity: continuity,
+                    trimsSourceCurves: trimsSourceCurves
+                )
+            )
+            return AutomationResult(
+                message: "Bridge curve created in sketch \(featureID.description).",
+                commandName: result.commandName,
+                generation: result.generation,
+                didMutate: result.didMutate,
+                diagnostics: result.diagnostics
+            )
+        case .setBridgeCurveParameters(let sourceID, let firstEndpoint, let secondEndpoint, let continuity, let trimsSourceCurves):
+            let result = try session.execute(
+                .setBridgeCurveParameters(
+                    sourceID: sourceID,
+                    firstEndpoint: firstEndpoint,
+                    secondEndpoint: secondEndpoint,
+                    continuity: continuity,
+                    trimsSourceCurves: trimsSourceCurves
+                )
+            )
+            return AutomationResult(
+                message: "Bridge curve \(sourceID.description) updated.",
+                commandName: result.commandName,
+                generation: result.generation,
+                didMutate: result.didMutate,
+                diagnostics: result.diagnostics
+            )
+        case .offsetCurve(let target, let distance, let options, let vertexHandle):
+            let result = try session.execute(
+                .offsetCurve(
+                    target: target,
+                    distance: distance,
+                    options: options,
+                    vertexHandle: vertexHandle
+                )
+            )
+            let message: String
+            if options.mode == .slot {
+                message = "Slot sketch profile created."
+            } else if vertexHandle == nil {
+                message = "Sketch curve offset created."
+            } else {
+                message = "Sketch vertex offset created."
+            }
+            return AutomationResult(
+                message: message,
+                commandName: result.commandName,
+                generation: result.generation,
+                didMutate: result.didMutate,
+                diagnostics: result.diagnostics
+            )
+        case .offsetRegions(let targets, let distance, let options, let combinesRegions):
+            let result = try session.execute(
+                .offsetRegions(
+                    targets: targets,
+                    distance: distance,
+                    options: options,
+                    combinesRegions: combinesRegions
+                )
+            )
+            return AutomationResult(
+                message: combinesRegions ? "Combined sketch regions offset created." : "Sketch regions offset created.",
+                commandName: result.commandName,
+                generation: result.generation,
+                didMutate: result.didMutate,
+                diagnostics: result.diagnostics
+            )
+        case .offsetSketchVertex(let target, let handle, let distance):
+            let result = try session.execute(
+                .offsetSketchVertex(
+                    target: target,
+                    handle: handle,
+                    distance: distance
+                )
+            )
+            return AutomationResult(
+                message: "Sketch vertex offset created.",
+                commandName: result.commandName,
+                generation: result.generation,
+                didMutate: result.didMutate,
+                diagnostics: result.diagnostics
+            )
+        case .applySketchCornerTreatment(let target, let adjacentTarget, let distance, let treatment):
+            let result = try session.execute(
+                .applySketchCornerTreatment(
+                    target: target,
+                    adjacentTarget: adjacentTarget,
+                    distance: distance,
+                    treatment: treatment
+                )
+            )
+            return AutomationResult(
+                message: sketchCornerTreatmentAutomationMessage(treatment),
+                commandName: result.commandName,
+                generation: result.generation,
+                didMutate: result.didMutate,
+                diagnostics: result.diagnostics
+            )
+        case .createSlotSketch(let target, let width):
+            let result = try session.execute(
+                .createSlotSketch(
+                    target: target,
+                    width: width
+                )
+            )
+            return AutomationResult(
+                message: "Slot sketch profile created.",
+                commandName: result.commandName,
+                generation: result.generation,
+                didMutate: result.didMutate,
+                diagnostics: result.diagnostics
+            )
+        case .offsetBodyFace(let target, let distance):
+            let result = try session.execute(
+                .offsetBodyFace(
+                    target: target,
+                    distance: distance
+                )
+            )
+            return AutomationResult(
+                message: "Body face offset applied.",
+                commandName: result.commandName,
+                generation: result.generation,
+                didMutate: result.didMutate,
+                diagnostics: result.diagnostics
+            )
+        case .chamferBodyEdges(let targets, let distance):
+            let result = try session.execute(
+                .chamferBodyEdges(
+                    targets: targets,
+                    distance: distance
+                )
+            )
+            return AutomationResult(
+                message: "Body edge chamfer applied.",
+                commandName: result.commandName,
+                generation: result.generation,
+                didMutate: result.didMutate,
+                diagnostics: result.diagnostics
+            )
+        case .filletBodyEdges(let targets, let radius, let segmentCount):
+            let result = try session.execute(
+                .filletBodyEdges(
+                    targets: targets,
+                    radius: radius,
+                    segmentCount: segmentCount
+                )
+            )
+            return AutomationResult(
+                message: "Body edge fillet applied.",
+                commandName: result.commandName,
+                generation: result.generation,
+                didMutate: result.didMutate,
+                diagnostics: result.diagnostics
+            )
+        case .moveBodyVertex(let target, let deltaX, let deltaY):
+            let result = try session.execute(
+                .moveBodyVertex(
+                    target: target,
+                    deltaX: deltaX,
+                    deltaY: deltaY
+                )
+            )
+            return AutomationResult(
+                message: "Body vertex moved.",
+                commandName: result.commandName,
+                generation: result.generation,
+                didMutate: result.didMutate,
+                diagnostics: result.diagnostics
+            )
+        case .moveSketchEntityPoint(let target, let handle, let deltaX, let deltaY):
+            let result = try session.execute(
+                .moveSketchEntityPoint(
+                    target: target,
+                    handle: handle,
+                    deltaX: deltaX,
+                    deltaY: deltaY
+                )
+            )
+            return AutomationResult(
+                message: "Sketch entity point moved.",
+                commandName: result.commandName,
+                generation: result.generation,
+                didMutate: result.didMutate,
+                diagnostics: result.diagnostics
+            )
+        case .moveSketchSplineControlPoint(let target, let controlPointIndex, let deltaX, let deltaY):
+            let result = try session.execute(
+                .moveSketchSplineControlPoint(
+                    target: target,
+                    controlPointIndex: controlPointIndex,
+                    deltaX: deltaX,
+                    deltaY: deltaY
+                )
+            )
+            return AutomationResult(
+                message: "Sketch spline control point moved.",
+                commandName: result.commandName,
+                generation: result.generation,
+                didMutate: result.didMutate,
+                diagnostics: result.diagnostics
+            )
+        case .slideSketchSplineControlPoints(let target, let controlPointIndexes, let direction, let distance):
+            let result = try session.execute(
+                .slideSketchSplineControlPoints(
+                    target: target,
+                    controlPointIndexes: controlPointIndexes,
+                    direction: direction,
+                    distance: distance
+                )
+            )
+            return AutomationResult(
+                message: "Sketch spline control points slid.",
+                commandName: result.commandName,
+                generation: result.generation,
+                didMutate: result.didMutate,
+                diagnostics: result.diagnostics
+            )
+        case .insertSketchSplineControlPoint(let target, let fraction):
+            let result = try session.execute(
+                .insertSketchSplineControlPoint(
+                    target: target,
+                    fraction: fraction
+                )
+            )
+            return AutomationResult(
+                message: "Sketch spline control point inserted.",
+                commandName: result.commandName,
+                generation: result.generation,
+                didMutate: result.didMutate,
+                diagnostics: result.diagnostics
+            )
+        case .setSketchCircleParameters(let target, let center, let radius):
+            let result = try session.execute(
+                .setSketchCircleParameters(
+                    target: target,
+                    center: center,
+                    radius: radius
+                )
+            )
+            return AutomationResult(
+                message: "Sketch circle parameters updated.",
+                commandName: result.commandName,
+                generation: result.generation,
+                didMutate: result.didMutate,
+                diagnostics: result.diagnostics
+            )
+        case .setSketchArcParameters(let target, let center, let radius, let startAngle, let endAngle):
+            let result = try session.execute(
+                .setSketchArcParameters(
+                    target: target,
+                    center: center,
+                    radius: radius,
+                    startAngle: startAngle,
+                    endAngle: endAngle
+                )
+            )
+            return AutomationResult(
+                message: "Sketch arc parameters updated.",
+                commandName: result.commandName,
+                generation: result.generation,
+                didMutate: result.didMutate,
+                diagnostics: result.diagnostics
+            )
+        case .setSketchEntityDimension(let target, let kind, let value):
+            let result = try session.execute(
+                .setSketchEntityDimension(
+                    target: target,
+                    kind: kind,
+                    value: value
+                )
+            )
+            return AutomationResult(
+                message: "Sketch entity dimension updated.",
+                commandName: result.commandName,
+                generation: result.generation,
+                didMutate: result.didMutate,
+                diagnostics: result.diagnostics
+            )
+        case .convertSketchLineToArc(let target, let sagitta):
+            let result = try session.execute(
+                .convertSketchLineToArc(
+                    target: target,
+                    sagitta: sagitta
+                )
+            )
+            return AutomationResult(
+                message: "Sketch line converted to an arc.",
+                commandName: result.commandName,
+                generation: result.generation,
+                didMutate: result.didMutate,
+                diagnostics: result.diagnostics
+            )
+        case .convertSketchLineToSpline(let target):
+            let result = try session.execute(
+                .convertSketchLineToSpline(target: target)
+            )
+            return AutomationResult(
+                message: "Sketch line converted to a spline.",
+                commandName: result.commandName,
+                generation: result.generation,
+                didMutate: result.didMutate,
+                diagnostics: result.diagnostics
+            )
+        case .reverseSketchCurve(let target):
+            let result = try session.execute(
+                .reverseSketchCurve(target: target)
+            )
+            return AutomationResult(
+                message: "Sketch curve direction reversed.",
+                commandName: result.commandName,
+                generation: result.generation,
+                didMutate: result.didMutate,
+                diagnostics: result.diagnostics
+            )
+        case .rebuildSketchCurve(let target, let options):
+            let result = try session.execute(
+                .rebuildSketchCurve(
+                    target: target,
+                    options: options
+                )
+            )
+            return AutomationResult(
+                message: "Sketch curve rebuilt.",
+                commandName: result.commandName,
+                generation: result.generation,
+                didMutate: result.didMutate,
+                diagnostics: result.diagnostics,
+                curveRebuildReport: result.curveRebuildReport
+            )
+        case .extendSketchCurve(let target, let distance, let shape):
+            let result = try session.execute(
+                .extendSketchCurve(
+                    target: target,
+                    distance: distance,
+                    shape: shape
+                )
+            )
+            return AutomationResult(
+                message: "Sketch curve extended.",
+                commandName: result.commandName,
+                generation: result.generation,
+                didMutate: result.didMutate,
+                diagnostics: result.diagnostics
+            )
+        case .splitSketchCurve(let target, let fraction):
+            let result = try session.execute(
+                .splitSketchCurve(
+                    target: target,
+                    fraction: fraction
+                )
+            )
+            return AutomationResult(
+                message: "Sketch curve segment split.",
+                commandName: result.commandName,
+                generation: result.generation,
+                didMutate: result.didMutate,
+                diagnostics: result.diagnostics
+            )
+        case .trimSketchCurveSegment(let target):
+            let result = try session.execute(
+                .trimSketchCurveSegment(target: target)
+            )
+            return AutomationResult(
+                message: "Sketch curve segment trimmed.",
+                commandName: result.commandName,
+                generation: result.generation,
+                didMutate: result.didMutate,
+                diagnostics: result.diagnostics
+            )
+        case .cutSketchCurve(let target, let cutter, let options):
+            let result = try session.execute(
+                .cutSketchCurve(
+                    target: target,
+                    cutter: cutter,
+                    options: options
+                )
+            )
+            return AutomationResult(
+                message: "Cut Curve applied.",
+                commandName: result.commandName,
+                generation: result.generation,
+                didMutate: result.didMutate,
+                diagnostics: result.diagnostics
+            )
         case .extrudeProfile(let name, let profile, let distance, let direction):
             let result = try session.execute(
                 .extrudeProfile(
@@ -240,6 +845,70 @@ public struct AutomationRunner {
             )
             return AutomationResult(
                 message: "Profile extrude \(name) created.",
+                commandName: result.commandName,
+                generation: result.generation,
+                didMutate: result.didMutate,
+                diagnostics: result.diagnostics
+            )
+        case .createSweep(let name, let profiles, let path, let guides, let targets, let options):
+            let result = try session.execute(
+                .createSweep(
+                    name: name,
+                    profiles: profiles,
+                    path: path,
+                    guides: guides,
+                    targets: targets,
+                    options: options
+                )
+            )
+            return AutomationResult(
+                message: "Sweep \(name) source created.",
+                commandName: result.commandName,
+                generation: result.generation,
+                didMutate: result.didMutate,
+                diagnostics: result.diagnostics
+            )
+        case .createPolySplineSurface(let name, let sourceMesh, let options):
+            let result = try session.execute(
+                .createPolySplineSurface(
+                    name: name,
+                    sourceMesh: sourceMesh,
+                    options: options
+                )
+            )
+            return AutomationResult(
+                message: "PolySpline surface \(name) created.",
+                commandName: result.commandName,
+                generation: result.generation,
+                didMutate: result.didMutate,
+                diagnostics: result.diagnostics
+            )
+        case .movePolySplineSurfaceVertex(let target, let deltaX, let deltaY, let deltaZ):
+            let result = try session.execute(
+                .movePolySplineSurfaceVertex(
+                    target: target,
+                    deltaX: deltaX,
+                    deltaY: deltaY,
+                    deltaZ: deltaZ
+                )
+            )
+            return AutomationResult(
+                message: "PolySpline surface vertex moved.",
+                commandName: result.commandName,
+                generation: result.generation,
+                didMutate: result.didMutate,
+                diagnostics: result.diagnostics
+            )
+        case .slidePolySplineSurfaceVertices(let targets, let direction, let distance):
+            let result = try session.execute(
+                .slidePolySplineSurfaceVertices(
+                    targets: targets,
+                    direction: direction,
+                    distance: distance
+                )
+            )
+            return AutomationResult(
+                message: "PolySpline surface vertices slid.",
                 commandName: result.commandName,
                 generation: result.generation,
                 didMutate: result.didMutate,
@@ -328,5 +997,16 @@ public struct AutomationRunner {
             results.append(try execute(command, in: session))
         }
         return results
+    }
+
+    private func sketchCornerTreatmentAutomationMessage(
+        _ treatment: SketchCornerTreatment
+    ) -> String {
+        switch treatment {
+        case .fillet:
+            "Sketch corner fillet applied."
+        case .chamfer:
+            "Sketch corner chamfer applied."
+        }
     }
 }

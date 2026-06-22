@@ -114,13 +114,14 @@ public struct ObjectDescriptor: Codable, Hashable, Sendable {
         featureID: FeatureID,
         sourceProfileFeatureID: FeatureID?,
         typeID: ObjectTypeID?,
+        geometryRole: GeometryRole = .solid,
         properties: ObjectPropertySet = ObjectPropertySet(),
         objectRegistry: ObjectTypeRegistry = .builtIn
     ) -> ObjectDescriptor {
         let resolvedProperties = objectRegistry.defaultProperties(for: typeID).merging(properties)
         return ObjectDescriptor(
             category: .body,
-            geometryRole: objectRegistry.geometryRole(for: typeID) ?? .solid,
+            geometryRole: objectRegistry.geometryRole(for: typeID) ?? geometryRole,
             typeID: typeID,
             properties: resolvedProperties,
             sourceFeatureID: featureID,
@@ -140,6 +141,10 @@ public struct ObjectDescriptor: Codable, Hashable, Sendable {
             category: .construction,
             geometryRole: .construction
         )
+    }
+
+    public static func annotation() -> ObjectDescriptor {
+        ObjectDescriptor(category: .annotation)
     }
 
     public func validate() throws {

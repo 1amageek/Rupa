@@ -4,7 +4,7 @@ public extension LengthDisplayUnit {
     var swiftCADLengthUnit: LengthUnit {
         switch self {
         case .micrometer:
-            .millimeter
+            .micrometer
         case .millimeter:
             .millimeter
         case .centimeter:
@@ -22,6 +22,8 @@ public extension LengthDisplayUnit {
 public extension LengthUnit {
     var rupaDisplayUnit: LengthDisplayUnit {
         switch self {
+        case .micrometer:
+            .micrometer
         case .millimeter:
             .millimeter
         case .centimeter:

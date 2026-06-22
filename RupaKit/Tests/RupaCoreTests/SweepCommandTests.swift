@@ -1,0 +1,245 @@
+import Testing
+import RupaCore
+import SwiftCAD
+
+@Test func createSweepAddsSourceFeatureWithProfileAndPathReferences() throws {
+    var document = DesignDocument.empty()
+    let profileID = try document.createRectangleSketch(
+        name: "Sweep Profile",
+        plane: .xy,
+        width: .length(4.0, .millimeter),
+        height: .length(2.0, .millimeter)
+    )
+    let pathID = try document.createLineSketch(
+        name: "Sweep Path",
+        plane: .xy,
+        start: SketchPoint(
+            x: .length(0.0, .millimeter),
+            y: .length(0.0, .millimeter)
+        ),
+        end: SketchPoint(
+            x: .length(20.0, .millimeter),
+            y: .length(0.0, .millimeter)
+        )
+    )
+
+    let sweepID = try document.createSweep(
+        name: "Profile Sweep",
+        profiles: [ProfileReference(featureID: profileID)],
+        path: SweepPathReference(featureID: pathID),
+        options: SweepOptions(
+            twistAngle: .angle(30.0, .degree),
+            endScale: .constant(.scalar(1.25)),
+            alignment: .parallel,
+            distanceFraction: .constant(.scalar(0.75)),
+            cornerStyle: .round,
+            guideMethod: .point,
+            booleanOperation: .newBody,
+            keepTools: false,
+            simplify: true,
+            resultKind: .solid
+        )
+    )
+
+    let feature = try #require(document.cadDocument.designGraph.nodes[sweepID])
+    guard case .sweep(let sweep) = feature.operation else {
+        Issue.record("Sweep command must create a sweep feature.")
+        return
+    }
+    let sceneNode = try #require(document.productMetadata.sceneNodes.values.first {
+        $0.reference == .body(sweepID)
+    })
+
+    #expect(feature.name == "Profile Sweep")
+    #expect(feature.inputs == [
+        FeatureInput(featureID: profileID, role: .profile),
+        FeatureInput(featureID: pathID, role: .path),
+    ])
+    #expect(feature.outputs == [FeatureOutput(role: .body)])
+    #expect(document.cadDocument.designGraph.dependencies.contains(
+        DependencyEdge(source: profileID, target: sweepID)
+    ))
+    #expect(document.cadDocument.designGraph.dependencies.contains(
+        DependencyEdge(source: pathID, target: sweepID)
+    ))
+    #expect(sweep.profiles == [ProfileReference(featureID: profileID)])
+    #expect(sweep.path == SweepPathReference(featureID: pathID))
+    #expect(sweep.options.alignment == .parallel)
+    #expect(sweep.options.cornerStyle == .round)
+    #expect(sweep.options.keepTools == false)
+    #expect(sweep.options.simplify)
+    #expect(sceneNode.object?.category == .body)
+    #expect(sceneNode.object?.sourceFeatureID == sweepID)
+    #expect(sceneNode.object?.sourceProfileFeatureID == profileID)
+    try document.validate()
+}
+
+@Test func createSweepBooleanStoresTargetBodyInput() throws {
+    var document = DesignDocument.empty()
+    let targetProfileID = try document.createRectangleSketch(
+        name: "Sweep Boolean Target Profile",
+        plane: .xy,
+        width: .length(8.0, .millimeter),
+        height: .length(4.0, .millimeter)
+    )
+    let targetBodyID = try document.extrudeProfile(
+        name: "Sweep Boolean Target",
+        profile: ProfileReference(featureID: targetProfileID),
+        distance: .length(4.0, .millimeter),
+        direction: .normal
+    )
+    let profileID = try document.createRectangleSketch(
+        name: "Sweep Boolean Tool Profile",
+        plane: .xy,
+        width: .length(4.0, .millimeter),
+        height: .length(2.0, .millimeter)
+    )
+    let pathID = try document.createLineSketch(
+        name: "Sweep Boolean Path",
+        plane: .yz,
+        start: SketchPoint(
+            x: .length(0.0, .millimeter),
+            y: .length(0.0, .millimeter)
+        ),
+        end: SketchPoint(
+            x: .length(0.0, .millimeter),
+            y: .length(10.0, .millimeter)
+        )
+    )
+
+    let sweepID = try document.createSweep(
+        name: "Boolean Sweep",
+        profiles: [ProfileReference(featureID: profileID)],
+        path: SweepPathReference(featureID: pathID),
+        targets: [SweepTargetReference(featureID: targetBodyID)],
+        options: SweepOptions(booleanOperation: .union)
+    )
+
+    let feature = try #require(document.cadDocument.designGraph.nodes[sweepID])
+    guard case .sweep(let sweep) = feature.operation else {
+        Issue.record("Sweep command must create a sweep feature.")
+        return
+    }
+
+    #expect(feature.inputs.contains(FeatureInput(featureID: targetBodyID, role: .target)))
+    #expect(document.cadDocument.designGraph.dependencies.contains(
+        DependencyEdge(source: targetBodyID, target: sweepID)
+    ))
+    #expect(sweep.targets == [SweepTargetReference(featureID: targetBodyID)])
+    #expect(sweep.options.booleanOperation == .union)
+    try document.validate()
+}
+
+@Test func createSweepCanCreateSheetSurfaceOutput() throws {
+    var document = DesignDocument.empty()
+    let profileID = try document.createRectangleSketch(
+        name: "Sweep Sheet Profile",
+        plane: .xy,
+        width: .length(4.0, .millimeter),
+        height: .length(2.0, .millimeter)
+    )
+    let pathID = try document.createLineSketch(
+        name: "Sweep Sheet Path",
+        plane: .yz,
+        start: SketchPoint(
+            x: .length(0.0, .millimeter),
+            y: .length(0.0, .millimeter)
+        ),
+        end: SketchPoint(
+            x: .length(0.0, .millimeter),
+            y: .length(20.0, .millimeter)
+        )
+    )
+
+    let sweepID = try document.createSweep(
+        name: "Profile Sweep Sheet",
+        profiles: [ProfileReference(featureID: profileID)],
+        path: SweepPathReference(featureID: pathID),
+        options: SweepOptions(resultKind: .sheet)
+    )
+
+    let feature = try #require(document.cadDocument.designGraph.nodes[sweepID])
+    let sceneNode = try #require(document.productMetadata.sceneNodes.values.first {
+        $0.reference == .body(sweepID)
+    })
+
+    #expect(feature.outputs == [FeatureOutput(role: .sheet)])
+    #expect(sceneNode.object?.category == .body)
+    #expect(sceneNode.object?.geometryRole == .surface)
+    #expect(sceneNode.object?.sourceFeatureID == sweepID)
+    #expect(sceneNode.object?.sourceProfileFeatureID == profileID)
+    try document.validate()
+}
+
+@Test func createSweepRejectsInvalidOptionQuantitiesBeforeMutation() throws {
+    var document = DesignDocument.empty()
+    let profileID = try document.createRectangleSketch(
+        name: "Invalid Sweep Profile",
+        plane: .xy,
+        width: .length(4.0, .millimeter),
+        height: .length(2.0, .millimeter)
+    )
+    let pathID = try document.createLineSketch(
+        name: "Invalid Sweep Path",
+        plane: .xy,
+        start: SketchPoint(
+            x: .length(0.0, .millimeter),
+            y: .length(0.0, .millimeter)
+        ),
+        end: SketchPoint(
+            x: .length(20.0, .millimeter),
+            y: .length(0.0, .millimeter)
+        )
+    )
+    let originalOrder = document.cadDocument.designGraph.order
+
+    do {
+        _ = try document.createSweep(
+            name: "Invalid Sweep",
+            profiles: [ProfileReference(featureID: profileID)],
+            path: SweepPathReference(featureID: pathID),
+            options: SweepOptions(
+                endScale: .length(1.0, .millimeter)
+            )
+        )
+        Issue.record("Sweep command must reject a length-valued end scale.")
+    } catch let error as EditorError {
+        #expect(error.code == .commandInvalid)
+        #expect(error.message.contains("end scale"))
+    }
+
+    #expect(document.cadDocument.designGraph.order == originalOrder)
+}
+
+@Test func createSweepRejectsBooleanOperationWithoutTargetBeforeMutation() throws {
+    var document = DesignDocument.empty()
+    let profileID = try document.createRectangleSketch(
+        name: "Invalid Boolean Sweep Profile",
+        plane: .xy,
+        width: .length(4.0, .millimeter),
+        height: .length(2.0, .millimeter)
+    )
+    let pathID = try document.createLineSketch(
+        name: "Invalid Boolean Sweep Path",
+        plane: .xy,
+        start: SketchPoint(
+            x: .length(0.0, .millimeter),
+            y: .length(0.0, .millimeter)
+        ),
+        end: SketchPoint(
+            x: .length(20.0, .millimeter),
+            y: .length(0.0, .millimeter)
+        )
+    )
+    let originalOrder = document.cadDocument.designGraph.order
+
+    #expect(throws: FeatureEvaluationError.self) {
+        _ = try document.createSweep(
+            name: "Invalid Boolean Sweep",
+            profiles: [ProfileReference(featureID: profileID)],
+            path: SweepPathReference(featureID: pathID),
+            options: SweepOptions(booleanOperation: .union)
+        )
+    }
+    #expect(document.cadDocument.designGraph.order == originalOrder)
+}

@@ -12,7 +12,7 @@ public extension DocumentEvaluator {
     ) -> DocumentEvaluator {
         DocumentEvaluator(
             profileExtractor: CircleAwareSketchProfileExtractor(
-                circleSegmentCountsByFeatureID: document.circleProfileSegmentCounts(
+                circleSegmentCountsByFeatureID: document.profileSegmentCounts(
                     objectRegistry: objectRegistry
                 )
             )

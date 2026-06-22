@@ -3,7 +3,11 @@ import Foundation
 public enum ModelingTool: String, CaseIterable, Hashable, Identifiable, Sendable {
     case select
     case sketch
+    case polygon
+    case arc
+    case spline
     case solid
+    case sweep
     case surface
     case mesh
     case measure
@@ -19,8 +23,16 @@ public enum ModelingTool: String, CaseIterable, Hashable, Identifiable, Sendable
             "Select"
         case .sketch:
             "Sketch"
+        case .polygon:
+            "Polygon"
+        case .arc:
+            "Arc"
+        case .spline:
+            "Spline"
         case .solid:
             "Solid"
+        case .sweep:
+            "Sweep"
         case .surface:
             "Surface"
         case .mesh:
@@ -38,8 +50,16 @@ public enum ModelingTool: String, CaseIterable, Hashable, Identifiable, Sendable
             "cursorarrow"
         case .sketch:
             "pencil.and.outline"
+        case .polygon:
+            "hexagon"
+        case .arc:
+            "point.topleft.down.curvedto.point.bottomright.up"
+        case .spline:
+            "waveform.path.ecg"
         case .solid:
             "cube"
+        case .sweep:
+            "arrow.triangle.2.circlepath"
         case .surface:
             "square.stack.3d.up"
         case .mesh:

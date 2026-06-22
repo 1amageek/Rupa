@@ -1,5 +1,5 @@
 {
-  "originHash" : "d05fad8135158b1ae95760776f55fca66f9c769c8f9aba03943c4399335538a3",
+  "originHash" : "66deef64e94244b3bdfb66ceade3910806b05e80493dee6741a4754b97959349",
   "pins" : [
     {
       "identity" : "mac-component",
@@ -17,15 +17,6 @@
       "state" : {
         "revision" : "ca37474853a4b5f59a22c74bfdd449b1f6bc4cc2",
         "version" : "1.8.1"
-      }
-    },
-    {
-      "identity" : "swift-cad",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/1amageek/swift-CAD",
-      "state" : {
-        "branch" : "main",
-        "revision" : "0b5deb157a9ecba336e94a77ed5156a404aca932"
       }
     },
     {

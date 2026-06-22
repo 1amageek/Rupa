@@ -7,18 +7,21 @@ public struct AutomationResult: Codable, Equatable, Sendable {
     public var generation: DocumentGeneration
     public var didMutate: Bool
     public var diagnostics: [EditorDiagnostic]
+    public var curveRebuildReport: CurveRebuildReport?
 
     public init(
         message: String,
         commandName: String? = nil,
         generation: DocumentGeneration = DocumentGeneration(),
         didMutate: Bool = false,
-        diagnostics: [EditorDiagnostic] = []
+        diagnostics: [EditorDiagnostic] = [],
+        curveRebuildReport: CurveRebuildReport? = nil
     ) {
         self.message = message
         self.commandName = commandName
         self.generation = generation
         self.didMutate = didMutate
         self.diagnostics = diagnostics
+        self.curveRebuildReport = curveRebuildReport
     }
 }

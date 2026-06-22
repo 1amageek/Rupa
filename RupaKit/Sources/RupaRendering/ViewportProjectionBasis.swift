@@ -1,4 +1,6 @@
 import CoreGraphics
+import RupaCore
+import SwiftCAD
 
 public enum ViewportProjectionMode: Equatable, Sendable {
     case isometric
@@ -103,6 +105,11 @@ public struct ViewportProjectionBasis: Equatable, Sendable {
         )
     }
 
+    public static func aligned(to plane: SketchPlane, tolerance: Double = 1.0e-12) throws -> ViewportProjectionBasis {
+        let coordinateSystem = try SketchPlaneCoordinateSystem(plane: plane, tolerance: tolerance)
+        return basis(horizontal: coordinateSystem.u, vertical: -coordinateSystem.v)
+    }
+
     public func endpoint(
         from origin: CGPoint,
         axis: ViewportCoordinateAxis,
@@ -123,6 +130,24 @@ public struct ViewportProjectionBasis: Equatable, Sendable {
             yDirection
         case .z:
             zDirection
+        }
+    }
+
+    public var viewNormal: Vector3D? {
+        let screenX = Vector3D(
+            x: Double(xDirection.dx),
+            y: Double(yDirection.dx),
+            z: Double(zDirection.dx)
+        )
+        let screenY = Vector3D(
+            x: Double(xDirection.dy),
+            y: Double(yDirection.dy),
+            z: Double(zDirection.dy)
+        )
+        do {
+            return try screenY.cross(screenX).normalized(tolerance: 1.0e-12)
+        } catch {
+            return nil
         }
     }
 
@@ -187,6 +212,15 @@ public struct ViewportProjectionBasis: Equatable, Sendable {
                 dx: -sin(yaw),
                 dy: elevationSine * cos(yaw)
             )
+        )
+    }
+
+    private static func basis(horizontal: Vector3D, vertical: Vector3D) -> ViewportProjectionBasis {
+        ViewportProjectionBasis(
+            mode: .orbit,
+            xDirection: CGVector(dx: CGFloat(horizontal.x), dy: CGFloat(vertical.x)),
+            yDirection: CGVector(dx: CGFloat(horizontal.y), dy: CGFloat(vertical.y)),
+            zDirection: CGVector(dx: CGFloat(horizontal.z), dy: CGFloat(vertical.z))
         )
     }
 

@@ -46,7 +46,7 @@ let package = Package(
         ),
     ],
     dependencies: [
-        .package(url: "https://github.com/1amageek/swift-CAD", branch: "main"),
+        .package(name: "swift-CAD", path: "../swift-CAD"),
         .package(url: "https://github.com/1amageek/mac-component", branch: "main"),
         .package(url: "https://github.com/apple/swift-argument-parser", from: "1.5.0"),
         .package(url: "https://github.com/apple/swift-collections", from: "1.1.0"),
