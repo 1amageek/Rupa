@@ -15270,6 +15270,16 @@ public struct DesignDocument: Identifiable, Sendable {
         )
         try cadDocument.validate()
         try productMetadata.validate(against: cadDocument, objectRegistry: objectRegistry)
+        do {
+            _ = try CADPipeline
+                .modelingDefault(for: self, objectRegistry: objectRegistry)
+                .evaluate(cadDocument)
+        } catch {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Sweep produced unsupported or invalid geometry: \(error)."
+            )
+        }
         didCommitSweep = true
         return featureID
     }

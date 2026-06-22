@@ -264,6 +264,8 @@ import SwiftCAD
     #expect(sweep.targets.contains(.profile))
     #expect(sweep.targets.contains(.sketchEntity))
     #expect(sweep.targets.contains(.body))
+    #expect(sweep.failureMode.contains("curved-path parallel alignment"))
+    #expect(sweep.failureMode.contains("straight-path normal or parallel alignment"))
     #expect(sweep.failureMode.contains("compatible multiple point/chord"))
     #expect(sweep.failureMode.contains("non-uniform point-guide rail deformation"))
     #expect(sweep.failureMode.contains("curve-guide contact"))

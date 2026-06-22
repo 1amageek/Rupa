@@ -12,14 +12,14 @@ import SwiftCAD
     )
     let pathID = try document.createLineSketch(
         name: "Sweep Path",
-        plane: .xy,
+        plane: .yz,
         start: SketchPoint(
             x: .length(0.0, .millimeter),
             y: .length(0.0, .millimeter)
         ),
         end: SketchPoint(
-            x: .length(20.0, .millimeter),
-            y: .length(0.0, .millimeter)
+            x: .length(0.0, .millimeter),
+            y: .length(20.0, .millimeter)
         )
     )
 
@@ -30,7 +30,7 @@ import SwiftCAD
         options: SweepOptions(
             twistAngle: .angle(30.0, .degree),
             endScale: .constant(.scalar(1.25)),
-            alignment: .normal,
+            alignment: .parallel,
             distanceFraction: .constant(.scalar(0.75)),
             cornerStyle: .mitre,
             guideMethod: .point,
@@ -64,7 +64,7 @@ import SwiftCAD
     ))
     #expect(sweep.profiles == [ProfileReference(featureID: profileID)])
     #expect(sweep.path == SweepPathReference(featureID: pathID))
-    #expect(sweep.options.alignment == .normal)
+    #expect(sweep.options.alignment == .parallel)
     #expect(sweep.options.cornerStyle == .mitre)
     #expect(sweep.options.keepTools == false)
     #expect(sweep.options.simplify == false)
@@ -98,20 +98,6 @@ import SwiftCAD
 
     do {
         _ = try document.createSweep(
-            name: "Parallel Sweep",
-            profiles: [ProfileReference(featureID: profileID)],
-            path: SweepPathReference(featureID: pathID),
-            options: SweepOptions(alignment: .parallel)
-        )
-        Issue.record("Sweep command must reject unsupported parallel alignment.")
-    } catch let error as EditorError {
-        #expect(error.code == .commandInvalid)
-        #expect(error.message.contains("parallel alignment"))
-    }
-    #expect(document.cadDocument.designGraph.order == originalOrder)
-
-    do {
-        _ = try document.createSweep(
             name: "Round Corner Sweep",
             profiles: [ProfileReference(featureID: profileID)],
             path: SweepPathReference(featureID: pathID),
@@ -135,6 +121,43 @@ import SwiftCAD
     } catch let error as EditorError {
         #expect(error.code == .commandInvalid)
         #expect(error.message.contains("simplify"))
+    }
+    #expect(document.cadDocument.designGraph.order == originalOrder)
+}
+
+@Test func createSweepRejectsCurvedPathParallelAlignmentThroughEvaluationGate() throws {
+    var document = DesignDocument.empty()
+    let profileID = try document.createRectangleSketch(
+        name: "Curved Parallel Sweep Profile",
+        plane: .xy,
+        width: .length(4.0, .millimeter),
+        height: .length(2.0, .millimeter)
+    )
+    let pathID = try document.createArcSketch(
+        name: "Curved Parallel Sweep Path",
+        plane: .yz,
+        center: SketchPoint(
+            x: .length(0.0, .millimeter),
+            y: .length(0.0, .millimeter)
+        ),
+        radius: .length(20.0, .millimeter),
+        startAngle: .angle(0.0, .degree),
+        endAngle: .angle(90.0, .degree)
+    )
+    let originalOrder = document.cadDocument.designGraph.order
+
+    do {
+        _ = try document.createSweep(
+            name: "Curved Parallel Sweep",
+            profiles: [ProfileReference(featureID: profileID)],
+            path: SweepPathReference(featureID: pathID),
+            options: SweepOptions(alignment: .parallel)
+        )
+        Issue.record("Sweep command must reject curved-path parallel alignment.")
+    } catch let error as EditorError {
+        #expect(error.code == .commandInvalid)
+        #expect(error.message.contains("parallel alignment"))
+        #expect(error.message.contains("curved paths"))
     }
     #expect(document.cadDocument.designGraph.order == originalOrder)
 }
