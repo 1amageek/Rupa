@@ -856,6 +856,63 @@ import Testing
     #expect(hit?.sketchControlPointIndex == nil)
 }
 
+@Test func viewportPickingReadinessReportsProjectedGeneratedTopologyTargets() throws {
+    let scene = viewportGeneratedTopologyScene()
+
+    let summary = ViewportPickingReadinessService().summarize(scene: scene)
+
+    #expect(summary.activeBackend == .projectedCPU)
+    #expect(summary.requiredBackend == .identityBuffer)
+    #expect(summary.bodyTargetCount == 1)
+    #expect(summary.generatedFaceTargetCount == 1)
+    #expect(summary.generatedEdgeTargetCount == 1)
+    #expect(summary.generatedVertexTargetCount == 1)
+    #expect(summary.supportsObjectTargets)
+    #expect(summary.supportsGeneratedFaceTargets)
+    #expect(summary.supportsGeneratedEdgeTargets)
+    #expect(summary.supportsGeneratedVertexTargets)
+    #expect(summary.supportsGeneratedTopologyTargets)
+    #expect(summary.isExactIdentityBacked == false)
+    #expect(summary.activeBackendTitle == "CPU")
+    #expect(summary.nextBackendTitle == "Identity")
+}
+
+@Test func viewportPickingReadinessReportsIdentityBackendAsReady() throws {
+    let scene = viewportGeneratedTopologyScene()
+
+    let summary = ViewportPickingReadinessService()
+        .summarize(scene: scene, activeBackend: .identityBuffer)
+
+    #expect(summary.activeBackend == .identityBuffer)
+    #expect(summary.isExactIdentityBacked)
+    #expect(summary.activeBackendTitle == "Identity")
+    #expect(summary.nextBackendTitle == "Ready")
+}
+
+@Test func viewportHitCarriesPickingBackendForGeneratedTopologyHit() throws {
+    let scene = viewportGeneratedTopologyScene()
+    let layout = try #require(
+        ViewportLayout(
+            scene: scene,
+            size: CGSize(width: 800.0, height: 600.0)
+        )
+    )
+    let vertexPoint = Point3D(x: -0.010, y: 0.0, z: -0.010)
+    let vertexComponentID = SelectionComponentID.generatedTopology(
+        "feature:body:subshape:test:vertex:frontBottomLeft"
+    )
+
+    let hit = ViewportHitTester().hitTest(
+        point: layout.project(vertexPoint),
+        in: scene,
+        layout: layout
+    )
+
+    #expect(hit?.kind == .body)
+    #expect(hit?.pickingBackend == .projectedCPU)
+    #expect(hit?.selectionComponent == .vertex(vertexComponentID))
+}
+
 @MainActor
 @Test func viewportSceneBuilderCreatesSketchRegionSelectionCandidates() async throws {
     let session = EditorSession()
@@ -1679,6 +1736,64 @@ private func generatedFaceCandidatePoints(
         ))
     }
     return candidates
+}
+
+private func viewportGeneratedTopologyScene() -> ViewportScene {
+    let featureID = FeatureID()
+    let faceComponentID = SelectionComponentID.generatedTopology(
+        "feature:body:subshape:test:face:front"
+    )
+    let edgeComponentID = SelectionComponentID.generatedTopology(
+        "feature:body:subshape:test:edge:frontBottom"
+    )
+    let vertexComponentID = SelectionComponentID.generatedTopology(
+        "feature:body:subshape:test:vertex:frontBottomLeft"
+    )
+    let frontBottomLeft = Point3D(x: -0.010, y: 0.0, z: -0.010)
+    let frontBottomRight = Point3D(x: 0.010, y: 0.0, z: -0.010)
+    let frontTopRight = Point3D(x: 0.010, y: 0.0, z: 0.010)
+    let frontTopLeft = Point3D(x: -0.010, y: 0.0, z: 0.010)
+    let topology = ViewportBodyTopology(
+        faces: [
+            ViewportBodyTopology.Face(
+                componentID: faceComponentID,
+                points: [
+                    frontBottomLeft,
+                    frontBottomRight,
+                    frontTopRight,
+                    frontTopLeft,
+                ]
+            ),
+        ],
+        edges: [
+            ViewportBodyTopology.Edge(
+                componentID: edgeComponentID,
+                start: frontBottomLeft,
+                end: frontBottomRight
+            ),
+        ],
+        vertices: [
+            ViewportBodyTopology.Vertex(
+                componentID: vertexComponentID,
+                point: frontBottomLeft
+            ),
+        ]
+    )
+    let component = ViewportBodyComponent(
+        sizeXMeters: 0.020,
+        sizeYMeters: 0.020,
+        sizeZMeters: 0.020,
+        yMinMeters: 0.0,
+        yMaxMeters: 0.020,
+        topology: topology
+    )
+    let item = ViewportSceneItem(
+        id: featureID.description,
+        featureID: featureID,
+        modelBounds: CGRect(x: -0.010, y: -0.010, width: 0.020, height: 0.020),
+        kind: .body(component: component)
+    )
+    return ViewportScene(items: [item])
 }
 
 private func projectedBounds(

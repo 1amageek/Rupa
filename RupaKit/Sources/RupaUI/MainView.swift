@@ -65,6 +65,7 @@ public struct MainView: View {
     @State private var viewportProjectionRequest: ViewportProjectionRequest?
     @State private var constructionPlaneRenameTargetID: ConstructionPlaneSourceID?
     @State private var constructionPlaneRenameText: String
+    @State private var hoveredViewportPickingBackend: ViewportPickingBackend?
     @State private var agentSessionID: UUID?
     @FocusState private var isWorkspaceFocused: Bool
 
@@ -1176,6 +1177,7 @@ public struct MainView: View {
                         accessibilityIdentifier: "WorkspaceQuality.gate"
                     )
                 }
+                viewportPickingPills
                 workspaceValuePill("Grid", isGridSnapEnabled ? "On" : "Off")
                 workspaceValuePill("Object", isObjectTargetingEnabled ? "On" : "Off")
                 workspaceValuePill("2D", constructionPlaneSnapSummary)
@@ -1362,6 +1364,7 @@ public struct MainView: View {
                 accessibilityIdentifier: "WorkspaceQuality.gate"
             )
         }
+        viewportPickingPills
         workspaceValuePill("Visible", "\(nodes.filter(\.isVisible).count)")
         workspaceValuePill("Locked", "\(nodes.filter(\.isLocked).count)")
 
@@ -2177,6 +2180,26 @@ public struct MainView: View {
 
     private var selectionQualitySummary: WorkspaceSelectionQualitySummary? {
         WorkspaceSelectionQualitySummary(scope: selectionScope)
+    }
+
+    private var activeViewportPickingBackend: ViewportPickingBackend {
+        hoveredViewportPickingBackend ?? .projectedCPU
+    }
+
+    @ViewBuilder
+    private var viewportPickingPills: some View {
+        workspaceValuePill(
+            "Pick",
+            activeViewportPickingBackend.title,
+            accessibilityIdentifier: "WorkspacePicking.backend"
+        )
+        if activeViewportPickingBackend.isExactIdentityBacked == false {
+            workspaceValuePill(
+                "Next",
+                ViewportPickingBackend.identityBuffer.title,
+                accessibilityIdentifier: "WorkspacePicking.nextBackend"
+            )
+        }
     }
 
     private func workspaceStatusChip(
@@ -3406,10 +3429,12 @@ public struct MainView: View {
 
     private func handleViewportHover(_ hit: ViewportHit?) {
         guard let hit else {
+            hoveredViewportPickingBackend = nil
             setHoveredTarget(nil)
             return
         }
 
+        hoveredViewportPickingBackend = hit.pickingBackend
         guard let target = selectionTarget(for: hit) else {
             setHoveredTarget(nil)
             return

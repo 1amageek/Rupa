@@ -1148,6 +1148,7 @@ public struct ViewportModelCoordinateMapper {
 public struct ViewportHit: Equatable, Sendable {
     public var featureID: FeatureID
     public var kind: ViewportSelectableKind
+    public var pickingBackend: ViewportPickingBackend
     public var sketchEntityID: SketchEntityID?
     public var sketchPointHandle: SketchEntityPointHandle?
     public var sketchControlPointIndex: Int?
@@ -1159,6 +1160,7 @@ public struct ViewportHit: Equatable, Sendable {
     public init(
         featureID: FeatureID,
         kind: ViewportSelectableKind,
+        pickingBackend: ViewportPickingBackend = .projectedCPU,
         sketchEntityID: SketchEntityID? = nil,
         sketchPointHandle: SketchEntityPointHandle? = nil,
         sketchControlPointIndex: Int? = nil,
@@ -1169,6 +1171,7 @@ public struct ViewportHit: Equatable, Sendable {
     ) {
         self.featureID = featureID
         self.kind = kind
+        self.pickingBackend = pickingBackend
         self.sketchEntityID = sketchEntityID
         self.sketchPointHandle = sketchPointHandle
         self.sketchControlPointIndex = sketchControlPointIndex
