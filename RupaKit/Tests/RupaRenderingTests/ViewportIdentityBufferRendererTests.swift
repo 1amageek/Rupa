@@ -77,6 +77,122 @@ import Testing
     #expect(hit?.selectionComponent == .face(faceComponentID))
 }
 
+@Test func viewportIdentityBufferReturnsSelectionHitsInsideRectangle() throws {
+    let scene = identityBufferGeneratedTopologyScene()
+    let viewportSize = CGSize(width: 240.0, height: 180.0)
+    let layout = try #require(ViewportLayout(scene: scene, size: viewportSize))
+    let plan = ViewportIdentityPickRenderPlanBuilder().build(scene: scene, layout: layout)
+    let renderer = try ViewportIdentityBufferRenderer()
+    let faceComponentID = SelectionComponentID.generatedTopology(
+        "feature:body:subshape:identity:face:front"
+    )
+    let edgeComponentID = SelectionComponentID.generatedTopology(
+        "feature:body:subshape:identity:edge:frontBottom"
+    )
+    let vertexComponentID = SelectionComponentID.generatedTopology(
+        "feature:body:subshape:identity:vertex:frontBottomLeft"
+    )
+
+    let buffer = try renderer.render(plan: plan, viewportSize: viewportSize)
+    let hits = buffer.hits(
+        in: CGRect(
+            x: 0.0,
+            y: 0.0,
+            width: viewportSize.width,
+            height: viewportSize.height
+        )
+    )
+
+    #expect(hits.contains {
+        $0.pickingBackend == .identityBuffer && $0.selectionComponent == .face(faceComponentID)
+    })
+    #expect(hits.contains {
+        $0.pickingBackend == .identityBuffer && $0.selectionComponent == .edge(edgeComponentID)
+    })
+    #expect(hits.contains {
+        $0.pickingBackend == .identityBuffer && $0.selectionComponent == .vertex(vertexComponentID)
+    })
+}
+
+@MainActor
+@Test func viewportIdentityHitResolverReturnsIdentityBufferSelectionHits() throws {
+    let scene = identityBufferGeneratedTopologyScene()
+    let viewportSize = CGSize(width: 240.0, height: 180.0)
+    let layout = try #require(ViewportLayout(scene: scene, size: viewportSize))
+    let resolver = ViewportIdentityHitResolver()
+    let vertexComponentID = SelectionComponentID.generatedTopology(
+        "feature:body:subshape:identity:vertex:frontBottomLeft"
+    )
+
+    let hits = resolver.selectionHits(
+        in: CGRect(x: 0.0, y: 0.0, width: viewportSize.width, height: viewportSize.height),
+        scene: scene,
+        layout: layout
+    )
+
+    #expect(hits.contains { $0.pickingBackend == .identityBuffer })
+    #expect(hits.contains { $0.selectionComponent == .vertex(vertexComponentID) })
+}
+
+@MainActor
+@Test func viewportIdentityHitResolverSelectionFallsBackToProjectedCPUWhenRendererIsUnavailable() throws {
+    let scene = identityBufferGeneratedTopologyScene()
+    let viewportSize = CGSize(width: 240.0, height: 180.0)
+    let layout = try #require(ViewportLayout(scene: scene, size: viewportSize))
+    let resolver = ViewportIdentityHitResolver(rendererFactory: {
+        throw ViewportIdentityBufferRendererError.deviceUnavailable
+    })
+    let vertexComponentID = SelectionComponentID.generatedTopology(
+        "feature:body:subshape:identity:vertex:frontBottomLeft"
+    )
+
+    let hits = resolver.selectionHits(
+        in: CGRect(x: 0.0, y: 0.0, width: viewportSize.width, height: viewportSize.height),
+        scene: scene,
+        layout: layout
+    )
+
+    #expect(hits.contains { $0.pickingBackend == .projectedCPU })
+    #expect(hits.contains { $0.selectionComponent == .vertex(vertexComponentID) })
+}
+
+@MainActor
+@Test func viewportIdentityHitResolverSelectionHonorsSketchControlPointPolicy() async throws {
+    let session = EditorSession()
+    _ = try session.execute(
+        .createSplineSketch(
+            name: "Viewport Identity Rectangle Spline Policy",
+            plane: .xy,
+            spline: SketchSpline(controlPoints: [
+                SketchPoint(x: .length(0.0, .millimeter), y: .length(0.0, .millimeter)),
+                SketchPoint(x: .length(2.0, .millimeter), y: .length(4.0, .millimeter)),
+                SketchPoint(x: .length(6.0, .millimeter), y: .length(4.0, .millimeter)),
+                SketchPoint(x: .length(8.0, .millimeter), y: .length(0.0, .millimeter)),
+            ])
+        )
+    )
+    let scene = ViewportSceneBuilder().build(document: session.document)
+    let viewportSize = CGSize(width: 240.0, height: 180.0)
+    let layout = try #require(ViewportLayout(scene: scene, size: viewportSize))
+    let resolver = ViewportIdentityHitResolver()
+
+    let hiddenHits = resolver.selectionHits(
+        in: CGRect(x: 0.0, y: 0.0, width: viewportSize.width, height: viewportSize.height),
+        scene: scene,
+        layout: layout,
+        sketchControlPointHitPolicy: .none
+    )
+    let visibleHits = resolver.selectionHits(
+        in: CGRect(x: 0.0, y: 0.0, width: viewportSize.width, height: viewportSize.height),
+        scene: scene,
+        layout: layout,
+        sketchControlPointHitPolicy: .all
+    )
+
+    #expect(hiddenHits.contains { $0.sketchControlPointIndex != nil } == false)
+    #expect(visibleHits.contains { $0.sketchControlPointIndex == 1 })
+}
+
 @MainActor
 @Test func viewportIdentityBufferRendererSamplesProjectedBodyFallbackHits() async throws {
     let session = EditorSession()

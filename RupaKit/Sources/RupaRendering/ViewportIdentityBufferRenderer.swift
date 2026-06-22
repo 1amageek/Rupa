@@ -80,6 +80,47 @@ public struct ViewportIdentityBuffer: Equatable, Sendable {
             hit: index.hit(for: identity)
         )
     }
+
+    public func hits(in rect: CGRect) -> [ViewportHit] {
+        let sampleRect = normalized(rect)
+        guard sampleRect.isNull == false,
+              sampleRect.isEmpty == false else {
+            return []
+        }
+        let minX = max(Int(floor(sampleRect.minX)), 0)
+        let minY = max(Int(floor(sampleRect.minY)), 0)
+        let maxX = min(Int(ceil(sampleRect.maxX)), width)
+        let maxY = min(Int(ceil(sampleRect.maxY)), height)
+        guard minX < maxX,
+              minY < maxY else {
+            return []
+        }
+
+        var hits: [ViewportHit] = []
+        var seenIdentities: Set<ViewportPickIdentity> = []
+        for y in minY ..< maxY {
+            for x in minX ..< maxX {
+                let rawValue = rawValues[y * width + x]
+                guard rawValue != ViewportPickIdentity.backgroundRawValue,
+                      let identity = ViewportPickIdentity(rawValue: rawValue),
+                      seenIdentities.insert(identity).inserted,
+                      let hit = index.hit(for: identity) else {
+                    continue
+                }
+                hits.append(hit)
+            }
+        }
+        return hits
+    }
+
+    private func normalized(_ rect: CGRect) -> CGRect {
+        CGRect(
+            x: min(rect.minX, rect.maxX),
+            y: min(rect.minY, rect.maxY),
+            width: abs(rect.width),
+            height: abs(rect.height)
+        )
+    }
 }
 
 public final class ViewportIdentityBufferRenderer {

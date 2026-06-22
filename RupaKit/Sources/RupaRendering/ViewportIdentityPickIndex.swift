@@ -91,13 +91,16 @@ public struct ViewportIdentityPickIndex: Equatable, Sendable {
 public struct ViewportIdentityPickIndexBuilder: Sendable {
     public var includesSketchControlPoints: Bool
     public var includesProjectedBodySubobjects: Bool
+    public var sketchControlPointHitPolicy: ViewportSketchControlPointHitPolicy
 
     public init(
         includesSketchControlPoints: Bool = true,
-        includesProjectedBodySubobjects: Bool = true
+        includesProjectedBodySubobjects: Bool = true,
+        sketchControlPointHitPolicy: ViewportSketchControlPointHitPolicy = .all
     ) {
         self.includesSketchControlPoints = includesSketchControlPoints
         self.includesProjectedBodySubobjects = includesProjectedBodySubobjects
+        self.sketchControlPointHitPolicy = sketchControlPointHitPolicy
     }
 
     public func build(scene: ViewportScene) -> ViewportIdentityPickIndex {
@@ -148,7 +151,8 @@ public struct ViewportIdentityPickIndexBuilder: Sendable {
             )
 
             guard includesSketchControlPoints,
-                  case .spline(let entityID, _, let controlPoints, _) = primitive else {
+                  case .spline(let entityID, _, let controlPoints, _) = primitive,
+                  sketchControlPointHitPolicy.allows(featureID: item.featureID, entityID: entityID) else {
                 continue
             }
             for controlPointIndex in controlPoints.indices {

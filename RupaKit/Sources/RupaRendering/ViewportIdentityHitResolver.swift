@@ -1,4 +1,6 @@
 import CoreGraphics
+import RupaCore
+import SwiftCAD
 
 @MainActor
 public final class ViewportIdentityHitResolver {
@@ -27,6 +29,34 @@ public final class ViewportIdentityHitResolver {
             return try identityHit(point: point, in: scene, layout: layout)
         } catch {
             return ViewportHitTester().hitTest(point: point, in: scene, layout: layout)
+        }
+    }
+
+    public func selectionHits(
+        in rect: CGRect,
+        scene: ViewportScene,
+        layout: ViewportLayout,
+        sketchControlPointHitPolicy: ViewportSketchControlPointHitPolicy = .all
+    ) -> [ViewportHit] {
+        do {
+            let index = ViewportIdentityPickIndexBuilder(
+                sketchControlPointHitPolicy: sketchControlPointHitPolicy
+            )
+            .build(scene: scene)
+            let plan = ViewportIdentityPickRenderPlanBuilder()
+                .build(scene: scene, layout: layout, index: index)
+            let buffer = try identityRenderer().render(
+                plan: plan,
+                viewportSize: layout.viewportSize
+            )
+            return buffer.hits(in: rect)
+        } catch {
+            return ViewportSelectionRectangleHitTester().hits(
+                in: rect,
+                scene: scene,
+                layout: layout,
+                sketchControlPointHitPolicy: sketchControlPointHitPolicy
+            )
         }
     }
 

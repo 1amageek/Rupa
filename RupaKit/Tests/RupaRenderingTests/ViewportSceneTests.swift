@@ -850,13 +850,13 @@ import Testing
         in: selectionRect,
         scene: scene,
         layout: layout,
-        allowsSketchControlPointHit: { _, _ in false }
+        sketchControlPointHitPolicy: .none
     )
     let visibleControlPointHits = ViewportSelectionRectangleHitTester().hits(
         in: selectionRect,
         scene: scene,
         layout: layout,
-        allowsSketchControlPointHit: { _, _ in true }
+        sketchControlPointHitPolicy: .all
     )
 
     #expect(hiddenControlPointHits.contains {

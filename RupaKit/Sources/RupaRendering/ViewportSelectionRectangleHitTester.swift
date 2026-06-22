@@ -36,7 +36,7 @@ public struct ViewportSelectionRectangleHitTester: Sendable {
         in rect: CGRect,
         scene: ViewportScene,
         layout: ViewportLayout,
-        allowsSketchControlPointHit: (FeatureID, SketchEntityID) -> Bool = { _, _ in true }
+        sketchControlPointHitPolicy: ViewportSketchControlPointHitPolicy = .all
     ) -> [ViewportHit] {
         let selectionRect = normalized(rect)
         var hits: [ViewportHit] = []
@@ -50,7 +50,7 @@ public struct ViewportSelectionRectangleHitTester: Sendable {
                     item: item,
                     primitives: primitives,
                     layout: layout,
-                    allowsSketchControlPointHit: allowsSketchControlPointHit
+                    sketchControlPointHitPolicy: sketchControlPointHitPolicy
                 ))
             case .body(let component):
                 let topologyHits = topologyHits(
@@ -84,7 +84,7 @@ public struct ViewportSelectionRectangleHitTester: Sendable {
         item: ViewportSceneItem,
         primitives: [ViewportSketchPrimitive],
         layout: ViewportLayout,
-        allowsSketchControlPointHit: (FeatureID, SketchEntityID) -> Bool
+        sketchControlPointHitPolicy: ViewportSketchControlPointHitPolicy
     ) -> [ViewportHit] {
         var hits: [ViewportHit] = []
         for primitive in primitives {
@@ -107,7 +107,7 @@ public struct ViewportSelectionRectangleHitTester: Sendable {
                     featureID: item.featureID,
                     in: rect,
                     layout: layout,
-                    allowsSketchControlPointHit: allowsSketchControlPointHit
+                    sketchControlPointHitPolicy: sketchControlPointHitPolicy
                 )
             )
         }
@@ -137,10 +137,10 @@ public struct ViewportSelectionRectangleHitTester: Sendable {
         featureID: FeatureID,
         in rect: CGRect,
         layout: ViewportLayout,
-        allowsSketchControlPointHit: (FeatureID, SketchEntityID) -> Bool
+        sketchControlPointHitPolicy: ViewportSketchControlPointHitPolicy
     ) -> [ViewportHit] {
         guard case .spline(let entityID, _, let controlPoints, _) = primitive,
-              allowsSketchControlPointHit(featureID, entityID) else {
+              sketchControlPointHitPolicy.allows(featureID: featureID, entityID: entityID) else {
             return []
         }
         var hits: [ViewportHit] = []

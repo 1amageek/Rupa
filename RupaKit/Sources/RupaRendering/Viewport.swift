@@ -3027,6 +3027,33 @@ public struct Viewport: View {
         pointDisplay(featureID: featureID, entityID: entityID)?.mode != .hidden
     }
 
+    private func sketchControlPointHitPolicy(
+        for scene: ViewportScene
+    ) -> ViewportSketchControlPointHitPolicy {
+        var targets: Set<ViewportSketchControlPointHitPolicy.Target> = []
+        for item in scene.items {
+            guard case .sketch(let primitives) = item.kind else {
+                continue
+            }
+            for primitive in primitives {
+                guard case .spline(let entityID, _, _, _) = primitive,
+                      allowsPointHandleInteraction(
+                        featureID: item.featureID,
+                        entityID: entityID
+                      ) else {
+                    continue
+                }
+                targets.insert(
+                    ViewportSketchControlPointHitPolicy.Target(
+                        featureID: item.featureID,
+                        entityID: entityID
+                    )
+                )
+            }
+        }
+        return .only(targets)
+    }
+
     private func isSplineControlPointHighlighted(
         featureID: FeatureID,
         entityID: SketchEntityID,
@@ -8386,15 +8413,14 @@ public struct Viewport: View {
             scene,
             selectedFeatureIDs: selectedTargetFeatureIDs()
         )
+        let sketchControlPointHitPolicy = sketchControlPointHitPolicy(for: hitScene)
         onSelectionDrag(
             ViewportSelectionDragTarget(
-                hits: ViewportSelectionRectangleHitTester().hits(
+                hits: identityHitResolver.selectionHits(
                     in: rect,
                     scene: hitScene,
                     layout: mapper.layout,
-                    allowsSketchControlPointHit: { featureID, entityID in
-                        allowsPointHandleInteraction(featureID: featureID, entityID: entityID)
-                    }
+                    sketchControlPointHitPolicy: sketchControlPointHitPolicy
                 ),
                 selectionIntent: selectionIntent
             )
