@@ -812,6 +812,65 @@ import Testing
 }
 
 @MainActor
+@Test func viewportSelectionRectangleHitTesterHonorsSketchControlPointPolicy() async throws {
+    let session = EditorSession()
+    _ = try session.execute(
+        .createSplineSketch(
+            name: "Viewport Spline Selection Policy",
+            plane: .xy,
+            spline: SketchSpline(controlPoints: [
+                SketchPoint(x: .length(0.0, .millimeter), y: .length(0.0, .millimeter)),
+                SketchPoint(x: .length(2.0, .millimeter), y: .length(4.0, .millimeter)),
+                SketchPoint(x: .length(6.0, .millimeter), y: .length(4.0, .millimeter)),
+                SketchPoint(x: .length(8.0, .millimeter), y: .length(0.0, .millimeter)),
+            ])
+        )
+    )
+    let scene = ViewportSceneBuilder().build(document: session.document)
+    let layout = try #require(
+        ViewportLayout(
+            scene: scene,
+            size: CGSize(width: 800.0, height: 600.0)
+        )
+    )
+    let sketchItem = try #require(scene.items.first { item in
+        if case .sketch = item.kind {
+            return true
+        }
+        return false
+    })
+    guard case .sketch(let primitives) = sketchItem.kind,
+          case .spline(let entityID, _, _, _) = try #require(primitives.first) else {
+        Issue.record("Expected a spline sketch primitive.")
+        return
+    }
+    let selectionRect = CGRect(x: 0.0, y: 0.0, width: 800.0, height: 600.0)
+
+    let hiddenControlPointHits = ViewportSelectionRectangleHitTester().hits(
+        in: selectionRect,
+        scene: scene,
+        layout: layout,
+        allowsSketchControlPointHit: { _, _ in false }
+    )
+    let visibleControlPointHits = ViewportSelectionRectangleHitTester().hits(
+        in: selectionRect,
+        scene: scene,
+        layout: layout,
+        allowsSketchControlPointHit: { _, _ in true }
+    )
+
+    #expect(hiddenControlPointHits.contains {
+        $0.sketchEntityID == entityID && $0.sketchControlPointIndex != nil
+    } == false)
+    #expect(hiddenControlPointHits.contains {
+        $0.sketchEntityID == entityID && $0.sketchControlPointIndex == nil
+    })
+    #expect(visibleControlPointHits.contains {
+        $0.sketchEntityID == entityID && $0.sketchControlPointIndex == 1
+    })
+}
+
+@MainActor
 @Test func viewportHitTesterReportsSketchPointHandle() async throws {
     let session = EditorSession()
     _ = try session.execute(
@@ -959,6 +1018,60 @@ import Testing
     #expect(vertexHit?.component == .vertex(fixture.nearVertexComponentID))
     #expect(edgeHit?.component == .edge(fixture.nearEdgeComponentID))
     #expect(faceHit?.component == .face(fixture.nearFaceComponentID))
+}
+
+@Test func viewportSelectionRectangleHitTesterReturnsGeneratedTopologySubobjectHits() throws {
+    let scene = viewportGeneratedTopologyScene()
+    let layout = try #require(
+        ViewportLayout(
+            scene: scene,
+            size: CGSize(width: 800.0, height: 600.0)
+        )
+    )
+    let faceComponentID = SelectionComponentID.generatedTopology(
+        "feature:body:subshape:test:face:front"
+    )
+    let edgeComponentID = SelectionComponentID.generatedTopology(
+        "feature:body:subshape:test:edge:frontBottom"
+    )
+    let vertexComponentID = SelectionComponentID.generatedTopology(
+        "feature:body:subshape:test:vertex:frontBottomLeft"
+    )
+
+    let hits = ViewportSelectionRectangleHitTester().hits(
+        in: CGRect(x: 0.0, y: 0.0, width: 800.0, height: 600.0),
+        scene: scene,
+        layout: layout
+    )
+
+    #expect(hits.contains { $0.selectionComponent == .face(faceComponentID) })
+    #expect(hits.contains { $0.selectionComponent == .edge(edgeComponentID) })
+    #expect(hits.contains { $0.selectionComponent == .vertex(vertexComponentID) })
+    #expect(hits.contains { $0.kind == .body && $0.selectionComponent == nil })
+}
+
+@MainActor
+@Test func viewportSelectionRectangleHitTesterReturnsProjectedBodySubobjectHitsWhenTopologyIsMissing() async throws {
+    let session = EditorSession()
+    _ = try #require(session.createDefaultExtrudedRectangle())
+    let scene = ViewportSceneBuilder().build(document: session.document)
+    let layout = try #require(
+        ViewportLayout(
+            scene: scene,
+            size: CGSize(width: 800.0, height: 600.0)
+        )
+    )
+
+    let hits = ViewportSelectionRectangleHitTester().hits(
+        in: CGRect(x: 0.0, y: 0.0, width: 800.0, height: 600.0),
+        scene: scene,
+        layout: layout
+    )
+
+    #expect(hits.contains { $0.bodyFace != nil })
+    #expect(hits.contains { $0.bodyEdge != nil })
+    #expect(hits.contains { $0.bodyVertex != nil })
+    #expect(hits.contains { $0.kind == .body && $0.selectionComponent == nil })
 }
 
 @MainActor
