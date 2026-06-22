@@ -35,6 +35,27 @@ import Testing
     #expect(backgroundSample.hit == nil)
 }
 
+@Test func viewportIdentityBufferRendererReportsRenderReadbackMetrics() throws {
+    let scene = identityBufferGeneratedTopologyScene()
+    let viewportSize = CGSize(width: 240.0, height: 180.0)
+    let layout = try #require(ViewportLayout(scene: scene, size: viewportSize))
+    let plan = ViewportIdentityPickRenderPlanBuilder().build(scene: scene, layout: layout)
+    let renderer = try ViewportIdentityBufferRenderer()
+
+    let buffer = try renderer.render(plan: plan, viewportSize: viewportSize)
+    let metrics = try #require(buffer.renderMetrics)
+
+    #expect(metrics.viewportWidth == 240)
+    #expect(metrics.viewportHeight == 180)
+    #expect(metrics.encodedCommandCount == plan.drawItems.count)
+    #expect(metrics.encodedPointCount > 0)
+    #expect(metrics.pixelCount == buffer.rawValues.count)
+    #expect(metrics.encodeDurationSeconds >= 0.0)
+    #expect(metrics.gpuDurationSeconds >= 0.0)
+    #expect(metrics.readbackDurationSeconds >= 0.0)
+    #expect(metrics.totalDurationSeconds >= metrics.readbackDurationSeconds)
+}
+
 @MainActor
 @Test func viewportIdentityHitResolverReturnsIdentityBufferGeneratedTopologyHit() throws {
     let scene = identityBufferGeneratedTopologyScene()
@@ -154,6 +175,7 @@ import Testing
     )
 
     #expect(renderer.renderCount == 1)
+    #expect(resolver.lastRenderMetrics == renderer.lastRenderMetrics)
 }
 
 @MainActor
@@ -200,6 +222,24 @@ import Testing
     _ = resolver.selectionHits(in: selectionRect, scene: scene, layout: layout)
 
     #expect(renderer.renderCount == 2)
+    #expect(resolver.lastRenderMetrics == renderer.lastRenderMetrics)
+}
+
+@MainActor
+@Test func viewportIdentityHitResolverInvalidateClearsLastRenderMetrics() throws {
+    let scene = identityBufferGeneratedTopologyScene()
+    let viewportSize = CGSize(width: 240.0, height: 180.0)
+    let layout = try #require(ViewportLayout(scene: scene, size: viewportSize))
+    let renderer = CountingIdentityBufferRenderer()
+    let resolver = ViewportIdentityHitResolver(rendererFactory: { renderer })
+    let selectionRect = CGRect(x: 0.0, y: 0.0, width: viewportSize.width, height: viewportSize.height)
+
+    _ = resolver.selectionHits(in: selectionRect, scene: scene, layout: layout)
+    #expect(resolver.lastRenderMetrics != nil)
+
+    resolver.invalidate()
+
+    #expect(resolver.lastRenderMetrics == nil)
 }
 
 @MainActor
@@ -368,6 +408,7 @@ private func identityBufferSplineScene() throws -> ViewportScene {
 private final class CountingIdentityBufferRenderer: ViewportIdentityBufferRendering {
     private(set) var renderCount = 0
     private(set) var renderedRecordCounts: [Int] = []
+    private(set) var lastRenderMetrics: ViewportIdentityBufferRenderMetrics?
 
     func render(
         plan: ViewportIdentityPickRenderPlan,
@@ -386,11 +427,41 @@ private final class CountingIdentityBufferRenderer: ViewportIdentityBufferRender
         let height = max(Int(ceil(viewportSize.height)), 1)
         let rawValue = plan.index.records.first?.identity.rawValue
             ?? ViewportPickIdentity.backgroundRawValue
+        let metrics = ViewportIdentityBufferRenderMetrics(
+            viewportWidth: width,
+            viewportHeight: height,
+            encodedCommandCount: plan.drawItems.count,
+            encodedPointCount: plan.drawItems.reduce(0) { partialResult, item in
+                partialResult + item.primitive.pointCount
+            },
+            pixelCount: width * height,
+            encodeDurationSeconds: Double(renderCount) * 0.001,
+            gpuDurationSeconds: Double(renderCount) * 0.002,
+            readbackDurationSeconds: Double(renderCount) * 0.003,
+            totalDurationSeconds: Double(renderCount) * 0.006
+        )
+        lastRenderMetrics = metrics
         return ViewportIdentityBuffer(
             width: width,
             height: height,
             rawValues: Array(repeating: rawValue, count: width * height),
-            index: plan.index
+            index: plan.index,
+            renderMetrics: metrics
         )
+    }
+}
+
+private extension ViewportIdentityPickPrimitive {
+    var pointCount: Int {
+        switch self {
+        case .polygon(let points):
+            return points.count
+        case .polyline(let points, _, _):
+            return points.count
+        case .segment(_, _, _):
+            return 2
+        case .point(_, _):
+            return 1
+        }
     }
 }

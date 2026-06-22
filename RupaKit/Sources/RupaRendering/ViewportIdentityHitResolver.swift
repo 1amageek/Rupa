@@ -20,6 +20,7 @@ public final class ViewportIdentityHitResolver {
     private var renderer: (any ViewportIdentityBufferRendering)?
     private var cached: Cache?
     private let rendererFactory: RendererFactory
+    public private(set) var lastRenderMetrics: ViewportIdentityBufferRenderMetrics?
 
     public init(rendererFactory: @escaping RendererFactory = { try ViewportIdentityBufferRenderer() }) {
         self.rendererFactory = rendererFactory
@@ -62,6 +63,7 @@ public final class ViewportIdentityHitResolver {
 
     public func invalidate() {
         cached = nil
+        lastRenderMetrics = nil
     }
 
     private func identityHit(
@@ -98,10 +100,12 @@ public final class ViewportIdentityHitResolver {
         .build(scene: scene)
         let plan = ViewportIdentityPickRenderPlanBuilder()
             .build(scene: scene, layout: layout, index: index)
+        lastRenderMetrics = nil
         let buffer = try identityRenderer().render(
             plan: plan,
             viewportSize: layout.viewportSize
         )
+        lastRenderMetrics = buffer.renderMetrics
         cached = Cache(key: key, buffer: buffer)
         return buffer
     }

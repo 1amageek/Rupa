@@ -1,4 +1,5 @@
 import CoreGraphics
+import Foundation
 import Metal
 
 public enum ViewportIdentityBufferRendererError: Error, Equatable, Sendable {
@@ -32,22 +33,59 @@ public struct ViewportIdentityBufferSample: Equatable, Sendable {
     }
 }
 
+public struct ViewportIdentityBufferRenderMetrics: Equatable, Sendable {
+    public var viewportWidth: Int
+    public var viewportHeight: Int
+    public var encodedCommandCount: Int
+    public var encodedPointCount: Int
+    public var pixelCount: Int
+    public var encodeDurationSeconds: Double
+    public var gpuDurationSeconds: Double
+    public var readbackDurationSeconds: Double
+    public var totalDurationSeconds: Double
+
+    public init(
+        viewportWidth: Int,
+        viewportHeight: Int,
+        encodedCommandCount: Int,
+        encodedPointCount: Int,
+        pixelCount: Int,
+        encodeDurationSeconds: Double,
+        gpuDurationSeconds: Double,
+        readbackDurationSeconds: Double,
+        totalDurationSeconds: Double
+    ) {
+        self.viewportWidth = viewportWidth
+        self.viewportHeight = viewportHeight
+        self.encodedCommandCount = encodedCommandCount
+        self.encodedPointCount = encodedPointCount
+        self.pixelCount = pixelCount
+        self.encodeDurationSeconds = encodeDurationSeconds
+        self.gpuDurationSeconds = gpuDurationSeconds
+        self.readbackDurationSeconds = readbackDurationSeconds
+        self.totalDurationSeconds = totalDurationSeconds
+    }
+}
+
 public struct ViewportIdentityBuffer: Equatable, Sendable {
     public var width: Int
     public var height: Int
     public var rawValues: [UInt32]
     public var index: ViewportIdentityPickIndex
+    public var renderMetrics: ViewportIdentityBufferRenderMetrics?
 
     public init(
         width: Int,
         height: Int,
         rawValues: [UInt32],
-        index: ViewportIdentityPickIndex
+        index: ViewportIdentityPickIndex,
+        renderMetrics: ViewportIdentityBufferRenderMetrics? = nil
     ) {
         self.width = width
         self.height = height
         self.rawValues = rawValues
         self.index = index
+        self.renderMetrics = renderMetrics
     }
 
     public func rawValue(at point: CGPoint) -> UInt32 {
@@ -175,9 +213,12 @@ public final class ViewportIdentityBufferRenderer {
         plan: ViewportIdentityPickRenderPlan,
         viewportSize: CGSize
     ) throws -> ViewportIdentityBuffer {
+        let totalStart = Self.timestamp()
         let size = try renderSize(for: viewportSize)
+        let encodeStart = Self.timestamp()
         let encodedPlan = try ViewportIdentityBufferCommandEncoder()
             .encode(plan: plan)
+        let encodeDurationSeconds = Self.duration(since: encodeStart)
         let commandBuffer = try makeCommandBuffer()
         let texture = try makeTexture(width: size.width, height: size.height)
         let commandBufferCommands = encodedPlan.commands.isEmpty
@@ -213,19 +254,37 @@ public final class ViewportIdentityBufferRenderer {
         )
         encoder.endEncoding()
 
+        let gpuStart = Self.timestamp()
         commandBuffer.commit()
         commandBuffer.waitUntilCompleted()
+        let gpuDurationSeconds = Self.duration(since: gpuStart)
         if let error = commandBuffer.error {
             throw ViewportIdentityBufferRendererError.commandExecutionFailed(
                 String(describing: error)
             )
         }
 
+        let readbackStart = Self.timestamp()
+        let rawValues = readTexture(texture, width: size.width, height: size.height)
+        let readbackDurationSeconds = Self.duration(since: readbackStart)
+        let totalDurationSeconds = Self.duration(since: totalStart)
+        let metrics = ViewportIdentityBufferRenderMetrics(
+            viewportWidth: size.width,
+            viewportHeight: size.height,
+            encodedCommandCount: encodedPlan.commands.count,
+            encodedPointCount: encodedPlan.points.count,
+            pixelCount: size.width * size.height,
+            encodeDurationSeconds: encodeDurationSeconds,
+            gpuDurationSeconds: gpuDurationSeconds,
+            readbackDurationSeconds: readbackDurationSeconds,
+            totalDurationSeconds: totalDurationSeconds
+        )
         return ViewportIdentityBuffer(
             width: size.width,
             height: size.height,
-            rawValues: readTexture(texture, width: size.width, height: size.height),
-            index: plan.index
+            rawValues: rawValues,
+            index: plan.index,
+            renderMetrics: metrics
         )
     }
 
@@ -249,6 +308,14 @@ public final class ViewportIdentityBufferRenderer {
             width: max(Int(ceil(viewportSize.width)), 1),
             height: max(Int(ceil(viewportSize.height)), 1)
         )
+    }
+
+    private static func timestamp() -> TimeInterval {
+        Date.timeIntervalSinceReferenceDate
+    }
+
+    private static func duration(since start: TimeInterval) -> Double {
+        max(timestamp() - start, 0.0)
     }
 
     private func makeCommandBuffer() throws -> any MTLCommandBuffer {

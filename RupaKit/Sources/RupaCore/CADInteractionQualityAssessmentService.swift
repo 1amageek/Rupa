@@ -173,19 +173,22 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                         "RupaKit/Sources/RupaCore/SelectionModel.swift",
                         "RupaKit/Sources/RupaCore/TopologySummaryService.swift",
                         "RupaKit/Sources/RupaRendering/ViewportScene.swift",
+                        "RupaKit/Sources/RupaRendering/ViewportIdentityBufferRenderer.swift",
+                        "RupaKit/Sources/RupaRendering/ViewportIdentityHitResolver.swift",
                     ],
                     tests: [
                         "RupaKit/Tests/RupaCoreTests/SelectionModelTests.swift",
                         "RupaKit/Tests/RupaCoreTests/TopologySummaryServiceTests.swift",
                         "RupaKit/Tests/RupaRenderingTests/ViewportSceneTests.swift",
+                        "RupaKit/Tests/RupaRenderingTests/ViewportIdentityBufferRendererTests.swift",
                     ]
                 ),
             ],
             openWork: [
-                "Metal identity-buffer picking for exact viewport hit identity.",
+                "Identity-buffer render/readback budget thresholds and regression gates.",
                 "Selection-mode affordance parity for all subobject scopes.",
             ],
-            next: "Replace remaining CPU-projected topology hit heuristics with an identity-buffer path shared by object, face, edge, vertex, and mesh targets."
+            next: "Use identity-buffer metrics to set performance budgets, then retire remaining CPU-projected topology hit heuristics where identity-buffer coverage is proven."
         ),
         entry(
             area: .sweep,
