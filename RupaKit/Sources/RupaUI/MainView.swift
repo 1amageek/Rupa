@@ -29,6 +29,7 @@ public struct MainView: View {
     @State private var sidebarSearchText: String
     @State private var workspacePlaneMode: WorkspacePlaneMode
     @State private var selectionScope: WorkspaceSelectionScope
+    @State private var selectionDragPreviewTargets: [SelectionTarget]
     @State private var isGridSnapEnabled: Bool
     @State private var isObjectTargetingEnabled: Bool
     @State private var isConstructionPlaneSnapEnabled: Bool
@@ -89,6 +90,7 @@ public struct MainView: View {
         self._sidebarSearchText = State(initialValue: "")
         self._workspacePlaneMode = State(initialValue: .adaptive)
         self._selectionScope = State(initialValue: .object)
+        self._selectionDragPreviewTargets = State(initialValue: [])
         self._isGridSnapEnabled = State(initialValue: true)
         self._isObjectTargetingEnabled = State(initialValue: true)
         self._isConstructionPlaneSnapEnabled = State(initialValue: true)
@@ -419,6 +421,7 @@ public struct MainView: View {
                     evaluationStatus: session.evaluationStatus,
                     renderInvalidation: session.renderInvalidation,
                     selection: session.selection,
+                    selectionDragPreviewTargets: selectionDragPreviewTargets,
                     surfaceAnalysis: selectedSurfaceAnalysisSummary,
                     surfaceAnalysisOptions: surfaceAnalysisOptions,
                     surfaceContinuity: selectedSurfaceContinuitySummary,
@@ -440,6 +443,7 @@ public struct MainView: View {
                     onShiftScroll: viewportShiftScrollHandler,
                     onReferenceLineAnchor: viewportReferenceLineAnchorHandler,
                     onSelectionDrag: handleViewportSelectionDrag,
+                    onSelectionDragPreview: viewportSelectionDragPreviewHandler,
                     onVertexDrag: viewportVertexDragHandler,
                     onFaceDrag: viewportFaceDragHandler,
                     onEdgeChamferDrag: viewportEdgeChamferDragHandler,
@@ -510,6 +514,7 @@ public struct MainView: View {
             handleWorkspaceKeyPress(keyPress)
         }
         .onChange(of: selectionScope) { _, newScope in
+            selectionDragPreviewTargets = []
             if newScope != .region {
                 regionOffsetCommandState.deactivate()
             }
@@ -595,6 +600,15 @@ public struct MainView: View {
         }
         return { target in
             handleViewportRegionOffsetDrag(target)
+        }
+    }
+
+    private var viewportSelectionDragPreviewHandler: ((ViewportSelectionDragTarget) -> Void)? {
+        guard session.selectedTool == .select else {
+            return nil
+        }
+        return { target in
+            handleViewportSelectionDragPreview(target)
         }
     }
 
@@ -3092,18 +3106,17 @@ public struct MainView: View {
     }
 
     private func handleViewportSelectionDrag(_ target: ViewportSelectionDragTarget) {
-        let targets = switch selectionScope {
-        case .object:
-            uniqueObjectTargets(for: target.hits)
-        case .sketchEntity:
-            uniqueSketchEntityTargets(for: target.hits)
-        case .face,
-             .edge,
-             .vertex,
-             .region:
-            uniqueSelectionTargets(for: target.hits)
-        }
+        selectionDragPreviewTargets = []
+        let targets = selectionTargets(for: target.hits)
         applyViewportSelection(targets: targets, intent: target.selectionIntent)
+    }
+
+    private func handleViewportSelectionDragPreview(_ target: ViewportSelectionDragTarget) {
+        let targets = selectionTargets(for: target.hits)
+        guard selectionDragPreviewTargets != targets else {
+            return
+        }
+        selectionDragPreviewTargets = targets
     }
 
     private func handleViewportVertexDrag(_ target: ViewportVertexDragTarget) {
@@ -3463,6 +3476,7 @@ public struct MainView: View {
         targets: [SelectionTarget],
         intent: ViewportSelectionIntent
     ) {
+        selectionDragPreviewTargets = []
         switch intent {
         case .replace:
             guard !targets.isEmpty else {
@@ -3789,6 +3803,20 @@ public struct MainView: View {
             targets.append(target)
         }
         return targets
+    }
+
+    private func selectionTargets(for hits: [ViewportHit]) -> [SelectionTarget] {
+        switch selectionScope {
+        case .object:
+            uniqueObjectTargets(for: hits)
+        case .sketchEntity:
+            uniqueSketchEntityTargets(for: hits)
+        case .face,
+             .edge,
+             .vertex,
+             .region:
+            uniqueSelectionTargets(for: hits)
+        }
     }
 
     private func uniqueSketchEntityTargets(for hits: [ViewportHit]) -> [SelectionTarget] {

@@ -56,6 +56,7 @@ public struct Viewport: View {
     private let evaluationStatus: EvaluationStatus
     private let renderInvalidation: RenderInvalidation
     private let selection: SelectionModel
+    private let selectionDragPreviewTargets: [SelectionTarget]
     private let surfaceAnalysis: SurfaceAnalysisResult?
     private let surfaceAnalysisOptions: ViewportSurfaceAnalysisOptions
     private let surfaceContinuity: SurfaceContinuityResult?
@@ -77,6 +78,7 @@ public struct Viewport: View {
     private let onShiftScroll: ((ViewportScrollDirection) -> Bool)?
     private let onReferenceLineAnchor: ((Point2D) -> Bool)?
     private let onSelectionDrag: ((ViewportSelectionDragTarget) -> Void)?
+    private let onSelectionDragPreview: ((ViewportSelectionDragTarget) -> Void)?
     private let onVertexDrag: ((ViewportVertexDragTarget) -> Void)?
     private let onFaceDrag: ((ViewportFaceDragTarget) -> Void)?
     private let onEdgeChamferDrag: ((ViewportEdgeChamferDragTarget) -> Void)?
@@ -102,6 +104,7 @@ public struct Viewport: View {
         evaluationStatus: EvaluationStatus = .notEvaluated,
         renderInvalidation: RenderInvalidation = RenderInvalidation(),
         selection: SelectionModel = .empty,
+        selectionDragPreviewTargets: [SelectionTarget] = [],
         surfaceAnalysis: SurfaceAnalysisResult? = nil,
         surfaceAnalysisOptions: ViewportSurfaceAnalysisOptions = ViewportSurfaceAnalysisOptions(),
         surfaceContinuity: SurfaceContinuityResult? = nil,
@@ -123,6 +126,7 @@ public struct Viewport: View {
         onShiftScroll: ((ViewportScrollDirection) -> Bool)? = nil,
         onReferenceLineAnchor: ((Point2D) -> Bool)? = nil,
         onSelectionDrag: ((ViewportSelectionDragTarget) -> Void)? = nil,
+        onSelectionDragPreview: ((ViewportSelectionDragTarget) -> Void)? = nil,
         onVertexDrag: ((ViewportVertexDragTarget) -> Void)? = nil,
         onFaceDrag: ((ViewportFaceDragTarget) -> Void)? = nil,
         onEdgeChamferDrag: ((ViewportEdgeChamferDragTarget) -> Void)? = nil,
@@ -147,6 +151,7 @@ public struct Viewport: View {
         self.evaluationStatus = evaluationStatus
         self.renderInvalidation = renderInvalidation
         self.selection = selection
+        self.selectionDragPreviewTargets = selectionDragPreviewTargets
         self.surfaceAnalysis = surfaceAnalysis
         self.surfaceAnalysisOptions = surfaceAnalysisOptions
         self.surfaceContinuity = surfaceContinuity
@@ -168,6 +173,7 @@ public struct Viewport: View {
         self.onShiftScroll = onShiftScroll
         self.onReferenceLineAnchor = onReferenceLineAnchor
         self.onSelectionDrag = onSelectionDrag
+        self.onSelectionDragPreview = onSelectionDragPreview
         self.onVertexDrag = onVertexDrag
         self.onFaceDrag = onFaceDrag
         self.onEdgeChamferDrag = onEdgeChamferDrag
@@ -639,20 +645,26 @@ public struct Viewport: View {
             basis: basis
         ).layout
         let selectedObjectFeatureIDs = selectedObjectFeatureIDs()
+        let previewObjectFeatureIDs = featureIDs(for: objectSelectionTargets(in: selectionDragPreviewTargets))
         let selectedTargetFeatureIDs = selectedTargetFeatureIDs()
         let selectedFaceTargets = selectedFaceTargets()
+        let previewFaceTargets = faceSelectionTargets(in: selectionDragPreviewTargets)
         let hoveredFaceTarget = hoveredFaceTarget()
         let selectedEdgeTargets = selectedEdgeTargets()
+        let previewEdgeTargets = edgeSelectionTargets(in: selectionDragPreviewTargets)
         let hoveredEdgeTarget = hoveredEdgeTarget()
         let selectedVertexTargets = selectedVertexTargets()
+        let previewVertexTargets = vertexSelectionTargets(in: selectionDragPreviewTargets)
         let hoveredVertexTarget = hoveredVertexTarget()
         let selectedSketchEntityTargets = selectedSketchEntityTargets()
+        let previewSketchEntityTargets = sketchEntitySelectionTargets(in: selectionDragPreviewTargets)
         let selectedSplineControlPointIDs = selectedSplineControlPointIdentities()
         let selectedSplineControlPointGroups = selectedSplineControlPointGroups()
         let selectedSlotWidthSourceTargets = selectedSlotWidthSourceTargets()
         let selectedSketchVertexOffsetSourceTargets = selectedSketchVertexOffsetSourceTargets()
         let hoveredSketchEntityTarget = hoveredSketchEntityTarget()
         let selectedSketchRegionTargets = selectedSketchRegionTargets()
+        let previewSketchRegionTargets = sketchRegionSelectionTargets(in: selectionDragPreviewTargets)
         let hoveredSketchRegionTarget = hoveredSketchRegionTarget()
         let hoveredFeatureIDs = hoveredFeatureIDs()
         let selectedBodyItems = selectedBodyItems(in: scene, selectedFeatureIDs: selectedObjectFeatureIDs)
@@ -687,6 +699,7 @@ public struct Viewport: View {
                     layout: layout,
                     isSelected: selectedObjectFeatureIDs.contains(item.featureID) && !usesSelectionGroup,
                     isHovered: hoveredFeatureIDs.contains(item.featureID)
+                        || previewObjectFeatureIDs.contains(item.featureID)
                 )
             }
         }
@@ -701,7 +714,8 @@ public struct Viewport: View {
                         featureID: item.featureID
                     ),
                     hoveredRegionIDs: sketchRegionIDs(
-                        in: hoveredSketchRegionTarget.map { [$0] } ?? [],
+                        in: previewSketchRegionTargets
+                            + (hoveredSketchRegionTarget.map { [$0] } ?? []),
                         featureID: item.featureID
                     ),
                     layout: layout,
@@ -719,7 +733,8 @@ public struct Viewport: View {
                     ),
                     selectedSplineControlPointIDs: selectedSplineControlPointIDs,
                     hoveredEntityIDs: sketchEntityIDs(
-                        in: hoveredSketchEntityTarget.map { [$0] } ?? [],
+                        in: previewSketchEntityTargets
+                            + (hoveredSketchEntityTarget.map { [$0] } ?? []),
                         featureID: item.featureID
                     )
                 )
@@ -782,6 +797,13 @@ public struct Viewport: View {
                 in: &context
             )
         }
+        drawFaceHighlights(
+            targets: previewFaceTargets,
+            style: .hovered,
+            scene: scene,
+            layout: layout,
+            in: &context
+        )
 
         drawEdgeHighlights(
             targets: selectedEdgeTargets,
@@ -800,6 +822,13 @@ public struct Viewport: View {
                 in: &context
             )
         }
+        drawEdgeHighlights(
+            targets: previewEdgeTargets,
+            style: .hovered,
+            scene: scene,
+            layout: layout,
+            in: &context
+        )
 
         drawVertexHighlights(
             targets: selectedVertexTargets,
@@ -818,6 +847,13 @@ public struct Viewport: View {
                 in: &context
             )
         }
+        drawVertexHighlights(
+            targets: previewVertexTargets,
+            style: .hovered,
+            scene: scene,
+            layout: layout,
+            in: &context
+        )
 
         drawGeneratedTopologyHighlights(
             targets: selection.selectedTargets,
@@ -861,6 +897,13 @@ public struct Viewport: View {
                 in: &context
             )
         }
+        drawGeneratedTopologyHighlights(
+            targets: selectionDragPreviewTargets,
+            style: .hovered,
+            scene: scene,
+            layout: layout,
+            in: &context
+        )
 
         drawSurfaceAnalysisOverlay(
             in: &context,
@@ -4974,7 +5017,11 @@ public struct Viewport: View {
     }
 
     private func objectSelectionTargets() -> [SelectionTarget] {
-        selection.selectedTargets.filter { target in
+        objectSelectionTargets(in: selection.selectedTargets)
+    }
+
+    private func objectSelectionTargets(in targets: [SelectionTarget]) -> [SelectionTarget] {
+        targets.filter { target in
             if case .object = target.component {
                 return true
             }
@@ -4983,7 +5030,11 @@ public struct Viewport: View {
     }
 
     private func selectedFaceTargets() -> [ViewportFaceSelectionTarget] {
-        selection.selectedTargets.compactMap { target in
+        faceSelectionTargets(in: selection.selectedTargets)
+    }
+
+    private func faceSelectionTargets(in targets: [SelectionTarget]) -> [ViewportFaceSelectionTarget] {
+        targets.compactMap { target in
             faceSelectionTarget(for: target)
         }
     }
@@ -4996,7 +5047,11 @@ public struct Viewport: View {
     }
 
     private func selectedEdgeTargets() -> [ViewportEdgeSelectionTarget] {
-        selection.selectedTargets.compactMap { target in
+        edgeSelectionTargets(in: selection.selectedTargets)
+    }
+
+    private func edgeSelectionTargets(in targets: [SelectionTarget]) -> [ViewportEdgeSelectionTarget] {
+        targets.compactMap { target in
             edgeSelectionTarget(for: target)
         }
     }
@@ -5009,7 +5064,11 @@ public struct Viewport: View {
     }
 
     private func selectedVertexTargets() -> [ViewportVertexSelectionTarget] {
-        selection.selectedTargets.compactMap { target in
+        vertexSelectionTargets(in: selection.selectedTargets)
+    }
+
+    private func vertexSelectionTargets(in targets: [SelectionTarget]) -> [ViewportVertexSelectionTarget] {
+        targets.compactMap { target in
             vertexSelectionTarget(for: target)
         }
     }
@@ -5022,7 +5081,11 @@ public struct Viewport: View {
     }
 
     private func selectedSketchEntityTargets() -> [ViewportSketchEntitySelectionTarget] {
-        selection.selectedTargets.compactMap { target in
+        sketchEntitySelectionTargets(in: selection.selectedTargets)
+    }
+
+    private func sketchEntitySelectionTargets(in targets: [SelectionTarget]) -> [ViewportSketchEntitySelectionTarget] {
+        targets.compactMap { target in
             sketchEntitySelectionTarget(for: target)
         }
     }
@@ -5103,7 +5166,11 @@ public struct Viewport: View {
     }
 
     private func selectedSketchRegionTargets() -> [ViewportSketchRegionSelectionTarget] {
-        selection.selectedTargets.compactMap { target in
+        sketchRegionSelectionTargets(in: selection.selectedTargets)
+    }
+
+    private func sketchRegionSelectionTargets(in targets: [SelectionTarget]) -> [ViewportSketchRegionSelectionTarget] {
+        targets.compactMap { target in
             sketchRegionSelectionTarget(for: target)
         }
     }
@@ -5979,12 +6046,14 @@ public struct Viewport: View {
         }
         guard let start, let current else {
             activeCanvasDrag = nil
+            publishSelectionDragPreview(hits: [])
             return
         }
 
         let dragDistance = hypot(current.x - start.x, current.y - start.y)
         guard dragDistance > 4.0 else {
             activeCanvasDrag = nil
+            publishSelectionDragPreview(hits: [])
             return
         }
 
@@ -5994,14 +6063,17 @@ public struct Viewport: View {
                 currentLocation: current,
                 kind: .selection
             )
+            publishSelectionDragPreview(from: start, to: current, size: size)
             return
         }
 
         guard let canvasDragPreviewKind, onCanvasDrag != nil else {
             activeCanvasDrag = nil
+            publishSelectionDragPreview(hits: [])
             return
         }
 
+        publishSelectionDragPreview(hits: [])
         activeCanvasDrag = ViewportActiveDrag(
             startLocation: start,
             currentLocation: current,
@@ -8001,6 +8073,7 @@ public struct Viewport: View {
         }
         defer {
             activeCanvasDrag = nil
+            publishSelectionDragPreview(hits: [])
         }
         if allowsSelectionRectangle {
             handleSelectionDrag(
@@ -8408,7 +8481,47 @@ public struct Viewport: View {
         guard let onSelectionDrag else {
             return
         }
+        onSelectionDrag(
+            ViewportSelectionDragTarget(
+                hits: selectionHits(
+                    from: start,
+                    to: end,
+                    size: size
+                ),
+                selectionIntent: selectionIntent
+            )
+        )
+    }
+
+    private func publishSelectionDragPreview(
+        from start: CGPoint,
+        to end: CGPoint,
+        size: CGSize
+    ) {
+        publishSelectionDragPreview(
+            hits: selectionHits(
+                from: start,
+                to: end,
+                size: size
+            )
+        )
+    }
+
+    private func publishSelectionDragPreview(hits: [ViewportHit]) {
+        onSelectionDragPreview?(
+            ViewportSelectionDragTarget(hits: hits)
+        )
+    }
+
+    private func selectionHits(
+        from start: CGPoint,
+        to end: CGPoint,
+        size: CGSize
+    ) -> [ViewportHit] {
         let rect = dragRect(from: start, to: end)
+        guard rect.width > 0.0, rect.height > 0.0 else {
+            return []
+        }
         let scene = ViewportSceneBuilder(objectRegistry: objectRegistry).build(document: document)
         let mapper = ViewportModelCoordinateMapper(
             document: document,
@@ -8421,18 +8534,12 @@ public struct Viewport: View {
             scene,
             selectedFeatureIDs: selectedTargetFeatureIDs()
         )
-        let sketchControlPointHitPolicy = sketchControlPointHitPolicy(for: hitScene)
-        onSelectionDrag(
-            ViewportSelectionDragTarget(
-                hits: identityHitResolver.selectionHits(
-                    in: rect,
-                    scene: hitScene,
-                    layout: mapper.layout,
-                    sketchControlPointHitPolicy: sketchControlPointHitPolicy,
-                    selectionHitPolicy: selectionHitPolicy
-                ),
-                selectionIntent: selectionIntent
-            )
+        return identityHitResolver.selectionHits(
+            in: rect,
+            scene: hitScene,
+            layout: mapper.layout,
+            sketchControlPointHitPolicy: sketchControlPointHitPolicy(for: hitScene),
+            selectionHitPolicy: selectionHitPolicy
         )
     }
 
