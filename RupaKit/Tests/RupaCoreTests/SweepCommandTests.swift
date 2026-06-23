@@ -349,6 +349,84 @@ import SwiftCAD
     try document.validate()
 }
 
+@Test func createSweepAcceptsBilinearQuadrilateralRailPointGuidesThroughEvaluationGate() throws {
+    var document = DesignDocument.empty()
+    let profileID = try document.createPolygonSketch(
+        name: "Bilinear Quadrilateral Rail Sweep Profile",
+        plane: .xy,
+        center: SketchPoint(
+            x: .length(0.0, .millimeter),
+            y: .length(0.0, .millimeter)
+        ),
+        radius: .length(20.0, .millimeter),
+        sides: 4
+    )
+    let pathID = try document.createLineSketch(
+        name: "Bilinear Quadrilateral Rail Sweep Path",
+        plane: .yz,
+        start: SketchPoint(
+            x: .length(0.0, .millimeter),
+            y: .length(0.0, .millimeter)
+        ),
+        end: SketchPoint(
+            x: .length(0.0, .millimeter),
+            y: .length(10.0, .millimeter)
+        )
+    )
+    let bottomGuideID = try createWorldLineSketch(
+        in: &document,
+        name: "Bilinear Quadrilateral Rail Bottom Guide",
+        start: Point3D(x: 0.0, y: -0.020, z: 0.0),
+        end: Point3D(x: -0.006, y: -0.026, z: 0.010)
+    )
+    let rightGuideID = try createWorldLineSketch(
+        in: &document,
+        name: "Bilinear Quadrilateral Rail Right Guide",
+        start: Point3D(x: 0.020, y: 0.0, z: 0.0),
+        end: Point3D(x: 0.030, y: -0.006, z: 0.010)
+    )
+    let topGuideID = try createWorldLineSketch(
+        in: &document,
+        name: "Bilinear Quadrilateral Rail Top Guide",
+        start: Point3D(x: 0.0, y: 0.020, z: 0.0),
+        end: Point3D(x: 0.008, y: 0.028, z: 0.010)
+    )
+    let leftGuideID = try createWorldLineSketch(
+        in: &document,
+        name: "Bilinear Quadrilateral Rail Left Guide",
+        start: Point3D(x: -0.020, y: 0.0, z: 0.0),
+        end: Point3D(x: -0.028, y: 0.004, z: 0.010)
+    )
+
+    let sweepID = try document.createSweep(
+        name: "Bilinear Quadrilateral Rail Sweep",
+        profiles: [ProfileReference(featureID: profileID)],
+        path: SweepPathReference(featureID: pathID),
+        guides: [
+            SweepGuideReference(featureID: bottomGuideID),
+            SweepGuideReference(featureID: rightGuideID),
+            SweepGuideReference(featureID: topGuideID),
+            SweepGuideReference(featureID: leftGuideID),
+        ],
+        options: SweepOptions(guideMethod: .point)
+    )
+
+    let feature = try #require(document.cadDocument.designGraph.nodes[sweepID])
+    guard case .sweep(let sweep) = feature.operation else {
+        Issue.record("Sweep command must create a sweep feature.")
+        return
+    }
+    #expect(sweep.guides == [
+        SweepGuideReference(featureID: bottomGuideID),
+        SweepGuideReference(featureID: rightGuideID),
+        SweepGuideReference(featureID: topGuideID),
+        SweepGuideReference(featureID: leftGuideID),
+    ])
+    #expect(sweep.options.guideMethod == .point)
+    #expect(feature.inputs.filter { $0.role == .guide }.count == 4)
+    try document.validate()
+}
+
 @Test func createSweepBooleanStoresTargetBodyInput() throws {
     var document = DesignDocument.empty()
     let targetProfileID = try document.createRectangleSketch(
