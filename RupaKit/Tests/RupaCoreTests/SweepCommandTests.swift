@@ -370,6 +370,22 @@ import SwiftCAD
         #expect(error.message.contains("end scale"))
     }
 
+    do {
+        _ = try document.createSweep(
+            name: "Zero Distance Sweep",
+            profiles: [ProfileReference(featureID: profileID)],
+            path: SweepPathReference(featureID: pathID),
+            options: SweepOptions(
+                distanceFraction: .constant(.scalar(0.0))
+            )
+        )
+        Issue.record("Sweep command must reject zero distance fraction before mutation.")
+    } catch let error as EditorError {
+        #expect(error.code == .commandInvalid)
+        #expect(error.message.contains("distance fraction"))
+        #expect(error.message.contains("greater than 0"))
+    }
+
     #expect(document.cadDocument.designGraph.order == originalOrder)
 }
 

@@ -13775,10 +13775,10 @@ public struct DesignDocument: Identifiable, Sendable {
     }
 
     private func validateSweepOptionQuantities(_ options: SweepOptions) throws {
-        if let unsupportedReason = SweepEvaluationCapabilities().unsupportedReason(for: options) {
+        if let unsupportedCase = SweepEvaluationCapabilities().staticUnsupportedCase(for: options) {
             throw EditorError(
                 code: .commandInvalid,
-                message: unsupportedReason
+                message: unsupportedCase.message
             )
         }
         _ = try resolvedAngleValue(options.twistAngle, owner: "Sweep twist angle")
@@ -13793,11 +13793,11 @@ public struct DesignDocument: Identifiable, Sendable {
             options.distanceFraction,
             owner: "Sweep distance fraction"
         )
-        guard distanceFraction >= 0.0,
+        guard distanceFraction > 0.0,
               distanceFraction <= 1.0 else {
             throw EditorError(
                 code: .commandInvalid,
-                message: "Sweep distance fraction must be between 0 and 1."
+                message: "Sweep distance fraction must be greater than 0 and less than or equal to 1."
             )
         }
     }

@@ -266,6 +266,8 @@ import SwiftCAD
     #expect(sweep.targets.contains(.body))
     #expect(sweep.failureMode.contains("curved-path parallel alignment"))
     #expect(sweep.failureMode.contains("profile-plane degenerate parallel alignment"))
+    #expect(sweep.failureMode.contains("oblique parallel alignment"))
+    #expect(sweep.failureMode.contains("shared typed sweep evaluation contract"))
     #expect(sweep.failureMode.contains("path-normal section sweep"))
     #expect(sweep.failureMode.contains("profile-plane-preserving exact extrusion"))
     #expect(sweep.failureMode.contains("compatible multiple point/chord"))
