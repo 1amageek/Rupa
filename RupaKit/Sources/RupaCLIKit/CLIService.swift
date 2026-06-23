@@ -2,7 +2,6 @@ import Foundation
 import RupaAgent
 import RupaAutomation
 import RupaCore
-import SwiftCAD
 
 public enum CLIEditMode: String, Codable, Equatable, Sendable, CaseIterable {
     case auto

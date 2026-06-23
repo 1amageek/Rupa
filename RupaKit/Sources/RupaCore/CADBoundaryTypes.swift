@@ -1,5 +1,6 @@
 import SwiftCAD
 
+public typealias AngleUnit = SwiftCAD.AngleUnit
 public typealias CADExpression = SwiftCAD.CADExpression
 public typealias CADPipeline = SwiftCAD.CADPipeline
 public typealias CADBRepModel = SwiftCAD.BRepModel
@@ -24,6 +25,7 @@ public typealias Point3D = SwiftCAD.Point3D
 public typealias PolySplineMeshAnalysisResult = SwiftCAD.PolySplineMeshAnalysisResult
 public typealias PolySplineOptions = SwiftCAD.PolySplineOptions
 public typealias ProfileReference = SwiftCAD.ProfileReference
+public typealias Quantity = SwiftCAD.Quantity
 public typealias QuantityKind = SwiftCAD.QuantityKind
 public typealias SelectionDimensionEvaluation = SwiftCAD.SelectionDimensionEvaluation
 public typealias SelectionDimensionID = SwiftCAD.SelectionDimensionID

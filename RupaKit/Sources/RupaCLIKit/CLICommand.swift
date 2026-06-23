@@ -3,7 +3,6 @@ import Foundation
 import RupaAgent
 import RupaAutomation
 import RupaCore
-import SwiftCAD
 
 public struct CLICommand: ParsableCommand {
     public static let configuration = CommandConfiguration(
