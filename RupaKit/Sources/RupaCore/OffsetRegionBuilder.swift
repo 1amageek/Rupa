@@ -51,7 +51,12 @@ struct OffsetRegionBuilder: Sendable {
                 message: "Offset Region currently supports closed regions whose exact boundary segments are all lines."
             )
         }
-        guard let summary = ProfileRegionGeometry.summary(for: profile) else {
+        let summary: ProfileRegionSummary
+        do {
+            summary = try ProfileRegionAnalyzer(
+                tolerance: ModelingTolerance(distance: tolerance, angle: 1.0e-9)
+            ).summary(for: profile)
+        } catch {
             throw EditorError(
                 code: .commandInvalid,
                 message: "Offset Region requires a finite, non-degenerate source region."

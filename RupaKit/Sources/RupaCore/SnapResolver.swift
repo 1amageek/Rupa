@@ -577,8 +577,12 @@ public struct SnapResolver: Sendable {
             } catch is UnitError {
                 continue
             }
+            let regionAnalyzer = ProfileRegionAnalyzer()
             for (profileIndex, profile) in profiles.enumerated() {
-                guard let region = ProfileRegionGeometry.summary(for: profile) else {
+                let region: ProfileRegionSummary
+                do {
+                    region = try regionAnalyzer.summary(for: profile)
+                } catch {
                     continue
                 }
                 let regionPoint = try projectedPoint(

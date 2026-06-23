@@ -234,8 +234,12 @@ public struct SketchDisplaySnapshotService: Sendable {
             return []
         }
 
+        let regionAnalyzer = ProfileRegionAnalyzer()
         return profiles.enumerated().compactMap { profileIndex, profile in
-            guard let summary = ProfileRegionGeometry.summary(for: profile) else {
+            let summary: ProfileRegionSummary
+            do {
+                summary = try regionAnalyzer.summary(for: profile)
+            } catch {
                 return nil
             }
             let points = summary.points.map { displayPoint(from: $0, on: profile.plane) }

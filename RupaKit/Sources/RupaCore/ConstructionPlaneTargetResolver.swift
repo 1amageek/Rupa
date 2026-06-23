@@ -607,7 +607,10 @@ public struct ConstructionPlaneTargetResolver: Sendable {
             )
         }
         let profile = profiles[reference.profileIndex]
-        guard let summary = ProfileRegionGeometry.summary(for: profile) else {
+        let summary: ProfileRegionSummary
+        do {
+            summary = try ProfileRegionAnalyzer().summary(for: profile)
+        } catch {
             throw EditorError(
                 code: .commandInvalid,
                 message: "Region-aligned construction plane requires a non-degenerate profile region."
@@ -682,7 +685,10 @@ public struct ConstructionPlaneTargetResolver: Sendable {
             )
         }
         let profile = profiles[reference.profileIndex]
-        guard let summary = ProfileRegionGeometry.summary(for: profile) else {
+        let summary: ProfileRegionSummary
+        do {
+            summary = try ProfileRegionAnalyzer().summary(for: profile)
+        } catch {
             throw EditorError(
                 code: .commandInvalid,
                 message: "Region-aligned construction plane requires a non-degenerate profile region."
