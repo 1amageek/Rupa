@@ -3,20 +3,14 @@ import SwiftCAD
 
 public extension DocumentEvaluator {
     static var modelingDefault: DocumentEvaluator {
-        DocumentEvaluator(profileExtractor: CircleAwareSketchProfileExtractor())
+        DocumentEvaluator()
     }
 
     static func modelingDefault(
-        for document: DesignDocument,
-        objectRegistry: ObjectTypeRegistry = .builtIn
+        for _: DesignDocument,
+        objectRegistry _: ObjectTypeRegistry = .builtIn
     ) -> DocumentEvaluator {
-        DocumentEvaluator(
-            profileExtractor: CircleAwareSketchProfileExtractor(
-                circleSegmentCountsByFeatureID: document.profileSegmentCounts(
-                    objectRegistry: objectRegistry
-                )
-            )
-        )
+        .modelingDefault
     }
 }
 
@@ -26,14 +20,9 @@ public extension CADPipeline {
     }
 
     static func modelingDefault(
-        for document: DesignDocument,
-        objectRegistry: ObjectTypeRegistry = .builtIn
+        for _: DesignDocument,
+        objectRegistry _: ObjectTypeRegistry = .builtIn
     ) -> CADPipeline {
-        CADPipeline(
-            evaluator: .modelingDefault(
-                for: document,
-                objectRegistry: objectRegistry
-            )
-        )
+        .modelingDefault
     }
 }

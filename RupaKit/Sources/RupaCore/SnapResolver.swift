@@ -554,10 +554,7 @@ public struct SnapResolver: Sendable {
         constructionPlane: SketchPlaneCoordinateSystem?
     ) throws -> [PrioritizedSnapCandidate] {
         let resolvedParameters = try ParameterResolver().resolve(document.cadDocument.parameters)
-        let segmentCounts = document.profileSegmentCounts()
-        let extractor = CircleAwareSketchProfileExtractor(
-            circleSegmentCountsByFeatureID: segmentCounts
-        )
+        let extractor = SketchProfileExtractor()
         var candidates: [PrioritizedSnapCandidate] = []
 
         for featureID in document.cadDocument.designGraph.order {

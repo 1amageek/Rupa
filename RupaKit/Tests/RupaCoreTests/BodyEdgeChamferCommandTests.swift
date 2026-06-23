@@ -169,8 +169,6 @@ import Testing
     #expect(abs(arc.radius - 0.001) <= 1.0e-9)
     #expect(abs(arc.startAngle - 0.0) <= 1.0e-9)
     #expect(abs(arc.endAngle - Double.pi / 2.0) <= 1.0e-9)
-    let extrude = try chamferExtrudeFeature(for: bodyFeatureID, in: session.document)
-    #expect(session.document.profileSegmentCounts()[extrude.profile.featureID] == 6)
     #expect(chamferBodyObject(for: bodyFeatureID, in: session.document)?.typeID == nil)
     #expect(session.evaluationStatus == .valid)
 }

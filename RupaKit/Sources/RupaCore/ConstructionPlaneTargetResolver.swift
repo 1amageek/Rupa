@@ -595,10 +595,7 @@ public struct ConstructionPlaneTargetResolver: Sendable {
             )
         }
         let resolvedParameters = try ParameterResolver().resolve(document.cadDocument.parameters)
-        let extractor = CircleAwareSketchProfileExtractor(
-            circleSegmentCountsByFeatureID: document.profileSegmentCounts()
-        )
-        let profiles = try extractor.extractProfiles(
+        let profiles = try SketchProfileExtractor().extractProfiles(
             from: sketch,
             sourceFeatureID: reference.featureID,
             parameters: resolvedParameters
@@ -673,10 +670,7 @@ public struct ConstructionPlaneTargetResolver: Sendable {
             )
         }
         let resolvedParameters = try ParameterResolver().resolve(document.cadDocument.parameters)
-        let extractor = CircleAwareSketchProfileExtractor(
-            circleSegmentCountsByFeatureID: document.profileSegmentCounts()
-        )
-        let profiles = try extractor.extractProfiles(
+        let profiles = try SketchProfileExtractor().extractProfiles(
             from: sketch,
             sourceFeatureID: reference.featureID,
             parameters: resolvedParameters

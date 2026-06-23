@@ -4966,9 +4966,7 @@ public struct DesignDocument: Identifiable, Sendable {
         let profiles: [Profile]
         do {
             let resolvedParameters = try ParameterResolver().resolve(cadDocument.parameters)
-            profiles = try CircleAwareSketchProfileExtractor(
-                circleSegmentCountsByFeatureID: profileSegmentCounts(objectRegistry: objectRegistry)
-            ).extractProfiles(
+            profiles = try SketchProfileExtractor().extractProfiles(
                 from: sketch,
                 sourceFeatureID: featureID,
                 parameters: resolvedParameters
@@ -15326,7 +15324,7 @@ public struct DesignDocument: Identifiable, Sendable {
         }
         let parameters = try ParameterResolver().resolve(cadDocument.parameters)
         do {
-            return try CircleAwareSketchProfileExtractor()
+            return try SketchProfileExtractor()
                 .extractProfiles(
                     from: sketch,
                     sourceFeatureID: source.id,

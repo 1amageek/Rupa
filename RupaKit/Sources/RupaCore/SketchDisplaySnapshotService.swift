@@ -224,10 +224,11 @@ public struct SketchDisplaySnapshotService: Sendable {
     ) -> [SketchDisplaySnapshot.Region] {
         let profiles: [CADProfile]
         do {
-            profiles = try CircleAwareSketchProfileExtractor().extractProfiles(
+            let resolvedParameters = try ParameterResolver().resolve(parameters)
+            profiles = try SketchProfileExtractor().extractProfiles(
                 from: sketch,
                 sourceFeatureID: featureID,
-                parameters: parameters
+                parameters: resolvedParameters
             )
         } catch {
             return []

@@ -19,11 +19,7 @@ public struct SketchEntitySummaryService: Sendable {
 
         let sceneNodeIDsByFeatureID = sceneNodeIDsByFeatureID(in: document)
         let resolvedParameters = try ParameterResolver().resolve(document.cadDocument.parameters)
-        let profileExtractor = CircleAwareSketchProfileExtractor(
-            circleSegmentCountsByFeatureID: document.profileSegmentCounts(
-                objectRegistry: objectRegistry
-            )
-        )
+        let profileExtractor = SketchProfileExtractor()
         var sketchEntries: [SketchEntitySummaryResult.SketchEntry] = []
         var entityEntries: [SketchEntitySummaryResult.EntityEntry] = []
         var regionEntries: [SketchEntitySummaryResult.RegionEntry] = []
@@ -108,7 +104,7 @@ public struct SketchEntitySummaryService: Sendable {
         sceneNodeID: String?,
         sketch: Sketch,
         resolvedParameters: ResolvedParameterTable,
-        profileExtractor: CircleAwareSketchProfileExtractor,
+        profileExtractor: SketchProfileExtractor,
         diagnostics: inout [EditorDiagnostic]
     ) -> [SketchEntitySummaryResult.RegionEntry] {
         let profiles: [Profile]

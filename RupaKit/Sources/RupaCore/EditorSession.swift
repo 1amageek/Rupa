@@ -2225,7 +2225,7 @@ public final class EditorSession {
         }
         do {
             let parameters = try ParameterResolver().resolve(document.cadDocument.parameters)
-            let profiles = try CircleAwareSketchProfileExtractor().extractProfiles(
+            let profiles = try SketchProfileExtractor().extractProfiles(
                 from: sketch,
                 sourceFeatureID: featureID,
                 parameters: parameters

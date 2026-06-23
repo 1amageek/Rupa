@@ -261,10 +261,7 @@ public struct SelectionModel: Codable, Equatable, Sendable {
     ) -> Bool {
         do {
             let resolvedParameters = try ParameterResolver().resolve(document.cadDocument.parameters)
-            let extractor = CircleAwareSketchProfileExtractor(
-                circleSegmentCountsByFeatureID: document.profileSegmentCounts()
-            )
-            let profiles = try extractor.extractProfiles(
+            let profiles = try SketchProfileExtractor().extractProfiles(
                 from: sketch,
                 sourceFeatureID: sourceFeatureID,
                 parameters: resolvedParameters
