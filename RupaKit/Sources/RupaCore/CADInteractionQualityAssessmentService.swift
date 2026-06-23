@@ -235,7 +235,7 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                 ),
             ],
             openWork: [
-                "Rail deformation beyond the current affine, signed-axis, and convex quadrilateral bilinear point-guide sections.",
+                "Rail deformation beyond the current affine, signed-axis, convex quadrilateral bilinear, and convex mean-value cage point-guide sections.",
                 "Non-box boolean operands.",
                 "Stable result topology beyond current exact subsets.",
                 "Full modal command-dialog parity.",

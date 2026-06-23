@@ -427,6 +427,85 @@ import SwiftCAD
     try document.validate()
 }
 
+@Test func createSweepAcceptsMeanValueCageRailPointGuidesThroughEvaluationGate() throws {
+    var document = DesignDocument.empty()
+    let profileID = try document.createPolygonSketch(
+        name: "Mean Value Cage Rail Sweep Profile",
+        plane: .xy,
+        center: SketchPoint(
+            x: .length(0.0, .millimeter),
+            y: .length(0.0, .millimeter)
+        ),
+        radius: .length(20.0, .millimeter),
+        sides: 5
+    )
+    let pathID = try document.createLineSketch(
+        name: "Mean Value Cage Rail Sweep Path",
+        plane: .yz,
+        start: SketchPoint(
+            x: .length(0.0, .millimeter),
+            y: .length(0.0, .millimeter)
+        ),
+        end: SketchPoint(
+            x: .length(0.0, .millimeter),
+            y: .length(10.0, .millimeter)
+        )
+    )
+    let guideDefinitions = [
+        (
+            name: "Mean Value Cage Rail Right Guide",
+            start: Point3D(x: 0.020000000000, y: 0.000000000000, z: 0.0),
+            end: Point3D(x: 0.030, y: -0.002, z: 0.010)
+        ),
+        (
+            name: "Mean Value Cage Rail Upper Right Guide",
+            start: Point3D(x: 0.006180339887, y: 0.019021130326, z: 0.0),
+            end: Point3D(x: 0.010, y: 0.024, z: 0.010)
+        ),
+        (
+            name: "Mean Value Cage Rail Upper Left Guide",
+            start: Point3D(x: -0.016180339887, y: 0.011755705045, z: 0.0),
+            end: Point3D(x: -0.020, y: 0.018, z: 0.010)
+        ),
+        (
+            name: "Mean Value Cage Rail Lower Left Guide",
+            start: Point3D(x: -0.016180339887, y: -0.011755705045, z: 0.0),
+            end: Point3D(x: -0.024, y: -0.010, z: 0.010)
+        ),
+        (
+            name: "Mean Value Cage Rail Lower Right Guide",
+            start: Point3D(x: 0.006180339887, y: -0.019021130326, z: 0.0),
+            end: Point3D(x: 0.002, y: -0.026, z: 0.010)
+        ),
+    ]
+    let guideIDs = try guideDefinitions.map {
+        try createWorldLineSketch(
+            in: &document,
+            name: $0.name,
+            start: $0.start,
+            end: $0.end
+        )
+    }
+
+    let sweepID = try document.createSweep(
+        name: "Mean Value Cage Rail Sweep",
+        profiles: [ProfileReference(featureID: profileID)],
+        path: SweepPathReference(featureID: pathID),
+        guides: guideIDs.map { SweepGuideReference(featureID: $0) },
+        options: SweepOptions(guideMethod: .point)
+    )
+
+    let feature = try #require(document.cadDocument.designGraph.nodes[sweepID])
+    guard case .sweep(let sweep) = feature.operation else {
+        Issue.record("Sweep command must create a sweep feature.")
+        return
+    }
+    #expect(sweep.guides == guideIDs.map { SweepGuideReference(featureID: $0) })
+    #expect(sweep.options.guideMethod == .point)
+    #expect(feature.inputs.filter { $0.role == .guide }.count == 5)
+    try document.validate()
+}
+
 @Test func createSweepBooleanStoresTargetBodyInput() throws {
     var document = DesignDocument.empty()
     let targetProfileID = try document.createRectangleSketch(
