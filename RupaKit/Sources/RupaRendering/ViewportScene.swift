@@ -1213,26 +1213,30 @@ public struct ViewportBodyTopologyHitTester {
     public func hitTest(
         component: ViewportBodyComponent,
         point: CGPoint,
-        layout: ViewportLayout
+        layout: ViewportLayout,
+        selectionHitPolicy: ViewportSelectionHitPolicy = .all
     ) -> ViewportBodyTopologyHit? {
         guard let topology = component.topology else {
             return nil
         }
-        if let vertex = hitVertex(in: topology, point: point, layout: layout) {
+        if selectionHitPolicy.allowsVertexHits,
+           let vertex = hitVertex(in: topology, point: point, layout: layout) {
             return ViewportBodyTopologyHit(
                 component: .vertex(vertex.componentID),
                 score: vertex.score,
                 depth: vertex.depth
             )
         }
-        if let edge = hitEdge(in: topology, point: point, layout: layout) {
+        if selectionHitPolicy.allowsEdgeHits,
+           let edge = hitEdge(in: topology, point: point, layout: layout) {
             return ViewportBodyTopologyHit(
                 component: .edge(edge.componentID),
                 score: edge.score,
                 depth: edge.depth
             )
         }
-        if let face = hitFace(in: topology, point: point, layout: layout) {
+        if selectionHitPolicy.allowsFaceHits,
+           let face = hitFace(in: topology, point: point, layout: layout) {
             return ViewportBodyTopologyHit(
                 component: .face(face.componentID),
                 score: 6.0,
@@ -1777,22 +1781,34 @@ public struct ViewportHitTester {
         in scene: ViewportScene,
         size: CGSize,
         camera: ViewportCamera = .identity,
-        basis: ViewportProjectionBasis = .isometric
+        basis: ViewportProjectionBasis = .isometric,
+        selectionHitPolicy: ViewportSelectionHitPolicy = .all
     ) -> ViewportHit? {
         guard let layout = ViewportLayout(scene: scene, size: size, camera: camera, basis: basis) else {
             return nil
         }
-        return hitTest(point: point, in: scene, layout: layout)
+        return hitTest(
+            point: point,
+            in: scene,
+            layout: layout,
+            selectionHitPolicy: selectionHitPolicy
+        )
     }
 
     public func hitTest(
         point: CGPoint,
         in scene: ViewportScene,
-        layout: ViewportLayout
+        layout: ViewportLayout,
+        selectionHitPolicy: ViewportSelectionHitPolicy = .all
     ) -> ViewportHit? {
         var bestHit: HitCandidate?
         for item in scene.items {
-            guard let itemHit = hitCandidate(for: item, point: point, layout: layout) else {
+            guard let itemHit = hitCandidate(
+                for: item,
+                point: point,
+                layout: layout,
+                selectionHitPolicy: selectionHitPolicy
+            ) else {
                 continue
             }
             if let current = bestHit {
@@ -1809,11 +1825,13 @@ public struct ViewportHitTester {
     private func hitCandidate(
         for item: ViewportSceneItem,
         point: CGPoint,
-        layout: ViewportLayout
+        layout: ViewportLayout,
+        selectionHitPolicy: ViewportSelectionHitPolicy
     ) -> HitCandidate? {
         switch item.kind {
         case .sketch(let primitives):
-            if let sketchHit = hitScoreForSketch(primitives, point: point, layout: layout) {
+            if (selectionHitPolicy.allowsObjectHits || selectionHitPolicy.allowsSketchEntityHits),
+               let sketchHit = hitScoreForSketch(primitives, point: point, layout: layout) {
                 return HitCandidate(
                     hit: ViewportHit(
                         featureID: item.featureID,
@@ -1825,7 +1843,8 @@ public struct ViewportHitTester {
                     score: sketchHit.score
                 )
             }
-            guard let regionHit = hitScoreForSketchRegion(item.sketchRegions, point: point, layout: layout) else {
+            guard selectionHitPolicy.allowsRegionHits,
+                  let regionHit = hitScoreForSketchRegion(item.sketchRegions, point: point, layout: layout) else {
                 return nil
             }
             return HitCandidate(
@@ -1837,10 +1856,20 @@ public struct ViewportHitTester {
                 score: regionHit.score
             )
         case .body(let component):
+            if selectionHitPolicy == .object,
+               let objectHit = hitBodyObject(
+                   for: item,
+                   component: component,
+                   point: point,
+                   layout: layout
+               ) {
+                return objectHit
+            }
             if let topologyHit = ViewportBodyTopologyHitTester(tolerance: tolerance).hitTest(
                 component: component,
                 point: point,
-                layout: layout
+                layout: layout,
+                selectionHitPolicy: selectionHitPolicy
             ) {
                 return HitCandidate(
                     hit: ViewportHit(
@@ -1852,19 +1881,22 @@ public struct ViewportHitTester {
                     depth: topologyHit.depth
                 )
             }
-            if let bodyVertex = hitBodyVertex(for: item, point: point, layout: layout) {
+            if selectionHitPolicy.allowsVertexHits,
+               let bodyVertex = hitBodyVertex(for: item, point: point, layout: layout) {
                 return HitCandidate(
                     hit: ViewportHit(featureID: item.featureID, kind: item.kind.selectableKind, bodyVertex: bodyVertex.vertex),
                     score: bodyVertex.score
                 )
             }
-            if let bodyEdge = hitBodyEdge(for: item, point: point, layout: layout) {
+            if selectionHitPolicy.allowsEdgeHits,
+               let bodyEdge = hitBodyEdge(for: item, point: point, layout: layout) {
                 return HitCandidate(
                     hit: ViewportHit(featureID: item.featureID, kind: item.kind.selectableKind, bodyEdge: bodyEdge.edge),
                     score: bodyEdge.score
                 )
             }
-            if let bodyFace = hitBodyFace(for: item, point: point, layout: layout) {
+            if selectionHitPolicy.allowsFaceHits,
+               let bodyFace = hitBodyFace(for: item, point: point, layout: layout) {
                 return HitCandidate(
                     hit: ViewportHit(featureID: item.featureID, kind: item.kind.selectableKind, bodyFace: bodyFace.face),
                     score: bodyFace.score
@@ -1872,6 +1904,33 @@ public struct ViewportHitTester {
             }
             return nil
         }
+    }
+
+    private func hitBodyObject(
+        for item: ViewportSceneItem,
+        component: ViewportBodyComponent,
+        point: CGPoint,
+        layout: ViewportLayout
+    ) -> HitCandidate? {
+        if let topologyHit = ViewportBodyTopologyHitTester(tolerance: tolerance).hitTest(
+            component: component,
+            point: point,
+            layout: layout,
+            selectionHitPolicy: .face
+        ) {
+            return HitCandidate(
+                hit: ViewportHit(featureID: item.featureID, kind: item.kind.selectableKind),
+                score: topologyHit.score,
+                depth: topologyHit.depth
+            )
+        }
+        if let bodyFace = hitBodyFace(for: item, point: point, layout: layout) {
+            return HitCandidate(
+                hit: ViewportHit(featureID: item.featureID, kind: item.kind.selectableKind),
+                score: bodyFace.score
+            )
+        }
+        return nil
     }
 
     private func isHitCandidate(_ candidate: HitCandidate, betterThan current: HitCandidate) -> Bool {

@@ -36,7 +36,8 @@ public struct ViewportSelectionRectangleHitTester: Sendable {
         in rect: CGRect,
         scene: ViewportScene,
         layout: ViewportLayout,
-        sketchControlPointHitPolicy: ViewportSketchControlPointHitPolicy = .all
+        sketchControlPointHitPolicy: ViewportSketchControlPointHitPolicy = .all,
+        selectionHitPolicy: ViewportSelectionHitPolicy = .all
     ) -> [ViewportHit] {
         let selectionRect = normalized(rect)
         var hits: [ViewportHit] = []
@@ -50,25 +51,33 @@ public struct ViewportSelectionRectangleHitTester: Sendable {
                     item: item,
                     primitives: primitives,
                     layout: layout,
-                    sketchControlPointHitPolicy: sketchControlPointHitPolicy
+                    sketchControlPointHitPolicy: sketchControlPointHitPolicy,
+                    selectionHitPolicy: selectionHitPolicy
                 ))
             case .body(let component):
-                let topologyHits = topologyHits(
-                    in: selectionRect,
-                    item: item,
-                    component: component,
-                    layout: layout
-                )
-                if topologyHits.isEmpty {
-                    hits.append(contentsOf: projectedBodySubobjectHits(
+                if selectionHitPolicy.allowsVertexHits
+                    || selectionHitPolicy.allowsEdgeHits
+                    || selectionHitPolicy.allowsFaceHits {
+                    let topologyHits = topologyHits(
                         in: selectionRect,
                         item: item,
-                        layout: layout
-                    ))
-                } else {
-                    hits.append(contentsOf: topologyHits)
+                        component: component,
+                        layout: layout,
+                        selectionHitPolicy: selectionHitPolicy
+                    )
+                    if topologyHits.isEmpty {
+                        hits.append(contentsOf: projectedBodySubobjectHits(
+                            in: selectionRect,
+                            item: item,
+                            layout: layout,
+                            selectionHitPolicy: selectionHitPolicy
+                        ))
+                    } else {
+                        hits.append(contentsOf: topologyHits)
+                    }
                 }
-                if let selectableBounds = selectionBounds(for: item, layout: layout),
+                if selectionHitPolicy.allowsObjectHits,
+                   let selectableBounds = selectionBounds(for: item, layout: layout),
                    selectionRect.intersects(selectableBounds),
                    seenBodyFeatureIDs.insert(item.featureID).inserted {
                     hits.append(ViewportHit(featureID: item.featureID, kind: .body))
@@ -84,34 +93,42 @@ public struct ViewportSelectionRectangleHitTester: Sendable {
         item: ViewportSceneItem,
         primitives: [ViewportSketchPrimitive],
         layout: ViewportLayout,
-        sketchControlPointHitPolicy: ViewportSketchControlPointHitPolicy
+        sketchControlPointHitPolicy: ViewportSketchControlPointHitPolicy,
+        selectionHitPolicy: ViewportSelectionHitPolicy
     ) -> [ViewportHit] {
         var hits: [ViewportHit] = []
-        for primitive in primitives {
-            let bounds = sketchSelectionBounds([primitive], layout: layout)
-                .insetBy(dx: -sketchPadding, dy: -sketchPadding)
-            guard !bounds.isNull,
-                  rect.intersects(bounds) else {
-                continue
+        if selectionHitPolicy.allowsObjectHits || selectionHitPolicy.allowsSketchEntityHits {
+            for primitive in primitives {
+                let bounds = sketchSelectionBounds([primitive], layout: layout)
+                    .insetBy(dx: -sketchPadding, dy: -sketchPadding)
+                guard !bounds.isNull,
+                      rect.intersects(bounds) else {
+                    continue
+                }
+                hits.append(
+                    ViewportHit(
+                        featureID: item.featureID,
+                        kind: .sketch,
+                        sketchEntityID: primitive.entityID
+                    )
+                )
+                if selectionHitPolicy.allowsSketchEntityHits {
+                    hits.append(
+                        contentsOf: sketchControlPointHits(
+                            primitive,
+                            featureID: item.featureID,
+                            in: rect,
+                            layout: layout,
+                            sketchControlPointHitPolicy: sketchControlPointHitPolicy
+                        )
+                    )
+                }
             }
-            hits.append(
-                ViewportHit(
-                    featureID: item.featureID,
-                    kind: .sketch,
-                    sketchEntityID: primitive.entityID
-                )
-            )
-            hits.append(
-                contentsOf: sketchControlPointHits(
-                    primitive,
-                    featureID: item.featureID,
-                    in: rect,
-                    layout: layout,
-                    sketchControlPointHitPolicy: sketchControlPointHitPolicy
-                )
-            )
         }
 
+        guard selectionHitPolicy.allowsRegionHits else {
+            return hits
+        }
         for region in item.sketchRegions {
             let projectedPoints = region.points.map(layout.project)
             let bounds = polygonBounds(projectedPoints)
@@ -165,7 +182,8 @@ public struct ViewportSelectionRectangleHitTester: Sendable {
         in rect: CGRect,
         item: ViewportSceneItem,
         component: ViewportBodyComponent,
-        layout: ViewportLayout
+        layout: ViewportLayout,
+        selectionHitPolicy: ViewportSelectionHitPolicy
     ) -> [ViewportHit] {
         guard let topology = component.topology,
               topology.isEmpty == false else {
@@ -173,51 +191,57 @@ public struct ViewportSelectionRectangleHitTester: Sendable {
         }
         var hits: [ViewportHit] = []
 
-        for vertex in topology.vertices {
-            let bounds = pointRect(layout.project(vertex.point), radius: topologyVertexRadius)
-            guard rect.intersects(bounds) else {
-                continue
-            }
-            hits.append(
-                ViewportHit(
-                    featureID: item.featureID,
-                    kind: .body,
-                    selectionComponent: .vertex(vertex.componentID)
+        if selectionHitPolicy.allowsVertexHits {
+            for vertex in topology.vertices {
+                let bounds = pointRect(layout.project(vertex.point), radius: topologyVertexRadius)
+                guard rect.intersects(bounds) else {
+                    continue
+                }
+                hits.append(
+                    ViewportHit(
+                        featureID: item.featureID,
+                        kind: .body,
+                        selectionComponent: .vertex(vertex.componentID)
+                    )
                 )
-            )
+            }
         }
 
-        for edge in topology.edges {
-            let bounds = segmentBounds(
-                start: layout.project(edge.start),
-                end: layout.project(edge.end)
-            )
-            .insetBy(dx: -topologyEdgePadding, dy: -topologyEdgePadding)
-            guard rect.intersects(bounds) else {
-                continue
-            }
-            hits.append(
-                ViewportHit(
-                    featureID: item.featureID,
-                    kind: .body,
-                    selectionComponent: .edge(edge.componentID)
+        if selectionHitPolicy.allowsEdgeHits {
+            for edge in topology.edges {
+                let bounds = segmentBounds(
+                    start: layout.project(edge.start),
+                    end: layout.project(edge.end)
                 )
-            )
+                .insetBy(dx: -topologyEdgePadding, dy: -topologyEdgePadding)
+                guard rect.intersects(bounds) else {
+                    continue
+                }
+                hits.append(
+                    ViewportHit(
+                        featureID: item.featureID,
+                        kind: .body,
+                        selectionComponent: .edge(edge.componentID)
+                    )
+                )
+            }
         }
 
-        for face in topology.faces {
-            let bounds = polygonBounds(face.points.map(layout.project))
-            guard !bounds.isNull,
-                  rect.intersects(bounds) else {
-                continue
-            }
-            hits.append(
-                ViewportHit(
-                    featureID: item.featureID,
-                    kind: .body,
-                    selectionComponent: .face(face.componentID)
+        if selectionHitPolicy.allowsFaceHits {
+            for face in topology.faces {
+                let bounds = polygonBounds(face.points.map(layout.project))
+                guard !bounds.isNull,
+                      rect.intersects(bounds) else {
+                    continue
+                }
+                hits.append(
+                    ViewportHit(
+                        featureID: item.featureID,
+                        kind: .body,
+                        selectionComponent: .face(face.componentID)
+                    )
                 )
-            )
+            }
         }
 
         return hits
@@ -226,54 +250,61 @@ public struct ViewportSelectionRectangleHitTester: Sendable {
     private func projectedBodySubobjectHits(
         in rect: CGRect,
         item: ViewportSceneItem,
-        layout: ViewportLayout
+        layout: ViewportLayout,
+        selectionHitPolicy: ViewportSelectionHitPolicy
     ) -> [ViewportHit] {
         guard let projection = layout.bodyProjection(for: item) else {
             return []
         }
         var hits: [ViewportHit] = []
 
-        for vertex in ViewportBodyVertex.allCases {
-            let bounds = pointRect(projection.point(for: vertex), radius: bodyVertexRadius)
-            guard rect.intersects(bounds) else {
-                continue
-            }
-            hits.append(
-                ViewportHit(
-                    featureID: item.featureID,
-                    kind: .body,
-                    bodyVertex: vertex
+        if selectionHitPolicy.allowsVertexHits {
+            for vertex in ViewportBodyVertex.allCases {
+                let bounds = pointRect(projection.point(for: vertex), radius: bodyVertexRadius)
+                guard rect.intersects(bounds) else {
+                    continue
+                }
+                hits.append(
+                    ViewportHit(
+                        featureID: item.featureID,
+                        kind: .body,
+                        bodyVertex: vertex
+                    )
                 )
-            )
+            }
         }
 
-        for edge in ViewportBodyEdge.verticalCases {
-            let segment = projection.segment(for: edge)
-            let bounds = segmentBounds(start: segment.start, end: segment.end)
-                .insetBy(dx: -bodyEdgePadding, dy: -bodyEdgePadding)
-            guard rect.intersects(bounds) else {
-                continue
-            }
-            hits.append(
-                ViewportHit(
-                    featureID: item.featureID,
-                    kind: .body,
-                    bodyEdge: edge
+        if selectionHitPolicy.allowsEdgeHits {
+            for edge in ViewportBodyEdge.verticalCases {
+                let segment = projection.segment(for: edge)
+                let bounds = segmentBounds(start: segment.start, end: segment.end)
+                    .insetBy(dx: -bodyEdgePadding, dy: -bodyEdgePadding)
+                guard rect.intersects(bounds) else {
+                    continue
+                }
+                hits.append(
+                    ViewportHit(
+                        featureID: item.featureID,
+                        kind: .body,
+                        bodyEdge: edge
+                    )
                 )
-            )
+            }
         }
 
-        for face in projectedBodyFaceCases {
-            guard projection.footprint(for: face).bounds.intersects(rect) else {
-                continue
-            }
-            hits.append(
-                ViewportHit(
-                    featureID: item.featureID,
-                    kind: .body,
-                    bodyFace: face
+        if selectionHitPolicy.allowsFaceHits {
+            for face in projectedBodyFaceCases {
+                guard projection.footprint(for: face).bounds.intersects(rect) else {
+                    continue
+                }
+                hits.append(
+                    ViewportHit(
+                        featureID: item.featureID,
+                        kind: .body,
+                        bodyFace: face
+                    )
                 )
-            )
+            }
         }
 
         return hits

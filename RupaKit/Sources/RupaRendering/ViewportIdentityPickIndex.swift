@@ -86,21 +86,33 @@ public struct ViewportIdentityPickIndex: Equatable, Sendable {
     public func records(for featureID: FeatureID) -> [ViewportIdentityPickRecord] {
         records.filter { $0.featureID == featureID }
     }
+
+    public func filtered(selectionHitPolicy: ViewportSelectionHitPolicy) -> ViewportIdentityPickIndex {
+        guard selectionHitPolicy != .all else {
+            return self
+        }
+        return ViewportIdentityPickIndex(
+            records: records.filter { selectionHitPolicy.allows(geometry: $0.geometry) }
+        )
+    }
 }
 
 public struct ViewportIdentityPickIndexBuilder: Sendable {
     public var includesSketchControlPoints: Bool
     public var includesProjectedBodySubobjects: Bool
     public var sketchControlPointHitPolicy: ViewportSketchControlPointHitPolicy
+    public var selectionHitPolicy: ViewportSelectionHitPolicy
 
     public init(
         includesSketchControlPoints: Bool = true,
         includesProjectedBodySubobjects: Bool = true,
-        sketchControlPointHitPolicy: ViewportSketchControlPointHitPolicy = .all
+        sketchControlPointHitPolicy: ViewportSketchControlPointHitPolicy = .all,
+        selectionHitPolicy: ViewportSelectionHitPolicy = .all
     ) {
         self.includesSketchControlPoints = includesSketchControlPoints
         self.includesProjectedBodySubobjects = includesProjectedBodySubobjects
         self.sketchControlPointHitPolicy = sketchControlPointHitPolicy
+        self.selectionHitPolicy = selectionHitPolicy
     }
 
     public func build(scene: ViewportScene) -> ViewportIdentityPickIndex {
@@ -346,6 +358,9 @@ public struct ViewportIdentityPickIndexBuilder: Sendable {
         allocator: inout ViewportPickIdentityAllocator,
         records: inout [ViewportIdentityPickRecord]
     ) {
+        guard selectionHitPolicy.allows(geometry: geometry) else {
+            return
+        }
         records.append(
             ViewportIdentityPickRecord(
                 identity: allocator.next(),

@@ -35,6 +35,45 @@ import Testing
     #expect(backgroundSample.hit == nil)
 }
 
+@Test func viewportIdentityBufferRendererFiltersGeneratedTopologyBySelectionPolicy() throws {
+    let scene = identityBufferGeneratedTopologyScene()
+    let viewportSize = CGSize(width: 240.0, height: 180.0)
+    let layout = try #require(ViewportLayout(scene: scene, size: viewportSize))
+    let renderer = try ViewportIdentityBufferRenderer()
+    let samplePoint = layout.project(Point3D(x: -0.018, y: 0.0, z: -0.018))
+    let faceComponentID = SelectionComponentID.generatedTopology(
+        "feature:body:subshape:identity:face:front"
+    )
+    let vertexComponentID = SelectionComponentID.generatedTopology(
+        "feature:body:subshape:identity:vertex:frontBottomLeft"
+    )
+
+    let facePlan = ViewportIdentityPickRenderPlanBuilder().build(
+        scene: scene,
+        layout: layout,
+        selectionHitPolicy: .face
+    )
+    let vertexPlan = ViewportIdentityPickRenderPlanBuilder().build(
+        scene: scene,
+        layout: layout,
+        selectionHitPolicy: .vertex
+    )
+    let allPlan = ViewportIdentityPickRenderPlanBuilder().build(scene: scene, layout: layout)
+
+    let faceSample = try renderer.render(plan: facePlan, viewportSize: viewportSize)
+        .sample(at: samplePoint)
+    let vertexSample = try renderer.render(plan: vertexPlan, viewportSize: viewportSize)
+        .sample(at: samplePoint)
+    let allSample = try renderer.render(plan: allPlan, viewportSize: viewportSize)
+        .sample(at: samplePoint)
+
+    #expect(facePlan.index.count == 1)
+    #expect(vertexPlan.index.count == 1)
+    #expect(faceSample.hit?.selectionComponent == .face(faceComponentID))
+    #expect(vertexSample.hit?.selectionComponent == .vertex(vertexComponentID))
+    #expect(allSample.hit?.selectionComponent == .vertex(vertexComponentID))
+}
+
 @Test func viewportIdentityBufferRendererReportsRenderReadbackMetrics() throws {
     let scene = identityBufferGeneratedTopologyScene()
     let viewportSize = CGSize(width: 240.0, height: 180.0)
@@ -54,6 +93,72 @@ import Testing
     #expect(metrics.gpuDurationSeconds >= 0.0)
     #expect(metrics.readbackDurationSeconds >= 0.0)
     #expect(metrics.totalDurationSeconds >= metrics.readbackDurationSeconds)
+}
+
+@MainActor
+@Test func viewportIdentityHitResolverDoesNotReuseIdentityBufferAcrossSelectionPolicies() throws {
+    let scene = identityBufferGeneratedTopologyScene()
+    let viewportSize = CGSize(width: 240.0, height: 180.0)
+    let layout = try #require(ViewportLayout(scene: scene, size: viewportSize))
+    let renderer = CountingIdentityBufferRenderer()
+    let resolver = ViewportIdentityHitResolver(rendererFactory: { renderer })
+
+    _ = resolver.hitTest(
+        point: layout.project(Point3D(x: -0.018, y: 0.0, z: -0.018)),
+        in: scene,
+        layout: layout,
+        selectionHitPolicy: .face
+    )
+    _ = resolver.hitTest(
+        point: layout.project(Point3D(x: -0.018, y: 0.0, z: -0.018)),
+        in: scene,
+        layout: layout,
+        selectionHitPolicy: .vertex
+    )
+
+    #expect(renderer.renderCount == 2)
+}
+
+@MainActor
+@Test func viewportIdentityHitResolverFallbackHonorsSelectionPolicy() throws {
+    let scene = identityBufferGeneratedTopologyScene()
+    let viewportSize = CGSize(width: 240.0, height: 180.0)
+    let layout = try #require(ViewportLayout(scene: scene, size: viewportSize))
+    let resolver = ViewportIdentityHitResolver(rendererFactory: {
+        throw ViewportIdentityBufferRendererError.deviceUnavailable
+    })
+    let samplePoint = layout.project(Point3D(x: -0.018, y: 0.0, z: -0.018))
+    let faceComponentID = SelectionComponentID.generatedTopology(
+        "feature:body:subshape:identity:face:front"
+    )
+    let vertexComponentID = SelectionComponentID.generatedTopology(
+        "feature:body:subshape:identity:vertex:frontBottomLeft"
+    )
+
+    let faceHit = resolver.hitTest(
+        point: samplePoint,
+        in: scene,
+        layout: layout,
+        selectionHitPolicy: .face
+    )
+    let vertexHit = resolver.hitTest(
+        point: samplePoint,
+        in: scene,
+        layout: layout,
+        selectionHitPolicy: .vertex
+    )
+    let objectHit = resolver.hitTest(
+        point: samplePoint,
+        in: scene,
+        layout: layout,
+        selectionHitPolicy: .object
+    )
+
+    #expect(faceHit?.pickingBackend == .projectedCPU)
+    #expect(faceHit?.selectionComponent == .face(faceComponentID))
+    #expect(vertexHit?.selectionComponent == .vertex(vertexComponentID))
+    #expect(objectHit?.kind == .body)
+    #expect(objectHit?.selectionComponent == nil)
 }
 
 @MainActor
@@ -153,6 +258,46 @@ import Testing
 
     #expect(hits.contains { $0.pickingBackend == .identityBuffer })
     #expect(hits.contains { $0.selectionComponent == .vertex(vertexComponentID) })
+}
+
+@MainActor
+@Test func viewportIdentityHitResolverSelectionHitsHonorSelectionPolicy() throws {
+    let scene = identityBufferGeneratedTopologyScene()
+    let viewportSize = CGSize(width: 240.0, height: 180.0)
+    let layout = try #require(ViewportLayout(scene: scene, size: viewportSize))
+    let resolver = ViewportIdentityHitResolver()
+    let selectionRect = CGRect(x: 0.0, y: 0.0, width: viewportSize.width, height: viewportSize.height)
+    let faceComponentID = SelectionComponentID.generatedTopology(
+        "feature:body:subshape:identity:face:front"
+    )
+    let edgeComponentID = SelectionComponentID.generatedTopology(
+        "feature:body:subshape:identity:edge:frontBottom"
+    )
+    let vertexComponentID = SelectionComponentID.generatedTopology(
+        "feature:body:subshape:identity:vertex:frontBottomLeft"
+    )
+
+    let faceHits = resolver.selectionHits(
+        in: selectionRect,
+        scene: scene,
+        layout: layout,
+        selectionHitPolicy: .face
+    )
+    let objectHits = resolver.selectionHits(
+        in: selectionRect,
+        scene: scene,
+        layout: layout,
+        selectionHitPolicy: .object
+    )
+
+    #expect(faceHits.contains { $0.selectionComponent == .face(faceComponentID) })
+    #expect(faceHits.contains { $0.selectionComponent == .edge(edgeComponentID) } == false)
+    #expect(faceHits.contains { $0.selectionComponent == .vertex(vertexComponentID) } == false)
+    #expect(faceHits.contains { $0.kind == .body && $0.selectionComponent == nil } == false)
+    #expect(objectHits.contains { $0.kind == .body && $0.selectionComponent == nil })
+    #expect(objectHits.contains { $0.selectionComponent == .face(faceComponentID) } == false)
+    #expect(objectHits.contains { $0.selectionComponent == .edge(edgeComponentID) } == false)
+    #expect(objectHits.contains { $0.selectionComponent == .vertex(vertexComponentID) } == false)
 }
 
 @MainActor

@@ -106,6 +106,7 @@ public final class ViewportIdentityHitResolver {
         var scene: ViewportScene
         var layout: ViewportLayout
         var sketchControlPointHitPolicy: ViewportSketchControlPointHitPolicy
+        var selectionHitPolicy: ViewportSelectionHitPolicy
     }
 
     private struct Cache {
@@ -138,12 +139,23 @@ public final class ViewportIdentityHitResolver {
     public func hitTest(
         point: CGPoint,
         in scene: ViewportScene,
-        layout: ViewportLayout
+        layout: ViewportLayout,
+        selectionHitPolicy: ViewportSelectionHitPolicy = .all
     ) -> ViewportHit? {
         do {
-            return try identityHit(point: point, in: scene, layout: layout)
+            return try identityHit(
+                point: point,
+                in: scene,
+                layout: layout,
+                selectionHitPolicy: selectionHitPolicy
+            )
         } catch {
-            return ViewportHitTester().hitTest(point: point, in: scene, layout: layout)
+            return ViewportHitTester().hitTest(
+                point: point,
+                in: scene,
+                layout: layout,
+                selectionHitPolicy: selectionHitPolicy
+            )
         }
     }
 
@@ -151,13 +163,15 @@ public final class ViewportIdentityHitResolver {
         in rect: CGRect,
         scene: ViewportScene,
         layout: ViewportLayout,
-        sketchControlPointHitPolicy: ViewportSketchControlPointHitPolicy = .all
+        sketchControlPointHitPolicy: ViewportSketchControlPointHitPolicy = .all,
+        selectionHitPolicy: ViewportSelectionHitPolicy = .all
     ) -> [ViewportHit] {
         do {
             let buffer = try identityBuffer(
                 for: scene,
                 layout: layout,
-                sketchControlPointHitPolicy: sketchControlPointHitPolicy
+                sketchControlPointHitPolicy: sketchControlPointHitPolicy,
+                selectionHitPolicy: selectionHitPolicy
             )
             return buffer.hits(in: rect)
         } catch {
@@ -165,7 +179,8 @@ public final class ViewportIdentityHitResolver {
                 in: rect,
                 scene: scene,
                 layout: layout,
-                sketchControlPointHitPolicy: sketchControlPointHitPolicy
+                sketchControlPointHitPolicy: sketchControlPointHitPolicy,
+                selectionHitPolicy: selectionHitPolicy
             )
         }
     }
@@ -180,12 +195,14 @@ public final class ViewportIdentityHitResolver {
     private func identityHit(
         point: CGPoint,
         in scene: ViewportScene,
-        layout: ViewportLayout
+        layout: ViewportLayout,
+        selectionHitPolicy: ViewportSelectionHitPolicy
     ) throws -> ViewportHit? {
         let buffer = try identityBuffer(
             for: scene,
             layout: layout,
-            sketchControlPointHitPolicy: .all
+            sketchControlPointHitPolicy: .all,
+            selectionHitPolicy: selectionHitPolicy
         )
         return try buffer.sample(at: point).hit
     }
@@ -193,13 +210,15 @@ public final class ViewportIdentityHitResolver {
     private func identityBuffer(
         for scene: ViewportScene,
         layout: ViewportLayout,
-        sketchControlPointHitPolicy: ViewportSketchControlPointHitPolicy
+        sketchControlPointHitPolicy: ViewportSketchControlPointHitPolicy,
+        selectionHitPolicy: ViewportSelectionHitPolicy
     ) throws -> ViewportIdentityBuffer {
         let renderSize = try Self.renderSize(for: layout.viewportSize)
         let key = CacheKey(
             scene: scene,
             layout: layout,
-            sketchControlPointHitPolicy: sketchControlPointHitPolicy
+            sketchControlPointHitPolicy: sketchControlPointHitPolicy,
+            selectionHitPolicy: selectionHitPolicy
         )
         if let cached,
            cached.key == key,
@@ -210,11 +229,17 @@ public final class ViewportIdentityHitResolver {
         }
 
         let index = ViewportIdentityPickIndexBuilder(
-            sketchControlPointHitPolicy: sketchControlPointHitPolicy
+            sketchControlPointHitPolicy: sketchControlPointHitPolicy,
+            selectionHitPolicy: selectionHitPolicy
         )
         .build(scene: scene)
         let plan = ViewportIdentityPickRenderPlanBuilder()
-            .build(scene: scene, layout: layout, index: index)
+            .build(
+                scene: scene,
+                layout: layout,
+                index: index,
+                selectionHitPolicy: selectionHitPolicy
+            )
         let cost = RenderCost(
             viewportWidth: renderSize.width,
             viewportHeight: renderSize.height,

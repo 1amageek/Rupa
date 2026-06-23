@@ -66,6 +66,7 @@ public struct Viewport: View {
     private let canvasDragAxisConstraint: SketchAxisConstraint?
     private let canvasDragSketchPlaneOverride: SketchPlane?
     private let projectionRequest: ViewportProjectionRequest?
+    private let selectionHitPolicy: ViewportSelectionHitPolicy
     private let showsConstructionPlaneHover: Bool
     private let allowsSelectionRectangle: Bool
     private let allowsObjectAffordances: Bool
@@ -111,6 +112,7 @@ public struct Viewport: View {
         canvasDragAxisConstraint: SketchAxisConstraint? = nil,
         canvasDragSketchPlaneOverride: SketchPlane? = nil,
         projectionRequest: ViewportProjectionRequest? = nil,
+        selectionHitPolicy: ViewportSelectionHitPolicy = .all,
         showsConstructionPlaneHover: Bool = false,
         allowsSelectionRectangle: Bool = false,
         allowsObjectAffordances: Bool = true,
@@ -155,6 +157,7 @@ public struct Viewport: View {
         self.canvasDragAxisConstraint = canvasDragAxisConstraint
         self.canvasDragSketchPlaneOverride = canvasDragSketchPlaneOverride
         self.projectionRequest = projectionRequest
+        self.selectionHitPolicy = selectionHitPolicy
         self.showsConstructionPlaneHover = showsConstructionPlaneHover
         self.allowsSelectionRectangle = allowsSelectionRectangle
         self.allowsObjectAffordances = allowsObjectAffordances
@@ -7197,7 +7200,12 @@ public struct Viewport: View {
         in scene: ViewportScene,
         layout: ViewportLayout
     ) -> ViewportHit? {
-        identityHitResolver.hitTest(point: point, in: scene, layout: layout)
+        identityHitResolver.hitTest(
+            point: point,
+            in: scene,
+            layout: layout,
+            selectionHitPolicy: selectionHitPolicy
+        )
     }
 
     private func polygonBounds(_ polygon: [CGPoint]) -> CGRect {
@@ -8420,7 +8428,8 @@ public struct Viewport: View {
                     in: rect,
                     scene: hitScene,
                     layout: mapper.layout,
-                    sketchControlPointHitPolicy: sketchControlPointHitPolicy
+                    sketchControlPointHitPolicy: sketchControlPointHitPolicy,
+                    selectionHitPolicy: selectionHitPolicy
                 ),
                 selectionIntent: selectionIntent
             )

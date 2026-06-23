@@ -107,9 +107,13 @@ public struct ViewportIdentityPickRenderPlanBuilder: Sendable {
     public func build(
         scene: ViewportScene,
         layout: ViewportLayout,
-        index: ViewportIdentityPickIndex? = nil
+        index: ViewportIdentityPickIndex? = nil,
+        selectionHitPolicy: ViewportSelectionHitPolicy = .all
     ) -> ViewportIdentityPickRenderPlan {
-        let pickIndex = index ?? ViewportIdentityPickIndexBuilder().build(scene: scene)
+        let pickIndex = (index ?? ViewportIdentityPickIndexBuilder(
+            selectionHitPolicy: selectionHitPolicy
+        ).build(scene: scene))
+        .filtered(selectionHitPolicy: selectionHitPolicy)
         var drawItems: [ViewportIdentityPickDrawItem] = []
 
         for item in scene.items {
