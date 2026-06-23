@@ -14925,6 +14925,7 @@ public struct DesignDocument: Identifiable, Sendable {
         deltaZ: CADExpression,
         objectRegistry: ObjectTypeRegistry = .builtIn
     ) throws {
+        let surfaceVertexEditor = PolySplineSurfaceVertexEditingService()
         let resolvedTarget = try PolySplineSurfaceVertexTarget.resolve(target, in: self)
         let delta = Vector3D(
             x: try resolvedLengthValue(deltaX, owner: "PolySpline surface vertex delta x"),
@@ -14945,9 +14946,10 @@ public struct DesignDocument: Identifiable, Sendable {
             )
         }
 
-        let sourceVertexIndex = try polySplineSourceVertexIndex(
+        let sourceVertexIndex = try surfaceVertexEditor.sourceVertexIndex(
             for: resolvedTarget,
-            in: polySpline
+            in: polySpline,
+            owner: "PolySpline surface vertex move"
         )
         guard polySpline.sourceMesh.positions.indices.contains(sourceVertexIndex) else {
             throw EditorError(
@@ -14959,10 +14961,11 @@ public struct DesignDocument: Identifiable, Sendable {
         polySpline.sourceMesh.positions[sourceVertexIndex] =
             polySpline.sourceMesh.positions[sourceVertexIndex] + delta
         try polySpline.validate()
-        try validatePolySplineTargetStillStable(
+        try surfaceVertexEditor.validateTargetStillStable(
             resolvedTarget,
             sourceVertexIndex: sourceVertexIndex,
-            in: polySpline
+            in: polySpline,
+            owner: "PolySpline surface vertex move"
         )
 
         var updatedCADDocument = cadDocument
@@ -14989,6 +14992,7 @@ public struct DesignDocument: Identifiable, Sendable {
         distance: CADExpression,
         objectRegistry: ObjectTypeRegistry = .builtIn
     ) throws {
+        let surfaceVertexEditor = PolySplineSurfaceVertexEditingService()
         guard targets.isEmpty == false else {
             throw EditorError(
                 code: .commandInvalid,
@@ -15041,9 +15045,10 @@ public struct DesignDocument: Identifiable, Sendable {
                 polySplinesByID[resolvedTarget.featureID] = sourcePolySpline
             }
 
-            let sourceVertexIndex = try polySplineSourceVertexIndex(
+            let sourceVertexIndex = try surfaceVertexEditor.sourceVertexIndex(
                 for: resolvedTarget,
-                in: polySpline
+                in: polySpline,
+                owner: "PolySpline surface vertex slide"
             )
             guard polySpline.sourceMesh.positions.indices.contains(sourceVertexIndex) else {
                 throw EditorError(
@@ -15062,7 +15067,7 @@ public struct DesignDocument: Identifiable, Sendable {
                 )
             }
 
-            let unitDirection = try polySplineSurfaceVertexSlideUnitVector(
+            let unitDirection = try surfaceVertexEditor.slideUnitVector(
                 for: resolvedTarget,
                 in: polySpline,
                 direction: direction
@@ -15096,10 +15101,11 @@ public struct DesignDocument: Identifiable, Sendable {
         for (featureID, polySpline) in polySplinesByID {
             try polySpline.validate()
             for update in updates where update.featureID == featureID {
-                try validatePolySplineTargetStillStable(
+                try surfaceVertexEditor.validateTargetStillStable(
                     update.target,
                     sourceVertexIndex: update.sourceVertexIndex,
-                    in: polySpline
+                    in: polySpline,
+                    owner: "PolySpline surface vertex slide"
                 )
             }
         }
@@ -15355,168 +15361,6 @@ public struct DesignDocument: Identifiable, Sendable {
                 message: "\(owner) must reference an existing body-producing feature."
             )
         }
-    }
-
-    private func polySplineSourceVertexIndex(
-        for target: PolySplineSurfaceVertexTarget,
-        in polySpline: PolySplineFeature
-    ) throws -> Int {
-        let analysis = PolySplineMeshAnalyzer().analyze(
-            mesh: polySpline.sourceMesh,
-            options: polySpline.options
-        )
-        guard analysis.result.isSupported else {
-            throw EditorError(
-                code: .commandInvalid,
-                message: "PolySpline surface vertex move requires a supported PolySpline source mesh."
-            )
-        }
-        guard let patch = analysis.supportedPatches.first(where: { $0.candidateID == target.patchID }) else {
-            throw EditorError(
-                code: .referenceUnresolved,
-                message: "PolySpline surface vertex move requires an existing patch target."
-            )
-        }
-        let boundaryIndex = target.boundaryRole.boundaryIndex
-        guard patch.boundaryVertexIndices.indices.contains(boundaryIndex) else {
-            throw EditorError(
-                code: .referenceUnresolved,
-                message: "PolySpline surface vertex move requires an existing patch boundary vertex."
-            )
-        }
-        return patch.boundaryVertexIndices[boundaryIndex]
-    }
-
-    private func validatePolySplineTargetStillStable(
-        _ target: PolySplineSurfaceVertexTarget,
-        sourceVertexIndex: Int,
-        in polySpline: PolySplineFeature
-    ) throws {
-        let analysis = PolySplineMeshAnalyzer().analyze(
-            mesh: polySpline.sourceMesh,
-            options: polySpline.options
-        )
-        guard analysis.result.isSupported else {
-            throw EditorError(
-                code: .commandInvalid,
-                message: "PolySpline surface vertex move would leave the source mesh unsupported: \(analysis.result.failureMessage ?? "No supported patch candidate.")"
-            )
-        }
-        guard let patch = analysis.supportedPatches.first(where: { $0.candidateID == target.patchID }) else {
-            throw EditorError(
-                code: .commandInvalid,
-                message: "PolySpline surface vertex move would remove the selected patch from the reconstruction."
-            )
-        }
-        let boundaryIndex = target.boundaryRole.boundaryIndex
-        guard patch.boundaryVertexIndices.indices.contains(boundaryIndex),
-              patch.boundaryVertexIndices[boundaryIndex] == sourceVertexIndex else {
-            throw EditorError(
-                code: .commandInvalid,
-                message: "PolySpline surface vertex move would change the selected patch boundary role."
-            )
-        }
-    }
-
-    private func polySplineSurfaceVertexSlideUnitVector(
-        for target: PolySplineSurfaceVertexTarget,
-        in polySpline: PolySplineFeature,
-        direction: PolySplineSurfaceVertexSlideDirection
-    ) throws -> Vector3D {
-        let analysis = PolySplineMeshAnalyzer().analyze(
-            mesh: polySpline.sourceMesh,
-            options: polySpline.options
-        )
-        guard analysis.result.isSupported else {
-            throw EditorError(
-                code: .commandInvalid,
-                message: "PolySpline surface vertex slide requires a supported PolySpline source mesh."
-            )
-        }
-        guard let patch = analysis.supportedPatches.first(where: { $0.candidateID == target.patchID }) else {
-            throw EditorError(
-                code: .referenceUnresolved,
-                message: "PolySpline surface vertex slide requires an existing patch target."
-            )
-        }
-
-        func boundaryPoint(_ role: PolySplineSurfaceVertexTarget.BoundaryRole) throws -> Point3D {
-            let boundaryIndex = role.boundaryIndex
-            guard patch.boundaryVertexIndices.indices.contains(boundaryIndex) else {
-                throw EditorError(
-                    code: .referenceUnresolved,
-                    message: "PolySpline surface vertex slide requires an existing patch boundary vertex."
-                )
-            }
-            let sourceVertexIndex = patch.boundaryVertexIndices[boundaryIndex]
-            guard polySpline.sourceMesh.positions.indices.contains(sourceVertexIndex) else {
-                throw EditorError(
-                    code: .referenceUnresolved,
-                    message: "PolySpline surface vertex slide references a missing source mesh vertex."
-                )
-            }
-            return polySpline.sourceMesh.positions[sourceVertexIndex]
-        }
-
-        let positiveURaw: Vector3D
-        switch target.boundaryRole {
-        case .uMinVMin, .uMaxVMin:
-            positiveURaw = try boundaryPoint(.uMaxVMin) - boundaryPoint(.uMinVMin)
-        case .uMaxVMax, .uMinVMax:
-            positiveURaw = try boundaryPoint(.uMaxVMax) - boundaryPoint(.uMinVMax)
-        }
-
-        let positiveVRaw: Vector3D
-        switch target.boundaryRole {
-        case .uMinVMin, .uMinVMax:
-            positiveVRaw = try boundaryPoint(.uMinVMax) - boundaryPoint(.uMinVMin)
-        case .uMaxVMin, .uMaxVMax:
-            positiveVRaw = try boundaryPoint(.uMaxVMax) - boundaryPoint(.uMaxVMin)
-        }
-
-        let positiveU = try normalizedPolySplineSlideVector(
-            positiveURaw,
-            owner: "Positive U"
-        )
-        let positiveV = try normalizedPolySplineSlideVector(
-            positiveVRaw,
-            owner: "Positive V"
-        )
-        let normal = try normalizedPolySplineSlideVector(
-            positiveU.cross(positiveV),
-            owner: "Normal"
-        )
-
-        switch direction {
-        case .positiveU:
-            return positiveU
-        case .negativeU:
-            return negatedPolySplineSlideVector(positiveU)
-        case .normal:
-            return normal
-        case .positiveV:
-            return positiveV
-        case .negativeV:
-            return negatedPolySplineSlideVector(positiveV)
-        }
-    }
-
-    private func normalizedPolySplineSlideVector(
-        _ vector: Vector3D,
-        owner: String
-    ) throws -> Vector3D {
-        do {
-            return try vector.normalized(tolerance: ModelingTolerance.standard.distance)
-        } catch {
-            throw EditorError(
-                code: .commandInvalid,
-                message: "\(owner) direction is collapsed for PolySpline surface vertex slide."
-            )
-        }
-    }
-
-    private func negatedPolySplineSlideVector(_ vector: Vector3D) -> Vector3D {
-        Vector3D(x: -vector.x, y: -vector.y, z: -vector.z)
     }
 
     public mutating func createExtrudedRectangle(
