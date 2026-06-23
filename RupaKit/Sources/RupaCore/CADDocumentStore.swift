@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import SwiftCAD
 
 @Observable
 public final class CADDocumentStore {
@@ -98,6 +99,7 @@ public final class CADDocumentStore {
 
     public func apply(_ command: EditorCommand) throws -> CommandExecutionResult {
         var curveRebuildReport: CurveRebuildReport?
+        var addedSelectionDimensionID: SelectionDimensionID?
         switch command {
         case .setDisplayUnit(let unit):
             document.setDisplayUnit(unit)
@@ -504,6 +506,19 @@ public final class CADDocumentStore {
             document = updatedDocument
             try commitMutation()
             evaluateCurrentDocument()
+        case .addSelectionDimension(let name, let kind, let first, let second, let target):
+            var updatedDocument = document
+            addedSelectionDimensionID = try updatedDocument.addSelectionDimension(
+                name: name,
+                kind: kind,
+                first: first,
+                second: second,
+                target: target,
+                objectRegistry: objectRegistry
+            )
+            document = updatedDocument
+            try commitMutation()
+            evaluateCurrentDocument()
         case .offsetCurve(let target, let distance, let options, let vertexHandle):
             var updatedDocument = document
             try updatedDocument.offsetCurve(
@@ -882,7 +897,8 @@ public final class CADDocumentStore {
             generation: generation,
             didMutate: command.mutatesDocument,
             diagnostics: diagnostics,
-            curveRebuildReport: curveRebuildReport
+            curveRebuildReport: curveRebuildReport,
+            addedSelectionDimensionID: addedSelectionDimensionID
         )
     }
 

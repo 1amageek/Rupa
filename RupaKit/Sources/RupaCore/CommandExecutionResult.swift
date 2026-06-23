@@ -1,4 +1,5 @@
 import Foundation
+import SwiftCAD
 
 public struct CommandExecutionResult: Equatable, Sendable {
     public var commandName: String
@@ -6,18 +7,21 @@ public struct CommandExecutionResult: Equatable, Sendable {
     public var didMutate: Bool
     public var diagnostics: [EditorDiagnostic]
     public var curveRebuildReport: CurveRebuildReport?
+    public var addedSelectionDimensionID: SelectionDimensionID?
 
     public init(
         commandName: String,
         generation: DocumentGeneration,
         didMutate: Bool,
         diagnostics: [EditorDiagnostic],
-        curveRebuildReport: CurveRebuildReport? = nil
+        curveRebuildReport: CurveRebuildReport? = nil,
+        addedSelectionDimensionID: SelectionDimensionID? = nil
     ) {
         self.commandName = commandName
         self.generation = generation
         self.didMutate = didMutate
         self.diagnostics = diagnostics
         self.curveRebuildReport = curveRebuildReport
+        self.addedSelectionDimensionID = addedSelectionDimensionID
     }
 }

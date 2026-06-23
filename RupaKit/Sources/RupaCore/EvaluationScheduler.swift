@@ -22,7 +22,7 @@ public struct EvaluationScheduler: Sendable {
             )
         }
 
-        guard document.cadDocument.hasActiveBodyProducingFeatures else {
+        guard document.cadDocument.hasActiveRenderableTopologyFeatures else {
             return evaluatedEmptyDocument(generation: generation)
         }
 
@@ -95,31 +95,5 @@ public struct EvaluationScheduler: Sendable {
                 ),
             ]
         )
-    }
-}
-
-private extension CADDocument {
-    var hasActiveBodyProducingFeatures: Bool {
-        designGraph.order.contains { featureID in
-            guard let feature = designGraph.nodes[featureID], !feature.isSuppressed else {
-                return false
-            }
-            switch feature.operation {
-            case .sketch:
-                return false
-            case .extrude:
-                return true
-            case .sweep:
-                return true
-            case .polySpline:
-                return true
-            case .faceLoopOffset:
-                return true
-            case .edgeOffset:
-                return true
-            case .faceKnife:
-                return true
-            }
-        }
     }
 }

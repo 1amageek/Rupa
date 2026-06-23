@@ -62,6 +62,11 @@ public enum AgentRequest: Codable, Equatable, Sendable {
         targets: [SelectionTarget],
         expectedGeneration: DocumentGeneration?
     )
+    case selectionDimensionEvaluation(
+        sessionID: UUID,
+        dimensionID: SelectionDimensionID?,
+        expectedGeneration: DocumentGeneration?
+    )
     case curveAnalysis(
         sessionID: UUID,
         expectedGeneration: DocumentGeneration?
@@ -122,12 +127,13 @@ public enum AgentResponse: Codable, Equatable, Sendable {
     case polySplineMeshAnalysis(PolySplineMeshAnalysisResult)
     case sketchEntitySummary(SketchEntitySummaryResult)
     case sketchDimensionSummary(SketchDimensionSummaryResult)
+    case selectionDimensionEvaluation(SelectionDimensionEvaluation)
     case curveAnalysis(CurveAnalysisResult)
     case topologySummary(TopologySummaryResult)
     case objectDimensionSummary(ObjectDimensionSummaryResult)
     case surfaceAnalysis(SurfaceAnalysisResult)
     case surfaceFrames(SurfaceFrameResult)
-    case surfaceContinuitySummary(SurfaceContinuityResult)
+    case surfaceContinuitySummary(RupaCore.SurfaceContinuityResult)
     case selection(SelectionStateResult)
     case save(SaveResult)
     case export(ExportResult)

@@ -43,7 +43,7 @@ public struct SurfaceAnalysisService: Sendable {
             )
         }
 
-        guard document.cadDocument.hasActiveSurfaceAnalysisFeatures else {
+        guard document.cadDocument.hasActiveRenderableTopologyFeatures else {
             return SurfaceAnalysisResult(
                 displayUnit: document.displayUnit,
                 diagnostics: [
@@ -422,6 +422,59 @@ public struct SurfaceAnalysisService: Sendable {
                 return chordLength
             }
             return abs(trim.endParameter - trim.startParameter) * circle.radius
+        case .bSpline:
+            return try estimatedSampledLength(
+                for: curve,
+                edge: edge,
+                fallback: chordLength
+            )
+        }
+    }
+
+    private func estimatedSampledLength(
+        for curve: Curve3D,
+        edge: Edge,
+        fallback: Double
+    ) throws -> Double {
+        let parameterSpan: (start: Double, end: Double)
+        if let trim = edge.trim {
+            parameterSpan = (trim.startParameter, trim.endParameter)
+        } else {
+            switch curve.parameterDomain {
+            case .unbounded:
+                return fallback
+            case .closed(let start, let end):
+                parameterSpan = (start, end)
+            case .periodic(let period):
+                parameterSpan = (0.0, period)
+            }
+        }
+
+        guard parameterSpan.start.isFinite,
+              parameterSpan.end.isFinite else {
+            return fallback
+        }
+        let span = parameterSpan.end - parameterSpan.start
+        guard abs(span) > tolerance.distance else {
+            return fallback
+        }
+
+        let segmentCount = 32
+        do {
+            var previous = try curve.point(at: parameterSpan.start, tolerance: tolerance)
+            var length = 0.0
+            for index in 1...segmentCount {
+                let parameter = parameterSpan.start + span * Double(index) / Double(segmentCount)
+                let current = try curve.point(at: parameter, tolerance: tolerance)
+                length += (current - previous).length
+                previous = current
+            }
+            return length
+        } catch {
+            throw EditorError(
+                code: .evaluationFailed,
+                message: "Surface analysis could not sample trim boundary curve length: \(String(describing: error))"
+            )
         }
     }
 
@@ -622,31 +675,5 @@ public struct SurfaceAnalysisService: Sendable {
 
     private func maxAbs(_ values: [Double]) -> Double {
         values.map(abs).max() ?? 0.0
-    }
-}
-
-private extension CADDocument {
-    var hasActiveSurfaceAnalysisFeatures: Bool {
-        designGraph.order.contains { featureID in
-            guard let feature = designGraph.nodes[featureID], !feature.isSuppressed else {
-                return false
-            }
-            switch feature.operation {
-            case .sketch:
-                return false
-            case .extrude:
-                return true
-            case .sweep:
-                return true
-            case .polySpline:
-                return true
-            case .faceLoopOffset:
-                return true
-            case .edgeOffset:
-                return true
-            case .faceKnife:
-                return true
-            }
-        }
     }
 }

@@ -17,6 +17,9 @@ public struct TopologySummaryService: Sendable {
         var radius: Double?
         var parameterXAxis: TopologySummaryResult.Entry.Point?
         var parameterYAxis: TopologySummaryResult.Entry.Point?
+        var degree: Int?
+        var controlPointCount: Int?
+        var isRational: Bool?
     }
 
     private struct SurfaceSummary {
@@ -44,7 +47,7 @@ public struct TopologySummaryService: Sendable {
             )
         }
 
-        guard document.cadDocument.hasActiveBodyProducingFeatures else {
+        guard document.cadDocument.hasActiveRenderableTopologyFeatures else {
             return TopologySummaryResult(
                 displayUnit: document.displayUnit,
                 diagnostics: [
@@ -198,6 +201,9 @@ public struct TopologySummaryService: Sendable {
                 curveRadius: curveInfo?.radius,
                 curveParameterXAxis: curveInfo?.parameterXAxis,
                 curveParameterYAxis: curveInfo?.parameterYAxis,
+                curveDegree: curveInfo?.degree,
+                curveControlPointCount: curveInfo?.controlPointCount,
+                curveIsRational: curveInfo?.isRational,
                 edgeParameterRange: edgeParameterRange,
                 start: start,
                 end: end
@@ -375,6 +381,13 @@ public struct TopologySummaryService: Sendable {
                 parameterXAxis: basis.map { point($0.xAxis) },
                 parameterYAxis: basis.map { point($0.yAxis) }
             )
+        case .bSpline(let curve):
+            return CurveSummary(
+                kind: "bSpline",
+                degree: curve.degree,
+                controlPointCount: curve.controlPointCount,
+                isRational: curve.isRational
+            )
         }
     }
 
@@ -415,32 +428,6 @@ public struct TopologySummaryService: Sendable {
                 uControlPointCount: surface.uControlPointCount,
                 vControlPointCount: surface.vControlPointCount
             )
-        }
-    }
-}
-
-private extension CADDocument {
-    var hasActiveBodyProducingFeatures: Bool {
-        designGraph.order.contains { featureID in
-            guard let feature = designGraph.nodes[featureID], !feature.isSuppressed else {
-                return false
-            }
-            switch feature.operation {
-            case .sketch:
-                return false
-            case .extrude:
-                return true
-            case .sweep:
-                return true
-            case .polySpline:
-                return true
-            case .faceLoopOffset:
-                return true
-            case .edgeOffset:
-                return true
-            case .faceKnife:
-                return true
-            }
         }
     }
 }

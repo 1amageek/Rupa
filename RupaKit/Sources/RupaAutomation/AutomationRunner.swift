@@ -428,6 +428,24 @@ public struct AutomationRunner {
                 didMutate: result.didMutate,
                 diagnostics: result.diagnostics
             )
+        case .addSelectionDimension(let name, let kind, let first, let second, let target):
+            let result = try session.execute(
+                .addSelectionDimension(
+                    name: name,
+                    kind: kind,
+                    first: first,
+                    second: second,
+                    target: target
+                )
+            )
+            return AutomationResult(
+                message: "Selection dimension added.",
+                commandName: result.commandName,
+                generation: result.generation,
+                didMutate: result.didMutate,
+                diagnostics: result.diagnostics,
+                addedSelectionDimensionID: result.addedSelectionDimensionID
+            )
         case .addSketchConstraint(let featureID, let constraint):
             let result = try session.execute(
                 .addSketchConstraint(

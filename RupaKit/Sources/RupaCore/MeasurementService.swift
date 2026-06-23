@@ -442,6 +442,14 @@ public struct MeasurementService {
                 solids.append(solid)
                 totals.solidVolumeCubicMeters += solid.volumeCubicMeters
                 bounds.include(solid.bounds)
+            case .bridgeCurve:
+                continue
+            case .curveEdit:
+                continue
+            case .curveOffset:
+                continue
+            case .curveTrim:
+                continue
             }
         }
 
@@ -486,15 +494,8 @@ public struct MeasurementService {
                   !node.isSuppressed else {
                 continue
             }
-            switch node.operation {
-            case .sketch, .extrude, .sweep, .polySpline:
-                continue
-            case .faceLoopOffset(let faceLoopOffset):
-                result.insert(faceLoopOffset.target.featureID)
-            case .edgeOffset(let edgeOffset):
-                result.insert(edgeOffset.target.featureID)
-            case .faceKnife(let faceKnife):
-                result.insert(faceKnife.target.featureID)
+            if let supersededFeatureID = node.operation.supersededBodyFeatureID {
+                result.insert(supersededFeatureID)
             }
         }
         return result

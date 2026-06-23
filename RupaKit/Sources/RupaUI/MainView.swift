@@ -4276,7 +4276,7 @@ public struct MainView: View {
         var edgePersistentNames: [String]
         var firstFacePersistentName: String?
         var secondFacePersistentName: String?
-        var continuity: SurfaceContinuityResult.ContinuityLevel
+        var continuity: RupaCore.SurfaceContinuityResult.ContinuityLevel
         var positionGap: Double
         var normalAngle: Double?
         var curvatureGap: Double?
@@ -4629,7 +4629,7 @@ public struct MainView: View {
         }
     }
 
-    private var selectedSurfaceContinuitySummary: SurfaceContinuityResult? {
+    private var selectedSurfaceContinuitySummary: RupaCore.SurfaceContinuityResult? {
         switch selectedSurfaceContinuitySummaryResult(for: selectedSceneNodes) {
         case .success(let summary):
             return summary
@@ -4669,7 +4669,7 @@ public struct MainView: View {
 
     private func selectedSurfaceContinuitySummaryResult(
         for nodes: [SceneNode]
-    ) -> Result<SurfaceContinuityResult?, Error> {
+    ) -> Result<RupaCore.SurfaceContinuityResult?, Error> {
         do {
             return .success(try resolveSelectedSurfaceContinuitySummary(for: nodes))
         } catch {
@@ -5166,7 +5166,7 @@ public struct MainView: View {
             return nil
         }
         let selectedPersistentNames = selectedGeneratedTopologyPersistentNames()
-        let adjacencies: [SurfaceContinuityResult.Adjacency]
+        let adjacencies: [RupaCore.SurfaceContinuityResult.Adjacency]
         if selectedPersistentNames.isEmpty {
             adjacencies = result.adjacencies
         } else {
@@ -5200,7 +5200,7 @@ public struct MainView: View {
 
     private func resolveSelectedSurfaceContinuitySummary(
         for nodes: [SceneNode]
-    ) throws -> SurfaceContinuityResult? {
+    ) throws -> RupaCore.SurfaceContinuityResult? {
         guard nodes.count == 1, let node = nodes.first else {
             return nil
         }
@@ -5238,7 +5238,7 @@ public struct MainView: View {
     }
 
     private func surfaceAdjacency(
-        _ adjacency: SurfaceContinuityResult.Adjacency,
+        _ adjacency: RupaCore.SurfaceContinuityResult.Adjacency,
         containsAny persistentNames: Set<String>
     ) -> Bool {
         if let firstFacePersistentName = adjacency.firstFacePersistentName,
@@ -8725,6 +8725,27 @@ public struct MainView: View {
                         inspectorRow("Operation", "Face Knife")
                         inspectorRow("Target", shortID(faceKnife.target.featureID))
                         inspectorRow("Loop Points", "\(faceKnife.loop.count)")
+                    case .bridgeCurve(let bridgeCurve):
+                        inspectorRow("Operation", "Bridge Curve")
+                        inspectorRow("Start Continuity", String(describing: bridgeCurve.start.requiredLevel).capitalized)
+                        inspectorRow("End Continuity", String(describing: bridgeCurve.end.requiredLevel).capitalized)
+                        inspectorRow("Samples", "\(bridgeCurve.sampleCount)")
+                    case .curveEdit(let curveEdit):
+                        inspectorRow("Operation", "Curve Edit")
+                        inspectorRow("Source", shortID(curveEdit.source.featureID))
+                        inspectorRow("Curve Index", "\(curveEdit.source.curveIndex)")
+                        inspectorRow("Edits", "\(curveEdit.edits.count)")
+                    case .curveOffset(let curveOffset):
+                        inspectorRow("Operation", "Curve Offset")
+                        inspectorRow("Source", shortID(curveOffset.source.featureID))
+                        inspectorRow("Curve Index", "\(curveOffset.source.curveIndex)")
+                        inspectorRow("Side", curveOffset.side.rawValue.capitalized)
+                        inspectorRow("Samples", "\(curveOffset.sampleCount)")
+                    case .curveTrim(let curveTrim):
+                        inspectorRow("Operation", "Curve Trim")
+                        inspectorRow("Source", shortID(curveTrim.source.featureID))
+                        inspectorRow("Curve Index", "\(curveTrim.source.curveIndex)")
+                        inspectorRow("Samples", "\(curveTrim.sampleCount)")
                     }
                     inspectorRow("Inputs", valueSummary(feature.inputs.map { $0.role.rawValue }))
                     inspectorRow("Outputs", valueSummary(feature.outputs.map { $0.role.rawValue }))
@@ -9086,7 +9107,7 @@ public struct MainView: View {
         }
     }
 
-    private func surfaceContinuityTitle(_ level: SurfaceContinuityResult.ContinuityLevel) -> String {
+    private func surfaceContinuityTitle(_ level: RupaCore.SurfaceContinuityResult.ContinuityLevel) -> String {
         switch level {
         case .disconnected:
             return "Disconnected"

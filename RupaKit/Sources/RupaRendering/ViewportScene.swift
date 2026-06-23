@@ -2572,6 +2572,14 @@ public struct ViewportSceneBuilder {
                     document: document,
                     evaluatedDocument: evaluatedDocument()
                 )
+            case .bridgeCurve:
+                return nil
+            case .curveEdit:
+                return nil
+            case .curveOffset:
+                return nil
+            case .curveTrim:
+                return nil
             }
         }
         return ViewportScene(items: items)

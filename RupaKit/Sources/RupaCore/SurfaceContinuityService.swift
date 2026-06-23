@@ -37,7 +37,7 @@ public struct SurfaceContinuityService: Sendable {
             )
         }
 
-        guard document.cadDocument.hasActiveSurfaceContinuityFeatures else {
+        guard document.cadDocument.hasActiveRenderableTopologyFeatures else {
             return SurfaceContinuityResult(
                 displayUnit: document.displayUnit,
                 diagnostics: [
@@ -294,31 +294,5 @@ public struct SurfaceContinuityService: Sendable {
             }
         }
         .joined(separator: "/")
-    }
-}
-
-private extension CADDocument {
-    var hasActiveSurfaceContinuityFeatures: Bool {
-        designGraph.order.contains { featureID in
-            guard let feature = designGraph.nodes[featureID], !feature.isSuppressed else {
-                return false
-            }
-            switch feature.operation {
-            case .sketch:
-                return false
-            case .extrude:
-                return true
-            case .sweep:
-                return true
-            case .polySpline:
-                return true
-            case .faceLoopOffset:
-                return true
-            case .edgeOffset:
-                return true
-            case .faceKnife:
-                return true
-            }
-        }
     }
 }

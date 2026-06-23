@@ -68,6 +68,13 @@ public enum AutomationCommand: Codable, Equatable, Sendable {
         kind: ObjectDimensionKind,
         value: CADExpression
     )
+    case addSelectionDimension(
+        name: String?,
+        kind: SelectionDimensionKind,
+        first: SelectionTarget,
+        second: SelectionTarget,
+        target: CADExpression
+    )
     case addSketchConstraint(featureID: FeatureID, constraint: SketchConstraint)
     case createBridgeCurve(
         featureID: FeatureID,
@@ -359,6 +366,14 @@ public enum AutomationCommand: Codable, Equatable, Sendable {
                 target: target,
                 kind: kind,
                 value: value
+            )
+        case .addSelectionDimension(let name, let kind, let first, let second, let target):
+            .addSelectionDimension(
+                name: name,
+                kind: kind,
+                first: first,
+                second: second,
+                target: target
             )
         case .addSketchConstraint(let featureID, let constraint):
             .addSketchConstraint(

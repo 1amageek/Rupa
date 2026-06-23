@@ -7,7 +7,7 @@ public struct ViewportSurfaceContinuityOverlay: Equatable {
         public var start: Point3D
         public var end: Point3D
         public var edgePersistentName: String
-        public var continuity: SurfaceContinuityResult.ContinuityLevel
+        public var continuity: RupaCore.SurfaceContinuityResult.ContinuityLevel
         public var requiresCurvatureContinuitySolve: Bool
         public var normalAngle: Double?
 
@@ -16,7 +16,7 @@ public struct ViewportSurfaceContinuityOverlay: Equatable {
             start: Point3D,
             end: Point3D,
             edgePersistentName: String,
-            continuity: SurfaceContinuityResult.ContinuityLevel,
+            continuity: RupaCore.SurfaceContinuityResult.ContinuityLevel,
             requiresCurvatureContinuitySolve: Bool,
             normalAngle: Double? = nil
         ) {
@@ -45,7 +45,7 @@ public struct ViewportSurfaceContinuityOverlay: Equatable {
     }
 
     public static func build(
-        result: SurfaceContinuityResult?,
+        result: RupaCore.SurfaceContinuityResult?,
         scene: ViewportScene,
         selection: SelectionModel,
         document: DesignDocument
@@ -139,7 +139,7 @@ public struct ViewportSurfaceContinuityOverlay: Equatable {
     }
 
     private static func shouldShow(
-        _ adjacency: SurfaceContinuityResult.Adjacency,
+        _ adjacency: RupaCore.SurfaceContinuityResult.Adjacency,
         selectedGeneratedNames: Set<String>
     ) -> Bool {
         guard selectedGeneratedNames.isEmpty == false else {
@@ -157,7 +157,7 @@ public struct ViewportSurfaceContinuityOverlay: Equatable {
     }
 
     private static func resolvedEdge(
-        for adjacency: SurfaceContinuityResult.Adjacency,
+        for adjacency: RupaCore.SurfaceContinuityResult.Adjacency,
         edgeLookup: [String: EdgeRecord]
     ) -> EdgeRecord? {
         for persistentName in adjacency.edgePersistentNames {

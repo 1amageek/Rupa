@@ -540,6 +540,16 @@ public final class AgentServer: AgentClientProtocol {
             failureMode: "Rejects non-body targets, unsupported edge topology, unsupported dimension kinds, invalid values, non-extruded sources, and stale generations before mutation."
         ),
         capability(
+            "addSelectionDimension",
+            category: .solid,
+            summary: "Add a persistent CAD selection dimension between measurable topology or sketch curve targets without storing it as Rupa product metadata.",
+            access: .automationCommand,
+            mutatesDocument: true,
+            discovery: [.topologySummary, .sketchEntitySummary, .selectionDimensionEvaluation],
+            targets: [.face, .edge, .vertex, .sketchEntity, .sketchPointHandle],
+            failureMode: "Rejects object-wide targets, profile regions, unresolved generated topology, unsupported sketch point handles, invalid target quantities, and stale generations before mutation."
+        ),
+        capability(
             "convertSketchLineToArc",
             category: .sourceCurveEditing,
             summary: "Convert a selected source line into a circular arc with a signed sagitta.",
@@ -781,6 +791,16 @@ public final class AgentServer: AgentClientProtocol {
             discovery: [.sketchDimensionSummary, .sketchEntitySummary, .topologySummary],
             targets: [.sketchEntity, .edge],
             failureMode: "Rejects stale generations, unsupported topology targets, unresolved source sketch curves, and invalid source expressions before returning candidates."
+        ),
+        capability(
+            "selectionDimensionEvaluation",
+            category: .read,
+            summary: "Evaluate persistent CAD selection dimensions stored in the SwiftCAD document source.",
+            access: .agentRequest,
+            mutatesDocument: false,
+            discovery: [.selectionDimensionEvaluation, .topologySummary, .sketchEntitySummary],
+            targets: [.document, .face, .edge, .vertex, .sketchEntity, .sketchPointHandle],
+            failureMode: "Rejects stale generations, invalid CAD source, unresolved selection references, or missing dimension IDs before returning measured residuals."
         ),
         capability(
             "resolveSnap",
@@ -1115,6 +1135,16 @@ public final class AgentServer: AgentClientProtocol {
                     try SketchDimensionSummaryService().summarize(
                         document: session.document,
                         targets: resolvedTargets,
+                        objectRegistry: session.objectRegistry
+                    )
+                )
+            case let .selectionDimensionEvaluation(sessionID, dimensionID, expectedGeneration):
+                let session = try registry.session(id: sessionID)
+                try session.store.requireGeneration(expectedGeneration)
+                return .selectionDimensionEvaluation(
+                    try SelectionDimensionService().evaluate(
+                        document: session.document,
+                        dimensionID: dimensionID,
                         objectRegistry: session.objectRegistry
                     )
                 )

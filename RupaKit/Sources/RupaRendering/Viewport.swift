@@ -48,7 +48,7 @@ public struct Viewport: View {
     @State private var orbitBasis: ViewportProjectionBasis?
     @State private var projectionTransition: ViewportProjectionTransition?
     @State private var modifierFlags: ViewportInputModifierFlags = ViewportInputModifierFlags()
-    @State private var reportedSnapCandidateKind: SnapCandidateKind?
+    @State private var reportedSnapCandidateKind: RupaCore.SnapCandidateKind?
     @State private var selectedAxis: ViewportCoordinateAxis?
     @State private var hoveredCanvasHit: ViewportHit?
     @State private var hoveredModelPoint: Point2D?
@@ -62,7 +62,7 @@ public struct Viewport: View {
     private let selectionDragPreviewTargets: [SelectionTarget]
     private let surfaceAnalysis: SurfaceAnalysisResult?
     private let surfaceAnalysisOptions: ViewportSurfaceAnalysisOptions
-    private let surfaceContinuity: SurfaceContinuityResult?
+    private let surfaceContinuity: RupaCore.SurfaceContinuityResult?
     private let curveCurvatureDisplays: [SelectionComponentID: CurveCurvatureDisplay]
     private let pointDisplays: [SelectionComponentID: PointDisplay]
     private let snapResolutionOptions: SnapResolutionOptions?
@@ -100,7 +100,7 @@ public struct Viewport: View {
     private let onPolySplineSurfaceVertexSlideDrag: ((ViewportPolySplineSurfaceVertexSlideDragTarget) -> Void)?
     private let onCommandConfirm: (() -> Void)?
     private let onHover: ((ViewportHit?) -> Void)?
-    private let onSnapCandidateKindChange: ((SnapCandidateKind?) -> Void)?
+    private let onSnapCandidateKindChange: ((RupaCore.SnapCandidateKind?) -> Void)?
     private let onProjectionBasisChange: ((ViewportProjectionBasis) -> Void)?
 
     public init(
@@ -112,7 +112,7 @@ public struct Viewport: View {
         selectionDragPreviewTargets: [SelectionTarget] = [],
         surfaceAnalysis: SurfaceAnalysisResult? = nil,
         surfaceAnalysisOptions: ViewportSurfaceAnalysisOptions = ViewportSurfaceAnalysisOptions(),
-        surfaceContinuity: SurfaceContinuityResult? = nil,
+        surfaceContinuity: RupaCore.SurfaceContinuityResult? = nil,
         curveCurvatureDisplays: [SelectionComponentID: CurveCurvatureDisplay] = [:],
         pointDisplays: [SelectionComponentID: PointDisplay] = [:],
         snapResolutionOptions: SnapResolutionOptions? = nil,
@@ -150,7 +150,7 @@ public struct Viewport: View {
         onPolySplineSurfaceVertexSlideDrag: ((ViewportPolySplineSurfaceVertexSlideDragTarget) -> Void)? = nil,
         onCommandConfirm: (() -> Void)? = nil,
         onHover: ((ViewportHit?) -> Void)? = nil,
-        onSnapCandidateKindChange: ((SnapCandidateKind?) -> Void)? = nil,
+        onSnapCandidateKindChange: ((RupaCore.SnapCandidateKind?) -> Void)? = nil,
         onProjectionBasisChange: ((ViewportProjectionBasis) -> Void)? = nil
     ) {
         self.document = document
@@ -1177,7 +1177,7 @@ public struct Viewport: View {
         }
     }
 
-    private func publishSnapCandidateKind(_ kind: SnapCandidateKind?) {
+    private func publishSnapCandidateKind(_ kind: RupaCore.SnapCandidateKind?) {
         guard reportedSnapCandidateKind != kind else {
             return
         }

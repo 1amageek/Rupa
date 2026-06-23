@@ -68,6 +68,9 @@ public struct TopologySummaryResult: Codable, Equatable, Sendable {
         public var curveRadius: Double?
         public var curveParameterXAxis: Point?
         public var curveParameterYAxis: Point?
+        public var curveDegree: Int?
+        public var curveControlPointCount: Int?
+        public var curveIsRational: Bool?
         public var edgeParameterRange: ParameterRange?
         public var surfaceOrigin: Point?
         public var surfaceNormal: Point?
@@ -104,6 +107,9 @@ public struct TopologySummaryResult: Codable, Equatable, Sendable {
             curveRadius: Double? = nil,
             curveParameterXAxis: Point? = nil,
             curveParameterYAxis: Point? = nil,
+            curveDegree: Int? = nil,
+            curveControlPointCount: Int? = nil,
+            curveIsRational: Bool? = nil,
             edgeParameterRange: ParameterRange? = nil,
             surfaceOrigin: Point? = nil,
             surfaceNormal: Point? = nil,
@@ -139,6 +145,9 @@ public struct TopologySummaryResult: Codable, Equatable, Sendable {
             self.curveRadius = curveRadius
             self.curveParameterXAxis = curveParameterXAxis
             self.curveParameterYAxis = curveParameterYAxis
+            self.curveDegree = curveDegree
+            self.curveControlPointCount = curveControlPointCount
+            self.curveIsRational = curveIsRational
             self.edgeParameterRange = edgeParameterRange
             self.surfaceOrigin = surfaceOrigin
             self.surfaceNormal = surfaceNormal

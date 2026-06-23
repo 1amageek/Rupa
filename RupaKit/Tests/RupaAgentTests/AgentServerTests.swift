@@ -69,8 +69,10 @@ import SwiftCAD
     #expect(capabilities.contains("setSketchArcParameters"))
     #expect(capabilities.contains("setSketchEntityDimension"))
     #expect(capabilities.contains("setObjectDimension"))
+    #expect(capabilities.contains("addSelectionDimension"))
     #expect(capabilities.contains("objectDimensionSummary"))
     #expect(capabilities.contains("sketchDimensionSummary"))
+    #expect(capabilities.contains("selectionDimensionEvaluation"))
     #expect(capabilities.contains("convertSketchLineToArc"))
     #expect(capabilities.contains("convertSketchLineToSpline"))
     #expect(capabilities.contains("reverseSketchCurve"))
@@ -134,8 +136,12 @@ import SwiftCAD
     let pointDisplay = try #require(descriptors.first { $0.name == "setPointDisplay" })
     let sketchEntityDimension = try #require(descriptors.first { $0.name == "setSketchEntityDimension" })
     let objectDimension = try #require(descriptors.first { $0.name == "setObjectDimension" })
+    let selectionDimension = try #require(descriptors.first { $0.name == "addSelectionDimension" })
     let objectDimensionSummary = try #require(descriptors.first { $0.name == "objectDimensionSummary" })
     let sketchDimensionSummary = try #require(descriptors.first { $0.name == "sketchDimensionSummary" })
+    let selectionDimensionEvaluation = try #require(
+        descriptors.first { $0.name == "selectionDimensionEvaluation" }
+    )
     let sketchSummary = try #require(descriptors.first { $0.name == "sketchEntitySummary" })
     let curveAnalysis = try #require(descriptors.first { $0.name == "curveAnalysis" })
     let topology = try #require(descriptors.first { $0.name == "topologySummary" })
@@ -481,6 +487,15 @@ import SwiftCAD
     #expect(objectDimension.discovery.contains(.objectDimensionSummary))
     #expect(objectDimension.targets == [.body, .face, .edge])
 
+    #expect(selectionDimension.category == .solid)
+    #expect(selectionDimension.mutatesDocument)
+    #expect(selectionDimension.access == .automationCommand)
+    #expect(selectionDimension.discovery.contains(.selectionDimensionEvaluation))
+    #expect(selectionDimension.discovery.contains(.topologySummary))
+    #expect(selectionDimension.discovery.contains(.sketchEntitySummary))
+    #expect(selectionDimension.targets == [.face, .edge, .vertex, .sketchEntity, .sketchPointHandle])
+    #expect(selectionDimension.summary.contains("SwiftCAD document source") || selectionDimension.summary.contains("CAD selection dimension"))
+
     #expect(objectDimensionSummary.category == .read)
     #expect(!objectDimensionSummary.mutatesDocument)
     #expect(objectDimensionSummary.access == .agentRequest)
@@ -497,6 +512,12 @@ import SwiftCAD
     #expect(sketchDimensionSummary.discovery.contains(.topologySummary))
     #expect(sketchDimensionSummary.targets == [.sketchEntity, .edge])
     #expect(sketchDimensionSummary.summary.contains("Dimension command candidates"))
+
+    #expect(selectionDimensionEvaluation.category == .read)
+    #expect(!selectionDimensionEvaluation.mutatesDocument)
+    #expect(selectionDimensionEvaluation.access == .agentRequest)
+    #expect(selectionDimensionEvaluation.discovery.contains(.selectionDimensionEvaluation))
+    #expect(selectionDimensionEvaluation.targets == [.document, .face, .edge, .vertex, .sketchEntity, .sketchPointHandle])
 
     #expect(topology.category == .read)
     #expect(!topology.mutatesDocument)
@@ -693,6 +714,12 @@ import SwiftCAD
         targets: [sketchDimensionTarget],
         expectedGeneration: DocumentGeneration(2)
     )
+    let selectionDimensionID = SelectionDimensionID()
+    let selectionDimensionRequest = AgentRequest.selectionDimensionEvaluation(
+        sessionID: sessionID,
+        dimensionID: selectionDimensionID,
+        expectedGeneration: DocumentGeneration(2)
+    )
     let expressionRequest = AgentRequest.setParameterExpression(
         sessionID: sessionID,
         name: "height",
@@ -756,6 +783,9 @@ import SwiftCAD
             ]
         )
     )
+    let selectionDimensionResponse = AgentResponse.selectionDimensionEvaluation(
+        SelectionDimensionEvaluation(measurements: [])
+    )
     let qualityAssessmentResponse = AgentResponse.cadInteractionQualityAssessment(
         CADInteractionQualityAssessmentService().assess()
     )
@@ -767,11 +797,13 @@ import SwiftCAD
     #expect(try codec.decodeRequest(from: try codec.encode(constructionPlaneRequest)) == constructionPlaneRequest)
     #expect(try codec.decodeRequest(from: try codec.encode(objectDimensionRequest)) == objectDimensionRequest)
     #expect(try codec.decodeRequest(from: try codec.encode(sketchDimensionRequest)) == sketchDimensionRequest)
+    #expect(try codec.decodeRequest(from: try codec.encode(selectionDimensionRequest)) == selectionDimensionRequest)
     #expect(try codec.decodeRequest(from: try codec.encode(expressionRequest)) == expressionRequest)
     #expect(try codec.decodeResponse(from: try codec.encode(listResponse)) == listResponse)
     #expect(try codec.decodeResponse(from: try codec.encode(constructionPlaneResponse)) == constructionPlaneResponse)
     #expect(try codec.decodeResponse(from: try codec.encode(objectDimensionResponse)) == objectDimensionResponse)
     #expect(try codec.decodeResponse(from: try codec.encode(sketchDimensionResponse)) == sketchDimensionResponse)
+    #expect(try codec.decodeResponse(from: try codec.encode(selectionDimensionResponse)) == selectionDimensionResponse)
     #expect(try codec.decodeResponse(from: try codec.encode(qualityAssessmentResponse)) == qualityAssessmentResponse)
 }
 
@@ -1563,9 +1595,9 @@ import SwiftCAD
         expectedGeneration: DocumentGeneration(4)
     )
     let surfaceContinuityResponse = AgentResponse.surfaceContinuitySummary(
-        SurfaceContinuityResult(
+        RupaCore.SurfaceContinuityResult(
             displayUnit: .millimeter,
-            counts: SurfaceContinuityResult.Counts(
+            counts: RupaCore.SurfaceContinuityResult.Counts(
                 bSplineFaceCount: 2,
                 sharedEdgeCount: 1,
                 g0AdjacencyCount: 0,
@@ -1574,7 +1606,7 @@ import SwiftCAD
                 unresolvedG2AdjacencyCount: 0
             ),
             adjacencies: [
-                SurfaceContinuityResult.Adjacency(
+                RupaCore.SurfaceContinuityResult.Adjacency(
                     edgeID: UUID().uuidString,
                     edgePersistentNames: ["feature:a/generated:polySpline/subshape:patch:0:edge:uMax"],
                     firstFaceID: UUID().uuidString,
@@ -1723,6 +1755,70 @@ import SwiftCAD
     #expect(result.didMutate)
     #expect(result.generation == DocumentGeneration(1))
     #expect(session.document.cadDocument.metadata.name == "Live")
+}
+
+@MainActor
+@Test func agentAddsAndEvaluatesPersistentSelectionDimension() async throws {
+    var document = DesignDocument.empty()
+    let featureID = try document.createLineSketch(
+        name: "Agent Line",
+        plane: .xy,
+        start: SketchPoint(
+            x: .length(0.0, .millimeter),
+            y: .length(0.0, .millimeter)
+        ),
+        end: SketchPoint(
+            x: .length(16.0, .millimeter),
+            y: .length(0.0, .millimeter)
+        )
+    )
+    let targets = try agentLineEndpointTargets(in: document, featureID: featureID)
+    let server = AgentServer()
+    let sessionID = UUID()
+    let session = EditorSession(document: document)
+    server.register(session: session, id: sessionID)
+
+    let addResponse = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .addSelectionDimension(
+                name: "Agent Length",
+                kind: .distance,
+                first: targets.start,
+                second: targets.end,
+                target: .length(16.0, .millimeter)
+            ),
+            expectedGeneration: DocumentGeneration(0)
+        )
+    )
+
+    guard case .command(let addResult) = addResponse else {
+        #expect(Bool(false))
+        return
+    }
+    let dimensionID = try #require(addResult.addedSelectionDimensionID)
+    #expect(addResult.commandName == "addSelectionDimension")
+    #expect(addResult.didMutate)
+    #expect(session.document.cadDocument.selectionDimensions.map(\.id) == [dimensionID])
+    #expect(session.document.productMetadata.measurements.isEmpty)
+
+    let evaluationResponse = server.handle(
+        .selectionDimensionEvaluation(
+            sessionID: sessionID,
+            dimensionID: dimensionID,
+            expectedGeneration: DocumentGeneration(1)
+        )
+    )
+
+    guard case .selectionDimensionEvaluation(let evaluation) = evaluationResponse else {
+        #expect(Bool(false))
+        return
+    }
+    let measurement = try #require(evaluation.measurements.first)
+    #expect(evaluation.measurements.count == 1)
+    #expect(measurement.dimension.id == dimensionID)
+    #expect(measurement.measured == .length(0.016, unit: .meter))
+    #expect(abs(measurement.residual.value) <= 1.0e-12)
 }
 
 @Test func agentCreatesReadsAndActivatesConstructionPlanes() async throws {
@@ -10639,6 +10735,31 @@ private func surfaceVectorCross(
         x: lhs.y * rhs.z - lhs.z * rhs.y,
         y: lhs.z * rhs.x - lhs.x * rhs.z,
         z: lhs.x * rhs.y - lhs.y * rhs.x
+    )
+}
+
+private func agentLineEndpointTargets(
+    in document: DesignDocument,
+    featureID: FeatureID
+) throws -> (start: SelectionTarget, end: SelectionTarget) {
+    let summary = try SketchEntitySummaryService().summarize(document: document)
+    let entry = try #require(summary.entries.first {
+        $0.sourceFeatureID == featureID.description && $0.entityKind == "line"
+    })
+    let sceneNodeIDString = try #require(entry.sceneNodeID)
+    let sceneNodeUUID = try #require(UUID(uuidString: sceneNodeIDString))
+    let sceneNodeID = SceneNodeID(sceneNodeUUID)
+    let startHandle = try #require(entry.pointHandles.first { $0.handle == .lineStart })
+    let endHandle = try #require(entry.pointHandles.first { $0.handle == .lineEnd })
+    return (
+        start: SelectionTarget(
+            sceneNodeID: sceneNodeID,
+            component: .sketchEntity(SelectionComponentID(rawValue: startHandle.selectionComponentID))
+        ),
+        end: SelectionTarget(
+            sceneNodeID: sceneNodeID,
+            component: .sketchEntity(SelectionComponentID(rawValue: endHandle.selectionComponentID))
+        )
     )
 }
 
