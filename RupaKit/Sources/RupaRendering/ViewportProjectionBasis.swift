@@ -1,6 +1,5 @@
 import CoreGraphics
 import RupaCore
-import SwiftCAD
 
 public enum ViewportProjectionMode: Equatable, Sendable {
     case isometric
@@ -107,7 +106,12 @@ public struct ViewportProjectionBasis: Equatable, Sendable {
 
     public static func aligned(to plane: SketchPlane, tolerance: Double = 1.0e-12) throws -> ViewportProjectionBasis {
         let coordinateSystem = try SketchPlaneCoordinateSystem(plane: plane, tolerance: tolerance)
-        return basis(horizontal: coordinateSystem.u, vertical: -coordinateSystem.v)
+        let vertical = Vector3D(
+            x: -coordinateSystem.v.x,
+            y: -coordinateSystem.v.y,
+            z: -coordinateSystem.v.z
+        )
+        return basis(horizontal: coordinateSystem.u, vertical: vertical)
     }
 
     public func endpoint(

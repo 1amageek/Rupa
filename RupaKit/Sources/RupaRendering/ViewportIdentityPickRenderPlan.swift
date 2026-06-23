@@ -1,6 +1,5 @@
 import CoreGraphics
 import RupaCore
-import SwiftCAD
 
 public enum ViewportIdentityPickPrimitive: Equatable, Sendable {
     case polygon(points: [CGPoint])

@@ -1,5 +1,5 @@
 import CoreGraphics
-import SwiftCAD
+import RupaCore
 
 struct ViewportSurfaceVertexAxisDragMapping {
     static func modelAmount(

@@ -1,5 +1,4 @@
 import RupaCore
-import SwiftCAD
 
 public struct ViewportSurfaceContinuityOverlay: Equatable {
     public struct Item: Equatable, Identifiable {

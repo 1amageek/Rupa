@@ -1,6 +1,5 @@
 import CoreGraphics
 import RupaCore
-import SwiftCAD
 
 public struct ViewportSelectionRectangleHitTester: Sendable {
     public var sketchPadding: CGFloat

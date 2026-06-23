@@ -1,6 +1,5 @@
 import CoreGraphics
 import RupaCore
-import SwiftCAD
 
 struct ViewportPolySplineSurfaceVertexSlideInput: Equatable {
     var target: PolySplineSurfaceVertexTarget

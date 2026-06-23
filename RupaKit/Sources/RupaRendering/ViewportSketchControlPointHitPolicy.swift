@@ -1,5 +1,4 @@
 import RupaCore
-import SwiftCAD
 
 public struct ViewportSketchControlPointHitPolicy: Equatable, Sendable {
     public struct Target: Equatable, Hashable, Sendable {

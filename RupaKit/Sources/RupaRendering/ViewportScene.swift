@@ -1,6 +1,5 @@
 import CoreGraphics
 import RupaCore
-import SwiftCAD
 
 public enum ViewportSelectableKind: String, Equatable, Sendable {
     case sketch
@@ -327,7 +326,7 @@ public struct ViewportModelDrag: Equatable, Sendable {
     public init(
         start: Point2D,
         end: Point2D,
-        sketchPlane: SketchPlane = .xy,
+        sketchPlane: SketchPlane = .defaultWorkspacePlane,
         modifierFlags: ViewportInputModifierFlags = ViewportInputModifierFlags(),
         startWorldPoint: Point3D? = nil,
         endWorldPoint: Point3D? = nil
@@ -1119,7 +1118,7 @@ public struct ViewportModelCoordinateMapper {
     public func modelDrag(
         from start: CGPoint,
         to end: CGPoint,
-        sketchPlane: SketchPlane = .xy,
+        sketchPlane: SketchPlane = .defaultWorkspacePlane,
         modifierFlags: ViewportInputModifierFlags = ViewportInputModifierFlags(),
         startWorldPoint: Point3D? = nil,
         endWorldPoint: Point3D? = nil
@@ -1503,7 +1502,7 @@ public struct ViewportCanvasTarget: Equatable, Sendable {
         hit: ViewportHit?,
         modelPoint: Point2D,
         modelWorldPoint: Point3D? = nil,
-        sketchPlane: SketchPlane = .xy,
+        sketchPlane: SketchPlane = .defaultWorkspacePlane,
         selectionIntent: ViewportSelectionIntent = .replace,
         modifierFlags: ViewportInputModifierFlags = ViewportInputModifierFlags()
     ) {
@@ -2508,11 +2507,16 @@ public struct ViewportSceneBuilder {
                         kind: .body,
                         document: document
                     )
+                    let direction = Vector3D(
+                        x: pathVector.x / pathLength,
+                        y: pathVector.y / pathLength,
+                        z: pathVector.z / pathLength
+                    )
                     let component = bodyComponent(
                         sketch: sketch,
                         bounds: bounds,
                         depthMeters: pathLength * distanceFraction,
-                        direction: .vector(pathVector / pathLength),
+                        direction: .vector(direction),
                         parameters: document.cadDocument.parameters,
                         declaredObjectTypeID: object?.typeID,
                         declaredProperties: object?.properties ?? ObjectPropertySet()
@@ -2735,8 +2739,8 @@ public struct ViewportSceneBuilder {
     }
 
     private func orderedOuterLoopPoints(
-        for face: Face,
-        in model: BRepModel
+        for face: CADFace,
+        in model: CADBRepModel
     ) -> [Point3D]? {
         guard let loopID = face.loops.first(where: { loopID in
             model.loops[loopID]?.role == .outer
@@ -3093,13 +3097,12 @@ public struct ViewportSceneBuilder {
         featureID: FeatureID,
         parameters: ParameterTable
     ) -> [ViewportSketchRegion] {
-        let profiles: [Profile]
+        let profiles: [CADProfile]
         do {
-            let resolvedParameters = try ParameterResolver().resolve(parameters)
             profiles = try CircleAwareSketchProfileExtractor().extractProfiles(
                 from: sketch,
                 sourceFeatureID: featureID,
-                parameters: resolvedParameters
+                parameters: parameters
             )
         } catch {
             return []
@@ -3119,7 +3122,7 @@ public struct ViewportSceneBuilder {
         }
     }
 
-    private func viewportRegionPoints(for profile: Profile) -> [CGPoint] {
+    private func viewportRegionPoints(for profile: CADProfile) -> [CGPoint] {
         profile.vertices.compactMap { vertex in
             guard let localPoint = localPoint(vertex, on: profile.plane) else {
                 return nil
@@ -3353,7 +3356,11 @@ public struct ViewportSceneBuilder {
               let endPoint = modelPoint(from: end, on: sketch.plane) else {
             return nil
         }
-        let vector = endPoint - startPoint
+        let vector = Vector3D(
+            x: endPoint.x - startPoint.x,
+            y: endPoint.y - startPoint.y,
+            z: endPoint.z - startPoint.z
+        )
         return vector.length > 1.0e-9 ? vector : nil
     }
 
@@ -3373,7 +3380,11 @@ public struct ViewportSceneBuilder {
                 let helper = abs(normal.z) < 0.9 ? Vector3D.unitZ : Vector3D.unitY
                 let u = try helper.cross(normal).normalized(tolerance: 1.0e-9)
                 let v = normal.cross(u)
-                return plane.origin + (u * x) + (v * y)
+                return Point3D(
+                    x: plane.origin.x + u.x * x + v.x * y,
+                    y: plane.origin.y + u.y * x + v.y * y,
+                    z: plane.origin.z + u.z * x + v.z * y
+                )
             } catch {
                 return nil
             }

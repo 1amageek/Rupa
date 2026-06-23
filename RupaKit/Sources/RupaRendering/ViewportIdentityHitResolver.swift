@@ -1,6 +1,5 @@
 import CoreGraphics
 import RupaCore
-import SwiftCAD
 
 @MainActor
 public final class ViewportIdentityHitResolver {

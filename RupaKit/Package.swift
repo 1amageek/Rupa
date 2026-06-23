@@ -81,7 +81,6 @@ let package = Package(
             name: "RupaRendering",
             dependencies: [
                 "RupaCore",
-                .product(name: "SwiftCAD", package: "swift-CAD"),
             ]
         ),
         .target(

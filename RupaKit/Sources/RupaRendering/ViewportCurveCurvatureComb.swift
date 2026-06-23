@@ -1,6 +1,5 @@
 import CoreGraphics
 import RupaCore
-import SwiftCAD
 
 public struct ViewportCurveCurvatureComb: Equatable {
     public var samples: [CurveEvaluationSample]
@@ -19,19 +18,19 @@ public struct ViewportCurveCurvatureComb: Equatable {
             samples = []
         case .circle(_, let center, let radiusMeters):
             samples = evaluator.circleSamples(
-                center: CADCore.Point2D(x: Double(center.x), y: Double(center.y)),
+                center: Point2D(x: Double(center.x), y: Double(center.y)),
                 radius: radiusMeters
             )
         case .arc(_, let center, let radiusMeters, let startAngleRadians, let endAngleRadians):
             samples = evaluator.arcSamples(
-                center: CADCore.Point2D(x: Double(center.x), y: Double(center.y)),
+                center: Point2D(x: Double(center.x), y: Double(center.y)),
                 radius: radiusMeters,
                 startAngle: startAngleRadians,
                 endAngle: endAngleRadians
             )
         case .spline(_, _, let controlPoints, _):
             let points = controlPoints.map { point in
-                CADCore.Point2D(x: Double(point.x), y: Double(point.y))
+                Point2D(x: Double(point.x), y: Double(point.y))
             }
             samples = evaluator.splineSamples(for: points)
         }

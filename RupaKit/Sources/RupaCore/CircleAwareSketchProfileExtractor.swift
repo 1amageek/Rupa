@@ -141,6 +141,19 @@ public struct CircleAwareSketchProfileExtractor: SketchProfileExtracting {
         }
     }
 
+    public func extractProfiles(
+        from sketch: Sketch,
+        sourceFeatureID: FeatureID,
+        parameters: ParameterTable
+    ) throws -> [CADProfile] {
+        let resolvedParameters = try resolver.resolve(parameters)
+        return try extractProfiles(
+            from: sketch,
+            sourceFeatureID: sourceFeatureID,
+            parameters: resolvedParameters
+        )
+    }
+
     private func resolve(_ point: SketchPoint, parameters: ResolvedParameterTable) throws -> Point2D {
         let x = try resolver.evaluate(point.x, parameters: parameters, variables: [:])
         let y = try resolver.evaluate(point.y, parameters: parameters, variables: [:])

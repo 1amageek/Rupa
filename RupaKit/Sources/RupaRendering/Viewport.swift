@@ -1,6 +1,5 @@
 import Foundation
 import RupaCore
-import SwiftCAD
 import SwiftUI
 
 public struct Viewport: View {
@@ -1331,7 +1330,11 @@ public struct Viewport: View {
         guard halfLength > 1.0e-12, direction.length > 1.0e-12 else {
             return
         }
-        let offset = direction * halfLength
+        let offset = Vector3D(
+            x: direction.x * halfLength,
+            y: direction.y * halfLength,
+            z: direction.z * halfLength
+        )
         let start = layout.project(Point3D(
             x: position.x - offset.x,
             y: position.y - offset.y,

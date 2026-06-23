@@ -1,5 +1,4 @@
 import RupaCore
-import SwiftCAD
 
 public struct ViewportSketchEntitySelectionTarget: Equatable, Sendable {
     public var featureID: FeatureID
