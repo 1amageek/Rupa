@@ -51,6 +51,22 @@ public struct AgentCapabilityDescriptor: Codable, Equatable, Sendable {
         case constructionPlane
     }
 
+    public struct OptionAxis: Codable, Equatable, Sendable {
+        public let name: String
+        public let supportedValues: [String]
+        public let notes: [String]
+
+        public init(
+            name: String,
+            supportedValues: [String],
+            notes: [String] = []
+        ) {
+            self.name = name
+            self.supportedValues = supportedValues
+            self.notes = notes
+        }
+    }
+
     public let name: String
     public let category: Category
     public let summary: String
@@ -61,6 +77,7 @@ public struct AgentCapabilityDescriptor: Codable, Equatable, Sendable {
     public let discovery: [Discovery]
     public let targets: [Target]
     public let failureMode: String
+    public let optionMatrix: [OptionAxis]
 
     public init(
         name: String,
@@ -72,7 +89,8 @@ public struct AgentCapabilityDescriptor: Codable, Equatable, Sendable {
         requiresExpectedGeneration: Bool = true,
         discovery: [Discovery] = [],
         targets: [Target] = [],
-        failureMode: String
+        failureMode: String,
+        optionMatrix: [OptionAxis] = []
     ) {
         self.name = name
         self.category = category
@@ -84,5 +102,6 @@ public struct AgentCapabilityDescriptor: Codable, Equatable, Sendable {
         self.discovery = discovery
         self.targets = targets
         self.failureMode = failureMode
+        self.optionMatrix = optionMatrix
     }
 }

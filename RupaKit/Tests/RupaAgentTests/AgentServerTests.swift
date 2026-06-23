@@ -279,9 +279,31 @@ import SwiftCAD
     #expect(sweep.failureMode.contains("exact swept-sheet side surfaces"))
     #expect(sweep.failureMode.contains("polygonal swept-sheet"))
     #expect(sweep.failureMode.contains("targetless boolean"))
+    #expect(sweep.failureMode.contains("boolean target operations with sheet output"))
     #expect(sweep.failureMode.contains("z-through rectangular-frame"))
     #expect(sweep.failureMode.contains("overconstrained guide sets"))
     #expect(sweep.failureMode.contains("unsupported evaluation"))
+    #expect(sweep.optionMatrix.map(\.name) == [
+        "alignment",
+        "guideMethod",
+        "booleanOperation",
+        "resultKind",
+        "cornerStyle",
+        "simplify",
+    ])
+    let sweepGuideAxis = try #require(sweep.optionMatrix.first { $0.name == "guideMethod" })
+    let sweepBooleanAxis = try #require(sweep.optionMatrix.first { $0.name == "booleanOperation" })
+    let sweepResultAxis = try #require(sweep.optionMatrix.first { $0.name == "resultKind" })
+    let sweepCornerAxis = try #require(sweep.optionMatrix.first { $0.name == "cornerStyle" })
+    let sweepSimplifyAxis = try #require(sweep.optionMatrix.first { $0.name == "simplify" })
+    #expect(sweepGuideAxis.supportedValues == ["point", "chord", "curve"])
+    #expect(sweepGuideAxis.notes.contains { $0.contains("mean-value cage rail deformation") })
+    #expect(sweepBooleanAxis.supportedValues == ["newBody", "union", "difference", "intersect", "slice"])
+    #expect(sweepBooleanAxis.notes.contains { $0.contains("solid resultKind") })
+    #expect(sweepResultAxis.supportedValues == ["solid", "sheet"])
+    #expect(sweepResultAxis.notes.contains { $0.contains("new-body outputs only") })
+    #expect(sweepCornerAxis.supportedValues == ["mitre"])
+    #expect(sweepSimplifyAxis.supportedValues == ["false"])
 
     #expect(polySpline.category == .solid)
     #expect(polySpline.mutatesDocument)

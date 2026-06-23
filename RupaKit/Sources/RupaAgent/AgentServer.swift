@@ -637,7 +637,54 @@ public final class AgentServer: AgentClientProtocol {
             mutatesDocument: true,
             discovery: [.sketchEntitySummary],
             targets: [.profile, .sketchEntity, .body],
-            failureMode: "Rejects missing profile, path, guide, or target body features, duplicate references, invalid option quantities, profile-plane degenerate parallel alignment, round corner style, simplify output, stale generations, targetless boolean operations, new-body target references, collapsed section scale, non-contacting point/chord guide starts, curve-guide path/profile contact failures, conflicting signed-axis rail guides, flipped or self-intersecting bilinear quadrilateral or mean-value cage rail guides, overconstrained guide sets, and degenerate swept topology before committing invalid geometry through the shared typed sweep evaluation contract; evaluates straight-path normal alignment as a path-normal section sweep, straight-path parallel identity sections as profile-plane-preserving exact extrusion when the path has a profile-normal component, straight-path parallel transformed or guided sections as profile-plane parallel section sweeps when the path has a profile-normal component, curved-path parallel alignment as a profile-plane parallel section sweep with twist, scale, and profile-plane guide projection, straight-path exact swept-sheet side surfaces for identity section transforms without guides, polygonal swept-solid new-body subsets for curved, twisted, scaled, compatible multiple point/chord guide constraints, non-uniform affine, signed-axis, convex quadrilateral bilinear, and convex mean-value cage point-guide rail deformation, and curve-guide contact constraints, and polygonal swept-sheet subsets for curved, transformed, or guided sheet inputs; evaluates exact box-prism union, difference, intersection, and slice boolean sweeps with target replacement, separated-fragment difference output, z-through rectangular-frame difference output, orthogonal cell-union connected box difference output, or keep-tools generated-name coverage; reports unsupported evaluation for non-box boolean operands, connected boolean topology outside the axis-aligned box cell-union subset, exact swept surfaces outside the straight identity analytic-boundary subset, and guide constraints outside the affine, signed-axis, convex quadrilateral bilinear, convex mean-value cage, chord, or curve-contact subsets."
+            failureMode: "Rejects missing profile, path, guide, or target body features, duplicate references, invalid option quantities, profile-plane degenerate parallel alignment, round corner style, simplify output, boolean target operations with sheet output, stale generations, targetless boolean operations, new-body target references, collapsed section scale, non-contacting point/chord guide starts, curve-guide path/profile contact failures, conflicting signed-axis rail guides, flipped or self-intersecting bilinear quadrilateral or mean-value cage rail guides, overconstrained guide sets, and degenerate swept topology before committing invalid geometry through the shared typed sweep evaluation contract; evaluates straight-path normal alignment as a path-normal section sweep, straight-path parallel identity sections as profile-plane-preserving exact extrusion when the path has a profile-normal component, straight-path parallel transformed or guided sections as profile-plane parallel section sweeps when the path has a profile-normal component, curved-path parallel alignment as a profile-plane parallel section sweep with twist, scale, and profile-plane guide projection, straight-path exact swept-sheet side surfaces for identity section transforms without guides, polygonal swept-solid new-body subsets for curved, twisted, scaled, compatible multiple point/chord guide constraints, non-uniform affine, signed-axis, convex quadrilateral bilinear, and convex mean-value cage point-guide rail deformation, and curve-guide contact constraints, and polygonal swept-sheet subsets for curved, transformed, or guided sheet inputs; evaluates exact box-prism union, difference, intersection, and slice boolean sweeps with target replacement, separated-fragment difference output, z-through rectangular-frame difference output, orthogonal cell-union connected box difference output, or keep-tools generated-name coverage; reports unsupported evaluation for non-box boolean operands, connected boolean topology outside the axis-aligned box cell-union subset, exact swept surfaces outside the straight identity analytic-boundary subset, and guide constraints outside the affine, signed-axis, convex quadrilateral bilinear, convex mean-value cage, chord, or curve-contact subsets.",
+            optionMatrix: [
+                AgentCapabilityDescriptor.OptionAxis(
+                    name: "alignment",
+                    supportedValues: ["parallel", "normal"],
+                    notes: [
+                        "parallel preserves the profile plane when the path has a nonzero profile-normal component",
+                        "normal uses path-normal section frames"
+                    ]
+                ),
+                AgentCapabilityDescriptor.OptionAxis(
+                    name: "guideMethod",
+                    supportedValues: ["point", "chord", "curve"],
+                    notes: [
+                        "point supports similarity, non-uniform affine, signed-axis, bilinear quadrilateral, and mean-value cage rail deformation when guide geometry satisfies those contracts",
+                        "chord supports directional compatible guide rotation",
+                        "curve requires initial path/profile contact and validates curve-contact constraints"
+                    ]
+                ),
+                AgentCapabilityDescriptor.OptionAxis(
+                    name: "booleanOperation",
+                    supportedValues: ["newBody", "union", "difference", "intersect", "slice"],
+                    notes: [
+                        "target boolean operations require at least one target body",
+                        "newBody must not declare target bodies",
+                        "target boolean operations require solid resultKind"
+                    ]
+                ),
+                AgentCapabilityDescriptor.OptionAxis(
+                    name: "resultKind",
+                    supportedValues: ["solid", "sheet"],
+                    notes: [
+                        "sheet is supported for new-body outputs only",
+                        "straight identity sheets preserve exact analytic side surfaces for line and circular-arc profile boundaries",
+                        "curved, transformed, or guided sheet outputs are polygonal"
+                    ]
+                ),
+                AgentCapabilityDescriptor.OptionAxis(
+                    name: "cornerStyle",
+                    supportedValues: ["mitre"],
+                    notes: ["round is rejected until curved transition topology exists"]
+                ),
+                AgentCapabilityDescriptor.OptionAxis(
+                    name: "simplify",
+                    supportedValues: ["false"],
+                    notes: ["simplify is rejected so generated topology remains explicit and selectable"]
+                ),
+            ]
         ),
         capability(
             "createPolySplineSurface",
@@ -884,7 +931,8 @@ public final class AgentServer: AgentClientProtocol {
         requiresExpectedGeneration: Bool = true,
         discovery: [AgentCapabilityDescriptor.Discovery] = [],
         targets: [AgentCapabilityDescriptor.Target] = [],
-        failureMode: String
+        failureMode: String,
+        optionMatrix: [AgentCapabilityDescriptor.OptionAxis] = []
     ) -> AgentCapabilityDescriptor {
         AgentCapabilityDescriptor(
             name: name,
@@ -896,7 +944,8 @@ public final class AgentServer: AgentClientProtocol {
             requiresExpectedGeneration: requiresExpectedGeneration,
             discovery: discovery,
             targets: targets,
-            failureMode: failureMode
+            failureMode: failureMode,
+            optionMatrix: optionMatrix
         )
     }
 
