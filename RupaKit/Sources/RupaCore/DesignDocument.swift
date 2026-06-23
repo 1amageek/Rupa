@@ -1154,9 +1154,8 @@ public struct DesignDocument: Identifiable, Sendable {
         var candidateFeature = feature
         candidateFeature.operation = .sketch(candidateSketch)
         var candidateCADDocument = cadDocument
-        candidateCADDocument.designGraph.nodes[featureID] = candidateFeature
         do {
-            try candidateCADDocument.validate()
+            try candidateCADDocument.replaceFeature(candidateFeature)
         } catch {
             throw EditorError(
                 code: .referenceUnresolved,
@@ -1173,10 +1172,8 @@ public struct DesignDocument: Identifiable, Sendable {
         feature.operation = .sketch(sketch)
 
         var updatedCADDocument = cadDocument
-        updatedCADDocument.designGraph.nodes[featureID] = feature
-        updatedCADDocument.designGraph.revision = updatedCADDocument.designGraph.revision.advanced()
         do {
-            try updatedCADDocument.validate()
+            try updatedCADDocument.replaceFeature(feature)
         } catch {
             throw EditorError(
                 code: .referenceUnresolved,
@@ -1504,10 +1501,8 @@ public struct DesignDocument: Identifiable, Sendable {
         feature.operation = .extrude(extrude)
 
         var updatedCADDocument = cadDocument
-        updatedCADDocument.designGraph.nodes[featureID] = feature
-        updatedCADDocument.designGraph.revision = updatedCADDocument.designGraph.revision.advanced()
         do {
-            try updatedCADDocument.validate()
+            try updatedCADDocument.replaceFeature(feature)
         } catch {
             throw EditorError(
                 code: .referenceUnresolved,
@@ -1583,11 +1578,8 @@ public struct DesignDocument: Identifiable, Sendable {
         feature.operation = .extrude(extrude)
 
         var updatedCADDocument = cadDocument
-        updatedCADDocument.designGraph.nodes[extrude.profile.featureID] = profileFeature
-        updatedCADDocument.designGraph.nodes[featureID] = feature
-        updatedCADDocument.designGraph.revision = updatedCADDocument.designGraph.revision.advanced()
         do {
-            try updatedCADDocument.validate()
+            try updatedCADDocument.replaceFeatures([profileFeature, feature])
         } catch {
             throw EditorError(
                 code: .referenceUnresolved,
@@ -1646,11 +1638,8 @@ public struct DesignDocument: Identifiable, Sendable {
         feature.operation = .extrude(extrude)
 
         var updatedCADDocument = cadDocument
-        updatedCADDocument.designGraph.nodes[extrude.profile.featureID] = profileFeature
-        updatedCADDocument.designGraph.nodes[featureID] = feature
-        updatedCADDocument.designGraph.revision = updatedCADDocument.designGraph.revision.advanced()
         do {
-            try updatedCADDocument.validate()
+            try updatedCADDocument.replaceFeatures([profileFeature, feature])
         } catch {
             throw EditorError(
                 code: .referenceUnresolved,
@@ -2918,13 +2907,12 @@ public struct DesignDocument: Identifiable, Sendable {
         }
 
         var updatedCADDocument = cadDocument
-        if updatesProfile {
-            updatedCADDocument.designGraph.nodes[extrude.profile.featureID] = profileFeature
-        }
-        updatedCADDocument.designGraph.nodes[featureID] = feature
-        updatedCADDocument.designGraph.revision = updatedCADDocument.designGraph.revision.advanced()
         do {
-            try updatedCADDocument.validate()
+            if updatesProfile {
+                try updatedCADDocument.replaceFeatures([profileFeature, feature])
+            } else {
+                try updatedCADDocument.replaceFeature(feature)
+            }
         } catch {
             throw EditorError(
                 code: .referenceUnresolved,
@@ -3040,14 +3028,21 @@ public struct DesignDocument: Identifiable, Sendable {
         feature.operation = .extrude(extrude)
 
         var updatedCADDocument = cadDocument
-        updatedCADDocument.designGraph.nodes[extrude.profile.featureID] = profileFeature
-        updatedCADDocument.designGraph.nodes[featureID] = feature
-        updatedCADDocument.designGraph.revision = updatedCADDocument.designGraph.revision.advanced()
-        try validateEditableBodyCandidate(
-            updatedCADDocument,
-            operationName: "Edge chamfer",
-            objectRegistry: objectRegistry
-        )
+        do {
+            try updatedCADDocument.replaceFeatures([profileFeature, feature])
+            try validateEditableBodyCandidate(
+                updatedCADDocument,
+                operationName: "Edge chamfer",
+                objectRegistry: objectRegistry
+            )
+        } catch let error as EditorError {
+            throw error
+        } catch {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "Edge chamfer produced invalid geometry: \(error)."
+            )
+        }
 
         cadDocument = updatedCADDocument
         try markBodyObjectAsSourceEditedSolid(featureID: featureID)
@@ -3158,14 +3153,21 @@ public struct DesignDocument: Identifiable, Sendable {
         feature.operation = .extrude(extrude)
 
         var updatedCADDocument = cadDocument
-        updatedCADDocument.designGraph.nodes[extrude.profile.featureID] = profileFeature
-        updatedCADDocument.designGraph.nodes[featureID] = feature
-        updatedCADDocument.designGraph.revision = updatedCADDocument.designGraph.revision.advanced()
-        try validateEditableBodyCandidate(
-            updatedCADDocument,
-            operationName: "Edge fillet",
-            objectRegistry: objectRegistry
-        )
+        do {
+            try updatedCADDocument.replaceFeatures([profileFeature, feature])
+            try validateEditableBodyCandidate(
+                updatedCADDocument,
+                operationName: "Edge fillet",
+                objectRegistry: objectRegistry
+            )
+        } catch let error as EditorError {
+            throw error
+        } catch {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "Edge fillet produced invalid geometry: \(error)."
+            )
+        }
 
         cadDocument = updatedCADDocument
         try markBodyObjectAsSourceEditedSolid(
@@ -3279,14 +3281,21 @@ public struct DesignDocument: Identifiable, Sendable {
         feature.operation = .extrude(extrude)
 
         var updatedCADDocument = cadDocument
-        updatedCADDocument.designGraph.nodes[extrude.profile.featureID] = profileFeature
-        updatedCADDocument.designGraph.nodes[featureID] = feature
-        updatedCADDocument.designGraph.revision = updatedCADDocument.designGraph.revision.advanced()
-        try validateEditableBodyCandidate(
-            updatedCADDocument,
-            operationName: "Vertex move",
-            objectRegistry: objectRegistry
-        )
+        do {
+            try updatedCADDocument.replaceFeatures([profileFeature, feature])
+            try validateEditableBodyCandidate(
+                updatedCADDocument,
+                operationName: "Vertex move",
+                objectRegistry: objectRegistry
+            )
+        } catch let error as EditorError {
+            throw error
+        } catch {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "Vertex move produced invalid geometry: \(error)."
+            )
+        }
 
         cadDocument = updatedCADDocument
         if preservesObjectProperties {
@@ -12980,10 +12989,8 @@ public struct DesignDocument: Identifiable, Sendable {
     ) throws {
         feature.operation = .sketch(sketch)
         var updatedCADDocument = cadDocument
-        updatedCADDocument.designGraph.nodes[featureID] = feature
-        updatedCADDocument.designGraph.revision = updatedCADDocument.designGraph.revision.advanced()
         do {
-            try updatedCADDocument.validate()
+            try updatedCADDocument.replaceFeature(feature)
         } catch {
             throw EditorError(
                 code: .referenceUnresolved,
@@ -14430,13 +14437,12 @@ public struct DesignDocument: Identifiable, Sendable {
         }
 
         var updatedCADDocument = cadDocument
-        if updatesProfile {
-            updatedCADDocument.designGraph.nodes[extrude.profile.featureID] = profileFeature
-        }
-        updatedCADDocument.designGraph.nodes[featureID] = feature
-        updatedCADDocument.designGraph.revision = updatedCADDocument.designGraph.revision.advanced()
         do {
-            try updatedCADDocument.validate()
+            if updatesProfile {
+                try updatedCADDocument.replaceFeatures([profileFeature, feature])
+            } else {
+                try updatedCADDocument.replaceFeature(feature)
+            }
         } catch {
             throw EditorError(
                 code: .referenceUnresolved,
@@ -14993,12 +14999,11 @@ public struct DesignDocument: Identifiable, Sendable {
 
         var updatedCADDocument = cadDocument
         feature.operation = .polySpline(polySpline)
-        updatedCADDocument.designGraph.nodes[resolvedTarget.featureID] = feature
-        updatedCADDocument.designGraph.revision = updatedCADDocument.designGraph.revision.advanced()
 
         let previousCADDocument = cadDocument
-        cadDocument = updatedCADDocument
         do {
+            try updatedCADDocument.replaceFeature(feature)
+            cadDocument = updatedCADDocument
             try validate(objectRegistry: objectRegistry)
         } catch {
             cadDocument = previousCADDocument
@@ -15134,6 +15139,7 @@ public struct DesignDocument: Identifiable, Sendable {
         }
 
         var updatedCADDocument = cadDocument
+        var replacementFeatures: [FeatureNode] = []
         for (featureID, feature) in featuresByID {
             guard let polySpline = polySplinesByID[featureID] else {
                 throw EditorError(
@@ -15143,13 +15149,13 @@ public struct DesignDocument: Identifiable, Sendable {
             }
             var updatedFeature = feature
             updatedFeature.operation = .polySpline(polySpline)
-            updatedCADDocument.designGraph.nodes[featureID] = updatedFeature
+            replacementFeatures.append(updatedFeature)
         }
-        updatedCADDocument.designGraph.revision = updatedCADDocument.designGraph.revision.advanced()
 
         let previousCADDocument = cadDocument
-        cadDocument = updatedCADDocument
         do {
+            try updatedCADDocument.replaceFeatures(replacementFeatures)
+            cadDocument = updatedCADDocument
             try validate(objectRegistry: objectRegistry)
         } catch {
             cadDocument = previousCADDocument
