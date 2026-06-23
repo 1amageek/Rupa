@@ -2,10 +2,10 @@ import Foundation
 import SwiftCAD
 
 struct SketchCurveEndpointResolver: Sendable {
-    private let evaluator: SketchCurveEvaluator
+    private let sampler: SketchCurveSampler
 
-    init(evaluator: SketchCurveEvaluator = SketchCurveEvaluator()) {
-        self.evaluator = evaluator
+    init(sampler: SketchCurveSampler = SketchCurveSampler()) {
+        self.sampler = sampler
     }
 
     func sample(
@@ -96,11 +96,7 @@ struct SketchCurveEndpointResolver: Sendable {
             guard case .line(let line) = sketch.entities[entityID] else {
                 return nil
             }
-            let samples = evaluator.lineSamples(
-                start: try resolvedPoint(line.start, document: document),
-                end: try resolvedPoint(line.end, document: document)
-            )
-            guard let sample = samples.first else {
+            guard let sample = try lineSample(for: line, parameter: 0.0, document: document) else {
                 return nil
             }
             return SketchCurveEndpointSample(
@@ -116,11 +112,7 @@ struct SketchCurveEndpointResolver: Sendable {
             guard case .line(let line) = sketch.entities[entityID] else {
                 return nil
             }
-            let samples = evaluator.lineSamples(
-                start: try resolvedPoint(line.start, document: document),
-                end: try resolvedPoint(line.end, document: document)
-            )
-            guard let sample = samples.last else {
+            guard let sample = try lineSample(for: line, parameter: 1.0, document: document) else {
                 return nil
             }
             return SketchCurveEndpointSample(
@@ -136,8 +128,7 @@ struct SketchCurveEndpointResolver: Sendable {
             guard case .arc(let arc) = sketch.entities[entityID] else {
                 return nil
             }
-            let samples = try arcSamples(for: arc, document: document)
-            guard let sample = samples.first else {
+            guard let sample = try arcSample(for: arc, parameter: 0.0, document: document) else {
                 return nil
             }
             return SketchCurveEndpointSample(
@@ -153,8 +144,7 @@ struct SketchCurveEndpointResolver: Sendable {
             guard case .arc(let arc) = sketch.entities[entityID] else {
                 return nil
             }
-            let samples = try arcSamples(for: arc, document: document)
-            guard let sample = samples.last else {
+            guard let sample = try arcSample(for: arc, parameter: 1.0, document: document) else {
                 return nil
             }
             return SketchCurveEndpointSample(
@@ -179,7 +169,7 @@ struct SketchCurveEndpointResolver: Sendable {
             }
             let segmentCount = (controlPoints.count - 1) / 3
             if index == 0 {
-                guard let sample = evaluator.splineSegmentSample(
+                guard let sample = sampler.splineSegmentSample(
                     for: controlPoints,
                     segmentIndex: 0,
                     t: 0.0
@@ -197,7 +187,7 @@ struct SketchCurveEndpointResolver: Sendable {
                 )
             }
             if index == controlPoints.count - 1 {
-                guard let sample = evaluator.splineSegmentSample(
+                guard let sample = sampler.splineSegmentSample(
                     for: controlPoints,
                     segmentIndex: segmentCount - 1,
                     t: 1.0
@@ -293,38 +283,15 @@ struct SketchCurveEndpointResolver: Sendable {
         return description
     }
 
-    private func arcSamples(
-        for arc: SketchArc,
-        document: DesignDocument
-    ) throws -> [CurveEvaluationSample] {
-        try evaluator.arcSamples(
-            center: resolvedPoint(arc.center, document: document),
-            radius: resolvedValue(arc.radius, kind: .length, document: document),
-            startAngle: resolvedValue(arc.startAngle, kind: .angle, document: document),
-            endAngle: resolvedValue(arc.endAngle, kind: .angle, document: document)
-        )
-    }
-
     private func lineSample(
         for line: SketchLine,
         parameter: Double,
         document: DesignDocument
     ) throws -> CurveEvaluationSample? {
-        let start = try resolvedPoint(line.start, document: document)
-        let end = try resolvedPoint(line.end, document: document)
-        let samples = evaluator.lineSamples(start: start, end: end)
-        guard let first = samples.first else {
-            return nil
-        }
-        return CurveEvaluationSample(
-            parameter: parameter,
-            point: CADCore.Point2D(
-                x: start.x + (end.x - start.x) * parameter,
-                y: start.y + (end.y - start.y) * parameter
-            ),
-            tangent: first.tangent,
-            normal: first.normal,
-            curvature: first.curvature
+        try sampler.lineSample(
+            start: resolvedPoint(line.start, document: document),
+            end: resolvedPoint(line.end, document: document),
+            parameter: parameter
         )
     }
 
@@ -333,27 +300,12 @@ struct SketchCurveEndpointResolver: Sendable {
         parameter: Double,
         document: DesignDocument
     ) throws -> CurveEvaluationSample? {
-        let center = try resolvedPoint(arc.center, document: document)
-        let radius = try resolvedValue(arc.radius, kind: .length, document: document)
-        let startAngle = try resolvedValue(arc.startAngle, kind: .angle, document: document)
-        let endAngle = try resolvedValue(arc.endAngle, kind: .angle, document: document)
-        guard radius > 1.0e-12 else {
-            return nil
-        }
-        let span = positiveAngleSpan(startAngle: startAngle, endAngle: endAngle)
-        let angle = startAngle + span * parameter
-        let cosine = cos(angle)
-        let sine = sin(angle)
-        let tangent = CADCore.Point2D(x: -sine, y: cosine)
-        return CurveEvaluationSample(
-            parameter: parameter,
-            point: CADCore.Point2D(
-                x: center.x + cosine * radius,
-                y: center.y + sine * radius
-            ),
-            tangent: tangent,
-            normal: CADCore.Point2D(x: -cosine, y: -sine),
-            curvature: 1.0 / radius
+        try sampler.arcSample(
+            center: resolvedPoint(arc.center, document: document),
+            radius: resolvedValue(arc.radius, kind: .length, document: document),
+            startAngle: resolvedValue(arc.startAngle, kind: .angle, document: document),
+            endAngle: resolvedValue(arc.endAngle, kind: .angle, document: document),
+            parameter: parameter
         )
     }
 
@@ -365,21 +317,7 @@ struct SketchCurveEndpointResolver: Sendable {
         let controlPoints = try spline.controlPoints.map { point in
             try resolvedPoint(point, document: document)
         }
-        guard controlPoints.count >= 4,
-              (controlPoints.count - 1).isMultiple(of: 3) else {
-            return nil
-        }
-        let segmentCount = (controlPoints.count - 1) / 3
-        let scaled = min(max(parameter, 0.0), 1.0) * Double(segmentCount)
-        let segmentIndex = min(Int(floor(scaled)), segmentCount - 1)
-        let localT = segmentIndex == segmentCount - 1 && parameter >= 1.0
-            ? 1.0
-            : scaled - Double(segmentIndex)
-        return evaluator.splineSegmentSample(
-            for: controlPoints,
-            segmentIndex: segmentIndex,
-            t: localT
-        )
+        return sampler.splineSample(for: controlPoints, parameter: parameter)
     }
 
     private func resolvedPoint(
@@ -489,19 +427,6 @@ struct SketchCurveEndpointResolver: Sendable {
             return SketchSplineEndpointReference(splineID: entityID, endpoint: .end)
         }
         return nil
-    }
-
-    private func positiveAngleSpan(startAngle: Double, endAngle: Double) -> Double {
-        let fullCircle = Double.pi * 2.0
-        let tolerance = 1.0e-12
-        var span = endAngle - startAngle
-        while span <= tolerance {
-            span += fullCircle
-        }
-        while span > fullCircle + tolerance {
-            span -= fullCircle
-        }
-        return min(span, fullCircle)
     }
 
     private func reversed(_ vector: CADCore.Point2D) -> CADCore.Point2D {

@@ -30,7 +30,7 @@ public struct CurveAnalysisService: Sendable {
         var requiredContinuity: CurveAnalysisResult.ContinuityLevel
     }
 
-    private let evaluator: SketchCurveEvaluator
+    private let sampler: SketchCurveSampler
     private let positionTolerance: Double
     private let tangentTolerance: Double
     private let curvatureTolerance: Double
@@ -41,7 +41,7 @@ public struct CurveAnalysisService: Sendable {
         tangentTolerance: Double = 1.0e-4,
         curvatureTolerance: Double = 1.0e-4
     ) {
-        self.evaluator = SketchCurveEvaluator(samplesPerSegment: samplesPerSegment)
+        self.sampler = SketchCurveSampler(samplesPerSegment: samplesPerSegment)
         self.positionTolerance = positionTolerance
         self.tangentTolerance = tangentTolerance
         self.curvatureTolerance = curvatureTolerance
@@ -223,19 +223,19 @@ public struct CurveAnalysisService: Sendable {
         case .point:
             return nil
         case .line(let line):
-            samples = evaluator.lineSamples(
+            samples = sampler.lineSamples(
                 start: try resolvedPoint(line.start, document: document),
                 end: try resolvedPoint(line.end, document: document)
             )
             curveKind = .line
         case .circle(let circle):
-            samples = evaluator.circleSamples(
+            samples = sampler.circleSamples(
                 center: try resolvedPoint(circle.center, document: document),
                 radius: try resolvedValue(circle.radius, kind: .length, document: document)
             )
             curveKind = .circle
         case .arc(let arc):
-            samples = evaluator.arcSamples(
+            samples = sampler.arcSamples(
                 center: try resolvedPoint(arc.center, document: document),
                 radius: try resolvedValue(arc.radius, kind: .length, document: document),
                 startAngle: try resolvedValue(arc.startAngle, kind: .angle, document: document),
@@ -246,7 +246,7 @@ public struct CurveAnalysisService: Sendable {
             let controlPoints = try spline.controlPoints.map { point in
                 try resolvedPoint(point, document: document)
             }
-            samples = evaluator.splineSamples(for: controlPoints)
+            samples = sampler.splineSamples(for: controlPoints)
             curveKind = .spline
         }
         guard samples.isEmpty == false else {
@@ -261,7 +261,7 @@ public struct CurveAnalysisService: Sendable {
             selectionComponentID: selectionComponentID,
             samples: samples,
             maxAbsCurvature: samples.map { abs($0.curvature) }.max() ?? 0.0,
-            approximateLength: evaluator.approximateLength(of: samples)
+            approximateLength: sampler.approximateLength(of: samples)
         )
     }
 
@@ -278,12 +278,12 @@ public struct CurveAnalysisService: Sendable {
         var joins: [CurveAnalysisResult.ContinuityJoin] = []
         joins.reserveCapacity(max(segmentCount - 1, 0))
         for segmentIndex in 0 ..< (segmentCount - 1) {
-            guard let first = evaluator.splineSegmentSample(
+            guard let first = sampler.splineSegmentSample(
                 for: controlPoints,
                 segmentIndex: segmentIndex,
                 t: 1.0
             ),
-            let second = evaluator.splineSegmentSample(
+            let second = sampler.splineSegmentSample(
                 for: controlPoints,
                 segmentIndex: segmentIndex + 1,
                 t: 0.0
@@ -454,7 +454,7 @@ public struct CurveAnalysisService: Sendable {
             guard case .line(let line) = sketch.entities[entityID] else {
                 return nil
             }
-            let samples = evaluator.lineSamples(
+            let samples = sampler.lineSamples(
                 start: try resolvedPoint(line.start, document: document),
                 end: try resolvedPoint(line.end, document: document)
             )
@@ -470,7 +470,7 @@ public struct CurveAnalysisService: Sendable {
             guard case .line(let line) = sketch.entities[entityID] else {
                 return nil
             }
-            let samples = evaluator.lineSamples(
+            let samples = sampler.lineSamples(
                 start: try resolvedPoint(line.start, document: document),
                 end: try resolvedPoint(line.end, document: document)
             )
@@ -522,13 +522,13 @@ public struct CurveAnalysisService: Sendable {
             let segmentCount = (controlPoints.count - 1) / 3
             let sample: CurveEvaluationSample?
             if index == 0 {
-                sample = evaluator.splineSegmentSample(
+                sample = sampler.splineSegmentSample(
                     for: controlPoints,
                     segmentIndex: 0,
                     t: 0.0
                 )
             } else if index == controlPoints.count - 1 {
-                sample = evaluator.splineSegmentSample(
+                sample = sampler.splineSegmentSample(
                     for: controlPoints,
                     segmentIndex: segmentCount - 1,
                     t: 1.0
@@ -633,7 +633,7 @@ public struct CurveAnalysisService: Sendable {
         for arc: SketchArc,
         document: DesignDocument
     ) throws -> [CurveEvaluationSample] {
-        try evaluator.arcSamples(
+        try sampler.arcSamples(
             center: resolvedPoint(arc.center, document: document),
             radius: resolvedValue(arc.radius, kind: .length, document: document),
             startAngle: resolvedValue(arc.startAngle, kind: .angle, document: document),

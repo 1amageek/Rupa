@@ -382,10 +382,10 @@ public struct SnapResolutionResult: Codable, Equatable, Sendable {
 }
 
 public struct SnapResolver: Sendable {
-    private let curveEvaluator: SketchCurveEvaluator
+    private let curveSampler: SketchCurveSampler
 
-    public init(curveEvaluator: SketchCurveEvaluator = SketchCurveEvaluator()) {
-        self.curveEvaluator = curveEvaluator
+    public init(curveSampler: SketchCurveSampler = SketchCurveSampler()) {
+        self.curveSampler = curveSampler
     }
 
     public func resolve(
@@ -1659,7 +1659,7 @@ public struct SnapResolver: Sendable {
             segmentIndex = min(max(Int(floor(scaledParameter)), 0), segmentCount - 1)
             localParameter = scaledParameter - Double(segmentIndex)
         }
-        return curveEvaluator.splineSegmentSample(
+        return curveSampler.splineSegmentSample(
             for: controlPoints,
             segmentIndex: segmentIndex,
             t: localParameter
@@ -2323,7 +2323,7 @@ public struct SnapResolver: Sendable {
         onSplineControlPoints controlPoints: [Point2D],
         near point: Point2D
     ) -> Point2D? {
-        let samples = curveEvaluator.splineSamples(for: controlPoints).map(\.point)
+        let samples = curveSampler.splineSamples(for: controlPoints).map(\.point)
         guard samples.count >= 2 else {
             return nil
         }
@@ -2468,7 +2468,7 @@ public struct SnapResolver: Sendable {
             return []
         }
         let segmentCount = (controlPoints.count - 1) / 3
-        let sampleCount = max(curveEvaluator.samplesPerSegment * 2, 32)
+        let sampleCount = max(curveSampler.samplesPerSegment * 2, 32)
         var points: [Point2D] = []
 
         for segmentIndex in 0 ..< segmentCount {
@@ -2526,7 +2526,7 @@ public struct SnapResolver: Sendable {
             return []
         }
         let segmentCount = (controlPoints.count - 1) / 3
-        let sampleCount = max(curveEvaluator.samplesPerSegment * 2, 32)
+        let sampleCount = max(curveSampler.samplesPerSegment * 2, 32)
         var points: [Point2D] = []
 
         for segmentIndex in 0 ..< segmentCount {
@@ -2621,7 +2621,7 @@ public struct SnapResolver: Sendable {
         segmentIndex: Int,
         t: Double
     ) -> SplineRelationValue? {
-        guard let sample = curveEvaluator.splineSegmentSample(
+        guard let sample = curveSampler.splineSegmentSample(
             for: controlPoints,
             segmentIndex: segmentIndex,
             t: t
@@ -2686,7 +2686,7 @@ public struct SnapResolver: Sendable {
         t: Double,
         relation: SnapCurveRelation
     ) -> SplineRelationValue? {
-        guard let sample = curveEvaluator.splineSegmentSample(
+        guard let sample = curveSampler.splineSegmentSample(
             for: controlPoints,
             segmentIndex: segmentIndex,
             t: t

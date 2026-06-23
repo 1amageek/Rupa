@@ -11,18 +11,18 @@ public struct ViewportCurveCurvatureComb: Equatable {
         samplesPerSegment: Int = 14,
         curvatureTolerance: Double = 1.0e-12
     ) {
-        let evaluator = SketchCurveEvaluator(samplesPerSegment: samplesPerSegment)
+        let sampler = SketchCurveSampler(samplesPerSegment: samplesPerSegment)
         let samples: [CurveEvaluationSample]
         switch primitive {
         case .point, .line:
             samples = []
         case .circle(_, let center, let radiusMeters):
-            samples = evaluator.circleSamples(
+            samples = sampler.circleSamples(
                 center: Point2D(x: Double(center.x), y: Double(center.y)),
                 radius: radiusMeters
             )
         case .arc(_, let center, let radiusMeters, let startAngleRadians, let endAngleRadians):
-            samples = evaluator.arcSamples(
+            samples = sampler.arcSamples(
                 center: Point2D(x: Double(center.x), y: Double(center.y)),
                 radius: radiusMeters,
                 startAngle: startAngleRadians,
@@ -32,7 +32,7 @@ public struct ViewportCurveCurvatureComb: Equatable {
             let points = controlPoints.map { point in
                 Point2D(x: Double(point.x), y: Double(point.y))
             }
-            samples = evaluator.splineSamples(for: points)
+            samples = sampler.splineSamples(for: points)
         }
 
         let drawableSamples = samples.filter { sample in
