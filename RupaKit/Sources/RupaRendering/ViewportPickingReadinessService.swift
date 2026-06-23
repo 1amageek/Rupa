@@ -3,11 +3,18 @@ public struct ViewportPickingReadinessService: Sendable {
 
     public func summarize(
         scene: ViewportScene,
-        activeBackend: ViewportPickingBackend = .projectedCPU
+        layout: ViewportLayout? = nil,
+        activeBackend: ViewportPickingBackend = .projectedCPU,
+        sketchControlPointHitPolicy: ViewportSketchControlPointHitPolicy = .all,
+        selectionHitPolicy: ViewportSelectionHitPolicy = .all,
+        renderBudget: ViewportIdentityHitResolver.RenderBudget = .standard
     ) -> ViewportPickingReadinessSummary {
-        let identityTargetCount = ViewportIdentityPickIndexBuilder()
-            .build(scene: scene)
-            .count
+        let index = ViewportIdentityPickIndexBuilder(
+            sketchControlPointHitPolicy: sketchControlPointHitPolicy,
+            selectionHitPolicy: selectionHitPolicy
+        )
+        .build(scene: scene)
+        let identityTargetCount = index.count
         var bodyTargetCount = 0
         var generatedFaceTargetCount = 0
         var generatedEdgeTargetCount = 0
@@ -25,6 +32,17 @@ public struct ViewportPickingReadinessService: Sendable {
             generatedEdgeTargetCount += topology.edges.count
             generatedVertexTargetCount += topology.vertices.count
         }
+        let identityRenderCost = layout.map {
+            renderCost(
+                scene: scene,
+                layout: $0,
+                index: index,
+                selectionHitPolicy: selectionHitPolicy
+            )
+        }
+        let identityBudgetRejection = identityRenderCost.flatMap {
+            renderBudget.rejection(for: $0)
+        }
 
         return ViewportPickingReadinessSummary(
             activeBackend: activeBackend,
@@ -32,7 +50,34 @@ public struct ViewportPickingReadinessService: Sendable {
             generatedFaceTargetCount: generatedFaceTargetCount,
             generatedEdgeTargetCount: generatedEdgeTargetCount,
             generatedVertexTargetCount: generatedVertexTargetCount,
-            identityTargetCount: identityTargetCount
+            identityTargetCount: identityTargetCount,
+            identityRenderCost: identityRenderCost,
+            identityBudgetRejection: identityBudgetRejection
+        )
+    }
+
+    private func renderCost(
+        scene: ViewportScene,
+        layout: ViewportLayout,
+        index: ViewportIdentityPickIndex,
+        selectionHitPolicy: ViewportSelectionHitPolicy
+    ) -> ViewportIdentityHitResolver.RenderCost {
+        let renderWidth = max(Int(layout.viewportSize.width.rounded(.up)), 1)
+        let renderHeight = max(Int(layout.viewportSize.height.rounded(.up)), 1)
+        let plan = ViewportIdentityPickRenderPlanBuilder()
+            .build(
+                scene: scene,
+                layout: layout,
+                index: index,
+                selectionHitPolicy: selectionHitPolicy
+            )
+        return ViewportIdentityHitResolver.RenderCost(
+            viewportWidth: renderWidth,
+            viewportHeight: renderHeight,
+            pixelCount: renderWidth * renderHeight,
+            drawItemCount: plan.drawItems.count,
+            encodedPointCount: plan.encodedPointCount,
+            identityRecordCount: plan.index.count
         )
     }
 }

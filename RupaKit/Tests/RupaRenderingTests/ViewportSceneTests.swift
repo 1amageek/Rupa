@@ -950,6 +950,54 @@ import Testing
     #expect(summary.nextBackendTitle == "Ready")
 }
 
+@Test func viewportPickingReadinessReportsIdentityRenderBudgetEstimate() throws {
+    let scene = viewportGeneratedTopologyScene()
+    let layout = try #require(ViewportLayout(
+        scene: scene,
+        size: CGSize(width: 240.0, height: 180.0)
+    ))
+
+    let summary = ViewportPickingReadinessService()
+        .summarize(scene: scene, layout: layout)
+
+    #expect(summary.hasIdentityBudgetEstimate)
+    #expect(summary.isIdentityRenderWithinBudget)
+    #expect(summary.identityRenderCost?.pixelCount == 43_200)
+    #expect((summary.identityRenderCost?.drawItemCount ?? 0) > 0)
+    #expect((summary.identityRenderCost?.encodedPointCount ?? 0) > 0)
+    #expect(summary.identityRenderCost?.identityRecordCount == summary.identityTargetCount)
+    #expect(summary.identityBudgetRejection == nil)
+    #expect(summary.identityBudgetStatusTitle == "Within budget")
+    #expect(summary.nextBackendTitle == "Identity")
+}
+
+@Test func viewportPickingReadinessReportsIdentityBudgetRejection() throws {
+    let scene = viewportGeneratedTopologyScene()
+    let layout = try #require(ViewportLayout(
+        scene: scene,
+        size: CGSize(width: 240.0, height: 180.0)
+    ))
+
+    let summary = ViewportPickingReadinessService()
+        .summarize(
+            scene: scene,
+            layout: layout,
+            renderBudget: ViewportIdentityHitResolver.RenderBudget(
+                maximumPixelCount: 1,
+                maximumDrawItemCount: 200_000,
+                maximumEncodedPointCount: 1_000_000
+            )
+        )
+
+    #expect(summary.hasIdentityBudgetEstimate)
+    #expect(summary.isIdentityRenderWithinBudget == false)
+    #expect(summary.identityBudgetRejection?.limit == .pixelCount)
+    #expect(summary.identityBudgetRejection?.actual == 43_200)
+    #expect(summary.identityBudgetRejection?.maximum == 1)
+    #expect(summary.identityBudgetStatusTitle == "Pixel budget exceeded")
+    #expect(summary.nextBackendTitle == "CPU")
+}
+
 @Test func viewportIdentityPickIndexBuildsDecodableGeneratedTopologyRecords() throws {
     let scene = viewportGeneratedTopologyScene()
     let faceComponentID = SelectionComponentID.generatedTopology(

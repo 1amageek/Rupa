@@ -6,6 +6,8 @@ public struct ViewportPickingReadinessSummary: Codable, Equatable, Sendable {
     public var generatedEdgeTargetCount: Int
     public var generatedVertexTargetCount: Int
     public var identityTargetCount: Int
+    public var identityRenderCost: ViewportIdentityHitResolver.RenderCost?
+    public var identityBudgetRejection: ViewportIdentityHitResolver.RenderBudgetRejection?
 
     public init(
         activeBackend: ViewportPickingBackend,
@@ -14,7 +16,9 @@ public struct ViewportPickingReadinessSummary: Codable, Equatable, Sendable {
         generatedFaceTargetCount: Int,
         generatedEdgeTargetCount: Int,
         generatedVertexTargetCount: Int,
-        identityTargetCount: Int = 0
+        identityTargetCount: Int = 0,
+        identityRenderCost: ViewportIdentityHitResolver.RenderCost? = nil,
+        identityBudgetRejection: ViewportIdentityHitResolver.RenderBudgetRejection? = nil
     ) {
         self.activeBackend = activeBackend
         self.requiredBackend = requiredBackend
@@ -23,6 +27,8 @@ public struct ViewportPickingReadinessSummary: Codable, Equatable, Sendable {
         self.generatedEdgeTargetCount = generatedEdgeTargetCount
         self.generatedVertexTargetCount = generatedVertexTargetCount
         self.identityTargetCount = identityTargetCount
+        self.identityRenderCost = identityRenderCost
+        self.identityBudgetRejection = identityBudgetRejection
     }
 
     public var supportsObjectTargets: Bool {
@@ -49,6 +55,14 @@ public struct ViewportPickingReadinessSummary: Codable, Equatable, Sendable {
         identityTargetCount > 0
     }
 
+    public var hasIdentityBudgetEstimate: Bool {
+        identityRenderCost != nil
+    }
+
+    public var isIdentityRenderWithinBudget: Bool {
+        identityBudgetRejection == nil
+    }
+
     public var isExactIdentityBacked: Bool {
         activeBackend.isExactIdentityBacked
     }
@@ -58,6 +72,26 @@ public struct ViewportPickingReadinessSummary: Codable, Equatable, Sendable {
     }
 
     public var nextBackendTitle: String {
-        isExactIdentityBacked ? "Ready" : requiredBackend.title
+        if isExactIdentityBacked {
+            return "Ready"
+        }
+        if identityBudgetRejection != nil {
+            return "CPU"
+        }
+        return requiredBackend.title
+    }
+
+    public var identityBudgetStatusTitle: String {
+        guard let rejection = identityBudgetRejection else {
+            return hasIdentityBudgetEstimate ? "Within budget" : "Unknown"
+        }
+        switch rejection.limit {
+        case .pixelCount:
+            return "Pixel budget exceeded"
+        case .drawItemCount:
+            return "Draw-item budget exceeded"
+        case .encodedPointCount:
+            return "Encoded-point budget exceeded"
+        }
     }
 }

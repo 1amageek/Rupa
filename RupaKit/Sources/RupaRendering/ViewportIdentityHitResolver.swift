@@ -6,13 +6,13 @@ import SwiftCAD
 public final class ViewportIdentityHitResolver {
     public typealias RendererFactory = () throws -> any ViewportIdentityBufferRendering
 
-    public enum RenderBudgetLimit: String, Equatable, Sendable {
+    public enum RenderBudgetLimit: String, Codable, Equatable, Sendable {
         case pixelCount
         case drawItemCount
         case encodedPointCount
     }
 
-    public struct RenderCost: Equatable, Sendable {
+    public struct RenderCost: Codable, Equatable, Sendable {
         public var viewportWidth: Int
         public var viewportHeight: Int
         public var pixelCount: Int
@@ -37,7 +37,7 @@ public final class ViewportIdentityHitResolver {
         }
     }
 
-    public struct RenderBudget: Equatable, Sendable {
+    public struct RenderBudget: Codable, Equatable, Sendable {
         public var maximumPixelCount: Int
         public var maximumDrawItemCount: Int
         public var maximumEncodedPointCount: Int
@@ -54,7 +54,7 @@ public final class ViewportIdentityHitResolver {
 
         public static let standard = RenderBudget()
 
-        fileprivate func rejection(for cost: RenderCost) -> RenderBudgetRejection? {
+        public func rejection(for cost: RenderCost) -> RenderBudgetRejection? {
             if cost.pixelCount > max(maximumPixelCount, 0) {
                 return RenderBudgetRejection(
                     limit: .pixelCount,
@@ -83,7 +83,7 @@ public final class ViewportIdentityHitResolver {
         }
     }
 
-    public struct RenderBudgetRejection: Equatable, Sendable {
+    public struct RenderBudgetRejection: Codable, Equatable, Sendable {
         public var limit: RenderBudgetLimit
         public var actual: Int
         public var maximum: Int
