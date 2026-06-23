@@ -54,6 +54,22 @@ public struct DesignDisplaySnapshotService: Sendable {
         )
     }
 
+    public func result(
+        document: DesignDocument,
+        generation: DocumentGeneration,
+        dirty: Bool
+    ) -> DesignDisplaySnapshotResult {
+        let snapshot = snapshot(document: document)
+        let order = document.cadDocument.designGraph.order
+        return DesignDisplaySnapshotResult(
+            generation: generation,
+            dirty: dirty,
+            sketches: order.compactMap { snapshot.sketches[$0] },
+            extrudes: order.compactMap { snapshot.extrudes[$0] },
+            straightPrismSweeps: order.compactMap { snapshot.straightPrismSweeps[$0] }
+        )
+    }
+
     private func straightPrismSweepSnapshot(
         featureID: FeatureID,
         sweep: SweepFeature,

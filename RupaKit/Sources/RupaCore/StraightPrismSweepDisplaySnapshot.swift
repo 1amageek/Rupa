@@ -1,4 +1,4 @@
-public struct StraightPrismSweepDisplaySnapshot: Equatable, Sendable {
+public struct StraightPrismSweepDisplaySnapshot: Codable, Equatable, Sendable {
     public var featureID: FeatureID
     public var profileFeatureID: FeatureID
     public var pathFeatureID: FeatureID

@@ -4,7 +4,7 @@ public struct CADInteractionQualityAssessmentService: Sendable {
     public func assess() -> CADInteractionQualityAssessmentResult {
         let entries = Self.entries
         return CADInteractionQualityAssessmentResult(
-            referenceDate: "2026-06-22",
+            referenceDate: "2026-06-23",
             scoringModel: "Average of all gate ratings where missing=0, planned=1, partial=2, implemented=3, verified=4.",
             score: Self.score(for: entries),
             counts: Self.counts(for: entries),
@@ -368,12 +368,17 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                         "RupaKit/Sources/RupaAgent/AgentCapabilityDescriptor.swift",
                         "RupaKit/Sources/RupaAgent/AgentMessage.swift",
                         "RupaKit/Sources/RupaAgent/AgentServer.swift",
+                        "RupaKit/Sources/RupaCore/DesignDisplaySnapshotResult.swift",
+                        "RupaKit/Sources/RupaCore/DesignDisplaySnapshotService.swift",
+                        "RupaKit/Sources/RupaCore/SketchDisplaySnapshotService.swift",
                     ],
                     tests: [
                         "RupaKit/Tests/RupaAgentTests/AgentServerTests.swift",
+                        "RupaKit/Tests/RupaCoreTests/SketchDisplaySnapshotServiceTests.swift",
                     ],
                     notes: [
                         "Capabilities declare mutation behavior, discovery summaries, targets, and failure modes.",
+                        "Agent-readable design display snapshots expose the same Core-owned sketch primitive, region, extrude, and straight-prism sweep display contract consumed by the viewport.",
                     ]
                 ),
             ],

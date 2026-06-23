@@ -1,4 +1,4 @@
-public struct ExtrudeDisplaySnapshot: Equatable, Sendable {
+public struct ExtrudeDisplaySnapshot: Codable, Equatable, Sendable {
     public var featureID: FeatureID
     public var profileFeatureID: FeatureID
     public var depthMeters: Double

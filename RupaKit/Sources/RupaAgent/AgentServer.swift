@@ -216,6 +216,16 @@ public final class AgentServer: AgentClientProtocol {
             failureMode: "Rejects stale generations before reading."
         ),
         capability(
+            "designDisplaySnapshot",
+            category: .read,
+            summary: "Return ordered UI-visible sketch primitives, profile regions, extrude display bodies, and straight-prism sweep display bodies for Agent viewport planning.",
+            access: .agentRequest,
+            mutatesDocument: false,
+            discovery: [.designDisplaySnapshot, .sketchEntitySummary, .topologySummary],
+            targets: [.document, .sketchEntity, .region, .body],
+            failureMode: "Rejects stale generations before reading; reports only display-ready source snapshots, not raw CAD kernel internals."
+        ),
+        capability(
             "createConstructionPlane",
             category: .sketch,
             summary: "Create a saved construction plane from a named SketchPlane source, add it to the construction scene, and optionally make it active for subsequent sketch creation.",
@@ -1098,6 +1108,16 @@ public final class AgentServer: AgentClientProtocol {
                 return .constructionPlaneSummary(
                     ConstructionPlaneSummaryService().summarize(
                         document: session.document
+                    )
+                )
+            case let .designDisplaySnapshot(sessionID, expectedGeneration):
+                let session = try registry.session(id: sessionID)
+                try session.store.requireGeneration(expectedGeneration)
+                return .designDisplaySnapshot(
+                    DesignDisplaySnapshotService().result(
+                        document: session.document,
+                        generation: session.generation,
+                        dirty: session.isDirty
                     )
                 )
             case let .meshSummary(sessionID, expectedGeneration):

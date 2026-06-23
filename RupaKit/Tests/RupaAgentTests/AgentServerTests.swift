@@ -31,6 +31,7 @@ import SwiftCAD
     #expect(capabilities.contains("createSectionPlane"))
     #expect(capabilities.contains("describeConstructionPlanes"))
     #expect(capabilities.contains("constructionPlaneSummary"))
+    #expect(capabilities.contains("designDisplaySnapshot"))
     #expect(capabilities.contains("createConstructionPlane"))
     #expect(capabilities.contains("createConstructionPlaneFromTarget"))
     #expect(capabilities.contains("createConstructionPlaneFromTargets"))
@@ -156,6 +157,7 @@ import SwiftCAD
     let constructionPlaneSetActive = try #require(descriptors.first { $0.name == "setActiveConstructionPlane" })
     let constructionPlaneRename = try #require(descriptors.first { $0.name == "renameConstructionPlane" })
     let constructionPlaneSummary = try #require(descriptors.first { $0.name == "constructionPlaneSummary" })
+    let designDisplaySnapshot = try #require(descriptors.first { $0.name == "designDisplaySnapshot" })
     let qualityAssessment = try #require(descriptors.first { $0.name == "cadInteractionQualityAssessment" })
     let selection = try #require(descriptors.first { $0.name == "selectTargets" })
 
@@ -630,6 +632,16 @@ import SwiftCAD
     #expect(constructionPlaneSummary.discovery.contains(.constructionPlaneSummary))
     #expect(constructionPlaneSummary.targets == [.constructionPlane])
 
+    #expect(designDisplaySnapshot.category == .read)
+    #expect(!designDisplaySnapshot.mutatesDocument)
+    #expect(designDisplaySnapshot.access == .agentRequest)
+    #expect(designDisplaySnapshot.discovery.contains(.designDisplaySnapshot))
+    #expect(designDisplaySnapshot.discovery.contains(.sketchEntitySummary))
+    #expect(designDisplaySnapshot.discovery.contains(.topologySummary))
+    #expect(designDisplaySnapshot.targets == [.document, .sketchEntity, .region, .body])
+    #expect(designDisplaySnapshot.summary.contains("UI-visible sketch primitives"))
+    #expect(designDisplaySnapshot.failureMode.contains("display-ready source snapshots"))
+
     #expect(qualityAssessment.category == .read)
     #expect(!qualityAssessment.mutatesDocument)
     #expect(!qualityAssessment.requiresSession)
@@ -672,6 +684,7 @@ import SwiftCAD
     #expect(descriptors == server.capabilityDescriptors())
     #expect(descriptors.contains { $0.name == "moveBodyVertex" && $0.targets == [.vertex] })
     #expect(descriptors.contains { $0.name == "cadInteractionQualityAssessment" && !$0.requiresSession })
+    #expect(descriptors.contains { $0.name == "designDisplaySnapshot" && $0.discovery.contains(.designDisplaySnapshot) })
 }
 
 @Test func agentMessageCodecRoundTripsParameterRequestsAndResponses() async throws {
@@ -696,6 +709,10 @@ import SwiftCAD
         expectedGeneration: DocumentGeneration(2)
     )
     let constructionPlaneRequest = AgentRequest.constructionPlaneSummary(
+        sessionID: sessionID,
+        expectedGeneration: DocumentGeneration(2)
+    )
+    let displaySnapshotRequest = AgentRequest.designDisplaySnapshot(
         sessionID: sessionID,
         expectedGeneration: DocumentGeneration(2)
     )
@@ -741,6 +758,15 @@ import SwiftCAD
         ConstructionPlaneSummaryResult(
             activePlaneID: nil,
             planes: []
+        )
+    )
+    let displaySnapshotResponse = AgentResponse.designDisplaySnapshot(
+        DesignDisplaySnapshotResult(
+            generation: DocumentGeneration(2),
+            dirty: false,
+            sketches: [],
+            extrudes: [],
+            straightPrismSweeps: []
         )
     )
     let objectDimensionResponse = AgentResponse.objectDimensionSummary(
@@ -795,12 +821,14 @@ import SwiftCAD
     #expect(try codec.decodeResponse(from: try codec.encode(capabilitiesResponse)) == capabilitiesResponse)
     #expect(try codec.decodeRequest(from: try codec.encode(listRequest)) == listRequest)
     #expect(try codec.decodeRequest(from: try codec.encode(constructionPlaneRequest)) == constructionPlaneRequest)
+    #expect(try codec.decodeRequest(from: try codec.encode(displaySnapshotRequest)) == displaySnapshotRequest)
     #expect(try codec.decodeRequest(from: try codec.encode(objectDimensionRequest)) == objectDimensionRequest)
     #expect(try codec.decodeRequest(from: try codec.encode(sketchDimensionRequest)) == sketchDimensionRequest)
     #expect(try codec.decodeRequest(from: try codec.encode(selectionDimensionRequest)) == selectionDimensionRequest)
     #expect(try codec.decodeRequest(from: try codec.encode(expressionRequest)) == expressionRequest)
     #expect(try codec.decodeResponse(from: try codec.encode(listResponse)) == listResponse)
     #expect(try codec.decodeResponse(from: try codec.encode(constructionPlaneResponse)) == constructionPlaneResponse)
+    #expect(try codec.decodeResponse(from: try codec.encode(displaySnapshotResponse)) == displaySnapshotResponse)
     #expect(try codec.decodeResponse(from: try codec.encode(objectDimensionResponse)) == objectDimensionResponse)
     #expect(try codec.decodeResponse(from: try codec.encode(sketchDimensionResponse)) == sketchDimensionResponse)
     #expect(try codec.decodeResponse(from: try codec.encode(selectionDimensionResponse)) == selectionDimensionResponse)
@@ -821,6 +849,39 @@ import SwiftCAD
     #expect(assessment.entries.allSatisfy { entry in
         entry.gateAssessments.map(\.gate) == CADInteractionQualityGate.allCases
     })
+}
+
+@MainActor
+@Test func agentReturnsDesignDisplaySnapshotForViewportPlanning() async throws {
+    let server = AgentServer()
+    let sessionID = UUID()
+    let session = EditorSession()
+    _ = try #require(session.createDefaultExtrudedRectangle())
+    server.register(session: session, id: sessionID)
+
+    let response = server.handle(
+        .designDisplaySnapshot(
+            sessionID: sessionID,
+            expectedGeneration: session.generation
+        )
+    )
+
+    guard case .designDisplaySnapshot(let snapshot) = response else {
+        #expect(Bool(false))
+        return
+    }
+    let sketch = try #require(snapshot.sketches.first)
+    let extrude = try #require(snapshot.extrudes.first)
+
+    #expect(snapshot.generation == session.generation)
+    #expect(snapshot.dirty == session.isDirty)
+    #expect(snapshot.sketches.count == 1)
+    #expect(snapshot.extrudes.count == 1)
+    #expect(snapshot.straightPrismSweeps.isEmpty)
+    #expect(sketch.primitives.count == 4)
+    #expect(sketch.regions.count == 1)
+    #expect(extrude.profileFeatureID == sketch.featureID)
+    #expect(extrude.depthMeters > 0.0)
 }
 
 @Test func agentMessageCodecRoundTripsCommandRequestAndResponse() async throws {

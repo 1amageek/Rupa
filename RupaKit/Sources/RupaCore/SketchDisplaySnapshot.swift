@@ -1,5 +1,5 @@
-public struct SketchDisplaySnapshot: Equatable, Sendable {
-    public struct Bounds: Equatable, Sendable {
+public struct SketchDisplaySnapshot: Codable, Equatable, Sendable {
+    public struct Bounds: Codable, Equatable, Sendable {
         public var minX: Double
         public var minY: Double
         public var maxX: Double
@@ -26,7 +26,7 @@ public struct SketchDisplaySnapshot: Equatable, Sendable {
         }
     }
 
-    public enum Primitive: Equatable, Sendable {
+    public enum Primitive: Codable, Equatable, Sendable {
         case point(entityID: SketchEntityID, point: Point2D)
         case line(entityID: SketchEntityID, start: Point2D, end: Point2D)
         case circle(entityID: SketchEntityID, center: Point2D, radiusMeters: Double)
@@ -56,7 +56,7 @@ public struct SketchDisplaySnapshot: Equatable, Sendable {
         }
     }
 
-    public struct Region: Equatable, Sendable {
+    public struct Region: Codable, Equatable, Sendable {
         public var componentID: SelectionComponentID
         public var points: [Point2D]
 
