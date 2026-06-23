@@ -7,6 +7,19 @@ public enum ViewportIdentityPickPrimitive: Equatable, Sendable {
     case polyline(points: [CGPoint], radius: CGFloat, isClosed: Bool)
     case segment(start: CGPoint, end: CGPoint, radius: CGFloat)
     case point(center: CGPoint, radius: CGFloat)
+
+    public var encodedPointCount: Int {
+        switch self {
+        case .polygon(let points):
+            points.count
+        case .polyline(let points, _, _):
+            points.count
+        case .segment:
+            2
+        case .point:
+            1
+        }
+    }
 }
 
 public struct ViewportIdentityPickDrawItem: Equatable, Sendable {
@@ -48,6 +61,12 @@ public struct ViewportIdentityPickRenderPlan: Equatable, Sendable {
 
     public var isEmpty: Bool {
         drawItems.isEmpty
+    }
+
+    public var encodedPointCount: Int {
+        drawItems.reduce(0) { partialResult, item in
+            partialResult + item.primitive.encodedPointCount
+        }
     }
 
     public func drawItems(for identity: ViewportPickIdentity) -> [ViewportIdentityPickDrawItem] {

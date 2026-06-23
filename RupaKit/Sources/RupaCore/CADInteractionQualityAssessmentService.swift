@@ -185,10 +185,10 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                 ),
             ],
             openWork: [
-                "Identity-buffer render/readback budget thresholds and regression gates.",
                 "Selection-mode affordance parity for all subobject scopes.",
+                "Identity-buffer budget tuning against larger production scene captures.",
             ],
-            next: "Use identity-buffer metrics to set performance budgets, then retire remaining CPU-projected topology hit heuristics where identity-buffer coverage is proven."
+            next: "Tune identity-buffer budgets against larger production scenes, then retire remaining CPU-projected topology hit heuristics where identity-buffer coverage is proven."
         ),
         entry(
             area: .sweep,

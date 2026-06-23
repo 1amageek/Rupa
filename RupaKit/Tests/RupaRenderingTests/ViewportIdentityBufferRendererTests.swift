@@ -243,6 +243,108 @@ import Testing
 }
 
 @MainActor
+@Test func viewportIdentityHitResolverFallsBackBeforeRenderingWhenPixelBudgetIsExceeded() throws {
+    let scene = identityBufferGeneratedTopologyScene()
+    let viewportSize = CGSize(width: 240.0, height: 180.0)
+    let layout = try #require(ViewportLayout(scene: scene, size: viewportSize))
+    let renderer = CountingIdentityBufferRenderer()
+    let resolver = ViewportIdentityHitResolver(
+        rendererFactory: { renderer },
+        renderBudget: ViewportIdentityHitResolver.RenderBudget(
+            maximumPixelCount: 1,
+            maximumDrawItemCount: 200_000,
+            maximumEncodedPointCount: 1_000_000
+        )
+    )
+    let faceComponentID = SelectionComponentID.generatedTopology(
+        "feature:body:subshape:identity:face:front"
+    )
+
+    let hit = resolver.hitTest(
+        point: layout.project(Point3D(x: 0.0, y: 0.0, z: 0.0)),
+        in: scene,
+        layout: layout
+    )
+
+    #expect(renderer.renderCount == 0)
+    #expect(resolver.lastBudgetRejection?.limit == .pixelCount)
+    #expect(resolver.lastRenderCost?.pixelCount == 43_200)
+    #expect(resolver.lastRenderMetrics == nil)
+    #expect(hit?.pickingBackend == .projectedCPU)
+    #expect(hit?.selectionComponent == .face(faceComponentID))
+}
+
+@MainActor
+@Test func viewportIdentityHitResolverFallsBackBeforeRenderingWhenPlanBudgetIsExceeded() throws {
+    let scene = identityBufferGeneratedTopologyScene()
+    let viewportSize = CGSize(width: 240.0, height: 180.0)
+    let layout = try #require(ViewportLayout(scene: scene, size: viewportSize))
+    let renderer = CountingIdentityBufferRenderer()
+    let resolver = ViewportIdentityHitResolver(
+        rendererFactory: { renderer },
+        renderBudget: ViewportIdentityHitResolver.RenderBudget(
+            maximumPixelCount: 8_294_400,
+            maximumDrawItemCount: 1,
+            maximumEncodedPointCount: 1_000_000
+        )
+    )
+
+    let hits = resolver.selectionHits(
+        in: CGRect(x: 0.0, y: 0.0, width: viewportSize.width, height: viewportSize.height),
+        scene: scene,
+        layout: layout
+    )
+
+    #expect(renderer.renderCount == 0)
+    #expect(resolver.lastBudgetRejection?.limit == .drawItemCount)
+    #expect((resolver.lastRenderCost?.drawItemCount ?? 0) > 1)
+    #expect(hits.contains { $0.pickingBackend == .projectedCPU })
+}
+
+@MainActor
+@Test func viewportIdentityHitResolverFallsBackBeforeRenderingWhenEncodedPointBudgetIsExceeded() throws {
+    let scene = identityBufferGeneratedTopologyScene()
+    let viewportSize = CGSize(width: 240.0, height: 180.0)
+    let layout = try #require(ViewportLayout(scene: scene, size: viewportSize))
+    let renderer = CountingIdentityBufferRenderer()
+    let resolver = ViewportIdentityHitResolver(
+        rendererFactory: { renderer },
+        renderBudget: ViewportIdentityHitResolver.RenderBudget(
+            maximumPixelCount: 8_294_400,
+            maximumDrawItemCount: 200_000,
+            maximumEncodedPointCount: 1
+        )
+    )
+
+    let hits = resolver.selectionHits(
+        in: CGRect(x: 0.0, y: 0.0, width: viewportSize.width, height: viewportSize.height),
+        scene: scene,
+        layout: layout
+    )
+
+    #expect(renderer.renderCount == 0)
+    #expect(resolver.lastBudgetRejection?.limit == .encodedPointCount)
+    #expect((resolver.lastRenderCost?.encodedPointCount ?? 0) > 1)
+    #expect(hits.contains { $0.pickingBackend == .projectedCPU })
+}
+
+@MainActor
+@Test func viewportIdentityHitResolverDoesNotCacheMismatchedRenderedBuffer() throws {
+    let scene = identityBufferGeneratedTopologyScene()
+    let viewportSize = CGSize(width: 240.0, height: 180.0)
+    let layout = try #require(ViewportLayout(scene: scene, size: viewportSize))
+    let renderer = MismatchedIdentityBufferRenderer()
+    let resolver = ViewportIdentityHitResolver(rendererFactory: { renderer })
+    let point = layout.project(Point3D(x: 0.0, y: 0.0, z: 0.0))
+
+    _ = resolver.hitTest(point: point, in: scene, layout: layout)
+    _ = resolver.hitTest(point: point, in: scene, layout: layout)
+
+    #expect(renderer.renderCount == 2)
+    #expect(resolver.lastRenderMetrics == nil)
+}
+
+@MainActor
 @Test func viewportIdentityHitResolverSelectionFallsBackToProjectedCPUWhenRendererIsUnavailable() throws {
     let scene = identityBufferGeneratedTopologyScene()
     let viewportSize = CGSize(width: 240.0, height: 180.0)
@@ -432,7 +534,7 @@ private final class CountingIdentityBufferRenderer: ViewportIdentityBufferRender
             viewportHeight: height,
             encodedCommandCount: plan.drawItems.count,
             encodedPointCount: plan.drawItems.reduce(0) { partialResult, item in
-                partialResult + item.primitive.pointCount
+                partialResult + item.primitive.encodedPointCount
             },
             pixelCount: width * height,
             encodeDurationSeconds: Double(renderCount) * 0.001,
@@ -451,17 +553,19 @@ private final class CountingIdentityBufferRenderer: ViewportIdentityBufferRender
     }
 }
 
-private extension ViewportIdentityPickPrimitive {
-    var pointCount: Int {
-        switch self {
-        case .polygon(let points):
-            return points.count
-        case .polyline(let points, _, _):
-            return points.count
-        case .segment(_, _, _):
-            return 2
-        case .point(_, _):
-            return 1
-        }
+private final class MismatchedIdentityBufferRenderer: ViewportIdentityBufferRendering {
+    private(set) var renderCount = 0
+
+    func render(
+        plan: ViewportIdentityPickRenderPlan,
+        viewportSize: CGSize
+    ) throws -> ViewportIdentityBuffer {
+        renderCount += 1
+        return ViewportIdentityBuffer(
+            width: 1,
+            height: 1,
+            rawValues: [ViewportPickIdentity.backgroundRawValue],
+            index: plan.index
+        )
     }
 }
