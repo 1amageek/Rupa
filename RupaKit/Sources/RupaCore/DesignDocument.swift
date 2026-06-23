@@ -1008,10 +1008,7 @@ public struct DesignDocument: Identifiable, Sendable {
             }
         }
 
-        appendFeature(feature)
-        cadDocument.designGraph.dependencies.append(
-            DependencyEdge(source: targetFeatureID, target: featureID)
-        )
+        try appendFeature(feature)
         _ = try productMetadata.appendSceneNodeToFirstRoot(
             name: trimmedName,
             reference: .body(featureID),
@@ -2098,10 +2095,7 @@ public struct DesignDocument: Identifiable, Sendable {
             }
         }
 
-        appendFeature(feature)
-        cadDocument.designGraph.dependencies.append(
-            DependencyEdge(source: targetFeatureID, target: featureID)
-        )
+        try appendFeature(feature)
         _ = try productMetadata.appendSceneNodeToFirstRoot(
             name: featureName,
             reference: .body(featureID),
@@ -2258,10 +2252,7 @@ public struct DesignDocument: Identifiable, Sendable {
             }
         }
 
-        appendFeature(feature)
-        cadDocument.designGraph.dependencies.append(
-            DependencyEdge(source: targetFeatureID, target: featureID)
-        )
+        try appendFeature(feature)
         _ = try productMetadata.appendSceneNodeToFirstRoot(
             name: featureName,
             reference: .body(featureID),
@@ -13690,6 +13681,18 @@ public struct DesignDocument: Identifiable, Sendable {
                 FeatureOutput(role: .curve),
             ]
         )
+
+        let previousCADDocument = cadDocument
+        let previousProductMetadata = productMetadata
+        var didCommitSketch = false
+        defer {
+            if didCommitSketch == false {
+                cadDocument = previousCADDocument
+                productMetadata = previousProductMetadata
+            }
+        }
+
+        try appendFeature(feature)
         _ = try productMetadata.appendSceneNodeToFirstRoot(
             name: name,
             reference: .sketch(featureID),
@@ -13701,7 +13704,8 @@ public struct DesignDocument: Identifiable, Sendable {
                 objectRegistry: objectRegistry
             )
         )
-        appendFeature(feature)
+        try productMetadata.validate(against: cadDocument, objectRegistry: objectRegistry)
+        didCommitSketch = true
         return featureID
     }
 
@@ -14912,7 +14916,7 @@ public struct DesignDocument: Identifiable, Sendable {
             }
         }
 
-        appendFeature(feature)
+        try appendFeature(feature)
         _ = try productMetadata.appendSceneNodeToFirstRoot(
             name: trimmedName,
             reference: .body(featureID),
@@ -15195,6 +15199,18 @@ public struct DesignDocument: Identifiable, Sendable {
             inputs: [FeatureInput(featureID: profile.featureID, role: .profile)],
             outputs: [FeatureOutput(role: .body)]
         )
+
+        let previousCADDocument = cadDocument
+        let previousProductMetadata = productMetadata
+        var didCommitExtrude = false
+        defer {
+            if didCommitExtrude == false {
+                cadDocument = previousCADDocument
+                productMetadata = previousProductMetadata
+            }
+        }
+
+        try appendFeature(feature)
         _ = try productMetadata.appendSceneNodeToFirstRoot(
             name: name,
             reference: .body(featureID),
@@ -15205,14 +15221,11 @@ public struct DesignDocument: Identifiable, Sendable {
                 objectRegistry: objectRegistry
             )
         )
-        appendFeature(feature)
-        cadDocument.designGraph.dependencies.append(
-            DependencyEdge(source: profile.featureID, target: featureID)
-        )
         try synchronizeObjectPropertiesFromSource(
             featureID: featureID,
             objectRegistry: objectRegistry
         )
+        didCommitExtrude = true
         return featureID
     }
 
@@ -15275,13 +15288,7 @@ public struct DesignDocument: Identifiable, Sendable {
             }
         }
 
-        appendFeature(feature)
-        let dependencySourceIDs = Set(inputs.map(\.featureID))
-        for sourceID in dependencySourceIDs.sorted(by: { $0.description < $1.description }) {
-            cadDocument.designGraph.dependencies.append(
-                DependencyEdge(source: sourceID, target: featureID)
-            )
-        }
+        try appendFeature(feature)
         _ = try productMetadata.appendSceneNodeToFirstRoot(
             name: trimmedName,
             reference: .body(featureID),
@@ -15471,10 +15478,8 @@ public struct DesignDocument: Identifiable, Sendable {
         try productMetadata.validate(against: cadDocument, objectRegistry: objectRegistry)
     }
 
-    private mutating func appendFeature(_ feature: FeatureNode) {
-        cadDocument.designGraph.nodes[feature.id] = feature
-        cadDocument.designGraph.order.append(feature.id)
-        cadDocument.designGraph.revision = cadDocument.designGraph.revision.advanced()
+    private mutating func appendFeature(_ feature: FeatureNode) throws {
+        try cadDocument.appendFeature(feature)
     }
 
     private func normalizedMetadataName(
