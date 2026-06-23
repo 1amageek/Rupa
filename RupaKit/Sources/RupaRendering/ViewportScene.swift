@@ -221,6 +221,32 @@ public struct ViewportBodyTopology: Equatable {
     }
 }
 
+private extension ViewportBodyTopology {
+    init(_ topology: BodyDisplaySnapshot.Topology) {
+        self.init(
+            faces: topology.faces.map { face in
+                ViewportBodyTopology.Face(
+                    componentID: face.componentID,
+                    points: face.points
+                )
+            },
+            edges: topology.edges.map { edge in
+                ViewportBodyTopology.Edge(
+                    componentID: edge.componentID,
+                    start: edge.start,
+                    end: edge.end
+                )
+            },
+            vertices: topology.vertices.map { vertex in
+                ViewportBodyTopology.Vertex(
+                    componentID: vertex.componentID,
+                    point: vertex.point
+                )
+            }
+        )
+    }
+}
+
 public struct ViewportBodyTopologyHit: Equatable, Sendable {
     public var component: SelectionComponent
     public var score: CGFloat
@@ -2390,21 +2416,14 @@ public struct ViewportSceneBuilder {
 
     public func build(document: DesignDocument) -> ViewportScene {
         let graph = document.cadDocument.designGraph
-        var cachedEvaluatedDocument: EvaluatedDocument?
-        var didAttemptEvaluation = false
-        func evaluatedDocument() -> EvaluatedDocument? {
-            if didAttemptEvaluation {
-                return cachedEvaluatedDocument
-            }
-            didAttemptEvaluation = true
-            do {
-                cachedEvaluatedDocument = try CADPipeline
-                    .modelingDefault(for: document, objectRegistry: objectRegistry)
-                    .evaluate(document.cadDocument)
-            } catch {
-                cachedEvaluatedDocument = nil
-            }
-            return cachedEvaluatedDocument
+        let bodyDisplaySnapshots: [FeatureID: BodyDisplaySnapshot]
+        do {
+            bodyDisplaySnapshots = try BodyDisplaySnapshotService().snapshots(
+                document: document,
+                objectRegistry: objectRegistry
+            )
+        } catch {
+            bodyDisplaySnapshots = [:]
         }
 
         let items = graph.order.compactMap { featureID -> ViewportSceneItem? in
@@ -2534,14 +2553,14 @@ public struct ViewportSceneBuilder {
                     featureID: featureID,
                     sourceFeatureID: profile.featureID,
                     document: document,
-                    evaluatedDocument: evaluatedDocument()
+                    bodyDisplaySnapshots: bodyDisplaySnapshots
                 )
             case .polySpline:
                 return evaluatedMeshBodyItem(
                     featureID: featureID,
                     sourceFeatureID: nil,
                     document: document,
-                    evaluatedDocument: evaluatedDocument()
+                    bodyDisplaySnapshots: bodyDisplaySnapshots
                 )
             case .faceLoopOffset:
                 return evaluatedMeshBodyItem(
@@ -2552,7 +2571,7 @@ public struct ViewportSceneBuilder {
                         document: document
                     )?.sourceProfileFeatureID,
                     document: document,
-                    evaluatedDocument: evaluatedDocument()
+                    bodyDisplaySnapshots: bodyDisplaySnapshots
                 )
             case .edgeOffset:
                 return evaluatedMeshBodyItem(
@@ -2563,7 +2582,7 @@ public struct ViewportSceneBuilder {
                         document: document
                     )?.sourceProfileFeatureID,
                     document: document,
-                    evaluatedDocument: evaluatedDocument()
+                    bodyDisplaySnapshots: bodyDisplaySnapshots
                 )
             case .faceKnife:
                 return evaluatedMeshBodyItem(
@@ -2574,7 +2593,7 @@ public struct ViewportSceneBuilder {
                         document: document
                     )?.sourceProfileFeatureID,
                     document: document,
-                    evaluatedDocument: evaluatedDocument()
+                    bodyDisplaySnapshots: bodyDisplaySnapshots
                 )
             case .bridgeCurve:
                 return nil
@@ -2627,14 +2646,9 @@ public struct ViewportSceneBuilder {
         featureID: FeatureID,
         sourceFeatureID: FeatureID?,
         document: DesignDocument,
-        evaluatedDocument: EvaluatedDocument?
+        bodyDisplaySnapshots: [FeatureID: BodyDisplaySnapshot]
     ) -> ViewportSceneItem? {
-        guard let evaluatedDocument,
-              let mesh = evaluatedMesh(
-                  for: featureID,
-                  in: evaluatedDocument
-              ),
-              let bounds = viewportMeshBounds(mesh) else {
+        guard let snapshot = bodyDisplaySnapshots[featureID] else {
             return nil
         }
         let object = objectDescriptor(
@@ -2650,175 +2664,29 @@ public struct ViewportSceneBuilder {
         let component = ViewportBodyComponent(
             typeID: resolvedTypeID,
             properties: properties,
-            sizeXMeters: max(bounds.maxX - bounds.minX, 1.0e-9),
-            sizeYMeters: max(bounds.maxY - bounds.minY, 1.0e-9),
-            sizeZMeters: max(bounds.maxZ - bounds.minZ, 1.0e-9),
-            yMinMeters: bounds.minY,
-            yMaxMeters: bounds.maxY,
+            sizeXMeters: max(snapshot.bounds.maxX - snapshot.bounds.minX, 1.0e-9),
+            sizeYMeters: max(snapshot.bounds.maxY - snapshot.bounds.minY, 1.0e-9),
+            sizeZMeters: max(snapshot.bounds.maxZ - snapshot.bounds.minZ, 1.0e-9),
+            yMinMeters: snapshot.bounds.minY,
+            yMaxMeters: snapshot.bounds.maxY,
             mesh: ViewportBodyMesh(
-                positions: mesh.positions,
-                indices: mesh.indices
+                positions: snapshot.mesh.positions,
+                indices: snapshot.mesh.indices
             ),
-            topology: evaluatedTopology(
-                for: featureID,
-                in: evaluatedDocument
-            )
+            topology: ViewportBodyTopology(snapshot.topology)
         )
         return ViewportSceneItem(
             id: featureID.description,
             featureID: featureID,
             sourceFeatureID: sourceFeatureID,
             modelBounds: CGRect(
-                x: bounds.minX,
-                y: bounds.minZ,
-                width: max(bounds.maxX - bounds.minX, 1.0e-9),
-                height: max(bounds.maxZ - bounds.minZ, 1.0e-9)
+                x: snapshot.bounds.minX,
+                y: snapshot.bounds.minZ,
+                width: max(snapshot.bounds.maxX - snapshot.bounds.minX, 1.0e-9),
+                height: max(snapshot.bounds.maxZ - snapshot.bounds.minZ, 1.0e-9)
             ),
             kind: .body(component: component)
         )
-    }
-
-    private func evaluatedTopology(
-        for featureID: FeatureID,
-        in evaluatedDocument: EvaluatedDocument
-    ) -> ViewportBodyTopology {
-        let model = evaluatedDocument.brep
-        var faces: [ViewportBodyTopology.Face] = []
-        var edges: [ViewportBodyTopology.Edge] = []
-        var vertices: [ViewportBodyTopology.Vertex] = []
-
-        for (name, reference) in evaluatedDocument.generatedNames.sorted(by: {
-            persistentNameString($0.key) < persistentNameString($1.key)
-        }) {
-            guard persistentNameSourceFeatureID(name) == featureID else {
-                continue
-            }
-            let componentID = SelectionComponentID.generatedTopology(
-                persistentNameString(name)
-            )
-            switch reference {
-            case .body:
-                continue
-            case .face(let faceID):
-                guard let face = model.faces[faceID],
-                      let points = orderedOuterLoopPoints(for: face, in: model),
-                      points.count >= 3 else {
-                    continue
-                }
-                faces.append(ViewportBodyTopology.Face(
-                    componentID: componentID,
-                    points: points
-                ))
-            case .edge(let edgeID):
-                guard let edge = model.edges[edgeID],
-                      let start = model.vertices[edge.startVertexID]?.point,
-                      let end = model.vertices[edge.endVertexID]?.point else {
-                    continue
-                }
-                edges.append(ViewportBodyTopology.Edge(
-                    componentID: componentID,
-                    start: start,
-                    end: end
-                ))
-            case .vertex(let vertexID):
-                guard let vertex = model.vertices[vertexID] else {
-                    continue
-                }
-                vertices.append(ViewportBodyTopology.Vertex(
-                    componentID: componentID,
-                    point: vertex.point
-                ))
-            }
-        }
-
-        return ViewportBodyTopology(
-            faces: faces,
-            edges: edges,
-            vertices: vertices
-        )
-    }
-
-    private func orderedOuterLoopPoints(
-        for face: CADFace,
-        in model: CADBRepModel
-    ) -> [Point3D]? {
-        guard let loopID = face.loops.first(where: { loopID in
-            model.loops[loopID]?.role == .outer
-        }) else {
-            return nil
-        }
-        do {
-            return try model.orderedPoints(for: loopID)
-        } catch {
-            return nil
-        }
-    }
-
-    private func persistentNameSourceFeatureID(_ name: PersistentName) -> FeatureID? {
-        for component in name.components {
-            if case .feature(let featureID) = component {
-                return featureID
-            }
-        }
-        return nil
-    }
-
-    private func persistentNameString(_ name: PersistentName) -> String {
-        name.components.map { component in
-            switch component {
-            case .feature(let featureID):
-                return "feature:\(featureID.description)"
-            case .generated(let value):
-                return "generated:\(value)"
-            case .subshape(let value):
-                return "subshape:\(value)"
-            case .index(let index):
-                return "index:\(index)"
-            }
-        }
-        .joined(separator: "/")
-    }
-
-    private func evaluatedMesh(
-        for featureID: FeatureID,
-        in evaluatedDocument: EvaluatedDocument
-    ) -> Mesh? {
-        guard let bodyID = generatedBodyID(
-            for: featureID,
-            in: evaluatedDocument.generatedNames
-        ) else {
-            return nil
-        }
-        return evaluatedDocument.meshes[bodyID]
-    }
-
-    private func generatedBodyID(
-        for featureID: FeatureID,
-        in generatedNames: [PersistentName: TopologyReference]
-    ) -> BodyID? {
-        generatedNames
-            .sorted { persistentNameString($0.key) < persistentNameString($1.key) }
-            .compactMap { entry -> BodyID? in
-                guard persistentNameSourceFeatureID(entry.key) == featureID,
-                      case .body(let bodyID) = entry.value else {
-                    return nil
-                }
-                return bodyID
-            }
-            .first
-    }
-
-    private func viewportMeshBounds(_ mesh: Mesh) -> ViewportMeshBounds? {
-        var bounds: ViewportMeshBounds?
-        for point in mesh.positions {
-            if var current = bounds {
-                current.include(point)
-                bounds = current
-            } else {
-                bounds = ViewportMeshBounds(point)
-            }
-        }
-        return bounds
     }
 
     private func bodyComponent(
@@ -3434,33 +3302,6 @@ public struct ViewportSceneBuilder {
         } catch {
             return nil
         }
-    }
-}
-
-private struct ViewportMeshBounds {
-    var minX: Double
-    var minY: Double
-    var minZ: Double
-    var maxX: Double
-    var maxY: Double
-    var maxZ: Double
-
-    init(_ point: Point3D) {
-        self.minX = point.x
-        self.minY = point.y
-        self.minZ = point.z
-        self.maxX = point.x
-        self.maxY = point.y
-        self.maxZ = point.z
-    }
-
-    mutating func include(_ point: Point3D) {
-        minX = min(minX, point.x)
-        minY = min(minY, point.y)
-        minZ = min(minZ, point.z)
-        maxX = max(maxX, point.x)
-        maxY = max(maxY, point.y)
-        maxZ = max(maxZ, point.z)
     }
 }
 
