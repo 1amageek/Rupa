@@ -76,22 +76,15 @@ public struct DesignDocument: Identifiable, Sendable {
         expression: CADExpression,
         kind: QuantityKind
     ) {
-        let existingID = cadDocument.parameters.parameters.values
-            .first { $0.name == name }?
-            .id ?? ParameterID()
-        cadDocument.parameters.parameters[existingID] = Parameter(
-            id: existingID,
+        cadDocument.upsertParameter(
             name: name,
             expression: expression,
             kind: kind
         )
-        cadDocument.parameters.revision = cadDocument.parameters.revision.advanced()
     }
 
     public mutating func deleteParameter(name: String) throws {
-        guard let parameterID = cadDocument.parameters.parameters.values
-            .first(where: { $0.name == name })?
-            .id else {
+        guard cadDocument.parameterID(named: name) != nil else {
             throw EditorError(
                 code: .referenceUnresolved,
                 message: "Parameter delete requires an existing parameter."
@@ -99,10 +92,8 @@ public struct DesignDocument: Identifiable, Sendable {
         }
 
         var updatedCADDocument = cadDocument
-        updatedCADDocument.parameters.parameters.removeValue(forKey: parameterID)
-        updatedCADDocument.parameters.revision = updatedCADDocument.parameters.revision.advanced()
         do {
-            try updatedCADDocument.validate()
+            try updatedCADDocument.deleteParameter(named: name)
         } catch {
             throw EditorError(
                 code: .referenceUnresolved,
