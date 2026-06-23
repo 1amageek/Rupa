@@ -1,3 +1,4 @@
+import RupaRendering
 import SwiftUI
 
 enum WorkspaceSelectionScope: String, CaseIterable, Identifiable, Sendable {
@@ -81,6 +82,30 @@ enum WorkspaceSelectionScope: String, CaseIterable, Identifiable, Sendable {
     }
 
     var isEnabled: Bool {
+        switch self {
+        case .object, .face, .edge, .vertex, .region, .sketchEntity:
+            return true
+        }
+    }
+
+    var viewportSelectionHitPolicy: ViewportSelectionHitPolicy {
+        switch self {
+        case .object:
+            return .object
+        case .face:
+            return .face
+        case .edge:
+            return .edge
+        case .vertex:
+            return .vertex
+        case .region:
+            return .region
+        case .sketchEntity:
+            return .sketchEntity
+        }
+    }
+
+    var allowsSelectionRectangle: Bool {
         switch self {
         case .object, .face, .edge, .vertex, .region, .sketchEntity:
             return true

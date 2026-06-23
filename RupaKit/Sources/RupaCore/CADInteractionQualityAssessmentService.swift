@@ -176,20 +176,22 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                         "RupaKit/Sources/RupaRendering/ViewportSelectionHitPolicy.swift",
                         "RupaKit/Sources/RupaRendering/ViewportIdentityBufferRenderer.swift",
                         "RupaKit/Sources/RupaRendering/ViewportIdentityHitResolver.swift",
+                        "RupaKit/Sources/RupaUI/WorkspaceSelectionScope.swift",
                     ],
                     tests: [
                         "RupaKit/Tests/RupaCoreTests/SelectionModelTests.swift",
                         "RupaKit/Tests/RupaCoreTests/TopologySummaryServiceTests.swift",
                         "RupaKit/Tests/RupaRenderingTests/ViewportSceneTests.swift",
                         "RupaKit/Tests/RupaRenderingTests/ViewportIdentityBufferRendererTests.swift",
+                        "RupaKit/Tests/RupaUIPackageTests/WorkspaceSelectionScopeTests.swift",
                     ]
                 ),
             ],
             openWork: [
-                "Selection-mode visual affordance parity for all subobject scopes.",
+                "Selection-mode hover, preview, and edit-handle affordance parity for all subobject scopes.",
                 "Identity-buffer budget tuning against larger production scene captures.",
             ],
-            next: "Broaden scope-specific visual affordances and tune identity-buffer budgets against larger production scenes before retiring remaining CPU-projected topology hit heuristics."
+            next: "Broaden scope-specific hover, preview, and edit-handle affordances and tune identity-buffer budgets against larger production scenes before retiring remaining CPU-projected topology hit heuristics."
         ),
         entry(
             area: .sweep,

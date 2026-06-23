@@ -387,23 +387,6 @@ public struct MainView: View {
         sidebarSearchText.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    private var viewportSelectionHitPolicy: ViewportSelectionHitPolicy {
-        switch selectionScope {
-        case .object:
-            return .object
-        case .face:
-            return .face
-        case .edge:
-            return .edge
-        case .vertex:
-            return .vertex
-        case .region:
-            return .region
-        case .sketchEntity:
-            return .sketchEntity
-        }
-    }
-
     private func matchesSidebarSearch(_ values: String...) -> Bool {
         let query = normalizedSidebarSearchText
         guard !query.isEmpty else {
@@ -446,7 +429,7 @@ public struct MainView: View {
                     canvasDragAxisConstraint: activeCanvasDragAxisConstraint,
                     canvasDragSketchPlaneOverride: workspacePlaneMode.sketchPlane,
                     projectionRequest: viewportProjectionRequest,
-                    selectionHitPolicy: viewportSelectionHitPolicy,
+                    selectionHitPolicy: selectionScope.viewportSelectionHitPolicy,
                     showsConstructionPlaneHover: showsConstructionPlaneHover,
                     allowsSelectionRectangle: allowsSelectionRectangle,
                     allowsObjectAffordances: allowsObjectAffordances,
@@ -721,7 +704,7 @@ public struct MainView: View {
     }
 
     private var allowsSelectionRectangle: Bool {
-        session.selectedTool == .select && (selectionScope == .object || selectionScope == .sketchEntity)
+        session.selectedTool == .select && selectionScope.allowsSelectionRectangle
     }
 
     private var hasActiveWorkspaceCommand: Bool {
