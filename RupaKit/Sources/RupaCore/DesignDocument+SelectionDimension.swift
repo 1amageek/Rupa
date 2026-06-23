@@ -22,25 +22,16 @@ public extension DesignDocument {
             in: self,
             objectRegistry: objectRegistry
         )
-        let dimension = SelectionDimension(
-            name: normalizedSelectionDimensionName(name),
-            kind: kind,
-            first: firstReference,
-            second: secondReference,
-            target: target
-        )
-        try dimension.validate(parameters: cadDocument.parameters)
-
         var updatedCADDocument = cadDocument
-        guard updatedCADDocument.selectionDimensions.contains(where: { $0.id == dimension.id }) == false else {
-            throw EditorError(
-                code: .commandInvalid,
-                message: "Selection dimension IDs must be unique."
-            )
-        }
-        updatedCADDocument.selectionDimensions.append(dimension)
+        let dimensionID: SelectionDimensionID
         do {
-            try updatedCADDocument.validate()
+            dimensionID = try updatedCADDocument.addSelectionDimension(
+                name: normalizedSelectionDimensionName(name),
+                kind: kind,
+                first: firstReference,
+                second: secondReference,
+                target: target
+            )
         } catch {
             throw EditorError(
                 code: .commandInvalid,
@@ -48,7 +39,7 @@ public extension DesignDocument {
             )
         }
         cadDocument = updatedCADDocument
-        return dimension.id
+        return dimensionID
     }
 
     private func normalizedSelectionDimensionName(_ name: String?) -> String? {
