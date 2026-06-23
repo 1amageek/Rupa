@@ -80,6 +80,11 @@ public enum AgentRequest: Codable, Equatable, Sendable {
         options: SurfaceAnalysisOptions,
         expectedGeneration: DocumentGeneration?
     )
+    case surfaceFrames(
+        sessionID: UUID,
+        queries: [SurfaceFrameQuery],
+        expectedGeneration: DocumentGeneration?
+    )
     case surfaceContinuitySummary(
         sessionID: UUID,
         expectedGeneration: DocumentGeneration?
@@ -121,6 +126,7 @@ public enum AgentResponse: Codable, Equatable, Sendable {
     case topologySummary(TopologySummaryResult)
     case objectDimensionSummary(ObjectDimensionSummaryResult)
     case surfaceAnalysis(SurfaceAnalysisResult)
+    case surfaceFrames(SurfaceFrameResult)
     case surfaceContinuitySummary(SurfaceContinuityResult)
     case selection(SelectionStateResult)
     case save(SaveResult)

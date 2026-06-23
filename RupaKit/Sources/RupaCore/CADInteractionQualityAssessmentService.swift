@@ -272,8 +272,11 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                     label: "PolySpline analysis, topology, overlays, and boundary CV mutation",
                     sourceFiles: [
                         "RupaKit/Sources/RupaCore/PolySplineMeshAnalysisService.swift",
+                        "RupaKit/Sources/RupaCore/SurfaceFrameService.swift",
                         "RupaKit/Sources/RupaCore/SurfaceAnalysisService.swift",
                         "RupaKit/Sources/RupaCore/SurfaceContinuityService.swift",
+                        "RupaKit/Sources/RupaAgent/AgentMessage.swift",
+                        "RupaKit/Sources/RupaAgent/AgentServer.swift",
                         "RupaKit/Sources/RupaRendering/ViewportSurfaceAnalysisOverlay.swift",
                         "RupaKit/Sources/RupaRendering/ViewportSurfaceContinuityOverlay.swift",
                     ],
@@ -287,14 +290,14 @@ public struct CADInteractionQualityAssessmentService: Sendable {
             ],
             openWork: [
                 "First-class NURBS and B-spline source entities with degree, order, knot vectors, weights, spans, stable CV/knot/span IDs, and trim-loop ownership.",
-                "UVN local-frame evaluation for selected surface parameters, including U/V tangents, normal, derivatives, curvature, and orientation consistency.",
+                "Viewport surface-frame handles and surface editing commands that consume the Agent-readable UVN frame contract.",
                 "Typed continuity contracts for G0/G1/G2 surface boundaries and G0/G1/G2/G3 curve matching.",
                 "Non-planar G2 multi-patch reconstruction.",
                 "Patch merge and rounded-corner policy output.",
                 "General trim-curve and surface CV source editing.",
                 "Viewport creation controls.",
             ],
-            next: "Promote PolySpline from generated-boundary editing to a shared parametric surface foundation with NURBS/B-spline source ownership, UVN frame evaluation, and explicit continuity diagnostics before broadening surface tools."
+            next: "Promote PolySpline from generated-boundary editing to a shared parametric surface foundation with NURBS/B-spline source ownership, UI-consumable UVN frame affordances, and explicit continuity diagnostics before broadening surface tools."
         ),
         entry(
             area: .curveContinuity,

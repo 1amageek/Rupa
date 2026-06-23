@@ -873,6 +873,16 @@ public final class AgentServer: AgentClientProtocol {
             failureMode: "Rejects stale generations, invalid documents, or unsupported unbounded B-spline domains before returning surface analysis data."
         ),
         capability(
+            "surfaceFrames",
+            category: .read,
+            summary: "Resolve explicit generated B-spline face UV addresses into oriented UVN local frames, derivative tangents, principal directions, and curvature values without mutation.",
+            access: .agentRequest,
+            mutatesDocument: false,
+            discovery: [.topologySummary, .surfaceFrames],
+            targets: [.face],
+            failureMode: "Rejects stale generations, unresolved face persistent names or face IDs, non-B-spline faces, unbounded domains, and UV parameters outside the face surface domain."
+        ),
+        capability(
             "surfaceContinuitySummary",
             category: .read,
             summary: "Discover B-spline face adjacencies, shared edges, and observed G0/G1/G2 continuity status without mutation.",
@@ -1143,6 +1153,16 @@ public final class AgentServer: AgentClientProtocol {
                 return .surfaceAnalysis(
                     try SurfaceAnalysisService(options: options).analyze(
                         document: session.document,
+                        objectRegistry: session.objectRegistry
+                    )
+                )
+            case let .surfaceFrames(sessionID, queries, expectedGeneration):
+                let session = try registry.session(id: sessionID)
+                try session.store.requireGeneration(expectedGeneration)
+                return .surfaceFrames(
+                    try SurfaceFrameService().resolve(
+                        document: session.document,
+                        queries: queries,
                         objectRegistry: session.objectRegistry
                     )
                 )

@@ -92,6 +92,7 @@ import SwiftCAD
     #expect(capabilities.contains("sketchEntitySummary"))
     #expect(capabilities.contains("topologySummary"))
     #expect(capabilities.contains("surfaceAnalysis"))
+    #expect(capabilities.contains("surfaceFrames"))
     #expect(capabilities.contains("surfaceContinuitySummary"))
     #expect(capabilities.contains("selectTargets"))
     #expect(capabilities.contains("saveDocument"))
@@ -139,6 +140,7 @@ import SwiftCAD
     let curveAnalysis = try #require(descriptors.first { $0.name == "curveAnalysis" })
     let topology = try #require(descriptors.first { $0.name == "topologySummary" })
     let surfaceAnalysis = try #require(descriptors.first { $0.name == "surfaceAnalysis" })
+    let surfaceFrames = try #require(descriptors.first { $0.name == "surfaceFrames" })
     let surfaceContinuity = try #require(descriptors.first { $0.name == "surfaceContinuitySummary" })
     let snapResolution = try #require(descriptors.first { $0.name == "resolveSnap" })
     let constructionPlaneCreate = try #require(descriptors.first { $0.name == "createConstructionPlane" })
@@ -511,6 +513,15 @@ import SwiftCAD
     #expect(surfaceAnalysis.summary.contains("sample density"))
     #expect(surfaceAnalysis.summary.contains("trim-boundary"))
     #expect(surfaceAnalysis.failureMode.contains("unbounded B-spline"))
+
+    #expect(surfaceFrames.category == .read)
+    #expect(!surfaceFrames.mutatesDocument)
+    #expect(surfaceFrames.access == .agentRequest)
+    #expect(surfaceFrames.discovery.contains(.topologySummary))
+    #expect(surfaceFrames.discovery.contains(.surfaceFrames))
+    #expect(surfaceFrames.targets == [.face])
+    #expect(surfaceFrames.summary.contains("UVN local frames"))
+    #expect(surfaceFrames.failureMode.contains("face persistent names"))
 
     #expect(surfaceContinuity.category == .read)
     #expect(!surfaceContinuity.mutatesDocument)
@@ -1504,6 +1515,49 @@ import SwiftCAD
             ]
         )
     )
+    let surfaceFramesRequest = AgentRequest.surfaceFrames(
+        sessionID: sessionID,
+        queries: [
+            SurfaceFrameQuery(
+                facePersistentName: "feature:a/generated:polySpline/subshape:patch:0:face",
+                u: 0.5,
+                v: 0.5
+            ),
+        ],
+        expectedGeneration: DocumentGeneration(4)
+    )
+    let surfaceFramesResponse = AgentResponse.surfaceFrames(
+        SurfaceFrameResult(
+            displayUnit: .millimeter,
+            frames: [
+                SurfaceFrameResult.Frame(
+                    faceID: UUID().uuidString,
+                    facePersistentNames: ["feature:a/generated:polySpline/subshape:patch:0:face"],
+                    sourceFeatureID: UUID().uuidString,
+                    sceneNodeID: UUID().uuidString,
+                    u: 0.5,
+                    v: 0.5,
+                    uDomain: SurfaceAnalysisResult.ParameterRange(lowerBound: 0.0, upperBound: 1.0),
+                    vDomain: SurfaceAnalysisResult.ParameterRange(lowerBound: 0.0, upperBound: 1.0),
+                    position: SurfaceAnalysisResult.Point(x: 0.1, y: 0.0, z: 0.2),
+                    tangentU: SurfaceAnalysisResult.Vector(x: 1.0, y: 0.0, z: 0.0),
+                    tangentV: SurfaceAnalysisResult.Vector(x: 0.0, y: 0.0, z: 1.0),
+                    uAxis: SurfaceAnalysisResult.Vector(x: 1.0, y: 0.0, z: 0.0),
+                    vAxis: SurfaceAnalysisResult.Vector(x: 0.0, y: 0.0, z: 1.0),
+                    normal: SurfaceAnalysisResult.Vector(x: 0.0, y: -1.0, z: 0.0),
+                    handedness: 1.0,
+                    normalCurvatureU: 0.0,
+                    normalCurvatureV: 0.0,
+                    meanCurvature: 0.0,
+                    gaussianCurvature: 0.0,
+                    minimumPrincipalCurvature: 0.0,
+                    maximumPrincipalCurvature: 0.0,
+                    minimumPrincipalDirection: SurfaceAnalysisResult.Vector(x: 1.0, y: 0.0, z: 0.0),
+                    maximumPrincipalDirection: SurfaceAnalysisResult.Vector(x: 0.0, y: 0.0, z: 1.0)
+                ),
+            ]
+        )
+    )
     let surfaceContinuityRequest = AgentRequest.surfaceContinuitySummary(
         sessionID: sessionID,
         expectedGeneration: DocumentGeneration(4)
@@ -1583,6 +1637,8 @@ import SwiftCAD
     #expect(try codec.decodeResponse(from: try codec.encode(topologyResponse)) == topologyResponse)
     #expect(try codec.decodeRequest(from: try codec.encode(surfaceAnalysisRequest)) == surfaceAnalysisRequest)
     #expect(try codec.decodeResponse(from: try codec.encode(surfaceAnalysisResponse)) == surfaceAnalysisResponse)
+    #expect(try codec.decodeRequest(from: try codec.encode(surfaceFramesRequest)) == surfaceFramesRequest)
+    #expect(try codec.decodeResponse(from: try codec.encode(surfaceFramesResponse)) == surfaceFramesResponse)
     #expect(try codec.decodeRequest(from: try codec.encode(surfaceContinuityRequest)) == surfaceContinuityRequest)
     #expect(try codec.decodeResponse(from: try codec.encode(surfaceContinuityResponse)) == surfaceContinuityResponse)
     #expect(try codec.decodeRequest(from: try codec.encode(selectRequest)) == selectRequest)
@@ -2765,6 +2821,76 @@ import SwiftCAD
     let sample = try #require(face.samples.first)
     #expect(abs(surfaceVectorLength(sample.minimumPrincipalDirection) - 1.0) <= 1.0e-8)
     #expect(abs(surfaceVectorLength(sample.maximumPrincipalDirection) - 1.0) <= 1.0e-8)
+    #expect(session.generation == generation)
+    #expect(session.isDirty == dirty)
+}
+
+@MainActor
+@Test func agentResolvesPlanarPolySplineSurfaceFramesWithoutMutation() async throws {
+    let server = AgentServer()
+    let sessionID = UUID()
+    let session = EditorSession()
+    server.register(session: session, id: sessionID)
+
+    let createResponse = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .createPolySplineSurface(
+                name: "Agent Surface Frame",
+                sourceMesh: agentPolySplinePatchNetworkMesh(centerZ: 0.0),
+                options: PolySplineOptions(mergePatches: false)
+            ),
+            expectedGeneration: DocumentGeneration(0)
+        )
+    )
+    guard case .command(let createResult) = createResponse else {
+        Issue.record("Agent must create a planar PolySpline patch network.")
+        return
+    }
+    #expect(createResult.didMutate)
+    let generation = session.generation
+    let dirty = session.isDirty
+
+    let topologyResponse = server.handle(
+        .topologySummary(
+            sessionID: sessionID,
+            expectedGeneration: generation
+        )
+    )
+    guard case .topologySummary(let topology) = topologyResponse,
+          let faceEntry = topology.entries.first(where: { $0.kind == .face }) else {
+        Issue.record("Agent must discover generated face topology before resolving UVN frames.")
+        return
+    }
+
+    let response = server.handle(
+        .surfaceFrames(
+            sessionID: sessionID,
+            queries: [
+                SurfaceFrameQuery(
+                    facePersistentName: faceEntry.persistentName,
+                    u: 0.5,
+                    v: 0.5
+                ),
+            ],
+            expectedGeneration: generation
+        )
+    )
+
+    guard case .surfaceFrames(let frames) = response else {
+        Issue.record("Agent must return surface frame data.")
+        return
+    }
+    #expect(frames.frames.count == 1)
+    let frame = try #require(frames.frames.first)
+    #expect(frame.facePersistentNames.contains(faceEntry.persistentName))
+    #expect(abs(surfaceVectorLength(frame.uAxis) - 1.0) <= 1.0e-8)
+    #expect(abs(surfaceVectorLength(frame.vAxis) - 1.0) <= 1.0e-8)
+    #expect(abs(surfaceVectorLength(frame.normal) - 1.0) <= 1.0e-8)
+    #expect(abs(surfaceVectorDot(surfaceVectorCross(frame.uAxis, frame.vAxis), frame.normal) - 1.0) <= 1.0e-8)
+    #expect(frame.handedness > 0.999_999)
+    #expect(abs(frame.normalCurvatureU) <= 1.0e-8)
+    #expect(abs(frame.normalCurvatureV) <= 1.0e-8)
     #expect(session.generation == generation)
     #expect(session.isDirty == dirty)
 }
@@ -10496,6 +10622,24 @@ private func agentPolySplinePatchNetworkMesh(centerZ: Double = 0.001) -> Mesh {
 
 private func surfaceVectorLength(_ vector: SurfaceAnalysisResult.Vector) -> Double {
     hypot(hypot(vector.x, vector.y), vector.z)
+}
+
+private func surfaceVectorDot(
+    _ lhs: SurfaceAnalysisResult.Vector,
+    _ rhs: SurfaceAnalysisResult.Vector
+) -> Double {
+    lhs.x * rhs.x + lhs.y * rhs.y + lhs.z * rhs.z
+}
+
+private func surfaceVectorCross(
+    _ lhs: SurfaceAnalysisResult.Vector,
+    _ rhs: SurfaceAnalysisResult.Vector
+) -> SurfaceAnalysisResult.Vector {
+    SurfaceAnalysisResult.Vector(
+        x: lhs.y * rhs.z - lhs.z * rhs.y,
+        y: lhs.z * rhs.x - lhs.x * rhs.z,
+        z: lhs.x * rhs.y - lhs.y * rhs.x
+    )
 }
 
 private extension ObjectPropertyValue {

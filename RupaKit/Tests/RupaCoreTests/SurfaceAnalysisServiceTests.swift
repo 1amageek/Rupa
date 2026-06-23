@@ -95,8 +95,66 @@ import SwiftCAD
     #expect(high.faces.allSatisfy { $0.trimBoundaries.count == 1 })
 }
 
+@Test func surfaceFrameServiceResolvesOrientedUVNFrameByPersistentName() async throws {
+    var document = DesignDocument.empty()
+    _ = try document.createPolySplineSurface(
+        name: "Frame Surface Analysis",
+        sourceMesh: surfaceAnalysisPolySplinePatchNetworkMesh(centerZ: 0.0),
+        options: PolySplineOptions(mergePatches: false)
+    )
+    let topology = try TopologySummaryService().summarize(document: document)
+    let faceEntry = try #require(topology.entries.first { $0.kind == .face })
+
+    let result = try SurfaceFrameService().resolve(
+        document: document,
+        queries: [
+            SurfaceFrameQuery(
+                facePersistentName: faceEntry.persistentName,
+                u: 0.5,
+                v: 0.5
+            ),
+        ]
+    )
+
+    #expect(result.frames.count == 1)
+    let frame = try #require(result.frames.first)
+    #expect(frame.facePersistentNames.contains(faceEntry.persistentName))
+    #expect(frame.u == 0.5)
+    #expect(frame.v == 0.5)
+    #expect(frame.uDomain.lowerBound == 0.0)
+    #expect(frame.uDomain.upperBound == 1.0)
+    #expect(frame.vDomain.lowerBound == 0.0)
+    #expect(frame.vDomain.upperBound == 1.0)
+    #expect(abs(vectorLength(frame.uAxis) - 1.0) <= 1.0e-8)
+    #expect(abs(vectorLength(frame.vAxis) - 1.0) <= 1.0e-8)
+    #expect(abs(vectorLength(frame.normal) - 1.0) <= 1.0e-8)
+    #expect(abs(dot(cross(frame.uAxis, frame.vAxis), frame.normal) - 1.0) <= 1.0e-8)
+    #expect(frame.handedness > 0.999_999)
+    #expect(abs(frame.normalCurvatureU) <= 1.0e-8)
+    #expect(abs(frame.normalCurvatureV) <= 1.0e-8)
+    #expect(!result.diagnostics.contains { $0.severity == .warning })
+}
+
 private func vectorLength(_ vector: SurfaceAnalysisResult.Vector) -> Double {
     hypot(hypot(vector.x, vector.y), vector.z)
+}
+
+private func dot(
+    _ lhs: SurfaceAnalysisResult.Vector,
+    _ rhs: SurfaceAnalysisResult.Vector
+) -> Double {
+    lhs.x * rhs.x + lhs.y * rhs.y + lhs.z * rhs.z
+}
+
+private func cross(
+    _ lhs: SurfaceAnalysisResult.Vector,
+    _ rhs: SurfaceAnalysisResult.Vector
+) -> SurfaceAnalysisResult.Vector {
+    SurfaceAnalysisResult.Vector(
+        x: lhs.y * rhs.z - lhs.z * rhs.y,
+        y: lhs.z * rhs.x - lhs.x * rhs.z,
+        z: lhs.x * rhs.y - lhs.y * rhs.x
+    )
 }
 
 private func surfaceAnalysisPolySplinePatchNetworkMesh(centerZ: Double) -> Mesh {

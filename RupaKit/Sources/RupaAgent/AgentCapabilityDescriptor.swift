@@ -25,6 +25,7 @@ public struct AgentCapabilityDescriptor: Codable, Equatable, Sendable {
         case curveAnalysis
         case topologySummary
         case surfaceAnalysis
+        case surfaceFrames
         case surfaceContinuitySummary
         case meshSummary
         case polySplineMeshAnalysis
