@@ -313,7 +313,8 @@ import SwiftCAD
     #expect(sweepBooleanAxis.notes.contains { $0.contains("solid resultKind") })
     #expect(sweepResultAxis.supportedValues == ["solid", "sheet"])
     #expect(sweepResultAxis.notes.contains { $0.contains("new-body outputs only") })
-    #expect(sweepCornerAxis.supportedValues == ["mitre"])
+    #expect(sweepCornerAxis.supportedValues == ["mitre", "round"])
+    #expect(sweepCornerAxis.notes.contains { $0.contains("single-curve path subset") })
     #expect(sweepSimplifyAxis.supportedValues == ["false"])
 
     #expect(polySpline.category == .solid)

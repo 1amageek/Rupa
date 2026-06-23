@@ -74,6 +74,43 @@ import SwiftCAD
     try document.validate()
 }
 
+@Test func createSweepAcceptsRoundCornerStyleWhenPathHasNoCornerTransition() throws {
+    var document = DesignDocument.empty()
+    let profileID = try document.createRectangleSketch(
+        name: "Round Sweep Profile",
+        plane: .xy,
+        width: .length(4.0, .millimeter),
+        height: .length(2.0, .millimeter)
+    )
+    let pathID = try document.createLineSketch(
+        name: "Round Sweep Path",
+        plane: .xy,
+        start: SketchPoint(
+            x: .length(0.0, .millimeter),
+            y: .length(0.0, .millimeter)
+        ),
+        end: SketchPoint(
+            x: .length(20.0, .millimeter),
+            y: .length(0.0, .millimeter)
+        )
+    )
+
+    let sweepID = try document.createSweep(
+        name: "Round Corner Sweep",
+        profiles: [ProfileReference(featureID: profileID)],
+        path: SweepPathReference(featureID: pathID),
+        options: SweepOptions(cornerStyle: .round)
+    )
+    let sweepFeature = try #require(document.cadDocument.designGraph.nodes[sweepID])
+
+    guard case .sweep(let sweep) = sweepFeature.operation else {
+        Issue.record("Expected a sweep feature.")
+        return
+    }
+    #expect(sweep.options.cornerStyle == .round)
+    try document.validate()
+}
+
 @Test func createSweepRejectsUnsupportedEvaluationOptionsBeforeMutation() throws {
     var document = DesignDocument.empty()
     let profileID = try document.createRectangleSketch(
@@ -95,20 +132,6 @@ import SwiftCAD
         )
     )
     let originalOrder = document.cadDocument.designGraph.order
-
-    do {
-        _ = try document.createSweep(
-            name: "Round Corner Sweep",
-            profiles: [ProfileReference(featureID: profileID)],
-            path: SweepPathReference(featureID: pathID),
-            options: SweepOptions(cornerStyle: .round)
-        )
-        Issue.record("Sweep command must reject unsupported round corners.")
-    } catch let error as EditorError {
-        #expect(error.code == .commandInvalid)
-        #expect(error.message.contains("round"))
-    }
-    #expect(document.cadDocument.designGraph.order == originalOrder)
 
     do {
         _ = try document.createSweep(
