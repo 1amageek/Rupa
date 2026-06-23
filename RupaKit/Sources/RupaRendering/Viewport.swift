@@ -16,6 +16,7 @@ public struct Viewport: View {
     @State private var activePolySplineSurfaceVertexDrag: ViewportPolySplineSurfaceVertexDragState?
     @State private var activePolySplineSurfaceVertexSlideDrag: ViewportPolySplineSurfaceVertexSlideDragState?
     @State private var activeRegionOffsetDrag: ViewportRegionOffsetDragState?
+    @State private var activeEdgeOffsetDrag: ViewportEdgeOffsetDragState?
     @State private var activeSlotWidthDrag: ViewportSlotWidthDragState?
     @State private var activeSketchVertexOffsetDrag: ViewportSketchVertexOffsetDragState?
     @State private var camera: ViewportCamera = .identity
@@ -29,6 +30,7 @@ public struct Viewport: View {
     @State private var hoveredPolySplineSurfaceVertex: ViewportPolySplineSurfaceVertexHandleTarget?
     @State private var hoveredPolySplineSurfaceVertexSlideHandle: ViewportPolySplineSurfaceVertexSlideHandleTarget?
     @State private var hoveredRegionOffsetHandle: ViewportRegionOffsetHandleTarget?
+    @State private var hoveredEdgeOffsetHandle: ViewportEdgeOffsetHandleTarget?
     @State private var hoveredSlotWidthHandle: ViewportSlotWidthHandleTarget?
     @State private var hoveredSketchVertexOffsetHandle: ViewportSketchVertexOffsetHandleTarget?
     @State private var pendingAffordance: ViewportAffordanceTarget?
@@ -40,6 +42,7 @@ public struct Viewport: View {
     @State private var pendingPolySplineSurfaceVertex: ViewportPolySplineSurfaceVertexHandleTarget?
     @State private var pendingPolySplineSurfaceVertexSlideHandle: ViewportPolySplineSurfaceVertexSlideHandleTarget?
     @State private var pendingRegionOffsetHandle: ViewportRegionOffsetHandleTarget?
+    @State private var pendingEdgeOffsetHandle: ViewportEdgeOffsetHandleTarget?
     @State private var pendingSlotWidthHandle: ViewportSlotWidthHandleTarget?
     @State private var pendingSketchVertexOffsetHandle: ViewportSketchVertexOffsetHandleTarget?
     @State private var orbitBasis: ViewportProjectionBasis?
@@ -73,6 +76,7 @@ public struct Viewport: View {
     private let allowsObjectAffordances: Bool
     private let slotWidthMeters: Double
     private let sketchVertexOffsetDistanceMeters: Double
+    private let edgeOffsetDistanceMeters: Double
     private let onPick: ((ViewportCanvasTarget) -> Void)?
     private let onCanvasDrag: ((ViewportModelDrag) -> Void)?
     private let onShiftScroll: ((ViewportScrollDirection) -> Bool)?
@@ -84,6 +88,7 @@ public struct Viewport: View {
     private let onEdgeChamferDrag: ((ViewportEdgeChamferDragTarget) -> Void)?
     private let onEdgeFilletDrag: ((ViewportEdgeFilletDragTarget) -> Void)?
     private let onRegionOffsetDrag: ((ViewportRegionOffsetDragTarget) -> Void)?
+    private let onEdgeOffsetDrag: ((ViewportEdgeOffsetDragTarget) -> Void)?
     private let onSlotWidthDrag: ((ViewportSlotWidthDragTarget) -> Void)?
     private let onSketchVertexOffsetDrag: ((ViewportSketchVertexOffsetDragTarget) -> Void)?
     private let onSketchCurveHandleDrag: ((ViewportSketchCurveHandleDragTarget) -> Void)?
@@ -121,6 +126,7 @@ public struct Viewport: View {
         allowsObjectAffordances: Bool = true,
         slotWidthMeters: Double = 0.002,
         sketchVertexOffsetDistanceMeters: Double = 0.001,
+        edgeOffsetDistanceMeters: Double = 0.001,
         onPick: ((ViewportCanvasTarget) -> Void)? = nil,
         onCanvasDrag: ((ViewportModelDrag) -> Void)? = nil,
         onShiftScroll: ((ViewportScrollDirection) -> Bool)? = nil,
@@ -132,6 +138,7 @@ public struct Viewport: View {
         onEdgeChamferDrag: ((ViewportEdgeChamferDragTarget) -> Void)? = nil,
         onEdgeFilletDrag: ((ViewportEdgeFilletDragTarget) -> Void)? = nil,
         onRegionOffsetDrag: ((ViewportRegionOffsetDragTarget) -> Void)? = nil,
+        onEdgeOffsetDrag: ((ViewportEdgeOffsetDragTarget) -> Void)? = nil,
         onSlotWidthDrag: ((ViewportSlotWidthDragTarget) -> Void)? = nil,
         onSketchVertexOffsetDrag: ((ViewportSketchVertexOffsetDragTarget) -> Void)? = nil,
         onSketchCurveHandleDrag: ((ViewportSketchCurveHandleDragTarget) -> Void)? = nil,
@@ -168,6 +175,7 @@ public struct Viewport: View {
         self.allowsObjectAffordances = allowsObjectAffordances
         self.slotWidthMeters = slotWidthMeters
         self.sketchVertexOffsetDistanceMeters = sketchVertexOffsetDistanceMeters
+        self.edgeOffsetDistanceMeters = edgeOffsetDistanceMeters
         self.onPick = onPick
         self.onCanvasDrag = onCanvasDrag
         self.onShiftScroll = onShiftScroll
@@ -179,6 +187,7 @@ public struct Viewport: View {
         self.onEdgeChamferDrag = onEdgeChamferDrag
         self.onEdgeFilletDrag = onEdgeFilletDrag
         self.onRegionOffsetDrag = onRegionOffsetDrag
+        self.onEdgeOffsetDrag = onEdgeOffsetDrag
         self.onSlotWidthDrag = onSlotWidthDrag
         self.onSketchVertexOffsetDrag = onSketchVertexOffsetDrag
         self.onSketchCurveHandleDrag = onSketchCurveHandleDrag
@@ -808,6 +817,12 @@ public struct Viewport: View {
         drawEdgeHighlights(
             targets: selectedEdgeTargets,
             style: .selected,
+            scene: scene,
+            layout: layout,
+            in: &context
+        )
+        drawEdgeOffsetAffordances(
+            targets: selectedEdgeTargets,
             scene: scene,
             layout: layout,
             in: &context
@@ -1606,6 +1621,77 @@ public struct Viewport: View {
             ),
             color: ViewportTheme.surfaceEdit,
             isHighlighted: true,
+            in: &context
+        )
+    }
+
+    private func drawEdgeOffsetAffordances(
+        targets: [ViewportEdgeSelectionTarget],
+        scene: ViewportScene,
+        layout: ViewportLayout,
+        in context: inout GraphicsContext
+    ) {
+        guard onEdgeOffsetDrag != nil, targets.isEmpty == false else {
+            return
+        }
+        for candidate in edgeOffsetAffordanceCandidates(
+            targets: targets,
+            scene: scene,
+            layout: layout
+        ) {
+            let identity = candidate.target.identity
+            let dragDistance = activeEdgeOffsetDrag?.target.identity == identity
+                ? activeEdgeOffsetDrag?.distanceMeters
+                : nil
+            let isHighlighted = hoveredEdgeOffsetHandle?.identity == identity
+                || pendingEdgeOffsetHandle?.identity == identity
+                || activeEdgeOffsetDrag?.target.identity == identity
+            drawEdgeOffsetAffordance(
+                candidate,
+                distanceMeters: dragDistance ?? candidate.geometry.baseDistanceMeters,
+                showsLabel: dragDistance != nil || isHighlighted,
+                isHighlighted: isHighlighted,
+                in: &context
+            )
+        }
+    }
+
+    private func drawEdgeOffsetAffordance(
+        _ candidate: ViewportEdgeOffsetAffordanceCandidate,
+        distanceMeters: Double,
+        showsLabel: Bool,
+        isHighlighted: Bool,
+        in context: inout GraphicsContext
+    ) {
+        let start = candidate.geometry.baseProjectedPoint
+        let end = candidate.geometry.projectedTip(distanceMeters: distanceMeters)
+        drawArrow(
+            from: start,
+            to: end,
+            color: ViewportTheme.surfaceEdit,
+            isHighlighted: isHighlighted,
+            in: &context
+        )
+        drawTransformHandle(
+            at: end,
+            style: .faceCenter,
+            isHighlighted: isHighlighted,
+            in: &context
+        )
+
+        guard showsLabel else {
+            return
+        }
+        let direction = CGVector(dx: end.x - start.x, dy: end.y - start.y).normalized
+        let normal = CGVector(dx: -direction.dy, dy: direction.dx)
+        drawDimensionLabel(
+            formattedViewportLength(distanceMeters),
+            at: CGPoint(
+                x: end.x + normal.dx * 20.0 + direction.dx * 10.0,
+                y: end.y + normal.dy * 20.0 + direction.dy * 10.0
+            ),
+            color: ViewportTheme.surfaceEdit,
+            isHighlighted: isHighlighted,
             in: &context
         )
     }
@@ -5293,6 +5379,77 @@ public struct Viewport: View {
         )
     }
 
+    private func edgeOffsetAffordanceCandidates(
+        targets: [ViewportEdgeSelectionTarget],
+        scene: ViewportScene,
+        layout: ViewportLayout
+    ) -> [ViewportEdgeOffsetAffordanceCandidate] {
+        guard onEdgeOffsetDrag != nil else {
+            return []
+        }
+        return targets.compactMap { target in
+            edgeOffsetAffordanceCandidate(
+                for: target,
+                scene: scene,
+                layout: layout
+            )
+        }
+    }
+
+    private func edgeOffsetAffordanceCandidate(
+        for target: ViewportEdgeSelectionTarget,
+        scene: ViewportScene,
+        layout: ViewportLayout
+    ) -> ViewportEdgeOffsetAffordanceCandidate? {
+        guard let item = scene.items.first(where: { $0.featureID == target.featureID }),
+              let projection = bodyProjection(for: item, layout: layout) else {
+            return nil
+        }
+        let segment = projection.segment(for: target.edge)
+        let supportPoint = edgeOffsetSupportPoint(
+            featureID: target.featureID,
+            projection: projection
+        )
+        guard let geometry = ViewportEdgeOffsetAffordanceGeometry(
+            edgeStart: segment.start,
+            edgeEnd: segment.end,
+            supportPoint: supportPoint,
+            fallbackDirection: edgeInwardDirection(projection: projection, edge: target.edge),
+            distanceMeters: edgeOffsetDistanceMeters,
+            layout: layout
+        ) else {
+            return nil
+        }
+        return ViewportEdgeOffsetAffordanceCandidate(
+            target: ViewportEdgeOffsetHandleTarget(
+                featureID: target.featureID,
+                edge: target.edge,
+                target: target.target,
+                geometry: geometry
+            ),
+            geometry: geometry
+        )
+    }
+
+    private func edgeOffsetSupportPoint(
+        featureID: FeatureID,
+        projection: ViewportBodyProjection
+    ) -> CGPoint? {
+        let supportFaces = selection.selectedTargets.compactMap { target -> ViewportBodyFace? in
+            guard case .face = target.component,
+                  let faceTarget = faceSelectionTarget(for: target),
+                  faceTarget.featureID == featureID else {
+                return nil
+            }
+            return faceTarget.face
+        }
+        guard supportFaces.count == 1,
+              let supportFace = supportFaces.first else {
+            return nil
+        }
+        return projection.footprint(for: supportFace).center
+    }
+
     private func slotWidthAffordanceCandidates(
         targets: [ViewportSlotWidthSourceTarget],
         scene: ViewportScene,
@@ -5653,7 +5810,7 @@ public struct Viewport: View {
               let featureID = reference.featureID else {
             return nil
         }
-        return ViewportEdgeSelectionTarget(featureID: featureID, edge: edge)
+        return ViewportEdgeSelectionTarget(featureID: featureID, edge: edge, target: target)
     }
 
     private func vertexSelectionTarget(for target: SelectionTarget) -> ViewportVertexSelectionTarget? {
@@ -5996,6 +6153,18 @@ public struct Viewport: View {
         if activePolySplineSurfaceVertexDrag != nil {
             return
         }
+        if let start, let current, let pendingEdgeOffsetHandle {
+            updateEdgeOffsetDrag(
+                target: pendingEdgeOffsetHandle,
+                start: start,
+                current: current,
+                size: size
+            )
+            return
+        }
+        if activeEdgeOffsetDrag != nil {
+            return
+        }
         if let start, let current, let pendingSlotWidthHandle {
             updateSlotWidthDrag(
                 target: pendingSlotWidthHandle,
@@ -6105,6 +6274,11 @@ public struct Viewport: View {
         }
         if let polySplineSurfaceVertexSlideTarget = selectedPolySplineSurfaceVertexSlideAffordanceTarget(at: point, size: size) {
             pendingPolySplineSurfaceVertexSlideHandle = polySplineSurfaceVertexSlideTarget
+            activeCanvasDrag = nil
+            return
+        }
+        if let edgeOffsetTarget = selectedEdgeOffsetAffordanceTarget(at: point, size: size) {
+            pendingEdgeOffsetHandle = edgeOffsetTarget
             activeCanvasDrag = nil
             return
         }
@@ -7015,6 +7189,38 @@ public struct Viewport: View {
         return nil
     }
 
+    private func selectedEdgeOffsetAffordanceTarget(
+        at point: CGPoint,
+        size: CGSize
+    ) -> ViewportEdgeOffsetHandleTarget? {
+        guard onEdgeOffsetDrag != nil else {
+            return nil
+        }
+        let scene = ViewportSceneBuilder(objectRegistry: objectRegistry).build(document: document)
+        let layout = ViewportModelCoordinateMapper(
+            document: document,
+            size: size,
+            objectRegistry: objectRegistry,
+            camera: camera,
+            basis: currentProjectionBasis
+        ).layout
+        let candidates = edgeOffsetAffordanceCandidates(
+            targets: selectedEdgeTargets(),
+            scene: scene,
+            layout: layout
+        )
+        for candidate in candidates.reversed() {
+            let start = candidate.geometry.baseProjectedPoint
+            let end = candidate.geometry.projectedTip()
+            let lineHit = point.distanceToSegment(start: start, end: end) <= 10.0
+            let tipHit = point.distance(to: end) <= 14.0
+            if lineHit || tipHit {
+                return candidate.target
+            }
+        }
+        return nil
+    }
+
     private func selectedSlotWidthAffordanceTarget(
         at point: CGPoint,
         size: CGSize
@@ -7574,6 +7780,34 @@ public struct Viewport: View {
         )
     }
 
+    private func updateEdgeOffsetDrag(
+        target: ViewportEdgeOffsetHandleTarget,
+        start: CGPoint,
+        current: CGPoint,
+        size: CGSize
+    ) {
+        activeEdgeOffsetDrag = ViewportEdgeOffsetDragState(
+            target: target,
+            startPoint: start,
+            distanceMeters: edgeOffsetDistance(
+                target: target,
+                start: start,
+                current: current
+            )
+        )
+    }
+
+    private func edgeOffsetDistance(
+        target: ViewportEdgeOffsetHandleTarget,
+        start: CGPoint,
+        current: CGPoint
+    ) -> Double {
+        target.geometry.offsetDistance(
+            start: start,
+            current: current
+        )
+    }
+
     private func updateSlotWidthDrag(
         target: ViewportSlotWidthHandleTarget,
         start: CGPoint,
@@ -7888,6 +8122,11 @@ public struct Viewport: View {
             activePolySplineSurfaceVertexDrag = nil
             return
         }
+        if pendingEdgeOffsetHandle != nil {
+            pendingEdgeOffsetHandle = nil
+            activeEdgeOffsetDrag = nil
+            return
+        }
         if pendingRegionOffsetHandle != nil {
             pendingRegionOffsetHandle = nil
             activeRegionOffsetDrag = nil
@@ -8012,6 +8251,16 @@ public struct Viewport: View {
             activeCanvasDrag = nil
             if let polySplineSurfaceVertexDragTarget {
                 onPolySplineSurfaceVertexDrag?(polySplineSurfaceVertexDragTarget)
+            }
+            return
+        }
+        if pendingEdgeOffsetHandle != nil || activeEdgeOffsetDrag != nil {
+            let edgeOffsetDragTarget = committedEdgeOffsetDragTarget()
+            pendingEdgeOffsetHandle = nil
+            activeEdgeOffsetDrag = nil
+            activeCanvasDrag = nil
+            if let edgeOffsetDragTarget {
+                onEdgeOffsetDrag?(edgeOffsetDragTarget)
             }
             return
         }
@@ -8273,6 +8522,20 @@ public struct Viewport: View {
         }
         return ViewportRegionOffsetDragTarget(
             target: activeRegionOffsetDrag.target.target,
+            distance: distance
+        )
+    }
+
+    private func committedEdgeOffsetDragTarget() -> ViewportEdgeOffsetDragTarget? {
+        guard let activeEdgeOffsetDrag else {
+            return nil
+        }
+        let distance = activeEdgeOffsetDrag.distanceMeters
+        guard abs(distance - activeEdgeOffsetDrag.target.geometry.baseDistanceMeters) > 1.0e-12 else {
+            return nil
+        }
+        return ViewportEdgeOffsetDragTarget(
+            target: activeEdgeOffsetDrag.target.target,
             distance: distance
         )
     }
@@ -8553,6 +8816,7 @@ public struct Viewport: View {
             basis: currentProjectionBasis
         )
         hoveredRegionOffsetHandle = nil
+        hoveredEdgeOffsetHandle = nil
         hoveredSlotWidthHandle = nil
         hoveredSketchVertexOffsetHandle = nil
         hoveredSplineControlPointSlideHandle = nil
@@ -8643,6 +8907,7 @@ public struct Viewport: View {
             hoveredPolySplineSurfaceVertex = polySplineSurfaceVertexTarget
             hoveredPolySplineSurfaceVertexSlideHandle = nil
             hoveredSketchVertexOffsetHandle = nil
+            hoveredEdgeOffsetHandle = nil
             hoveredAffordance = nil
             hoveredCanvasHit = nil
             hoveredModelPoint = nil
@@ -8650,6 +8915,17 @@ public struct Viewport: View {
             return
         }
         hoveredPolySplineSurfaceVertex = nil
+        if let edgeOffsetTarget = selectedEdgeOffsetAffordanceTarget(at: point, size: size) {
+            hoveredEdgeOffsetHandle = edgeOffsetTarget
+            hoveredSlotWidthHandle = nil
+            hoveredSketchVertexOffsetHandle = nil
+            hoveredAffordance = nil
+            hoveredCanvasHit = nil
+            hoveredModelPoint = nil
+            clearHoverCallbacks()
+            return
+        }
+        hoveredEdgeOffsetHandle = nil
         if let slotWidthTarget = selectedSlotWidthAffordanceTarget(at: point, size: size) {
             hoveredSlotWidthHandle = slotWidthTarget
             hoveredSketchVertexOffsetHandle = nil
@@ -8734,6 +9010,7 @@ public struct Viewport: View {
         hoveredPolySplineSurfaceVertexSlideHandle = nil
         hoveredPolySplineSurfaceVertex = nil
         hoveredRegionOffsetHandle = nil
+        hoveredEdgeOffsetHandle = nil
         hoveredSlotWidthHandle = nil
         hoveredSketchVertexOffsetHandle = nil
         hoveredCanvasHit = nil
@@ -8957,6 +9234,12 @@ private struct ViewportPolySplineSurfaceVertexSlideDragState: Equatable {
 
 private struct ViewportRegionOffsetDragState: Equatable {
     var target: ViewportRegionOffsetHandleTarget
+    var startPoint: CGPoint
+    var distanceMeters: Double
+}
+
+private struct ViewportEdgeOffsetDragState: Equatable {
+    var target: ViewportEdgeOffsetHandleTarget
     var startPoint: CGPoint
     var distanceMeters: Double
 }
@@ -9283,6 +9566,30 @@ private struct ViewportRegionOffsetHandleTarget: Equatable {
 private struct ViewportRegionOffsetHandleIdentity: Equatable {
     var featureID: FeatureID
     var componentID: SelectionComponentID
+}
+
+private struct ViewportEdgeOffsetAffordanceCandidate: Equatable {
+    var target: ViewportEdgeOffsetHandleTarget
+    var geometry: ViewportEdgeOffsetAffordanceGeometry
+}
+
+private struct ViewportEdgeOffsetHandleTarget: Equatable {
+    var featureID: FeatureID
+    var edge: ViewportBodyEdge
+    var target: SelectionTarget
+    var geometry: ViewportEdgeOffsetAffordanceGeometry
+
+    var identity: ViewportEdgeOffsetHandleIdentity {
+        ViewportEdgeOffsetHandleIdentity(
+            featureID: featureID,
+            edge: edge
+        )
+    }
+}
+
+private struct ViewportEdgeOffsetHandleIdentity: Equatable {
+    var featureID: FeatureID
+    var edge: ViewportBodyEdge
 }
 
 private struct ViewportSlotWidthAffordanceCandidate: Equatable {
@@ -10195,6 +10502,7 @@ private struct ViewportFaceSelectionTarget: Hashable {
 private struct ViewportEdgeSelectionTarget: Hashable {
     var featureID: FeatureID
     var edge: ViewportBodyEdge
+    var target: SelectionTarget
 }
 
 private struct ViewportVertexSelectionTarget: Hashable {

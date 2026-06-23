@@ -1591,6 +1591,34 @@ import Testing
     #expect(abs(geometry.offsetDistance(start: start, current: inwardEnd, layout: layout) + 0.125) < 1.0e-12)
 }
 
+@Test func viewportEdgeOffsetAffordanceMapsArrowDragToPositiveDistance() throws {
+    let layout = ViewportLayout(
+        modelBounds: CGRect(x: 0.0, y: 0.0, width: 2.0, height: 2.0),
+        size: CGSize(width: 800.0, height: 600.0)
+    )
+    let geometry = try #require(
+        ViewportEdgeOffsetAffordanceGeometry(
+            edgeStart: CGPoint(x: 300.0, y: 260.0),
+            edgeEnd: CGPoint(x: 360.0, y: 260.0),
+            supportPoint: CGPoint(x: 330.0, y: 220.0),
+            fallbackDirection: CGVector(dx: 1.0, dy: 0.0),
+            distanceMeters: 0.5,
+            layout: layout
+        )
+    )
+
+    let start = geometry.projectedTip()
+    let fartherEnd = geometry.projectedTip(distanceMeters: 0.75)
+    let nearerEnd = geometry.projectedTip(distanceMeters: 0.35)
+    let collapsedEnd = geometry.projectedTip(distanceMeters: -0.1)
+
+    #expect(abs(geometry.projectedDirection.dx) < 1.0e-12)
+    #expect(geometry.projectedDirection.dy < 0.0)
+    #expect(abs(geometry.offsetDistance(start: start, current: fartherEnd) - 0.75) < 1.0e-12)
+    #expect(abs(geometry.offsetDistance(start: start, current: nearerEnd) - 0.35) < 1.0e-12)
+    #expect(geometry.offsetDistance(start: start, current: collapsedEnd) > 0.0)
+}
+
 @Test func viewportSlotWidthAffordanceMapsArrowDragToFullWidth() throws {
     let layout = ViewportLayout(
         modelBounds: CGRect(x: 0.0, y: 0.0, width: 2.0, height: 2.0),

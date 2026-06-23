@@ -438,6 +438,7 @@ public struct MainView: View {
                     allowsObjectAffordances: allowsObjectAffordances,
                     slotWidthMeters: slotProfileWidthMeters,
                     sketchVertexOffsetDistanceMeters: sketchVertexOffsetDistanceMeters,
+                    edgeOffsetDistanceMeters: edgeOffsetDistanceMeters,
                     onPick: handleViewportPick,
                     onCanvasDrag: handleViewportDrag,
                     onShiftScroll: viewportShiftScrollHandler,
@@ -449,6 +450,7 @@ public struct MainView: View {
                     onEdgeChamferDrag: viewportEdgeChamferDragHandler,
                     onEdgeFilletDrag: viewportEdgeFilletDragHandler,
                     onRegionOffsetDrag: viewportRegionOffsetDragHandler,
+                    onEdgeOffsetDrag: viewportEdgeOffsetDragHandler,
                     onSlotWidthDrag: viewportSlotWidthDragHandler,
                     onSketchVertexOffsetDrag: viewportSketchVertexOffsetDragHandler,
                     onSketchCurveHandleDrag: viewportSketchCurveHandleDragHandler,
@@ -600,6 +602,18 @@ public struct MainView: View {
         }
         return { target in
             handleViewportRegionOffsetDrag(target)
+        }
+    }
+
+    private var viewportEdgeOffsetDragHandler: ((ViewportEdgeOffsetDragTarget) -> Void)? {
+        guard session.selectedTool == .select,
+              selectionScope == .edge,
+              edgeOffsetCommandState.isActive,
+              selectedEdgeTargets.isEmpty == false else {
+            return nil
+        }
+        return { target in
+            handleViewportEdgeOffsetDrag(target)
         }
     }
 
@@ -3221,6 +3235,20 @@ public struct MainView: View {
             gapFill: regionOffsetGapFill,
             isSymmetric: regionOffsetCommandState.usesLockedDistance,
             combinesRegions: regionOffsetCommandState.usesCombinedRegions
+        )
+    }
+
+    private func handleViewportEdgeOffsetDrag(_ target: ViewportEdgeOffsetDragTarget) {
+        guard session.selectedTool == .select,
+              selectionScope == .edge,
+              edgeOffsetCommandState.isActive else {
+            return
+        }
+        edgeOffsetDistanceMeters = max(target.distance, 1.0e-9)
+        offsetSelectedEdges(
+            [target.target],
+            by: edgeOffsetDistanceMeters,
+            gapFill: edgeOffsetGapFill
         )
     }
 

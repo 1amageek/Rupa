@@ -177,6 +177,7 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                         "RupaKit/Sources/RupaRendering/ViewportIdentityBufferRenderer.swift",
                         "RupaKit/Sources/RupaRendering/ViewportIdentityHitResolver.swift",
                         "RupaKit/Sources/RupaRendering/Viewport.swift",
+                        "RupaKit/Sources/RupaRendering/ViewportEdgeOffsetAffordanceGeometry.swift",
                         "RupaKit/Sources/RupaUI/WorkspaceSelectionScope.swift",
                         "RupaKit/Sources/RupaUI/MainView.swift",
                     ],
@@ -190,10 +191,10 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                 ),
             ],
             openWork: [
-                "Selection-mode edit-handle affordance parity for all subobject scopes.",
+                "Remaining selection-mode edit-handle affordance parity for all subobject scopes.",
                 "Identity-buffer budget tuning against larger production scene captures.",
             ],
-            next: "Broaden scope-specific edit-handle affordances and tune identity-buffer budgets against larger production scenes before retiring remaining CPU-projected topology hit heuristics."
+            next: "Broaden remaining scope-specific edit-handle affordances and tune identity-buffer budgets against larger production scenes before retiring remaining CPU-projected topology hit heuristics."
         ),
         entry(
             area: .sweep,

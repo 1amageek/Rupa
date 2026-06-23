@@ -1606,6 +1606,19 @@ public struct ViewportRegionOffsetDragTarget: Equatable, Sendable {
     }
 }
 
+public struct ViewportEdgeOffsetDragTarget: Equatable, Sendable {
+    public var target: SelectionTarget
+    public var distance: Double
+
+    public init(
+        target: SelectionTarget,
+        distance: Double
+    ) {
+        self.target = target
+        self.distance = distance
+    }
+}
+
 public struct ViewportSlotWidthDragTarget: Equatable, Sendable {
     public var target: SelectionTarget
     public var width: Double
