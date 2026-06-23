@@ -317,6 +317,17 @@ public final class CADDocumentStore {
             document = updatedDocument
             try commitMutation()
             evaluateCurrentDocument()
+        case .createSketch(let name, let sketch, let geometryRole):
+            var updatedDocument = document
+            try updatedDocument.createSketch(
+                name: name,
+                sketch: sketch,
+                geometryRole: geometryRole,
+                objectRegistry: objectRegistry
+            )
+            document = updatedDocument
+            try commitMutation()
+            evaluateCurrentDocument()
         case .createLineSketch(let name, let plane, let start, let end):
             var updatedDocument = document
             try updatedDocument.createLineSketch(

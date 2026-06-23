@@ -286,6 +286,15 @@ public final class AgentServer: AgentClientProtocol {
             failureMode: "Rejects missing construction plane IDs, empty names, duplicate names, and stale generations before mutation."
         ),
         capability(
+            "createSketch",
+            category: .sketch,
+            summary: "Create a source sketch containing one or more typed sketch entities, including connected open multi-entity curve chains for Sweep paths.",
+            access: .automationCommand,
+            mutatesDocument: true,
+            targets: [.document],
+            failureMode: "Rejects empty sketches, invalid sketch expressions, non-sketch geometry roles, and stale generations before mutation; downstream feature evaluation rejects disconnected, branched, or unsupported curve-chain topology."
+        ),
+        capability(
             "createLineSketch",
             category: .sketch,
             summary: "Create a source sketch containing one line entity.",
@@ -657,7 +666,7 @@ public final class AgentServer: AgentClientProtocol {
             mutatesDocument: true,
             discovery: [.sketchEntitySummary],
             targets: [.profile, .sketchEntity, .body],
-            failureMode: "Rejects missing profile, path, guide, or target body features, duplicate references, invalid option quantities, profile-plane degenerate parallel alignment, simplify output, boolean target operations with sheet output, stale generations, targetless boolean operations, new-body target references, collapsed section scale, non-contacting point/chord guide starts, curve-guide path/profile contact failures, conflicting signed-axis rail guides, flipped or self-intersecting bilinear quadrilateral or mean-value cage rail guides, overconstrained guide sets, and degenerate swept topology before committing invalid geometry through the shared typed sweep evaluation contract; evaluates mitre and round corner styles for the current single-curve path subset where no corner-transition topology is required; evaluates straight-path normal alignment as a path-normal section sweep, straight-path parallel identity sections as profile-plane-preserving exact extrusion when the path has a profile-normal component, straight-path parallel transformed or guided sections as profile-plane parallel section sweeps when the path has a profile-normal component, curved-path parallel alignment as a profile-plane parallel section sweep with twist, scale, and profile-plane guide projection, straight-path exact swept-sheet side surfaces for identity section transforms without guides, polygonal swept-solid new-body subsets for curved, twisted, scaled, compatible multiple point/chord guide constraints, non-uniform affine, signed-axis, convex quadrilateral bilinear, and convex mean-value cage point-guide rail deformation, and curve-guide contact constraints, and polygonal swept-sheet subsets for curved, transformed, or guided sheet inputs; evaluates exact box-prism union, difference, intersection, and slice boolean sweeps with target replacement, separated-fragment difference output, z-through rectangular-frame difference output, orthogonal cell-union connected box difference output, or keep-tools generated-name coverage; reports unsupported evaluation for non-box boolean operands, connected boolean topology outside the axis-aligned box cell-union subset, exact swept surfaces outside the straight identity analytic-boundary subset, and guide constraints outside the affine, signed-axis, convex quadrilateral bilinear, convex mean-value cage, chord, or curve-contact subsets.",
+            failureMode: "Rejects missing profile, path, guide, or target body features, duplicate references, invalid option quantities, disconnected or branched open path chains, closed path chains, round corner style on multi-curve paths until corner-transition blend topology exists, profile-plane degenerate parallel alignment, simplify output, boolean target operations with sheet output, stale generations, targetless boolean operations, new-body target references, collapsed section scale, non-contacting point/chord guide starts, curve-guide path/profile contact failures, conflicting signed-axis rail guides, flipped or self-intersecting bilinear quadrilateral or mean-value cage rail guides, overconstrained guide sets, and degenerate swept topology before committing invalid geometry through the shared typed sweep evaluation contract; evaluates mitre corner style for connected open single- or multi-curve path chains; evaluates round corner style for single-curve paths where no corner-transition topology is required; evaluates straight-path normal alignment as a path-normal section sweep, straight-path parallel identity sections as profile-plane-preserving exact extrusion when the path has a profile-normal component, straight-path parallel transformed or guided sections as profile-plane parallel section sweeps when the path has a profile-normal component, curved-path parallel alignment as a profile-plane parallel section sweep with twist, scale, and profile-plane guide projection, straight-path exact swept-sheet side surfaces for identity section transforms without guides, polygonal swept-solid new-body subsets for connected open curved or multi-curve paths, twisted, scaled, compatible multiple point/chord guide constraints, non-uniform affine, signed-axis, convex quadrilateral bilinear, and convex mean-value cage point-guide rail deformation, and curve-guide contact constraints, and polygonal swept-sheet subsets for curved, transformed, or guided sheet inputs; evaluates exact box-prism union, difference, intersection, and slice boolean sweeps with target replacement, separated-fragment difference output, z-through rectangular-frame difference output, orthogonal cell-union connected box difference output, or keep-tools generated-name coverage; reports unsupported evaluation for non-box boolean operands, connected boolean topology outside the axis-aligned box cell-union subset, exact swept surfaces outside the straight identity analytic-boundary subset, corner-transition blend topology outside the current single-curve round subset, and guide constraints outside the affine, signed-axis, convex quadrilateral bilinear, convex mean-value cage, chord, or curve-contact subsets.",
             optionMatrix: [
                 AgentCapabilityDescriptor.OptionAxis(
                     name: "alignment",
@@ -697,7 +706,10 @@ public final class AgentServer: AgentClientProtocol {
                 AgentCapabilityDescriptor.OptionAxis(
                     name: "cornerStyle",
                     supportedValues: ["mitre", "round"],
-                    notes: ["round is accepted for the current single-curve path subset where no corner transition topology is required"]
+                    notes: [
+                        "mitre is supported for connected open single- or multi-curve path chains",
+                        "round is accepted for single-curve paths only until multi-curve corner-transition blend topology is implemented"
+                    ]
                 ),
                 AgentCapabilityDescriptor.OptionAxis(
                     name: "simplify",

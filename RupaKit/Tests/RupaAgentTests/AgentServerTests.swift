@@ -38,6 +38,7 @@ import SwiftCAD
     #expect(capabilities.contains("createViewAlignedConstructionPlane"))
     #expect(capabilities.contains("setActiveConstructionPlane"))
     #expect(capabilities.contains("renameConstructionPlane"))
+    #expect(capabilities.contains("createSketch"))
     #expect(capabilities.contains("createLineSketch"))
     #expect(capabilities.contains("createCircleSketch"))
     #expect(capabilities.contains("createArcSketch"))
@@ -160,6 +161,7 @@ import SwiftCAD
     let designDisplaySnapshot = try #require(descriptors.first { $0.name == "designDisplaySnapshot" })
     let qualityAssessment = try #require(descriptors.first { $0.name == "cadInteractionQualityAssessment" })
     let selection = try #require(descriptors.first { $0.name == "selectTargets" })
+    let createSketch = try #require(descriptors.first { $0.name == "createSketch" })
 
     #expect(fillet.category == .directEditing)
     #expect(fillet.mutatesDocument)
@@ -267,6 +269,13 @@ import SwiftCAD
     #expect(slotSketch.failureMode.contains("disconnected line/arc"))
     #expect(slotSketch.failureMode.contains("inner radius"))
 
+    #expect(createSketch.category == .sketch)
+    #expect(createSketch.mutatesDocument)
+    #expect(createSketch.targets == [.document])
+    #expect(createSketch.summary.contains("multi-entity curve chains"))
+    #expect(createSketch.failureMode.contains("disconnected"))
+    #expect(createSketch.failureMode.contains("branched"))
+
     #expect(sweep.category == .solid)
     #expect(sweep.mutatesDocument)
     #expect(sweep.access == .automationCommand)
@@ -275,6 +284,8 @@ import SwiftCAD
     #expect(sweep.targets.contains(.sketchEntity))
     #expect(sweep.targets.contains(.body))
     #expect(sweep.failureMode.contains("profile-plane degenerate parallel alignment"))
+    #expect(sweep.failureMode.contains("disconnected or branched open path chains"))
+    #expect(sweep.failureMode.contains("round corner style on multi-curve paths"))
     #expect(sweep.failureMode.contains("shared typed sweep evaluation contract"))
     #expect(sweep.failureMode.contains("path-normal section sweep"))
     #expect(sweep.failureMode.contains("profile-plane-preserving exact extrusion"))
@@ -287,6 +298,7 @@ import SwiftCAD
     #expect(sweep.failureMode.contains("flipped or self-intersecting bilinear quadrilateral or mean-value cage rail guides"))
     #expect(sweep.failureMode.contains("curve-guide contact"))
     #expect(sweep.failureMode.contains("exact swept-sheet side surfaces"))
+    #expect(sweep.failureMode.contains("connected open curved or multi-curve paths"))
     #expect(sweep.failureMode.contains("polygonal swept-sheet"))
     #expect(sweep.failureMode.contains("targetless boolean"))
     #expect(sweep.failureMode.contains("boolean target operations with sheet output"))
@@ -314,7 +326,8 @@ import SwiftCAD
     #expect(sweepResultAxis.supportedValues == ["solid", "sheet"])
     #expect(sweepResultAxis.notes.contains { $0.contains("new-body outputs only") })
     #expect(sweepCornerAxis.supportedValues == ["mitre", "round"])
-    #expect(sweepCornerAxis.notes.contains { $0.contains("single-curve path subset") })
+    #expect(sweepCornerAxis.notes.contains { $0.contains("multi-curve path chains") })
+    #expect(sweepCornerAxis.notes.contains { $0.contains("single-curve paths only") })
     #expect(sweepSimplifyAxis.supportedValues == ["false"])
 
     #expect(polySpline.category == .solid)
@@ -7885,6 +7898,98 @@ import SwiftCAD
     #expect(session.evaluatedBodyCount == 1)
     #expect(session.evaluationStatus == .valid)
     #expect(result.diagnostics.contains { diagnostic in diagnostic.severity == .error } == false)
+}
+
+@MainActor
+@Test func agentCreatesConnectedMultiEntitySweepPathAndSweepThroughAutomation() async throws {
+    var document = DesignDocument.empty()
+    let profileID = try document.createRectangleSketch(
+        name: "Agent Connected Sweep Profile",
+        plane: .xy,
+        width: .length(2.0, .millimeter),
+        height: .length(1.0, .millimeter)
+    )
+    let server = AgentServer()
+    let sessionID = UUID()
+    let session = EditorSession(document: document)
+    server.register(session: session, id: sessionID)
+
+    let pathResponse = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .createSketch(
+                name: "Agent Connected Sweep Path",
+                sketch: Sketch(
+                    plane: .yz,
+                    entities: [
+                        SketchEntityID(): .line(SketchLine(
+                            start: SketchPoint(
+                                x: .length(0.0, .millimeter),
+                                y: .length(0.0, .millimeter)
+                            ),
+                            end: SketchPoint(
+                                x: .length(0.0, .millimeter),
+                                y: .length(15.0, .millimeter)
+                            )
+                        )),
+                        SketchEntityID(): .line(SketchLine(
+                            start: SketchPoint(
+                                x: .length(0.0, .millimeter),
+                                y: .length(15.0, .millimeter)
+                            ),
+                            end: SketchPoint(
+                                x: .length(8.0, .millimeter),
+                                y: .length(25.0, .millimeter)
+                            )
+                        )),
+                    ]
+                ),
+                geometryRole: .curve
+            ),
+            expectedGeneration: DocumentGeneration(0)
+        )
+    )
+    guard case .command(let pathResult) = pathResponse else {
+        Issue.record("Agent must return a createSketch command result.")
+        return
+    }
+    let pathID = try #require(session.document.cadDocument.designGraph.order.last)
+
+    let sweepResponse = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .createSweep(
+                name: "Agent Connected Multi-Path Sweep",
+                profiles: [ProfileReference(featureID: profileID)],
+                path: SweepPathReference(featureID: pathID),
+                guides: [],
+                targets: [],
+                options: SweepOptions(cornerStyle: .mitre)
+            ),
+            expectedGeneration: pathResult.generation
+        )
+    )
+    guard case .command(let sweepResult) = sweepResponse else {
+        Issue.record("Agent must return a connected sweep command result.")
+        return
+    }
+    let sweepID = try #require(session.document.cadDocument.designGraph.order.last)
+    let pathFeature = try #require(session.document.cadDocument.designGraph.nodes[pathID])
+    let sweepFeature = try #require(session.document.cadDocument.designGraph.nodes[sweepID])
+
+    guard case .sketch(let pathSketch) = pathFeature.operation,
+          case .sweep(let sweep) = sweepFeature.operation else {
+        Issue.record("Agent must create a sketch path and a sweep feature.")
+        return
+    }
+    #expect(pathResult.commandName == "createSketch")
+    #expect(pathSketch.entities.count == 2)
+    #expect(sweepResult.commandName == "createSweep")
+    #expect(sweepResult.generation == DocumentGeneration(2))
+    #expect(sweep.path == SweepPathReference(featureID: pathID))
+    #expect(session.evaluatedBodyCount == 1)
+    #expect(session.evaluationStatus == .valid)
+    #expect(sweepResult.diagnostics.contains { diagnostic in diagnostic.severity == .error } == false)
 }
 
 @MainActor

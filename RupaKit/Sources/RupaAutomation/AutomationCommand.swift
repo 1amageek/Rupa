@@ -39,6 +39,7 @@ public enum AutomationCommand: Codable, Equatable, Sendable {
     case renameConstructionPlane(id: ConstructionPlaneSourceID, name: String)
     case setCurveCurvatureDisplay(target: SelectionTarget, isVisible: Bool?, combScale: Double?)
     case setPointDisplay(target: SelectionTarget, isVisible: Bool?)
+    case createSketch(name: String, sketch: Sketch, geometryRole: ObjectDescriptor.GeometryRole)
     case createLineSketch(name: String, plane: SketchPlane, start: SketchPoint, end: SketchPoint)
     case createCircleSketch(name: String, plane: SketchPlane, center: SketchPoint, radius: CADExpression)
     case createArcSketch(
@@ -298,6 +299,12 @@ public enum AutomationCommand: Codable, Equatable, Sendable {
             )
         case .setPointDisplay(let target, let isVisible):
             .setPointDisplay(target: target, isVisible: isVisible)
+        case .createSketch(let name, let sketch, let geometryRole):
+            .createSketch(
+                name: name,
+                sketch: sketch,
+                geometryRole: geometryRole
+            )
         case .createLineSketch(let name, let plane, let start, let end):
             .createLineSketch(
                 name: name,

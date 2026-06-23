@@ -42,6 +42,7 @@ public enum EditorCommand: Codable, Equatable, Sendable {
     case renameConstructionPlane(id: ConstructionPlaneSourceID, name: String)
     case setCurveCurvatureDisplay(target: SelectionTarget, isVisible: Bool?, combScale: Double?)
     case setPointDisplay(target: SelectionTarget, isVisible: Bool?)
+    case createSketch(name: String, sketch: Sketch, geometryRole: ObjectDescriptor.GeometryRole)
     case createLineSketch(name: String, plane: SketchPlane, start: SketchPoint, end: SketchPoint)
     case createCircleSketch(name: String, plane: SketchPlane, center: SketchPoint, radius: CADExpression)
     case createArcSketch(
@@ -286,6 +287,8 @@ public enum EditorCommand: Codable, Equatable, Sendable {
             "setCurveCurvatureDisplay"
         case .setPointDisplay:
             "setPointDisplay"
+        case .createSketch:
+            "createSketch"
         case .createLineSketch:
             "createLineSketch"
         case .createCircleSketch:
@@ -415,6 +418,7 @@ public enum EditorCommand: Codable, Equatable, Sendable {
              .renameConstructionPlane,
              .setCurveCurvatureDisplay,
              .setPointDisplay,
+             .createSketch,
              .createLineSketch,
              .createCircleSketch,
              .createArcSketch,

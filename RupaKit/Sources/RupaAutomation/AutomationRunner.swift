@@ -288,6 +288,22 @@ public struct AutomationRunner {
                 didMutate: result.didMutate,
                 diagnostics: result.diagnostics
             )
+        case .createSketch(let name, let sketch, let geometryRole):
+            let result = try session.execute(
+                .createSketch(
+                    name: name,
+                    sketch: sketch,
+                    geometryRole: geometryRole
+                )
+            )
+            let entityLabel = sketch.entities.count == 1 ? "entity" : "entities"
+            return AutomationResult(
+                message: "Sketch \(name) created with \(sketch.entities.count) \(entityLabel).",
+                commandName: result.commandName,
+                generation: result.generation,
+                didMutate: result.didMutate,
+                diagnostics: result.diagnostics
+            )
         case .createLineSketch(let name, let plane, let start, let end):
             let result = try session.execute(
                 .createLineSketch(

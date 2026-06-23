@@ -111,6 +111,70 @@ import SwiftCAD
     try document.validate()
 }
 
+@Test func createSweepAcceptsConnectedMultiEntityPathSketch() throws {
+    var document = DesignDocument.empty()
+    let profileID = try document.createRectangleSketch(
+        name: "Connected Sweep Profile",
+        plane: .xy,
+        width: .length(2.0, .millimeter),
+        height: .length(1.0, .millimeter)
+    )
+    let pathID = try document.createSketch(
+        name: "Connected Sweep Path",
+        sketch: connectedLinePathSketch(),
+        geometryRole: .curve
+    )
+
+    let sweepID = try document.createSweep(
+        name: "Connected Multi-Path Sweep",
+        profiles: [ProfileReference(featureID: profileID)],
+        path: SweepPathReference(featureID: pathID),
+        options: SweepOptions(cornerStyle: .mitre)
+    )
+    let feature = try #require(document.cadDocument.designGraph.nodes[sweepID])
+    let evaluated = try CADPipeline.modelingDefault(for: document).evaluate(document.cadDocument)
+
+    guard case .sweep(let sweep) = feature.operation else {
+        Issue.record("Expected a sweep feature.")
+        return
+    }
+    #expect(sweep.path == SweepPathReference(featureID: pathID))
+    #expect(evaluated.brep.vertices.count > 8)
+    #expect(evaluated.brep.faces.count > 6)
+    try document.validate()
+}
+
+@Test func createSweepRejectsRoundCornerStyleForConnectedMultiEntityPathSketch() throws {
+    var document = DesignDocument.empty()
+    let profileID = try document.createRectangleSketch(
+        name: "Round Multi-Path Sweep Profile",
+        plane: .xy,
+        width: .length(2.0, .millimeter),
+        height: .length(1.0, .millimeter)
+    )
+    let pathID = try document.createSketch(
+        name: "Round Multi-Path Sweep Path",
+        sketch: connectedLinePathSketch(),
+        geometryRole: .curve
+    )
+    let originalOrder = document.cadDocument.designGraph.order
+
+    do {
+        _ = try document.createSweep(
+            name: "Round Multi-Path Sweep",
+            profiles: [ProfileReference(featureID: profileID)],
+            path: SweepPathReference(featureID: pathID),
+            options: SweepOptions(cornerStyle: .round)
+        )
+        Issue.record("Round multi-curve sweep paths must be rejected until blend topology is implemented.")
+    } catch let error as EditorError {
+        #expect(error.message.contains("Round sweep corner style requires curved corner-transition topology"))
+    } catch {
+        Issue.record("Expected EditorError for round multi-curve sweep path, got \(error).")
+    }
+    #expect(document.cadDocument.designGraph.order == originalOrder)
+}
+
 @Test func createSweepRejectsUnsupportedEvaluationOptionsBeforeMutation() throws {
     var document = DesignDocument.empty()
     let profileID = try document.createRectangleSketch(
@@ -742,6 +806,36 @@ private func createWorldLineSketch(
             x: .length(localEnd.x, .meter),
             y: .length(localEnd.y, .meter)
         )
+    )
+}
+
+private func connectedLinePathSketch() -> Sketch {
+    let firstLineID = SketchEntityID()
+    let secondLineID = SketchEntityID()
+    return Sketch(
+        plane: .yz,
+        entities: [
+            firstLineID: .line(SketchLine(
+                start: SketchPoint(
+                    x: .length(0.0, .millimeter),
+                    y: .length(0.0, .millimeter)
+                ),
+                end: SketchPoint(
+                    x: .length(0.0, .millimeter),
+                    y: .length(15.0, .millimeter)
+                )
+            )),
+            secondLineID: .line(SketchLine(
+                start: SketchPoint(
+                    x: .length(0.0, .millimeter),
+                    y: .length(15.0, .millimeter)
+                ),
+                end: SketchPoint(
+                    x: .length(8.0, .millimeter),
+                    y: .length(25.0, .millimeter)
+                )
+            )),
+        ]
     )
 }
 

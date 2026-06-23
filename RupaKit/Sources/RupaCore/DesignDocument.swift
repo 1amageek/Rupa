@@ -620,6 +620,36 @@ public struct DesignDocument: Identifiable, Sendable {
     }
 
     @discardableResult
+    public mutating func createSketch(
+        name: String,
+        sketch: Sketch,
+        geometryRole: ObjectDescriptor.GeometryRole = .sketchProfile,
+        objectRegistry: ObjectTypeRegistry = .builtIn
+    ) throws -> FeatureID {
+        let trimmedName = try normalizedMetadataName(name, owner: "Sketch")
+        guard sketch.entities.isEmpty == false else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Sketch must contain at least one entity."
+            )
+        }
+        guard geometryRole == .sketchProfile || geometryRole == .curve else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Sketch geometry role must be sketchProfile or curve."
+            )
+        }
+        try sketch.validate()
+        try sketch.validateExpressions(using: cadDocument.parameters)
+        return try appendSketchFeature(
+            name: trimmedName,
+            sketch: sketch,
+            geometryRole: geometryRole,
+            objectRegistry: objectRegistry
+        )
+    }
+
+    @discardableResult
     public mutating func createLineSketch(
         name: String,
         plane: SketchPlane,
