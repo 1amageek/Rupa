@@ -1665,6 +1665,20 @@ public struct Viewport: View {
     ) {
         let start = candidate.geometry.baseProjectedPoint
         let end = candidate.geometry.projectedTip(distanceMeters: distanceMeters)
+        let previewSegment = candidate.geometry.previewSegment(distanceMeters: distanceMeters)
+        var previewPath = Path()
+        previewPath.move(to: previewSegment.start)
+        previewPath.addLine(to: previewSegment.end)
+        context.stroke(
+            previewPath,
+            with: .color(Color.black.opacity(isHighlighted ? 0.42 : 0.28)),
+            style: StrokeStyle(lineWidth: isHighlighted ? 4.8 : 3.4, lineCap: .round)
+        )
+        context.stroke(
+            previewPath,
+            with: .color(ViewportTheme.surfaceEdit.opacity(isHighlighted ? 0.96 : 0.72)),
+            style: StrokeStyle(lineWidth: isHighlighted ? 2.4 : 1.7, lineCap: .round, dash: [5.0, 4.0])
+        )
         drawArrow(
             from: start,
             to: end,

@@ -1,6 +1,8 @@
 import CoreGraphics
 
 struct ViewportEdgeOffsetAffordanceGeometry: Equatable {
+    var edgeStart: CGPoint
+    var edgeEnd: CGPoint
     var baseProjectedPoint: CGPoint
     var projectedDirection: CGVector
     var minimumLengthPoints: CGFloat
@@ -36,6 +38,8 @@ struct ViewportEdgeOffsetAffordanceGeometry: Equatable {
             return nil
         }
 
+        self.edgeStart = edgeStart
+        self.edgeEnd = edgeEnd
         self.baseProjectedPoint = midpoint
         self.projectedDirection = direction
         self.minimumLengthPoints = viewportLength
@@ -49,6 +53,19 @@ struct ViewportEdgeOffsetAffordanceGeometry: Equatable {
         return CGPoint(
             x: baseProjectedPoint.x + projectedDirection.dx * lengthPoints,
             y: baseProjectedPoint.y + projectedDirection.dy * lengthPoints
+        )
+    }
+
+    func previewSegment(distanceMeters: Double? = nil) -> (start: CGPoint, end: CGPoint) {
+        let distance = max(distanceMeters ?? baseDistanceMeters, 1.0e-9)
+        let offset = CGFloat(distance) * pointsPerMeter
+        let delta = CGVector(
+            dx: projectedDirection.dx * offset,
+            dy: projectedDirection.dy * offset
+        )
+        return (
+            CGPoint(x: edgeStart.x + delta.dx, y: edgeStart.y + delta.dy),
+            CGPoint(x: edgeEnd.x + delta.dx, y: edgeEnd.y + delta.dy)
         )
     }
 

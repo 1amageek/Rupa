@@ -1611,12 +1611,18 @@ import Testing
     let fartherEnd = geometry.projectedTip(distanceMeters: 0.75)
     let nearerEnd = geometry.projectedTip(distanceMeters: 0.35)
     let collapsedEnd = geometry.projectedTip(distanceMeters: -0.1)
+    let previewSegment = geometry.previewSegment(distanceMeters: 0.75)
 
     #expect(abs(geometry.projectedDirection.dx) < 1.0e-12)
     #expect(geometry.projectedDirection.dy < 0.0)
     #expect(abs(geometry.offsetDistance(start: start, current: fartherEnd) - 0.75) < 1.0e-12)
     #expect(abs(geometry.offsetDistance(start: start, current: nearerEnd) - 0.35) < 1.0e-12)
     #expect(geometry.offsetDistance(start: start, current: collapsedEnd) > 0.0)
+    #expect(abs(previewSegment.start.x - 300.0) < 1.0e-12)
+    #expect(abs(previewSegment.end.x - 360.0) < 1.0e-12)
+    #expect(previewSegment.start.y < 260.0)
+    #expect(abs((previewSegment.end.x - previewSegment.start.x) - 60.0) < 1.0e-12)
+    #expect(abs(previewSegment.end.y - previewSegment.start.y) < 1.0e-12)
 }
 
 @Test func viewportSlotWidthAffordanceMapsArrowDragToFullWidth() throws {
