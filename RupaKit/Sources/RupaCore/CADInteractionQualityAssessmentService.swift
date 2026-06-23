@@ -222,11 +222,13 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                     label: "Sweep source feature and guided evaluation subset",
                     sourceFiles: [
                         "swift-CAD/Sources/CADKernel/SweepEvaluationCapabilities.swift",
+                        "swift-CAD/Sources/CADKernel/PlanarSweepFeatureEvaluator.swift",
                         "RupaKit/Sources/RupaCore/DesignDocument.swift",
                         "RupaKit/Sources/RupaAgent/AgentServer.swift",
                         "RupaKit/Sources/RupaUI/MainView.swift",
                     ],
                     tests: [
+                        "swift-CAD/Tests/CADKernelTests/CADKernelTests.swift",
                         "RupaKit/Tests/RupaCoreTests/SweepCommandTests.swift",
                         "RupaKit/Tests/RupaAgentTests/AgentServerTests.swift",
                     ]

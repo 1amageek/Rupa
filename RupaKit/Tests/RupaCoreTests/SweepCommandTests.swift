@@ -235,6 +235,46 @@ import SwiftCAD
     #expect(document.cadDocument.designGraph.order == originalOrder)
 }
 
+@Test func createSweepAcceptsObliqueParallelAlignmentWithEndScaleThroughEvaluationGate() throws {
+    var document = DesignDocument.empty()
+    let profileID = try document.createRectangleSketch(
+        name: "Oblique Parallel Sweep Profile",
+        plane: .xy,
+        width: .length(4.0, .millimeter),
+        height: .length(2.0, .millimeter)
+    )
+    let pathID = try document.createLineSketch(
+        name: "Oblique Parallel Sweep Path",
+        plane: .yz,
+        start: SketchPoint(
+            x: .length(0.0, .millimeter),
+            y: .length(0.0, .millimeter)
+        ),
+        end: SketchPoint(
+            x: .length(10.0, .millimeter),
+            y: .length(20.0, .millimeter)
+        )
+    )
+
+    let sweepID = try document.createSweep(
+        name: "Oblique Parallel Sweep",
+        profiles: [ProfileReference(featureID: profileID)],
+        path: SweepPathReference(featureID: pathID),
+        options: SweepOptions(
+            endScale: .constant(.scalar(0.5)),
+            alignment: .parallel
+        )
+    )
+
+    let feature = try #require(document.cadDocument.designGraph.nodes[sweepID])
+    guard case .sweep(let sweep) = feature.operation else {
+        Issue.record("Sweep command must create a sweep feature.")
+        return
+    }
+    #expect(sweep.options.alignment == .parallel)
+    try document.validate()
+}
+
 @Test func createSweepBooleanStoresTargetBodyInput() throws {
     var document = DesignDocument.empty()
     let targetProfileID = try document.createRectangleSketch(
