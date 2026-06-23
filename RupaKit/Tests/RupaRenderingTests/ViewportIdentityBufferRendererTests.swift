@@ -159,6 +159,7 @@ import Testing
     #expect(vertexHit?.selectionComponent == .vertex(vertexComponentID))
     #expect(objectHit?.kind == .body)
     #expect(objectHit?.selectionComponent == nil)
+    #expect(resolver.lastResolutionStatus == .fellBackAfterRendererUnavailable)
 }
 
 @MainActor
@@ -179,6 +180,7 @@ import Testing
 
     #expect(hit?.pickingBackend == .identityBuffer)
     #expect(hit?.selectionComponent == .face(faceComponentID))
+    #expect(resolver.lastResolutionStatus == .renderedIdentityBuffer)
 }
 
 @MainActor
@@ -201,6 +203,26 @@ import Testing
 
     #expect(hit?.pickingBackend == .projectedCPU)
     #expect(hit?.selectionComponent == .face(faceComponentID))
+    #expect(resolver.lastResolutionStatus == .fellBackAfterRendererUnavailable)
+}
+
+@MainActor
+@Test func viewportIdentityHitResolverRecordsRendererFailureFallback() throws {
+    let scene = identityBufferGeneratedTopologyScene()
+    let viewportSize = CGSize(width: 240.0, height: 180.0)
+    let layout = try #require(ViewportLayout(scene: scene, size: viewportSize))
+    let resolver = ViewportIdentityHitResolver(rendererFactory: {
+        throw ViewportIdentityBufferRendererError.commandQueueCreationFailed
+    })
+
+    let hit = resolver.hitTest(
+        point: layout.project(Point3D(x: 0.0, y: 0.0, z: 0.0)),
+        in: scene,
+        layout: layout
+    )
+
+    #expect(hit?.pickingBackend == .projectedCPU)
+    #expect(resolver.lastResolutionStatus == .fellBackAfterRendererFailure)
 }
 
 @Test func viewportIdentityBufferReturnsSelectionHitsInsideRectangle() throws {
@@ -321,6 +343,8 @@ import Testing
 
     #expect(renderer.renderCount == 1)
     #expect(resolver.lastRenderMetrics == renderer.lastRenderMetrics)
+    #expect(resolver.lastResolutionStatus == .reusedIdentityBuffer)
+    #expect(resolver.lastResolutionSummary?.renderMetrics == renderer.lastRenderMetrics)
 }
 
 @MainActor
@@ -368,6 +392,7 @@ import Testing
 
     #expect(renderer.renderCount == 2)
     #expect(resolver.lastRenderMetrics == renderer.lastRenderMetrics)
+    #expect(resolver.lastResolutionStatus == .renderedIdentityBuffer)
 }
 
 @MainActor
@@ -385,6 +410,7 @@ import Testing
     resolver.invalidate()
 
     #expect(resolver.lastRenderMetrics == nil)
+    #expect(resolver.lastResolutionSummary == nil)
 }
 
 @MainActor
@@ -415,6 +441,8 @@ import Testing
     #expect(resolver.lastBudgetRejection?.limit == .pixelCount)
     #expect(resolver.lastRenderCost?.pixelCount == 43_200)
     #expect(resolver.lastRenderMetrics == nil)
+    #expect(resolver.lastResolutionStatus == .fellBackAfterBudgetRejection)
+    #expect(resolver.lastResolutionSummary?.budgetRejection?.limit == .pixelCount)
     #expect(hit?.pickingBackend == .projectedCPU)
     #expect(hit?.selectionComponent == .face(faceComponentID))
 }
@@ -443,6 +471,7 @@ import Testing
     #expect(renderer.renderCount == 0)
     #expect(resolver.lastBudgetRejection?.limit == .drawItemCount)
     #expect((resolver.lastRenderCost?.drawItemCount ?? 0) > 1)
+    #expect(resolver.lastResolutionStatus == .fellBackAfterBudgetRejection)
     #expect(hits.contains { $0.pickingBackend == .projectedCPU })
 }
 
@@ -470,6 +499,7 @@ import Testing
     #expect(renderer.renderCount == 0)
     #expect(resolver.lastBudgetRejection?.limit == .encodedPointCount)
     #expect((resolver.lastRenderCost?.encodedPointCount ?? 0) > 1)
+    #expect(resolver.lastResolutionStatus == .fellBackAfterBudgetRejection)
     #expect(hits.contains { $0.pickingBackend == .projectedCPU })
 }
 
@@ -487,6 +517,7 @@ import Testing
 
     #expect(renderer.renderCount == 2)
     #expect(resolver.lastRenderMetrics == nil)
+    #expect(resolver.lastResolutionStatus == .fellBackAfterInvalidRenderedBuffer)
 }
 
 @MainActor
@@ -509,6 +540,7 @@ import Testing
 
     #expect(hits.contains { $0.pickingBackend == .projectedCPU })
     #expect(hits.contains { $0.selectionComponent == .vertex(vertexComponentID) })
+    #expect(resolver.lastResolutionStatus == .fellBackAfterRendererUnavailable)
 }
 
 @MainActor

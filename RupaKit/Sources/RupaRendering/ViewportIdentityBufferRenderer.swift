@@ -33,7 +33,7 @@ public struct ViewportIdentityBufferSample: Equatable, Sendable {
     }
 }
 
-public struct ViewportIdentityBufferRenderMetrics: Equatable, Sendable {
+public struct ViewportIdentityBufferRenderMetrics: Codable, Equatable, Sendable {
     public var viewportWidth: Int
     public var viewportHeight: Int
     public var encodedCommandCount: Int

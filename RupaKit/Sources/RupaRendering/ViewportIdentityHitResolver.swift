@@ -6,6 +6,16 @@ import SwiftCAD
 public final class ViewportIdentityHitResolver {
     public typealias RendererFactory = () throws -> any ViewportIdentityBufferRendering
 
+    public enum ResolutionStatus: String, Codable, Equatable, Sendable {
+        case renderedIdentityBuffer
+        case reusedIdentityBuffer
+        case fellBackAfterBudgetRejection
+        case fellBackAfterRendererUnavailable
+        case fellBackAfterInvalidViewportSize
+        case fellBackAfterInvalidRenderedBuffer
+        case fellBackAfterRendererFailure
+    }
+
     public enum RenderBudgetLimit: String, Codable, Equatable, Sendable {
         case pixelCount
         case drawItemCount
@@ -102,6 +112,25 @@ public final class ViewportIdentityHitResolver {
         }
     }
 
+    public struct ResolutionSummary: Codable, Equatable, Sendable {
+        public var status: ResolutionStatus
+        public var renderCost: RenderCost?
+        public var renderMetrics: ViewportIdentityBufferRenderMetrics?
+        public var budgetRejection: RenderBudgetRejection?
+
+        public init(
+            status: ResolutionStatus,
+            renderCost: RenderCost? = nil,
+            renderMetrics: ViewportIdentityBufferRenderMetrics? = nil,
+            budgetRejection: RenderBudgetRejection? = nil
+        ) {
+            self.status = status
+            self.renderCost = renderCost
+            self.renderMetrics = renderMetrics
+            self.budgetRejection = budgetRejection
+        }
+    }
+
     private struct CacheKey: Equatable {
         var scene: ViewportScene
         var layout: ViewportLayout
@@ -127,6 +156,11 @@ public final class ViewportIdentityHitResolver {
     public private(set) var lastRenderMetrics: ViewportIdentityBufferRenderMetrics?
     public private(set) var lastRenderCost: RenderCost?
     public private(set) var lastBudgetRejection: RenderBudgetRejection?
+    public private(set) var lastResolutionSummary: ResolutionSummary?
+
+    public var lastResolutionStatus: ResolutionStatus? {
+        lastResolutionSummary?.status
+    }
 
     public init(
         rendererFactory: @escaping RendererFactory = { try ViewportIdentityBufferRenderer() },
@@ -150,6 +184,7 @@ public final class ViewportIdentityHitResolver {
                 selectionHitPolicy: selectionHitPolicy
             )
         } catch {
+            recordFallback(from: error)
             return ViewportHitTester().hitTest(
                 point: point,
                 in: scene,
@@ -175,6 +210,7 @@ public final class ViewportIdentityHitResolver {
             )
             return buffer.hits(in: rect)
         } catch {
+            recordFallback(from: error)
             return ViewportSelectionRectangleHitTester().hits(
                 in: rect,
                 scene: scene,
@@ -190,6 +226,7 @@ public final class ViewportIdentityHitResolver {
         lastRenderMetrics = nil
         lastRenderCost = nil
         lastBudgetRejection = nil
+        lastResolutionSummary = nil
     }
 
     private func identityHit(
@@ -223,8 +260,11 @@ public final class ViewportIdentityHitResolver {
         if let cached,
            cached.key == key,
            reusable(cached, renderSize: renderSize) {
-            lastRenderCost = cached.cost
-            lastBudgetRejection = nil
+            recordResolution(
+                .reusedIdentityBuffer,
+                renderCost: cached.cost,
+                renderMetrics: cached.buffer.renderMetrics
+            )
             return cached.buffer
         }
 
@@ -251,8 +291,13 @@ public final class ViewportIdentityHitResolver {
         lastRenderCost = cost
         lastRenderMetrics = nil
         lastBudgetRejection = nil
+        lastResolutionSummary = nil
         if let rejection = renderBudget.rejection(for: cost) {
-            lastBudgetRejection = rejection
+            recordResolution(
+                .fellBackAfterBudgetRejection,
+                renderCost: cost,
+                budgetRejection: rejection
+            )
             throw ResolverError.budgetExceeded(rejection)
         }
         let buffer = try identityRenderer().render(
@@ -260,11 +305,62 @@ public final class ViewportIdentityHitResolver {
             viewportSize: layout.viewportSize
         )
         guard renderedBufferMatches(buffer, cost: cost) else {
+            recordResolution(.fellBackAfterInvalidRenderedBuffer, renderCost: cost)
             throw ResolverError.invalidRenderedBuffer
         }
-        lastRenderMetrics = buffer.renderMetrics
+        recordResolution(
+            .renderedIdentityBuffer,
+            renderCost: cost,
+            renderMetrics: buffer.renderMetrics
+        )
         cached = Cache(key: key, buffer: buffer, cost: cost)
         return buffer
+    }
+
+    private func recordResolution(
+        _ status: ResolutionStatus,
+        renderCost: RenderCost? = nil,
+        renderMetrics: ViewportIdentityBufferRenderMetrics? = nil,
+        budgetRejection: RenderBudgetRejection? = nil
+    ) {
+        lastRenderCost = renderCost
+        lastRenderMetrics = renderMetrics
+        lastBudgetRejection = budgetRejection
+        lastResolutionSummary = ResolutionSummary(
+            status: status,
+            renderCost: renderCost,
+            renderMetrics: renderMetrics,
+            budgetRejection: budgetRejection
+        )
+    }
+
+    private func recordFallback(from error: Error) {
+        if let resolverError = error as? ResolverError {
+            switch resolverError {
+            case .budgetExceeded(let rejection):
+                recordResolution(
+                    .fellBackAfterBudgetRejection,
+                    renderCost: rejection.cost,
+                    budgetRejection: rejection
+                )
+            case .invalidRenderedBuffer:
+                recordResolution(.fellBackAfterInvalidRenderedBuffer, renderCost: lastRenderCost)
+            }
+            return
+        }
+
+        guard let rendererError = error as? ViewportIdentityBufferRendererError else {
+            recordResolution(.fellBackAfterRendererFailure, renderCost: lastRenderCost)
+            return
+        }
+        switch rendererError {
+        case .invalidViewportSize:
+            recordResolution(.fellBackAfterInvalidViewportSize, renderCost: lastRenderCost)
+        case .deviceUnavailable:
+            recordResolution(.fellBackAfterRendererUnavailable, renderCost: lastRenderCost)
+        default:
+            recordResolution(.fellBackAfterRendererFailure, renderCost: lastRenderCost)
+        }
     }
 
     private func identityRenderer() throws -> any ViewportIdentityBufferRendering {
