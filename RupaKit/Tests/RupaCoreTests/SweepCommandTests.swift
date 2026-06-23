@@ -275,6 +275,80 @@ import SwiftCAD
     try document.validate()
 }
 
+@Test func createSweepAcceptsBilinearCornerRailPointGuidesThroughEvaluationGate() throws {
+    var document = DesignDocument.empty()
+    let profileID = try document.createRectangleSketch(
+        name: "Bilinear Rail Sweep Profile",
+        plane: .xy,
+        width: .length(40.0, .millimeter),
+        height: .length(20.0, .millimeter)
+    )
+    let pathID = try document.createLineSketch(
+        name: "Bilinear Rail Sweep Path",
+        plane: .yz,
+        start: SketchPoint(
+            x: .length(0.0, .millimeter),
+            y: .length(0.0, .millimeter)
+        ),
+        end: SketchPoint(
+            x: .length(0.0, .millimeter),
+            y: .length(10.0, .millimeter)
+        )
+    )
+    let bottomLeftGuideID = try createWorldLineSketch(
+        in: &document,
+        name: "Bilinear Rail Bottom Left Guide",
+        start: Point3D(x: -0.020, y: -0.010, z: 0.0),
+        end: Point3D(x: -0.030, y: -0.008, z: 0.010)
+    )
+    let bottomRightGuideID = try createWorldLineSketch(
+        in: &document,
+        name: "Bilinear Rail Bottom Right Guide",
+        start: Point3D(x: 0.020, y: -0.010, z: 0.0),
+        end: Point3D(x: 0.028, y: -0.012, z: 0.010)
+    )
+    let topRightGuideID = try createWorldLineSketch(
+        in: &document,
+        name: "Bilinear Rail Top Right Guide",
+        start: Point3D(x: 0.020, y: 0.010, z: 0.0),
+        end: Point3D(x: 0.034, y: 0.024, z: 0.010)
+    )
+    let topLeftGuideID = try createWorldLineSketch(
+        in: &document,
+        name: "Bilinear Rail Top Left Guide",
+        start: Point3D(x: -0.020, y: 0.010, z: 0.0),
+        end: Point3D(x: -0.018, y: 0.016, z: 0.010)
+    )
+
+    let sweepID = try document.createSweep(
+        name: "Bilinear Rail Sweep",
+        profiles: [ProfileReference(featureID: profileID)],
+        path: SweepPathReference(featureID: pathID),
+        guides: [
+            SweepGuideReference(featureID: bottomLeftGuideID),
+            SweepGuideReference(featureID: bottomRightGuideID),
+            SweepGuideReference(featureID: topRightGuideID),
+            SweepGuideReference(featureID: topLeftGuideID),
+        ],
+        options: SweepOptions(guideMethod: .point)
+    )
+
+    let feature = try #require(document.cadDocument.designGraph.nodes[sweepID])
+    guard case .sweep(let sweep) = feature.operation else {
+        Issue.record("Sweep command must create a sweep feature.")
+        return
+    }
+    #expect(sweep.guides == [
+        SweepGuideReference(featureID: bottomLeftGuideID),
+        SweepGuideReference(featureID: bottomRightGuideID),
+        SweepGuideReference(featureID: topRightGuideID),
+        SweepGuideReference(featureID: topLeftGuideID),
+    ])
+    #expect(sweep.options.guideMethod == .point)
+    #expect(feature.inputs.filter { $0.role == .guide }.count == 4)
+    try document.validate()
+}
+
 @Test func createSweepBooleanStoresTargetBodyInput() throws {
     var document = DesignDocument.empty()
     let targetProfileID = try document.createRectangleSketch(
@@ -459,4 +533,45 @@ import SwiftCAD
         )
     }
     #expect(document.cadDocument.designGraph.order == originalOrder)
+}
+
+private func createWorldLineSketch(
+    in document: inout DesignDocument,
+    name: String,
+    start: Point3D,
+    end: Point3D
+) throws -> FeatureID {
+    let tolerance = ModelingTolerance.standard
+    let delta = end - start
+    let direction = try delta.normalized(tolerance: tolerance.distance)
+    let helper = abs(direction.z) < 0.9 ? Vector3D.unitZ : Vector3D.unitY
+    let normal = try direction.cross(helper).normalized(tolerance: tolerance.distance)
+    let basis = try sketchPlaneBasis(for: normal, tolerance: tolerance)
+    let localEnd = Point2D(
+        x: delta.dot(basis.u),
+        y: delta.dot(basis.v)
+    )
+    return try document.createLineSketch(
+        name: name,
+        plane: .plane(Plane3D(origin: start, normal: normal)),
+        start: SketchPoint(
+            x: .length(0.0, .meter),
+            y: .length(0.0, .meter)
+        ),
+        end: SketchPoint(
+            x: .length(localEnd.x, .meter),
+            y: .length(localEnd.y, .meter)
+        )
+    )
+}
+
+private func sketchPlaneBasis(
+    for planeNormal: Vector3D,
+    tolerance: ModelingTolerance
+) throws -> (u: Vector3D, v: Vector3D) {
+    let normal = try planeNormal.normalized(tolerance: tolerance.distance)
+    let helper = abs(normal.z) < 0.9 ? Vector3D.unitZ : Vector3D.unitY
+    let u = try helper.cross(normal).normalized(tolerance: tolerance.distance)
+    let v = normal.cross(u)
+    return (u, v)
 }
