@@ -298,6 +298,7 @@ import SwiftCAD
     let sweepSimplifyAxis = try #require(sweep.optionMatrix.first { $0.name == "simplify" })
     #expect(sweepGuideAxis.supportedValues == ["point", "chord", "curve"])
     #expect(sweepGuideAxis.notes.contains { $0.contains("mean-value cage rail deformation") })
+    #expect(sweepGuideAxis.notes.contains { $0.contains("radial point rail deformation") })
     #expect(sweepBooleanAxis.supportedValues == ["newBody", "union", "difference", "intersect", "slice"])
     #expect(sweepBooleanAxis.notes.contains { $0.contains("solid resultKind") })
     #expect(sweepResultAxis.supportedValues == ["solid", "sheet"])

@@ -651,7 +651,7 @@ public final class AgentServer: AgentClientProtocol {
                     name: "guideMethod",
                     supportedValues: ["point", "chord", "curve"],
                     notes: [
-                        "point supports similarity, non-uniform affine, signed-axis, bilinear quadrilateral, and mean-value cage rail deformation when guide geometry satisfies those contracts",
+                        "point supports similarity, non-uniform affine, signed-axis, bilinear quadrilateral, mean-value cage rail deformation, and radial point rail deformation when guide geometry satisfies those contracts",
                         "chord supports directional compatible guide rotation",
                         "curve requires initial path/profile contact and validates curve-contact constraints"
                     ]

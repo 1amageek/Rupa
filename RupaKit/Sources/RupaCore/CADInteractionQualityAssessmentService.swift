@@ -237,7 +237,7 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                 ),
             ],
             openWork: [
-                "Rail deformation beyond the current affine, signed-axis, convex quadrilateral bilinear, and convex mean-value cage point-guide sections.",
+                "Rail deformation beyond the current affine, signed-axis, convex quadrilateral bilinear, convex mean-value cage, and radial point-guide sections.",
                 "Non-box boolean operands.",
                 "Stable result topology beyond current exact subsets.",
                 "Full modal command-dialog parity.",
@@ -250,6 +250,9 @@ public struct CADInteractionQualityAssessmentService: Sendable {
             references: [
                 "https://doc.plasticity.xyz/solid/polyspline",
                 "https://doc.plasticity.xyz/solid/slide-surface-cv",
+                "https://doc.plasticity.xyz/cad-essentials/nurbs-overview",
+                "https://doc.plasticity.xyz/cad-essentials/uvn-coordinate-system",
+                "https://doc.plasticity.xyz/cad-essentials/continuity-curve-and-surface",
             ],
             rating: .partial,
             gates: [
@@ -283,12 +286,15 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                 ),
             ],
             openWork: [
+                "First-class NURBS and B-spline source entities with degree, order, knot vectors, weights, spans, stable CV/knot/span IDs, and trim-loop ownership.",
+                "UVN local-frame evaluation for selected surface parameters, including U/V tangents, normal, derivatives, curvature, and orientation consistency.",
+                "Typed continuity contracts for G0/G1/G2 surface boundaries and G0/G1/G2/G3 curve matching.",
                 "Non-planar G2 multi-patch reconstruction.",
                 "Patch merge and rounded-corner policy output.",
                 "General trim-curve and surface CV source editing.",
                 "Viewport creation controls.",
             ],
-            next: "Promote PolySpline from generated-boundary editing to first-class surface source editing with explicit G2 diagnostics and creation affordances."
+            next: "Promote PolySpline from generated-boundary editing to a shared parametric surface foundation with NURBS/B-spline source ownership, UVN frame evaluation, and explicit continuity diagnostics before broadening surface tools."
         ),
         entry(
             area: .curveContinuity,
