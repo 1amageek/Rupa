@@ -1,6 +1,5 @@
 import Foundation
 import RupaCore
-import SwiftCAD
 
 struct DimensionCommandEntry: Equatable {
     enum Source: Equatable {

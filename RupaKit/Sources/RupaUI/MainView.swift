@@ -3,7 +3,6 @@ import MacComponent
 import RupaCore
 import RupaPreview
 import RupaRendering
-import SwiftCAD
 import SwiftUI
 
 private struct ViewAlignedConstructionPlaneRequest: Equatable {

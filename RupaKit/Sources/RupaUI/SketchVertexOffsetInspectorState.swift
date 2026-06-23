@@ -1,5 +1,4 @@
 import RupaCore
-import SwiftCAD
 
 struct SketchVertexOffsetInspectorState {
     var entityKind: String

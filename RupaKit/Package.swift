@@ -74,7 +74,6 @@ let package = Package(
                 "RupaRendering",
                 "RupaPreview",
                 .product(name: "MacComponent", package: "mac-component"),
-                .product(name: "SwiftCAD", package: "swift-CAD"),
             ]
         ),
         .target(

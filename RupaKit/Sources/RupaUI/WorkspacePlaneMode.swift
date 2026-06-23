@@ -1,4 +1,4 @@
-import SwiftCAD
+import RupaCore
 
 enum WorkspacePlaneMode: String, CaseIterable, Identifiable {
     case adaptive
