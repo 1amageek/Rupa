@@ -2416,6 +2416,7 @@ public struct ViewportSceneBuilder {
 
     public func build(document: DesignDocument) -> ViewportScene {
         let graph = document.cadDocument.designGraph
+        let designDisplaySnapshot = DesignDisplaySnapshotService().snapshot(document: document)
         let bodyDisplaySnapshots: [FeatureID: BodyDisplaySnapshot]
         do {
             bodyDisplaySnapshots = try BodyDisplaySnapshotService().snapshots(
@@ -2432,118 +2433,70 @@ public struct ViewportSceneBuilder {
             }
 
             switch feature.operation {
-            case .sketch(let sketch):
-                guard let bounds = sketchBounds(
-                    sketch,
-                    parameters: document.cadDocument.parameters
-                ) else {
+            case .sketch:
+                guard let sketchSnapshot = designDisplaySnapshot.sketches[featureID] else {
                     return nil
                 }
+                let bounds = viewportBounds(sketchSnapshot.bounds)
                 return ViewportSceneItem(
                     id: featureID.description,
                     featureID: featureID,
                     modelBounds: bounds,
                     kind: .sketch(
-                        primitives: sketchPrimitives(
-                            sketch,
-                            parameters: document.cadDocument.parameters
-                        )
+                        primitives: viewportSketchPrimitives(sketchSnapshot.primitives)
                     ),
-                    sketchRegions: sketchRegions(
-                        sketch,
-                        featureID: featureID,
-                        parameters: document.cadDocument.parameters
-                    )
+                    sketchRegions: viewportSketchRegions(sketchSnapshot.regions)
                 )
-            case .extrude(let extrude):
-                guard let sourceFeature = graph.nodes[extrude.profile.featureID],
-                      case .sketch(let sketch) = sourceFeature.operation,
-                      let bounds = sketchBounds(
-                          sketch,
-                          parameters: document.cadDocument.parameters
-                      ),
-                      let depthMeters = resolvedLength(
-                          extrude.distance,
-                          parameters: document.cadDocument.parameters
-                      ) else {
+            case .extrude:
+                guard let extrudeSnapshot = designDisplaySnapshot.extrudes[featureID],
+                      let sketchSnapshot = designDisplaySnapshot.sketches[extrudeSnapshot.profileFeatureID] else {
                     return nil
                 }
+                let bounds = viewportBounds(sketchSnapshot.bounds)
                 let object = objectDescriptor(
                     featureID: featureID,
                     kind: .body,
                     document: document
                 )
                 let component = bodyComponent(
-                    sketch: sketch,
+                    sketchSnapshot: sketchSnapshot,
                     bounds: bounds,
-                    depthMeters: depthMeters,
-                    direction: extrude.direction,
-                    parameters: document.cadDocument.parameters,
+                    depthMeters: extrudeSnapshot.depthMeters,
+                    direction: extrudeSnapshot.direction,
                     declaredObjectTypeID: object?.typeID,
                     declaredProperties: object?.properties ?? ObjectPropertySet()
                 )
                 return ViewportSceneItem(
                     id: featureID.description,
                     featureID: featureID,
-                    sourceFeatureID: extrude.profile.featureID,
+                    sourceFeatureID: extrudeSnapshot.profileFeatureID,
                     modelBounds: bounds,
                     kind: .body(component: component)
                 )
             case .sweep(let sweep):
-                guard let profile = sweep.profiles.first,
-                      let sourceFeature = graph.nodes[profile.featureID],
-                      case .sketch(let sketch) = sourceFeature.operation,
-                      let bounds = sketchBounds(
-                          sketch,
-                          parameters: document.cadDocument.parameters
-                      ) else {
+                guard let profile = sweep.profiles.first else {
                     return nil
                 }
-                if let pathFeature = graph.nodes[sweep.path.featureID],
-                   case .sketch(let pathSketch) = pathFeature.operation,
-                   let pathVector = straightOpenPathVector(
-                       pathSketch,
-                       parameters: document.cadDocument.parameters
-                   ),
-                   canUseViewportPrismSweep(
-                       sweep,
-                       parameters: document.cadDocument.parameters
-                   ),
-                   isIdentityViewportSweepSectionTransform(
-                       sweep,
-                       parameters: document.cadDocument.parameters
-                   ),
-                   let distanceFraction = resolvedScalar(
-                       sweep.options.distanceFraction,
-                       parameters: document.cadDocument.parameters
-                   ) {
-                    let pathLength = pathVector.length
-                    guard pathLength > 1.0e-9 else {
-                        return nil
-                    }
+                if let sweepSnapshot = designDisplaySnapshot.straightPrismSweeps[featureID],
+                   let sketchSnapshot = designDisplaySnapshot.sketches[sweepSnapshot.profileFeatureID] {
+                    let bounds = viewportBounds(sketchSnapshot.bounds)
                     let object = objectDescriptor(
                         featureID: featureID,
                         kind: .body,
                         document: document
                     )
-                    let direction = Vector3D(
-                        x: pathVector.x / pathLength,
-                        y: pathVector.y / pathLength,
-                        z: pathVector.z / pathLength
-                    )
                     let component = bodyComponent(
-                        sketch: sketch,
+                        sketchSnapshot: sketchSnapshot,
                         bounds: bounds,
-                        depthMeters: pathLength * distanceFraction,
-                        direction: .vector(direction),
-                        parameters: document.cadDocument.parameters,
+                        depthMeters: sweepSnapshot.depthMeters,
+                        direction: sweepSnapshot.direction,
                         declaredObjectTypeID: object?.typeID,
                         declaredProperties: object?.properties ?? ObjectPropertySet()
                     )
                     return ViewportSceneItem(
                         id: featureID.description,
                         featureID: featureID,
-                        sourceFeatureID: profile.featureID,
+                        sourceFeatureID: sweepSnapshot.profileFeatureID,
                         modelBounds: bounds,
                         kind: .body(component: component)
                     )
@@ -2608,40 +2561,6 @@ public struct ViewportSceneBuilder {
         return ViewportScene(items: items)
     }
 
-    private func canUseViewportPrismSweep(
-        _ sweep: SweepFeature,
-        parameters: ParameterTable
-    ) -> Bool {
-        guard sweep.profiles.count == 1,
-              sweep.guides.isEmpty,
-              sweep.options.resultKind == .solid,
-              sweep.options.booleanOperation == .newBody,
-              sweep.options.keepTools == false,
-              let twistAngle = resolvedAngle(sweep.options.twistAngle, parameters: parameters),
-              twistAngle.isFinite,
-              let endScale = resolvedScalar(sweep.options.endScale, parameters: parameters),
-              endScale.isFinite,
-              endScale > 1.0e-9,
-              let distanceFraction = resolvedScalar(sweep.options.distanceFraction, parameters: parameters),
-              distanceFraction > 0.0,
-              distanceFraction <= 1.0 else {
-            return false
-        }
-        return true
-    }
-
-    private func isIdentityViewportSweepSectionTransform(
-        _ sweep: SweepFeature,
-        parameters: ParameterTable
-    ) -> Bool {
-        guard let twistAngle = resolvedAngle(sweep.options.twistAngle, parameters: parameters),
-              let endScale = resolvedScalar(sweep.options.endScale, parameters: parameters) else {
-            return false
-        }
-        return abs(twistAngle) <= 1.0e-9
-            && abs(endScale - 1.0) <= 1.0e-9
-    }
-
     private func evaluatedMeshBodyItem(
         featureID: FeatureID,
         sourceFeatureID: FeatureID?,
@@ -2690,17 +2609,21 @@ public struct ViewportSceneBuilder {
     }
 
     private func bodyComponent(
-        sketch: Sketch,
+        sketchSnapshot: SketchDisplaySnapshot,
         bounds: CGRect,
         depthMeters: Double,
         direction: ExtrudeDirection,
-        parameters: ParameterTable,
         declaredObjectTypeID: ObjectTypeID?,
         declaredProperties: ObjectPropertySet
     ) -> ViewportBodyComponent {
         let sizeY = abs(depthMeters)
         let yExtents = bodyYExtents(depthMeters: depthMeters, direction: direction)
-        let rawCylinder = cylinderComponent(sketch: sketch, parameters: parameters)
+        let rawCylinder = sketchSnapshot.singleCircleProfileRadiusMeters.map { radius in
+            ViewportCylinderComponent(
+                topRadiusMeters: radius,
+                bottomRadiusMeters: radius
+            )
+        }
         let resolvedTypeID = declaredObjectTypeID ?? (rawCylinder == nil ? .cube : .cylinder)
         let properties = resolvedProperties(
             typeID: resolvedTypeID,
@@ -2756,6 +2679,68 @@ public struct ViewportSceneBuilder {
         }?.object
     }
 
+    private func viewportBounds(_ bounds: SketchDisplaySnapshot.Bounds) -> CGRect {
+        CGRect(
+            x: bounds.minX,
+            y: bounds.minY,
+            width: max(bounds.width, 0.001),
+            height: max(bounds.height, 0.001)
+        )
+    }
+
+    private func viewportSketchPrimitives(
+        _ primitives: [SketchDisplaySnapshot.Primitive]
+    ) -> [ViewportSketchPrimitive] {
+        primitives.map { primitive in
+            switch primitive {
+            case .point(let entityID, let point):
+                return .point(entityID: entityID, point: viewportPoint(point))
+            case .line(let entityID, let start, let end):
+                return .line(
+                    entityID: entityID,
+                    start: viewportPoint(start),
+                    end: viewportPoint(end)
+                )
+            case .circle(let entityID, let center, let radiusMeters):
+                return .circle(
+                    entityID: entityID,
+                    center: viewportPoint(center),
+                    radiusMeters: radiusMeters
+                )
+            case .arc(let entityID, let center, let radiusMeters, let startAngleRadians, let endAngleRadians):
+                return .arc(
+                    entityID: entityID,
+                    center: viewportPoint(center),
+                    radiusMeters: radiusMeters,
+                    startAngleRadians: startAngleRadians,
+                    endAngleRadians: endAngleRadians
+                )
+            case .spline(let entityID, let points, let controlPoints, let sketchPlane):
+                return .spline(
+                    entityID: entityID,
+                    points: points.map(viewportPoint),
+                    controlPoints: controlPoints.map(viewportPoint),
+                    sketchPlane: sketchPlane
+                )
+            }
+        }
+    }
+
+    private func viewportSketchRegions(
+        _ regions: [SketchDisplaySnapshot.Region]
+    ) -> [ViewportSketchRegion] {
+        regions.map { region in
+            ViewportSketchRegion(
+                componentID: region.componentID,
+                points: region.points.map(viewportPoint)
+            )
+        }
+    }
+
+    private func viewportPoint(_ point: Point2D) -> CGPoint {
+        CGPoint(x: point.x, y: point.y)
+    }
+
     private func bodyYExtents(
         depthMeters: Double,
         direction: ExtrudeDirection
@@ -2770,22 +2755,6 @@ public struct ViewportSceneBuilder {
             }
             return (-size, 0.0)
         }
-    }
-
-    private func cylinderComponent(
-        sketch: Sketch,
-        parameters: ParameterTable
-    ) -> ViewportCylinderComponent? {
-        guard sketch.entities.count == 1,
-              let entity = sketch.entities.values.first,
-              case .circle(let circle) = entity,
-              let radius = resolvedLength(circle.radius, parameters: parameters) else {
-            return nil
-        }
-        return ViewportCylinderComponent(
-            topRadiusMeters: radius,
-            bottomRadiusMeters: radius
-        )
     }
 
     private func cylinderComponent(
@@ -2846,463 +2815,6 @@ public struct ViewportSceneBuilder {
         return value
     }
 
-	    private func sketchBounds(
-        _ sketch: Sketch,
-        parameters: ParameterTable
-    ) -> CGRect? {
-        let modelPoints = sketch.entities.values.flatMap { entity in
-            entityPoints(
-                for: entity,
-                plane: sketch.plane,
-                parameters: parameters
-            )
-        }
-        guard let firstPoint = modelPoints.first else {
-            return nil
-        }
-
-        var minX = firstPoint.x
-        var minY = firstPoint.y
-        var maxX = firstPoint.x
-        var maxY = firstPoint.y
-
-        for point in modelPoints.dropFirst() {
-            minX = min(minX, point.x)
-            minY = min(minY, point.y)
-            maxX = max(maxX, point.x)
-            maxY = max(maxY, point.y)
-        }
-
-        let width = maxX - minX
-        let height = maxY - minY
-        return CGRect(
-            x: minX,
-            y: minY,
-            width: width > 0.001 ? width : 0.001,
-            height: height > 0.001 ? height : 0.001
-        )
-    }
-
-    private func sketchPrimitives(
-        _ sketch: Sketch,
-        parameters: ParameterTable
-    ) -> [ViewportSketchPrimitive] {
-        sketch.entities.compactMap { entityID, entity in
-            switch entity {
-            case .point(let point):
-                guard let resolved = resolvedViewportPoint(
-                    point,
-                    plane: sketch.plane,
-                    parameters: parameters
-                ) else {
-                    return nil
-                }
-                return .point(entityID: entityID, point: resolved)
-            case .line(let line):
-                guard let start = resolvedViewportPoint(
-                    line.start,
-                    plane: sketch.plane,
-                    parameters: parameters
-                ),
-                      let end = resolvedViewportPoint(
-                          line.end,
-                          plane: sketch.plane,
-                          parameters: parameters
-                      ) else {
-                    return nil
-                }
-                return .line(entityID: entityID, start: start, end: end)
-            case .circle(let circle):
-                guard let center = resolvedViewportPoint(
-                    circle.center,
-                    plane: sketch.plane,
-                    parameters: parameters
-                ),
-                      let radius = resolvedLength(circle.radius, parameters: parameters) else {
-                    return nil
-                }
-                return .circle(entityID: entityID, center: center, radiusMeters: radius)
-            case .arc(let arc):
-                guard let center = resolvedViewportPoint(
-                    arc.center,
-                    plane: sketch.plane,
-                    parameters: parameters
-                ),
-                      let radius = resolvedLength(arc.radius, parameters: parameters),
-                      let startAngle = resolvedAngle(arc.startAngle, parameters: parameters),
-                      let endAngle = resolvedAngle(arc.endAngle, parameters: parameters) else {
-                    return nil
-                }
-                return .arc(
-                    entityID: entityID,
-                    center: center,
-                    radiusMeters: radius,
-                    startAngleRadians: startAngle,
-                    endAngleRadians: endAngle
-                )
-            case .spline(let spline):
-                let controlPoints = resolvedSplineControlPoints(
-                    spline,
-                    plane: sketch.plane,
-                    parameters: parameters
-                )
-                let points = splineSamplePoints(controlPoints: controlPoints)
-                guard points.count >= 2 else {
-                    return nil
-                }
-                return .spline(
-                    entityID: entityID,
-                    points: points,
-                    controlPoints: controlPoints,
-                    sketchPlane: sketch.plane
-                )
-            }
-        }
-    }
-
-    private func sketchRegions(
-        _ sketch: Sketch,
-        featureID: FeatureID,
-        parameters: ParameterTable
-    ) -> [ViewportSketchRegion] {
-        let profiles: [CADProfile]
-        do {
-            profiles = try CircleAwareSketchProfileExtractor().extractProfiles(
-                from: sketch,
-                sourceFeatureID: featureID,
-                parameters: parameters
-            )
-        } catch {
-            return []
-        }
-        return profiles.enumerated().compactMap { profileIndex, profile in
-            let points = viewportRegionPoints(for: profile)
-            guard points.count >= 3 else {
-                return nil
-            }
-            return ViewportSketchRegion(
-                componentID: .profileRegion(
-                    featureID: featureID,
-                    profileIndex: profileIndex
-                ),
-                points: points
-            )
-        }
-    }
-
-    private func viewportRegionPoints(for profile: CADProfile) -> [CGPoint] {
-        profile.vertices.compactMap { vertex in
-            guard let localPoint = localPoint(vertex, on: profile.plane) else {
-                return nil
-            }
-            return viewportPoint(from: localPoint, on: profile.plane)
-        }
-    }
-
-    private func entityPoints(
-        for entity: SketchEntity,
-        plane: SketchPlane,
-        parameters: ParameterTable
-    ) -> [CGPoint] {
-        switch entity {
-        case .point(let point):
-            guard let resolved = resolvedViewportPoint(
-                point,
-                plane: plane,
-                parameters: parameters
-            ) else {
-                return []
-            }
-            return [resolved]
-        case .line(let line):
-            guard let start = resolvedViewportPoint(
-                line.start,
-                plane: plane,
-                parameters: parameters
-            ),
-                  let end = resolvedViewportPoint(
-                      line.end,
-                      plane: plane,
-                      parameters: parameters
-                  ) else {
-                return []
-            }
-            return [start, end]
-        case .circle(let circle):
-            guard let center = resolvedViewportPoint(
-                circle.center,
-                plane: plane,
-                parameters: parameters
-            ),
-                  let radius = resolvedLength(circle.radius, parameters: parameters) else {
-                return []
-            }
-            let radiusValue = CGFloat(radius)
-            return [
-                CGPoint(x: center.x - radiusValue, y: center.y - radiusValue),
-                CGPoint(x: center.x + radiusValue, y: center.y + radiusValue),
-            ]
-        case .arc(let arc):
-            guard let center = resolvedViewportPoint(
-                arc.center,
-                plane: plane,
-                parameters: parameters
-            ),
-                  let radius = resolvedLength(arc.radius, parameters: parameters),
-                  let startAngle = resolvedAngle(arc.startAngle, parameters: parameters),
-                  let endAngle = resolvedAngle(arc.endAngle, parameters: parameters) else {
-                return []
-            }
-            return arcBoundsPoints(
-                center: center,
-                radiusMeters: radius,
-                startAngleRadians: startAngle,
-                endAngleRadians: endAngle
-            )
-        case .spline(let spline):
-            return resolvedSplinePoints(
-                spline,
-                plane: plane,
-                parameters: parameters
-            )
-        }
-    }
-
-    private func resolvedSplinePoints(
-        _ spline: SketchSpline,
-        plane: SketchPlane,
-        parameters: ParameterTable
-    ) -> [CGPoint] {
-        splineSamplePoints(
-            controlPoints: resolvedSplineControlPoints(
-                spline,
-                plane: plane,
-                parameters: parameters
-            )
-        )
-    }
-
-    private func resolvedSplineControlPoints(
-        _ spline: SketchSpline,
-        plane: SketchPlane,
-        parameters: ParameterTable
-    ) -> [CGPoint] {
-        guard spline.controlPoints.count >= 4,
-              (spline.controlPoints.count - 1).isMultiple(of: 3) else {
-            return []
-        }
-        let controlPoints = spline.controlPoints.compactMap { point in
-            resolvedViewportPoint(
-                point,
-                plane: plane,
-                parameters: parameters
-            )
-        }
-        guard controlPoints.count == spline.controlPoints.count else {
-            return []
-        }
-        return controlPoints
-    }
-
-    private func splineSamplePoints(controlPoints: [CGPoint]) -> [CGPoint] {
-        guard controlPoints.count >= 4,
-              (controlPoints.count - 1).isMultiple(of: 3) else {
-            return []
-        }
-        var samples: [CGPoint] = []
-        let samplesPerSegment = 32
-        for segmentStart in stride(from: 0, to: controlPoints.count - 1, by: 3) {
-            let p0 = controlPoints[segmentStart]
-            let p1 = controlPoints[segmentStart + 1]
-            let p2 = controlPoints[segmentStart + 2]
-            let p3 = controlPoints[segmentStart + 3]
-            for index in 0 ... samplesPerSegment {
-                if segmentStart > 0, index == 0 {
-                    continue
-                }
-                let t = CGFloat(index) / CGFloat(samplesPerSegment)
-                samples.append(cubicBezierPoint(p0, p1, p2, p3, t: t))
-            }
-        }
-        return samples
-    }
-
-    private func cubicBezierPoint(
-        _ p0: CGPoint,
-        _ p1: CGPoint,
-        _ p2: CGPoint,
-        _ p3: CGPoint,
-        t: CGFloat
-    ) -> CGPoint {
-        let oneMinusT = 1.0 - t
-        let b0 = oneMinusT * oneMinusT * oneMinusT
-        let b1 = 3.0 * oneMinusT * oneMinusT * t
-        let b2 = 3.0 * oneMinusT * t * t
-        let b3 = t * t * t
-        return CGPoint(
-            x: p0.x * b0 + p1.x * b1 + p2.x * b2 + p3.x * b3,
-            y: p0.y * b0 + p1.y * b1 + p2.y * b2 + p3.y * b3
-        )
-    }
-
-    private func resolvedViewportPoint(
-        _ point: SketchPoint,
-        plane: SketchPlane,
-        parameters: ParameterTable
-    ) -> CGPoint? {
-        guard let localPoint = resolvedPoint(point, parameters: parameters) else {
-            return nil
-        }
-        return viewportPoint(from: localPoint, on: plane)
-    }
-
-    private func viewportPoint(
-        from localPoint: CGPoint,
-        on plane: SketchPlane
-    ) -> CGPoint {
-        switch plane {
-        case .xy, .yz, .plane:
-            return localPoint
-        case .zx:
-            return CGPoint(
-                x: localPoint.y,
-                y: localPoint.x
-            )
-        }
-    }
-
-    private func localPoint(
-        _ point: Point3D,
-        on plane: SketchPlane
-    ) -> CGPoint? {
-        switch plane {
-        case .xy:
-            return CGPoint(x: CGFloat(point.x), y: CGFloat(point.y))
-        case .yz:
-            return CGPoint(x: CGFloat(point.y), y: CGFloat(point.z))
-        case .zx:
-            return CGPoint(x: CGFloat(point.z), y: CGFloat(point.x))
-        case .plane(let plane):
-            do {
-                let normal = try plane.normal.normalized(tolerance: 1.0e-9)
-                let helper = abs(normal.z) < 0.9 ? Vector3D.unitZ : Vector3D.unitY
-                let u = try helper.cross(normal).normalized(tolerance: 1.0e-9)
-                let v = normal.cross(u)
-                let delta = Vector3D(
-                    x: point.x - plane.origin.x,
-                    y: point.y - plane.origin.y,
-                    z: point.z - plane.origin.z
-                )
-                return CGPoint(x: CGFloat(delta.dot(u)), y: CGFloat(delta.dot(v)))
-            } catch {
-                return nil
-            }
-        }
-    }
-
-    private func resolvedPoint(
-        _ point: SketchPoint,
-        parameters: ParameterTable
-    ) -> CGPoint? {
-        guard let x = resolvedLength(point.x, parameters: parameters),
-              let y = resolvedLength(point.y, parameters: parameters) else {
-            return nil
-        }
-        return CGPoint(x: CGFloat(x), y: CGFloat(y))
-    }
-
-    private func straightOpenPathVector(
-        _ sketch: Sketch,
-        parameters: ParameterTable
-    ) -> Vector3D? {
-        guard sketch.entities.count == 1,
-              let entity = sketch.entities.values.first,
-              case .line(let line) = entity,
-              let start = resolvedPoint(line.start, parameters: parameters),
-              let end = resolvedPoint(line.end, parameters: parameters),
-              let startPoint = modelPoint(from: start, on: sketch.plane),
-              let endPoint = modelPoint(from: end, on: sketch.plane) else {
-            return nil
-        }
-        let vector = Vector3D(
-            x: endPoint.x - startPoint.x,
-            y: endPoint.y - startPoint.y,
-            z: endPoint.z - startPoint.z
-        )
-        return vector.length > 1.0e-9 ? vector : nil
-    }
-
-    private func modelPoint(from localPoint: CGPoint, on plane: SketchPlane) -> Point3D? {
-        let x = Double(localPoint.x)
-        let y = Double(localPoint.y)
-        switch plane {
-        case .xy:
-            return Point3D(x: x, y: y, z: 0.0)
-        case .yz:
-            return Point3D(x: 0.0, y: x, z: y)
-        case .zx:
-            return Point3D(x: y, y: 0.0, z: x)
-        case .plane(let plane):
-            do {
-                let normal = try plane.normal.normalized(tolerance: 1.0e-9)
-                let helper = abs(normal.z) < 0.9 ? Vector3D.unitZ : Vector3D.unitY
-                let u = try helper.cross(normal).normalized(tolerance: 1.0e-9)
-                let v = normal.cross(u)
-                return Point3D(
-                    x: plane.origin.x + u.x * x + v.x * y,
-                    y: plane.origin.y + u.y * x + v.y * y,
-                    z: plane.origin.z + u.z * x + v.z * y
-                )
-            } catch {
-                return nil
-            }
-        }
-    }
-
-    private func resolvedLength(
-        _ expression: CADExpression,
-        parameters: ParameterTable
-    ) -> Double? {
-        do {
-            let quantity = try parameters.resolvedValue(for: expression)
-            guard quantity.kind == .length else {
-                return nil
-            }
-            return quantity.value
-        } catch {
-            return nil
-        }
-    }
-
-    private func resolvedAngle(
-        _ expression: CADExpression,
-        parameters: ParameterTable
-    ) -> Double? {
-        do {
-            let quantity = try parameters.resolvedValue(for: expression)
-            guard quantity.kind == .angle else {
-                return nil
-            }
-            return quantity.value
-        } catch {
-            return nil
-        }
-    }
-
-    private func resolvedScalar(
-        _ expression: CADExpression,
-        parameters: ParameterTable
-    ) -> Double? {
-        do {
-            let quantity = try parameters.resolvedValue(for: expression)
-            guard quantity.kind == .scalar else {
-                return nil
-            }
-            return quantity.value
-        } catch {
-            return nil
-        }
-    }
 }
 
 private func projectedArcPoints(
