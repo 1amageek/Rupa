@@ -1907,6 +1907,68 @@ import SwiftCAD
     #expect(abs(measurement.residual.value) <= 1.0e-12)
 }
 
+@MainActor
+@Test func agentAddsAndEvaluatesGeneratedFacePairSelectionDimension() async throws {
+    let server = AgentServer()
+    let sessionID = UUID()
+    let session = EditorSession()
+    _ = try #require(session.createDefaultExtrudedRectangle())
+    server.register(session: session, id: sessionID)
+
+    let topologyResponse = server.handle(
+        .topologySummary(
+            sessionID: sessionID,
+            expectedGeneration: session.generation
+        )
+    )
+    guard case .topologySummary(let topology) = topologyResponse else {
+        #expect(Bool(false))
+        return
+    }
+    let facePair = try agentParallelFaceDimensionTargets(in: topology)
+
+    let addResponse = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .addSelectionDimension(
+                name: "Agent Face Distance",
+                kind: .distance,
+                first: facePair.first,
+                second: facePair.second,
+                target: .length(facePair.distance, .meter)
+            ),
+            expectedGeneration: session.generation
+        )
+    )
+
+    guard case .command(let addResult) = addResponse else {
+        #expect(Bool(false))
+        return
+    }
+    let dimensionID = try #require(addResult.addedSelectionDimensionID)
+    #expect(addResult.commandName == "addSelectionDimension")
+    #expect(addResult.didMutate)
+    #expect(session.document.cadDocument.selectionDimensions.map(\.id) == [dimensionID])
+    #expect(session.document.productMetadata.measurements.isEmpty)
+
+    let evaluationResponse = server.handle(
+        .selectionDimensionEvaluation(
+            sessionID: sessionID,
+            dimensionID: dimensionID,
+            expectedGeneration: session.generation
+        )
+    )
+    guard case .selectionDimensionEvaluation(let evaluation) = evaluationResponse else {
+        #expect(Bool(false))
+        return
+    }
+    let measurement = try #require(evaluation.measurements.first)
+    #expect(evaluation.measurements.count == 1)
+    #expect(measurement.dimension.id == dimensionID)
+    #expect(abs(measurement.measured.value - facePair.distance) <= 1.0e-12)
+    #expect(abs(measurement.residual.value) <= 1.0e-12)
+}
+
 @Test func agentCreatesReadsAndActivatesConstructionPlanes() async throws {
     let server = AgentServer()
     let sessionID = UUID()
@@ -10725,6 +10787,42 @@ private func agentParallelFaceTargets(
     throw EditorError(
         code: .referenceUnresolved,
         message: "Agent construction-plane test requires parallel generated faces."
+    )
+}
+
+private func agentParallelFaceDimensionTargets(
+    in topology: TopologySummaryResult
+) throws -> (first: SelectionTarget, second: SelectionTarget, distance: Double) {
+    let faces = topology.entries.filter { $0.kind == .face }
+    for firstIndex in faces.indices {
+        let first = faces[firstIndex]
+        guard let firstCenter = first.center,
+              let firstNormal = first.normal,
+              let firstTarget = first.selectionTarget() else {
+            continue
+        }
+        let firstPoint = agentPoint3D(firstCenter)
+        let firstNormalVector = try agentVector(firstNormal).normalized(tolerance: 1.0e-12)
+        for second in faces.dropFirst(firstIndex + 1) {
+            guard let secondCenter = second.center,
+                  let secondNormal = second.normal,
+                  let secondTarget = second.selectionTarget() else {
+                continue
+            }
+            let secondNormalVector = try agentVector(secondNormal).normalized(tolerance: 1.0e-12)
+            guard abs(abs(firstNormalVector.dot(secondNormalVector)) - 1.0) <= 1.0e-8 else {
+                continue
+            }
+            let distance = (agentPoint3D(secondCenter) - firstPoint).length
+            guard distance > 1.0e-9 else {
+                continue
+            }
+            return (firstTarget, secondTarget, distance)
+        }
+    }
+    throw EditorError(
+        code: .referenceUnresolved,
+        message: "Agent selection-dimension test requires parallel generated faces."
     )
 }
 

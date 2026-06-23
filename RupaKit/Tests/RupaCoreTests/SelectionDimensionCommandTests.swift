@@ -43,6 +43,41 @@ import Testing
     #expect(try measurement.isSatisfied())
 }
 
+@Test func selectionDimensionCommandMeasuresGeneratedFacePairDistance() async throws {
+    var document = DesignDocument.empty()
+    try document.createExtrudedRectangle(
+        name: "Measured Box",
+        plane: .xy,
+        width: .length(20.0, .millimeter),
+        height: .length(10.0, .millimeter),
+        depth: .length(6.0, .millimeter),
+        direction: .normal
+    )
+    let targets = try opposingFaceTargets(in: document)
+
+    let dimensionID = try document.addSelectionDimension(
+        name: "Box Depth",
+        kind: .distance,
+        first: targets.first,
+        second: targets.second,
+        target: .length(6.0, .millimeter)
+    )
+
+    #expect(document.cadDocument.selectionDimensions.count == 1)
+    #expect(document.productMetadata.measurements.isEmpty)
+    let dimension = try #require(document.cadDocument.selectionDimensions.first)
+    #expect(dimension.id == dimensionID)
+    #expect(dimension.kind == .distance)
+
+    let evaluation = try SelectionDimensionService().evaluate(document: document)
+    let measurement = try #require(evaluation.measurements.first)
+    #expect(evaluation.measurements.count == 1)
+    #expect(measurement.dimension.id == dimensionID)
+    #expect(measurement.measured == .length(0.006, unit: .meter))
+    #expect(abs(measurement.residual.value) <= 1.0e-12)
+    #expect(try measurement.isSatisfied())
+}
+
 @Test func selectionDimensionCommandRejectsObjectWideTargets() async throws {
     var document = DesignDocument.empty()
     let featureID = try document.createLineSketch(
@@ -98,4 +133,21 @@ private func lineEndpointTargets(
             component: .sketchEntity(SelectionComponentID(rawValue: endHandle.selectionComponentID))
         )
     )
+}
+
+private func opposingFaceTargets(
+    in document: DesignDocument
+) throws -> (first: SelectionTarget, second: SelectionTarget) {
+    let topology = try TopologySummaryService().summarize(document: document)
+    let faceEntries = try topology.entries.compactMap { entry -> (centerZ: Double, target: SelectionTarget)? in
+        guard entry.kind == .face,
+              let centerZ = entry.center?.z else {
+            return nil
+        }
+        return (centerZ, try #require(entry.selectionTarget()))
+    }
+    let lowerFace = try #require(faceEntries.min { $0.centerZ < $1.centerZ })
+    let upperFace = try #require(faceEntries.max { $0.centerZ < $1.centerZ })
+    #expect(upperFace.centerZ - lowerFace.centerZ > 0.0)
+    return (lowerFace.target, upperFace.target)
 }

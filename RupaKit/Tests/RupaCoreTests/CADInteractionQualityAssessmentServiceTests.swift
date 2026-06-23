@@ -19,7 +19,7 @@ import RupaCore
     }
 }
 
-@Test func cadInteractionQualityAssessmentRecordsDimensionDepthEdgeSupportAndOpenGaps() async throws {
+@Test func cadInteractionQualityAssessmentRecordsSelectionDimensionFacePairSupportAndOpenGaps() async throws {
     let result = CADInteractionQualityAssessmentService().assess()
     let dimension = try #require(result.entries.first { $0.area == .dimensions })
 
@@ -29,7 +29,10 @@ import RupaCore
     #expect(dimension.evidence.contains { evidence in
         evidence.notes.contains("Generated extrusion-depth edges resolve to object depth dimensions.")
     })
-    #expect(dimension.openWork.contains("Solid face-distance pair dimensions."))
+    #expect(dimension.evidence.contains { evidence in
+        evidence.notes.contains("Generated solid face pairs resolve to SwiftCAD selection dimensions and evaluate through the shared CAD kernel.")
+    })
+    #expect(!dimension.openWork.contains("Solid face-distance pair dimensions."))
     #expect(!dimension.openWork.contains("Vertical/depth generated Edge dimensions."))
 }
 

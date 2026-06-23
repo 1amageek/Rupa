@@ -47,17 +47,18 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                     tests: [
                         "RupaKit/Tests/RupaCoreTests/SketchDimensionSummaryServiceTests.swift",
                         "RupaKit/Tests/RupaCoreTests/DesignDocumentTests.swift",
+                        "RupaKit/Tests/RupaCoreTests/SelectionDimensionCommandTests.swift",
                         "RupaKit/Tests/RupaUIPackageTests/DimensionCommandStateTests.swift",
                         "RupaKit/Tests/RupaAgentTests/AgentServerTests.swift",
                     ],
                     notes: [
                         "Generated cap edges resolve back to editable sketch curves.",
                         "Generated extrusion-depth edges resolve to object depth dimensions.",
+                        "Generated solid face pairs resolve to SwiftCAD selection dimensions and evaluate through the shared CAD kernel.",
                     ]
                 ),
             ],
             openWork: [
-                "Solid face-distance pair dimensions.",
                 "Fillet-size and sphere dimensions.",
                 "General multi-reference solver dimensions.",
                 "Drawing annotation dimensions separate from model-driving dimensions.",
