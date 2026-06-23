@@ -2,12 +2,35 @@ import SwiftCAD
 
 public struct DesignDisplaySnapshotService: Sendable {
     private let sketchService: SketchDisplaySnapshotService
+    private let bodyService: BodyDisplaySnapshotService
 
-    public init(sketchService: SketchDisplaySnapshotService = SketchDisplaySnapshotService()) {
+    public init(
+        sketchService: SketchDisplaySnapshotService = SketchDisplaySnapshotService(),
+        bodyService: BodyDisplaySnapshotService = BodyDisplaySnapshotService()
+    ) {
         self.sketchService = sketchService
+        self.bodyService = bodyService
     }
 
     public func snapshot(document: DesignDocument) -> DesignDisplaySnapshot {
+        snapshot(document: document, bodies: [:])
+    }
+
+    public func evaluatedSnapshot(
+        document: DesignDocument,
+        objectRegistry: ObjectTypeRegistry = .builtIn
+    ) throws -> DesignDisplaySnapshot {
+        let bodies = try bodyService.snapshots(
+            document: document,
+            objectRegistry: objectRegistry
+        )
+        return snapshot(document: document, bodies: bodies)
+    }
+
+    private func snapshot(
+        document: DesignDocument,
+        bodies: [FeatureID: BodyDisplaySnapshot]
+    ) -> DesignDisplaySnapshot {
         let sketches = sketchService.snapshots(document: document)
         var extrudes: [FeatureID: ExtrudeDisplaySnapshot] = [:]
         var straightPrismSweeps: [FeatureID: StraightPrismSweepDisplaySnapshot] = [:]
@@ -50,23 +73,29 @@ public struct DesignDisplaySnapshotService: Sendable {
         return DesignDisplaySnapshot(
             sketches: sketches,
             extrudes: extrudes,
-            straightPrismSweeps: straightPrismSweeps
+            straightPrismSweeps: straightPrismSweeps,
+            bodies: bodies
         )
     }
 
     public func result(
         document: DesignDocument,
+        objectRegistry: ObjectTypeRegistry = .builtIn,
         generation: DocumentGeneration,
         dirty: Bool
-    ) -> DesignDisplaySnapshotResult {
-        let snapshot = snapshot(document: document)
+    ) throws -> DesignDisplaySnapshotResult {
+        let snapshot = try evaluatedSnapshot(
+            document: document,
+            objectRegistry: objectRegistry
+        )
         let order = document.cadDocument.designGraph.order
         return DesignDisplaySnapshotResult(
             generation: generation,
             dirty: dirty,
             sketches: order.compactMap { snapshot.sketches[$0] },
             extrudes: order.compactMap { snapshot.extrudes[$0] },
-            straightPrismSweeps: order.compactMap { snapshot.straightPrismSweeps[$0] }
+            straightPrismSweeps: order.compactMap { snapshot.straightPrismSweeps[$0] },
+            bodies: order.compactMap { snapshot.bodies[$0] }
         )
     }
 

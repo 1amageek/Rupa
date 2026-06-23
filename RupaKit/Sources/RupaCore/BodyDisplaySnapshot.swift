@@ -1,5 +1,5 @@
-public struct BodyDisplaySnapshot: Equatable, Sendable {
-    public struct Bounds: Equatable, Sendable {
+public struct BodyDisplaySnapshot: Codable, Equatable, Sendable {
+    public struct Bounds: Codable, Equatable, Sendable {
         public var minX: Double
         public var minY: Double
         public var minZ: Double
@@ -24,7 +24,7 @@ public struct BodyDisplaySnapshot: Equatable, Sendable {
         }
     }
 
-    public struct Mesh: Equatable, Sendable {
+    public struct Mesh: Codable, Equatable, Sendable {
         public var positions: [Point3D]
         public var indices: [UInt32]
 
@@ -34,8 +34,8 @@ public struct BodyDisplaySnapshot: Equatable, Sendable {
         }
     }
 
-    public struct Topology: Equatable, Sendable {
-        public struct Face: Equatable, Sendable {
+    public struct Topology: Codable, Equatable, Sendable {
+        public struct Face: Codable, Equatable, Sendable {
             public var componentID: SelectionComponentID
             public var points: [Point3D]
 
@@ -45,7 +45,7 @@ public struct BodyDisplaySnapshot: Equatable, Sendable {
             }
         }
 
-        public struct Edge: Equatable, Sendable {
+        public struct Edge: Codable, Equatable, Sendable {
             public var componentID: SelectionComponentID
             public var start: Point3D
             public var end: Point3D
@@ -57,7 +57,7 @@ public struct BodyDisplaySnapshot: Equatable, Sendable {
             }
         }
 
-        public struct Vertex: Equatable, Sendable {
+        public struct Vertex: Codable, Equatable, Sendable {
             public var componentID: SelectionComponentID
             public var point: Point3D
 

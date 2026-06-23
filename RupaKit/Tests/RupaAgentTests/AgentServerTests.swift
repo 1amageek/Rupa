@@ -638,8 +638,9 @@ import SwiftCAD
     #expect(designDisplaySnapshot.discovery.contains(.designDisplaySnapshot))
     #expect(designDisplaySnapshot.discovery.contains(.sketchEntitySummary))
     #expect(designDisplaySnapshot.discovery.contains(.topologySummary))
-    #expect(designDisplaySnapshot.targets == [.document, .sketchEntity, .region, .body])
+    #expect(designDisplaySnapshot.targets == [.document, .sketchEntity, .region, .body, .face, .edge, .vertex])
     #expect(designDisplaySnapshot.summary.contains("UI-visible sketch primitives"))
+    #expect(designDisplaySnapshot.summary.contains("generated topology"))
     #expect(designDisplaySnapshot.failureMode.contains("display-ready source snapshots"))
 
     #expect(qualityAssessment.category == .read)
@@ -766,7 +767,8 @@ import SwiftCAD
             dirty: false,
             sketches: [],
             extrudes: [],
-            straightPrismSweeps: []
+            straightPrismSweeps: [],
+            bodies: []
         )
     )
     let objectDimensionResponse = AgentResponse.objectDimensionSummary(
@@ -865,6 +867,8 @@ import SwiftCAD
             expectedGeneration: session.generation
         )
     )
+    let codec = AgentMessageCodec()
+    let decodedResponse = try codec.decodeResponse(from: try codec.encode(response))
 
     guard case .designDisplaySnapshot(let snapshot) = response else {
         #expect(Bool(false))
@@ -872,16 +876,23 @@ import SwiftCAD
     }
     let sketch = try #require(snapshot.sketches.first)
     let extrude = try #require(snapshot.extrudes.first)
+    let body = try #require(snapshot.bodies.first)
 
     #expect(snapshot.generation == session.generation)
     #expect(snapshot.dirty == session.isDirty)
     #expect(snapshot.sketches.count == 1)
     #expect(snapshot.extrudes.count == 1)
     #expect(snapshot.straightPrismSweeps.isEmpty)
+    #expect(snapshot.bodies.count == 1)
     #expect(sketch.primitives.count == 4)
     #expect(sketch.regions.count == 1)
     #expect(extrude.profileFeatureID == sketch.featureID)
     #expect(extrude.depthMeters > 0.0)
+    #expect(body.mesh.positions.isEmpty == false)
+    #expect(body.topology.faces.count == 6)
+    #expect(body.topology.edges.count == 12)
+    #expect(body.topology.vertices.count == 8)
+    #expect(decodedResponse == response)
 }
 
 @Test func agentMessageCodecRoundTripsCommandRequestAndResponse() async throws {

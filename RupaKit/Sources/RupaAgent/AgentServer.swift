@@ -218,11 +218,11 @@ public final class AgentServer: AgentClientProtocol {
         capability(
             "designDisplaySnapshot",
             category: .read,
-            summary: "Return ordered UI-visible sketch primitives, profile regions, extrude display bodies, and straight-prism sweep display bodies for Agent viewport planning.",
+            summary: "Return ordered UI-visible sketch primitives, profile regions, extrude and straight-prism sweep display bodies, evaluated body meshes, and generated topology for Agent viewport planning.",
             access: .agentRequest,
             mutatesDocument: false,
             discovery: [.designDisplaySnapshot, .sketchEntitySummary, .topologySummary],
-            targets: [.document, .sketchEntity, .region, .body],
+            targets: [.document, .sketchEntity, .region, .body, .face, .edge, .vertex],
             failureMode: "Rejects stale generations before reading; reports only display-ready source snapshots, not raw CAD kernel internals."
         ),
         capability(
@@ -1114,8 +1114,9 @@ public final class AgentServer: AgentClientProtocol {
                 let session = try registry.session(id: sessionID)
                 try session.store.requireGeneration(expectedGeneration)
                 return .designDisplaySnapshot(
-                    DesignDisplaySnapshotService().result(
+                    try DesignDisplaySnapshotService().result(
                         document: session.document,
+                        objectRegistry: session.objectRegistry,
                         generation: session.generation,
                         dirty: session.isDirty
                     )

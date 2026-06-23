@@ -378,7 +378,7 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                     ],
                     notes: [
                         "Capabilities declare mutation behavior, discovery summaries, targets, and failure modes.",
-                        "Agent-readable design display snapshots expose the same Core-owned sketch primitive, region, extrude, and straight-prism sweep display contract consumed by the viewport.",
+                        "Agent-readable design display snapshots expose the same Core-owned sketch primitive, region, extrude, straight-prism sweep, body mesh, and generated topology display contract consumed by the viewport.",
                     ]
                 ),
             ],

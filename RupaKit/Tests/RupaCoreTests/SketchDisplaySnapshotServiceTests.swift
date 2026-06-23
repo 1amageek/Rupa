@@ -122,6 +122,7 @@ import Testing
     let extrude = try #require(snapshot.extrudes[extrudeID])
     let sweep = try #require(snapshot.straightPrismSweeps[sweepID])
 
+    #expect(snapshot.bodies.isEmpty)
     #expect(extrude.profileFeatureID == extrudeProfileID)
     #expect(abs(extrude.depthMeters - 0.012) <= 1.0e-12)
     #expect(sweep.profileFeatureID == sweepProfileID)
@@ -134,4 +135,28 @@ import Testing
     #expect(abs(direction.x) <= 1.0e-12)
     #expect(abs(direction.y) <= 1.0e-12)
     #expect(abs(direction.z - 1.0) <= 1.0e-12)
+}
+
+@MainActor
+@Test func designDisplaySnapshotResultIncludesEvaluatedBodyTopologyForAgents() throws {
+    let session = EditorSession()
+    _ = try #require(session.createDefaultExtrudedRectangle())
+
+    let result = try DesignDisplaySnapshotService().result(
+        document: session.document,
+        generation: session.generation,
+        dirty: session.isDirty
+    )
+    let body = try #require(result.bodies.first)
+
+    #expect(result.generation == session.generation)
+    #expect(result.dirty == session.isDirty)
+    #expect(result.sketches.count == 1)
+    #expect(result.extrudes.count == 1)
+    #expect(result.bodies.count == 1)
+    #expect(body.mesh.positions.isEmpty == false)
+    #expect(body.mesh.indices.count >= 3)
+    #expect(body.topology.faces.count == 6)
+    #expect(body.topology.edges.count == 12)
+    #expect(body.topology.vertices.count == 8)
 }
