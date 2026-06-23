@@ -1,6 +1,5 @@
 import Foundation
 import RupaCore
-import SwiftCAD
 
 public enum AutomationCommand: Codable, Equatable, Sendable {
     case describeDocument

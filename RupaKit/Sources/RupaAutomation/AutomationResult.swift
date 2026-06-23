@@ -1,6 +1,5 @@
 import Foundation
 import RupaCore
-import SwiftCAD
 
 public struct AutomationResult: Codable, Equatable, Sendable {
     public var message: String

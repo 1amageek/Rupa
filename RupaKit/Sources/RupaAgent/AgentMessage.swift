@@ -1,7 +1,6 @@
 import Foundation
 import RupaAutomation
 import RupaCore
-import SwiftCAD
 
 public enum AgentRequest: Codable, Equatable, Sendable {
     case capabilities

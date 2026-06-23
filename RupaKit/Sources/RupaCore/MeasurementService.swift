@@ -996,8 +996,8 @@ public struct MeasurementService {
     private func resolvedPoint(
         _ point: SketchPoint,
         parameters: ParameterTable
-    ) throws -> Point2D {
-        Point2D(
+    ) throws -> MeasurementPoint2D {
+        MeasurementPoint2D(
             x: try resolvedLength(point.x, parameters: parameters),
             y: try resolvedLength(point.y, parameters: parameters)
         )
@@ -1145,7 +1145,7 @@ public struct MeasurementService {
     private func splineSamplePoints(
         _ spline: SketchSpline,
         parameters: ParameterTable
-    ) throws -> [Point2D] {
+    ) throws -> [MeasurementPoint2D] {
         guard spline.controlPoints.count >= 4,
               (spline.controlPoints.count - 1).isMultiple(of: 3) else {
             return []
@@ -1157,7 +1157,7 @@ public struct MeasurementService {
             CADCore.Point2D(x: point.x, y: point.y)
         }
         return try splineTessellator.points(for: kernelControlPoints).map { point in
-            Point2D(x: point.x, y: point.y)
+            MeasurementPoint2D(x: point.x, y: point.y)
         }
     }
 
@@ -1183,7 +1183,7 @@ public struct MeasurementService {
         let points = (0 ... segmentCount).map { index in
             let ratio = Double(index) / Double(segmentCount)
             let angle = startAngle + span * ratio
-            return Point2D(
+            return MeasurementPoint2D(
                 x: center.x + cos(angle) * radius,
                 y: center.y + sin(angle) * radius
             )
@@ -1191,7 +1191,7 @@ public struct MeasurementService {
         return ResolvedProfileSegment(kind: .arc, points: points)
     }
 
-    private func orderedClosedLoop(from segments: [ResolvedProfileSegment]) -> [Point2D]? {
+    private func orderedClosedLoop(from segments: [ResolvedProfileSegment]) -> [MeasurementPoint2D]? {
         var remaining = segments.filter { $0.points.count >= 2 }
         guard let first = remaining.first else {
             return nil
@@ -1233,7 +1233,7 @@ public struct MeasurementService {
     private func arcBoundsPoints(
         _ arc: SketchArc,
         parameters: ParameterTable
-    ) throws -> [Point2D] {
+    ) throws -> [MeasurementPoint2D] {
         let center = try resolvedPoint(arc.center, parameters: parameters)
         let radius = try resolvedLength(arc.radius, parameters: parameters)
         let startAngle = try resolvedAngle(arc.startAngle, parameters: parameters)
@@ -1243,7 +1243,7 @@ public struct MeasurementService {
         )
         let angles = arcSamplingAngles(startAngle: startAngle, span: span)
         return angles.map { angle in
-            Point2D(
+            MeasurementPoint2D(
                 x: center.x + cos(angle) * radius,
                 y: center.y + sin(angle) * radius
             )
@@ -1278,7 +1278,7 @@ public struct MeasurementService {
         return min(span, fullCircle)
     }
 
-    private func polygonArea(_ points: [Point2D]) -> Double {
+    private func polygonArea(_ points: [MeasurementPoint2D]) -> Double {
         var twiceArea = 0.0
         for index in points.indices {
             let current = points[index]
@@ -1288,7 +1288,7 @@ public struct MeasurementService {
         return twiceArea / 2.0
     }
 
-    private func isClose(_ lhs: Point2D, _ rhs: Point2D) -> Bool {
+    private func isClose(_ lhs: MeasurementPoint2D, _ rhs: MeasurementPoint2D) -> Bool {
         let dx = lhs.x - rhs.x
         let dy = lhs.y - rhs.y
         return (dx * dx + dy * dy).squareRoot() <= tolerance.distance
@@ -1381,7 +1381,7 @@ private struct PlaneFrame {
     var u: Vector3D
     var v: Vector3D
 
-    func map(_ point: Point2D) -> Point3D {
+    func map(_ point: MeasurementPoint2D) -> Point3D {
         origin + (u * point.x) + (v * point.y)
     }
 }
@@ -1394,18 +1394,18 @@ private enum ResolvedProfileSegmentKind: Equatable {
 
 private struct ResolvedProfileSegment {
     var kind: ResolvedProfileSegmentKind
-    var points: [Point2D]
+    var points: [MeasurementPoint2D]
 
-    var start: Point2D {
+    var start: MeasurementPoint2D {
         points[0]
     }
 
-    var end: Point2D {
+    var end: MeasurementPoint2D {
         points[points.count - 1]
     }
 }
 
-private struct Point2D: Equatable {
+private struct MeasurementPoint2D: Equatable {
     var x: Double
     var y: Double
 }
