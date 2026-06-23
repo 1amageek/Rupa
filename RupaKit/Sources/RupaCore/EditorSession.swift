@@ -700,113 +700,20 @@ public final class EditorSession {
     }
 
     private func supportFaceTargetResolvingSelectionContext(for edgeTarget: SelectionTarget) throws -> SelectionTarget? {
-        guard case .edge = edgeTarget.component,
-              selection.containsTarget(edgeTarget) else {
-            return nil
-        }
-        if let selectedSupportFace = try selectedSupportFaceTarget(for: edgeTarget) {
-            return selectedSupportFace
-        }
-        return try inferredCapSupportFaceTarget(for: edgeTarget)
-    }
-
-    private func selectedSupportFaceTarget(for edgeTarget: SelectionTarget) throws -> SelectionTarget? {
-        guard case .edge = edgeTarget.component else {
-            return nil
-        }
-
-        let candidates = selection.selectedTargets.filter { target in
-            guard target.sceneNodeID == edgeTarget.sceneNodeID,
-                  target != edgeTarget,
-                  case .face(let componentID) = target.component,
-                  componentID.generatedTopologyPersistentName != nil else {
-                return false
-            }
-            return true
-        }
-
-        guard candidates.count <= 1 else {
-            throw EditorError(
-                code: .commandInvalid,
-                message: "Offset Edge support face inference requires exactly one selected generated support face on the same body."
-            )
-        }
-        return candidates.first
-    }
-
-    private func inferredCapSupportFaceTarget(for edgeTarget: SelectionTarget) throws -> SelectionTarget? {
-        guard case .edge(let edgeComponentID) = edgeTarget.component,
-              let edgePersistentName = edgeComponentID.generatedTopologyPersistentName else {
-            return nil
-        }
-
-        let topology = try TopologySummaryService().summarize(
+        let resolution = try EdgeOffsetSupportFaceResolver().resolve(
+            edgeTarget: edgeTarget,
+            selection: selection,
             document: document,
             objectRegistry: objectRegistry
         )
-        guard let edgeEntry = topology.entries.first(where: { entry in
-            entry.kind == .edge &&
-                entry.sceneNodeID == edgeTarget.sceneNodeID.description &&
-                entry.persistentName == edgePersistentName
-        }) else {
-            return nil
-        }
-        guard edgeEntry.curveKind == "line",
-              let start = edgeEntry.start,
-              let end = edgeEntry.end else {
-            return nil
-        }
-
-        let candidates = topology.entries.compactMap { entry -> SelectionTarget? in
-            guard entry.kind == .face,
-                  entry.sceneNodeID == edgeTarget.sceneNodeID.description,
-                  entry.generatedRole == "startFace" || entry.generatedRole == "endFace",
-                  edgeEndpoints(start, end, lieOnPlaneOf: entry),
-                  let target = entry.selectionTarget() else {
-                return nil
-            }
-            return target
-        }
-
-        guard candidates.count <= 1 else {
+        if resolution.status == .ambiguous,
+           let message = resolution.diagnosticMessage {
             throw EditorError(
                 code: .commandInvalid,
-                message: "Offset Edge cap support face inference requires exactly one generated start or end face containing the selected edge."
+                message: message
             )
         }
-        return candidates.first
-    }
-
-    private func edgeEndpoints(
-        _ start: TopologySummaryResult.Entry.Point,
-        _ end: TopologySummaryResult.Entry.Point,
-        lieOnPlaneOf face: TopologySummaryResult.Entry
-    ) -> Bool {
-        guard face.surfaceKind == "plane",
-              let origin = face.surfaceOrigin,
-              let normal = face.surfaceNormal else {
-            return false
-        }
-        let tolerance = 1.0e-8
-        return point(start, liesOnPlaneOrigin: origin, normal: normal, tolerance: tolerance) &&
-            point(end, liesOnPlaneOrigin: origin, normal: normal, tolerance: tolerance)
-    }
-
-    private func point(
-        _ point: TopologySummaryResult.Entry.Point,
-        liesOnPlaneOrigin origin: TopologySummaryResult.Entry.Point,
-        normal: TopologySummaryResult.Entry.Point,
-        tolerance: Double
-    ) -> Bool {
-        let normalLength = sqrt(normal.x * normal.x + normal.y * normal.y + normal.z * normal.z)
-        guard normalLength > tolerance else {
-            return false
-        }
-        let signedDistanceNumerator =
-            (point.x - origin.x) * normal.x +
-            (point.y - origin.y) * normal.y +
-            (point.z - origin.z) * normal.z
-        return abs(signedDistanceNumerator) <= tolerance * normalLength
+        return resolution.supportTarget
     }
 
     public func setDisplayUnit(_ unit: LengthDisplayUnit) {

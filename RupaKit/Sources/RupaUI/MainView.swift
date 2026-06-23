@@ -609,7 +609,7 @@ public struct MainView: View {
         guard session.selectedTool == .select,
               selectionScope == .edge,
               edgeOffsetCommandState.isActive,
-              selectedEdgeTargets.isEmpty == false else {
+              selectedEdgeOffsetSupportResolution.isSupported else {
             return nil
         }
         return { target in
@@ -1731,10 +1731,11 @@ public struct MainView: View {
 
     @ViewBuilder
     private func edgeOffsetContextPanelContent(_ targets: [SelectionTarget]) -> some View {
+        let supportResolution = edgeOffsetSupportResolution(for: targets)
         workspaceStatusChip(
             "Offset Edge",
             systemImage: "arrow.up.left.and.arrow.down.right",
-            tint: .accentColor
+            tint: supportResolution.isSupported ? .accentColor : .orange
         )
 
         workspaceValuePill(
@@ -1751,6 +1752,11 @@ public struct MainView: View {
             "Input",
             edgeOffsetCommandState.inputModeTitle,
             accessibilityIdentifier: "WorkspaceEdgeOffset.inputMode"
+        )
+        workspaceValuePill(
+            "Support",
+            edgeOffsetSupportTitle(supportResolution),
+            accessibilityIdentifier: "WorkspaceEdgeOffset.support"
         )
 
         workspaceIconButton(
@@ -3085,6 +3091,12 @@ public struct MainView: View {
         slotProfileCommandState.deactivate()
         slideCommandState.deactivate()
         edgeOffsetCommandState.activateDistanceInput()
+        let supportResolution = edgeOffsetSupportResolution(for: selectedEdgeTargets)
+        if supportResolution.isSupported == false,
+           let message = supportResolution.diagnosticMessage {
+            session.reportToolStatus(message, severity: .warning)
+            isPreviewExpanded = true
+        }
     }
 
     private func activateSlotProfileCommand() {
@@ -4415,6 +4427,50 @@ public struct MainView: View {
                 return true
             }
             return false
+        }
+    }
+
+    private var selectedEdgeOffsetSupportResolution: EdgeOffsetSupportFaceResolution {
+        edgeOffsetSupportResolution(for: selectedEdgeTargets)
+    }
+
+    private func edgeOffsetSupportResolution(
+        for targets: [SelectionTarget]
+    ) -> EdgeOffsetSupportFaceResolution {
+        guard targets.count == 1,
+              let target = targets.first else {
+            return .unavailable("Offset Edge currently supports one selected edge.")
+        }
+        do {
+            return try EdgeOffsetSupportFaceResolver().resolve(
+                edgeTarget: target,
+                selection: session.selection,
+                document: session.document,
+                objectRegistry: objectRegistry
+            )
+        } catch let error as EditorError {
+            return .unavailable(error.message)
+        } catch {
+            return .unavailable(String(describing: error))
+        }
+    }
+
+    private func edgeOffsetSupportTitle(
+        _ resolution: EdgeOffsetSupportFaceResolution
+    ) -> String {
+        switch (resolution.status, resolution.source) {
+        case (.supported, .selectedFace):
+            return "Selected Face"
+        case (.supported, .inferredCapFace):
+            return "Cap Face"
+        case (.ambiguous, _):
+            return "Ambiguous"
+        case (.unavailable, _):
+            return "Missing"
+        case (.notApplicable, _):
+            return "Unsupported"
+        case (.supported, nil):
+            return "Ready"
         }
     }
 

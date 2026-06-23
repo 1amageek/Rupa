@@ -573,6 +573,127 @@ import Testing
 }
 
 @MainActor
+@Test func edgeOffsetSupportFaceResolverReportsSelectedSupportFaceSource() async throws {
+    let session = EditorSession()
+    _ = try #require(session.createDefaultExtrudedRectangle())
+    let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let bodySceneNodeID = try #require(commandStackBodySceneNodeID(for: bodyFeatureID, in: session.document))
+    let topology = try TopologySummaryService().summarize(document: session.document)
+    let supportFaceEntry = try #require(
+        topology.entries.first {
+            $0.kind == .face &&
+                $0.sceneNodeID == bodySceneNodeID.description &&
+                $0.generatedRole == "startFace"
+        }
+    )
+    let supportFaceTarget = try #require(supportFaceEntry.selectionTarget())
+    let supportDepth = try #require(supportFaceEntry.center?.z)
+    let edgeEntry = try #require(
+        topology.entries.first {
+            $0.kind == .edge &&
+                $0.sceneNodeID == bodySceneNodeID.description &&
+                $0.curveKind == "line" &&
+                commandStackTopologyPoint($0.start, isOnDepth: supportDepth) &&
+                commandStackTopologyPoint($0.end, isOnDepth: supportDepth) &&
+                $0.selectionTarget() != nil
+        }
+    )
+    let edgeTarget = try #require(edgeEntry.selectionTarget())
+
+    #expect(session.selectTargets([supportFaceTarget, edgeTarget]))
+    let resolution = try EdgeOffsetSupportFaceResolver().resolve(
+        edgeTarget: edgeTarget,
+        selection: session.selection,
+        document: session.document,
+        objectRegistry: session.objectRegistry
+    )
+
+    #expect(resolution.status == .supported)
+    #expect(resolution.source == .selectedFace)
+    #expect(resolution.supportTarget == supportFaceTarget)
+}
+
+@MainActor
+@Test func edgeOffsetSupportFaceResolverReportsInferredCapFaceSource() async throws {
+    let session = EditorSession()
+    _ = try #require(session.createDefaultExtrudedRectangle())
+    let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let bodySceneNodeID = try #require(commandStackBodySceneNodeID(for: bodyFeatureID, in: session.document))
+    let topology = try TopologySummaryService().summarize(document: session.document)
+    let supportFaceEntry = try #require(
+        topology.entries.first {
+            $0.kind == .face &&
+                $0.sceneNodeID == bodySceneNodeID.description &&
+                $0.generatedRole == "startFace"
+        }
+    )
+    let supportFaceTarget = try #require(supportFaceEntry.selectionTarget())
+    let supportDepth = try #require(supportFaceEntry.center?.z)
+    let edgeEntry = try #require(
+        topology.entries.first {
+            $0.kind == .edge &&
+                $0.sceneNodeID == bodySceneNodeID.description &&
+                $0.curveKind == "line" &&
+                commandStackTopologyPoint($0.start, isOnDepth: supportDepth) &&
+                commandStackTopologyPoint($0.end, isOnDepth: supportDepth) &&
+                $0.selectionTarget() != nil
+        }
+    )
+    let edgeTarget = try #require(edgeEntry.selectionTarget())
+
+    #expect(session.selectTargets([edgeTarget]))
+    let resolution = try EdgeOffsetSupportFaceResolver().resolve(
+        edgeTarget: edgeTarget,
+        selection: session.selection,
+        document: session.document,
+        objectRegistry: session.objectRegistry
+    )
+
+    #expect(resolution.status == .supported)
+    #expect(resolution.source == .inferredCapFace)
+    #expect(resolution.supportTarget == supportFaceTarget)
+}
+
+@MainActor
+@Test func edgeOffsetSupportFaceResolverReportsAmbiguousSelectedSupportFaces() async throws {
+    let session = EditorSession()
+    _ = try #require(session.createDefaultExtrudedRectangle())
+    let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let bodySceneNodeID = try #require(commandStackBodySceneNodeID(for: bodyFeatureID, in: session.document))
+    let topology = try TopologySummaryService().summarize(document: session.document)
+    let faceTargets = topology.entries
+        .filter {
+            $0.kind == .face &&
+                $0.sceneNodeID == bodySceneNodeID.description &&
+                $0.selectionTarget() != nil
+        }
+        .compactMap { $0.selectionTarget() }
+    let firstFaceTarget = try #require(faceTargets.first)
+    let secondFaceTarget = try #require(faceTargets.dropFirst().first)
+    let edgeEntry = try #require(
+        topology.entries.first {
+            $0.kind == .edge &&
+                $0.sceneNodeID == bodySceneNodeID.description &&
+                $0.curveKind == "line" &&
+                $0.selectionTarget() != nil
+        }
+    )
+    let edgeTarget = try #require(edgeEntry.selectionTarget())
+
+    #expect(session.selectTargets([firstFaceTarget, secondFaceTarget, edgeTarget]))
+    let resolution = try EdgeOffsetSupportFaceResolver().resolve(
+        edgeTarget: edgeTarget,
+        selection: session.selection,
+        document: session.document,
+        objectRegistry: session.objectRegistry
+    )
+
+    #expect(resolution.status == .ambiguous)
+    #expect(resolution.supportTarget == nil)
+    #expect(resolution.diagnosticMessage == EdgeOffsetSupportFaceResolver.ambiguousSelectedSupportFaceMessage)
+}
+
+@MainActor
 @Test func measurementServiceMeasuresSelectedSketchOnly() async throws {
     let session = EditorSession()
     _ = try #require(session.createDefaultExtrudedRectangle())

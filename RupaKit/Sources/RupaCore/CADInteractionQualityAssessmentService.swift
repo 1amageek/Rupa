@@ -171,6 +171,7 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                     sourceFiles: [
                         "RupaKit/Sources/RupaCore/SelectionTarget.swift",
                         "RupaKit/Sources/RupaCore/SelectionModel.swift",
+                        "RupaKit/Sources/RupaCore/EdgeOffsetSupportFaceResolver.swift",
                         "RupaKit/Sources/RupaCore/TopologySummaryService.swift",
                         "RupaKit/Sources/RupaRendering/ViewportScene.swift",
                         "RupaKit/Sources/RupaRendering/ViewportSelectionHitPolicy.swift",
@@ -183,6 +184,7 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                     ],
                     tests: [
                         "RupaKit/Tests/RupaCoreTests/SelectionModelTests.swift",
+                        "RupaKit/Tests/RupaCoreTests/CommandStackTests.swift",
                         "RupaKit/Tests/RupaCoreTests/TopologySummaryServiceTests.swift",
                         "RupaKit/Tests/RupaRenderingTests/ViewportSceneTests.swift",
                         "RupaKit/Tests/RupaRenderingTests/ViewportIdentityBufferRendererTests.swift",
