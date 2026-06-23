@@ -125,7 +125,7 @@ import SwiftCAD
     #expect(document.cadDocument.designGraph.order == originalOrder)
 }
 
-@Test func createSweepRejectsCurvedPathParallelAlignmentThroughEvaluationGate() throws {
+@Test func createSweepAcceptsCurvedPathParallelAlignmentThroughEvaluationGate() throws {
     var document = DesignDocument.empty()
     let profileID = try document.createRectangleSketch(
         name: "Curved Parallel Sweep Profile",
@@ -144,22 +144,21 @@ import SwiftCAD
         startAngle: .angle(0.0, .degree),
         endAngle: .angle(90.0, .degree)
     )
-    let originalOrder = document.cadDocument.designGraph.order
 
-    do {
-        _ = try document.createSweep(
-            name: "Curved Parallel Sweep",
-            profiles: [ProfileReference(featureID: profileID)],
-            path: SweepPathReference(featureID: pathID),
-            options: SweepOptions(alignment: .parallel)
-        )
-        Issue.record("Sweep command must reject curved-path parallel alignment.")
-    } catch let error as EditorError {
-        #expect(error.code == .commandInvalid)
-        #expect(error.message.contains("parallel alignment"))
-        #expect(error.message.contains("curved paths"))
+    let sweepID = try document.createSweep(
+        name: "Curved Parallel Sweep",
+        profiles: [ProfileReference(featureID: profileID)],
+        path: SweepPathReference(featureID: pathID),
+        options: SweepOptions(alignment: .parallel)
+    )
+
+    let feature = try #require(document.cadDocument.designGraph.nodes[sweepID])
+    guard case .sweep(let sweep) = feature.operation else {
+        Issue.record("Sweep command must create a sweep feature.")
+        return
     }
-    #expect(document.cadDocument.designGraph.order == originalOrder)
+    #expect(sweep.options.alignment == .parallel)
+    try document.validate()
 }
 
 @Test func createSweepNormalAlignmentAcceptsProfilePlaneStraightPath() throws {
