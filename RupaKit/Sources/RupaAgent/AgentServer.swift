@@ -183,6 +183,7 @@ public final class AgentServer: AgentClientProtocol {
                     name: "outputMode",
                     supportedValues: ["componentInstance", "independentCopy"],
                     notes: [
+                        "Use designDisplaySnapshot.componentDefinitions to choose a renderable ComponentDefinitionID.",
                         "componentInstance preserves source ownership with lightweight shared component definition instances.",
                         "independentCopy clones the source CAD feature dependency graph into direct scene outputs owned by the pattern source.",
                     ]
@@ -323,12 +324,12 @@ public final class AgentServer: AgentClientProtocol {
         capability(
             "designDisplaySnapshot",
             category: .read,
-            summary: "Return ordered UI-visible sketch primitives, profile regions, extrude and straight-prism sweep display bodies, evaluated body meshes, and generated topology for Agent viewport planning.",
+            summary: "Return ordered UI-visible sketch primitives, profile regions, component definitions, pattern arrays, extrude and straight-prism sweep display bodies, evaluated body meshes, and generated topology for Agent viewport planning.",
             access: .agentRequest,
             mutatesDocument: false,
             discovery: [.designDisplaySnapshot, .sketchEntitySummary, .topologySummary],
             targets: [.document, .sketchEntity, .region, .body, .face, .edge, .vertex],
-            failureMode: "Rejects stale generations before reading; reports only display-ready source snapshots, not raw CAD kernel internals."
+            failureMode: "Rejects stale generations before reading; reports only display-ready source snapshots, reusable component definitions, and generated pattern sources, not raw CAD kernel internals."
         ),
         capability(
             "createConstructionPlane",

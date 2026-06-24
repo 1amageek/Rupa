@@ -417,6 +417,12 @@ public struct DesignDocument: Identifiable, Sendable {
                 message: "Scene node visibility requires an existing scene node."
             )
         }
+        guard patternArraySourceID(containingGeneratedOutputSceneNode: id) == nil else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Pattern array output scene node visibility is controlled by the pattern source."
+            )
+        }
         node.isVisible = isVisible
         productMetadata.sceneNodes[id] = node
         try productMetadata.validate(against: cadDocument, objectRegistry: objectRegistry)
@@ -431,6 +437,12 @@ public struct DesignDocument: Identifiable, Sendable {
             throw EditorError(
                 code: .referenceUnresolved,
                 message: "Scene node lock requires an existing scene node."
+            )
+        }
+        guard patternArraySourceID(containingGeneratedOutputSceneNode: id) == nil else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Pattern array output scene node locks are controlled by the pattern source."
             )
         }
         node.isLocked = isLocked
@@ -472,6 +484,12 @@ public struct DesignDocument: Identifiable, Sendable {
                 message: "Scene node material requires an existing scene node."
             )
         }
+        guard patternArraySourceID(containingGeneratedOutputSceneNode: id) == nil else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Pattern array output scene node materials are controlled by the pattern source."
+            )
+        }
         if let materialID,
            productMetadata.materialLibrary.materials[materialID] == nil {
             throw EditorError(
@@ -495,6 +513,12 @@ public struct DesignDocument: Identifiable, Sendable {
             throw EditorError(
                 code: .referenceUnresolved,
                 message: "Object property changes require an existing object scene node."
+            )
+        }
+        guard patternArraySourceID(containingGeneratedOutputSceneNode: id) == nil else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Pattern array output object properties are controlled by the pattern source."
             )
         }
         guard object.typeID != nil else {
@@ -549,6 +573,12 @@ public struct DesignDocument: Identifiable, Sendable {
                 message: "Component instance visibility requires an existing component instance."
             )
         }
+        guard patternArraySourceID(owningOutputInstance: id) == nil else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Pattern array output instance visibility is controlled by the pattern source."
+            )
+        }
         instance.isVisible = isVisible
         productMetadata.componentInstances[id] = instance
         try productMetadata.validate(against: cadDocument, objectRegistry: objectRegistry)
@@ -563,6 +593,12 @@ public struct DesignDocument: Identifiable, Sendable {
             throw EditorError(
                 code: .referenceUnresolved,
                 message: "Component instance lock requires an existing component instance."
+            )
+        }
+        guard patternArraySourceID(owningOutputInstance: id) == nil else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Pattern array output instance locks are controlled by the pattern source."
             )
         }
         instance.isLocked = isLocked
@@ -16231,6 +16267,22 @@ public struct DesignDocument: Identifiable, Sendable {
     ) -> PatternArraySourceID? {
         productMetadata.patternArrays.first { _, source in
             source.outputInstanceIDs.contains(componentInstanceID)
+        }?.key
+    }
+
+    private func patternArraySourceID(
+        containingGeneratedOutputSceneNode sceneNodeID: SceneNodeID
+    ) -> PatternArraySourceID? {
+        productMetadata.patternArrays.first { _, source in
+            guard let rootNode = productMetadata.sceneNodes[source.rootSceneNodeID] else {
+                return false
+            }
+            return rootNode.childIDs.contains { outputSceneNodeID in
+                sceneSubtree(
+                    outputSceneNodeID,
+                    contains: sceneNodeID
+                )
+            }
         }?.key
     }
 

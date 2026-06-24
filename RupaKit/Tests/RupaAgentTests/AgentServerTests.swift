@@ -704,6 +704,9 @@ import SwiftCAD
     #expect(spacingMode.supportedValues == ["spacing", "extent"])
     #expect(curveAlignment.supportedValues == ["normal", "parallel", "transport"])
     #expect(patternOutputMode.supportedValues == ["componentInstance", "independentCopy"])
+    #expect(patternOutputMode.notes.contains {
+        $0.contains("designDisplaySnapshot.componentDefinitions")
+    })
 
     #expect(patternArrayUpdate.category == .pattern)
     #expect(patternArrayUpdate.mutatesDocument)
@@ -725,8 +728,10 @@ import SwiftCAD
     #expect(designDisplaySnapshot.discovery.contains(.topologySummary))
     #expect(designDisplaySnapshot.targets == [.document, .sketchEntity, .region, .body, .face, .edge, .vertex])
     #expect(designDisplaySnapshot.summary.contains("UI-visible sketch primitives"))
+    #expect(designDisplaySnapshot.summary.contains("component definitions"))
     #expect(designDisplaySnapshot.summary.contains("generated topology"))
     #expect(designDisplaySnapshot.failureMode.contains("display-ready source snapshots"))
+    #expect(designDisplaySnapshot.failureMode.contains("reusable component definitions"))
 
     #expect(qualityAssessment.category == .read)
     #expect(!qualityAssessment.mutatesDocument)
@@ -986,6 +991,7 @@ import SwiftCAD
     #expect(snapshot.extrudes.count == 1)
     #expect(snapshot.straightPrismSweeps.isEmpty)
     #expect(snapshot.bodies.count == 1)
+    #expect(snapshot.componentDefinitions.isEmpty)
     #expect(snapshot.patternArrays.isEmpty)
     #expect(sketch.primitives.count == 4)
     #expect(sketch.regions.count == 1)
@@ -1043,6 +1049,7 @@ import SwiftCAD
         return
     }
     let discoveredArray = try #require(snapshot.patternArrays.first)
+    let discoveredDefinition = try #require(snapshot.componentDefinitions.first)
     let firstOutput = try #require(discoveredArray.outputs.first)
 
     let updateResponse = server.handle(
@@ -1072,6 +1079,13 @@ import SwiftCAD
     let firstOutputInstanceID = try #require(firstOutput.componentInstanceID)
 
     #expect(snapshot.patternArrays.count == 1)
+    #expect(snapshot.componentDefinitions.count == 1)
+    #expect(discoveredDefinition.definitionID == definition.id)
+    #expect(discoveredDefinition.name == "Agent Snapshot Array Source")
+    #expect(discoveredDefinition.bodySceneNodeIDs == [bodySceneNodeID])
+    #expect(discoveredDefinition.bodyFeatureIDs.contains(bodyFeatureID))
+    #expect(discoveredDefinition.featureIDs.contains(bodyFeatureID))
+    #expect(discoveredDefinition.isRenderable)
     #expect(discoveredArray.name == "Agent Snapshot Array")
     #expect(discoveredArray.definitionID == definition.id)
     #expect(discoveredArray.definitionName == "Agent Snapshot Array Source")

@@ -36,6 +36,11 @@ import Testing
     let source = try #require(session.document.productMetadata.patternArrays.values.first {
         $0.name == "Display Array"
     })
+    let bodyFeature = try #require(session.document.cadDocument.designGraph.nodes[bodyFeatureID])
+    guard case .extrude(let extrude) = bodyFeature.operation else {
+        Issue.record("Default body should be produced by an extrude.")
+        return
+    }
     let firstOutputID = try #require(source.outputInstanceIDs.first)
     let firstOutputInstance = try #require(
         session.document.productMetadata.componentInstances[firstOutputID]
@@ -52,8 +57,21 @@ import Testing
     )
     let patternArray = try #require(result.patternArrays.first)
     let firstOutput = try #require(patternArray.outputs.first)
+    let componentDefinition = try #require(result.componentDefinitions.first)
+    let rootSceneNode = try #require(componentDefinition.rootSceneNodes.first)
 
     #expect(result.patternArrays.count == 1)
+    #expect(result.componentDefinitions.count == 1)
+    #expect(componentDefinition.definitionID == definition.id)
+    #expect(componentDefinition.name == "Display Array Source")
+    #expect(componentDefinition.bodySceneNodeIDs == [bodySceneNodeID])
+    #expect(componentDefinition.bodyFeatureIDs == [bodyFeatureID])
+    #expect(componentDefinition.featureIDs.contains(bodyFeatureID))
+    #expect(componentDefinition.featureIDs.contains(extrude.profile.featureID))
+    #expect(componentDefinition.isRenderable)
+    #expect(rootSceneNode.sceneNodeID == bodySceneNodeID)
+    #expect(rootSceneNode.referenceKind == .body)
+    #expect(rootSceneNode.featureID == bodyFeatureID)
     #expect(patternArray.sourceID == source.id)
     #expect(patternArray.name == "Display Array")
     #expect(patternArray.definitionID == definition.id)

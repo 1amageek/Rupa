@@ -360,6 +360,7 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                     label: "Source-owned rectangular, radial, and curve component-instance array command",
                     sourceFiles: [
                         "RupaKit/Sources/RupaCore/ComponentDefinition.swift",
+                        "RupaKit/Sources/RupaCore/ComponentDefinitionDisplaySnapshot.swift",
                         "RupaKit/Sources/RupaCore/ComponentInstance.swift",
                         "RupaKit/Sources/RupaCore/PatternArraySource.swift",
                         "RupaKit/Sources/RupaCore/PatternArrayDisplaySnapshot.swift",
@@ -385,7 +386,7 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                         "Curve Array path distribution, twist, scale, Normal, Parallel, Transport, ratio extent, distance extent, explicit polyline paths, and source sketch-entity paths support Core, Automation, and Agent command paths.",
                         "Pattern Array source update and explode lifecycle commands support Core, Automation, and Agent command paths.",
                         "Component-instance Pattern Array explode materializes cloned CAD feature scene outputs before detaching source ownership.",
-                        "Design display snapshots expose PatternArraySource IDs, output instance IDs, independent-copy output scene node feature IDs, root scene node IDs, distribution, and output mode for Agent lifecycle planning.",
+                        "Design display snapshots expose ComponentDefinition IDs, renderable root scene nodes, dependency feature closures, PatternArraySource IDs, output instance IDs, independent-copy output scene node feature IDs, root scene node IDs, distribution, and output mode for Agent lifecycle planning.",
                         "Place, viewport editing workflows, and incremental independent-copy reuse remain open.",
                     ]
                 ),

@@ -5,6 +5,7 @@ public struct DesignDisplaySnapshotResult: Codable, Equatable, Sendable {
     public var extrudes: [ExtrudeDisplaySnapshot]
     public var straightPrismSweeps: [StraightPrismSweepDisplaySnapshot]
     public var bodies: [BodyDisplaySnapshot]
+    public var componentDefinitions: [ComponentDefinitionDisplaySnapshot]
     public var patternArrays: [PatternArrayDisplaySnapshot]
 
     public init(
@@ -14,6 +15,7 @@ public struct DesignDisplaySnapshotResult: Codable, Equatable, Sendable {
         extrudes: [ExtrudeDisplaySnapshot],
         straightPrismSweeps: [StraightPrismSweepDisplaySnapshot],
         bodies: [BodyDisplaySnapshot],
+        componentDefinitions: [ComponentDefinitionDisplaySnapshot] = [],
         patternArrays: [PatternArrayDisplaySnapshot] = []
     ) {
         self.generation = generation
@@ -22,6 +24,7 @@ public struct DesignDisplaySnapshotResult: Codable, Equatable, Sendable {
         self.extrudes = extrudes
         self.straightPrismSweeps = straightPrismSweeps
         self.bodies = bodies
+        self.componentDefinitions = componentDefinitions
         self.patternArrays = patternArrays
     }
 }

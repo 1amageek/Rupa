@@ -998,6 +998,7 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
             )
         }
         let ownedFeatureIDs = Set(source.outputFeatureIDs)
+        var outputReferencedFeatureIDs: Set<FeatureID> = []
         for featureID in source.outputFeatureIDs {
             guard cadDocument.designGraph.nodes[featureID] != nil else {
                 throw DocumentValidationError.invalidProductMetadata(
@@ -1018,23 +1019,49 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
                     "Independent-copy pattern array output transforms must match the source distribution."
                 )
             }
-            let descendantFeatureIDs = featureIDs(inSceneSubtreeRootedAt: outputSceneNodeID)
+            let descendantFeatureIDs = referencedFeatureIDs(inSceneSubtreeRootedAt: outputSceneNodeID)
             guard !descendantFeatureIDs.isEmpty,
                   descendantFeatureIDs.isSubset(of: ownedFeatureIDs) else {
                 throw DocumentValidationError.invalidProductMetadata(
                     "Independent-copy pattern array output scene nodes must reference only owned cloned features."
                 )
             }
+            outputReferencedFeatureIDs.formUnion(descendantFeatureIDs)
+        }
+        guard dependencyFeatureClosure(
+            from: outputReferencedFeatureIDs,
+            cadDocument: cadDocument
+        ) == ownedFeatureIDs else {
+            throw DocumentValidationError.invalidProductMetadata(
+                "Independent-copy pattern array output features must exactly match generated output dependencies."
+            )
         }
     }
 
-    private func featureIDs(inSceneSubtreeRootedAt rootSceneNodeID: SceneNodeID) -> Set<FeatureID> {
-        var featureIDs: Set<FeatureID> = []
-        collectFeatureIDs(rootSceneNodeID, featureIDs: &featureIDs)
+    private func dependencyFeatureClosure(
+        from seedFeatureIDs: Set<FeatureID>,
+        cadDocument: CADDocument
+    ) -> Set<FeatureID> {
+        var featureIDs = seedFeatureIDs
+        var pendingFeatureIDs = Array(seedFeatureIDs)
+        while let featureID = pendingFeatureIDs.popLast() {
+            guard let feature = cadDocument.designGraph.nodes[featureID] else {
+                continue
+            }
+            for input in feature.inputs where featureIDs.insert(input.featureID).inserted {
+                pendingFeatureIDs.append(input.featureID)
+            }
+        }
         return featureIDs
     }
 
-    private func collectFeatureIDs(
+    private func referencedFeatureIDs(inSceneSubtreeRootedAt rootSceneNodeID: SceneNodeID) -> Set<FeatureID> {
+        var featureIDs: Set<FeatureID> = []
+        collectReferencedFeatureIDs(rootSceneNodeID, featureIDs: &featureIDs)
+        return featureIDs
+    }
+
+    private func collectReferencedFeatureIDs(
         _ sceneNodeID: SceneNodeID,
         featureIDs: inout Set<FeatureID>
     ) {
@@ -1044,8 +1071,14 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
         if let featureID = sceneNode.reference?.featureID {
             featureIDs.insert(featureID)
         }
+        if let featureID = sceneNode.object?.sourceFeatureID {
+            featureIDs.insert(featureID)
+        }
+        if let featureID = sceneNode.object?.sourceProfileFeatureID {
+            featureIDs.insert(featureID)
+        }
         for childID in sceneNode.childIDs {
-            collectFeatureIDs(childID, featureIDs: &featureIDs)
+            collectReferencedFeatureIDs(childID, featureIDs: &featureIDs)
         }
     }
 

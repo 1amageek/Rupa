@@ -3,6 +3,7 @@ public struct DesignDisplaySnapshot: Equatable, Sendable {
     public var extrudes: [FeatureID: ExtrudeDisplaySnapshot]
     public var straightPrismSweeps: [FeatureID: StraightPrismSweepDisplaySnapshot]
     public var bodies: [FeatureID: BodyDisplaySnapshot]
+    public var componentDefinitions: [ComponentDefinitionID: ComponentDefinitionDisplaySnapshot]
     public var patternArrays: [PatternArraySourceID: PatternArrayDisplaySnapshot]
 
     public init(
@@ -10,12 +11,14 @@ public struct DesignDisplaySnapshot: Equatable, Sendable {
         extrudes: [FeatureID: ExtrudeDisplaySnapshot] = [:],
         straightPrismSweeps: [FeatureID: StraightPrismSweepDisplaySnapshot] = [:],
         bodies: [FeatureID: BodyDisplaySnapshot] = [:],
+        componentDefinitions: [ComponentDefinitionID: ComponentDefinitionDisplaySnapshot] = [:],
         patternArrays: [PatternArraySourceID: PatternArrayDisplaySnapshot] = [:]
     ) {
         self.sketches = sketches
         self.extrudes = extrudes
         self.straightPrismSweeps = straightPrismSweeps
         self.bodies = bodies
+        self.componentDefinitions = componentDefinitions
         self.patternArrays = patternArrays
     }
 }

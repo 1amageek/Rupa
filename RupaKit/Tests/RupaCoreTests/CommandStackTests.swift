@@ -4758,6 +4758,238 @@ import Testing
 }
 
 @MainActor
+@Test func rectangularPatternArrayOwnsGeneratedOutputMetadata() async throws {
+    let session = EditorSession()
+    _ = try #require(session.createDefaultExtrudedRectangle())
+    let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let bodySceneNodeID = try #require(commandStackBodySceneNodeID(for: bodyFeatureID, in: session.document))
+    _ = try session.execute(.createComponentDefinition(name: "Metadata Owned Source", rootSceneNodeIDs: [bodySceneNodeID]))
+    let definition = try #require(session.document.productMetadata.componentDefinitions.values.first {
+        $0.name == "Metadata Owned Source"
+    })
+    _ = try session.execute(
+        .createPatternArray(
+            name: "Metadata Owned Array",
+            definitionID: definition.id,
+            distribution: .rectangular(RectangularPatternArray(
+                firstAxis: PatternArrayLinearAxis(
+                    direction: .unitX,
+                    distance: .length(10.0, .millimeter),
+                    copyCount: 1
+                )
+            )),
+            outputMode: .componentInstance
+        )
+    )
+    let source = try #require(session.document.productMetadata.patternArrays.values.first {
+        $0.name == "Metadata Owned Array"
+    })
+    let outputInstanceID = try #require(source.outputInstanceIDs.first)
+    let outputSceneNodeID = try #require(
+        session.document.productMetadata.sceneNodes[source.rootSceneNodeID]?.childIDs.first
+    )
+
+    do {
+        _ = try session.execute(.setComponentInstanceVisibility(id: outputInstanceID, isVisible: false))
+        Issue.record("Pattern array output instance visibility must be controlled by the pattern source.")
+    } catch let error as EditorError {
+        #expect(error.code == .commandInvalid)
+    }
+    do {
+        _ = try session.execute(.setComponentInstanceLock(id: outputInstanceID, isLocked: true))
+        Issue.record("Pattern array output instance locks must be controlled by the pattern source.")
+    } catch let error as EditorError {
+        #expect(error.code == .commandInvalid)
+    }
+    do {
+        _ = try session.execute(.setSceneNodeVisibility(id: outputSceneNodeID, isVisible: false))
+        Issue.record("Pattern array output scene node visibility must be controlled by the pattern source.")
+    } catch let error as EditorError {
+        #expect(error.code == .commandInvalid)
+    }
+    do {
+        _ = try session.execute(.setSceneNodeLock(id: outputSceneNodeID, isLocked: true))
+        Issue.record("Pattern array output scene node locks must be controlled by the pattern source.")
+    } catch let error as EditorError {
+        #expect(error.code == .commandInvalid)
+    }
+    do {
+        _ = try session.execute(.setSceneNodeMaterial(id: outputSceneNodeID, materialID: nil))
+        Issue.record("Pattern array output scene node materials must be controlled by the pattern source.")
+    } catch let error as EditorError {
+        #expect(error.code == .commandInvalid)
+    }
+
+    let sourceRootResult = try session.execute(
+        .setSceneNodeVisibility(id: source.rootSceneNodeID, isVisible: false)
+    )
+    #expect(sourceRootResult.commandName == "setSceneNodeVisibility")
+    #expect(session.document.productMetadata.sceneNodes[source.rootSceneNodeID]?.isVisible == false)
+}
+
+@MainActor
+@Test func independentPatternArrayOwnsGeneratedOutputObjectProperties() async throws {
+    let session = EditorSession()
+    _ = try #require(session.createDefaultExtrudedRectangle())
+    let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let bodySceneNodeID = try #require(commandStackBodySceneNodeID(for: bodyFeatureID, in: session.document))
+    _ = try session.execute(.createComponentDefinition(name: "Property Owned Source", rootSceneNodeIDs: [bodySceneNodeID]))
+    let definition = try #require(session.document.productMetadata.componentDefinitions.values.first {
+        $0.name == "Property Owned Source"
+    })
+    _ = try session.execute(
+        .createPatternArray(
+            name: "Property Owned Array",
+            definitionID: definition.id,
+            distribution: .rectangular(RectangularPatternArray(
+                firstAxis: PatternArrayLinearAxis(
+                    direction: .unitX,
+                    distance: .length(10.0, .millimeter),
+                    copyCount: 1
+                )
+            )),
+            outputMode: .independentCopy
+        )
+    )
+    let source = try #require(session.document.productMetadata.patternArrays.values.first {
+        $0.name == "Property Owned Array"
+    })
+    let outputRootSceneNodeID = try #require(source.outputSceneNodeIDs.first)
+    let outputBodySceneNodeID = try #require(
+        session.document.productMetadata.sceneNodes[outputRootSceneNodeID]?.childIDs.first
+    )
+
+    do {
+        _ = try session.execute(
+            .setSceneNodeObjectProperty(
+                id: outputBodySceneNodeID,
+                propertyID: ObjectPropertyID(rawValue: "generated.output.override"),
+                value: .boolean(true)
+            )
+        )
+        Issue.record("Independent-copy pattern array output object properties must be controlled by the source.")
+    } catch let error as EditorError {
+        #expect(error.code == .commandInvalid)
+        #expect(error.message.contains("Pattern array output"))
+    }
+}
+
+@MainActor
+@Test func independentPatternArrayMetadataRejectsForeignOwnedFeatures() async throws {
+    let session = EditorSession()
+    _ = try #require(session.createDefaultExtrudedRectangle())
+    let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let bodySceneNodeID = try #require(commandStackBodySceneNodeID(for: bodyFeatureID, in: session.document))
+    _ = try session.execute(.createComponentDefinition(name: "Foreign Feature Source", rootSceneNodeIDs: [bodySceneNodeID]))
+    let definition = try #require(session.document.productMetadata.componentDefinitions.values.first {
+        $0.name == "Foreign Feature Source"
+    })
+    _ = try session.execute(
+        .createPatternArray(
+            name: "Foreign Feature Array",
+            definitionID: definition.id,
+            distribution: .rectangular(RectangularPatternArray(
+                firstAxis: PatternArrayLinearAxis(
+                    direction: .unitX,
+                    distance: .length(10.0, .millimeter),
+                    copyCount: 1
+                )
+            )),
+            outputMode: .independentCopy
+        )
+    )
+    let source = try #require(session.document.productMetadata.patternArrays.values.first {
+        $0.name == "Foreign Feature Array"
+    })
+    var metadata = session.document.productMetadata
+    var invalidSource = try #require(metadata.patternArrays[source.id])
+    invalidSource.outputFeatureIDs.append(bodyFeatureID)
+    metadata.patternArrays[source.id] = invalidSource
+
+    var validationError: DocumentValidationError?
+    do {
+        try metadata.validate(
+            against: session.document.cadDocument,
+            objectRegistry: .builtIn
+        )
+    } catch let error as DocumentValidationError {
+        validationError = error
+    }
+
+    guard case .invalidProductMetadata(let message) = validationError else {
+        #expect(Bool(false))
+        return
+    }
+    #expect(message.contains("exactly match generated output dependencies"))
+}
+
+@MainActor
+@Test func independentPatternArrayMetadataRejectsForeignObjectFeatureReferences() async throws {
+    let session = EditorSession()
+    _ = try #require(session.createDefaultExtrudedRectangle())
+    let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let bodyFeature = try #require(session.document.cadDocument.designGraph.nodes[bodyFeatureID])
+    guard case .extrude(let extrude) = bodyFeature.operation else {
+        Issue.record("Default body should be produced by an extrude.")
+        return
+    }
+    let originalProfileFeatureID = extrude.profile.featureID
+    let bodySceneNodeID = try #require(commandStackBodySceneNodeID(for: bodyFeatureID, in: session.document))
+    _ = try session.execute(
+        .createComponentDefinition(
+            name: "Foreign Object Feature Source",
+            rootSceneNodeIDs: [bodySceneNodeID]
+        )
+    )
+    let definition = try #require(session.document.productMetadata.componentDefinitions.values.first {
+        $0.name == "Foreign Object Feature Source"
+    })
+    _ = try session.execute(
+        .createPatternArray(
+            name: "Foreign Object Feature Array",
+            definitionID: definition.id,
+            distribution: .rectangular(RectangularPatternArray(
+                firstAxis: PatternArrayLinearAxis(
+                    direction: .unitX,
+                    distance: .length(10.0, .millimeter),
+                    copyCount: 1
+                )
+            )),
+            outputMode: .independentCopy
+        )
+    )
+    let source = try #require(session.document.productMetadata.patternArrays.values.first {
+        $0.name == "Foreign Object Feature Array"
+    })
+    #expect(!Set(source.outputFeatureIDs).contains(originalProfileFeatureID))
+
+    var metadata = session.document.productMetadata
+    let outputRootSceneNodeID = try #require(source.outputSceneNodeIDs.first)
+    let outputBodySceneNodeID = try #require(metadata.sceneNodes[outputRootSceneNodeID]?.childIDs.first)
+    var outputBodySceneNode = try #require(metadata.sceneNodes[outputBodySceneNodeID])
+    var object = try #require(outputBodySceneNode.object)
+    object.sourceProfileFeatureID = originalProfileFeatureID
+    outputBodySceneNode.object = object
+    metadata.sceneNodes[outputBodySceneNodeID] = outputBodySceneNode
+
+    var validationError: DocumentValidationError?
+    do {
+        try metadata.validate(
+            against: session.document.cadDocument,
+            objectRegistry: .builtIn
+        )
+    } catch let error as DocumentValidationError {
+        validationError = error
+    }
+
+    guard case .invalidProductMetadata(let message) = validationError else {
+        #expect(Bool(false))
+        return
+    }
+    #expect(message.contains("only owned cloned features"))
+}
+
+@MainActor
 @Test func patternArrayMetadataValidationRequiresExactOutputGroup() async throws {
     let session = EditorSession()
     _ = try #require(session.createDefaultExtrudedRectangle())

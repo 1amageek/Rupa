@@ -79,6 +79,7 @@ public struct DesignDisplaySnapshotService: Sendable {
             extrudes: extrudes,
             straightPrismSweeps: straightPrismSweeps,
             bodies: bodies,
+            componentDefinitions: componentDefinitionSnapshots(document: document),
             patternArrays: patternArraySnapshots(document: document)
         )
     }
@@ -104,8 +105,180 @@ public struct DesignDisplaySnapshotService: Sendable {
             extrudes: order.compactMap { snapshot.extrudes[$0] },
             straightPrismSweeps: order.compactMap { snapshot.straightPrismSweeps[$0] },
             bodies: order.compactMap { snapshot.bodies[$0] },
+            componentDefinitions: sortedComponentDefinitionSnapshots(snapshot.componentDefinitions),
             patternArrays: sortedPatternArraySnapshots(snapshot.patternArrays)
         )
+    }
+
+    private func componentDefinitionSnapshots(
+        document: DesignDocument
+    ) -> [ComponentDefinitionID: ComponentDefinitionDisplaySnapshot] {
+        let metadata = document.productMetadata
+        var snapshots: [ComponentDefinitionID: ComponentDefinitionDisplaySnapshot] = [:]
+        snapshots.reserveCapacity(metadata.componentDefinitions.count)
+
+        for (_, definition) in metadata.componentDefinitions {
+            var accumulator = ComponentDefinitionSnapshotAccumulator()
+            var visitedSceneNodeIDs: Set<SceneNodeID> = []
+            var visitedDefinitionIDs: Set<ComponentDefinitionID> = [definition.id]
+            let rootSceneNodes: [ComponentDefinitionDisplaySnapshot.RootSceneNode] =
+                definition.rootSceneNodeIDs.compactMap { rootSceneNodeID in
+                    guard let sceneNode = metadata.sceneNodes[rootSceneNodeID] else {
+                        return nil
+                    }
+                    appendComponentDefinitionSceneTree(
+                        rootSceneNodeID,
+                        metadata: metadata,
+                        visitedSceneNodeIDs: &visitedSceneNodeIDs,
+                        visitedDefinitionIDs: &visitedDefinitionIDs,
+                        accumulator: &accumulator
+                    )
+                    return ComponentDefinitionDisplaySnapshot.RootSceneNode(
+                        sceneNodeID: rootSceneNodeID,
+                        name: sceneNode.name,
+                        referenceKind: sceneNode.reference?.kind,
+                        featureID: sceneNode.reference?.featureID,
+                        componentInstanceID: sceneNode.reference?.componentInstanceID,
+                        objectCategory: sceneNode.object?.category,
+                        isVisible: sceneNode.isVisible,
+                        isLocked: sceneNode.isLocked,
+                        childCount: sceneNode.childIDs.count
+                    )
+                }
+
+            snapshots[definition.id] = ComponentDefinitionDisplaySnapshot(
+                definitionID: definition.id,
+                name: definition.name,
+                rootSceneNodes: rootSceneNodes,
+                bodySceneNodeIDs: accumulator.bodySceneNodeIDs,
+                sketchSceneNodeIDs: accumulator.sketchSceneNodeIDs,
+                featureIDs: featureClosure(
+                    from: accumulator.featureIDs,
+                    cadDocument: document.cadDocument
+                ),
+                bodyFeatureIDs: accumulator.bodyFeatureIDs,
+                sketchFeatureIDs: accumulator.sketchFeatureIDs,
+                nestedComponentInstanceIDs: accumulator.nestedComponentInstanceIDs,
+                nestedDefinitionIDs: accumulator.nestedDefinitionIDs,
+                isRenderable: !accumulator.bodyFeatureIDs.isEmpty || !accumulator.sketchFeatureIDs.isEmpty
+            )
+        }
+        return snapshots
+    }
+
+    private func appendComponentDefinitionSceneTree(
+        _ sceneNodeID: SceneNodeID,
+        metadata: ProductMetadata,
+        visitedSceneNodeIDs: inout Set<SceneNodeID>,
+        visitedDefinitionIDs: inout Set<ComponentDefinitionID>,
+        accumulator: inout ComponentDefinitionSnapshotAccumulator
+    ) {
+        guard visitedSceneNodeIDs.insert(sceneNodeID).inserted,
+              let sceneNode = metadata.sceneNodes[sceneNodeID] else {
+            return
+        }
+
+        appendSceneNodeReference(
+            sceneNode.reference,
+            sceneNodeID: sceneNodeID,
+            metadata: metadata,
+            visitedSceneNodeIDs: &visitedSceneNodeIDs,
+            visitedDefinitionIDs: &visitedDefinitionIDs,
+            accumulator: &accumulator
+        )
+        for childID in sceneNode.childIDs {
+            appendComponentDefinitionSceneTree(
+                childID,
+                metadata: metadata,
+                visitedSceneNodeIDs: &visitedSceneNodeIDs,
+                visitedDefinitionIDs: &visitedDefinitionIDs,
+                accumulator: &accumulator
+            )
+        }
+    }
+
+    private func appendSceneNodeReference(
+        _ reference: SceneNodeReference?,
+        sceneNodeID: SceneNodeID,
+        metadata: ProductMetadata,
+        visitedSceneNodeIDs: inout Set<SceneNodeID>,
+        visitedDefinitionIDs: inout Set<ComponentDefinitionID>,
+        accumulator: inout ComponentDefinitionSnapshotAccumulator
+    ) {
+        guard let reference else {
+            return
+        }
+        switch reference.kind {
+        case .feature:
+            if let featureID = reference.featureID {
+                accumulator.appendFeatureID(featureID)
+            }
+        case .body:
+            if let featureID = reference.featureID {
+                accumulator.appendBodySceneNodeID(sceneNodeID)
+                accumulator.appendBodyFeatureID(featureID)
+            }
+        case .sketch:
+            if let featureID = reference.featureID {
+                accumulator.appendSketchSceneNodeID(sceneNodeID)
+                accumulator.appendSketchFeatureID(featureID)
+            }
+        case .componentInstance:
+            appendNestedComponentDefinition(
+                reference.componentInstanceID,
+                metadata: metadata,
+                visitedSceneNodeIDs: &visitedSceneNodeIDs,
+                visitedDefinitionIDs: &visitedDefinitionIDs,
+                accumulator: &accumulator
+            )
+        case .construction:
+            break
+        }
+    }
+
+    private func appendNestedComponentDefinition(
+        _ componentInstanceID: ComponentInstanceID?,
+        metadata: ProductMetadata,
+        visitedSceneNodeIDs: inout Set<SceneNodeID>,
+        visitedDefinitionIDs: inout Set<ComponentDefinitionID>,
+        accumulator: inout ComponentDefinitionSnapshotAccumulator
+    ) {
+        guard let componentInstanceID,
+              let instance = metadata.componentInstances[componentInstanceID],
+              let definition = metadata.componentDefinitions[instance.definitionID] else {
+            return
+        }
+        accumulator.appendNestedComponentInstanceID(componentInstanceID)
+        guard visitedDefinitionIDs.insert(definition.id).inserted else {
+            return
+        }
+        accumulator.appendNestedDefinitionID(definition.id)
+        for rootSceneNodeID in definition.rootSceneNodeIDs {
+            appendComponentDefinitionSceneTree(
+                rootSceneNodeID,
+                metadata: metadata,
+                visitedSceneNodeIDs: &visitedSceneNodeIDs,
+                visitedDefinitionIDs: &visitedDefinitionIDs,
+                accumulator: &accumulator
+            )
+        }
+    }
+
+    private func featureClosure(
+        from seedFeatureIDs: [FeatureID],
+        cadDocument: CADDocument
+    ) -> [FeatureID] {
+        var featureIDs = Set(seedFeatureIDs)
+        var pendingFeatureIDs = seedFeatureIDs
+        while let featureID = pendingFeatureIDs.popLast() {
+            guard let feature = cadDocument.designGraph.nodes[featureID] else {
+                continue
+            }
+            for input in feature.inputs where featureIDs.insert(input.featureID).inserted {
+                pendingFeatureIDs.append(input.featureID)
+            }
+        }
+        return cadDocument.designGraph.order.filter { featureIDs.contains($0) }
     }
 
     private func patternArraySnapshots(
@@ -248,6 +421,17 @@ public struct DesignDisplaySnapshotService: Sendable {
         }
     }
 
+    private func sortedComponentDefinitionSnapshots(
+        _ snapshots: [ComponentDefinitionID: ComponentDefinitionDisplaySnapshot]
+    ) -> [ComponentDefinitionDisplaySnapshot] {
+        snapshots.values.sorted {
+            if $0.name == $1.name {
+                return $0.definitionID.description < $1.definitionID.description
+            }
+            return $0.name < $1.name
+        }
+    }
+
     private func straightPrismSweepSnapshot(
         featureID: FeatureID,
         sweep: SweepFeature,
@@ -298,5 +482,68 @@ public struct DesignDisplaySnapshotService: Sendable {
                 z: pathVector.z / pathLength
             ))
         )
+    }
+}
+
+private struct ComponentDefinitionSnapshotAccumulator: Sendable {
+    private(set) var bodySceneNodeIDs: [SceneNodeID] = []
+    private(set) var sketchSceneNodeIDs: [SceneNodeID] = []
+    private(set) var featureIDs: [FeatureID] = []
+    private(set) var bodyFeatureIDs: [FeatureID] = []
+    private(set) var sketchFeatureIDs: [FeatureID] = []
+    private(set) var nestedComponentInstanceIDs: [ComponentInstanceID] = []
+    private(set) var nestedDefinitionIDs: [ComponentDefinitionID] = []
+
+    private var bodySceneNodeIDSet: Set<SceneNodeID> = []
+    private var sketchSceneNodeIDSet: Set<SceneNodeID> = []
+    private var featureIDSet: Set<FeatureID> = []
+    private var bodyFeatureIDSet: Set<FeatureID> = []
+    private var sketchFeatureIDSet: Set<FeatureID> = []
+    private var nestedComponentInstanceIDSet: Set<ComponentInstanceID> = []
+    private var nestedDefinitionIDSet: Set<ComponentDefinitionID> = []
+
+    mutating func appendBodySceneNodeID(_ sceneNodeID: SceneNodeID) {
+        Self.append(sceneNodeID, to: &bodySceneNodeIDs, tracking: &bodySceneNodeIDSet)
+    }
+
+    mutating func appendSketchSceneNodeID(_ sceneNodeID: SceneNodeID) {
+        Self.append(sceneNodeID, to: &sketchSceneNodeIDs, tracking: &sketchSceneNodeIDSet)
+    }
+
+    mutating func appendFeatureID(_ featureID: FeatureID) {
+        Self.append(featureID, to: &featureIDs, tracking: &featureIDSet)
+    }
+
+    mutating func appendBodyFeatureID(_ featureID: FeatureID) {
+        Self.append(featureID, to: &bodyFeatureIDs, tracking: &bodyFeatureIDSet)
+        appendFeatureID(featureID)
+    }
+
+    mutating func appendSketchFeatureID(_ featureID: FeatureID) {
+        Self.append(featureID, to: &sketchFeatureIDs, tracking: &sketchFeatureIDSet)
+        appendFeatureID(featureID)
+    }
+
+    mutating func appendNestedComponentInstanceID(_ componentInstanceID: ComponentInstanceID) {
+        Self.append(
+            componentInstanceID,
+            to: &nestedComponentInstanceIDs,
+            tracking: &nestedComponentInstanceIDSet
+        )
+    }
+
+    mutating func appendNestedDefinitionID(_ definitionID: ComponentDefinitionID) {
+        Self.append(definitionID, to: &nestedDefinitionIDs, tracking: &nestedDefinitionIDSet)
+    }
+
+    private static func append<T: Hashable>(
+        _ value: T,
+        to values: inout [T],
+        tracking seenValues: inout Set<T>
+    ) {
+        guard seenValues.insert(value).inserted else {
+            return
+        }
+        values.append(value)
     }
 }
