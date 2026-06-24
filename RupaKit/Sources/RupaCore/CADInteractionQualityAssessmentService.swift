@@ -397,6 +397,7 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                         "Component-instance Pattern Array explode materializes cloned CAD feature scene outputs before detaching source ownership.",
                         "Design display snapshots expose ComponentDefinition IDs, ComponentInstance IDs, typed component instance ownership, renderable root scene nodes, dependency feature closures, PatternArraySource IDs, output instance IDs, independent-copy output scene node feature IDs, root scene node IDs, distribution, and output mode for Agent lifecycle planning.",
                         "Pattern Array summaries expose editable fields, lifecycle actions, source-owned output edit policy, output IDs, and diagnostics without forcing CAD evaluation.",
+                        "Pattern Array summary diagnostics mirror source-owned output invariants for missing instances, mismatched transforms, duplicate ownership, root child mapping, and independent-copy feature closure checks.",
                         "The object Inspector now maps selected source roots, generated outputs, and independent-copy descendants back to their PatternArraySource and displays ownership, lifecycle actions, output mode, selected output index, and diagnostics.",
                         "Viewport editing workflows and incremental independent-copy reuse remain open.",
                     ]

@@ -99,6 +99,9 @@ import RupaCore
         evidence.notes.contains("Pattern Array summaries expose editable fields, lifecycle actions, source-owned output edit policy, output IDs, and diagnostics without forcing CAD evaluation.")
     })
     #expect(arrays.evidence.contains { evidence in
+        evidence.notes.contains("Pattern Array summary diagnostics mirror source-owned output invariants for missing instances, mismatched transforms, duplicate ownership, root child mapping, and independent-copy feature closure checks.")
+    })
+    #expect(arrays.evidence.contains { evidence in
         evidence.notes.contains("The object Inspector now maps selected source roots, generated outputs, and independent-copy descendants back to their PatternArraySource and displays ownership, lifecycle actions, output mode, selected output index, and diagnostics.")
     })
 

@@ -1,3 +1,5 @@
+import SwiftCAD
+
 public struct PatternArraySummaryService: Sendable {
     public init() {}
 
@@ -7,6 +9,7 @@ public struct PatternArraySummaryService: Sendable {
         dirty: Bool
     ) -> PatternArraySummaryResult {
         let metadata = document.productMetadata
+        let outputOwnershipIndex = outputOwnershipIndex(for: metadata.patternArrays.values)
         let summaries = metadata.patternArrays.values
             .sorted { lhs, rhs in
                 if lhs.name == rhs.name {
@@ -15,7 +18,12 @@ public struct PatternArraySummaryService: Sendable {
                 return lhs.name < rhs.name
             }
             .map { source in
-                summary(for: source, metadata: metadata)
+                summary(
+                    for: source,
+                    metadata: metadata,
+                    cadDocument: document.cadDocument,
+                    outputOwnershipIndex: outputOwnershipIndex
+                )
             }
         return PatternArraySummaryResult(
             generation: generation,
@@ -26,11 +34,18 @@ public struct PatternArraySummaryService: Sendable {
 
     private func summary(
         for source: PatternArraySource,
-        metadata: ProductMetadata
+        metadata: ProductMetadata,
+        cadDocument: CADDocument,
+        outputOwnershipIndex: OutputOwnershipIndex
     ) -> PatternArraySummary {
         let definition = metadata.componentDefinitions[source.definitionID]
         let rootSceneNode = metadata.sceneNodes[source.rootSceneNodeID]
-        let diagnostics = diagnostics(for: source, metadata: metadata)
+        let diagnostics = diagnostics(
+            for: source,
+            metadata: metadata,
+            cadDocument: cadDocument,
+            outputOwnershipIndex: outputOwnershipIndex
+        )
         return PatternArraySummary(
             sourceID: source.id,
             name: source.name,
@@ -48,6 +63,36 @@ public struct PatternArraySummaryService: Sendable {
             lifecycleActions: [.updatePatternArray, .explodePatternArray],
             outputOwnership: outputOwnership(for: source.outputMode),
             diagnostics: diagnostics
+        )
+    }
+
+    private struct OutputOwnershipIndex {
+        var sourceIDsByOutputInstanceID: [ComponentInstanceID: [PatternArraySourceID]]
+        var sourceIDsByOutputSceneNodeID: [SceneNodeID: [PatternArraySourceID]]
+        var sourceIDsByOutputFeatureID: [FeatureID: [PatternArraySourceID]]
+    }
+
+    private func outputOwnershipIndex(
+        for sources: Dictionary<PatternArraySourceID, PatternArraySource>.Values
+    ) -> OutputOwnershipIndex {
+        var sourceIDsByOutputInstanceID: [ComponentInstanceID: [PatternArraySourceID]] = [:]
+        var sourceIDsByOutputSceneNodeID: [SceneNodeID: [PatternArraySourceID]] = [:]
+        var sourceIDsByOutputFeatureID: [FeatureID: [PatternArraySourceID]] = [:]
+        for source in sources {
+            for instanceID in source.outputInstanceIDs {
+                sourceIDsByOutputInstanceID[instanceID, default: []].append(source.id)
+            }
+            for sceneNodeID in source.outputSceneNodeIDs {
+                sourceIDsByOutputSceneNodeID[sceneNodeID, default: []].append(source.id)
+            }
+            for featureID in source.outputFeatureIDs {
+                sourceIDsByOutputFeatureID[featureID, default: []].append(source.id)
+            }
+        }
+        return OutputOwnershipIndex(
+            sourceIDsByOutputInstanceID: sourceIDsByOutputInstanceID,
+            sourceIDsByOutputSceneNodeID: sourceIDsByOutputSceneNodeID,
+            sourceIDsByOutputFeatureID: sourceIDsByOutputFeatureID
         )
     }
 
@@ -94,7 +139,9 @@ public struct PatternArraySummaryService: Sendable {
 
     private func diagnostics(
         for source: PatternArraySource,
-        metadata: ProductMetadata
+        metadata: ProductMetadata,
+        cadDocument: CADDocument,
+        outputOwnershipIndex: OutputOwnershipIndex
     ) -> [PatternArraySummary.Diagnostic] {
         var diagnostics: [PatternArraySummary.Diagnostic] = []
         if metadata.componentDefinitions[source.definitionID] == nil {
@@ -106,7 +153,8 @@ public struct PatternArraySummaryService: Sendable {
                 )
             )
         }
-        if metadata.sceneNodes[source.rootSceneNodeID] == nil {
+        let rootSceneNode = metadata.sceneNodes[source.rootSceneNodeID]
+        if rootSceneNode == nil {
             diagnostics.append(
                 PatternArraySummary.Diagnostic(
                     severity: .error,
@@ -114,56 +162,398 @@ public struct PatternArraySummaryService: Sendable {
                     message: "Pattern array source references a missing root scene node."
                 )
             )
+        } else if rootSceneNode?.reference != nil || rootSceneNode?.object?.category != .group {
+            diagnostics.append(
+                PatternArraySummary.Diagnostic(
+                    severity: .error,
+                    code: "invalidRootSceneNode",
+                    message: "Pattern array root scene node must be a group node."
+                )
+            )
         }
+
+        let expectedTransforms: [Transform3D]?
+        do {
+            expectedTransforms = try PatternArrayInstancePlanner().transforms(
+                for: source.distribution,
+                parameters: cadDocument.parameters,
+                cadDocument: cadDocument
+            )
+        } catch {
+            expectedTransforms = nil
+            diagnostics.append(
+                PatternArraySummary.Diagnostic(
+                    severity: .error,
+                    code: "invalidDistribution",
+                    message: error.localizedDescription
+                )
+            )
+        }
+
         switch source.outputMode {
         case .componentInstance:
-            if source.outputInstanceIDs.isEmpty {
-                diagnostics.append(
-                    PatternArraySummary.Diagnostic(
-                        severity: .error,
-                        code: "missingComponentInstanceOutputs",
-                        message: "Component-instance pattern array source has no output instances."
-                    )
-                )
-            }
-            if !source.outputSceneNodeIDs.isEmpty || !source.outputFeatureIDs.isEmpty {
-                diagnostics.append(
-                    PatternArraySummary.Diagnostic(
-                        severity: .error,
-                        code: "mixedComponentInstanceOutputs",
-                        message: "Component-instance pattern array source also owns direct scene or feature outputs."
-                    )
-                )
-            }
+            componentInstanceDiagnostics(
+                for: source,
+                rootSceneNode: rootSceneNode,
+                metadata: metadata,
+                expectedTransforms: expectedTransforms,
+                outputOwnershipIndex: outputOwnershipIndex,
+                diagnostics: &diagnostics
+            )
         case .independentCopy:
-            if source.outputSceneNodeIDs.isEmpty {
-                diagnostics.append(
-                    PatternArraySummary.Diagnostic(
-                        severity: .error,
-                        code: "missingIndependentCopySceneOutputs",
-                        message: "Independent-copy pattern array source has no output scene nodes."
-                    )
+            independentCopyDiagnostics(
+                for: source,
+                rootSceneNode: rootSceneNode,
+                metadata: metadata,
+                cadDocument: cadDocument,
+                expectedTransforms: expectedTransforms,
+                outputOwnershipIndex: outputOwnershipIndex,
+                diagnostics: &diagnostics
+            )
+        }
+        return diagnostics
+    }
+
+    private func componentInstanceDiagnostics(
+        for source: PatternArraySource,
+        rootSceneNode: SceneNode?,
+        metadata: ProductMetadata,
+        expectedTransforms: [Transform3D]?,
+        outputOwnershipIndex: OutputOwnershipIndex,
+        diagnostics: inout [PatternArraySummary.Diagnostic]
+    ) {
+        if source.outputInstanceIDs.isEmpty {
+            appendDiagnostic(
+                code: "missingComponentInstanceOutputs",
+                message: "Component-instance pattern array source has no output instances.",
+                to: &diagnostics
+            )
+        }
+        if !source.outputSceneNodeIDs.isEmpty || !source.outputFeatureIDs.isEmpty {
+            appendDiagnostic(
+                code: "mixedComponentInstanceOutputs",
+                message: "Component-instance pattern array source also owns direct scene or feature outputs.",
+                to: &diagnostics
+            )
+        }
+        if let expectedTransforms,
+           expectedTransforms.count != source.outputInstanceIDs.count {
+            appendDiagnostic(
+                code: "componentInstanceOutputCountMismatch",
+                message: "Pattern array output instances must match the source distribution count.",
+                to: &diagnostics
+            )
+        }
+
+        for (index, instanceID) in source.outputInstanceIDs.enumerated() {
+            if let ownerIDs = outputOwnershipIndex.sourceIDsByOutputInstanceID[instanceID],
+               ownerIDs.count > 1 {
+                appendDiagnostic(
+                    code: "duplicateOutputInstanceOwnership",
+                    message: "Pattern array output component instances must be owned by exactly one pattern source.",
+                    to: &diagnostics
                 )
             }
-            if source.outputFeatureIDs.isEmpty {
-                diagnostics.append(
-                    PatternArraySummary.Diagnostic(
-                        severity: .error,
-                        code: "missingIndependentCopyFeatureOutputs",
-                        message: "Independent-copy pattern array source has no cloned feature outputs."
-                    )
+            guard let instance = metadata.componentInstances[instanceID] else {
+                appendDiagnostic(
+                    code: "missingOutputInstance",
+                    message: "Pattern array output instances must exist.",
+                    to: &diagnostics
+                )
+                continue
+            }
+            if instance.definitionID != source.definitionID {
+                appendDiagnostic(
+                    code: "outputInstanceDefinitionMismatch",
+                    message: "Pattern array output instances must use the source component definition.",
+                    to: &diagnostics
                 )
             }
-            if !source.outputInstanceIDs.isEmpty {
-                diagnostics.append(
-                    PatternArraySummary.Diagnostic(
-                        severity: .error,
-                        code: "mixedIndependentCopyOutputs",
-                        message: "Independent-copy pattern array source also owns component instance outputs."
-                    )
+            if let expectedTransforms,
+               index < expectedTransforms.count,
+               !transform(instance.localTransform, approximatelyEquals: expectedTransforms[index]) {
+                appendDiagnostic(
+                    code: "outputInstanceTransformMismatch",
+                    message: "Pattern array output instance transforms must match the source distribution.",
+                    to: &diagnostics
                 )
             }
         }
-        return diagnostics
+
+        guard let rootSceneNode else {
+            return
+        }
+        if rootSceneNode.childIDs.count != source.outputInstanceIDs.count {
+            appendDiagnostic(
+                code: "componentInstanceOutputSceneNodeCountMismatch",
+                message: "Pattern array root scene node must contain exactly its output instance scene nodes.",
+                to: &diagnostics
+            )
+        }
+        let outputInstanceIDs = Set(source.outputInstanceIDs)
+        var childInstanceIDs: [ComponentInstanceID] = []
+        childInstanceIDs.reserveCapacity(rootSceneNode.childIDs.count)
+        for childID in rootSceneNode.childIDs {
+            guard let childNode = metadata.sceneNodes[childID] else {
+                appendDiagnostic(
+                    code: "missingOutputSceneNode",
+                    message: "Pattern array output scene nodes must exist.",
+                    to: &diagnostics
+                )
+                continue
+            }
+            guard childNode.reference?.kind == .componentInstance,
+                  let componentInstanceID = childNode.reference?.componentInstanceID else {
+                appendDiagnostic(
+                    code: "invalidOutputSceneNodeReference",
+                    message: "Pattern array root scene node children must be output component instance nodes.",
+                    to: &diagnostics
+                )
+                continue
+            }
+            if !outputInstanceIDs.contains(componentInstanceID) {
+                appendDiagnostic(
+                    code: "unexpectedOutputSceneNodeInstance",
+                    message: "Pattern array root scene node children must reference owned output instances.",
+                    to: &diagnostics
+                )
+            }
+            if !transform(childNode.localTransform, approximatelyEquals: .identity) {
+                appendDiagnostic(
+                    code: "outputSceneNodeTransformNotIdentity",
+                    message: "Pattern array output scene node transforms must be identity.",
+                    to: &diagnostics
+                )
+            }
+            childInstanceIDs.append(componentInstanceID)
+        }
+        if Set(childInstanceIDs) != outputInstanceIDs || childInstanceIDs.count != outputInstanceIDs.count {
+            appendDiagnostic(
+                code: "outputSceneNodeMappingMismatch",
+                message: "Pattern array root scene node must map one child to each output instance.",
+                to: &diagnostics
+            )
+        }
+    }
+
+    private func independentCopyDiagnostics(
+        for source: PatternArraySource,
+        rootSceneNode: SceneNode?,
+        metadata: ProductMetadata,
+        cadDocument: CADDocument,
+        expectedTransforms: [Transform3D]?,
+        outputOwnershipIndex: OutputOwnershipIndex,
+        diagnostics: inout [PatternArraySummary.Diagnostic]
+    ) {
+        if source.outputSceneNodeIDs.isEmpty {
+            appendDiagnostic(
+                code: "missingIndependentCopySceneOutputs",
+                message: "Independent-copy pattern array source has no output scene nodes.",
+                to: &diagnostics
+            )
+        }
+        if source.outputFeatureIDs.isEmpty {
+            appendDiagnostic(
+                code: "missingIndependentCopyFeatureOutputs",
+                message: "Independent-copy pattern array source has no cloned feature outputs.",
+                to: &diagnostics
+            )
+        }
+        if !source.outputInstanceIDs.isEmpty {
+            appendDiagnostic(
+                code: "mixedIndependentCopyOutputs",
+                message: "Independent-copy pattern array source also owns component instance outputs.",
+                to: &diagnostics
+            )
+        }
+        if let expectedTransforms,
+           expectedTransforms.count != source.outputSceneNodeIDs.count {
+            appendDiagnostic(
+                code: "independentCopyOutputCountMismatch",
+                message: "Independent-copy pattern array output scene nodes must match the source distribution count.",
+                to: &diagnostics
+            )
+        }
+        if let rootSceneNode,
+           rootSceneNode.childIDs != source.outputSceneNodeIDs {
+            appendDiagnostic(
+                code: "independentCopyRootChildrenMismatch",
+                message: "Independent-copy pattern array root scene node must contain exactly its output scene nodes.",
+                to: &diagnostics
+            )
+        }
+
+        let ownedFeatureIDs = Set(source.outputFeatureIDs)
+        var outputReferencedFeatureIDs: Set<FeatureID> = []
+        for sceneNodeID in source.outputSceneNodeIDs {
+            if let ownerIDs = outputOwnershipIndex.sourceIDsByOutputSceneNodeID[sceneNodeID],
+               ownerIDs.count > 1 {
+                appendDiagnostic(
+                    code: "duplicateOutputSceneNodeOwnership",
+                    message: "Independent-copy pattern array output scene nodes must be owned by exactly one pattern source.",
+                    to: &diagnostics
+                )
+            }
+        }
+        for featureID in source.outputFeatureIDs {
+            if let ownerIDs = outputOwnershipIndex.sourceIDsByOutputFeatureID[featureID],
+               ownerIDs.count > 1 {
+                appendDiagnostic(
+                    code: "duplicateOutputFeatureOwnership",
+                    message: "Independent-copy pattern array output features must be owned by exactly one pattern source.",
+                    to: &diagnostics
+                )
+            }
+            if cadDocument.designGraph.nodes[featureID] == nil {
+                appendDiagnostic(
+                    code: "missingIndependentCopyFeature",
+                    message: "Independent-copy pattern array output features must exist.",
+                    to: &diagnostics
+                )
+            }
+        }
+
+        for (index, outputSceneNodeID) in source.outputSceneNodeIDs.enumerated() {
+            guard let outputNode = metadata.sceneNodes[outputSceneNodeID] else {
+                appendDiagnostic(
+                    code: "missingIndependentCopySceneOutput",
+                    message: "Independent-copy pattern array output scene nodes must exist.",
+                    to: &diagnostics
+                )
+                continue
+            }
+            if outputNode.reference != nil || outputNode.object?.category != .group {
+                appendDiagnostic(
+                    code: "invalidIndependentCopySceneOutput",
+                    message: "Independent-copy pattern array outputs must be group scene nodes.",
+                    to: &diagnostics
+                )
+            }
+            if let expectedTransforms,
+               index < expectedTransforms.count,
+               !transform(outputNode.localTransform, approximatelyEquals: expectedTransforms[index]) {
+                appendDiagnostic(
+                    code: "independentCopyOutputTransformMismatch",
+                    message: "Independent-copy pattern array output transforms must match the source distribution.",
+                    to: &diagnostics
+                )
+            }
+            let descendantFeatureIDs = referencedFeatureIDs(
+                inSceneSubtreeRootedAt: outputSceneNodeID,
+                metadata: metadata
+            )
+            if descendantFeatureIDs.isEmpty {
+                appendDiagnostic(
+                    code: "missingIndependentCopyOutputFeatureReferences",
+                    message: "Independent-copy pattern array output scene nodes must reference generated features.",
+                    to: &diagnostics
+                )
+            } else if !descendantFeatureIDs.isSubset(of: ownedFeatureIDs) {
+                appendDiagnostic(
+                    code: "unexpectedIndependentCopyOutputFeatureReferences",
+                    message: "Independent-copy pattern array output scene nodes must reference only owned cloned features.",
+                    to: &diagnostics
+                )
+            }
+            outputReferencedFeatureIDs.formUnion(descendantFeatureIDs)
+        }
+
+        if dependencyFeatureClosure(
+            from: outputReferencedFeatureIDs,
+            cadDocument: cadDocument
+        ) != ownedFeatureIDs {
+            appendDiagnostic(
+                code: "independentCopyFeatureClosureMismatch",
+                message: "Independent-copy pattern array output features must exactly match generated output dependencies.",
+                to: &diagnostics
+            )
+        }
+    }
+
+    private func appendDiagnostic(
+        code: String,
+        message: String,
+        to diagnostics: inout [PatternArraySummary.Diagnostic]
+    ) {
+        diagnostics.append(
+            PatternArraySummary.Diagnostic(
+                severity: .error,
+                code: code,
+                message: message
+            )
+        )
+    }
+
+    private func dependencyFeatureClosure(
+        from seedFeatureIDs: Set<FeatureID>,
+        cadDocument: CADDocument
+    ) -> Set<FeatureID> {
+        var featureIDs = seedFeatureIDs
+        var pendingFeatureIDs = Array(seedFeatureIDs)
+        while let featureID = pendingFeatureIDs.popLast() {
+            guard let feature = cadDocument.designGraph.nodes[featureID] else {
+                continue
+            }
+            for input in feature.inputs where featureIDs.insert(input.featureID).inserted {
+                pendingFeatureIDs.append(input.featureID)
+            }
+        }
+        return featureIDs
+    }
+
+    private func referencedFeatureIDs(
+        inSceneSubtreeRootedAt rootSceneNodeID: SceneNodeID,
+        metadata: ProductMetadata
+    ) -> Set<FeatureID> {
+        var featureIDs: Set<FeatureID> = []
+        collectReferencedFeatureIDs(
+            rootSceneNodeID,
+            metadata: metadata,
+            featureIDs: &featureIDs
+        )
+        return featureIDs
+    }
+
+    private func collectReferencedFeatureIDs(
+        _ sceneNodeID: SceneNodeID,
+        metadata: ProductMetadata,
+        featureIDs: inout Set<FeatureID>
+    ) {
+        guard let sceneNode = metadata.sceneNodes[sceneNodeID] else {
+            return
+        }
+        if let featureID = sceneNode.reference?.featureID {
+            featureIDs.insert(featureID)
+        }
+        if let featureID = sceneNode.object?.sourceFeatureID {
+            featureIDs.insert(featureID)
+        }
+        if let featureID = sceneNode.object?.sourceProfileFeatureID {
+            featureIDs.insert(featureID)
+        }
+        for childID in sceneNode.childIDs {
+            collectReferencedFeatureIDs(
+                childID,
+                metadata: metadata,
+                featureIDs: &featureIDs
+            )
+        }
+    }
+
+    private func transform(
+        _ lhs: Transform3D,
+        approximatelyEquals rhs: Transform3D
+    ) -> Bool {
+        let left = lhs.matrix.values
+        let right = rhs.matrix.values
+        guard left.count == right.count else {
+            return false
+        }
+        for index in left.indices {
+            guard abs(left[index] - right[index]) <= 1.0e-9 else {
+                return false
+            }
+        }
+        return true
     }
 }
