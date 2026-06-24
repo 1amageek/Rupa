@@ -459,6 +459,7 @@ public struct MainView: View {
                     onEdgeOffsetDrag: viewportEdgeOffsetDragHandler,
                     onSlotWidthDrag: viewportSlotWidthDragHandler,
                     onSketchVertexOffsetDrag: viewportSketchVertexOffsetDragHandler,
+                    onPatternArrayLinearAxisDrag: viewportPatternArrayLinearAxisDragHandler,
                     onSketchCurveHandleDrag: viewportSketchCurveHandleDragHandler,
                     onSketchDimensionDrag: viewportSketchDimensionDragHandler,
                     onSketchPointHandleDrag: viewportSketchPointHandleDragHandler,
@@ -652,6 +653,16 @@ public struct MainView: View {
         }
         return { target in
             handleViewportSketchVertexOffsetDrag(target)
+        }
+    }
+
+    private var viewportPatternArrayLinearAxisDragHandler: ((ViewportPatternArrayLinearAxisDragTarget) -> Void)? {
+        guard session.selectedTool == .select,
+              patternArrayInspectorState(for: selectedSceneNodes) != nil else {
+            return nil
+        }
+        return { target in
+            handleViewportPatternArrayLinearAxisDrag(target)
         }
     }
 
@@ -3292,6 +3303,33 @@ public struct MainView: View {
             target: target.target,
             handle: target.handle,
             distance: .length(sketchVertexOffsetDistanceMeters, .meter)
+        )
+        if result?.diagnostics.isEmpty == false {
+            isPreviewExpanded = true
+        }
+    }
+
+    private func handleViewportPatternArrayLinearAxisDrag(
+        _ target: ViewportPatternArrayLinearAxisDragTarget
+    ) {
+        guard session.selectedTool == .select,
+              let state = patternArrayInspectorState(for: selectedSceneNodes),
+              state.sourceID == target.sourceID else {
+            return
+        }
+        let slot: PatternArrayEditingService.RectangularAxisSlot
+        switch target.axisSlot {
+        case .first:
+            slot = .first
+        case .second:
+            slot = .second
+        }
+        let result = PatternArrayEditingService(
+            session: session,
+            sourceID: target.sourceID
+        ).setRectangularAxisDistance(
+            slot: slot,
+            meters: target.distance
         )
         if result?.diagnostics.isEmpty == false {
             isPreviewExpanded = true

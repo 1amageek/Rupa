@@ -18,6 +18,7 @@ public struct Viewport: View {
     @State private var activeEdgeOffsetDrag: ViewportEdgeOffsetDragState?
     @State private var activeSlotWidthDrag: ViewportSlotWidthDragState?
     @State private var activeSketchVertexOffsetDrag: ViewportSketchVertexOffsetDragState?
+    @State private var activePatternArrayLinearAxisDrag: ViewportPatternArrayLinearAxisDragState?
     @State private var camera: ViewportCamera = .identity
     @State private var editedBodies: [FeatureID: ViewportObjectEditState] = [:]
     @State private var hoveredAffordance: ViewportAffordanceTarget?
@@ -32,6 +33,7 @@ public struct Viewport: View {
     @State private var hoveredEdgeOffsetHandle: ViewportEdgeOffsetHandleTarget?
     @State private var hoveredSlotWidthHandle: ViewportSlotWidthHandleTarget?
     @State private var hoveredSketchVertexOffsetHandle: ViewportSketchVertexOffsetHandleTarget?
+    @State private var hoveredPatternArrayLinearAxisHandle: ViewportPatternArrayLinearAxisHandleTarget?
     @State private var pendingAffordance: ViewportAffordanceTarget?
     @State private var pendingSketchCurveHandle: ViewportSketchCurveHandleTarget?
     @State private var pendingSketchDimension: ViewportSketchDimensionTarget?
@@ -44,6 +46,7 @@ public struct Viewport: View {
     @State private var pendingEdgeOffsetHandle: ViewportEdgeOffsetHandleTarget?
     @State private var pendingSlotWidthHandle: ViewportSlotWidthHandleTarget?
     @State private var pendingSketchVertexOffsetHandle: ViewportSketchVertexOffsetHandleTarget?
+    @State private var pendingPatternArrayLinearAxisHandle: ViewportPatternArrayLinearAxisHandleTarget?
     @State private var orbitBasis: ViewportProjectionBasis?
     @State private var projectionTransition: ViewportProjectionTransition?
     @State private var modifierFlags: ViewportInputModifierFlags = ViewportInputModifierFlags()
@@ -93,6 +96,7 @@ public struct Viewport: View {
     private let onEdgeOffsetDrag: ((ViewportEdgeOffsetDragTarget) -> Void)?
     private let onSlotWidthDrag: ((ViewportSlotWidthDragTarget) -> Void)?
     private let onSketchVertexOffsetDrag: ((ViewportSketchVertexOffsetDragTarget) -> Void)?
+    private let onPatternArrayLinearAxisDrag: ((ViewportPatternArrayLinearAxisDragTarget) -> Void)?
     private let onSketchCurveHandleDrag: ((ViewportSketchCurveHandleDragTarget) -> Void)?
     private let onSketchDimensionDrag: ((ViewportSketchDimensionDragTarget) -> Void)?
     private let onSketchPointHandleDrag: ((ViewportSketchPointHandleDragTarget) -> Void)?
@@ -146,6 +150,7 @@ public struct Viewport: View {
         onEdgeOffsetDrag: ((ViewportEdgeOffsetDragTarget) -> Void)? = nil,
         onSlotWidthDrag: ((ViewportSlotWidthDragTarget) -> Void)? = nil,
         onSketchVertexOffsetDrag: ((ViewportSketchVertexOffsetDragTarget) -> Void)? = nil,
+        onPatternArrayLinearAxisDrag: ((ViewportPatternArrayLinearAxisDragTarget) -> Void)? = nil,
         onSketchCurveHandleDrag: ((ViewportSketchCurveHandleDragTarget) -> Void)? = nil,
         onSketchDimensionDrag: ((ViewportSketchDimensionDragTarget) -> Void)? = nil,
         onSketchPointHandleDrag: ((ViewportSketchPointHandleDragTarget) -> Void)? = nil,
@@ -198,6 +203,7 @@ public struct Viewport: View {
         self.onEdgeOffsetDrag = onEdgeOffsetDrag
         self.onSlotWidthDrag = onSlotWidthDrag
         self.onSketchVertexOffsetDrag = onSketchVertexOffsetDrag
+        self.onPatternArrayLinearAxisDrag = onPatternArrayLinearAxisDrag
         self.onSketchCurveHandleDrag = onSketchCurveHandleDrag
         self.onSketchDimensionDrag = onSketchDimensionDrag
         self.onSketchPointHandleDrag = onSketchPointHandleDrag
@@ -831,6 +837,12 @@ public struct Viewport: View {
 
         drawPatternArrayPreviews(
             patternArrayPreviews,
+            scene: scene,
+            layout: layout,
+            in: &context
+        )
+
+        drawPatternArrayLinearAxisAffordances(
             scene: scene,
             layout: layout,
             in: &context
@@ -4241,6 +4253,91 @@ public struct Viewport: View {
         }
     }
 
+    private func drawPatternArrayLinearAxisAffordances(
+        scene: ViewportScene,
+        layout: ViewportLayout,
+        in context: inout GraphicsContext
+    ) {
+        guard onPatternArrayLinearAxisDrag != nil else {
+            return
+        }
+        let candidates = patternArrayLinearAxisAffordanceCandidates(
+            scene: scene,
+            layout: layout
+        )
+        guard !candidates.isEmpty else {
+            return
+        }
+        for candidate in candidates {
+            let identity = candidate.target.identity
+            let dragDistance = activePatternArrayLinearAxisDrag?.target.identity == identity
+                ? activePatternArrayLinearAxisDrag?.distanceMeters
+                : nil
+            let isHighlighted = hoveredPatternArrayLinearAxisHandle?.identity == identity
+                || pendingPatternArrayLinearAxisHandle?.identity == identity
+                || activePatternArrayLinearAxisDrag?.target.identity == identity
+            drawPatternArrayLinearAxisAffordance(
+                candidate,
+                distanceMeters: dragDistance ?? candidate.geometry.baseDistanceMeters,
+                showsLabel: dragDistance != nil || isHighlighted,
+                isHighlighted: isHighlighted,
+                in: &context
+            )
+        }
+    }
+
+    private func drawPatternArrayLinearAxisAffordance(
+        _ candidate: ViewportPatternArrayLinearAxisAffordanceCandidate,
+        distanceMeters: Double,
+        showsLabel: Bool,
+        isHighlighted: Bool,
+        in context: inout GraphicsContext
+    ) {
+        let start = candidate.geometry.baseProjectedPoint
+        let end = candidate.geometry.projectedTip(distanceMeters: distanceMeters)
+        let color = Color.cyan
+        drawArrow(
+            from: start,
+            to: end,
+            color: color,
+            isHighlighted: isHighlighted,
+            in: &context
+        )
+        drawTransformHandle(
+            at: end,
+            style: .faceCenter,
+            isHighlighted: isHighlighted,
+            in: &context
+        )
+
+        guard showsLabel else {
+            return
+        }
+        let direction = CGVector(dx: end.x - start.x, dy: end.y - start.y).normalized
+        let normal = CGVector(dx: -direction.dy, dy: direction.dx)
+        drawDimensionLabel(
+            "\(patternArrayLinearAxisSlotTitle(candidate.target.axisSlot)) \(candidate.target.distanceModeTitle) \(formattedViewportLength(distanceMeters))",
+            at: CGPoint(
+                x: end.x + normal.dx * 20.0 + direction.dx * 10.0,
+                y: end.y + normal.dy * 20.0 + direction.dy * 10.0
+            ),
+            color: color,
+            isHighlighted: isHighlighted,
+            in: &context
+        )
+    }
+
+    private func patternArrayLinearAxisSlotTitle(
+        _ axisSlot: ViewportPatternArrayLinearAxisSlot
+    ) -> String {
+        switch axisSlot {
+        case .first:
+            "Axis 1"
+        case .second:
+            "Axis 2"
+        }
+    }
+
     private func drawPatternArrayPreview(
         _ preview: ViewportPatternArrayPreview,
         itemByID: [String: ViewportSceneItem],
@@ -5985,6 +6082,21 @@ public struct Viewport: View {
         )
     }
 
+    private func patternArrayLinearAxisAffordanceCandidates(
+        scene: ViewportScene,
+        layout: ViewportLayout
+    ) -> [ViewportPatternArrayLinearAxisAffordanceCandidate] {
+        guard onPatternArrayLinearAxisDrag != nil else {
+            return []
+        }
+        return ViewportPatternArrayLinearAxisAffordanceService().candidates(
+            document: document,
+            scene: scene,
+            selection: selection,
+            layout: layout
+        )
+    }
+
     private func sketchVertexOffsetAffordanceCandidates(
         targets: [ViewportSketchVertexOffsetSourceTarget],
         scene: ViewportScene,
@@ -6656,6 +6768,17 @@ public struct Viewport: View {
         if activeSlotWidthDrag != nil {
             return
         }
+        if let start, let current, let pendingPatternArrayLinearAxisHandle {
+            updatePatternArrayLinearAxisDrag(
+                target: pendingPatternArrayLinearAxisHandle,
+                start: start,
+                current: current
+            )
+            return
+        }
+        if activePatternArrayLinearAxisDrag != nil {
+            return
+        }
         if let start, let current, let pendingSketchVertexOffsetHandle {
             updateSketchVertexOffsetDrag(
                 target: pendingSketchVertexOffsetHandle,
@@ -6763,6 +6886,11 @@ public struct Viewport: View {
         }
         if let slotWidthTarget = selectedSlotWidthAffordanceTarget(at: point, size: size) {
             pendingSlotWidthHandle = slotWidthTarget
+            activeCanvasDrag = nil
+            return
+        }
+        if let patternArrayLinearAxisTarget = selectedPatternArrayLinearAxisAffordanceTarget(at: point, size: size) {
+            pendingPatternArrayLinearAxisHandle = patternArrayLinearAxisTarget
             activeCanvasDrag = nil
             return
         }
@@ -7719,6 +7847,34 @@ public struct Viewport: View {
         return nil
     }
 
+    private func selectedPatternArrayLinearAxisAffordanceTarget(
+        at point: CGPoint,
+        size: CGSize
+    ) -> ViewportPatternArrayLinearAxisHandleTarget? {
+        guard onPatternArrayLinearAxisDrag != nil else {
+            return nil
+        }
+        let sceneContext = makeSceneContext(
+            size: size,
+            camera: camera,
+            basis: currentProjectionBasis
+        )
+        let candidates = patternArrayLinearAxisAffordanceCandidates(
+            scene: sceneContext.scene,
+            layout: sceneContext.layout
+        )
+        for candidate in candidates.reversed() {
+            let start = candidate.geometry.baseProjectedPoint
+            let end = candidate.geometry.projectedTip()
+            let lineHit = point.distanceToSegment(start: start, end: end) <= 10.0
+            let tipHit = point.distance(to: end) <= 14.0
+            if lineHit || tipHit {
+                return candidate.target
+            }
+        }
+        return nil
+    }
+
     private func selectedSketchVertexOffsetAffordanceTarget(
         at point: CGPoint,
         size: CGSize
@@ -8296,6 +8452,21 @@ public struct Viewport: View {
         )
     }
 
+    private func updatePatternArrayLinearAxisDrag(
+        target: ViewportPatternArrayLinearAxisHandleTarget,
+        start: CGPoint,
+        current: CGPoint
+    ) {
+        activePatternArrayLinearAxisDrag = ViewportPatternArrayLinearAxisDragState(
+            target: target,
+            startPoint: start,
+            distanceMeters: target.geometry.axisDistance(
+                start: start,
+                current: current
+            )
+        )
+    }
+
     private func updateSketchVertexOffsetDrag(
         target: ViewportSketchVertexOffsetHandleTarget,
         start: CGPoint,
@@ -8579,6 +8750,11 @@ public struct Viewport: View {
             activeSketchVertexOffsetDrag = nil
             return
         }
+        if pendingPatternArrayLinearAxisHandle != nil {
+            pendingPatternArrayLinearAxisHandle = nil
+            activePatternArrayLinearAxisDrag = nil
+            return
+        }
         if pendingAffordance != nil {
             pendingAffordance = nil
             activeAffordanceDrag = nil
@@ -8712,6 +8888,16 @@ public struct Viewport: View {
             activeCanvasDrag = nil
             if let slotWidthDragTarget {
                 onSlotWidthDrag?(slotWidthDragTarget)
+            }
+            return
+        }
+        if pendingPatternArrayLinearAxisHandle != nil || activePatternArrayLinearAxisDrag != nil {
+            let patternArrayLinearAxisDragTarget = committedPatternArrayLinearAxisDragTarget()
+            pendingPatternArrayLinearAxisHandle = nil
+            activePatternArrayLinearAxisDrag = nil
+            activeCanvasDrag = nil
+            if let patternArrayLinearAxisDragTarget {
+                onPatternArrayLinearAxisDrag?(patternArrayLinearAxisDragTarget)
             }
             return
         }
@@ -8994,6 +9180,21 @@ public struct Viewport: View {
         )
     }
 
+    private func committedPatternArrayLinearAxisDragTarget() -> ViewportPatternArrayLinearAxisDragTarget? {
+        guard let activePatternArrayLinearAxisDrag else {
+            return nil
+        }
+        let distance = activePatternArrayLinearAxisDrag.distanceMeters
+        guard abs(distance - activePatternArrayLinearAxisDrag.target.geometry.baseDistanceMeters) > 1.0e-12 else {
+            return nil
+        }
+        return ViewportPatternArrayLinearAxisDragTarget(
+            sourceID: activePatternArrayLinearAxisDrag.target.sourceID,
+            axisSlot: activePatternArrayLinearAxisDrag.target.axisSlot,
+            distance: distance
+        )
+    }
+
     private func committedSketchVertexOffsetDragTarget() -> ViewportSketchVertexOffsetDragTarget? {
         guard let activeSketchVertexOffsetDrag else {
             return nil
@@ -9249,6 +9450,7 @@ public struct Viewport: View {
         hoveredEdgeOffsetHandle = nil
         hoveredSlotWidthHandle = nil
         hoveredSketchVertexOffsetHandle = nil
+        hoveredPatternArrayLinearAxisHandle = nil
         hoveredSplineControlPointSlideHandle = nil
         hoveredPolySplineSurfaceVertexSlideHandle = nil
         if let sketchCurveHandleTarget = selectedSketchCurveHandleTarget(at: point, size: size) {
@@ -9359,6 +9561,7 @@ public struct Viewport: View {
         if let slotWidthTarget = selectedSlotWidthAffordanceTarget(at: point, size: size) {
             hoveredSlotWidthHandle = slotWidthTarget
             hoveredSketchVertexOffsetHandle = nil
+            hoveredPatternArrayLinearAxisHandle = nil
             hoveredAffordance = nil
             hoveredCanvasHit = nil
             hoveredModelPoint = nil
@@ -9366,6 +9569,16 @@ public struct Viewport: View {
             return
         }
         hoveredSlotWidthHandle = nil
+        if let patternArrayLinearAxisTarget = selectedPatternArrayLinearAxisAffordanceTarget(at: point, size: size) {
+            hoveredPatternArrayLinearAxisHandle = patternArrayLinearAxisTarget
+            hoveredSketchVertexOffsetHandle = nil
+            hoveredAffordance = nil
+            hoveredCanvasHit = nil
+            hoveredModelPoint = nil
+            clearHoverCallbacks()
+            return
+        }
+        hoveredPatternArrayLinearAxisHandle = nil
         if let sketchVertexOffsetTarget = selectedSketchVertexOffsetAffordanceTarget(at: point, size: size) {
             hoveredSketchVertexOffsetHandle = sketchVertexOffsetTarget
             hoveredAffordance = nil
@@ -9443,6 +9656,7 @@ public struct Viewport: View {
         hoveredEdgeOffsetHandle = nil
         hoveredSlotWidthHandle = nil
         hoveredSketchVertexOffsetHandle = nil
+        hoveredPatternArrayLinearAxisHandle = nil
         hoveredCanvasHit = nil
         hoveredModelPoint = nil
         clearHoverCallbacks()
@@ -9674,6 +9888,12 @@ private struct ViewportSlotWidthDragState: Equatable {
     var target: ViewportSlotWidthHandleTarget
     var startPoint: CGPoint
     var widthMeters: Double
+}
+
+private struct ViewportPatternArrayLinearAxisDragState: Equatable {
+    var target: ViewportPatternArrayLinearAxisHandleTarget
+    var startPoint: CGPoint
+    var distanceMeters: Double
 }
 
 private struct ViewportSketchVertexOffsetDragState: Equatable {

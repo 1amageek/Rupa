@@ -9,6 +9,7 @@ struct PatternArrayEditingService {
 
     let session: EditorSession
     let sourceID: PatternArraySourceID
+    private let distancePolicy = PatternArrayDistancePolicy.standard
 
     @discardableResult
     func setOutputMode(_ outputMode: PatternArrayOutputMode) -> CommandExecutionResult? {
@@ -31,7 +32,7 @@ struct PatternArrayEditingService {
         meters: Double
     ) -> CommandExecutionResult? {
         updateRectangularAxis(slot: slot) { axis in
-            axis.distance = .length(max(meters, 0.0), .meter)
+            axis.distance = .length(distancePolicy.normalizedLinearDistanceMeters(meters), .meter)
         }
     }
 
@@ -58,10 +59,10 @@ struct PatternArrayEditingService {
             guard rectangular.secondAxis == nil else {
                 return nil
             }
-            let distanceMeters = fallbackDistanceMeters ?? 0.01
+            let distanceMeters = distancePolicy.normalizedLinearDistanceMeters(fallbackDistanceMeters ?? 0.01)
             rectangular.secondAxis = PatternArrayLinearAxis(
                 direction: defaultPerpendicularDirection(to: rectangular.firstAxis.direction),
-                distance: .length(max(distanceMeters, 1.0e-9), .meter),
+                distance: .length(distanceMeters, .meter),
                 copyCount: 1,
                 distanceMode: rectangular.firstAxis.distanceMode
             )
@@ -138,7 +139,7 @@ struct PatternArrayEditingService {
     @discardableResult
     func setRadialAxisDistance(_ meters: Double) -> CommandExecutionResult? {
         updateRadialAxis { radialAxis in
-            radialAxis.distance = .length(max(meters, 0.0), .meter)
+            radialAxis.distance = .length(distancePolicy.normalizedLinearDistanceMeters(meters), .meter)
         }
     }
 
@@ -161,7 +162,7 @@ struct PatternArrayEditingService {
             }
             radial.radialAxis = PatternArrayLinearAxis(
                 direction: defaultPerpendicularDirection(to: radial.angularAxis.axis),
-                distance: .length(0.01, .meter),
+                distance: .length(distancePolicy.normalizedLinearDistanceMeters(0.01), .meter),
                 copyCount: 1,
                 distanceMode: .spacing
             )
@@ -226,7 +227,10 @@ struct PatternArrayEditingService {
         curve.extentMode = extentMode
         switch extentMode {
         case .distance:
-            curve.extent = .length(max(fallbackDistanceMeters ?? 0.01, 1.0e-9), .meter)
+            curve.extent = .length(
+                distancePolicy.normalizedLinearDistanceMeters(fallbackDistanceMeters ?? 0.01),
+                .meter
+            )
         case .ratio:
             curve.extent = .scalar(clampedCurveExtentRatio(fallbackRatio ?? 1.0))
         }
@@ -240,7 +244,7 @@ struct PatternArrayEditingService {
     func setCurveExtentDistance(_ meters: Double) -> CommandExecutionResult? {
         updateCurve { curve in
             curve.extentMode = .distance
-            curve.extent = .length(max(meters, 1.0e-9), .meter)
+            curve.extent = .length(distancePolicy.normalizedLinearDistanceMeters(meters), .meter)
         }
     }
 

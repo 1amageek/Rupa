@@ -43,6 +43,109 @@ import Testing
 }
 
 @MainActor
+@Test func patternArrayEditingServiceSetsRectangularAxisDistanceFromViewportDrag() async throws {
+    let session = EditorSession()
+    _ = try #require(session.createDefaultExtrudedRectangle())
+    let sourceID = try createPatternArray(
+        in: session,
+        name: "Viewport Distance Array",
+        distribution: .rectangular(RectangularPatternArray(
+            firstAxis: PatternArrayLinearAxis(
+                direction: .unitX,
+                distance: .length(10.0, .millimeter),
+                copyCount: 3,
+                distanceMode: .spacing
+            )
+        ))
+    )
+    let service = PatternArrayEditingService(session: session, sourceID: sourceID)
+
+    let result = service.setRectangularAxisDistance(slot: .first, meters: 0.024)
+
+    let source = try #require(session.document.productMetadata.patternArrays[sourceID])
+    guard case .rectangular(let rectangular) = source.distribution,
+          case .constant(let distance) = rectangular.firstAxis.distance else {
+        Issue.record("Expected a rectangular pattern array source with constant first-axis distance.")
+        return
+    }
+    #expect(result?.didMutate == true)
+    #expect(rectangular.firstAxis.distanceMode == .spacing)
+    #expect(distance.kind == .length)
+    #expect(distance.value == 0.024)
+}
+
+@MainActor
+@Test func patternArrayEditingServiceNormalizesLinearDistancesToPlannerTolerance() async throws {
+    let session = EditorSession()
+    _ = try #require(session.createDefaultExtrudedRectangle())
+    let minimumDistance = PatternArrayDistancePolicy.standard.minimumLinearDistanceMeters
+    let rectangularSourceID = try createPatternArray(
+        in: session,
+        name: "Minimum Rectangular Distance Array",
+        distribution: .rectangular(RectangularPatternArray(
+            firstAxis: PatternArrayLinearAxis(
+                direction: .unitX,
+                distance: .length(10.0, .millimeter),
+                copyCount: 3
+            )
+        ))
+    )
+    let radialSourceID = try createPatternArray(
+        in: session,
+        name: "Minimum Radial Distance Array",
+        distribution: .radial(RadialPatternArray(
+            angularAxis: PatternArrayAngularAxis(
+                center: .origin,
+                axis: .unitZ,
+                angle: .angle(90.0, .degree),
+                copyCount: 3
+            ),
+            radialAxis: PatternArrayLinearAxis(
+                direction: .unitX,
+                distance: .length(10.0, .millimeter),
+                copyCount: 2
+            )
+        ))
+    )
+    let curveSourceID = try createPatternArray(
+        in: session,
+        name: "Minimum Curve Extent Array",
+        distribution: .curve(CurvePatternArray(
+            path: .polyline(
+                points: [
+                    .origin,
+                    Point3D(x: 0.03, y: 0.0, z: 0.0),
+                ],
+                normal: .unitZ
+            ),
+            copyCount: 2,
+            extent: .length(10.0, .millimeter),
+            extentMode: .distance
+        ))
+    )
+
+    let rectangularResult = PatternArrayEditingService(
+        session: session,
+        sourceID: rectangularSourceID
+    ).setRectangularAxisDistance(slot: .first, meters: 1.0e-9)
+    let radialResult = PatternArrayEditingService(
+        session: session,
+        sourceID: radialSourceID
+    ).setRadialAxisDistance(1.0e-9)
+    let curveResult = PatternArrayEditingService(
+        session: session,
+        sourceID: curveSourceID
+    ).setCurveExtentDistance(1.0e-9)
+
+    #expect(rectangularResult?.didMutate == true)
+    #expect(radialResult?.didMutate == true)
+    #expect(curveResult?.didMutate == true)
+    #expect(try rectangularFirstAxisDistance(in: session.document, sourceID: rectangularSourceID) == minimumDistance)
+    #expect(try radialAxisDistance(in: session.document, sourceID: radialSourceID) == minimumDistance)
+    #expect(try curveExtentDistance(in: session.document, sourceID: curveSourceID) == minimumDistance)
+}
+
+@MainActor
 @Test func patternArrayEditingServiceReplacesCurvePathWithSketchEntity() async throws {
     let session = EditorSession()
     _ = try #require(session.createDefaultExtrudedRectangle())
@@ -288,4 +391,53 @@ private func firstSketchCurveReference(
         code: .referenceUnresolved,
         message: "Expected a sketch curve entity."
     )
+}
+
+private func rectangularFirstAxisDistance(
+    in document: DesignDocument,
+    sourceID: PatternArraySourceID
+) throws -> Double {
+    let source = try #require(document.productMetadata.patternArrays[sourceID])
+    guard case .rectangular(let rectangular) = source.distribution,
+          case .constant(let quantity) = rectangular.firstAxis.distance,
+          quantity.kind == .length else {
+        throw EditorError(
+            code: .referenceUnresolved,
+            message: "Expected a rectangular pattern source with a constant linear axis distance."
+        )
+    }
+    return quantity.value
+}
+
+private func radialAxisDistance(
+    in document: DesignDocument,
+    sourceID: PatternArraySourceID
+) throws -> Double {
+    let source = try #require(document.productMetadata.patternArrays[sourceID])
+    guard case .radial(let radial) = source.distribution,
+          let radialAxis = radial.radialAxis,
+          case .constant(let quantity) = radialAxis.distance,
+          quantity.kind == .length else {
+        throw EditorError(
+            code: .referenceUnresolved,
+            message: "Expected a radial pattern source with a constant linear axis distance."
+        )
+    }
+    return quantity.value
+}
+
+private func curveExtentDistance(
+    in document: DesignDocument,
+    sourceID: PatternArraySourceID
+) throws -> Double {
+    let source = try #require(document.productMetadata.patternArrays[sourceID])
+    guard case .curve(let curve) = source.distribution,
+          case .constant(let quantity) = curve.extent,
+          quantity.kind == .length else {
+        throw EditorError(
+            code: .referenceUnresolved,
+            message: "Expected a curve pattern source with a constant linear extent."
+        )
+    }
+    return quantity.value
 }

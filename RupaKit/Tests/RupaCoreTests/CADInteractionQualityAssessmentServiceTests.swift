@@ -96,6 +96,9 @@ import RupaCore
         evidence.sourceFiles.contains("RupaKit/Sources/RupaCore/PatternArraySummaryService.swift")
     })
     #expect(arrays.evidence.contains { evidence in
+        evidence.sourceFiles.contains("RupaKit/Sources/RupaCore/PatternArrayDistancePolicy.swift")
+    })
+    #expect(arrays.evidence.contains { evidence in
         evidence.sourceFiles.contains("RupaKit/Sources/RupaUI/PatternArrayInspectorState.swift")
     })
     #expect(arrays.evidence.contains { evidence in
@@ -111,7 +114,13 @@ import RupaCore
         evidence.sourceFiles.contains("RupaKit/Sources/RupaRendering/ViewportPatternArrayPreviewService.swift")
     })
     #expect(arrays.evidence.contains { evidence in
+        evidence.sourceFiles.contains("RupaKit/Sources/RupaRendering/ViewportPatternArrayLinearAxisAffordanceService.swift")
+    })
+    #expect(arrays.evidence.contains { evidence in
         evidence.tests.contains("RupaKit/Tests/RupaRenderingTests/ViewportPatternArrayPreviewServiceTests.swift")
+    })
+    #expect(arrays.evidence.contains { evidence in
+        evidence.tests.contains("RupaKit/Tests/RupaRenderingTests/ViewportPatternArrayLinearAxisAffordanceServiceTests.swift")
     })
     #expect(arrays.evidence.contains { evidence in
         evidence.notes.contains("Pattern Array summaries expose editable fields, lifecycle actions, source-owned output edit policy, output IDs, and diagnostics without forcing CAD evaluation.")
@@ -139,6 +148,9 @@ import RupaCore
     })
     #expect(arrays.evidence.contains { evidence in
         evidence.notes.contains("The viewport resolves selected PatternArraySource roots, component-instance outputs, and independent-copy descendants into source-owned output outlines, copy markers, and count labels without scanning global component-instance references.")
+    })
+    #expect(arrays.evidence.contains { evidence in
+        evidence.notes.contains("The viewport exposes rectangular Pattern Array first- and second-axis distance handles that resolve selected source roots or outputs back to PatternArraySource IDs and commit source-owned distance updates after drag completion.")
     })
 
     let section = try #require(result.entries.first { $0.area == .sectionAnalysis })
