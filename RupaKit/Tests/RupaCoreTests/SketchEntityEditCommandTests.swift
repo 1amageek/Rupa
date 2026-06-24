@@ -583,6 +583,79 @@ import Testing
 }
 
 @MainActor
+@Test func offsetCurveRejectsGeneratedEdgeSupportFaceThatDoesNotContainEdgeBeforeMutation() async throws {
+    let session = EditorSession()
+    _ = try session.execute(
+        .createExtrudedRectangleFromCorners(
+            name: "Invalid Edge Offset Support Box",
+            plane: .xy,
+            firstCorner: SketchPoint(
+                x: .length(0.0, .millimeter),
+                y: .length(0.0, .millimeter)
+            ),
+            oppositeCorner: SketchPoint(
+                x: .length(20.0, .millimeter),
+                y: .length(12.0, .millimeter)
+            ),
+            depth: .length(5.0, .millimeter),
+            direction: .normal
+        )
+    )
+    let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let bodyNodeID = try #require(
+        bodySceneNodeID(
+            for: bodyFeatureID,
+            in: session.document
+        )
+    )
+    let topology = try TopologySummaryService().summarize(document: session.document)
+    let startFaceEntry = try #require(topology.entries.first {
+        $0.kind == .face &&
+            $0.sceneNodeID == bodyNodeID.description &&
+            $0.generatedRole == "startFace"
+    })
+    let invalidSupportFaceEntry = try #require(topology.entries.first {
+        $0.kind == .face &&
+            $0.sceneNodeID == bodyNodeID.description &&
+            $0.generatedRole == "endFace"
+    })
+    let startDepth = try #require(startFaceEntry.center?.z)
+    let edgeEntry = try #require(topology.entries.first {
+        $0.kind == .edge &&
+            $0.sceneNodeID == bodyNodeID.description &&
+            $0.curveKind == "line" &&
+            topologyPoint($0.start, isOnDepth: startDepth) &&
+            topologyPoint($0.end, isOnDepth: startDepth) &&
+            $0.selectionTarget() != nil
+    })
+    let target = try #require(edgeEntry.selectionTarget())
+    let invalidSupportTarget = try #require(invalidSupportFaceEntry.selectionTarget())
+    let generation = session.generation
+    let featureCount = session.document.cadDocument.designGraph.order.count
+
+    do {
+        _ = try session.execute(
+            .offsetCurve(
+                target: target,
+                distance: .length(2.0, .millimeter),
+                options: OffsetCurveOptions(
+                    gapFill: .linear,
+                    supportTarget: invalidSupportTarget
+                ),
+                vertexHandle: nil
+            )
+        )
+        Issue.record("Offset Edge must reject a support face that does not contain the selected edge.")
+    } catch let error as EditorError {
+        #expect(error.code == .commandInvalid)
+        #expect(error.message.contains("support face"))
+    }
+
+    #expect(session.generation == generation)
+    #expect(session.document.cadDocument.designGraph.order.count == featureCount)
+}
+
+@MainActor
 @Test func offsetSketchVertexCommandMigratesLineDimensionsAcrossSplitCorner() async throws {
     var document = DesignDocument.empty()
     _ = try document.createRectangleSketchFromCorners(

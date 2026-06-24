@@ -3933,10 +3933,10 @@ import Testing
     let definition = try #require(session.document.productMetadata.componentDefinitions.values.first)
 
     let result = try session.execute(
-        .createRectangularPatternArray(
+        .createPatternArray(
             name: "Panel Array",
             definitionID: definition.id,
-            array: RectangularPatternArray(
+            distribution: .rectangular(RectangularPatternArray(
                 firstAxis: PatternArrayLinearAxis(
                     direction: Vector3D(x: 2.0, y: 0.0, z: 0.0),
                     distance: .length(30.0, .millimeter),
@@ -3949,7 +3949,7 @@ import Testing
                     copyCount: 2,
                     distanceMode: .spacing
                 )
-            ),
+            )),
             outputMode: .componentInstance
         )
     )
@@ -3966,7 +3966,7 @@ import Testing
         session.document.productMetadata.componentInstances[source.outputInstanceIDs[3]]
     )
 
-    #expect(result.commandName == "createRectangularPatternArray")
+    #expect(result.commandName == "createPatternArray")
     #expect(result.generation == DocumentGeneration(3))
     #expect(source.name == "Panel Array")
     #expect(source.definitionID == definition.id)
@@ -3991,6 +3991,63 @@ import Testing
 }
 
 @MainActor
+@Test func patternArrayCommandCreatesRadialDistributionFromSource() async throws {
+    let session = EditorSession()
+    _ = try #require(session.createDefaultExtrudedRectangle())
+    let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let bodySceneNodeID = try #require(commandStackBodySceneNodeID(for: bodyFeatureID, in: session.document))
+    _ = try session.execute(.createComponentDefinition(name: "Radial Array Source", rootSceneNodeIDs: [bodySceneNodeID]))
+    let definition = try #require(session.document.productMetadata.componentDefinitions.values.first)
+
+    let result = try session.execute(
+        .createPatternArray(
+            name: "Bolt Circle",
+            definitionID: definition.id,
+            distribution: .radial(
+                RadialPatternArray(
+                    angularAxis: PatternArrayAngularAxis(
+                        center: .origin,
+                        axis: .unitZ,
+                        angle: .angle(90.0, .degree),
+                        copyCount: 2,
+                        angleMode: .spacing
+                    ),
+                    radialAxis: PatternArrayLinearAxis(
+                        direction: .unitX,
+                        distance: .length(5.0, .millimeter),
+                        copyCount: 1,
+                        distanceMode: .spacing
+                    )
+                )
+            ),
+            outputMode: .componentInstance
+        )
+    )
+
+    let source = try #require(session.document.productMetadata.patternArrays.values.first {
+        $0.name == "Bolt Circle"
+    })
+    let firstInstance = try #require(
+        session.document.productMetadata.componentInstances[source.outputInstanceIDs[0]]
+    )
+    let radialOnlyInstance = try #require(
+        session.document.productMetadata.componentInstances[source.outputInstanceIDs[2]]
+    )
+    let firstValues = firstInstance.localTransform.matrix.values
+    let radialValues = radialOnlyInstance.localTransform.matrix.values
+
+    #expect(result.commandName == "createPatternArray")
+    #expect(result.didMutate)
+    #expect(source.outputInstanceIDs.count == 5)
+    #expect(commandStackApproximatelyEqual(firstValues[0], 0.0))
+    #expect(commandStackApproximatelyEqual(firstValues[1], 1.0))
+    #expect(commandStackApproximatelyEqual(firstValues[4], -1.0))
+    #expect(commandStackApproximatelyEqual(firstValues[5], 0.0))
+    #expect(commandStackApproximatelyEqual(radialValues[12], 0.005))
+    #expect(commandStackApproximatelyEqual(radialValues[13], 0.0))
+}
+
+@MainActor
 @Test func rectangularPatternArrayRegeneratesOutputTransformsFromParameterSource() async throws {
     let session = EditorSession()
     _ = try #require(session.createDefaultExtrudedRectangle())
@@ -4011,16 +4068,16 @@ import Testing
         $0.name == "Regenerated Array Source"
     })
     _ = try session.execute(
-        .createRectangularPatternArray(
+        .createPatternArray(
             name: "Regenerated Array",
             definitionID: definition.id,
-            array: RectangularPatternArray(
+            distribution: .rectangular(RectangularPatternArray(
                 firstAxis: PatternArrayLinearAxis(
                     direction: .unitX,
                     distance: .reference(spacing.id),
                     copyCount: 2
                 )
-            ),
+            )),
             outputMode: .componentInstance
         )
     )
@@ -4074,16 +4131,16 @@ import Testing
         $0.name == "Parameter Guard Source"
     })
     _ = try session.execute(
-        .createRectangularPatternArray(
+        .createPatternArray(
             name: "Parameter Guard Array",
             definitionID: definition.id,
-            array: RectangularPatternArray(
+            distribution: .rectangular(RectangularPatternArray(
                 firstAxis: PatternArrayLinearAxis(
                     direction: .unitX,
                     distance: .reference(spacing.id),
                     copyCount: 2
                 )
-            ),
+            )),
             outputMode: .componentInstance
         )
     )
@@ -4116,16 +4173,16 @@ import Testing
         $0.name == "Owned Array Source"
     })
     _ = try session.execute(
-        .createRectangularPatternArray(
+        .createPatternArray(
             name: "Owned Array",
             definitionID: definition.id,
-            array: RectangularPatternArray(
+            distribution: .rectangular(RectangularPatternArray(
                 firstAxis: PatternArrayLinearAxis(
                     direction: .unitX,
                     distance: .length(10.0, .millimeter),
                     copyCount: 1
                 )
-            ),
+            )),
             outputMode: .componentInstance
         )
     )
@@ -4170,16 +4227,16 @@ import Testing
     _ = try session.execute(.createComponentDefinition(name: "Array Source", rootSceneNodeIDs: [bodySceneNodeID]))
     let definition = try #require(session.document.productMetadata.componentDefinitions.values.first)
     _ = try session.execute(
-        .createRectangularPatternArray(
+        .createPatternArray(
             name: "Output Group Array",
             definitionID: definition.id,
-            array: RectangularPatternArray(
+            distribution: .rectangular(RectangularPatternArray(
                 firstAxis: PatternArrayLinearAxis(
                     direction: .unitX,
                     distance: .length(5.0, .millimeter),
                     copyCount: 2
                 )
-            ),
+            )),
             outputMode: .componentInstance
         )
     )
@@ -4212,6 +4269,53 @@ import Testing
 }
 
 @MainActor
+@Test func patternArrayMetadataValidationRejectsStaleOutputTransforms() async throws {
+    let session = EditorSession()
+    _ = try #require(session.createDefaultExtrudedRectangle())
+    let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let bodySceneNodeID = try #require(commandStackBodySceneNodeID(for: bodyFeatureID, in: session.document))
+    _ = try session.execute(.createComponentDefinition(name: "Transform Guard Source", rootSceneNodeIDs: [bodySceneNodeID]))
+    let definition = try #require(session.document.productMetadata.componentDefinitions.values.first)
+    _ = try session.execute(
+        .createPatternArray(
+            name: "Transform Guard Array",
+            definitionID: definition.id,
+            distribution: .rectangular(
+                RectangularPatternArray(
+                    firstAxis: PatternArrayLinearAxis(
+                        direction: .unitX,
+                        distance: .length(5.0, .millimeter),
+                        copyCount: 2
+                    )
+                )
+            ),
+            outputMode: .componentInstance
+        )
+    )
+
+    let source = try #require(session.document.productMetadata.patternArrays.values.first)
+    let firstOutputID = try #require(source.outputInstanceIDs.first)
+    var metadata = session.document.productMetadata
+    metadata.componentInstances[firstOutputID]?.localTransform = .identity
+
+    var validationError: DocumentValidationError?
+    do {
+        try metadata.validate(
+            against: session.document.cadDocument,
+            objectRegistry: .builtIn
+        )
+    } catch let error as DocumentValidationError {
+        validationError = error
+    }
+
+    guard case .invalidProductMetadata(let message) = validationError else {
+        #expect(Bool(false))
+        return
+    }
+    #expect(message.contains("transforms"))
+}
+
+@MainActor
 @Test func rectangularPatternArrayRejectsEmptyComponentDefinitionBeforeMutation() async throws {
     let session = EditorSession()
     _ = try session.execute(.createComponentDefinition(name: "Empty Array Source", rootSceneNodeIDs: []))
@@ -4220,16 +4324,16 @@ import Testing
     var caught: EditorError?
     do {
         _ = try session.execute(
-            .createRectangularPatternArray(
+            .createPatternArray(
                 name: "Empty Source Array",
                 definitionID: definition.id,
-                array: RectangularPatternArray(
+                distribution: .rectangular(RectangularPatternArray(
                     firstAxis: PatternArrayLinearAxis(
                         direction: .unitX,
                         distance: .length(5.0, .millimeter),
                         copyCount: 2
                     )
-                ),
+                )),
                 outputMode: .componentInstance
             )
         )
@@ -4251,16 +4355,16 @@ import Testing
     var missingDefinitionError: EditorError?
     do {
         _ = try session.execute(
-            .createRectangularPatternArray(
+            .createPatternArray(
                 name: "Missing Definition Array",
                 definitionID: ComponentDefinitionID(),
-                array: RectangularPatternArray(
+                distribution: .rectangular(RectangularPatternArray(
                     firstAxis: PatternArrayLinearAxis(
                         direction: .unitX,
                         distance: .length(10.0, .millimeter),
                         copyCount: 2
                     )
-                ),
+                )),
                 outputMode: .componentInstance
             )
         )
@@ -4277,16 +4381,16 @@ import Testing
     var invalidAxisError: DocumentValidationError?
     do {
         _ = try session.execute(
-            .createRectangularPatternArray(
+            .createPatternArray(
                 name: "Invalid Axis Array",
                 definitionID: definition.id,
-                array: RectangularPatternArray(
+                distribution: .rectangular(RectangularPatternArray(
                     firstAxis: PatternArrayLinearAxis(
                         direction: .zero,
                         distance: .length(10.0, .millimeter),
                         copyCount: 2
                     )
-                ),
+                )),
                 outputMode: .componentInstance
             )
         )
@@ -4297,10 +4401,10 @@ import Testing
     var parallelAxisError: DocumentValidationError?
     do {
         _ = try session.execute(
-            .createRectangularPatternArray(
+            .createPatternArray(
                 name: "Parallel Axis Array",
                 definitionID: definition.id,
-                array: RectangularPatternArray(
+                distribution: .rectangular(RectangularPatternArray(
                     firstAxis: PatternArrayLinearAxis(
                         direction: .unitX,
                         distance: .length(10.0, .millimeter),
@@ -4311,7 +4415,7 @@ import Testing
                         distance: .length(5.0, .millimeter),
                         copyCount: 2
                     )
-                ),
+                )),
                 outputMode: .componentInstance
             )
         )
@@ -4322,16 +4426,16 @@ import Testing
     var budgetError: EditorError?
     do {
         _ = try session.execute(
-            .createRectangularPatternArray(
+            .createPatternArray(
                 name: "Budget Array",
                 definitionID: definition.id,
-                array: RectangularPatternArray(
+                distribution: .rectangular(RectangularPatternArray(
                     firstAxis: PatternArrayLinearAxis(
                         direction: .unitX,
                         distance: .length(1.0, .millimeter),
                         copyCount: 10_001
                     )
-                ),
+                )),
                 outputMode: .componentInstance
             )
         )
@@ -4908,6 +5012,14 @@ private func commandStackTopologyPoint(
         return false
     }
     return abs(point.z - depth) < 1.0e-10
+}
+
+private func commandStackApproximatelyEqual(
+    _ lhs: Double,
+    _ rhs: Double,
+    tolerance: Double = 1.0e-10
+) -> Bool {
+    abs(lhs - rhs) <= tolerance
 }
 
 @MainActor

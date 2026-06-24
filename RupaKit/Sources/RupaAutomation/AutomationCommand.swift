@@ -13,10 +13,10 @@ public enum AutomationCommand: Codable, Equatable, Sendable {
         definitionID: ComponentDefinitionID,
         localTransform: Transform3D
     )
-    case createRectangularPatternArray(
+    case createPatternArray(
         name: String,
         definitionID: ComponentDefinitionID,
-        array: RectangularPatternArray,
+        distribution: PatternArrayDistribution,
         outputMode: PatternArrayOutputMode
     )
     case setSceneNodeVisibility(id: SceneNodeID, isVisible: Bool)
@@ -246,11 +246,11 @@ public enum AutomationCommand: Codable, Equatable, Sendable {
                 definitionID: definitionID,
                 localTransform: localTransform
             )
-        case .createRectangularPatternArray(let name, let definitionID, let array, let outputMode):
-            .createRectangularPatternArray(
+        case .createPatternArray(let name, let definitionID, let distribution, let outputMode):
+            .createPatternArray(
                 name: name,
                 definitionID: definitionID,
-                array: array,
+                distribution: distribution,
                 outputMode: outputMode
             )
         case .setSceneNodeVisibility(let id, let isVisible):

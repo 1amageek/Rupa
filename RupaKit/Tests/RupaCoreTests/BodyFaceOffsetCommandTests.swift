@@ -108,16 +108,16 @@ import Testing
         $0.name == "Offset Instance Source"
     })
     _ = try session.execute(
-        .createRectangularPatternArray(
+        .createPatternArray(
             name: "Offset Instance Pattern",
             definitionID: definition.id,
-            array: RectangularPatternArray(
+            distribution: .rectangular(RectangularPatternArray(
                 firstAxis: PatternArrayLinearAxis(
                     direction: .unitX,
                     distance: .length(20.0, .millimeter),
                     copyCount: 1
                 )
-            ),
+            )),
             outputMode: .componentInstance
         )
     )

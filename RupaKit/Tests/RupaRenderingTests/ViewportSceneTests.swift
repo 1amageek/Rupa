@@ -43,16 +43,16 @@ import Testing
         $0.name == "Viewport Pattern Source"
     })
     _ = try session.execute(
-        .createRectangularPatternArray(
+        .createPatternArray(
             name: "Viewport Pattern",
             definitionID: definition.id,
-            array: RectangularPatternArray(
+            distribution: .rectangular(RectangularPatternArray(
                 firstAxis: PatternArrayLinearAxis(
                     direction: .unitX,
                     distance: .length(100.0, .millimeter),
                     copyCount: 2
                 )
-            ),
+            )),
             outputMode: .componentInstance
         )
     )
@@ -133,16 +133,16 @@ import Testing
         $0.name == "Nested Pattern Definition"
     })
     _ = try session.execute(
-        .createRectangularPatternArray(
+        .createPatternArray(
             name: "Nested Pattern",
             definitionID: nestedDefinition.id,
-            array: RectangularPatternArray(
+            distribution: .rectangular(RectangularPatternArray(
                 firstAxis: PatternArrayLinearAxis(
                     direction: .unitX,
                     distance: .length(50.0, .millimeter),
                     copyCount: 1
                 )
-            ),
+            )),
             outputMode: .componentInstance
         )
     )

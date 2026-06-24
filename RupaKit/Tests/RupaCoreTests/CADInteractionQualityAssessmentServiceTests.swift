@@ -78,7 +78,8 @@ import RupaCore
     #expect(arrays.currentRating == .partial)
     #expect(arrayCommandRating == .partial)
     #expect(arrays.referenceSources.contains("https://doc.plasticity.xyz/common/rectangular-array"))
-    #expect(arrays.openWork.contains { $0.contains("Radial array") })
+    #expect(arrays.openWork.contains { $0.contains("radial array center") })
+    #expect(arrays.openWork.contains { $0.contains("Curve array distribution") })
     #expect(arrays.evidence.contains { evidence in
         evidence.sourceFiles.contains("RupaKit/Sources/RupaCore/PatternArraySource.swift")
     })

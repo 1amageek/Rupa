@@ -10,6 +10,11 @@ public enum PatternArrayDistanceMode: String, Codable, Hashable, Sendable {
     case extent
 }
 
+public enum PatternArrayAngleMode: String, Codable, Hashable, Sendable {
+    case spacing
+    case extent
+}
+
 public struct PatternArrayGenerationBudget: Codable, Hashable, Sendable {
     public var maximumOutputInstanceCount: Int
 
@@ -90,13 +95,82 @@ public struct RectangularPatternArray: Codable, Hashable, Sendable {
     }
 }
 
+public struct PatternArrayAngularAxis: Codable, Hashable, Sendable {
+    public var center: Point3D
+    public var axis: Vector3D
+    public var angle: CADExpression
+    public var copyCount: Int
+    public var angleMode: PatternArrayAngleMode
+
+    public init(
+        center: Point3D,
+        axis: Vector3D,
+        angle: CADExpression,
+        copyCount: Int,
+        angleMode: PatternArrayAngleMode = .spacing
+    ) {
+        self.center = center
+        self.axis = axis
+        self.angle = angle
+        self.copyCount = copyCount
+        self.angleMode = angleMode
+    }
+
+    public func validate(tolerance: ModelingTolerance = .standard) throws {
+        try tolerance.validate()
+        try center.validate()
+        try axis.validate()
+        guard axis.length > tolerance.distance else {
+            throw DocumentValidationError.invalidProductMetadata(
+                "Pattern array angular axis direction must be non-zero."
+            )
+        }
+        guard copyCount > 0 else {
+            throw DocumentValidationError.invalidProductMetadata(
+                "Pattern array angular copy count must be positive."
+            )
+        }
+        try angle.validateLiteralQuantities()
+    }
+}
+
+public struct RadialPatternArray: Codable, Hashable, Sendable {
+    public var angularAxis: PatternArrayAngularAxis
+    public var radialAxis: PatternArrayLinearAxis?
+
+    public init(
+        angularAxis: PatternArrayAngularAxis,
+        radialAxis: PatternArrayLinearAxis? = nil
+    ) {
+        self.angularAxis = angularAxis
+        self.radialAxis = radialAxis
+    }
+
+    public func validate(tolerance: ModelingTolerance = .standard) throws {
+        try angularAxis.validate(tolerance: tolerance)
+        try radialAxis?.validate(tolerance: tolerance)
+        if let radialAxis {
+            let axis = try angularAxis.axis.normalized(tolerance: tolerance.distance)
+            let radialDirection = try radialAxis.direction.normalized(tolerance: tolerance.distance)
+            guard axis.cross(radialDirection).length > tolerance.angle else {
+                throw DocumentValidationError.invalidProductMetadata(
+                    "Radial pattern array repetition direction must not be parallel to the rotation axis."
+                )
+            }
+        }
+    }
+}
+
 public enum PatternArrayDistribution: Codable, Hashable, Sendable {
     case rectangular(RectangularPatternArray)
+    case radial(RadialPatternArray)
 
     public func validate(tolerance: ModelingTolerance = .standard) throws {
         switch self {
         case .rectangular(let rectangular):
             try rectangular.validate(tolerance: tolerance)
+        case .radial(let radial):
+            try radial.validate(tolerance: tolerance)
         }
     }
 }

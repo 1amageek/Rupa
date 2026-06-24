@@ -989,17 +989,17 @@ public final class EditorSession {
     }
 
     @discardableResult
-    public func createRectangularPatternArray(
+    public func createPatternArray(
         name: String,
         definitionID: ComponentDefinitionID,
-        array: RectangularPatternArray,
+        distribution: PatternArrayDistribution,
         outputMode: PatternArrayOutputMode = .componentInstance
     ) -> CommandExecutionResult? {
         perform(
-            .createRectangularPatternArray(
+            .createPatternArray(
                 name: name,
                 definitionID: definitionID,
-                array: array,
+                distribution: distribution,
                 outputMode: outputMode
             )
         )

@@ -3114,28 +3114,74 @@ import SwiftCAD
     let definition = try #require(session.document.productMetadata.componentDefinitions.values.first)
 
     let result = try runner.execute(
-        .createRectangularPatternArray(
+        .createPatternArray(
             name: "Automation Rectangular Array",
             definitionID: definition.id,
-            array: RectangularPatternArray(
+            distribution: .rectangular(RectangularPatternArray(
                 firstAxis: PatternArrayLinearAxis(
                     direction: .unitX,
                     distance: .length(5.0, .millimeter),
                     copyCount: 2,
                     distanceMode: .spacing
                 )
-            ),
+            )),
             outputMode: .componentInstance
         ),
         in: session
     )
     let source = try #require(session.document.productMetadata.patternArrays.values.first)
 
-    #expect(result.commandName == "createRectangularPatternArray")
-    #expect(result.message == "Rectangular pattern array Automation Rectangular Array created.")
+    #expect(result.commandName == "createPatternArray")
+    #expect(result.message == "Pattern array Automation Rectangular Array created.")
     #expect(result.didMutate)
     #expect(source.outputInstanceIDs.count == 2)
     #expect(session.document.productMetadata.componentInstances.count == 2)
+    #expect(session.generation == DocumentGeneration(3))
+}
+
+@MainActor
+@Test func automationCanCreateRadialPatternArray() async throws {
+    let session = EditorSession()
+    let runner = AutomationRunner()
+    _ = try #require(session.createDefaultExtrudedRectangle())
+    let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let bodySceneNodeID = try #require(automationSceneNodeID(for: bodyFeatureID, in: session.document))
+    _ = try runner.execute(
+        .createComponentDefinition(
+            name: "Automation Radial Source",
+            rootSceneNodeIDs: [bodySceneNodeID]
+        ),
+        in: session
+    )
+    let definition = try #require(session.document.productMetadata.componentDefinitions.values.first)
+
+    let result = try runner.execute(
+        .createPatternArray(
+            name: "Automation Radial Array",
+            definitionID: definition.id,
+            distribution: .radial(
+                RadialPatternArray(
+                    angularAxis: PatternArrayAngularAxis(
+                        center: .origin,
+                        axis: .unitZ,
+                        angle: .angle(120.0, .degree),
+                        copyCount: 2,
+                        angleMode: .spacing
+                    )
+                )
+            ),
+            outputMode: .componentInstance
+        ),
+        in: session
+    )
+    let source = try #require(session.document.productMetadata.patternArrays.values.first {
+        $0.name == "Automation Radial Array"
+    })
+
+    #expect(result.commandName == "createPatternArray")
+    #expect(result.message == "Pattern array Automation Radial Array created.")
+    #expect(result.didMutate)
+    #expect(source.outputInstanceIDs.count == 2)
     #expect(session.generation == DocumentGeneration(3))
 }
 

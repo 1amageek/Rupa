@@ -164,7 +164,7 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
         try validateSceneNodes(against: cadDocument, objectRegistry: objectRegistry)
         try validateComponentDefinitions()
         try validateComponentInstances()
-        try validatePatternArrays()
+        try validatePatternArrays(against: cadDocument)
         try materialLibrary.validate()
         try validateValidationRules()
         try validateExportPresets()
@@ -814,7 +814,7 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
         }
     }
 
-    private func validatePatternArrays() throws {
+    private func validatePatternArrays(against cadDocument: CADDocument) throws {
         var names: Set<String> = []
         for (sourceID, source) in patternArrays {
             guard source.id == sourceID else {
@@ -832,6 +832,15 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
                 )
             }
             try source.validate()
+            let expectedTransforms = try PatternArrayInstancePlanner().transforms(
+                for: source.distribution,
+                parameters: cadDocument.parameters
+            )
+            guard expectedTransforms.count == source.outputInstanceIDs.count else {
+                throw DocumentValidationError.invalidProductMetadata(
+                    "Pattern array output instances must match the source distribution count."
+                )
+            }
             for instanceID in source.outputInstanceIDs {
                 guard let instance = componentInstances[instanceID] else {
                     throw DocumentValidationError.invalidProductMetadata(
@@ -841,6 +850,14 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
                 guard instance.definitionID == source.definitionID else {
                     throw DocumentValidationError.invalidProductMetadata(
                         "Pattern array output instances must use the source component definition."
+                    )
+                }
+            }
+            for (index, instanceID) in source.outputInstanceIDs.enumerated() {
+                guard let instance = componentInstances[instanceID],
+                      transform(instance.localTransform, approximatelyEquals: expectedTransforms[index]) else {
+                    throw DocumentValidationError.invalidProductMetadata(
+                        "Pattern array output instance transforms must match the source distribution."
                     )
                 }
             }
@@ -869,6 +886,11 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
                         "Pattern array root scene node children must be output component instance nodes."
                     )
                 }
+                guard transform(childNode.localTransform, approximatelyEquals: .identity) else {
+                    throw DocumentValidationError.invalidProductMetadata(
+                        "Pattern array output scene node transforms must be identity."
+                    )
+                }
                 childInstanceIDs.append(componentInstanceID)
             }
             guard Set(childInstanceIDs) == outputInstanceIDs,
@@ -878,6 +900,23 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
                 )
             }
         }
+    }
+
+    private func transform(
+        _ lhs: Transform3D,
+        approximatelyEquals rhs: Transform3D
+    ) -> Bool {
+        let left = lhs.matrix.values
+        let right = rhs.matrix.values
+        guard left.count == right.count else {
+            return false
+        }
+        for index in left.indices {
+            guard abs(left[index] - right[index]) <= 1.0e-9 else {
+                return false
+            }
+        }
+        return true
     }
 
     private func validateValidationRules() throws {

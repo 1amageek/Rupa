@@ -22,7 +22,7 @@ import SwiftCAD
     #expect(capabilities.contains("cadInteractionQualityAssessment"))
     #expect(capabilities.contains("createComponentDefinition"))
     #expect(capabilities.contains("createComponentInstance"))
-    #expect(capabilities.contains("createRectangularPatternArray"))
+    #expect(capabilities.contains("createPatternArray"))
     #expect(capabilities.contains("setSceneNodeVisibility"))
     #expect(capabilities.contains("setSceneNodeLock"))
     #expect(capabilities.contains("setSceneNodeTransform"))
@@ -161,7 +161,7 @@ import SwiftCAD
     let constructionPlaneSetActive = try #require(descriptors.first { $0.name == "setActiveConstructionPlane" })
     let constructionPlaneRename = try #require(descriptors.first { $0.name == "renameConstructionPlane" })
     let constructionPlaneSummary = try #require(descriptors.first { $0.name == "constructionPlaneSummary" })
-    let rectangularPatternArray = try #require(descriptors.first { $0.name == "createRectangularPatternArray" })
+    let patternArray = try #require(descriptors.first { $0.name == "createPatternArray" })
     let designDisplaySnapshot = try #require(descriptors.first { $0.name == "designDisplaySnapshot" })
     let qualityAssessment = try #require(descriptors.first { $0.name == "cadInteractionQualityAssessment" })
     let selection = try #require(descriptors.first { $0.name == "selectTargets" })
@@ -668,21 +668,27 @@ import SwiftCAD
     #expect(constructionPlaneSummary.discovery.contains(.constructionPlaneSummary))
     #expect(constructionPlaneSummary.targets == [.constructionPlane])
 
-    #expect(rectangularPatternArray.category == .pattern)
-    #expect(rectangularPatternArray.mutatesDocument)
-    #expect(rectangularPatternArray.access == .automationCommand)
-    #expect(rectangularPatternArray.discovery.contains(.designDisplaySnapshot))
-    #expect(rectangularPatternArray.targets == [.sceneNode])
-    #expect(rectangularPatternArray.summary.contains("component instances"))
-    #expect(rectangularPatternArray.optionMatrix.map(\.name) == ["distanceMode", "axisCount", "outputMode"])
-    let rectangularDistanceMode = try #require(
-        rectangularPatternArray.optionMatrix.first { $0.name == "distanceMode" }
+    #expect(patternArray.category == .pattern)
+    #expect(patternArray.mutatesDocument)
+    #expect(patternArray.access == .automationCommand)
+    #expect(patternArray.discovery.contains(.designDisplaySnapshot))
+    #expect(patternArray.targets == [.sceneNode])
+    #expect(patternArray.summary.contains("component instances"))
+    #expect(patternArray.summary.contains("rectangular"))
+    #expect(patternArray.summary.contains("radial"))
+    #expect(patternArray.optionMatrix.map(\.name) == ["distribution", "spacingMode", "axisCount", "outputMode"])
+    let distributionMode = try #require(
+        patternArray.optionMatrix.first { $0.name == "distribution" }
     )
-    let rectangularOutputMode = try #require(
-        rectangularPatternArray.optionMatrix.first { $0.name == "outputMode" }
+    let spacingMode = try #require(
+        patternArray.optionMatrix.first { $0.name == "spacingMode" }
     )
-    #expect(rectangularDistanceMode.supportedValues == ["spacing", "extent"])
-    #expect(rectangularOutputMode.supportedValues == ["componentInstance"])
+    let patternOutputMode = try #require(
+        patternArray.optionMatrix.first { $0.name == "outputMode" }
+    )
+    #expect(distributionMode.supportedValues == ["rectangular", "radial"])
+    #expect(spacingMode.supportedValues == ["spacing", "extent"])
+    #expect(patternOutputMode.supportedValues == ["componentInstance"])
 
     #expect(designDisplaySnapshot.category == .read)
     #expect(!designDisplaySnapshot.mutatesDocument)
@@ -1012,26 +1018,28 @@ import SwiftCAD
     #expect(decodedRequest == request)
 }
 
-@Test func agentMessageCodecRoundTripsRectangularPatternArrayCommand() async throws {
+@Test func agentMessageCodecRoundTripsPatternArrayCommand() async throws {
     let codec = AgentMessageCodec()
     let sessionID = UUID()
     let request = AgentRequest.execute(
         sessionID: sessionID,
-        command: .createRectangularPatternArray(
+        command: .createPatternArray(
             name: "Encoded Rectangular Array",
             definitionID: ComponentDefinitionID(),
-            array: RectangularPatternArray(
-                firstAxis: PatternArrayLinearAxis(
-                    direction: .unitX,
-                    distance: .length(8.0, .millimeter),
-                    copyCount: 4,
-                    distanceMode: .spacing
-                ),
-                secondAxis: PatternArrayLinearAxis(
-                    direction: .unitY,
-                    distance: .length(40.0, .millimeter),
-                    copyCount: 2,
-                    distanceMode: .extent
+            distribution: .rectangular(
+                RectangularPatternArray(
+                    firstAxis: PatternArrayLinearAxis(
+                        direction: .unitX,
+                        distance: .length(8.0, .millimeter),
+                        copyCount: 4,
+                        distanceMode: .spacing
+                    ),
+                    secondAxis: PatternArrayLinearAxis(
+                        direction: .unitY,
+                        distance: .length(40.0, .millimeter),
+                        copyCount: 2,
+                        distanceMode: .extent
+                    )
                 )
             ),
             outputMode: .componentInstance
@@ -4349,21 +4357,23 @@ import SwiftCAD
     let arrayResponse = server.handle(
         .execute(
             sessionID: sessionID,
-            command: .createRectangularPatternArray(
+            command: .createPatternArray(
                 name: "Agent Rectangular Array",
                 definitionID: definition.id,
-                array: RectangularPatternArray(
-                    firstAxis: PatternArrayLinearAxis(
-                        direction: .unitX,
-                        distance: .length(12.0, .millimeter),
-                        copyCount: 3,
-                        distanceMode: .spacing
-                    ),
-                    secondAxis: PatternArrayLinearAxis(
-                        direction: .unitZ,
-                        distance: .length(30.0, .millimeter),
-                        copyCount: 2,
-                        distanceMode: .extent
+                distribution: .rectangular(
+                    RectangularPatternArray(
+                        firstAxis: PatternArrayLinearAxis(
+                            direction: .unitX,
+                            distance: .length(12.0, .millimeter),
+                            copyCount: 3,
+                            distanceMode: .spacing
+                        ),
+                        secondAxis: PatternArrayLinearAxis(
+                            direction: .unitZ,
+                            distance: .length(30.0, .millimeter),
+                            copyCount: 2,
+                            distanceMode: .extent
+                        )
                     )
                 ),
                 outputMode: .componentInstance
@@ -4384,12 +4394,89 @@ import SwiftCAD
         session.document.productMetadata.componentInstances[source.outputInstanceIDs[3]]
     )
 
-    #expect(arrayResult.commandName == "createRectangularPatternArray")
+    #expect(arrayResult.commandName == "createPatternArray")
     #expect(arrayResult.generation == DocumentGeneration(3))
     #expect(source.outputInstanceIDs.count == 11)
     #expect(firstInstance.localTransform.matrix.values[12] == 0.012)
     #expect(fourthInstance.localTransform.matrix.values[12] == 0.0)
     #expect(fourthInstance.localTransform.matrix.values[14] == 0.015)
+}
+
+@Test func agentDispatchesRadialPatternArrayCommandThroughAutomationAndCore() async throws {
+    let server = AgentServer()
+    let sessionID = UUID()
+    let session = EditorSession()
+    server.register(session: session, id: sessionID)
+
+    let createResponse = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .createExtrudedRectangle(
+                name: "Agent Radial Array Body",
+                plane: .xy,
+                width: .length(10.0, .millimeter),
+                height: .length(6.0, .millimeter),
+                depth: .length(4.0, .millimeter),
+                direction: .normal
+            ),
+            expectedGeneration: DocumentGeneration(0)
+        )
+    )
+    guard case .command = createResponse else {
+        #expect(Bool(false))
+        return
+    }
+    let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let bodySceneNode = try #require(agentBodySceneNode(for: bodyFeatureID, in: session.document))
+    let definitionResponse = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .createComponentDefinition(
+                name: "Agent Radial Source",
+                rootSceneNodeIDs: [bodySceneNode.id]
+            ),
+            expectedGeneration: DocumentGeneration(1)
+        )
+    )
+    guard case .command = definitionResponse else {
+        #expect(Bool(false))
+        return
+    }
+    let definition = try #require(session.document.productMetadata.componentDefinitions.values.first)
+
+    let arrayResponse = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .createPatternArray(
+                name: "Agent Radial Array",
+                definitionID: definition.id,
+                distribution: .radial(
+                    RadialPatternArray(
+                        angularAxis: PatternArrayAngularAxis(
+                            center: .origin,
+                            axis: .unitZ,
+                            angle: .angle(90.0, .degree),
+                            copyCount: 3,
+                            angleMode: .spacing
+                        )
+                    )
+                ),
+                outputMode: .componentInstance
+            ),
+            expectedGeneration: DocumentGeneration(2)
+        )
+    )
+    guard case .command(let arrayResult) = arrayResponse else {
+        #expect(Bool(false))
+        return
+    }
+    let source = try #require(session.document.productMetadata.patternArrays.values.first {
+        $0.name == "Agent Radial Array"
+    })
+
+    #expect(arrayResult.commandName == "createPatternArray")
+    #expect(arrayResult.generation == DocumentGeneration(3))
+    #expect(source.outputInstanceIDs.count == 3)
 }
 
 @Test func agentDispatchesCircleModelingCommandThroughAutomationAndCore() async throws {

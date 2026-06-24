@@ -192,12 +192,12 @@ public final class CADDocumentStore {
             document = updatedDocument
             try commitMutation()
             evaluateCurrentDocument()
-        case .createRectangularPatternArray(let name, let definitionID, let array, let outputMode):
+        case .createPatternArray(let name, let definitionID, let distribution, let outputMode):
             var updatedDocument = document
-            try updatedDocument.createRectangularPatternArray(
+            try updatedDocument.createPatternArray(
                 name: name,
                 definitionID: definitionID,
-                array: array,
+                distribution: distribution,
                 outputMode: outputMode,
                 objectRegistry: objectRegistry
             )

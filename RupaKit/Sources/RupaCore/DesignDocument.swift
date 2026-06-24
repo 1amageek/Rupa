@@ -205,10 +205,10 @@ public struct DesignDocument: Identifiable, Sendable {
     }
 
     @discardableResult
-    public mutating func createRectangularPatternArray(
+    public mutating func createPatternArray(
         name: String,
         definitionID: ComponentDefinitionID,
-        array: RectangularPatternArray,
+        distribution: PatternArrayDistribution,
         outputMode: PatternArrayOutputMode = .componentInstance,
         objectRegistry: ObjectTypeRegistry = .builtIn
     ) throws -> PatternArraySourceID {
@@ -216,6 +216,7 @@ public struct DesignDocument: Identifiable, Sendable {
             name,
             owner: "Pattern array"
         )
+        try distribution.validate()
         guard productMetadata.patternArrays.values.allSatisfy({
             $0.name.trimmingCharacters(in: .whitespacesAndNewlines) != trimmedName
         }) else {
@@ -264,7 +265,7 @@ public struct DesignDocument: Identifiable, Sendable {
         let source = PatternArraySource(
             name: trimmedName,
             definitionID: definitionID,
-            distribution: .rectangular(array),
+            distribution: distribution,
             outputMode: outputMode,
             outputInstanceIDs: [],
             rootSceneNodeID: groupNode.id
@@ -2300,6 +2301,11 @@ public struct DesignDocument: Identifiable, Sendable {
             document: self,
             objectRegistry: objectRegistry
         )
+        let evaluatedDocument = try DocumentEvaluationContextResolver().evaluatedDocument(
+            document: self,
+            objectRegistry: objectRegistry,
+            failurePrefix: "\(operationName) requires current generated topology"
+        )
         guard let edgeEntry = topology.entries.first(where: { $0.persistentName == edgePersistentNameString }) else {
             throw EditorError(
                 code: .referenceUnresolved,
@@ -2326,6 +2332,14 @@ public struct DesignDocument: Identifiable, Sendable {
                 message: "\(operationName) support target must reference a face on the selected body."
             )
         }
+        try validateEdgeOffsetSupportTopology(
+            edgeEntry: edgeEntry,
+            supportFaceEntry: supportFaceEntry,
+            topology: topology,
+            evaluatedDocument: evaluatedDocument,
+            isSymmetric: options.isSymmetric,
+            operationName: operationName
+        )
 
         let edgePersistentName = try GeneratedTopologyPersistentNameParser().parse(
             edgePersistentNameString,
@@ -2381,6 +2395,121 @@ public struct DesignDocument: Identifiable, Sendable {
         try productMetadata.validate(against: cadDocument, objectRegistry: objectRegistry)
         didCommit = true
         return featureID
+    }
+
+    private func validateEdgeOffsetSupportTopology(
+        edgeEntry: TopologySummaryResult.Entry,
+        supportFaceEntry: TopologySummaryResult.Entry,
+        topology: TopologySummaryResult,
+        evaluatedDocument: EvaluatedDocument,
+        isSymmetric: Bool,
+        operationName: String
+    ) throws {
+        guard edgeEntry.curveKind == "line",
+              edgeEntry.start != nil,
+              edgeEntry.end != nil else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "\(operationName) currently supports generated line edges with resolvable endpoints."
+            )
+        }
+        let edgeID = try evaluatedEdgeID(
+            for: edgeEntry,
+            in: evaluatedDocument,
+            operationName: operationName
+        )
+        let supportFaceID = try evaluatedFaceID(
+            for: supportFaceEntry,
+            in: evaluatedDocument,
+            operationName: operationName
+        )
+        guard face(supportFaceID, containsBoundaryEdge: edgeID, in: evaluatedDocument.brep) else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "\(operationName) support face must contain the selected edge."
+            )
+        }
+        guard isSymmetric else {
+            return
+        }
+        let oppositeCandidates = try topology.entries.filter { entry in
+            guard entry.kind == .face,
+                  entry.sceneNodeID == edgeEntry.sceneNodeID,
+                  entry.persistentName != supportFaceEntry.persistentName else {
+                return false
+            }
+            let candidateFaceID = try evaluatedFaceID(
+                for: entry,
+                in: evaluatedDocument,
+                operationName: operationName
+            )
+            return face(
+                candidateFaceID,
+                containsBoundaryEdge: edgeID,
+                in: evaluatedDocument.brep
+            )
+        }
+        guard oppositeCandidates.count == 1 else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "\(operationName) symmetric mode requires exactly one opposite support face sharing the selected edge."
+            )
+        }
+    }
+
+    private func evaluatedEdgeID(
+        for entry: TopologySummaryResult.Entry,
+        in evaluatedDocument: EvaluatedDocument,
+        operationName: String
+    ) throws -> EdgeID {
+        let persistentName = try GeneratedTopologyPersistentNameParser().parse(
+            entry.persistentName,
+            operationName: operationName
+        )
+        guard case .edge(let edgeID) = evaluatedDocument.generatedNames[persistentName] else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "\(operationName) evaluated topology edge was not found."
+            )
+        }
+        return edgeID
+    }
+
+    private func evaluatedFaceID(
+        for entry: TopologySummaryResult.Entry,
+        in evaluatedDocument: EvaluatedDocument,
+        operationName: String
+    ) throws -> FaceID {
+        let persistentName = try GeneratedTopologyPersistentNameParser().parse(
+            entry.persistentName,
+            operationName: operationName
+        )
+        guard case .face(let faceID) = evaluatedDocument.generatedNames[persistentName] else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "\(operationName) evaluated topology face was not found."
+            )
+        }
+        return faceID
+    }
+
+    private func face(
+        _ faceID: FaceID,
+        containsBoundaryEdge edgeID: EdgeID,
+        in model: BRepModel
+    ) -> Bool {
+        guard let face = model.faces[faceID] else {
+            return false
+        }
+        for loopID in face.loops {
+            guard let loop = model.loops[loopID] else {
+                continue
+            }
+            if loop.edges.contains(where: { $0.edgeID == edgeID }) {
+                return true
+            }
+        }
+        return false
     }
 
     private func generatedSketchVertexOffsetTarget(

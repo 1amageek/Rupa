@@ -86,17 +86,17 @@ public struct AutomationRunner {
                 didMutate: result.didMutate,
                 diagnostics: result.diagnostics
             )
-        case .createRectangularPatternArray(let name, let definitionID, let array, let outputMode):
+        case .createPatternArray(let name, let definitionID, let distribution, let outputMode):
             let result = try session.execute(
-                .createRectangularPatternArray(
+                .createPatternArray(
                     name: name,
                     definitionID: definitionID,
-                    array: array,
+                    distribution: distribution,
                     outputMode: outputMode
                 )
             )
             return AutomationResult(
-                message: "Rectangular pattern array \(name) created.",
+                message: "Pattern array \(name) created.",
                 commandName: result.commandName,
                 generation: result.generation,
                 didMutate: result.didMutate,

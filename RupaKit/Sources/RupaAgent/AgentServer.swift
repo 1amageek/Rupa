@@ -133,28 +133,39 @@ public final class AgentServer: AgentClientProtocol {
             failureMode: "Rejects missing definitions, invalid transforms, and stale generations before mutation."
         ),
         capability(
-            "createRectangularPatternArray",
+            "createPatternArray",
             category: .pattern,
-            summary: "Create a source-owned rectangular pattern array that emits component instances from a component definition with spacing or extent-controlled one- or two-axis distribution.",
+            summary: "Create a source-owned pattern array that emits component instances from a component definition with rectangular or radial distribution, preserving source ownership instead of cloning CAD feature geometry.",
             access: .automationCommand,
             mutatesDocument: true,
             discovery: [.designDisplaySnapshot],
             targets: [.sceneNode],
-            failureMode: "Rejects missing component definitions, invalid axis directions, non-positive copy counts, non-length distances, zero spacing, duplicate array names, and stale generations before mutation.",
+            failureMode: "Rejects missing component definitions, invalid linear or angular axis directions, non-positive copy counts, non-length distances, non-angle rotations, zero spacing, zero angles, duplicate array names, stale output transforms, and stale generations before mutation.",
             optionMatrix: [
                 AgentCapabilityDescriptor.OptionAxis(
-                    name: "distanceMode",
+                    name: "distribution",
+                    supportedValues: ["rectangular", "radial"],
+                    notes: [
+                        "Rectangular distributions support one- or two-axis linear spacing or extent.",
+                        "Radial distributions support center, rotation axis, angle spacing or extent, copy count, and optional radial repetition.",
+                    ]
+                ),
+                AgentCapabilityDescriptor.OptionAxis(
+                    name: "spacingMode",
                     supportedValues: ["spacing", "extent"],
                     notes: [
-                        "Spacing uses the resolved distance as each copy step.",
-                        "Extent distributes generated copies evenly across the resolved distance.",
+                        "Linear spacing uses the resolved distance as each copy step.",
+                        "Linear extent distributes generated copies evenly across the resolved distance.",
+                        "Angular spacing uses the resolved angle as each copy step.",
+                        "Angular extent distributes generated copies evenly across the resolved angle.",
                     ]
                 ),
                 AgentCapabilityDescriptor.OptionAxis(
                     name: "axisCount",
-                    supportedValues: ["one", "two"],
+                    supportedValues: ["one", "two", "angular", "angularWithRadialRepetition"],
                     notes: [
                         "Two-axis arrays generate the rectangular lattice excluding the original source position.",
+                        "Radial repetition generates additional rings while excluding the original source position.",
                     ]
                 ),
                 AgentCapabilityDescriptor.OptionAxis(
