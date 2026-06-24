@@ -382,6 +382,7 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                         "RupaKit/Sources/RupaUI/PatternArrayCurvePathCandidate.swift",
                         "RupaKit/Sources/RupaUI/PatternArrayCurvePathPickState.swift",
                         "RupaKit/Sources/RupaUI/PatternArrayCurvePathPickService.swift",
+                        "RupaKit/Sources/RupaUI/PatternArraySummaryCache.swift",
                         "RupaKit/Sources/RupaUI/MainView.swift",
                     ],
                     tests: [
@@ -392,6 +393,7 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                         "RupaKit/Tests/RupaAgentTests/AgentServerTests.swift",
                         "RupaKit/Tests/RupaUIPackageTests/PatternArrayInspectorStateTests.swift",
                         "RupaKit/Tests/RupaUIPackageTests/PatternArrayEditingServiceTests.swift",
+                        "RupaKit/Tests/RupaUIPackageTests/PatternArraySummaryCacheTests.swift",
                     ],
                     notes: [
                         "Rectangular, radial, and curve arrays now persist a PatternArraySource and emit component instances or independent copied CAD feature geometry.",
@@ -408,6 +410,7 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                         "The Pattern Array Inspector exposes source-owned output mode plus rectangular first- and second-axis controls, radial center, axis, angular spacing or extent, radial repetition, and curve count, twist, scale, alignment, and extent controls that update the PatternArraySource instead of generated outputs.",
                         "The Pattern Array Inspector starts a dedicated viewport Curve Array path pick mode; viewport sketch line, circle, arc, or spline targets update the PatternArraySource path without replacing the active Pattern Array selection.",
                         "Curve Array ratio extent editing clamps UI and service inputs to the Core planner range before source-owned regeneration.",
+                        "The Pattern Array Inspector reuses generation-keyed summary results so SwiftUI redraws do not repeatedly run transform planning or sketch curve extraction for unchanged documents.",
                         "Viewport editing workflows and incremental independent-copy reuse remain open.",
                     ]
                 ),

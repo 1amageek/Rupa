@@ -30,6 +30,7 @@ public struct MainView: View {
     @State private var selectionScope: WorkspaceSelectionScope
     @State private var selectionDragPreviewTargets: [SelectionTarget]
     @State private var patternArrayCurvePathPickState: PatternArrayCurvePathPickState
+    @State private var patternArraySummaryCache: PatternArraySummaryCache
     @State private var isGridSnapEnabled: Bool
     @State private var isObjectTargetingEnabled: Bool
     @State private var isConstructionPlaneSnapEnabled: Bool
@@ -92,6 +93,7 @@ public struct MainView: View {
         self._selectionScope = State(initialValue: .object)
         self._selectionDragPreviewTargets = State(initialValue: [])
         self._patternArrayCurvePathPickState = State(initialValue: .inactive)
+        self._patternArraySummaryCache = State(initialValue: PatternArraySummaryCache())
         self._isGridSnapEnabled = State(initialValue: true)
         self._isObjectTargetingEnabled = State(initialValue: true)
         self._isConstructionPlaneSnapEnabled = State(initialValue: true)
@@ -4404,7 +4406,7 @@ public struct MainView: View {
             selectedNodes: nodes,
             sceneNodes: session.document.productMetadata.sceneNodes,
             patternArrays: session.document.productMetadata.patternArrays,
-            summaryResult: PatternArraySummaryService().summarize(
+            summaryResult: patternArraySummaryCache.result(
                 document: session.document,
                 generation: session.generation,
                 dirty: session.isDirty

@@ -103,6 +103,9 @@ import RupaCore
         evidence.sourceFiles.contains("RupaKit/Sources/RupaUI/PatternArrayCurvePathPickService.swift")
     })
     #expect(arrays.evidence.contains { evidence in
+        evidence.sourceFiles.contains("RupaKit/Sources/RupaUI/PatternArraySummaryCache.swift")
+    })
+    #expect(arrays.evidence.contains { evidence in
         evidence.notes.contains("Pattern Array summaries expose editable fields, lifecycle actions, source-owned output edit policy, output IDs, and diagnostics without forcing CAD evaluation.")
     })
     #expect(arrays.evidence.contains { evidence in
@@ -122,6 +125,9 @@ import RupaCore
     })
     #expect(arrays.evidence.contains { evidence in
         evidence.notes.contains("Curve Array ratio extent editing clamps UI and service inputs to the Core planner range before source-owned regeneration.")
+    })
+    #expect(arrays.evidence.contains { evidence in
+        evidence.notes.contains("The Pattern Array Inspector reuses generation-keyed summary results so SwiftUI redraws do not repeatedly run transform planning or sketch curve extraction for unchanged documents.")
     })
 
     let section = try #require(result.entries.first { $0.area == .sectionAnalysis })
