@@ -91,7 +91,8 @@ import RupaCore
     #expect(!arrays.openWork.contains { $0.contains("curve count/extent/path") })
     #expect(!arrays.openWork.contains { $0.contains("curve count/path") })
     #expect(!arrays.openWork.contains { $0.contains("extent-density count editing") })
-    #expect(arrays.openWork.contains { $0.contains("Interactive viewport array handles") })
+    #expect(!arrays.openWork.contains { $0.contains("curve-path replacement previews") })
+    #expect(arrays.openWork.contains { $0.contains("Direct viewport curve-path edit handles") })
     #expect(arrays.evidence.contains { evidence in
         evidence.sourceFiles.contains("RupaKit/Sources/RupaCore/PatternArraySource.swift")
     })
@@ -147,6 +148,12 @@ import RupaCore
         evidence.sourceFiles.contains("RupaKit/Sources/RupaRendering/ViewportPatternArrayOutputModeAffordanceService.swift")
     })
     #expect(arrays.evidence.contains { evidence in
+        evidence.sourceFiles.contains("RupaKit/Sources/RupaRendering/ViewportPatternArrayCurvePathReplacementPreviewRequest.swift")
+    })
+    #expect(arrays.evidence.contains { evidence in
+        evidence.sourceFiles.contains("RupaKit/Sources/RupaRendering/ViewportPatternArrayCurvePathReplacementPreviewService.swift")
+    })
+    #expect(arrays.evidence.contains { evidence in
         evidence.tests.contains("RupaKit/Tests/RupaRenderingTests/ViewportPatternArrayPreviewServiceTests.swift")
     })
     #expect(arrays.evidence.contains { evidence in
@@ -169,6 +176,9 @@ import RupaCore
     })
     #expect(arrays.evidence.contains { evidence in
         evidence.tests.contains("RupaKit/Tests/RupaRenderingTests/ViewportPatternArrayOutputModeAffordanceServiceTests.swift")
+    })
+    #expect(arrays.evidence.contains { evidence in
+        evidence.tests.contains("RupaKit/Tests/RupaRenderingTests/ViewportPatternArrayCurvePathReplacementPreviewServiceTests.swift")
     })
     #expect(arrays.evidence.contains { evidence in
         evidence.notes.contains("Pattern Array summaries expose editable fields, lifecycle actions, source-owned output edit policy, output IDs, and diagnostics without forcing CAD evaluation.")
@@ -211,6 +221,9 @@ import RupaCore
     })
     #expect(arrays.evidence.contains { evidence in
         evidence.notes.contains("The viewport exposes Pattern Array output-mode badges that resolve selected source roots, generated outputs, and independent-copy descendants back to source-owned output mode regeneration.")
+    })
+    #expect(arrays.evidence.contains { evidence in
+        evidence.notes.contains("The viewport previews Curve Pattern Array path replacement candidates with planner-derived ghost output markers before committing the pick-mode source update.")
     })
     #expect(arrays.evidence.contains { evidence in
         evidence.notes.contains("Viewport and inspector Pattern Array edits preserve direct parameter references by updating referenced ParameterTable values when quantity kinds match.")

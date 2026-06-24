@@ -76,6 +76,7 @@ public struct Viewport: View {
     private let renderInvalidation: RenderInvalidation
     private let selection: SelectionModel
     private let selectionDragPreviewTargets: [SelectionTarget]
+    private let patternArrayCurvePathReplacementPreviewRequest: ViewportPatternArrayCurvePathReplacementPreviewRequest?
     private let surfaceAnalysis: SurfaceAnalysisResult?
     private let surfaceAnalysisOptions: ViewportSurfaceAnalysisOptions
     private let surfaceContinuity: RupaCore.SurfaceContinuityResult?
@@ -134,6 +135,7 @@ public struct Viewport: View {
         renderInvalidation: RenderInvalidation = RenderInvalidation(),
         selection: SelectionModel = .empty,
         selectionDragPreviewTargets: [SelectionTarget] = [],
+        patternArrayCurvePathReplacementPreviewRequest: ViewportPatternArrayCurvePathReplacementPreviewRequest? = nil,
         surfaceAnalysis: SurfaceAnalysisResult? = nil,
         surfaceAnalysisOptions: ViewportSurfaceAnalysisOptions = ViewportSurfaceAnalysisOptions(),
         surfaceContinuity: RupaCore.SurfaceContinuityResult? = nil,
@@ -191,6 +193,7 @@ public struct Viewport: View {
         self.renderInvalidation = renderInvalidation
         self.selection = selection
         self.selectionDragPreviewTargets = selectionDragPreviewTargets
+        self.patternArrayCurvePathReplacementPreviewRequest = patternArrayCurvePathReplacementPreviewRequest
         self.surfaceAnalysis = surfaceAnalysis
         self.surfaceAnalysisOptions = surfaceAnalysisOptions
         self.surfaceContinuity = surfaceContinuity
@@ -860,6 +863,12 @@ public struct Viewport: View {
 
         drawPatternArrayPreviews(
             patternArrayPreviews,
+            scene: scene,
+            layout: layout,
+            in: &context
+        )
+
+        drawPatternArrayCurvePathReplacementPreview(
             scene: scene,
             layout: layout,
             in: &context
@@ -4298,6 +4307,79 @@ public struct Viewport: View {
                 in: &context
             )
         }
+    }
+
+    private func drawPatternArrayCurvePathReplacementPreview(
+        scene: ViewportScene,
+        layout: ViewportLayout,
+        in context: inout GraphicsContext
+    ) {
+        guard let request = patternArrayCurvePathReplacementPreviewRequest,
+              let preview = ViewportPatternArrayCurvePathReplacementPreviewService().preview(
+                document: document,
+                scene: scene,
+                layout: layout,
+                request: request
+              ) else {
+            return
+        }
+        let color = Color.green
+        if preview.pathPoints.count >= 2 {
+            context.stroke(
+                polylinePath(for: preview.pathPoints),
+                with: .color(color.opacity(0.36)),
+                style: StrokeStyle(lineWidth: 1.4, lineCap: .round, lineJoin: .round, dash: [7.0, 5.0])
+            )
+        }
+        if preview.outputPoints.count >= 2 {
+            context.stroke(
+                polylinePath(for: preview.outputPoints),
+                with: .color(color.opacity(0.52)),
+                style: StrokeStyle(lineWidth: 1.2, lineCap: .round, lineJoin: .round, dash: [4.0, 5.0])
+            )
+        }
+        for (index, point) in preview.outputPoints.enumerated() {
+            drawPatternArrayCurvePathReplacementPreviewMarker(
+                at: point,
+                label: "\(index + 1)",
+                color: color,
+                in: &context
+            )
+        }
+        guard let firstPoint = preview.outputPoints.first else {
+            return
+        }
+        let hiddenCount = max(preview.totalOutputCount - preview.outputPoints.count, 0)
+        let suffix = hiddenCount > 0 ? " +\(hiddenCount)" : ""
+        drawPatternArraySmallLabel(
+            "Path Preview \(preview.title) \(preview.totalOutputCount)\(suffix)",
+            at: CGPoint(x: firstPoint.x, y: firstPoint.y - 34.0),
+            color: color,
+            in: &context
+        )
+    }
+
+    private func drawPatternArrayCurvePathReplacementPreviewMarker(
+        at point: CGPoint,
+        label: String,
+        color: Color,
+        in context: inout GraphicsContext
+    ) {
+        let radius = 5.0
+        var marker = Path()
+        marker.move(to: CGPoint(x: point.x, y: point.y - radius))
+        marker.addLine(to: CGPoint(x: point.x + radius, y: point.y))
+        marker.addLine(to: CGPoint(x: point.x, y: point.y + radius))
+        marker.addLine(to: CGPoint(x: point.x - radius, y: point.y))
+        marker.closeSubpath()
+        context.fill(marker, with: .color(color.opacity(0.22)))
+        context.stroke(marker, with: .color(color.opacity(0.9)), lineWidth: 1.2)
+        drawPatternArraySmallLabel(
+            label,
+            at: CGPoint(x: point.x, y: point.y - 17.0),
+            color: color,
+            in: &context
+        )
     }
 
     private func drawPatternArrayLinearAxisAffordances(
