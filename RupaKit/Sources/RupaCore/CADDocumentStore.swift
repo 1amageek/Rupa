@@ -802,6 +802,18 @@ public final class CADDocumentStore {
             document = updatedDocument
             try commitMutation()
             evaluateCurrentDocument()
+        case .createRevolve(let name, let profile, let axis, let angle):
+            var updatedDocument = document
+            try updatedDocument.createRevolve(
+                name: name,
+                profile: profile,
+                axis: axis,
+                angle: angle,
+                objectRegistry: objectRegistry
+            )
+            document = updatedDocument
+            try commitMutation()
+            evaluateCurrentDocument()
         case .createSweep(let name, let profiles, let path, let guides, let targets, let options):
             var updatedDocument = document
             try updatedDocument.createSweep(

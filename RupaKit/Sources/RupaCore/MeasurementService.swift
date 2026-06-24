@@ -208,6 +208,73 @@ public struct MeasurementService {
                 solids.append(solid)
                 totals.solidVolumeCubicMeters += solid.volumeCubicMeters
                 bounds.include(solid.bounds)
+            case .revolve(let revolve):
+                guard !isSupersededInDocumentScope(featureID) else {
+                    continue
+                }
+                guard shouldMeasure(featureID) else {
+                    continue
+                }
+                includedSourceFeatureIDs.insert(featureID)
+                guard let sourceNode = document.cadDocument.designGraph.nodes[revolve.profile.featureID],
+                      case .sketch(let sourceSketch) = sourceNode.operation else {
+                    diagnostics.append(
+                        EditorDiagnostic(
+                            severity: .warning,
+                            message: "Measurement skipped a revolve feature with an unresolved profile reference."
+                        )
+                    )
+                    continue
+                }
+                let sourceSketchBounds = try boundsForSketch(
+                    sourceSketch,
+                    parameters: document.cadDocument.parameters
+                )
+                let profile = try profileCache[revolve.profile.featureID] ?? measureProfile(
+                    featureID: revolve.profile.featureID,
+                    featureName: sourceNode.name,
+                    sketch: sourceSketch,
+                    parameters: document.cadDocument.parameters
+                )
+                guard let profile else {
+                    diagnostics.append(
+                        EditorDiagnostic(
+                            severity: .warning,
+                            message: "Measurement skipped a revolve feature with an unsupported profile."
+                        )
+                    )
+                    continue
+                }
+                profileCache[revolve.profile.featureID] = profile
+                includeSketch(
+                    featureID: revolve.profile.featureID,
+                    sketch: sourceSketch,
+                    sketchBounds: sourceSketchBounds,
+                    profile: profile
+                )
+                var evaluatedSkipReason: String?
+                let solid = try measureEvaluatedSolid(
+                    featureID: featureID,
+                    featureName: node.name,
+                    sourceFeatureID: revolve.profile.featureID,
+                    sourceFeatureName: sourceNode.name,
+                    evaluatedDocument: evaluatedDocument(),
+                    unsupportedReason: &evaluatedSkipReason
+                )
+                guard let solid else {
+                    let detail = evaluatedSkipReason.map { " \($0)" } ?? ""
+                    diagnostics.append(
+                        EditorDiagnostic(
+                            severity: .info,
+                            message: "Measurement skipped a revolve feature outside the supported solid evaluation subset.\(detail)"
+                        )
+                    )
+                    continue
+                }
+                counts.solids += 1
+                solids.append(solid)
+                totals.solidVolumeCubicMeters += solid.volumeCubicMeters
+                bounds.include(solid.bounds)
             case .sweep(let sweep):
                 guard !isSupersededInDocumentScope(featureID) else {
                     continue

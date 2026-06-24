@@ -2473,6 +2473,13 @@ public struct ViewportSceneBuilder {
                     modelBounds: bounds,
                     kind: .body(component: component)
                 )
+            case .revolve(let revolve):
+                return evaluatedMeshBodyItem(
+                    featureID: featureID,
+                    sourceFeatureID: revolve.profile.featureID,
+                    document: document,
+                    bodyDisplaySnapshots: bodyDisplaySnapshots
+                )
             case .sweep(let sweep):
                 guard let profile = sweep.profiles.first else {
                     return nil

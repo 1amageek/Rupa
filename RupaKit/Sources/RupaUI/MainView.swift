@@ -8700,6 +8700,11 @@ public struct MainView: View {
                     case .extrude(let extrude):
                         inspectorRow("Operation", "Extrude")
                         inspectorRow("Profile Source", shortID(extrude.profile.featureID))
+                    case .revolve(let revolve):
+                        inspectorRow("Operation", "Revolve")
+                        inspectorRow("Profile Source", shortID(revolve.profile.featureID))
+                        inspectorRow("Axis Origin", pointSummary(revolve.axis.origin))
+                        inspectorRow("Axis Direction", vectorSummary(revolve.axis.direction))
                     case .sweep(let sweep):
                         inspectorRow("Operation", "Sweep")
                         inspectorRow("Profiles", valueSummary(sweep.profiles.map { shortID($0.featureID) }))
@@ -9223,6 +9228,17 @@ public struct MainView: View {
 
     private func sketchPointSummary(_ point: SketchEntitySummaryResult.Point) -> String {
         "x \(formatted(point.x)), y \(formatted(point.y))"
+    }
+
+    private func pointSummary(_ point: Point3D) -> String {
+        "x \(formatted(point.x)), y \(formatted(point.y)), z \(formatted(point.z))"
+    }
+
+    private func vectorSummary(_ vector: Vector3D) -> String {
+        let x = vector.x.formatted(.number.precision(.fractionLength(0...3)))
+        let y = vector.y.formatted(.number.precision(.fractionLength(0...3)))
+        let z = vector.z.formatted(.number.precision(.fractionLength(0...3)))
+        return "x \(x), y \(y), z \(z)"
     }
 
     private func sketchLineCandidateTitle(_ candidate: InspectorSketchLineCandidate) -> String {

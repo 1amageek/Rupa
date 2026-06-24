@@ -86,6 +86,7 @@ import SwiftCAD
     #expect(capabilities.contains("setCurveCurvatureDisplay"))
     #expect(capabilities.contains("setPointDisplay"))
     #expect(capabilities.contains("extrudeProfile"))
+    #expect(capabilities.contains("createRevolve"))
     #expect(capabilities.contains("createExtrudedRectangle"))
     #expect(capabilities.contains("createExtrudedRectangleFromCorners"))
     #expect(capabilities.contains("createExtrudedCircle"))
@@ -119,6 +120,7 @@ import SwiftCAD
     let sketchVertexOffset = try #require(descriptors.first { $0.name == "offsetSketchVertex" })
     let sketchCornerTreatment = try #require(descriptors.first { $0.name == "applySketchCornerTreatment" })
     let slotSketch = try #require(descriptors.first { $0.name == "createSlotSketch" })
+    let revolve = try #require(descriptors.first { $0.name == "createRevolve" })
     let sweep = try #require(descriptors.first { $0.name == "createSweep" })
     let polySpline = try #require(descriptors.first { $0.name == "createPolySplineSurface" })
     let polySplineVertexMove = try #require(descriptors.first { $0.name == "movePolySplineSurfaceVertex" })
@@ -275,6 +277,20 @@ import SwiftCAD
     #expect(createSketch.summary.contains("multi-entity curve chains"))
     #expect(createSketch.failureMode.contains("disconnected"))
     #expect(createSketch.failureMode.contains("branched"))
+
+    #expect(revolve.category == .solid)
+    #expect(revolve.mutatesDocument)
+    #expect(revolve.access == .automationCommand)
+    #expect(revolve.discovery.contains(.sketchEntitySummary))
+    #expect(revolve.discovery.contains(.topologySummary))
+    #expect(revolve.targets == [.profile])
+    #expect(revolve.summary.contains("explicit 3D axis"))
+    #expect(revolve.failureMode.contains("over-full-turn angles"))
+    #expect(revolve.failureMode.contains("surface-of-revolution"))
+    #expect(revolve.optionMatrix.map(\.name) == ["angle"])
+    let revolveAngleAxis = try #require(revolve.optionMatrix.first { $0.name == "angle" })
+    #expect(revolveAngleAxis.supportedValues == ["nonzero angle up to 360 degrees"])
+    #expect(revolveAngleAxis.notes.contains { $0.contains("partial angles") })
 
     #expect(sweep.category == .solid)
     #expect(sweep.mutatesDocument)
@@ -7956,6 +7972,62 @@ import SwiftCAD
     #expect(result.generation == DocumentGeneration(1))
     #expect(sweep.profiles == [ProfileReference(featureID: profileID)])
     #expect(sweep.path == SweepPathReference(featureID: pathID))
+    #expect(feature.outputs == [FeatureOutput(role: .body)])
+    #expect(session.evaluatedBodyCount == 1)
+    #expect(session.evaluationStatus == .valid)
+    #expect(result.diagnostics.contains { diagnostic in diagnostic.severity == .error } == false)
+}
+
+@MainActor
+@Test func agentCreatesRevolveSourceThroughAutomationAndCore() async throws {
+    var document = DesignDocument.empty()
+    let profileID = try document.createRectangleSketchFromCorners(
+        name: "Agent Revolve Profile",
+        plane: .xy,
+        firstCorner: SketchPoint(
+            x: .length(0.0, .millimeter),
+            y: .length(0.0, .millimeter)
+        ),
+        oppositeCorner: SketchPoint(
+            x: .length(4.0, .millimeter),
+            y: .length(14.0, .millimeter)
+        )
+    )
+    let server = AgentServer()
+    let sessionID = UUID()
+    let session = EditorSession(document: document)
+    server.register(session: session, id: sessionID)
+
+    let response = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .createRevolve(
+                name: "Agent Revolved Body",
+                profile: ProfileReference(featureID: profileID),
+                axis: RevolveAxis(origin: .origin, direction: .unitY),
+                angle: .angle(180.0, .degree)
+            ),
+            expectedGeneration: DocumentGeneration(0)
+        )
+    )
+
+    guard case .command(let result) = response else {
+        Issue.record("Agent must return a revolve command result.")
+        return
+    }
+    let revolveID = try #require(session.document.cadDocument.designGraph.order.last)
+    let feature = try #require(session.document.cadDocument.designGraph.nodes[revolveID])
+    guard case .revolve(let revolve) = feature.operation else {
+        Issue.record("Agent must create a revolve feature.")
+        return
+    }
+
+    #expect(result.commandName == "createRevolve")
+    #expect(result.didMutate)
+    #expect(result.generation == DocumentGeneration(1))
+    #expect(revolve.profile == ProfileReference(featureID: profileID))
+    #expect(revolve.axis == RevolveAxis(origin: .origin, direction: .unitY))
+    #expect(revolve.angle == .angle(180.0, .degree))
     #expect(feature.outputs == [FeatureOutput(role: .body)])
     #expect(session.evaluatedBodyCount == 1)
     #expect(session.evaluationStatus == .valid)

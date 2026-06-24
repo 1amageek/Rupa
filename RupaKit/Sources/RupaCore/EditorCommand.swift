@@ -183,6 +183,7 @@ public enum EditorCommand: Codable, Equatable, Sendable {
     case trimSketchCurveSegment(target: SelectionTarget)
     case cutSketchCurve(target: SelectionTarget, cutter: SelectionTarget, options: CutCurveOptions)
     case extrudeProfile(name: String, profile: ProfileReference, distance: CADExpression, direction: ExtrudeDirection)
+    case createRevolve(name: String, profile: ProfileReference, axis: RevolveAxis, angle: CADExpression)
     case createSweep(
         name: String,
         profiles: [ProfileReference],
@@ -371,6 +372,8 @@ public enum EditorCommand: Codable, Equatable, Sendable {
             "cutSketchCurve"
         case .extrudeProfile:
             "extrudeProfile"
+        case .createRevolve:
+            "createRevolve"
         case .createSweep:
             "createSweep"
         case .createPolySplineSurface:
@@ -460,6 +463,7 @@ public enum EditorCommand: Codable, Equatable, Sendable {
              .trimSketchCurveSegment,
              .cutSketchCurve,
              .extrudeProfile,
+             .createRevolve,
              .createSweep,
              .createPolySplineSurface,
              .movePolySplineSurfaceVertex,

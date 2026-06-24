@@ -15236,6 +15236,82 @@ public struct DesignDocument: Identifiable, Sendable {
     }
 
     @discardableResult
+    public mutating func createRevolve(
+        name: String,
+        profile: ProfileReference,
+        axis: RevolveAxis,
+        angle: CADExpression = .constant(.angle(360.0, unit: .degree)),
+        objectRegistry: ObjectTypeRegistry = .builtIn
+    ) throws -> FeatureID {
+        let trimmedName = try normalizedMetadataName(name, owner: "Revolve")
+        let revolve = RevolveFeature(
+            profile: profile,
+            axis: axis,
+            angle: angle,
+            operation: .newBody
+        )
+        try revolve.validate()
+        guard let source = cadDocument.designGraph.nodes[profile.featureID],
+              source.outputs.contains(where: { $0.role == .profile }) else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "Revolve profile must reference an existing sketch profile feature."
+            )
+        }
+        guard try containsSupportedExtrudeProfile(source) else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "Revolve profile must reference a supported closed sketch profile."
+            )
+        }
+
+        let featureID = FeatureID()
+        let feature = FeatureNode(
+            id: featureID,
+            name: trimmedName,
+            operation: .revolve(revolve),
+            inputs: [FeatureInput(featureID: profile.featureID, role: .profile)],
+            outputs: [FeatureOutput(role: .body)]
+        )
+
+        let previousCADDocument = cadDocument
+        let previousProductMetadata = productMetadata
+        var didCommitRevolve = false
+        defer {
+            if didCommitRevolve == false {
+                cadDocument = previousCADDocument
+                productMetadata = previousProductMetadata
+            }
+        }
+
+        try appendFeature(feature)
+        _ = try productMetadata.appendSceneNodeToFirstRoot(
+            name: trimmedName,
+            reference: .body(featureID),
+            object: .body(
+                featureID: featureID,
+                sourceProfileFeatureID: profile.featureID,
+                typeID: nil,
+                objectRegistry: objectRegistry
+            )
+        )
+        try cadDocument.validate()
+        try productMetadata.validate(against: cadDocument, objectRegistry: objectRegistry)
+        do {
+            _ = try CADPipeline
+                .modelingDefault(for: self, objectRegistry: objectRegistry)
+                .evaluate(cadDocument)
+        } catch {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Revolve produced unsupported or invalid geometry: \(error)."
+            )
+        }
+        didCommitRevolve = true
+        return featureID
+    }
+
+    @discardableResult
     public mutating func createSweep(
         name: String,
         profiles: [ProfileReference],

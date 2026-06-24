@@ -7,6 +7,8 @@ extension FeatureOperation {
             return false
         case .extrude:
             return true
+        case .revolve:
+            return true
         case .sweep:
             return true
         case .polySpline:
@@ -33,6 +35,8 @@ extension FeatureOperation {
         case .sketch:
             return nil
         case .extrude:
+            return nil
+        case .revolve:
             return nil
         case .sweep:
             return nil

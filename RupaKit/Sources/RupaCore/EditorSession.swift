@@ -1914,6 +1914,23 @@ public final class EditorSession {
     }
 
     @discardableResult
+    public func createRevolve(
+        name: String,
+        profile: ProfileReference,
+        axis: RevolveAxis,
+        angle: CADExpression = .constant(.angle(360.0, unit: .degree))
+    ) -> CommandExecutionResult? {
+        perform(
+            .createRevolve(
+                name: name,
+                profile: profile,
+                axis: axis,
+                angle: angle
+            )
+        )
+    }
+
+    @discardableResult
     public func createPolySplineSurface(
         name: String,
         sourceMesh: Mesh,

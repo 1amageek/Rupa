@@ -884,6 +884,22 @@ public struct AutomationRunner {
                 didMutate: result.didMutate,
                 diagnostics: result.diagnostics
             )
+        case .createRevolve(let name, let profile, let axis, let angle):
+            let result = try session.execute(
+                .createRevolve(
+                    name: name,
+                    profile: profile,
+                    axis: axis,
+                    angle: angle
+                )
+            )
+            return AutomationResult(
+                message: "Revolve \(name) source created.",
+                commandName: result.commandName,
+                generation: result.generation,
+                didMutate: result.didMutate,
+                diagnostics: result.diagnostics
+            )
         case .createSweep(let name, let profiles, let path, let guides, let targets, let options):
             let result = try session.execute(
                 .createSweep(

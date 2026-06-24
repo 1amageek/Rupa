@@ -659,6 +659,26 @@ public final class AgentServer: AgentClientProtocol {
             failureMode: "Rejects open, unsupported, missing, or invalid profiles and stale generations before mutation."
         ),
         capability(
+            "createRevolve",
+            category: .solid,
+            summary: "Create a Revolve source feature from an existing supported closed profile, an explicit 3D axis, and a finite angle into a solid body.",
+            access: .automationCommand,
+            mutatesDocument: true,
+            discovery: [.sketchEntitySummary, .topologySummary],
+            targets: [.profile],
+            failureMode: "Rejects missing or unsupported closed profiles, zero or over-full-turn angles, collapsed axes, unsupported conical or curved profile boundaries until analytic surface-of-revolution support exists, invalid generated topology, and stale generations before mutation.",
+            optionMatrix: [
+                AgentCapabilityDescriptor.OptionAxis(
+                    name: "angle",
+                    supportedValues: ["nonzero angle up to 360 degrees"],
+                    notes: [
+                        "partial angles create start and end caps",
+                        "full turns create closed cylindrical and planar side topology without seam-cap faces"
+                    ]
+                ),
+            ]
+        ),
+        capability(
             "createSweep",
             category: .solid,
             summary: "Create a Sweep source feature from profile, path, optional guide references, and explicit twist, scale, alignment, distance, corner, guide, boolean, keep-tools, simplify, and result-kind options.",
