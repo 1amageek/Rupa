@@ -494,6 +494,95 @@ import Testing
 }
 
 @MainActor
+@Test func offsetCurveDispatchesSymmetricGeneratedEdgeToEvaluatedEdgeOffsetFeature() async throws {
+    let session = EditorSession()
+    _ = try session.execute(
+        .createExtrudedRectangleFromCorners(
+            name: "Symmetric Edge Offset Box",
+            plane: .xy,
+            firstCorner: SketchPoint(
+                x: .length(0.0, .millimeter),
+                y: .length(0.0, .millimeter)
+            ),
+            oppositeCorner: SketchPoint(
+                x: .length(20.0, .millimeter),
+                y: .length(12.0, .millimeter)
+            ),
+            depth: .length(5.0, .millimeter),
+            direction: .normal
+        )
+    )
+    let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let bodyNodeID = try #require(bodySceneNodeID(for: bodyFeatureID, in: session.document))
+    let beforeTopology = try TopologySummaryService().summarize(document: session.document)
+    let supportFaceEntry = try #require(
+        beforeTopology.entries.first {
+            $0.kind == .face &&
+                $0.sceneNodeID == bodyNodeID.description &&
+                $0.generatedRole == "startFace"
+        }
+    )
+    let supportFaceTarget = try #require(supportFaceEntry.selectionTarget())
+    let supportDepth = try #require(supportFaceEntry.center?.z)
+    let edgeEntry = try #require(
+        beforeTopology.entries.first {
+            $0.kind == .edge &&
+                $0.sceneNodeID == bodyNodeID.description &&
+                $0.curveKind == "line" &&
+                topologyPoint($0.start, isOnDepth: supportDepth) &&
+                topologyPoint($0.end, isOnDepth: supportDepth) &&
+                $0.selectionTarget() != nil
+        }
+    )
+    let target = try #require(edgeEntry.selectionTarget())
+    let beforeGeneration = session.generation
+
+    let result = try session.execute(
+        .offsetCurve(
+            target: target,
+            distance: .length(2.0, .millimeter),
+            options: OffsetCurveOptions(
+                mode: .offset,
+                isSymmetric: true,
+                gapFill: .linear,
+                supportTarget: supportFaceTarget
+            ),
+            vertexHandle: nil
+        )
+    )
+
+    let offsetFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let feature = try #require(session.document.cadDocument.designGraph.nodes[offsetFeatureID])
+    guard case .edgeOffset(let edgeOffset) = feature.operation else {
+        Issue.record("Symmetric edge target Offset Curve must create an EdgeOffset feature.")
+        return
+    }
+    let topology = try TopologySummaryService().summarize(document: session.document)
+    let generatedOffsetEdges = topology.entries.filter {
+        $0.kind == .edge &&
+            $0.sourceFeatureID == offsetFeatureID.description &&
+            $0.generatedRole == "edgeOffset" &&
+            $0.subshapeRole == "offsetEdge"
+    }
+
+    #expect(result.commandName == "offsetCurve")
+    #expect(result.didMutate)
+    #expect(session.generation == (try beforeGeneration.advanced()))
+    #expect(edgeOffset.target == EdgeOffsetTargetReference(featureID: bodyFeatureID))
+    #expect(edgeOffset.isSymmetric)
+    #expect(edgeOffset.gapFill == .linear)
+    #expect(feature.inputs == [FeatureInput(featureID: bodyFeatureID, role: .target)])
+    #expect(feature.outputs == [FeatureOutput(role: .body)])
+    #expect(topology.counts.bodyCount == 1)
+    #expect(topology.counts.faceCount == 8)
+    #expect(topology.counts.edgeCount == 18)
+    #expect(topology.counts.vertexCount == 12)
+    #expect(generatedOffsetEdges.count == 2)
+    #expect(topology.entries.contains { $0.persistentName == edgeEntry.persistentName })
+    #expect(session.evaluationStatus == .valid)
+}
+
+@MainActor
 @Test func offsetSketchVertexCommandMigratesLineDimensionsAcrossSplitCorner() async throws {
     var document = DesignDocument.empty()
     _ = try document.createRectangleSketchFromCorners(

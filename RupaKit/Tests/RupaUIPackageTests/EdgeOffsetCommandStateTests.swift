@@ -7,12 +7,15 @@ import Testing
 
     #expect(state.isActive == false)
     #expect(state.inputModeTitle == "Inactive")
+    #expect(state.usesLockedDistance == false)
 
     state.activateDistanceInput()
+    state.toggleLockedDistance()
 
     #expect(state.isActive)
     #expect(state.inputMode == .distance)
     #expect(state.inputModeTitle == "Distance")
+    #expect(state.usesLockedDistance)
 
     state.deactivate()
 

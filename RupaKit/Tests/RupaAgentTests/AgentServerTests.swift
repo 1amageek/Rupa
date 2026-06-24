@@ -5434,6 +5434,96 @@ import SwiftCAD
 }
 
 @MainActor
+@Test func agentExecutesSymmetricGeneratedEdgeOffsetDirectEditSolid() async throws {
+    let server = AgentServer()
+    let sessionID = UUID()
+    let session = EditorSession()
+    _ = try #require(session.createDefaultExtrudedRectangle())
+    server.register(session: session, id: sessionID)
+
+    let topologyResponse = server.handle(
+        .topologySummary(
+            sessionID: sessionID,
+            expectedGeneration: DocumentGeneration(1)
+        )
+    )
+    guard case .topologySummary(let topology) = topologyResponse else {
+        Issue.record("Agent must return a topology summary.")
+        return
+    }
+    let supportFaceEntry = try #require(topology.entries.first { entry in
+        entry.kind == .face && entry.generatedRole == "startFace"
+    })
+    let supportFaceTarget = try #require(supportFaceEntry.selectionTarget())
+    let supportDepth = try #require(supportFaceEntry.center?.z)
+    let edgeEntry = try #require(topology.entries.first { entry in
+        entry.kind == .edge &&
+            entry.curveKind == "line" &&
+            agentTopologyPoint(entry.start, isOnDepth: supportDepth) &&
+            agentTopologyPoint(entry.end, isOnDepth: supportDepth) &&
+            entry.selectionTarget() != nil
+    })
+    let edgeTarget = try #require(edgeEntry.selectionTarget())
+
+    let offsetResponse = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .offsetCurve(
+                target: edgeTarget,
+                distance: .length(2.0, .millimeter),
+                options: OffsetCurveOptions(
+                    isSymmetric: true,
+                    gapFill: .linear,
+                    supportTarget: supportFaceTarget
+                ),
+                vertexHandle: nil
+            ),
+            expectedGeneration: DocumentGeneration(1)
+        )
+    )
+    guard case .command(let offsetResult) = offsetResponse else {
+        #expect(Bool(false))
+        return
+    }
+    let offsetFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let feature = try #require(session.document.cadDocument.designGraph.nodes[offsetFeatureID])
+    guard case .edgeOffset(let edgeOffset) = feature.operation else {
+        Issue.record("Agent symmetric Offset Edge must create an EdgeOffset feature.")
+        return
+    }
+
+    let measuredResponse = server.handle(
+        .measure(
+            sessionID: sessionID,
+            expectedGeneration: DocumentGeneration(2)
+        )
+    )
+    guard case .measurement(let measurement) = measuredResponse else {
+        #expect(Bool(false))
+        return
+    }
+    let evaluatedTopology = try TopologySummaryService().summarize(document: session.document)
+    let generatedOffsetEdges = evaluatedTopology.entries.filter { entry in
+        entry.kind == .edge &&
+            entry.sourceFeatureID == offsetFeatureID.description &&
+            entry.generatedRole == "edgeOffset" &&
+            entry.subshapeRole == "offsetEdge"
+    }
+
+    #expect(offsetResult.didMutate)
+    #expect(offsetResult.generation == DocumentGeneration(2))
+    #expect(edgeOffset.isSymmetric)
+    #expect(measurement.counts.sourceFeatures == 3)
+    #expect(measurement.counts.solids == 1)
+    #expect(measurement.diagnostics.contains { $0.message.contains("Offset Edge") } == false)
+    #expect(generatedOffsetEdges.count == 2)
+    #expect(evaluatedTopology.counts.faceCount == 8)
+    #expect(evaluatedTopology.counts.edgeCount == 18)
+    #expect(evaluatedTopology.counts.vertexCount == 12)
+    #expect(session.generation == DocumentGeneration(2))
+}
+
+@MainActor
 @Test func agentMeasuresSelectedOpenSessionBodyWithoutMutation() async throws {
     let server = AgentServer()
     let sessionID = UUID()

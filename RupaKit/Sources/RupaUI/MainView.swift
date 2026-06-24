@@ -1755,6 +1755,11 @@ public struct MainView: View {
             accessibilityIdentifier: "WorkspaceEdgeOffset.inputMode"
         )
         workspaceValuePill(
+            "Lock",
+            edgeOffsetCommandState.usesLockedDistance ? "On" : "Off",
+            accessibilityIdentifier: "WorkspaceEdgeOffset.lockedDistance"
+        )
+        workspaceValuePill(
             "Support",
             edgeOffsetSupportTitle(supportResolution),
             accessibilityIdentifier: "WorkspaceEdgeOffset.support"
@@ -1768,7 +1773,8 @@ public struct MainView: View {
             offsetSelectedEdges(
                 targets,
                 by: edgeOffsetDistanceMeters,
-                gapFill: edgeOffsetGapFill
+                gapFill: edgeOffsetGapFill,
+                isSymmetric: edgeOffsetCommandState.usesLockedDistance
             )
         }
     }
@@ -3025,11 +3031,7 @@ public struct MainView: View {
             return .handled
         case "s":
             if edgeOffsetCommandState.isActive {
-                session.reportToolStatus(
-                    "Symmetric Offset Edge is not implemented yet.",
-                    severity: .warning
-                )
-                isPreviewExpanded = true
+                edgeOffsetCommandState.toggleLockedDistance()
                 return .handled
             }
             guard regionOffsetCommandState.isActive else {
@@ -7614,7 +7616,8 @@ public struct MainView: View {
     private func offsetSelectedEdges(
         _ targets: [SelectionTarget],
         by meters: Double,
-        gapFill: OffsetCurveGapFill
+        gapFill: OffsetCurveGapFill,
+        isSymmetric: Bool = false
     ) {
         guard targets.count == 1, let target = targets.first else {
             session.reportToolStatus(
@@ -7627,7 +7630,10 @@ public struct MainView: View {
         let result = session.offsetCurve(
             target: target,
             distance: .length(max(meters, 1.0e-9), .meter),
-            options: OffsetCurveOptions(gapFill: gapFill),
+            options: OffsetCurveOptions(
+                isSymmetric: isSymmetric,
+                gapFill: gapFill
+            ),
             vertexHandle: nil
         )
         if result?.diagnostics.isEmpty == false || result == nil {

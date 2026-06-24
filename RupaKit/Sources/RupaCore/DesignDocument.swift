@@ -2246,12 +2246,6 @@ public struct DesignDocument: Identifiable, Sendable {
                 message: "\(operationName) uses the selected generated edge target and does not accept a sketch vertex handle."
             )
         }
-        guard options.isSymmetric == false else {
-            throw EditorError(
-                code: .commandInvalid,
-                message: "\(operationName) currently supports a single offset distance; symmetric lock-distance edge offsets are not implemented."
-            )
-        }
         guard distanceMeters > 0.0 else {
             throw EditorError(
                 code: .commandInvalid,

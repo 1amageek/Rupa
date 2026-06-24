@@ -7,9 +7,14 @@ struct EdgeOffsetCommandState: Equatable {
     }
 
     var inputMode: InputMode
+    var usesLockedDistance: Bool
 
-    init(inputMode: InputMode = .inactive) {
+    init(
+        inputMode: InputMode = .inactive,
+        usesLockedDistance: Bool = false
+    ) {
         self.inputMode = inputMode
+        self.usesLockedDistance = usesLockedDistance
     }
 
     static var inactive: EdgeOffsetCommandState {
@@ -35,6 +40,11 @@ struct EdgeOffsetCommandState: Equatable {
 
     mutating func deactivate() {
         inputMode = .inactive
+        usesLockedDistance = false
+    }
+
+    mutating func toggleLockedDistance() {
+        usesLockedDistance.toggle()
     }
 
     func gapFill(after current: OffsetCurveGapFill) -> OffsetCurveGapFill {
