@@ -5,6 +5,7 @@ public enum ViewportPatternArrayCopyCountSlot: String, Equatable, Sendable {
     case rectangularSecond
     case radialAngular
     case radialAxis
+    case curve
 }
 
 public struct ViewportPatternArrayCopyCountDragTarget: Equatable, Sendable {

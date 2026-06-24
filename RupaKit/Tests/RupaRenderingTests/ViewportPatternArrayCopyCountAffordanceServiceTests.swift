@@ -121,6 +121,66 @@ import Testing
 }
 
 @MainActor
+@Test func patternArrayCopyCountAffordanceServiceResolvesCurveCountsFromOutputSelection() async throws {
+    let session = EditorSession()
+    _ = try createDefaultCopyCountPatternSourceDefinition(
+        in: session,
+        definitionName: "Curve Count Source"
+    )
+    let definition = try #require(session.document.productMetadata.componentDefinitions.values.first {
+        $0.name == "Curve Count Source"
+    })
+    _ = try session.execute(
+        .createPatternArray(
+            name: "Curve Count Pattern",
+            definitionID: definition.id,
+            distribution: .curve(CurvePatternArray(
+                path: .polyline(
+                    points: [
+                        .origin,
+                        Point3D(x: 0.1, y: 0.0, z: 0.0),
+                    ],
+                    normal: .unitZ
+                ),
+                copyCount: 3,
+                extent: .scalar(0.75),
+                extentMode: .ratio
+            )),
+            outputMode: .componentInstance
+        )
+    )
+    let source = try #require(session.document.productMetadata.patternArrays.values.first {
+        $0.name == "Curve Count Pattern"
+    })
+    let outputSceneNodeID = try firstCopyCountOutputSceneNodeID(source: source, document: session.document)
+    let scene = ViewportSceneBuilder().build(document: session.document)
+    let layout = try #require(ViewportLayout(scene: scene, size: CGSize(width: 900.0, height: 700.0)))
+
+    let candidates = ViewportPatternArrayCopyCountAffordanceService().candidates(
+        document: session.document,
+        scene: scene,
+        selection: SelectionModel(selectedTargets: [
+            SelectionTarget(sceneNodeID: outputSceneNodeID),
+        ]),
+        layout: layout
+    )
+
+    let candidate = try #require(candidates.first)
+    #expect(candidates.map(\.target.slot) == [.curve])
+    #expect(candidate.target.sourceID == source.id)
+    #expect(candidate.geometry.baseCopyCount == 3)
+    #expect(candidate.geometry.copyCount(
+        start: candidate.geometry.handlePoint,
+        current: candidate.geometry.handlePoint(copyCount: 5)
+    ) == 5)
+    #expect(candidate.geometry.copyCount(
+        start: candidate.geometry.handlePoint,
+        current: candidate.geometry.handlePoint(copyCount: 1)
+    ) == 1)
+    #expect(candidate.geometry.guidePoints().count > 3)
+}
+
+@MainActor
 @Test func patternArrayCopyCountAffordanceServiceSkipsExtentModeCounts() async throws {
     let session = EditorSession()
     _ = try createDefaultCopyCountPatternSourceDefinition(
@@ -186,6 +246,19 @@ private func createDefaultCopyCountPatternSourceDefinition(
         )
     )
     return bodyFeatureID
+}
+
+private func firstCopyCountOutputSceneNodeID(
+    source: PatternArraySource,
+    document: DesignDocument
+) throws -> SceneNodeID {
+    let rootNode = try #require(document.productMetadata.sceneNodes[source.rootSceneNodeID])
+    return try #require(rootNode.childIDs.first { childID in
+        guard let componentInstanceID = document.productMetadata.sceneNodes[childID]?.reference?.componentInstanceID else {
+            return false
+        }
+        return source.outputInstanceIDs.contains(componentInstanceID)
+    })
 }
 
 private func copyCountSceneNodeID(

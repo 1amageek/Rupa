@@ -3435,6 +3435,8 @@ public struct MainView: View {
             result = service.setRadialAngularCopyCount(target.copyCount)
         case .radialAxis:
             result = service.setRadialAxisCopyCount(target.copyCount)
+        case .curve:
+            result = service.setCurveCopyCount(target.copyCount)
         }
         if result?.diagnostics.isEmpty == false {
             isPreviewExpanded = true

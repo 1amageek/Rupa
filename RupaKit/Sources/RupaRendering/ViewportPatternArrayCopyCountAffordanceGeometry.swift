@@ -5,12 +5,15 @@ import RupaCore
 enum ViewportPatternArrayCopyCountAffordanceGeometry: Equatable {
     case linear(ViewportPatternArrayCopyCountLinearGeometry)
     case angular(ViewportPatternArrayCopyCountAngularGeometry)
+    case curve(ViewportPatternArrayCopyCountCurveGeometry)
 
     var baseCopyCount: Int {
         switch self {
         case .linear(let geometry):
             geometry.baseCopyCount
         case .angular(let geometry):
+            geometry.baseCopyCount
+        case .curve(let geometry):
             geometry.baseCopyCount
         }
     }
@@ -21,6 +24,8 @@ enum ViewportPatternArrayCopyCountAffordanceGeometry: Equatable {
             geometry.handlePoint()
         case .angular(let geometry):
             geometry.handlePoint()
+        case .curve(let geometry):
+            geometry.handlePoint()
         }
     }
 
@@ -29,6 +34,8 @@ enum ViewportPatternArrayCopyCountAffordanceGeometry: Equatable {
         case .linear(let geometry):
             geometry.handlePoint(copyCount: copyCount)
         case .angular(let geometry):
+            geometry.handlePoint(copyCount: copyCount)
+        case .curve(let geometry):
             geometry.handlePoint(copyCount: copyCount)
         }
     }
@@ -42,6 +49,8 @@ enum ViewportPatternArrayCopyCountAffordanceGeometry: Equatable {
             ]
         case .angular(let geometry):
             geometry.arcPoints(copyCount: copyCount ?? geometry.baseCopyCount)
+        case .curve(let geometry):
+            geometry.guidePoints(copyCount: copyCount ?? geometry.baseCopyCount)
         }
     }
 
@@ -53,6 +62,8 @@ enum ViewportPatternArrayCopyCountAffordanceGeometry: Equatable {
         case .linear(let geometry):
             geometry.copyCount(start: start, current: current)
         case .angular(let geometry):
+            geometry.copyCount(start: start, current: current)
+        case .curve(let geometry):
             geometry.copyCount(start: start, current: current)
         }
     }
@@ -336,5 +347,129 @@ struct ViewportPatternArrayCopyCountAngularGeometry: Equatable {
             y: vector.y * scalar,
             z: vector.z * scalar
         )
+    }
+}
+
+struct ViewportPatternArrayCopyCountCurveGeometry: Equatable {
+    var pathPoints: [CGPoint]
+    var anchorPoint: CGPoint
+    var projectedDirection: CGVector
+    var baseCopyCount: Int
+    var pointsPerCopy: CGFloat
+
+    init?(
+        path: PatternArrayCurvePathGeometry,
+        distributionLength: Double,
+        copyCount: Int,
+        layout: ViewportLayout,
+        handleOffsetPoints: CGFloat = 24.0,
+        minimumPointsPerCopy: CGFloat = 28.0
+    ) {
+        guard distributionLength.isFinite,
+              distributionLength > 0.0,
+              copyCount > 0,
+              handleOffsetPoints.isFinite,
+              handleOffsetPoints > 0.0,
+              minimumPointsPerCopy.isFinite,
+              minimumPointsPerCopy > 0.0,
+              let extentGeometry = ViewportPatternArrayCurveExtentAffordanceGeometry(
+                  path: path,
+                  distributionLength: distributionLength,
+                  layout: layout
+              ) else {
+            return nil
+        }
+        let pathPoints = extentGeometry.projectedExtentPoints(distanceMeters: distributionLength)
+        guard let tip = pathPoints.last else {
+            return nil
+        }
+        let direction: CGVector
+        do {
+            let sample = try path.sample(at: distributionLength)
+            let projectedTangent = Self.projectedVector(
+                sample.tangent,
+                at: sample.point,
+                layout: layout
+            )
+            if projectedTangent.length > 1.0e-9 {
+                direction = projectedTangent.normalized
+            } else if let fallback = Self.fallbackDirection(from: pathPoints) {
+                direction = fallback
+            } else {
+                return nil
+            }
+        } catch {
+            guard let fallback = Self.fallbackDirection(from: pathPoints) else {
+                return nil
+            }
+            direction = fallback
+        }
+        let normal = CGVector(dx: -direction.dy, dy: direction.dx)
+        self.pathPoints = pathPoints
+        self.anchorPoint = CGPoint(
+            x: tip.x + normal.dx * handleOffsetPoints,
+            y: tip.y + normal.dy * handleOffsetPoints
+        )
+        self.projectedDirection = direction
+        self.baseCopyCount = copyCount
+        self.pointsPerCopy = minimumPointsPerCopy
+    }
+
+    func handlePoint(copyCount: Int? = nil) -> CGPoint {
+        let count = max(copyCount ?? baseCopyCount, 1)
+        let distance = pointsPerCopy * CGFloat(count)
+        return CGPoint(
+            x: anchorPoint.x + projectedDirection.dx * distance,
+            y: anchorPoint.y + projectedDirection.dy * distance
+        )
+    }
+
+    func guidePoints(copyCount: Int? = nil) -> [CGPoint] {
+        var points = pathPoints
+        points.append(anchorPoint)
+        points.append(handlePoint(copyCount: copyCount ?? baseCopyCount))
+        return points
+    }
+
+    func copyCount(
+        start: CGPoint,
+        current: CGPoint
+    ) -> Int {
+        let delta = CGVector(dx: current.x - start.x, dy: current.y - start.y)
+        let projectedDelta = delta.dx * projectedDirection.dx + delta.dy * projectedDirection.dy
+        let countDelta = Int((projectedDelta / pointsPerCopy).rounded())
+        return max(baseCopyCount + countDelta, 1)
+    }
+
+    private static func projectedVector(
+        _ vector: Vector3D,
+        at origin: Point3D,
+        layout: ViewportLayout
+    ) -> CGVector {
+        let end = Point3D(
+            x: origin.x + vector.x,
+            y: origin.y + vector.y,
+            z: origin.z + vector.z
+        )
+        let startPoint = layout.project(origin)
+        let endPoint = layout.project(end)
+        return CGVector(
+            dx: endPoint.x - startPoint.x,
+            dy: endPoint.y - startPoint.y
+        )
+    }
+
+    private static func fallbackDirection(from points: [CGPoint]) -> CGVector? {
+        guard points.count >= 2,
+              let last = points.last else {
+            return nil
+        }
+        for point in points.dropLast().reversed() {
+            let direction = CGVector(dx: last.x - point.x, dy: last.y - point.y)
+            if direction.length > 1.0e-9 {
+                return direction.normalized
+            }
+        }
+        return nil
     }
 }

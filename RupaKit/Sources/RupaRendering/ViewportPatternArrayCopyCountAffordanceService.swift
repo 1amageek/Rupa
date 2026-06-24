@@ -21,6 +21,7 @@ struct ViewportPatternArrayCopyCountAffordanceService: Sendable {
         return sourceIDs.flatMap { sourceID in
             candidates(
                 sourceID: sourceID,
+                document: document,
                 metadata: metadata,
                 index: index,
                 layout: layout
@@ -30,6 +31,7 @@ struct ViewportPatternArrayCopyCountAffordanceService: Sendable {
 
     private func candidates(
         sourceID: PatternArraySourceID,
+        document: DesignDocument,
         metadata: ProductMetadata,
         index: ViewportPatternArraySourceSelectionIndex,
         layout: ViewportLayout
@@ -54,7 +56,15 @@ struct ViewportPatternArrayCopyCountAffordanceService: Sendable {
                 index: index,
                 layout: layout
             )
-        case .curve:
+        case .curve(let curve):
+            if let candidate = curveCandidate(
+                sourceID: sourceID,
+                curve: curve,
+                document: document,
+                layout: layout
+            ) {
+                return [candidate]
+            }
             return []
         }
     }
@@ -158,6 +168,37 @@ struct ViewportPatternArrayCopyCountAffordanceService: Sendable {
         return ViewportPatternArrayCopyCountAffordanceCandidate(target: target, geometry: target.geometry)
     }
 
+    private func curveCandidate(
+        sourceID: PatternArraySourceID,
+        curve: CurvePatternArray,
+        document: DesignDocument,
+        layout: ViewportLayout
+    ) -> ViewportPatternArrayCopyCountAffordanceCandidate? {
+        do {
+            let distributionGeometry = try PatternArrayCurvePathGeometryService().distributionGeometry(
+                for: curve,
+                parameters: document.cadDocument.parameters,
+                cadDocument: document.cadDocument
+            )
+            guard let geometry = ViewportPatternArrayCopyCountCurveGeometry(
+                path: distributionGeometry.path,
+                distributionLength: distributionGeometry.distributionLength,
+                copyCount: curve.copyCount,
+                layout: layout
+            ) else {
+                return nil
+            }
+            let target = ViewportPatternArrayCopyCountHandleTarget(
+                sourceID: sourceID,
+                slot: .curve,
+                geometry: .curve(geometry)
+            )
+            return ViewportPatternArrayCopyCountAffordanceCandidate(target: target, geometry: target.geometry)
+        } catch {
+            return nil
+        }
+    }
+
     private func constantLengthMeters(_ expression: CADExpression) -> Double? {
         guard case .constant(let quantity) = expression,
               quantity.kind == .length,
@@ -205,6 +246,8 @@ struct ViewportPatternArrayCopyCountHandleTarget: Equatable {
             "Radial Count"
         case .radialAxis:
             "Radius Count"
+        case .curve:
+            "Curve Count"
         }
     }
 }
