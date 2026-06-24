@@ -3,6 +3,7 @@ import RupaCore
 public enum ViewportPatternArrayLinearAxisSlot: String, Equatable, Sendable {
     case first
     case second
+    case radial
 }
 
 public struct ViewportPatternArrayLinearAxisDragTarget: Equatable, Sendable {

@@ -460,6 +460,7 @@ public struct MainView: View {
                     onSlotWidthDrag: viewportSlotWidthDragHandler,
                     onSketchVertexOffsetDrag: viewportSketchVertexOffsetDragHandler,
                     onPatternArrayLinearAxisDrag: viewportPatternArrayLinearAxisDragHandler,
+                    onPatternArrayRadialAngleDrag: viewportPatternArrayRadialAngleDragHandler,
                     onSketchCurveHandleDrag: viewportSketchCurveHandleDragHandler,
                     onSketchDimensionDrag: viewportSketchDimensionDragHandler,
                     onSketchPointHandleDrag: viewportSketchPointHandleDragHandler,
@@ -663,6 +664,16 @@ public struct MainView: View {
         }
         return { target in
             handleViewportPatternArrayLinearAxisDrag(target)
+        }
+    }
+
+    private var viewportPatternArrayRadialAngleDragHandler: ((ViewportPatternArrayRadialAngleDragTarget) -> Void)? {
+        guard session.selectedTool == .select,
+              patternArrayInspectorState(for: selectedSceneNodes) != nil else {
+            return nil
+        }
+        return { target in
+            handleViewportPatternArrayRadialAngleDrag(target)
         }
     }
 
@@ -3323,6 +3334,15 @@ public struct MainView: View {
             slot = .first
         case .second:
             slot = .second
+        case .radial:
+            let result = PatternArrayEditingService(
+                session: session,
+                sourceID: target.sourceID
+            ).setRadialAxisDistance(target.distance)
+            if result?.diagnostics.isEmpty == false {
+                isPreviewExpanded = true
+            }
+            return
         }
         let result = PatternArrayEditingService(
             session: session,
@@ -3331,6 +3351,23 @@ public struct MainView: View {
             slot: slot,
             meters: target.distance
         )
+        if result?.diagnostics.isEmpty == false {
+            isPreviewExpanded = true
+        }
+    }
+
+    private func handleViewportPatternArrayRadialAngleDrag(
+        _ target: ViewportPatternArrayRadialAngleDragTarget
+    ) {
+        guard session.selectedTool == .select,
+              let state = patternArrayInspectorState(for: selectedSceneNodes),
+              state.sourceID == target.sourceID else {
+            return
+        }
+        let result = PatternArrayEditingService(
+            session: session,
+            sourceID: target.sourceID
+        ).setRadialAngle(degrees: target.angleRadians * 180.0 / .pi)
         if result?.diagnostics.isEmpty == false {
             isPreviewExpanded = true
         }

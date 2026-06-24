@@ -120,6 +120,62 @@ import Testing
 }
 
 @MainActor
+@Test func patternArrayLinearAxisAffordanceServiceResolvesRadialAxisHandle() async throws {
+    let session = EditorSession()
+    _ = try createDefaultPatternSourceDefinition(
+        in: session,
+        definitionName: "Radial Linear Axis Source"
+    )
+    let definition = try #require(session.document.productMetadata.componentDefinitions.values.first {
+        $0.name == "Radial Linear Axis Source"
+    })
+    _ = try session.execute(
+        .createPatternArray(
+            name: "Radial Linear Axis Pattern",
+            definitionID: definition.id,
+            distribution: .radial(RadialPatternArray(
+                angularAxis: PatternArrayAngularAxis(
+                    center: .origin,
+                    axis: .unitZ,
+                    angle: .angle(90.0, .degree),
+                    copyCount: 3
+                ),
+                radialAxis: PatternArrayLinearAxis(
+                    direction: .unitX,
+                    distance: .length(0.05, .meter),
+                    copyCount: 2,
+                    distanceMode: .spacing
+                )
+            )),
+            outputMode: .componentInstance
+        )
+    )
+    let source = try #require(session.document.productMetadata.patternArrays.values.first {
+        $0.name == "Radial Linear Axis Pattern"
+    })
+    let scene = ViewportSceneBuilder().build(document: session.document)
+    let layout = try #require(ViewportLayout(
+        scene: scene,
+        size: CGSize(width: 900.0, height: 700.0)
+    ))
+
+    let candidates = ViewportPatternArrayLinearAxisAffordanceService().candidates(
+        document: session.document,
+        scene: scene,
+        selection: SelectionModel(selectedTargets: [
+            SelectionTarget(sceneNodeID: source.rootSceneNodeID),
+        ]),
+        layout: layout
+    )
+
+    let candidate = try #require(candidates.first)
+    #expect(candidates.map(\.target.axisSlot) == [.radial])
+    #expect(candidate.target.sourceID == source.id)
+    #expect(candidate.target.distanceMode == .spacing)
+    #expect(candidate.geometry.baseDistanceMeters == 0.05)
+}
+
+@MainActor
 @discardableResult
 private func createDefaultPatternSourceDefinition(
     in session: EditorSession,

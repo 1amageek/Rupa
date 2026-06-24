@@ -369,6 +369,7 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                         "RupaKit/Sources/RupaCore/PatternArraySummary.swift",
                         "RupaKit/Sources/RupaCore/PatternArraySummaryResult.swift",
                         "RupaKit/Sources/RupaCore/PatternArraySummaryService.swift",
+                        "RupaKit/Sources/RupaCore/PatternArrayAnglePolicy.swift",
                         "RupaKit/Sources/RupaCore/PatternArrayDistancePolicy.swift",
                         "RupaKit/Sources/RupaCore/PatternArrayInstancePlanner.swift",
                         "RupaKit/Sources/RupaCore/DesignDisplaySnapshotService.swift",
@@ -387,9 +388,13 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                         "RupaKit/Sources/RupaUI/MainView.swift",
                         "RupaKit/Sources/RupaRendering/ViewportPatternArrayPreview.swift",
                         "RupaKit/Sources/RupaRendering/ViewportPatternArrayPreviewService.swift",
+                        "RupaKit/Sources/RupaRendering/ViewportPatternArraySourceSelectionIndex.swift",
                         "RupaKit/Sources/RupaRendering/ViewportPatternArrayLinearAxisDragTarget.swift",
                         "RupaKit/Sources/RupaRendering/ViewportPatternArrayLinearAxisAffordanceGeometry.swift",
                         "RupaKit/Sources/RupaRendering/ViewportPatternArrayLinearAxisAffordanceService.swift",
+                        "RupaKit/Sources/RupaRendering/ViewportPatternArrayRadialAngleDragTarget.swift",
+                        "RupaKit/Sources/RupaRendering/ViewportPatternArrayRadialAngleAffordanceGeometry.swift",
+                        "RupaKit/Sources/RupaRendering/ViewportPatternArrayRadialAngleAffordanceService.swift",
                         "RupaKit/Sources/RupaRendering/Viewport.swift",
                     ],
                     tests: [
@@ -403,6 +408,7 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                         "RupaKit/Tests/RupaUIPackageTests/PatternArraySummaryCacheTests.swift",
                         "RupaKit/Tests/RupaRenderingTests/ViewportPatternArrayPreviewServiceTests.swift",
                         "RupaKit/Tests/RupaRenderingTests/ViewportPatternArrayLinearAxisAffordanceServiceTests.swift",
+                        "RupaKit/Tests/RupaRenderingTests/ViewportPatternArrayRadialAngleAffordanceServiceTests.swift",
                     ],
                     notes: [
                         "Rectangular, radial, and curve arrays now persist a PatternArraySource and emit component instances or independent copied CAD feature geometry.",
@@ -422,13 +428,14 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                         "The Pattern Array Inspector reuses generation-keyed summary results so SwiftUI redraws do not repeatedly run transform planning or sketch curve extraction for unchanged documents.",
                         "The viewport resolves selected PatternArraySource roots, component-instance outputs, and independent-copy descendants into source-owned output outlines, copy markers, and count labels without scanning global component-instance references.",
                         "The viewport exposes rectangular Pattern Array first- and second-axis distance handles that resolve selected source roots or outputs back to PatternArraySource IDs and commit source-owned distance updates after drag completion.",
+                        "The viewport exposes radial Pattern Array angular spacing/extent handles and radial-axis distance handles through the shared PatternArray source-selection index.",
                         "Viewport editing workflows and incremental independent-copy reuse remain open.",
                     ]
                 ),
             ],
             openWork: [
                 "Viewport-independent copy controls and regeneration reuse for edited outputs.",
-                "Interactive viewport array handles for count, radial angle/radius, curve extent/path, and output mode editing.",
+                "Interactive viewport array handles for count, curve extent/path, and output mode editing.",
             ],
             next: "Add viewport array handles, curve path picking affordances, and independent-copy reuse diagnostics."
         ),

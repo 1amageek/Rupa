@@ -146,6 +146,41 @@ import Testing
 }
 
 @MainActor
+@Test func patternArrayEditingServiceNormalizesRadialAngleToPlannerTolerance() async throws {
+    let session = EditorSession()
+    _ = try #require(session.createDefaultExtrudedRectangle())
+    let sourceID = try createPatternArray(
+        in: session,
+        name: "Minimum Radial Angle Array",
+        distribution: .radial(RadialPatternArray(
+            angularAxis: PatternArrayAngularAxis(
+                center: .origin,
+                axis: .unitZ,
+                angle: .angle(90.0, .degree),
+                copyCount: 3,
+                angleMode: .spacing
+            )
+        ))
+    )
+
+    let result = PatternArrayEditingService(
+        session: session,
+        sourceID: sourceID
+    ).setRadialAngle(degrees: 1.0e-12)
+
+    let source = try #require(session.document.productMetadata.patternArrays[sourceID])
+    guard case .radial(let radial) = source.distribution,
+          case .constant(let quantity) = radial.angularAxis.angle else {
+        Issue.record("Expected a radial pattern source with a constant angular distance.")
+        return
+    }
+    #expect(result?.didMutate == true)
+    #expect(radial.angularAxis.angleMode == .spacing)
+    #expect(quantity.kind == .angle)
+    #expect(quantity.value == PatternArrayAnglePolicy.standard.minimumAngleRadians)
+}
+
+@MainActor
 @Test func patternArrayEditingServiceReplacesCurvePathWithSketchEntity() async throws {
     let session = EditorSession()
     _ = try #require(session.createDefaultExtrudedRectangle())

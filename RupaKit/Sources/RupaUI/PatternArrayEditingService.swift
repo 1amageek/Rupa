@@ -9,6 +9,7 @@ struct PatternArrayEditingService {
 
     let session: EditorSession
     let sourceID: PatternArraySourceID
+    private let anglePolicy = PatternArrayAnglePolicy.standard
     private let distancePolicy = PatternArrayDistancePolicy.standard
 
     @discardableResult
@@ -118,7 +119,8 @@ struct PatternArrayEditingService {
     @discardableResult
     func setRadialAngle(degrees: Double) -> CommandExecutionResult? {
         updateRadialAngularAxis { angularAxis in
-            angularAxis.angle = .angle(degrees, .degree)
+            let angleRadians = PatternArrayEditingService.radians(fromDegrees: degrees)
+            angularAxis.angle = .angle(anglePolicy.normalizedSignedAngleRadians(angleRadians), .radian)
         }
     }
 
@@ -342,5 +344,9 @@ struct PatternArrayEditingService {
             return 1.0
         }
         return min(max(ratio, 1.0e-9), 1.0)
+    }
+
+    private static func radians(fromDegrees degrees: Double) -> Double {
+        degrees * .pi / 180.0
     }
 }
