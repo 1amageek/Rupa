@@ -43,8 +43,8 @@ public final class EditorSession {
         store.evaluatedBodyCount
     }
 
-    public var currentEvaluatedDocument: EvaluatedDocument? {
-        store.currentEvaluatedDocument
+    public var currentEvaluationCache: EvaluatedDocumentCache? {
+        store.currentEvaluationCache
     }
 
     public var evaluationSnapshot: EvaluationSnapshot {

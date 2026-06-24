@@ -19,20 +19,20 @@ public struct ObjectDimensionSummaryService: Sendable {
         }
 
         let resolver = ObjectDimensionSourceResolver()
-        let entries = try targets.flatMap { target in
+        let summaryEntries = try targets.flatMap { target in
             try entries(for: resolver.resolve(target: target, in: document))
         }
         return ObjectDimensionSummaryResult(
             displayUnit: document.displayUnit,
             counts: ObjectDimensionSummaryResult.Counts(
                 targetCount: targets.count,
-                entryCount: entries.count
+                entryCount: summaryEntries.count
             ),
-            entries: entries,
+            entries: summaryEntries,
             diagnostics: [
                 EditorDiagnostic(
                     severity: .info,
-                    message: "Object dimension summary completed with \(entries.count) editable dimension candidate(s)."
+                    message: "Object dimension summary completed with \(summaryEntries.count) editable dimension candidate(s)."
                 ),
             ]
         )

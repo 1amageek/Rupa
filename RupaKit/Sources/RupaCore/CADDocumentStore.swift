@@ -12,7 +12,7 @@ public final class CADDocumentStore {
     public private(set) var evaluatedGeneration: DocumentGeneration?
     public private(set) var renderInvalidation: RenderInvalidation
     public private(set) var evaluatedBodyCount: Int
-    public private(set) var evaluatedDocument: EvaluatedDocument?
+    public private(set) var evaluationCache: EvaluatedDocumentCache?
     public let objectRegistry: ObjectTypeRegistry
     private let evaluationScheduler: EvaluationScheduler
 
@@ -25,7 +25,7 @@ public final class CADDocumentStore {
         evaluatedGeneration: DocumentGeneration? = nil,
         renderInvalidation: RenderInvalidation = RenderInvalidation(),
         evaluatedBodyCount: Int = 0,
-        evaluatedDocument: EvaluatedDocument? = nil,
+        evaluationCache: EvaluatedDocumentCache? = nil,
         objectRegistry: ObjectTypeRegistry = .builtIn,
         evaluationScheduler: EvaluationScheduler = EvaluationScheduler()
     ) {
@@ -37,19 +37,22 @@ public final class CADDocumentStore {
         self.evaluatedGeneration = evaluatedGeneration
         self.renderInvalidation = renderInvalidation
         self.evaluatedBodyCount = evaluatedBodyCount
-        self.evaluatedDocument = evaluatedDocument
+        self.evaluationCache = evaluationCache
         self.objectRegistry = objectRegistry
         self.evaluationScheduler = evaluationScheduler
     }
 
-    public var currentEvaluatedDocument: EvaluatedDocument? {
+    public var currentEvaluationCache: EvaluatedDocumentCache? {
         guard evaluatedGeneration == generation else {
             return nil
         }
         guard case .valid = evaluationStatus else {
             return nil
         }
-        return evaluatedDocument
+        guard evaluationCache?.generation == generation else {
+            return nil
+        }
+        return evaluationCache
     }
 
     public var evaluationSnapshot: EvaluationSnapshot {
@@ -77,7 +80,7 @@ public final class CADDocumentStore {
 
     public func restore(_ snapshot: DocumentSnapshot) {
         let cacheGeneration = generation
-        let cache = currentEvaluatedDocument
+        let cache = currentEvaluationCache
         document = snapshot.document
         generation = snapshot.generation
         isDirty = snapshot.isDirty
@@ -86,7 +89,7 @@ public final class CADDocumentStore {
         evaluatedGeneration = snapshot.evaluatedGeneration
         renderInvalidation = snapshot.renderInvalidation
         evaluatedBodyCount = snapshot.evaluatedBodyCount
-        evaluatedDocument = Self.preservedEvaluatedDocument(
+        evaluationCache = Self.preservedEvaluationCache(
             cache: cache,
             cacheGeneration: cacheGeneration,
             restoredGeneration: snapshot.generation,
@@ -105,7 +108,7 @@ public final class CADDocumentStore {
         evaluatedGeneration = snapshot.evaluatedGeneration
         renderInvalidation = snapshot.renderInvalidation
         evaluatedBodyCount = snapshot.evaluatedBodyCount
-        evaluatedDocument = nil
+        evaluationCache = nil
     }
 
     public func requireGeneration(_ expectedGeneration: DocumentGeneration?) throws {
@@ -976,24 +979,27 @@ public final class CADDocumentStore {
         evaluatedBodyCount = snapshot.bodyCount
         if case .valid = snapshot.status,
            snapshot.evaluatedGeneration == generation {
-            evaluatedDocument = result.evaluatedDocument
+            evaluationCache = result.evaluationCache
         } else {
-            evaluatedDocument = nil
+            evaluationCache = nil
         }
     }
 
-    private static func preservedEvaluatedDocument(
-        cache: EvaluatedDocument?,
+    private static func preservedEvaluationCache(
+        cache: EvaluatedDocumentCache?,
         cacheGeneration: DocumentGeneration,
         restoredGeneration: DocumentGeneration,
         restoredEvaluationStatus: EvaluationStatus,
         restoredEvaluatedGeneration: DocumentGeneration?
-    ) -> EvaluatedDocument? {
+    ) -> EvaluatedDocumentCache? {
         guard cacheGeneration == restoredGeneration,
               restoredEvaluatedGeneration == restoredGeneration else {
             return nil
         }
         guard case .valid = restoredEvaluationStatus else {
+            return nil
+        }
+        guard cache?.generation == restoredGeneration else {
             return nil
         }
         return cache

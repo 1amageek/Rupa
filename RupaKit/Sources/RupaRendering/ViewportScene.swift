@@ -1120,14 +1120,32 @@ public struct ViewportModelCoordinateMapper {
         document: DesignDocument,
         size: CGSize,
         objectRegistry: ObjectTypeRegistry = .builtIn,
-        evaluatedDocument: EvaluatedDocument? = nil,
+        documentGeneration: DocumentGeneration? = nil,
+        evaluationCache: EvaluatedDocumentCache? = nil,
         camera: ViewportCamera = .identity,
         basis: ViewportProjectionBasis = .isometric
     ) {
         let scene = ViewportSceneBuilder(objectRegistry: objectRegistry).build(
             document: document,
-            evaluatedDocument: evaluatedDocument
+            documentGeneration: documentGeneration,
+            evaluationCache: evaluationCache
         )
+        self.init(
+            document: document,
+            scene: scene,
+            size: size,
+            camera: camera,
+            basis: basis
+        )
+    }
+
+    public init(
+        document: DesignDocument,
+        scene: ViewportScene,
+        size: CGSize,
+        camera: ViewportCamera = .identity,
+        basis: ViewportProjectionBasis = .isometric
+    ) {
         let modelBounds = Self.modelBounds(for: document, scene: scene)
         self.layout = ViewportLayout(
             modelBounds: modelBounds,
@@ -1187,6 +1205,39 @@ public struct ViewportModelCoordinateMapper {
             return baseBounds
         }
         return baseBounds.union(sceneBounds)
+    }
+}
+
+public struct ViewportSceneContext {
+    public var scene: ViewportScene
+    public var mapper: ViewportModelCoordinateMapper
+
+    public var layout: ViewportLayout {
+        mapper.layout
+    }
+
+    public init(
+        document: DesignDocument,
+        documentGeneration: DocumentGeneration? = nil,
+        size: CGSize,
+        objectRegistry: ObjectTypeRegistry = .builtIn,
+        evaluationCache: EvaluatedDocumentCache? = nil,
+        camera: ViewportCamera = .identity,
+        basis: ViewportProjectionBasis = .isometric
+    ) {
+        let scene = ViewportSceneBuilder(objectRegistry: objectRegistry).build(
+            document: document,
+            documentGeneration: documentGeneration,
+            evaluationCache: evaluationCache
+        )
+        self.scene = scene
+        self.mapper = ViewportModelCoordinateMapper(
+            document: document,
+            scene: scene,
+            size: size,
+            camera: camera,
+            basis: basis
+        )
     }
 }
 
@@ -2420,12 +2471,17 @@ public struct ViewportSceneBuilder {
 
     public func build(
         document: DesignDocument,
-        evaluatedDocument: EvaluatedDocument? = nil
+        documentGeneration: DocumentGeneration? = nil,
+        evaluationCache: EvaluatedDocumentCache? = nil
     ) -> ViewportScene {
         let graph = document.cadDocument.designGraph
         let designDisplaySnapshot = DesignDisplaySnapshotService().snapshot(document: document)
         let bodyDisplaySnapshots: [FeatureID: BodyDisplaySnapshot]
-        if let evaluatedDocument {
+        if let evaluatedDocument = currentEvaluatedDocument(
+            for: document,
+            documentGeneration: documentGeneration,
+            evaluationCache: evaluationCache
+        ) {
             bodyDisplaySnapshots = BodyDisplaySnapshotService().snapshots(
                 evaluatedDocument: evaluatedDocument
             )
@@ -2579,6 +2635,28 @@ public struct ViewportSceneBuilder {
             }
         }
         return ViewportScene(items: items)
+    }
+
+    private func currentEvaluatedDocument(
+        for document: DesignDocument,
+        documentGeneration: DocumentGeneration?,
+        evaluationCache: EvaluatedDocumentCache?
+    ) -> EvaluatedDocument? {
+        guard let documentGeneration,
+              let evaluationCache else {
+            return nil
+        }
+        do {
+            guard try evaluationCache.matches(
+                document: document,
+                generation: documentGeneration
+            ) else {
+                return nil
+            }
+            return evaluationCache.evaluatedDocument
+        } catch {
+            return nil
+        }
     }
 
     private func evaluatedMeshBodyItem(

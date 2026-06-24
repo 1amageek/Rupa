@@ -73,7 +73,10 @@ public struct EvaluationScheduler: Sendable {
                     ),
                 ]
             ),
-            evaluatedDocument: evaluatedDocument
+            evaluationCache: EvaluatedDocumentCache(
+                generation: generation,
+                evaluatedDocument: evaluatedDocument
+            )
         )
     }
 

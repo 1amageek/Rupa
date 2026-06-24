@@ -1,12 +1,12 @@
 public struct DocumentEvaluationResult: Sendable {
     public var snapshot: EvaluationSnapshot
-    public var evaluatedDocument: EvaluatedDocument?
+    public var evaluationCache: EvaluatedDocumentCache?
 
     public init(
         snapshot: EvaluationSnapshot,
-        evaluatedDocument: EvaluatedDocument? = nil
+        evaluationCache: EvaluatedDocumentCache? = nil
     ) {
         self.snapshot = snapshot
-        self.evaluatedDocument = evaluatedDocument
+        self.evaluationCache = evaluationCache
     }
 }

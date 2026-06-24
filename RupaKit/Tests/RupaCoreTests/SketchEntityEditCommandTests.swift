@@ -239,15 +239,15 @@ import Testing
         Issue.record("Generated vertex offset fixture must create an extrude body.")
         return
     }
-    let bodySceneNodeID = try #require(bodySceneNodeID(for: bodyFeatureID, in: session.document))
+    let bodyNodeID = try #require(bodySceneNodeID(for: bodyFeatureID, in: session.document))
     let componentID = try #require(
         try GeneratedTopologySelectionResolver().componentID(
-            for: bodySceneNodeID,
+            for: bodyNodeID,
             cornerVertex: .frontBottomRight,
             in: session.document
         )
     )
-    let target = SelectionTarget(sceneNodeID: bodySceneNodeID, component: .vertex(componentID))
+    let target = SelectionTarget(sceneNodeID: bodyNodeID, component: .vertex(componentID))
     let beforeGeneration = session.generation
 
     let result = try session.execute(
@@ -294,15 +294,15 @@ import Testing
         )
     )
     let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
-    let bodySceneNodeID = try #require(bodySceneNodeID(for: bodyFeatureID, in: session.document))
+    let bodyNodeID = try #require(bodySceneNodeID(for: bodyFeatureID, in: session.document))
     let componentID = try #require(
         try GeneratedTopologySelectionResolver().componentID(
-            for: bodySceneNodeID,
+            for: bodyNodeID,
             cornerVertex: .frontBottomRight,
             in: session.document
         )
     )
-    let target = SelectionTarget(sceneNodeID: bodySceneNodeID, component: .vertex(componentID))
+    let target = SelectionTarget(sceneNodeID: bodyNodeID, component: .vertex(componentID))
     let before = try SketchEntitySummaryService().summarize(document: session.document)
     let beforeGeneration = session.generation
 
@@ -347,15 +347,15 @@ import Testing
         )
     )
     let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
-    let bodySceneNodeID = try #require(bodySceneNodeID(for: bodyFeatureID, in: session.document))
+    let bodyNodeID = try #require(bodySceneNodeID(for: bodyFeatureID, in: session.document))
     let componentID = try #require(
         try GeneratedTopologySelectionResolver().componentID(
-            for: bodySceneNodeID,
+            for: bodyNodeID,
             bodyFace: .front,
             in: session.document
         )
     )
-    let target = SelectionTarget(sceneNodeID: bodySceneNodeID, component: .face(componentID))
+    let target = SelectionTarget(sceneNodeID: bodyNodeID, component: .face(componentID))
     let beforeGeneration = session.generation
 
     let result = try session.execute(
@@ -419,12 +419,12 @@ import Testing
         )
     )
     let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
-    let bodySceneNodeID = try #require(bodySceneNodeID(for: bodyFeatureID, in: session.document))
+    let bodyNodeID = try #require(bodySceneNodeID(for: bodyFeatureID, in: session.document))
     let beforeTopology = try TopologySummaryService().summarize(document: session.document)
     let supportFaceEntry = try #require(
         beforeTopology.entries.first {
             $0.kind == .face &&
-                $0.sceneNodeID == bodySceneNodeID.description &&
+                $0.sceneNodeID == bodyNodeID.description &&
                 $0.generatedRole == "startFace"
         }
     )
@@ -433,7 +433,7 @@ import Testing
     let edgeEntry = try #require(
         beforeTopology.entries.first {
             $0.kind == .edge &&
-                $0.sceneNodeID == bodySceneNodeID.description &&
+                $0.sceneNodeID == bodyNodeID.description &&
                 $0.curveKind == "line" &&
                 topologyPoint($0.start, isOnDepth: supportDepth) &&
                 topologyPoint($0.end, isOnDepth: supportDepth) &&

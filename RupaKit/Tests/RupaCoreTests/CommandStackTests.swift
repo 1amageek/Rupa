@@ -33,13 +33,14 @@ import Testing
 
     _ = try #require(session.createDefaultExtrudedRectangle())
 
-    let evaluatedDocument = try #require(session.currentEvaluatedDocument)
+    let evaluationCache = try #require(session.currentEvaluationCache)
     #expect(session.evaluationStatus == .valid)
     #expect(session.evaluatedGeneration == session.generation)
-    #expect(evaluatedDocument.meshes.count == session.evaluatedBodyCount)
+    #expect(evaluationCache.generation == session.generation)
+    #expect(evaluationCache.evaluatedDocument.meshes.count == session.evaluatedBodyCount)
 
     session.reportToolStatus("Cache-preserving diagnostic")
-    #expect(session.currentEvaluatedDocument != nil)
+    #expect(session.currentEvaluationCache != nil)
 
     let snapshot = session.store.snapshot()
     session.store.restore(DocumentSnapshot(
@@ -52,7 +53,31 @@ import Testing
         renderInvalidation: snapshot.renderInvalidation,
         evaluatedBodyCount: snapshot.evaluatedBodyCount
     ))
-    #expect(session.currentEvaluatedDocument == nil)
+    #expect(session.currentEvaluationCache == nil)
+}
+
+@MainActor
+@Test func editorSessionRebuildsEvaluationCacheAfterUndoAndRedo() async throws {
+    let session = EditorSession()
+    _ = try #require(session.createDefaultExtrudedRectangle())
+    let originalGeneration = session.generation
+    let originalCache = try #require(session.currentEvaluationCache)
+
+    _ = try session.execute(.setDisplayUnit(.meter))
+    let changedCache = try #require(session.currentEvaluationCache)
+    #expect(changedCache.generation == session.generation)
+    #expect(changedCache.generation != originalCache.generation)
+
+    _ = try session.undo()
+    let undoCache = try #require(session.currentEvaluationCache)
+    #expect(session.generation != originalGeneration)
+    #expect(undoCache.generation == session.generation)
+    #expect(undoCache.sourceFingerprint == originalCache.sourceFingerprint)
+
+    _ = try session.redo()
+    let redoCache = try #require(session.currentEvaluationCache)
+    #expect(redoCache.generation == session.generation)
+    #expect(redoCache.sourceFingerprint == changedCache.sourceFingerprint)
 }
 
 @MainActor

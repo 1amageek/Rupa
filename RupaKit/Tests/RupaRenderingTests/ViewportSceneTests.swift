@@ -31,15 +31,51 @@ import Testing
 @Test func viewportSceneBuilderUsesCurrentEvaluatedDocumentWhenAvailable() async throws {
     let session = EditorSession()
     _ = try #require(session.createDefaultExtrudedRectangle())
-    let evaluatedDocument = try #require(session.currentEvaluatedDocument)
+    let evaluationCache = try #require(session.currentEvaluationCache)
 
     let documentScene = ViewportSceneBuilder().build(document: session.document)
     let cachedScene = ViewportSceneBuilder().build(
         document: session.document,
-        evaluatedDocument: evaluatedDocument
+        documentGeneration: session.generation,
+        evaluationCache: evaluationCache
     )
 
     #expect(cachedScene == documentScene)
+}
+
+@MainActor
+@Test func viewportSceneBuilderIgnoresEvaluationCacheWhenGenerationIsStale() async throws {
+    let session = EditorSession()
+    _ = try #require(session.createDefaultExtrudedRectangle())
+    let evaluationCache = try #require(session.currentEvaluationCache)
+
+    let documentScene = ViewportSceneBuilder().build(document: session.document)
+    let staleScene = ViewportSceneBuilder().build(
+        document: session.document,
+        documentGeneration: DocumentGeneration(session.generation.value + 1),
+        evaluationCache: evaluationCache
+    )
+
+    #expect(staleScene == documentScene)
+}
+
+@MainActor
+@Test func viewportSceneBuilderIgnoresEvaluationCacheWhenSourceFingerprintDiffers() async throws {
+    let rectangleSession = EditorSession()
+    _ = try #require(rectangleSession.createDefaultExtrudedRectangle())
+    let rectangleCache = try #require(rectangleSession.currentEvaluationCache)
+
+    let circleSession = EditorSession()
+    _ = try #require(circleSession.createDefaultExtrudedCircle())
+
+    let circleScene = ViewportSceneBuilder().build(document: circleSession.document)
+    let mismatchedScene = ViewportSceneBuilder().build(
+        document: circleSession.document,
+        documentGeneration: rectangleCache.generation,
+        evaluationCache: rectangleCache
+    )
+
+    #expect(mismatchedScene == circleScene)
 }
 
 @Test func viewportFaceSurfacePointResolverRestoresPointInsideProjectedFace() throws {

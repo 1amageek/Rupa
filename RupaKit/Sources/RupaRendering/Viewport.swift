@@ -54,7 +54,8 @@ public struct Viewport: View {
     @State private var identityHitResolver = ViewportIdentityHitResolver()
 
     private let document: DesignDocument
-    private let evaluatedDocument: EvaluatedDocument?
+    private let documentGeneration: DocumentGeneration?
+    private let evaluationCache: EvaluatedDocumentCache?
     private let objectRegistry: ObjectTypeRegistry
     private let evaluationStatus: EvaluationStatus
     private let renderInvalidation: RenderInvalidation
@@ -105,7 +106,8 @@ public struct Viewport: View {
 
     public init(
         document: DesignDocument,
-        evaluatedDocument: EvaluatedDocument? = nil,
+        documentGeneration: DocumentGeneration? = nil,
+        evaluationCache: EvaluatedDocumentCache? = nil,
         objectRegistry: ObjectTypeRegistry = .builtIn,
         evaluationStatus: EvaluationStatus = .notEvaluated,
         renderInvalidation: RenderInvalidation = RenderInvalidation(),
@@ -155,7 +157,8 @@ public struct Viewport: View {
         onProjectionBasisChange: ((ViewportProjectionBasis) -> Void)? = nil
     ) {
         self.document = document
-        self.evaluatedDocument = evaluatedDocument
+        self.documentGeneration = documentGeneration
+        self.evaluationCache = evaluationCache
         self.objectRegistry = objectRegistry
         self.evaluationStatus = evaluationStatus
         self.renderInvalidation = renderInvalidation
@@ -569,7 +572,24 @@ public struct Viewport: View {
     private func makeScene() -> ViewportScene {
         ViewportSceneBuilder(objectRegistry: objectRegistry).build(
             document: document,
-            evaluatedDocument: evaluatedDocument
+            documentGeneration: documentGeneration,
+            evaluationCache: evaluationCache
+        )
+    }
+
+    private func makeSceneContext(
+        size: CGSize,
+        camera: ViewportCamera,
+        basis: ViewportProjectionBasis
+    ) -> ViewportSceneContext {
+        ViewportSceneContext(
+            document: document,
+            documentGeneration: documentGeneration,
+            size: size,
+            objectRegistry: objectRegistry,
+            evaluationCache: evaluationCache,
+            camera: camera,
+            basis: basis
         )
     }
 
@@ -582,7 +602,8 @@ public struct Viewport: View {
             document: document,
             size: size,
             objectRegistry: objectRegistry,
-            evaluatedDocument: evaluatedDocument,
+            documentGeneration: documentGeneration,
+            evaluationCache: evaluationCache,
             camera: camera,
             basis: basis
         )
@@ -679,12 +700,13 @@ public struct Viewport: View {
         camera: ViewportCamera,
         basis: ViewportProjectionBasis
     ) {
-        let scene = makeScene()
-        let layout = makeLayout(
+        let sceneContext = makeSceneContext(
             size: size,
             camera: camera,
             basis: basis
         )
+        let scene = sceneContext.scene
+        let layout = sceneContext.layout
         let selectedObjectFeatureIDs = selectedObjectFeatureIDs()
         let previewObjectFeatureIDs = featureIDs(for: objectSelectionTargets(in: selectionDragPreviewTargets))
         let selectedTargetFeatureIDs = selectedTargetFeatureIDs()
@@ -3994,12 +4016,13 @@ public struct Viewport: View {
         size: CGSize,
         basis: ViewportProjectionBasis
     ) -> [ViewportFaceAccessibilityMarker] {
-        let scene = makeScene()
-        let layout = makeLayout(
+        let sceneContext = makeSceneContext(
             size: size,
             camera: camera,
             basis: basis
         )
+        let scene = sceneContext.scene
+        let layout = sceneContext.layout
 
         return scene.items.flatMap { item -> [ViewportFaceAccessibilityMarker] in
             guard case .body = item.kind,
@@ -4034,12 +4057,13 @@ public struct Viewport: View {
         size: CGSize,
         basis: ViewportProjectionBasis
     ) -> [ViewportEdgeAccessibilityMarker] {
-        let scene = makeScene()
-        let layout = makeLayout(
+        let sceneContext = makeSceneContext(
             size: size,
             camera: camera,
             basis: basis
         )
+        let scene = sceneContext.scene
+        let layout = sceneContext.layout
 
         return scene.items.flatMap { item -> [ViewportEdgeAccessibilityMarker] in
             guard case .body = item.kind,
@@ -6382,12 +6406,13 @@ public struct Viewport: View {
         guard onSketchCurveHandleDrag != nil else {
             return nil
         }
-        let scene = makeScene()
-        let layout = makeLayout(
+        let sceneContext = makeSceneContext(
             size: size,
             camera: camera,
             basis: currentProjectionBasis
         )
+        let scene = sceneContext.scene
+        let layout = sceneContext.layout
         let handleTolerance: CGFloat = 12.0
         var bestTarget: (target: ViewportSketchCurveHandleTarget, distance: CGFloat)?
         for selectionTarget in selection.selectedTargets.reversed() {
@@ -6435,12 +6460,13 @@ public struct Viewport: View {
         guard onSketchDimensionDrag != nil else {
             return nil
         }
-        let scene = makeScene()
-        let layout = makeLayout(
+        let sceneContext = makeSceneContext(
             size: size,
             camera: camera,
             basis: currentProjectionBasis
         )
+        let scene = sceneContext.scene
+        let layout = sceneContext.layout
         var bestTarget: (target: ViewportSketchDimensionTarget, distance: CGFloat)?
         for selectionTarget in selection.selectedTargets.reversed() {
             guard case .sketchEntity = selectionTarget.component,
@@ -6672,12 +6698,13 @@ public struct Viewport: View {
         guard onSketchPointHandleDrag != nil else {
             return nil
         }
-        let scene = makeScene()
-        let layout = makeLayout(
+        let sceneContext = makeSceneContext(
             size: size,
             camera: camera,
             basis: currentProjectionBasis
         )
+        let scene = sceneContext.scene
+        let layout = sceneContext.layout
         let handleTolerance: CGFloat = 12.0
         for target in selection.selectedTargets.reversed() {
             guard case .sketchEntity = target.component,
@@ -6763,12 +6790,13 @@ public struct Viewport: View {
         guard onSplineControlPointDrag != nil else {
             return nil
         }
-        let scene = makeScene()
-        let layout = makeLayout(
+        let sceneContext = makeSceneContext(
             size: size,
             camera: camera,
             basis: currentProjectionBasis
         )
+        let scene = sceneContext.scene
+        let layout = sceneContext.layout
         let handleTolerance: CGFloat = 12.0
         for target in selection.selectedTargets.reversed() {
             guard case .sketchEntity = target.component,
@@ -6816,12 +6844,13 @@ public struct Viewport: View {
         guard onPolySplineSurfaceVertexDrag != nil else {
             return nil
         }
-        let scene = makeScene()
-        let layout = makeLayout(
+        let sceneContext = makeSceneContext(
             size: size,
             camera: camera,
             basis: currentProjectionBasis
         )
+        let scene = sceneContext.scene
+        let layout = sceneContext.layout
         let topologyVertices = polySplineSurfaceTopologyVertices(in: scene)
         let handleTolerance: CGFloat = 12.0
         for target in polySplineSurfaceVertexHandleTargets(in: scene) {
@@ -6870,12 +6899,13 @@ public struct Viewport: View {
         guard onPolySplineSurfaceVertexSlideDrag != nil else {
             return nil
         }
-        let scene = makeScene()
-        let layout = makeLayout(
+        let sceneContext = makeSceneContext(
             size: size,
             camera: camera,
             basis: currentProjectionBasis
         )
+        let scene = sceneContext.scene
+        let layout = sceneContext.layout
         var nearest: (target: ViewportPolySplineSurfaceVertexSlideHandleTarget, distance: CGFloat)?
         for candidate in polySplineSurfaceVertexSlideAffordanceCandidates(
             scene: scene,
@@ -7052,12 +7082,13 @@ public struct Viewport: View {
         guard onVertexDrag != nil else {
             return nil
         }
-        let scene = makeScene()
-        let layout = makeLayout(
+        let sceneContext = makeSceneContext(
             size: size,
             camera: camera,
             basis: currentProjectionBasis
         )
+        let scene = sceneContext.scene
+        let layout = sceneContext.layout
         let handleTolerance: CGFloat = 12.0
         for target in selection.selectedTargets.reversed() {
             guard case .vertex = target.component,
@@ -7085,12 +7116,13 @@ public struct Viewport: View {
         guard onFaceDrag != nil else {
             return nil
         }
-        let scene = makeScene()
-        let layout = makeLayout(
+        let sceneContext = makeSceneContext(
             size: size,
             camera: camera,
             basis: currentProjectionBasis
         )
+        let scene = sceneContext.scene
+        let layout = sceneContext.layout
         for target in selection.selectedTargets.reversed() {
             guard case .face = target.component,
                   let faceTarget = faceSelectionTarget(for: target),
@@ -7118,12 +7150,13 @@ public struct Viewport: View {
         guard onEdgeChamferDrag != nil else {
             return nil
         }
-        let scene = makeScene()
-        let layout = makeLayout(
+        let sceneContext = makeSceneContext(
             size: size,
             camera: camera,
             basis: currentProjectionBasis
         )
+        let scene = sceneContext.scene
+        let layout = sceneContext.layout
         for target in selection.selectedTargets.reversed() {
             guard case .edge = target.component,
                   let edgeTarget = edgeSelectionTarget(for: target),
@@ -7150,12 +7183,13 @@ public struct Viewport: View {
         guard onEdgeFilletDrag != nil else {
             return nil
         }
-        let scene = makeScene()
-        let layout = makeLayout(
+        let sceneContext = makeSceneContext(
             size: size,
             camera: camera,
             basis: currentProjectionBasis
         )
+        let scene = sceneContext.scene
+        let layout = sceneContext.layout
         for target in selection.selectedTargets.reversed() {
             guard case .edge = target.component,
                   let edgeTarget = edgeSelectionTarget(for: target),
@@ -7182,12 +7216,13 @@ public struct Viewport: View {
         guard onRegionOffsetDrag != nil else {
             return nil
         }
-        let scene = makeScene()
-        let layout = makeLayout(
+        let sceneContext = makeSceneContext(
             size: size,
             camera: camera,
             basis: currentProjectionBasis
         )
+        let scene = sceneContext.scene
+        let layout = sceneContext.layout
         let candidates = regionOffsetAffordanceCandidates(
             targets: selectedSketchRegionTargets(),
             scene: scene,
@@ -7212,12 +7247,13 @@ public struct Viewport: View {
         guard onEdgeOffsetDrag != nil else {
             return nil
         }
-        let scene = makeScene()
-        let layout = makeLayout(
+        let sceneContext = makeSceneContext(
             size: size,
             camera: camera,
             basis: currentProjectionBasis
         )
+        let scene = sceneContext.scene
+        let layout = sceneContext.layout
         let candidates = edgeOffsetAffordanceCandidates(
             targets: selectedEdgeTargets(),
             scene: scene,
@@ -7242,12 +7278,13 @@ public struct Viewport: View {
         guard onSlotWidthDrag != nil else {
             return nil
         }
-        let scene = makeScene()
-        let layout = makeLayout(
+        let sceneContext = makeSceneContext(
             size: size,
             camera: camera,
             basis: currentProjectionBasis
         )
+        let scene = sceneContext.scene
+        let layout = sceneContext.layout
         let candidates = slotWidthAffordanceCandidates(
             targets: selectedSlotWidthSourceTargets(),
             scene: scene,
@@ -7272,12 +7309,13 @@ public struct Viewport: View {
         guard onSketchVertexOffsetDrag != nil else {
             return nil
         }
-        let scene = makeScene()
-        let layout = makeLayout(
+        let sceneContext = makeSceneContext(
             size: size,
             camera: camera,
             basis: currentProjectionBasis
         )
+        let scene = sceneContext.scene
+        let layout = sceneContext.layout
         let candidates = sketchVertexOffsetAffordanceCandidates(
             targets: selectedSketchVertexOffsetSourceTargets(),
             scene: scene,
@@ -7302,12 +7340,13 @@ public struct Viewport: View {
         guard onSplineControlPointSlideDrag != nil else {
             return nil
         }
-        let scene = makeScene()
-        let layout = makeLayout(
+        let sceneContext = makeSceneContext(
             size: size,
             camera: camera,
             basis: currentProjectionBasis
         )
+        let scene = sceneContext.scene
+        let layout = sceneContext.layout
         let candidates = splineControlPointSlideAffordanceCandidates(
             groups: selectedSplineControlPointGroups(),
             scene: scene,
@@ -7332,12 +7371,13 @@ public struct Viewport: View {
         guard allowsObjectAffordances else {
             return nil
         }
-        let scene = makeScene()
-        let layout = makeLayout(
+        let sceneContext = makeSceneContext(
             size: size,
             camera: camera,
             basis: currentProjectionBasis
         )
+        let scene = sceneContext.scene
+        let layout = sceneContext.layout
         return affordanceTarget(at: point, scene: scene, layout: layout)
     }
 
@@ -7557,7 +7597,13 @@ public struct Viewport: View {
         current: CGPoint,
         size: CGSize
     ) {
-        let scene = makeScene()
+        let sceneContext = makeSceneContext(
+            size: size,
+            camera: camera,
+            basis: currentProjectionBasis
+        )
+        let scene = sceneContext.scene
+        let layout = sceneContext.layout
         let selectedFeatureIDs = selectedObjectFeatureIDs()
         let selectedBodyItems = selectedBodyItems(in: scene, selectedFeatureIDs: selectedFeatureIDs)
         let targetIsSelectionGroup = selectedBodyItems.count > 1
@@ -7592,11 +7638,6 @@ public struct Viewport: View {
             activeAffordanceDrag = dragState
         }
 
-        let layout = makeLayout(
-            size: size,
-            camera: camera,
-            basis: currentProjectionBasis
-        )
         if let baseGroupEdit = dragState.baseGroupEdit {
             let nextGroupEdit = baseGroupEdit.applying(
                 action: target.action,
@@ -8129,12 +8170,13 @@ public struct Viewport: View {
         guard let onPick else {
             return
         }
-        let scene = makeScene()
-        let mapper = makeCoordinateMapper(
+        let sceneContext = makeSceneContext(
             size: size,
             camera: camera,
             basis: currentProjectionBasis
         )
+        let scene = sceneContext.scene
+        let mapper = sceneContext.mapper
         let hit = viewportHit(
             point: point,
             in: sceneBySuppressingSketches(
@@ -8318,12 +8360,13 @@ public struct Viewport: View {
         guard let onCanvasDrag else {
             return
         }
-        let mapper = makeCoordinateMapper(
+        let sceneContext = makeSceneContext(
             size: size,
             camera: camera,
             basis: currentProjectionBasis
         )
-        let scene = makeScene()
+        let scene = sceneContext.scene
+        let mapper = sceneContext.mapper
         let sketchPlane = activeCanvasDrag?.sketchPlane ?? canvasDragSketchPlane(for: hoveredCanvasHit)
         onCanvasDrag(
             mapper.modelDrag(
@@ -8757,12 +8800,13 @@ public struct Viewport: View {
         guard rect.width > 0.0, rect.height > 0.0 else {
             return []
         }
-        let scene = makeScene()
-        let mapper = makeCoordinateMapper(
+        let sceneContext = makeSceneContext(
             size: size,
             camera: camera,
             basis: currentProjectionBasis
         )
+        let scene = sceneContext.scene
+        let mapper = sceneContext.mapper
         let hitScene = sceneBySuppressingSketches(
             scene,
             selectedFeatureIDs: selectedTargetFeatureIDs()
@@ -8777,12 +8821,13 @@ public struct Viewport: View {
     }
 
     private func hover(at point: CGPoint, size: CGSize) {
-        let scene = makeScene()
-        let mapper = makeCoordinateMapper(
+        let sceneContext = makeSceneContext(
             size: size,
             camera: camera,
             basis: currentProjectionBasis
         )
+        let scene = sceneContext.scene
+        let mapper = sceneContext.mapper
         hoveredRegionOffsetHandle = nil
         hoveredEdgeOffsetHandle = nil
         hoveredSlotWidthHandle = nil
