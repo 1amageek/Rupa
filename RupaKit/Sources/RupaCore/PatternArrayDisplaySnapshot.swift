@@ -32,25 +32,27 @@ public struct PatternArrayDisplaySnapshot: Codable, Equatable, Sendable {
     public var sourceID: PatternArraySourceID
     public var name: String
     public var definitionID: ComponentDefinitionID
-    public var definitionName: String
+    public var definitionName: String?
     public var distribution: PatternArrayDistribution
     public var outputMode: PatternArrayOutputMode
     public var rootSceneNodeID: SceneNodeID
-    public var rootSceneNodeName: String
+    public var rootSceneNodeName: String?
     public var outputCount: Int
     public var outputs: [Output]
+    public var diagnostics: [PatternArraySummary.Diagnostic]
 
     public init(
         sourceID: PatternArraySourceID,
         name: String,
         definitionID: ComponentDefinitionID,
-        definitionName: String,
+        definitionName: String?,
         distribution: PatternArrayDistribution,
         outputMode: PatternArrayOutputMode,
         rootSceneNodeID: SceneNodeID,
-        rootSceneNodeName: String,
+        rootSceneNodeName: String?,
         outputCount: Int,
-        outputs: [Output]
+        outputs: [Output],
+        diagnostics: [PatternArraySummary.Diagnostic] = []
     ) {
         self.sourceID = sourceID
         self.name = name
@@ -62,5 +64,6 @@ public struct PatternArrayDisplaySnapshot: Codable, Equatable, Sendable {
         self.rootSceneNodeName = rootSceneNodeName
         self.outputCount = outputCount
         self.outputs = outputs
+        self.diagnostics = diagnostics
     }
 }

@@ -138,6 +138,7 @@ import Testing
     #expect(patternArray.outputMode == .componentInstance)
     #expect(patternArray.outputCount == source.outputInstanceIDs.count)
     #expect(patternArray.outputs.count == source.outputInstanceIDs.count)
+    #expect(patternArray.diagnostics.isEmpty)
     #expect(firstOutput.componentInstanceID == firstOutputID)
     #expect(firstOutput.sceneNodeID == firstOutputSceneNodeID)
     #expect(firstOutput.localTransform == firstOutputInstance.localTransform)
@@ -151,6 +152,66 @@ import Testing
     #expect(firstComponentInstance.ownership.patternArraySourceName == "Display Array")
     #expect(firstComponentInstance.ownership.patternArrayOutputIndex == 0)
     #expect(!firstComponentInstance.ownership.isDirectlyEditable)
+}
+
+@MainActor
+@Test func designDisplaySnapshotKeepsInvalidPatternArraySourcesForDiagnostics() async throws {
+    let session = EditorSession()
+    _ = try #require(session.createDefaultExtrudedRectangle())
+    let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let bodySceneNodeID = try #require(
+        designDisplaySnapshotBodySceneNodeID(for: bodyFeatureID, in: session.document)
+    )
+    _ = try session.execute(
+        .createComponentDefinition(
+            name: "Invalid Display Array Source",
+            rootSceneNodeIDs: [bodySceneNodeID]
+        )
+    )
+    let definition = try #require(session.document.productMetadata.componentDefinitions.values.first {
+        $0.name == "Invalid Display Array Source"
+    })
+    _ = try session.execute(
+        .createPatternArray(
+            name: "Invalid Display Array",
+            definitionID: definition.id,
+            distribution: .rectangular(RectangularPatternArray(
+                firstAxis: PatternArrayLinearAxis(
+                    direction: .unitX,
+                    distance: .length(12.0, .millimeter),
+                    copyCount: 2
+                )
+            )),
+            outputMode: .componentInstance
+        )
+    )
+    let source = try #require(session.document.productMetadata.patternArrays.values.first {
+        $0.name == "Invalid Display Array"
+    })
+    var document = session.document
+    document.productMetadata.componentDefinitions.removeValue(forKey: definition.id)
+    document.productMetadata.sceneNodes.removeValue(forKey: source.rootSceneNodeID)
+
+    let result = try DesignDisplaySnapshotService().result(
+        document: document,
+        currentEvaluation: session.currentEvaluation,
+        generation: session.generation,
+        dirty: session.isDirty
+    )
+    let patternArray = try #require(result.patternArrays.first)
+    let diagnosticCodes = Set(patternArray.diagnostics.map(\.code))
+
+    #expect(result.patternArrays.count == 1)
+    #expect(patternArray.sourceID == source.id)
+    #expect(patternArray.name == "Invalid Display Array")
+    #expect(patternArray.definitionID == definition.id)
+    #expect(patternArray.definitionName == nil)
+    #expect(patternArray.rootSceneNodeID == source.rootSceneNodeID)
+    #expect(patternArray.rootSceneNodeName == nil)
+    #expect(patternArray.outputCount == source.outputInstanceIDs.count)
+    #expect(patternArray.outputs.isEmpty)
+    #expect(diagnosticCodes.contains("missingDefinition"))
+    #expect(diagnosticCodes.contains("missingRootSceneNode"))
 }
 
 private func designDisplaySnapshotBodySceneNodeID(

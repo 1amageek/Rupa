@@ -378,14 +378,20 @@ public struct DesignDisplaySnapshotService: Sendable {
         document: DesignDocument
     ) -> [PatternArraySourceID: PatternArrayDisplaySnapshot] {
         let metadata = document.productMetadata
+        let summaries = PatternArraySummaryService().summarize(
+            document: document,
+            generation: DocumentGeneration(),
+            dirty: false
+        )
+        let summariesBySourceID = Dictionary(
+            uniqueKeysWithValues: summaries.patternArrays.map { ($0.sourceID, $0) }
+        )
         var snapshots: [PatternArraySourceID: PatternArrayDisplaySnapshot] = [:]
         snapshots.reserveCapacity(metadata.patternArrays.count)
 
         for (sourceID, source) in metadata.patternArrays {
-            guard let definition = metadata.componentDefinitions[source.definitionID],
-                  let rootNode = metadata.sceneNodes[source.rootSceneNodeID] else {
-                continue
-            }
+            let definition = metadata.componentDefinitions[source.definitionID]
+            let rootNode = metadata.sceneNodes[source.rootSceneNodeID]
             let outputs = patternArrayOutputs(
                 source: source,
                 rootNode: rootNode,
@@ -395,13 +401,14 @@ public struct DesignDisplaySnapshotService: Sendable {
                 sourceID: source.id,
                 name: source.name,
                 definitionID: source.definitionID,
-                definitionName: definition.name,
+                definitionName: definition?.name,
                 distribution: source.distribution,
                 outputMode: source.outputMode,
                 rootSceneNodeID: source.rootSceneNodeID,
-                rootSceneNodeName: rootNode.name,
-                outputCount: outputs.count,
-                outputs: outputs
+                rootSceneNodeName: rootNode?.name,
+                outputCount: outputCount(for: source),
+                outputs: outputs,
+                diagnostics: summariesBySourceID[sourceID]?.diagnostics ?? []
             )
         }
         return snapshots
@@ -409,11 +416,14 @@ public struct DesignDisplaySnapshotService: Sendable {
 
     private func patternArrayOutputs(
         source: PatternArraySource,
-        rootNode: SceneNode,
+        rootNode: SceneNode?,
         metadata: ProductMetadata
     ) -> [PatternArrayDisplaySnapshot.Output] {
         switch source.outputMode {
         case .componentInstance:
+            guard let rootNode else {
+                return []
+            }
             let sceneNodeIDsByInstanceID = componentInstanceSceneNodeIDs(
                 rootNode: rootNode,
                 metadata: metadata
@@ -446,6 +456,15 @@ public struct DesignDisplaySnapshotService: Sendable {
                     isLocked: sceneNode.isLocked
                 )
             }
+        }
+    }
+
+    private func outputCount(for source: PatternArraySource) -> Int {
+        switch source.outputMode {
+        case .componentInstance:
+            source.outputInstanceIDs.count
+        case .independentCopy:
+            source.outputSceneNodeIDs.count
         }
     }
 

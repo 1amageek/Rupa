@@ -99,6 +99,9 @@ import RupaCore
         evidence.notes.contains("Pattern Array summaries expose editable fields, lifecycle actions, source-owned output edit policy, output IDs, and diagnostics without forcing CAD evaluation.")
     })
     #expect(arrays.evidence.contains { evidence in
+        evidence.notes.contains("Design display snapshots keep invalid PatternArraySource records discoverable with diagnostics instead of dropping sources whose definition, root scene node, or generated outputs are missing.")
+    })
+    #expect(arrays.evidence.contains { evidence in
         evidence.notes.contains("Pattern Array summary diagnostics mirror source-owned output invariants for missing instances, mismatched transforms, duplicate ownership, root child mapping, and independent-copy feature closure checks.")
     })
     #expect(arrays.evidence.contains { evidence in

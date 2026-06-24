@@ -1236,6 +1236,7 @@ import SwiftCAD
     #expect(discoveredArray.definitionName == "Agent Snapshot Array Source")
     #expect(discoveredArray.outputCount == 2)
     #expect(discoveredArray.outputs.count == 2)
+    #expect(discoveredArray.diagnostics.isEmpty)
     #expect(firstOutput.componentInstanceID == discoveredArray.outputs[0].componentInstanceID)
     #expect(discoveredInstance.definitionID == definition.id)
     #expect(discoveredInstance.definitionName == "Agent Snapshot Array Source")
