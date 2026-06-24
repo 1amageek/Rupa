@@ -74,6 +74,23 @@ struct ViewportPatternArrayRadialAngleAffordanceGeometry: Equatable {
         start: CGPoint,
         current: CGPoint
     ) -> Double {
+        if let startAngle = projectedAngleParameter(for: start),
+           let currentAngle = projectedAngleParameter(for: current) {
+            return Self.normalizedSignedAngleRadians(
+                baseAngleRadians + Self.normalizedAngleDelta(
+                    from: startAngle,
+                    to: currentAngle
+                ),
+                minimumAngleRadians: minimumAngleRadians
+            )
+        }
+        return screenPolarAngleRadians(start: start, current: current)
+    }
+
+    private func screenPolarAngleRadians(
+        start: CGPoint,
+        current: CGPoint
+    ) -> Double {
         let center = centerProjectedPoint
         let startVector = CGVector(dx: start.x - center.x, dy: start.y - center.y)
         let currentVector = CGVector(dx: current.x - center.x, dy: current.y - center.y)
@@ -81,14 +98,56 @@ struct ViewportPatternArrayRadialAngleAffordanceGeometry: Equatable {
               currentVector.length > 1.0e-9 else {
             return baseAngleRadians
         }
-        let delta = atan2(
-            startVector.dx * currentVector.dy - startVector.dy * currentVector.dx,
-            startVector.dx * currentVector.dx + startVector.dy * currentVector.dy
-        )
         return Self.normalizedSignedAngleRadians(
-            baseAngleRadians + Double(delta),
+            baseAngleRadians + atan2(
+                startVector.dx * currentVector.dy - startVector.dy * currentVector.dx,
+                startVector.dx * currentVector.dx + startVector.dy * currentVector.dy
+            ),
             minimumAngleRadians: minimumAngleRadians
         )
+    }
+
+    private func projectedAngleParameter(for point: CGPoint) -> Double? {
+        let center = centerProjectedPoint
+        let delta = CGVector(dx: point.x - center.x, dy: point.y - center.y)
+        guard delta.length > 1.0e-9 else {
+            return nil
+        }
+        let radialProjection = projectedVector(radialVector)
+        let tangentProjection = projectedVector(axis.cross(radialVector))
+        let determinant = radialProjection.dx * tangentProjection.dy - radialProjection.dy * tangentProjection.dx
+        let determinantScale = max(radialProjection.length * tangentProjection.length, 1.0)
+        guard abs(determinant) > determinantScale * 1.0e-9 else {
+            return nil
+        }
+        let cosine = (delta.dx * tangentProjection.dy - delta.dy * tangentProjection.dx) / determinant
+        let sine = (radialProjection.dx * delta.dy - radialProjection.dy * delta.dx) / determinant
+        guard cosine.isFinite,
+              sine.isFinite,
+              hypot(cosine, sine) > 1.0e-9 else {
+            return nil
+        }
+        return atan2(sine, cosine)
+    }
+
+    private func projectedVector(_ vector: Vector3D) -> CGVector {
+        let center = centerProjectedPoint
+        let end = layout.project(Self.point(centerModelPoint, offsetBy: vector))
+        return CGVector(dx: end.x - center.x, dy: end.y - center.y)
+    }
+
+    private static func normalizedAngleDelta(
+        from start: Double,
+        to end: Double
+    ) -> Double {
+        var delta = end - start
+        while delta <= -.pi {
+            delta += .pi * 2.0
+        }
+        while delta > .pi {
+            delta -= .pi * 2.0
+        }
+        return delta
     }
 
     private func projectedPoint(angleRadians: Double) -> CGPoint {

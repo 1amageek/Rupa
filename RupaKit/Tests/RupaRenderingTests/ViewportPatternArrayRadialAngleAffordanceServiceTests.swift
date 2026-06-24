@@ -50,16 +50,37 @@ import Testing
 
     let candidate = try #require(candidates.first)
     let start = candidate.geometry.projectedTip()
-    let current = rotated(
-        point: start,
-        around: candidate.geometry.centerProjectedPoint,
-        angleRadians: Double.pi / 6.0
-    )
+    let targetAngle = Double.pi * 2.0 / 3.0
+    let current = candidate.geometry.projectedTip(angleRadians: targetAngle)
     #expect(candidates.count == 1)
     #expect(candidate.target.sourceID == source.id)
     #expect(candidate.target.angleMode == .extent)
     #expect(abs(candidate.geometry.baseAngleRadians - Double.pi / 2.0) < 1.0e-12)
-    #expect(abs(candidate.geometry.angleRadians(start: start, current: current) - Double.pi * 2.0 / 3.0) < 1.0e-9)
+    #expect(abs(candidate.geometry.angleRadians(start: start, current: current) - targetAngle) < 1.0e-9)
+}
+
+@MainActor
+@Test func radialAngleGeometryRestoresModelAngleFromProjectedEllipse() throws {
+    let layout = ViewportLayout(
+        modelBounds: CGRect(x: -0.2, y: -0.2, width: 0.4, height: 0.4),
+        size: CGSize(width: 900.0, height: 700.0),
+        basis: .orbit(yaw: 0.9, elevation: 0.42)
+    )
+    let geometry = try #require(ViewportPatternArrayRadialAngleAffordanceGeometry(
+        center: .origin,
+        axis: Vector3D(x: 0.2, y: 1.0, z: 0.25),
+        referencePoint: Point3D(x: 0.08, y: 0.0, z: 0.0),
+        angleRadians: Double.pi / 3.0,
+        layout: layout
+    ))
+    let targetAngle = Double.pi * 0.72
+
+    let restoredAngle = geometry.angleRadians(
+        start: geometry.projectedTip(),
+        current: geometry.projectedTip(angleRadians: targetAngle)
+    )
+
+    #expect(abs(restoredAngle - targetAngle) < 1.0e-9)
 }
 
 @MainActor
@@ -156,18 +177,4 @@ private func sceneNodeID(
         )
     }
     return sceneNode.key
-}
-
-private func rotated(
-    point: CGPoint,
-    around center: CGPoint,
-    angleRadians: Double
-) -> CGPoint {
-    let vector = CGVector(dx: point.x - center.x, dy: point.y - center.y)
-    let cosAngle = cos(angleRadians)
-    let sinAngle = sin(angleRadians)
-    return CGPoint(
-        x: center.x + vector.dx * cosAngle - vector.dy * sinAngle,
-        y: center.y + vector.dx * sinAngle + vector.dy * cosAngle
-    )
 }
