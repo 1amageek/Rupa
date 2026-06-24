@@ -4,14 +4,20 @@ import RupaCore
 
 enum ViewportPatternArrayCopyCountAffordanceGeometry: Equatable {
     case linear(ViewportPatternArrayCopyCountLinearGeometry)
+    case linearDensity(ViewportPatternArrayCopyCountLinearDensityGeometry)
     case angular(ViewportPatternArrayCopyCountAngularGeometry)
+    case angularDensity(ViewportPatternArrayCopyCountAngularDensityGeometry)
     case curve(ViewportPatternArrayCopyCountCurveGeometry)
 
     var baseCopyCount: Int {
         switch self {
         case .linear(let geometry):
             geometry.baseCopyCount
+        case .linearDensity(let geometry):
+            geometry.baseCopyCount
         case .angular(let geometry):
+            geometry.baseCopyCount
+        case .angularDensity(let geometry):
             geometry.baseCopyCount
         case .curve(let geometry):
             geometry.baseCopyCount
@@ -22,7 +28,11 @@ enum ViewportPatternArrayCopyCountAffordanceGeometry: Equatable {
         switch self {
         case .linear(let geometry):
             geometry.handlePoint()
+        case .linearDensity(let geometry):
+            geometry.handlePoint()
         case .angular(let geometry):
+            geometry.handlePoint()
+        case .angularDensity(let geometry):
             geometry.handlePoint()
         case .curve(let geometry):
             geometry.handlePoint()
@@ -33,7 +43,11 @@ enum ViewportPatternArrayCopyCountAffordanceGeometry: Equatable {
         switch self {
         case .linear(let geometry):
             geometry.handlePoint(copyCount: copyCount)
+        case .linearDensity(let geometry):
+            geometry.handlePoint(copyCount: copyCount)
         case .angular(let geometry):
+            geometry.handlePoint(copyCount: copyCount)
+        case .angularDensity(let geometry):
             geometry.handlePoint(copyCount: copyCount)
         case .curve(let geometry):
             geometry.handlePoint(copyCount: copyCount)
@@ -47,8 +61,12 @@ enum ViewportPatternArrayCopyCountAffordanceGeometry: Equatable {
                 geometry.baseProjectedPoint,
                 geometry.handlePoint(copyCount: copyCount ?? geometry.baseCopyCount),
             ]
+        case .linearDensity(let geometry):
+            geometry.guidePoints(copyCount: copyCount ?? geometry.baseCopyCount)
         case .angular(let geometry):
             geometry.arcPoints(copyCount: copyCount ?? geometry.baseCopyCount)
+        case .angularDensity(let geometry):
+            geometry.guidePoints(copyCount: copyCount ?? geometry.baseCopyCount)
         case .curve(let geometry):
             geometry.guidePoints(copyCount: copyCount ?? geometry.baseCopyCount)
         }
@@ -61,7 +79,11 @@ enum ViewportPatternArrayCopyCountAffordanceGeometry: Equatable {
         switch self {
         case .linear(let geometry):
             geometry.copyCount(start: start, current: current)
+        case .linearDensity(let geometry):
+            geometry.copyCount(start: start, current: current)
         case .angular(let geometry):
+            geometry.copyCount(start: start, current: current)
+        case .angularDensity(let geometry):
             geometry.copyCount(start: start, current: current)
         case .curve(let geometry):
             geometry.copyCount(start: start, current: current)
@@ -127,6 +149,102 @@ struct ViewportPatternArrayCopyCountLinearGeometry: Equatable {
             x: baseProjectedPoint.x + projectedDirection.dx * distance,
             y: baseProjectedPoint.y + projectedDirection.dy * distance
         )
+    }
+
+    func copyCount(
+        start: CGPoint,
+        current: CGPoint
+    ) -> Int {
+        let delta = CGVector(dx: current.x - start.x, dy: current.y - start.y)
+        let projectedDelta = delta.dx * projectedDirection.dx + delta.dy * projectedDirection.dy
+        let countDelta = Int((projectedDelta / pointsPerCopy).rounded())
+        return max(baseCopyCount + countDelta, 1)
+    }
+}
+
+struct ViewportPatternArrayCopyCountLinearDensityGeometry: Equatable {
+    var baseProjectedPoint: CGPoint
+    var extentPoint: CGPoint
+    var anchorPoint: CGPoint
+    var projectedDirection: CGVector
+    var baseCopyCount: Int
+    var pointsPerCopy: CGFloat
+
+    init?(
+        baseProjectedPoint: CGPoint,
+        axisDirection: Vector3D,
+        extentDistanceMeters: Double,
+        copyCount: Int,
+        layout: ViewportLayout,
+        handleOffsetPoints: CGFloat = 24.0,
+        minimumPointsPerCopy: CGFloat = 28.0
+    ) {
+        guard extentDistanceMeters.isFinite,
+              extentDistanceMeters > 0.0,
+              copyCount > 0,
+              handleOffsetPoints.isFinite,
+              handleOffsetPoints > 0.0,
+              minimumPointsPerCopy.isFinite,
+              minimumPointsPerCopy > 0.0 else {
+            return nil
+        }
+        let axisLength = axisDirection.length
+        guard axisLength.isFinite, axisLength > 1.0e-12 else {
+            return nil
+        }
+        let unit = Vector3D(
+            x: axisDirection.x / axisLength,
+            y: axisDirection.y / axisLength,
+            z: axisDirection.z / axisLength
+        )
+        let projected = CGVector(
+            dx: (
+                layout.basis.xDirection.dx * CGFloat(unit.x)
+                    + layout.basis.yDirection.dx * CGFloat(unit.y)
+                    + layout.basis.zDirection.dx * CGFloat(unit.z)
+            ) * layout.scale,
+            dy: (
+                layout.basis.xDirection.dy * CGFloat(unit.x)
+                    + layout.basis.yDirection.dy * CGFloat(unit.y)
+                    + layout.basis.zDirection.dy * CGFloat(unit.z)
+            ) * layout.scale
+        )
+        guard projected.length > 1.0e-9 else {
+            return nil
+        }
+        let direction = projected.normalized
+        let extentPoint = CGPoint(
+            x: baseProjectedPoint.x + direction.dx * CGFloat(extentDistanceMeters) * projected.length,
+            y: baseProjectedPoint.y + direction.dy * CGFloat(extentDistanceMeters) * projected.length
+        )
+        let normal = CGVector(dx: -direction.dy, dy: direction.dx)
+        self.baseProjectedPoint = baseProjectedPoint
+        self.extentPoint = extentPoint
+        self.anchorPoint = CGPoint(
+            x: extentPoint.x + normal.dx * handleOffsetPoints,
+            y: extentPoint.y + normal.dy * handleOffsetPoints
+        )
+        self.projectedDirection = direction
+        self.baseCopyCount = copyCount
+        self.pointsPerCopy = minimumPointsPerCopy
+    }
+
+    func handlePoint(copyCount: Int? = nil) -> CGPoint {
+        let count = max(copyCount ?? baseCopyCount, 1)
+        let distance = pointsPerCopy * CGFloat(count)
+        return CGPoint(
+            x: anchorPoint.x + projectedDirection.dx * distance,
+            y: anchorPoint.y + projectedDirection.dy * distance
+        )
+    }
+
+    func guidePoints(copyCount: Int? = nil) -> [CGPoint] {
+        [
+            baseProjectedPoint,
+            extentPoint,
+            anchorPoint,
+            handlePoint(copyCount: copyCount ?? baseCopyCount),
+        ]
     }
 
     func copyCount(
@@ -307,6 +425,215 @@ struct ViewportPatternArrayCopyCountAngularGeometry: Equatable {
             return value
         }
         return value < 0.0 ? -minimumAngleRadians : minimumAngleRadians
+    }
+
+    private static func vector(from start: Point3D, to end: Point3D) -> Vector3D {
+        Vector3D(
+            x: end.x - start.x,
+            y: end.y - start.y,
+            z: end.z - start.z
+        )
+    }
+
+    private static func point(_ point: Point3D, offsetBy vector: Vector3D) -> Point3D {
+        Point3D(
+            x: point.x + vector.x,
+            y: point.y + vector.y,
+            z: point.z + vector.z
+        )
+    }
+
+    private static func add(_ lhs: Vector3D, _ rhs: Vector3D) -> Vector3D {
+        Vector3D(
+            x: lhs.x + rhs.x,
+            y: lhs.y + rhs.y,
+            z: lhs.z + rhs.z
+        )
+    }
+
+    private static func subtract(_ lhs: Vector3D, _ rhs: Vector3D) -> Vector3D {
+        Vector3D(
+            x: lhs.x - rhs.x,
+            y: lhs.y - rhs.y,
+            z: lhs.z - rhs.z
+        )
+    }
+
+    private static func scale(_ vector: Vector3D, by scalar: Double) -> Vector3D {
+        Vector3D(
+            x: vector.x * scalar,
+            y: vector.y * scalar,
+            z: vector.z * scalar
+        )
+    }
+}
+
+struct ViewportPatternArrayCopyCountAngularDensityGeometry: Equatable {
+    var centerModelPoint: Point3D
+    var axis: Vector3D
+    var radialVector: Vector3D
+    var baseCopyCount: Int
+    var extentAngleRadians: Double
+    var layout: ViewportLayout
+    var anchorPoint: CGPoint
+    var projectedDirection: CGVector
+    var pointsPerCopy: CGFloat
+
+    init?(
+        center: Point3D,
+        axis: Vector3D,
+        referencePoint: Point3D,
+        extentAngleRadians: Double,
+        copyCount: Int,
+        layout: ViewportLayout,
+        handleOffsetPoints: CGFloat = 24.0,
+        minimumPointsPerCopy: CGFloat = 28.0,
+        minimumAngleRadians: Double = PatternArrayAnglePolicy.standard.minimumAngleRadians
+    ) {
+        guard extentAngleRadians.isFinite,
+              abs(extentAngleRadians) > minimumAngleRadians,
+              copyCount > 0,
+              handleOffsetPoints.isFinite,
+              handleOffsetPoints > 0.0,
+              minimumPointsPerCopy.isFinite,
+              minimumPointsPerCopy > 0.0,
+              let normalizedAxis = Self.normalized(axis) else {
+            return nil
+        }
+        let rawRadialVector = Self.vector(from: center, to: referencePoint)
+        let projectedRadialVector = Self.subtract(
+            rawRadialVector,
+            Self.scale(normalizedAxis, by: rawRadialVector.dot(normalizedAxis))
+        )
+        let radialVector: Vector3D
+        if projectedRadialVector.length > PatternArrayDistancePolicy.standard.minimumLinearDistanceMeters {
+            radialVector = projectedRadialVector
+        } else {
+            radialVector = Self.fallbackRadialVector(axis: normalizedAxis)
+        }
+        guard radialVector.length > PatternArrayDistancePolicy.standard.minimumLinearDistanceMeters else {
+            return nil
+        }
+
+        self.centerModelPoint = center
+        self.axis = normalizedAxis
+        self.radialVector = radialVector
+        self.baseCopyCount = copyCount
+        self.extentAngleRadians = extentAngleRadians
+        self.layout = layout
+        self.pointsPerCopy = minimumPointsPerCopy
+
+        let endRadialVector = Self.rotated(radialVector, around: normalizedAxis, angleRadians: extentAngleRadians)
+        let endPoint = layout.project(Self.point(center, offsetBy: endRadialVector))
+        let centerPoint = layout.project(center)
+        let outward = CGVector(dx: endPoint.x - centerPoint.x, dy: endPoint.y - centerPoint.y)
+        guard outward.length > 1.0e-9 else {
+            return nil
+        }
+        let tangentVector = Self.scale(
+            normalizedAxis.cross(endRadialVector),
+            by: extentAngleRadians < 0.0 ? -1.0 : 1.0
+        )
+        let projectedTangent = Self.projectedVector(
+            tangentVector,
+            at: Self.point(center, offsetBy: endRadialVector),
+            layout: layout
+        )
+        guard projectedTangent.length > 1.0e-9 else {
+            return nil
+        }
+        self.anchorPoint = CGPoint(
+            x: endPoint.x + outward.normalized.dx * handleOffsetPoints,
+            y: endPoint.y + outward.normalized.dy * handleOffsetPoints
+        )
+        self.projectedDirection = projectedTangent.normalized
+    }
+
+    func handlePoint(copyCount: Int? = nil) -> CGPoint {
+        let count = max(copyCount ?? baseCopyCount, 1)
+        let distance = pointsPerCopy * CGFloat(count)
+        return CGPoint(
+            x: anchorPoint.x + projectedDirection.dx * distance,
+            y: anchorPoint.y + projectedDirection.dy * distance
+        )
+    }
+
+    func guidePoints(copyCount: Int? = nil) -> [CGPoint] {
+        var points = arcPoints(angleRadians: extentAngleRadians)
+        points.append(anchorPoint)
+        points.append(handlePoint(copyCount: copyCount ?? baseCopyCount))
+        return points
+    }
+
+    func copyCount(
+        start: CGPoint,
+        current: CGPoint
+    ) -> Int {
+        let delta = CGVector(dx: current.x - start.x, dy: current.y - start.y)
+        let projectedDelta = delta.dx * projectedDirection.dx + delta.dy * projectedDirection.dy
+        let countDelta = Int((projectedDelta / pointsPerCopy).rounded())
+        return max(baseCopyCount + countDelta, 1)
+    }
+
+    private func arcPoints(angleRadians: Double) -> [CGPoint] {
+        let segments = max(Int(abs(angleRadians) / (.pi / 18.0)), 12)
+        return (0 ... segments).map { index in
+            layout.project(Self.point(
+                centerModelPoint,
+                offsetBy: Self.rotated(
+                    radialVector,
+                    around: axis,
+                    angleRadians: angleRadians * Double(index) / Double(segments)
+                )
+            ))
+        }
+    }
+
+    private static func projectedVector(
+        _ vector: Vector3D,
+        at origin: Point3D,
+        layout: ViewportLayout
+    ) -> CGVector {
+        let end = Point3D(
+            x: origin.x + vector.x,
+            y: origin.y + vector.y,
+            z: origin.z + vector.z
+        )
+        let startPoint = layout.project(origin)
+        let endPoint = layout.project(end)
+        return CGVector(dx: endPoint.x - startPoint.x, dy: endPoint.y - startPoint.y)
+    }
+
+    private static func rotated(
+        _ vector: Vector3D,
+        around axis: Vector3D,
+        angleRadians: Double
+    ) -> Vector3D {
+        let cosAngle = cos(angleRadians)
+        let sinAngle = sin(angleRadians)
+        return add(
+            add(
+                scale(vector, by: cosAngle),
+                scale(axis.cross(vector), by: sinAngle)
+            ),
+            scale(axis, by: axis.dot(vector) * (1.0 - cosAngle))
+        )
+    }
+
+    private static func normalized(_ vector: Vector3D) -> Vector3D? {
+        guard vector.length.isFinite, vector.length > 1.0e-12 else {
+            return nil
+        }
+        return scale(vector, by: 1.0 / vector.length)
+    }
+
+    private static func fallbackRadialVector(axis: Vector3D) -> Vector3D {
+        let helper = abs(axis.z) < 0.9 ? Vector3D.unitZ : Vector3D.unitY
+        let radial = subtract(helper, scale(axis, by: helper.dot(axis)))
+        guard let normalized = normalized(radial) else {
+            return Vector3D.unitX
+        }
+        return scale(normalized, by: 0.05)
     }
 
     private static func vector(from start: Point3D, to end: Point3D) -> Vector3D {

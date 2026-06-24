@@ -60,6 +60,68 @@ import Testing
 }
 
 @MainActor
+@Test func patternArrayCopyCountAffordanceServiceResolvesRectangularExtentDensityCounts() async throws {
+    let session = EditorSession()
+    _ = try createDefaultCopyCountPatternSourceDefinition(
+        in: session,
+        definitionName: "Rectangular Extent Density Source"
+    )
+    let definition = try #require(session.document.productMetadata.componentDefinitions.values.first {
+        $0.name == "Rectangular Extent Density Source"
+    })
+    _ = try session.execute(
+        .createPatternArray(
+            name: "Rectangular Extent Density Pattern",
+            definitionID: definition.id,
+            distribution: .rectangular(RectangularPatternArray(
+                firstAxis: PatternArrayLinearAxis(
+                    direction: .unitX,
+                    distance: .length(0.08, .meter),
+                    copyCount: 4,
+                    distanceMode: .extent
+                ),
+                secondAxis: PatternArrayLinearAxis(
+                    direction: .unitZ,
+                    distance: .length(0.05, .meter),
+                    copyCount: 2,
+                    distanceMode: .extent
+                )
+            )),
+            outputMode: .componentInstance
+        )
+    )
+    let source = try #require(session.document.productMetadata.patternArrays.values.first {
+        $0.name == "Rectangular Extent Density Pattern"
+    })
+    let scene = ViewportSceneBuilder().build(document: session.document)
+    let layout = try #require(ViewportLayout(scene: scene, size: CGSize(width: 900.0, height: 700.0)))
+
+    let candidates = ViewportPatternArrayCopyCountAffordanceService().candidates(
+        document: session.document,
+        scene: scene,
+        selection: SelectionModel(selectedTargets: [
+            SelectionTarget(sceneNodeID: source.rootSceneNodeID),
+        ]),
+        layout: layout
+    )
+
+    #expect(candidates.map(\.target.slot) == [.rectangularFirst, .rectangularSecond])
+    #expect(candidates.map(\.geometry.baseCopyCount) == [4, 2])
+    let firstCandidate = try #require(candidates.first { $0.target.slot == .rectangularFirst })
+    let secondCandidate = try #require(candidates.first { $0.target.slot == .rectangularSecond })
+    #expect(firstCandidate.geometry.copyCount(
+        start: firstCandidate.geometry.handlePoint,
+        current: firstCandidate.geometry.handlePoint(copyCount: 6)
+    ) == 6)
+    #expect(secondCandidate.geometry.copyCount(
+        start: secondCandidate.geometry.handlePoint,
+        current: secondCandidate.geometry.handlePoint(copyCount: 1)
+    ) == 1)
+    #expect(firstCandidate.geometry.guidePoints().count == 4)
+    #expect(secondCandidate.geometry.guidePoints().count == 4)
+}
+
+@MainActor
 @Test func patternArrayCopyCountAffordanceServiceResolvesRadialSpacingCounts() async throws {
     let session = EditorSession()
     _ = try createDefaultCopyCountPatternSourceDefinition(
@@ -181,18 +243,18 @@ import Testing
 }
 
 @MainActor
-@Test func patternArrayCopyCountAffordanceServiceSkipsExtentModeCounts() async throws {
+@Test func patternArrayCopyCountAffordanceServiceResolvesRadialExtentDensityCounts() async throws {
     let session = EditorSession()
     _ = try createDefaultCopyCountPatternSourceDefinition(
         in: session,
-        definitionName: "Extent Count Source"
+        definitionName: "Radial Extent Density Source"
     )
     let definition = try #require(session.document.productMetadata.componentDefinitions.values.first {
-        $0.name == "Extent Count Source"
+        $0.name == "Radial Extent Density Source"
     })
     _ = try session.execute(
         .createPatternArray(
-            name: "Extent Count Pattern",
+            name: "Radial Extent Density Pattern",
             definitionID: definition.id,
             distribution: .radial(RadialPatternArray(
                 angularAxis: PatternArrayAngularAxis(
@@ -213,7 +275,7 @@ import Testing
         )
     )
     let source = try #require(session.document.productMetadata.patternArrays.values.first {
-        $0.name == "Extent Count Pattern"
+        $0.name == "Radial Extent Density Pattern"
     })
     let scene = ViewportSceneBuilder().build(document: session.document)
     let layout = try #require(ViewportLayout(scene: scene, size: CGSize(width: 900.0, height: 700.0)))
@@ -227,7 +289,20 @@ import Testing
         layout: layout
     )
 
-    #expect(candidates.isEmpty)
+    #expect(candidates.map(\.target.slot) == [.radialAngular, .radialAxis])
+    #expect(candidates.map(\.geometry.baseCopyCount) == [3, 2])
+    let angularCandidate = try #require(candidates.first { $0.target.slot == .radialAngular })
+    let radialAxisCandidate = try #require(candidates.first { $0.target.slot == .radialAxis })
+    #expect(angularCandidate.geometry.copyCount(
+        start: angularCandidate.geometry.handlePoint,
+        current: angularCandidate.geometry.handlePoint(copyCount: 5)
+    ) == 5)
+    #expect(radialAxisCandidate.geometry.copyCount(
+        start: radialAxisCandidate.geometry.handlePoint,
+        current: radialAxisCandidate.geometry.handlePoint(copyCount: 3)
+    ) == 3)
+    #expect(angularCandidate.geometry.guidePoints().count > 3)
+    #expect(radialAxisCandidate.geometry.guidePoints().count == 4)
 }
 
 @MainActor

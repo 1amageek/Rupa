@@ -90,6 +90,7 @@ import RupaCore
     #expect(!arrays.openWork.contains { $0.contains("viewport curve array path pick mode") })
     #expect(!arrays.openWork.contains { $0.contains("curve count/extent/path") })
     #expect(!arrays.openWork.contains { $0.contains("curve count/path") })
+    #expect(!arrays.openWork.contains { $0.contains("extent-density count editing") })
     #expect(arrays.openWork.contains { $0.contains("Interactive viewport array handles") })
     #expect(arrays.evidence.contains { evidence in
         evidence.sourceFiles.contains("RupaKit/Sources/RupaCore/PatternArraySource.swift")
@@ -185,7 +186,7 @@ import RupaCore
         evidence.notes.contains("The viewport exposes radial Pattern Array angular spacing/extent handles and radial-axis distance handles through the shared PatternArray source-selection index.")
     })
     #expect(arrays.evidence.contains { evidence in
-        evidence.notes.contains("The viewport exposes spacing-mode Pattern Array copy-count handles for rectangular axes, radial angular/radial axes, and Curve Pattern Array density counts while preserving distance, angle, path extent, and source-owned output regeneration semantics.")
+        evidence.notes.contains("The viewport exposes Pattern Array copy-count handles for rectangular axes, radial angular/radial axes, extent-density modes, and Curve Pattern Array density counts while preserving distance, angle, path extent, and source-owned output regeneration semantics.")
     })
     #expect(arrays.evidence.contains { evidence in
         evidence.notes.contains("The viewport exposes Curve Pattern Array extent handles that use the shared Core curve-path geometry resolver so viewport dragging and generated copy placement agree on path length and sampling.")

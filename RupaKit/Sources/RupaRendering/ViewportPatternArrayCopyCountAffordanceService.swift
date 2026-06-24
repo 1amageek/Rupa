@@ -111,31 +111,24 @@ struct ViewportPatternArrayCopyCountAffordanceService: Sendable {
     ) -> [ViewportPatternArrayCopyCountAffordanceCandidate] {
         var result: [ViewportPatternArrayCopyCountAffordanceCandidate] = []
         if let referencePoint = index.sourceBaseModelPoint(source: source),
-           radial.angularAxis.angleMode == .spacing,
            let angleRadians = constantAngleRadians(radial.angularAxis.angle),
-           let geometry = ViewportPatternArrayCopyCountAngularGeometry(
-            center: radial.angularAxis.center,
-            axis: radial.angularAxis.axis,
-            referencePoint: referencePoint,
-            stepAngleRadians: angleRadians,
-            copyCount: radial.angularAxis.copyCount,
-            layout: layout
+           let candidate = angularCandidate(
+               sourceID: sourceID,
+               angularAxis: radial.angularAxis,
+               angleRadians: angleRadians,
+               referencePoint: referencePoint,
+               layout: layout
            ) {
-            let target = ViewportPatternArrayCopyCountHandleTarget(
-                sourceID: sourceID,
-                slot: .radialAngular,
-                geometry: .angular(geometry)
-            )
-            result.append(ViewportPatternArrayCopyCountAffordanceCandidate(target: target, geometry: target.geometry))
+            result.append(candidate)
         }
         if let radialAxis = radial.radialAxis,
            let baseProjectedPoint = index.sourceBaseProjectedPoint(source: source, layout: layout),
            let candidate = linearCandidate(
-            sourceID: sourceID,
-            slot: .radialAxis,
-            axis: radialAxis,
-            baseProjectedPoint: baseProjectedPoint,
-            layout: layout
+               sourceID: sourceID,
+               slot: .radialAxis,
+               axis: radialAxis,
+               baseProjectedPoint: baseProjectedPoint,
+               layout: layout
            ) {
             result.append(candidate)
         }
@@ -149,21 +142,80 @@ struct ViewportPatternArrayCopyCountAffordanceService: Sendable {
         baseProjectedPoint: CGPoint,
         layout: ViewportLayout
     ) -> ViewportPatternArrayCopyCountAffordanceCandidate? {
-        guard axis.distanceMode == .spacing,
-              let distanceMeters = constantLengthMeters(axis.distance),
-              let geometry = ViewportPatternArrayCopyCountLinearGeometry(
+        guard let distanceMeters = constantLengthMeters(axis.distance) else {
+            return nil
+        }
+        let geometry: ViewportPatternArrayCopyCountAffordanceGeometry
+        switch axis.distanceMode {
+        case .spacing:
+            guard let spacingGeometry = ViewportPatternArrayCopyCountLinearGeometry(
                 baseProjectedPoint: baseProjectedPoint,
                 axisDirection: axis.direction,
                 distanceMeters: distanceMeters,
                 copyCount: axis.copyCount,
                 layout: layout
-              ) else {
-            return nil
+            ) else {
+                return nil
+            }
+            geometry = .linear(spacingGeometry)
+        case .extent:
+            guard let densityGeometry = ViewportPatternArrayCopyCountLinearDensityGeometry(
+                baseProjectedPoint: baseProjectedPoint,
+                axisDirection: axis.direction,
+                extentDistanceMeters: distanceMeters,
+                copyCount: axis.copyCount,
+                layout: layout
+            ) else {
+                return nil
+            }
+            geometry = .linearDensity(densityGeometry)
         }
         let target = ViewportPatternArrayCopyCountHandleTarget(
             sourceID: sourceID,
             slot: slot,
-            geometry: .linear(geometry)
+            geometry: geometry
+        )
+        return ViewportPatternArrayCopyCountAffordanceCandidate(target: target, geometry: target.geometry)
+    }
+
+    private func angularCandidate(
+        sourceID: PatternArraySourceID,
+        angularAxis: PatternArrayAngularAxis,
+        angleRadians: Double,
+        referencePoint: Point3D,
+        layout: ViewportLayout
+    ) -> ViewportPatternArrayCopyCountAffordanceCandidate? {
+        let geometry: ViewportPatternArrayCopyCountAffordanceGeometry
+        switch angularAxis.angleMode {
+        case .spacing:
+            guard let spacingGeometry = ViewportPatternArrayCopyCountAngularGeometry(
+                center: angularAxis.center,
+                axis: angularAxis.axis,
+                referencePoint: referencePoint,
+                stepAngleRadians: angleRadians,
+                copyCount: angularAxis.copyCount,
+                layout: layout
+            ) else {
+                return nil
+            }
+            geometry = .angular(spacingGeometry)
+        case .extent:
+            guard let densityGeometry = ViewportPatternArrayCopyCountAngularDensityGeometry(
+                center: angularAxis.center,
+                axis: angularAxis.axis,
+                referencePoint: referencePoint,
+                extentAngleRadians: angleRadians,
+                copyCount: angularAxis.copyCount,
+                layout: layout
+            ) else {
+                return nil
+            }
+            geometry = .angularDensity(densityGeometry)
+        }
+        let target = ViewportPatternArrayCopyCountHandleTarget(
+            sourceID: sourceID,
+            slot: .radialAngular,
+            geometry: geometry
         )
         return ViewportPatternArrayCopyCountAffordanceCandidate(target: target, geometry: target.geometry)
     }

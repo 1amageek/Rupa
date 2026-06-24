@@ -439,7 +439,7 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                         "The viewport resolves selected PatternArraySource roots, component-instance outputs, and independent-copy descendants into source-owned output outlines, copy markers, and count labels without scanning global component-instance references.",
                         "The viewport exposes rectangular Pattern Array first- and second-axis distance handles that resolve selected source roots or outputs back to PatternArraySource IDs and commit source-owned distance updates after drag completion.",
                         "The viewport exposes radial Pattern Array angular spacing/extent handles and radial-axis distance handles through the shared PatternArray source-selection index.",
-                        "The viewport exposes spacing-mode Pattern Array copy-count handles for rectangular axes, radial angular/radial axes, and Curve Pattern Array density counts while preserving distance, angle, path extent, and source-owned output regeneration semantics.",
+                        "The viewport exposes Pattern Array copy-count handles for rectangular axes, radial angular/radial axes, extent-density modes, and Curve Pattern Array density counts while preserving distance, angle, path extent, and source-owned output regeneration semantics.",
                         "The viewport exposes Curve Pattern Array extent handles that use the shared Core curve-path geometry resolver so viewport dragging and generated copy placement agree on path length and sampling.",
                         "Viewport editing workflows and incremental independent-copy reuse remain open.",
                     ]
@@ -447,7 +447,7 @@ public struct CADInteractionQualityAssessmentService: Sendable {
             ],
             openWork: [
                 "Viewport-independent copy controls and regeneration reuse for edited outputs.",
-                "Interactive viewport array handles for curve path, extent-density count editing, and output mode editing.",
+                "Interactive viewport array handles for curve path and output mode editing.",
             ],
             next: "Add viewport array handles, curve path picking affordances, and independent-copy reuse diagnostics."
         ),
