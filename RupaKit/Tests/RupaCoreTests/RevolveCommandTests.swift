@@ -89,3 +89,31 @@ import SwiftCAD
     #expect(document.cadDocument.designGraph.order == beforeOrder)
     try document.validate()
 }
+
+@Test func createRevolveRejectsAxisOutsideProfilePlaneBeforeMutation() throws {
+    var document = DesignDocument.empty()
+    let profileID = try document.createRectangleSketchFromCorners(
+        name: "Revolve Profile",
+        plane: .xy,
+        firstCorner: SketchPoint(
+            x: .length(0.0, .millimeter),
+            y: .length(0.0, .millimeter)
+        ),
+        oppositeCorner: SketchPoint(
+            x: .length(4.0, .millimeter),
+            y: .length(12.0, .millimeter)
+        )
+    )
+    let beforeOrder = document.cadDocument.designGraph.order
+
+    #expect(throws: EditorError.self) {
+        _ = try document.createRevolve(
+            name: "Rejected Revolve",
+            profile: ProfileReference(featureID: profileID),
+            axis: RevolveAxis(origin: .origin, direction: .unitZ),
+            angle: .angle(180.0, .degree)
+        )
+    }
+    #expect(document.cadDocument.designGraph.order == beforeOrder)
+    try document.validate()
+}

@@ -666,8 +666,16 @@ public final class AgentServer: AgentClientProtocol {
             mutatesDocument: true,
             discovery: [.sketchEntitySummary, .topologySummary],
             targets: [.profile],
-            failureMode: "Rejects missing or unsupported closed profiles, zero or over-full-turn angles, collapsed axes, unsupported conical or curved profile boundaries until analytic surface-of-revolution support exists, invalid generated topology, and stale generations before mutation.",
+            failureMode: "Rejects missing or unsupported closed profiles, axes that do not lie in the profile plane, profiles crossing the rotation axis, zero or over-full-turn angles, collapsed axes, unsupported conical or curved profile boundaries until analytic surface-of-revolution support exists, invalid generated topology, and stale generations before mutation.",
             optionMatrix: [
+                AgentCapabilityDescriptor.OptionAxis(
+                    name: "axis",
+                    supportedValues: ["explicit 3D line lying in the profile plane"],
+                    notes: [
+                        "the profile must remain on one side of the axis",
+                        "the axis may coincide with one profile boundary segment"
+                    ]
+                ),
                 AgentCapabilityDescriptor.OptionAxis(
                     name: "angle",
                     supportedValues: ["nonzero angle up to 360 degrees"],
