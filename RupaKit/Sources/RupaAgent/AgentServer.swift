@@ -135,7 +135,7 @@ public final class AgentServer: AgentClientProtocol {
         capability(
             "createPatternArray",
             category: .pattern,
-            summary: "Create a source-owned pattern array that emits component instances from a component definition with rectangular, radial, or curve distribution, preserving source ownership instead of cloning CAD feature geometry.",
+            summary: "Create a source-owned pattern array from a component definition with rectangular, radial, or curve distribution, emitting lightweight component instances or cloned independent CAD feature copies.",
             access: .automationCommand,
             mutatesDocument: true,
             discovery: [.designDisplaySnapshot],
@@ -181,9 +181,10 @@ public final class AgentServer: AgentClientProtocol {
                 ),
                 AgentCapabilityDescriptor.OptionAxis(
                     name: "outputMode",
-                    supportedValues: ["componentInstance"],
+                    supportedValues: ["componentInstance", "independentCopy"],
                     notes: [
-                        "The current implementation preserves source ownership by emitting component instances instead of cloning CAD feature geometry.",
+                        "componentInstance preserves source ownership with lightweight shared component definition instances.",
+                        "independentCopy clones the source CAD feature dependency graph into direct scene outputs owned by the pattern source.",
                     ]
                 ),
             ]
@@ -191,7 +192,7 @@ public final class AgentServer: AgentClientProtocol {
         capability(
             "updatePatternArray",
             category: .pattern,
-            summary: "Edit an existing source-owned pattern array by replacing its name, component definition, distribution, or output mode, then regenerate owned output instances.",
+            summary: "Edit an existing source-owned pattern array by replacing its name, component definition, distribution, or output mode, then regenerate owned outputs.",
             access: .automationCommand,
             mutatesDocument: true,
             discovery: [.designDisplaySnapshot],
@@ -209,9 +210,10 @@ public final class AgentServer: AgentClientProtocol {
                 ),
                 AgentCapabilityDescriptor.OptionAxis(
                     name: "outputMode",
-                    supportedValues: ["componentInstance"],
+                    supportedValues: ["componentInstance", "independentCopy"],
                     notes: [
                         "Generated component instance transforms remain source-owned until the array is exploded.",
+                        "Independent-copy outputs expose cloned feature IDs in designDisplaySnapshot.patternArrays outputs.",
                     ]
                 ),
             ]
@@ -219,7 +221,7 @@ public final class AgentServer: AgentClientProtocol {
         capability(
             "explodePatternArray",
             category: .pattern,
-            summary: "Detach generated component instances from a pattern array source so the emitted instances become independently editable scene items.",
+            summary: "Detach generated pattern outputs from a pattern array source; component-instance arrays are materialized as cloned CAD feature scene outputs before detaching.",
             access: .automationCommand,
             mutatesDocument: true,
             discovery: [.designDisplaySnapshot],

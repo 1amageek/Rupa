@@ -120,11 +120,39 @@ public struct DesignDisplaySnapshotService: Sendable {
                   let rootNode = metadata.sceneNodes[source.rootSceneNodeID] else {
                 continue
             }
+            let outputs = patternArrayOutputs(
+                source: source,
+                rootNode: rootNode,
+                metadata: metadata
+            )
+            snapshots[sourceID] = PatternArrayDisplaySnapshot(
+                sourceID: source.id,
+                name: source.name,
+                definitionID: source.definitionID,
+                definitionName: definition.name,
+                distribution: source.distribution,
+                outputMode: source.outputMode,
+                rootSceneNodeID: source.rootSceneNodeID,
+                rootSceneNodeName: rootNode.name,
+                outputCount: outputs.count,
+                outputs: outputs
+            )
+        }
+        return snapshots
+    }
+
+    private func patternArrayOutputs(
+        source: PatternArraySource,
+        rootNode: SceneNode,
+        metadata: ProductMetadata
+    ) -> [PatternArrayDisplaySnapshot.Output] {
+        switch source.outputMode {
+        case .componentInstance:
             let sceneNodeIDsByInstanceID = componentInstanceSceneNodeIDs(
                 rootNode: rootNode,
                 metadata: metadata
             )
-            let outputs = source.outputInstanceIDs.compactMap { componentInstanceID -> PatternArrayDisplaySnapshot.Output? in
+            return source.outputInstanceIDs.compactMap { componentInstanceID -> PatternArrayDisplaySnapshot.Output? in
                 guard let instance = metadata.componentInstances[componentInstanceID],
                       let sceneNodeID = sceneNodeIDsByInstanceID[componentInstanceID] else {
                     return nil
@@ -138,20 +166,21 @@ public struct DesignDisplaySnapshotService: Sendable {
                     isLocked: instance.isLocked
                 )
             }
-            snapshots[sourceID] = PatternArrayDisplaySnapshot(
-                sourceID: source.id,
-                name: source.name,
-                definitionID: source.definitionID,
-                definitionName: definition.name,
-                distribution: source.distribution,
-                outputMode: source.outputMode,
-                rootSceneNodeID: source.rootSceneNodeID,
-                rootSceneNodeName: rootNode.name,
-                outputCount: source.outputInstanceIDs.count,
-                outputs: outputs
-            )
+        case .independentCopy:
+            return source.outputSceneNodeIDs.compactMap { sceneNodeID -> PatternArrayDisplaySnapshot.Output? in
+                guard let sceneNode = metadata.sceneNodes[sceneNodeID] else {
+                    return nil
+                }
+                return PatternArrayDisplaySnapshot.Output(
+                    sceneNodeID: sceneNodeID,
+                    featureIDs: featureIDs(inSceneSubtreeRootedAt: sceneNodeID, metadata: metadata),
+                    name: sceneNode.name,
+                    localTransform: sceneNode.localTransform,
+                    isVisible: sceneNode.isVisible,
+                    isLocked: sceneNode.isLocked
+                )
+            }
         }
-        return snapshots
     }
 
     private func componentInstanceSceneNodeIDs(
@@ -167,6 +196,45 @@ public struct DesignDisplaySnapshotService: Sendable {
             sceneNodeIDsByInstanceID[componentInstanceID] = childID
         }
         return sceneNodeIDsByInstanceID
+    }
+
+    private func featureIDs(
+        inSceneSubtreeRootedAt rootSceneNodeID: SceneNodeID,
+        metadata: ProductMetadata
+    ) -> [FeatureID] {
+        var featureIDs: [FeatureID] = []
+        var visitedSceneNodeIDs: Set<SceneNodeID> = []
+        appendFeatureIDs(
+            rootSceneNodeID,
+            metadata: metadata,
+            featureIDs: &featureIDs,
+            visitedSceneNodeIDs: &visitedSceneNodeIDs
+        )
+        return featureIDs
+    }
+
+    private func appendFeatureIDs(
+        _ sceneNodeID: SceneNodeID,
+        metadata: ProductMetadata,
+        featureIDs: inout [FeatureID],
+        visitedSceneNodeIDs: inout Set<SceneNodeID>
+    ) {
+        guard visitedSceneNodeIDs.insert(sceneNodeID).inserted,
+              let sceneNode = metadata.sceneNodes[sceneNodeID] else {
+            return
+        }
+        if let featureID = sceneNode.reference?.featureID,
+           !featureIDs.contains(featureID) {
+            featureIDs.append(featureID)
+        }
+        for childID in sceneNode.childIDs {
+            appendFeatureIDs(
+                childID,
+                metadata: metadata,
+                featureIDs: &featureIDs,
+                visitedSceneNodeIDs: &visitedSceneNodeIDs
+            )
+        }
     }
 
     private func sortedPatternArraySnapshots(

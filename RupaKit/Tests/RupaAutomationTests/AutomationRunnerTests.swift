@@ -3290,6 +3290,15 @@ import SwiftCAD
         .explodePatternArray(id: source.id),
         in: session
     )
+    let outputSceneNodeID = try #require(
+        session.document.productMetadata.sceneNodes[source.rootSceneNodeID]?.childIDs.first
+    )
+    let outputFeatureID = try #require(
+        automationFeatureID(
+            inSceneSubtreeRootedAt: outputSceneNodeID,
+            document: session.document
+        )
+    )
 
     #expect(updateResult.commandName == "updatePatternArray")
     #expect(updateResult.message == "Pattern array updated.")
@@ -3298,7 +3307,8 @@ import SwiftCAD
     #expect(explodeResult.commandName == "explodePatternArray")
     #expect(explodeResult.message == "Pattern array exploded.")
     #expect(session.document.productMetadata.patternArrays[source.id] == nil)
-    #expect(session.document.productMetadata.componentInstances[firstOutputID] != nil)
+    #expect(session.document.productMetadata.componentInstances[firstOutputID] == nil)
+    #expect(session.document.cadDocument.designGraph.nodes[outputFeatureID] != nil)
     #expect(session.generation == DocumentGeneration(5))
 }
 
@@ -4134,6 +4144,27 @@ private func automationSceneNodeID(
     document.productMetadata.sceneNodes.first { _, node in
         node.reference == .body(featureID)
     }?.key
+}
+
+private func automationFeatureID(
+    inSceneSubtreeRootedAt rootSceneNodeID: SceneNodeID,
+    document: DesignDocument
+) -> FeatureID? {
+    guard let sceneNode = document.productMetadata.sceneNodes[rootSceneNodeID] else {
+        return nil
+    }
+    if let featureID = sceneNode.reference?.featureID {
+        return featureID
+    }
+    for childID in sceneNode.childIDs {
+        if let featureID = automationFeatureID(
+            inSceneSubtreeRootedAt: childID,
+            document: document
+        ) {
+            return featureID
+        }
+    }
+    return nil
 }
 
 private func automationSketchEntityComponentID(from target: SelectionTarget) -> SelectionComponentID? {

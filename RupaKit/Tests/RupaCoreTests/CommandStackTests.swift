@@ -4421,7 +4421,7 @@ import Testing
 }
 
 @MainActor
-@Test func patternArrayCommandExplodesSourceIntoIndependentInstances() async throws {
+@Test func patternArrayCommandExplodesSourceIntoIndependentFeatureCopies() async throws {
     let session = EditorSession()
     _ = try #require(session.createDefaultExtrudedRectangle())
     let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
@@ -4448,32 +4448,45 @@ import Testing
         $0.name == "Explodable Array"
     })
     let outputInstanceID = try #require(source.outputInstanceIDs.first)
+    let componentOutputSceneNodeID = try #require(
+        session.document.productMetadata.sceneNodes[source.rootSceneNodeID]?.childIDs.first
+    )
+    let originalFeatureCount = session.document.cadDocument.designGraph.order.count
+
+    let explodeResult = try session.execute(.explodePatternArray(id: source.id))
     let outputSceneNodeID = try #require(
         session.document.productMetadata.sceneNodes[source.rootSceneNodeID]?.childIDs.first
     )
-
-    let explodeResult = try session.execute(.explodePatternArray(id: source.id))
-    let independentTransform = try translationTransform(x: 0.03, y: 0.0, z: 0.0)
-    let transformResult = try session.execute(
-        .setComponentInstanceTransform(
-            id: outputInstanceID,
-            localTransform: independentTransform
+    let clonedBodyFeatureID = try #require(
+        commandStackBodyFeatureID(
+            inSceneSubtreeRootedAt: outputSceneNodeID,
+            document: session.document
         )
     )
+    let clonedFeature = try #require(session.document.cadDocument.designGraph.nodes[clonedBodyFeatureID])
+    let originalFeature = try #require(session.document.cadDocument.designGraph.nodes[bodyFeatureID])
+    guard case .extrude(let clonedExtrude) = clonedFeature.operation,
+          case .extrude(let originalExtrude) = originalFeature.operation else {
+        Issue.record("Pattern array explode should materialize cloned extrude feature copies.")
+        return
+    }
 
     #expect(explodeResult.commandName == "explodePatternArray")
     #expect(session.document.productMetadata.patternArrays[source.id] == nil)
-    #expect(session.document.productMetadata.componentInstances[outputInstanceID] != nil)
+    #expect(session.document.productMetadata.componentInstances[outputInstanceID] == nil)
+    #expect(session.document.productMetadata.sceneNodes[componentOutputSceneNodeID] == nil)
     #expect(session.document.productMetadata.sceneNodes[outputSceneNodeID] != nil)
-    #expect(transformResult.commandName == "setComponentInstanceTransform")
-    #expect(session.document.productMetadata.componentInstances[outputInstanceID]?.localTransform == independentTransform)
-
-    _ = try session.undo()
-    #expect(session.document.productMetadata.patternArrays[source.id] == nil)
-    #expect(session.document.productMetadata.componentInstances[outputInstanceID]?.localTransform != independentTransform)
+    #expect(session.document.cadDocument.designGraph.order.count == originalFeatureCount + 2)
+    #expect(clonedBodyFeatureID != bodyFeatureID)
+    #expect(clonedExtrude.profile.featureID != originalExtrude.profile.featureID)
 
     _ = try session.undo()
     #expect(session.document.productMetadata.patternArrays[source.id] != nil)
+    #expect(session.document.cadDocument.designGraph.nodes[clonedBodyFeatureID] == nil)
+    #expect(session.document.productMetadata.componentInstances[outputInstanceID] != nil)
+    #expect(session.document.productMetadata.sceneNodes[componentOutputSceneNodeID] != nil)
+
+    let independentTransform = try translationTransform(x: 0.03, y: 0.0, z: 0.0)
     do {
         _ = try session.execute(
             .setComponentInstanceTransform(
@@ -4485,6 +4498,155 @@ import Testing
     } catch let error as EditorError {
         #expect(error.code == .commandInvalid)
     }
+}
+
+@MainActor
+@Test func patternArrayIndependentCopyOutputClonesEditableFeatureGraph() async throws {
+    let session = EditorSession()
+    _ = try #require(session.createDefaultExtrudedRectangle())
+    let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let bodySceneNodeID = try #require(commandStackBodySceneNodeID(for: bodyFeatureID, in: session.document))
+    let originalFeature = try #require(session.document.cadDocument.designGraph.nodes[bodyFeatureID])
+    guard case .extrude(let originalExtrude) = originalFeature.operation else {
+        Issue.record("Default solid should be an extrude feature.")
+        return
+    }
+    _ = try session.execute(
+        .createComponentDefinition(
+            name: "Independent Copy Source",
+            rootSceneNodeIDs: [bodySceneNodeID]
+        )
+    )
+    let definition = try #require(session.document.productMetadata.componentDefinitions.values.first {
+        $0.name == "Independent Copy Source"
+    })
+
+    _ = try session.execute(
+        .createPatternArray(
+            name: "Independent Copy Array",
+            definitionID: definition.id,
+            distribution: .rectangular(RectangularPatternArray(
+                firstAxis: PatternArrayLinearAxis(
+                    direction: .unitX,
+                    distance: .length(8.0, .millimeter),
+                    copyCount: 2
+                )
+            )),
+            outputMode: .independentCopy
+        )
+    )
+    let source = try #require(session.document.productMetadata.patternArrays.values.first {
+        $0.name == "Independent Copy Array"
+    })
+    let firstOutputSceneNodeID = try #require(source.outputSceneNodeIDs.first)
+    let firstCloneBodyFeatureID = try #require(
+        commandStackBodyFeatureID(
+            inSceneSubtreeRootedAt: firstOutputSceneNodeID,
+            document: session.document
+        )
+    )
+    let firstCloneFeature = try #require(session.document.cadDocument.designGraph.nodes[firstCloneBodyFeatureID])
+    guard case .extrude(let firstCloneExtrude) = firstCloneFeature.operation else {
+        Issue.record("Independent-copy pattern output should clone the source extrude.")
+        return
+    }
+
+    #expect(source.outputMode == .independentCopy)
+    #expect(source.outputInstanceIDs.isEmpty)
+    #expect(source.outputSceneNodeIDs.count == 2)
+    #expect(source.outputFeatureIDs.count == 4)
+    #expect(!source.outputFeatureIDs.contains(bodyFeatureID))
+    #expect(!source.outputFeatureIDs.contains(originalExtrude.profile.featureID))
+    #expect(source.outputFeatureIDs.contains(firstCloneBodyFeatureID))
+    #expect(source.outputFeatureIDs.contains(firstCloneExtrude.profile.featureID))
+    #expect(firstCloneBodyFeatureID != bodyFeatureID)
+    #expect(firstCloneExtrude.profile.featureID != originalExtrude.profile.featureID)
+
+    let editedDistance = CADExpression.length(7.0, .millimeter)
+    let editResult = try session.execute(
+        .setExtrudeDistance(
+            featureID: firstCloneBodyFeatureID,
+            distance: editedDistance
+        )
+    )
+    let editedCloneFeature = try #require(session.document.cadDocument.designGraph.nodes[firstCloneBodyFeatureID])
+    let preservedOriginalFeature = try #require(session.document.cadDocument.designGraph.nodes[bodyFeatureID])
+    guard case .extrude(let editedCloneExtrude) = editedCloneFeature.operation,
+          case .extrude(let preservedOriginalExtrude) = preservedOriginalFeature.operation else {
+        Issue.record("Independent-copy edit should keep both body features as extrudes.")
+        return
+    }
+
+    #expect(editResult.commandName == "setExtrudeDistance")
+    #expect(editedCloneExtrude.distance == editedDistance)
+    #expect(preservedOriginalExtrude.distance == originalExtrude.distance)
+}
+
+@MainActor
+@Test func componentDefinitionRejectsPatternArrayOutputSceneSubtree() async throws {
+    let session = EditorSession()
+    _ = try #require(session.createDefaultExtrudedRectangle())
+    let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let bodySceneNodeID = try #require(commandStackBodySceneNodeID(for: bodyFeatureID, in: session.document))
+    _ = try session.execute(
+        .createComponentDefinition(
+            name: "Pattern Source Definition",
+            rootSceneNodeIDs: [bodySceneNodeID]
+        )
+    )
+    let definition = try #require(session.document.productMetadata.componentDefinitions.values.first {
+        $0.name == "Pattern Source Definition"
+    })
+    _ = try session.execute(
+        .createPatternArray(
+            name: "Definition Guard Array",
+            definitionID: definition.id,
+            distribution: .rectangular(RectangularPatternArray(
+                firstAxis: PatternArrayLinearAxis(
+                    direction: .unitX,
+                    distance: .length(8.0, .millimeter),
+                    copyCount: 1
+                )
+            )),
+            outputMode: .independentCopy
+        )
+    )
+    let source = try #require(session.document.productMetadata.patternArrays.values.first {
+        $0.name == "Definition Guard Array"
+    })
+    let outputRootSceneNodeID = try #require(source.outputSceneNodeIDs.first)
+    let outputBodySceneNodeID = try #require(
+        session.document.productMetadata.sceneNodes[outputRootSceneNodeID]?.childIDs.first
+    )
+    let generation = session.generation
+
+    do {
+        _ = try session.execute(
+            .createComponentDefinition(
+                name: "Invalid Pattern Output Root",
+                rootSceneNodeIDs: [outputRootSceneNodeID]
+            )
+        )
+        Issue.record("Component definitions must reject pattern array output root scene nodes.")
+    } catch let error as EditorError {
+        #expect(error.code == .commandInvalid)
+    }
+    do {
+        _ = try session.execute(
+            .createComponentDefinition(
+                name: "Invalid Pattern Output Body",
+                rootSceneNodeIDs: [outputBodySceneNodeID]
+            )
+        )
+        Issue.record("Component definitions must reject pattern array output descendant scene nodes.")
+    } catch let error as EditorError {
+        #expect(error.code == .commandInvalid)
+    }
+
+    #expect(session.generation == generation)
+    #expect(session.document.productMetadata.componentDefinitions.values.allSatisfy {
+        $0.name != "Invalid Pattern Output Root" && $0.name != "Invalid Pattern Output Body"
+    })
 }
 
 @MainActor
@@ -5379,6 +5541,28 @@ private func commandStackBodySceneNodeID(
     document.productMetadata.sceneNodes.first { _, node in
         node.reference == .body(featureID)
     }?.key
+}
+
+private func commandStackBodyFeatureID(
+    inSceneSubtreeRootedAt rootSceneNodeID: SceneNodeID,
+    document: DesignDocument
+) -> FeatureID? {
+    guard let sceneNode = document.productMetadata.sceneNodes[rootSceneNodeID] else {
+        return nil
+    }
+    if sceneNode.reference?.kind == .body,
+       let featureID = sceneNode.reference?.featureID {
+        return featureID
+    }
+    for childID in sceneNode.childIDs {
+        if let featureID = commandStackBodyFeatureID(
+            inSceneSubtreeRootedAt: childID,
+            document: document
+        ) {
+            return featureID
+        }
+    }
+    return nil
 }
 
 private func commandStackTopologyPoint(

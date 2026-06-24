@@ -152,6 +152,12 @@ public struct DesignDocument: Identifiable, Sendable {
                     message: "Component definition root scene nodes must exist."
                 )
             }
+            guard patternArraySourceID(containingOutputSceneNode: rootSceneNodeID) == nil else {
+                throw EditorError(
+                    code: .commandInvalid,
+                    message: "Component definitions cannot use source-owned pattern array output scene nodes."
+                )
+            }
         }
 
         let definition = ComponentDefinition(
@@ -231,10 +237,11 @@ public struct DesignDocument: Identifiable, Sendable {
         )
 
         switch outputMode {
-        case .componentInstance:
+        case .componentInstance, .independentCopy:
             break
         }
 
+        var updatedCADDocument = cadDocument
         var updatedMetadata = productMetadata
         guard let rootSceneNodeID = updatedMetadata.rootSceneNodeIDs.first,
               updatedMetadata.sceneNodes[rootSceneNodeID] != nil else {
@@ -262,9 +269,11 @@ public struct DesignDocument: Identifiable, Sendable {
         updatedMetadata.patternArrays[source.id] = source
         try synchronizePatternArrayOutputs(
             for: source.id,
-            metadata: &updatedMetadata
+            metadata: &updatedMetadata,
+            cadDocument: &updatedCADDocument
         )
-        try updatedMetadata.validate(against: cadDocument, objectRegistry: objectRegistry)
+        try updatedMetadata.validate(against: updatedCADDocument, objectRegistry: objectRegistry)
+        cadDocument = updatedCADDocument
         productMetadata = updatedMetadata
         return source.id
     }
@@ -277,6 +286,7 @@ public struct DesignDocument: Identifiable, Sendable {
         outputMode: PatternArrayOutputMode? = nil,
         objectRegistry: ObjectTypeRegistry = .builtIn
     ) throws {
+        var updatedCADDocument = cadDocument
         var updatedMetadata = productMetadata
         guard var source = updatedMetadata.patternArrays[id] else {
             throw EditorError(
@@ -325,7 +335,7 @@ public struct DesignDocument: Identifiable, Sendable {
 
         let nextOutputMode = outputMode ?? source.outputMode
         switch nextOutputMode {
-        case .componentInstance:
+        case .componentInstance, .independentCopy:
             break
         }
         source.outputMode = nextOutputMode
@@ -333,9 +343,11 @@ public struct DesignDocument: Identifiable, Sendable {
         updatedMetadata.patternArrays[id] = source
         try synchronizePatternArrayOutputs(
             for: id,
-            metadata: &updatedMetadata
+            metadata: &updatedMetadata,
+            cadDocument: &updatedCADDocument
         )
-        try updatedMetadata.validate(against: cadDocument, objectRegistry: objectRegistry)
+        try updatedMetadata.validate(against: updatedCADDocument, objectRegistry: objectRegistry)
+        cadDocument = updatedCADDocument
         productMetadata = updatedMetadata
     }
 
@@ -343,7 +355,8 @@ public struct DesignDocument: Identifiable, Sendable {
     public mutating func explodePatternArray(
         id: PatternArraySourceID,
         objectRegistry: ObjectTypeRegistry = .builtIn
-    ) throws -> [ComponentInstanceID] {
+    ) throws -> PatternArrayExplodeResult {
+        var updatedCADDocument = cadDocument
         var updatedMetadata = productMetadata
         guard let source = updatedMetadata.patternArrays[id] else {
             throw EditorError(
@@ -358,10 +371,16 @@ public struct DesignDocument: Identifiable, Sendable {
             )
         }
 
+        let result = try materializedPatternArrayOutputsForExplode(
+            source: source,
+            metadata: &updatedMetadata,
+            cadDocument: &updatedCADDocument
+        )
         updatedMetadata.patternArrays.removeValue(forKey: id)
-        try updatedMetadata.validate(against: cadDocument, objectRegistry: objectRegistry)
+        try updatedMetadata.validate(against: updatedCADDocument, objectRegistry: objectRegistry)
+        cadDocument = updatedCADDocument
         productMetadata = updatedMetadata
-        return source.outputInstanceIDs
+        return result
     }
 
     public mutating func regeneratePatternArrays(
@@ -370,6 +389,7 @@ public struct DesignDocument: Identifiable, Sendable {
         guard productMetadata.patternArrays.isEmpty == false else {
             return
         }
+        var updatedCADDocument = cadDocument
         var updatedMetadata = productMetadata
         let sourceIDs = updatedMetadata.patternArrays.keys.sorted {
             $0.description < $1.description
@@ -377,10 +397,12 @@ public struct DesignDocument: Identifiable, Sendable {
         for sourceID in sourceIDs {
             try synchronizePatternArrayOutputs(
                 for: sourceID,
-                metadata: &updatedMetadata
+                metadata: &updatedMetadata,
+                cadDocument: &updatedCADDocument
             )
         }
-        try updatedMetadata.validate(against: cadDocument, objectRegistry: objectRegistry)
+        try updatedMetadata.validate(against: updatedCADDocument, objectRegistry: objectRegistry)
+        cadDocument = updatedCADDocument
         productMetadata = updatedMetadata
     }
 
@@ -427,7 +449,7 @@ public struct DesignDocument: Identifiable, Sendable {
                 message: "Scene node transform requires an existing scene node."
             )
         }
-        guard patternArraySourceID(owningOutputSceneNode: id) == nil else {
+        guard patternArraySourceID(containingOutputSceneNode: id) == nil else {
             throw EditorError(
                 code: .commandInvalid,
                 message: "Pattern array output scene node transforms are controlled by the pattern source."
@@ -15952,7 +15974,8 @@ public struct DesignDocument: Identifiable, Sendable {
 
     private func synchronizePatternArrayOutputs(
         for sourceID: PatternArraySourceID,
-        metadata: inout ProductMetadata
+        metadata: inout ProductMetadata,
+        cadDocument: inout CADDocument
     ) throws {
         guard var source = metadata.patternArrays[sourceID] else {
             throw EditorError(
@@ -15987,6 +16010,61 @@ public struct DesignDocument: Identifiable, Sendable {
             )
         }
 
+        switch source.outputMode {
+        case .componentInstance:
+            PatternArrayIndependentCopyBuilder().removeOutputs(
+                source: source,
+                metadata: &metadata,
+                cadDocument: &cadDocument
+            )
+            source.outputSceneNodeIDs = []
+            source.outputFeatureIDs = []
+            try synchronizePatternArrayComponentInstanceOutputs(
+                source: &source,
+                rootNode: &rootNode,
+                transforms: transforms,
+                metadata: &metadata
+            )
+        case .independentCopy:
+            removePatternArrayComponentInstanceOutputs(
+                source: source,
+                rootNode: rootNode,
+                metadata: &metadata
+            )
+            PatternArrayIndependentCopyBuilder().removeOutputs(
+                source: source,
+                metadata: &metadata,
+                cadDocument: &cadDocument
+            )
+            guard let definition = metadata.componentDefinitions[source.definitionID] else {
+                throw EditorError(
+                    code: .referenceUnresolved,
+                    message: "Pattern array regeneration requires an existing component definition."
+                )
+            }
+            let result = try PatternArrayIndependentCopyBuilder().createOutputs(
+                name: source.name,
+                definition: definition,
+                transforms: transforms,
+                metadata: &metadata,
+                cadDocument: &cadDocument
+            )
+            source.outputInstanceIDs = []
+            source.outputSceneNodeIDs = result.outputSceneNodeIDs
+            source.outputFeatureIDs = result.outputFeatureIDs
+            rootNode.childIDs = result.outputSceneNodeIDs
+            metadata.sceneNodes[source.rootSceneNodeID] = rootNode
+        }
+
+        metadata.patternArrays[sourceID] = source
+    }
+
+    private func synchronizePatternArrayComponentInstanceOutputs(
+        source: inout PatternArraySource,
+        rootNode: inout SceneNode,
+        transforms: [Transform3D],
+        metadata: inout ProductMetadata
+    ) throws {
         let previousOutputIDs = source.outputInstanceIDs
         let reusableOutputIDs = Array(previousOutputIDs.prefix(transforms.count))
         let reusableOutputIDSet = Set(reusableOutputIDs)
@@ -16060,7 +16138,78 @@ public struct DesignDocument: Identifiable, Sendable {
         source.outputInstanceIDs = nextOutputIDs
         rootNode.childIDs = nextChildIDs
         metadata.sceneNodes[source.rootSceneNodeID] = rootNode
-        metadata.patternArrays[sourceID] = source
+    }
+
+    private func removePatternArrayComponentInstanceOutputs(
+        source: PatternArraySource,
+        rootNode: SceneNode,
+        metadata: inout ProductMetadata
+    ) {
+        for instanceID in source.outputInstanceIDs {
+            metadata.componentInstances.removeValue(forKey: instanceID)
+        }
+        for childID in rootNode.childIDs {
+            if let componentInstanceID = metadata.sceneNodes[childID]?.reference?.componentInstanceID,
+               source.outputInstanceIDs.contains(componentInstanceID) {
+                metadata.componentInstances.removeValue(forKey: componentInstanceID)
+            }
+            metadata.sceneNodes.removeValue(forKey: childID)
+        }
+    }
+
+    private func materializedPatternArrayOutputsForExplode(
+        source: PatternArraySource,
+        metadata: inout ProductMetadata,
+        cadDocument: inout CADDocument
+    ) throws -> PatternArrayExplodeResult {
+        guard var rootNode = metadata.sceneNodes[source.rootSceneNodeID] else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "Pattern array explode requires an existing output group scene node."
+            )
+        }
+        switch source.outputMode {
+        case .componentInstance:
+            let transforms = try source.outputInstanceIDs.map { instanceID -> Transform3D in
+                guard let instance = metadata.componentInstances[instanceID] else {
+                    throw EditorError(
+                        code: .referenceUnresolved,
+                        message: "Pattern array explode requires existing output component instances."
+                    )
+                }
+                return instance.localTransform
+            }
+            guard let definition = metadata.componentDefinitions[source.definitionID] else {
+                throw EditorError(
+                    code: .referenceUnresolved,
+                    message: "Pattern array explode requires an existing component definition."
+                )
+            }
+            removePatternArrayComponentInstanceOutputs(
+                source: source,
+                rootNode: rootNode,
+                metadata: &metadata
+            )
+            let result = try PatternArrayIndependentCopyBuilder().createOutputs(
+                name: source.name,
+                definition: definition,
+                transforms: transforms,
+                metadata: &metadata,
+                cadDocument: &cadDocument
+            )
+            rootNode.childIDs = result.outputSceneNodeIDs
+            metadata.sceneNodes[source.rootSceneNodeID] = rootNode
+            return PatternArrayExplodeResult(
+                componentInstanceIDs: source.outputInstanceIDs,
+                sceneNodeIDs: result.outputSceneNodeIDs,
+                featureIDs: result.outputFeatureIDs
+            )
+        case .independentCopy:
+            return PatternArrayExplodeResult(
+                sceneNodeIDs: source.outputSceneNodeIDs,
+                featureIDs: source.outputFeatureIDs
+            )
+        }
     }
 
     private func patternArrayChildSceneNodeIDsByInstanceID(
@@ -16086,14 +16235,57 @@ public struct DesignDocument: Identifiable, Sendable {
     }
 
     private func patternArraySourceID(
-        owningOutputSceneNode sceneNodeID: SceneNodeID
+        containingOutputSceneNode sceneNodeID: SceneNodeID
     ) -> PatternArraySourceID? {
         productMetadata.patternArrays.first { _, source in
             guard let rootNode = productMetadata.sceneNodes[source.rootSceneNodeID] else {
                 return false
             }
-            return rootNode.childIDs.contains(sceneNodeID)
+            if source.rootSceneNodeID == sceneNodeID {
+                return true
+            }
+            return rootNode.childIDs.contains { outputSceneNodeID in
+                sceneSubtree(
+                    outputSceneNodeID,
+                    contains: sceneNodeID
+                )
+            }
         }?.key
+    }
+
+    private func sceneSubtree(
+        _ rootSceneNodeID: SceneNodeID,
+        contains targetSceneNodeID: SceneNodeID
+    ) -> Bool {
+        var visitedSceneNodeIDs: Set<SceneNodeID> = []
+        return sceneSubtree(
+            rootSceneNodeID,
+            contains: targetSceneNodeID,
+            visitedSceneNodeIDs: &visitedSceneNodeIDs
+        )
+    }
+
+    private func sceneSubtree(
+        _ rootSceneNodeID: SceneNodeID,
+        contains targetSceneNodeID: SceneNodeID,
+        visitedSceneNodeIDs: inout Set<SceneNodeID>
+    ) -> Bool {
+        guard visitedSceneNodeIDs.insert(rootSceneNodeID).inserted else {
+            return false
+        }
+        if rootSceneNodeID == targetSceneNodeID {
+            return true
+        }
+        guard let sceneNode = productMetadata.sceneNodes[rootSceneNodeID] else {
+            return false
+        }
+        return sceneNode.childIDs.contains { childID in
+            sceneSubtree(
+                childID,
+                contains: targetSceneNodeID,
+                visitedSceneNodeIDs: &visitedSceneNodeIDs
+            )
+        }
     }
 
     private struct EditableBodyTargetResolution {

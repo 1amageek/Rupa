@@ -3,6 +3,7 @@ import SwiftCAD
 
 public enum PatternArrayOutputMode: String, Codable, Hashable, Sendable {
     case componentInstance
+    case independentCopy
 }
 
 public enum PatternArrayDistanceMode: String, Codable, Hashable, Sendable {
@@ -274,6 +275,8 @@ public struct PatternArraySource: Codable, Hashable, Identifiable, Sendable {
     public var distribution: PatternArrayDistribution
     public var outputMode: PatternArrayOutputMode
     public var outputInstanceIDs: [ComponentInstanceID]
+    public var outputSceneNodeIDs: [SceneNodeID]
+    public var outputFeatureIDs: [FeatureID]
     public var rootSceneNodeID: SceneNodeID
 
     public init(
@@ -283,6 +286,8 @@ public struct PatternArraySource: Codable, Hashable, Identifiable, Sendable {
         distribution: PatternArrayDistribution,
         outputMode: PatternArrayOutputMode = .componentInstance,
         outputInstanceIDs: [ComponentInstanceID] = [],
+        outputSceneNodeIDs: [SceneNodeID] = [],
+        outputFeatureIDs: [FeatureID] = [],
         rootSceneNodeID: SceneNodeID
     ) {
         self.id = id
@@ -291,6 +296,8 @@ public struct PatternArraySource: Codable, Hashable, Identifiable, Sendable {
         self.distribution = distribution
         self.outputMode = outputMode
         self.outputInstanceIDs = outputInstanceIDs
+        self.outputSceneNodeIDs = outputSceneNodeIDs
+        self.outputFeatureIDs = outputFeatureIDs
         self.rootSceneNodeID = rootSceneNodeID
     }
 
@@ -298,16 +305,46 @@ public struct PatternArraySource: Codable, Hashable, Identifiable, Sendable {
         guard !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             throw DocumentValidationError.invalidProductMetadata("Pattern array source names must not be empty.")
         }
-        guard Set(outputInstanceIDs).count == outputInstanceIDs.count else {
-            throw DocumentValidationError.invalidProductMetadata(
-                "Pattern array output instance references must be unique."
-            )
-        }
-        guard !outputInstanceIDs.isEmpty else {
-            throw DocumentValidationError.invalidProductMetadata(
-                "Pattern array sources must own at least one output instance."
-            )
+        try validateUniqueOutputs(outputInstanceIDs, owner: "output instance references")
+        try validateUniqueOutputs(outputSceneNodeIDs, owner: "output scene node references")
+        try validateUniqueOutputs(outputFeatureIDs, owner: "output feature references")
+        switch outputMode {
+        case .componentInstance:
+            guard !outputInstanceIDs.isEmpty else {
+                throw DocumentValidationError.invalidProductMetadata(
+                    "Component-instance pattern array sources must own at least one output instance."
+                )
+            }
+            guard outputSceneNodeIDs.isEmpty, outputFeatureIDs.isEmpty else {
+                throw DocumentValidationError.invalidProductMetadata(
+                    "Component-instance pattern array sources must not own direct scene nodes or cloned features."
+                )
+            }
+        case .independentCopy:
+            guard !outputSceneNodeIDs.isEmpty else {
+                throw DocumentValidationError.invalidProductMetadata(
+                    "Independent-copy pattern array sources must own at least one output scene node."
+                )
+            }
+            guard !outputFeatureIDs.isEmpty else {
+                throw DocumentValidationError.invalidProductMetadata(
+                    "Independent-copy pattern array sources must own cloned CAD features."
+                )
+            }
+            guard outputInstanceIDs.isEmpty else {
+                throw DocumentValidationError.invalidProductMetadata(
+                    "Independent-copy pattern array sources must not own component instances."
+                )
+            }
         }
         try distribution.validate(tolerance: tolerance)
+    }
+
+    private func validateUniqueOutputs<T: Hashable>(_ values: [T], owner: String) throws {
+        guard Set(values).count == values.count else {
+            throw DocumentValidationError.invalidProductMetadata(
+                "Pattern array \(owner) must be unique."
+            )
+        }
     }
 }

@@ -2,16 +2,18 @@ import SwiftCAD
 
 public struct PatternArrayDisplaySnapshot: Codable, Equatable, Sendable {
     public struct Output: Codable, Equatable, Sendable {
-        public var componentInstanceID: ComponentInstanceID
+        public var componentInstanceID: ComponentInstanceID?
         public var sceneNodeID: SceneNodeID
+        public var featureIDs: [FeatureID]
         public var name: String
         public var localTransform: Transform3D
         public var isVisible: Bool
         public var isLocked: Bool
 
         public init(
-            componentInstanceID: ComponentInstanceID,
+            componentInstanceID: ComponentInstanceID? = nil,
             sceneNodeID: SceneNodeID,
+            featureIDs: [FeatureID] = [],
             name: String,
             localTransform: Transform3D,
             isVisible: Bool,
@@ -19,6 +21,7 @@ public struct PatternArrayDisplaySnapshot: Codable, Equatable, Sendable {
         ) {
             self.componentInstanceID = componentInstanceID
             self.sceneNodeID = sceneNodeID
+            self.featureIDs = featureIDs
             self.name = name
             self.localTransform = localTransform
             self.isVisible = isVisible

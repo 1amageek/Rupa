@@ -703,7 +703,7 @@ import SwiftCAD
     #expect(distributionMode.supportedValues == ["rectangular", "radial", "curve"])
     #expect(spacingMode.supportedValues == ["spacing", "extent"])
     #expect(curveAlignment.supportedValues == ["normal", "parallel", "transport"])
-    #expect(patternOutputMode.supportedValues == ["componentInstance"])
+    #expect(patternOutputMode.supportedValues == ["componentInstance", "independentCopy"])
 
     #expect(patternArrayUpdate.category == .pattern)
     #expect(patternArrayUpdate.mutatesDocument)
@@ -715,7 +715,7 @@ import SwiftCAD
     #expect(patternArrayExplode.mutatesDocument)
     #expect(patternArrayExplode.discovery.contains(.designDisplaySnapshot))
     #expect(patternArrayExplode.targets == [.sceneNode])
-    #expect(patternArrayExplode.summary.contains("independently editable"))
+    #expect(patternArrayExplode.summary.contains("materialized"))
 
     #expect(designDisplaySnapshot.category == .read)
     #expect(!designDisplaySnapshot.mutatesDocument)
@@ -1069,6 +1069,7 @@ import SwiftCAD
         return
     }
     let updatedSource = try #require(session.document.productMetadata.patternArrays[discoveredArray.sourceID])
+    let firstOutputInstanceID = try #require(firstOutput.componentInstanceID)
 
     #expect(snapshot.patternArrays.count == 1)
     #expect(discoveredArray.name == "Agent Snapshot Array")
@@ -1079,7 +1080,7 @@ import SwiftCAD
     #expect(firstOutput.componentInstanceID == discoveredArray.outputs[0].componentInstanceID)
     #expect(updateResult.commandName == "updatePatternArray")
     #expect(updatedSource.name == "Agent Snapshot Array Updated")
-    #expect(updatedSource.outputInstanceIDs == [firstOutput.componentInstanceID])
+    #expect(updatedSource.outputInstanceIDs == [firstOutputInstanceID])
 }
 
 @Test func agentMessageCodecRoundTripsCommandRequestAndResponse() async throws {
@@ -4815,6 +4816,15 @@ import SwiftCAD
         #expect(Bool(false))
         return
     }
+    let outputSceneNodeID = try #require(
+        session.document.productMetadata.sceneNodes[source.rootSceneNodeID]?.childIDs.first
+    )
+    let outputFeatureID = try #require(
+        agentFeatureID(
+            inSceneSubtreeRootedAt: outputSceneNodeID,
+            document: session.document
+        )
+    )
 
     #expect(updateResult.commandName == "updatePatternArray")
     #expect(updateResult.generation == DocumentGeneration(4))
@@ -4823,7 +4833,8 @@ import SwiftCAD
     #expect(explodeResult.commandName == "explodePatternArray")
     #expect(explodeResult.generation == DocumentGeneration(5))
     #expect(session.document.productMetadata.patternArrays[source.id] == nil)
-    #expect(session.document.productMetadata.componentInstances[firstOutputID] != nil)
+    #expect(session.document.productMetadata.componentInstances[firstOutputID] == nil)
+    #expect(session.document.cadDocument.designGraph.nodes[outputFeatureID] != nil)
 }
 
 @Test func agentDispatchesCircleModelingCommandThroughAutomationAndCore() async throws {
@@ -11785,6 +11796,27 @@ private func agentPatternArrayBodySceneNodeID(
     document.productMetadata.sceneNodes.first { _, node in
         node.reference == .body(featureID)
     }?.key
+}
+
+private func agentFeatureID(
+    inSceneSubtreeRootedAt rootSceneNodeID: SceneNodeID,
+    document: DesignDocument
+) -> FeatureID? {
+    guard let sceneNode = document.productMetadata.sceneNodes[rootSceneNodeID] else {
+        return nil
+    }
+    if let featureID = sceneNode.reference?.featureID {
+        return featureID
+    }
+    for childID in sceneNode.childIDs {
+        if let featureID = agentFeatureID(
+            inSceneSubtreeRootedAt: childID,
+            document: document
+        ) {
+            return featureID
+        }
+    }
+    return nil
 }
 
 private extension ObjectPropertyValue {

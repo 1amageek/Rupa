@@ -789,7 +789,63 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
                         "Component definition root scene node references a missing node."
                     )
                 }
+                guard patternArraySourceID(containingOutputSceneNode: rootSceneNodeID) == nil else {
+                    throw DocumentValidationError.invalidProductMetadata(
+                        "Component definition root scene nodes must not reference source-owned pattern array outputs."
+                    )
+                }
             }
+        }
+    }
+
+    private func patternArraySourceID(
+        containingOutputSceneNode sceneNodeID: SceneNodeID
+    ) -> PatternArraySourceID? {
+        patternArrays.first { _, source in
+            guard let rootNode = sceneNodes[source.rootSceneNodeID] else {
+                return false
+            }
+            if source.rootSceneNodeID == sceneNodeID {
+                return true
+            }
+            return rootNode.childIDs.contains { outputSceneNodeID in
+                sceneSubtree(outputSceneNodeID, contains: sceneNodeID)
+            }
+        }?.key
+    }
+
+    private func sceneSubtree(
+        _ rootSceneNodeID: SceneNodeID,
+        contains targetSceneNodeID: SceneNodeID
+    ) -> Bool {
+        var visitedSceneNodeIDs: Set<SceneNodeID> = []
+        return sceneSubtree(
+            rootSceneNodeID,
+            contains: targetSceneNodeID,
+            visitedSceneNodeIDs: &visitedSceneNodeIDs
+        )
+    }
+
+    private func sceneSubtree(
+        _ rootSceneNodeID: SceneNodeID,
+        contains targetSceneNodeID: SceneNodeID,
+        visitedSceneNodeIDs: inout Set<SceneNodeID>
+    ) -> Bool {
+        guard visitedSceneNodeIDs.insert(rootSceneNodeID).inserted else {
+            return false
+        }
+        if rootSceneNodeID == targetSceneNodeID {
+            return true
+        }
+        guard let sceneNode = sceneNodes[rootSceneNodeID] else {
+            return false
+        }
+        return sceneNode.childIDs.contains { childID in
+            sceneSubtree(
+                childID,
+                contains: targetSceneNodeID,
+                visitedSceneNodeIDs: &visitedSceneNodeIDs
+            )
         }
     }
 
@@ -837,31 +893,6 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
                 parameters: cadDocument.parameters,
                 cadDocument: cadDocument
             )
-            guard expectedTransforms.count == source.outputInstanceIDs.count else {
-                throw DocumentValidationError.invalidProductMetadata(
-                    "Pattern array output instances must match the source distribution count."
-                )
-            }
-            for instanceID in source.outputInstanceIDs {
-                guard let instance = componentInstances[instanceID] else {
-                    throw DocumentValidationError.invalidProductMetadata(
-                        "Pattern array output instances must exist."
-                    )
-                }
-                guard instance.definitionID == source.definitionID else {
-                    throw DocumentValidationError.invalidProductMetadata(
-                        "Pattern array output instances must use the source component definition."
-                    )
-                }
-            }
-            for (index, instanceID) in source.outputInstanceIDs.enumerated() {
-                guard let instance = componentInstances[instanceID],
-                      transform(instance.localTransform, approximatelyEquals: expectedTransforms[index]) else {
-                    throw DocumentValidationError.invalidProductMetadata(
-                        "Pattern array output instance transforms must match the source distribution."
-                    )
-                }
-            }
             let rootSceneNodeID = source.rootSceneNodeID
             guard let rootNode = sceneNodes[rootSceneNodeID],
                   rootNode.reference == nil,
@@ -870,36 +901,151 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
                     "Pattern array root scene node must be a group node."
                 )
             }
-            guard rootNode.childIDs.count == source.outputInstanceIDs.count else {
-                throw DocumentValidationError.invalidProductMetadata(
-                    "Pattern array root scene node must contain exactly its output instance scene nodes."
+            switch source.outputMode {
+            case .componentInstance:
+                try validateComponentInstancePatternArray(
+                    source: source,
+                    rootNode: rootNode,
+                    expectedTransforms: expectedTransforms
+                )
+            case .independentCopy:
+                try validateIndependentCopyPatternArray(
+                    source: source,
+                    rootNode: rootNode,
+                    expectedTransforms: expectedTransforms,
+                    cadDocument: cadDocument
                 )
             }
-            let outputInstanceIDs = Set(source.outputInstanceIDs)
-            var childInstanceIDs: [ComponentInstanceID] = []
-            childInstanceIDs.reserveCapacity(rootNode.childIDs.count)
-            for childID in rootNode.childIDs {
-                guard let childNode = sceneNodes[childID],
-                      childNode.reference?.kind == .componentInstance,
-                      let componentInstanceID = childNode.reference?.componentInstanceID,
-                      outputInstanceIDs.contains(componentInstanceID) else {
-                    throw DocumentValidationError.invalidProductMetadata(
-                        "Pattern array root scene node children must be output component instance nodes."
-                    )
-                }
-                guard transform(childNode.localTransform, approximatelyEquals: .identity) else {
-                    throw DocumentValidationError.invalidProductMetadata(
-                        "Pattern array output scene node transforms must be identity."
-                    )
-                }
-                childInstanceIDs.append(componentInstanceID)
-            }
-            guard Set(childInstanceIDs) == outputInstanceIDs,
-                  childInstanceIDs.count == outputInstanceIDs.count else {
+        }
+    }
+
+    private func validateComponentInstancePatternArray(
+        source: PatternArraySource,
+        rootNode: SceneNode,
+        expectedTransforms: [Transform3D]
+    ) throws {
+        guard expectedTransforms.count == source.outputInstanceIDs.count else {
+            throw DocumentValidationError.invalidProductMetadata(
+                "Pattern array output instances must match the source distribution count."
+            )
+        }
+        for instanceID in source.outputInstanceIDs {
+            guard let instance = componentInstances[instanceID] else {
                 throw DocumentValidationError.invalidProductMetadata(
-                    "Pattern array root scene node must map one child to each output instance."
+                    "Pattern array output instances must exist."
                 )
             }
+            guard instance.definitionID == source.definitionID else {
+                throw DocumentValidationError.invalidProductMetadata(
+                    "Pattern array output instances must use the source component definition."
+                )
+            }
+        }
+        for (index, instanceID) in source.outputInstanceIDs.enumerated() {
+            guard let instance = componentInstances[instanceID],
+                  transform(instance.localTransform, approximatelyEquals: expectedTransforms[index]) else {
+                throw DocumentValidationError.invalidProductMetadata(
+                    "Pattern array output instance transforms must match the source distribution."
+                )
+            }
+        }
+        guard rootNode.childIDs.count == source.outputInstanceIDs.count else {
+            throw DocumentValidationError.invalidProductMetadata(
+                "Pattern array root scene node must contain exactly its output instance scene nodes."
+            )
+        }
+        let outputInstanceIDs = Set(source.outputInstanceIDs)
+        var childInstanceIDs: [ComponentInstanceID] = []
+        childInstanceIDs.reserveCapacity(rootNode.childIDs.count)
+        for childID in rootNode.childIDs {
+            guard let childNode = sceneNodes[childID],
+                  childNode.reference?.kind == .componentInstance,
+                  let componentInstanceID = childNode.reference?.componentInstanceID,
+                  outputInstanceIDs.contains(componentInstanceID) else {
+                throw DocumentValidationError.invalidProductMetadata(
+                    "Pattern array root scene node children must be output component instance nodes."
+                )
+            }
+            guard transform(childNode.localTransform, approximatelyEquals: .identity) else {
+                throw DocumentValidationError.invalidProductMetadata(
+                    "Pattern array output scene node transforms must be identity."
+                )
+            }
+            childInstanceIDs.append(componentInstanceID)
+        }
+        guard Set(childInstanceIDs) == outputInstanceIDs,
+              childInstanceIDs.count == outputInstanceIDs.count else {
+            throw DocumentValidationError.invalidProductMetadata(
+                "Pattern array root scene node must map one child to each output instance."
+            )
+        }
+    }
+
+    private func validateIndependentCopyPatternArray(
+        source: PatternArraySource,
+        rootNode: SceneNode,
+        expectedTransforms: [Transform3D],
+        cadDocument: CADDocument
+    ) throws {
+        guard expectedTransforms.count == source.outputSceneNodeIDs.count else {
+            throw DocumentValidationError.invalidProductMetadata(
+                "Independent-copy pattern array output scene nodes must match the source distribution count."
+            )
+        }
+        guard rootNode.childIDs == source.outputSceneNodeIDs else {
+            throw DocumentValidationError.invalidProductMetadata(
+                "Independent-copy pattern array root scene node must contain exactly its output scene nodes."
+            )
+        }
+        let ownedFeatureIDs = Set(source.outputFeatureIDs)
+        for featureID in source.outputFeatureIDs {
+            guard cadDocument.designGraph.nodes[featureID] != nil else {
+                throw DocumentValidationError.invalidProductMetadata(
+                    "Independent-copy pattern array output features must exist."
+                )
+            }
+        }
+        for (index, outputSceneNodeID) in source.outputSceneNodeIDs.enumerated() {
+            guard let outputNode = sceneNodes[outputSceneNodeID],
+                  outputNode.reference == nil,
+                  outputNode.object?.category == .group else {
+                throw DocumentValidationError.invalidProductMetadata(
+                    "Independent-copy pattern array outputs must be group scene nodes."
+                )
+            }
+            guard transform(outputNode.localTransform, approximatelyEquals: expectedTransforms[index]) else {
+                throw DocumentValidationError.invalidProductMetadata(
+                    "Independent-copy pattern array output transforms must match the source distribution."
+                )
+            }
+            let descendantFeatureIDs = featureIDs(inSceneSubtreeRootedAt: outputSceneNodeID)
+            guard !descendantFeatureIDs.isEmpty,
+                  descendantFeatureIDs.isSubset(of: ownedFeatureIDs) else {
+                throw DocumentValidationError.invalidProductMetadata(
+                    "Independent-copy pattern array output scene nodes must reference only owned cloned features."
+                )
+            }
+        }
+    }
+
+    private func featureIDs(inSceneSubtreeRootedAt rootSceneNodeID: SceneNodeID) -> Set<FeatureID> {
+        var featureIDs: Set<FeatureID> = []
+        collectFeatureIDs(rootSceneNodeID, featureIDs: &featureIDs)
+        return featureIDs
+    }
+
+    private func collectFeatureIDs(
+        _ sceneNodeID: SceneNodeID,
+        featureIDs: inout Set<FeatureID>
+    ) {
+        guard let sceneNode = sceneNodes[sceneNodeID] else {
+            return
+        }
+        if let featureID = sceneNode.reference?.featureID {
+            featureIDs.insert(featureID)
+        }
+        for childID in sceneNode.childIDs {
+            collectFeatureIDs(childID, featureIDs: &featureIDs)
         }
     }
 
