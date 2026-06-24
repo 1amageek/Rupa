@@ -250,6 +250,16 @@ public final class AgentServer: AgentClientProtocol {
             ]
         ),
         capability(
+            "patternArraySummary",
+            category: .read,
+            summary: "List source-owned Pattern Array edit candidates, output ownership, lifecycle actions, and diagnostics without mutating the document.",
+            access: .agentRequest,
+            mutatesDocument: false,
+            discovery: [.patternArraySummary, .designDisplaySnapshot],
+            targets: [.sceneNode, .componentInstance],
+            failureMode: "Rejects stale generations before reading; reports source-owned component-instance and independent-copy output policies so Agents do not direct-edit generated outputs."
+        ),
+        capability(
             "setSceneNodeVisibility",
             category: .component,
             summary: "Set visibility on a scene node without changing CAD feature source.",
@@ -1311,6 +1321,16 @@ public final class AgentServer: AgentClientProtocol {
                         document: session.document,
                         objectRegistry: session.objectRegistry,
                         currentEvaluation: session.currentEvaluation,
+                        generation: session.generation,
+                        dirty: session.isDirty
+                    )
+                )
+            case let .patternArraySummary(sessionID, expectedGeneration):
+                let session = try registry.session(id: sessionID)
+                try session.store.requireGeneration(expectedGeneration)
+                return .patternArraySummary(
+                    PatternArraySummaryService().summarize(
+                        document: session.document,
                         generation: session.generation,
                         dirty: session.isDirty
                     )

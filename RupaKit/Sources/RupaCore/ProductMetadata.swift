@@ -893,6 +893,9 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
                 source: source,
                 sourceIDByOutputInstanceID: &sourceIDByOutputInstanceID
             )
+        }
+
+        for (_, source) in patternArrays {
             let expectedTransforms = try PatternArrayInstancePlanner().transforms(
                 for: source.distribution,
                 parameters: cadDocument.parameters,

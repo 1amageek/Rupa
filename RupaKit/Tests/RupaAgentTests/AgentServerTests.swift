@@ -25,6 +25,7 @@ import SwiftCAD
     #expect(capabilities.contains("createPatternArray"))
     #expect(capabilities.contains("updatePatternArray"))
     #expect(capabilities.contains("explodePatternArray"))
+    #expect(capabilities.contains("patternArraySummary"))
     #expect(capabilities.contains("setSceneNodeVisibility"))
     #expect(capabilities.contains("setSceneNodeLock"))
     #expect(capabilities.contains("setSceneNodeTransform"))
@@ -176,6 +177,7 @@ import SwiftCAD
     let patternArray = try #require(descriptors.first { $0.name == "createPatternArray" })
     let patternArrayUpdate = try #require(descriptors.first { $0.name == "updatePatternArray" })
     let patternArrayExplode = try #require(descriptors.first { $0.name == "explodePatternArray" })
+    let patternArraySummary = try #require(descriptors.first { $0.name == "patternArraySummary" })
     let designDisplaySnapshot = try #require(descriptors.first { $0.name == "designDisplaySnapshot" })
     let qualityAssessment = try #require(descriptors.first { $0.name == "cadInteractionQualityAssessment" })
     let selection = try #require(descriptors.first { $0.name == "selectTargets" })
@@ -765,6 +767,15 @@ import SwiftCAD
     #expect(patternArrayExplode.targets == [.sceneNode])
     #expect(patternArrayExplode.summary.contains("materialized"))
 
+    #expect(patternArraySummary.category == .read)
+    #expect(!patternArraySummary.mutatesDocument)
+    #expect(patternArraySummary.access == .agentRequest)
+    #expect(patternArraySummary.discovery.contains(.patternArraySummary))
+    #expect(patternArraySummary.discovery.contains(.designDisplaySnapshot))
+    #expect(patternArraySummary.targets == [.sceneNode, .componentInstance])
+    #expect(patternArraySummary.summary.contains("output ownership"))
+    #expect(patternArraySummary.failureMode.contains("source-owned component-instance"))
+
     #expect(designDisplaySnapshot.category == .read)
     #expect(!designDisplaySnapshot.mutatesDocument)
     #expect(designDisplaySnapshot.access == .agentRequest)
@@ -832,6 +843,7 @@ import SwiftCAD
     #expect(descriptors.contains { $0.name == "moveBodyVertex" && $0.targets == [.vertex] })
     #expect(descriptors.contains { $0.name == "cadInteractionQualityAssessment" && !$0.requiresSession })
     #expect(descriptors.contains { $0.name == "designDisplaySnapshot" && $0.discovery.contains(.designDisplaySnapshot) })
+    #expect(descriptors.contains { $0.name == "patternArraySummary" && $0.discovery.contains(.patternArraySummary) })
 }
 
 @Test func agentMessageCodecRoundTripsParameterRequestsAndResponses() async throws {
@@ -860,6 +872,10 @@ import SwiftCAD
         expectedGeneration: DocumentGeneration(2)
     )
     let displaySnapshotRequest = AgentRequest.designDisplaySnapshot(
+        sessionID: sessionID,
+        expectedGeneration: DocumentGeneration(2)
+    )
+    let patternArraySummaryRequest = AgentRequest.patternArraySummary(
         sessionID: sessionID,
         expectedGeneration: DocumentGeneration(2)
     )
@@ -917,6 +933,13 @@ import SwiftCAD
             bodies: []
         )
     )
+    let patternArraySummaryResponse = AgentResponse.patternArraySummary(
+        PatternArraySummaryResult(
+            generation: DocumentGeneration(2),
+            dirty: false,
+            patternArrays: []
+        )
+    )
     let objectDimensionResponse = AgentResponse.objectDimensionSummary(
         ObjectDimensionSummaryResult(
             displayUnit: .millimeter,
@@ -970,6 +993,7 @@ import SwiftCAD
     #expect(try codec.decodeRequest(from: try codec.encode(listRequest)) == listRequest)
     #expect(try codec.decodeRequest(from: try codec.encode(constructionPlaneRequest)) == constructionPlaneRequest)
     #expect(try codec.decodeRequest(from: try codec.encode(displaySnapshotRequest)) == displaySnapshotRequest)
+    #expect(try codec.decodeRequest(from: try codec.encode(patternArraySummaryRequest)) == patternArraySummaryRequest)
     #expect(try codec.decodeRequest(from: try codec.encode(objectDimensionRequest)) == objectDimensionRequest)
     #expect(try codec.decodeRequest(from: try codec.encode(sketchDimensionRequest)) == sketchDimensionRequest)
     #expect(try codec.decodeRequest(from: try codec.encode(selectionDimensionRequest)) == selectionDimensionRequest)
@@ -977,6 +1001,7 @@ import SwiftCAD
     #expect(try codec.decodeResponse(from: try codec.encode(listResponse)) == listResponse)
     #expect(try codec.decodeResponse(from: try codec.encode(constructionPlaneResponse)) == constructionPlaneResponse)
     #expect(try codec.decodeResponse(from: try codec.encode(displaySnapshotResponse)) == displaySnapshotResponse)
+    #expect(try codec.decodeResponse(from: try codec.encode(patternArraySummaryResponse)) == patternArraySummaryResponse)
     #expect(try codec.decodeResponse(from: try codec.encode(objectDimensionResponse)) == objectDimensionResponse)
     #expect(try codec.decodeResponse(from: try codec.encode(sketchDimensionResponse)) == sketchDimensionResponse)
     #expect(try codec.decodeResponse(from: try codec.encode(selectionDimensionResponse)) == selectionDimensionResponse)
@@ -1224,6 +1249,73 @@ import SwiftCAD
     #expect(updateResult.commandName == "updatePatternArray")
     #expect(updatedSource.name == "Agent Snapshot Array Updated")
     #expect(updatedSource.outputInstanceIDs == [firstOutputInstanceID])
+}
+
+@Test func agentReportsPatternArraySummaryForLifecyclePlanning() async throws {
+    let server = AgentServer()
+    let sessionID = UUID()
+    let session = EditorSession()
+    _ = try #require(session.createDefaultExtrudedRectangle())
+    let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let bodySceneNodeID = try #require(
+        agentPatternArrayBodySceneNodeID(for: bodyFeatureID, in: session.document)
+    )
+    _ = try session.execute(
+        .createComponentDefinition(
+            name: "Agent Summary Array Source",
+            rootSceneNodeIDs: [bodySceneNodeID]
+        )
+    )
+    let definition = try #require(session.document.productMetadata.componentDefinitions.values.first {
+        $0.name == "Agent Summary Array Source"
+    })
+    _ = try session.execute(
+        .createPatternArray(
+            name: "Agent Summary Array",
+            definitionID: definition.id,
+            distribution: .rectangular(RectangularPatternArray(
+                firstAxis: PatternArrayLinearAxis(
+                    direction: .unitX,
+                    distance: .length(8.0, .millimeter),
+                    copyCount: 2
+                )
+            )),
+            outputMode: .componentInstance
+        )
+    )
+    let source = try #require(session.document.productMetadata.patternArrays.values.first {
+        $0.name == "Agent Summary Array"
+    })
+    server.register(session: session, id: sessionID)
+
+    let summaryResponse = server.handle(
+        .patternArraySummary(
+            sessionID: sessionID,
+            expectedGeneration: session.generation
+        )
+    )
+    let codec = AgentMessageCodec()
+    let decodedResponse = try codec.decodeResponse(from: try codec.encode(summaryResponse))
+    guard case .patternArraySummary(let result) = summaryResponse else {
+        #expect(Bool(false))
+        return
+    }
+    let summary = try #require(result.patternArrays.first)
+
+    #expect(result.generation == session.generation)
+    #expect(result.dirty == session.isDirty)
+    #expect(summary.sourceID == source.id)
+    #expect(summary.definitionID == definition.id)
+    #expect(summary.definitionName == "Agent Summary Array Source")
+    #expect(summary.outputMode == .componentInstance)
+    #expect(summary.outputCount == source.outputInstanceIDs.count)
+    #expect(summary.componentInstanceOutputIDs == source.outputInstanceIDs)
+    #expect(summary.outputOwnership.kind == .sourceOwnedComponentInstances)
+    #expect(!summary.outputOwnership.directOutputEditingAllowed)
+    #expect(summary.outputOwnership.sourceEditAction == .updatePatternArray)
+    #expect(summary.outputOwnership.detachAction == .explodePatternArray)
+    #expect(summary.diagnostics.isEmpty)
+    #expect(decodedResponse == summaryResponse)
 }
 
 @Test func agentMessageCodecRoundTripsCommandRequestAndResponse() async throws {

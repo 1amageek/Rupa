@@ -75,13 +75,23 @@ import RupaCore
 
     let arrays = try #require(result.entries.first { $0.area == .patternsAndArrays })
     let arrayCommandRating = try gateRating(.commandContract, in: arrays)
+    let arrayAgentRating = try gateRating(.agentParity, in: arrays)
+    let arrayDiagnosticsRating = try gateRating(.measurementDiagnostics, in: arrays)
     #expect(arrays.currentRating == .partial)
     #expect(arrayCommandRating == .partial)
+    #expect(arrayAgentRating == .implemented)
+    #expect(arrayDiagnosticsRating == .partial)
     #expect(arrays.referenceSources.contains("https://doc.plasticity.xyz/common/rectangular-array"))
     #expect(arrays.openWork.contains { $0.contains("radial array center") })
     #expect(arrays.openWork.contains { $0.contains("curve array path selection") })
     #expect(arrays.evidence.contains { evidence in
         evidence.sourceFiles.contains("RupaKit/Sources/RupaCore/PatternArraySource.swift")
+    })
+    #expect(arrays.evidence.contains { evidence in
+        evidence.sourceFiles.contains("RupaKit/Sources/RupaCore/PatternArraySummaryService.swift")
+    })
+    #expect(arrays.evidence.contains { evidence in
+        evidence.notes.contains("Pattern Array summaries expose editable fields, lifecycle actions, source-owned output edit policy, output IDs, and diagnostics without forcing CAD evaluation.")
     })
 
     let section = try #require(result.entries.first { $0.area == .sectionAnalysis })

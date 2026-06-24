@@ -46,6 +46,10 @@ public enum AgentRequest: Codable, Equatable, Sendable {
         sessionID: UUID,
         expectedGeneration: DocumentGeneration?
     )
+    case patternArraySummary(
+        sessionID: UUID,
+        expectedGeneration: DocumentGeneration?
+    )
     case meshSummary(
         sessionID: UUID,
         expectedGeneration: DocumentGeneration?
@@ -127,6 +131,7 @@ public enum AgentResponse: Codable, Equatable, Sendable {
     case snapResolution(SnapResolutionResult)
     case constructionPlaneSummary(ConstructionPlaneSummaryResult)
     case designDisplaySnapshot(DesignDisplaySnapshotResult)
+    case patternArraySummary(PatternArraySummaryResult)
     case meshSummary(MeshSummaryResult)
     case polySplineMeshAnalysis(PolySplineMeshAnalysisResult)
     case sketchEntitySummary(SketchEntitySummaryResult)
