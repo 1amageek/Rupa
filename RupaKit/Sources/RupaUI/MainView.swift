@@ -461,6 +461,7 @@ public struct MainView: View {
                     onSketchVertexOffsetDrag: viewportSketchVertexOffsetDragHandler,
                     onPatternArrayLinearAxisDrag: viewportPatternArrayLinearAxisDragHandler,
                     onPatternArrayRadialAngleDrag: viewportPatternArrayRadialAngleDragHandler,
+                    onPatternArrayCopyCountDrag: viewportPatternArrayCopyCountDragHandler,
                     onSketchCurveHandleDrag: viewportSketchCurveHandleDragHandler,
                     onSketchDimensionDrag: viewportSketchDimensionDragHandler,
                     onSketchPointHandleDrag: viewportSketchPointHandleDragHandler,
@@ -674,6 +675,16 @@ public struct MainView: View {
         }
         return { target in
             handleViewportPatternArrayRadialAngleDrag(target)
+        }
+    }
+
+    private var viewportPatternArrayCopyCountDragHandler: ((ViewportPatternArrayCopyCountDragTarget) -> Void)? {
+        guard session.selectedTool == .select,
+              patternArrayInspectorState(for: selectedSceneNodes) != nil else {
+            return nil
+        }
+        return { target in
+            handleViewportPatternArrayCopyCountDrag(target)
         }
     }
 
@@ -3368,6 +3379,34 @@ public struct MainView: View {
             session: session,
             sourceID: target.sourceID
         ).setRadialAngle(degrees: target.angleRadians * 180.0 / .pi)
+        if result?.diagnostics.isEmpty == false {
+            isPreviewExpanded = true
+        }
+    }
+
+    private func handleViewportPatternArrayCopyCountDrag(
+        _ target: ViewportPatternArrayCopyCountDragTarget
+    ) {
+        guard session.selectedTool == .select,
+              let state = patternArrayInspectorState(for: selectedSceneNodes),
+              state.sourceID == target.sourceID else {
+            return
+        }
+        let service = PatternArrayEditingService(
+            session: session,
+            sourceID: target.sourceID
+        )
+        let result: CommandExecutionResult?
+        switch target.slot {
+        case .rectangularFirst:
+            result = service.setRectangularAxisCopyCount(slot: .first, copyCount: target.copyCount)
+        case .rectangularSecond:
+            result = service.setRectangularAxisCopyCount(slot: .second, copyCount: target.copyCount)
+        case .radialAngular:
+            result = service.setRadialAngularCopyCount(target.copyCount)
+        case .radialAxis:
+            result = service.setRadialAxisCopyCount(target.copyCount)
+        }
         if result?.diagnostics.isEmpty == false {
             isPreviewExpanded = true
         }

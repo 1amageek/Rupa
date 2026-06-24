@@ -395,6 +395,9 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                         "RupaKit/Sources/RupaRendering/ViewportPatternArrayRadialAngleDragTarget.swift",
                         "RupaKit/Sources/RupaRendering/ViewportPatternArrayRadialAngleAffordanceGeometry.swift",
                         "RupaKit/Sources/RupaRendering/ViewportPatternArrayRadialAngleAffordanceService.swift",
+                        "RupaKit/Sources/RupaRendering/ViewportPatternArrayCopyCountDragTarget.swift",
+                        "RupaKit/Sources/RupaRendering/ViewportPatternArrayCopyCountAffordanceGeometry.swift",
+                        "RupaKit/Sources/RupaRendering/ViewportPatternArrayCopyCountAffordanceService.swift",
                         "RupaKit/Sources/RupaRendering/Viewport.swift",
                     ],
                     tests: [
@@ -409,6 +412,7 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                         "RupaKit/Tests/RupaRenderingTests/ViewportPatternArrayPreviewServiceTests.swift",
                         "RupaKit/Tests/RupaRenderingTests/ViewportPatternArrayLinearAxisAffordanceServiceTests.swift",
                         "RupaKit/Tests/RupaRenderingTests/ViewportPatternArrayRadialAngleAffordanceServiceTests.swift",
+                        "RupaKit/Tests/RupaRenderingTests/ViewportPatternArrayCopyCountAffordanceServiceTests.swift",
                     ],
                     notes: [
                         "Rectangular, radial, and curve arrays now persist a PatternArraySource and emit component instances or independent copied CAD feature geometry.",
@@ -429,13 +433,14 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                         "The viewport resolves selected PatternArraySource roots, component-instance outputs, and independent-copy descendants into source-owned output outlines, copy markers, and count labels without scanning global component-instance references.",
                         "The viewport exposes rectangular Pattern Array first- and second-axis distance handles that resolve selected source roots or outputs back to PatternArraySource IDs and commit source-owned distance updates after drag completion.",
                         "The viewport exposes radial Pattern Array angular spacing/extent handles and radial-axis distance handles through the shared PatternArray source-selection index.",
+                        "The viewport exposes spacing-mode Pattern Array copy-count handles for rectangular axes and radial angular/radial axes while preserving distance, angle, and source-owned output regeneration semantics.",
                         "Viewport editing workflows and incremental independent-copy reuse remain open.",
                     ]
                 ),
             ],
             openWork: [
                 "Viewport-independent copy controls and regeneration reuse for edited outputs.",
-                "Interactive viewport array handles for count, curve extent/path, and output mode editing.",
+                "Interactive viewport array handles for curve count/extent/path, extent-density count editing, and output mode editing.",
             ],
             next: "Add viewport array handles, curve path picking affordances, and independent-copy reuse diagnostics."
         ),

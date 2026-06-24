@@ -75,6 +75,64 @@ import Testing
 }
 
 @MainActor
+@Test func patternArrayEditingServiceSetsCopyCountsFromViewportDrag() async throws {
+    let session = EditorSession()
+    _ = try #require(session.createDefaultExtrudedRectangle())
+    let rectangularSourceID = try createPatternArray(
+        in: session,
+        name: "Viewport Rectangular Count Array",
+        distribution: .rectangular(RectangularPatternArray(
+            firstAxis: PatternArrayLinearAxis(
+                direction: .unitX,
+                distance: .length(10.0, .millimeter),
+                copyCount: 3
+            ),
+            secondAxis: PatternArrayLinearAxis(
+                direction: .unitZ,
+                distance: .length(12.0, .millimeter),
+                copyCount: 2
+            )
+        ))
+    )
+    let radialSourceID = try createPatternArray(
+        in: session,
+        name: "Viewport Radial Count Array",
+        distribution: .radial(RadialPatternArray(
+            angularAxis: PatternArrayAngularAxis(
+                center: .origin,
+                axis: .unitZ,
+                angle: .angle(45.0, .degree),
+                copyCount: 4
+            ),
+            radialAxis: PatternArrayLinearAxis(
+                direction: .unitX,
+                distance: .length(10.0, .millimeter),
+                copyCount: 2
+            )
+        ))
+    )
+
+    let rectangularService = PatternArrayEditingService(session: session, sourceID: rectangularSourceID)
+    let radialService = PatternArrayEditingService(session: session, sourceID: radialSourceID)
+    _ = rectangularService.setRectangularAxisCopyCount(slot: .first, copyCount: 5)
+    _ = rectangularService.setRectangularAxisCopyCount(slot: .second, copyCount: 1)
+    _ = radialService.setRadialAngularCopyCount(6)
+    _ = radialService.setRadialAxisCopyCount(3)
+
+    let rectangularSource = try #require(session.document.productMetadata.patternArrays[rectangularSourceID])
+    let radialSource = try #require(session.document.productMetadata.patternArrays[radialSourceID])
+    guard case .rectangular(let rectangular) = rectangularSource.distribution,
+          case .radial(let radial) = radialSource.distribution else {
+        Issue.record("Expected rectangular and radial pattern array sources.")
+        return
+    }
+    #expect(rectangular.firstAxis.copyCount == 5)
+    #expect(rectangular.secondAxis?.copyCount == 1)
+    #expect(radial.angularAxis.copyCount == 6)
+    #expect(radial.radialAxis?.copyCount == 3)
+}
+
+@MainActor
 @Test func patternArrayEditingServiceNormalizesLinearDistancesToPlannerTolerance() async throws {
     let session = EditorSession()
     _ = try #require(session.createDefaultExtrudedRectangle())
