@@ -462,6 +462,7 @@ public struct MainView: View {
                     onPatternArrayLinearAxisDrag: viewportPatternArrayLinearAxisDragHandler,
                     onPatternArrayRadialAngleDrag: viewportPatternArrayRadialAngleDragHandler,
                     onPatternArrayCopyCountDrag: viewportPatternArrayCopyCountDragHandler,
+                    onPatternArrayCurveExtentDrag: viewportPatternArrayCurveExtentDragHandler,
                     onSketchCurveHandleDrag: viewportSketchCurveHandleDragHandler,
                     onSketchDimensionDrag: viewportSketchDimensionDragHandler,
                     onSketchPointHandleDrag: viewportSketchPointHandleDragHandler,
@@ -685,6 +686,34 @@ public struct MainView: View {
         }
         return { target in
             handleViewportPatternArrayCopyCountDrag(target)
+        }
+    }
+
+    private var viewportPatternArrayCurveExtentDragHandler: ((ViewportPatternArrayCurveExtentDragTarget) -> Void)? {
+        guard session.selectedTool == .select,
+              patternArrayInspectorState(for: selectedSceneNodes) != nil else {
+            return nil
+        }
+        return { target in
+            guard session.selectedTool == .select,
+                  let state = patternArrayInspectorState(for: selectedSceneNodes),
+                  state.sourceID == target.sourceID else {
+                return
+            }
+            let service = PatternArrayEditingService(
+                session: session,
+                sourceID: target.sourceID
+            )
+            let result: CommandExecutionResult?
+            switch target.extent {
+            case .distance(let meters):
+                result = service.setCurveExtentDistance(meters)
+            case .ratio(let ratio):
+                result = service.setCurveExtentRatio(ratio)
+            }
+            if result?.diagnostics.isEmpty == false {
+                isPreviewExpanded = true
+            }
         }
     }
 

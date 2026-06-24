@@ -207,17 +207,12 @@ public struct PatternArrayInstancePlanner: Sendable {
                 message: "Pattern array output count exceeds the generation budget."
             )
         }
-        let geometry = try curvePathGeometry(
-            for: curve.path,
-            cadDocument: cadDocument,
+        let geometry = try PatternArrayCurvePathGeometryService(
             tolerance: tolerance
-        )
-        let pathLength = geometry.totalLength
-        let distributionLength = try curveDistributionLength(
+        ).distributionGeometry(
             for: curve,
-            pathLength: pathLength,
             parameters: parameters,
-            tolerance: tolerance
+            cadDocument: cadDocument
         )
         let twist = try resolvedAngle(curve.twist, parameters: parameters)
         let endScale = try resolvedScalar(curve.endScale, parameters: parameters)
@@ -234,13 +229,10 @@ public struct PatternArrayInstancePlanner: Sendable {
         var transportFrame: CurvePatternFrame?
         for index in 1 ... curve.copyCount {
             let progress = Double(index) / Double(curve.copyCount)
-            let sample = try geometry.sample(
-                at: distributionLength * progress,
-                tolerance: tolerance
-            )
+            let sample = try geometry.path.sample(at: geometry.distributionLength * progress)
             let frame = try curveFrame(
                 tangent: sample.tangent,
-                referenceNormal: geometry.referenceNormal,
+                referenceNormal: geometry.path.referenceNormal,
                 alignment: curve.alignment,
                 previousTransportFrame: &transportFrame,
                 tolerance: tolerance
@@ -248,7 +240,7 @@ public struct PatternArrayInstancePlanner: Sendable {
             transforms.append(
                 try curveTransform(
                     point: sample.point,
-                    origin: geometry.origin,
+                    origin: geometry.path.origin,
                     frame: frame,
                     twist: twist * progress,
                     scale: 1.0 + (endScale - 1.0) * progress,
@@ -257,91 +249,6 @@ public struct PatternArrayInstancePlanner: Sendable {
             )
         }
         return transforms
-    }
-
-    private func curvePathGeometry(
-        for path: PatternArrayCurvePath,
-        cadDocument: CADDocument?,
-        tolerance: ModelingTolerance
-    ) throws -> CurvePatternPathSampler.Geometry {
-        let sampler = CurvePatternPathSampler(tolerance: tolerance)
-        switch path {
-        case .polyline(let points, let normal):
-            return try sampler.geometry(
-                points: points,
-                referenceNormal: normal ?? .unitZ
-            )
-        case .sketchEntity(let featureID, let entityID):
-            guard let cadDocument else {
-                throw EditorError(
-                    code: .commandInvalid,
-                    message: "Curve pattern array sketch paths require a CAD document."
-                )
-            }
-            guard let node = cadDocument.designGraph.nodes[featureID],
-                  case let .sketch(sketch) = node.operation,
-                  sketch.entities[entityID] != nil else {
-                throw EditorError(
-                    code: .referenceUnresolved,
-                    message: "Curve pattern array sketch path could not be resolved."
-                )
-            }
-            let resolvedParameters = try ParameterResolver().resolve(cadDocument.parameters)
-            let curves = try SketchCurveExtractor(tolerance: tolerance).extractCurves(
-                from: sketch,
-                sourceFeatureID: featureID,
-                parameters: resolvedParameters
-            )
-            guard let curve = curves.first(where: { $0.source == .sketchEntity(entityID) }) else {
-                throw EditorError(
-                    code: .referenceUnresolved,
-                    message: "Curve pattern array sketch path must reference a curve entity."
-                )
-            }
-            return try sampler.geometry(
-                for: curve,
-                referenceNormal: sketchPlaneNormal(sketch.plane, tolerance: tolerance)
-            )
-        }
-    }
-
-    private func curveDistributionLength(
-        for curve: CurvePatternArray,
-        pathLength: Double,
-        parameters: ParameterTable,
-        tolerance: ModelingTolerance
-    ) throws -> Double {
-        switch curve.extentMode {
-        case .distance:
-            let distance = try resolvedLength(curve.extent, parameters: parameters)
-            guard distance.isFinite,
-                  distance > tolerance.distance,
-                  distance <= pathLength + tolerance.distance else {
-                throw EditorError(
-                    code: .commandInvalid,
-                    message: "Curve pattern array distance extent must fit within the path length."
-                )
-            }
-            return min(distance, pathLength)
-        case .ratio:
-            let ratio = try resolvedScalar(curve.extent, parameters: parameters)
-            guard ratio.isFinite,
-                  ratio > 0.0,
-                  ratio <= 1.0 else {
-                throw EditorError(
-                    code: .commandInvalid,
-                    message: "Curve pattern array ratio extent must resolve to a scalar greater than 0 and no greater than 1."
-                )
-            }
-            let distance = pathLength * ratio
-            guard distance > tolerance.distance else {
-                throw EditorError(
-                    code: .commandInvalid,
-                    message: "Curve pattern array ratio extent must resolve to a positive path distance."
-                )
-            }
-            return distance
-        }
     }
 
     private func curveFrame(
@@ -642,22 +549,6 @@ public struct PatternArrayInstancePlanner: Sendable {
             y: rotation.r10 * vector.x + rotation.r11 * vector.y + rotation.r12 * vector.z,
             z: rotation.r20 * vector.x + rotation.r21 * vector.y + rotation.r22 * vector.z
         )
-    }
-
-    private func sketchPlaneNormal(
-        _ plane: SketchPlane,
-        tolerance: ModelingTolerance
-    ) throws -> Vector3D {
-        switch plane {
-        case .xy:
-            return .unitZ
-        case .yz:
-            return .unitX
-        case .zx:
-            return .unitY
-        case .plane(let plane):
-            return try plane.normal.normalized(tolerance: tolerance.distance)
-        }
     }
 
     private struct CurvePatternFrame: Sendable {

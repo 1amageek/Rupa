@@ -88,6 +88,7 @@ import RupaCore
     #expect(arrays.referenceSources.contains("https://doc.plasticity.xyz/common/rectangular-array"))
     #expect(!arrays.openWork.contains { $0.contains("radial array center") })
     #expect(!arrays.openWork.contains { $0.contains("viewport curve array path pick mode") })
+    #expect(!arrays.openWork.contains { $0.contains("curve count/extent/path") })
     #expect(arrays.openWork.contains { $0.contains("Interactive viewport array handles") })
     #expect(arrays.evidence.contains { evidence in
         evidence.sourceFiles.contains("RupaKit/Sources/RupaCore/PatternArraySource.swift")
@@ -100,6 +101,9 @@ import RupaCore
     })
     #expect(arrays.evidence.contains { evidence in
         evidence.sourceFiles.contains("RupaKit/Sources/RupaCore/PatternArrayAnglePolicy.swift")
+    })
+    #expect(arrays.evidence.contains { evidence in
+        evidence.sourceFiles.contains("RupaKit/Sources/RupaCore/PatternArrayCurvePathGeometryService.swift")
     })
     #expect(arrays.evidence.contains { evidence in
         evidence.sourceFiles.contains("RupaKit/Sources/RupaUI/PatternArrayInspectorState.swift")
@@ -126,6 +130,9 @@ import RupaCore
         evidence.sourceFiles.contains("RupaKit/Sources/RupaRendering/ViewportPatternArrayRadialAngleAffordanceService.swift")
     })
     #expect(arrays.evidence.contains { evidence in
+        evidence.sourceFiles.contains("RupaKit/Sources/RupaRendering/ViewportPatternArrayCurveExtentAffordanceService.swift")
+    })
+    #expect(arrays.evidence.contains { evidence in
         evidence.tests.contains("RupaKit/Tests/RupaRenderingTests/ViewportPatternArrayPreviewServiceTests.swift")
     })
     #expect(arrays.evidence.contains { evidence in
@@ -133,6 +140,15 @@ import RupaCore
     })
     #expect(arrays.evidence.contains { evidence in
         evidence.tests.contains("RupaKit/Tests/RupaRenderingTests/ViewportPatternArrayRadialAngleAffordanceServiceTests.swift")
+    })
+    #expect(arrays.evidence.contains { evidence in
+        evidence.tests.contains("RupaKit/Tests/RupaRenderingTests/ViewportPatternArrayCopyCountAffordanceServiceTests.swift")
+    })
+    #expect(arrays.evidence.contains { evidence in
+        evidence.tests.contains("RupaKit/Tests/RupaCoreTests/PatternArrayCurvePathGeometryServiceTests.swift")
+    })
+    #expect(arrays.evidence.contains { evidence in
+        evidence.tests.contains("RupaKit/Tests/RupaRenderingTests/ViewportPatternArrayCurveExtentAffordanceServiceTests.swift")
     })
     #expect(arrays.evidence.contains { evidence in
         evidence.notes.contains("Pattern Array summaries expose editable fields, lifecycle actions, source-owned output edit policy, output IDs, and diagnostics without forcing CAD evaluation.")
@@ -166,6 +182,12 @@ import RupaCore
     })
     #expect(arrays.evidence.contains { evidence in
         evidence.notes.contains("The viewport exposes radial Pattern Array angular spacing/extent handles and radial-axis distance handles through the shared PatternArray source-selection index.")
+    })
+    #expect(arrays.evidence.contains { evidence in
+        evidence.notes.contains("The viewport exposes spacing-mode Pattern Array copy-count handles for rectangular axes and radial angular/radial axes while preserving distance, angle, and source-owned output regeneration semantics.")
+    })
+    #expect(arrays.evidence.contains { evidence in
+        evidence.notes.contains("The viewport exposes Curve Pattern Array extent handles that use the shared Core curve-path geometry resolver so viewport dragging and generated copy placement agree on path length and sampling.")
     })
 
     let section = try #require(result.entries.first { $0.area == .sectionAnalysis })
