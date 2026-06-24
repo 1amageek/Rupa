@@ -279,29 +279,62 @@ public final class AgentServer: AgentClientProtocol {
         capability(
             "setComponentInstanceVisibility",
             category: .component,
-            summary: "Set visibility on a component instance.",
+            summary: "Set visibility on a directly editable document-owned component instance.",
             access: .automationCommand,
             mutatesDocument: true,
-            targets: [.sceneNode],
-            failureMode: "Rejects missing instances and stale generations before mutation."
+            discovery: [.designDisplaySnapshot],
+            targets: [.componentInstance],
+            failureMode: "Rejects missing instances, pattern-owned output instances, and stale generations before mutation.",
+            optionMatrix: [
+                AgentCapabilityDescriptor.OptionAxis(
+                    name: "componentInstanceID",
+                    supportedValues: ["designDisplaySnapshot.componentInstances"],
+                    notes: [
+                        "Use only component instances whose ownership.kind is document.",
+                        "Pattern-owned outputs must be edited through updatePatternArray or detached with explodePatternArray before direct edits."
+                    ]
+                )
+            ]
         ),
         capability(
             "setComponentInstanceLock",
             category: .component,
-            summary: "Set lock state on a component instance.",
+            summary: "Set lock state on a directly editable document-owned component instance.",
             access: .automationCommand,
             mutatesDocument: true,
-            targets: [.sceneNode],
-            failureMode: "Rejects missing instances and stale generations before mutation."
+            discovery: [.designDisplaySnapshot],
+            targets: [.componentInstance],
+            failureMode: "Rejects missing instances, pattern-owned output instances, and stale generations before mutation.",
+            optionMatrix: [
+                AgentCapabilityDescriptor.OptionAxis(
+                    name: "componentInstanceID",
+                    supportedValues: ["designDisplaySnapshot.componentInstances"],
+                    notes: [
+                        "Use only component instances whose ownership.kind is document.",
+                        "Pattern-owned outputs must be edited through updatePatternArray or detached with explodePatternArray before direct edits."
+                    ]
+                )
+            ]
         ),
         capability(
             "setComponentInstanceTransform",
             category: .component,
-            summary: "Replace a component instance local transform.",
+            summary: "Replace a directly editable document-owned component instance local transform.",
             access: .automationCommand,
             mutatesDocument: true,
-            targets: [.sceneNode],
-            failureMode: "Rejects missing instances, invalid transforms, and stale generations before mutation."
+            discovery: [.designDisplaySnapshot],
+            targets: [.componentInstance],
+            failureMode: "Rejects missing instances, pattern-owned output instances, invalid transforms, and stale generations before mutation.",
+            optionMatrix: [
+                AgentCapabilityDescriptor.OptionAxis(
+                    name: "componentInstanceID",
+                    supportedValues: ["designDisplaySnapshot.componentInstances"],
+                    notes: [
+                        "Use only component instances whose ownership.kind is document.",
+                        "Pattern-owned outputs must be edited through updatePatternArray or detached with explodePatternArray before direct edits."
+                    ]
+                )
+            ]
         ),
         capability(
             "createSectionPlane",
@@ -339,7 +372,7 @@ public final class AgentServer: AgentClientProtocol {
             access: .agentRequest,
             mutatesDocument: false,
             discovery: [.designDisplaySnapshot, .sketchEntitySummary, .topologySummary],
-            targets: [.document, .sketchEntity, .region, .body, .face, .edge, .vertex],
+            targets: [.document, .componentInstance, .sketchEntity, .region, .body, .face, .edge, .vertex],
             failureMode: "Rejects stale generations before reading; reports only display-ready source snapshots, reusable component definitions, placed component instances, and generated pattern sources, not raw CAD kernel internals."
         ),
         capability(

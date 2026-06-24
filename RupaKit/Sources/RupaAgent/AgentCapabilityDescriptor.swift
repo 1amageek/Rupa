@@ -43,6 +43,7 @@ public struct AgentCapabilityDescriptor: Codable, Equatable, Sendable {
     public enum Target: String, Codable, Equatable, Sendable {
         case document
         case sceneNode
+        case componentInstance
         case profile
         case body
         case face

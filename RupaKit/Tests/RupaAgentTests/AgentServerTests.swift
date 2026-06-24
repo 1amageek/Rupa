@@ -164,6 +164,15 @@ import SwiftCAD
     let constructionPlaneRename = try #require(descriptors.first { $0.name == "renameConstructionPlane" })
     let constructionPlaneSummary = try #require(descriptors.first { $0.name == "constructionPlaneSummary" })
     let componentInstance = try #require(descriptors.first { $0.name == "createComponentInstance" })
+    let componentInstanceVisibility = try #require(
+        descriptors.first { $0.name == "setComponentInstanceVisibility" }
+    )
+    let componentInstanceLock = try #require(
+        descriptors.first { $0.name == "setComponentInstanceLock" }
+    )
+    let componentInstanceTransform = try #require(
+        descriptors.first { $0.name == "setComponentInstanceTransform" }
+    )
     let patternArray = try #require(descriptors.first { $0.name == "createPatternArray" })
     let patternArrayUpdate = try #require(descriptors.first { $0.name == "updatePatternArray" })
     let patternArrayExplode = try #require(descriptors.first { $0.name == "explodePatternArray" })
@@ -688,6 +697,26 @@ import SwiftCAD
         $0.contains("ownership.kind")
     })
 
+    for descriptor in [componentInstanceVisibility, componentInstanceLock, componentInstanceTransform] {
+        #expect(descriptor.category == .component)
+        #expect(descriptor.mutatesDocument)
+        #expect(descriptor.access == .automationCommand)
+        #expect(descriptor.discovery.contains(.designDisplaySnapshot))
+        #expect(descriptor.targets == [.componentInstance])
+        #expect(descriptor.summary.contains("document-owned component instance"))
+        #expect(descriptor.failureMode.contains("pattern-owned output instances"))
+        let componentInstanceAxis = try #require(
+            descriptor.optionMatrix.first { $0.name == "componentInstanceID" }
+        )
+        #expect(componentInstanceAxis.supportedValues == ["designDisplaySnapshot.componentInstances"])
+        #expect(componentInstanceAxis.notes.contains {
+            $0.contains("ownership.kind is document")
+        })
+        #expect(componentInstanceAxis.notes.contains {
+            $0.contains("explodePatternArray")
+        })
+    }
+
     #expect(patternArray.category == .pattern)
     #expect(patternArray.mutatesDocument)
     #expect(patternArray.access == .automationCommand)
@@ -742,7 +771,16 @@ import SwiftCAD
     #expect(designDisplaySnapshot.discovery.contains(.designDisplaySnapshot))
     #expect(designDisplaySnapshot.discovery.contains(.sketchEntitySummary))
     #expect(designDisplaySnapshot.discovery.contains(.topologySummary))
-    #expect(designDisplaySnapshot.targets == [.document, .sketchEntity, .region, .body, .face, .edge, .vertex])
+    #expect(designDisplaySnapshot.targets == [
+        .document,
+        .componentInstance,
+        .sketchEntity,
+        .region,
+        .body,
+        .face,
+        .edge,
+        .vertex,
+    ])
     #expect(designDisplaySnapshot.summary.contains("UI-visible sketch primitives"))
     #expect(designDisplaySnapshot.summary.contains("component definitions"))
     #expect(designDisplaySnapshot.summary.contains("component instances"))
@@ -4654,6 +4692,96 @@ import SwiftCAD
     #expect(firstInstance.localTransform.matrix.values[12] == 0.012)
     #expect(fourthInstance.localTransform.matrix.values[12] == 0.0)
     #expect(fourthInstance.localTransform.matrix.values[14] == 0.015)
+}
+
+@Test func agentRejectsDirectEditsToPatternOwnedComponentInstances() async throws {
+    let server = AgentServer()
+    let sessionID = UUID()
+    let session = EditorSession()
+    _ = try #require(session.createDefaultExtrudedRectangle())
+    let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let bodySceneNodeID = try #require(agentSceneNodeID(for: bodyFeatureID, in: session.document))
+    server.register(session: session, id: sessionID)
+
+    let definitionResponse = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .createComponentDefinition(
+                name: "Agent Owned Instance Source",
+                rootSceneNodeIDs: [bodySceneNodeID]
+            ),
+            expectedGeneration: session.generation
+        )
+    )
+    guard case .command = definitionResponse else {
+        #expect(Bool(false))
+        return
+    }
+    let definition = try #require(session.document.productMetadata.componentDefinitions.values.first {
+        $0.name == "Agent Owned Instance Source"
+    })
+
+    let arrayResponse = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .createPatternArray(
+                name: "Agent Owned Instance Array",
+                definitionID: definition.id,
+                distribution: .rectangular(RectangularPatternArray(
+                    firstAxis: PatternArrayLinearAxis(
+                        direction: .unitX,
+                        distance: .length(10.0, .millimeter),
+                        copyCount: 1
+                    )
+                )),
+                outputMode: .componentInstance
+            ),
+            expectedGeneration: session.generation
+        )
+    )
+    guard case .command = arrayResponse else {
+        #expect(Bool(false))
+        return
+    }
+    let source = try #require(session.document.productMetadata.patternArrays.values.first {
+        $0.name == "Agent Owned Instance Array"
+    })
+    let outputInstanceID = try #require(source.outputInstanceIDs.first)
+    let generationBeforeRejectedEdits = session.generation
+    let rejectedCommands: [(AutomationCommand, String)] = [
+        (
+            .setComponentInstanceVisibility(id: outputInstanceID, isVisible: false),
+            "visibility is controlled by the pattern source"
+        ),
+        (
+            .setComponentInstanceLock(id: outputInstanceID, isLocked: true),
+            "locks are controlled by the pattern source"
+        ),
+        (
+            .setComponentInstanceTransform(
+                id: outputInstanceID,
+                localTransform: try agentTranslationTransform(x: 0.01, y: 0.0, z: 0.0)
+            ),
+            "transforms are controlled by the pattern source"
+        ),
+    ]
+
+    for (command, expectedMessageFragment) in rejectedCommands {
+        let response = server.handle(
+            .execute(
+                sessionID: sessionID,
+                command: command,
+                expectedGeneration: generationBeforeRejectedEdits
+            )
+        )
+        guard case .failure(let error) = response else {
+            #expect(Bool(false))
+            return
+        }
+        #expect(error.code == .commandInvalid)
+        #expect(error.message.contains(expectedMessageFragment))
+        #expect(session.generation == generationBeforeRejectedEdits)
+    }
 }
 
 @Test func agentDispatchesRadialPatternArrayCommandThroughAutomationAndCore() async throws {
