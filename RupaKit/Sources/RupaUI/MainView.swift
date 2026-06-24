@@ -29,6 +29,7 @@ public struct MainView: View {
     @State private var workspacePlaneMode: WorkspacePlaneMode
     @State private var selectionScope: WorkspaceSelectionScope
     @State private var selectionDragPreviewTargets: [SelectionTarget]
+    @State private var patternArrayCurvePathPickState: PatternArrayCurvePathPickState
     @State private var isGridSnapEnabled: Bool
     @State private var isObjectTargetingEnabled: Bool
     @State private var isConstructionPlaneSnapEnabled: Bool
@@ -90,6 +91,7 @@ public struct MainView: View {
         self._workspacePlaneMode = State(initialValue: .adaptive)
         self._selectionScope = State(initialValue: .object)
         self._selectionDragPreviewTargets = State(initialValue: [])
+        self._patternArrayCurvePathPickState = State(initialValue: .inactive)
         self._isGridSnapEnabled = State(initialValue: true)
         self._isObjectTargetingEnabled = State(initialValue: true)
         self._isConstructionPlaneSnapEnabled = State(initialValue: true)
@@ -203,6 +205,7 @@ public struct MainView: View {
             },
             set: { ids in
                 let orderedIDs = sceneBrowserRows.map(\.id).filter { ids.contains($0) }
+                patternArrayCurvePathPickState.cancel()
                 _ = session.selectSceneNodes(orderedIDs)
                 dimensionCommandState.deactivate()
             }
@@ -3509,6 +3512,9 @@ public struct MainView: View {
         }
 
         guard let target = selectionTarget(for: hit) else {
+            if patternArrayCurvePathPickState.isActive {
+                _ = applyPatternArrayCurvePathPick(targets: [])
+            }
             return
         }
 
@@ -3520,6 +3526,9 @@ public struct MainView: View {
         intent: ViewportSelectionIntent
     ) {
         selectionDragPreviewTargets = []
+        if applyPatternArrayCurvePathPick(targets: targets) {
+            return
+        }
         switch intent {
         case .replace:
             guard !targets.isEmpty else {
@@ -3545,6 +3554,25 @@ public struct MainView: View {
         }
         dimensionCommandState.deactivate()
         syncOffsetCommandAvailability()
+    }
+
+    private func applyPatternArrayCurvePathPick(targets: [SelectionTarget]) -> Bool {
+        guard let sourceID = patternArrayCurvePathPickState.sourceID else {
+            return false
+        }
+        let outcome = PatternArrayCurvePathPickService(
+            session: session,
+            sourceID: sourceID
+        ).apply(targets: targets)
+        switch outcome {
+        case .waitingForCurve:
+            break
+        case .applied, .failed:
+            patternArrayCurvePathPickState.cancel()
+        }
+        dimensionCommandState.deactivate()
+        syncOffsetCommandAvailability()
+        return true
     }
 
     private func syncOffsetCommandAvailability() {
@@ -4646,24 +4674,6 @@ public struct MainView: View {
             return .success(try resolveSelectedSketchEntity())
         } catch {
             return .failure(error)
-        }
-    }
-
-    private var selectedPatternArrayCurvePathCandidate: PatternArrayCurvePathCandidate? {
-        switch selectedSketchEntityResult {
-        case .success(let entity):
-            guard let entity else {
-                return nil
-            }
-            return PatternArrayCurvePathCandidate(
-                target: entity.target,
-                featureID: entity.sourceFeatureID,
-                entityID: entity.entityID,
-                sourceFeatureName: entity.sourceFeatureName,
-                entityKind: entity.entityKind
-            )
-        case .failure:
-            return nil
         }
     }
 
@@ -5886,8 +5896,20 @@ public struct MainView: View {
             state: state,
             session: session,
             positionSliderRange: transformPositionSliderRange,
-            curvePathCandidate: selectedPatternArrayCurvePathCandidate
+            isCurvePathPickActive: patternArrayCurvePathPickState.isPicking(sourceID: state.sourceID),
+            onStartCurvePathPick: startPatternArrayCurvePathPick,
+            onCancelCurvePathPick: cancelPatternArrayCurvePathPick
         )
+    }
+
+    private func startPatternArrayCurvePathPick(sourceID: PatternArraySourceID) {
+        patternArrayCurvePathPickState.start(sourceID: sourceID)
+        session.reportToolStatus("Pick a sketch line, circle, arc, or spline for the Curve Array path.")
+    }
+
+    private func cancelPatternArrayCurvePathPick() {
+        patternArrayCurvePathPickState.cancel()
+        session.reportToolStatus("Curve Array path pick canceled.")
     }
 
     private func boolChoicePicker(

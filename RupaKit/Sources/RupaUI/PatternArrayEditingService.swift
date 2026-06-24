@@ -228,7 +228,7 @@ struct PatternArrayEditingService {
         case .distance:
             curve.extent = .length(max(fallbackDistanceMeters ?? 0.01, 1.0e-9), .meter)
         case .ratio:
-            curve.extent = .scalar(max(fallbackRatio ?? 1.0, 1.0e-9))
+            curve.extent = .scalar(clampedCurveExtentRatio(fallbackRatio ?? 1.0))
         }
         return session.updatePatternArray(
             id: sourceID,
@@ -248,7 +248,7 @@ struct PatternArrayEditingService {
     func setCurveExtentRatio(_ ratio: Double) -> CommandExecutionResult? {
         updateCurve { curve in
             curve.extentMode = .ratio
-            curve.extent = .scalar(max(ratio, 1.0e-9))
+            curve.extent = .scalar(clampedCurveExtentRatio(ratio))
         }
     }
 
@@ -331,5 +331,12 @@ struct PatternArrayEditingService {
             z: direction.z / length
         )
         return abs(unitDirection.dot(.unitY)) < 0.9 ? .unitY : .unitX
+    }
+
+    private func clampedCurveExtentRatio(_ ratio: Double) -> Double {
+        guard ratio.isFinite else {
+            return 1.0
+        }
+        return min(max(ratio, 1.0e-9), 1.0)
     }
 }

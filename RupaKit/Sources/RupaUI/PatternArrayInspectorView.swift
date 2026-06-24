@@ -6,7 +6,9 @@ struct PatternArrayInspectorView: View {
     let state: PatternArrayInspectorState
     let session: EditorSession
     let positionSliderRange: ClosedRange<Double>
-    let curvePathCandidate: PatternArrayCurvePathCandidate?
+    let isCurvePathPickActive: Bool
+    let onStartCurvePathPick: (PatternArraySourceID) -> Void
+    let onCancelCurvePathPick: () -> Void
 
     var body: some View {
         inspectorSection("Pattern Array") {
@@ -242,7 +244,7 @@ struct PatternArrayInspectorView: View {
         _ curve: PatternArrayInspectorState.CurveDistribution
     ) -> some View {
         inspectorRow("Path", curve.pathTitle)
-        curvePathReplacementControls(curve)
+        curvePathReplacementControls
         inspectorControlRow("Curve Copies") {
             Stepper(
                 value: Binding(
@@ -305,7 +307,7 @@ struct PatternArrayInspectorView: View {
                 numericControl(
                     "Curve Extent",
                     values: [extentRatio],
-                    sliderRange: 0.01 ... max(1.0, extentRatio * 2.0)
+                    sliderRange: 0.01 ... 1.0
                 ) { ratio in
                     setCurveExtentRatio(ratio)
                 } unitLabel: {
@@ -319,27 +321,23 @@ struct PatternArrayInspectorView: View {
     }
 
     @ViewBuilder
-    private func curvePathReplacementControls(
-        _ curve: PatternArrayInspectorState.CurveDistribution
-    ) -> some View {
-        inspectorRow(
-            "Selected Path",
-            curvePathCandidate?.title ?? "No Sketch Curve"
-        )
-        if let curvePathCandidate {
-            inspectorActionRow {
-                Button {
-                    setCurvePath(curvePathCandidate.path)
-                } label: {
-                    Label(
-                        curvePathCandidate.matches(curve.path) ? "Path Active" : "Use Selected Path",
-                        systemImage: "point.topleft.down.curvedto.point.bottomright.up"
-                    )
+    private var curvePathReplacementControls: some View {
+        inspectorRow("Path Pick", isCurvePathPickActive ? "Pick Sketch Curve" : "Ready")
+        inspectorActionRow {
+            Button {
+                if isCurvePathPickActive {
+                    onCancelCurvePathPick()
+                } else {
+                    onStartCurvePathPick(state.sourceID)
                 }
-                .controlSize(.small)
-                .disabled(curvePathCandidate.matches(curve.path))
-                .accessibilityIdentifier("InspectorPatternArray.curve.path.useSelected")
+            } label: {
+                Label(
+                    isCurvePathPickActive ? "Cancel Path Pick" : "Pick Path in Viewport",
+                    systemImage: isCurvePathPickActive ? "xmark.circle" : "cursorarrow.click"
+                )
             }
+            .controlSize(.small)
+            .accessibilityIdentifier("InspectorPatternArray.curve.path.pick")
         }
     }
 
@@ -531,10 +529,6 @@ struct PatternArrayInspectorView: View {
 
     private func setRadialAxisEnabled(_ isEnabled: Bool) {
         editingService.setRadialAxisEnabled(isEnabled)
-    }
-
-    private func setCurvePath(_ path: PatternArrayCurvePath) {
-        editingService.setCurvePath(path)
     }
 
     private func setCurveCopyCount(_ copyCount: Int) {
