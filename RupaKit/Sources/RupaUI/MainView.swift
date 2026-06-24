@@ -3885,6 +3885,10 @@ public struct MainView: View {
     }
 
     private func sceneNodeID(for hit: ViewportHit) -> SceneNodeID? {
+        if let sceneNodeID = hit.sceneNodeID,
+           session.document.productMetadata.sceneNodes[sceneNodeID] != nil {
+            return sceneNodeID
+        }
         let expectedKind: SceneNodeReference.Kind = switch hit.kind {
         case .sketch:
             .sketch

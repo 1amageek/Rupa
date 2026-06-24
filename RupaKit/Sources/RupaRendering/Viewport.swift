@@ -714,7 +714,9 @@ public struct Viewport: View {
         let scene = sceneContext.scene
         let layout = sceneContext.layout
         let selectedObjectFeatureIDs = selectedObjectFeatureIDs()
+        let selectedObjectSceneNodeIDs = sceneNodeIDs(for: objectSelectionTargets())
         let previewObjectFeatureIDs = featureIDs(for: objectSelectionTargets(in: selectionDragPreviewTargets))
+        let previewObjectSceneNodeIDs = sceneNodeIDs(for: objectSelectionTargets(in: selectionDragPreviewTargets))
         let selectedTargetFeatureIDs = selectedTargetFeatureIDs()
         let selectedFaceTargets = selectedFaceTargets()
         let previewFaceTargets = faceSelectionTargets(in: selectionDragPreviewTargets)
@@ -736,6 +738,7 @@ public struct Viewport: View {
         let previewSketchRegionTargets = sketchRegionSelectionTargets(in: selectionDragPreviewTargets)
         let hoveredSketchRegionTarget = hoveredSketchRegionTarget()
         let hoveredFeatureIDs = hoveredFeatureIDs()
+        let hoveredSceneNodeIDs = hoveredSceneNodeIDs()
         let selectedBodyItems = selectedBodyItems(in: scene, selectedFeatureIDs: selectedObjectFeatureIDs)
         let usesSelectionGroup = selectedBodyItems.count > 1
         let suppressedSketchFeatureIDs = suppressedSketchFeatureIDs(
@@ -766,9 +769,15 @@ public struct Viewport: View {
                     item,
                     in: &context,
                     layout: layout,
-                    isSelected: selectedObjectFeatureIDs.contains(item.featureID) && !usesSelectionGroup,
+                    isSelected: isObjectItem(
+                        item,
+                        selectedByFeatureIDs: selectedObjectFeatureIDs,
+                        selectedBySceneNodeIDs: selectedObjectSceneNodeIDs
+                    ) && !usesSelectionGroup,
                     isHovered: hoveredFeatureIDs.contains(item.featureID)
                         || previewObjectFeatureIDs.contains(item.featureID)
+                        || item.sceneNodeID.map(hoveredSceneNodeIDs.contains) == true
+                        || item.sceneNodeID.map(previewObjectSceneNodeIDs.contains) == true
                 )
             }
         }
@@ -794,8 +803,13 @@ public struct Viewport: View {
                     item,
                     in: &context,
                     layout: layout,
-                    isSelected: selectedObjectFeatureIDs.contains(item.featureID),
-                    isHovered: hoveredFeatureIDs.contains(item.featureID),
+                    isSelected: isObjectItem(
+                        item,
+                        selectedByFeatureIDs: selectedObjectFeatureIDs,
+                        selectedBySceneNodeIDs: selectedObjectSceneNodeIDs
+                    ),
+                    isHovered: hoveredFeatureIDs.contains(item.featureID)
+                        || item.sceneNodeID.map(hoveredSceneNodeIDs.contains) == true,
                     selectedEntityIDs: sketchEntityIDs(
                         in: selectedSketchEntityTargets,
                         featureID: item.featureID
@@ -3378,6 +3392,7 @@ public struct Viewport: View {
         if let mesh = component.mesh {
             drawBodyMesh(
                 mesh,
+                item: item,
                 in: &context,
                 layout: layout,
                 isSelected: isSelected,
@@ -3398,6 +3413,7 @@ public struct Viewport: View {
 
     private func drawBodyMesh(
         _ mesh: ViewportBodyMesh,
+        item: ViewportSceneItem,
         in context: inout GraphicsContext,
         layout: ViewportLayout,
         isSelected: Bool,
@@ -3419,9 +3435,9 @@ public struct Viewport: View {
             }
 
             var path = Path()
-            path.move(to: layout.project(mesh.positions[firstIndex]))
-            path.addLine(to: layout.project(mesh.positions[secondIndex]))
-            path.addLine(to: layout.project(mesh.positions[thirdIndex]))
+            path.move(to: layout.project(mesh.positions[firstIndex], in: item))
+            path.addLine(to: layout.project(mesh.positions[secondIndex], in: item))
+            path.addLine(to: layout.project(mesh.positions[thirdIndex], in: item))
             path.closeSubpath()
             context.fill(path, with: .color(baseColor.opacity(fillOpacity)))
             context.stroke(path, with: .color(baseColor.opacity(strokeOpacity)), lineWidth: isSelected ? 1.1 : 0.7)
@@ -3481,7 +3497,12 @@ public struct Viewport: View {
         in context: inout GraphicsContext
     ) {
         guard let face = hit.bodyFace,
-              let item = scene.items.first(where: { $0.featureID == hit.featureID }),
+              let item = scene.items.first(where: { item in
+                  if let sceneNodeID = hit.sceneNodeID {
+                      return item.sceneNodeID == sceneNodeID && item.featureID == hit.featureID
+                  }
+                  return item.featureID == hit.featureID
+              }),
               let projection = bodyProjection(for: item, layout: layout) else {
             return
         }
@@ -3600,6 +3621,7 @@ public struct Viewport: View {
                 }
                 drawGeneratedFaceHighlight(
                     face,
+                    item: item,
                     style: style,
                     layout: layout,
                     in: &context
@@ -3611,6 +3633,7 @@ public struct Viewport: View {
                 }
                 drawGeneratedEdgeHighlight(
                     edge,
+                    item: item,
                     style: style,
                     layout: layout,
                     in: &context
@@ -3622,6 +3645,7 @@ public struct Viewport: View {
                 }
                 drawGeneratedVertexHighlight(
                     vertex,
+                    item: item,
                     style: style,
                     layout: layout,
                     in: &context
@@ -3632,11 +3656,12 @@ public struct Viewport: View {
 
     private func drawGeneratedFaceHighlight(
         _ face: ViewportBodyTopology.Face,
+        item: ViewportSceneItem,
         style: ViewportFaceHighlightStyle,
         layout: ViewportLayout,
         in context: inout GraphicsContext
     ) {
-        let polygon = face.points.map { layout.project($0) }
+        let polygon = face.points.map { layout.project($0, in: item) }
         let highlightPath = path(for: polygon)
         context.fill(highlightPath, with: .color(style.color.opacity(style.fillOpacity)))
         context.stroke(
@@ -3648,12 +3673,13 @@ public struct Viewport: View {
 
     private func drawGeneratedEdgeHighlight(
         _ edge: ViewportBodyTopology.Edge,
+        item: ViewportSceneItem,
         style: ViewportFaceHighlightStyle,
         layout: ViewportLayout,
         in context: inout GraphicsContext
     ) {
-        let start = layout.project(edge.start)
-        let end = layout.project(edge.end)
+        let start = layout.project(edge.start, in: item)
+        let end = layout.project(edge.end, in: item)
         var path = Path()
         path.move(to: start)
         path.addLine(to: end)
@@ -3668,11 +3694,12 @@ public struct Viewport: View {
 
     private func drawGeneratedVertexHighlight(
         _ vertex: ViewportBodyTopology.Vertex,
+        item: ViewportSceneItem,
         style: ViewportFaceHighlightStyle,
         layout: ViewportLayout,
         in context: inout GraphicsContext
     ) {
-        let point = layout.project(vertex.point)
+        let point = layout.project(vertex.point, in: item)
         drawTransformHandle(at: point, style: .vertex, isHighlighted: true, in: &context)
         let radius: CGFloat = style == .selected ? 9.0 : 7.0
         let rect = CGRect(
@@ -3911,12 +3938,52 @@ public struct Viewport: View {
         for target: SelectionTarget,
         in scene: ViewportScene
     ) -> ViewportSceneItem? {
+        if let directItem = scene.items.first(where: { item in
+            item.sceneNodeID == target.sceneNodeID && itemContains(target.component, in: item)
+        }) {
+            return directItem
+        }
         guard let reference = document.productMetadata.sceneNodes[target.sceneNodeID]?.reference,
               reference.kind == .body,
               let featureID = reference.featureID else {
             return nil
         }
         return scene.items.first { $0.featureID == featureID }
+    }
+
+    private func itemContains(
+        _ component: SelectionComponent,
+        in item: ViewportSceneItem
+    ) -> Bool {
+        switch component {
+        case .object:
+            return true
+        case .face(let componentID):
+            guard case .body(let bodyComponent) = item.kind else {
+                return false
+            }
+            return bodyComponent.topology?.faces.contains { $0.componentID == componentID } == true
+                || componentID.generatedTopologyPersistentName == nil
+        case .edge(let componentID):
+            guard case .body(let bodyComponent) = item.kind else {
+                return false
+            }
+            return bodyComponent.topology?.edges.contains { $0.componentID == componentID } == true
+                || componentID.generatedTopologyPersistentName == nil
+        case .vertex(let componentID):
+            guard case .body(let bodyComponent) = item.kind else {
+                return false
+            }
+            return bodyComponent.topology?.vertices.contains { $0.componentID == componentID } == true
+                || componentID.generatedTopologyPersistentName == nil
+        case .sketchEntity(let componentID):
+            guard case .sketch(let primitives) = item.kind else {
+                return false
+            }
+            return primitives.contains { $0.entityID == componentID.sketchEntityBaseReference?.entityID }
+        case .region(let componentID):
+            return item.sketchRegions.contains { $0.componentID == componentID }
+        }
     }
 
     private func selectedGeneratedFaceSurfaceWorldPoint(
@@ -5170,6 +5237,22 @@ public struct Viewport: View {
         )
     }
 
+    private func sceneNodeIDs(for targets: [SelectionTarget]) -> Set<SceneNodeID> {
+        Set(targets.map(\.sceneNodeID))
+    }
+
+    private func isObjectItem(
+        _ item: ViewportSceneItem,
+        selectedByFeatureIDs featureIDs: Set<FeatureID>,
+        selectedBySceneNodeIDs sceneNodeIDs: Set<SceneNodeID>
+    ) -> Bool {
+        if let sceneNodeID = item.sceneNodeID,
+           sceneNodeIDs.contains(sceneNodeID) {
+            return true
+        }
+        return featureIDs.contains(item.featureID)
+    }
+
     private func objectSelectionTargets() -> [SelectionTarget] {
         objectSelectionTargets(in: selection.selectedTargets)
     }
@@ -6099,6 +6182,14 @@ public struct Viewport: View {
             return []
         }
         return [featureID]
+    }
+
+    private func hoveredSceneNodeIDs() -> Set<SceneNodeID> {
+        if let hoveredTarget = selection.hoveredTarget,
+           case .object = hoveredTarget.component {
+            return [hoveredTarget.sceneNodeID]
+        }
+        return selection.hoveredSceneNodeID.map { [$0] } ?? []
     }
 
     private func isAffordanceHovered(

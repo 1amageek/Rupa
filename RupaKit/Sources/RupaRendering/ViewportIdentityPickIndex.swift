@@ -153,6 +153,7 @@ public struct ViewportIdentityPickIndexBuilder: Sendable {
                 geometry: .sketchEntity(entityID),
                 hit: ViewportHit(
                     featureID: item.featureID,
+                    sceneNodeID: item.sceneNodeID,
                     kind: .sketch,
                     pickingBackend: .identityBuffer,
                     sketchEntityID: entityID
@@ -175,6 +176,7 @@ public struct ViewportIdentityPickIndexBuilder: Sendable {
                     ),
                     hit: ViewportHit(
                         featureID: item.featureID,
+                        sceneNodeID: item.sceneNodeID,
                         kind: .sketch,
                         pickingBackend: .identityBuffer,
                         sketchEntityID: entityID,
@@ -192,6 +194,7 @@ public struct ViewportIdentityPickIndexBuilder: Sendable {
                 geometry: .sketchRegion(region.componentID),
                 hit: ViewportHit(
                     featureID: item.featureID,
+                    sceneNodeID: item.sceneNodeID,
                     kind: .sketch,
                     pickingBackend: .identityBuffer,
                     selectionComponent: .region(region.componentID)
@@ -213,6 +216,7 @@ public struct ViewportIdentityPickIndexBuilder: Sendable {
             geometry: .body,
             hit: ViewportHit(
                 featureID: item.featureID,
+                sceneNodeID: item.sceneNodeID,
                 kind: .body,
                 pickingBackend: .identityBuffer
             ),
@@ -249,6 +253,7 @@ public struct ViewportIdentityPickIndexBuilder: Sendable {
                 geometry: .generatedFace(face.componentID),
                 hit: ViewportHit(
                     featureID: item.featureID,
+                    sceneNodeID: item.sceneNodeID,
                     kind: .body,
                     pickingBackend: .identityBuffer,
                     selectionComponent: .face(face.componentID)
@@ -264,6 +269,7 @@ public struct ViewportIdentityPickIndexBuilder: Sendable {
                 geometry: .generatedEdge(edge.componentID),
                 hit: ViewportHit(
                     featureID: item.featureID,
+                    sceneNodeID: item.sceneNodeID,
                     kind: .body,
                     pickingBackend: .identityBuffer,
                     selectionComponent: .edge(edge.componentID)
@@ -279,6 +285,7 @@ public struct ViewportIdentityPickIndexBuilder: Sendable {
                 geometry: .generatedVertex(vertex.componentID),
                 hit: ViewportHit(
                     featureID: item.featureID,
+                    sceneNodeID: item.sceneNodeID,
                     kind: .body,
                     pickingBackend: .identityBuffer,
                     selectionComponent: .vertex(vertex.componentID)
@@ -300,6 +307,7 @@ public struct ViewportIdentityPickIndexBuilder: Sendable {
                 geometry: .projectedBodyFace(face),
                 hit: ViewportHit(
                     featureID: item.featureID,
+                    sceneNodeID: item.sceneNodeID,
                     kind: .body,
                     pickingBackend: .identityBuffer,
                     bodyFace: face
@@ -315,6 +323,7 @@ public struct ViewportIdentityPickIndexBuilder: Sendable {
                 geometry: .projectedBodyEdge(edge),
                 hit: ViewportHit(
                     featureID: item.featureID,
+                    sceneNodeID: item.sceneNodeID,
                     kind: .body,
                     pickingBackend: .identityBuffer,
                     bodyEdge: edge
@@ -330,6 +339,7 @@ public struct ViewportIdentityPickIndexBuilder: Sendable {
                 geometry: .projectedBodyVertex(vertex),
                 hit: ViewportHit(
                     featureID: item.featureID,
+                    sceneNodeID: item.sceneNodeID,
                     kind: .body,
                     pickingBackend: .identityBuffer,
                     bodyVertex: vertex

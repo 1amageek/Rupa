@@ -74,16 +74,31 @@ public struct DesignDocument: Identifiable, Sendable {
     public mutating func upsertParameter(
         name: String,
         expression: CADExpression,
-        kind: QuantityKind
-    ) {
-        cadDocument.upsertParameter(
+        kind: QuantityKind,
+        objectRegistry: ObjectTypeRegistry = .builtIn
+    ) throws {
+        let previousCADDocument = cadDocument
+        let previousProductMetadata = productMetadata
+        var updatedCADDocument = cadDocument
+        updatedCADDocument.upsertParameter(
             name: name,
             expression: expression,
             kind: kind
         )
+        cadDocument = updatedCADDocument
+        do {
+            try regeneratePatternArrays(objectRegistry: objectRegistry)
+        } catch {
+            cadDocument = previousCADDocument
+            productMetadata = previousProductMetadata
+            throw error
+        }
     }
 
-    public mutating func deleteParameter(name: String) throws {
+    public mutating func deleteParameter(
+        name: String,
+        objectRegistry: ObjectTypeRegistry = .builtIn
+    ) throws {
         guard cadDocument.parameterID(named: name) != nil else {
             throw EditorError(
                 code: .referenceUnresolved,
@@ -91,6 +106,8 @@ public struct DesignDocument: Identifiable, Sendable {
             )
         }
 
+        let previousCADDocument = cadDocument
+        let previousProductMetadata = productMetadata
         var updatedCADDocument = cadDocument
         do {
             try updatedCADDocument.deleteParameter(named: name)
@@ -101,6 +118,13 @@ public struct DesignDocument: Identifiable, Sendable {
             )
         }
         cadDocument = updatedCADDocument
+        do {
+            try regeneratePatternArrays(objectRegistry: objectRegistry)
+        } catch {
+            cadDocument = previousCADDocument
+            productMetadata = previousProductMetadata
+            throw error
+        }
     }
 
     @discardableResult
@@ -180,6 +204,101 @@ public struct DesignDocument: Identifiable, Sendable {
         return instance.id
     }
 
+    @discardableResult
+    public mutating func createRectangularPatternArray(
+        name: String,
+        definitionID: ComponentDefinitionID,
+        array: RectangularPatternArray,
+        outputMode: PatternArrayOutputMode = .componentInstance,
+        objectRegistry: ObjectTypeRegistry = .builtIn
+    ) throws -> PatternArraySourceID {
+        let trimmedName = try normalizedMetadataName(
+            name,
+            owner: "Pattern array"
+        )
+        guard productMetadata.patternArrays.values.allSatisfy({
+            $0.name.trimmingCharacters(in: .whitespacesAndNewlines) != trimmedName
+        }) else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Pattern array source names must be unique."
+            )
+        }
+        guard let definition = productMetadata.componentDefinitions[definitionID] else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "Pattern arrays must reference an existing component definition."
+            )
+        }
+        guard ComponentDefinitionSceneResolver().containsRenderableSceneNode(
+            in: definition,
+            metadata: productMetadata
+        ) else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Pattern arrays require a component definition with at least one renderable scene node."
+            )
+        }
+
+        switch outputMode {
+        case .componentInstance:
+            break
+        }
+
+        var updatedMetadata = productMetadata
+        guard let rootSceneNodeID = updatedMetadata.rootSceneNodeIDs.first,
+              updatedMetadata.sceneNodes[rootSceneNodeID] != nil else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Pattern arrays require a valid root scene node."
+            )
+        }
+
+        let groupNode = SceneNode(
+            name: trimmedName,
+            object: .group()
+        )
+        updatedMetadata.sceneNodes[groupNode.id] = groupNode
+        updatedMetadata.sceneNodes[rootSceneNodeID]?.childIDs.append(groupNode.id)
+
+        let source = PatternArraySource(
+            name: trimmedName,
+            definitionID: definitionID,
+            distribution: .rectangular(array),
+            outputMode: outputMode,
+            outputInstanceIDs: [],
+            rootSceneNodeID: groupNode.id
+        )
+        updatedMetadata.patternArrays[source.id] = source
+        try synchronizePatternArrayOutputs(
+            for: source.id,
+            metadata: &updatedMetadata
+        )
+        try updatedMetadata.validate(against: cadDocument, objectRegistry: objectRegistry)
+        productMetadata = updatedMetadata
+        return source.id
+    }
+
+    public mutating func regeneratePatternArrays(
+        objectRegistry: ObjectTypeRegistry = .builtIn
+    ) throws {
+        guard productMetadata.patternArrays.isEmpty == false else {
+            return
+        }
+        var updatedMetadata = productMetadata
+        let sourceIDs = updatedMetadata.patternArrays.keys.sorted {
+            $0.description < $1.description
+        }
+        for sourceID in sourceIDs {
+            try synchronizePatternArrayOutputs(
+                for: sourceID,
+                metadata: &updatedMetadata
+            )
+        }
+        try updatedMetadata.validate(against: cadDocument, objectRegistry: objectRegistry)
+        productMetadata = updatedMetadata
+    }
+
     public mutating func setSceneNodeVisibility(
         id: SceneNodeID,
         isVisible: Bool,
@@ -221,6 +340,12 @@ public struct DesignDocument: Identifiable, Sendable {
             throw EditorError(
                 code: .referenceUnresolved,
                 message: "Scene node transform requires an existing scene node."
+            )
+        }
+        guard patternArraySourceID(owningOutputSceneNode: id) == nil else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Pattern array output scene node transforms are controlled by the pattern source."
             )
         }
         try localTransform.validate()
@@ -347,6 +472,12 @@ public struct DesignDocument: Identifiable, Sendable {
             throw EditorError(
                 code: .referenceUnresolved,
                 message: "Component instance transform requires an existing component instance."
+            )
+        }
+        guard patternArraySourceID(owningOutputInstance: id) == nil else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Pattern array output instance transforms are controlled by the pattern source."
             )
         }
         try localTransform.validate()
@@ -944,14 +1075,12 @@ public struct DesignDocument: Identifiable, Sendable {
                 message: "\(operationName) requires a generated topology face target."
             )
         }
-        guard let sceneNode = productMetadata.sceneNodes[target.sceneNodeID],
-              sceneNode.reference?.kind == .body,
-              let targetFeatureID = sceneNode.reference?.featureID else {
-            throw EditorError(
-                code: .referenceUnresolved,
-                message: "\(operationName) requires a body scene node."
-            )
-        }
+        let resolvedTarget = try editableBodyTargetResolution(
+            for: target,
+            operationName: operationName
+        )
+        let sceneNode = resolvedTarget.sceneNode
+        let targetFeatureID = resolvedTarget.featureID
         guard let targetFeature = cadDocument.designGraph.nodes[targetFeatureID],
               targetFeature.outputs.contains(where: { $0.role == .body }) else {
             throw EditorError(
@@ -971,7 +1100,7 @@ public struct DesignDocument: Identifiable, Sendable {
             )
         }
         guard entry.kind == .face,
-              entry.sceneNodeID == target.sceneNodeID.description else {
+              entry.sceneNodeID == resolvedTarget.sceneNodeID.description else {
             throw EditorError(
                 code: .commandInvalid,
                 message: "\(operationName) target must reference a face on the selected body."
@@ -2019,14 +2148,12 @@ public struct DesignDocument: Identifiable, Sendable {
                 message: "\(operationName) requires a generated topology face target."
             )
         }
-        guard let sceneNode = productMetadata.sceneNodes[target.sceneNodeID],
-              sceneNode.reference?.kind == .body,
-              let targetFeatureID = sceneNode.reference?.featureID else {
-            throw EditorError(
-                code: .referenceUnresolved,
-                message: "\(operationName) requires a body scene node."
-            )
-        }
+        let resolvedTarget = try editableBodyTargetResolution(
+            for: target,
+            operationName: operationName
+        )
+        let sceneNode = resolvedTarget.sceneNode
+        let targetFeatureID = resolvedTarget.featureID
         guard let targetFeature = cadDocument.designGraph.nodes[targetFeatureID],
               targetFeature.outputs.contains(where: { $0.role == .body }) else {
             throw EditorError(
@@ -2046,7 +2173,7 @@ public struct DesignDocument: Identifiable, Sendable {
             )
         }
         guard entry.kind == .face,
-              entry.sceneNodeID == target.sceneNodeID.description else {
+              entry.sceneNodeID == resolvedTarget.sceneNodeID.description else {
             throw EditorError(
                 code: .commandInvalid,
                 message: "\(operationName) target must reference a face on the selected body."
@@ -2144,12 +2271,6 @@ public struct DesignDocument: Identifiable, Sendable {
                 message: "\(operationName) requires a generated support face target in offset options."
             )
         }
-        guard supportTarget.sceneNodeID == target.sceneNodeID else {
-            throw EditorError(
-                code: .commandInvalid,
-                message: "\(operationName) target edge and support face must belong to the same body scene node."
-            )
-        }
         guard case .face(let supportFaceComponentID) = supportTarget.component,
               let supportFacePersistentNameString = supportFaceComponentID.generatedTopologyPersistentName else {
             throw EditorError(
@@ -2157,14 +2278,22 @@ public struct DesignDocument: Identifiable, Sendable {
                 message: "\(operationName) requires a generated topology support face target."
             )
         }
-        guard let sceneNode = productMetadata.sceneNodes[target.sceneNodeID],
-              sceneNode.reference?.kind == .body,
-              let targetFeatureID = sceneNode.reference?.featureID else {
+        let resolvedTarget = try editableBodyTargetResolution(
+            for: target,
+            operationName: operationName
+        )
+        let resolvedSupportTarget = try editableBodyTargetResolution(
+            for: supportTarget,
+            operationName: operationName
+        )
+        guard resolvedSupportTarget.sceneNodeID == resolvedTarget.sceneNodeID else {
             throw EditorError(
-                code: .referenceUnresolved,
-                message: "\(operationName) requires a body scene node."
+                code: .commandInvalid,
+                message: "\(operationName) target edge and support face must belong to the same body scene node."
             )
         }
+        let sceneNode = resolvedTarget.sceneNode
+        let targetFeatureID = resolvedTarget.featureID
         guard let targetFeature = cadDocument.designGraph.nodes[targetFeatureID],
               targetFeature.outputs.contains(where: { $0.role == .body }) else {
             throw EditorError(
@@ -2184,7 +2313,7 @@ public struct DesignDocument: Identifiable, Sendable {
             )
         }
         guard edgeEntry.kind == .edge,
-              edgeEntry.sceneNodeID == target.sceneNodeID.description else {
+              edgeEntry.sceneNodeID == resolvedTarget.sceneNodeID.description else {
             throw EditorError(
                 code: .commandInvalid,
                 message: "\(operationName) target must reference an edge on the selected body."
@@ -2197,7 +2326,7 @@ public struct DesignDocument: Identifiable, Sendable {
             )
         }
         guard supportFaceEntry.kind == .face,
-              supportFaceEntry.sceneNodeID == target.sceneNodeID.description else {
+              supportFaceEntry.sceneNodeID == resolvedTarget.sceneNodeID.description else {
             throw EditorError(
                 code: .commandInvalid,
                 message: "\(operationName) support target must reference a face on the selected body."
@@ -2272,14 +2401,11 @@ public struct DesignDocument: Identifiable, Sendable {
                 message: "\(operationName) requires a generated topology vertex target."
             )
         }
-        guard let bodySceneNode = productMetadata.sceneNodes[target.sceneNodeID],
-              bodySceneNode.reference?.kind == .body,
-              let bodyFeatureID = bodySceneNode.reference?.featureID else {
-            throw EditorError(
-                code: .referenceUnresolved,
-                message: "\(operationName) requires a body scene node."
-            )
-        }
+        let resolvedTarget = try editableBodyTargetResolution(
+            for: target,
+            operationName: operationName
+        )
+        let bodyFeatureID = resolvedTarget.featureID
         guard let bodyFeature = cadDocument.designGraph.nodes[bodyFeatureID],
               case let .extrude(extrude) = bodyFeature.operation,
               let profileFeature = cadDocument.designGraph.nodes[extrude.profile.featureID],
@@ -2307,7 +2433,7 @@ public struct DesignDocument: Identifiable, Sendable {
             )
         }
         guard entry.kind == .vertex,
-              entry.sceneNodeID == target.sceneNodeID.description else {
+              entry.sceneNodeID == resolvedTarget.sceneNodeID.description else {
             throw EditorError(
                 code: .commandInvalid,
                 message: "\(operationName) generated topology target must reference a vertex on the selected body."
@@ -2794,18 +2920,15 @@ public struct DesignDocument: Identifiable, Sendable {
                 message: "Face offset distance must not be zero."
             )
         }
-        let face = try editableBodyFace(
+        let resolvedTarget = try editableBodyTargetResolution(
             for: target,
+            operationName: "Face offset"
+        )
+        let face = try editableBodyFace(
+            for: resolvedTarget.target,
             objectRegistry: objectRegistry
         )
-        guard let sceneNode = productMetadata.sceneNodes[target.sceneNodeID],
-              sceneNode.reference?.kind == .body,
-              let featureID = sceneNode.reference?.featureID else {
-            throw EditorError(
-                code: .referenceUnresolved,
-                message: "Face offset requires a body scene node."
-            )
-        }
+        let featureID = resolvedTarget.featureID
         guard var feature = cadDocument.designGraph.nodes[featureID],
               case var .extrude(extrude) = feature.operation else {
             throw EditorError(
@@ -2830,7 +2953,7 @@ public struct DesignDocument: Identifiable, Sendable {
                 feature: &feature,
                 extrude: &extrude,
                 featureID: featureID,
-                sceneNodeID: target.sceneNodeID,
+                sceneNodeID: resolvedTarget.sceneNodeID,
                 objectRegistry: objectRegistry
             )
             return
@@ -2922,7 +3045,7 @@ public struct DesignDocument: Identifiable, Sendable {
 
         cadDocument = updatedCADDocument
         if abs(translationYDelta) > 0.0 {
-            try translateSceneNode(target.sceneNodeID, y: translationYDelta)
+            try translateSceneNode(resolvedTarget.sceneNodeID, y: translationYDelta)
         }
         try synchronizeObjectPropertiesFromSource(
             featureID: featureID,
@@ -2944,8 +3067,14 @@ public struct DesignDocument: Identifiable, Sendable {
             )
         }
 
+        let resolvedTargets = try targets.map { target in
+            try editableBodyTargetResolution(
+                for: target,
+                operationName: "Edge chamfer"
+            )
+        }
         var sceneNodeID: SceneNodeID?
-        for target in targets {
+        for target in resolvedTargets.map(\.target) {
             if let resolvedSceneNodeID = sceneNodeID {
                 guard resolvedSceneNodeID == target.sceneNodeID else {
                     throw EditorError(
@@ -2964,12 +3093,10 @@ public struct DesignDocument: Identifiable, Sendable {
                 message: "Edge chamfer requires an editable body edge."
             )
         }
-        guard let sceneNode = productMetadata.sceneNodes[resolvedSceneNodeID],
-              sceneNode.reference?.kind == .body,
-              let featureID = sceneNode.reference?.featureID else {
+        guard let featureID = resolvedTargets.first?.featureID else {
             throw EditorError(
-                code: .referenceUnresolved,
-                message: "Edge chamfer requires a body scene node."
+                code: .commandInvalid,
+                message: "Edge chamfer requires an editable body edge."
             )
         }
         guard var feature = cadDocument.designGraph.nodes[featureID],
@@ -3003,7 +3130,7 @@ public struct DesignDocument: Identifiable, Sendable {
         if let bounds = try resolvedSketchBounds2D(sketch),
            try rectangleLineIDs(in: sketch) != nil {
             targetIndices = try rectangleProfileLoopVertexIndices(
-                for: targets,
+                for: resolvedTargets.map(\.target),
                 profileLoop: profileLoop,
                 bounds: bounds,
                 operationName: "Edge chamfer",
@@ -3011,7 +3138,7 @@ public struct DesignDocument: Identifiable, Sendable {
             )
         } else {
             targetIndices = try generatedProfileLoopVertexIndices(
-                for: targets,
+                for: resolvedTargets.map(\.target),
                 profileLoop: profileLoop,
                 sketchPlane: sketch.plane,
                 expectedKind: .edge,
@@ -3069,8 +3196,14 @@ public struct DesignDocument: Identifiable, Sendable {
             )
         }
 
+        let resolvedTargets = try targets.map { target in
+            try editableBodyTargetResolution(
+                for: target,
+                operationName: "Edge fillet"
+            )
+        }
         var sceneNodeID: SceneNodeID?
-        for target in targets {
+        for target in resolvedTargets.map(\.target) {
             if let resolvedSceneNodeID = sceneNodeID {
                 guard resolvedSceneNodeID == target.sceneNodeID else {
                     throw EditorError(
@@ -3089,12 +3222,10 @@ public struct DesignDocument: Identifiable, Sendable {
                 message: "Edge fillet requires an editable body edge."
             )
         }
-        guard let sceneNode = productMetadata.sceneNodes[resolvedSceneNodeID],
-              sceneNode.reference?.kind == .body,
-              let featureID = sceneNode.reference?.featureID else {
+        guard let featureID = resolvedTargets.first?.featureID else {
             throw EditorError(
-                code: .referenceUnresolved,
-                message: "Edge fillet requires a body scene node."
+                code: .commandInvalid,
+                message: "Edge fillet requires an editable body edge."
             )
         }
         guard var feature = cadDocument.designGraph.nodes[featureID],
@@ -3128,7 +3259,7 @@ public struct DesignDocument: Identifiable, Sendable {
         if let bounds = try resolvedSketchBounds2D(sketch),
            try rectangleLineIDs(in: sketch) != nil {
             targetIndices = try rectangleProfileLoopVertexIndices(
-                for: targets,
+                for: resolvedTargets.map(\.target),
                 profileLoop: profileLoop,
                 bounds: bounds,
                 operationName: "Edge fillet",
@@ -3136,7 +3267,7 @@ public struct DesignDocument: Identifiable, Sendable {
             )
         } else {
             targetIndices = try generatedProfileLoopVertexIndices(
-                for: targets,
+                for: resolvedTargets.map(\.target),
                 profileLoop: profileLoop,
                 sketchPlane: sketch.plane,
                 expectedKind: .edge,
@@ -3191,14 +3322,11 @@ public struct DesignDocument: Identifiable, Sendable {
                 message: "Vertex move delta must not be zero."
             )
         }
-        guard let sceneNode = productMetadata.sceneNodes[target.sceneNodeID],
-              sceneNode.reference?.kind == .body,
-              let featureID = sceneNode.reference?.featureID else {
-            throw EditorError(
-                code: .referenceUnresolved,
-                message: "Vertex move requires a body scene node."
-            )
-        }
+        let resolvedTarget = try editableBodyTargetResolution(
+            for: target,
+            operationName: "Vertex move"
+        )
+        let featureID = resolvedTarget.featureID
         guard var feature = cadDocument.designGraph.nodes[featureID],
               case let .extrude(extrude) = feature.operation,
               var profileFeature = cadDocument.designGraph.nodes[extrude.profile.featureID],
@@ -3213,7 +3341,7 @@ public struct DesignDocument: Identifiable, Sendable {
         let preservesObjectProperties: Bool
         if isRectangleProfile(sketch) {
             let vertex = try editableBodyVertex(
-                for: target,
+                for: resolvedTarget.target,
                 objectRegistry: objectRegistry
             )
             guard var bounds = try resolvedSketchBounds2D(sketch) else {
@@ -3261,7 +3389,7 @@ public struct DesignDocument: Identifiable, Sendable {
                 operationName: "Vertex move"
             )
             let index = try profileLoopVertexIndex(
-                for: target,
+                for: resolvedTarget.target,
                 profileLoop: profileLoop,
                 sketchPlane: sketch.plane,
                 expectedKind: .vertex,
@@ -15577,6 +15705,258 @@ public struct DesignDocument: Identifiable, Sendable {
         }
         return trimmedName
     }
+
+    private func nextAvailableMetadataName(
+        prefix: String,
+        existingNames: inout Set<String>
+    ) -> String {
+        if existingNames.insert(prefix).inserted {
+            return prefix
+        }
+
+        var index = 2
+        while !existingNames.insert("\(prefix) \(index)").inserted {
+            index += 1
+        }
+        return "\(prefix) \(index)"
+    }
+
+    private func synchronizePatternArrayOutputs(
+        for sourceID: PatternArraySourceID,
+        metadata: inout ProductMetadata
+    ) throws {
+        guard var source = metadata.patternArrays[sourceID] else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "Pattern array regeneration requires an existing pattern source."
+            )
+        }
+        guard metadata.componentDefinitions[source.definitionID] != nil else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "Pattern array regeneration requires an existing component definition."
+            )
+        }
+        guard var rootNode = metadata.sceneNodes[source.rootSceneNodeID],
+              rootNode.reference == nil,
+              rootNode.object?.category == .group else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "Pattern array regeneration requires an existing output group scene node."
+            )
+        }
+
+        let transforms = try PatternArrayInstancePlanner().transforms(
+            for: source.distribution,
+            parameters: cadDocument.parameters
+        )
+        guard transforms.isEmpty == false else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Pattern arrays must create at least one output instance."
+            )
+        }
+
+        let previousOutputIDs = source.outputInstanceIDs
+        let reusableOutputIDs = Array(previousOutputIDs.prefix(transforms.count))
+        let reusableOutputIDSet = Set(reusableOutputIDs)
+        var usedInstanceNames = Set(
+            metadata.componentInstances.values.compactMap { instance in
+                previousOutputIDs.contains(instance.id)
+                    ? nil
+                    : instance.name.trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+        )
+        let existingChildIDsByInstanceID = patternArrayChildSceneNodeIDsByInstanceID(
+            rootNode: rootNode,
+            metadata: metadata
+        )
+
+        var nextOutputIDs: [ComponentInstanceID] = []
+        var nextChildIDs: [SceneNodeID] = []
+        nextOutputIDs.reserveCapacity(transforms.count)
+        nextChildIDs.reserveCapacity(transforms.count)
+        for (index, transform) in transforms.enumerated() {
+            let instanceID = index < reusableOutputIDs.count
+                ? reusableOutputIDs[index]
+                : ComponentInstanceID()
+            let instanceName: String
+            if let existingInstance = metadata.componentInstances[instanceID] {
+                instanceName = existingInstance.name
+                usedInstanceNames.insert(existingInstance.name.trimmingCharacters(in: .whitespacesAndNewlines))
+            } else {
+                instanceName = nextAvailableMetadataName(
+                    prefix: "\(source.name) \(index + 1)",
+                    existingNames: &usedInstanceNames
+                )
+            }
+
+            var instance = metadata.componentInstances[instanceID] ?? ComponentInstance(
+                id: instanceID,
+                definitionID: source.definitionID,
+                name: instanceName
+            )
+            instance.definitionID = source.definitionID
+            instance.name = instanceName
+            instance.localTransform = transform
+            metadata.componentInstances[instanceID] = instance
+            nextOutputIDs.append(instanceID)
+
+            let sceneNodeID = existingChildIDsByInstanceID[instanceID] ?? SceneNodeID()
+            var sceneNode = metadata.sceneNodes[sceneNodeID] ?? SceneNode(id: sceneNodeID, name: instanceName)
+            sceneNode.name = instanceName
+            sceneNode.reference = .componentInstance(instanceID)
+            sceneNode.object = .componentInstance(instanceID)
+            sceneNode.localTransform = .identity
+            metadata.sceneNodes[sceneNodeID] = sceneNode
+            nextChildIDs.append(sceneNodeID)
+        }
+
+        let nextOutputIDSet = Set(nextOutputIDs)
+        for removedInstanceID in Set(previousOutputIDs).subtracting(nextOutputIDSet) {
+            metadata.componentInstances.removeValue(forKey: removedInstanceID)
+            if let removedSceneNodeID = existingChildIDsByInstanceID[removedInstanceID] {
+                metadata.sceneNodes.removeValue(forKey: removedSceneNodeID)
+            }
+        }
+        for removedChildID in Set(rootNode.childIDs).subtracting(Set(nextChildIDs)) {
+            if let componentInstanceID = metadata.sceneNodes[removedChildID]?.reference?.componentInstanceID,
+               !reusableOutputIDSet.contains(componentInstanceID) {
+                metadata.componentInstances.removeValue(forKey: componentInstanceID)
+            }
+            metadata.sceneNodes.removeValue(forKey: removedChildID)
+        }
+
+        source.outputInstanceIDs = nextOutputIDs
+        rootNode.childIDs = nextChildIDs
+        metadata.sceneNodes[source.rootSceneNodeID] = rootNode
+        metadata.patternArrays[sourceID] = source
+    }
+
+    private func patternArrayChildSceneNodeIDsByInstanceID(
+        rootNode: SceneNode,
+        metadata: ProductMetadata
+    ) -> [ComponentInstanceID: SceneNodeID] {
+        var sceneNodeIDsByInstanceID: [ComponentInstanceID: SceneNodeID] = [:]
+        for childID in rootNode.childIDs {
+            guard let componentInstanceID = metadata.sceneNodes[childID]?.reference?.componentInstanceID else {
+                continue
+            }
+            sceneNodeIDsByInstanceID[componentInstanceID] = childID
+        }
+        return sceneNodeIDsByInstanceID
+    }
+
+    private func patternArraySourceID(
+        owningOutputInstance componentInstanceID: ComponentInstanceID
+    ) -> PatternArraySourceID? {
+        productMetadata.patternArrays.first { _, source in
+            source.outputInstanceIDs.contains(componentInstanceID)
+        }?.key
+    }
+
+    private func patternArraySourceID(
+        owningOutputSceneNode sceneNodeID: SceneNodeID
+    ) -> PatternArraySourceID? {
+        productMetadata.patternArrays.first { _, source in
+            guard let rootNode = productMetadata.sceneNodes[source.rootSceneNodeID] else {
+                return false
+            }
+            return rootNode.childIDs.contains(sceneNodeID)
+        }?.key
+    }
+
+    private struct EditableBodyTargetResolution {
+        var sceneNodeID: SceneNodeID
+        var sceneNode: SceneNode
+        var featureID: FeatureID
+        var target: SelectionTarget
+    }
+
+    private func editableBodyTargetResolution(
+        for target: SelectionTarget,
+        operationName: String
+    ) throws -> EditableBodyTargetResolution {
+        guard let sceneNode = productMetadata.sceneNodes[target.sceneNodeID],
+              let reference = sceneNode.reference else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "\(operationName) requires a body scene node."
+            )
+        }
+        if reference.kind == .body,
+           let featureID = reference.featureID {
+            return EditableBodyTargetResolution(
+                sceneNodeID: target.sceneNodeID,
+                sceneNode: sceneNode,
+                featureID: featureID,
+                target: target
+            )
+        }
+        guard reference.kind == .componentInstance,
+              let componentInstanceID = reference.componentInstanceID,
+              let instance = productMetadata.componentInstances[componentInstanceID],
+              let definition = productMetadata.componentDefinitions[instance.definitionID] else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "\(operationName) requires a body scene node."
+            )
+        }
+        let preferredFeatureID = try sourceFeatureID(
+            for: target.component,
+            operationName: operationName
+        )
+        let bodySceneNodeIDs = ComponentDefinitionSceneResolver().bodySceneNodeIDs(
+            in: definition,
+            preferredFeatureID: preferredFeatureID,
+            metadata: productMetadata
+        )
+        guard let sourceSceneNodeID = bodySceneNodeIDs.first,
+              bodySceneNodeIDs.count == 1,
+              let sourceSceneNode = productMetadata.sceneNodes[sourceSceneNodeID],
+              let sourceFeatureID = sourceSceneNode.reference?.featureID else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "\(operationName) component instance target must resolve to exactly one source body scene node."
+            )
+        }
+        return EditableBodyTargetResolution(
+            sceneNodeID: sourceSceneNodeID,
+            sceneNode: sourceSceneNode,
+            featureID: sourceFeatureID,
+            target: SelectionTarget(
+                sceneNodeID: sourceSceneNodeID,
+                component: target.component
+            )
+        )
+    }
+
+    private func sourceFeatureID(
+        for component: SelectionComponent,
+        operationName: String
+    ) throws -> FeatureID? {
+        let componentID: SelectionComponentID?
+        switch component {
+        case .face(let id), .edge(let id), .vertex(let id):
+            componentID = id
+        case .object, .sketchEntity, .region:
+            componentID = nil
+        }
+        guard let persistentName = componentID?.generatedTopologyPersistentName else {
+            return nil
+        }
+        let parsedName = try GeneratedTopologyPersistentNameParser().parse(
+            persistentName,
+            operationName: operationName
+        )
+        for component in parsedName.components {
+            if case .feature(let featureID) = component {
+                return featureID
+            }
+        }
+        return nil
+    }
+
 }
 
 private extension SweepResultKind {

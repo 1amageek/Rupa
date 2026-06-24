@@ -86,6 +86,22 @@ public struct AutomationRunner {
                 didMutate: result.didMutate,
                 diagnostics: result.diagnostics
             )
+        case .createRectangularPatternArray(let name, let definitionID, let array, let outputMode):
+            let result = try session.execute(
+                .createRectangularPatternArray(
+                    name: name,
+                    definitionID: definitionID,
+                    array: array,
+                    outputMode: outputMode
+                )
+            )
+            return AutomationResult(
+                message: "Rectangular pattern array \(name) created.",
+                commandName: result.commandName,
+                generation: result.generation,
+                didMutate: result.didMutate,
+                diagnostics: result.diagnostics
+            )
         case .setSceneNodeVisibility(let id, let isVisible):
             let result = try session.execute(
                 .setSceneNodeVisibility(id: id, isVisible: isVisible)

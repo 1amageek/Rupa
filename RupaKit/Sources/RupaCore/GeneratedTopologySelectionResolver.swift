@@ -14,17 +14,23 @@ public struct GeneratedTopologySelectionResolver: Sendable {
         in document: DesignDocument,
         objectRegistry: ObjectTypeRegistry = .builtIn
     ) throws -> SelectionComponentID? {
+        let resolvedSceneNodeID = try resolvedBodySceneNodeID(
+            for: sceneNodeID,
+            preferredFeatureID: nil,
+            in: document,
+            operationName: "Generated topology selection"
+        )
         let topology = try topologyService.summarize(
             document: document,
             objectRegistry: objectRegistry
         )
         let context = try rectangleContextIfNeeded(
             for: requestedBodyFace,
-            sceneNodeID: sceneNodeID,
+            sceneNodeID: resolvedSceneNodeID,
             in: document,
             operationName: "Generated topology selection"
         )
-        for entry in topology.entries where entry.kind == .face && entry.sceneNodeID == sceneNodeID.description {
+        for entry in topology.entries where entry.kind == .face && entry.sceneNodeID == resolvedSceneNodeID.description {
             let resolvedFace: BodyFace
             if let directFace = directBodyFace(for: entry) {
                 resolvedFace = directFace
@@ -32,7 +38,7 @@ public struct GeneratedTopologySelectionResolver: Sendable {
                 do {
                     resolvedFace = try bodyFace(
                         for: entry,
-                        sceneNodeID: sceneNodeID,
+                        sceneNodeID: resolvedSceneNodeID,
                         context: context,
                         operationName: "Generated topology selection"
                     )
@@ -57,8 +63,14 @@ public struct GeneratedTopologySelectionResolver: Sendable {
         in document: DesignDocument,
         objectRegistry: ObjectTypeRegistry = .builtIn
     ) throws -> SelectionComponentID? {
-        let context = try rectangleExtrudeContext(
+        let resolvedSceneNodeID = try resolvedBodySceneNodeID(
             for: sceneNodeID,
+            preferredFeatureID: nil,
+            in: document,
+            operationName: "Generated topology selection"
+        )
+        let context = try rectangleExtrudeContext(
+            for: resolvedSceneNodeID,
             in: document,
             operationName: "Generated topology selection"
         )
@@ -66,12 +78,12 @@ public struct GeneratedTopologySelectionResolver: Sendable {
             document: document,
             objectRegistry: objectRegistry
         )
-        for entry in topology.entries where entry.kind == .edge && entry.sceneNodeID == sceneNodeID.description {
+        for entry in topology.entries where entry.kind == .edge && entry.sceneNodeID == resolvedSceneNodeID.description {
             let resolvedEdge: BodyCornerEdge
             do {
                 resolvedEdge = try cornerEdge(
                     for: entry,
-                    sceneNodeID: sceneNodeID,
+                    sceneNodeID: resolvedSceneNodeID,
                     context: context,
                     operationName: "Generated topology selection"
                 )
@@ -93,8 +105,14 @@ public struct GeneratedTopologySelectionResolver: Sendable {
         in document: DesignDocument,
         objectRegistry: ObjectTypeRegistry = .builtIn
     ) throws -> SelectionComponentID? {
-        let context = try rectangleExtrudeContext(
+        let resolvedSceneNodeID = try resolvedBodySceneNodeID(
             for: sceneNodeID,
+            preferredFeatureID: nil,
+            in: document,
+            operationName: "Generated topology selection"
+        )
+        let context = try rectangleExtrudeContext(
+            for: resolvedSceneNodeID,
             in: document,
             operationName: "Generated topology selection"
         )
@@ -102,12 +120,12 @@ public struct GeneratedTopologySelectionResolver: Sendable {
             document: document,
             objectRegistry: objectRegistry
         )
-        for entry in topology.entries where entry.kind == .vertex && entry.sceneNodeID == sceneNodeID.description {
+        for entry in topology.entries where entry.kind == .vertex && entry.sceneNodeID == resolvedSceneNodeID.description {
             let resolvedVertex: BodyCornerVertex
             do {
                 resolvedVertex = try cornerVertex(
                     for: entry,
-                    sceneNodeID: sceneNodeID,
+                    sceneNodeID: resolvedSceneNodeID,
                     context: context,
                     operationName: "Generated topology selection"
                 )
@@ -140,6 +158,12 @@ public struct GeneratedTopologySelectionResolver: Sendable {
             document: document,
             objectRegistry: objectRegistry
         )
+        let resolvedSceneNodeID = try resolvedBodySceneNodeID(
+            for: target.sceneNodeID,
+            preferredFeatureID: sourceFeatureID(in: persistentName, operationName: operationName),
+            in: document,
+            operationName: operationName
+        )
         guard let entry = topology.entries.first(where: { $0.persistentName == persistentName }) else {
             throw EditorError(
                 code: .referenceUnresolved,
@@ -148,7 +172,7 @@ public struct GeneratedTopologySelectionResolver: Sendable {
         }
         if let directFace = directBodyFace(for: entry) {
             guard entry.kind == .face,
-                  entry.sceneNodeID == target.sceneNodeID.description else {
+                  entry.sceneNodeID == resolvedSceneNodeID.description else {
                 throw EditorError(
                     code: .commandInvalid,
                     message: "\(operationName) generated topology target must reference a face on the selected body."
@@ -157,13 +181,13 @@ public struct GeneratedTopologySelectionResolver: Sendable {
             return directFace
         }
         let context = try rectangleExtrudeContext(
-            for: target.sceneNodeID,
+            for: resolvedSceneNodeID,
             in: document,
             operationName: operationName
         )
         return try bodyFace(
             for: entry,
-            sceneNodeID: target.sceneNodeID,
+            sceneNodeID: resolvedSceneNodeID,
             context: context,
             operationName: operationName
         )
@@ -182,8 +206,14 @@ public struct GeneratedTopologySelectionResolver: Sendable {
                 message: "\(operationName) requires a generated topology edge target."
             )
         }
-        let context = try rectangleExtrudeContext(
+        let resolvedSceneNodeID = try resolvedBodySceneNodeID(
             for: target.sceneNodeID,
+            preferredFeatureID: sourceFeatureID(in: persistentName, operationName: operationName),
+            in: document,
+            operationName: operationName
+        )
+        let context = try rectangleExtrudeContext(
+            for: resolvedSceneNodeID,
             in: document,
             operationName: operationName
         )
@@ -199,7 +229,7 @@ public struct GeneratedTopologySelectionResolver: Sendable {
         }
         return try cornerEdge(
             for: entry,
-            sceneNodeID: target.sceneNodeID,
+            sceneNodeID: resolvedSceneNodeID,
             context: context,
             operationName: operationName
         )
@@ -218,8 +248,14 @@ public struct GeneratedTopologySelectionResolver: Sendable {
                 message: "\(operationName) requires a generated topology vertex target."
             )
         }
-        let context = try rectangleExtrudeContext(
+        let resolvedSceneNodeID = try resolvedBodySceneNodeID(
             for: target.sceneNodeID,
+            preferredFeatureID: sourceFeatureID(in: persistentName, operationName: operationName),
+            in: document,
+            operationName: operationName
+        )
+        let context = try rectangleExtrudeContext(
+            for: resolvedSceneNodeID,
             in: document,
             operationName: operationName
         )
@@ -235,7 +271,7 @@ public struct GeneratedTopologySelectionResolver: Sendable {
         }
         return try cornerVertex(
             for: entry,
-            sceneNodeID: target.sceneNodeID,
+            sceneNodeID: resolvedSceneNodeID,
             context: context,
             operationName: operationName
         )
@@ -359,6 +395,62 @@ public struct GeneratedTopologySelectionResolver: Sendable {
             code: .commandInvalid,
             message: "\(operationName) generated topology face is not an editable rectangle face."
         )
+    }
+
+    private func resolvedBodySceneNodeID(
+        for sceneNodeID: SceneNodeID,
+        preferredFeatureID: FeatureID?,
+        in document: DesignDocument,
+        operationName: String
+    ) throws -> SceneNodeID {
+        guard let sceneNode = document.productMetadata.sceneNodes[sceneNodeID],
+              let reference = sceneNode.reference else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "\(operationName) generated topology target requires a body scene node."
+            )
+        }
+        if reference.kind == .body {
+            return sceneNodeID
+        }
+        guard reference.kind == .componentInstance,
+              let componentInstanceID = reference.componentInstanceID,
+              let instance = document.productMetadata.componentInstances[componentInstanceID],
+              let definition = document.productMetadata.componentDefinitions[instance.definitionID] else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "\(operationName) generated topology target requires a body scene node."
+            )
+        }
+        let bodySceneNodeIDs = ComponentDefinitionSceneResolver().bodySceneNodeIDs(
+            in: definition,
+            preferredFeatureID: preferredFeatureID,
+            metadata: document.productMetadata
+        )
+        guard let resolvedSceneNodeID = bodySceneNodeIDs.first,
+              bodySceneNodeIDs.count == 1 else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "\(operationName) component instance target must resolve to exactly one source body scene node."
+            )
+        }
+        return resolvedSceneNodeID
+    }
+
+    private func sourceFeatureID(
+        in persistentNameString: String,
+        operationName: String
+    ) throws -> FeatureID? {
+        let persistentName = try GeneratedTopologyPersistentNameParser().parse(
+            persistentNameString,
+            operationName: operationName
+        )
+        for component in persistentName.components {
+            if case .feature(let featureID) = component {
+                return featureID
+            }
+        }
+        return nil
     }
 
     private func rectangleExtrudeContext(

@@ -93,6 +93,66 @@ import Testing
 }
 
 @MainActor
+@Test func offsetBodyFaceCommandResolvesComponentInstanceGeneratedFaceToSourceBody() async throws {
+    let session = EditorSession()
+    _ = try #require(session.createDefaultExtrudedRectangle())
+    let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let bodyNodeID = try #require(sceneNodeID(for: bodyFeatureID, in: session.document))
+    _ = try session.execute(
+        .createComponentDefinition(
+            name: "Offset Instance Source",
+            rootSceneNodeIDs: [bodyNodeID]
+        )
+    )
+    let definition = try #require(session.document.productMetadata.componentDefinitions.values.first {
+        $0.name == "Offset Instance Source"
+    })
+    _ = try session.execute(
+        .createRectangularPatternArray(
+            name: "Offset Instance Pattern",
+            definitionID: definition.id,
+            array: RectangularPatternArray(
+                firstAxis: PatternArrayLinearAxis(
+                    direction: .unitX,
+                    distance: .length(20.0, .millimeter),
+                    copyCount: 1
+                )
+            ),
+            outputMode: .componentInstance
+        )
+    )
+    let source = try #require(session.document.productMetadata.patternArrays.values.first)
+    let instanceID = try #require(source.outputInstanceIDs.first)
+    let instanceSceneNodeID = try #require(session.document.productMetadata.sceneNodes.first { _, node in
+        node.reference == .componentInstance(instanceID)
+    }?.key)
+    let beforeBounds = try rectangleBounds(forBody: bodyFeatureID, in: session.document)
+    let componentID = try #require(
+        try GeneratedTopologySelectionResolver().componentID(
+            for: instanceSceneNodeID,
+            bodyFace: .right,
+            in: session.document
+        )
+    )
+    let target = SelectionTarget(sceneNodeID: instanceSceneNodeID, component: .face(componentID))
+
+    let result = try session.execute(
+        .offsetBodyFace(
+            target: target,
+            distance: .length(2.0, .millimeter)
+        )
+    )
+
+    let afterBounds = try rectangleBounds(forBody: bodyFeatureID, in: session.document)
+    #expect(result.commandName == "offsetBodyFace")
+    #expect(result.didMutate)
+    #expect(session.generation == DocumentGeneration(4))
+    #expect(componentID.generatedTopologyPersistentName != nil)
+    #expect(nearlyEqual(afterBounds.maxX, beforeBounds.maxX + 0.002))
+    #expect(session.document.productMetadata.patternArrays[source.id] != nil)
+}
+
+@MainActor
 @Test func offsetBodyFaceCommandEditsCylinderSideFaceRadius() async throws {
     let session = EditorSession()
     _ = try #require(session.createDefaultExtrudedCircle())

@@ -1791,7 +1791,7 @@ func cliExecutableReturnsDataExitForLiveGenerationMismatch() async throws {
 
     let url = temporaryDirectory.appendingPathComponent("parameter-delete.swcad")
     var document = DesignDocument.empty(named: "Before")
-    document.upsertParameter(
+    try document.upsertParameter(
         name: "width",
         expression: .constant(.length(25.0, unit: .millimeter)),
         kind: .length

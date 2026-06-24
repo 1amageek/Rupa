@@ -603,7 +603,7 @@ import Testing
     let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
     let bodyNodeID = try #require(chamferSceneNodeID(for: bodyFeatureID, in: session.document))
     var document = session.document
-    document.upsertParameter(
+    try document.upsertParameter(
         name: "cornerX",
         expression: .constant(.length(-20.0, unit: .millimeter)),
         kind: .length

@@ -15,6 +15,12 @@ public enum EditorCommand: Codable, Equatable, Sendable {
         definitionID: ComponentDefinitionID,
         localTransform: Transform3D
     )
+    case createRectangularPatternArray(
+        name: String,
+        definitionID: ComponentDefinitionID,
+        array: RectangularPatternArray,
+        outputMode: PatternArrayOutputMode
+    )
     case setSceneNodeVisibility(id: SceneNodeID, isVisible: Bool)
     case setSceneNodeLock(id: SceneNodeID, isLocked: Bool)
     case setSceneNodeTransform(id: SceneNodeID, localTransform: Transform3D)
@@ -254,6 +260,8 @@ public enum EditorCommand: Codable, Equatable, Sendable {
             "createComponentDefinition"
         case .createComponentInstance:
             "createComponentInstance"
+        case .createRectangularPatternArray:
+            "createRectangularPatternArray"
         case .setSceneNodeVisibility:
             "setSceneNodeVisibility"
         case .setSceneNodeLock:
@@ -404,6 +412,7 @@ public enum EditorCommand: Codable, Equatable, Sendable {
              .deleteParameter,
              .createComponentDefinition,
              .createComponentInstance,
+             .createRectangularPatternArray,
              .setSceneNodeVisibility,
              .setSceneNodeLock,
              .setSceneNodeTransform,

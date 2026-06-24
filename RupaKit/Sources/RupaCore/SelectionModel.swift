@@ -186,7 +186,14 @@ public struct SelectionModel: Codable, Equatable, Sendable {
         case .object:
             return true
         case .face, .edge, .vertex:
-            return reference?.kind == .body
+            if reference?.kind == .body {
+                return true
+            }
+            return isComponentInstanceSubobject(
+                component,
+                compatibleWith: reference,
+                in: document
+            )
         case .sketchEntity(let componentID):
             guard reference?.kind == .sketch,
                   let featureID = reference?.featureID,
@@ -214,6 +221,64 @@ public struct SelectionModel: Codable, Equatable, Sendable {
                 document: document
             )
         }
+    }
+
+    private func isComponentInstanceSubobject(
+        _ component: SelectionComponent,
+        compatibleWith reference: SceneNodeReference?,
+        in document: DesignDocument
+    ) -> Bool {
+        guard reference?.kind == .componentInstance,
+              let componentInstanceID = reference?.componentInstanceID,
+              let instance = document.productMetadata.componentInstances[componentInstanceID],
+              let definition = document.productMetadata.componentDefinitions[instance.definitionID] else {
+            return false
+        }
+        let preferredFeatureID = sourceFeatureID(for: component)
+        let bodyFeatureIDs = Set(
+            ComponentDefinitionSceneResolver().bodySceneNodeIDs(
+                in: definition,
+                preferredFeatureID: preferredFeatureID,
+                metadata: document.productMetadata
+            ).compactMap { sceneNodeID in
+                document.productMetadata.sceneNodes[sceneNodeID]?.reference?.featureID
+            }
+        )
+        if bodyFeatureIDs.isEmpty {
+            return false
+        }
+        if let preferredFeatureID {
+            return bodyFeatureIDs.contains(preferredFeatureID)
+        }
+        return bodyFeatureIDs.count == 1
+    }
+
+    private func sourceFeatureID(for component: SelectionComponent) -> FeatureID? {
+        let componentID: SelectionComponentID?
+        switch component {
+        case .face(let id), .edge(let id), .vertex(let id):
+            componentID = id
+        case .object, .sketchEntity, .region:
+            componentID = nil
+        }
+        guard let persistentName = componentID?.generatedTopologyPersistentName else {
+            return nil
+        }
+        let parsedName: PersistentName
+        do {
+            parsedName = try GeneratedTopologyPersistentNameParser().parse(
+                persistentName,
+                operationName: "Selection"
+            )
+        } catch {
+            return nil
+        }
+        for component in parsedName.components {
+            if case .feature(let featureID) = component {
+                return featureID
+            }
+        }
+        return nil
     }
 
     private func isSketchComponent(

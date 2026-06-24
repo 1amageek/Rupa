@@ -165,7 +165,7 @@ public struct ViewportIdentityPickRenderPlanBuilder: Sendable {
 
         for region in item.sketchRegions {
             guard let record = record(
-                for: item.featureID,
+                for: item,
                 geometry: .sketchRegion(region.componentID),
                 in: index
             ) else {
@@ -188,7 +188,7 @@ public struct ViewportIdentityPickRenderPlanBuilder: Sendable {
         drawItems: inout [ViewportIdentityPickDrawItem]
     ) {
         let geometry = ViewportIdentityPickGeometry.sketchEntity(primitive.entityID)
-        guard let record = record(for: item.featureID, geometry: geometry, in: index),
+        guard let record = record(for: item, geometry: geometry, in: index),
               let pickPrimitive = sketchPrimitive(primitive, layout: layout) else {
             return
         }
@@ -215,7 +215,7 @@ public struct ViewportIdentityPickRenderPlanBuilder: Sendable {
                 entityID: entityID,
                 controlPointIndex: controlPointIndex
             )
-            guard let record = record(for: item.featureID, geometry: geometry, in: index) else {
+            guard let record = record(for: item, geometry: geometry, in: index) else {
                 continue
             }
             appendDrawItem(
@@ -270,21 +270,21 @@ public struct ViewportIdentityPickRenderPlanBuilder: Sendable {
         index: ViewportIdentityPickIndex,
         drawItems: inout [ViewportIdentityPickDrawItem]
     ) {
-        guard let record = record(for: item.featureID, geometry: .body, in: index) else {
+        guard let record = record(for: item, geometry: .body, in: index) else {
             return
         }
 
         if let topology = component.topology,
            topology.faces.isEmpty == false {
             for face in topology.faces {
-                let points = face.points.map(layout.project)
+                let points = face.points.map { layout.project($0, in: item) }
                 guard points.count >= 3 else {
                     continue
                 }
                 appendDrawItem(
                     record: record,
                     primitive: .polygon(points: points),
-                    depth: averageDepth(face.points, layout: layout),
+                    depth: averageDepth(face.points, item: item, layout: layout),
                     drawItems: &drawItems
                 )
             }
@@ -293,6 +293,7 @@ public struct ViewportIdentityPickRenderPlanBuilder: Sendable {
 
         if let mesh = component.mesh {
             appendMeshDrawItems(
+                item: item,
                 record: record,
                 mesh: mesh,
                 layout: layout,
@@ -315,6 +316,7 @@ public struct ViewportIdentityPickRenderPlanBuilder: Sendable {
     }
 
     private func appendMeshDrawItems(
+        item: ViewportSceneItem,
         record: ViewportIdentityPickRecord,
         mesh: ViewportBodyMesh,
         layout: ViewportLayout,
@@ -339,8 +341,8 @@ public struct ViewportIdentityPickRenderPlanBuilder: Sendable {
             ]
             appendDrawItem(
                 record: record,
-                primitive: .polygon(points: points.map(layout.project)),
-                depth: averageDepth(points, layout: layout),
+                primitive: .polygon(points: points.map { layout.project($0, in: item) }),
+                depth: averageDepth(points, item: item, layout: layout),
                 drawItems: &drawItems
             )
             index += 3
@@ -356,47 +358,47 @@ public struct ViewportIdentityPickRenderPlanBuilder: Sendable {
     ) {
         for face in topology.faces {
             let geometry = ViewportIdentityPickGeometry.generatedFace(face.componentID)
-            guard let record = record(for: item.featureID, geometry: geometry, in: index),
+            guard let record = record(for: item, geometry: geometry, in: index),
                   face.points.count >= 3 else {
                 continue
             }
             appendDrawItem(
                 record: record,
-                primitive: .polygon(points: face.points.map(layout.project)),
-                depth: averageDepth(face.points, layout: layout),
+                primitive: .polygon(points: face.points.map { layout.project($0, in: item) }),
+                depth: averageDepth(face.points, item: item, layout: layout),
                 drawItems: &drawItems
             )
         }
 
         for edge in topology.edges {
             let geometry = ViewportIdentityPickGeometry.generatedEdge(edge.componentID)
-            guard let record = record(for: item.featureID, geometry: geometry, in: index) else {
+            guard let record = record(for: item, geometry: geometry, in: index) else {
                 continue
             }
             appendDrawItem(
                 record: record,
                 primitive: .segment(
-                    start: layout.project(edge.start),
-                    end: layout.project(edge.end),
+                    start: layout.project(edge.start, in: item),
+                    end: layout.project(edge.end, in: item),
                     radius: topologyEdgeRadius
                 ),
-                depth: averageDepth([edge.start, edge.end], layout: layout),
+                depth: averageDepth([edge.start, edge.end], item: item, layout: layout),
                 drawItems: &drawItems
             )
         }
 
         for vertex in topology.vertices {
             let geometry = ViewportIdentityPickGeometry.generatedVertex(vertex.componentID)
-            guard let record = record(for: item.featureID, geometry: geometry, in: index) else {
+            guard let record = record(for: item, geometry: geometry, in: index) else {
                 continue
             }
             appendDrawItem(
                 record: record,
                 primitive: .point(
-                    center: layout.project(vertex.point),
+                    center: layout.project(vertex.point, in: item),
                     radius: topologyVertexRadius
                 ),
-                depth: projectedDepth(vertex.point, layout: layout),
+                depth: layout.projectedDepth(vertex.point, in: item),
                 drawItems: &drawItems
             )
         }
@@ -413,7 +415,7 @@ public struct ViewportIdentityPickRenderPlanBuilder: Sendable {
         }
         for face in projectedBodyFaceCases {
             let geometry = ViewportIdentityPickGeometry.projectedBodyFace(face)
-            guard let record = record(for: item.featureID, geometry: geometry, in: index) else {
+            guard let record = record(for: item, geometry: geometry, in: index) else {
                 continue
             }
             appendDrawItem(
@@ -426,7 +428,7 @@ public struct ViewportIdentityPickRenderPlanBuilder: Sendable {
 
         for edge in ViewportBodyEdge.verticalCases {
             let geometry = ViewportIdentityPickGeometry.projectedBodyEdge(edge)
-            guard let record = record(for: item.featureID, geometry: geometry, in: index) else {
+            guard let record = record(for: item, geometry: geometry, in: index) else {
                 continue
             }
             let segment = projection.segment(for: edge)
@@ -444,7 +446,7 @@ public struct ViewportIdentityPickRenderPlanBuilder: Sendable {
 
         for vertex in ViewportBodyVertex.allCases {
             let geometry = ViewportIdentityPickGeometry.projectedBodyVertex(vertex)
-            guard let record = record(for: item.featureID, geometry: geometry, in: index) else {
+            guard let record = record(for: item, geometry: geometry, in: index) else {
                 continue
             }
             appendDrawItem(
@@ -564,12 +566,14 @@ public struct ViewportIdentityPickRenderPlanBuilder: Sendable {
     }
 
     private func record(
-        for featureID: FeatureID,
+        for item: ViewportSceneItem,
         geometry: ViewportIdentityPickGeometry,
         in index: ViewportIdentityPickIndex
     ) -> ViewportIdentityPickRecord? {
         index.records.first { record in
-            record.featureID == featureID && record.geometry == geometry
+            record.featureID == item.featureID
+                && record.geometry == geometry
+                && record.hit.sceneNodeID == item.sceneNodeID
         }
     }
 
@@ -597,18 +601,15 @@ public struct ViewportIdentityPickRenderPlanBuilder: Sendable {
             || topology.vertices.isEmpty == false
     }
 
-    private func averageDepth(_ points: [Point3D], layout: ViewportLayout) -> Double? {
-        let depths = points.compactMap { projectedDepth($0, layout: layout) }
+    private func averageDepth(
+        _ points: [Point3D],
+        item: ViewportSceneItem,
+        layout: ViewportLayout
+    ) -> Double? {
+        let depths = points.compactMap { layout.projectedDepth($0, in: item) }
         guard depths.isEmpty == false else {
             return nil
         }
         return depths.reduce(0.0, +) / Double(depths.count)
-    }
-
-    private func projectedDepth(_ point: Point3D, layout: ViewportLayout) -> Double? {
-        guard let viewNormal = layout.basis.viewNormal else {
-            return nil
-        }
-        return point.x * viewNormal.x + point.y * viewNormal.y + point.z * viewNormal.z
     }
 }

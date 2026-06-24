@@ -157,16 +157,17 @@ public final class CADDocumentStore {
             try commitMutation()
             evaluateCurrentDocument()
         case .upsertParameter(let name, let expression, let kind):
-            document.upsertParameter(
+            try document.upsertParameter(
                 name: name,
                 expression: expression,
-                kind: kind
+                kind: kind,
+                objectRegistry: objectRegistry
             )
             try commitMutation()
             evaluateCurrentDocument()
         case .deleteParameter(let name):
             var updatedDocument = document
-            try updatedDocument.deleteParameter(name: name)
+            try updatedDocument.deleteParameter(name: name, objectRegistry: objectRegistry)
             document = updatedDocument
             try commitMutation()
             evaluateCurrentDocument()
@@ -186,6 +187,18 @@ public final class CADDocumentStore {
                 name: name,
                 definitionID: definitionID,
                 localTransform: localTransform,
+                objectRegistry: objectRegistry
+            )
+            document = updatedDocument
+            try commitMutation()
+            evaluateCurrentDocument()
+        case .createRectangularPatternArray(let name, let definitionID, let array, let outputMode):
+            var updatedDocument = document
+            try updatedDocument.createRectangularPatternArray(
+                name: name,
+                definitionID: definitionID,
+                array: array,
+                outputMode: outputMode,
                 objectRegistry: objectRegistry
             )
             document = updatedDocument

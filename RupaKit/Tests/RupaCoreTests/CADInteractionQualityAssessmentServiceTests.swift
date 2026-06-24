@@ -75,10 +75,13 @@ import RupaCore
 
     let arrays = try #require(result.entries.first { $0.area == .patternsAndArrays })
     let arrayCommandRating = try gateRating(.commandContract, in: arrays)
-    #expect(arrays.currentRating == .planned)
-    #expect(arrayCommandRating == .missing)
+    #expect(arrays.currentRating == .partial)
+    #expect(arrayCommandRating == .partial)
     #expect(arrays.referenceSources.contains("https://doc.plasticity.xyz/common/rectangular-array"))
-    #expect(arrays.openWork.contains { $0.contains("Rectangular array") })
+    #expect(arrays.openWork.contains { $0.contains("Radial array") })
+    #expect(arrays.evidence.contains { evidence in
+        evidence.sourceFiles.contains("RupaKit/Sources/RupaCore/PatternArraySource.swift")
+    })
 
     let section = try #require(result.entries.first { $0.area == .sectionAnalysis })
     #expect(section.currentRating == .partial)

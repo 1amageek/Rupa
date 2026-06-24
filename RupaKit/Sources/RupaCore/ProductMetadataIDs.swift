@@ -3,6 +3,7 @@ import SwiftCAD
 public enum SceneNodeTag {}
 public enum ComponentDefinitionTag {}
 public enum ComponentInstanceTag {}
+public enum PatternArraySourceTag {}
 public enum ValidationRuleTag {}
 public enum ExportPresetTag {}
 public enum BridgeCurveSourceTag {}
@@ -12,6 +13,7 @@ public enum MeasurementAnnotationTag {}
 public typealias SceneNodeID = TaggedID<SceneNodeTag>
 public typealias ComponentDefinitionID = TaggedID<ComponentDefinitionTag>
 public typealias ComponentInstanceID = TaggedID<ComponentInstanceTag>
+public typealias PatternArraySourceID = TaggedID<PatternArraySourceTag>
 public typealias ValidationRuleID = TaggedID<ValidationRuleTag>
 public typealias ExportPresetID = TaggedID<ExportPresetTag>
 public typealias BridgeCurveSourceID = TaggedID<BridgeCurveSourceTag>

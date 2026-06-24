@@ -3,6 +3,7 @@ public struct AgentCapabilityDescriptor: Codable, Equatable, Sendable {
         case document
         case parameter
         case component
+        case pattern
         case sketch
         case solid
         case directEditing

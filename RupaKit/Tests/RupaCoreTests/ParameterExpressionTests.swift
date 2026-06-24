@@ -5,7 +5,7 @@ import Testing
 
 @Test func parameterExpressionParserResolvesReferencesAndMixedUnits() throws {
     var document = DesignDocument.empty(named: "Parameters")
-    document.upsertParameter(
+    try document.upsertParameter(
         name: "width",
         expression: .constant(.length(10.0, unit: .millimeter)),
         kind: .length
@@ -53,7 +53,7 @@ import Testing
 
 @Test func parameterExpressionParserRejectsSelfReferenceBeforeMutation() throws {
     var document = DesignDocument.empty(named: "Parameters")
-    document.upsertParameter(
+    try document.upsertParameter(
         name: "width",
         expression: .constant(.length(10.0, unit: .millimeter)),
         kind: .length
@@ -76,7 +76,7 @@ import Testing
 
 @Test func parameterListResultReportsFormattedExpressionAndResolvedValue() throws {
     var document = DesignDocument.empty(named: "Parameters")
-    document.upsertParameter(
+    try document.upsertParameter(
         name: "width",
         expression: .constant(.length(10.0, unit: .millimeter)),
         kind: .length
@@ -84,7 +84,7 @@ import Testing
     let width = try #require(
         document.cadDocument.parameters.parameters.values.first { $0.name == "width" }
     )
-    document.upsertParameter(
+    try document.upsertParameter(
         name: "doubleWidth",
         expression: .multiply(
             .reference(width.id),

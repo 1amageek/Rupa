@@ -6,6 +6,7 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
     public var rootSceneNodeIDs: [SceneNodeID]
     public var componentDefinitions: [ComponentDefinitionID: ComponentDefinition]
     public var componentInstances: [ComponentInstanceID: ComponentInstance]
+    public var patternArrays: [PatternArraySourceID: PatternArraySource]
     public var materialLibrary: MaterialLibrary
     public var validationRules: [ValidationRuleID: ValidationRule]
     public var exportPresets: [ExportPresetID: ExportPreset]
@@ -22,6 +23,7 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
         rootSceneNodeIDs: [SceneNodeID],
         componentDefinitions: [ComponentDefinitionID: ComponentDefinition] = [:],
         componentInstances: [ComponentInstanceID: ComponentInstance] = [:],
+        patternArrays: [PatternArraySourceID: PatternArraySource] = [:],
         materialLibrary: MaterialLibrary = MaterialLibrary(),
         validationRules: [ValidationRuleID: ValidationRule] = [:],
         exportPresets: [ExportPresetID: ExportPreset] = [:],
@@ -37,6 +39,7 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
         self.rootSceneNodeIDs = rootSceneNodeIDs
         self.componentDefinitions = componentDefinitions
         self.componentInstances = componentInstances
+        self.patternArrays = patternArrays
         self.materialLibrary = materialLibrary
         self.validationRules = validationRules
         self.exportPresets = exportPresets
@@ -54,6 +57,7 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
         case rootSceneNodeIDs
         case componentDefinitions
         case componentInstances
+        case patternArrays
         case materialLibrary
         case validationRules
         case exportPresets
@@ -78,6 +82,10 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
             componentInstances: try container.decodeIfPresent(
                 [ComponentInstanceID: ComponentInstance].self,
                 forKey: .componentInstances
+            ) ?? [:],
+            patternArrays: try container.decodeIfPresent(
+                [PatternArraySourceID: PatternArraySource].self,
+                forKey: .patternArrays
             ) ?? [:],
             materialLibrary: try container.decodeIfPresent(
                 MaterialLibrary.self,
@@ -128,6 +136,7 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
         try container.encode(rootSceneNodeIDs, forKey: .rootSceneNodeIDs)
         try container.encode(componentDefinitions, forKey: .componentDefinitions)
         try container.encode(componentInstances, forKey: .componentInstances)
+        try container.encode(patternArrays, forKey: .patternArrays)
         try container.encode(materialLibrary, forKey: .materialLibrary)
         try container.encode(validationRules, forKey: .validationRules)
         try container.encode(exportPresets, forKey: .exportPresets)
@@ -155,6 +164,7 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
         try validateSceneNodes(against: cadDocument, objectRegistry: objectRegistry)
         try validateComponentDefinitions()
         try validateComponentInstances()
+        try validatePatternArrays()
         try materialLibrary.validate()
         try validateValidationRules()
         try validateExportPresets()
@@ -801,6 +811,72 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
                 throw DocumentValidationError.invalidProductMetadata("Component instance names must be unique.")
             }
             try instance.validate()
+        }
+    }
+
+    private func validatePatternArrays() throws {
+        var names: Set<String> = []
+        for (sourceID, source) in patternArrays {
+            guard source.id == sourceID else {
+                throw DocumentValidationError.invalidProductMetadata(
+                    "Pattern array source keys must match source IDs."
+                )
+            }
+            let trimmedName = source.name.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard names.insert(trimmedName).inserted else {
+                throw DocumentValidationError.invalidProductMetadata("Pattern array source names must be unique.")
+            }
+            guard componentDefinitions[source.definitionID] != nil else {
+                throw DocumentValidationError.invalidProductMetadata(
+                    "Pattern array sources must reference an existing component definition."
+                )
+            }
+            try source.validate()
+            for instanceID in source.outputInstanceIDs {
+                guard let instance = componentInstances[instanceID] else {
+                    throw DocumentValidationError.invalidProductMetadata(
+                        "Pattern array output instances must exist."
+                    )
+                }
+                guard instance.definitionID == source.definitionID else {
+                    throw DocumentValidationError.invalidProductMetadata(
+                        "Pattern array output instances must use the source component definition."
+                    )
+                }
+            }
+            let rootSceneNodeID = source.rootSceneNodeID
+            guard let rootNode = sceneNodes[rootSceneNodeID],
+                  rootNode.reference == nil,
+                  rootNode.object?.category == .group else {
+                throw DocumentValidationError.invalidProductMetadata(
+                    "Pattern array root scene node must be a group node."
+                )
+            }
+            guard rootNode.childIDs.count == source.outputInstanceIDs.count else {
+                throw DocumentValidationError.invalidProductMetadata(
+                    "Pattern array root scene node must contain exactly its output instance scene nodes."
+                )
+            }
+            let outputInstanceIDs = Set(source.outputInstanceIDs)
+            var childInstanceIDs: [ComponentInstanceID] = []
+            childInstanceIDs.reserveCapacity(rootNode.childIDs.count)
+            for childID in rootNode.childIDs {
+                guard let childNode = sceneNodes[childID],
+                      childNode.reference?.kind == .componentInstance,
+                      let componentInstanceID = childNode.reference?.componentInstanceID,
+                      outputInstanceIDs.contains(componentInstanceID) else {
+                    throw DocumentValidationError.invalidProductMetadata(
+                        "Pattern array root scene node children must be output component instance nodes."
+                    )
+                }
+                childInstanceIDs.append(componentInstanceID)
+            }
+            guard Set(childInstanceIDs) == outputInstanceIDs,
+                  childInstanceIDs.count == outputInstanceIDs.count else {
+                throw DocumentValidationError.invalidProductMetadata(
+                    "Pattern array root scene node must map one child to each output instance."
+                )
+            }
         }
     }
 

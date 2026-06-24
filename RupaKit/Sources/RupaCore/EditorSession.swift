@@ -988,6 +988,23 @@ public final class EditorSession {
         )
     }
 
+    @discardableResult
+    public func createRectangularPatternArray(
+        name: String,
+        definitionID: ComponentDefinitionID,
+        array: RectangularPatternArray,
+        outputMode: PatternArrayOutputMode = .componentInstance
+    ) -> CommandExecutionResult? {
+        perform(
+            .createRectangularPatternArray(
+                name: name,
+                definitionID: definitionID,
+                array: array,
+                outputMode: outputMode
+            )
+        )
+    }
+
     public func setSceneNodeVisibility(
         _ id: SceneNodeID,
         isVisible: Bool

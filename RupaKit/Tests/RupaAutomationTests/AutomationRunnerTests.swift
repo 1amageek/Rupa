@@ -3098,6 +3098,48 @@ import SwiftCAD
 }
 
 @MainActor
+@Test func automationCanCreateRectangularPatternArray() async throws {
+    let session = EditorSession()
+    let runner = AutomationRunner()
+    _ = try #require(session.createDefaultExtrudedRectangle())
+    let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let bodySceneNodeID = try #require(automationSceneNodeID(for: bodyFeatureID, in: session.document))
+    _ = try runner.execute(
+        .createComponentDefinition(
+            name: "Automation Array Source",
+            rootSceneNodeIDs: [bodySceneNodeID]
+        ),
+        in: session
+    )
+    let definition = try #require(session.document.productMetadata.componentDefinitions.values.first)
+
+    let result = try runner.execute(
+        .createRectangularPatternArray(
+            name: "Automation Rectangular Array",
+            definitionID: definition.id,
+            array: RectangularPatternArray(
+                firstAxis: PatternArrayLinearAxis(
+                    direction: .unitX,
+                    distance: .length(5.0, .millimeter),
+                    copyCount: 2,
+                    distanceMode: .spacing
+                )
+            ),
+            outputMode: .componentInstance
+        ),
+        in: session
+    )
+    let source = try #require(session.document.productMetadata.patternArrays.values.first)
+
+    #expect(result.commandName == "createRectangularPatternArray")
+    #expect(result.message == "Rectangular pattern array Automation Rectangular Array created.")
+    #expect(result.didMutate)
+    #expect(source.outputInstanceIDs.count == 2)
+    #expect(session.document.productMetadata.componentInstances.count == 2)
+    #expect(session.generation == DocumentGeneration(3))
+}
+
+@MainActor
 @Test func automationCanCreateSectionPlane() async throws {
     let session = EditorSession()
     let runner = AutomationRunner()

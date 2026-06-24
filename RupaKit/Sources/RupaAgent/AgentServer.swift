@@ -133,6 +133,40 @@ public final class AgentServer: AgentClientProtocol {
             failureMode: "Rejects missing definitions, invalid transforms, and stale generations before mutation."
         ),
         capability(
+            "createRectangularPatternArray",
+            category: .pattern,
+            summary: "Create a source-owned rectangular pattern array that emits component instances from a component definition with spacing or extent-controlled one- or two-axis distribution.",
+            access: .automationCommand,
+            mutatesDocument: true,
+            discovery: [.designDisplaySnapshot],
+            targets: [.sceneNode],
+            failureMode: "Rejects missing component definitions, invalid axis directions, non-positive copy counts, non-length distances, zero spacing, duplicate array names, and stale generations before mutation.",
+            optionMatrix: [
+                AgentCapabilityDescriptor.OptionAxis(
+                    name: "distanceMode",
+                    supportedValues: ["spacing", "extent"],
+                    notes: [
+                        "Spacing uses the resolved distance as each copy step.",
+                        "Extent distributes generated copies evenly across the resolved distance.",
+                    ]
+                ),
+                AgentCapabilityDescriptor.OptionAxis(
+                    name: "axisCount",
+                    supportedValues: ["one", "two"],
+                    notes: [
+                        "Two-axis arrays generate the rectangular lattice excluding the original source position.",
+                    ]
+                ),
+                AgentCapabilityDescriptor.OptionAxis(
+                    name: "outputMode",
+                    supportedValues: ["componentInstance"],
+                    notes: [
+                        "The current implementation preserves source ownership by emitting component instances instead of cloning CAD feature geometry.",
+                    ]
+                ),
+            ]
+        ),
+        capability(
             "setSceneNodeVisibility",
             category: .component,
             summary: "Set visibility on a scene node without changing CAD feature source.",

@@ -28,6 +28,139 @@ import Testing
 }
 
 @MainActor
+@Test func viewportSceneBuilderExpandsComponentInstancePatternItemsWithSceneNodeIdentity() async throws {
+    let session = EditorSession()
+    _ = try #require(session.createDefaultExtrudedRectangle())
+    let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let bodyNodeID = try #require(bodySceneNodeID(for: bodyFeatureID, in: session.document))
+    _ = try session.execute(
+        .createComponentDefinition(
+            name: "Viewport Pattern Source",
+            rootSceneNodeIDs: [bodyNodeID]
+        )
+    )
+    let definition = try #require(session.document.productMetadata.componentDefinitions.values.first {
+        $0.name == "Viewport Pattern Source"
+    })
+    _ = try session.execute(
+        .createRectangularPatternArray(
+            name: "Viewport Pattern",
+            definitionID: definition.id,
+            array: RectangularPatternArray(
+                firstAxis: PatternArrayLinearAxis(
+                    direction: .unitX,
+                    distance: .length(100.0, .millimeter),
+                    copyCount: 2
+                )
+            ),
+            outputMode: .componentInstance
+        )
+    )
+    let source = try #require(session.document.productMetadata.patternArrays.values.first)
+
+    let scene = ViewportSceneBuilder().build(document: session.document)
+    let baseBody = try #require(scene.items.first { item in
+        item.componentInstanceID == nil && item.featureID == bodyFeatureID
+    })
+    let instanceItems = scene.items
+        .filter { $0.componentInstanceID != nil && $0.featureID == bodyFeatureID }
+        .sorted { $0.modelBounds.midX < $1.modelBounds.midX }
+
+    #expect(instanceItems.count == 2)
+    #expect(Set(instanceItems.compactMap(\.componentInstanceID)) == Set(source.outputInstanceIDs))
+    #expect(abs(instanceItems[0].modelTransform.matrix.values[12] - 0.1) < 1.0e-12)
+    #expect(abs(instanceItems[1].modelTransform.matrix.values[12] - 0.2) < 1.0e-12)
+    #expect(abs(instanceItems[0].modelBounds.midX - (baseBody.modelBounds.midX + 0.1)) < 1.0e-12)
+    #expect(abs(instanceItems[1].modelBounds.midX - (baseBody.modelBounds.midX + 0.2)) < 1.0e-12)
+
+    let layout = try #require(ViewportLayout(
+        scene: scene,
+        size: CGSize(width: 900.0, height: 700.0)
+    ))
+    let hitPoint = layout.project(CGPoint(
+        x: instanceItems[0].modelBounds.midX,
+        y: instanceItems[0].modelBounds.midY
+    ))
+    let hit = try #require(ViewportHitTester().hitTest(
+        point: hitPoint,
+        in: scene,
+        layout: layout,
+        selectionHitPolicy: .object
+    ))
+
+    #expect(hit.sceneNodeID == instanceItems[0].sceneNodeID)
+
+    _ = try session.execute(.setSceneNodeVisibility(id: source.rootSceneNodeID, isVisible: false))
+    let hiddenScene = ViewportSceneBuilder().build(document: session.document)
+    #expect(hiddenScene.items.contains { $0.componentInstanceID != nil } == false)
+}
+
+@MainActor
+@Test func viewportSceneBuilderExpandsNestedComponentInstancePatternDefinitions() async throws {
+    let session = EditorSession()
+    _ = try #require(session.createDefaultExtrudedRectangle())
+    let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let bodyNodeID = try #require(bodySceneNodeID(for: bodyFeatureID, in: session.document))
+    _ = try session.execute(
+        .createComponentDefinition(
+            name: "Nested Body Definition",
+            rootSceneNodeIDs: [bodyNodeID]
+        )
+    )
+    let bodyDefinition = try #require(session.document.productMetadata.componentDefinitions.values.first {
+        $0.name == "Nested Body Definition"
+    })
+    _ = try session.execute(
+        .createComponentInstance(
+            name: "Nested Source Instance",
+            definitionID: bodyDefinition.id,
+            localTransform: .identity
+        )
+    )
+    let sourceInstance = try #require(session.document.productMetadata.componentInstances.values.first {
+        $0.name == "Nested Source Instance"
+    })
+    let sourceInstanceNodeID = try #require(session.document.productMetadata.sceneNodes.first { _, node in
+        node.reference?.componentInstanceID == sourceInstance.id
+    }?.key)
+    _ = try session.execute(
+        .createComponentDefinition(
+            name: "Nested Pattern Definition",
+            rootSceneNodeIDs: [sourceInstanceNodeID]
+        )
+    )
+    let nestedDefinition = try #require(session.document.productMetadata.componentDefinitions.values.first {
+        $0.name == "Nested Pattern Definition"
+    })
+    _ = try session.execute(
+        .createRectangularPatternArray(
+            name: "Nested Pattern",
+            definitionID: nestedDefinition.id,
+            array: RectangularPatternArray(
+                firstAxis: PatternArrayLinearAxis(
+                    direction: .unitX,
+                    distance: .length(50.0, .millimeter),
+                    copyCount: 1
+                )
+            ),
+            outputMode: .componentInstance
+        )
+    )
+    let source = try #require(session.document.productMetadata.patternArrays.values.first {
+        $0.name == "Nested Pattern"
+    })
+    let outputInstanceID = try #require(source.outputInstanceIDs.first)
+
+    let scene = ViewportSceneBuilder().build(document: session.document)
+    let outputItems = scene.items.filter {
+        $0.componentInstanceID == outputInstanceID && $0.featureID == bodyFeatureID
+    }
+
+    #expect(outputItems.count == 1)
+    #expect(abs((outputItems.first?.modelTransform.matrix.values[12] ?? 0.0) - 0.05) < 1.0e-12)
+}
+
+@MainActor
 @Test func viewportSceneBuilderUsesCurrentEvaluatedDocumentWhenAvailable() async throws {
     let session = EditorSession()
     _ = try #require(session.createDefaultExtrudedRectangle())
@@ -1373,16 +1506,19 @@ import Testing
     let hitPoint = layout.project(fixture.nearCenter)
 
     let vertexHit = ViewportBodyTopologyHitTester().hitTest(
+        item: fixture.item,
         component: fixture.vertexComponent,
         point: hitPoint,
         layout: layout
     )
     let edgeHit = ViewportBodyTopologyHitTester().hitTest(
+        item: fixture.item,
         component: fixture.edgeComponent,
         point: hitPoint,
         layout: layout
     )
     let faceHit = ViewportBodyTopologyHitTester(tolerance: 0.0).hitTest(
+        item: fixture.item,
         component: fixture.faceComponent,
         point: hitPoint,
         layout: layout
@@ -2374,6 +2510,7 @@ private struct OverlappingGeneratedFaceScene {
 private struct OverlappingGeneratedPrimitiveComponent {
     var modelBounds: CGRect
     var nearCenter: Point3D
+    var item: ViewportSceneItem
     var vertexComponent: ViewportBodyComponent
     var edgeComponent: ViewportBodyComponent
     var faceComponent: ViewportBodyComponent
@@ -2449,6 +2586,11 @@ private func overlappingGeneratedPrimitiveComponent() throws -> OverlappingGener
     return OverlappingGeneratedPrimitiveComponent(
         modelBounds: modelBounds(for: allPoints),
         nearCenter: centers.near,
+        item: viewportBodyItem(
+            featureID: FeatureID(),
+            topology: ViewportBodyTopology(),
+            points: allPoints
+        ),
         vertexComponent: viewportBodyComponent(
             topology: ViewportBodyTopology(
                 vertices: [

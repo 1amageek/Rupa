@@ -40,7 +40,7 @@ public struct ViewportSelectionRectangleHitTester: Sendable {
     ) -> [ViewportHit] {
         let selectionRect = normalized(rect)
         var hits: [ViewportHit] = []
-        var seenBodyFeatureIDs: Set<FeatureID> = []
+        var seenBodyItemIDs: Set<String> = []
 
         for item in scene.items {
             switch item.kind {
@@ -78,8 +78,12 @@ public struct ViewportSelectionRectangleHitTester: Sendable {
                 if selectionHitPolicy.allowsObjectHits,
                    let selectableBounds = selectionBounds(for: item, layout: layout),
                    selectionRect.intersects(selectableBounds),
-                   seenBodyFeatureIDs.insert(item.featureID).inserted {
-                    hits.append(ViewportHit(featureID: item.featureID, kind: .body))
+                   seenBodyItemIDs.insert(item.id).inserted {
+                    hits.append(ViewportHit(
+                        featureID: item.featureID,
+                        sceneNodeID: item.sceneNodeID,
+                        kind: .body
+                    ))
                 }
             }
         }
@@ -107,6 +111,7 @@ public struct ViewportSelectionRectangleHitTester: Sendable {
                 hits.append(
                     ViewportHit(
                         featureID: item.featureID,
+                        sceneNodeID: item.sceneNodeID,
                         kind: .sketch,
                         sketchEntityID: primitive.entityID
                     )
@@ -116,6 +121,7 @@ public struct ViewportSelectionRectangleHitTester: Sendable {
                         contentsOf: sketchControlPointHits(
                             primitive,
                             featureID: item.featureID,
+                            sceneNodeID: item.sceneNodeID,
                             in: rect,
                             layout: layout,
                             sketchControlPointHitPolicy: sketchControlPointHitPolicy
@@ -139,6 +145,7 @@ public struct ViewportSelectionRectangleHitTester: Sendable {
             hits.append(
                 ViewportHit(
                     featureID: item.featureID,
+                    sceneNodeID: item.sceneNodeID,
                     kind: .sketch,
                     selectionComponent: .region(region.componentID)
                 )
@@ -151,6 +158,7 @@ public struct ViewportSelectionRectangleHitTester: Sendable {
     private func sketchControlPointHits(
         _ primitive: ViewportSketchPrimitive,
         featureID: FeatureID,
+        sceneNodeID: SceneNodeID?,
         in rect: CGRect,
         layout: ViewportLayout,
         sketchControlPointHitPolicy: ViewportSketchControlPointHitPolicy
@@ -168,6 +176,7 @@ public struct ViewportSelectionRectangleHitTester: Sendable {
             hits.append(
                 ViewportHit(
                     featureID: featureID,
+                    sceneNodeID: sceneNodeID,
                     kind: .sketch,
                     sketchEntityID: entityID,
                     sketchControlPointIndex: index
@@ -192,13 +201,14 @@ public struct ViewportSelectionRectangleHitTester: Sendable {
 
         if selectionHitPolicy.allowsVertexHits {
             for vertex in topology.vertices {
-                let bounds = pointRect(layout.project(vertex.point), radius: topologyVertexRadius)
+                let bounds = pointRect(layout.project(vertex.point, in: item), radius: topologyVertexRadius)
                 guard rect.intersects(bounds) else {
                     continue
                 }
                 hits.append(
                     ViewportHit(
                         featureID: item.featureID,
+                        sceneNodeID: item.sceneNodeID,
                         kind: .body,
                         selectionComponent: .vertex(vertex.componentID)
                     )
@@ -209,8 +219,8 @@ public struct ViewportSelectionRectangleHitTester: Sendable {
         if selectionHitPolicy.allowsEdgeHits {
             for edge in topology.edges {
                 let bounds = segmentBounds(
-                    start: layout.project(edge.start),
-                    end: layout.project(edge.end)
+                    start: layout.project(edge.start, in: item),
+                    end: layout.project(edge.end, in: item)
                 )
                 .insetBy(dx: -topologyEdgePadding, dy: -topologyEdgePadding)
                 guard rect.intersects(bounds) else {
@@ -219,6 +229,7 @@ public struct ViewportSelectionRectangleHitTester: Sendable {
                 hits.append(
                     ViewportHit(
                         featureID: item.featureID,
+                        sceneNodeID: item.sceneNodeID,
                         kind: .body,
                         selectionComponent: .edge(edge.componentID)
                     )
@@ -228,7 +239,7 @@ public struct ViewportSelectionRectangleHitTester: Sendable {
 
         if selectionHitPolicy.allowsFaceHits {
             for face in topology.faces {
-                let bounds = polygonBounds(face.points.map(layout.project))
+                let bounds = polygonBounds(face.points.map { layout.project($0, in: item) })
                 guard !bounds.isNull,
                       rect.intersects(bounds) else {
                     continue
@@ -236,6 +247,7 @@ public struct ViewportSelectionRectangleHitTester: Sendable {
                 hits.append(
                     ViewportHit(
                         featureID: item.featureID,
+                        sceneNodeID: item.sceneNodeID,
                         kind: .body,
                         selectionComponent: .face(face.componentID)
                     )
@@ -266,6 +278,7 @@ public struct ViewportSelectionRectangleHitTester: Sendable {
                 hits.append(
                     ViewportHit(
                         featureID: item.featureID,
+                        sceneNodeID: item.sceneNodeID,
                         kind: .body,
                         bodyVertex: vertex
                     )
@@ -284,6 +297,7 @@ public struct ViewportSelectionRectangleHitTester: Sendable {
                 hits.append(
                     ViewportHit(
                         featureID: item.featureID,
+                        sceneNodeID: item.sceneNodeID,
                         kind: .body,
                         bodyEdge: edge
                     )
@@ -299,6 +313,7 @@ public struct ViewportSelectionRectangleHitTester: Sendable {
                 hits.append(
                     ViewportHit(
                         featureID: item.featureID,
+                        sceneNodeID: item.sceneNodeID,
                         kind: .body,
                         bodyFace: face
                     )
