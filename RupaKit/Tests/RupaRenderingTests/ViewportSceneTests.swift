@@ -44,6 +44,38 @@ import Testing
 }
 
 @MainActor
+@Test func viewportSceneBuilderUsesCurrentEvaluationContextWhenAvailable() async throws {
+    let session = EditorSession()
+    _ = try #require(session.createDefaultExtrudedRectangle())
+    let currentEvaluation = try #require(session.currentEvaluation)
+
+    let documentScene = ViewportSceneBuilder().build(document: session.document)
+    let contextScene = ViewportSceneBuilder().build(
+        document: session.document,
+        currentEvaluation: currentEvaluation,
+        documentGeneration: session.generation
+    )
+
+    #expect(contextScene == documentScene)
+}
+
+@MainActor
+@Test func viewportSceneBuilderIgnoresCurrentEvaluationWhenGenerationIsStale() async throws {
+    let session = EditorSession()
+    _ = try #require(session.createDefaultExtrudedRectangle())
+    let currentEvaluation = try #require(session.currentEvaluation)
+
+    let documentScene = ViewportSceneBuilder().build(document: session.document)
+    let staleScene = ViewportSceneBuilder().build(
+        document: session.document,
+        currentEvaluation: currentEvaluation,
+        documentGeneration: DocumentGeneration(session.generation.value + 1)
+    )
+
+    #expect(staleScene == documentScene)
+}
+
+@MainActor
 @Test func viewportSceneBuilderIgnoresEvaluationCacheWhenGenerationIsStale() async throws {
     let session = EditorSession()
     _ = try #require(session.createDefaultExtrudedRectangle())

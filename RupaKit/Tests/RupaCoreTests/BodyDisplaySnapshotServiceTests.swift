@@ -52,8 +52,12 @@ import SwiftCAD
 
     #expect(firstSnapshots.isEmpty == false)
     #expect(secondSnapshots == firstSnapshots)
-    #expect(throws: FeatureEvaluationError.self) {
+    do {
         _ = try service.snapshots(document: session.document)
+        Issue.record("Body display snapshots should report the injected evaluation failure.")
+    } catch let error as EditorError {
+        #expect(error.code == .evaluationFailed)
+        #expect(error.message.contains("Injected evaluator should not be used."))
     }
 }
 

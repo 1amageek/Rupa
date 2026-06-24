@@ -1157,6 +1157,7 @@ public final class AgentServer: AgentClientProtocol {
                     try DesignDisplaySnapshotService().result(
                         document: session.document,
                         objectRegistry: session.objectRegistry,
+                        currentEvaluation: session.currentEvaluation,
                         generation: session.generation,
                         dirty: session.isDirty
                     )
@@ -1167,7 +1168,9 @@ public final class AgentServer: AgentClientProtocol {
                 return .meshSummary(
                     try MeshSummaryService().summarize(
                         document: session.document,
-                        objectRegistry: session.objectRegistry
+                        objectRegistry: session.objectRegistry,
+                        currentEvaluation: session.currentEvaluation,
+                        currentGeneration: session.generation
                     )
                 )
             case let .polySplineMeshAnalysis(sessionID, sourceMesh, options, expectedGeneration):
@@ -1224,7 +1227,9 @@ public final class AgentServer: AgentClientProtocol {
                 return .topologySummary(
                     try TopologySummaryService().summarize(
                         document: session.document,
-                        objectRegistry: session.objectRegistry
+                        objectRegistry: session.objectRegistry,
+                        currentEvaluation: session.currentEvaluation,
+                        currentGeneration: session.generation
                     )
                 )
             case let .objectDimensionSummary(sessionID, targets, expectedGeneration):
@@ -1244,7 +1249,9 @@ public final class AgentServer: AgentClientProtocol {
                 return .surfaceAnalysis(
                     try SurfaceAnalysisService(options: options).analyze(
                         document: session.document,
-                        objectRegistry: session.objectRegistry
+                        objectRegistry: session.objectRegistry,
+                        currentEvaluation: session.currentEvaluation,
+                        currentGeneration: session.generation
                     )
                 )
             case let .surfaceFrames(sessionID, queries, expectedGeneration):
@@ -1263,7 +1270,9 @@ public final class AgentServer: AgentClientProtocol {
                 return .surfaceContinuitySummary(
                     try SurfaceContinuityService().summarize(
                         document: session.document,
-                        objectRegistry: session.objectRegistry
+                        objectRegistry: session.objectRegistry,
+                        currentEvaluation: session.currentEvaluation,
+                        currentGeneration: session.generation
                     )
                 )
             case let .selectTargets(sessionID, targets, expectedGeneration):

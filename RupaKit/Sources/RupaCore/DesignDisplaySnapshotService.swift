@@ -18,11 +18,15 @@ public struct DesignDisplaySnapshotService: Sendable {
 
     public func evaluatedSnapshot(
         document: DesignDocument,
-        objectRegistry: ObjectTypeRegistry = .builtIn
+        objectRegistry: ObjectTypeRegistry = .builtIn,
+        currentEvaluation: DocumentEvaluationContext? = nil,
+        currentGeneration: DocumentGeneration? = nil
     ) throws -> DesignDisplaySnapshot {
         let bodies = try bodyService.snapshots(
             document: document,
-            objectRegistry: objectRegistry
+            objectRegistry: objectRegistry,
+            currentEvaluation: currentEvaluation,
+            currentGeneration: currentGeneration
         )
         return snapshot(document: document, bodies: bodies)
     }
@@ -81,12 +85,15 @@ public struct DesignDisplaySnapshotService: Sendable {
     public func result(
         document: DesignDocument,
         objectRegistry: ObjectTypeRegistry = .builtIn,
+        currentEvaluation: DocumentEvaluationContext? = nil,
         generation: DocumentGeneration,
         dirty: Bool
     ) throws -> DesignDisplaySnapshotResult {
         let snapshot = try evaluatedSnapshot(
             document: document,
-            objectRegistry: objectRegistry
+            objectRegistry: objectRegistry,
+            currentEvaluation: currentEvaluation,
+            currentGeneration: generation
         )
         let order = document.cadDocument.designGraph.order
         return DesignDisplaySnapshotResult(

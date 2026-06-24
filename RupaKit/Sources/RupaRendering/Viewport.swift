@@ -54,6 +54,7 @@ public struct Viewport: View {
     @State private var identityHitResolver = ViewportIdentityHitResolver()
 
     private let document: DesignDocument
+    private let currentEvaluation: DocumentEvaluationContext?
     private let documentGeneration: DocumentGeneration?
     private let evaluationCache: EvaluatedDocumentCache?
     private let objectRegistry: ObjectTypeRegistry
@@ -106,6 +107,7 @@ public struct Viewport: View {
 
     public init(
         document: DesignDocument,
+        currentEvaluation: DocumentEvaluationContext? = nil,
         documentGeneration: DocumentGeneration? = nil,
         evaluationCache: EvaluatedDocumentCache? = nil,
         objectRegistry: ObjectTypeRegistry = .builtIn,
@@ -157,6 +159,7 @@ public struct Viewport: View {
         onProjectionBasisChange: ((ViewportProjectionBasis) -> Void)? = nil
     ) {
         self.document = document
+        self.currentEvaluation = currentEvaluation
         self.documentGeneration = documentGeneration
         self.evaluationCache = evaluationCache
         self.objectRegistry = objectRegistry
@@ -572,6 +575,7 @@ public struct Viewport: View {
     private func makeScene() -> ViewportScene {
         ViewportSceneBuilder(objectRegistry: objectRegistry).build(
             document: document,
+            currentEvaluation: currentEvaluation,
             documentGeneration: documentGeneration,
             evaluationCache: evaluationCache
         )
@@ -587,6 +591,7 @@ public struct Viewport: View {
             documentGeneration: documentGeneration,
             size: size,
             objectRegistry: objectRegistry,
+            currentEvaluation: currentEvaluation,
             evaluationCache: evaluationCache,
             camera: camera,
             basis: basis
@@ -602,6 +607,7 @@ public struct Viewport: View {
             document: document,
             size: size,
             objectRegistry: objectRegistry,
+            currentEvaluation: currentEvaluation,
             documentGeneration: documentGeneration,
             evaluationCache: evaluationCache,
             camera: camera,

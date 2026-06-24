@@ -416,8 +416,8 @@ public struct MainView: View {
             ZStack {
                 Viewport(
                     document: session.document,
+                    currentEvaluation: session.currentEvaluation,
                     documentGeneration: session.generation,
-                    evaluationCache: session.currentEvaluationCache,
                     objectRegistry: objectRegistry,
                     evaluationStatus: session.evaluationStatus,
                     renderInvalidation: session.renderInvalidation,
@@ -5123,7 +5123,9 @@ public struct MainView: View {
             options: surfaceAnalysisOptions.analysisOptions
         ).analyze(
             document: session.document,
-            objectRegistry: objectRegistry
+            objectRegistry: objectRegistry,
+            currentEvaluation: session.currentEvaluation,
+            currentGeneration: session.generation
         )
         guard result.counts.bSplineFaceCount > 0 else {
             return nil
@@ -5212,7 +5214,9 @@ public struct MainView: View {
 
         let result = try SurfaceContinuityService().summarize(
             document: session.document,
-            objectRegistry: objectRegistry
+            objectRegistry: objectRegistry,
+            currentEvaluation: session.currentEvaluation,
+            currentGeneration: session.generation
         )
         guard result.counts.bSplineFaceCount > 0 else {
             return nil
@@ -7386,7 +7390,12 @@ public struct MainView: View {
 
     @ViewBuilder
     private func objectShapeSection(_ nodes: [SceneNode]) -> some View {
-        let shapes = nodes.map { objectShape(for: $0) }
+        let scene = ViewportSceneBuilder(objectRegistry: objectRegistry).build(
+            document: session.document,
+            currentEvaluation: session.currentEvaluation,
+            documentGeneration: session.generation
+        )
+        let shapes = nodes.map { objectShape(for: $0, in: scene) }
         if shapes.allSatisfy({ $0 != nil }) {
             let resolvedShapes = shapes.compactMap { $0 }
             inspectorSection("Shape") {
@@ -7464,7 +7473,10 @@ public struct MainView: View {
         }
     }
 
-    private func objectShape(for node: SceneNode) -> InspectorObjectShape? {
+    private func objectShape(
+        for node: SceneNode,
+        in scene: ViewportScene
+    ) -> InspectorObjectShape? {
         guard let object = node.object,
               object.typeID != nil else {
             return nil
@@ -7472,11 +7484,6 @@ public struct MainView: View {
         guard let featureID = node.reference?.featureID else {
             return nil
         }
-        let scene = ViewportSceneBuilder(objectRegistry: objectRegistry).build(
-            document: session.document,
-            documentGeneration: session.generation,
-            evaluationCache: session.currentEvaluationCache
-        )
         guard let item = scene.items.first(where: { $0.featureID == featureID }) else {
             return nil
         }

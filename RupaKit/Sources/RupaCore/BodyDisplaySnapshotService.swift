@@ -10,13 +10,19 @@ public struct BodyDisplaySnapshotService: Sendable {
 
     public func snapshots(
         document: DesignDocument,
-        objectRegistry: ObjectTypeRegistry = .builtIn
+        objectRegistry: ObjectTypeRegistry = .builtIn,
+        currentEvaluation: DocumentEvaluationContext? = nil,
+        currentGeneration: DocumentGeneration? = nil
     ) throws -> [FeatureID: BodyDisplaySnapshot] {
-        let pipeline = pipelineOverride ?? .modelingDefault(
-            for: document,
-            objectRegistry: objectRegistry
+        let evaluatedDocument = try DocumentEvaluationContextResolver(
+            pipeline: pipelineOverride
+        ).evaluatedDocument(
+            document: document,
+            objectRegistry: objectRegistry,
+            currentEvaluation: currentEvaluation,
+            currentGeneration: currentGeneration,
+            failurePrefix: "Document must evaluate successfully before body display snapshots"
         )
-        let evaluatedDocument = try pipeline.evaluate(document.cadDocument)
         return snapshots(evaluatedDocument: evaluatedDocument)
     }
 

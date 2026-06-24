@@ -94,8 +94,13 @@ import RupaCore
     #expect(performance.currentRating == .partial)
     #expect(performance.referenceSources.contains("Rupa/CAD_QUALITY_MILESTONES.md"))
     #expect(performance.evidence.contains { evidence in
-        evidence.notes.contains("Viewport scene construction can consume a current evaluated document instead of forcing another CAD evaluation.")
+        evidence.notes.contains("Viewport scene construction, Inspector shape and surface panels, and Agent display/mesh/topology/surface summaries can consume a store-validated current evaluation context instead of forcing another CAD evaluation.")
     })
+    #expect(performance.evidence.contains { evidence in
+        evidence.sourceFiles.contains("RupaKit/Sources/RupaCore/DocumentEvaluationContext.swift")
+    })
+    #expect(!performance.openWork.contains { $0.contains("Agent summaries for current evaluation cache reuse") })
+    #expect(performance.openWork.contains { $0.contains("memory pressure") })
 }
 
 @Test func cadInteractionQualityAssessmentRecordsSelectionDimensionFacePairSupportAndOpenGaps() async throws {

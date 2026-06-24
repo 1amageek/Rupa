@@ -1120,6 +1120,7 @@ public struct ViewportModelCoordinateMapper {
         document: DesignDocument,
         size: CGSize,
         objectRegistry: ObjectTypeRegistry = .builtIn,
+        currentEvaluation: DocumentEvaluationContext? = nil,
         documentGeneration: DocumentGeneration? = nil,
         evaluationCache: EvaluatedDocumentCache? = nil,
         camera: ViewportCamera = .identity,
@@ -1127,6 +1128,7 @@ public struct ViewportModelCoordinateMapper {
     ) {
         let scene = ViewportSceneBuilder(objectRegistry: objectRegistry).build(
             document: document,
+            currentEvaluation: currentEvaluation,
             documentGeneration: documentGeneration,
             evaluationCache: evaluationCache
         )
@@ -1221,12 +1223,14 @@ public struct ViewportSceneContext {
         documentGeneration: DocumentGeneration? = nil,
         size: CGSize,
         objectRegistry: ObjectTypeRegistry = .builtIn,
+        currentEvaluation: DocumentEvaluationContext? = nil,
         evaluationCache: EvaluatedDocumentCache? = nil,
         camera: ViewportCamera = .identity,
         basis: ViewportProjectionBasis = .isometric
     ) {
         let scene = ViewportSceneBuilder(objectRegistry: objectRegistry).build(
             document: document,
+            currentEvaluation: currentEvaluation,
             documentGeneration: documentGeneration,
             evaluationCache: evaluationCache
         )
@@ -2471,6 +2475,7 @@ public struct ViewportSceneBuilder {
 
     public func build(
         document: DesignDocument,
+        currentEvaluation: DocumentEvaluationContext? = nil,
         documentGeneration: DocumentGeneration? = nil,
         evaluationCache: EvaluatedDocumentCache? = nil
     ) -> ViewportScene {
@@ -2479,6 +2484,7 @@ public struct ViewportSceneBuilder {
         let bodyDisplaySnapshots: [FeatureID: BodyDisplaySnapshot]
         if let evaluatedDocument = currentEvaluatedDocument(
             for: document,
+            currentEvaluation: currentEvaluation,
             documentGeneration: documentGeneration,
             evaluationCache: evaluationCache
         ) {
@@ -2639,9 +2645,18 @@ public struct ViewportSceneBuilder {
 
     private func currentEvaluatedDocument(
         for document: DesignDocument,
+        currentEvaluation: DocumentEvaluationContext?,
         documentGeneration: DocumentGeneration?,
         evaluationCache: EvaluatedDocumentCache?
     ) -> EvaluatedDocument? {
+        if let currentEvaluation {
+            guard let documentGeneration,
+                  currentEvaluation.generation == documentGeneration else {
+                return nil
+            }
+            return currentEvaluation.evaluatedDocument
+        }
+
         guard let documentGeneration,
               let evaluationCache else {
             return nil

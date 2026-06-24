@@ -37,7 +37,13 @@ public final class CADDocumentStore {
         self.evaluatedGeneration = evaluatedGeneration
         self.renderInvalidation = renderInvalidation
         self.evaluatedBodyCount = evaluatedBodyCount
-        self.evaluationCache = evaluationCache
+        self.evaluationCache = Self.currentValidatedEvaluationCache(
+            cache: evaluationCache,
+            document: document,
+            generation: generation,
+            evaluationStatus: evaluationStatus,
+            evaluatedGeneration: evaluatedGeneration
+        )
         self.objectRegistry = objectRegistry
         self.evaluationScheduler = evaluationScheduler
     }
@@ -53,6 +59,10 @@ public final class CADDocumentStore {
             return nil
         }
         return evaluationCache
+    }
+
+    public var currentEvaluation: DocumentEvaluationContext? {
+        currentEvaluationCache.map(DocumentEvaluationContext.init(cache:))
     }
 
     public var evaluationSnapshot: EvaluationSnapshot {
@@ -79,7 +89,6 @@ public final class CADDocumentStore {
     }
 
     public func restore(_ snapshot: DocumentSnapshot) {
-        let cacheGeneration = generation
         let cache = currentEvaluationCache
         document = snapshot.document
         generation = snapshot.generation
@@ -89,12 +98,12 @@ public final class CADDocumentStore {
         evaluatedGeneration = snapshot.evaluatedGeneration
         renderInvalidation = snapshot.renderInvalidation
         evaluatedBodyCount = snapshot.evaluatedBodyCount
-        evaluationCache = Self.preservedEvaluationCache(
+        evaluationCache = Self.currentValidatedEvaluationCache(
             cache: cache,
-            cacheGeneration: cacheGeneration,
-            restoredGeneration: snapshot.generation,
-            restoredEvaluationStatus: snapshot.evaluationStatus,
-            restoredEvaluatedGeneration: snapshot.evaluatedGeneration
+            document: snapshot.document,
+            generation: snapshot.generation,
+            evaluationStatus: snapshot.evaluationStatus,
+            evaluatedGeneration: snapshot.evaluatedGeneration
         )
     }
 
@@ -985,23 +994,33 @@ public final class CADDocumentStore {
         }
     }
 
-    private static func preservedEvaluationCache(
+    private static func currentValidatedEvaluationCache(
         cache: EvaluatedDocumentCache?,
-        cacheGeneration: DocumentGeneration,
-        restoredGeneration: DocumentGeneration,
-        restoredEvaluationStatus: EvaluationStatus,
-        restoredEvaluatedGeneration: DocumentGeneration?
+        document: DesignDocument,
+        generation: DocumentGeneration,
+        evaluationStatus: EvaluationStatus,
+        evaluatedGeneration: DocumentGeneration?
     ) -> EvaluatedDocumentCache? {
-        guard cacheGeneration == restoredGeneration,
-              restoredEvaluatedGeneration == restoredGeneration else {
+        guard evaluatedGeneration == generation else {
             return nil
         }
-        guard case .valid = restoredEvaluationStatus else {
+        guard case .valid = evaluationStatus else {
             return nil
         }
-        guard cache?.generation == restoredGeneration else {
+        guard let cache,
+              cache.generation == generation else {
             return nil
         }
-        return cache
+        do {
+            guard try cache.matches(
+                document: document,
+                generation: generation
+            ) else {
+                return nil
+            }
+            return cache
+        } catch {
+            return nil
+        }
     }
 }

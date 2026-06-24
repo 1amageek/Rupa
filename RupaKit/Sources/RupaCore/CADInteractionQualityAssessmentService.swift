@@ -786,10 +786,18 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                     label: "Evaluated document reuse and viewport picking budgets",
                     sourceFiles: [
                         "RupaKit/Sources/RupaCore/DocumentEvaluationResult.swift",
+                        "RupaKit/Sources/RupaCore/DocumentEvaluationContext.swift",
+                        "RupaKit/Sources/RupaCore/DocumentEvaluationContextResolver.swift",
                         "RupaKit/Sources/RupaCore/EvaluationScheduler.swift",
                         "RupaKit/Sources/RupaCore/CADDocumentStore.swift",
                         "RupaKit/Sources/RupaCore/BodyDisplaySnapshotService.swift",
+                        "RupaKit/Sources/RupaCore/MeshSummaryService.swift",
+                        "RupaKit/Sources/RupaCore/TopologySummaryService.swift",
+                        "RupaKit/Sources/RupaCore/SurfaceAnalysisService.swift",
+                        "RupaKit/Sources/RupaCore/SurfaceContinuityService.swift",
                         "RupaKit/Sources/RupaRendering/ViewportScene.swift",
+                        "RupaKit/Sources/RupaAgent/AgentServer.swift",
+                        "RupaKit/Sources/RupaUI/MainView.swift",
                         "RupaKit/Sources/RupaRendering/ViewportIdentityHitResolver.swift",
                         "RupaKit/Sources/RupaRendering/ViewportPickingReadinessService.swift",
                     ],
@@ -801,7 +809,7 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                     ],
                     notes: [
                         "EvaluationScheduler can return the evaluated document alongside the persistent evaluation snapshot.",
-                        "Viewport scene construction can consume a current evaluated document instead of forcing another CAD evaluation.",
+                        "Viewport scene construction, Inspector shape and surface panels, and Agent display/mesh/topology/surface summaries can consume a store-validated current evaluation context instead of forcing another CAD evaluation.",
                         "Identity picking exposes render/readback metrics and budget fallback diagnostics.",
                     ]
                 ),
@@ -809,7 +817,7 @@ public struct CADInteractionQualityAssessmentService: Sendable {
             openWork: [
                 "Measured dense-model budgets for sketch, sweep, mesh, surface, and exchange workflows.",
                 "Borrowed or copy-on-write buffers for dense meshes, control nets, and imported byte ranges where API ownership permits.",
-                "Inspector and Agent summaries for current evaluation cache reuse, memory pressure, and render budget fallback.",
+                "Inspector diagnostics for memory pressure and render budget fallback beyond current evaluation-cache reuse.",
             ],
             next: "Turn evaluation reuse and identity-picking metrics into enforced dense-model performance budgets with regression fixtures before broadening heavy CAD workflows."
         ),

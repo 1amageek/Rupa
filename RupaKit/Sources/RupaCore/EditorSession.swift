@@ -47,6 +47,10 @@ public final class EditorSession {
         store.currentEvaluationCache
     }
 
+    public var currentEvaluation: DocumentEvaluationContext? {
+        store.currentEvaluation
+    }
+
     public var evaluationSnapshot: EvaluationSnapshot {
         store.evaluationSnapshot
     }
@@ -2867,7 +2871,9 @@ public final class EditorSession {
         do {
             let result = try MeshSummaryService().summarize(
                 document: document,
-                objectRegistry: objectRegistry
+                objectRegistry: objectRegistry,
+                currentEvaluation: currentEvaluation,
+                currentGeneration: generation
             )
             reportToolStatus(result.message)
         } catch {

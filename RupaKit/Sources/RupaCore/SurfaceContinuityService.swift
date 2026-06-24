@@ -26,7 +26,9 @@ public struct SurfaceContinuityService: Sendable {
 
     public func summarize(
         document: DesignDocument,
-        objectRegistry: ObjectTypeRegistry = .builtIn
+        objectRegistry: ObjectTypeRegistry = .builtIn,
+        currentEvaluation: DocumentEvaluationContext? = nil,
+        currentGeneration: DocumentGeneration? = nil
     ) throws -> SurfaceContinuityResult {
         do {
             try document.validate(objectRegistry: objectRegistry)
@@ -49,19 +51,15 @@ public struct SurfaceContinuityService: Sendable {
             )
         }
 
-        let evaluatedDocument: EvaluatedDocument
-        do {
-            let pipeline = pipelineOverride ?? .modelingDefault(
-                for: document,
-                objectRegistry: objectRegistry
-            )
-            evaluatedDocument = try pipeline.evaluate(document.cadDocument)
-        } catch {
-            throw EditorError(
-                code: .evaluationFailed,
-                message: "Document must evaluate successfully before surface continuity summary: \(String(describing: error))"
-            )
-        }
+        let evaluatedDocument = try DocumentEvaluationContextResolver(
+            pipeline: pipelineOverride
+        ).evaluatedDocument(
+            document: document,
+            objectRegistry: objectRegistry,
+            currentEvaluation: currentEvaluation,
+            currentGeneration: currentGeneration,
+            failurePrefix: "Document must evaluate successfully before surface continuity summary"
+        )
 
         let persistentNames = persistentTopologyNames(in: evaluatedDocument)
         let bSplineFaceIDs = Set(

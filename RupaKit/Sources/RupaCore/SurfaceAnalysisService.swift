@@ -32,7 +32,9 @@ public struct SurfaceAnalysisService: Sendable {
 
     public func analyze(
         document: DesignDocument,
-        objectRegistry: ObjectTypeRegistry = .builtIn
+        objectRegistry: ObjectTypeRegistry = .builtIn,
+        currentEvaluation: DocumentEvaluationContext? = nil,
+        currentGeneration: DocumentGeneration? = nil
     ) throws -> SurfaceAnalysisResult {
         do {
             try document.validate(objectRegistry: objectRegistry)
@@ -55,19 +57,15 @@ public struct SurfaceAnalysisService: Sendable {
             )
         }
 
-        let evaluatedDocument: EvaluatedDocument
-        do {
-            let pipeline = pipelineOverride ?? .modelingDefault(
-                for: document,
-                objectRegistry: objectRegistry
-            )
-            evaluatedDocument = try pipeline.evaluate(document.cadDocument)
-        } catch {
-            throw EditorError(
-                code: .evaluationFailed,
-                message: "Document must evaluate successfully before surface analysis: \(String(describing: error))"
-            )
-        }
+        let evaluatedDocument = try DocumentEvaluationContextResolver(
+            pipeline: pipelineOverride
+        ).evaluatedDocument(
+            document: document,
+            objectRegistry: objectRegistry,
+            currentEvaluation: currentEvaluation,
+            currentGeneration: currentGeneration,
+            failurePrefix: "Document must evaluate successfully before surface analysis"
+        )
 
         let persistentNames = persistentTopologyNames(in: evaluatedDocument)
         let sceneNodeIDsByFeatureID = sceneNodeIDsByFeatureID(in: document)

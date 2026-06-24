@@ -36,7 +36,9 @@ public struct TopologySummaryService: Sendable {
 
     public func summarize(
         document: DesignDocument,
-        objectRegistry: ObjectTypeRegistry = .builtIn
+        objectRegistry: ObjectTypeRegistry = .builtIn,
+        currentEvaluation: DocumentEvaluationContext? = nil,
+        currentGeneration: DocumentGeneration? = nil
     ) throws -> TopologySummaryResult {
         do {
             try document.validate(objectRegistry: objectRegistry)
@@ -59,19 +61,15 @@ public struct TopologySummaryService: Sendable {
             )
         }
 
-        let evaluatedDocument: EvaluatedDocument
-        do {
-            let pipeline = pipelineOverride ?? .modelingDefault(
-                for: document,
-                objectRegistry: objectRegistry
-            )
-            evaluatedDocument = try pipeline.evaluate(document.cadDocument)
-        } catch {
-            throw EditorError(
-                code: .evaluationFailed,
-                message: "Document must evaluate successfully before topology summary: \(String(describing: error))"
-            )
-        }
+        let evaluatedDocument = try DocumentEvaluationContextResolver(
+            pipeline: pipelineOverride
+        ).evaluatedDocument(
+            document: document,
+            objectRegistry: objectRegistry,
+            currentEvaluation: currentEvaluation,
+            currentGeneration: currentGeneration,
+            failurePrefix: "Document must evaluate successfully before topology summary"
+        )
 
         let sceneNodeIDsByFeatureID = sceneNodeIDsByFeatureID(in: document)
         let entries = evaluatedDocument.generatedNames

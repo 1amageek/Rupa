@@ -10,7 +10,9 @@ public struct MeshSummaryService: Sendable {
 
     public func summarize(
         document: DesignDocument,
-        objectRegistry: ObjectTypeRegistry = .builtIn
+        objectRegistry: ObjectTypeRegistry = .builtIn,
+        currentEvaluation: DocumentEvaluationContext? = nil,
+        currentGeneration: DocumentGeneration? = nil
     ) throws -> MeshSummaryResult {
         do {
             try document.validate(objectRegistry: objectRegistry)
@@ -33,19 +35,15 @@ public struct MeshSummaryService: Sendable {
             )
         }
 
-        let evaluatedDocument: EvaluatedDocument
-        do {
-            let pipeline = pipelineOverride ?? .modelingDefault(
-                for: document,
-                objectRegistry: objectRegistry
-            )
-            evaluatedDocument = try pipeline.evaluate(document.cadDocument)
-        } catch {
-            throw EditorError(
-                code: .evaluationFailed,
-                message: "Document must evaluate successfully before mesh summary: \(String(describing: error))"
-            )
-        }
+        let evaluatedDocument = try DocumentEvaluationContextResolver(
+            pipeline: pipelineOverride
+        ).evaluatedDocument(
+            document: document,
+            objectRegistry: objectRegistry,
+            currentEvaluation: currentEvaluation,
+            currentGeneration: currentGeneration,
+            failurePrefix: "Document must evaluate successfully before mesh summary"
+        )
 
         var accumulator = MeshBoundsAccumulator()
         var bodies: [MeshSummaryResult.Body] = []
