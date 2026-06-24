@@ -834,7 +834,8 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
             try source.validate()
             let expectedTransforms = try PatternArrayInstancePlanner().transforms(
                 for: source.distribution,
-                parameters: cadDocument.parameters
+                parameters: cadDocument.parameters,
+                cadDocument: cadDocument
             )
             guard expectedTransforms.count == source.outputInstanceIDs.count else {
                 throw DocumentValidationError.invalidProductMetadata(

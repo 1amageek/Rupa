@@ -676,7 +676,14 @@ import SwiftCAD
     #expect(patternArray.summary.contains("component instances"))
     #expect(patternArray.summary.contains("rectangular"))
     #expect(patternArray.summary.contains("radial"))
-    #expect(patternArray.optionMatrix.map(\.name) == ["distribution", "spacingMode", "axisCount", "outputMode"])
+    #expect(patternArray.summary.contains("curve"))
+    #expect(patternArray.optionMatrix.map(\.name) == [
+        "distribution",
+        "spacingMode",
+        "axisCount",
+        "curveAlignment",
+        "outputMode",
+    ])
     let distributionMode = try #require(
         patternArray.optionMatrix.first { $0.name == "distribution" }
     )
@@ -686,8 +693,12 @@ import SwiftCAD
     let patternOutputMode = try #require(
         patternArray.optionMatrix.first { $0.name == "outputMode" }
     )
-    #expect(distributionMode.supportedValues == ["rectangular", "radial"])
+    let curveAlignment = try #require(
+        patternArray.optionMatrix.first { $0.name == "curveAlignment" }
+    )
+    #expect(distributionMode.supportedValues == ["rectangular", "radial", "curve"])
     #expect(spacingMode.supportedValues == ["spacing", "extent"])
+    #expect(curveAlignment.supportedValues == ["normal", "parallel", "transport"])
     #expect(patternOutputMode.supportedValues == ["componentInstance"])
 
     #expect(designDisplaySnapshot.category == .read)
@@ -4472,6 +4483,85 @@ import SwiftCAD
     }
     let source = try #require(session.document.productMetadata.patternArrays.values.first {
         $0.name == "Agent Radial Array"
+    })
+
+    #expect(arrayResult.commandName == "createPatternArray")
+    #expect(arrayResult.generation == DocumentGeneration(3))
+    #expect(source.outputInstanceIDs.count == 3)
+}
+
+@Test func agentDispatchesCurvePatternArrayCommandThroughAutomationAndCore() async throws {
+    let server = AgentServer()
+    let sessionID = UUID()
+    let session = EditorSession()
+    server.register(session: session, id: sessionID)
+
+    let createResponse = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .createExtrudedRectangle(
+                name: "Agent Curve Array Body",
+                plane: .xy,
+                width: .length(10.0, .millimeter),
+                height: .length(6.0, .millimeter),
+                depth: .length(4.0, .millimeter),
+                direction: .normal
+            ),
+            expectedGeneration: DocumentGeneration(0)
+        )
+    )
+    guard case .command = createResponse else {
+        #expect(Bool(false))
+        return
+    }
+    let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let bodySceneNode = try #require(agentBodySceneNode(for: bodyFeatureID, in: session.document))
+    let definitionResponse = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .createComponentDefinition(
+                name: "Agent Curve Source",
+                rootSceneNodeIDs: [bodySceneNode.id]
+            ),
+            expectedGeneration: DocumentGeneration(1)
+        )
+    )
+    guard case .command = definitionResponse else {
+        #expect(Bool(false))
+        return
+    }
+    let definition = try #require(session.document.productMetadata.componentDefinitions.values.first)
+
+    let arrayResponse = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .createPatternArray(
+                name: "Agent Curve Array",
+                definitionID: definition.id,
+                distribution: .curve(
+                    CurvePatternArray(
+                        path: .polyline(
+                            points: [
+                                .origin,
+                                Point3D(x: 0.03, y: 0.0, z: 0.0),
+                            ],
+                            normal: .unitZ
+                        ),
+                        copyCount: 3,
+                        alignment: .parallel
+                    )
+                ),
+                outputMode: .componentInstance
+            ),
+            expectedGeneration: DocumentGeneration(2)
+        )
+    )
+    guard case .command(let arrayResult) = arrayResponse else {
+        #expect(Bool(false))
+        return
+    }
+    let source = try #require(session.document.productMetadata.patternArrays.values.first {
+        $0.name == "Agent Curve Array"
     })
 
     #expect(arrayResult.commandName == "createPatternArray")

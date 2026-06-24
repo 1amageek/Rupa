@@ -357,7 +357,7 @@ public struct CADInteractionQualityAssessmentService: Sendable {
             ],
             evidence: [
                 CADInteractionQualityEvidence(
-                    label: "Source-owned rectangular and radial component-instance array command",
+                    label: "Source-owned rectangular, radial, and curve component-instance array command",
                     sourceFiles: [
                         "RupaKit/Sources/RupaCore/ComponentDefinition.swift",
                         "RupaKit/Sources/RupaCore/ComponentInstance.swift",
@@ -376,20 +376,21 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                         "RupaKit/Tests/RupaAgentTests/AgentServerTests.swift",
                     ],
                     notes: [
-                        "Rectangular and radial arrays now persist a PatternArraySource and emit component instances without cloning CAD feature geometry.",
+                        "Rectangular, radial, and curve arrays now persist a PatternArraySource and emit component instances without cloning CAD feature geometry.",
                         "Rectangular spacing and extent modes support one- or two-axis lattices through Core, Automation, and Agent command paths.",
                         "Radial angle spacing/extent, center, axis, count, and optional radial repetition support Core, Automation, and Agent command paths.",
-                        "Curve Array, Place, independent-copy output, update, and explode workflows remain open.",
+                        "Curve Array path distribution, twist, scale, Normal, Parallel, Transport, ratio extent, distance extent, explicit polyline paths, and source sketch-entity paths support Core, Automation, and Agent command paths.",
+                        "Place, independent-copy output, update, explode, and viewport editing workflows remain open.",
                     ]
                 ),
             ],
             openWork: [
                 "Rectangular independent-copy output, source update, and explode workflows.",
                 "Viewport preview and Inspector affordances for radial array center, angle, count, repetition, and output mode.",
-                "Curve array distribution, twist, scale, alignment, and instance options.",
+                "Viewport preview and Inspector affordances for curve array path selection, twist, scale, alignment, extent, and output mode.",
                 "Viewport preview and Inspector affordances for array handles, copy count, spacing, extent, and output mode.",
             ],
-            next: "Extend the Pattern Array source model with curve distribution frames, radial and curve UI preview handles, and update/explode lifecycle commands."
+            next: "Add radial and curve UI preview handles, curve path picking affordances, and update/explode lifecycle commands."
         ),
         entry(
             area: .sectionAnalysis,

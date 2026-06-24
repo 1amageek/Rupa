@@ -4048,6 +4048,249 @@ import Testing
 }
 
 @MainActor
+@Test func patternArrayCommandCreatesCurveDistributionFromPolylinePath() async throws {
+    let session = EditorSession()
+    _ = try #require(session.createDefaultExtrudedRectangle())
+    let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let bodySceneNodeID = try #require(commandStackBodySceneNodeID(for: bodyFeatureID, in: session.document))
+    _ = try session.execute(.createComponentDefinition(name: "Curve Array Source", rootSceneNodeIDs: [bodySceneNodeID]))
+    let definition = try #require(session.document.productMetadata.componentDefinitions.values.first)
+
+    let result = try session.execute(
+        .createPatternArray(
+            name: "Curve Array",
+            definitionID: definition.id,
+            distribution: .curve(
+                CurvePatternArray(
+                    path: .polyline(
+                        points: [
+                            .origin,
+                            Point3D(x: 0.03, y: 0.0, z: 0.0),
+                        ],
+                        normal: .unitZ
+                    ),
+                    copyCount: 3,
+                    twist: .angle(90.0, .degree),
+                    endScale: .scalar(2.0),
+                    alignment: .parallel,
+                    extent: .scalar(1.0),
+                    extentMode: .ratio
+                )
+            ),
+            outputMode: .componentInstance
+        )
+    )
+
+    let source = try #require(session.document.productMetadata.patternArrays.values.first {
+        $0.name == "Curve Array"
+    })
+    let firstInstance = try #require(
+        session.document.productMetadata.componentInstances[source.outputInstanceIDs[0]]
+    )
+    let thirdInstance = try #require(
+        session.document.productMetadata.componentInstances[source.outputInstanceIDs[2]]
+    )
+    let firstValues = firstInstance.localTransform.matrix.values
+    let thirdValues = thirdInstance.localTransform.matrix.values
+
+    #expect(result.commandName == "createPatternArray")
+    #expect(source.outputInstanceIDs.count == 3)
+    #expect(commandStackApproximatelyEqual(firstValues[0], 4.0 / 3.0))
+    #expect(commandStackApproximatelyEqual(firstValues[12], 0.01))
+    #expect(commandStackApproximatelyEqual(thirdValues[0], 2.0))
+    #expect(commandStackApproximatelyEqual(thirdValues[12], 0.03))
+}
+
+@MainActor
+@Test func patternArrayCurveDistributionRegeneratesFromSketchEntityPathParameter() async throws {
+    let session = EditorSession()
+    _ = try #require(session.createDefaultExtrudedRectangle())
+    _ = try session.execute(
+        .upsertParameter(
+            name: "curveArrayPathLength",
+            expression: .constant(.length(20.0, unit: .millimeter)),
+            kind: .length
+        )
+    )
+    let pathLength = try #require(
+        session.document.cadDocument.parameters.parameters.values.first { $0.name == "curveArrayPathLength" }
+    )
+    let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let bodySceneNodeID = try #require(commandStackBodySceneNodeID(for: bodyFeatureID, in: session.document))
+    _ = try session.execute(.createComponentDefinition(name: "Curve Parameter Source", rootSceneNodeIDs: [bodySceneNodeID]))
+    let definition = try #require(session.document.productMetadata.componentDefinitions.values.first {
+        $0.name == "Curve Parameter Source"
+    })
+    _ = try session.execute(
+        .createLineSketch(
+            name: "Curve Array Path",
+            plane: .xy,
+            start: SketchPoint(x: .length(0.0, .millimeter), y: .length(0.0, .millimeter)),
+            end: SketchPoint(x: .reference(pathLength.id), y: .length(0.0, .millimeter))
+        )
+    )
+    let pathFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let pathFeature = try #require(session.document.cadDocument.designGraph.nodes[pathFeatureID])
+    guard case let .sketch(pathSketch) = pathFeature.operation else {
+        #expect(Bool(false))
+        return
+    }
+    let pathEntityID = try #require(pathSketch.entities.first { _, entity in
+        guard case .line = entity else {
+            return false
+        }
+        return true
+    }?.key)
+
+    _ = try session.execute(
+        .createPatternArray(
+            name: "Sketch Path Curve Array",
+            definitionID: definition.id,
+            distribution: .curve(
+                CurvePatternArray(
+                    path: .sketchEntity(featureID: pathFeatureID, entityID: pathEntityID),
+                    copyCount: 2,
+                    alignment: .parallel
+                )
+            ),
+            outputMode: .componentInstance
+        )
+    )
+    let source = try #require(session.document.productMetadata.patternArrays.values.first {
+        $0.name == "Sketch Path Curve Array"
+    })
+    let outputIDs = source.outputInstanceIDs
+    let initialFirst = try #require(session.document.productMetadata.componentInstances[outputIDs[0]])
+    let initialSecond = try #require(session.document.productMetadata.componentInstances[outputIDs[1]])
+
+    _ = try session.execute(
+        .upsertParameter(
+            name: "curveArrayPathLength",
+            expression: .constant(.length(40.0, unit: .millimeter)),
+            kind: .length
+        )
+    )
+
+    let regeneratedSource = try #require(session.document.productMetadata.patternArrays[source.id])
+    let regeneratedFirst = try #require(session.document.productMetadata.componentInstances[outputIDs[0]])
+    let regeneratedSecond = try #require(session.document.productMetadata.componentInstances[outputIDs[1]])
+    #expect(regeneratedSource.outputInstanceIDs == outputIDs)
+    #expect(commandStackApproximatelyEqual(initialFirst.localTransform.matrix.values[12], 0.01))
+    #expect(commandStackApproximatelyEqual(initialSecond.localTransform.matrix.values[12], 0.02))
+    #expect(commandStackApproximatelyEqual(regeneratedFirst.localTransform.matrix.values[12], 0.02))
+    #expect(commandStackApproximatelyEqual(regeneratedSecond.localTransform.matrix.values[12], 0.04))
+}
+
+@MainActor
+@Test func patternArrayCurveDistributionUsesExactArcLengthForSketchArcPath() async throws {
+    let session = EditorSession()
+    _ = try #require(session.createDefaultExtrudedRectangle())
+    let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let bodySceneNodeID = try #require(commandStackBodySceneNodeID(for: bodyFeatureID, in: session.document))
+    _ = try session.execute(.createComponentDefinition(name: "Exact Arc Array Source", rootSceneNodeIDs: [bodySceneNodeID]))
+    let definition = try #require(session.document.productMetadata.componentDefinitions.values.first {
+        $0.name == "Exact Arc Array Source"
+    })
+    _ = try session.execute(
+        .createArcSketch(
+            name: "Exact Arc Array Path",
+            plane: .xy,
+            center: SketchPoint(x: .length(0.0, .millimeter), y: .length(0.0, .millimeter)),
+            radius: .length(20.0, .millimeter),
+            startAngle: .angle(0.0, .degree),
+            endAngle: .angle(90.0, .degree)
+        )
+    )
+    let pathFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let pathFeature = try #require(session.document.cadDocument.designGraph.nodes[pathFeatureID])
+    guard case let .sketch(pathSketch) = pathFeature.operation else {
+        #expect(Bool(false))
+        return
+    }
+    let pathEntityID = try #require(pathSketch.entities.first { _, entity in
+        guard case .arc = entity else {
+            return false
+        }
+        return true
+    }?.key)
+
+    _ = try session.execute(
+        .createPatternArray(
+            name: "Exact Arc Curve Array",
+            definitionID: definition.id,
+            distribution: .curve(
+                CurvePatternArray(
+                    path: .sketchEntity(featureID: pathFeatureID, entityID: pathEntityID),
+                    copyCount: 2,
+                    alignment: .parallel
+                )
+            ),
+            outputMode: .componentInstance
+        )
+    )
+    let source = try #require(session.document.productMetadata.patternArrays.values.first {
+        $0.name == "Exact Arc Curve Array"
+    })
+    let first = try #require(session.document.productMetadata.componentInstances[source.outputInstanceIDs[0]])
+    let second = try #require(session.document.productMetadata.componentInstances[source.outputInstanceIDs[1]])
+    let radius = 0.02
+    let midpointCoordinate = radius / sqrt(2.0)
+
+    #expect(commandStackApproximatelyEqual(first.localTransform.matrix.values[12], midpointCoordinate - radius))
+    #expect(commandStackApproximatelyEqual(first.localTransform.matrix.values[13], midpointCoordinate))
+    #expect(commandStackApproximatelyEqual(second.localTransform.matrix.values[12], -radius))
+    #expect(commandStackApproximatelyEqual(second.localTransform.matrix.values[13], radius))
+}
+
+@MainActor
+@Test func patternArrayCurveDistributionRejectsSubToleranceRatioExtentBeforeMutation() async throws {
+    let session = EditorSession()
+    _ = try #require(session.createDefaultExtrudedRectangle())
+    let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let bodySceneNodeID = try #require(commandStackBodySceneNodeID(for: bodyFeatureID, in: session.document))
+    _ = try session.execute(.createComponentDefinition(name: "Tiny Ratio Source", rootSceneNodeIDs: [bodySceneNodeID]))
+    let definition = try #require(session.document.productMetadata.componentDefinitions.values.first {
+        $0.name == "Tiny Ratio Source"
+    })
+    let generation = session.generation
+    let patternArrayCount = session.document.productMetadata.patternArrays.count
+
+    var caught: EditorError?
+    do {
+        _ = try session.execute(
+            .createPatternArray(
+                name: "Tiny Ratio Curve Array",
+                definitionID: definition.id,
+                distribution: .curve(
+                    CurvePatternArray(
+                        path: .polyline(
+                            points: [
+                                .origin,
+                                Point3D(x: 0.03, y: 0.0, z: 0.0),
+                            ],
+                            normal: .unitZ
+                        ),
+                        copyCount: 1,
+                        alignment: .parallel,
+                        extent: .scalar(1.0e-7),
+                        extentMode: .ratio
+                    )
+                ),
+                outputMode: .componentInstance
+            )
+        )
+        Issue.record("Curve pattern array ratio extents must produce a meaningful path distance.")
+    } catch let error as EditorError {
+        caught = error
+    }
+
+    #expect(caught?.code == .commandInvalid)
+    #expect(caught?.message.contains("positive path distance") == true)
+    #expect(session.generation == generation)
+    #expect(session.document.productMetadata.patternArrays.count == patternArrayCount)
+}
+
+@MainActor
 @Test func rectangularPatternArrayRegeneratesOutputTransformsFromParameterSource() async throws {
     let session = EditorSession()
     _ = try #require(session.createDefaultExtrudedRectangle())

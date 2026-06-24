@@ -135,19 +135,20 @@ public final class AgentServer: AgentClientProtocol {
         capability(
             "createPatternArray",
             category: .pattern,
-            summary: "Create a source-owned pattern array that emits component instances from a component definition with rectangular or radial distribution, preserving source ownership instead of cloning CAD feature geometry.",
+            summary: "Create a source-owned pattern array that emits component instances from a component definition with rectangular, radial, or curve distribution, preserving source ownership instead of cloning CAD feature geometry.",
             access: .automationCommand,
             mutatesDocument: true,
             discovery: [.designDisplaySnapshot],
             targets: [.sceneNode],
-            failureMode: "Rejects missing component definitions, invalid linear or angular axis directions, non-positive copy counts, non-length distances, non-angle rotations, zero spacing, zero angles, duplicate array names, stale output transforms, and stale generations before mutation.",
+            failureMode: "Rejects missing component definitions, invalid linear or angular axis directions, invalid curve paths, non-positive copy counts, non-length distances, non-angle rotations, non-scalar ratio or scale values, zero spacing, zero angles, duplicate array names, stale output transforms, and stale generations before mutation.",
             optionMatrix: [
                 AgentCapabilityDescriptor.OptionAxis(
                     name: "distribution",
-                    supportedValues: ["rectangular", "radial"],
+                    supportedValues: ["rectangular", "radial", "curve"],
                     notes: [
                         "Rectangular distributions support one- or two-axis linear spacing or extent.",
                         "Radial distributions support center, rotation axis, angle spacing or extent, copy count, and optional radial repetition.",
+                        "Curve distributions support explicit polyline paths or source sketch-entity paths with twist, scale, alignment, and extent controls.",
                     ]
                 ),
                 AgentCapabilityDescriptor.OptionAxis(
@@ -162,10 +163,20 @@ public final class AgentServer: AgentClientProtocol {
                 ),
                 AgentCapabilityDescriptor.OptionAxis(
                     name: "axisCount",
-                    supportedValues: ["one", "two", "angular", "angularWithRadialRepetition"],
+                    supportedValues: ["one", "two", "angular", "angularWithRadialRepetition", "curvePath"],
                     notes: [
                         "Two-axis arrays generate the rectangular lattice excluding the original source position.",
                         "Radial repetition generates additional rings while excluding the original source position.",
+                        "Curve path arrays place generated copies along the resolved path excluding the original source position.",
+                    ]
+                ),
+                AgentCapabilityDescriptor.OptionAxis(
+                    name: "curveAlignment",
+                    supportedValues: ["normal", "parallel", "transport"],
+                    notes: [
+                        "Normal aligns generated copies to the path tangent and local normal frame.",
+                        "Parallel preserves the original orientation while following path positions.",
+                        "Transport follows the path while minimizing frame flips along complex paths.",
                     ]
                 ),
                 AgentCapabilityDescriptor.OptionAxis(

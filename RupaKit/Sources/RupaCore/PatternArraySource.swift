@@ -15,6 +15,17 @@ public enum PatternArrayAngleMode: String, Codable, Hashable, Sendable {
     case extent
 }
 
+public enum PatternArrayCurveAlignment: String, Codable, Hashable, Sendable {
+    case normal
+    case parallel
+    case transport
+}
+
+public enum PatternArrayCurveExtentMode: String, Codable, Hashable, Sendable {
+    case distance
+    case ratio
+}
+
 public struct PatternArrayGenerationBudget: Codable, Hashable, Sendable {
     public var maximumOutputInstanceCount: Int
 
@@ -161,9 +172,88 @@ public struct RadialPatternArray: Codable, Hashable, Sendable {
     }
 }
 
+public enum PatternArrayCurvePath: Codable, Hashable, Sendable {
+    case polyline(points: [Point3D], normal: Vector3D?)
+    case sketchEntity(featureID: FeatureID, entityID: SketchEntityID)
+
+    public func validate(tolerance: ModelingTolerance = .standard) throws {
+        try tolerance.validate()
+        switch self {
+        case .polyline(let points, let normal):
+            guard points.count >= 2 else {
+                throw DocumentValidationError.invalidProductMetadata(
+                    "Curve pattern array polyline paths must contain at least two points."
+                )
+            }
+            for point in points {
+                try point.validate()
+            }
+            for index in 1 ..< points.count {
+                guard (points[index] - points[index - 1]).length > tolerance.distance else {
+                    throw DocumentValidationError.invalidProductMetadata(
+                        "Curve pattern array polyline paths must not contain degenerate spans."
+                    )
+                }
+            }
+            if let normal {
+                try normal.validate()
+                guard normal.length > tolerance.distance else {
+                    throw DocumentValidationError.invalidProductMetadata(
+                        "Curve pattern array path normal must be non-zero."
+                    )
+                }
+            }
+        case .sketchEntity:
+            break
+        }
+    }
+}
+
+public struct CurvePatternArray: Codable, Hashable, Sendable {
+    public var path: PatternArrayCurvePath
+    public var copyCount: Int
+    public var twist: CADExpression
+    public var endScale: CADExpression
+    public var alignment: PatternArrayCurveAlignment
+    public var extent: CADExpression
+    public var extentMode: PatternArrayCurveExtentMode
+
+    public init(
+        path: PatternArrayCurvePath,
+        copyCount: Int,
+        twist: CADExpression = .angle(0.0, .radian),
+        endScale: CADExpression = .scalar(1.0),
+        alignment: PatternArrayCurveAlignment = .transport,
+        extent: CADExpression = .scalar(1.0),
+        extentMode: PatternArrayCurveExtentMode = .ratio
+    ) {
+        self.path = path
+        self.copyCount = copyCount
+        self.twist = twist
+        self.endScale = endScale
+        self.alignment = alignment
+        self.extent = extent
+        self.extentMode = extentMode
+    }
+
+    public func validate(tolerance: ModelingTolerance = .standard) throws {
+        try tolerance.validate()
+        try path.validate(tolerance: tolerance)
+        guard copyCount > 0 else {
+            throw DocumentValidationError.invalidProductMetadata(
+                "Curve pattern array copy count must be positive."
+            )
+        }
+        try twist.validateLiteralQuantities()
+        try endScale.validateLiteralQuantities()
+        try extent.validateLiteralQuantities()
+    }
+}
+
 public enum PatternArrayDistribution: Codable, Hashable, Sendable {
     case rectangular(RectangularPatternArray)
     case radial(RadialPatternArray)
+    case curve(CurvePatternArray)
 
     public func validate(tolerance: ModelingTolerance = .standard) throws {
         switch self {
@@ -171,6 +261,8 @@ public enum PatternArrayDistribution: Codable, Hashable, Sendable {
             try rectangular.validate(tolerance: tolerance)
         case .radial(let radial):
             try radial.validate(tolerance: tolerance)
+        case .curve(let curve):
+            try curve.validate(tolerance: tolerance)
         }
     }
 }

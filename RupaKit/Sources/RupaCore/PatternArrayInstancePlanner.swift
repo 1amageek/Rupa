@@ -7,6 +7,7 @@ public struct PatternArrayInstancePlanner: Sendable {
     public func transforms(
         for distribution: PatternArrayDistribution,
         parameters: ParameterTable,
+        cadDocument: CADDocument? = nil,
         tolerance: ModelingTolerance = .standard,
         budget: PatternArrayGenerationBudget = .standard
     ) throws -> [Transform3D] {
@@ -24,6 +25,14 @@ public struct PatternArrayInstancePlanner: Sendable {
             return try radialTransforms(
                 for: radial,
                 parameters: parameters,
+                tolerance: tolerance,
+                budget: budget
+            )
+        case .curve(let curve):
+            return try curveTransforms(
+                for: curve,
+                parameters: parameters,
+                cadDocument: cadDocument,
                 tolerance: tolerance,
                 budget: budget
             )
@@ -184,6 +193,247 @@ public struct PatternArrayInstancePlanner: Sendable {
         return multiplied.partialValue - 1
     }
 
+    private func curveTransforms(
+        for curve: CurvePatternArray,
+        parameters: ParameterTable,
+        cadDocument: CADDocument?,
+        tolerance: ModelingTolerance,
+        budget: PatternArrayGenerationBudget
+    ) throws -> [Transform3D] {
+        try curve.validate(tolerance: tolerance)
+        guard curve.copyCount <= budget.maximumOutputInstanceCount else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Pattern array output count exceeds the generation budget."
+            )
+        }
+        let geometry = try curvePathGeometry(
+            for: curve.path,
+            cadDocument: cadDocument,
+            tolerance: tolerance
+        )
+        let pathLength = geometry.totalLength
+        let distributionLength = try curveDistributionLength(
+            for: curve,
+            pathLength: pathLength,
+            parameters: parameters,
+            tolerance: tolerance
+        )
+        let twist = try resolvedAngle(curve.twist, parameters: parameters)
+        let endScale = try resolvedScalar(curve.endScale, parameters: parameters)
+        guard endScale.isFinite,
+              endScale > tolerance.distance else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Curve pattern array scale must resolve to a positive finite scalar."
+            )
+        }
+
+        var transforms: [Transform3D] = []
+        transforms.reserveCapacity(curve.copyCount)
+        var transportFrame: CurvePatternFrame?
+        for index in 1 ... curve.copyCount {
+            let progress = Double(index) / Double(curve.copyCount)
+            let sample = try geometry.sample(
+                at: distributionLength * progress,
+                tolerance: tolerance
+            )
+            let frame = try curveFrame(
+                tangent: sample.tangent,
+                referenceNormal: geometry.referenceNormal,
+                alignment: curve.alignment,
+                previousTransportFrame: &transportFrame,
+                tolerance: tolerance
+            )
+            transforms.append(
+                try curveTransform(
+                    point: sample.point,
+                    origin: geometry.origin,
+                    frame: frame,
+                    twist: twist * progress,
+                    scale: 1.0 + (endScale - 1.0) * progress,
+                    alignment: curve.alignment
+                )
+            )
+        }
+        return transforms
+    }
+
+    private func curvePathGeometry(
+        for path: PatternArrayCurvePath,
+        cadDocument: CADDocument?,
+        tolerance: ModelingTolerance
+    ) throws -> CurvePatternPathSampler.Geometry {
+        let sampler = CurvePatternPathSampler(tolerance: tolerance)
+        switch path {
+        case .polyline(let points, let normal):
+            return try sampler.geometry(
+                points: points,
+                referenceNormal: normal ?? .unitZ
+            )
+        case .sketchEntity(let featureID, let entityID):
+            guard let cadDocument else {
+                throw EditorError(
+                    code: .commandInvalid,
+                    message: "Curve pattern array sketch paths require a CAD document."
+                )
+            }
+            guard let node = cadDocument.designGraph.nodes[featureID],
+                  case let .sketch(sketch) = node.operation,
+                  sketch.entities[entityID] != nil else {
+                throw EditorError(
+                    code: .referenceUnresolved,
+                    message: "Curve pattern array sketch path could not be resolved."
+                )
+            }
+            let resolvedParameters = try ParameterResolver().resolve(cadDocument.parameters)
+            let curves = try SketchCurveExtractor(tolerance: tolerance).extractCurves(
+                from: sketch,
+                sourceFeatureID: featureID,
+                parameters: resolvedParameters
+            )
+            guard let curve = curves.first(where: { $0.source == .sketchEntity(entityID) }) else {
+                throw EditorError(
+                    code: .referenceUnresolved,
+                    message: "Curve pattern array sketch path must reference a curve entity."
+                )
+            }
+            return try sampler.geometry(
+                for: curve,
+                referenceNormal: sketchPlaneNormal(sketch.plane, tolerance: tolerance)
+            )
+        }
+    }
+
+    private func curveDistributionLength(
+        for curve: CurvePatternArray,
+        pathLength: Double,
+        parameters: ParameterTable,
+        tolerance: ModelingTolerance
+    ) throws -> Double {
+        switch curve.extentMode {
+        case .distance:
+            let distance = try resolvedLength(curve.extent, parameters: parameters)
+            guard distance.isFinite,
+                  distance > tolerance.distance,
+                  distance <= pathLength + tolerance.distance else {
+                throw EditorError(
+                    code: .commandInvalid,
+                    message: "Curve pattern array distance extent must fit within the path length."
+                )
+            }
+            return min(distance, pathLength)
+        case .ratio:
+            let ratio = try resolvedScalar(curve.extent, parameters: parameters)
+            guard ratio.isFinite,
+                  ratio > 0.0,
+                  ratio <= 1.0 else {
+                throw EditorError(
+                    code: .commandInvalid,
+                    message: "Curve pattern array ratio extent must resolve to a scalar greater than 0 and no greater than 1."
+                )
+            }
+            let distance = pathLength * ratio
+            guard distance > tolerance.distance else {
+                throw EditorError(
+                    code: .commandInvalid,
+                    message: "Curve pattern array ratio extent must resolve to a positive path distance."
+                )
+            }
+            return distance
+        }
+    }
+
+    private func curveFrame(
+        tangent: Vector3D,
+        referenceNormal: Vector3D,
+        alignment: PatternArrayCurveAlignment,
+        previousTransportFrame: inout CurvePatternFrame?,
+        tolerance: ModelingTolerance
+    ) throws -> CurvePatternFrame {
+        switch alignment {
+        case .parallel:
+            return CurvePatternFrame(
+                tangent: .unitX,
+                normal: .unitY,
+                binormal: .unitZ
+            )
+        case .normal:
+            return try normalCurveFrame(
+                tangent: tangent,
+                referenceNormal: referenceNormal,
+                tolerance: tolerance
+            )
+        case .transport:
+            let frame: CurvePatternFrame
+            if let previousTransportFrame,
+               let transportedNormal = try projectedUnitVector(
+                previousTransportFrame.normal,
+                perpendicularTo: tangent,
+                tolerance: tolerance
+               ) {
+                let binormal = try tangent.cross(transportedNormal).normalized(tolerance: tolerance.distance)
+                frame = CurvePatternFrame(
+                    tangent: tangent,
+                    normal: transportedNormal,
+                    binormal: binormal
+                )
+            } else {
+                frame = try normalCurveFrame(
+                    tangent: tangent,
+                    referenceNormal: referenceNormal,
+                    tolerance: tolerance
+                )
+            }
+            previousTransportFrame = frame
+            return frame
+        }
+    }
+
+    private func normalCurveFrame(
+        tangent: Vector3D,
+        referenceNormal: Vector3D,
+        tolerance: ModelingTolerance
+    ) throws -> CurvePatternFrame {
+        let normal: Vector3D
+        if let projectedNormal = try projectedUnitVector(
+            referenceNormal,
+            perpendicularTo: tangent,
+            tolerance: tolerance
+        ) {
+            normal = projectedNormal
+        } else {
+            normal = try fallbackNormal(for: tangent, tolerance: tolerance)
+        }
+        let binormal = try tangent.cross(normal).normalized(tolerance: tolerance.distance)
+        return CurvePatternFrame(
+            tangent: tangent,
+            normal: normal,
+            binormal: binormal
+        )
+    }
+
+    private func projectedUnitVector(
+        _ vector: Vector3D,
+        perpendicularTo axis: Vector3D,
+        tolerance: ModelingTolerance
+    ) throws -> Vector3D? {
+        let projection = vector - axis * vector.dot(axis)
+        guard projection.length > tolerance.distance else {
+            return nil
+        }
+        return try projection.normalized(tolerance: tolerance.distance)
+    }
+
+    private func fallbackNormal(
+        for tangent: Vector3D,
+        tolerance: ModelingTolerance
+    ) throws -> Vector3D {
+        let helper = abs(tangent.z) < 0.9 ? Vector3D.unitZ : Vector3D.unitY
+        let normal = helper - tangent * helper.dot(tangent)
+        return try normal.normalized(tolerance: tolerance.distance)
+    }
+
     private func stepVector(
         for axis: PatternArrayLinearAxis,
         parameters: ParameterTable,
@@ -282,12 +532,63 @@ public struct PatternArrayInstancePlanner: Sendable {
         return quantity.value
     }
 
+    private func resolvedScalar(
+        _ expression: CADExpression,
+        parameters: ParameterTable
+    ) throws -> Double {
+        let quantity: Quantity
+        do {
+            quantity = try parameters.resolvedValue(for: expression)
+        } catch let error as EditorError {
+            throw error
+        } catch {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Pattern array scalar value could not be resolved: \(error)."
+            )
+        }
+        guard quantity.kind == .scalar else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Pattern array scalar value must resolve to a scalar."
+            )
+        }
+        return quantity.value
+    }
+
     private func translationTransform(_ vector: Vector3D) throws -> Transform3D {
         var values = Matrix4x4.identity.values
         values[12] = vector.x
         values[13] = vector.y
         values[14] = vector.z
         return Transform3D(matrix: try Matrix4x4(values: values))
+    }
+
+    private func curveTransform(
+        point: Point3D,
+        origin: Point3D,
+        frame: CurvePatternFrame,
+        twist: Double,
+        scale: Double,
+        alignment: PatternArrayCurveAlignment
+    ) throws -> Transform3D {
+        let twistAxis: Vector3D
+        switch alignment {
+        case .parallel:
+            twistAxis = .unitX
+        case .normal, .transport:
+            twistAxis = frame.tangent
+        }
+        let twistRotation = rotationValues(angle: twist, axis: twistAxis)
+        let normal = rotated(frame.normal, rotation: twistRotation)
+        let binormal = rotated(frame.binormal, rotation: twistRotation)
+        let translation = point - origin
+        return Transform3D(matrix: try Matrix4x4(values: [
+            frame.tangent.x * scale, frame.tangent.y * scale, frame.tangent.z * scale, 0.0,
+            normal.x * scale, normal.y * scale, normal.z * scale, 0.0,
+            binormal.x * scale, binormal.y * scale, binormal.z * scale, 0.0,
+            translation.x, translation.y, translation.z, 1.0,
+        ]))
     }
 
     private func radialTransform(
@@ -342,16 +643,38 @@ public struct PatternArrayInstancePlanner: Sendable {
             z: rotation.r20 * vector.x + rotation.r21 * vector.y + rotation.r22 * vector.z
         )
     }
-}
 
-private struct RotationValues: Sendable {
-    var r00: Double
-    var r01: Double
-    var r02: Double
-    var r10: Double
-    var r11: Double
-    var r12: Double
-    var r20: Double
-    var r21: Double
-    var r22: Double
+    private func sketchPlaneNormal(
+        _ plane: SketchPlane,
+        tolerance: ModelingTolerance
+    ) throws -> Vector3D {
+        switch plane {
+        case .xy:
+            return .unitZ
+        case .yz:
+            return .unitX
+        case .zx:
+            return .unitY
+        case .plane(let plane):
+            return try plane.normal.normalized(tolerance: tolerance.distance)
+        }
+    }
+
+    private struct CurvePatternFrame: Sendable {
+        var tangent: Vector3D
+        var normal: Vector3D
+        var binormal: Vector3D
+    }
+
+    private struct RotationValues: Sendable {
+        var r00: Double
+        var r01: Double
+        var r02: Double
+        var r10: Double
+        var r11: Double
+        var r12: Double
+        var r20: Double
+        var r21: Double
+        var r22: Double
+    }
 }

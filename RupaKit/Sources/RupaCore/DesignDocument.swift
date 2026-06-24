@@ -15871,7 +15871,8 @@ public struct DesignDocument: Identifiable, Sendable {
 
         let transforms = try PatternArrayInstancePlanner().transforms(
             for: source.distribution,
-            parameters: cadDocument.parameters
+            parameters: cadDocument.parameters,
+            cadDocument: cadDocument
         )
         guard transforms.isEmpty == false else {
             throw EditorError(

@@ -3186,6 +3186,54 @@ import SwiftCAD
 }
 
 @MainActor
+@Test func automationCanCreateCurvePatternArray() async throws {
+    let session = EditorSession()
+    let runner = AutomationRunner()
+    _ = try #require(session.createDefaultExtrudedRectangle())
+    let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let bodySceneNodeID = try #require(automationSceneNodeID(for: bodyFeatureID, in: session.document))
+    _ = try runner.execute(
+        .createComponentDefinition(
+            name: "Automation Curve Source",
+            rootSceneNodeIDs: [bodySceneNodeID]
+        ),
+        in: session
+    )
+    let definition = try #require(session.document.productMetadata.componentDefinitions.values.first)
+
+    let result = try runner.execute(
+        .createPatternArray(
+            name: "Automation Curve Array",
+            definitionID: definition.id,
+            distribution: .curve(
+                CurvePatternArray(
+                    path: .polyline(
+                        points: [
+                            .origin,
+                            Point3D(x: 0.03, y: 0.0, z: 0.0),
+                        ],
+                        normal: .unitZ
+                    ),
+                    copyCount: 3,
+                    alignment: .parallel
+                )
+            ),
+            outputMode: .componentInstance
+        ),
+        in: session
+    )
+    let source = try #require(session.document.productMetadata.patternArrays.values.first {
+        $0.name == "Automation Curve Array"
+    })
+
+    #expect(result.commandName == "createPatternArray")
+    #expect(result.message == "Pattern array Automation Curve Array created.")
+    #expect(result.didMutate)
+    #expect(source.outputInstanceIDs.count == 3)
+    #expect(session.generation == DocumentGeneration(3))
+}
+
+@MainActor
 @Test func automationCanCreateSectionPlane() async throws {
     let session = EditorSession()
     let runner = AutomationRunner()
