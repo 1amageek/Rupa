@@ -133,8 +133,145 @@ import SwiftCAD
     }
 }
 
+@MainActor
+@Test func summaryServicesIgnoreCurrentEvaluationContextWhenSourceFingerprintDiffers() async throws {
+    let rectangleSession = EditorSession()
+    _ = try #require(rectangleSession.createDefaultExtrudedRectangle())
+    let currentEvaluation = try #require(rectangleSession.currentEvaluation)
+
+    let circleSession = EditorSession()
+    _ = try #require(circleSession.createDefaultExtrudedCircle())
+    let failingPipeline = CADPipeline(
+        evaluator: DocumentEvaluator(featureEvaluator: ContextFailingFeatureEvaluator())
+    )
+
+    do {
+        _ = try MeshSummaryService(pipeline: failingPipeline).summarize(
+            document: circleSession.document,
+            currentEvaluation: currentEvaluation,
+            currentGeneration: rectangleSession.generation
+        )
+        Issue.record("Mismatched source fingerprint must not use the current evaluation context.")
+    } catch let error as EditorError {
+        #expect(error.code == .evaluationFailed)
+        #expect(error.message.contains("Injected evaluator should not be used."))
+    }
+}
+
+@MainActor
+@Test func measurementServiceUsesCurrentEvaluationContextBeforeEvaluatingPipeline() async throws {
+    var document = DesignDocument.empty()
+    let profileID = try document.createRectangleSketchFromCorners(
+        name: "Revolve Profile",
+        plane: .xy,
+        firstCorner: SketchPoint(
+            x: .length(0.0, .millimeter),
+            y: .length(0.0, .millimeter)
+        ),
+        oppositeCorner: SketchPoint(
+            x: .length(4.0, .millimeter),
+            y: .length(12.0, .millimeter)
+        )
+    )
+    _ = try document.createRevolve(
+        name: "Revolved Body",
+        profile: ProfileReference(featureID: profileID),
+        axis: RevolveAxis(origin: .origin, direction: .unitY),
+        angle: .angle(180.0, .degree)
+    )
+    let session = EditorSession(document: document)
+    session.store.evaluateCurrentDocument()
+    let currentEvaluation = try #require(session.currentEvaluation)
+    let failingPipeline = CADPipeline(
+        evaluator: DocumentEvaluator(featureEvaluator: ContextFailingFeatureEvaluator())
+    )
+
+    let result = try MeasurementService(pipeline: failingPipeline).measure(
+        document: session.document,
+        currentEvaluation: currentEvaluation,
+        currentGeneration: session.generation
+    )
+
+    #expect(result.counts.solids == 1)
+    #expect(result.diagnostics.contains { $0.message.contains("Injected evaluator should not be used.") } == false)
+}
+
+@MainActor
+@Test func surfaceFrameServiceUsesCurrentEvaluationContextBeforeEvaluatingPipeline() async throws {
+    var document = DesignDocument.empty()
+    _ = try document.createPolySplineSurface(
+        name: "Context Frame Surface",
+        sourceMesh: contextFramePolySplinePatchNetworkMesh(centerZ: 0.0),
+        options: PolySplineOptions(mergePatches: false)
+    )
+    let session = EditorSession(document: document)
+    session.store.evaluateCurrentDocument()
+    let currentEvaluation = try #require(session.currentEvaluation)
+    let topology = try TopologySummaryService().summarize(
+        document: session.document,
+        currentEvaluation: currentEvaluation,
+        currentGeneration: session.generation
+    )
+    let faceEntry = try #require(topology.entries.first { $0.kind == .face })
+    let failingPipeline = CADPipeline(
+        evaluator: DocumentEvaluator(featureEvaluator: ContextFailingFeatureEvaluator())
+    )
+
+    let result = try SurfaceFrameService(pipeline: failingPipeline).resolve(
+        document: session.document,
+        queries: [
+            SurfaceFrameQuery(
+                facePersistentName: faceEntry.persistentName,
+                u: 0.5,
+                v: 0.5
+            ),
+        ],
+        currentEvaluation: currentEvaluation,
+        currentGeneration: session.generation
+    )
+
+    #expect(result.frames.count == 1)
+}
+
+@MainActor
+@Test func selectionDimensionServiceUsesCurrentEvaluationContextBeforeEvaluatingPipeline() async throws {
+    let session = EditorSession()
+    _ = try #require(session.createDefaultExtrudedRectangle())
+    let currentEvaluation = try #require(session.currentEvaluation)
+    let failingPipeline = CADPipeline(
+        evaluator: DocumentEvaluator(featureEvaluator: ContextFailingFeatureEvaluator())
+    )
+
+    let result = try SelectionDimensionService(pipeline: failingPipeline).evaluate(
+        document: session.document,
+        currentEvaluation: currentEvaluation,
+        currentGeneration: session.generation
+    )
+
+    #expect(result.measurements.isEmpty)
+}
+
 private struct ContextFailingFeatureEvaluator: FeatureEvaluating {
     func evaluate(feature _: FeatureNode, context _: EvaluationContext) throws -> EvaluationResult {
         throw FeatureEvaluationError.unsupportedOperation("Injected evaluator should not be used.")
     }
+}
+
+private func contextFramePolySplinePatchNetworkMesh(centerZ: Double) -> Mesh {
+    Mesh(
+        positions: [
+            Point3D(x: 0.0, y: 0.0, z: 0.0),
+            Point3D(x: 0.01, y: 0.0, z: 0.0),
+            Point3D(x: 0.02, y: 0.0, z: 0.0),
+            Point3D(x: 0.0, y: 0.01, z: 0.0),
+            Point3D(x: 0.01, y: 0.01, z: centerZ),
+            Point3D(x: 0.02, y: 0.01, z: 0.0),
+        ],
+        indices: [
+            0, 1, 4,
+            0, 4, 3,
+            1, 2, 5,
+            1, 5, 4,
+        ]
+    )
 }

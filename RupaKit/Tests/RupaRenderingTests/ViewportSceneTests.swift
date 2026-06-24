@@ -76,6 +76,25 @@ import Testing
 }
 
 @MainActor
+@Test func viewportSceneBuilderIgnoresCurrentEvaluationWhenSourceFingerprintDiffers() async throws {
+    let rectangleSession = EditorSession()
+    _ = try #require(rectangleSession.createDefaultExtrudedRectangle())
+    let currentEvaluation = try #require(rectangleSession.currentEvaluation)
+
+    let circleSession = EditorSession()
+    _ = try #require(circleSession.createDefaultExtrudedCircle())
+
+    let circleScene = ViewportSceneBuilder().build(document: circleSession.document)
+    let mismatchedScene = ViewportSceneBuilder().build(
+        document: circleSession.document,
+        currentEvaluation: currentEvaluation,
+        documentGeneration: rectangleSession.generation
+    )
+
+    #expect(mismatchedScene == circleScene)
+}
+
+@MainActor
 @Test func viewportSceneBuilderIgnoresEvaluationCacheWhenGenerationIsStale() async throws {
     let session = EditorSession()
     _ = try #require(session.createDefaultExtrudedRectangle())

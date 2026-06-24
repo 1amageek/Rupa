@@ -2,28 +2,49 @@ import Foundation
 import SwiftCAD
 
 public struct MeasurementService {
+    private let pipelineOverride: CADPipeline?
     private let tolerance: ModelingTolerance
     private let splineTessellator: CubicBezierSplineTessellator
 
-    public init(tolerance: ModelingTolerance = .standard) {
+    public init(
+        pipeline: CADPipeline? = nil,
+        tolerance: ModelingTolerance = .standard
+    ) {
+        self.pipelineOverride = pipeline
         self.tolerance = tolerance
         self.splineTessellator = CubicBezierSplineTessellator(tolerance: tolerance)
     }
 
-    public func measure(document: DesignDocument) throws -> MeasurementResult {
+    public func measure(
+        document: DesignDocument,
+        objectRegistry: ObjectTypeRegistry = .builtIn,
+        currentEvaluation: DocumentEvaluationContext? = nil,
+        currentGeneration: DocumentGeneration? = nil
+    ) throws -> MeasurementResult {
         try measure(
             document: document,
             selectedFeatureIDs: nil,
-            scope: .document
+            scope: .document,
+            objectRegistry: objectRegistry,
+            currentEvaluation: currentEvaluation,
+            currentGeneration: currentGeneration
         )
     }
 
     public func measure(
         document: DesignDocument,
-        selection: SelectionModel
+        selection: SelectionModel,
+        objectRegistry: ObjectTypeRegistry = .builtIn,
+        currentEvaluation: DocumentEvaluationContext? = nil,
+        currentGeneration: DocumentGeneration? = nil
     ) throws -> MeasurementResult {
         guard !selection.selectedSceneNodeIDs.isEmpty else {
-            return try measure(document: document)
+            return try measure(
+                document: document,
+                objectRegistry: objectRegistry,
+                currentEvaluation: currentEvaluation,
+                currentGeneration: currentGeneration
+            )
         }
         let selectedFeatureIDs = Set(
             selection.selectedSceneNodeReferences(in: document).compactMap(\.featureID)
@@ -31,14 +52,20 @@ public struct MeasurementService {
         return try measure(
             document: document,
             selectedFeatureIDs: selectedFeatureIDs,
-            scope: .selection
+            scope: .selection,
+            objectRegistry: objectRegistry,
+            currentEvaluation: currentEvaluation,
+            currentGeneration: currentGeneration
         )
     }
 
     private func measure(
         document: DesignDocument,
         selectedFeatureIDs: Set<FeatureID>?,
-        scope: MeasurementResult.Scope
+        scope: MeasurementResult.Scope,
+        objectRegistry: ObjectTypeRegistry,
+        currentEvaluation: DocumentEvaluationContext?,
+        currentGeneration: DocumentGeneration?
     ) throws -> MeasurementResult {
         var counts = MeasurementResult.Counts()
         var profiles: [MeasurementResult.Profile] = []
@@ -73,9 +100,15 @@ public struct MeasurementService {
             }
             didAttemptEvaluation = true
             do {
-                cachedEvaluatedDocument = try CADPipeline
-                    .modelingDefault(for: document)
-                    .evaluate(document.cadDocument)
+                cachedEvaluatedDocument = try DocumentEvaluationContextResolver(
+                    pipeline: pipelineOverride
+                ).evaluatedDocument(
+                    document: document,
+                    objectRegistry: objectRegistry,
+                    currentEvaluation: currentEvaluation,
+                    currentGeneration: currentGeneration,
+                    failurePrefix: "Measurement could not read evaluated geometry"
+                )
             } catch {
                 diagnostics.append(
                     EditorDiagnostic(

@@ -1129,7 +1129,10 @@ public final class AgentServer: AgentClientProtocol {
                 return .measurement(
                     try MeasurementService().measure(
                         document: session.document,
-                        selection: session.selection
+                        selection: session.selection,
+                        objectRegistry: session.objectRegistry,
+                        currentEvaluation: session.currentEvaluation,
+                        currentGeneration: session.generation
                     )
                 )
             case let .resolveSnap(sessionID, point, options, expectedGeneration):
@@ -1209,7 +1212,9 @@ public final class AgentServer: AgentClientProtocol {
                     try SelectionDimensionService().evaluate(
                         document: session.document,
                         dimensionID: dimensionID,
-                        objectRegistry: session.objectRegistry
+                        objectRegistry: session.objectRegistry,
+                        currentEvaluation: session.currentEvaluation,
+                        currentGeneration: session.generation
                     )
                 )
             case let .curveAnalysis(sessionID, expectedGeneration):
@@ -1261,7 +1266,9 @@ public final class AgentServer: AgentClientProtocol {
                     try SurfaceFrameService().resolve(
                         document: session.document,
                         queries: queries,
-                        objectRegistry: session.objectRegistry
+                        objectRegistry: session.objectRegistry,
+                        currentEvaluation: session.currentEvaluation,
+                        currentGeneration: session.generation
                     )
                 )
             case let .surfaceContinuitySummary(sessionID, expectedGeneration):

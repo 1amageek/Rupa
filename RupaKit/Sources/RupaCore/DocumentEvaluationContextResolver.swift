@@ -14,9 +14,20 @@ public struct DocumentEvaluationContextResolver: Sendable {
         currentGeneration: DocumentGeneration? = nil,
         failurePrefix: String
     ) throws -> EvaluatedDocument {
-        if let currentEvaluation,
-           currentEvaluation.generation == currentGeneration {
-            return currentEvaluation.evaluatedDocument
+        if let currentEvaluation {
+            do {
+                if try currentEvaluation.matches(
+                    document: document,
+                    generation: currentGeneration
+                ) {
+                    return currentEvaluation.evaluatedDocument
+                }
+            } catch {
+                throw EditorError(
+                    code: .evaluationFailed,
+                    message: "\(failurePrefix): \(String(describing: error))"
+                )
+            }
         }
 
         do {

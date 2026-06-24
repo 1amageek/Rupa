@@ -2650,8 +2650,14 @@ public struct ViewportSceneBuilder {
         evaluationCache: EvaluatedDocumentCache?
     ) -> EvaluatedDocument? {
         if let currentEvaluation {
-            guard let documentGeneration,
-                  currentEvaluation.generation == documentGeneration else {
+            do {
+                guard try currentEvaluation.matches(
+                    document: document,
+                    generation: documentGeneration
+                ) else {
+                    return nil
+                }
+            } catch {
                 return nil
             }
             return currentEvaluation.evaluatedDocument

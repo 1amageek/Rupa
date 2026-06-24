@@ -2859,7 +2859,10 @@ public final class EditorSession {
         do {
             let result = try MeasurementService().measure(
                 document: document,
-                selection: selection
+                selection: selection,
+                objectRegistry: objectRegistry,
+                currentEvaluation: currentEvaluation,
+                currentGeneration: generation
             )
             reportToolStatus(result.message)
         } catch {

@@ -11,7 +11,9 @@ public struct SelectionDimensionService: Sendable {
     public func evaluate(
         document: DesignDocument,
         dimensionID: SelectionDimensionID? = nil,
-        objectRegistry: ObjectTypeRegistry = .builtIn
+        objectRegistry: ObjectTypeRegistry = .builtIn,
+        currentEvaluation: DocumentEvaluationContext? = nil,
+        currentGeneration: DocumentGeneration? = nil
     ) throws -> SelectionDimensionEvaluation {
         do {
             try document.validate(objectRegistry: objectRegistry)
@@ -26,7 +28,15 @@ public struct SelectionDimensionService: Sendable {
             for: document,
             objectRegistry: objectRegistry
         )
-        let evaluatedDocument = try pipeline.evaluate(document.cadDocument)
+        let evaluatedDocument = try DocumentEvaluationContextResolver(
+            pipeline: pipelineOverride
+        ).evaluatedDocument(
+            document: document,
+            objectRegistry: objectRegistry,
+            currentEvaluation: currentEvaluation,
+            currentGeneration: currentGeneration,
+            failurePrefix: "Document must evaluate successfully before selection dimension evaluation"
+        )
         if let dimensionID {
             return try pipeline.evaluateSelectionDimension(
                 dimensionID,

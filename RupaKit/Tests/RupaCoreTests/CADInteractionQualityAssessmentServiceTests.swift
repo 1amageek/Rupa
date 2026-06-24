@@ -94,7 +94,10 @@ import RupaCore
     #expect(performance.currentRating == .partial)
     #expect(performance.referenceSources.contains("Rupa/CAD_QUALITY_MILESTONES.md"))
     #expect(performance.evidence.contains { evidence in
-        evidence.notes.contains("Viewport scene construction, Inspector shape and surface panels, and Agent display/mesh/topology/surface summaries can consume a store-validated current evaluation context instead of forcing another CAD evaluation.")
+        evidence.notes.contains("Viewport scene construction, Inspector shape and surface panels, Agent display/mesh/topology/surface summaries, measurement, surface frame, and selection dimension read paths can consume a store-validated current evaluation context instead of forcing another CAD evaluation.")
+    })
+    #expect(performance.evidence.contains { evidence in
+        evidence.notes.contains("Evaluation context reuse now checks both document generation and CAD source fingerprint before returning an evaluated document.")
     })
     #expect(performance.evidence.contains { evidence in
         evidence.sourceFiles.contains("RupaKit/Sources/RupaCore/DocumentEvaluationContext.swift")

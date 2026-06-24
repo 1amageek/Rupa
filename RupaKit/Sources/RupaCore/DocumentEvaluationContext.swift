@@ -30,4 +30,17 @@ public struct DocumentEvaluationContext: Sendable {
             evaluatedDocument: evaluatedDocument
         )
     }
+
+    public func matches(
+        document: DesignDocument,
+        generation expectedGeneration: DocumentGeneration?,
+        tolerance: ModelingTolerance = .standard
+    ) throws -> Bool {
+        guard let expectedGeneration,
+              generation == expectedGeneration else {
+            return false
+        }
+        let currentFingerprint = try document.cadDocument.sourceFingerprint(tolerance: tolerance)
+        return currentFingerprint == sourceFingerprint
+    }
 }

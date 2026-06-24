@@ -791,8 +791,11 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                         "RupaKit/Sources/RupaCore/EvaluationScheduler.swift",
                         "RupaKit/Sources/RupaCore/CADDocumentStore.swift",
                         "RupaKit/Sources/RupaCore/BodyDisplaySnapshotService.swift",
+                        "RupaKit/Sources/RupaCore/MeasurementService.swift",
                         "RupaKit/Sources/RupaCore/MeshSummaryService.swift",
                         "RupaKit/Sources/RupaCore/TopologySummaryService.swift",
+                        "RupaKit/Sources/RupaCore/SelectionDimensionService.swift",
+                        "RupaKit/Sources/RupaCore/SurfaceFrameService.swift",
                         "RupaKit/Sources/RupaCore/SurfaceAnalysisService.swift",
                         "RupaKit/Sources/RupaCore/SurfaceContinuityService.swift",
                         "RupaKit/Sources/RupaRendering/ViewportScene.swift",
@@ -804,12 +807,14 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                     tests: [
                         "RupaKit/Tests/RupaCoreTests/BodyDisplaySnapshotServiceTests.swift",
                         "RupaKit/Tests/RupaCoreTests/CommandStackTests.swift",
+                        "RupaKit/Tests/RupaCoreTests/DocumentEvaluationContextTests.swift",
                         "RupaKit/Tests/RupaRenderingTests/ViewportSceneTests.swift",
                         "RupaKit/Tests/RupaRenderingTests/ViewportIdentityBufferRendererTests.swift",
                     ],
                     notes: [
                         "EvaluationScheduler can return the evaluated document alongside the persistent evaluation snapshot.",
-                        "Viewport scene construction, Inspector shape and surface panels, and Agent display/mesh/topology/surface summaries can consume a store-validated current evaluation context instead of forcing another CAD evaluation.",
+                        "Viewport scene construction, Inspector shape and surface panels, Agent display/mesh/topology/surface summaries, measurement, surface frame, and selection dimension read paths can consume a store-validated current evaluation context instead of forcing another CAD evaluation.",
+                        "Evaluation context reuse now checks both document generation and CAD source fingerprint before returning an evaluated document.",
                         "Identity picking exposes render/readback metrics and budget fallback diagnostics.",
                     ]
                 ),

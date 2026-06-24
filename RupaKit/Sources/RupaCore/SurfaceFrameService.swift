@@ -22,7 +22,9 @@ public struct SurfaceFrameService: Sendable {
     public func resolve(
         document: DesignDocument,
         queries: [SurfaceFrameQuery],
-        objectRegistry: ObjectTypeRegistry = .builtIn
+        objectRegistry: ObjectTypeRegistry = .builtIn,
+        currentEvaluation: DocumentEvaluationContext? = nil,
+        currentGeneration: DocumentGeneration? = nil
     ) throws -> SurfaceFrameResult {
         do {
             try document.validate(objectRegistry: objectRegistry)
@@ -45,19 +47,15 @@ public struct SurfaceFrameService: Sendable {
             )
         }
 
-        let evaluatedDocument: EvaluatedDocument
-        do {
-            let pipeline = pipelineOverride ?? .modelingDefault(
-                for: document,
-                objectRegistry: objectRegistry
-            )
-            evaluatedDocument = try pipeline.evaluate(document.cadDocument)
-        } catch {
-            throw EditorError(
-                code: .evaluationFailed,
-                message: "Document must evaluate successfully before surface frame resolution: \(String(describing: error))"
-            )
-        }
+        let evaluatedDocument = try DocumentEvaluationContextResolver(
+            pipeline: pipelineOverride
+        ).evaluatedDocument(
+            document: document,
+            objectRegistry: objectRegistry,
+            currentEvaluation: currentEvaluation,
+            currentGeneration: currentGeneration,
+            failurePrefix: "Document must evaluate successfully before surface frame resolution"
+        )
 
         let persistentNames = persistentTopologyNames(in: evaluatedDocument)
         let sceneNodeIDsByFeatureID = sceneNodeIDsByFeatureID(in: document)
