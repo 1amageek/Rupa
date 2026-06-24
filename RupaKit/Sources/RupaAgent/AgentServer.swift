@@ -221,6 +221,39 @@ public final class AgentServer: AgentClientProtocol {
                     ]
                 ),
                 AgentCapabilityDescriptor.OptionAxis(
+                    name: "distribution",
+                    supportedValues: ["rectangular", "radial", "curve"],
+                    notes: [
+                        "Rectangular updates can replace one- or two-axis linear spacing or extent.",
+                        "Radial updates can replace center, rotation axis, angle spacing or extent, copy count, and optional radial repetition.",
+                        "Curve updates can replace explicit or sketch-entity path distribution controls, twist, scale, alignment, and extent.",
+                    ]
+                ),
+                AgentCapabilityDescriptor.OptionAxis(
+                    name: "spacingMode",
+                    supportedValues: ["spacing", "extent"],
+                    notes: [
+                        "Linear spacing and extent update PatternArrayLinearAxis.distanceMode.",
+                        "Angular spacing and extent update PatternArrayAngularAxis.angleMode.",
+                    ]
+                ),
+                AgentCapabilityDescriptor.OptionAxis(
+                    name: "axisCount",
+                    supportedValues: ["one", "two", "angular", "angularWithRadialRepetition", "curvePath"],
+                    notes: [
+                        "Omit rectangular secondAxis to keep a one-axis array.",
+                        "Omit radial radialAxis to keep angular-only repetition.",
+                        "Curve path arrays regenerate from the supplied path and copy count.",
+                    ]
+                ),
+                AgentCapabilityDescriptor.OptionAxis(
+                    name: "curveAlignment",
+                    supportedValues: ["normal", "parallel", "transport"],
+                    notes: [
+                        "Use normal for path-local frames, parallel to preserve source orientation, and transport to minimize frame flips.",
+                    ]
+                ),
+                AgentCapabilityDescriptor.OptionAxis(
                     name: "outputMode",
                     supportedValues: ["componentInstance", "independentCopy"],
                     notes: [

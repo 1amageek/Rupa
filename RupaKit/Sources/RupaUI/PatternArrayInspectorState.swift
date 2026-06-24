@@ -8,7 +8,7 @@ struct PatternArrayInspectorState: Equatable, Sendable {
         case mixed
     }
 
-    struct RectangularFirstAxis: Equatable, Sendable {
+    struct LinearAxis: Equatable, Sendable {
         var copyCount: Int
         var distanceMeters: Double?
         var distanceMode: PatternArrayDistanceMode
@@ -27,6 +27,64 @@ struct PatternArrayInspectorState: Equatable, Sendable {
         }
     }
 
+    struct AngularAxis: Equatable, Sendable {
+        var center: Point3D
+        var axis: Vector3D
+        var copyCount: Int
+        var angleRadians: Double?
+        var angleMode: PatternArrayAngleMode
+
+        var angleIsEditable: Bool {
+            angleRadians != nil
+        }
+
+        var angleModeTitle: String {
+            switch angleMode {
+            case .spacing:
+                "Spacing"
+            case .extent:
+                "Extent"
+            }
+        }
+    }
+
+    struct CurveDistribution: Equatable, Sendable {
+        var pathTitle: String
+        var copyCount: Int
+        var twistRadians: Double?
+        var endScale: Double?
+        var alignment: PatternArrayCurveAlignment
+        var extentMeters: Double?
+        var extentRatio: Double?
+        var extentMode: PatternArrayCurveExtentMode
+
+        var twistIsEditable: Bool {
+            twistRadians != nil
+        }
+
+        var endScaleIsEditable: Bool {
+            endScale != nil
+        }
+
+        var extentIsEditable: Bool {
+            switch extentMode {
+            case .distance:
+                extentMeters != nil
+            case .ratio:
+                extentRatio != nil
+            }
+        }
+
+        var extentModeTitle: String {
+            switch extentMode {
+            case .distance:
+                "Distance"
+            case .ratio:
+                "Ratio"
+            }
+        }
+    }
+
     var sourceID: PatternArraySourceID
     var name: String
     var definitionID: ComponentDefinitionID
@@ -40,7 +98,11 @@ struct PatternArrayInspectorState: Equatable, Sendable {
     var selectedOutputIndices: [Int]
     var outputOwnership: PatternArraySummary.OutputOwnership
     var diagnostics: [PatternArraySummary.Diagnostic]
-    var rectangularFirstAxis: RectangularFirstAxis?
+    var rectangularFirstAxis: LinearAxis?
+    var rectangularSecondAxis: LinearAxis?
+    var radialAngularAxis: AngularAxis?
+    var radialAxis: LinearAxis?
+    var curve: CurveDistribution?
 
     init?(
         selectedNodes: [SceneNode],
@@ -79,7 +141,12 @@ struct PatternArrayInspectorState: Equatable, Sendable {
         self.selectedOutputIndices = Self.selectedOutputIndices(from: matches)
         self.outputOwnership = summary.outputOwnership
         self.diagnostics = summary.diagnostics
-        self.rectangularFirstAxis = patternArrays[summary.sourceID].flatMap(Self.rectangularFirstAxis)
+        let source = patternArrays[summary.sourceID]
+        self.rectangularFirstAxis = source.flatMap(Self.rectangularFirstAxis)
+        self.rectangularSecondAxis = source.flatMap(Self.rectangularSecondAxis)
+        self.radialAngularAxis = source.flatMap(Self.radialAngularAxis)
+        self.radialAxis = source.flatMap(Self.radialAxis)
+        self.curve = source.flatMap(Self.curveDistribution)
     }
 
     var selectionRoleTitle: String {
@@ -267,14 +334,81 @@ struct PatternArrayInspectorState: Equatable, Sendable {
 
     private static func rectangularFirstAxis(
         for source: PatternArraySource
-    ) -> RectangularFirstAxis? {
+    ) -> LinearAxis? {
         guard case .rectangular(let rectangular) = source.distribution else {
             return nil
         }
-        return RectangularFirstAxis(
-            copyCount: rectangular.firstAxis.copyCount,
-            distanceMeters: constantLengthMeters(rectangular.firstAxis.distance),
-            distanceMode: rectangular.firstAxis.distanceMode
+        return linearAxis(from: rectangular.firstAxis)
+    }
+
+    private static func rectangularSecondAxis(
+        for source: PatternArraySource
+    ) -> LinearAxis? {
+        guard case .rectangular(let rectangular) = source.distribution,
+              let secondAxis = rectangular.secondAxis else {
+            return nil
+        }
+        return linearAxis(from: secondAxis)
+    }
+
+    private static func radialAngularAxis(
+        for source: PatternArraySource
+    ) -> AngularAxis? {
+        guard case .radial(let radial) = source.distribution else {
+            return nil
+        }
+        return AngularAxis(
+            center: radial.angularAxis.center,
+            axis: radial.angularAxis.axis,
+            copyCount: radial.angularAxis.copyCount,
+            angleRadians: constantAngleRadians(radial.angularAxis.angle),
+            angleMode: radial.angularAxis.angleMode
+        )
+    }
+
+    private static func radialAxis(
+        for source: PatternArraySource
+    ) -> LinearAxis? {
+        guard case .radial(let radial) = source.distribution,
+              let radialAxis = radial.radialAxis else {
+            return nil
+        }
+        return linearAxis(from: radialAxis)
+    }
+
+    private static func curveDistribution(
+        for source: PatternArraySource
+    ) -> CurveDistribution? {
+        guard case .curve(let curve) = source.distribution else {
+            return nil
+        }
+        let extentMeters: Double?
+        let extentRatio: Double?
+        switch curve.extentMode {
+        case .distance:
+            extentMeters = constantLengthMeters(curve.extent)
+            extentRatio = nil
+        case .ratio:
+            extentMeters = nil
+            extentRatio = constantScalar(curve.extent)
+        }
+        return CurveDistribution(
+            pathTitle: pathTitle(for: curve.path),
+            copyCount: curve.copyCount,
+            twistRadians: constantAngleRadians(curve.twist),
+            endScale: constantScalar(curve.endScale),
+            alignment: curve.alignment,
+            extentMeters: extentMeters,
+            extentRatio: extentRatio,
+            extentMode: curve.extentMode
+        )
+    }
+
+    private static func linearAxis(from axis: PatternArrayLinearAxis) -> LinearAxis {
+        return LinearAxis(
+            copyCount: axis.copyCount,
+            distanceMeters: constantLengthMeters(axis.distance),
+            distanceMode: axis.distanceMode
         )
     }
 
@@ -285,6 +419,33 @@ struct PatternArrayInspectorState: Equatable, Sendable {
             return nil
         }
         return quantity.value
+    }
+
+    private static func constantAngleRadians(_ expression: CADExpression) -> Double? {
+        guard case .constant(let quantity) = expression,
+              quantity.kind == .angle,
+              quantity.value.isFinite else {
+            return nil
+        }
+        return quantity.value
+    }
+
+    private static func constantScalar(_ expression: CADExpression) -> Double? {
+        guard case .constant(let quantity) = expression,
+              quantity.kind == .scalar,
+              quantity.value.isFinite else {
+            return nil
+        }
+        return quantity.value
+    }
+
+    private static func pathTitle(for path: PatternArrayCurvePath) -> String {
+        switch path {
+        case .polyline(let points, _):
+            "\(points.count) Point Polyline"
+        case .sketchEntity:
+            "Sketch Entity"
+        }
     }
 
     private func actionTitle(_ action: PatternArraySummary.LifecycleAction) -> String {

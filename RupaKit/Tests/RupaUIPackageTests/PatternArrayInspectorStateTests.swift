@@ -53,7 +53,7 @@ import Testing
     #expect(state.outputModeTitle == "Component Instance")
 }
 
-@Test func patternArrayInspectorStateReportsEditableRectangularFirstAxis() throws {
+@Test func patternArrayInspectorStateReportsEditableRectangularAxes() throws {
     let fixture = PatternArrayInspectorFixture()
     let rootNode = SceneNode(id: fixture.rootSceneNodeID, name: "Array Root")
     let source = PatternArraySource(
@@ -66,6 +66,12 @@ import Testing
                 distance: .length(12.0, .millimeter),
                 copyCount: 3,
                 distanceMode: .extent
+            ),
+            secondAxis: PatternArrayLinearAxis(
+                direction: .unitY,
+                distance: .length(6.0, .millimeter),
+                copyCount: 2,
+                distanceMode: .spacing
             )
         )),
         outputMode: .componentInstance,
@@ -86,12 +92,126 @@ import Testing
         )
     ))
     let rectangular = try #require(state.rectangularFirstAxis)
+    let secondAxis = try #require(state.rectangularSecondAxis)
 
     #expect(rectangular.copyCount == 3)
     #expect(rectangular.distanceMeters == 0.012)
     #expect(rectangular.distanceMode == .extent)
     #expect(rectangular.distanceModeTitle == "Extent")
     #expect(rectangular.distanceIsEditable)
+    #expect(secondAxis.copyCount == 2)
+    #expect(secondAxis.distanceMeters == 0.006)
+    #expect(secondAxis.distanceMode == .spacing)
+    #expect(secondAxis.distanceModeTitle == "Spacing")
+    #expect(secondAxis.distanceIsEditable)
+}
+
+@Test func patternArrayInspectorStateReportsEditableRadialDistribution() throws {
+    let fixture = PatternArrayInspectorFixture()
+    let rootNode = SceneNode(id: fixture.rootSceneNodeID, name: "Array Root")
+    let source = PatternArraySource(
+        id: fixture.sourceID,
+        name: "Array",
+        definitionID: fixture.definitionID,
+        distribution: .radial(RadialPatternArray(
+            angularAxis: PatternArrayAngularAxis(
+                center: Point3D(x: 0.001, y: 0.002, z: 0.003),
+                axis: .unitZ,
+                angle: .angle(180.0, .degree),
+                copyCount: 5,
+                angleMode: .extent
+            ),
+            radialAxis: PatternArrayLinearAxis(
+                direction: .unitX,
+                distance: .length(4.0, .millimeter),
+                copyCount: 2,
+                distanceMode: .spacing
+            )
+        )),
+        outputMode: .componentInstance,
+        outputInstanceIDs: [
+            fixture.firstComponentInstanceID,
+            fixture.secondComponentInstanceID,
+        ],
+        rootSceneNodeID: fixture.rootSceneNodeID
+    )
+    let state = try #require(PatternArrayInspectorState(
+        selectedNodes: [rootNode],
+        sceneNodes: [rootNode.id: rootNode],
+        patternArrays: [source.id: source],
+        summaryResult: PatternArraySummaryResult(
+            generation: DocumentGeneration(7),
+            dirty: false,
+            patternArrays: [fixture.componentInstanceSummary(distributionKind: .radial)]
+        )
+    ))
+    let angularAxis = try #require(state.radialAngularAxis)
+    let radialAxis = try #require(state.radialAxis)
+
+    #expect(angularAxis.center == Point3D(x: 0.001, y: 0.002, z: 0.003))
+    #expect(angularAxis.axis == .unitZ)
+    #expect(angularAxis.copyCount == 5)
+    #expect(abs((angularAxis.angleRadians ?? 0.0) - Double.pi) < 1.0e-12)
+    #expect(angularAxis.angleMode == .extent)
+    #expect(angularAxis.angleModeTitle == "Extent")
+    #expect(angularAxis.angleIsEditable)
+    #expect(radialAxis.copyCount == 2)
+    #expect(radialAxis.distanceMeters == 0.004)
+    #expect(radialAxis.distanceMode == .spacing)
+}
+
+@Test func patternArrayInspectorStateReportsEditableCurveDistribution() throws {
+    let fixture = PatternArrayInspectorFixture()
+    let rootNode = SceneNode(id: fixture.rootSceneNodeID, name: "Array Root")
+    let source = PatternArraySource(
+        id: fixture.sourceID,
+        name: "Array",
+        definitionID: fixture.definitionID,
+        distribution: .curve(CurvePatternArray(
+            path: .polyline(
+                points: [
+                    .origin,
+                    Point3D(x: 0.01, y: 0.0, z: 0.0),
+                ],
+                normal: .unitZ
+            ),
+            copyCount: 4,
+            twist: .angle(45.0, .degree),
+            endScale: .scalar(1.5),
+            alignment: .parallel,
+            extent: .scalar(0.75),
+            extentMode: .ratio
+        )),
+        outputMode: .componentInstance,
+        outputInstanceIDs: [
+            fixture.firstComponentInstanceID,
+            fixture.secondComponentInstanceID,
+        ],
+        rootSceneNodeID: fixture.rootSceneNodeID
+    )
+    let state = try #require(PatternArrayInspectorState(
+        selectedNodes: [rootNode],
+        sceneNodes: [rootNode.id: rootNode],
+        patternArrays: [source.id: source],
+        summaryResult: PatternArraySummaryResult(
+            generation: DocumentGeneration(7),
+            dirty: false,
+            patternArrays: [fixture.componentInstanceSummary(distributionKind: .curve)]
+        )
+    ))
+    let curve = try #require(state.curve)
+
+    #expect(curve.pathTitle == "2 Point Polyline")
+    #expect(curve.copyCount == 4)
+    #expect(abs((curve.twistRadians ?? 0.0) - Double.pi / 4.0) < 1.0e-12)
+    #expect(curve.endScale == 1.5)
+    #expect(curve.alignment == .parallel)
+    #expect(curve.extentRatio == 0.75)
+    #expect(curve.extentMode == .ratio)
+    #expect(curve.extentModeTitle == "Ratio")
+    #expect(curve.twistIsEditable)
+    #expect(curve.endScaleIsEditable)
+    #expect(curve.extentIsEditable)
 }
 
 @Test func patternArrayInspectorStateReportsIndependentCopyDescendantSelection() throws {
@@ -181,6 +301,12 @@ private struct PatternArrayInspectorFixture {
     }
 
     var componentInstanceSummary: PatternArraySummary {
+        componentInstanceSummary(distributionKind: .rectangular)
+    }
+
+    func componentInstanceSummary(
+        distributionKind: PatternArraySummary.DistributionKind
+    ) -> PatternArraySummary {
         PatternArraySummary(
             sourceID: sourceID,
             name: name,
@@ -188,7 +314,7 @@ private struct PatternArrayInspectorFixture {
             definitionName: "Definition",
             rootSceneNodeID: rootSceneNodeID,
             rootSceneNodeName: "Array Root",
-            distributionKind: .rectangular,
+            distributionKind: distributionKind,
             outputMode: .componentInstance,
             outputCount: 2,
             componentInstanceOutputIDs: [

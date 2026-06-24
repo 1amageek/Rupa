@@ -759,7 +759,22 @@ import SwiftCAD
     #expect(patternArrayUpdate.mutatesDocument)
     #expect(patternArrayUpdate.discovery.contains(.designDisplaySnapshot))
     #expect(patternArrayUpdate.targets == [.sceneNode])
-    #expect(patternArrayUpdate.optionMatrix.map(\.name) == ["editableFields", "outputMode"])
+    #expect(patternArrayUpdate.optionMatrix.map(\.name) == [
+        "editableFields",
+        "distribution",
+        "spacingMode",
+        "axisCount",
+        "curveAlignment",
+        "outputMode",
+    ])
+    let updateDistribution = try #require(
+        patternArrayUpdate.optionMatrix.first { $0.name == "distribution" }
+    )
+    let updateCurveAlignment = try #require(
+        patternArrayUpdate.optionMatrix.first { $0.name == "curveAlignment" }
+    )
+    #expect(updateDistribution.supportedValues == ["rectangular", "radial", "curve"])
+    #expect(updateCurveAlignment.supportedValues == ["normal", "parallel", "transport"])
 
     #expect(patternArrayExplode.category == .pattern)
     #expect(patternArrayExplode.mutatesDocument)
