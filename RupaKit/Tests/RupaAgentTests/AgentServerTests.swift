@@ -163,6 +163,7 @@ import SwiftCAD
     let constructionPlaneSetActive = try #require(descriptors.first { $0.name == "setActiveConstructionPlane" })
     let constructionPlaneRename = try #require(descriptors.first { $0.name == "renameConstructionPlane" })
     let constructionPlaneSummary = try #require(descriptors.first { $0.name == "constructionPlaneSummary" })
+    let componentInstance = try #require(descriptors.first { $0.name == "createComponentInstance" })
     let patternArray = try #require(descriptors.first { $0.name == "createPatternArray" })
     let patternArrayUpdate = try #require(descriptors.first { $0.name == "updatePatternArray" })
     let patternArrayExplode = try #require(descriptors.first { $0.name == "explodePatternArray" })
@@ -672,6 +673,21 @@ import SwiftCAD
     #expect(constructionPlaneSummary.discovery.contains(.constructionPlaneSummary))
     #expect(constructionPlaneSummary.targets == [.constructionPlane])
 
+    #expect(componentInstance.category == .component)
+    #expect(componentInstance.mutatesDocument)
+    #expect(componentInstance.access == .automationCommand)
+    #expect(componentInstance.discovery.contains(.designDisplaySnapshot))
+    #expect(componentInstance.targets == [.sceneNode])
+    #expect(componentInstance.failureMode.contains("duplicate names"))
+    let componentDefinitionAxis = try #require(componentInstance.optionMatrix.first { $0.name == "definitionID" })
+    #expect(componentDefinitionAxis.supportedValues == ["designDisplaySnapshot.componentDefinitions"])
+    #expect(componentDefinitionAxis.notes.contains {
+        $0.contains("designDisplaySnapshot.componentInstances")
+    })
+    #expect(componentDefinitionAxis.notes.contains {
+        $0.contains("ownership.kind")
+    })
+
     #expect(patternArray.category == .pattern)
     #expect(patternArray.mutatesDocument)
     #expect(patternArray.access == .automationCommand)
@@ -729,9 +745,11 @@ import SwiftCAD
     #expect(designDisplaySnapshot.targets == [.document, .sketchEntity, .region, .body, .face, .edge, .vertex])
     #expect(designDisplaySnapshot.summary.contains("UI-visible sketch primitives"))
     #expect(designDisplaySnapshot.summary.contains("component definitions"))
+    #expect(designDisplaySnapshot.summary.contains("component instances"))
     #expect(designDisplaySnapshot.summary.contains("generated topology"))
     #expect(designDisplaySnapshot.failureMode.contains("display-ready source snapshots"))
     #expect(designDisplaySnapshot.failureMode.contains("reusable component definitions"))
+    #expect(designDisplaySnapshot.failureMode.contains("placed component instances"))
 
     #expect(qualityAssessment.category == .read)
     #expect(!qualityAssessment.mutatesDocument)
@@ -992,6 +1010,7 @@ import SwiftCAD
     #expect(snapshot.straightPrismSweeps.isEmpty)
     #expect(snapshot.bodies.count == 1)
     #expect(snapshot.componentDefinitions.isEmpty)
+    #expect(snapshot.componentInstances.isEmpty)
     #expect(snapshot.patternArrays.isEmpty)
     #expect(sketch.primitives.count == 4)
     #expect(sketch.regions.count == 1)
@@ -1002,6 +1021,64 @@ import SwiftCAD
     #expect(body.topology.edges.count == 12)
     #expect(body.topology.vertices.count == 8)
     #expect(decodedResponse == response)
+}
+
+@Test func agentDiscoversPlacedComponentInstancesFromDesignDisplaySnapshot() async throws {
+    let server = AgentServer()
+    let sessionID = UUID()
+    let session = EditorSession()
+    _ = try #require(session.createDefaultExtrudedRectangle())
+    let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let bodySceneNodeID = try #require(
+        agentPatternArrayBodySceneNodeID(for: bodyFeatureID, in: session.document)
+    )
+    _ = try session.execute(
+        .createComponentDefinition(
+            name: "Agent Placed Source",
+            rootSceneNodeIDs: [bodySceneNodeID]
+        )
+    )
+    let definition = try #require(session.document.productMetadata.componentDefinitions.values.first {
+        $0.name == "Agent Placed Source"
+    })
+    _ = try session.execute(
+        .createComponentInstance(
+            name: "Agent Placed Instance",
+            definitionID: definition.id,
+            localTransform: .identity
+        )
+    )
+    let instance = try #require(session.document.productMetadata.componentInstances.values.first)
+    let sceneNode = try #require(session.document.productMetadata.sceneNodes.values.first {
+        $0.reference == .componentInstance(instance.id)
+    })
+    server.register(session: session, id: sessionID)
+
+    let snapshotResponse = server.handle(
+        .designDisplaySnapshot(
+            sessionID: sessionID,
+            expectedGeneration: session.generation
+        )
+    )
+    let codec = AgentMessageCodec()
+    let decodedResponse = try codec.decodeResponse(from: try codec.encode(snapshotResponse))
+    guard case .designDisplaySnapshot(let snapshot) = snapshotResponse else {
+        #expect(Bool(false))
+        return
+    }
+    let discoveredInstance = try #require(snapshot.componentInstances.first)
+
+    #expect(snapshot.componentDefinitions.count == 1)
+    #expect(snapshot.componentInstances.count == 1)
+    #expect(discoveredInstance.instanceID == instance.id)
+    #expect(discoveredInstance.name == "Agent Placed Instance")
+    #expect(discoveredInstance.definitionID == definition.id)
+    #expect(discoveredInstance.definitionName == "Agent Placed Source")
+    #expect(discoveredInstance.sceneNodeIDs == [sceneNode.id])
+    #expect(discoveredInstance.primarySceneNodeID == sceneNode.id)
+    #expect(discoveredInstance.ownership == .document)
+    #expect(discoveredInstance.ownership.isDirectlyEditable)
+    #expect(decodedResponse == snapshotResponse)
 }
 
 @Test func agentDiscoversPatternArraySourceFromDesignDisplaySnapshotForLifecycleCommands() async throws {
@@ -1044,6 +1121,8 @@ import SwiftCAD
             expectedGeneration: session.generation
         )
     )
+    let codec = AgentMessageCodec()
+    let decodedResponse = try codec.decodeResponse(from: try codec.encode(snapshotResponse))
     guard case .designDisplaySnapshot(let snapshot) = snapshotResponse else {
         #expect(Bool(false))
         return
@@ -1051,6 +1130,10 @@ import SwiftCAD
     let discoveredArray = try #require(snapshot.patternArrays.first)
     let discoveredDefinition = try #require(snapshot.componentDefinitions.first)
     let firstOutput = try #require(discoveredArray.outputs.first)
+    let firstOutputInstanceID = try #require(firstOutput.componentInstanceID)
+    let discoveredInstance = try #require(snapshot.componentInstances.first {
+        $0.instanceID == firstOutputInstanceID
+    })
 
     let updateResponse = server.handle(
         .execute(
@@ -1076,10 +1159,9 @@ import SwiftCAD
         return
     }
     let updatedSource = try #require(session.document.productMetadata.patternArrays[discoveredArray.sourceID])
-    let firstOutputInstanceID = try #require(firstOutput.componentInstanceID)
-
     #expect(snapshot.patternArrays.count == 1)
     #expect(snapshot.componentDefinitions.count == 1)
+    #expect(snapshot.componentInstances.count == 2)
     #expect(discoveredDefinition.definitionID == definition.id)
     #expect(discoveredDefinition.name == "Agent Snapshot Array Source")
     #expect(discoveredDefinition.bodySceneNodeIDs == [bodySceneNodeID])
@@ -1092,6 +1174,15 @@ import SwiftCAD
     #expect(discoveredArray.outputCount == 2)
     #expect(discoveredArray.outputs.count == 2)
     #expect(firstOutput.componentInstanceID == discoveredArray.outputs[0].componentInstanceID)
+    #expect(discoveredInstance.definitionID == definition.id)
+    #expect(discoveredInstance.definitionName == "Agent Snapshot Array Source")
+    #expect(discoveredInstance.primarySceneNodeID == firstOutput.sceneNodeID)
+    #expect(discoveredInstance.ownership.kind == .patternArrayOutput)
+    #expect(discoveredInstance.ownership.patternArraySourceID == discoveredArray.sourceID)
+    #expect(discoveredInstance.ownership.patternArraySourceName == "Agent Snapshot Array")
+    #expect(discoveredInstance.ownership.patternArrayOutputIndex == 0)
+    #expect(!discoveredInstance.ownership.isDirectlyEditable)
+    #expect(decodedResponse == snapshotResponse)
     #expect(updateResult.commandName == "updatePatternArray")
     #expect(updatedSource.name == "Agent Snapshot Array Updated")
     #expect(updatedSource.outputInstanceIDs == [firstOutputInstanceID])

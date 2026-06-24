@@ -872,6 +872,7 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
 
     private func validatePatternArrays(against cadDocument: CADDocument) throws {
         var names: Set<String> = []
+        var sourceIDByOutputInstanceID: [ComponentInstanceID: PatternArraySourceID] = [:]
         for (sourceID, source) in patternArrays {
             guard source.id == sourceID else {
                 throw DocumentValidationError.invalidProductMetadata(
@@ -888,6 +889,10 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
                 )
             }
             try source.validate()
+            try validatePatternArrayOutputInstanceOwnership(
+                source: source,
+                sourceIDByOutputInstanceID: &sourceIDByOutputInstanceID
+            )
             let expectedTransforms = try PatternArrayInstancePlanner().transforms(
                 for: source.distribution,
                 parameters: cadDocument.parameters,
@@ -916,6 +921,26 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
                     cadDocument: cadDocument
                 )
             }
+        }
+    }
+
+    private func validatePatternArrayOutputInstanceOwnership(
+        source: PatternArraySource,
+        sourceIDByOutputInstanceID: inout [ComponentInstanceID: PatternArraySourceID]
+    ) throws {
+        guard source.outputMode == .componentInstance else {
+            return
+        }
+        for instanceID in source.outputInstanceIDs {
+            if let existingSourceID = sourceIDByOutputInstanceID[instanceID] {
+                throw DocumentValidationError.invalidProductMetadata(
+                    """
+                    Pattern array output component instances must be owned by exactly one pattern source; \
+                    instance \(instanceID) is referenced by \(existingSourceID) and \(source.id).
+                    """
+                )
+            }
+            sourceIDByOutputInstanceID[instanceID] = source.id
         }
     }
 

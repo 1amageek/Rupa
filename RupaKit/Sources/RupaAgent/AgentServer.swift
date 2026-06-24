@@ -129,8 +129,19 @@ public final class AgentServer: AgentClientProtocol {
             summary: "Place a component definition instance with a local transform.",
             access: .automationCommand,
             mutatesDocument: true,
+            discovery: [.designDisplaySnapshot],
             targets: [.sceneNode],
-            failureMode: "Rejects missing definitions, invalid transforms, and stale generations before mutation."
+            failureMode: "Rejects missing definitions, invalid transforms, duplicate names, and stale generations before mutation.",
+            optionMatrix: [
+                AgentCapabilityDescriptor.OptionAxis(
+                    name: "definitionID",
+                    supportedValues: ["designDisplaySnapshot.componentDefinitions"],
+                    notes: [
+                        "Use renderable component definitions from the display snapshot when placing reusable instances.",
+                        "Use designDisplaySnapshot.componentInstances ownership.kind to distinguish directly editable placed instances from pattern-owned outputs before creating duplicates."
+                    ]
+                )
+            ]
         ),
         capability(
             "createPatternArray",
@@ -324,12 +335,12 @@ public final class AgentServer: AgentClientProtocol {
         capability(
             "designDisplaySnapshot",
             category: .read,
-            summary: "Return ordered UI-visible sketch primitives, profile regions, component definitions, pattern arrays, extrude and straight-prism sweep display bodies, evaluated body meshes, and generated topology for Agent viewport planning.",
+            summary: "Return ordered UI-visible sketch primitives, profile regions, component definitions, component instances, pattern arrays, extrude and straight-prism sweep display bodies, evaluated body meshes, and generated topology for Agent viewport planning.",
             access: .agentRequest,
             mutatesDocument: false,
             discovery: [.designDisplaySnapshot, .sketchEntitySummary, .topologySummary],
             targets: [.document, .sketchEntity, .region, .body, .face, .edge, .vertex],
-            failureMode: "Rejects stale generations before reading; reports only display-ready source snapshots, reusable component definitions, and generated pattern sources, not raw CAD kernel internals."
+            failureMode: "Rejects stale generations before reading; reports only display-ready source snapshots, reusable component definitions, placed component instances, and generated pattern sources, not raw CAD kernel internals."
         ),
         capability(
             "createConstructionPlane",

@@ -80,6 +80,7 @@ public struct DesignDisplaySnapshotService: Sendable {
             straightPrismSweeps: straightPrismSweeps,
             bodies: bodies,
             componentDefinitions: componentDefinitionSnapshots(document: document),
+            componentInstances: componentInstanceSnapshots(document: document),
             patternArrays: patternArraySnapshots(document: document)
         )
     }
@@ -106,6 +107,7 @@ public struct DesignDisplaySnapshotService: Sendable {
             straightPrismSweeps: order.compactMap { snapshot.straightPrismSweeps[$0] },
             bodies: order.compactMap { snapshot.bodies[$0] },
             componentDefinitions: sortedComponentDefinitionSnapshots(snapshot.componentDefinitions),
+            componentInstances: sortedComponentInstanceSnapshots(snapshot.componentInstances),
             patternArrays: sortedPatternArraySnapshots(snapshot.patternArrays)
         )
     }
@@ -281,6 +283,97 @@ public struct DesignDisplaySnapshotService: Sendable {
         return cadDocument.designGraph.order.filter { featureIDs.contains($0) }
     }
 
+    private func componentInstanceSnapshots(
+        document: DesignDocument
+    ) -> [ComponentInstanceID: ComponentInstanceDisplaySnapshot] {
+        let metadata = document.productMetadata
+        let sceneNodeIDsByInstanceID = componentInstanceSceneNodeIDs(metadata: metadata)
+        let patternOwnershipByInstanceID = componentInstancePatternOwnership(metadata: metadata)
+        var snapshots: [ComponentInstanceID: ComponentInstanceDisplaySnapshot] = [:]
+        snapshots.reserveCapacity(metadata.componentInstances.count)
+
+        for (_, instance) in metadata.componentInstances {
+            guard let definition = metadata.componentDefinitions[instance.definitionID] else {
+                continue
+            }
+            let sceneNodeIDs = sceneNodeIDsByInstanceID[instance.id] ?? []
+            let ownership = patternOwnershipByInstanceID[instance.id] ?? .document
+            snapshots[instance.id] = ComponentInstanceDisplaySnapshot(
+                instanceID: instance.id,
+                name: instance.name,
+                definitionID: instance.definitionID,
+                definitionName: definition.name,
+                sceneNodeIDs: sceneNodeIDs,
+                primarySceneNodeID: sceneNodeIDs.first,
+                localTransform: instance.localTransform,
+                isVisible: instance.isVisible,
+                isLocked: instance.isLocked,
+                propertyCount: instance.properties.count,
+                ownership: ownership
+            )
+        }
+        return snapshots
+    }
+
+    private func componentInstanceSceneNodeIDs(
+        metadata: ProductMetadata
+    ) -> [ComponentInstanceID: [SceneNodeID]] {
+        var sceneNodeIDsByInstanceID: [ComponentInstanceID: [SceneNodeID]] = [:]
+        var visitedSceneNodeIDs: Set<SceneNodeID> = []
+        for rootSceneNodeID in metadata.rootSceneNodeIDs {
+            appendComponentInstanceSceneNodeIDs(
+                rootSceneNodeID,
+                metadata: metadata,
+                visitedSceneNodeIDs: &visitedSceneNodeIDs,
+                sceneNodeIDsByInstanceID: &sceneNodeIDsByInstanceID
+            )
+        }
+        return sceneNodeIDsByInstanceID
+    }
+
+    private func appendComponentInstanceSceneNodeIDs(
+        _ sceneNodeID: SceneNodeID,
+        metadata: ProductMetadata,
+        visitedSceneNodeIDs: inout Set<SceneNodeID>,
+        sceneNodeIDsByInstanceID: inout [ComponentInstanceID: [SceneNodeID]]
+    ) {
+        guard visitedSceneNodeIDs.insert(sceneNodeID).inserted,
+              let sceneNode = metadata.sceneNodes[sceneNodeID] else {
+            return
+        }
+        if sceneNode.reference?.kind == .componentInstance,
+           let componentInstanceID = sceneNode.reference?.componentInstanceID {
+            sceneNodeIDsByInstanceID[componentInstanceID, default: []].append(sceneNodeID)
+        }
+        for childID in sceneNode.childIDs {
+            appendComponentInstanceSceneNodeIDs(
+                childID,
+                metadata: metadata,
+                visitedSceneNodeIDs: &visitedSceneNodeIDs,
+                sceneNodeIDsByInstanceID: &sceneNodeIDsByInstanceID
+            )
+        }
+    }
+
+    private func componentInstancePatternOwnership(
+        metadata: ProductMetadata
+    ) -> [ComponentInstanceID: ComponentInstanceOwnershipDisplaySnapshot] {
+        var ownershipByInstanceID: [ComponentInstanceID: ComponentInstanceOwnershipDisplaySnapshot] = [:]
+        for (_, source) in metadata.patternArrays {
+            for (index, instanceID) in source.outputInstanceIDs.enumerated() {
+                guard ownershipByInstanceID[instanceID] == nil else {
+                    continue
+                }
+                ownershipByInstanceID[instanceID] = .patternArrayOutput(
+                    sourceID: source.id,
+                    sourceName: source.name,
+                    outputIndex: index
+                )
+            }
+        }
+        return ownershipByInstanceID
+    }
+
     private func patternArraySnapshots(
         document: DesignDocument
     ) -> [PatternArraySourceID: PatternArrayDisplaySnapshot] {
@@ -427,6 +520,17 @@ public struct DesignDisplaySnapshotService: Sendable {
         snapshots.values.sorted {
             if $0.name == $1.name {
                 return $0.definitionID.description < $1.definitionID.description
+            }
+            return $0.name < $1.name
+        }
+    }
+
+    private func sortedComponentInstanceSnapshots(
+        _ snapshots: [ComponentInstanceID: ComponentInstanceDisplaySnapshot]
+    ) -> [ComponentInstanceDisplaySnapshot] {
+        snapshots.values.sorted {
+            if $0.name == $1.name {
+                return $0.instanceID.description < $1.instanceID.description
             }
             return $0.name < $1.name
         }

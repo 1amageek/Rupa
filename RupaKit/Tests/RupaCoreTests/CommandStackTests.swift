@@ -4758,6 +4758,68 @@ import Testing
 }
 
 @MainActor
+@Test func productMetadataRejectsPatternArrayOutputInstanceOwnedByMultipleSources() async throws {
+    let session = EditorSession()
+    _ = try #require(session.createDefaultExtrudedRectangle())
+    let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let bodySceneNodeID = try #require(commandStackBodySceneNodeID(for: bodyFeatureID, in: session.document))
+    _ = try session.execute(
+        .createComponentDefinition(
+            name: "Exclusive Pattern Source",
+            rootSceneNodeIDs: [bodySceneNodeID]
+        )
+    )
+    let definition = try #require(session.document.productMetadata.componentDefinitions.values.first {
+        $0.name == "Exclusive Pattern Source"
+    })
+    _ = try session.execute(
+        .createPatternArray(
+            name: "Exclusive Array A",
+            definitionID: definition.id,
+            distribution: .rectangular(RectangularPatternArray(
+                firstAxis: PatternArrayLinearAxis(
+                    direction: .unitX,
+                    distance: .length(10.0, .millimeter),
+                    copyCount: 1
+                )
+            )),
+            outputMode: .componentInstance
+        )
+    )
+    _ = try session.execute(
+        .createPatternArray(
+            name: "Exclusive Array B",
+            definitionID: definition.id,
+            distribution: .rectangular(RectangularPatternArray(
+                firstAxis: PatternArrayLinearAxis(
+                    direction: .unitY,
+                    distance: .length(10.0, .millimeter),
+                    copyCount: 1
+                )
+            )),
+            outputMode: .componentInstance
+        )
+    )
+    let sources = session.document.productMetadata.patternArrays.values.sorted { $0.name < $1.name }
+    let firstSource = try #require(sources.first)
+    var secondSource = try #require(sources.last)
+    let firstOutputInstanceID = try #require(firstSource.outputInstanceIDs.first)
+    var metadata = session.document.productMetadata
+    secondSource.outputInstanceIDs = [firstOutputInstanceID]
+    metadata.patternArrays[secondSource.id] = secondSource
+
+    let result = try session.execute(.replaceProductMetadata(metadata))
+
+    guard case .failed(let message) = session.evaluationStatus else {
+        #expect(Bool(false))
+        return
+    }
+    #expect(result.didMutate)
+    #expect(message.contains("owned by exactly one pattern source"))
+    #expect(session.diagnostics.first?.severity == .error)
+}
+
+@MainActor
 @Test func rectangularPatternArrayOwnsGeneratedOutputMetadata() async throws {
     let session = EditorSession()
     _ = try #require(session.createDefaultExtrudedRectangle())

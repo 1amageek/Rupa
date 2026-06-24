@@ -3,6 +3,59 @@ import Testing
 @testable import RupaCore
 
 @MainActor
+@Test func designDisplaySnapshotListsPlacedComponentInstancesForAgentPlanning() async throws {
+    let session = EditorSession()
+    _ = try #require(session.createDefaultExtrudedRectangle())
+    let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let bodySceneNodeID = try #require(
+        designDisplaySnapshotBodySceneNodeID(for: bodyFeatureID, in: session.document)
+    )
+    _ = try session.execute(
+        .createComponentDefinition(
+            name: "Display Placed Source",
+            rootSceneNodeIDs: [bodySceneNodeID]
+        )
+    )
+    let definition = try #require(session.document.productMetadata.componentDefinitions.values.first {
+        $0.name == "Display Placed Source"
+    })
+    _ = try session.execute(
+        .createComponentInstance(
+            name: "Display Placed Instance",
+            definitionID: definition.id,
+            localTransform: .identity
+        )
+    )
+    let instance = try #require(session.document.productMetadata.componentInstances.values.first)
+    let sceneNode = try #require(session.document.productMetadata.sceneNodes.values.first {
+        $0.reference == .componentInstance(instance.id)
+    })
+
+    let result = try DesignDisplaySnapshotService().result(
+        document: session.document,
+        currentEvaluation: session.currentEvaluation,
+        generation: session.generation,
+        dirty: session.isDirty
+    )
+    let componentInstance = try #require(result.componentInstances.first)
+
+    #expect(result.componentDefinitions.count == 1)
+    #expect(result.componentInstances.count == 1)
+    #expect(componentInstance.instanceID == instance.id)
+    #expect(componentInstance.name == "Display Placed Instance")
+    #expect(componentInstance.definitionID == definition.id)
+    #expect(componentInstance.definitionName == "Display Placed Source")
+    #expect(componentInstance.sceneNodeIDs == [sceneNode.id])
+    #expect(componentInstance.primarySceneNodeID == sceneNode.id)
+    #expect(componentInstance.localTransform == .identity)
+    #expect(componentInstance.isVisible)
+    #expect(!componentInstance.isLocked)
+    #expect(componentInstance.propertyCount == 0)
+    #expect(componentInstance.ownership == .document)
+    #expect(componentInstance.ownership.isDirectlyEditable)
+}
+
+@MainActor
 @Test func designDisplaySnapshotListsPatternArraySourcesForAgentPlanning() async throws {
     let session = EditorSession()
     _ = try #require(session.createDefaultExtrudedRectangle())
@@ -58,10 +111,15 @@ import Testing
     let patternArray = try #require(result.patternArrays.first)
     let firstOutput = try #require(patternArray.outputs.first)
     let componentDefinition = try #require(result.componentDefinitions.first)
+    let componentInstances = result.componentInstances
+    let firstComponentInstance = try #require(componentInstances.first {
+        $0.instanceID == firstOutputID
+    })
     let rootSceneNode = try #require(componentDefinition.rootSceneNodes.first)
 
     #expect(result.patternArrays.count == 1)
     #expect(result.componentDefinitions.count == 1)
+    #expect(result.componentInstances.count == source.outputInstanceIDs.count)
     #expect(componentDefinition.definitionID == definition.id)
     #expect(componentDefinition.name == "Display Array Source")
     #expect(componentDefinition.bodySceneNodeIDs == [bodySceneNodeID])
@@ -83,6 +141,16 @@ import Testing
     #expect(firstOutput.componentInstanceID == firstOutputID)
     #expect(firstOutput.sceneNodeID == firstOutputSceneNodeID)
     #expect(firstOutput.localTransform == firstOutputInstance.localTransform)
+    #expect(firstComponentInstance.definitionID == definition.id)
+    #expect(firstComponentInstance.definitionName == "Display Array Source")
+    #expect(firstComponentInstance.sceneNodeIDs == [firstOutputSceneNodeID])
+    #expect(firstComponentInstance.primarySceneNodeID == firstOutputSceneNodeID)
+    #expect(firstComponentInstance.localTransform == firstOutputInstance.localTransform)
+    #expect(firstComponentInstance.ownership.kind == .patternArrayOutput)
+    #expect(firstComponentInstance.ownership.patternArraySourceID == source.id)
+    #expect(firstComponentInstance.ownership.patternArraySourceName == "Display Array")
+    #expect(firstComponentInstance.ownership.patternArrayOutputIndex == 0)
+    #expect(!firstComponentInstance.ownership.isDirectlyEditable)
 }
 
 private func designDisplaySnapshotBodySceneNodeID(
