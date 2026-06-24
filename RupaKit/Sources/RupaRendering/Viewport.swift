@@ -740,6 +740,11 @@ public struct Viewport: View {
         let hoveredFeatureIDs = hoveredFeatureIDs()
         let hoveredSceneNodeIDs = hoveredSceneNodeIDs()
         let selectedBodyItems = selectedBodyItems(in: scene, selectedFeatureIDs: selectedObjectFeatureIDs)
+        let patternArrayPreviews = ViewportPatternArrayPreviewService().previews(
+            document: document,
+            scene: scene,
+            selection: selection
+        )
         let usesSelectionGroup = selectedBodyItems.count > 1
         let suppressedSketchFeatureIDs = suppressedSketchFeatureIDs(
             in: scene,
@@ -823,6 +828,13 @@ public struct Viewport: View {
                 )
             }
         }
+
+        drawPatternArrayPreviews(
+            patternArrayPreviews,
+            scene: scene,
+            layout: layout,
+            in: &context
+        )
 
         drawRegionOffsetAffordances(
             targets: selectedSketchRegionTargets,
@@ -4206,6 +4218,314 @@ public struct Viewport: View {
             case .sketch:
                 drawSketchSelectionAffordance(item, in: &context, layout: layout)
             }
+        }
+    }
+
+    private func drawPatternArrayPreviews(
+        _ previews: [ViewportPatternArrayPreview],
+        scene: ViewportScene,
+        layout: ViewportLayout,
+        in context: inout GraphicsContext
+    ) {
+        guard !previews.isEmpty else {
+            return
+        }
+        let itemByID = Dictionary(uniqueKeysWithValues: scene.items.map { ($0.id, $0) })
+        for preview in previews {
+            drawPatternArrayPreview(
+                preview,
+                itemByID: itemByID,
+                layout: layout,
+                in: &context
+            )
+        }
+    }
+
+    private func drawPatternArrayPreview(
+        _ preview: ViewportPatternArrayPreview,
+        itemByID: [String: ViewportSceneItem],
+        layout: ViewportLayout,
+        in context: inout GraphicsContext
+    ) {
+        let outputs = drawablePatternArrayOutputs(preview.outputs)
+        let outputCenters = outputs.compactMap { output -> (ViewportPatternArrayPreview.Output, CGPoint)? in
+            guard let center = patternArrayOutputCenter(
+                for: output,
+                itemByID: itemByID,
+                layout: layout
+            ) else {
+                return nil
+            }
+            return (output, center)
+        }
+        drawPatternArrayConnector(
+            centers: outputCenters.map(\.1),
+            in: &context
+        )
+
+        for output in outputs {
+            drawPatternArrayOutput(
+                output,
+                itemByID: itemByID,
+                layout: layout,
+                in: &context
+            )
+        }
+
+        if let firstCenter = outputCenters.first?.1 {
+            drawPatternArrayCountLabel(
+                preview,
+                drawnOutputCount: outputs.count,
+                at: CGPoint(x: firstCenter.x, y: firstCenter.y - 32.0),
+                in: &context
+            )
+        }
+    }
+
+    private func drawablePatternArrayOutputs(
+        _ outputs: [ViewportPatternArrayPreview.Output]
+    ) -> [ViewportPatternArrayPreview.Output] {
+        let maximumDecoratedOutputs = 128
+        guard outputs.count > maximumDecoratedOutputs else {
+            return outputs
+        }
+        var decoratedOutputs: [ViewportPatternArrayPreview.Output] = []
+        decoratedOutputs.reserveCapacity(maximumDecoratedOutputs)
+        var seenIndexes: Set<Int> = []
+        for output in outputs where output.isSelected && decoratedOutputs.count < maximumDecoratedOutputs {
+            seenIndexes.insert(output.index)
+            decoratedOutputs.append(output)
+        }
+        for output in outputs where decoratedOutputs.count < maximumDecoratedOutputs {
+            guard seenIndexes.insert(output.index).inserted else {
+                continue
+            }
+            decoratedOutputs.append(output)
+        }
+        return decoratedOutputs.sorted { $0.index < $1.index }
+    }
+
+    private func drawPatternArrayOutput(
+        _ output: ViewportPatternArrayPreview.Output,
+        itemByID: [String: ViewportSceneItem],
+        layout: ViewportLayout,
+        in context: inout GraphicsContext
+    ) {
+        let color = output.isSelected ? Color.orange : Color.cyan
+        for itemID in output.itemIDs {
+            guard let item = itemByID[itemID] else {
+                continue
+            }
+            drawPatternArrayItemOutline(
+                item,
+                color: color,
+                isSelectedOutput: output.isSelected,
+                layout: layout,
+                in: &context
+            )
+        }
+        guard let center = patternArrayOutputCenter(
+            for: output,
+            itemByID: itemByID,
+            layout: layout
+        ) else {
+            return
+        }
+        drawPatternArrayOutputMarker(
+            output,
+            at: center,
+            color: color,
+            in: &context
+        )
+    }
+
+    private func drawPatternArrayConnector(
+        centers: [CGPoint],
+        in context: inout GraphicsContext
+    ) {
+        guard centers.count > 1 else {
+            return
+        }
+        var path = Path()
+        path.move(to: centers[0])
+        for center in centers.dropFirst() {
+            path.addLine(to: center)
+        }
+        context.stroke(
+            path,
+            with: .color(Color.cyan.opacity(0.42)),
+            style: StrokeStyle(lineWidth: 1.1, dash: [5.0, 5.0])
+        )
+    }
+
+    private func drawPatternArrayItemOutline(
+        _ item: ViewportSceneItem,
+        color: Color,
+        isSelectedOutput: Bool,
+        layout: ViewportLayout,
+        in context: inout GraphicsContext
+    ) {
+        let outline = patternArrayItemOutlinePath(item, layout: layout)
+        context.stroke(
+            outline,
+            with: .color(color.opacity(isSelectedOutput ? 0.88 : 0.50)),
+            style: StrokeStyle(lineWidth: isSelectedOutput ? 1.45 : 1.05, dash: [6.0, 4.0])
+        )
+    }
+
+    private func patternArrayItemOutlinePath(
+        _ item: ViewportSceneItem,
+        layout: ViewportLayout
+    ) -> Path {
+        if let projection = layout.bodyProjection(for: item) {
+            return patternArrayBodyOutlinePath(projection)
+        }
+        return patternArrayProjectedRectPath(layout.projectedFootprint(item.modelBounds))
+    }
+
+    private func patternArrayBodyOutlinePath(
+        _ projection: ViewportBodyProjection
+    ) -> Path {
+        var path = Path()
+        appendPatternArrayProjectedRect(projection.frontFootprint, to: &path)
+        appendPatternArrayProjectedRect(projection.backFootprint, to: &path)
+        let corners = [
+            (projection.frontFootprint.bottomLeft, projection.backFootprint.bottomLeft),
+            (projection.frontFootprint.bottomRight, projection.backFootprint.bottomRight),
+            (projection.frontFootprint.topRight, projection.backFootprint.topRight),
+            (projection.frontFootprint.topLeft, projection.backFootprint.topLeft),
+        ]
+        for edge in corners {
+            path.move(to: edge.0)
+            path.addLine(to: edge.1)
+        }
+        return path
+    }
+
+    private func patternArrayProjectedRectPath(
+        _ rect: ViewportProjectedRect
+    ) -> Path {
+        var path = Path()
+        appendPatternArrayProjectedRect(rect, to: &path)
+        return path
+    }
+
+    private func appendPatternArrayProjectedRect(
+        _ rect: ViewportProjectedRect,
+        to path: inout Path
+    ) {
+        path.move(to: rect.bottomLeft)
+        path.addLine(to: rect.bottomRight)
+        path.addLine(to: rect.topRight)
+        path.addLine(to: rect.topLeft)
+        path.closeSubpath()
+    }
+
+    private func patternArrayOutputCenter(
+        for output: ViewportPatternArrayPreview.Output,
+        itemByID: [String: ViewportSceneItem],
+        layout: ViewportLayout
+    ) -> CGPoint? {
+        let centers = output.itemIDs.compactMap { itemID -> CGPoint? in
+            guard let item = itemByID[itemID] else {
+                return nil
+            }
+            if let projection = layout.bodyProjection(for: item) {
+                return projection.center
+            }
+            return layout.projectedFootprint(item.modelBounds).center
+        }
+        guard !centers.isEmpty else {
+            return nil
+        }
+        let sum = centers.reduce(CGPoint.zero) { partial, center in
+            CGPoint(x: partial.x + center.x, y: partial.y + center.y)
+        }
+        return CGPoint(
+            x: sum.x / CGFloat(centers.count),
+            y: sum.y / CGFloat(centers.count)
+        )
+    }
+
+    private func drawPatternArrayOutputMarker(
+        _ output: ViewportPatternArrayPreview.Output,
+        at center: CGPoint,
+        color: Color,
+        in context: inout GraphicsContext
+    ) {
+        let radius: CGFloat = output.isSelected ? 5.2 : 4.0
+        let markerRect = CGRect(
+            x: center.x - radius,
+            y: center.y - radius,
+            width: radius * 2.0,
+            height: radius * 2.0
+        )
+        context.fill(Path(ellipseIn: markerRect), with: .color(color.opacity(0.28)))
+        context.stroke(Path(ellipseIn: markerRect), with: .color(color.opacity(0.92)), lineWidth: 1.2)
+        drawPatternArraySmallLabel(
+            "#\(output.index + 1)",
+            at: CGPoint(x: center.x, y: center.y - 16.0),
+            color: color,
+            in: &context
+        )
+    }
+
+    private func drawPatternArrayCountLabel(
+        _ preview: ViewportPatternArrayPreview,
+        drawnOutputCount: Int,
+        at point: CGPoint,
+        in context: inout GraphicsContext
+    ) {
+        let hiddenCount = max(preview.outputs.count - drawnOutputCount, 0)
+        let suffix = hiddenCount > 0 ? " +\(hiddenCount)" : ""
+        drawPatternArraySmallLabel(
+            "\(patternArrayDistributionTitle(preview.distributionKind)) \(preview.outputCount)\(suffix)",
+            at: point,
+            color: Color.cyan,
+            in: &context
+        )
+    }
+
+    private func drawPatternArraySmallLabel(
+        _ label: String,
+        at point: CGPoint,
+        color: Color,
+        in context: inout GraphicsContext
+    ) {
+        let width = max(CGFloat(label.count) * 7.0 + 12.0, 22.0)
+        let rect = CGRect(
+            x: point.x - width / 2.0,
+            y: point.y - 9.0,
+            width: width,
+            height: 18.0
+        )
+        context.fill(
+            Path(roundedRect: rect, cornerRadius: 6.0),
+            with: .color(Color.black.opacity(0.72))
+        )
+        context.stroke(
+            Path(roundedRect: rect, cornerRadius: 6.0),
+            with: .color(color.opacity(0.72)),
+            lineWidth: 0.8
+        )
+        context.draw(
+            Text(label)
+                .font(.system(size: 9.5, weight: .semibold, design: .rounded))
+                .foregroundStyle(Color.white.opacity(0.94)),
+            at: CGPoint(x: rect.midX, y: rect.midY)
+        )
+    }
+
+    private func patternArrayDistributionTitle(
+        _ distributionKind: PatternArraySummary.DistributionKind
+    ) -> String {
+        switch distributionKind {
+        case .rectangular:
+            "Rectangular"
+        case .radial:
+            "Radial"
+        case .curve:
+            "Curve"
         }
     }
 

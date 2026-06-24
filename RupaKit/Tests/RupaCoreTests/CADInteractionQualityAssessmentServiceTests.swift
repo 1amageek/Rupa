@@ -75,18 +75,20 @@ import RupaCore
 
     let arrays = try #require(result.entries.first { $0.area == .patternsAndArrays })
     let arrayCommandRating = try gateRating(.commandContract, in: arrays)
+    let arrayViewportRating = try gateRating(.viewportAffordance, in: arrays)
     let arrayInspectorRating = try gateRating(.inspectorAffordance, in: arrays)
     let arrayAgentRating = try gateRating(.agentParity, in: arrays)
     let arrayDiagnosticsRating = try gateRating(.measurementDiagnostics, in: arrays)
     #expect(arrays.currentRating == .partial)
     #expect(arrayCommandRating == .partial)
+    #expect(arrayViewportRating == .partial)
     #expect(arrayInspectorRating == .partial)
     #expect(arrayAgentRating == .implemented)
     #expect(arrayDiagnosticsRating == .partial)
     #expect(arrays.referenceSources.contains("https://doc.plasticity.xyz/common/rectangular-array"))
     #expect(!arrays.openWork.contains { $0.contains("radial array center") })
     #expect(!arrays.openWork.contains { $0.contains("viewport curve array path pick mode") })
-    #expect(arrays.openWork.contains { $0.contains("Viewport preview affordances") })
+    #expect(arrays.openWork.contains { $0.contains("Interactive viewport array handles") })
     #expect(arrays.evidence.contains { evidence in
         evidence.sourceFiles.contains("RupaKit/Sources/RupaCore/PatternArraySource.swift")
     })
@@ -104,6 +106,12 @@ import RupaCore
     })
     #expect(arrays.evidence.contains { evidence in
         evidence.sourceFiles.contains("RupaKit/Sources/RupaUI/PatternArraySummaryCache.swift")
+    })
+    #expect(arrays.evidence.contains { evidence in
+        evidence.sourceFiles.contains("RupaKit/Sources/RupaRendering/ViewportPatternArrayPreviewService.swift")
+    })
+    #expect(arrays.evidence.contains { evidence in
+        evidence.tests.contains("RupaKit/Tests/RupaRenderingTests/ViewportPatternArrayPreviewServiceTests.swift")
     })
     #expect(arrays.evidence.contains { evidence in
         evidence.notes.contains("Pattern Array summaries expose editable fields, lifecycle actions, source-owned output edit policy, output IDs, and diagnostics without forcing CAD evaluation.")
@@ -128,6 +136,9 @@ import RupaCore
     })
     #expect(arrays.evidence.contains { evidence in
         evidence.notes.contains("The Pattern Array Inspector reuses generation-keyed summary results so SwiftUI redraws do not repeatedly run transform planning or sketch curve extraction for unchanged documents.")
+    })
+    #expect(arrays.evidence.contains { evidence in
+        evidence.notes.contains("The viewport resolves selected PatternArraySource roots, component-instance outputs, and independent-copy descendants into source-owned output outlines, copy markers, and count labels without scanning global component-instance references.")
     })
 
     let section = try #require(result.entries.first { $0.area == .sectionAnalysis })

@@ -348,7 +348,7 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                 .sourceOwnership: .partial,
                 .commandContract: .partial,
                 .selectionTopology: .partial,
-                .viewportAffordance: .missing,
+                .viewportAffordance: .partial,
                 .inspectorAffordance: .partial,
                 .agentParity: .implemented,
                 .measurementDiagnostics: .partial,
@@ -384,6 +384,9 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                         "RupaKit/Sources/RupaUI/PatternArrayCurvePathPickService.swift",
                         "RupaKit/Sources/RupaUI/PatternArraySummaryCache.swift",
                         "RupaKit/Sources/RupaUI/MainView.swift",
+                        "RupaKit/Sources/RupaRendering/ViewportPatternArrayPreview.swift",
+                        "RupaKit/Sources/RupaRendering/ViewportPatternArrayPreviewService.swift",
+                        "RupaKit/Sources/RupaRendering/Viewport.swift",
                     ],
                     tests: [
                         "RupaKit/Tests/RupaCoreTests/DesignDisplaySnapshotServiceTests.swift",
@@ -394,6 +397,7 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                         "RupaKit/Tests/RupaUIPackageTests/PatternArrayInspectorStateTests.swift",
                         "RupaKit/Tests/RupaUIPackageTests/PatternArrayEditingServiceTests.swift",
                         "RupaKit/Tests/RupaUIPackageTests/PatternArraySummaryCacheTests.swift",
+                        "RupaKit/Tests/RupaRenderingTests/ViewportPatternArrayPreviewServiceTests.swift",
                     ],
                     notes: [
                         "Rectangular, radial, and curve arrays now persist a PatternArraySource and emit component instances or independent copied CAD feature geometry.",
@@ -411,13 +415,14 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                         "The Pattern Array Inspector starts a dedicated viewport Curve Array path pick mode; viewport sketch line, circle, arc, or spline targets update the PatternArraySource path without replacing the active Pattern Array selection.",
                         "Curve Array ratio extent editing clamps UI and service inputs to the Core planner range before source-owned regeneration.",
                         "The Pattern Array Inspector reuses generation-keyed summary results so SwiftUI redraws do not repeatedly run transform planning or sketch curve extraction for unchanged documents.",
+                        "The viewport resolves selected PatternArraySource roots, component-instance outputs, and independent-copy descendants into source-owned output outlines, copy markers, and count labels without scanning global component-instance references.",
                         "Viewport editing workflows and incremental independent-copy reuse remain open.",
                     ]
                 ),
             ],
             openWork: [
                 "Viewport-independent copy controls and regeneration reuse for edited outputs.",
-                "Viewport preview affordances for array handles, copy count, spacing, extent, path, and output mode.",
+                "Interactive viewport array handles for count, spacing, extent, path, and output mode editing.",
             ],
             next: "Add viewport array handles, curve path picking affordances, and independent-copy reuse diagnostics."
         ),
