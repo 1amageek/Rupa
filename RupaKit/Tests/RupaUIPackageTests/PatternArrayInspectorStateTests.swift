@@ -53,6 +53,47 @@ import Testing
     #expect(state.outputModeTitle == "Component Instance")
 }
 
+@Test func patternArrayInspectorStateReportsEditableRectangularFirstAxis() throws {
+    let fixture = PatternArrayInspectorFixture()
+    let rootNode = SceneNode(id: fixture.rootSceneNodeID, name: "Array Root")
+    let source = PatternArraySource(
+        id: fixture.sourceID,
+        name: "Array",
+        definitionID: fixture.definitionID,
+        distribution: .rectangular(RectangularPatternArray(
+            firstAxis: PatternArrayLinearAxis(
+                direction: .unitX,
+                distance: .length(12.0, .millimeter),
+                copyCount: 3,
+                distanceMode: .extent
+            )
+        )),
+        outputMode: .componentInstance,
+        outputInstanceIDs: [
+            fixture.firstComponentInstanceID,
+            fixture.secondComponentInstanceID,
+        ],
+        rootSceneNodeID: fixture.rootSceneNodeID
+    )
+    let state = try #require(PatternArrayInspectorState(
+        selectedNodes: [rootNode],
+        sceneNodes: [rootNode.id: rootNode],
+        patternArrays: [source.id: source],
+        summaryResult: PatternArraySummaryResult(
+            generation: DocumentGeneration(7),
+            dirty: false,
+            patternArrays: [fixture.componentInstanceSummary]
+        )
+    ))
+    let rectangular = try #require(state.rectangularFirstAxis)
+
+    #expect(rectangular.copyCount == 3)
+    #expect(rectangular.distanceMeters == 0.012)
+    #expect(rectangular.distanceMode == .extent)
+    #expect(rectangular.distanceModeTitle == "Extent")
+    #expect(rectangular.distanceIsEditable)
+}
+
 @Test func patternArrayInspectorStateReportsIndependentCopyDescendantSelection() throws {
     let fixture = PatternArrayInspectorFixture()
     let outputRoot = SceneNode(

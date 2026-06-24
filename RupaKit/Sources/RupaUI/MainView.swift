@@ -4375,6 +4375,7 @@ public struct MainView: View {
         PatternArrayInspectorState(
             selectedNodes: nodes,
             sceneNodes: session.document.productMetadata.sceneNodes,
+            patternArrays: session.document.productMetadata.patternArrays,
             summaryResult: PatternArraySummaryService().summarize(
                 document: session.document,
                 generation: session.generation,
@@ -5871,7 +5872,7 @@ public struct MainView: View {
             inspectorRow("Definition", state.definitionName ?? shortID(state.definitionID))
             inspectorRow("Root", state.rootSceneNodeName ?? shortID(state.rootSceneNodeID))
             inspectorRow("Distribution", state.distributionTitle)
-            inspectorRow("Output Mode", state.outputModeTitle)
+            patternArrayOutputModePicker(state)
             inspectorRow("Outputs", "\(state.outputCount)")
             inspectorRow("Selected Output", state.selectedOutputTitle)
             inspectorRow("Ownership", state.ownershipTitle)
@@ -5879,7 +5880,150 @@ public struct MainView: View {
             inspectorRow("Source Edit", state.sourceEditTitle)
             inspectorRow("Detach", state.detachTitle)
             inspectorRow("Diagnostics", state.diagnosticsTitle)
+            if let firstAxis = state.rectangularFirstAxis {
+                patternArrayRectangularFirstAxisControls(
+                    state,
+                    firstAxis: firstAxis
+                )
+            }
         }
+    }
+
+    private func patternArrayOutputModePicker(_ state: PatternArrayInspectorState) -> some View {
+        inspectorControlRow("Output Mode") {
+            Picker(
+                "",
+                selection: Binding(
+                    get: { state.outputMode },
+                    set: { outputMode in
+                        session.updatePatternArray(
+                            id: state.sourceID,
+                            outputMode: outputMode
+                        )
+                    }
+                )
+            ) {
+                Text("Component")
+                    .tag(PatternArrayOutputMode.componentInstance)
+                Text("Independent")
+                    .tag(PatternArrayOutputMode.independentCopy)
+            }
+            .labelsHidden()
+            .controlSize(.small)
+            .frame(minWidth: inspectorControlWidth)
+            .accessibilityIdentifier("InspectorPatternArray.outputMode")
+        }
+    }
+
+    @ViewBuilder
+    private func patternArrayRectangularFirstAxisControls(
+        _ state: PatternArrayInspectorState,
+        firstAxis: PatternArrayInspectorState.RectangularFirstAxis
+    ) -> some View {
+        inspectorControlRow("Copies") {
+            Stepper(
+                value: Binding(
+                    get: { firstAxis.copyCount },
+                    set: { copyCount in
+                        setPatternArrayRectangularFirstAxisCopyCount(
+                            state,
+                            copyCount: copyCount
+                        )
+                    }
+                ),
+                in: 1 ... 10_000
+            ) {
+                Text("\(firstAxis.copyCount)")
+                    .monospacedDigit()
+            }
+            .accessibilityIdentifier("InspectorPatternArray.rectangular.firstAxis.copyCount")
+        }
+        if let distanceMeters = firstAxis.distanceMeters {
+            lengthControl(
+                firstAxis.distanceModeTitle,
+                meters: distanceMeters,
+                sliderRange: patternArrayDistanceSliderRange(for: distanceMeters)
+            ) { meters in
+                setPatternArrayRectangularFirstAxisDistance(
+                    state,
+                    meters: meters
+                )
+            }
+            .accessibilityIdentifier("InspectorPatternArray.rectangular.firstAxis.distance")
+        } else {
+            inspectorRow(firstAxis.distanceModeTitle, "Expression")
+        }
+        inspectorControlRow("Distance Mode") {
+            Picker(
+                "",
+                selection: Binding(
+                    get: { firstAxis.distanceMode },
+                    set: { distanceMode in
+                        setPatternArrayRectangularFirstAxisDistanceMode(
+                            state,
+                            distanceMode: distanceMode
+                        )
+                    }
+                )
+            ) {
+                Text("Spacing")
+                    .tag(PatternArrayDistanceMode.spacing)
+                Text("Extent")
+                    .tag(PatternArrayDistanceMode.extent)
+            }
+            .labelsHidden()
+            .controlSize(.small)
+            .frame(minWidth: inspectorControlWidth)
+            .accessibilityIdentifier("InspectorPatternArray.rectangular.firstAxis.distanceMode")
+        }
+    }
+
+    private func patternArrayDistanceSliderRange(for meters: Double) -> ClosedRange<Double> {
+        let unit = session.document.displayUnit
+        let currentValue = max(unit.value(fromMeters: meters), 0.001)
+        return 0.0 ... max(currentValue * 2.0, 1.0)
+    }
+
+    private func setPatternArrayRectangularFirstAxisCopyCount(
+        _ state: PatternArrayInspectorState,
+        copyCount: Int
+    ) {
+        updatePatternArrayRectangularFirstAxis(state) { firstAxis in
+            firstAxis.copyCount = max(copyCount, 1)
+        }
+    }
+
+    private func setPatternArrayRectangularFirstAxisDistance(
+        _ state: PatternArrayInspectorState,
+        meters: Double
+    ) {
+        updatePatternArrayRectangularFirstAxis(state) { firstAxis in
+            firstAxis.distance = .length(max(meters, 0.0), .meter)
+        }
+    }
+
+    private func setPatternArrayRectangularFirstAxisDistanceMode(
+        _ state: PatternArrayInspectorState,
+        distanceMode: PatternArrayDistanceMode
+    ) {
+        updatePatternArrayRectangularFirstAxis(state) { firstAxis in
+            firstAxis.distanceMode = distanceMode
+        }
+    }
+
+    private func updatePatternArrayRectangularFirstAxis(
+        _ state: PatternArrayInspectorState,
+        update: (inout PatternArrayLinearAxis) -> Void
+    ) {
+        guard let source = session.document.productMetadata.patternArrays[state.sourceID],
+              case .rectangular(var rectangular) = source.distribution else {
+            return
+        }
+        update(&rectangular.firstAxis)
+        session.updatePatternArray(
+            id: state.sourceID,
+            distribution: .rectangular(rectangular)
+        )
     }
 
     private func boolChoicePicker(

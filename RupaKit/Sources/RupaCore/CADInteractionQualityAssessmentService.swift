@@ -400,6 +400,7 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                         "Pattern Array summaries expose editable fields, lifecycle actions, source-owned output edit policy, output IDs, and diagnostics without forcing CAD evaluation.",
                         "Pattern Array summary diagnostics mirror source-owned output invariants for missing instances, mismatched transforms, duplicate ownership, root child mapping, and independent-copy feature closure checks.",
                         "The object Inspector now maps selected source roots, generated outputs, and independent-copy descendants back to their PatternArraySource and displays ownership, lifecycle actions, output mode, selected output index, and diagnostics.",
+                        "The Pattern Array Inspector exposes source-owned output mode plus rectangular first-axis copy count, spacing or extent, and distance mode controls that update the PatternArraySource instead of generated outputs.",
                         "Viewport editing workflows and incremental independent-copy reuse remain open.",
                     ]
                 ),

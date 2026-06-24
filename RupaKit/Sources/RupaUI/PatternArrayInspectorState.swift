@@ -8,6 +8,25 @@ struct PatternArrayInspectorState: Equatable, Sendable {
         case mixed
     }
 
+    struct RectangularFirstAxis: Equatable, Sendable {
+        var copyCount: Int
+        var distanceMeters: Double?
+        var distanceMode: PatternArrayDistanceMode
+
+        var distanceIsEditable: Bool {
+            distanceMeters != nil
+        }
+
+        var distanceModeTitle: String {
+            switch distanceMode {
+            case .spacing:
+                "Spacing"
+            case .extent:
+                "Extent"
+            }
+        }
+    }
+
     var sourceID: PatternArraySourceID
     var name: String
     var definitionID: ComponentDefinitionID
@@ -21,10 +40,12 @@ struct PatternArrayInspectorState: Equatable, Sendable {
     var selectedOutputIndices: [Int]
     var outputOwnership: PatternArraySummary.OutputOwnership
     var diagnostics: [PatternArraySummary.Diagnostic]
+    var rectangularFirstAxis: RectangularFirstAxis?
 
     init?(
         selectedNodes: [SceneNode],
         sceneNodes: [SceneNodeID: SceneNode],
+        patternArrays: [PatternArraySourceID: PatternArraySource] = [:],
         summaryResult: PatternArraySummaryResult
     ) {
         guard !selectedNodes.isEmpty else {
@@ -58,6 +79,7 @@ struct PatternArrayInspectorState: Equatable, Sendable {
         self.selectedOutputIndices = Self.selectedOutputIndices(from: matches)
         self.outputOwnership = summary.outputOwnership
         self.diagnostics = summary.diagnostics
+        self.rectangularFirstAxis = patternArrays[summary.sourceID].flatMap(Self.rectangularFirstAxis)
     }
 
     var selectionRoleTitle: String {
@@ -241,6 +263,28 @@ struct PatternArrayInspectorState: Equatable, Sendable {
             indices.append(outputIndex)
         }
         return indices.sorted()
+    }
+
+    private static func rectangularFirstAxis(
+        for source: PatternArraySource
+    ) -> RectangularFirstAxis? {
+        guard case .rectangular(let rectangular) = source.distribution else {
+            return nil
+        }
+        return RectangularFirstAxis(
+            copyCount: rectangular.firstAxis.copyCount,
+            distanceMeters: constantLengthMeters(rectangular.firstAxis.distance),
+            distanceMode: rectangular.firstAxis.distanceMode
+        )
+    }
+
+    private static func constantLengthMeters(_ expression: CADExpression) -> Double? {
+        guard case .constant(let quantity) = expression,
+              quantity.kind == .length,
+              quantity.value.isFinite else {
+            return nil
+        }
+        return quantity.value
     }
 
     private func actionTitle(_ action: PatternArraySummary.LifecycleAction) -> String {
