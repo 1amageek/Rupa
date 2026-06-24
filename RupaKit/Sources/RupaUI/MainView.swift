@@ -463,6 +463,7 @@ public struct MainView: View {
                     onPatternArrayRadialAngleDrag: viewportPatternArrayRadialAngleDragHandler,
                     onPatternArrayCopyCountDrag: viewportPatternArrayCopyCountDragHandler,
                     onPatternArrayCurveExtentDrag: viewportPatternArrayCurveExtentDragHandler,
+                    onPatternArrayOutputModeChange: viewportPatternArrayOutputModeChangeHandler,
                     onSketchCurveHandleDrag: viewportSketchCurveHandleDragHandler,
                     onSketchDimensionDrag: viewportSketchDimensionDragHandler,
                     onSketchPointHandleDrag: viewportSketchPointHandleDragHandler,
@@ -714,6 +715,16 @@ public struct MainView: View {
             if result?.diagnostics.isEmpty == false {
                 isPreviewExpanded = true
             }
+        }
+    }
+
+    private var viewportPatternArrayOutputModeChangeHandler: ((ViewportPatternArrayOutputModeTarget) -> Void)? {
+        guard session.selectedTool == .select,
+              patternArrayInspectorState(for: selectedSceneNodes) != nil else {
+            return nil
+        }
+        return { target in
+            handleViewportPatternArrayOutputModeChange(target)
         }
     }
 
@@ -3438,6 +3449,21 @@ public struct MainView: View {
         case .curve:
             result = service.setCurveCopyCount(target.copyCount)
         }
+        if result?.diagnostics.isEmpty == false {
+            isPreviewExpanded = true
+        }
+    }
+
+    private func handleViewportPatternArrayOutputModeChange(_ target: ViewportPatternArrayOutputModeTarget) {
+        guard session.selectedTool == .select,
+              let state = patternArrayInspectorState(for: selectedSceneNodes),
+              state.sourceID == target.sourceID else {
+            return
+        }
+        let result = PatternArrayEditingService(
+            session: session,
+            sourceID: target.sourceID
+        ).setOutputMode(target.outputMode)
         if result?.diagnostics.isEmpty == false {
             isPreviewExpanded = true
         }

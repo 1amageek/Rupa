@@ -117,6 +117,9 @@ import RupaCore
         evidence.sourceFiles.contains("RupaKit/Sources/RupaUI/PatternArrayEditingService.swift")
     })
     #expect(arrays.evidence.contains { evidence in
+        evidence.sourceFiles.contains("RupaKit/Sources/RupaUI/PatternArrayExpressionWritebackService.swift")
+    })
+    #expect(arrays.evidence.contains { evidence in
         evidence.sourceFiles.contains("RupaKit/Sources/RupaUI/PatternArrayCurvePathPickService.swift")
     })
     #expect(arrays.evidence.contains { evidence in
@@ -138,6 +141,12 @@ import RupaCore
         evidence.sourceFiles.contains("RupaKit/Sources/RupaRendering/ViewportPatternArrayCurveExtentAffordanceService.swift")
     })
     #expect(arrays.evidence.contains { evidence in
+        evidence.sourceFiles.contains("RupaKit/Sources/RupaRendering/ViewportPatternArrayOutputModeTarget.swift")
+    })
+    #expect(arrays.evidence.contains { evidence in
+        evidence.sourceFiles.contains("RupaKit/Sources/RupaRendering/ViewportPatternArrayOutputModeAffordanceService.swift")
+    })
+    #expect(arrays.evidence.contains { evidence in
         evidence.tests.contains("RupaKit/Tests/RupaRenderingTests/ViewportPatternArrayPreviewServiceTests.swift")
     })
     #expect(arrays.evidence.contains { evidence in
@@ -157,6 +166,9 @@ import RupaCore
     })
     #expect(arrays.evidence.contains { evidence in
         evidence.tests.contains("RupaKit/Tests/RupaRenderingTests/ViewportPatternArrayCurveExtentAffordanceServiceTests.swift")
+    })
+    #expect(arrays.evidence.contains { evidence in
+        evidence.tests.contains("RupaKit/Tests/RupaRenderingTests/ViewportPatternArrayOutputModeAffordanceServiceTests.swift")
     })
     #expect(arrays.evidence.contains { evidence in
         evidence.notes.contains("Pattern Array summaries expose editable fields, lifecycle actions, source-owned output edit policy, output IDs, and diagnostics without forcing CAD evaluation.")
@@ -198,8 +210,15 @@ import RupaCore
         evidence.notes.contains("The viewport exposes Curve Pattern Array extent handles that use the shared Core curve-path geometry resolver so viewport dragging and generated copy placement agree on path length and sampling.")
     })
     #expect(arrays.evidence.contains { evidence in
+        evidence.notes.contains("The viewport exposes Pattern Array output-mode badges that resolve selected source roots, generated outputs, and independent-copy descendants back to source-owned output mode regeneration.")
+    })
+    #expect(arrays.evidence.contains { evidence in
+        evidence.notes.contains("Viewport and inspector Pattern Array edits preserve direct parameter references by updating referenced ParameterTable values when quantity kinds match.")
+    })
+    #expect(arrays.evidence.contains { evidence in
         evidence.notes.contains("Pattern Array generation, curve path extent resolution, and viewport affordance placement share the same parameter-aware expression resolver so Agent-authored parametric arrays remain directly editable in the UI.")
     })
+    #expect(!arrays.openWork.contains { $0.contains("output mode editing") })
 
     let section = try #require(result.entries.first { $0.area == .sectionAnalysis })
     #expect(section.currentRating == .partial)

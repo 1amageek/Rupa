@@ -32,9 +32,40 @@ struct PatternArrayEditingService {
         slot: RectangularAxisSlot,
         meters: Double
     ) -> CommandExecutionResult? {
-        updateRectangularAxis(slot: slot) { axis in
-            axis.distance = .length(distancePolicy.normalizedLinearDistanceMeters(meters), .meter)
+        guard let source = session.document.productMetadata.patternArrays[sourceID],
+              case .rectangular(var rectangular) = source.distribution else {
+            return nil
         }
+        let distanceQuantity = Quantity(
+            value: distancePolicy.normalizedLinearDistanceMeters(meters),
+            kind: .length
+        )
+        switch slot {
+        case .first:
+            if let result = expressionWritebackService.updateReferencedExpression(
+                rectangular.firstAxis.distance,
+                quantity: distanceQuantity
+            ) {
+                return commandResult(from: result)
+            }
+            rectangular.firstAxis.distance = .constant(distanceQuantity)
+        case .second:
+            guard var secondAxis = rectangular.secondAxis else {
+                return nil
+            }
+            if let result = expressionWritebackService.updateReferencedExpression(
+                secondAxis.distance,
+                quantity: distanceQuantity
+            ) {
+                return commandResult(from: result)
+            }
+            secondAxis.distance = .constant(distanceQuantity)
+            rectangular.secondAxis = secondAxis
+        }
+        return session.updatePatternArray(
+            id: sourceID,
+            distribution: .rectangular(rectangular)
+        )
     }
 
     @discardableResult
@@ -118,10 +149,26 @@ struct PatternArrayEditingService {
 
     @discardableResult
     func setRadialAngle(degrees: Double) -> CommandExecutionResult? {
-        updateRadialAngularAxis { angularAxis in
-            let angleRadians = PatternArrayEditingService.radians(fromDegrees: degrees)
-            angularAxis.angle = .angle(anglePolicy.normalizedSignedAngleRadians(angleRadians), .radian)
+        guard let source = session.document.productMetadata.patternArrays[sourceID],
+              case .radial(var radial) = source.distribution else {
+            return nil
         }
+        let angleRadians = PatternArrayEditingService.radians(fromDegrees: degrees)
+        let angleQuantity = Quantity(
+            value: anglePolicy.normalizedSignedAngleRadians(angleRadians),
+            kind: .angle
+        )
+        if let result = expressionWritebackService.updateReferencedExpression(
+            radial.angularAxis.angle,
+            quantity: angleQuantity
+        ) {
+            return commandResult(from: result)
+        }
+        radial.angularAxis.angle = .constant(angleQuantity)
+        return session.updatePatternArray(
+            id: sourceID,
+            distribution: .radial(radial)
+        )
     }
 
     @discardableResult
@@ -140,9 +187,27 @@ struct PatternArrayEditingService {
 
     @discardableResult
     func setRadialAxisDistance(_ meters: Double) -> CommandExecutionResult? {
-        updateRadialAxis { radialAxis in
-            radialAxis.distance = .length(distancePolicy.normalizedLinearDistanceMeters(meters), .meter)
+        guard let source = session.document.productMetadata.patternArrays[sourceID],
+              case .radial(var radial) = source.distribution,
+              var radialAxis = radial.radialAxis else {
+            return nil
         }
+        let distanceQuantity = Quantity(
+            value: distancePolicy.normalizedLinearDistanceMeters(meters),
+            kind: .length
+        )
+        if let result = expressionWritebackService.updateReferencedExpression(
+            radialAxis.distance,
+            quantity: distanceQuantity
+        ) {
+            return commandResult(from: result)
+        }
+        radialAxis.distance = .constant(distanceQuantity)
+        radial.radialAxis = radialAxis
+        return session.updatePatternArray(
+            id: sourceID,
+            distribution: .radial(radial)
+        )
     }
 
     @discardableResult
@@ -196,16 +261,19 @@ struct PatternArrayEditingService {
 
     @discardableResult
     func setCurveTwist(degrees: Double) -> CommandExecutionResult? {
-        updateCurve { curve in
-            curve.twist = .angle(degrees, .degree)
-        }
+        let angleRadians = PatternArrayEditingService.radians(fromDegrees: degrees)
+        return updateCurveExpression(
+            keyPath: \.twist,
+            quantity: Quantity(value: angleRadians, kind: .angle)
+        )
     }
 
     @discardableResult
     func setCurveEndScale(_ scale: Double) -> CommandExecutionResult? {
-        updateCurve { curve in
-            curve.endScale = .scalar(max(scale, 1.0e-9))
-        }
+        return updateCurveExpression(
+            keyPath: \.endScale,
+            quantity: Quantity(value: max(scale, 1.0e-9), kind: .scalar)
+        )
     }
 
     @discardableResult
@@ -244,18 +312,100 @@ struct PatternArrayEditingService {
 
     @discardableResult
     func setCurveExtentDistance(_ meters: Double) -> CommandExecutionResult? {
-        updateCurve { curve in
-            curve.extentMode = .distance
-            curve.extent = .length(distancePolicy.normalizedLinearDistanceMeters(meters), .meter)
+        guard let source = session.document.productMetadata.patternArrays[sourceID],
+              case .curve(var curve) = source.distribution else {
+            return nil
         }
+        let distanceQuantity = Quantity(
+            value: distancePolicy.normalizedLinearDistanceMeters(meters),
+            kind: .length
+        )
+        if curve.extentMode == .distance,
+           let result = expressionWritebackService.updateReferencedExpression(
+               curve.extent,
+               quantity: distanceQuantity
+           ) {
+            return commandResult(from: result)
+        }
+        curve.extentMode = .distance
+        curve.extent = .constant(distanceQuantity)
+        return session.updatePatternArray(
+            id: sourceID,
+            distribution: .curve(curve)
+        )
     }
 
     @discardableResult
     func setCurveExtentRatio(_ ratio: Double) -> CommandExecutionResult? {
-        updateCurve { curve in
-            curve.extentMode = .ratio
-            curve.extent = .scalar(clampedCurveExtentRatio(ratio))
+        guard let source = session.document.productMetadata.patternArrays[sourceID],
+              case .curve(var curve) = source.distribution else {
+            return nil
         }
+        let ratioQuantity = Quantity(
+            value: clampedCurveExtentRatio(ratio),
+            kind: .scalar
+        )
+        if curve.extentMode == .ratio,
+           let result = expressionWritebackService.updateReferencedExpression(
+               curve.extent,
+               quantity: ratioQuantity
+           ) {
+            return commandResult(from: result)
+        }
+        curve.extentMode = .ratio
+        curve.extent = .constant(ratioQuantity)
+        return session.updatePatternArray(
+            id: sourceID,
+            distribution: .curve(curve)
+        )
+    }
+
+    private var expressionWritebackService: PatternArrayExpressionWritebackService {
+        PatternArrayExpressionWritebackService(session: session)
+    }
+
+    private func updateCurveExpression(
+        keyPath: WritableKeyPath<CurvePatternArray, CADExpression>,
+        quantity: Quantity
+    ) -> CommandExecutionResult? {
+        guard let source = session.document.productMetadata.patternArrays[sourceID],
+              case .curve(var curve) = source.distribution else {
+            return nil
+        }
+        if let result = expressionWritebackService.updateReferencedExpression(
+            curve[keyPath: keyPath],
+            quantity: quantity
+        ) {
+            return commandResult(from: result)
+        }
+        curve[keyPath: keyPath] = .constant(quantity)
+        return session.updatePatternArray(
+            id: sourceID,
+            distribution: .curve(curve)
+        )
+    }
+
+    private func commandResult(from writebackResult: PatternArrayExpressionWritebackResult) -> CommandExecutionResult? {
+        switch writebackResult {
+        case .updated(let commandResult):
+            return commandResult
+        case .blocked:
+            return nil
+        }
+    }
+
+    private func updateCurve(
+        update: (inout CurvePatternArray) -> Void
+    ) -> CommandExecutionResult? {
+        guard let source = session.document.productMetadata.patternArrays[sourceID],
+              case .curve(var curve) = source.distribution else {
+            return nil
+        }
+        update(&curve)
+        return session.updatePatternArray(
+            id: sourceID,
+            distribution: .curve(curve)
+        )
     }
 
     private func updateRectangularAxis(
@@ -309,20 +459,6 @@ struct PatternArrayEditingService {
         return session.updatePatternArray(
             id: sourceID,
             distribution: .radial(radial)
-        )
-    }
-
-    private func updateCurve(
-        update: (inout CurvePatternArray) -> Void
-    ) -> CommandExecutionResult? {
-        guard let source = session.document.productMetadata.patternArrays[sourceID],
-              case .curve(var curve) = source.distribution else {
-            return nil
-        }
-        update(&curve)
-        return session.updatePatternArray(
-            id: sourceID,
-            distribution: .curve(curve)
         )
     }
 

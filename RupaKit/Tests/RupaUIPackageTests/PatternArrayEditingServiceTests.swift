@@ -75,6 +75,193 @@ import Testing
 }
 
 @MainActor
+@Test func patternArrayEditingServiceUpdatesReferencedRectangularDistanceParameter() async throws {
+    let session = EditorSession()
+    _ = try #require(session.createDefaultExtrudedRectangle())
+    _ = try session.execute(
+        .upsertParameter(
+            name: "editablePatternSpacing",
+            expression: .constant(.length(10.0, unit: .millimeter)),
+            kind: .length
+        )
+    )
+    let spacing = try #require(session.document.cadDocument.parameters.parameters.values.first {
+        $0.name == "editablePatternSpacing"
+    })
+    let sourceID = try createPatternArray(
+        in: session,
+        name: "Referenced Viewport Distance Array",
+        distribution: .rectangular(RectangularPatternArray(
+            firstAxis: PatternArrayLinearAxis(
+                direction: .unitX,
+                distance: .reference(spacing.id),
+                copyCount: 3,
+                distanceMode: .spacing
+            )
+        ))
+    )
+    let service = PatternArrayEditingService(session: session, sourceID: sourceID)
+
+    let result = service.setRectangularAxisDistance(slot: .first, meters: 0.024)
+
+    let source = try #require(session.document.productMetadata.patternArrays[sourceID])
+    guard case .rectangular(let rectangular) = source.distribution,
+          case .reference(let parameterID) = rectangular.firstAxis.distance else {
+        Issue.record("Expected the rectangular axis to keep the parameter reference.")
+        return
+    }
+    let quantity = try parameterQuantity(named: "editablePatternSpacing", in: session.document)
+    #expect(result?.didMutate == true)
+    #expect(parameterID == spacing.id)
+    #expect(quantity.kind == .length)
+    #expect(quantity.value == 0.024)
+}
+
+@MainActor
+@Test func patternArrayExpressionWritebackBlocksKindMismatchWithoutDroppingReference() async throws {
+    let session = EditorSession()
+    _ = try session.execute(
+        .upsertParameter(
+            name: "editablePatternAngleOnly",
+            expression: .constant(.angle(45.0, unit: .degree)),
+            kind: .angle
+        )
+    )
+    let angle = try #require(session.document.cadDocument.parameters.parameters.values.first {
+        $0.name == "editablePatternAngleOnly"
+    })
+
+    let result = PatternArrayExpressionWritebackService(session: session).updateReferencedExpression(
+        .reference(angle.id),
+        quantity: .length(0.024, unit: .meter)
+    )
+
+    guard case .blocked = try #require(result) else {
+        Issue.record("Expected kind-mismatched parameter writeback to block.")
+        return
+    }
+    let parameter = try #require(session.document.cadDocument.parameters.parameters[angle.id])
+    guard case .constant(let quantity) = parameter.expression else {
+        Issue.record("Expected the parameter expression to remain unchanged.")
+        return
+    }
+    #expect(quantity.kind == .angle)
+    #expect(abs(quantity.value - Double.pi / 4.0) < 1.0e-12)
+    #expect(session.diagnostics.contains {
+        $0.severity == .warning && $0.message == "Pattern Array parameter reference could not be updated."
+    })
+}
+
+@MainActor
+@Test func patternArrayEditingServiceUpdatesReferencedRadialAndCurveParameters() async throws {
+    let session = EditorSession()
+    _ = try #require(session.createDefaultExtrudedRectangle())
+    _ = try session.execute(
+        .upsertParameter(
+            name: "editablePatternAngle",
+            expression: .constant(.angle(45.0, unit: .degree)),
+            kind: .angle
+        )
+    )
+    _ = try session.execute(
+        .upsertParameter(
+            name: "editablePatternTwist",
+            expression: .constant(.angle(15.0, unit: .degree)),
+            kind: .angle
+        )
+    )
+    _ = try session.execute(
+        .upsertParameter(
+            name: "editablePatternScale",
+            expression: .constant(.scalar(1.5)),
+            kind: .scalar
+        )
+    )
+    _ = try session.execute(
+        .upsertParameter(
+            name: "editablePatternRatio",
+            expression: .constant(.scalar(0.5)),
+            kind: .scalar
+        )
+    )
+    let angle = try #require(session.document.cadDocument.parameters.parameters.values.first {
+        $0.name == "editablePatternAngle"
+    })
+    let twist = try #require(session.document.cadDocument.parameters.parameters.values.first {
+        $0.name == "editablePatternTwist"
+    })
+    let scale = try #require(session.document.cadDocument.parameters.parameters.values.first {
+        $0.name == "editablePatternScale"
+    })
+    let ratio = try #require(session.document.cadDocument.parameters.parameters.values.first {
+        $0.name == "editablePatternRatio"
+    })
+    let radialSourceID = try createPatternArray(
+        in: session,
+        name: "Referenced Radial Parameter Array",
+        distribution: .radial(RadialPatternArray(
+            angularAxis: PatternArrayAngularAxis(
+                center: .origin,
+                axis: .unitZ,
+                angle: .reference(angle.id),
+                copyCount: 3
+            )
+        ))
+    )
+    let curveSourceID = try createPatternArray(
+        in: session,
+        name: "Referenced Curve Parameter Array",
+        distribution: .curve(CurvePatternArray(
+            path: .polyline(
+                points: [
+                    .origin,
+                    Point3D(x: 0.03, y: 0.0, z: 0.0),
+                ],
+                normal: .unitZ
+            ),
+            copyCount: 2,
+            twist: .reference(twist.id),
+            endScale: .reference(scale.id),
+            extent: .reference(ratio.id),
+            extentMode: .ratio
+        ))
+    )
+
+    let radialResult = PatternArrayEditingService(
+        session: session,
+        sourceID: radialSourceID
+    ).setRadialAngle(degrees: 90.0)
+    let curveService = PatternArrayEditingService(session: session, sourceID: curveSourceID)
+    let twistResult = curveService.setCurveTwist(degrees: 30.0)
+    let scaleResult = curveService.setCurveEndScale(2.0)
+    let ratioResult = curveService.setCurveExtentRatio(0.75)
+
+    let radialSource = try #require(session.document.productMetadata.patternArrays[radialSourceID])
+    let curveSource = try #require(session.document.productMetadata.patternArrays[curveSourceID])
+    guard case .radial(let radial) = radialSource.distribution,
+          case .reference(let radialAngleID) = radial.angularAxis.angle,
+          case .curve(let curve) = curveSource.distribution,
+          case .reference(let twistID) = curve.twist,
+          case .reference(let scaleID) = curve.endScale,
+          case .reference(let ratioID) = curve.extent else {
+        Issue.record("Expected radial and curve controls to keep parameter references.")
+        return
+    }
+    #expect(radialResult?.didMutate == true)
+    #expect(twistResult?.didMutate == true)
+    #expect(scaleResult?.didMutate == true)
+    #expect(ratioResult?.didMutate == true)
+    #expect(radialAngleID == angle.id)
+    #expect(twistID == twist.id)
+    #expect(scaleID == scale.id)
+    #expect(ratioID == ratio.id)
+    #expect(abs(try parameterQuantity(named: "editablePatternAngle", in: session.document).value - Double.pi / 2.0) < 1.0e-12)
+    #expect(abs(try parameterQuantity(named: "editablePatternTwist", in: session.document).value - Double.pi / 6.0) < 1.0e-12)
+    #expect(try parameterQuantity(named: "editablePatternScale", in: session.document).value == 2.0)
+    #expect(try parameterQuantity(named: "editablePatternRatio", in: session.document).value == 0.75)
+}
+
+@MainActor
 @Test func patternArrayEditingServiceSetsCopyCountsFromViewportDrag() async throws {
     let session = EditorSession()
     _ = try #require(session.createDefaultExtrudedRectangle())
@@ -533,4 +720,18 @@ private func curveExtentDistance(
         )
     }
     return quantity.value
+}
+
+private func parameterQuantity(
+    named name: String,
+    in document: DesignDocument
+) throws -> Quantity {
+    let parameter = try #require(document.cadDocument.parameters.parameters.values.first { $0.name == name })
+    guard case .constant(let quantity) = parameter.expression else {
+        throw EditorError(
+            code: .referenceUnresolved,
+            message: "Expected a constant parameter expression."
+        )
+    }
+    return quantity
 }

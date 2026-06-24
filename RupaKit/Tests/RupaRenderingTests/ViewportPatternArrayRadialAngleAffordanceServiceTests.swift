@@ -192,6 +192,72 @@ import Testing
     #expect(abs(candidate.geometry.baseAngleRadians - Double.pi / 4.0) < 1.0e-12)
 }
 
+@Test func patternArraySourceSelectionIndexPreservesBodyYMidpointForModelReference() throws {
+    let definitionID = ComponentDefinitionID()
+    let sourceSceneNodeID = SceneNodeID()
+    let patternRootSceneNodeID = SceneNodeID()
+    let sourceID = PatternArraySourceID()
+    let source = PatternArraySource(
+        id: sourceID,
+        name: "Elevated Source",
+        definitionID: definitionID,
+        distribution: .radial(RadialPatternArray(
+            angularAxis: PatternArrayAngularAxis(
+                center: .origin,
+                axis: .unitY,
+                angle: .angle(45.0, .degree),
+                copyCount: 2
+            )
+        )),
+        outputMode: .componentInstance,
+        outputInstanceIDs: [ComponentInstanceID()],
+        rootSceneNodeID: patternRootSceneNodeID
+    )
+    let metadata = ProductMetadata(
+        sceneNodes: [
+            sourceSceneNodeID: SceneNode(id: sourceSceneNodeID, name: "Source Body"),
+            patternRootSceneNodeID: SceneNode(id: patternRootSceneNodeID, name: "Pattern Root"),
+        ],
+        rootSceneNodeIDs: [sourceSceneNodeID, patternRootSceneNodeID],
+        componentDefinitions: [
+            definitionID: ComponentDefinition(
+                id: definitionID,
+                name: "Elevated Definition",
+                rootSceneNodeIDs: [sourceSceneNodeID]
+            ),
+        ],
+        patternArrays: [
+            sourceID: source,
+        ]
+    )
+    let scene = ViewportScene(items: [
+        ViewportSceneItem(
+            id: "source-body",
+            featureID: FeatureID(),
+            sceneNodeID: sourceSceneNodeID,
+            modelBounds: CGRect(x: 1.0, y: 2.0, width: 4.0, height: 6.0),
+            kind: .body(component: ViewportBodyComponent(
+                sizeXMeters: 4.0,
+                sizeYMeters: 8.0,
+                sizeZMeters: 6.0,
+                yMinMeters: 3.0,
+                yMaxMeters: 11.0
+            ))
+        ),
+    ])
+    let index = ViewportPatternArraySourceSelectionIndex(
+        metadata: metadata,
+        scene: scene,
+        selection: .empty
+    )
+
+    let point = try #require(index.sourceBaseModelPoint(source: source))
+
+    #expect(point.x == 3.0)
+    #expect(point.y == 7.0)
+    #expect(point.z == 5.0)
+}
+
 @MainActor
 @discardableResult
 private func createDefaultRadialPatternSourceDefinition(

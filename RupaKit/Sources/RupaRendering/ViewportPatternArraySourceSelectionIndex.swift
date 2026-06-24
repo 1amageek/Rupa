@@ -115,9 +115,17 @@ struct ViewportPatternArraySourceSelectionIndex {
     }
 
     private func itemModelCenter(_ item: ViewportSceneItem) -> Point3D {
-        Point3D(
+        let y: Double
+        if case .body(let component) = item.kind,
+           component.yMinMeters.isFinite,
+           component.yMaxMeters.isFinite {
+            y = (component.yMinMeters + component.yMaxMeters) * 0.5
+        } else {
+            y = 0.0
+        }
+        return Point3D(
             x: Double(item.modelBounds.midX),
-            y: 0.0,
+            y: y,
             z: Double(item.modelBounds.midY)
         )
     }
