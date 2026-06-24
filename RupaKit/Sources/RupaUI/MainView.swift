@@ -416,6 +416,7 @@ public struct MainView: View {
             ZStack {
                 Viewport(
                     document: session.document,
+                    evaluatedDocument: session.currentEvaluatedDocument,
                     objectRegistry: objectRegistry,
                     evaluationStatus: session.evaluationStatus,
                     renderInvalidation: session.renderInvalidation,
@@ -7470,7 +7471,10 @@ public struct MainView: View {
         guard let featureID = node.reference?.featureID else {
             return nil
         }
-        let scene = ViewportSceneBuilder(objectRegistry: objectRegistry).build(document: session.document)
+        let scene = ViewportSceneBuilder(objectRegistry: objectRegistry).build(
+            document: session.document,
+            evaluatedDocument: session.currentEvaluatedDocument
+        )
         guard let item = scene.items.first(where: { $0.featureID == featureID }) else {
             return nil
         }

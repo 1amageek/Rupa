@@ -6,16 +6,19 @@ import RupaCore
 
     #expect(result.referenceDate == "2026-06-24")
     #expect(result.counts.entryCount == result.entries.count)
-    #expect(result.entries.count >= 14)
+    #expect(Set(result.entries.map(\.area)) == Set(CADInteractionQualityArea.allCases))
+    #expect(result.entries.map(\.area).count == Set(result.entries.map(\.area)).count)
     #expect(result.score > 0.0)
     #expect(result.score < 1.0)
 
     for entry in result.entries {
         #expect(entry.gateAssessments.map(\.gate) == CADInteractionQualityGate.allCases)
-        #expect(entry.gateAssessments.allSatisfy { $0.rating != .missing })
         #expect(!entry.referenceSources.isEmpty)
         #expect(!entry.evidence.isEmpty)
         #expect(!entry.nextRequiredResult.isEmpty)
+        for assessment in entry.gateAssessments where assessment.rating == .missing {
+            #expect(!assessment.openWork.isEmpty)
+        }
     }
 }
 
@@ -35,7 +38,9 @@ import RupaCore
 
         #expect(entry.currentRating != .missing)
         #expect(entry.gateAssessments.map(\.gate) == CADInteractionQualityGate.allCases)
-        #expect(entry.gateAssessments.allSatisfy { $0.rating != .missing })
+        for assessment in entry.gateAssessments where assessment.rating == .missing {
+            #expect(!assessment.openWork.isEmpty)
+        }
         #expect(!entry.referenceSources.isEmpty)
         #expect(!entry.evidence.isEmpty)
         #expect(!entry.openWork.isEmpty)
@@ -71,7 +76,7 @@ import RupaCore
     let arrays = try #require(result.entries.first { $0.area == .patternsAndArrays })
     let arrayCommandRating = try gateRating(.commandContract, in: arrays)
     #expect(arrays.currentRating == .planned)
-    #expect(arrayCommandRating == .planned)
+    #expect(arrayCommandRating == .missing)
     #expect(arrays.referenceSources.contains("https://doc.plasticity.xyz/common/rectangular-array"))
     #expect(arrays.openWork.contains { $0.contains("Rectangular array") })
 
@@ -79,6 +84,18 @@ import RupaCore
     #expect(section.currentRating == .partial)
     #expect(section.referenceSources.contains("https://doc.plasticity.xyz/common/section-analysis"))
     #expect(section.openWork.contains { $0.contains("Virtual section clipping") })
+
+    let sketchPrecision = try #require(result.entries.first { $0.area == .sketchPrecision })
+    #expect(sketchPrecision.currentRating == .partial)
+    #expect(sketchPrecision.referenceSources.contains("https://doc.plasticity.xyz/sketch"))
+    #expect(sketchPrecision.openWork.contains { $0.contains("General sketch solver") })
+
+    let performance = try #require(result.entries.first { $0.area == .performance })
+    #expect(performance.currentRating == .partial)
+    #expect(performance.referenceSources.contains("Rupa/CAD_QUALITY_MILESTONES.md"))
+    #expect(performance.evidence.contains { evidence in
+        evidence.notes.contains("Viewport scene construction can consume a current evaluated document instead of forcing another CAD evaluation.")
+    })
 }
 
 @Test func cadInteractionQualityAssessmentRecordsSelectionDimensionFacePairSupportAndOpenGaps() async throws {

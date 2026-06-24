@@ -54,6 +54,7 @@ public struct Viewport: View {
     @State private var identityHitResolver = ViewportIdentityHitResolver()
 
     private let document: DesignDocument
+    private let evaluatedDocument: EvaluatedDocument?
     private let objectRegistry: ObjectTypeRegistry
     private let evaluationStatus: EvaluationStatus
     private let renderInvalidation: RenderInvalidation
@@ -104,6 +105,7 @@ public struct Viewport: View {
 
     public init(
         document: DesignDocument,
+        evaluatedDocument: EvaluatedDocument? = nil,
         objectRegistry: ObjectTypeRegistry = .builtIn,
         evaluationStatus: EvaluationStatus = .notEvaluated,
         renderInvalidation: RenderInvalidation = RenderInvalidation(),
@@ -153,6 +155,7 @@ public struct Viewport: View {
         onProjectionBasisChange: ((ViewportProjectionBasis) -> Void)? = nil
     ) {
         self.document = document
+        self.evaluatedDocument = evaluatedDocument
         self.objectRegistry = objectRegistry
         self.evaluationStatus = evaluationStatus
         self.renderInvalidation = renderInvalidation
@@ -563,19 +566,51 @@ public struct Viewport: View {
         context.stroke(majorPath, with: .color(ViewportTheme.gridMajor), lineWidth: 0.85)
     }
 
+    private func makeScene() -> ViewportScene {
+        ViewportSceneBuilder(objectRegistry: objectRegistry).build(
+            document: document,
+            evaluatedDocument: evaluatedDocument
+        )
+    }
+
+    private func makeCoordinateMapper(
+        size: CGSize,
+        camera: ViewportCamera,
+        basis: ViewportProjectionBasis
+    ) -> ViewportModelCoordinateMapper {
+        ViewportModelCoordinateMapper(
+            document: document,
+            size: size,
+            objectRegistry: objectRegistry,
+            evaluatedDocument: evaluatedDocument,
+            camera: camera,
+            basis: basis
+        )
+    }
+
+    private func makeLayout(
+        size: CGSize,
+        camera: ViewportCamera,
+        basis: ViewportProjectionBasis
+    ) -> ViewportLayout {
+        makeCoordinateMapper(
+            size: size,
+            camera: camera,
+            basis: basis
+        ).layout
+    }
+
     private func drawAxes(
         in context: inout GraphicsContext,
         size: CGSize,
         camera: ViewportCamera,
         basis: ViewportProjectionBasis
     ) {
-        let layout = ViewportModelCoordinateMapper(
-            document: document,
+        let layout = makeLayout(
             size: size,
-            objectRegistry: objectRegistry,
             camera: camera,
             basis: basis
-        ).layout
+        )
         let origin = layout.project(.zero)
         let basis = layout.basis
         let planeExtent = hypot(size.width, size.height) * 1.10
@@ -644,14 +679,12 @@ public struct Viewport: View {
         camera: ViewportCamera,
         basis: ViewportProjectionBasis
     ) {
-        let scene = ViewportSceneBuilder(objectRegistry: objectRegistry).build(document: document)
-        let layout = ViewportModelCoordinateMapper(
-            document: document,
+        let scene = makeScene()
+        let layout = makeLayout(
             size: size,
-            objectRegistry: objectRegistry,
             camera: camera,
             basis: basis
-        ).layout
+        )
         let selectedObjectFeatureIDs = selectedObjectFeatureIDs()
         let previewObjectFeatureIDs = featureIDs(for: objectSelectionTargets(in: selectionDragPreviewTargets))
         let selectedTargetFeatureIDs = selectedTargetFeatureIDs()
@@ -1073,10 +1106,8 @@ public struct Viewport: View {
               !anchors.isEmpty else {
             return
         }
-        let mapper = ViewportModelCoordinateMapper(
-            document: document,
+        let mapper = makeCoordinateMapper(
             size: size,
-            objectRegistry: objectRegistry,
             camera: camera,
             basis: basis
         )
@@ -1185,10 +1216,8 @@ public struct Viewport: View {
     }
 
     private func refreshSnapCandidateKind(size: CGSize) {
-        let mapper = ViewportModelCoordinateMapper(
-            document: document,
+        let mapper = makeCoordinateMapper(
             size: size,
-            objectRegistry: objectRegistry,
             camera: camera,
             basis: currentProjectionBasis
         )
@@ -1207,10 +1236,8 @@ public struct Viewport: View {
         guard let onReferenceLineAnchor else {
             return false
         }
-        let mapper = ViewportModelCoordinateMapper(
-            document: document,
+        let mapper = makeCoordinateMapper(
             size: size,
-            objectRegistry: objectRegistry,
             camera: camera,
             basis: currentProjectionBasis
         )
@@ -3967,14 +3994,12 @@ public struct Viewport: View {
         size: CGSize,
         basis: ViewportProjectionBasis
     ) -> [ViewportFaceAccessibilityMarker] {
-        let scene = ViewportSceneBuilder(objectRegistry: objectRegistry).build(document: document)
-        let layout = ViewportModelCoordinateMapper(
-            document: document,
+        let scene = makeScene()
+        let layout = makeLayout(
             size: size,
-            objectRegistry: objectRegistry,
             camera: camera,
             basis: basis
-        ).layout
+        )
 
         return scene.items.flatMap { item -> [ViewportFaceAccessibilityMarker] in
             guard case .body = item.kind,
@@ -4009,14 +4034,12 @@ public struct Viewport: View {
         size: CGSize,
         basis: ViewportProjectionBasis
     ) -> [ViewportEdgeAccessibilityMarker] {
-        let scene = ViewportSceneBuilder(objectRegistry: objectRegistry).build(document: document)
-        let layout = ViewportModelCoordinateMapper(
-            document: document,
+        let scene = makeScene()
+        let layout = makeLayout(
             size: size,
-            objectRegistry: objectRegistry,
             camera: camera,
             basis: basis
-        ).layout
+        )
 
         return scene.items.flatMap { item -> [ViewportEdgeAccessibilityMarker] in
             guard case .body = item.kind,
@@ -4344,10 +4367,8 @@ public struct Viewport: View {
         size: CGSize,
         basis: ViewportProjectionBasis
     ) {
-        let mapper = ViewportModelCoordinateMapper(
-            document: document,
+        let mapper = makeCoordinateMapper(
             size: size,
-            objectRegistry: objectRegistry,
             camera: camera,
             basis: basis
         )
@@ -6361,14 +6382,12 @@ public struct Viewport: View {
         guard onSketchCurveHandleDrag != nil else {
             return nil
         }
-        let scene = ViewportSceneBuilder(objectRegistry: objectRegistry).build(document: document)
-        let layout = ViewportModelCoordinateMapper(
-            document: document,
+        let scene = makeScene()
+        let layout = makeLayout(
             size: size,
-            objectRegistry: objectRegistry,
             camera: camera,
             basis: currentProjectionBasis
-        ).layout
+        )
         let handleTolerance: CGFloat = 12.0
         var bestTarget: (target: ViewportSketchCurveHandleTarget, distance: CGFloat)?
         for selectionTarget in selection.selectedTargets.reversed() {
@@ -6416,14 +6435,12 @@ public struct Viewport: View {
         guard onSketchDimensionDrag != nil else {
             return nil
         }
-        let scene = ViewportSceneBuilder(objectRegistry: objectRegistry).build(document: document)
-        let layout = ViewportModelCoordinateMapper(
-            document: document,
+        let scene = makeScene()
+        let layout = makeLayout(
             size: size,
-            objectRegistry: objectRegistry,
             camera: camera,
             basis: currentProjectionBasis
-        ).layout
+        )
         var bestTarget: (target: ViewportSketchDimensionTarget, distance: CGFloat)?
         for selectionTarget in selection.selectedTargets.reversed() {
             guard case .sketchEntity = selectionTarget.component,
@@ -6655,14 +6672,12 @@ public struct Viewport: View {
         guard onSketchPointHandleDrag != nil else {
             return nil
         }
-        let scene = ViewportSceneBuilder(objectRegistry: objectRegistry).build(document: document)
-        let layout = ViewportModelCoordinateMapper(
-            document: document,
+        let scene = makeScene()
+        let layout = makeLayout(
             size: size,
-            objectRegistry: objectRegistry,
             camera: camera,
             basis: currentProjectionBasis
-        ).layout
+        )
         let handleTolerance: CGFloat = 12.0
         for target in selection.selectedTargets.reversed() {
             guard case .sketchEntity = target.component,
@@ -6748,14 +6763,12 @@ public struct Viewport: View {
         guard onSplineControlPointDrag != nil else {
             return nil
         }
-        let scene = ViewportSceneBuilder(objectRegistry: objectRegistry).build(document: document)
-        let layout = ViewportModelCoordinateMapper(
-            document: document,
+        let scene = makeScene()
+        let layout = makeLayout(
             size: size,
-            objectRegistry: objectRegistry,
             camera: camera,
             basis: currentProjectionBasis
-        ).layout
+        )
         let handleTolerance: CGFloat = 12.0
         for target in selection.selectedTargets.reversed() {
             guard case .sketchEntity = target.component,
@@ -6803,14 +6816,12 @@ public struct Viewport: View {
         guard onPolySplineSurfaceVertexDrag != nil else {
             return nil
         }
-        let scene = ViewportSceneBuilder(objectRegistry: objectRegistry).build(document: document)
-        let layout = ViewportModelCoordinateMapper(
-            document: document,
+        let scene = makeScene()
+        let layout = makeLayout(
             size: size,
-            objectRegistry: objectRegistry,
             camera: camera,
             basis: currentProjectionBasis
-        ).layout
+        )
         let topologyVertices = polySplineSurfaceTopologyVertices(in: scene)
         let handleTolerance: CGFloat = 12.0
         for target in polySplineSurfaceVertexHandleTargets(in: scene) {
@@ -6859,14 +6870,12 @@ public struct Viewport: View {
         guard onPolySplineSurfaceVertexSlideDrag != nil else {
             return nil
         }
-        let scene = ViewportSceneBuilder(objectRegistry: objectRegistry).build(document: document)
-        let layout = ViewportModelCoordinateMapper(
-            document: document,
+        let scene = makeScene()
+        let layout = makeLayout(
             size: size,
-            objectRegistry: objectRegistry,
             camera: camera,
             basis: currentProjectionBasis
-        ).layout
+        )
         var nearest: (target: ViewportPolySplineSurfaceVertexSlideHandleTarget, distance: CGFloat)?
         for candidate in polySplineSurfaceVertexSlideAffordanceCandidates(
             scene: scene,
@@ -7043,14 +7052,12 @@ public struct Viewport: View {
         guard onVertexDrag != nil else {
             return nil
         }
-        let scene = ViewportSceneBuilder(objectRegistry: objectRegistry).build(document: document)
-        let layout = ViewportModelCoordinateMapper(
-            document: document,
+        let scene = makeScene()
+        let layout = makeLayout(
             size: size,
-            objectRegistry: objectRegistry,
             camera: camera,
             basis: currentProjectionBasis
-        ).layout
+        )
         let handleTolerance: CGFloat = 12.0
         for target in selection.selectedTargets.reversed() {
             guard case .vertex = target.component,
@@ -7078,14 +7085,12 @@ public struct Viewport: View {
         guard onFaceDrag != nil else {
             return nil
         }
-        let scene = ViewportSceneBuilder(objectRegistry: objectRegistry).build(document: document)
-        let layout = ViewportModelCoordinateMapper(
-            document: document,
+        let scene = makeScene()
+        let layout = makeLayout(
             size: size,
-            objectRegistry: objectRegistry,
             camera: camera,
             basis: currentProjectionBasis
-        ).layout
+        )
         for target in selection.selectedTargets.reversed() {
             guard case .face = target.component,
                   let faceTarget = faceSelectionTarget(for: target),
@@ -7113,14 +7118,12 @@ public struct Viewport: View {
         guard onEdgeChamferDrag != nil else {
             return nil
         }
-        let scene = ViewportSceneBuilder(objectRegistry: objectRegistry).build(document: document)
-        let layout = ViewportModelCoordinateMapper(
-            document: document,
+        let scene = makeScene()
+        let layout = makeLayout(
             size: size,
-            objectRegistry: objectRegistry,
             camera: camera,
             basis: currentProjectionBasis
-        ).layout
+        )
         for target in selection.selectedTargets.reversed() {
             guard case .edge = target.component,
                   let edgeTarget = edgeSelectionTarget(for: target),
@@ -7147,14 +7150,12 @@ public struct Viewport: View {
         guard onEdgeFilletDrag != nil else {
             return nil
         }
-        let scene = ViewportSceneBuilder(objectRegistry: objectRegistry).build(document: document)
-        let layout = ViewportModelCoordinateMapper(
-            document: document,
+        let scene = makeScene()
+        let layout = makeLayout(
             size: size,
-            objectRegistry: objectRegistry,
             camera: camera,
             basis: currentProjectionBasis
-        ).layout
+        )
         for target in selection.selectedTargets.reversed() {
             guard case .edge = target.component,
                   let edgeTarget = edgeSelectionTarget(for: target),
@@ -7181,14 +7182,12 @@ public struct Viewport: View {
         guard onRegionOffsetDrag != nil else {
             return nil
         }
-        let scene = ViewportSceneBuilder(objectRegistry: objectRegistry).build(document: document)
-        let layout = ViewportModelCoordinateMapper(
-            document: document,
+        let scene = makeScene()
+        let layout = makeLayout(
             size: size,
-            objectRegistry: objectRegistry,
             camera: camera,
             basis: currentProjectionBasis
-        ).layout
+        )
         let candidates = regionOffsetAffordanceCandidates(
             targets: selectedSketchRegionTargets(),
             scene: scene,
@@ -7213,14 +7212,12 @@ public struct Viewport: View {
         guard onEdgeOffsetDrag != nil else {
             return nil
         }
-        let scene = ViewportSceneBuilder(objectRegistry: objectRegistry).build(document: document)
-        let layout = ViewportModelCoordinateMapper(
-            document: document,
+        let scene = makeScene()
+        let layout = makeLayout(
             size: size,
-            objectRegistry: objectRegistry,
             camera: camera,
             basis: currentProjectionBasis
-        ).layout
+        )
         let candidates = edgeOffsetAffordanceCandidates(
             targets: selectedEdgeTargets(),
             scene: scene,
@@ -7245,14 +7242,12 @@ public struct Viewport: View {
         guard onSlotWidthDrag != nil else {
             return nil
         }
-        let scene = ViewportSceneBuilder(objectRegistry: objectRegistry).build(document: document)
-        let layout = ViewportModelCoordinateMapper(
-            document: document,
+        let scene = makeScene()
+        let layout = makeLayout(
             size: size,
-            objectRegistry: objectRegistry,
             camera: camera,
             basis: currentProjectionBasis
-        ).layout
+        )
         let candidates = slotWidthAffordanceCandidates(
             targets: selectedSlotWidthSourceTargets(),
             scene: scene,
@@ -7277,14 +7272,12 @@ public struct Viewport: View {
         guard onSketchVertexOffsetDrag != nil else {
             return nil
         }
-        let scene = ViewportSceneBuilder(objectRegistry: objectRegistry).build(document: document)
-        let layout = ViewportModelCoordinateMapper(
-            document: document,
+        let scene = makeScene()
+        let layout = makeLayout(
             size: size,
-            objectRegistry: objectRegistry,
             camera: camera,
             basis: currentProjectionBasis
-        ).layout
+        )
         let candidates = sketchVertexOffsetAffordanceCandidates(
             targets: selectedSketchVertexOffsetSourceTargets(),
             scene: scene,
@@ -7309,14 +7302,12 @@ public struct Viewport: View {
         guard onSplineControlPointSlideDrag != nil else {
             return nil
         }
-        let scene = ViewportSceneBuilder(objectRegistry: objectRegistry).build(document: document)
-        let layout = ViewportModelCoordinateMapper(
-            document: document,
+        let scene = makeScene()
+        let layout = makeLayout(
             size: size,
-            objectRegistry: objectRegistry,
             camera: camera,
             basis: currentProjectionBasis
-        ).layout
+        )
         let candidates = splineControlPointSlideAffordanceCandidates(
             groups: selectedSplineControlPointGroups(),
             scene: scene,
@@ -7341,14 +7332,12 @@ public struct Viewport: View {
         guard allowsObjectAffordances else {
             return nil
         }
-        let scene = ViewportSceneBuilder(objectRegistry: objectRegistry).build(document: document)
-        let layout = ViewportModelCoordinateMapper(
-            document: document,
+        let scene = makeScene()
+        let layout = makeLayout(
             size: size,
-            objectRegistry: objectRegistry,
             camera: camera,
             basis: currentProjectionBasis
-        ).layout
+        )
         return affordanceTarget(at: point, scene: scene, layout: layout)
     }
 
@@ -7568,7 +7557,7 @@ public struct Viewport: View {
         current: CGPoint,
         size: CGSize
     ) {
-        let scene = ViewportSceneBuilder(objectRegistry: objectRegistry).build(document: document)
+        let scene = makeScene()
         let selectedFeatureIDs = selectedObjectFeatureIDs()
         let selectedBodyItems = selectedBodyItems(in: scene, selectedFeatureIDs: selectedFeatureIDs)
         let targetIsSelectionGroup = selectedBodyItems.count > 1
@@ -7603,13 +7592,11 @@ public struct Viewport: View {
             activeAffordanceDrag = dragState
         }
 
-        let layout = ViewportModelCoordinateMapper(
-            document: document,
+        let layout = makeLayout(
             size: size,
-            objectRegistry: objectRegistry,
             camera: camera,
             basis: currentProjectionBasis
-        ).layout
+        )
         if let baseGroupEdit = dragState.baseGroupEdit {
             let nextGroupEdit = baseGroupEdit.applying(
                 action: target.action,
@@ -7639,13 +7626,11 @@ public struct Viewport: View {
         current: CGPoint,
         size: CGSize
     ) {
-        let layout = ViewportModelCoordinateMapper(
-            document: document,
+        let layout = makeLayout(
             size: size,
-            objectRegistry: objectRegistry,
             camera: camera,
             basis: currentProjectionBasis
-        ).layout
+        )
         let startPoint = layout.unproject(start)
         let currentPoint = layout.unproject(current)
         activeSplineControlPointDrag = ViewportSplineControlPointDragState(
@@ -7664,13 +7649,11 @@ public struct Viewport: View {
         current: CGPoint,
         size: CGSize
     ) {
-        let layout = ViewportModelCoordinateMapper(
-            document: document,
+        let layout = makeLayout(
             size: size,
-            objectRegistry: objectRegistry,
             camera: camera,
             basis: currentProjectionBasis
-        ).layout
+        )
         activeSplineControlPointSlideDrag = ViewportSplineControlPointSlideDragState(
             target: target,
             startPoint: start,
@@ -7688,13 +7671,11 @@ public struct Viewport: View {
         current: CGPoint,
         size: CGSize
     ) {
-        let layout = ViewportModelCoordinateMapper(
-            document: document,
+        let layout = makeLayout(
             size: size,
-            objectRegistry: objectRegistry,
             camera: camera,
             basis: currentProjectionBasis
-        ).layout
+        )
         activePolySplineSurfaceVertexSlideDrag = ViewportPolySplineSurfaceVertexSlideDragState(
             target: target,
             startPoint: start,
@@ -7712,13 +7693,11 @@ public struct Viewport: View {
         current: CGPoint,
         size: CGSize
     ) {
-        let layout = ViewportModelCoordinateMapper(
-            document: document,
+        let layout = makeLayout(
             size: size,
-            objectRegistry: objectRegistry,
             camera: camera,
             basis: currentProjectionBasis
-        ).layout
+        )
         let delta: Point3D
         switch target.dragMode {
         case .planar:
@@ -7765,13 +7744,11 @@ public struct Viewport: View {
         current: CGPoint,
         size: CGSize
     ) {
-        let layout = ViewportModelCoordinateMapper(
-            document: document,
+        let layout = makeLayout(
             size: size,
-            objectRegistry: objectRegistry,
             camera: camera,
             basis: currentProjectionBasis
-        ).layout
+        )
         activeRegionOffsetDrag = ViewportRegionOffsetDragState(
             target: target,
             startPoint: start,
@@ -7831,13 +7808,11 @@ public struct Viewport: View {
         current: CGPoint,
         size: CGSize
     ) {
-        let layout = ViewportModelCoordinateMapper(
-            document: document,
+        let layout = makeLayout(
             size: size,
-            objectRegistry: objectRegistry,
             camera: camera,
             basis: currentProjectionBasis
-        ).layout
+        )
         activeSlotWidthDrag = ViewportSlotWidthDragState(
             target: target,
             startPoint: start,
@@ -7869,13 +7844,11 @@ public struct Viewport: View {
         current: CGPoint,
         size: CGSize
     ) {
-        let layout = ViewportModelCoordinateMapper(
-            document: document,
+        let layout = makeLayout(
             size: size,
-            objectRegistry: objectRegistry,
             camera: camera,
             basis: currentProjectionBasis
-        ).layout
+        )
         activeSketchVertexOffsetDrag = ViewportSketchVertexOffsetDragState(
             target: target,
             startPoint: start,
@@ -7907,13 +7880,11 @@ public struct Viewport: View {
         current: CGPoint,
         size: CGSize
     ) {
-        let layout = ViewportModelCoordinateMapper(
-            document: document,
+        let layout = makeLayout(
             size: size,
-            objectRegistry: objectRegistry,
             camera: camera,
             basis: currentProjectionBasis
-        ).layout
+        )
         let startPoint = layout.unproject(start)
         let currentPoint = layout.unproject(current)
         activeSketchPointHandleDrag = ViewportSketchPointHandleDragState(
@@ -7932,13 +7903,11 @@ public struct Viewport: View {
         current: CGPoint,
         size: CGSize
     ) {
-        let layout = ViewportModelCoordinateMapper(
-            document: document,
+        let layout = makeLayout(
             size: size,
-            objectRegistry: objectRegistry,
             camera: camera,
             basis: currentProjectionBasis
-        ).layout
+        )
         let currentPoint = layout.unproject(current)
         let values = sketchCurveHandleValues(
             target: target,
@@ -7959,13 +7928,11 @@ public struct Viewport: View {
         current: CGPoint,
         size: CGSize
     ) {
-        let layout = ViewportModelCoordinateMapper(
-            document: document,
+        let layout = makeLayout(
             size: size,
-            objectRegistry: objectRegistry,
             camera: camera,
             basis: currentProjectionBasis
-        ).layout
+        )
         let startPoint = layout.unproject(start)
         let currentPoint = layout.unproject(current)
         let value = sketchDimensionValue(
@@ -8162,11 +8129,9 @@ public struct Viewport: View {
         guard let onPick else {
             return
         }
-        let scene = ViewportSceneBuilder(objectRegistry: objectRegistry).build(document: document)
-        let mapper = ViewportModelCoordinateMapper(
-            document: document,
+        let scene = makeScene()
+        let mapper = makeCoordinateMapper(
             size: size,
-            objectRegistry: objectRegistry,
             camera: camera,
             basis: currentProjectionBasis
         )
@@ -8353,14 +8318,12 @@ public struct Viewport: View {
         guard let onCanvasDrag else {
             return
         }
-        let mapper = ViewportModelCoordinateMapper(
-            document: document,
+        let mapper = makeCoordinateMapper(
             size: size,
-            objectRegistry: objectRegistry,
             camera: camera,
             basis: currentProjectionBasis
         )
-        let scene = ViewportSceneBuilder(objectRegistry: objectRegistry).build(document: document)
+        let scene = makeScene()
         let sketchPlane = activeCanvasDrag?.sketchPlane ?? canvasDragSketchPlane(for: hoveredCanvasHit)
         onCanvasDrag(
             mapper.modelDrag(
@@ -8619,13 +8582,11 @@ public struct Viewport: View {
               let baseEdit = activeAffordanceDrag.baseEdits[activeAffordanceDrag.target.featureID] else {
             return nil
         }
-        let layout = ViewportModelCoordinateMapper(
-            document: document,
+        let layout = makeLayout(
             size: size,
-            objectRegistry: objectRegistry,
             camera: camera,
             basis: currentProjectionBasis
-        ).layout
+        )
         let delta = baseEdit.profileCornerDragDelta(
             start: activeAffordanceDrag.startPoint,
             current: end,
@@ -8653,13 +8614,11 @@ public struct Viewport: View {
               let baseEdit = activeAffordanceDrag.baseEdits[activeAffordanceDrag.target.featureID] else {
             return nil
         }
-        let layout = ViewportModelCoordinateMapper(
-            document: document,
+        let layout = makeLayout(
             size: size,
-            objectRegistry: objectRegistry,
             camera: camera,
             basis: currentProjectionBasis
-        ).layout
+        )
         guard let distance = baseEdit.profileFaceDragDistance(
             face,
             start: activeAffordanceDrag.startPoint,
@@ -8689,13 +8648,11 @@ public struct Viewport: View {
               let baseEdit = activeAffordanceDrag.baseEdits[activeAffordanceDrag.target.featureID] else {
             return nil
         }
-        let layout = ViewportModelCoordinateMapper(
-            document: document,
+        let layout = makeLayout(
             size: size,
-            objectRegistry: objectRegistry,
             camera: camera,
             basis: currentProjectionBasis
-        ).layout
+        )
         guard let distance = baseEdit.profileEdgeChamferDistance(
             edge,
             start: activeAffordanceDrag.startPoint,
@@ -8725,13 +8682,11 @@ public struct Viewport: View {
               let baseEdit = activeAffordanceDrag.baseEdits[activeAffordanceDrag.target.featureID] else {
             return nil
         }
-        let layout = ViewportModelCoordinateMapper(
-            document: document,
+        let layout = makeLayout(
             size: size,
-            objectRegistry: objectRegistry,
             camera: camera,
             basis: currentProjectionBasis
-        ).layout
+        )
         guard let radius = baseEdit.profileEdgeFilletRadius(
             edge,
             start: activeAffordanceDrag.startPoint,
@@ -8802,11 +8757,9 @@ public struct Viewport: View {
         guard rect.width > 0.0, rect.height > 0.0 else {
             return []
         }
-        let scene = ViewportSceneBuilder(objectRegistry: objectRegistry).build(document: document)
-        let mapper = ViewportModelCoordinateMapper(
-            document: document,
+        let scene = makeScene()
+        let mapper = makeCoordinateMapper(
             size: size,
-            objectRegistry: objectRegistry,
             camera: camera,
             basis: currentProjectionBasis
         )
@@ -8824,11 +8777,9 @@ public struct Viewport: View {
     }
 
     private func hover(at point: CGPoint, size: CGSize) {
-        let scene = ViewportSceneBuilder(objectRegistry: objectRegistry).build(document: document)
-        let mapper = ViewportModelCoordinateMapper(
-            document: document,
+        let scene = makeScene()
+        let mapper = makeCoordinateMapper(
             size: size,
-            objectRegistry: objectRegistry,
             camera: camera,
             basis: currentProjectionBasis
         )
@@ -9132,13 +9083,11 @@ public struct Viewport: View {
         size: CGSize
     ) {
         let basis = currentProjectionBasis
-        let oldLayout = ViewportModelCoordinateMapper(
-            document: document,
+        let oldLayout = makeLayout(
             size: size,
-            objectRegistry: objectRegistry,
             camera: camera,
             basis: basis
-        ).layout
+        )
         let anchoredModelPoint = oldLayout.unproject(anchor)
         let newZoom = min(
             max(camera.zoom * factor, ViewportCamera.minimumZoom),
@@ -9148,13 +9097,11 @@ public struct Viewport: View {
             zoom: newZoom,
             pan: camera.pan
         )
-        let nextLayout = ViewportModelCoordinateMapper(
-            document: document,
+        let nextLayout = makeLayout(
             size: size,
-            objectRegistry: objectRegistry,
             camera: nextCamera,
             basis: basis
-        ).layout
+        )
         let projectedAnchor = nextLayout.project(anchoredModelPoint)
         nextCamera.pan.width += anchor.x - projectedAnchor.x
         nextCamera.pan.height += anchor.y - projectedAnchor.y

@@ -900,6 +900,8 @@ import SwiftCAD
     #expect(assessment.entries.allSatisfy { entry in
         entry.gateAssessments.map(\.gate) == CADInteractionQualityGate.allCases
     })
+    #expect(Set(assessment.entries.map(\.area)) == Set(CADInteractionQualityArea.allCases))
+    #expect(assessment.entries.map(\.area).count == Set(assessment.entries.map(\.area)).count)
 }
 
 @MainActor

@@ -13,17 +13,33 @@ public struct EvaluationScheduler: Sendable {
         generation: DocumentGeneration,
         objectRegistry: ObjectTypeRegistry = .builtIn
     ) -> EvaluationSnapshot {
+        evaluateResult(
+            document: document,
+            generation: generation,
+            objectRegistry: objectRegistry
+        ).snapshot
+    }
+
+    public func evaluateResult(
+        document: DesignDocument,
+        generation: DocumentGeneration,
+        objectRegistry: ObjectTypeRegistry = .builtIn
+    ) -> DocumentEvaluationResult {
         do {
             try document.validate(objectRegistry: objectRegistry)
         } catch {
-            return failedSnapshot(
-                message: String(describing: error),
-                generation: generation
+            return DocumentEvaluationResult(
+                snapshot: failedSnapshot(
+                    message: String(describing: error),
+                    generation: generation
+                )
             )
         }
 
         guard document.cadDocument.hasActiveRenderableTopologyFeatures else {
-            return evaluatedEmptyDocument(generation: generation)
+            return DocumentEvaluationResult(
+                snapshot: evaluatedEmptyDocument(generation: generation)
+            )
         }
 
         let evaluator = evaluatorOverride ?? .modelingDefault(
@@ -33,26 +49,31 @@ public struct EvaluationScheduler: Sendable {
         let report = evaluator.evaluateReport(document.cadDocument)
         guard report.isComplete, let evaluatedDocument = report.evaluatedDocument else {
             let message = report.failure?.message ?? "Document evaluation did not complete."
-            return failedSnapshot(
-                message: message,
-                generation: generation
+            return DocumentEvaluationResult(
+                snapshot: failedSnapshot(
+                    message: message,
+                    generation: generation
+                )
             )
         }
 
-        return EvaluationSnapshot(
-            status: .valid,
-            evaluatedGeneration: generation,
-            renderInvalidation: RenderInvalidation(
-                generation: generation,
-                reason: .evaluated
-            ),
-            bodyCount: evaluatedDocument.meshes.count,
-            diagnostics: [
-                EditorDiagnostic(
-                    severity: .info,
-                    message: "Evaluation completed with \(evaluatedDocument.meshes.count) generated bodies."
+        return DocumentEvaluationResult(
+            snapshot: EvaluationSnapshot(
+                status: .valid,
+                evaluatedGeneration: generation,
+                renderInvalidation: RenderInvalidation(
+                    generation: generation,
+                    reason: .evaluated
                 ),
-            ]
+                bodyCount: evaluatedDocument.meshes.count,
+                diagnostics: [
+                    EditorDiagnostic(
+                        severity: .info,
+                        message: "Evaluation completed with \(evaluatedDocument.meshes.count) generated bodies."
+                    ),
+                ]
+            ),
+            evaluatedDocument: evaluatedDocument
         )
     }
 

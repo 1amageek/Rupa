@@ -43,6 +43,10 @@ public final class EditorSession {
         store.evaluatedBodyCount
     }
 
+    public var currentEvaluatedDocument: EvaluatedDocument? {
+        store.currentEvaluatedDocument
+    }
+
     public var evaluationSnapshot: EvaluationSnapshot {
         store.evaluationSnapshot
     }

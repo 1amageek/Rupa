@@ -28,6 +28,34 @@ import Testing
 }
 
 @MainActor
+@Test func editorSessionExposesCurrentEvaluatedDocumentForMatchingGeneration() async throws {
+    let session = EditorSession()
+
+    _ = try #require(session.createDefaultExtrudedRectangle())
+
+    let evaluatedDocument = try #require(session.currentEvaluatedDocument)
+    #expect(session.evaluationStatus == .valid)
+    #expect(session.evaluatedGeneration == session.generation)
+    #expect(evaluatedDocument.meshes.count == session.evaluatedBodyCount)
+
+    session.reportToolStatus("Cache-preserving diagnostic")
+    #expect(session.currentEvaluatedDocument != nil)
+
+    let snapshot = session.store.snapshot()
+    session.store.restore(DocumentSnapshot(
+        document: snapshot.document,
+        generation: snapshot.generation,
+        isDirty: snapshot.isDirty,
+        diagnostics: snapshot.diagnostics,
+        evaluationStatus: .failed(message: "Injected failure"),
+        evaluatedGeneration: snapshot.evaluatedGeneration,
+        renderInvalidation: snapshot.renderInvalidation,
+        evaluatedBodyCount: snapshot.evaluatedBodyCount
+    ))
+    #expect(session.currentEvaluatedDocument == nil)
+}
+
+@MainActor
 @Test func commandStackRejectsStaleGenerationBeforeMutation() async throws {
     let session = EditorSession()
     _ = try session.execute(.setDisplayUnit(.meter))

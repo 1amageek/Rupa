@@ -66,6 +66,59 @@ public struct CADInteractionQualityAssessmentService: Sendable {
             next: "Generalize Dimension from primitive-owned targets to reference-pair and generated-face contracts while keeping UI and Agent summaries non-mutating."
         ),
         entry(
+            area: .sketchPrecision,
+            workflow: "Sketch constraints, dimensions, numeric input, and precision construction",
+            references: [
+                "https://doc.plasticity.xyz/sketch",
+                "https://doc.plasticity.xyz/tool/sketching-essentials",
+                "https://doc.plasticity.xyz/tool/polygon",
+                "https://doc.plasticity.xyz/common/dimension",
+            ],
+            rating: .partial,
+            gates: [
+                .referenceContract: .verified,
+                .sourceOwnership: .implemented,
+                .commandContract: .implemented,
+                .selectionTopology: .implemented,
+                .viewportAffordance: .partial,
+                .inspectorAffordance: .partial,
+                .agentParity: .verified,
+                .measurementDiagnostics: .implemented,
+                .verification: .verified,
+                .performanceBudget: .planned,
+            ],
+            evidence: [
+                CADInteractionQualityEvidence(
+                    label: "Source sketch precision contracts",
+                    sourceFiles: [
+                        "RupaKit/Sources/RupaCore/SketchInputState.swift",
+                        "RupaKit/Sources/RupaCore/SketchEntityDimensionKind.swift",
+                        "RupaKit/Sources/RupaCore/SketchDimensionSummaryService.swift",
+                        "RupaKit/Sources/RupaCore/PolygonToolState.swift",
+                        "RupaKit/Sources/RupaCore/DesignDocument.swift",
+                        "RupaKit/Sources/RupaAgent/AgentServer.swift",
+                        "RupaKit/Sources/RupaUI/MainView.swift",
+                    ],
+                    tests: [
+                        "RupaKit/Tests/RupaCoreTests/SketchDimensionSummaryServiceTests.swift",
+                        "RupaKit/Tests/RupaCoreTests/SketchEntityEditCommandTests.swift",
+                        "RupaKit/Tests/RupaUIPackageTests/DimensionCommandStateTests.swift",
+                        "RupaKit/Tests/RupaAgentTests/AgentServerTests.swift",
+                    ],
+                    notes: [
+                        "Source line, circle, arc, rectangle, polygon, spline, and Slot subsets keep typed editable source data.",
+                        "Numeric input, dimensions, constraints, and Agent commands share Core mutation paths for supported sketch entities.",
+                    ]
+                ),
+            ],
+            openWork: [
+                "General sketch solver coverage for arbitrary reference pairs and overconstraint diagnostics.",
+                "Viewport constraint glyphs and multi-step construction handles beyond current supported tools.",
+                "Persistent constraint migration across broader curve rebuild, split, trim, and generated-curve workflows.",
+            ],
+            next: "Raise sketch precision from supported source-entity subsets to a general solver-backed sketch workspace with visible constraint affordances and Agent-readable overconstraint diagnostics."
+        ),
+        entry(
             area: .filletingAndBlending,
             workflow: "Exact filleting, chamfering, and shell-grade blending",
             references: [
@@ -293,13 +346,13 @@ public struct CADInteractionQualityAssessmentService: Sendable {
             gates: [
                 .referenceContract: .verified,
                 .sourceOwnership: .partial,
-                .commandContract: .planned,
+                .commandContract: .missing,
                 .selectionTopology: .partial,
-                .viewportAffordance: .planned,
-                .inspectorAffordance: .planned,
-                .agentParity: .planned,
-                .measurementDiagnostics: .planned,
-                .verification: .planned,
+                .viewportAffordance: .missing,
+                .inspectorAffordance: .missing,
+                .agentParity: .missing,
+                .measurementDiagnostics: .missing,
+                .verification: .missing,
                 .performanceBudget: .planned,
             ],
             evidence: [
@@ -707,6 +760,58 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                 "Rendered workflow verification is still deferred to the final UI pass.",
             ],
             next: "Use this assessment plus capability descriptors as the required preflight before exposing new workspace controls."
+        ),
+        entry(
+            area: .performance,
+            workflow: "Evaluation reuse, identity picking budgets, and zero-copy-oriented display paths",
+            references: [
+                "Rupa/CAD_QUALITY_MILESTONES.md",
+                "swift-CAD/CAD_KERNEL_REQUIREMENTS.md",
+            ],
+            rating: .partial,
+            gates: [
+                .referenceContract: .implemented,
+                .sourceOwnership: .partial,
+                .commandContract: .partial,
+                .selectionTopology: .partial,
+                .viewportAffordance: .partial,
+                .inspectorAffordance: .planned,
+                .agentParity: .partial,
+                .measurementDiagnostics: .implemented,
+                .verification: .partial,
+                .performanceBudget: .partial,
+            ],
+            evidence: [
+                CADInteractionQualityEvidence(
+                    label: "Evaluated document reuse and viewport picking budgets",
+                    sourceFiles: [
+                        "RupaKit/Sources/RupaCore/DocumentEvaluationResult.swift",
+                        "RupaKit/Sources/RupaCore/EvaluationScheduler.swift",
+                        "RupaKit/Sources/RupaCore/CADDocumentStore.swift",
+                        "RupaKit/Sources/RupaCore/BodyDisplaySnapshotService.swift",
+                        "RupaKit/Sources/RupaRendering/ViewportScene.swift",
+                        "RupaKit/Sources/RupaRendering/ViewportIdentityHitResolver.swift",
+                        "RupaKit/Sources/RupaRendering/ViewportPickingReadinessService.swift",
+                    ],
+                    tests: [
+                        "RupaKit/Tests/RupaCoreTests/BodyDisplaySnapshotServiceTests.swift",
+                        "RupaKit/Tests/RupaCoreTests/CommandStackTests.swift",
+                        "RupaKit/Tests/RupaRenderingTests/ViewportSceneTests.swift",
+                        "RupaKit/Tests/RupaRenderingTests/ViewportIdentityBufferRendererTests.swift",
+                    ],
+                    notes: [
+                        "EvaluationScheduler can return the evaluated document alongside the persistent evaluation snapshot.",
+                        "Viewport scene construction can consume a current evaluated document instead of forcing another CAD evaluation.",
+                        "Identity picking exposes render/readback metrics and budget fallback diagnostics.",
+                    ]
+                ),
+            ],
+            openWork: [
+                "Measured dense-model budgets for sketch, sweep, mesh, surface, and exchange workflows.",
+                "Borrowed or copy-on-write buffers for dense meshes, control nets, and imported byte ranges where API ownership permits.",
+                "Inspector and Agent summaries for current evaluation cache reuse, memory pressure, and render budget fallback.",
+            ],
+            next: "Turn evaluation reuse and identity-picking metrics into enforced dense-model performance budgets with regression fixtures before broadening heavy CAD workflows."
         ),
     ]
 

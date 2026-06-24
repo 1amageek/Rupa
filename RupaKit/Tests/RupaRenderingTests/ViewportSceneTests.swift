@@ -27,6 +27,21 @@ import Testing
     #expect(scene.modelBounds != nil)
 }
 
+@MainActor
+@Test func viewportSceneBuilderUsesCurrentEvaluatedDocumentWhenAvailable() async throws {
+    let session = EditorSession()
+    _ = try #require(session.createDefaultExtrudedRectangle())
+    let evaluatedDocument = try #require(session.currentEvaluatedDocument)
+
+    let documentScene = ViewportSceneBuilder().build(document: session.document)
+    let cachedScene = ViewportSceneBuilder().build(
+        document: session.document,
+        evaluatedDocument: evaluatedDocument
+    )
+
+    #expect(cachedScene == documentScene)
+}
+
 @Test func viewportFaceSurfacePointResolverRestoresPointInsideProjectedFace() throws {
     let componentID = SelectionComponentID.generatedTopology("feature:body:subshape:test:face:front")
     let face = ViewportBodyTopology.Face(

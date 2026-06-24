@@ -1120,10 +1120,14 @@ public struct ViewportModelCoordinateMapper {
         document: DesignDocument,
         size: CGSize,
         objectRegistry: ObjectTypeRegistry = .builtIn,
+        evaluatedDocument: EvaluatedDocument? = nil,
         camera: ViewportCamera = .identity,
         basis: ViewportProjectionBasis = .isometric
     ) {
-        let scene = ViewportSceneBuilder(objectRegistry: objectRegistry).build(document: document)
+        let scene = ViewportSceneBuilder(objectRegistry: objectRegistry).build(
+            document: document,
+            evaluatedDocument: evaluatedDocument
+        )
         let modelBounds = Self.modelBounds(for: document, scene: scene)
         self.layout = ViewportLayout(
             modelBounds: modelBounds,
@@ -2414,17 +2418,26 @@ public struct ViewportSceneBuilder {
         self.objectRegistry = objectRegistry
     }
 
-    public func build(document: DesignDocument) -> ViewportScene {
+    public func build(
+        document: DesignDocument,
+        evaluatedDocument: EvaluatedDocument? = nil
+    ) -> ViewportScene {
         let graph = document.cadDocument.designGraph
         let designDisplaySnapshot = DesignDisplaySnapshotService().snapshot(document: document)
         let bodyDisplaySnapshots: [FeatureID: BodyDisplaySnapshot]
-        do {
-            bodyDisplaySnapshots = try BodyDisplaySnapshotService().snapshots(
-                document: document,
-                objectRegistry: objectRegistry
+        if let evaluatedDocument {
+            bodyDisplaySnapshots = BodyDisplaySnapshotService().snapshots(
+                evaluatedDocument: evaluatedDocument
             )
-        } catch {
-            bodyDisplaySnapshots = [:]
+        } else {
+            do {
+                bodyDisplaySnapshots = try BodyDisplaySnapshotService().snapshots(
+                    document: document,
+                    objectRegistry: objectRegistry
+                )
+            } catch {
+                bodyDisplaySnapshots = [:]
+            }
         }
 
         let items = graph.order.compactMap { featureID -> ViewportSceneItem? in
