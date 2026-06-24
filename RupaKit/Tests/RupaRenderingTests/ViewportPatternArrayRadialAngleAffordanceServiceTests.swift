@@ -84,6 +84,65 @@ import Testing
 }
 
 @MainActor
+@Test func patternArrayRadialAngleAffordanceServiceResolvesReferencedAngle() async throws {
+    let session = EditorSession()
+    _ = try createDefaultRadialPatternSourceDefinition(
+        in: session,
+        definitionName: "Referenced Radial Angle Source"
+    )
+    _ = try session.execute(
+        .upsertParameter(
+            name: "radialAngle",
+            expression: .constant(.angle(60.0, unit: .degree)),
+            kind: .angle
+        )
+    )
+    let angle = try #require(session.document.cadDocument.parameters.parameters.values.first {
+        $0.name == "radialAngle"
+    })
+    let definition = try #require(session.document.productMetadata.componentDefinitions.values.first {
+        $0.name == "Referenced Radial Angle Source"
+    })
+    _ = try session.execute(
+        .createPatternArray(
+            name: "Referenced Radial Angle Pattern",
+            definitionID: definition.id,
+            distribution: .radial(RadialPatternArray(
+                angularAxis: PatternArrayAngularAxis(
+                    center: .origin,
+                    axis: .unitZ,
+                    angle: .reference(angle.id),
+                    copyCount: 3
+                )
+            )),
+            outputMode: .componentInstance
+        )
+    )
+    let source = try #require(session.document.productMetadata.patternArrays.values.first {
+        $0.name == "Referenced Radial Angle Pattern"
+    })
+    let scene = ViewportSceneBuilder().build(document: session.document)
+    let layout = try #require(ViewportLayout(
+        scene: scene,
+        size: CGSize(width: 900.0, height: 700.0)
+    ))
+
+    let candidates = ViewportPatternArrayRadialAngleAffordanceService().candidates(
+        document: session.document,
+        scene: scene,
+        selection: SelectionModel(selectedTargets: [
+            SelectionTarget(sceneNodeID: source.rootSceneNodeID),
+        ]),
+        layout: layout
+    )
+
+    let candidate = try #require(candidates.first)
+    #expect(candidates.count == 1)
+    #expect(candidate.target.sourceID == source.id)
+    #expect(abs(candidate.geometry.baseAngleRadians - Double.pi / 3.0) < 1.0e-12)
+}
+
+@MainActor
 @Test func patternArrayRadialAngleAffordanceServiceResolvesOutputSelection() async throws {
     let session = EditorSession()
     _ = try createDefaultRadialPatternSourceDefinition(

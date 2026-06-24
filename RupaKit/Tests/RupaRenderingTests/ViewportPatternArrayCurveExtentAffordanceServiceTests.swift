@@ -113,6 +113,67 @@ import Testing
 }
 
 @MainActor
+@Test func patternArrayCurveExtentAffordanceServiceResolvesReferencedRatioExtent() async throws {
+    let session = EditorSession()
+    _ = try createDefaultCurveExtentPatternSourceDefinition(
+        in: session,
+        definitionName: "Referenced Curve Ratio Source"
+    )
+    _ = try session.execute(
+        .upsertParameter(
+            name: "curveExtentRatio",
+            expression: .constant(.scalar(0.6)),
+            kind: .scalar
+        )
+    )
+    let ratio = try #require(session.document.cadDocument.parameters.parameters.values.first {
+        $0.name == "curveExtentRatio"
+    })
+    let definition = try #require(session.document.productMetadata.componentDefinitions.values.first {
+        $0.name == "Referenced Curve Ratio Source"
+    })
+    _ = try session.execute(
+        .createPatternArray(
+            name: "Referenced Curve Ratio Pattern",
+            definitionID: definition.id,
+            distribution: .curve(CurvePatternArray(
+                path: .polyline(
+                    points: [
+                        .origin,
+                        Point3D(x: 0.1, y: 0.0, z: 0.0),
+                    ],
+                    normal: .unitZ
+                ),
+                copyCount: 3,
+                extent: .reference(ratio.id),
+                extentMode: .ratio
+            )),
+            outputMode: .componentInstance
+        )
+    )
+    let source = try #require(session.document.productMetadata.patternArrays.values.first {
+        $0.name == "Referenced Curve Ratio Pattern"
+    })
+    let scene = ViewportSceneBuilder().build(document: session.document)
+    let layout = try #require(ViewportLayout(scene: scene, size: CGSize(width: 900.0, height: 700.0)))
+
+    let candidates = ViewportPatternArrayCurveExtentAffordanceService().candidates(
+        document: session.document,
+        scene: scene,
+        selection: SelectionModel(selectedTargets: [
+            SelectionTarget(sceneNodeID: source.rootSceneNodeID),
+        ]),
+        layout: layout
+    )
+
+    let candidate = try #require(candidates.first)
+    #expect(candidates.count == 1)
+    #expect(candidate.target.sourceID == source.id)
+    #expect(candidate.target.extentMode == .ratio)
+    #expect(abs(candidate.geometry.baseDistanceMeters - 0.06) < 1.0e-12)
+}
+
+@MainActor
 @discardableResult
 private func createDefaultCurveExtentPatternSourceDefinition(
     in session: EditorSession,

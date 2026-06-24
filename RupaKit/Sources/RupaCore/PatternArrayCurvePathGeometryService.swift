@@ -77,9 +77,10 @@ public struct PatternArrayCurvePathGeometryService: Sendable {
         pathLength: Double,
         parameters: ParameterTable
     ) throws -> Double {
+        let expressionResolver = PatternArrayExpressionResolver(parameters: parameters)
         switch curve.extentMode {
         case .distance:
-            let distance = try resolvedLength(curve.extent, parameters: parameters)
+            let distance = try expressionResolver.lengthMeters(for: curve.extent)
             guard distance.isFinite,
                   distance > tolerance.distance,
                   distance <= pathLength + tolerance.distance else {
@@ -90,7 +91,7 @@ public struct PatternArrayCurvePathGeometryService: Sendable {
             }
             return min(distance, pathLength)
         case .ratio:
-            let ratio = try resolvedScalar(curve.extent, parameters: parameters)
+            let ratio = try expressionResolver.scalarValue(for: curve.extent)
             guard ratio.isFinite,
                   ratio > 0.0,
                   ratio <= 1.0 else {
@@ -108,54 +109,6 @@ public struct PatternArrayCurvePathGeometryService: Sendable {
             }
             return distance
         }
-    }
-
-    private func resolvedLength(
-        _ expression: CADExpression,
-        parameters: ParameterTable
-    ) throws -> Double {
-        let quantity: Quantity
-        do {
-            quantity = try parameters.resolvedValue(for: expression)
-        } catch let error as EditorError {
-            throw error
-        } catch {
-            throw EditorError(
-                code: .commandInvalid,
-                message: "Pattern array distance could not be resolved: \(error)."
-            )
-        }
-        guard quantity.kind == .length else {
-            throw EditorError(
-                code: .commandInvalid,
-                message: "Pattern array distance must resolve to a length."
-            )
-        }
-        return quantity.value
-    }
-
-    private func resolvedScalar(
-        _ expression: CADExpression,
-        parameters: ParameterTable
-    ) throws -> Double {
-        let quantity: Quantity
-        do {
-            quantity = try parameters.resolvedValue(for: expression)
-        } catch let error as EditorError {
-            throw error
-        } catch {
-            throw EditorError(
-                code: .commandInvalid,
-                message: "Pattern array scalar value could not be resolved: \(error)."
-            )
-        }
-        guard quantity.kind == .scalar else {
-            throw EditorError(
-                code: .commandInvalid,
-                message: "Pattern array scalar value must resolve to a scalar."
-            )
-        }
-        return quantity.value
     }
 
     private func sketchPlaneNormal(_ plane: SketchPlane) throws -> Vector3D {

@@ -120,6 +120,64 @@ import Testing
 }
 
 @MainActor
+@Test func patternArrayLinearAxisAffordanceServiceResolvesReferencedDistance() async throws {
+    let session = EditorSession()
+    _ = try createDefaultPatternSourceDefinition(
+        in: session,
+        definitionName: "Referenced Axis Handle Source"
+    )
+    _ = try session.execute(
+        .upsertParameter(
+            name: "axisSpacing",
+            expression: .constant(.length(70.0, unit: .millimeter)),
+            kind: .length
+        )
+    )
+    let spacing = try #require(session.document.cadDocument.parameters.parameters.values.first {
+        $0.name == "axisSpacing"
+    })
+    let definition = try #require(session.document.productMetadata.componentDefinitions.values.first {
+        $0.name == "Referenced Axis Handle Source"
+    })
+    _ = try session.execute(
+        .createPatternArray(
+            name: "Referenced Axis Handle Pattern",
+            definitionID: definition.id,
+            distribution: .rectangular(RectangularPatternArray(
+                firstAxis: PatternArrayLinearAxis(
+                    direction: .unitX,
+                    distance: .reference(spacing.id),
+                    copyCount: 2
+                )
+            )),
+            outputMode: .componentInstance
+        )
+    )
+    let source = try #require(session.document.productMetadata.patternArrays.values.first {
+        $0.name == "Referenced Axis Handle Pattern"
+    })
+    let scene = ViewportSceneBuilder().build(document: session.document)
+    let layout = try #require(ViewportLayout(
+        scene: scene,
+        size: CGSize(width: 900.0, height: 700.0)
+    ))
+
+    let candidates = ViewportPatternArrayLinearAxisAffordanceService().candidates(
+        document: session.document,
+        scene: scene,
+        selection: SelectionModel(selectedTargets: [
+            SelectionTarget(sceneNodeID: source.rootSceneNodeID),
+        ]),
+        layout: layout
+    )
+
+    let candidate = try #require(candidates.first)
+    #expect(candidates.count == 1)
+    #expect(candidate.target.sourceID == source.id)
+    #expect(candidate.geometry.baseDistanceMeters == 0.07)
+}
+
+@MainActor
 @Test func patternArrayLinearAxisAffordanceServiceResolvesRadialAxisHandle() async throws {
     let session = EditorSession()
     _ = try createDefaultPatternSourceDefinition(

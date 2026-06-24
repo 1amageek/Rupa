@@ -17,10 +17,12 @@ struct ViewportPatternArrayRadialAngleAffordanceService: Sendable {
         guard !sourceIDs.isEmpty else {
             return []
         }
+        let expressionResolver = PatternArrayExpressionResolver(parameters: document.cadDocument.parameters)
         return sourceIDs.compactMap { sourceID in
             candidate(
                 sourceID: sourceID,
                 metadata: metadata,
+                expressionResolver: expressionResolver,
                 index: index,
                 layout: layout
             )
@@ -30,12 +32,16 @@ struct ViewportPatternArrayRadialAngleAffordanceService: Sendable {
     private func candidate(
         sourceID: PatternArraySourceID,
         metadata: ProductMetadata,
+        expressionResolver: PatternArrayExpressionResolver,
         index: ViewportPatternArraySourceSelectionIndex,
         layout: ViewportLayout
     ) -> ViewportPatternArrayRadialAngleAffordanceCandidate? {
         guard let source = metadata.patternArrays[sourceID],
               case .radial(let radial) = source.distribution,
-              let angleRadians = constantAngleRadians(radial.angularAxis.angle),
+              let angleRadians = resolvedAngleRadians(
+                  radial.angularAxis.angle,
+                  expressionResolver: expressionResolver
+              ),
               let referencePoint = index.sourceBaseModelPoint(source: source),
               let geometry = ViewportPatternArrayRadialAngleAffordanceGeometry(
                   center: radial.angularAxis.center,
@@ -56,13 +62,19 @@ struct ViewportPatternArrayRadialAngleAffordanceService: Sendable {
         )
     }
 
-    private func constantAngleRadians(_ expression: CADExpression) -> Double? {
-        guard case .constant(let quantity) = expression,
-              quantity.kind == .angle,
-              quantity.value.isFinite else {
+    private func resolvedAngleRadians(
+        _ expression: CADExpression,
+        expressionResolver: PatternArrayExpressionResolver
+    ) -> Double? {
+        do {
+            let value = try expressionResolver.angleRadians(for: expression)
+            guard value.isFinite else {
+                return nil
+            }
+            return value
+        } catch {
             return nil
         }
-        return quantity.value
     }
 }
 

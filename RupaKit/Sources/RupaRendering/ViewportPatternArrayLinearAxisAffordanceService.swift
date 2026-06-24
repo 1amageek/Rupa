@@ -18,10 +18,12 @@ struct ViewportPatternArrayLinearAxisAffordanceService: Sendable {
         guard !sourceIDs.isEmpty else {
             return []
         }
+        let expressionResolver = PatternArrayExpressionResolver(parameters: document.cadDocument.parameters)
         return sourceIDs.flatMap { sourceID in
             candidates(
                 sourceID: sourceID,
                 metadata: metadata,
+                expressionResolver: expressionResolver,
                 index: index,
                 layout: layout
             )
@@ -31,6 +33,7 @@ struct ViewportPatternArrayLinearAxisAffordanceService: Sendable {
     private func candidates(
         sourceID: PatternArraySourceID,
         metadata: ProductMetadata,
+        expressionResolver: PatternArrayExpressionResolver,
         index: ViewportPatternArraySourceSelectionIndex,
         layout: ViewportLayout
     ) -> [ViewportPatternArrayLinearAxisAffordanceCandidate] {
@@ -46,6 +49,7 @@ struct ViewportPatternArrayLinearAxisAffordanceService: Sendable {
                 sourceID: sourceID,
                 axisSlot: .first,
                 axis: rectangular.firstAxis,
+                expressionResolver: expressionResolver,
                 baseProjectedPoint: baseProjectedPoint,
                 layout: layout
             ) {
@@ -56,6 +60,7 @@ struct ViewportPatternArrayLinearAxisAffordanceService: Sendable {
                    sourceID: sourceID,
                    axisSlot: .second,
                    axis: secondAxis,
+                   expressionResolver: expressionResolver,
                    baseProjectedPoint: baseProjectedPoint,
                    layout: layout
                ) {
@@ -67,6 +72,7 @@ struct ViewportPatternArrayLinearAxisAffordanceService: Sendable {
                    sourceID: sourceID,
                    axisSlot: .radial,
                    axis: radialAxis,
+                   expressionResolver: expressionResolver,
                    baseProjectedPoint: baseProjectedPoint,
                    layout: layout
                ) {
@@ -82,10 +88,11 @@ struct ViewportPatternArrayLinearAxisAffordanceService: Sendable {
         sourceID: PatternArraySourceID,
         axisSlot: ViewportPatternArrayLinearAxisSlot,
         axis: PatternArrayLinearAxis,
+        expressionResolver: PatternArrayExpressionResolver,
         baseProjectedPoint: CGPoint,
         layout: ViewportLayout
     ) -> ViewportPatternArrayLinearAxisAffordanceCandidate? {
-        guard let distanceMeters = constantLengthMeters(axis.distance),
+        guard let distanceMeters = resolvedLengthMeters(axis.distance, expressionResolver: expressionResolver),
               let geometry = ViewportPatternArrayLinearAxisAffordanceGeometry(
                   baseProjectedPoint: baseProjectedPoint,
                   axisDirection: axis.direction,
@@ -105,14 +112,19 @@ struct ViewportPatternArrayLinearAxisAffordanceService: Sendable {
         )
     }
 
-    private func constantLengthMeters(_ expression: CADExpression) -> Double? {
-        guard case .constant(let quantity) = expression,
-              quantity.kind == .length,
-              quantity.value.isFinite,
-              quantity.value > 0.0 else {
+    private func resolvedLengthMeters(
+        _ expression: CADExpression,
+        expressionResolver: PatternArrayExpressionResolver
+    ) -> Double? {
+        do {
+            let value = try expressionResolver.lengthMeters(for: expression)
+            guard value.isFinite, value > 0.0 else {
+                return nil
+            }
+            return value
+        } catch {
             return nil
         }
-        return quantity.value
     }
 }
 

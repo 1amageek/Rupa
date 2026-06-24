@@ -122,6 +122,65 @@ import Testing
 }
 
 @MainActor
+@Test func patternArrayCopyCountAffordanceServiceResolvesReferencedLinearDistance() async throws {
+    let session = EditorSession()
+    _ = try createDefaultCopyCountPatternSourceDefinition(
+        in: session,
+        definitionName: "Referenced Count Source"
+    )
+    _ = try session.execute(
+        .upsertParameter(
+            name: "countSpacing",
+            expression: .constant(.length(45.0, unit: .millimeter)),
+            kind: .length
+        )
+    )
+    let spacing = try #require(session.document.cadDocument.parameters.parameters.values.first {
+        $0.name == "countSpacing"
+    })
+    let definition = try #require(session.document.productMetadata.componentDefinitions.values.first {
+        $0.name == "Referenced Count Source"
+    })
+    _ = try session.execute(
+        .createPatternArray(
+            name: "Referenced Count Pattern",
+            definitionID: definition.id,
+            distribution: .rectangular(RectangularPatternArray(
+                firstAxis: PatternArrayLinearAxis(
+                    direction: .unitX,
+                    distance: .reference(spacing.id),
+                    copyCount: 3,
+                    distanceMode: .spacing
+                )
+            )),
+            outputMode: .componentInstance
+        )
+    )
+    let source = try #require(session.document.productMetadata.patternArrays.values.first {
+        $0.name == "Referenced Count Pattern"
+    })
+    let scene = ViewportSceneBuilder().build(document: session.document)
+    let layout = try #require(ViewportLayout(scene: scene, size: CGSize(width: 900.0, height: 700.0)))
+
+    let candidates = ViewportPatternArrayCopyCountAffordanceService().candidates(
+        document: session.document,
+        scene: scene,
+        selection: SelectionModel(selectedTargets: [
+            SelectionTarget(sceneNodeID: source.rootSceneNodeID),
+        ]),
+        layout: layout
+    )
+
+    let candidate = try #require(candidates.first)
+    #expect(candidates.map(\.target.slot) == [.rectangularFirst])
+    #expect(candidate.geometry.baseCopyCount == 3)
+    #expect(candidate.geometry.copyCount(
+        start: candidate.geometry.handlePoint,
+        current: candidate.geometry.handlePoint(copyCount: 5)
+    ) == 5)
+}
+
+@MainActor
 @Test func patternArrayCopyCountAffordanceServiceResolvesRadialSpacingCounts() async throws {
     let session = EditorSession()
     _ = try createDefaultCopyCountPatternSourceDefinition(
@@ -180,6 +239,66 @@ import Testing
         start: radialAxisCandidate.geometry.handlePoint,
         current: radialAxisCandidate.geometry.handlePoint(copyCount: 3)
     ) == 3)
+}
+
+@MainActor
+@Test func patternArrayCopyCountAffordanceServiceResolvesReferencedAngularDistance() async throws {
+    let session = EditorSession()
+    _ = try createDefaultCopyCountPatternSourceDefinition(
+        in: session,
+        definitionName: "Referenced Angular Count Source"
+    )
+    _ = try session.execute(
+        .upsertParameter(
+            name: "countAngle",
+            expression: .constant(.angle(45.0, unit: .degree)),
+            kind: .angle
+        )
+    )
+    let angle = try #require(session.document.cadDocument.parameters.parameters.values.first {
+        $0.name == "countAngle"
+    })
+    let definition = try #require(session.document.productMetadata.componentDefinitions.values.first {
+        $0.name == "Referenced Angular Count Source"
+    })
+    _ = try session.execute(
+        .createPatternArray(
+            name: "Referenced Angular Count Pattern",
+            definitionID: definition.id,
+            distribution: .radial(RadialPatternArray(
+                angularAxis: PatternArrayAngularAxis(
+                    center: .origin,
+                    axis: .unitZ,
+                    angle: .reference(angle.id),
+                    copyCount: 4,
+                    angleMode: .spacing
+                )
+            )),
+            outputMode: .componentInstance
+        )
+    )
+    let source = try #require(session.document.productMetadata.patternArrays.values.first {
+        $0.name == "Referenced Angular Count Pattern"
+    })
+    let scene = ViewportSceneBuilder().build(document: session.document)
+    let layout = try #require(ViewportLayout(scene: scene, size: CGSize(width: 900.0, height: 700.0)))
+
+    let candidates = ViewportPatternArrayCopyCountAffordanceService().candidates(
+        document: session.document,
+        scene: scene,
+        selection: SelectionModel(selectedTargets: [
+            SelectionTarget(sceneNodeID: source.rootSceneNodeID),
+        ]),
+        layout: layout
+    )
+
+    let candidate = try #require(candidates.first)
+    #expect(candidates.map(\.target.slot) == [.radialAngular])
+    #expect(candidate.geometry.baseCopyCount == 4)
+    #expect(candidate.geometry.copyCount(
+        start: candidate.geometry.handlePoint,
+        current: candidate.geometry.handlePoint(copyCount: 6)
+    ) == 6)
 }
 
 @MainActor

@@ -371,6 +371,7 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                         "RupaKit/Sources/RupaCore/PatternArraySummaryService.swift",
                         "RupaKit/Sources/RupaCore/PatternArrayAnglePolicy.swift",
                         "RupaKit/Sources/RupaCore/PatternArrayDistancePolicy.swift",
+                        "RupaKit/Sources/RupaCore/PatternArrayExpressionResolver.swift",
                         "RupaKit/Sources/RupaCore/PatternArrayCurvePathGeometryService.swift",
                         "RupaKit/Sources/RupaCore/PatternArrayInstancePlanner.swift",
                         "RupaKit/Sources/RupaCore/DesignDisplaySnapshotService.swift",
@@ -417,6 +418,7 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                         "RupaKit/Tests/RupaRenderingTests/ViewportPatternArrayLinearAxisAffordanceServiceTests.swift",
                         "RupaKit/Tests/RupaRenderingTests/ViewportPatternArrayRadialAngleAffordanceServiceTests.swift",
                         "RupaKit/Tests/RupaRenderingTests/ViewportPatternArrayCopyCountAffordanceServiceTests.swift",
+                        "RupaKit/Tests/RupaCoreTests/PatternArrayExpressionResolverTests.swift",
                         "RupaKit/Tests/RupaCoreTests/PatternArrayCurvePathGeometryServiceTests.swift",
                         "RupaKit/Tests/RupaRenderingTests/ViewportPatternArrayCurveExtentAffordanceServiceTests.swift",
                     ],
@@ -441,6 +443,7 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                         "The viewport exposes radial Pattern Array angular spacing/extent handles and radial-axis distance handles through the shared PatternArray source-selection index.",
                         "The viewport exposes Pattern Array copy-count handles for rectangular axes, radial angular/radial axes, extent-density modes, and Curve Pattern Array density counts while preserving distance, angle, path extent, and source-owned output regeneration semantics.",
                         "The viewport exposes Curve Pattern Array extent handles that use the shared Core curve-path geometry resolver so viewport dragging and generated copy placement agree on path length and sampling.",
+                        "Pattern Array generation, curve path extent resolution, and viewport affordance placement share the same parameter-aware expression resolver so Agent-authored parametric arrays remain directly editable in the UI.",
                         "Viewport editing workflows and incremental independent-copy reuse remain open.",
                     ]
                 ),

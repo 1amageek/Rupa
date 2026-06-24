@@ -13,18 +13,19 @@ public struct PatternArrayInstancePlanner: Sendable {
     ) throws -> [Transform3D] {
         try tolerance.validate()
         try budget.validate()
+        let expressionResolver = PatternArrayExpressionResolver(parameters: parameters)
         switch distribution {
         case .rectangular(let rectangular):
             return try rectangularTransforms(
                 for: rectangular,
-                parameters: parameters,
+                expressionResolver: expressionResolver,
                 tolerance: tolerance,
                 budget: budget
             )
         case .radial(let radial):
             return try radialTransforms(
                 for: radial,
-                parameters: parameters,
+                expressionResolver: expressionResolver,
                 tolerance: tolerance,
                 budget: budget
             )
@@ -32,6 +33,7 @@ public struct PatternArrayInstancePlanner: Sendable {
             return try curveTransforms(
                 for: curve,
                 parameters: parameters,
+                expressionResolver: expressionResolver,
                 cadDocument: cadDocument,
                 tolerance: tolerance,
                 budget: budget
@@ -41,7 +43,7 @@ public struct PatternArrayInstancePlanner: Sendable {
 
     private func rectangularTransforms(
         for rectangular: RectangularPatternArray,
-        parameters: ParameterTable,
+        expressionResolver: PatternArrayExpressionResolver,
         tolerance: ModelingTolerance,
         budget: PatternArrayGenerationBudget
     ) throws -> [Transform3D] {
@@ -55,7 +57,7 @@ public struct PatternArrayInstancePlanner: Sendable {
         }
         let firstStep = try stepVector(
             for: rectangular.firstAxis,
-            parameters: parameters,
+            expressionResolver: expressionResolver,
             tolerance: tolerance
         )
         guard let secondAxis = rectangular.secondAxis else {
@@ -66,7 +68,7 @@ public struct PatternArrayInstancePlanner: Sendable {
 
         let secondStep = try stepVector(
             for: secondAxis,
-            parameters: parameters,
+            expressionResolver: expressionResolver,
             tolerance: tolerance
         )
         var transforms: [Transform3D] = []
@@ -113,7 +115,7 @@ public struct PatternArrayInstancePlanner: Sendable {
 
     private func radialTransforms(
         for radial: RadialPatternArray,
-        parameters: ParameterTable,
+        expressionResolver: PatternArrayExpressionResolver,
         tolerance: ModelingTolerance,
         budget: PatternArrayGenerationBudget
     ) throws -> [Transform3D] {
@@ -127,11 +129,15 @@ public struct PatternArrayInstancePlanner: Sendable {
         }
         let stepAngle = try angularStep(
             for: radial.angularAxis,
-            parameters: parameters,
+            expressionResolver: expressionResolver,
             tolerance: tolerance
         )
         let radialStep = try radial.radialAxis.map {
-            try stepVector(for: $0, parameters: parameters, tolerance: tolerance)
+            try stepVector(
+                for: $0,
+                expressionResolver: expressionResolver,
+                tolerance: tolerance
+            )
         }
         let rotationAxis = try radial.angularAxis.axis.normalized(tolerance: tolerance.distance)
 
@@ -196,6 +202,7 @@ public struct PatternArrayInstancePlanner: Sendable {
     private func curveTransforms(
         for curve: CurvePatternArray,
         parameters: ParameterTable,
+        expressionResolver: PatternArrayExpressionResolver,
         cadDocument: CADDocument?,
         tolerance: ModelingTolerance,
         budget: PatternArrayGenerationBudget
@@ -214,8 +221,8 @@ public struct PatternArrayInstancePlanner: Sendable {
             parameters: parameters,
             cadDocument: cadDocument
         )
-        let twist = try resolvedAngle(curve.twist, parameters: parameters)
-        let endScale = try resolvedScalar(curve.endScale, parameters: parameters)
+        let twist = try expressionResolver.angleRadians(for: curve.twist)
+        let endScale = try expressionResolver.scalarValue(for: curve.endScale)
         guard endScale.isFinite,
               endScale > tolerance.distance else {
             throw EditorError(
@@ -343,14 +350,11 @@ public struct PatternArrayInstancePlanner: Sendable {
 
     private func stepVector(
         for axis: PatternArrayLinearAxis,
-        parameters: ParameterTable,
+        expressionResolver: PatternArrayExpressionResolver,
         tolerance: ModelingTolerance
     ) throws -> Vector3D {
         try axis.validate(tolerance: tolerance)
-        let distance = try resolvedLength(
-            axis.distance,
-            parameters: parameters
-        )
+        let distance = try expressionResolver.lengthMeters(for: axis.distance)
         guard distance.isFinite,
               abs(distance) > tolerance.distance else {
             throw EditorError(
@@ -371,11 +375,11 @@ public struct PatternArrayInstancePlanner: Sendable {
 
     private func angularStep(
         for axis: PatternArrayAngularAxis,
-        parameters: ParameterTable,
+        expressionResolver: PatternArrayExpressionResolver,
         tolerance: ModelingTolerance
     ) throws -> Double {
         try axis.validate(tolerance: tolerance)
-        let angle = try resolvedAngle(axis.angle, parameters: parameters)
+        let angle = try expressionResolver.angleRadians(for: axis.angle)
         guard angle.isFinite,
               abs(angle) > tolerance.angle else {
             throw EditorError(
@@ -389,78 +393,6 @@ public struct PatternArrayInstancePlanner: Sendable {
         case .extent:
             return angle / Double(axis.copyCount)
         }
-    }
-
-    private func resolvedLength(
-        _ expression: CADExpression,
-        parameters: ParameterTable
-    ) throws -> Double {
-        let quantity: Quantity
-        do {
-            quantity = try parameters.resolvedValue(for: expression)
-        } catch let error as EditorError {
-            throw error
-        } catch {
-            throw EditorError(
-                code: .commandInvalid,
-                message: "Pattern array distance could not be resolved: \(error)."
-            )
-        }
-        guard quantity.kind == .length else {
-            throw EditorError(
-                code: .commandInvalid,
-                message: "Pattern array distance must resolve to a length."
-            )
-        }
-        return quantity.value
-    }
-
-    private func resolvedAngle(
-        _ expression: CADExpression,
-        parameters: ParameterTable
-    ) throws -> Double {
-        let quantity: Quantity
-        do {
-            quantity = try parameters.resolvedValue(for: expression)
-        } catch let error as EditorError {
-            throw error
-        } catch {
-            throw EditorError(
-                code: .commandInvalid,
-                message: "Pattern array angle could not be resolved: \(error)."
-            )
-        }
-        guard quantity.kind == .angle else {
-            throw EditorError(
-                code: .commandInvalid,
-                message: "Pattern array angle must resolve to an angle."
-            )
-        }
-        return quantity.value
-    }
-
-    private func resolvedScalar(
-        _ expression: CADExpression,
-        parameters: ParameterTable
-    ) throws -> Double {
-        let quantity: Quantity
-        do {
-            quantity = try parameters.resolvedValue(for: expression)
-        } catch let error as EditorError {
-            throw error
-        } catch {
-            throw EditorError(
-                code: .commandInvalid,
-                message: "Pattern array scalar value could not be resolved: \(error)."
-            )
-        }
-        guard quantity.kind == .scalar else {
-            throw EditorError(
-                code: .commandInvalid,
-                message: "Pattern array scalar value must resolve to a scalar."
-            )
-        }
-        return quantity.value
     }
 
     private func translationTransform(_ vector: Vector3D) throws -> Transform3D {

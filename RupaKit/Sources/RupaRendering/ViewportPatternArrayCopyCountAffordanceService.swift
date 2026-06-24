@@ -18,11 +18,13 @@ struct ViewportPatternArrayCopyCountAffordanceService: Sendable {
         guard !sourceIDs.isEmpty else {
             return []
         }
+        let expressionResolver = PatternArrayExpressionResolver(parameters: document.cadDocument.parameters)
         return sourceIDs.flatMap { sourceID in
             candidates(
                 sourceID: sourceID,
                 document: document,
                 metadata: metadata,
+                expressionResolver: expressionResolver,
                 index: index,
                 layout: layout
             )
@@ -33,6 +35,7 @@ struct ViewportPatternArrayCopyCountAffordanceService: Sendable {
         sourceID: PatternArraySourceID,
         document: DesignDocument,
         metadata: ProductMetadata,
+        expressionResolver: PatternArrayExpressionResolver,
         index: ViewportPatternArraySourceSelectionIndex,
         layout: ViewportLayout
     ) -> [ViewportPatternArrayCopyCountAffordanceCandidate] {
@@ -45,6 +48,7 @@ struct ViewportPatternArrayCopyCountAffordanceService: Sendable {
                 sourceID: sourceID,
                 rectangular: rectangular,
                 source: source,
+                expressionResolver: expressionResolver,
                 index: index,
                 layout: layout
             )
@@ -53,6 +57,7 @@ struct ViewportPatternArrayCopyCountAffordanceService: Sendable {
                 sourceID: sourceID,
                 radial: radial,
                 source: source,
+                expressionResolver: expressionResolver,
                 index: index,
                 layout: layout
             )
@@ -73,6 +78,7 @@ struct ViewportPatternArrayCopyCountAffordanceService: Sendable {
         sourceID: PatternArraySourceID,
         rectangular: RectangularPatternArray,
         source: PatternArraySource,
+        expressionResolver: PatternArrayExpressionResolver,
         index: ViewportPatternArraySourceSelectionIndex,
         layout: ViewportLayout
     ) -> [ViewportPatternArrayCopyCountAffordanceCandidate] {
@@ -84,6 +90,7 @@ struct ViewportPatternArrayCopyCountAffordanceService: Sendable {
             sourceID: sourceID,
             slot: .rectangularFirst,
             axis: rectangular.firstAxis,
+            expressionResolver: expressionResolver,
             baseProjectedPoint: baseProjectedPoint,
             layout: layout
         ) {
@@ -94,6 +101,7 @@ struct ViewportPatternArrayCopyCountAffordanceService: Sendable {
             sourceID: sourceID,
             slot: .rectangularSecond,
             axis: secondAxis,
+            expressionResolver: expressionResolver,
             baseProjectedPoint: baseProjectedPoint,
             layout: layout
            ) {
@@ -106,12 +114,13 @@ struct ViewportPatternArrayCopyCountAffordanceService: Sendable {
         sourceID: PatternArraySourceID,
         radial: RadialPatternArray,
         source: PatternArraySource,
+        expressionResolver: PatternArrayExpressionResolver,
         index: ViewportPatternArraySourceSelectionIndex,
         layout: ViewportLayout
     ) -> [ViewportPatternArrayCopyCountAffordanceCandidate] {
         var result: [ViewportPatternArrayCopyCountAffordanceCandidate] = []
         if let referencePoint = index.sourceBaseModelPoint(source: source),
-           let angleRadians = constantAngleRadians(radial.angularAxis.angle),
+           let angleRadians = resolvedAngleRadians(radial.angularAxis.angle, expressionResolver: expressionResolver),
            let candidate = angularCandidate(
                sourceID: sourceID,
                angularAxis: radial.angularAxis,
@@ -127,6 +136,7 @@ struct ViewportPatternArrayCopyCountAffordanceService: Sendable {
                sourceID: sourceID,
                slot: .radialAxis,
                axis: radialAxis,
+               expressionResolver: expressionResolver,
                baseProjectedPoint: baseProjectedPoint,
                layout: layout
            ) {
@@ -139,10 +149,11 @@ struct ViewportPatternArrayCopyCountAffordanceService: Sendable {
         sourceID: PatternArraySourceID,
         slot: ViewportPatternArrayCopyCountSlot,
         axis: PatternArrayLinearAxis,
+        expressionResolver: PatternArrayExpressionResolver,
         baseProjectedPoint: CGPoint,
         layout: ViewportLayout
     ) -> ViewportPatternArrayCopyCountAffordanceCandidate? {
-        guard let distanceMeters = constantLengthMeters(axis.distance) else {
+        guard let distanceMeters = resolvedLengthMeters(axis.distance, expressionResolver: expressionResolver) else {
             return nil
         }
         let geometry: ViewportPatternArrayCopyCountAffordanceGeometry
@@ -251,23 +262,34 @@ struct ViewportPatternArrayCopyCountAffordanceService: Sendable {
         }
     }
 
-    private func constantLengthMeters(_ expression: CADExpression) -> Double? {
-        guard case .constant(let quantity) = expression,
-              quantity.kind == .length,
-              quantity.value.isFinite,
-              quantity.value > 0.0 else {
+    private func resolvedLengthMeters(
+        _ expression: CADExpression,
+        expressionResolver: PatternArrayExpressionResolver
+    ) -> Double? {
+        do {
+            let value = try expressionResolver.lengthMeters(for: expression)
+            guard value.isFinite, value > 0.0 else {
+                return nil
+            }
+            return value
+        } catch {
             return nil
         }
-        return quantity.value
     }
 
-    private func constantAngleRadians(_ expression: CADExpression) -> Double? {
-        guard case .constant(let quantity) = expression,
-              quantity.kind == .angle,
-              quantity.value.isFinite else {
+    private func resolvedAngleRadians(
+        _ expression: CADExpression,
+        expressionResolver: PatternArrayExpressionResolver
+    ) -> Double? {
+        do {
+            let value = try expressionResolver.angleRadians(for: expression)
+            guard value.isFinite else {
+                return nil
+            }
+            return value
+        } catch {
             return nil
         }
-        return quantity.value
     }
 }
 
