@@ -882,6 +882,21 @@ import SwiftCAD
     #expect(assessment.counts.entryCount == assessment.entries.count)
     #expect(assessment.entries.contains { $0.area == .dimensions })
     #expect(assessment.entries.contains { $0.area == .agentOperability })
+    let productParityAreas: [CADInteractionQualityArea] = [
+        .filletingAndBlending,
+        .booleanModeling,
+        .directModeling,
+        .exchangeAndDrawings,
+        .patternsAndArrays,
+        .sectionAnalysis,
+    ]
+    for area in productParityAreas {
+        let entry = try #require(assessment.entries.first { $0.area == area })
+        #expect(entry.currentRating != .missing)
+        #expect(!entry.evidence.isEmpty)
+        #expect(!entry.openWork.isEmpty)
+        #expect(!entry.nextRequiredResult.isEmpty)
+    }
     #expect(assessment.entries.allSatisfy { entry in
         entry.gateAssessments.map(\.gate) == CADInteractionQualityGate.allCases
     })

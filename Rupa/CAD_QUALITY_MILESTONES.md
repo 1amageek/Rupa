@@ -31,6 +31,42 @@ flowchart LR
 | Measurement and diagnostics | The result is measurable or explainable through structured summaries when the geometry type supports it. |
 | Verification | Unit, package, rendering, and app-build coverage exist at the same scope as the shipped behavior. |
 
+## Product Tour Parity Tracks
+
+The current parity target is based on the Plasticity product tour checked on
+2026-06-24. The tour highlights robust filleting, direct face manipulation,
+xNURBS surface blending, PolySplines, hidden-line SVG export, surface
+continuity, section analysis, pattern and array tools, CV editing, powerful
+booleans, dimensions, construction planes, snapping, offset curves, tangent
+snaps, bridge curves, curvature combs, and surface extension. Rupa must track
+these as explicit capability areas because an Agent cannot produce reliable CAD
+results when the product surface cannot represent, validate, select, or inspect
+the same operation.
+
+```mermaid
+flowchart LR
+    Product["Plasticity product capability"] --> Area["Rupa quality area"]
+    Area --> Kernel["SwiftCAD kernel contract"]
+    Area --> Core["Rupa Core command and source state"]
+    Area --> UI["Viewport and Inspector affordance"]
+    Area --> Agent["Automation and Agent parity"]
+    Kernel --> Tests["Focused tests"]
+    Core --> Tests
+    UI --> Tests
+    Agent --> Tests
+```
+
+| Track | Product capability | Primary owner | Required implementation result | Verification gate |
+|---|---|---|---|---|
+| P0 | Robust filleting and blending | SwiftCAD kernel first, Rupa Core second | Edge/face blend requests must carry radius law, continuity intent, affected topology references, and explicit unsupported diagnostics before broad UI exposure. | Kernel evaluator tests for exact supported subsets, Rupa command rejection tests for unsupported selections, and Agent capability readback. |
+| P0 | Powerful booleans | SwiftCAD kernel first, Rupa Core second | Boolean operands, operation kind, keep-tool policy, topology naming, and failure diagnostics must be typed source contracts rather than mesh-only operations. | Exact subset tests for union/difference/intersection, topology naming tests, and Agent execution tests. |
+| P0 | Direct face manipulation | Rupa Core and SwiftCAD jointly | Face, edge, and vertex edits must resolve from stable selection to source-owned feature edits or fail before mutation when the source cannot be rewritten. | Selection-to-command tests, undo/redo tests, viewport handle tests for supported scopes, and Agent parity tests. |
+| P1 | Surface modeling, CV editing, surface extension, xNURBS-like blending | SwiftCAD surface foundation first | NURBS/B-spline source surfaces, CV/knot/span/trim identity, UVN frames, continuity diagnostics, and exact surface edit requests must exist before adding broad surfacing tools. | Surface evaluator tests, continuity measurement tests, selected CV/trim identity tests, and Agent analysis readback. |
+| P1 | PolySplines mesh-to-NURBS conversion | SwiftCAD reconstruction plus Rupa diagnostics | Mesh suitability, patch partition, continuity constraints, generated B-spline topology, and editable CV/trim handles must remain source-owned and diagnosable. | Mesh preflight tests, patch topology tests, surface continuity tests, and Inspector/Agent readback tests. |
+| P1 | Hidden-line export and section analysis | SwiftCAD analysis plus Rupa export/readback | Visible/hidden edge classification, section planes, hatching, stroke metadata, and saved view context must be analysis output, not viewport screenshots. | Deterministic hidden-line/section tests with stable SVG or structured output fixtures. |
+| P1 | Pattern and array tools | Rupa Core source contract with kernel transform support | Linear, radial, grid, and curve-driven repetitions must preserve source instance identity, editable parameters, and downstream topology naming. | Source mutation tests, generated naming tests, transform precision tests, and Agent execution/readback tests. |
+| P2 | Sketch precision family | Rupa Core and UI with kernel geometry queries | Dimensions, snapping, tangent snaps, offset curves, polygons, bridge curves, and curvature combs must share exact curve references and diagnostics. | Existing sketch, snap, dimension, curve edit, and Agent tests remain the regression boundary; new tools add tests at the shared command layer. |
+
 ## Milestone Roadmap
 
 ```mermaid

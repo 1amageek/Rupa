@@ -4,7 +4,7 @@ public struct CADInteractionQualityAssessmentService: Sendable {
     public func assess() -> CADInteractionQualityAssessmentResult {
         let entries = Self.entries
         return CADInteractionQualityAssessmentResult(
-            referenceDate: "2026-06-23",
+            referenceDate: "2026-06-24",
             scoringModel: "Average of all gate ratings where missing=0, planned=1, partial=2, implemented=3, verified=4.",
             score: Self.score(for: entries),
             counts: Self.counts(for: entries),
@@ -64,6 +64,325 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                 "Drawing annotation dimensions separate from model-driving dimensions.",
             ],
             next: "Generalize Dimension from primitive-owned targets to reference-pair and generated-face contracts while keeping UI and Agent summaries non-mutating."
+        ),
+        entry(
+            area: .filletingAndBlending,
+            workflow: "Exact filleting, chamfering, and shell-grade blending",
+            references: [
+                "https://www.plasticity.xyz/product",
+                "https://doc.plasticity.xyz/solid/fillet-shell",
+                "https://doc.plasticity.xyz/sketch/fillet",
+                "https://doc.plasticity.xyz/cad-essentials/fillet-order-of-operations",
+            ],
+            rating: .partial,
+            gates: [
+                .referenceContract: .verified,
+                .sourceOwnership: .partial,
+                .commandContract: .partial,
+                .selectionTopology: .implemented,
+                .viewportAffordance: .partial,
+                .inspectorAffordance: .planned,
+                .agentParity: .partial,
+                .measurementDiagnostics: .partial,
+                .verification: .verified,
+                .performanceBudget: .planned,
+            ],
+            evidence: [
+                CADInteractionQualityEvidence(
+                    label: "Profile-owned fillet and chamfer subset",
+                    sourceFiles: [
+                        "RupaKit/Sources/RupaCore/DesignDocument.swift",
+                        "RupaKit/Sources/RupaCore/EditableExtrudeProfileLoop.swift",
+                        "RupaKit/Sources/RupaCore/BodyCornerEdge.swift",
+                        "RupaKit/Sources/RupaCore/BodyCornerVertex.swift",
+                        "RupaKit/Sources/RupaAgent/AgentServer.swift",
+                        "RupaKit/Sources/RupaRendering/ViewportProfileEdgeFilletMapping.swift",
+                        "RupaKit/Sources/RupaRendering/ViewportProfileEdgeChamferMapping.swift",
+                    ],
+                    tests: [
+                        "RupaKit/Tests/RupaCoreTests/BodyEdgeChamferCommandTests.swift",
+                        "RupaKit/Tests/RupaCoreTests/BodyVertexMoveCommandTests.swift",
+                        "RupaKit/Tests/RupaAgentTests/AgentServerTests.swift",
+                    ],
+                    notes: [
+                        "Body edge fillet and chamfer commands exist for generated profile-edge subsets.",
+                        "The current fillet command does not yet expose shell-grade conic, G2, constant-width, variable-radius, or range-limited blend contracts.",
+                    ]
+                ),
+            ],
+            openWork: [
+                "Exact shell-edge blend source ownership for arbitrary solid and sheet topology.",
+                "Conic, G2, constant-width, variable-radius, and range-limited blend options.",
+                "Blend failure diagnostics for self-intersection, tangent-chain ambiguity, and radius overconstraint.",
+                "Viewport and inspector controls for ordered blend sets and per-edge radius editing.",
+            ],
+            next: "Promote profile-edge fillets into a kernel-backed blend feature contract with Agent-readable option coverage and explicit failure diagnostics before broadening viewport controls."
+        ),
+        entry(
+            area: .booleanModeling,
+            workflow: "Standalone and command-integrated boolean modeling",
+            references: [
+                "https://doc.plasticity.xyz/solid/boolean",
+                "https://doc.plasticity.xyz/solid/sweep",
+                "https://doc.plasticity.xyz/solid/revolve",
+            ],
+            rating: .partial,
+            gates: [
+                .referenceContract: .verified,
+                .sourceOwnership: .partial,
+                .commandContract: .partial,
+                .selectionTopology: .implemented,
+                .viewportAffordance: .partial,
+                .inspectorAffordance: .planned,
+                .agentParity: .partial,
+                .measurementDiagnostics: .partial,
+                .verification: .verified,
+                .performanceBudget: .partial,
+            ],
+            evidence: [
+                CADInteractionQualityEvidence(
+                    label: "Boolean operation options on evaluated feature subsets",
+                    sourceFiles: [
+                        "swift-CAD/Sources/CADKernel/BoxBRepBooleanEvaluator.swift",
+                        "swift-CAD/Sources/CADKernel/PlanarSweepFeatureEvaluator.swift",
+                        "swift-CAD/Sources/CADKernel/PlanarRevolveFeatureEvaluator.swift",
+                        "RupaKit/Sources/RupaCore/DesignDocument.swift",
+                        "RupaKit/Sources/RupaCore/EditorCommand.swift",
+                        "RupaKit/Sources/RupaAgent/AgentServer.swift",
+                    ],
+                    tests: [
+                        "swift-CAD/Tests/CADKernelTests/CADKernelTests.swift",
+                        "RupaKit/Tests/RupaCoreTests/SweepCommandTests.swift",
+                        "RupaKit/Tests/RupaCoreTests/RevolveCommandTests.swift",
+                        "RupaKit/Tests/RupaAgentTests/AgentServerTests.swift",
+                    ],
+                    notes: [
+                        "Sweep and revolve expose boolean operation options through Agent capability descriptors.",
+                        "Standalone Boolean target/tool workflows and mixed Solid/Sheet operations remain gap items.",
+                    ]
+                ),
+            ],
+            openWork: [
+                "Standalone Boolean command with target/tool selection contracts.",
+                "Union, difference, and intersect support across general Solid and Sheet topology.",
+                "Keep Tools, Slice, and targetless creation policies.",
+                "Exact post-boolean topology naming for follow-on selection, dimensions, and direct edits.",
+            ],
+            next: "Add a standalone Boolean feature contract that reuses command-integrated boolean options but owns target/tool selection, exact topology output, and failure diagnostics."
+        ),
+        entry(
+            area: .directModeling,
+            workflow: "Direct face, edge, vertex, and surface-CV modeling",
+            references: [
+                "https://www.plasticity.xyz/product",
+                "https://www.plasticity.xyz/faq",
+                "https://doc.plasticity.xyz/solid/offset-face",
+                "https://doc.plasticity.xyz/common/move.en",
+                "https://doc.plasticity.xyz/solid/delete-face",
+                "https://doc.plasticity.xyz/solid/match-face",
+                "https://doc.plasticity.xyz/solid/draft-face.en",
+            ],
+            rating: .partial,
+            gates: [
+                .referenceContract: .verified,
+                .sourceOwnership: .partial,
+                .commandContract: .partial,
+                .selectionTopology: .implemented,
+                .viewportAffordance: .partial,
+                .inspectorAffordance: .partial,
+                .agentParity: .partial,
+                .measurementDiagnostics: .partial,
+                .verification: .verified,
+                .performanceBudget: .partial,
+            ],
+            evidence: [
+                CADInteractionQualityEvidence(
+                    label: "Direct edit commands for owned generated topology subsets",
+                    sourceFiles: [
+                        "RupaKit/Sources/RupaCore/DesignDocument.swift",
+                        "RupaKit/Sources/RupaCore/EditorCommand.swift",
+                        "RupaKit/Sources/RupaCore/GeneratedTopologySelectionResolver.swift",
+                        "RupaKit/Sources/RupaCore/PolySplineSurfaceVertexEditingService.swift",
+                        "RupaKit/Sources/RupaAgent/AgentServer.swift",
+                    ],
+                    tests: [
+                        "RupaKit/Tests/RupaCoreTests/BodyFaceOffsetCommandTests.swift",
+                        "RupaKit/Tests/RupaCoreTests/BodyEdgeChamferCommandTests.swift",
+                        "RupaKit/Tests/RupaCoreTests/BodyVertexMoveCommandTests.swift",
+                        "RupaKit/Tests/RupaCoreTests/DesignDocumentTests.swift",
+                        "RupaKit/Tests/RupaAgentTests/AgentServerTests.swift",
+                    ],
+                    notes: [
+                        "Face offset, edge chamfer/fillet, vertex move, and PolySpline surface vertex edits are routed through command contracts.",
+                        "General push/pull, move edge, delete face, match face, draft face, and proportional CV editing are not yet complete.",
+                    ]
+                ),
+            ],
+            openWork: [
+                "General push/pull face edits with dependent offset, adjacent-angle, and grow policies.",
+                "Move planar and circular edges while preserving analytic geometry.",
+                "Delete Face, Match Face, Draft Face, and broader surface-CV proportional editing.",
+                "Direct edit rollback diagnostics when topology cannot be healed exactly.",
+            ],
+            next: "Expand direct edits from owned generated topology subsets to general face, edge, vertex, and surface-CV contracts with stable topology names and non-destructive diagnostics."
+        ),
+        entry(
+            area: .exchangeAndDrawings,
+            workflow: "CAD exchange, technical drawing, and hidden-line export",
+            references: [
+                "https://www.plasticity.xyz/product",
+                "https://doc.plasticity.xyz/plasticity-essentials/import-export",
+                "https://doc.plasticity.xyz/plasticity-essentials/export-hidden-line",
+                "https://doc.plasticity.xyz/plasticity-essentials/export-svg",
+            ],
+            rating: .partial,
+            gates: [
+                .referenceContract: .verified,
+                .sourceOwnership: .partial,
+                .commandContract: .partial,
+                .selectionTopology: .partial,
+                .viewportAffordance: .planned,
+                .inspectorAffordance: .planned,
+                .agentParity: .partial,
+                .measurementDiagnostics: .partial,
+                .verification: .verified,
+                .performanceBudget: .partial,
+            ],
+            evidence: [
+                CADInteractionQualityEvidence(
+                    label: "Document export and exchange-format foundation",
+                    sourceFiles: [
+                        "RupaKit/Sources/RupaCore/DocumentExportService.swift",
+                        "RupaKit/Sources/RupaCore/ExportOptions.swift",
+                        "RupaKit/Sources/RupaCore/ExportPreset.swift",
+                        "RupaKit/Sources/RupaCore/ExportResult.swift",
+                        "swift-CAD/Sources/CADExchange/OfficialFormatExchange.swift",
+                        "swift-CAD/Sources/CADExchange/PDFExporter.swift",
+                        "RupaKit/Sources/RupaAgent/AgentServer.swift",
+                    ],
+                    tests: [
+                        "RupaKit/Tests/RupaCoreTests/DesignDocumentTests.swift",
+                        "swift-CAD/Tests/CADExchangeTests/CADExchangeTests.swift",
+                        "RupaKit/Tests/RupaAgentTests/AgentServerTests.swift",
+                    ],
+                    notes: [
+                        "Export service and exchange-format tests cover file-oriented output paths.",
+                        "Hidden-line technical drawing generation, section hatching, and drawing annotation workflows remain separate gaps.",
+                    ]
+                ),
+            ],
+            openWork: [
+                "Hidden-line export from selected views with occluded-line and style controls.",
+                "Section hatching, radial hatching, and parametric hatching for technical drawings.",
+                "Drawing-space annotations that are distinct from model-driving dimensions.",
+                "Agent-readable import contract for supported exchange formats and failure recovery.",
+            ],
+            next: "Split exchange from drawing generation by adding a hidden-line drawing result contract with view, hatch, annotation, and export diagnostics."
+        ),
+        entry(
+            area: .patternsAndArrays,
+            workflow: "Rectangular, radial, curve, and instance-based arrays",
+            references: [
+                "https://doc.plasticity.xyz/common",
+                "https://doc.plasticity.xyz/common/rectangular-array",
+                "https://doc.plasticity.xyz/common/radial-array",
+                "https://doc.plasticity.xyz/common/curve-array",
+                "https://doc.plasticity.xyz/common/place",
+            ],
+            rating: .planned,
+            gates: [
+                .referenceContract: .verified,
+                .sourceOwnership: .partial,
+                .commandContract: .planned,
+                .selectionTopology: .partial,
+                .viewportAffordance: .planned,
+                .inspectorAffordance: .planned,
+                .agentParity: .planned,
+                .measurementDiagnostics: .planned,
+                .verification: .planned,
+                .performanceBudget: .planned,
+            ],
+            evidence: [
+                CADInteractionQualityEvidence(
+                    label: "Component instance and transform foundation without array commands",
+                    sourceFiles: [
+                        "RupaKit/Sources/RupaCore/ComponentDefinition.swift",
+                        "RupaKit/Sources/RupaCore/ComponentInstance.swift",
+                        "RupaKit/Sources/RupaCore/SceneNode.swift",
+                        "RupaKit/Sources/RupaCore/EditorCommand.swift",
+                        "RupaKit/Sources/RupaAgent/AgentServer.swift",
+                    ],
+                    tests: [
+                        "RupaKit/Tests/RupaCoreTests/CommandStackTests.swift",
+                        "RupaKit/Tests/RupaAgentTests/AgentServerTests.swift",
+                    ],
+                    notes: [
+                        "Component instances and transform commands can support array outputs.",
+                        "No Rectangular Array, Radial Array, Curve Array, or Place command contract exists yet.",
+                    ]
+                ),
+            ],
+            openWork: [
+                "Rectangular array count, spacing, extent, second-direction, and instance options.",
+                "Radial array angle, spacing, count, repetition, center, and instance options.",
+                "Curve array distribution, twist, scale, alignment, and instance options.",
+                "Array source ownership that can update or explode generated copies predictably.",
+            ],
+            next: "Add a shared Pattern Array source model that emits component instances or independent copies and exposes rectangular, radial, and curve distribution policies to Agent and UI."
+        ),
+        entry(
+            area: .sectionAnalysis,
+            workflow: "Section analysis, measurement, and inspection overlays",
+            references: [
+                "https://doc.plasticity.xyz/common/section-analysis",
+                "https://doc.plasticity.xyz/tool/measure",
+                "https://doc.plasticity.xyz/tool/measure-radius",
+                "https://doc.plasticity.xyz/tool/measure-continuity",
+                "https://doc.plasticity.xyz/solid/toggle-surface-curvature",
+            ],
+            rating: .partial,
+            gates: [
+                .referenceContract: .verified,
+                .sourceOwnership: .partial,
+                .commandContract: .partial,
+                .selectionTopology: .partial,
+                .viewportAffordance: .partial,
+                .inspectorAffordance: .partial,
+                .agentParity: .partial,
+                .measurementDiagnostics: .implemented,
+                .verification: .verified,
+                .performanceBudget: .partial,
+            ],
+            evidence: [
+                CADInteractionQualityEvidence(
+                    label: "Measurements, surface continuity, and saved section-plane metadata",
+                    sourceFiles: [
+                        "RupaKit/Sources/RupaCore/MeasurementService.swift",
+                        "RupaKit/Sources/RupaCore/MeasurementAnnotation.swift",
+                        "RupaKit/Sources/RupaCore/SelectionDimensionService.swift",
+                        "RupaKit/Sources/RupaCore/SurfaceContinuityService.swift",
+                        "RupaKit/Sources/RupaCore/DesignDocument.swift",
+                        "RupaKit/Sources/RupaAgent/AgentServer.swift",
+                    ],
+                    tests: [
+                        "RupaKit/Tests/RupaCoreTests/CommandStackTests.swift",
+                        "RupaKit/Tests/RupaCoreTests/SelectionDimensionCommandTests.swift",
+                        "RupaKit/Tests/RupaCoreTests/SurfaceContinuityServiceTests.swift",
+                        "RupaKit/Tests/RupaAgentTests/AgentServerTests.swift",
+                    ],
+                    notes: [
+                        "Measurement summaries, selection dimensions, surface continuity summaries, and section-plane creation are Agent-readable.",
+                        "Virtual section clipping, section hatching, interference highlighting, and section-distance controls remain incomplete.",
+                    ]
+                ),
+            ],
+            openWork: [
+                "Virtual section clipping through solids and meshes without mutating model geometry.",
+                "Selection, CPlane, previous-plane, distance, and flip policies for Section Analysis.",
+                "Interference highlighting and section hatching for drawing/export workflows.",
+                "Persistent inspection overlay controls that share the measurement and topology contracts.",
+            ],
+            next: "Connect saved section planes to a non-mutating section analysis result that drives viewport clipping, hatching, interference diagnostics, and Agent-readable measurements."
         ),
         entry(
             area: .snapping,

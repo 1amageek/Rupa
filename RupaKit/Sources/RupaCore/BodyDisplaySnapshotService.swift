@@ -17,6 +17,12 @@ public struct BodyDisplaySnapshotService: Sendable {
             objectRegistry: objectRegistry
         )
         let evaluatedDocument = try pipeline.evaluate(document.cadDocument)
+        return snapshots(evaluatedDocument: evaluatedDocument)
+    }
+
+    public func snapshots(
+        evaluatedDocument: EvaluatedDocument
+    ) -> [FeatureID: BodyDisplaySnapshot] {
         var snapshots: [FeatureID: BodyDisplaySnapshot] = [:]
         for featureID in bodyFeatureIDs(in: evaluatedDocument.generatedNames) {
             guard let snapshot = snapshot(

@@ -1,4 +1,5 @@
 import Testing
+import SwiftCAD
 @testable import RupaCore
 
 @MainActor
@@ -7,7 +8,16 @@ import Testing
     _ = try #require(session.createDefaultExtrudedRectangle())
     let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
 
-    let snapshots = try BodyDisplaySnapshotService().snapshots(document: session.document)
+    let service = BodyDisplaySnapshotService()
+    let evaluatedDocument = try CADPipeline
+        .modelingDefault(for: session.document)
+        .evaluate(session.document.cadDocument)
+    let documentSnapshots = try service.snapshots(document: session.document)
+    let evaluatedDocumentSnapshots = service.snapshots(evaluatedDocument: evaluatedDocument)
+
+    #expect(evaluatedDocumentSnapshots == documentSnapshots)
+
+    let snapshots = evaluatedDocumentSnapshots
     let snapshot = try #require(snapshots[bodyFeatureID])
 
     #expect(snapshot.featureID == bodyFeatureID)
@@ -22,4 +32,33 @@ import Testing
     #expect(snapshot.topology.faces.allSatisfy { $0.componentID.generatedTopologyPersistentName != nil })
     #expect(snapshot.topology.edges.allSatisfy { $0.componentID.generatedTopologyPersistentName != nil })
     #expect(snapshot.topology.vertices.allSatisfy { $0.componentID.generatedTopologyPersistentName != nil })
+}
+
+@MainActor
+@Test func bodyDisplaySnapshotServiceReusesEvaluatedDocumentWithoutPipelineOverride() async throws {
+    let session = EditorSession()
+    _ = try #require(session.createDefaultExtrudedRectangle())
+    let evaluatedDocument = try CADPipeline
+        .modelingDefault(for: session.document)
+        .evaluate(session.document.cadDocument)
+    let service = BodyDisplaySnapshotService(
+        pipeline: CADPipeline(
+            evaluator: DocumentEvaluator(featureEvaluator: FailingFeatureEvaluator())
+        )
+    )
+
+    let firstSnapshots = service.snapshots(evaluatedDocument: evaluatedDocument)
+    let secondSnapshots = service.snapshots(evaluatedDocument: evaluatedDocument)
+
+    #expect(firstSnapshots.isEmpty == false)
+    #expect(secondSnapshots == firstSnapshots)
+    #expect(throws: FeatureEvaluationError.self) {
+        _ = try service.snapshots(document: session.document)
+    }
+}
+
+private struct FailingFeatureEvaluator: FeatureEvaluating {
+    func evaluate(feature _: FeatureNode, context _: EvaluationContext) throws -> EvaluationResult {
+        throw FeatureEvaluationError.unsupportedOperation("Injected evaluator should not be used.")
+    }
 }
