@@ -21,6 +21,14 @@ public enum EditorCommand: Codable, Equatable, Sendable {
         distribution: PatternArrayDistribution,
         outputMode: PatternArrayOutputMode
     )
+    case updatePatternArray(
+        id: PatternArraySourceID,
+        name: String?,
+        definitionID: ComponentDefinitionID?,
+        distribution: PatternArrayDistribution?,
+        outputMode: PatternArrayOutputMode?
+    )
+    case explodePatternArray(id: PatternArraySourceID)
     case setSceneNodeVisibility(id: SceneNodeID, isVisible: Bool)
     case setSceneNodeLock(id: SceneNodeID, isLocked: Bool)
     case setSceneNodeTransform(id: SceneNodeID, localTransform: Transform3D)
@@ -262,6 +270,10 @@ public enum EditorCommand: Codable, Equatable, Sendable {
             "createComponentInstance"
         case .createPatternArray:
             "createPatternArray"
+        case .updatePatternArray:
+            "updatePatternArray"
+        case .explodePatternArray:
+            "explodePatternArray"
         case .setSceneNodeVisibility:
             "setSceneNodeVisibility"
         case .setSceneNodeLock:
@@ -413,6 +425,8 @@ public enum EditorCommand: Codable, Equatable, Sendable {
              .createComponentDefinition,
              .createComponentInstance,
              .createPatternArray,
+             .updatePatternArray,
+             .explodePatternArray,
              .setSceneNodeVisibility,
              .setSceneNodeLock,
              .setSceneNodeTransform,

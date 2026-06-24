@@ -4354,6 +4354,140 @@ import Testing
 }
 
 @MainActor
+@Test func patternArrayCommandUpdatesSourceAndResynchronizesOutputs() async throws {
+    let session = EditorSession()
+    _ = try #require(session.createDefaultExtrudedRectangle())
+    let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let bodySceneNodeID = try #require(commandStackBodySceneNodeID(for: bodyFeatureID, in: session.document))
+    _ = try session.execute(.createComponentDefinition(name: "Update Array Source", rootSceneNodeIDs: [bodySceneNodeID]))
+    let definition = try #require(session.document.productMetadata.componentDefinitions.values.first {
+        $0.name == "Update Array Source"
+    })
+    _ = try session.execute(
+        .createPatternArray(
+            name: "Editable Array",
+            definitionID: definition.id,
+            distribution: .rectangular(RectangularPatternArray(
+                firstAxis: PatternArrayLinearAxis(
+                    direction: .unitX,
+                    distance: .length(10.0, .millimeter),
+                    copyCount: 3
+                )
+            )),
+            outputMode: .componentInstance
+        )
+    )
+    let source = try #require(session.document.productMetadata.patternArrays.values.first {
+        $0.name == "Editable Array"
+    })
+    let initialOutputIDs = source.outputInstanceIDs
+    let initialSecondOutputID = initialOutputIDs[1]
+
+    let result = try session.execute(
+        .updatePatternArray(
+            id: source.id,
+            name: "Updated Array",
+            definitionID: nil,
+            distribution: .rectangular(RectangularPatternArray(
+                firstAxis: PatternArrayLinearAxis(
+                    direction: .unitX,
+                    distance: .length(20.0, .millimeter),
+                    copyCount: 1
+                )
+            )),
+            outputMode: nil
+        )
+    )
+
+    let updatedSource = try #require(session.document.productMetadata.patternArrays[source.id])
+    let updatedGroupNode = try #require(session.document.productMetadata.sceneNodes[source.rootSceneNodeID])
+    let reusedInstance = try #require(
+        session.document.productMetadata.componentInstances[initialOutputIDs[0]]
+    )
+
+    #expect(result.commandName == "updatePatternArray")
+    #expect(result.generation == DocumentGeneration(4))
+    #expect(updatedSource.name == "Updated Array")
+    #expect(updatedGroupNode.name == "Updated Array")
+    #expect(updatedSource.outputInstanceIDs == [initialOutputIDs[0]])
+    #expect(session.document.productMetadata.componentInstances[initialSecondOutputID] == nil)
+    #expect(reusedInstance.localTransform.matrix.values[12] == 0.02)
+
+    _ = try session.undo()
+    let restoredSource = try #require(session.document.productMetadata.patternArrays[source.id])
+    #expect(restoredSource.name == "Editable Array")
+    #expect(restoredSource.outputInstanceIDs == initialOutputIDs)
+    #expect(session.document.productMetadata.componentInstances[initialSecondOutputID] != nil)
+}
+
+@MainActor
+@Test func patternArrayCommandExplodesSourceIntoIndependentInstances() async throws {
+    let session = EditorSession()
+    _ = try #require(session.createDefaultExtrudedRectangle())
+    let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let bodySceneNodeID = try #require(commandStackBodySceneNodeID(for: bodyFeatureID, in: session.document))
+    _ = try session.execute(.createComponentDefinition(name: "Explode Array Source", rootSceneNodeIDs: [bodySceneNodeID]))
+    let definition = try #require(session.document.productMetadata.componentDefinitions.values.first {
+        $0.name == "Explode Array Source"
+    })
+    _ = try session.execute(
+        .createPatternArray(
+            name: "Explodable Array",
+            definitionID: definition.id,
+            distribution: .rectangular(RectangularPatternArray(
+                firstAxis: PatternArrayLinearAxis(
+                    direction: .unitX,
+                    distance: .length(10.0, .millimeter),
+                    copyCount: 1
+                )
+            )),
+            outputMode: .componentInstance
+        )
+    )
+    let source = try #require(session.document.productMetadata.patternArrays.values.first {
+        $0.name == "Explodable Array"
+    })
+    let outputInstanceID = try #require(source.outputInstanceIDs.first)
+    let outputSceneNodeID = try #require(
+        session.document.productMetadata.sceneNodes[source.rootSceneNodeID]?.childIDs.first
+    )
+
+    let explodeResult = try session.execute(.explodePatternArray(id: source.id))
+    let independentTransform = try translationTransform(x: 0.03, y: 0.0, z: 0.0)
+    let transformResult = try session.execute(
+        .setComponentInstanceTransform(
+            id: outputInstanceID,
+            localTransform: independentTransform
+        )
+    )
+
+    #expect(explodeResult.commandName == "explodePatternArray")
+    #expect(session.document.productMetadata.patternArrays[source.id] == nil)
+    #expect(session.document.productMetadata.componentInstances[outputInstanceID] != nil)
+    #expect(session.document.productMetadata.sceneNodes[outputSceneNodeID] != nil)
+    #expect(transformResult.commandName == "setComponentInstanceTransform")
+    #expect(session.document.productMetadata.componentInstances[outputInstanceID]?.localTransform == independentTransform)
+
+    _ = try session.undo()
+    #expect(session.document.productMetadata.patternArrays[source.id] == nil)
+    #expect(session.document.productMetadata.componentInstances[outputInstanceID]?.localTransform != independentTransform)
+
+    _ = try session.undo()
+    #expect(session.document.productMetadata.patternArrays[source.id] != nil)
+    do {
+        _ = try session.execute(
+            .setComponentInstanceTransform(
+                id: outputInstanceID,
+                localTransform: independentTransform
+            )
+        )
+        Issue.record("Restored pattern array outputs must return to source-owned transforms.")
+    } catch let error as EditorError {
+        #expect(error.code == .commandInvalid)
+    }
+}
+
+@MainActor
 @Test func rectangularPatternArrayRejectsDeletingReferencedPatternParameterBeforeMutation() async throws {
     let session = EditorSession()
     _ = try #require(session.createDefaultExtrudedRectangle())

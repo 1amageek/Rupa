@@ -204,6 +204,28 @@ public final class CADDocumentStore {
             document = updatedDocument
             try commitMutation()
             evaluateCurrentDocument()
+        case .updatePatternArray(let id, let name, let definitionID, let distribution, let outputMode):
+            var updatedDocument = document
+            try updatedDocument.updatePatternArray(
+                id: id,
+                name: name,
+                definitionID: definitionID,
+                distribution: distribution,
+                outputMode: outputMode,
+                objectRegistry: objectRegistry
+            )
+            document = updatedDocument
+            try commitMutation()
+            evaluateCurrentDocument()
+        case .explodePatternArray(let id):
+            var updatedDocument = document
+            try updatedDocument.explodePatternArray(
+                id: id,
+                objectRegistry: objectRegistry
+            )
+            document = updatedDocument
+            try commitMutation()
+            evaluateCurrentDocument()
         case .setSceneNodeVisibility(let id, let isVisible):
             var updatedDocument = document
             try updatedDocument.setSceneNodeVisibility(id: id, isVisible: isVisible, objectRegistry: objectRegistry)

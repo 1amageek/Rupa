@@ -1005,6 +1005,32 @@ public final class EditorSession {
         )
     }
 
+    @discardableResult
+    public func updatePatternArray(
+        id: PatternArraySourceID,
+        name: String? = nil,
+        definitionID: ComponentDefinitionID? = nil,
+        distribution: PatternArrayDistribution? = nil,
+        outputMode: PatternArrayOutputMode? = nil
+    ) -> CommandExecutionResult? {
+        perform(
+            .updatePatternArray(
+                id: id,
+                name: name,
+                definitionID: definitionID,
+                distribution: distribution,
+                outputMode: outputMode
+            )
+        )
+    }
+
+    @discardableResult
+    public func explodePatternArray(
+        id: PatternArraySourceID
+    ) -> CommandExecutionResult? {
+        perform(.explodePatternArray(id: id))
+    }
+
     public func setSceneNodeVisibility(
         _ id: SceneNodeID,
         isVisible: Bool

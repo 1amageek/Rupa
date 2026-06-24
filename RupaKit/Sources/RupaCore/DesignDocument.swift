@@ -225,21 +225,10 @@ public struct DesignDocument: Identifiable, Sendable {
                 message: "Pattern array source names must be unique."
             )
         }
-        guard let definition = productMetadata.componentDefinitions[definitionID] else {
-            throw EditorError(
-                code: .referenceUnresolved,
-                message: "Pattern arrays must reference an existing component definition."
-            )
-        }
-        guard ComponentDefinitionSceneResolver().containsRenderableSceneNode(
-            in: definition,
+        _ = try requireRenderablePatternArrayDefinition(
+            definitionID,
             metadata: productMetadata
-        ) else {
-            throw EditorError(
-                code: .commandInvalid,
-                message: "Pattern arrays require a component definition with at least one renderable scene node."
-            )
-        }
+        )
 
         switch outputMode {
         case .componentInstance:
@@ -278,6 +267,101 @@ public struct DesignDocument: Identifiable, Sendable {
         try updatedMetadata.validate(against: cadDocument, objectRegistry: objectRegistry)
         productMetadata = updatedMetadata
         return source.id
+    }
+
+    public mutating func updatePatternArray(
+        id: PatternArraySourceID,
+        name: String? = nil,
+        definitionID: ComponentDefinitionID? = nil,
+        distribution: PatternArrayDistribution? = nil,
+        outputMode: PatternArrayOutputMode? = nil,
+        objectRegistry: ObjectTypeRegistry = .builtIn
+    ) throws {
+        var updatedMetadata = productMetadata
+        guard var source = updatedMetadata.patternArrays[id] else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "Pattern array update requires an existing pattern source."
+            )
+        }
+
+        if let name {
+            let trimmedName = try normalizedMetadataName(
+                name,
+                owner: "Pattern array"
+            )
+            guard updatedMetadata.patternArrays.values.allSatisfy({
+                $0.id == id || $0.name.trimmingCharacters(in: .whitespacesAndNewlines) != trimmedName
+            }) else {
+                throw EditorError(
+                    code: .commandInvalid,
+                    message: "Pattern array source names must be unique."
+                )
+            }
+            source.name = trimmedName
+            guard var rootNode = updatedMetadata.sceneNodes[source.rootSceneNodeID],
+                  rootNode.reference == nil,
+                  rootNode.object?.category == .group else {
+                throw EditorError(
+                    code: .referenceUnresolved,
+                    message: "Pattern array update requires an existing output group scene node."
+                )
+            }
+            rootNode.name = trimmedName
+            updatedMetadata.sceneNodes[source.rootSceneNodeID] = rootNode
+        }
+
+        let nextDefinitionID = definitionID ?? source.definitionID
+        let definition = try requireRenderablePatternArrayDefinition(
+            nextDefinitionID,
+            metadata: updatedMetadata
+        )
+        source.definitionID = definition.id
+
+        if let distribution {
+            try distribution.validate()
+            source.distribution = distribution
+        }
+
+        let nextOutputMode = outputMode ?? source.outputMode
+        switch nextOutputMode {
+        case .componentInstance:
+            break
+        }
+        source.outputMode = nextOutputMode
+
+        updatedMetadata.patternArrays[id] = source
+        try synchronizePatternArrayOutputs(
+            for: id,
+            metadata: &updatedMetadata
+        )
+        try updatedMetadata.validate(against: cadDocument, objectRegistry: objectRegistry)
+        productMetadata = updatedMetadata
+    }
+
+    @discardableResult
+    public mutating func explodePatternArray(
+        id: PatternArraySourceID,
+        objectRegistry: ObjectTypeRegistry = .builtIn
+    ) throws -> [ComponentInstanceID] {
+        var updatedMetadata = productMetadata
+        guard let source = updatedMetadata.patternArrays[id] else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "Pattern array explode requires an existing pattern source."
+            )
+        }
+        guard updatedMetadata.sceneNodes[source.rootSceneNodeID] != nil else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "Pattern array explode requires an existing output group scene node."
+            )
+        }
+
+        updatedMetadata.patternArrays.removeValue(forKey: id)
+        try updatedMetadata.validate(against: cadDocument, objectRegistry: objectRegistry)
+        productMetadata = updatedMetadata
+        return source.outputInstanceIDs
     }
 
     public mutating func regeneratePatternArrays(
@@ -15842,6 +15926,28 @@ public struct DesignDocument: Identifiable, Sendable {
             index += 1
         }
         return "\(prefix) \(index)"
+    }
+
+    private func requireRenderablePatternArrayDefinition(
+        _ definitionID: ComponentDefinitionID,
+        metadata: ProductMetadata
+    ) throws -> ComponentDefinition {
+        guard let definition = metadata.componentDefinitions[definitionID] else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "Pattern arrays must reference an existing component definition."
+            )
+        }
+        guard ComponentDefinitionSceneResolver().containsRenderableSceneNode(
+            in: definition,
+            metadata: metadata
+        ) else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Pattern arrays require a component definition with at least one renderable scene node."
+            )
+        }
+        return definition
     }
 
     private func synchronizePatternArrayOutputs(

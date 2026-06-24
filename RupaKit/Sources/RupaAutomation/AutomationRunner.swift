@@ -102,6 +102,32 @@ public struct AutomationRunner {
                 didMutate: result.didMutate,
                 diagnostics: result.diagnostics
             )
+        case .updatePatternArray(let id, let name, let definitionID, let distribution, let outputMode):
+            let result = try session.execute(
+                .updatePatternArray(
+                    id: id,
+                    name: name,
+                    definitionID: definitionID,
+                    distribution: distribution,
+                    outputMode: outputMode
+                )
+            )
+            return AutomationResult(
+                message: "Pattern array updated.",
+                commandName: result.commandName,
+                generation: result.generation,
+                didMutate: result.didMutate,
+                diagnostics: result.diagnostics
+            )
+        case .explodePatternArray(let id):
+            let result = try session.execute(.explodePatternArray(id: id))
+            return AutomationResult(
+                message: "Pattern array exploded.",
+                commandName: result.commandName,
+                generation: result.generation,
+                didMutate: result.didMutate,
+                diagnostics: result.diagnostics
+            )
         case .setSceneNodeVisibility(let id, let isVisible):
             let result = try session.execute(
                 .setSceneNodeVisibility(id: id, isVisible: isVisible)

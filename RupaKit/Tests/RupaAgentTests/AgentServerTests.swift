@@ -23,6 +23,8 @@ import SwiftCAD
     #expect(capabilities.contains("createComponentDefinition"))
     #expect(capabilities.contains("createComponentInstance"))
     #expect(capabilities.contains("createPatternArray"))
+    #expect(capabilities.contains("updatePatternArray"))
+    #expect(capabilities.contains("explodePatternArray"))
     #expect(capabilities.contains("setSceneNodeVisibility"))
     #expect(capabilities.contains("setSceneNodeLock"))
     #expect(capabilities.contains("setSceneNodeTransform"))
@@ -162,6 +164,8 @@ import SwiftCAD
     let constructionPlaneRename = try #require(descriptors.first { $0.name == "renameConstructionPlane" })
     let constructionPlaneSummary = try #require(descriptors.first { $0.name == "constructionPlaneSummary" })
     let patternArray = try #require(descriptors.first { $0.name == "createPatternArray" })
+    let patternArrayUpdate = try #require(descriptors.first { $0.name == "updatePatternArray" })
+    let patternArrayExplode = try #require(descriptors.first { $0.name == "explodePatternArray" })
     let designDisplaySnapshot = try #require(descriptors.first { $0.name == "designDisplaySnapshot" })
     let qualityAssessment = try #require(descriptors.first { $0.name == "cadInteractionQualityAssessment" })
     let selection = try #require(descriptors.first { $0.name == "selectTargets" })
@@ -701,6 +705,18 @@ import SwiftCAD
     #expect(curveAlignment.supportedValues == ["normal", "parallel", "transport"])
     #expect(patternOutputMode.supportedValues == ["componentInstance"])
 
+    #expect(patternArrayUpdate.category == .pattern)
+    #expect(patternArrayUpdate.mutatesDocument)
+    #expect(patternArrayUpdate.discovery.contains(.designDisplaySnapshot))
+    #expect(patternArrayUpdate.targets == [.sceneNode])
+    #expect(patternArrayUpdate.optionMatrix.map(\.name) == ["editableFields", "outputMode"])
+
+    #expect(patternArrayExplode.category == .pattern)
+    #expect(patternArrayExplode.mutatesDocument)
+    #expect(patternArrayExplode.discovery.contains(.designDisplaySnapshot))
+    #expect(patternArrayExplode.targets == [.sceneNode])
+    #expect(patternArrayExplode.summary.contains("independently editable"))
+
     #expect(designDisplaySnapshot.category == .read)
     #expect(!designDisplaySnapshot.mutatesDocument)
     #expect(designDisplaySnapshot.access == .agentRequest)
@@ -970,6 +986,7 @@ import SwiftCAD
     #expect(snapshot.extrudes.count == 1)
     #expect(snapshot.straightPrismSweeps.isEmpty)
     #expect(snapshot.bodies.count == 1)
+    #expect(snapshot.patternArrays.isEmpty)
     #expect(sketch.primitives.count == 4)
     #expect(sketch.regions.count == 1)
     #expect(extrude.profileFeatureID == sketch.featureID)
@@ -979,6 +996,90 @@ import SwiftCAD
     #expect(body.topology.edges.count == 12)
     #expect(body.topology.vertices.count == 8)
     #expect(decodedResponse == response)
+}
+
+@Test func agentDiscoversPatternArraySourceFromDesignDisplaySnapshotForLifecycleCommands() async throws {
+    let server = AgentServer()
+    let sessionID = UUID()
+    let session = EditorSession()
+    _ = try #require(session.createDefaultExtrudedRectangle())
+    let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let bodySceneNodeID = try #require(
+        agentPatternArrayBodySceneNodeID(for: bodyFeatureID, in: session.document)
+    )
+    _ = try session.execute(
+        .createComponentDefinition(
+            name: "Agent Snapshot Array Source",
+            rootSceneNodeIDs: [bodySceneNodeID]
+        )
+    )
+    let definition = try #require(session.document.productMetadata.componentDefinitions.values.first {
+        $0.name == "Agent Snapshot Array Source"
+    })
+    _ = try session.execute(
+        .createPatternArray(
+            name: "Agent Snapshot Array",
+            definitionID: definition.id,
+            distribution: .rectangular(RectangularPatternArray(
+                firstAxis: PatternArrayLinearAxis(
+                    direction: .unitX,
+                    distance: .length(8.0, .millimeter),
+                    copyCount: 2
+                )
+            )),
+            outputMode: .componentInstance
+        )
+    )
+    server.register(session: session, id: sessionID)
+
+    let snapshotResponse = server.handle(
+        .designDisplaySnapshot(
+            sessionID: sessionID,
+            expectedGeneration: session.generation
+        )
+    )
+    guard case .designDisplaySnapshot(let snapshot) = snapshotResponse else {
+        #expect(Bool(false))
+        return
+    }
+    let discoveredArray = try #require(snapshot.patternArrays.first)
+    let firstOutput = try #require(discoveredArray.outputs.first)
+
+    let updateResponse = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .updatePatternArray(
+                id: discoveredArray.sourceID,
+                name: "Agent Snapshot Array Updated",
+                definitionID: nil,
+                distribution: .rectangular(RectangularPatternArray(
+                    firstAxis: PatternArrayLinearAxis(
+                        direction: .unitX,
+                        distance: .length(16.0, .millimeter),
+                        copyCount: 1
+                    )
+                )),
+                outputMode: nil
+            ),
+            expectedGeneration: snapshot.generation
+        )
+    )
+    guard case .command(let updateResult) = updateResponse else {
+        #expect(Bool(false))
+        return
+    }
+    let updatedSource = try #require(session.document.productMetadata.patternArrays[discoveredArray.sourceID])
+
+    #expect(snapshot.patternArrays.count == 1)
+    #expect(discoveredArray.name == "Agent Snapshot Array")
+    #expect(discoveredArray.definitionID == definition.id)
+    #expect(discoveredArray.definitionName == "Agent Snapshot Array Source")
+    #expect(discoveredArray.outputCount == 2)
+    #expect(discoveredArray.outputs.count == 2)
+    #expect(firstOutput.componentInstanceID == discoveredArray.outputs[0].componentInstanceID)
+    #expect(updateResult.commandName == "updatePatternArray")
+    #expect(updatedSource.name == "Agent Snapshot Array Updated")
+    #expect(updatedSource.outputInstanceIDs == [firstOutput.componentInstanceID])
 }
 
 @Test func agentMessageCodecRoundTripsCommandRequestAndResponse() async throws {
@@ -1061,6 +1162,42 @@ import SwiftCAD
     let decodedRequest = try codec.decodeRequest(from: try codec.encode(request))
 
     #expect(decodedRequest == request)
+}
+
+@Test func agentMessageCodecRoundTripsPatternArrayLifecycleCommands() async throws {
+    let codec = AgentMessageCodec()
+    let sessionID = UUID()
+    let sourceID = PatternArraySourceID()
+    let updateRequest = AgentRequest.execute(
+        sessionID: sessionID,
+        command: .updatePatternArray(
+            id: sourceID,
+            name: "Encoded Updated Array",
+            definitionID: nil,
+            distribution: .rectangular(
+                RectangularPatternArray(
+                    firstAxis: PatternArrayLinearAxis(
+                        direction: .unitX,
+                        distance: .length(12.0, .millimeter),
+                        copyCount: 2
+                    )
+                )
+            ),
+            outputMode: nil
+        ),
+        expectedGeneration: DocumentGeneration(6)
+    )
+    let explodeRequest = AgentRequest.execute(
+        sessionID: sessionID,
+        command: .explodePatternArray(id: sourceID),
+        expectedGeneration: DocumentGeneration(7)
+    )
+
+    let decodedUpdateRequest = try codec.decodeRequest(from: try codec.encode(updateRequest))
+    let decodedExplodeRequest = try codec.decodeRequest(from: try codec.encode(explodeRequest))
+
+    #expect(decodedUpdateRequest == updateRequest)
+    #expect(decodedExplodeRequest == explodeRequest)
 }
 
 @Test func agentMessageCodecRoundTripsOffsetCurveCommand() async throws {
@@ -4567,6 +4704,126 @@ import SwiftCAD
     #expect(arrayResult.commandName == "createPatternArray")
     #expect(arrayResult.generation == DocumentGeneration(3))
     #expect(source.outputInstanceIDs.count == 3)
+}
+
+@Test func agentDispatchesPatternArrayLifecycleCommandsThroughAutomationAndCore() async throws {
+    let server = AgentServer()
+    let sessionID = UUID()
+    let session = EditorSession()
+    server.register(session: session, id: sessionID)
+
+    let createResponse = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .createExtrudedRectangle(
+                name: "Agent Array Lifecycle Body",
+                plane: .xy,
+                width: .length(10.0, .millimeter),
+                height: .length(6.0, .millimeter),
+                depth: .length(4.0, .millimeter),
+                direction: .normal
+            ),
+            expectedGeneration: DocumentGeneration(0)
+        )
+    )
+    guard case .command = createResponse else {
+        #expect(Bool(false))
+        return
+    }
+    let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let bodySceneNode = try #require(agentBodySceneNode(for: bodyFeatureID, in: session.document))
+    let definitionResponse = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .createComponentDefinition(
+                name: "Agent Lifecycle Source",
+                rootSceneNodeIDs: [bodySceneNode.id]
+            ),
+            expectedGeneration: DocumentGeneration(1)
+        )
+    )
+    guard case .command = definitionResponse else {
+        #expect(Bool(false))
+        return
+    }
+    let definition = try #require(session.document.productMetadata.componentDefinitions.values.first)
+
+    let arrayResponse = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .createPatternArray(
+                name: "Agent Lifecycle Array",
+                definitionID: definition.id,
+                distribution: .rectangular(
+                    RectangularPatternArray(
+                        firstAxis: PatternArrayLinearAxis(
+                            direction: .unitX,
+                            distance: .length(6.0, .millimeter),
+                            copyCount: 2
+                        )
+                    )
+                ),
+                outputMode: .componentInstance
+            ),
+            expectedGeneration: DocumentGeneration(2)
+        )
+    )
+    guard case .command = arrayResponse else {
+        #expect(Bool(false))
+        return
+    }
+    let source = try #require(session.document.productMetadata.patternArrays.values.first {
+        $0.name == "Agent Lifecycle Array"
+    })
+    let firstOutputID = try #require(source.outputInstanceIDs.first)
+
+    let updateResponse = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .updatePatternArray(
+                id: source.id,
+                name: "Agent Updated Array",
+                definitionID: nil,
+                distribution: .rectangular(
+                    RectangularPatternArray(
+                        firstAxis: PatternArrayLinearAxis(
+                            direction: .unitX,
+                            distance: .length(12.0, .millimeter),
+                            copyCount: 1
+                        )
+                    )
+                ),
+                outputMode: nil
+            ),
+            expectedGeneration: DocumentGeneration(3)
+        )
+    )
+    guard case .command(let updateResult) = updateResponse else {
+        #expect(Bool(false))
+        return
+    }
+    let updatedSource = try #require(session.document.productMetadata.patternArrays[source.id])
+
+    let explodeResponse = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .explodePatternArray(id: source.id),
+            expectedGeneration: DocumentGeneration(4)
+        )
+    )
+    guard case .command(let explodeResult) = explodeResponse else {
+        #expect(Bool(false))
+        return
+    }
+
+    #expect(updateResult.commandName == "updatePatternArray")
+    #expect(updateResult.generation == DocumentGeneration(4))
+    #expect(updatedSource.name == "Agent Updated Array")
+    #expect(updatedSource.outputInstanceIDs == [firstOutputID])
+    #expect(explodeResult.commandName == "explodePatternArray")
+    #expect(explodeResult.generation == DocumentGeneration(5))
+    #expect(session.document.productMetadata.patternArrays[source.id] == nil)
+    #expect(session.document.productMetadata.componentInstances[firstOutputID] != nil)
 }
 
 @Test func agentDispatchesCircleModelingCommandThroughAutomationAndCore() async throws {
@@ -11519,6 +11776,15 @@ private func agentLineEndpointTargets(
             component: .sketchEntity(SelectionComponentID(rawValue: endHandle.selectionComponentID))
         )
     )
+}
+
+private func agentPatternArrayBodySceneNodeID(
+    for featureID: FeatureID,
+    in document: DesignDocument
+) -> SceneNodeID? {
+    document.productMetadata.sceneNodes.first { _, node in
+        node.reference == .body(featureID)
+    }?.key
 }
 
 private extension ObjectPropertyValue {

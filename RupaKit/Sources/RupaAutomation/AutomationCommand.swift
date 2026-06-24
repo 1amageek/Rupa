@@ -19,6 +19,14 @@ public enum AutomationCommand: Codable, Equatable, Sendable {
         distribution: PatternArrayDistribution,
         outputMode: PatternArrayOutputMode
     )
+    case updatePatternArray(
+        id: PatternArraySourceID,
+        name: String?,
+        definitionID: ComponentDefinitionID?,
+        distribution: PatternArrayDistribution?,
+        outputMode: PatternArrayOutputMode?
+    )
+    case explodePatternArray(id: PatternArraySourceID)
     case setSceneNodeVisibility(id: SceneNodeID, isVisible: Bool)
     case setSceneNodeLock(id: SceneNodeID, isLocked: Bool)
     case setSceneNodeTransform(id: SceneNodeID, localTransform: Transform3D)
@@ -253,6 +261,16 @@ public enum AutomationCommand: Codable, Equatable, Sendable {
                 distribution: distribution,
                 outputMode: outputMode
             )
+        case .updatePatternArray(let id, let name, let definitionID, let distribution, let outputMode):
+            .updatePatternArray(
+                id: id,
+                name: name,
+                definitionID: definitionID,
+                distribution: distribution,
+                outputMode: outputMode
+            )
+        case .explodePatternArray(let id):
+            .explodePatternArray(id: id)
         case .setSceneNodeVisibility(let id, let isVisible):
             .setSceneNodeVisibility(id: id, isVisible: isVisible)
         case .setSceneNodeLock(let id, let isLocked):

@@ -189,6 +189,53 @@ public final class AgentServer: AgentClientProtocol {
             ]
         ),
         capability(
+            "updatePatternArray",
+            category: .pattern,
+            summary: "Edit an existing source-owned pattern array by replacing its name, component definition, distribution, or output mode, then regenerate owned output instances.",
+            access: .automationCommand,
+            mutatesDocument: true,
+            discovery: [.designDisplaySnapshot],
+            targets: [.sceneNode],
+            failureMode: "Rejects missing pattern sources, duplicate names, missing component definitions, invalid distributions, stale output groups, and stale generations before mutation.",
+            optionMatrix: [
+                AgentCapabilityDescriptor.OptionAxis(
+                    name: "editableFields",
+                    supportedValues: ["name", "definitionID", "distribution", "outputMode"],
+                    notes: [
+                        "Use designDisplaySnapshot.patternArrays to discover the existing PatternArraySourceID.",
+                        "Omitted fields keep their current source values.",
+                        "Distribution updates reuse existing output instances where counts overlap and remove stale generated outputs.",
+                    ]
+                ),
+                AgentCapabilityDescriptor.OptionAxis(
+                    name: "outputMode",
+                    supportedValues: ["componentInstance"],
+                    notes: [
+                        "Generated component instance transforms remain source-owned until the array is exploded.",
+                    ]
+                ),
+            ]
+        ),
+        capability(
+            "explodePatternArray",
+            category: .pattern,
+            summary: "Detach generated component instances from a pattern array source so the emitted instances become independently editable scene items.",
+            access: .automationCommand,
+            mutatesDocument: true,
+            discovery: [.designDisplaySnapshot],
+            targets: [.sceneNode],
+            failureMode: "Rejects missing pattern sources, stale output groups, and stale generations before mutation.",
+            optionMatrix: [
+                AgentCapabilityDescriptor.OptionAxis(
+                    name: "sourceDiscovery",
+                    supportedValues: ["designDisplaySnapshot.patternArrays"],
+                    notes: [
+                        "Use the snapshot PatternArraySourceID to detach generated component instances from their source."
+                    ]
+                ),
+            ]
+        ),
+        capability(
             "setSceneNodeVisibility",
             category: .component,
             summary: "Set visibility on a scene node without changing CAD feature source.",

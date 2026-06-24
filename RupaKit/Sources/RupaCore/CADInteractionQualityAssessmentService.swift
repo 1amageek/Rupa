@@ -362,7 +362,9 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                         "RupaKit/Sources/RupaCore/ComponentDefinition.swift",
                         "RupaKit/Sources/RupaCore/ComponentInstance.swift",
                         "RupaKit/Sources/RupaCore/PatternArraySource.swift",
+                        "RupaKit/Sources/RupaCore/PatternArrayDisplaySnapshot.swift",
                         "RupaKit/Sources/RupaCore/PatternArrayInstancePlanner.swift",
+                        "RupaKit/Sources/RupaCore/DesignDisplaySnapshotService.swift",
                         "RupaKit/Sources/RupaCore/SceneNode.swift",
                         "RupaKit/Sources/RupaCore/ProductMetadata.swift",
                         "RupaKit/Sources/RupaCore/DesignDocument.swift",
@@ -371,6 +373,7 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                         "RupaKit/Sources/RupaAgent/AgentServer.swift",
                     ],
                     tests: [
+                        "RupaKit/Tests/RupaCoreTests/DesignDisplaySnapshotServiceTests.swift",
                         "RupaKit/Tests/RupaCoreTests/CommandStackTests.swift",
                         "RupaKit/Tests/RupaAutomationTests/AutomationRunnerTests.swift",
                         "RupaKit/Tests/RupaAgentTests/AgentServerTests.swift",
@@ -380,17 +383,19 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                         "Rectangular spacing and extent modes support one- or two-axis lattices through Core, Automation, and Agent command paths.",
                         "Radial angle spacing/extent, center, axis, count, and optional radial repetition support Core, Automation, and Agent command paths.",
                         "Curve Array path distribution, twist, scale, Normal, Parallel, Transport, ratio extent, distance extent, explicit polyline paths, and source sketch-entity paths support Core, Automation, and Agent command paths.",
-                        "Place, independent-copy output, update, explode, and viewport editing workflows remain open.",
+                        "Pattern Array source update and explode lifecycle commands support Core, Automation, and Agent command paths.",
+                        "Design display snapshots expose PatternArraySource IDs, output instance IDs, root scene node IDs, distribution, and output mode for Agent lifecycle planning.",
+                        "Place, independent-copy output, and viewport editing workflows remain open.",
                     ]
                 ),
             ],
             openWork: [
-                "Rectangular independent-copy output, source update, and explode workflows.",
+                "Rectangular independent-copy output workflow.",
                 "Viewport preview and Inspector affordances for radial array center, angle, count, repetition, and output mode.",
                 "Viewport preview and Inspector affordances for curve array path selection, twist, scale, alignment, extent, and output mode.",
                 "Viewport preview and Inspector affordances for array handles, copy count, spacing, extent, and output mode.",
             ],
-            next: "Add radial and curve UI preview handles, curve path picking affordances, and update/explode lifecycle commands."
+            next: "Add radial and curve UI preview handles, curve path picking affordances, and independent-copy output mode."
         ),
         entry(
             area: .sectionAnalysis,

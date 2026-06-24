@@ -3234,6 +3234,75 @@ import SwiftCAD
 }
 
 @MainActor
+@Test func automationCanUpdateAndExplodePatternArray() async throws {
+    let session = EditorSession()
+    let runner = AutomationRunner()
+    _ = try #require(session.createDefaultExtrudedRectangle())
+    let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let bodySceneNodeID = try #require(automationSceneNodeID(for: bodyFeatureID, in: session.document))
+    _ = try runner.execute(
+        .createComponentDefinition(
+            name: "Automation Lifecycle Source",
+            rootSceneNodeIDs: [bodySceneNodeID]
+        ),
+        in: session
+    )
+    let definition = try #require(session.document.productMetadata.componentDefinitions.values.first)
+    _ = try runner.execute(
+        .createPatternArray(
+            name: "Automation Lifecycle Array",
+            definitionID: definition.id,
+            distribution: .rectangular(RectangularPatternArray(
+                firstAxis: PatternArrayLinearAxis(
+                    direction: .unitX,
+                    distance: .length(5.0, .millimeter),
+                    copyCount: 2
+                )
+            )),
+            outputMode: .componentInstance
+        ),
+        in: session
+    )
+    let source = try #require(session.document.productMetadata.patternArrays.values.first {
+        $0.name == "Automation Lifecycle Array"
+    })
+    let firstOutputID = try #require(source.outputInstanceIDs.first)
+
+    let updateResult = try runner.execute(
+        .updatePatternArray(
+            id: source.id,
+            name: "Automation Updated Array",
+            definitionID: nil,
+            distribution: .rectangular(RectangularPatternArray(
+                firstAxis: PatternArrayLinearAxis(
+                    direction: .unitX,
+                    distance: .length(12.0, .millimeter),
+                    copyCount: 1
+                )
+            )),
+            outputMode: nil
+        ),
+        in: session
+    )
+    let updatedSource = try #require(session.document.productMetadata.patternArrays[source.id])
+
+    let explodeResult = try runner.execute(
+        .explodePatternArray(id: source.id),
+        in: session
+    )
+
+    #expect(updateResult.commandName == "updatePatternArray")
+    #expect(updateResult.message == "Pattern array updated.")
+    #expect(updatedSource.name == "Automation Updated Array")
+    #expect(updatedSource.outputInstanceIDs == [firstOutputID])
+    #expect(explodeResult.commandName == "explodePatternArray")
+    #expect(explodeResult.message == "Pattern array exploded.")
+    #expect(session.document.productMetadata.patternArrays[source.id] == nil)
+    #expect(session.document.productMetadata.componentInstances[firstOutputID] != nil)
+    #expect(session.generation == DocumentGeneration(5))
+}
+
+@MainActor
 @Test func automationCanCreateSectionPlane() async throws {
     let session = EditorSession()
     let runner = AutomationRunner()
