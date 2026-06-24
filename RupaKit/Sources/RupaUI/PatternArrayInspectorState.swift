@@ -49,6 +49,7 @@ struct PatternArrayInspectorState: Equatable, Sendable {
     }
 
     struct CurveDistribution: Equatable, Sendable {
+        var path: PatternArrayCurvePath
         var pathTitle: String
         var copyCount: Int
         var twistRadians: Double?
@@ -393,6 +394,7 @@ struct PatternArrayInspectorState: Equatable, Sendable {
             extentRatio = constantScalar(curve.extent)
         }
         return CurveDistribution(
+            path: curve.path,
             pathTitle: pathTitle(for: curve.path),
             copyCount: curve.copyCount,
             twistRadians: constantAngleRadians(curve.twist),

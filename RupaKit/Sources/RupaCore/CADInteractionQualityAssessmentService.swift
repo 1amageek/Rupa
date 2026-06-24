@@ -378,6 +378,8 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                         "RupaKit/Sources/RupaAutomation/AutomationCommand.swift",
                         "RupaKit/Sources/RupaAgent/AgentServer.swift",
                         "RupaKit/Sources/RupaUI/PatternArrayInspectorState.swift",
+                        "RupaKit/Sources/RupaUI/PatternArrayEditingService.swift",
+                        "RupaKit/Sources/RupaUI/PatternArrayCurvePathCandidate.swift",
                         "RupaKit/Sources/RupaUI/MainView.swift",
                     ],
                     tests: [
@@ -387,6 +389,7 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                         "RupaKit/Tests/RupaAutomationTests/AutomationRunnerTests.swift",
                         "RupaKit/Tests/RupaAgentTests/AgentServerTests.swift",
                         "RupaKit/Tests/RupaUIPackageTests/PatternArrayInspectorStateTests.swift",
+                        "RupaKit/Tests/RupaUIPackageTests/PatternArrayEditingServiceTests.swift",
                     ],
                     notes: [
                         "Rectangular, radial, and curve arrays now persist a PatternArraySource and emit component instances or independent copied CAD feature geometry.",
@@ -401,14 +404,15 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                         "Pattern Array summary diagnostics mirror source-owned output invariants for missing instances, mismatched transforms, duplicate ownership, root child mapping, and independent-copy feature closure checks.",
                         "The object Inspector now maps selected source roots, generated outputs, and independent-copy descendants back to their PatternArraySource and displays ownership, lifecycle actions, output mode, selected output index, and diagnostics.",
                         "The Pattern Array Inspector exposes source-owned output mode plus rectangular first- and second-axis controls, radial center, axis, angular spacing or extent, radial repetition, and curve count, twist, scale, alignment, and extent controls that update the PatternArraySource instead of generated outputs.",
+                        "The Pattern Array Inspector can replace a Curve Array path with the currently selected sketch curve through a testable editing service while preserving source-owned regeneration.",
                         "Viewport editing workflows and incremental independent-copy reuse remain open.",
                     ]
                 ),
             ],
             openWork: [
                 "Viewport-independent copy controls and regeneration reuse for edited outputs.",
-                "Interactive curve array path picking and path replacement affordances.",
-                "Viewport preview affordances for array handles, copy count, spacing, extent, and output mode.",
+                "Dedicated viewport curve array path pick mode and path preview affordances.",
+                "Viewport preview affordances for array handles, copy count, spacing, extent, path, and output mode.",
             ],
             next: "Add viewport array handles, curve path picking affordances, and independent-copy reuse diagnostics."
         ),

@@ -6,6 +6,7 @@ struct PatternArrayInspectorView: View {
     let state: PatternArrayInspectorState
     let session: EditorSession
     let positionSliderRange: ClosedRange<Double>
+    let curvePathCandidate: PatternArrayCurvePathCandidate?
 
     var body: some View {
         inspectorSection("Pattern Array") {
@@ -80,10 +81,7 @@ struct PatternArrayInspectorView: View {
                 selection: Binding(
                     get: { state.outputMode },
                     set: { outputMode in
-                        session.updatePatternArray(
-                            id: state.sourceID,
-                            outputMode: outputMode
-                        )
+                        editingService.setOutputMode(outputMode)
                     }
                 )
             ) {
@@ -244,6 +242,7 @@ struct PatternArrayInspectorView: View {
         _ curve: PatternArrayInspectorState.CurveDistribution
     ) -> some View {
         inspectorRow("Path", curve.pathTitle)
+        curvePathReplacementControls(curve)
         inspectorControlRow("Curve Copies") {
             Stepper(
                 value: Binding(
@@ -315,6 +314,31 @@ struct PatternArrayInspectorView: View {
                 .accessibilityIdentifier("InspectorPatternArray.curve.extent.ratio")
             } else {
                 inspectorRow("Curve Extent", "Expression")
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func curvePathReplacementControls(
+        _ curve: PatternArrayInspectorState.CurveDistribution
+    ) -> some View {
+        inspectorRow(
+            "Selected Path",
+            curvePathCandidate?.title ?? "No Sketch Curve"
+        )
+        if let curvePathCandidate {
+            inspectorActionRow {
+                Button {
+                    setCurvePath(curvePathCandidate.path)
+                } label: {
+                    Label(
+                        curvePathCandidate.matches(curve.path) ? "Path Active" : "Use Selected Path",
+                        systemImage: "point.topleft.down.curvedto.point.bottomright.up"
+                    )
+                }
+                .controlSize(.small)
+                .disabled(curvePathCandidate.matches(curve.path))
+                .accessibilityIdentifier("InspectorPatternArray.curve.path.useSelected")
             }
         }
     }
@@ -430,84 +454,38 @@ struct PatternArrayInspectorView: View {
         }
     }
 
-    private enum RectangularAxisSlot {
-        case first
-        case second
-    }
-
-    private func setRectangularAxisCopyCount(
-        slot: RectangularAxisSlot,
-        copyCount: Int
-    ) {
-        updateRectangularAxis(slot: slot) { axis in
-            axis.copyCount = max(copyCount, 1)
-        }
-    }
-
-    private func setRectangularAxisDistance(
-        slot: RectangularAxisSlot,
-        meters: Double
-    ) {
-        updateRectangularAxis(slot: slot) { axis in
-            axis.distance = .length(max(meters, 0.0), .meter)
-        }
-    }
-
-    private func setRectangularAxisDistanceMode(
-        slot: RectangularAxisSlot,
-        distanceMode: PatternArrayDistanceMode
-    ) {
-        updateRectangularAxis(slot: slot) { axis in
-            axis.distanceMode = distanceMode
-        }
-    }
-
-    private func setRectangularSecondAxisEnabled(_ isEnabled: Bool) {
-        guard let source = session.document.productMetadata.patternArrays[state.sourceID],
-              case .rectangular(var rectangular) = source.distribution else {
-            return
-        }
-        if isEnabled {
-            guard rectangular.secondAxis == nil else {
-                return
-            }
-            let distanceMeters = state.rectangularFirstAxis?.distanceMeters ?? 0.01
-            rectangular.secondAxis = PatternArrayLinearAxis(
-                direction: defaultPerpendicularDirection(to: rectangular.firstAxis.direction),
-                distance: .length(max(distanceMeters, 1.0e-9), .meter),
-                copyCount: 1,
-                distanceMode: rectangular.firstAxis.distanceMode
-            )
-        } else {
-            rectangular.secondAxis = nil
-        }
-        session.updatePatternArray(
-            id: state.sourceID,
-            distribution: .rectangular(rectangular)
+    private var editingService: PatternArrayEditingService {
+        PatternArrayEditingService(
+            session: session,
+            sourceID: state.sourceID
         )
     }
 
-    private func updateRectangularAxis(
-        slot: RectangularAxisSlot,
-        update: (inout PatternArrayLinearAxis) -> Void
+    private func setRectangularAxisCopyCount(
+        slot: PatternArrayEditingService.RectangularAxisSlot,
+        copyCount: Int
     ) {
-        guard let source = session.document.productMetadata.patternArrays[state.sourceID],
-              case .rectangular(var rectangular) = source.distribution else {
-            return
-        }
-        switch slot {
-        case .first:
-            update(&rectangular.firstAxis)
-        case .second:
-            guard var secondAxis = rectangular.secondAxis else {
-                return
-            }
-            update(&secondAxis)
-            rectangular.secondAxis = secondAxis
-        }
-        session.updatePatternArray(
-            id: state.sourceID,
-            distribution: .rectangular(rectangular)
+        editingService.setRectangularAxisCopyCount(slot: slot, copyCount: copyCount)
+    }
+
+    private func setRectangularAxisDistance(
+        slot: PatternArrayEditingService.RectangularAxisSlot,
+        meters: Double
+    ) {
+        editingService.setRectangularAxisDistance(slot: slot, meters: meters)
+    }
+
+    private func setRectangularAxisDistanceMode(
+        slot: PatternArrayEditingService.RectangularAxisSlot,
+        distanceMode: PatternArrayDistanceMode
+    ) {
+        editingService.setRectangularAxisDistanceMode(slot: slot, distanceMode: distanceMode)
+    }
+
+    private func setRectangularSecondAxisEnabled(_ isEnabled: Bool) {
+        editingService.setRectangularSecondAxisEnabled(
+            isEnabled,
+            fallbackDistanceMeters: state.rectangularFirstAxis?.distanceMeters
         )
     }
 
@@ -516,13 +494,7 @@ struct PatternArrayInspectorView: View {
         y: Double? = nil,
         z: Double? = nil
     ) {
-        updateRadialAngularAxis { angularAxis in
-            angularAxis.center = Point3D(
-                x: x ?? angularAxis.center.x,
-                y: y ?? angularAxis.center.y,
-                z: z ?? angularAxis.center.z
-            )
-        }
+        editingService.setRadialCenter(x: x, y: y, z: z)
     }
 
     private func setRadialAxisDirection(
@@ -530,168 +502,74 @@ struct PatternArrayInspectorView: View {
         y: Double? = nil,
         z: Double? = nil
     ) {
-        updateRadialAngularAxis { angularAxis in
-            angularAxis.axis = Vector3D(
-                x: x ?? angularAxis.axis.x,
-                y: y ?? angularAxis.axis.y,
-                z: z ?? angularAxis.axis.z
-            )
-        }
+        editingService.setRadialAxisDirection(x: x, y: y, z: z)
     }
 
     private func setRadialAngularCopyCount(_ copyCount: Int) {
-        updateRadialAngularAxis { angularAxis in
-            angularAxis.copyCount = max(copyCount, 1)
-        }
+        editingService.setRadialAngularCopyCount(copyCount)
     }
 
     private func setRadialAngle(degrees: Double) {
-        updateRadialAngularAxis { angularAxis in
-            angularAxis.angle = .angle(degrees, .degree)
-        }
+        editingService.setRadialAngle(degrees: degrees)
     }
 
     private func setRadialAngleMode(_ angleMode: PatternArrayAngleMode) {
-        updateRadialAngularAxis { angularAxis in
-            angularAxis.angleMode = angleMode
-        }
-    }
-
-    private func updateRadialAngularAxis(
-        update: (inout PatternArrayAngularAxis) -> Void
-    ) {
-        guard let source = session.document.productMetadata.patternArrays[state.sourceID],
-              case .radial(var radial) = source.distribution else {
-            return
-        }
-        update(&radial.angularAxis)
-        session.updatePatternArray(
-            id: state.sourceID,
-            distribution: .radial(radial)
-        )
+        editingService.setRadialAngleMode(angleMode)
     }
 
     private func setRadialAxisCopyCount(_ copyCount: Int) {
-        updateRadialAxis { radialAxis in
-            radialAxis.copyCount = max(copyCount, 1)
-        }
+        editingService.setRadialAxisCopyCount(copyCount)
     }
 
     private func setRadialAxisDistance(_ meters: Double) {
-        updateRadialAxis { radialAxis in
-            radialAxis.distance = .length(max(meters, 0.0), .meter)
-        }
+        editingService.setRadialAxisDistance(meters)
     }
 
     private func setRadialAxisDistanceMode(_ distanceMode: PatternArrayDistanceMode) {
-        updateRadialAxis { radialAxis in
-            radialAxis.distanceMode = distanceMode
-        }
+        editingService.setRadialAxisDistanceMode(distanceMode)
     }
 
     private func setRadialAxisEnabled(_ isEnabled: Bool) {
-        guard let source = session.document.productMetadata.patternArrays[state.sourceID],
-              case .radial(var radial) = source.distribution else {
-            return
-        }
-        if isEnabled {
-            guard radial.radialAxis == nil else {
-                return
-            }
-            radial.radialAxis = PatternArrayLinearAxis(
-                direction: defaultPerpendicularDirection(to: radial.angularAxis.axis),
-                distance: .length(0.01, .meter),
-                copyCount: 1,
-                distanceMode: .spacing
-            )
-        } else {
-            radial.radialAxis = nil
-        }
-        session.updatePatternArray(
-            id: state.sourceID,
-            distribution: .radial(radial)
-        )
+        editingService.setRadialAxisEnabled(isEnabled)
     }
 
-    private func updateRadialAxis(
-        update: (inout PatternArrayLinearAxis) -> Void
-    ) {
-        guard let source = session.document.productMetadata.patternArrays[state.sourceID],
-              case .radial(var radial) = source.distribution,
-              var radialAxis = radial.radialAxis else {
-            return
-        }
-        update(&radialAxis)
-        radial.radialAxis = radialAxis
-        session.updatePatternArray(
-            id: state.sourceID,
-            distribution: .radial(radial)
-        )
+    private func setCurvePath(_ path: PatternArrayCurvePath) {
+        editingService.setCurvePath(path)
     }
 
     private func setCurveCopyCount(_ copyCount: Int) {
-        updateCurve { curve in
-            curve.copyCount = max(copyCount, 1)
-        }
+        editingService.setCurveCopyCount(copyCount)
     }
 
     private func setCurveTwist(degrees: Double) {
-        updateCurve { curve in
-            curve.twist = .angle(degrees, .degree)
-        }
+        editingService.setCurveTwist(degrees: degrees)
     }
 
     private func setCurveEndScale(_ scale: Double) {
-        updateCurve { curve in
-            curve.endScale = .scalar(max(scale, 1.0e-9))
-        }
+        editingService.setCurveEndScale(scale)
     }
 
     private func setCurveAlignment(_ alignment: PatternArrayCurveAlignment) {
-        updateCurve { curve in
-            curve.alignment = alignment
-        }
+        editingService.setCurveAlignment(alignment)
     }
 
     private func setCurveExtentMode(
         curve: PatternArrayInspectorState.CurveDistribution,
         extentMode: PatternArrayCurveExtentMode
     ) {
-        updateCurve { sourceCurve in
-            sourceCurve.extentMode = extentMode
-            switch extentMode {
-            case .distance:
-                sourceCurve.extent = .length(max(curve.extentMeters ?? 0.01, 1.0e-9), .meter)
-            case .ratio:
-                sourceCurve.extent = .scalar(max(curve.extentRatio ?? 1.0, 1.0e-9))
-            }
-        }
+        editingService.setCurveExtentMode(
+            extentMode,
+            fallbackDistanceMeters: curve.extentMeters,
+            fallbackRatio: curve.extentRatio
+        )
     }
 
     private func setCurveExtentDistance(_ meters: Double) {
-        updateCurve { curve in
-            curve.extentMode = .distance
-            curve.extent = .length(max(meters, 1.0e-9), .meter)
-        }
+        editingService.setCurveExtentDistance(meters)
     }
 
     private func setCurveExtentRatio(_ ratio: Double) {
-        updateCurve { curve in
-            curve.extentMode = .ratio
-            curve.extent = .scalar(max(ratio, 1.0e-9))
-        }
-    }
-
-    private func updateCurve(update: (inout CurvePatternArray) -> Void) {
-        guard let source = session.document.productMetadata.patternArrays[state.sourceID],
-              case .curve(var curve) = source.distribution else {
-            return
-        }
-        update(&curve)
-        session.updatePatternArray(
-            id: state.sourceID,
-            distribution: .curve(curve)
-        )
+        editingService.setCurveExtentRatio(ratio)
     }
 
     private func inspectorSection<Content: View>(
@@ -883,19 +761,6 @@ struct PatternArrayInspectorView: View {
         formatter.minimumFractionDigits = 0
         formatter.maximumFractionDigits = 6
         return formatter
-    }
-
-    private func defaultPerpendicularDirection(to direction: Vector3D) -> Vector3D {
-        let length = direction.length
-        guard length.isFinite, length > 1.0e-9 else {
-            return .unitY
-        }
-        let unitDirection = Vector3D(
-            x: direction.x / length,
-            y: direction.y / length,
-            z: direction.z / length
-        )
-        return abs(unitDirection.dot(.unitY)) < 0.9 ? .unitY : .unitX
     }
 
     private func vectorSummary(_ vector: Vector3D) -> String {

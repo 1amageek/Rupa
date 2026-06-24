@@ -4649,6 +4649,24 @@ public struct MainView: View {
         }
     }
 
+    private var selectedPatternArrayCurvePathCandidate: PatternArrayCurvePathCandidate? {
+        switch selectedSketchEntityResult {
+        case .success(let entity):
+            guard let entity else {
+                return nil
+            }
+            return PatternArrayCurvePathCandidate(
+                target: entity.target,
+                featureID: entity.sourceFeatureID,
+                entityID: entity.entityID,
+                sourceFeatureName: entity.sourceFeatureName,
+                entityKind: entity.entityKind
+            )
+        case .failure:
+            return nil
+        }
+    }
+
     private var selectedSurfaceContinuitySummary: RupaCore.SurfaceContinuityResult? {
         switch selectedSurfaceContinuitySummaryResult(for: selectedSceneNodes) {
         case .success(let summary):
@@ -5867,7 +5885,8 @@ public struct MainView: View {
         PatternArrayInspectorView(
             state: state,
             session: session,
-            positionSliderRange: transformPositionSliderRange
+            positionSliderRange: transformPositionSliderRange,
+            curvePathCandidate: selectedPatternArrayCurvePathCandidate
         )
     }
 

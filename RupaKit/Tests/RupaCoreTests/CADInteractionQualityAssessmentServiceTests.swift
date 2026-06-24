@@ -85,7 +85,7 @@ import RupaCore
     #expect(arrayDiagnosticsRating == .partial)
     #expect(arrays.referenceSources.contains("https://doc.plasticity.xyz/common/rectangular-array"))
     #expect(!arrays.openWork.contains { $0.contains("radial array center") })
-    #expect(arrays.openWork.contains { $0.contains("curve array path picking") })
+    #expect(arrays.openWork.contains { $0.contains("viewport curve array path pick mode") })
     #expect(arrays.evidence.contains { evidence in
         evidence.sourceFiles.contains("RupaKit/Sources/RupaCore/PatternArraySource.swift")
     })
@@ -94,6 +94,9 @@ import RupaCore
     })
     #expect(arrays.evidence.contains { evidence in
         evidence.sourceFiles.contains("RupaKit/Sources/RupaUI/PatternArrayInspectorState.swift")
+    })
+    #expect(arrays.evidence.contains { evidence in
+        evidence.sourceFiles.contains("RupaKit/Sources/RupaUI/PatternArrayEditingService.swift")
     })
     #expect(arrays.evidence.contains { evidence in
         evidence.notes.contains("Pattern Array summaries expose editable fields, lifecycle actions, source-owned output edit policy, output IDs, and diagnostics without forcing CAD evaluation.")
@@ -109,6 +112,9 @@ import RupaCore
     })
     #expect(arrays.evidence.contains { evidence in
         evidence.notes.contains("The Pattern Array Inspector exposes source-owned output mode plus rectangular first- and second-axis controls, radial center, axis, angular spacing or extent, radial repetition, and curve count, twist, scale, alignment, and extent controls that update the PatternArraySource instead of generated outputs.")
+    })
+    #expect(arrays.evidence.contains { evidence in
+        evidence.notes.contains("The Pattern Array Inspector can replace a Curve Array path with the currently selected sketch curve through a testable editing service while preserving source-owned regeneration.")
     })
 
     let section = try #require(result.entries.first { $0.area == .sectionAnalysis })

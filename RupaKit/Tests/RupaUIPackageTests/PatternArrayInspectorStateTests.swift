@@ -201,6 +201,7 @@ import Testing
     ))
     let curve = try #require(state.curve)
 
+    #expect(curve.path == .polyline(points: [.origin, Point3D(x: 0.01, y: 0.0, z: 0.0)], normal: .unitZ))
     #expect(curve.pathTitle == "2 Point Polyline")
     #expect(curve.copyCount == 4)
     #expect(abs((curve.twistRadians ?? 0.0) - Double.pi / 4.0) < 1.0e-12)
