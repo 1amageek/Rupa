@@ -75,10 +75,12 @@ import RupaCore
 
     let arrays = try #require(result.entries.first { $0.area == .patternsAndArrays })
     let arrayCommandRating = try gateRating(.commandContract, in: arrays)
+    let arrayInspectorRating = try gateRating(.inspectorAffordance, in: arrays)
     let arrayAgentRating = try gateRating(.agentParity, in: arrays)
     let arrayDiagnosticsRating = try gateRating(.measurementDiagnostics, in: arrays)
     #expect(arrays.currentRating == .partial)
     #expect(arrayCommandRating == .partial)
+    #expect(arrayInspectorRating == .partial)
     #expect(arrayAgentRating == .implemented)
     #expect(arrayDiagnosticsRating == .partial)
     #expect(arrays.referenceSources.contains("https://doc.plasticity.xyz/common/rectangular-array"))
@@ -91,7 +93,13 @@ import RupaCore
         evidence.sourceFiles.contains("RupaKit/Sources/RupaCore/PatternArraySummaryService.swift")
     })
     #expect(arrays.evidence.contains { evidence in
+        evidence.sourceFiles.contains("RupaKit/Sources/RupaUI/PatternArrayInspectorState.swift")
+    })
+    #expect(arrays.evidence.contains { evidence in
         evidence.notes.contains("Pattern Array summaries expose editable fields, lifecycle actions, source-owned output edit policy, output IDs, and diagnostics without forcing CAD evaluation.")
+    })
+    #expect(arrays.evidence.contains { evidence in
+        evidence.notes.contains("The object Inspector now maps selected source roots, generated outputs, and independent-copy descendants back to their PatternArraySource and displays ownership, lifecycle actions, output mode, selected output index, and diagnostics.")
     })
 
     let section = try #require(result.entries.first { $0.area == .sectionAnalysis })

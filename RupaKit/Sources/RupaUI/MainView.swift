@@ -4371,6 +4371,18 @@ public struct MainView: View {
         }
     }
 
+    private func patternArrayInspectorState(for nodes: [SceneNode]) -> PatternArrayInspectorState? {
+        PatternArrayInspectorState(
+            selectedNodes: nodes,
+            sceneNodes: session.document.productMetadata.sceneNodes,
+            summaryResult: PatternArraySummaryService().summarize(
+                document: session.document,
+                generation: session.generation,
+                dirty: session.isDirty
+            )
+        )
+    }
+
     private var selectedTargetCount: Int {
         max(session.selection.selectedTargets.count, session.selection.selectedSceneNodeIDs.count)
     }
@@ -5718,6 +5730,10 @@ public struct MainView: View {
             }
         }
 
+        if let patternArrayState = patternArrayInspectorState(for: nodes) {
+            patternArrayInspectorSection(patternArrayState)
+        }
+
         inspectorSection("Reference") {
             if nodes.count == 1, let node = nodes.first {
                 if let object = node.object {
@@ -5843,6 +5859,26 @@ public struct MainView: View {
                 }
                 .disabled(nodes.allSatisfy { $0.localTransform.matrix == .identity })
             }
+        }
+    }
+
+    @ViewBuilder
+    private func patternArrayInspectorSection(_ state: PatternArrayInspectorState) -> some View {
+        inspectorSection("Pattern Array") {
+            inspectorRow("Name", state.name)
+            inspectorRow("Role", state.selectionRoleTitle)
+            inspectorRow("Source ID", shortID(state.sourceID))
+            inspectorRow("Definition", state.definitionName ?? shortID(state.definitionID))
+            inspectorRow("Root", state.rootSceneNodeName ?? shortID(state.rootSceneNodeID))
+            inspectorRow("Distribution", state.distributionTitle)
+            inspectorRow("Output Mode", state.outputModeTitle)
+            inspectorRow("Outputs", "\(state.outputCount)")
+            inspectorRow("Selected Output", state.selectedOutputTitle)
+            inspectorRow("Ownership", state.ownershipTitle)
+            inspectorRow("Direct Edit", state.directEditTitle)
+            inspectorRow("Source Edit", state.sourceEditTitle)
+            inspectorRow("Detach", state.detachTitle)
+            inspectorRow("Diagnostics", state.diagnosticsTitle)
         }
     }
 

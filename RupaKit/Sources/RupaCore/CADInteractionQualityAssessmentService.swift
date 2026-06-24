@@ -349,7 +349,7 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                 .commandContract: .partial,
                 .selectionTopology: .partial,
                 .viewportAffordance: .missing,
-                .inspectorAffordance: .missing,
+                .inspectorAffordance: .partial,
                 .agentParity: .implemented,
                 .measurementDiagnostics: .partial,
                 .verification: .partial,
@@ -377,6 +377,8 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                         "RupaKit/Sources/RupaCore/EditorCommand.swift",
                         "RupaKit/Sources/RupaAutomation/AutomationCommand.swift",
                         "RupaKit/Sources/RupaAgent/AgentServer.swift",
+                        "RupaKit/Sources/RupaUI/PatternArrayInspectorState.swift",
+                        "RupaKit/Sources/RupaUI/MainView.swift",
                     ],
                     tests: [
                         "RupaKit/Tests/RupaCoreTests/DesignDisplaySnapshotServiceTests.swift",
@@ -384,6 +386,7 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                         "RupaKit/Tests/RupaCoreTests/CommandStackTests.swift",
                         "RupaKit/Tests/RupaAutomationTests/AutomationRunnerTests.swift",
                         "RupaKit/Tests/RupaAgentTests/AgentServerTests.swift",
+                        "RupaKit/Tests/RupaUIPackageTests/PatternArrayInspectorStateTests.swift",
                     ],
                     notes: [
                         "Rectangular, radial, and curve arrays now persist a PatternArraySource and emit component instances or independent copied CAD feature geometry.",
@@ -394,15 +397,16 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                         "Component-instance Pattern Array explode materializes cloned CAD feature scene outputs before detaching source ownership.",
                         "Design display snapshots expose ComponentDefinition IDs, ComponentInstance IDs, typed component instance ownership, renderable root scene nodes, dependency feature closures, PatternArraySource IDs, output instance IDs, independent-copy output scene node feature IDs, root scene node IDs, distribution, and output mode for Agent lifecycle planning.",
                         "Pattern Array summaries expose editable fields, lifecycle actions, source-owned output edit policy, output IDs, and diagnostics without forcing CAD evaluation.",
+                        "The object Inspector now maps selected source roots, generated outputs, and independent-copy descendants back to their PatternArraySource and displays ownership, lifecycle actions, output mode, selected output index, and diagnostics.",
                         "Viewport editing workflows and incremental independent-copy reuse remain open.",
                     ]
                 ),
             ],
             openWork: [
                 "Viewport-independent copy controls and regeneration reuse for edited outputs.",
-                "Viewport preview and Inspector affordances for radial array center, angle, count, repetition, and output mode.",
-                "Viewport preview and Inspector affordances for curve array path selection, twist, scale, alignment, extent, and output mode.",
-                "Viewport preview and Inspector affordances for array handles, copy count, spacing, extent, and output mode.",
+                "Interactive Inspector controls for radial array center, angle, count, repetition, and output mode.",
+                "Interactive Inspector controls for curve array path selection, twist, scale, alignment, extent, and output mode.",
+                "Viewport preview affordances for array handles, copy count, spacing, extent, and output mode.",
             ],
             next: "Add radial and curve UI preview handles, curve path picking affordances, and independent-copy reuse diagnostics."
         ),

@@ -1,0 +1,254 @@
+import RupaCore
+
+struct PatternArrayInspectorState: Equatable, Sendable {
+    enum SelectionRole: Equatable, Sendable {
+        case sourceRoot
+        case output
+        case outputDescendant
+        case mixed
+    }
+
+    var sourceID: PatternArraySourceID
+    var name: String
+    var definitionID: ComponentDefinitionID
+    var definitionName: String?
+    var rootSceneNodeID: SceneNodeID
+    var rootSceneNodeName: String?
+    var distributionKind: PatternArraySummary.DistributionKind
+    var outputMode: PatternArrayOutputMode
+    var outputCount: Int
+    var selectedRole: SelectionRole
+    var selectedOutputIndices: [Int]
+    var outputOwnership: PatternArraySummary.OutputOwnership
+    var diagnostics: [PatternArraySummary.Diagnostic]
+
+    init?(
+        selectedNodes: [SceneNode],
+        sceneNodes: [SceneNodeID: SceneNode],
+        summaryResult: PatternArraySummaryResult
+    ) {
+        guard !selectedNodes.isEmpty else {
+            return nil
+        }
+
+        let matches = selectedNodes.compactMap { node in
+            Self.match(
+                node: node,
+                sceneNodes: sceneNodes,
+                summaries: summaryResult.patternArrays
+            )
+        }
+        guard matches.count == selectedNodes.count,
+              let firstMatch = matches.first,
+              matches.allSatisfy({ $0.summary.sourceID == firstMatch.summary.sourceID }) else {
+            return nil
+        }
+
+        let summary = firstMatch.summary
+        self.sourceID = summary.sourceID
+        self.name = summary.name
+        self.definitionID = summary.definitionID
+        self.definitionName = summary.definitionName
+        self.rootSceneNodeID = summary.rootSceneNodeID
+        self.rootSceneNodeName = summary.rootSceneNodeName
+        self.distributionKind = summary.distributionKind
+        self.outputMode = summary.outputMode
+        self.outputCount = summary.outputCount
+        self.selectedRole = Self.selectedRole(for: matches.map(\.role))
+        self.selectedOutputIndices = Self.selectedOutputIndices(from: matches)
+        self.outputOwnership = summary.outputOwnership
+        self.diagnostics = summary.diagnostics
+    }
+
+    var selectionRoleTitle: String {
+        switch selectedRole {
+        case .sourceRoot:
+            "Source Root"
+        case .output:
+            "Output"
+        case .outputDescendant:
+            "Output Descendant"
+        case .mixed:
+            "Mixed"
+        }
+    }
+
+    var selectedOutputTitle: String {
+        guard !selectedOutputIndices.isEmpty else {
+            return "None"
+        }
+        let visibleIndices = selectedOutputIndices
+            .prefix(3)
+            .map { "#\($0 + 1)" }
+            .joined(separator: ", ")
+        if selectedOutputIndices.count > 3 {
+            return "\(visibleIndices), +\(selectedOutputIndices.count - 3)"
+        }
+        return visibleIndices
+    }
+
+    var distributionTitle: String {
+        switch distributionKind {
+        case .rectangular:
+            "Rectangular"
+        case .radial:
+            "Radial"
+        case .curve:
+            "Curve"
+        }
+    }
+
+    var outputModeTitle: String {
+        switch outputMode {
+        case .componentInstance:
+            "Component Instance"
+        case .independentCopy:
+            "Independent Copy"
+        }
+    }
+
+    var ownershipTitle: String {
+        switch outputOwnership.kind {
+        case .sourceOwnedComponentInstances:
+            "Source-owned Component Instances"
+        case .sourceOwnedIndependentCopies:
+            "Source-owned Independent Copies"
+        }
+    }
+
+    var directEditTitle: String {
+        outputOwnership.directOutputEditingAllowed ? "Allowed" : "Source Controlled"
+    }
+
+    var sourceEditTitle: String {
+        actionTitle(outputOwnership.sourceEditAction)
+    }
+
+    var detachTitle: String {
+        actionTitle(outputOwnership.detachAction)
+    }
+
+    var diagnosticsTitle: String {
+        guard !diagnostics.isEmpty else {
+            return "None"
+        }
+        let errors = diagnostics.filter { $0.severity == .error }.count
+        let warnings = diagnostics.filter { $0.severity == .warning }.count
+        var parts: [String] = []
+        if errors > 0 {
+            parts.append("\(errors) \(errors == 1 ? "error" : "errors")")
+        }
+        if warnings > 0 {
+            parts.append("\(warnings) \(warnings == 1 ? "warning" : "warnings")")
+        }
+        return parts.joined(separator: ", ")
+    }
+
+    private struct Match {
+        var summary: PatternArraySummary
+        var role: SelectionRole
+        var outputIndex: Int?
+    }
+
+    private static func match(
+        node: SceneNode,
+        sceneNodes: [SceneNodeID: SceneNode],
+        summaries: [PatternArraySummary]
+    ) -> Match? {
+        for summary in summaries {
+            if node.id == summary.rootSceneNodeID {
+                return Match(summary: summary, role: .sourceRoot, outputIndex: nil)
+            }
+            if let componentInstanceID = node.reference?.componentInstanceID,
+               let outputIndex = summary.componentInstanceOutputIDs.firstIndex(of: componentInstanceID) {
+                return Match(summary: summary, role: .output, outputIndex: outputIndex)
+            }
+            if let outputIndex = summary.outputSceneNodeIDs.firstIndex(of: node.id) {
+                return Match(summary: summary, role: .output, outputIndex: outputIndex)
+            }
+            if let outputIndex = outputDescendantIndex(
+                nodeID: node.id,
+                outputSceneNodeIDs: summary.outputSceneNodeIDs,
+                sceneNodes: sceneNodes
+            ) {
+                return Match(summary: summary, role: .outputDescendant, outputIndex: outputIndex)
+            }
+        }
+        return nil
+    }
+
+    private static func outputDescendantIndex(
+        nodeID: SceneNodeID,
+        outputSceneNodeIDs: [SceneNodeID],
+        sceneNodes: [SceneNodeID: SceneNode]
+    ) -> Int? {
+        for (index, outputSceneNodeID) in outputSceneNodeIDs.enumerated() {
+            var visitedSceneNodeIDs: Set<SceneNodeID> = []
+            if sceneSubtree(
+                outputSceneNodeID,
+                contains: nodeID,
+                sceneNodes: sceneNodes,
+                visitedSceneNodeIDs: &visitedSceneNodeIDs
+            ) {
+                return index
+            }
+        }
+        return nil
+    }
+
+    private static func sceneSubtree(
+        _ rootSceneNodeID: SceneNodeID,
+        contains targetSceneNodeID: SceneNodeID,
+        sceneNodes: [SceneNodeID: SceneNode],
+        visitedSceneNodeIDs: inout Set<SceneNodeID>
+    ) -> Bool {
+        guard visitedSceneNodeIDs.insert(rootSceneNodeID).inserted,
+              let sceneNode = sceneNodes[rootSceneNodeID] else {
+            return false
+        }
+        if rootSceneNodeID == targetSceneNodeID {
+            return true
+        }
+        for childID in sceneNode.childIDs {
+            if sceneSubtree(
+                childID,
+                contains: targetSceneNodeID,
+                sceneNodes: sceneNodes,
+                visitedSceneNodeIDs: &visitedSceneNodeIDs
+            ) {
+                return true
+            }
+        }
+        return false
+    }
+
+    private static func selectedRole(for roles: [SelectionRole]) -> SelectionRole {
+        guard let firstRole = roles.first,
+              roles.allSatisfy({ $0 == firstRole }) else {
+            return .mixed
+        }
+        return firstRole
+    }
+
+    private static func selectedOutputIndices(from matches: [Match]) -> [Int] {
+        var indices: [Int] = []
+        var seenIndices: Set<Int> = []
+        for match in matches {
+            guard let outputIndex = match.outputIndex,
+                  seenIndices.insert(outputIndex).inserted else {
+                continue
+            }
+            indices.append(outputIndex)
+        }
+        return indices.sorted()
+    }
+
+    private func actionTitle(_ action: PatternArraySummary.LifecycleAction) -> String {
+        switch action {
+        case .updatePatternArray:
+            "Update Pattern Array"
+        case .explodePatternArray:
+            "Explode Pattern Array"
+        }
+    }
+}
