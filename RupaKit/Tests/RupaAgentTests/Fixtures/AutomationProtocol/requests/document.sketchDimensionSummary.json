@@ -1,0 +1,13 @@
+{
+  "jsonrpc": "2.0",
+  "id": "document.sketchDimensionSummary-1",
+  "method": "document.sketchDimensionSummary",
+  "params": {
+    "sessionID": "00000000-0000-0000-0000-000000000001",
+    "targets": [],
+    "expectedGeneration": {
+      "value": 2
+    }
+  }
+}
+

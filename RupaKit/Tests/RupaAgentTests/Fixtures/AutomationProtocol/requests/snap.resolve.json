@@ -1,0 +1,23 @@
+{
+  "jsonrpc": "2.0",
+  "id": "snap.resolve-1",
+  "method": "snap.resolve",
+  "params": {
+    "sessionID": "00000000-0000-0000-0000-000000000001",
+    "point": {
+      "x": 0.012,
+      "y": 0.024
+    },
+    "options": {
+      "usesGrid": true,
+      "usesObjects": false,
+      "gridIntervalMeters": 0.001,
+      "objectSearchRadiusMeters": 0.002,
+      "maximumCandidateCount": 8
+    },
+    "expectedGeneration": {
+      "value": 5
+    }
+  }
+}
+

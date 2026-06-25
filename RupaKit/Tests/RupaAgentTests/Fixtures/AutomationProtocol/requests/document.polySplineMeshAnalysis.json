@@ -1,0 +1,58 @@
+{
+  "jsonrpc": "2.0",
+  "id": "document.polySplineMeshAnalysis-1",
+  "method": "document.polySplineMeshAnalysis",
+  "params": {
+    "sessionID": "00000000-0000-0000-0000-000000000001",
+    "sourceMesh": {
+      "positions": [
+        {
+          "x": 0.0,
+          "y": 0.0,
+          "z": 0.0
+        },
+        {
+          "x": 1.0,
+          "y": 0.0,
+          "z": 0.0
+        },
+        {
+          "x": 0.0,
+          "y": 1.0,
+          "z": 0.0
+        }
+      ],
+      "normals": [
+        {
+          "x": 0.0,
+          "y": 0.0,
+          "z": 1.0
+        },
+        {
+          "x": 0.0,
+          "y": 0.0,
+          "z": 1.0
+        },
+        {
+          "x": 0.0,
+          "y": 0.0,
+          "z": 1.0
+        }
+      ],
+      "indices": [
+        0,
+        1,
+        2
+      ]
+    },
+    "options": {
+      "roundedCorners": false,
+      "mergePatches": true,
+      "interpolateBoundaryExactly": true
+    },
+    "expectedGeneration": {
+      "value": 2
+    }
+  }
+}
+

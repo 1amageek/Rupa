@@ -1,0 +1,15 @@
+{
+  "jsonrpc": "2.0",
+  "id": "parameter.setExpression-1",
+  "method": "parameter.setExpression",
+  "result": {
+    "message": "Parameter height updated.",
+    "commandName": "upsertParameter",
+    "generation": {
+      "value": 10
+    },
+    "didMutate": true,
+    "diagnostics": []
+  }
+}
+

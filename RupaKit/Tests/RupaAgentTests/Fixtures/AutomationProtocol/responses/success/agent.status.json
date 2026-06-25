@@ -1,0 +1,11 @@
+{
+  "jsonrpc": "2.0",
+  "id": "agent.status-1",
+  "method": "agent.status",
+  "result": {
+    "running": true,
+    "socketPath": "/tmp/rupa.sock",
+    "sessionCount": 2
+  }
+}
+

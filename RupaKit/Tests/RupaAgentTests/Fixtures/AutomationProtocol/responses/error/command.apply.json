@@ -1,0 +1,10 @@
+{
+  "jsonrpc": "2.0",
+  "id": "command.apply-1",
+  "method": "command.apply",
+  "error": {
+    "code": "document.generationMismatch",
+    "message": "The document has changed since the command was prepared."
+  }
+}
+

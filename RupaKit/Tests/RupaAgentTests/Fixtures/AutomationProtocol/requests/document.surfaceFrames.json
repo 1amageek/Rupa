@@ -1,0 +1,19 @@
+{
+  "jsonrpc": "2.0",
+  "id": "document.surfaceFrames-1",
+  "method": "document.surfaceFrames",
+  "params": {
+    "sessionID": "00000000-0000-0000-0000-000000000001",
+    "queries": [
+      {
+        "faceID": "face-1",
+        "u": 0.25,
+        "v": 0.75
+      }
+    ],
+    "expectedGeneration": {
+      "value": 7
+    }
+  }
+}
+

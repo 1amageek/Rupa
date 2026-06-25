@@ -1,0 +1,15 @@
+{
+  "jsonrpc": "2.0",
+  "id": "document.surfaceAnalysis-1",
+  "method": "document.surfaceAnalysis",
+  "params": {
+    "sessionID": "00000000-0000-0000-0000-000000000001",
+    "options": {
+      "sampleDensity": "high"
+    },
+    "expectedGeneration": {
+      "value": 6
+    }
+  }
+}
+

@@ -156,6 +156,9 @@ Nested domain payloads use the Codable JSON shape of the public RupaCore, RupaAu
 
 ## Representative Fixtures
 
+Stored fixtures live under `RupaKit/Tests/RupaAgentTests/Fixtures/AutomationProtocol`.
+The `AgentProtocolFixtureFileTests` runner decodes each file directly from disk so external clients can use the same JSON examples without depending on Swift encoders.
+
 ### Empty Params
 
 ```json

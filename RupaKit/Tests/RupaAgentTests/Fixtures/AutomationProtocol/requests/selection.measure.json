@@ -1,0 +1,26 @@
+{
+  "jsonrpc": "2.0",
+  "id": "selection.measure-1",
+  "method": "selection.measure",
+  "params": {
+    "sessionID": "00000000-0000-0000-0000-000000000001",
+    "query": {
+      "kind": "point",
+      "first": {
+        "kind": "topology",
+        "topology": {
+          "components": [
+            {
+              "kind": "generated",
+              "value": "fixture"
+            }
+          ]
+        }
+      }
+    },
+    "expectedGeneration": {
+      "value": 2
+    }
+  }
+}
+

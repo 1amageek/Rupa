@@ -1,0 +1,17 @@
+{
+  "jsonrpc": "2.0",
+  "id": "command.apply-1",
+  "method": "command.apply",
+  "params": {
+    "sessionID": "00000000-0000-0000-0000-000000000001",
+    "command": {
+      "renameDocument": {
+        "name": "Fixture Project"
+      }
+    },
+    "expectedGeneration": {
+      "value": 3
+    }
+  }
+}
+

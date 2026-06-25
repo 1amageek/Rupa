@@ -1,0 +1,19 @@
+{
+  "jsonrpc": "2.0",
+  "id": "parameter.setExpression-1",
+  "method": "parameter.setExpression",
+  "params": {
+    "sessionID": "00000000-0000-0000-0000-000000000001",
+    "name": "height",
+    "expression": "width * 2",
+    "kind": "length",
+    "defaults": {
+      "lengthUnit": "millimeter",
+      "angleUnit": "degree"
+    },
+    "expectedGeneration": {
+      "value": 4
+    }
+  }
+}
+

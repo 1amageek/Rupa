@@ -1,0 +1,12 @@
+{
+  "jsonrpc": "2.0",
+  "id": "document.curveAnalysis-1",
+  "method": "document.curveAnalysis",
+  "params": {
+    "sessionID": "00000000-0000-0000-0000-000000000001",
+    "expectedGeneration": {
+      "value": 2
+    }
+  }
+}
+

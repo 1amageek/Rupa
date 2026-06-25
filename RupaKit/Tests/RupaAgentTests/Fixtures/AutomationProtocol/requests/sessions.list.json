@@ -1,0 +1,7 @@
+{
+  "jsonrpc": "2.0",
+  "id": "sessions.list-1",
+  "method": "sessions.list",
+  "params": {}
+}
+

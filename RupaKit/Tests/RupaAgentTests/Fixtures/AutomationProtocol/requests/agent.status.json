@@ -1,0 +1,7 @@
+{
+  "jsonrpc": "2.0",
+  "id": "agent.status-1",
+  "method": "agent.status",
+  "params": {}
+}
+

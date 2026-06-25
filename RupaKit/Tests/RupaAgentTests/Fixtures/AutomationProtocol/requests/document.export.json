@@ -1,0 +1,15 @@
+{
+  "jsonrpc": "2.0",
+  "id": "document.export-1",
+  "method": "document.export",
+  "params": {
+    "sessionID": "00000000-0000-0000-0000-000000000001",
+    "outputPath": "/tmp/rupa-fixture.obj",
+    "options": {},
+    "dryRun": true,
+    "expectedGeneration": {
+      "value": 9
+    }
+  }
+}
+
