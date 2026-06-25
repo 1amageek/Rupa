@@ -476,6 +476,7 @@ public struct MainView: View {
                     onSplineControlPointDrag: viewportSplineControlPointDragHandler,
                     onSplineControlPointSlideDrag: viewportSplineControlPointSlideDragHandler,
                     onPolySplineSurfaceVertexDrag: viewportPolySplineSurfaceVertexDragHandler,
+                    onSurfaceControlPointDrag: viewportSurfaceControlPointDragHandler,
                     onPolySplineSurfaceVertexSlideDrag: viewportPolySplineSurfaceVertexSlideDragHandler,
                     onCommandConfirm: viewportCommandConfirmHandler,
                     onHover: viewportHoverHandler,
@@ -842,6 +843,17 @@ public struct MainView: View {
         }
         return { target in
             handleViewportPolySplineSurfaceVertexDrag(target)
+        }
+    }
+
+    private var viewportSurfaceControlPointDragHandler: ((ViewportSurfaceControlPointDragTarget) -> Void)? {
+        guard session.selectedTool == .select,
+              selectionScope == .vertex,
+              slideCommandState.isSurfaceControlVerticesActive == false else {
+            return nil
+        }
+        return { target in
+            handleViewportSurfaceControlPointDrag(target)
         }
     }
 
@@ -3300,6 +3312,22 @@ public struct MainView: View {
             return
         }
         let result = session.movePolySplineSurfaceVertex(
+            target: target.target,
+            deltaX: .length(target.deltaX, .meter),
+            deltaY: .length(target.deltaY, .meter),
+            deltaZ: .length(target.deltaZ, .meter)
+        )
+        if result?.diagnostics.isEmpty == false {
+            isPreviewExpanded = true
+        }
+    }
+
+    private func handleViewportSurfaceControlPointDrag(_ target: ViewportSurfaceControlPointDragTarget) {
+        guard session.selectedTool == .select,
+              selectionScope == .vertex else {
+            return
+        }
+        let result = session.moveSurfaceControlPoint(
             target: target.target,
             deltaX: .length(target.deltaX, .meter),
             deltaY: .length(target.deltaY, .meter),

@@ -1730,6 +1730,25 @@ public struct ViewportPolySplineSurfaceVertexDragTarget: Equatable, Sendable {
     }
 }
 
+public struct ViewportSurfaceControlPointDragTarget: Equatable, Sendable {
+    public var target: SelectionReference
+    public var deltaX: Double
+    public var deltaY: Double
+    public var deltaZ: Double
+
+    public init(
+        target: SelectionReference,
+        deltaX: Double,
+        deltaY: Double,
+        deltaZ: Double
+    ) {
+        self.target = target
+        self.deltaX = deltaX
+        self.deltaY = deltaY
+        self.deltaZ = deltaZ
+    }
+}
+
 public struct ViewportPolySplineSurfaceVertexSlideDragTarget: Equatable, Sendable {
     public var targets: [SelectionTarget]
     public var direction: PolySplineSurfaceVertexSlideDirection
