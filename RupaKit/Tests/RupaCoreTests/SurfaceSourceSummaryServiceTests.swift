@@ -102,6 +102,55 @@ import SwiftCAD
     #expect(abs(measuredPoint.point.z - controlVertex.point.z) <= 1.0e-12)
 }
 
+@MainActor
+@Test func surfaceControlPointDisplayStateRoundTripsThroughSurfaceSourceSummary() async throws {
+    let session = EditorSession()
+    let createResult = try #require(session.createPolySplineSurface(
+        name: "Surface CV Display State",
+        sourceMesh: surfaceSourceSummaryPatchNetworkMesh(centerZ: 0.0),
+        options: PolySplineOptions(mergePatches: false)
+    ))
+    #expect(createResult.commandName == "createPolySplineSurface")
+
+    let initialSummary = try SurfaceSourceSummaryService().summarize(document: session.document)
+    let initialPatch = try #require(initialSummary.sources.first?.patches.first)
+    let interiorControlPoint = try #require(initialPatch.controlPoints.first { $0.uIndex == 1 && $0.vIndex == 1 })
+    #expect(interiorControlPoint.isPointDisplayVisible == false)
+
+    let displayResult = try #require(session.setSurfaceControlPointDisplay(
+        target: interiorControlPoint.selectionReference,
+        isVisible: true
+    ))
+    #expect(displayResult.commandName == "setSurfaceControlPointDisplay")
+    #expect(displayResult.didMutate)
+
+    let displayID = try SurfaceControlPointDisplayID(selectionReference: interiorControlPoint.selectionReference)
+    #expect(session.document.productMetadata.surfaceControlPointDisplays[displayID]?.isVisible == true)
+    let visibleSummary = try SurfaceSourceSummaryService().summarize(document: session.document)
+    let visiblePatch = try #require(visibleSummary.sources.first?.patches.first)
+    let visibleControlPoint = try #require(visiblePatch.controlPoints.first { $0.uIndex == 1 && $0.vIndex == 1 })
+    let visibleControlVertex = try #require(visiblePatch.controlVertices.first { $0.role == "uMin:vMin" })
+    #expect(visibleControlPoint.isPointDisplayVisible)
+    #expect(visibleControlVertex.isPointDisplayVisible == false)
+
+    _ = try session.undo()
+    #expect(session.document.productMetadata.surfaceControlPointDisplays[displayID] == nil)
+
+    _ = try session.redo()
+    #expect(session.document.productMetadata.surfaceControlPointDisplays[displayID]?.isVisible == true)
+
+    let hiddenResult = try #require(session.setSurfaceControlPointDisplay(
+        target: interiorControlPoint.selectionReference,
+        isVisible: false
+    ))
+    #expect(hiddenResult.commandName == "setSurfaceControlPointDisplay")
+
+    let hiddenSummary = try SurfaceSourceSummaryService().summarize(document: session.document)
+    let hiddenPatch = try #require(hiddenSummary.sources.first?.patches.first)
+    let hiddenControlPoint = try #require(hiddenPatch.controlPoints.first { $0.uIndex == 1 && $0.vIndex == 1 })
+    #expect(hiddenControlPoint.isPointDisplayVisible == false)
+}
+
 private func surfaceSourceSummaryPatchNetworkMesh(centerZ: Double) -> Mesh {
     Mesh(
         positions: [

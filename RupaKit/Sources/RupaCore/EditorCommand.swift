@@ -211,6 +211,10 @@ public enum EditorCommand: Codable, Equatable, Sendable {
         sourceMesh: Mesh,
         options: PolySplineOptions
     )
+    case setSurfaceControlPointDisplay(
+        target: SelectionReference,
+        isVisible: Bool?
+    )
     case movePolySplineSurfaceVertex(
         target: SelectionTarget,
         deltaX: CADExpression,
@@ -409,6 +413,8 @@ public enum EditorCommand: Codable, Equatable, Sendable {
             "createSweep"
         case .createPolySplineSurface:
             "createPolySplineSurface"
+        case .setSurfaceControlPointDisplay:
+            "setSurfaceControlPointDisplay"
         case .movePolySplineSurfaceVertex:
             "movePolySplineSurfaceVertex"
         case .moveSurfaceControlPoint:
@@ -504,6 +510,7 @@ public enum EditorCommand: Codable, Equatable, Sendable {
              .createRevolve,
              .createSweep,
              .createPolySplineSurface,
+             .setSurfaceControlPointDisplay,
              .movePolySplineSurfaceVertex,
              .moveSurfaceControlPoint,
              .slidePolySplineSurfaceVertices,

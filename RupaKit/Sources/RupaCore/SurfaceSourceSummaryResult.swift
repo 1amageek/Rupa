@@ -175,6 +175,7 @@ public struct SurfaceSourceSummaryResult: Codable, Equatable, Sendable {
         public var generatedVertexPersistentName: String
         public var selectionComponentID: String
         public var selectionReference: SelectionReference
+        public var isPointDisplayVisible: Bool
 
         public init(
             id: String,
@@ -183,7 +184,8 @@ public struct SurfaceSourceSummaryResult: Codable, Equatable, Sendable {
             point: Point,
             generatedVertexPersistentName: String,
             selectionComponentID: String,
-            selectionReference: SelectionReference
+            selectionReference: SelectionReference,
+            isPointDisplayVisible: Bool = false
         ) {
             self.id = id
             self.role = role
@@ -192,6 +194,7 @@ public struct SurfaceSourceSummaryResult: Codable, Equatable, Sendable {
             self.generatedVertexPersistentName = generatedVertexPersistentName
             self.selectionComponentID = selectionComponentID
             self.selectionReference = selectionReference
+            self.isPointDisplayVisible = isPointDisplayVisible
         }
     }
 
@@ -203,6 +206,7 @@ public struct SurfaceSourceSummaryResult: Codable, Equatable, Sendable {
         public var isBoundary: Bool
         public var isEditable: Bool
         public var selectionReference: SelectionReference
+        public var isPointDisplayVisible: Bool
 
         public init(
             id: String,
@@ -211,7 +215,8 @@ public struct SurfaceSourceSummaryResult: Codable, Equatable, Sendable {
             point: Point,
             isBoundary: Bool,
             isEditable: Bool,
-            selectionReference: SelectionReference
+            selectionReference: SelectionReference,
+            isPointDisplayVisible: Bool = false
         ) {
             self.id = id
             self.uIndex = uIndex
@@ -220,6 +225,7 @@ public struct SurfaceSourceSummaryResult: Codable, Equatable, Sendable {
             self.isBoundary = isBoundary
             self.isEditable = isEditable
             self.selectionReference = selectionReference
+            self.isPointDisplayVisible = isPointDisplayVisible
         }
     }
 

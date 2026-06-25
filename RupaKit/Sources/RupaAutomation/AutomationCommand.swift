@@ -193,6 +193,7 @@ public enum AutomationCommand: Codable, Equatable, Sendable {
         sourceMesh: Mesh,
         options: PolySplineOptions
     )
+    case setSurfaceControlPointDisplay(target: SelectionReference, isVisible: Bool?)
     case movePolySplineSurfaceVertex(
         target: SelectionTarget,
         deltaX: CADExpression,
@@ -618,6 +619,8 @@ public enum AutomationCommand: Codable, Equatable, Sendable {
                 sourceMesh: sourceMesh,
                 options: options
             )
+        case .setSurfaceControlPointDisplay(let target, let isVisible):
+            .setSurfaceControlPointDisplay(target: target, isVisible: isVisible)
         case .movePolySplineSurfaceVertex(let target, let deltaX, let deltaY, let deltaZ):
             .movePolySplineSurfaceVertex(
                 target: target,

@@ -447,6 +447,40 @@ import SwiftCAD
 }
 
 @MainActor
+@Test func automationCanToggleSurfaceControlPointDisplay() async throws {
+    let session = EditorSession()
+    let runner = AutomationRunner()
+    _ = try runner.execute(
+        .createPolySplineSurface(
+            name: "Automation Surface CV Display",
+            sourceMesh: automationPolySplineQuadMesh(),
+            options: PolySplineOptions()
+        ),
+        in: session
+    )
+    let summary = try SurfaceSourceSummaryService().summarize(document: session.document)
+    let patch = try #require(summary.sources.first?.patches.first)
+    let controlPoint = try #require(patch.controlPoints.first { $0.uIndex == 1 && $0.vIndex == 1 })
+    let displayID = try SurfaceControlPointDisplayID(selectionReference: controlPoint.selectionReference)
+
+    let showResult = try runner.execute(
+        .setSurfaceControlPointDisplay(target: controlPoint.selectionReference, isVisible: true),
+        in: session
+    )
+
+    #expect(showResult.message == "Surface control point display visible.")
+    #expect(showResult.commandName == "setSurfaceControlPointDisplay")
+    #expect(showResult.didMutate)
+    #expect(showResult.generation == DocumentGeneration(2))
+    #expect(session.document.productMetadata.surfaceControlPointDisplays[displayID]?.isVisible == true)
+
+    let visibleSummary = try SurfaceSourceSummaryService().summarize(document: session.document)
+    let visiblePatch = try #require(visibleSummary.sources.first?.patches.first)
+    let visibleControlPoint = try #require(visiblePatch.controlPoints.first { $0.uIndex == 1 && $0.vIndex == 1 })
+    #expect(visibleControlPoint.isPointDisplayVisible)
+}
+
+@MainActor
 @Test func automationCanCreateSweepSourceFeature() async throws {
     var document = DesignDocument.empty()
     let profileID = try document.createRectangleSketch(

@@ -330,6 +330,18 @@ public struct AutomationRunner {
                 didMutate: result.didMutate,
                 diagnostics: result.diagnostics
             )
+        case .setSurfaceControlPointDisplay(let target, let isVisible):
+            let result = try session.execute(
+                .setSurfaceControlPointDisplay(target: target, isVisible: isVisible)
+            )
+            let visibility = isVisible.map { $0 ? "visible" : "hidden" } ?? "toggled"
+            return AutomationResult(
+                message: "Surface control point display \(visibility).",
+                commandName: result.commandName,
+                generation: result.generation,
+                didMutate: result.didMutate,
+                diagnostics: result.diagnostics
+            )
         case .createSketch(let name, let sketch, let geometryRole):
             let result = try session.execute(
                 .createSketch(

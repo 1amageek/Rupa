@@ -1216,6 +1216,16 @@ public final class AgentCommandController: AgentClientProtocol {
             failureMode: "Rejects stale generations, non-sketch-entity targets, standalone point entities, or missing source curves before mutation."
         ),
         capability(
+            "setSurfaceControlPointDisplay",
+            category: .solid,
+            summary: "Toggle persistent Agent-visible Surface CV point display state for PolySpline surface control points discovered from surfaceSourceSummary.",
+            access: .automationCommand,
+            mutatesDocument: true,
+            discovery: [.surfaceSourceSummary, .selectionMeasurement, .surfaceAnalysis],
+            targets: [.surfaceControlPoint],
+            failureMode: "Accepts cubic PolySpline surface control point selection references discovered from surfaceSourceSummary; rejects non-control-point references, unsupported PolySpline source meshes, missing patches, out-of-range indexes, stale generations, or missing source features before mutation."
+        ),
+        capability(
             "topologySummary",
             category: .read,
             summary: "Discover generated faces, edges, vertices, persistent topology names, and selection targets without mutation.",

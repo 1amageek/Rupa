@@ -62,6 +62,7 @@ import SwiftCAD
     #expect(capabilities.contains("createPolySplineSurface"))
     #expect(capabilities.contains("movePolySplineSurfaceVertex"))
     #expect(capabilities.contains("moveSurfaceControlPoint"))
+    #expect(capabilities.contains("setSurfaceControlPointDisplay"))
     #expect(capabilities.contains("slidePolySplineSurfaceVertices"))
     #expect(capabilities.contains("slideSurfaceControlPoints"))
     #expect(capabilities.contains("polySplineMeshAnalysis"))
@@ -136,6 +137,7 @@ import SwiftCAD
     let polySpline = try #require(descriptors.first { $0.name == "createPolySplineSurface" })
     let polySplineVertexMove = try #require(descriptors.first { $0.name == "movePolySplineSurfaceVertex" })
     let surfaceControlPointMove = try #require(descriptors.first { $0.name == "moveSurfaceControlPoint" })
+    let surfaceControlPointDisplay = try #require(descriptors.first { $0.name == "setSurfaceControlPointDisplay" })
     let polySplineVertexSlide = try #require(descriptors.first { $0.name == "slidePolySplineSurfaceVertices" })
     let surfaceControlPointSlide = try #require(descriptors.first { $0.name == "slideSurfaceControlPoints" })
     let polySplineAnalysis = try #require(descriptors.first { $0.name == "polySplineMeshAnalysis" })
@@ -417,6 +419,16 @@ import SwiftCAD
     #expect(surfaceControlPointMove.targets == [.surfaceControlPoint])
     #expect(surfaceControlPointMove.summary.contains("SelectionReference"))
     #expect(surfaceControlPointMove.failureMode.contains("strict interior B-spline control point"))
+
+    #expect(surfaceControlPointDisplay.category == .solid)
+    #expect(surfaceControlPointDisplay.mutatesDocument)
+    #expect(surfaceControlPointDisplay.access == .automationCommand)
+    #expect(surfaceControlPointDisplay.discovery.contains(.surfaceSourceSummary))
+    #expect(surfaceControlPointDisplay.discovery.contains(.selectionMeasurement))
+    #expect(surfaceControlPointDisplay.discovery.contains(.surfaceAnalysis))
+    #expect(surfaceControlPointDisplay.targets == [.surfaceControlPoint])
+    #expect(surfaceControlPointDisplay.summary.contains("Surface CV point display"))
+    #expect(surfaceControlPointDisplay.failureMode.contains("out-of-range indexes"))
 
     #expect(polySplineVertexSlide.category == .solid)
     #expect(polySplineVertexSlide.mutatesDocument)
@@ -2977,6 +2989,14 @@ private func rawAgentProtocolJSON(_ source: String) -> Data {
         ),
         expectedGeneration: DocumentGeneration(5)
     )
+    let surfaceControlPointDisplayRequest = AgentRequest.execute(
+        sessionID: sessionID,
+        command: .setSurfaceControlPointDisplay(
+            target: surfaceControlPointReference,
+            isVisible: true
+        ),
+        expectedGeneration: DocumentGeneration(5)
+    )
     let surfaceControlPointSlideRequest = AgentRequest.execute(
         sessionID: sessionID,
         command: .slideSurfaceControlPoints(
@@ -2992,6 +3012,9 @@ private func rawAgentProtocolJSON(_ source: String) -> Data {
     let decodedSurfaceControlPointMoveRequest = try codec.decodeRequest(
         from: try codec.encode(surfaceControlPointMoveRequest)
     )
+    let decodedSurfaceControlPointDisplayRequest = try codec.decodeRequest(
+        from: try codec.encode(surfaceControlPointDisplayRequest)
+    )
     let decodedSurfaceControlPointSlideRequest = try codec.decodeRequest(
         from: try codec.encode(surfaceControlPointSlideRequest)
     )
@@ -2999,6 +3022,7 @@ private func rawAgentProtocolJSON(_ source: String) -> Data {
     #expect(decodedRequest == request)
     #expect(decodedSlideRequest == slideRequest)
     #expect(decodedSurfaceControlPointMoveRequest == surfaceControlPointMoveRequest)
+    #expect(decodedSurfaceControlPointDisplayRequest == surfaceControlPointDisplayRequest)
     #expect(decodedSurfaceControlPointSlideRequest == surfaceControlPointSlideRequest)
 }
 
@@ -4852,6 +4876,77 @@ private func rawAgentProtocolJSON(_ source: String) -> Data {
     #expect(override.vIndex == 1)
     #expect(abs(override.point.z - (controlPoint.point.z + 0.001)) <= 1.0e-12)
     #expect(session.evaluationStatus == .valid)
+}
+
+@MainActor
+@Test func agentTogglesSurfaceControlPointDisplayThroughSurfaceSourceReference() async throws {
+    let server = AgentCommandController()
+    let sessionID = UUID()
+    let session = EditorSession()
+    server.register(session: session, id: sessionID)
+
+    let createResponse = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .createPolySplineSurface(
+                name: "Agent Surface CV Display",
+                sourceMesh: agentPolySplineQuadMesh(),
+                options: PolySplineOptions()
+            ),
+            expectedGeneration: DocumentGeneration(0)
+        )
+    )
+    guard case .command(let createResult) = createResponse else {
+        Issue.record("Agent must create a PolySpline surface.")
+        return
+    }
+    #expect(createResult.didMutate)
+
+    let summaryResponse = server.handle(
+        .surfaceSourceSummary(
+            sessionID: sessionID,
+            expectedGeneration: DocumentGeneration(1)
+        )
+    )
+    guard case .surfaceSourceSummary(let summary) = summaryResponse else {
+        Issue.record("Agent must return a surface source summary.")
+        return
+    }
+    let patch = try #require(summary.sources.first?.patches.first)
+    let controlPoint = try #require(patch.controlPoints.first { $0.uIndex == 1 && $0.vIndex == 1 })
+
+    let displayResponse = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .setSurfaceControlPointDisplay(
+                target: controlPoint.selectionReference,
+                isVisible: true
+            ),
+            expectedGeneration: DocumentGeneration(1)
+        )
+    )
+
+    guard case .command(let displayResult) = displayResponse else {
+        Issue.record("Agent must set a surface control point display state.")
+        return
+    }
+    #expect(displayResult.commandName == "setSurfaceControlPointDisplay")
+    #expect(displayResult.didMutate)
+    #expect(displayResult.generation == DocumentGeneration(2))
+
+    let visibleSummaryResponse = server.handle(
+        .surfaceSourceSummary(
+            sessionID: sessionID,
+            expectedGeneration: DocumentGeneration(2)
+        )
+    )
+    guard case .surfaceSourceSummary(let visibleSummary) = visibleSummaryResponse else {
+        Issue.record("Agent must return an updated surface source summary.")
+        return
+    }
+    let visiblePatch = try #require(visibleSummary.sources.first?.patches.first)
+    let visibleControlPoint = try #require(visiblePatch.controlPoints.first { $0.uIndex == 1 && $0.vIndex == 1 })
+    #expect(visibleControlPoint.isPointDisplayVisible)
 }
 
 @MainActor

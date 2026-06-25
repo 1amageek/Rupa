@@ -1118,6 +1118,14 @@ public final class EditorSession {
     }
 
     @discardableResult
+    public func setSurfaceControlPointDisplay(
+        target: SelectionReference,
+        isVisible: Bool? = nil
+    ) -> CommandExecutionResult? {
+        perform(.setSurfaceControlPointDisplay(target: target, isVisible: isVisible))
+    }
+
+    @discardableResult
     public func createDefaultRectangleSketch() -> CommandExecutionResult? {
         perform(
             .createRectangleSketch(

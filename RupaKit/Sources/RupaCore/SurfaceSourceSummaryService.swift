@@ -53,6 +53,7 @@ public struct SurfaceSourceSummaryService: Sendable {
                 feature: feature,
                 polySpline: polySpline,
                 sceneNodeID: sceneNodeIDsByFeatureID[featureID],
+                surfaceControlPointDisplays: document.productMetadata.surfaceControlPointDisplays,
                 topologyEntriesByPersistentName: topologyEntriesByPersistentName
             )
         }
@@ -75,6 +76,7 @@ public struct SurfaceSourceSummaryService: Sendable {
         feature: FeatureNode,
         polySpline: PolySplineFeature,
         sceneNodeID: SceneNodeID?,
+        surfaceControlPointDisplays: [SurfaceControlPointDisplayID: SurfaceControlPointDisplay],
         topologyEntriesByPersistentName: [String: TopologySummaryResult.Entry]
     ) -> SurfaceSourceSummaryResult.Source {
         let analysis = PolySplineMeshAnalysisService().analyze(
@@ -90,6 +92,7 @@ public struct SurfaceSourceSummaryService: Sendable {
                 featureID: featureID,
                 patchCandidate: patchCandidate,
                 polySpline: polySpline,
+                surfaceControlPointDisplays: surfaceControlPointDisplays,
                 topologyEntriesByPersistentName: topologyEntriesByPersistentName
             )
         }
@@ -140,6 +143,7 @@ public struct SurfaceSourceSummaryService: Sendable {
         featureID: FeatureID,
         patchCandidate: PatchCandidate,
         polySpline: PolySplineFeature,
+        surfaceControlPointDisplays: [SurfaceControlPointDisplayID: SurfaceControlPointDisplay],
         topologyEntriesByPersistentName: [String: TopologySummaryResult.Entry]
     ) -> SurfaceSourceSummaryResult.Patch {
         let patchID = patchCandidate.patchID
@@ -178,7 +182,8 @@ public struct SurfaceSourceSummaryService: Sendable {
                 role: role,
                 surfaceReference: surfaceReference,
                 sourceVertexIndex: sourceVertexIndex,
-                sourceMesh: sourceMesh
+                sourceMesh: sourceMesh,
+                surfaceControlPointDisplays: surfaceControlPointDisplays
             )
         }
         let controlPoints = surfaceControlPoints(
@@ -186,7 +191,8 @@ public struct SurfaceSourceSummaryService: Sendable {
             patchID: patchID,
             surfaceReference: surfaceReference,
             patchCandidate: patchCandidate,
-            polySpline: polySpline
+            polySpline: polySpline,
+            surfaceControlPointDisplays: surfaceControlPointDisplays
         )
         return SurfaceSourceSummaryResult.Patch(
             patchID: patchID,
@@ -216,7 +222,8 @@ public struct SurfaceSourceSummaryService: Sendable {
         patchID: Int,
         surfaceReference: SurfaceReference,
         patchCandidate: PatchCandidate,
-        polySpline: PolySplineFeature
+        polySpline: PolySplineFeature,
+        surfaceControlPointDisplays: [SurfaceControlPointDisplayID: SurfaceControlPointDisplay]
     ) -> [SurfaceSourceSummaryResult.ControlPoint] {
         guard patchCandidate.boundaryVertexIndices.count == 4 else {
             return []
@@ -255,6 +262,11 @@ public struct SurfaceSourceSummaryService: Sendable {
                 let point = controlPoints[vIndex][uIndex]
                 let isBoundary = uIndex == 0 || uIndex == 3 || vIndex == 0 || vIndex == 3
                 let isCorner = (uIndex == 0 || uIndex == 3) && (vIndex == 0 || vIndex == 3)
+                let selectionReference = SelectionReference.surface(.controlPoint(SurfaceControlPointReference(
+                    surface: surfaceReference,
+                    uIndex: uIndex,
+                    vIndex: vIndex
+                )))
                 result.append(SurfaceSourceSummaryResult.ControlPoint(
                     id: "feature:\(featureID.description)/patch:\(patchID)/surfaceControlPoint:u\(uIndex):v\(vIndex)",
                     uIndex: uIndex,
@@ -262,11 +274,11 @@ public struct SurfaceSourceSummaryService: Sendable {
                     point: SurfaceSourceSummaryResult.Point(x: point.x, y: point.y, z: point.z),
                     isBoundary: isBoundary,
                     isEditable: isBoundary == false || isCorner,
-                    selectionReference: .surface(.controlPoint(SurfaceControlPointReference(
-                        surface: surfaceReference,
-                        uIndex: uIndex,
-                        vIndex: vIndex
-                    )))
+                    selectionReference: selectionReference,
+                    isPointDisplayVisible: isSurfaceControlPointDisplayVisible(
+                        selectionReference,
+                        in: surfaceControlPointDisplays
+                    )
                 ))
             }
         }
@@ -279,7 +291,8 @@ public struct SurfaceSourceSummaryService: Sendable {
         role: SurfaceVertexRole,
         surfaceReference: SurfaceReference,
         sourceVertexIndex: Int,
-        sourceMesh: Mesh
+        sourceMesh: Mesh,
+        surfaceControlPointDisplays: [SurfaceControlPointDisplayID: SurfaceControlPointDisplay]
     ) -> SurfaceSourceSummaryResult.ControlVertex {
         let generatedVertexName = persistentName(
             featureID: featureID,
@@ -292,6 +305,11 @@ public struct SurfaceSourceSummaryService: Sendable {
         } else {
             point = Point3D(x: 0.0, y: 0.0, z: 0.0)
         }
+        let selectionReference = SelectionReference.surface(.controlPoint(SurfaceControlPointReference(
+            surface: surfaceReference,
+            uIndex: role.uIndex,
+            vIndex: role.vIndex
+        )))
         return SurfaceSourceSummaryResult.ControlVertex(
             id: "feature:\(featureID.description)/patch:\(patchID)/cv:\(role.id)",
             role: role.id,
@@ -301,12 +319,25 @@ public struct SurfaceSourceSummaryService: Sendable {
             selectionComponentID: SelectionComponentID
                 .generatedTopology(generatedVertexPersistentName)
                 .rawValue,
-            selectionReference: .surface(.controlPoint(SurfaceControlPointReference(
-                surface: surfaceReference,
-                uIndex: role.uIndex,
-                vIndex: role.vIndex
-            )))
+            selectionReference: selectionReference,
+            isPointDisplayVisible: isSurfaceControlPointDisplayVisible(
+                selectionReference,
+                in: surfaceControlPointDisplays
+            )
         )
+    }
+
+    private func isSurfaceControlPointDisplayVisible(
+        _ selectionReference: SelectionReference,
+        in displays: [SurfaceControlPointDisplayID: SurfaceControlPointDisplay]
+    ) -> Bool {
+        let id: SurfaceControlPointDisplayID
+        do {
+            id = try SurfaceControlPointDisplayID(selectionReference: selectionReference)
+        } catch {
+            return false
+        }
+        return displays[id]?.isVisible == true
     }
 
     private func adjacencies(

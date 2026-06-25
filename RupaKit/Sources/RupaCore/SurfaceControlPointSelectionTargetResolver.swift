@@ -34,6 +34,27 @@ public struct SurfaceControlPointSelectionTargetResolver: Sendable {
         return try editTarget(for: reference, in: document)
     }
 
+    public func validateDisplayTarget(
+        for selection: SelectionReference,
+        in document: DesignDocument
+    ) throws -> SurfaceControlPointReference {
+        try validateDisplayTarget(for: selection, in: document.cadDocument)
+    }
+
+    public func validateDisplayTarget(
+        for selection: SelectionReference,
+        in cadDocument: CADDocument
+    ) throws -> SurfaceControlPointReference {
+        guard case .surface(.controlPoint(let reference)) = selection else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Surface control point display requires a surface control point selection reference."
+            )
+        }
+        try validateDisplayTarget(for: reference, in: cadDocument)
+        return reference
+    }
+
     public func target(
         for reference: SurfaceControlPointReference,
         in document: DesignDocument
@@ -94,6 +115,51 @@ public struct SurfaceControlPointSelectionTargetResolver: Sendable {
             uIndex: reference.uIndex,
             vIndex: reference.vIndex
         ))
+    }
+
+    private func validateDisplayTarget(
+        for reference: SurfaceControlPointReference,
+        in cadDocument: CADDocument
+    ) throws {
+        do {
+            try reference.validate()
+        } catch {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Surface control point display requires a valid selection reference: \(error)."
+            )
+        }
+        guard (0 ... 3).contains(reference.uIndex),
+              (0 ... 3).contains(reference.vIndex) else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Surface control point display currently supports cubic PolySpline patch control point indexes from 0 through 3."
+            )
+        }
+        let patchFace = try polySplinePatchFace(from: reference.surface.faceName)
+        guard let feature = cadDocument.designGraph.nodes[patchFace.featureID],
+              case let .polySpline(polySpline) = feature.operation else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "Surface control point display requires an existing PolySpline source feature."
+            )
+        }
+        let analysis = PolySplineMeshAnalyzer().analyze(
+            mesh: polySpline.sourceMesh,
+            options: polySpline.options
+        )
+        guard analysis.result.isSupported else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Surface control point display requires a supported PolySpline source mesh."
+            )
+        }
+        guard analysis.supportedPatches.contains(where: { $0.candidateID == patchFace.patchID }) else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "Surface control point display requires an existing PolySpline patch target."
+            )
+        }
     }
 
     private func boundaryTarget(

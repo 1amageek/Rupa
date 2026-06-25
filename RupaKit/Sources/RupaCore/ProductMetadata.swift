@@ -15,6 +15,7 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
     public var activeConstructionPlaneID: ConstructionPlaneSourceID?
     public var curveCurvatureDisplays: [SelectionComponentID: CurveCurvatureDisplay]
     public var pointDisplays: [SelectionComponentID: PointDisplay]
+    public var surfaceControlPointDisplays: [SurfaceControlPointDisplayID: SurfaceControlPointDisplay]
     public var measurements: [MeasurementAnnotationID: MeasurementAnnotation]
     public var templateDefaults: TemplateDefaults
 
@@ -32,6 +33,7 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
         activeConstructionPlaneID: ConstructionPlaneSourceID? = nil,
         curveCurvatureDisplays: [SelectionComponentID: CurveCurvatureDisplay] = [:],
         pointDisplays: [SelectionComponentID: PointDisplay] = [:],
+        surfaceControlPointDisplays: [SurfaceControlPointDisplayID: SurfaceControlPointDisplay] = [:],
         measurements: [MeasurementAnnotationID: MeasurementAnnotation] = [:],
         templateDefaults: TemplateDefaults = TemplateDefaults()
     ) {
@@ -48,6 +50,7 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
         self.activeConstructionPlaneID = activeConstructionPlaneID
         self.curveCurvatureDisplays = curveCurvatureDisplays
         self.pointDisplays = pointDisplays
+        self.surfaceControlPointDisplays = surfaceControlPointDisplays
         self.measurements = measurements
         self.templateDefaults = templateDefaults
     }
@@ -66,6 +69,7 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
         case activeConstructionPlaneID
         case curveCurvatureDisplays
         case pointDisplays
+        case surfaceControlPointDisplays
         case measurements
         case templateDefaults
     }
@@ -119,6 +123,10 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
                 [SelectionComponentID: PointDisplay].self,
                 forKey: .pointDisplays
             ) ?? [:],
+            surfaceControlPointDisplays: try container.decodeIfPresent(
+                [SurfaceControlPointDisplayID: SurfaceControlPointDisplay].self,
+                forKey: .surfaceControlPointDisplays
+            ) ?? [:],
             measurements: try container.decodeIfPresent(
                 [MeasurementAnnotationID: MeasurementAnnotation].self,
                 forKey: .measurements
@@ -145,6 +153,7 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
         try container.encodeIfPresent(activeConstructionPlaneID, forKey: .activeConstructionPlaneID)
         try container.encode(curveCurvatureDisplays, forKey: .curveCurvatureDisplays)
         try container.encode(pointDisplays, forKey: .pointDisplays)
+        try container.encode(surfaceControlPointDisplays, forKey: .surfaceControlPointDisplays)
         try container.encode(measurements, forKey: .measurements)
         try container.encode(templateDefaults, forKey: .templateDefaults)
     }
@@ -173,6 +182,7 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
         try validateConstructionPlanes()
         try validateCurveCurvatureDisplays(against: cadDocument)
         try validatePointDisplays(against: cadDocument)
+        try validateSurfaceControlPointDisplays(against: cadDocument)
         try validateMeasurements()
         try validateTemplateDefaults()
     }
@@ -523,6 +533,17 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
             guard componentID == display.componentID else {
                 throw DocumentValidationError.invalidProductMetadata(
                     "Point display keys must match display component IDs."
+                )
+            }
+            try display.validate(against: cadDocument)
+        }
+    }
+
+    private func validateSurfaceControlPointDisplays(against cadDocument: CADDocument) throws {
+        for (id, display) in surfaceControlPointDisplays {
+            guard id == display.id else {
+                throw DocumentValidationError.invalidProductMetadata(
+                    "Surface control point display keys must match display IDs."
                 )
             }
             try display.validate(against: cadDocument)

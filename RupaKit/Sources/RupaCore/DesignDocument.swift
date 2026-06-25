@@ -886,6 +886,27 @@ public struct DesignDocument: Identifiable, Sendable {
         try productMetadata.validate(against: cadDocument, objectRegistry: objectRegistry)
     }
 
+    public mutating func setSurfaceControlPointDisplay(
+        target: SelectionReference,
+        isVisible: Bool? = nil,
+        objectRegistry: ObjectTypeRegistry = .builtIn
+    ) throws {
+        let displayID = try SurfaceControlPointDisplayID(selectionReference: target)
+        let existing = productMetadata.surfaceControlPointDisplays[displayID]
+        let nextVisibility: Bool
+        if let isVisible {
+            nextVisibility = isVisible
+        } else if let existing {
+            nextVisibility = !existing.isVisible
+        } else {
+            nextVisibility = true
+        }
+        let display = try SurfaceControlPointDisplay(target: target, isVisible: nextVisibility)
+        try display.validate(against: cadDocument)
+        productMetadata.surfaceControlPointDisplays[displayID] = display
+        try productMetadata.validate(against: cadDocument, objectRegistry: objectRegistry)
+    }
+
     @discardableResult
     public mutating func createSketch(
         name: String,
