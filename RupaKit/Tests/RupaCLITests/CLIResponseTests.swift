@@ -3069,6 +3069,75 @@ func cliExecutableSketchDimensionSummaryAndSetMutateClosedDocumentAsJSON() async
 }
 
 @Test(.timeLimit(.minutes(1)))
+func cliExecutableSelectionDimensionAddPersistsClosedDocumentAsJSON() async throws {
+    let temporaryDirectory = try makeTemporaryDirectory()
+    defer {
+        removeTemporaryDirectory(temporaryDirectory)
+    }
+    let documentURL = temporaryDirectory.appendingPathComponent("process-selection-dimension.swcad")
+    var document = DesignDocument.empty(named: "Process Selection Dimension")
+    let featureID = try document.createLineSketch(
+        name: "Measured Line",
+        plane: .xy,
+        start: SketchPoint(
+            x: .length(0.0, .millimeter),
+            y: .length(0.0, .millimeter)
+        ),
+        end: SketchPoint(
+            x: .length(10.0, .millimeter),
+            y: .length(0.0, .millimeter)
+        )
+    )
+    let endpoints = try cliLineEndpointTargets(in: document, featureID: featureID)
+    try DocumentFileService().save(document, to: documentURL)
+
+    let result = try await runCLI([
+        "dimension",
+        "add-selection",
+        documentURL.path,
+        "--name",
+        "CLI Line Length",
+        "--kind",
+        "distance",
+        "--first-target",
+        try encodedSelectionTarget(endpoints.start),
+        "--second-target",
+        try encodedSelectionTarget(endpoints.end),
+        "--target-value",
+        "10",
+        "--length-unit",
+        "millimeter",
+        "--mode",
+        "file",
+        "--json",
+    ])
+    let response = try JSONDecoder().decode(
+        CLISelectionDimensionAddResponse.self,
+        from: result.standardOutputData
+    )
+    let loaded = try DocumentFileService().load(from: documentURL)
+    let dimensionID = try #require(response.selectionDimensionID)
+    let dimension = try #require(loaded.cadDocument.selectionDimensions.first { $0.id == dimensionID })
+    let evaluation = try SelectionDimensionService().evaluate(
+        document: loaded,
+        dimensionID: dimensionID
+    )
+    let measurement = try #require(evaluation.measurements.first)
+
+    #expect(result.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: result.standardError))
+    #expect(response.message == "Selection dimension added.")
+    #expect(response.saved)
+    #expect(!response.dirty)
+    #expect(dimension.name == "CLI Line Length")
+    #expect(dimension.kind == .distance)
+    #expect(evaluation.measurements.count == 1)
+    #expect(measurement.dimension.id == dimensionID)
+    #expect(measurement.measured == .length(0.010, unit: .meter))
+    #expect(abs(measurement.residual.value) <= 1.0e-12)
+    #expect(try measurement.isSatisfied())
+}
+
+@Test(.timeLimit(.minutes(1)))
 func cliExecutableObjectDimensionSummaryAndSetMutateClosedDocumentAsJSON() async throws {
     let temporaryDirectory = try makeTemporaryDirectory()
     defer {
@@ -5581,6 +5650,31 @@ private func cliNearlyEqual(
     tolerance: Double = 1.0e-9
 ) -> Bool {
     abs(lhs - rhs) <= tolerance
+}
+
+private func cliLineEndpointTargets(
+    in document: DesignDocument,
+    featureID: FeatureID
+) throws -> (start: SelectionTarget, end: SelectionTarget) {
+    let summary = try SketchEntitySummaryService().summarize(document: document)
+    let entry = try #require(summary.entries.first {
+        $0.sourceFeatureID == featureID.description && $0.entityKind == "line"
+    })
+    let sceneNodeIDString = try #require(entry.sceneNodeID)
+    let sceneNodeUUID = try #require(UUID(uuidString: sceneNodeIDString))
+    let sceneNodeID = SceneNodeID(sceneNodeUUID)
+    let startHandle = try #require(entry.pointHandles.first { $0.handle == .lineStart })
+    let endHandle = try #require(entry.pointHandles.first { $0.handle == .lineEnd })
+    return (
+        start: SelectionTarget(
+            sceneNodeID: sceneNodeID,
+            component: .sketchEntity(SelectionComponentID(rawValue: startHandle.selectionComponentID))
+        ),
+        end: SelectionTarget(
+            sceneNodeID: sceneNodeID,
+            component: .sketchEntity(SelectionComponentID(rawValue: endHandle.selectionComponentID))
+        )
+    )
 }
 
 private func encodedSelectionReference(_ reference: SelectionReference) throws -> String {

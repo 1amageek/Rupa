@@ -19,6 +19,12 @@ public struct CLIDocumentTarget: Equatable, Sendable {
     }
 }
 
+private struct CLIAutomationMutationExecution: Sendable {
+    var result: AutomationResult
+    var dirty: Bool
+    var saved: Bool
+}
+
 public struct CLIService {
     private let fileService: DocumentFileService
     private let exportService: DocumentExportService
@@ -1894,6 +1900,42 @@ public struct CLIService {
         )
     }
 
+    public func addSelectionDimension(
+        target: CLIDocumentTarget,
+        name: String?,
+        kind: SelectionDimensionKind,
+        first: SelectionTarget,
+        second: SelectionTarget,
+        targetValue: CADExpression,
+        mode: CLIEditMode = .auto,
+        expectedGeneration: DocumentGeneration? = nil,
+        dryRun: Bool = false,
+        forceFileEdit: Bool = false,
+        client: AgentClientProtocol? = nil
+    ) throws -> CLISelectionDimensionAddResponse {
+        let execution = try executeAutomationMutationCommand(
+            .addSelectionDimension(
+                name: name,
+                kind: kind,
+                first: first,
+                second: second,
+                target: targetValue
+            ),
+            target: target,
+            mode: mode,
+            expectedGeneration: expectedGeneration,
+            dryRun: dryRun,
+            forceFileEdit: forceFileEdit,
+            client: client,
+            missingTargetMessage: "Selection dimension mutation requires a document file path or live session ID."
+        )
+        return CLISelectionDimensionAddResponse(
+            result: execution.result,
+            dirty: execution.dirty,
+            saved: execution.saved
+        )
+    }
+
     public func saveFile(
         at url: URL,
         forceFileEdit: Bool = false,
@@ -3547,9 +3589,36 @@ public struct CLIService {
         client: AgentClientProtocol?,
         missingTargetMessage: String
     ) throws -> CLIResponse {
+        let execution = try executeAutomationMutationCommand(
+            command,
+            target: target,
+            mode: mode,
+            expectedGeneration: expectedGeneration,
+            dryRun: dryRun,
+            forceFileEdit: forceFileEdit,
+            client: client,
+            missingTargetMessage: missingTargetMessage
+        )
+        return CLIResponse(
+            result: execution.result,
+            dirty: execution.dirty,
+            saved: execution.saved
+        )
+    }
+
+    private func executeAutomationMutationCommand(
+        _ command: AutomationCommand,
+        target: CLIDocumentTarget,
+        mode: CLIEditMode,
+        expectedGeneration: DocumentGeneration?,
+        dryRun: Bool,
+        forceFileEdit: Bool,
+        client: AgentClientProtocol?,
+        missingTargetMessage: String
+    ) throws -> CLIAutomationMutationExecution {
         switch mode {
         case .auto:
-            return try executeDocumentMutationCommandAutomatically(
+            return try executeAutomationMutationCommandAutomatically(
                 command,
                 target: target,
                 expectedGeneration: expectedGeneration,
@@ -3562,7 +3631,7 @@ public struct CLIService {
             guard let url = target.fileURL else {
                 throw invalidCommand("File mode requires a document file path.")
             }
-            return try executeModelingCommandFile(
+            return try executeAutomationMutationFile(
                 command,
                 at: url,
                 dryRun: dryRun,
@@ -3574,7 +3643,7 @@ public struct CLIService {
                 target: target,
                 client: client
             )
-            return try executeModelingCommandLiveSession(
+            return try executeAutomationMutationLiveSession(
                 command,
                 sessionID: sessionID,
                 expectedGeneration: expectedGeneration,
@@ -3583,7 +3652,7 @@ public struct CLIService {
         }
     }
 
-    private func executeDocumentMutationCommandAutomatically(
+    private func executeAutomationMutationCommandAutomatically(
         _ command: AutomationCommand,
         target: CLIDocumentTarget,
         expectedGeneration: DocumentGeneration?,
@@ -3591,9 +3660,9 @@ public struct CLIService {
         forceFileEdit: Bool,
         client: AgentClientProtocol?,
         missingTargetMessage: String
-    ) throws -> CLIResponse {
+    ) throws -> CLIAutomationMutationExecution {
         if let sessionID = target.sessionID {
-            return try executeModelingCommandLiveSession(
+            return try executeAutomationMutationLiveSession(
                 command,
                 sessionID: sessionID,
                 expectedGeneration: expectedGeneration,
@@ -3608,7 +3677,7 @@ public struct CLIService {
             guard !dryRun else {
                 throw invalidCommand("Dry-run is not supported for live document mutation.")
             }
-            return try executeModelingCommandLiveSession(
+            return try executeAutomationMutationLiveSession(
                 command,
                 sessionID: session.id,
                 expectedGeneration: expectedGeneration,
@@ -3619,7 +3688,7 @@ public struct CLIService {
         guard let url = target.fileURL else {
             throw invalidCommand(missingTargetMessage)
         }
-        return try executeModelingCommandFile(
+        return try executeAutomationMutationFile(
             command,
             at: url,
             dryRun: dryRun,
@@ -3628,13 +3697,13 @@ public struct CLIService {
         )
     }
 
-    private func executeModelingCommandFile(
+    private func executeAutomationMutationFile(
         _ command: AutomationCommand,
         at url: URL,
         dryRun: Bool,
         forceFileEdit: Bool,
         conflictClient: AgentClientProtocol?
-    ) throws -> CLIResponse {
+    ) throws -> CLIAutomationMutationExecution {
         try rejectOpenDocumentConflict(
             fileURL: url,
             forceFileEdit: forceFileEdit,
@@ -3650,21 +3719,19 @@ public struct CLIService {
             session.store.markClean()
         }
 
-        return CLIResponse(
-            message: result.message,
-            generation: result.generation.value,
+        return CLIAutomationMutationExecution(
+            result: result,
             dirty: session.isDirty,
-            saved: shouldSave,
-            diagnostics: result.diagnostics
+            saved: shouldSave
         )
     }
 
-    private func executeModelingCommandLiveSession(
+    private func executeAutomationMutationLiveSession(
         _ command: AutomationCommand,
         sessionID: UUID,
         expectedGeneration: DocumentGeneration?,
         client: AgentClientProtocol
-    ) throws -> CLIResponse {
+    ) throws -> CLIAutomationMutationExecution {
         let response = try client.send(
             .execute(
                 sessionID: sessionID,
@@ -3673,12 +3740,10 @@ public struct CLIService {
             )
         )
         let result = try commandResult(from: response)
-        return CLIResponse(
-            message: result.message,
-            generation: result.generation.value,
+        return CLIAutomationMutationExecution(
+            result: result,
             dirty: result.didMutate,
-            saved: false,
-            diagnostics: result.diagnostics
+            saved: false
         )
     }
 
