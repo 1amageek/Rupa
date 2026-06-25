@@ -957,6 +957,109 @@ import SwiftCAD
     #expect(descriptors.contains { $0.name == "patternArraySummary" && $0.discovery.contains(.patternArraySummary) })
 }
 
+@Test func agentMessageCodecWrapsRequestsInJSONRPCEnvelope() async throws {
+    let codec = AgentMessageCodec()
+
+    let encoded = try codec.encode(AgentRequest.status, id: "request-1")
+    let envelope = try codec.decodeRequestEnvelope(from: encoded)
+    let json = try #require(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+
+    #expect(envelope == AgentRequestEnvelope(id: "request-1", params: .status))
+    #expect(json["jsonrpc"] as? String == "2.0")
+    #expect(json["id"] as? String == "request-1")
+    #expect(json["method"] as? String == "agent.status")
+    #expect(json["params"] != nil)
+}
+
+@Test func agentMessageCodecWrapsResponsesInJSONRPCEnvelope() async throws {
+    let codec = AgentMessageCodec()
+    let response = AgentResponse.status(
+        AgentStatus(
+            running: true,
+            socketPath: "/tmp/rupa.sock",
+            sessionCount: 2
+        )
+    )
+
+    let encoded = try codec.encode(response, id: "request-2")
+    let decoded = try codec.decodeResponse(from: encoded, expectedID: "request-2")
+    let envelope = try codec.decodeResponseEnvelope(from: encoded)
+    let json = try #require(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+
+    #expect(decoded == response)
+    #expect(envelope.id == "request-2")
+    #expect(json["jsonrpc"] as? String == "2.0")
+    #expect(json["id"] as? String == "request-2")
+    #expect(json["result"] != nil)
+    #expect(json["error"] == nil)
+}
+
+@Test func agentMessageCodecWrapsFailuresAsResponseErrors() async throws {
+    let codec = AgentMessageCodec()
+    let error = EditorError(
+        code: .commandInvalid,
+        message: "Malformed command."
+    )
+
+    let encoded = try codec.encode(AgentResponse.failure(error), id: "request-3")
+    let decoded = try codec.decodeResponse(from: encoded, expectedID: "request-3")
+    let json = try #require(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+    let errorJSON = try #require(json["error"] as? [String: Any])
+
+    #expect(decoded == .failure(error))
+    #expect(json["result"] == nil)
+    #expect(errorJSON["code"] as? String == EditorError.Code.commandInvalid.rawValue)
+    #expect(errorJSON["message"] as? String == "Malformed command.")
+}
+
+@Test func agentMessageCodecRejectsRequestMethodPayloadMismatch() async throws {
+    let codec = AgentMessageCodec()
+    let encoded = Data(
+        """
+        {
+            "jsonrpc": "2.0",
+            "id": "request-4",
+            "method": "agent.status",
+            "params": {
+                "sessions": {}
+            }
+        }
+        """.utf8
+    )
+    var caught: EditorError?
+
+    do {
+        _ = try codec.decodeRequestEnvelope(from: encoded)
+    } catch let error as EditorError {
+        caught = error
+    }
+
+    #expect(caught?.code == .commandInvalid)
+}
+
+@Test func agentMessageCodecRejectsResponseIDMismatch() async throws {
+    let codec = AgentMessageCodec()
+    let encoded = try codec.encode(
+        AgentResponse.status(
+            AgentStatus(
+                running: true,
+                socketPath: "/tmp/rupa.sock",
+                sessionCount: 1
+            )
+        ),
+        id: "actual-request"
+    )
+    var caught: EditorError?
+
+    do {
+        _ = try codec.decodeResponse(from: encoded, expectedID: "expected-request")
+    } catch let error as EditorError {
+        caught = error
+    }
+
+    #expect(caught?.code == .agentConnectionFailed)
+}
+
 @Test func agentMessageCodecRoundTripsParameterRequestsAndResponses() async throws {
     let codec = AgentMessageCodec()
     let capabilitiesRequest = AgentRequest.capabilities

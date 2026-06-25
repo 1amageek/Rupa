@@ -180,7 +180,7 @@ struct ApplicationRoot: App {
 }
 ```
 
-When live CLI support is enabled, app startup creates the application model and starts the agent server.
+When live CLI support is enabled, app startup creates the application model and starts the Agent command service.
 
 ```swift
 import SwiftUI
@@ -196,7 +196,7 @@ struct ApplicationRoot: App {
             MainView()
                 .environmentObject(appModel)
                 .task {
-                    await appModel.startAgentServerIfNeeded()
+                    await appModel.startAgentCommandServiceIfNeeded()
                 }
         }
     }
@@ -1099,19 +1099,18 @@ The package-level socket listener supports start, stop, stale socket replacement
 
 ```json
 {
+  "jsonrpc": "2.0",
   "id": "request-id",
   "method": "command.apply",
   "params": {
-    "document": "/absolute/path/to/document.swcad",
-    "expectedGeneration": 42,
-    "command": {
-      "type": "setParameter",
-      "name": "width",
-      "expression": "50mm"
-    },
-    "options": {
-      "save": false,
-      "evaluate": true
+    "execute": {
+      "sessionID": "open-session-id",
+      "expectedGeneration": 42,
+      "command": {
+        "type": "setParameter",
+        "name": "width",
+        "expression": "50mm"
+      }
     }
   }
 }
@@ -1121,18 +1120,15 @@ The package-level socket listener supports start, stop, stale socket replacement
 
 ```json
 {
+  "jsonrpc": "2.0",
   "id": "request-id",
   "result": {
-    "success": true,
-    "document": {
-      "path": "/absolute/path/to/document.swcad",
-      "dirty": true,
+    "command": {
+      "message": "Parameter width updated.",
+      "commandName": "setParameter",
       "generation": 43,
-      "bodies": 1,
-      "features": 2,
-      "parameters": 3
-    },
-    "diagnostics": []
+      "didMutate": true
+    }
   }
 }
 ```
@@ -1141,6 +1137,7 @@ The package-level socket listener supports start, stop, stale socket replacement
 
 ```json
 {
+  "jsonrpc": "2.0",
   "id": "request-id",
   "error": {
     "code": "document.generationMismatch",
@@ -1153,21 +1150,35 @@ The package-level socket listener supports start, stop, stale socket replacement
 
 | Method | Purpose |
 |---|---|
+| `agent.capabilities` | Return structured Agent capability descriptors. |
 | `agent.status` | Return server status, socket path, and session count. |
+| `agent.cadInteractionQualityAssessment` | Return the static CAD interaction quality assessment without requiring a session. |
 | `sessions.list` | Return open document session summaries. |
 | `command.apply` | Apply one automation command to an open session. |
-| `batch.apply` | Apply an ordered automation batch to an open session. |
+| `parameter.setExpression` | Parse and apply a typed parameter expression to an open session. |
+| `document.parameters` | Return all document parameters and diagnostics. |
 | `document.save` | Save an open document through its app session. |
 | `document.evaluate` | Evaluate an open document through its app session. |
-| `document.meshSummary` | Summarize generated meshes for an open document through its app session without mutating source. |
-| `document.sketchEntitySummary` | Summarize source sketch entities and selection component IDs for an open document through its app session without mutating source. |
-| `document.topologySummary` | Summarize Swift-CAD generated BRep topology and persistent names for an open document through its app session without mutating source. |
+| `document.measure` | Measure an open document through its app session without mutating source. |
+| `selection.measure` | Measure a typed selection query without mutating source. |
+| `snap.resolve` | Resolve a point against shared snapping rules and return ranked snap diagnostics. |
 | `document.constructionPlaneSummary` | Summarize saved construction planes, linked construction scene nodes, and the active construction plane without mutating source. |
+| `document.designDisplaySnapshot` | Return the Agent-visible display/source snapshot for the open document without mutating source. |
+| `document.patternArraySummary` | Return source-owned pattern array summaries without mutating source. |
+| `document.meshSummary` | Summarize generated meshes for an open document through its app session without mutating source. |
+| `document.polySplineMeshAnalysis` | Preflight source meshes for supported PolySpline surface conversion and diagnostics. |
+| `document.sketchEntitySummary` | Summarize source sketch entities and selection component IDs for an open document through its app session without mutating source. |
+| `document.sketchDimensionSummary` | Return editable source sketch dimensions for selected targets without mutating source. |
+| `selection.dimensionEvaluation` | Evaluate an existing selection dimension without mutating source. |
+| `document.curveAnalysis` | Return source curve and curvature diagnostics without mutating source. |
+| `document.topologySummary` | Summarize Swift-CAD generated BRep topology and persistent names for an open document through its app session without mutating source. |
+| `document.objectDimensionSummary` | Return editable object dimension candidates for selected targets without mutating source. |
+| `document.surfaceSourceSummary` | Return source and generated surface references for Agent targeting without mutating source. |
 | `document.surfaceAnalysis` | Sample generated B-spline faces for bounded UV points, oriented normals, analytic tangents, mean/Gaussian/U/V/principal curvature, principal directions, ordered trim-boundary points, and finite-difference surface curvature-comb diagnostics without mutating source. |
+| `document.surfaceFrames` | Return evaluated UVN frame data for selected supported surface samples without mutating source. |
 | `document.movePolySplineSurfaceVertex` | Move a selected generated PolySpline patch boundary vertex by mutating the owning source mesh vertex through the undoable command pipeline, rejecting unsupported targets or edits that change the selected patch boundary role. Selected viewport boundary-vertex center and global-axis handles route to the same command. |
 | `document.surfaceContinuitySummary` | Summarize generated B-spline face adjacencies, shared persistent edges, G0/G1/G2 continuity status, and unresolved curvature-continuity requirements without mutating source. |
 | `selection.selectTargets` | Replace the open session selection with typed object or subobject targets without mutating CAD source. |
-| `document.measure` | Measure an open document through its app session without mutating source. |
 | `document.export` | Export an open document session to an exchange artifact without mutating source, using the same `ExportOptions` as file-mode CLI export. |
 
 ## Stable References
@@ -1222,7 +1233,7 @@ Currently implemented command groups:
 
 | Command | Purpose |
 |---|---|
-| `rupa agent status` | Inspect running agent server status. |
+| `rupa agent status` | Inspect the running Agent command service status. |
 | `rupa sessions` | List open app sessions. |
 | `rupa attach <document>` | Resolve and attach to an open file-backed document session. |
 | `rupa attach --session <id>` | Resolve and attach to an open document session by session ID. |
@@ -1293,7 +1304,7 @@ Initial error code families:
 
 | Code family | Meaning |
 |---|---|
-| `agent.unavailable` | No running agent server is available. |
+| `agent.unavailable` | No running Agent command service is available. |
 | `agent.connectionFailed` | IPC connection failed. |
 | `session.notFound` | No matching app session exists. |
 | `document.openInApp` | File mode requested direct mutation of an open document. |

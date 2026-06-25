@@ -227,9 +227,9 @@ public actor AgentSocketService {
 
     public func responseData(for requestData: Data) async -> Data {
         do {
-            let request = try codec.decodeRequest(from: requestData)
-            let response = await response(for: request)
-            return try codec.encode(response)
+            let requestEnvelope = try codec.decodeRequestEnvelope(from: requestData)
+            let response = await response(for: requestEnvelope.params)
+            return try codec.encode(response, id: requestEnvelope.id)
         } catch {
             return failureResponseData(for: error)
         }
@@ -249,7 +249,7 @@ public actor AgentSocketService {
         }
 
         do {
-            return try codec.encode(response)
+            return try codec.encode(response, id: nil)
         } catch {
             return Data()
         }

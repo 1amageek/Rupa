@@ -35,12 +35,13 @@ public final class AgentClient: AgentClientProtocol {
             }
         }
 
-        let requestData = try codec.encode(request)
+        let requestID = UUID().uuidString
+        let requestData = try codec.encode(request, id: requestID)
         try AgentSocketIO.writeAll(requestData, to: descriptor)
         Darwin.shutdown(descriptor, SHUT_WR)
 
         let responseData = try AgentSocketIO.readAll(from: descriptor)
-        return try codec.decodeResponse(from: responseData)
+        return try codec.decodeResponse(from: responseData, expectedID: requestID)
     }
 
     private func socketError(

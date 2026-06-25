@@ -160,6 +160,71 @@ public enum AgentResponse: Codable, Equatable, Sendable {
     case failure(EditorError)
 }
 
+public extension AgentRequest {
+    var methodName: String {
+        switch self {
+        case .capabilities:
+            "agent.capabilities"
+        case .status:
+            "agent.status"
+        case .sessions:
+            "sessions.list"
+        case .cadInteractionQualityAssessment:
+            "agent.cadInteractionQualityAssessment"
+        case .execute:
+            "command.apply"
+        case .parameters:
+            "document.parameters"
+        case .setParameterExpression:
+            "parameter.setExpression"
+        case .evaluate:
+            "document.evaluate"
+        case .measure:
+            "document.measure"
+        case .selectionMeasurement:
+            "selection.measure"
+        case .resolveSnap:
+            "snap.resolve"
+        case .constructionPlaneSummary:
+            "document.constructionPlaneSummary"
+        case .designDisplaySnapshot:
+            "document.designDisplaySnapshot"
+        case .patternArraySummary:
+            "document.patternArraySummary"
+        case .meshSummary:
+            "document.meshSummary"
+        case .polySplineMeshAnalysis:
+            "document.polySplineMeshAnalysis"
+        case .sketchEntitySummary:
+            "document.sketchEntitySummary"
+        case .sketchDimensionSummary:
+            "document.sketchDimensionSummary"
+        case .selectionDimensionEvaluation:
+            "selection.dimensionEvaluation"
+        case .curveAnalysis:
+            "document.curveAnalysis"
+        case .topologySummary:
+            "document.topologySummary"
+        case .objectDimensionSummary:
+            "document.objectDimensionSummary"
+        case .surfaceSourceSummary:
+            "document.surfaceSourceSummary"
+        case .surfaceAnalysis:
+            "document.surfaceAnalysis"
+        case .surfaceFrames:
+            "document.surfaceFrames"
+        case .surfaceContinuitySummary:
+            "document.surfaceContinuitySummary"
+        case .selectTargets:
+            "selection.selectTargets"
+        case .save:
+            "document.save"
+        case .export:
+            "document.export"
+        }
+    }
+}
+
 public struct AgentStatus: Codable, Equatable, Sendable {
     public var running: Bool
     public var socketPath: String?
