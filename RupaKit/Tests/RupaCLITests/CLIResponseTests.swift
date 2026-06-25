@@ -601,6 +601,84 @@ func cliExecutableModelExtrudeExistingProfilePersistsClosedDocumentAsJSON() asyn
 @Suite(.serialized)
 struct CLIModelCommandTests {
     @Test(.timeLimit(.minutes(1)))
+    func executableModelRevolvePersistsClosedDocumentAsJSON() async throws {
+        let temporaryDirectory = try makeTemporaryDirectory()
+        defer {
+            removeTemporaryDirectory(temporaryDirectory)
+        }
+        let documentURL = temporaryDirectory.appendingPathComponent("process-revolve.swcad")
+        var document = DesignDocument.empty(named: "Process Revolve")
+        let profileID = try document.createRectangleSketchFromCorners(
+            name: "Revolve Profile",
+            plane: .xy,
+            firstCorner: SketchPoint(
+                x: .length(0.0, .millimeter),
+                y: .length(0.0, .millimeter)
+            ),
+            oppositeCorner: SketchPoint(
+                x: .length(4.0, .millimeter),
+                y: .length(12.0, .millimeter)
+            )
+        )
+        try DocumentFileService().save(document, to: documentURL)
+
+        let result = try await runCLI([
+            "model",
+            "revolve",
+            documentURL.path,
+            "--name",
+            "CLI Revolve",
+            "--profile-feature-id",
+            profileID.description,
+            "--profile-index",
+            "0",
+            "--axis-origin-x",
+            "0",
+            "--axis-origin-y",
+            "0",
+            "--axis-origin-z",
+            "0",
+            "--axis-unit",
+            "millimeter",
+            "--axis-direction-x",
+            "0",
+            "--axis-direction-y",
+            "1",
+            "--axis-direction-z",
+            "0",
+            "--angle",
+            "180",
+            "--angle-unit",
+            "degree",
+            "--mode",
+            "file",
+            "--json",
+        ])
+        let response = try JSONDecoder().decode(
+            CLIResponse.self,
+            from: result.standardOutputData
+        )
+        let loaded = try DocumentFileService().load(from: documentURL)
+        let revolveFeatureID = try #require(loaded.cadDocument.designGraph.order.last)
+        let feature = try #require(loaded.cadDocument.designGraph.nodes[revolveFeatureID])
+        guard case let .revolve(revolve) = feature.operation else {
+            #expect(Bool(false))
+            return
+        }
+
+        #expect(result.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: result.standardError))
+        #expect(response.message == "Revolve CLI Revolve source created.")
+        #expect(response.saved)
+        #expect(!response.dirty)
+        #expect(loaded.cadDocument.designGraph.order.count == 2)
+        #expect(revolve.profile == ProfileReference(featureID: profileID))
+        #expect(revolve.axis == RevolveAxis(origin: .origin, direction: .unitY))
+        #expect(revolve.angle == .angle(180.0, .degree))
+        #expect(feature.inputs == [FeatureInput(featureID: profileID, role: .profile)])
+        #expect(loaded.productMetadata.sceneNodes.values.contains { $0.reference == .body(revolveFeatureID) })
+    }
+
+    @Test(.timeLimit(.minutes(1)))
     func executableModelSweepPersistsClosedDocumentAsJSON() async throws {
         let temporaryDirectory = try makeTemporaryDirectory()
         defer {

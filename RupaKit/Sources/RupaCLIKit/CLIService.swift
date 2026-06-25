@@ -732,6 +732,35 @@ public struct CLIService {
         )
     }
 
+    public func createRevolve(
+        target: CLIDocumentTarget,
+        name: String,
+        profile: ProfileReference,
+        axis: RevolveAxis,
+        angle: CADExpression,
+        mode: CLIEditMode = .auto,
+        expectedGeneration: DocumentGeneration? = nil,
+        dryRun: Bool = false,
+        forceFileEdit: Bool = false,
+        client: AgentClientProtocol? = nil
+    ) throws -> CLIResponse {
+        let command = AutomationCommand.createRevolve(
+            name: name,
+            profile: profile,
+            axis: axis,
+            angle: angle
+        )
+        return try executeModelingCommand(
+            command,
+            target: target,
+            mode: mode,
+            expectedGeneration: expectedGeneration,
+            dryRun: dryRun,
+            forceFileEdit: forceFileEdit,
+            client: client
+        )
+    }
+
     public func createLineSketch(
         target: CLIDocumentTarget,
         name: String,
