@@ -16170,6 +16170,13 @@ public struct DesignDocument: Identifiable, Sendable {
         let reusableOutputSceneNodeIDs = Array(source.outputSceneNodeIDs.prefix(reusedCount))
         let staleOutputSceneNodeIDs = Array(source.outputSceneNodeIDs.dropFirst(reusedCount))
         let ownedFeatureIDs = Set(source.outputFeatureIDs)
+        if transforms.count < source.outputSceneNodeIDs.count {
+            try requireNoExternalFeatureDependents(
+                of: ownedFeatureIDs,
+                cadDocument: cadDocument,
+                owner: "Independent-copy pattern array output removal"
+            )
+        }
 
         var reusedFeatureIDs: Set<FeatureID> = []
         reusedFeatureIDs.reserveCapacity(ownedFeatureIDs.count)
@@ -16337,14 +16344,16 @@ public struct DesignDocument: Identifiable, Sendable {
         rootNode: SceneNode,
         metadata: inout ProductMetadata
     ) {
+        let ownedOutputInstanceIDs = Set(source.outputInstanceIDs)
         for instanceID in source.outputInstanceIDs {
             metadata.componentInstances.removeValue(forKey: instanceID)
         }
         for childID in rootNode.childIDs {
-            if let componentInstanceID = metadata.sceneNodes[childID]?.reference?.componentInstanceID,
-               source.outputInstanceIDs.contains(componentInstanceID) {
-                metadata.componentInstances.removeValue(forKey: componentInstanceID)
+            guard let componentInstanceID = metadata.sceneNodes[childID]?.reference?.componentInstanceID,
+                  ownedOutputInstanceIDs.contains(componentInstanceID) else {
+                continue
             }
+            metadata.componentInstances.removeValue(forKey: componentInstanceID)
             metadata.sceneNodes.removeValue(forKey: childID)
         }
     }

@@ -4814,7 +4814,7 @@ import Testing
     #expect(updatedSource.outputSceneNodeIDs == initialOutputSceneNodeIDs)
     #expect(updatedSource.outputFeatureIDs.contains(firstCloneBodyFeatureID))
     #expect(updatedExtrude.distance == editedDistance)
-    #expect(secondOutputNode.localTransform.matrix.values[12] == 0.02)
+    #expect(secondOutputNode.localTransform.matrix.values[12] == 0.04)
 }
 
 @MainActor

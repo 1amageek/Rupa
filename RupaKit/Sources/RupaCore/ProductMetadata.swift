@@ -161,6 +161,7 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
         against cadDocument: CADDocument,
         objectRegistry: ObjectTypeRegistry
     ) throws {
+        try validatePatternArrayOutputOwnership()
         try validateSceneNodes(against: cadDocument, objectRegistry: objectRegistry)
         try validateComponentDefinitions()
         try validateComponentInstances()
@@ -872,9 +873,6 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
 
     private func validatePatternArrays(against cadDocument: CADDocument) throws {
         var names: Set<String> = []
-        var sourceIDByOutputInstanceID: [ComponentInstanceID: PatternArraySourceID] = [:]
-        var sourceIDByOutputSceneNodeID: [SceneNodeID: PatternArraySourceID] = [:]
-        var sourceIDByOutputFeatureID: [FeatureID: PatternArraySourceID] = [:]
         for (sourceID, source) in patternArrays {
             guard source.id == sourceID else {
                 throw DocumentValidationError.invalidProductMetadata(
@@ -891,12 +889,6 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
                 )
             }
             try source.validate()
-            try validatePatternArrayOutputOwnership(
-                source: source,
-                sourceIDByOutputInstanceID: &sourceIDByOutputInstanceID,
-                sourceIDByOutputSceneNodeID: &sourceIDByOutputSceneNodeID,
-                sourceIDByOutputFeatureID: &sourceIDByOutputFeatureID
-            )
         }
 
         for (_, source) in patternArrays {
@@ -928,6 +920,20 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
                     cadDocument: cadDocument
                 )
             }
+        }
+    }
+
+    private func validatePatternArrayOutputOwnership() throws {
+        var sourceIDByOutputInstanceID: [ComponentInstanceID: PatternArraySourceID] = [:]
+        var sourceIDByOutputSceneNodeID: [SceneNodeID: PatternArraySourceID] = [:]
+        var sourceIDByOutputFeatureID: [FeatureID: PatternArraySourceID] = [:]
+        for source in patternArrays.values {
+            try validatePatternArrayOutputOwnership(
+                source: source,
+                sourceIDByOutputInstanceID: &sourceIDByOutputInstanceID,
+                sourceIDByOutputSceneNodeID: &sourceIDByOutputSceneNodeID,
+                sourceIDByOutputFeatureID: &sourceIDByOutputFeatureID
+            )
         }
     }
 
