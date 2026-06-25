@@ -87,6 +87,54 @@ import Testing
     #expect(abs(geometry.modelDirection.z) < 1.0e-12)
 }
 
+@Test func viewportSurfaceControlPointSlideAffordanceUsesPatchHullFrame() throws {
+    let layout = polySplineSurfaceVertexSlideLayout()
+    let featureID = FeatureID()
+    let input = surfaceControlPointSlideInput(
+        featureID: featureID,
+        uIndex: 1,
+        vIndex: 1,
+        point: Point3D(x: 0.002, y: 0.0, z: 0.002)
+    )
+    let topologyVertices = polySplineSurfaceVertexSlideTopologyVertices(featureID: featureID)
+    let geometry = try #require(
+        ViewportPolySplineSurfaceVertexSlideAffordanceGeometry(
+            selectedControlPoints: [input],
+            topologyVertices: topologyVertices,
+            direction: .positiveU,
+            layout: layout
+        )
+    )
+
+    let start = layout.project(geometry.baseModelPoint)
+    let current = layout.project(Point3D(x: 0.003, y: 0.0, z: 0.002))
+    let preview = try #require(
+        ViewportPolySplineSurfaceVertexSlideAffordanceGeometry.previewControlPoints(
+            selectedControlPoints: [input],
+            topologyVertices: topologyVertices,
+            direction: .positiveV,
+            distanceMeters: 0.001
+        )?.first
+    )
+    let normalGeometry = try #require(
+        ViewportPolySplineSurfaceVertexSlideAffordanceGeometry(
+            selectedControlPoints: [input],
+            topologyVertices: topologyVertices,
+            direction: .normal,
+            layout: layout
+        )
+    )
+
+    #expect(abs(geometry.slideDistance(start: start, current: current, layout: layout) - 0.001) < 1.0e-12)
+    #expect(abs(preview.originalPoint.x - 0.002) < 1.0e-12)
+    #expect(abs(preview.originalPoint.z - 0.002) < 1.0e-12)
+    #expect(abs(preview.movedPoint.x - 0.002) < 1.0e-12)
+    #expect(abs(preview.movedPoint.z - 0.003) < 1.0e-12)
+    #expect(abs(normalGeometry.modelDirection.x) < 1.0e-12)
+    #expect(abs(normalGeometry.modelDirection.y + 1.0) < 1.0e-12)
+    #expect(abs(normalGeometry.modelDirection.z) < 1.0e-12)
+}
+
 @Test func viewportPolySplineSurfaceVertexSlideAffordanceAppliesModelTransformAndKeepsLocalDistance() throws {
     let layout = polySplineSurfaceVertexSlideLayout()
     let featureID = FeatureID()
@@ -328,6 +376,30 @@ private func polySplineSurfaceVertexSlideInput(
             sceneNodeID: sceneNodeID,
             component: .vertex(componentID)
         ),
+        point: point,
+        modelTransform: modelTransform
+    )
+}
+
+private func surfaceControlPointSlideInput(
+    featureID: FeatureID,
+    uIndex: Int,
+    vIndex: Int,
+    point: Point3D,
+    modelTransform: Transform3D = .identity
+) -> ViewportSurfaceControlPointSlideInput {
+    ViewportSurfaceControlPointSlideInput(
+        target: .surface(.controlPoint(SurfaceControlPointReference(
+            surface: SurfaceReference(faceName: PersistentName(components: [
+                .feature(featureID),
+                .generated("polySpline"),
+                .subshape("patch:0:face"),
+            ])),
+            uIndex: uIndex,
+            vIndex: vIndex
+        ))),
+        featureID: featureID,
+        patchID: 0,
         point: point,
         modelTransform: modelTransform
     )

@@ -1749,6 +1749,22 @@ public struct ViewportSurfaceControlPointDragTarget: Equatable, Sendable {
     }
 }
 
+public struct ViewportSurfaceControlPointSlideDragTarget: Equatable, Sendable {
+    public var targets: [SelectionReference]
+    public var direction: PolySplineSurfaceVertexSlideDirection
+    public var distance: Double
+
+    public init(
+        targets: [SelectionReference],
+        direction: PolySplineSurfaceVertexSlideDirection,
+        distance: Double
+    ) {
+        self.targets = targets
+        self.direction = direction
+        self.distance = distance
+    }
+}
+
 public struct ViewportPolySplineSurfaceVertexSlideDragTarget: Equatable, Sendable {
     public var targets: [SelectionTarget]
     public var direction: PolySplineSurfaceVertexSlideDirection

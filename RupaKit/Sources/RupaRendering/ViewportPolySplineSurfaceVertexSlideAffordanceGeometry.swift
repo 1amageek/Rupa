@@ -8,8 +8,22 @@ struct ViewportPolySplineSurfaceVertexSlideInput: Equatable {
     var modelTransform: Transform3D = .identity
 }
 
+struct ViewportSurfaceControlPointSlideInput: Equatable {
+    var target: SelectionReference
+    var featureID: FeatureID
+    var patchID: Int
+    var point: Point3D
+    var modelTransform: Transform3D = .identity
+}
+
 struct ViewportPolySplineSurfaceVertexSlidePreviewVertex: Equatable {
     var selectionTarget: SelectionTarget
+    var originalPoint: Point3D
+    var movedPoint: Point3D
+}
+
+struct ViewportSurfaceControlPointSlidePreviewVertex: Equatable {
+    var selectionReference: SelectionReference
     var originalPoint: Point3D
     var movedPoint: Point3D
 }
@@ -53,6 +67,49 @@ struct ViewportPolySplineSurfaceVertexSlideAffordanceGeometry: Equatable {
         }
         let center = Self.averagePoint(selectedVertices.map { vertex in
             vertex.modelTransform.viewportTransformedPoint(vertex.point)
+        })
+        let projectedUnitLength = Self.projectedLength(
+            from: center,
+            direction: averagedDirection,
+            distanceMeters: 1.0,
+            layout: layout
+        )
+        guard projectedUnitLength > 1.0e-9 else {
+            return nil
+        }
+        self.baseModelPoint = center
+        self.modelDirection = averagedDirection
+        self.minimumLengthMeters = Double(viewportLength / projectedUnitLength)
+    }
+
+    init?(
+        selectedControlPoints: [ViewportSurfaceControlPointSlideInput],
+        topologyVertices: [ViewportBodyTopology.Vertex],
+        direction: PolySplineSurfaceVertexSlideDirection,
+        layout: ViewportLayout,
+        viewportLength: CGFloat = 62.0
+    ) {
+        guard selectedControlPoints.isEmpty == false else {
+            return nil
+        }
+        let pointsByRole = Self.pointsByRole(in: topologyVertices)
+        let directionVectors = selectedControlPoints.compactMap { controlPoint -> Vector3D? in
+            guard let direction = Self.slideDirection(
+                featureID: controlPoint.featureID,
+                patchID: controlPoint.patchID,
+                direction: direction,
+                pointsByRole: pointsByRole
+            ) else {
+                return nil
+            }
+            return controlPoint.modelTransform.viewportTransformedVector(direction)
+        }
+        guard directionVectors.count == selectedControlPoints.count,
+              let averagedDirection = Self.averageVector(directionVectors) else {
+            return nil
+        }
+        let center = Self.averagePoint(selectedControlPoints.map { controlPoint in
+            controlPoint.modelTransform.viewportTransformedPoint(controlPoint.point)
         })
         let projectedUnitLength = Self.projectedLength(
             from: center,
@@ -117,6 +174,38 @@ struct ViewportPolySplineSurfaceVertexSlideAffordanceGeometry: Equatable {
             )
         }
         guard previewVertices.count == selectedVertices.count else {
+            return nil
+        }
+        return previewVertices
+    }
+
+    static func previewControlPoints(
+        selectedControlPoints: [ViewportSurfaceControlPointSlideInput],
+        topologyVertices: [ViewportBodyTopology.Vertex],
+        direction: PolySplineSurfaceVertexSlideDirection,
+        distanceMeters: Double
+    ) -> [ViewportSurfaceControlPointSlidePreviewVertex]? {
+        guard selectedControlPoints.isEmpty == false else {
+            return nil
+        }
+        let pointsByRole = pointsByRole(in: topologyVertices)
+        let previewVertices = selectedControlPoints.compactMap { controlPoint -> ViewportSurfaceControlPointSlidePreviewVertex? in
+            guard let direction = slideDirection(
+                featureID: controlPoint.featureID,
+                patchID: controlPoint.patchID,
+                direction: direction,
+                pointsByRole: pointsByRole
+            ) else {
+                return nil
+            }
+            let movedPoint = offset(controlPoint.point, direction: direction, distanceMeters: distanceMeters)
+            return ViewportSurfaceControlPointSlidePreviewVertex(
+                selectionReference: controlPoint.target,
+                originalPoint: controlPoint.modelTransform.viewportTransformedPoint(controlPoint.point),
+                movedPoint: controlPoint.modelTransform.viewportTransformedPoint(movedPoint)
+            )
+        }
+        guard previewVertices.count == selectedControlPoints.count else {
             return nil
         }
         return previewVertices
@@ -374,6 +463,51 @@ struct ViewportPolySplineSurfaceVertexSlideAffordanceGeometry: Equatable {
 
         guard let positiveU = normalized(positiveURaw),
               let positiveV = normalized(positiveVRaw),
+              let normal = normalized(positiveU.cross(positiveV)) else {
+            return nil
+        }
+
+        switch direction {
+        case .positiveU:
+            return positiveU
+        case .negativeU:
+            return negated(positiveU)
+        case .normal:
+            return normal
+        case .positiveV:
+            return positiveV
+        case .negativeV:
+            return negated(positiveV)
+        }
+    }
+
+    private static func slideDirection(
+        featureID: FeatureID,
+        patchID: Int,
+        direction: PolySplineSurfaceVertexSlideDirection,
+        pointsByRole: [PolySplineSurfaceVertexTarget: Point3D]
+    ) -> Vector3D? {
+        guard let corners = patchCorners(
+            featureID: featureID,
+            patchID: patchID,
+            pointsByRole: pointsByRole
+        ) else {
+            return nil
+        }
+        guard let bottomU = normalized(vector(from: corners.bottomLeft, to: corners.bottomRight)),
+              let topU = normalized(vector(from: corners.topLeft, to: corners.topRight)),
+              let leftV = normalized(vector(from: corners.bottomLeft, to: corners.topLeft)),
+              let rightV = normalized(vector(from: corners.bottomRight, to: corners.topRight)),
+              let positiveU = normalized(Vector3D(
+                  x: bottomU.x + topU.x,
+                  y: bottomU.y + topU.y,
+                  z: bottomU.z + topU.z
+              )),
+              let positiveV = normalized(Vector3D(
+                  x: leftV.x + rightV.x,
+                  y: leftV.y + rightV.y,
+                  z: leftV.z + rightV.z
+              )),
               let normal = normalized(positiveU.cross(positiveV)) else {
             return nil
         }

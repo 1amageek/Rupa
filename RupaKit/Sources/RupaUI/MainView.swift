@@ -478,6 +478,7 @@ public struct MainView: View {
                     onPolySplineSurfaceVertexDrag: viewportPolySplineSurfaceVertexDragHandler,
                     onSurfaceControlPointDrag: viewportSurfaceControlPointDragHandler,
                     onPolySplineSurfaceVertexSlideDrag: viewportPolySplineSurfaceVertexSlideDragHandler,
+                    onSurfaceControlPointSlideDrag: viewportSurfaceControlPointSlideDragHandler,
                     onCommandConfirm: viewportCommandConfirmHandler,
                     onHover: viewportHoverHandler,
                     onSnapCandidateKindChange: { kind in
@@ -865,6 +866,17 @@ public struct MainView: View {
         }
         return { target in
             handleViewportPolySplineSurfaceVertexSlideDrag(target)
+        }
+    }
+
+    private var viewportSurfaceControlPointSlideDragHandler: ((ViewportSurfaceControlPointSlideDragTarget) -> Void)? {
+        guard session.selectedTool == .select,
+              selectionScope == .vertex,
+              slideCommandState.isSurfaceControlVerticesActive else {
+            return nil
+        }
+        return { target in
+            handleViewportSurfaceControlPointSlideDrag(target)
         }
     }
 
@@ -1561,6 +1573,12 @@ public struct MainView: View {
             polySplineSurfaceVertexSlideContextPanelContent(selectedPolySplineSurfaceVertexTargets)
         }
 
+        if slideCommandState.isSurfaceControlVerticesActive,
+           selectedSurfaceControlPointReferences.isEmpty == false {
+            workspaceContextDivider
+            surfaceControlPointSlideContextPanelContent(selectedSurfaceControlPointReferences)
+        }
+
         if nodes.count == 1, let node = nodes.first {
             let nodeTranslation = translation(for: node)
             workspaceValuePill("X", formatted(nodeTranslation.x))
@@ -1825,6 +1843,89 @@ public struct MainView: View {
             accessibilityIdentifier: "WorkspaceSlideSurfaceCV.negativeV"
         ) {
             slideSelectedPolySplineSurfaceVertices(
+                targets,
+                direction: .negativeV
+            )
+        }
+        workspaceIconButton(
+            systemImage: "checkmark",
+            help: "Confirm Slide Surface CV",
+            accessibilityIdentifier: "WorkspaceSlideSurfaceCV.confirm"
+        ) {
+            _ = confirmActiveWorkspaceCommand()
+        }
+    }
+
+    @ViewBuilder
+    private func surfaceControlPointSlideContextPanelContent(
+        _ targets: [SelectionReference]
+    ) -> some View {
+        workspaceStatusChip(
+            "Slide Surface CV",
+            systemImage: "arrow.triangle.2.circlepath",
+            tint: .accentColor
+        )
+        workspaceValuePill(
+            "CVs",
+            "\(targets.count)",
+            accessibilityIdentifier: "WorkspaceSlideSurfaceCV.count"
+        )
+        workspaceValuePill(
+            "Distance",
+            formatted(polySplineSurfaceVertexSlideDistanceMeters),
+            accessibilityIdentifier: "WorkspaceSlideSurfaceCV.distance"
+        )
+        workspaceValuePill(
+            "Route",
+            slideCommandState.routeTitle,
+            accessibilityIdentifier: "WorkspaceSlideSurfaceCV.inputMode"
+        )
+        workspaceIconButton(
+            systemImage: "arrow.right",
+            help: "Slide Surface CV Positive U",
+            accessibilityIdentifier: "WorkspaceSlideSurfaceCV.positiveU"
+        ) {
+            slideSelectedSurfaceControlPoints(
+                targets,
+                direction: .positiveU
+            )
+        }
+        workspaceIconButton(
+            systemImage: "arrow.left",
+            help: "Slide Surface CV Negative U",
+            accessibilityIdentifier: "WorkspaceSlideSurfaceCV.negativeU"
+        ) {
+            slideSelectedSurfaceControlPoints(
+                targets,
+                direction: .negativeU
+            )
+        }
+        workspaceIconButton(
+            systemImage: "arrow.up.right",
+            help: "Slide Surface CV Normal",
+            accessibilityIdentifier: "WorkspaceSlideSurfaceCV.normal"
+        ) {
+            slideSelectedSurfaceControlPoints(
+                targets,
+                direction: .normal
+            )
+        }
+        workspaceIconButton(
+            systemImage: "arrow.up",
+            help: "Slide Surface CV Positive V",
+            accessibilityIdentifier: "WorkspaceSlideSurfaceCV.positiveV"
+        ) {
+            slideSelectedSurfaceControlPoints(
+                targets,
+                direction: .positiveV
+            )
+        }
+        workspaceIconButton(
+            systemImage: "arrow.down",
+            help: "Slide Surface CV Negative V",
+            accessibilityIdentifier: "WorkspaceSlideSurfaceCV.negativeV"
+        ) {
+            slideSelectedSurfaceControlPoints(
                 targets,
                 direction: .negativeV
             )
@@ -2855,8 +2956,9 @@ public struct MainView: View {
               let input = selectedSplineControlPointSlideInput() else {
             if selectionScope == .vertex,
                slideCommandState.isSurfaceControlVerticesActive {
-                let targets = selectedPolySplineSurfaceVertexTargets
-                guard targets.isEmpty == false else {
+                let vertexTargets = selectedPolySplineSurfaceVertexTargets
+                let referenceTargets = selectedSurfaceControlPointReferences
+                guard vertexTargets.isEmpty == false || referenceTargets.isEmpty == false else {
                     return nil
                 }
                 let direction: PolySplineSurfaceVertexSlideDirection
@@ -2870,10 +2972,17 @@ public struct MainView: View {
                 default:
                     return nil
                 }
-                slideSelectedPolySplineSurfaceVertices(
-                    targets,
-                    direction: direction
-                )
+                if referenceTargets.isEmpty == false {
+                    slideSelectedSurfaceControlPoints(
+                        referenceTargets,
+                        direction: direction
+                    )
+                } else {
+                    slideSelectedPolySplineSurfaceVertices(
+                        vertexTargets,
+                        direction: direction
+                    )
+                }
                 return .handled
             }
             return nil
@@ -2936,6 +3045,11 @@ public struct MainView: View {
         }
         let surfaceTargets = selectedPolySplineSurfaceVertexTargets
         if surfaceTargets.isEmpty == false {
+            activateSlideSurfaceControlVerticesCommand()
+            return
+        }
+        let surfaceReferences = selectedSurfaceControlPointReferences
+        if surfaceReferences.isEmpty == false {
             activateSlideSurfaceControlVerticesCommand()
             return
         }
@@ -3348,6 +3462,22 @@ public struct MainView: View {
         }
         polySplineSurfaceVertexSlideDistanceMeters = max(abs(target.distance), 1.0e-9)
         slideSelectedPolySplineSurfaceVertices(
+            target.targets,
+            direction: target.direction,
+            distanceMeters: target.distance
+        )
+    }
+
+    private func handleViewportSurfaceControlPointSlideDrag(
+        _ target: ViewportSurfaceControlPointSlideDragTarget
+    ) {
+        guard session.selectedTool == .select,
+              selectionScope == .vertex,
+              slideCommandState.isSurfaceControlVerticesActive else {
+            return
+        }
+        polySplineSurfaceVertexSlideDistanceMeters = max(abs(target.distance), 1.0e-9)
+        slideSelectedSurfaceControlPoints(
             target.targets,
             direction: target.direction,
             distanceMeters: target.distance
@@ -4947,6 +5077,15 @@ public struct MainView: View {
 
     private var selectedPolySplineSurfaceVertexTargets: [SelectionTarget] {
         selectedVertexTargets.filter(\.isGeneratedPolySplineSurfaceVertex)
+    }
+
+    private var selectedSurfaceControlPointReferences: [SelectionReference] {
+        session.selection.selectedReferences.filter { reference in
+            if case .surface(.controlPoint) = reference {
+                return true
+            }
+            return false
+        }
     }
 
     private var selectedSketchPointTargets: [SelectionTarget] {
@@ -8296,6 +8435,22 @@ public struct MainView: View {
     ) {
         let resolvedDistanceMeters = distanceMeters ?? max(polySplineSurfaceVertexSlideDistanceMeters, 1.0e-9)
         let result = session.slidePolySplineSurfaceVertices(
+            targets: targets,
+            direction: direction,
+            distance: .length(resolvedDistanceMeters, .meter)
+        )
+        if result?.diagnostics.isEmpty == false || result == nil {
+            isPreviewExpanded = true
+        }
+    }
+
+    private func slideSelectedSurfaceControlPoints(
+        _ targets: [SelectionReference],
+        direction: PolySplineSurfaceVertexSlideDirection,
+        distanceMeters: Double? = nil
+    ) {
+        let resolvedDistanceMeters = distanceMeters ?? max(polySplineSurfaceVertexSlideDistanceMeters, 1.0e-9)
+        let result = session.slideSurfaceControlPoints(
             targets: targets,
             direction: direction,
             distance: .length(resolvedDistanceMeters, .meter)
