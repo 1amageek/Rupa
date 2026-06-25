@@ -402,6 +402,8 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                         "RupaKit/Sources/RupaRendering/ViewportPatternArrayLinearAxisDragTarget.swift",
                         "RupaKit/Sources/RupaRendering/ViewportPatternArrayLinearAxisAffordanceGeometry.swift",
                         "RupaKit/Sources/RupaRendering/ViewportPatternArrayLinearAxisAffordanceService.swift",
+                        "RupaKit/Sources/RupaRendering/ViewportIndependentCopyExtrudeDistanceDragTarget.swift",
+                        "RupaKit/Sources/RupaRendering/ViewportIndependentCopyExtrudeDistanceAffordanceService.swift",
                         "RupaKit/Sources/RupaRendering/ViewportPatternArrayRadialAngleDragTarget.swift",
                         "RupaKit/Sources/RupaRendering/ViewportPatternArrayRadialAngleAffordanceGeometry.swift",
                         "RupaKit/Sources/RupaRendering/ViewportPatternArrayRadialAngleAffordanceService.swift",
@@ -430,6 +432,7 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                         "RupaKit/Tests/RupaUIPackageTests/PatternArraySummaryCacheTests.swift",
                         "RupaKit/Tests/RupaRenderingTests/ViewportPatternArrayPreviewServiceTests.swift",
                         "RupaKit/Tests/RupaRenderingTests/ViewportPatternArrayLinearAxisAffordanceServiceTests.swift",
+                        "RupaKit/Tests/RupaRenderingTests/ViewportIndependentCopyExtrudeDistanceAffordanceServiceTests.swift",
                         "RupaKit/Tests/RupaRenderingTests/ViewportPatternArrayRadialAngleAffordanceServiceTests.swift",
                         "RupaKit/Tests/RupaRenderingTests/ViewportPatternArrayCopyCountAffordanceServiceTests.swift",
                         "RupaKit/Tests/RupaCoreTests/PatternArrayExpressionResolverTests.swift",
@@ -459,6 +462,7 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                         "The Pattern Array Inspector reuses generation-keyed summary results so SwiftUI redraws do not repeatedly run transform planning or sketch curve extraction for unchanged documents.",
                         "The viewport resolves selected PatternArraySource roots, component-instance outputs, and independent-copy descendants into source-owned output outlines, copy markers, and count labels without scanning global component-instance references.",
                         "The viewport exposes rectangular Pattern Array first- and second-axis distance handles that resolve selected source roots or outputs back to PatternArraySource IDs and commit source-owned distance updates after drag completion.",
+                        "The viewport exposes independent-copy cloned extrude distance handles that resolve selected output roots or descendants to clone feature IDs, derive normal directions from profile sketch planes, and commit cloned-feature distance edits after drag completion.",
                         "The viewport exposes radial Pattern Array angular spacing/extent handles and radial-axis distance handles through the shared PatternArray source-selection index.",
                         "The viewport exposes Pattern Array copy-count handles for rectangular axes, radial angular/radial axes, extent-density modes, and Curve Pattern Array density counts while preserving distance, angle, path extent, and source-owned output regeneration semantics.",
                         "The viewport exposes Curve Pattern Array extent handles that use the shared Core curve-path geometry resolver so viewport dragging and generated copy placement agree on path length and sampling.",
@@ -467,14 +471,14 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                         "The viewport previews Curve Pattern Array path replacement candidates with planner-derived ghost output markers before committing the pick-mode source update.",
                         "Viewport and inspector Pattern Array edits preserve direct parameter references by updating referenced ParameterTable values when quantity kinds match.",
                         "Pattern Array generation, curve path extent resolution, and viewport affordance placement share the same parameter-aware expression resolver so Agent-authored parametric arrays remain directly editable in the UI.",
-                        "Viewport editing workflows for direct independent-copy cloned-feature handles remain open.",
+                        "Viewport editing workflows for direct independent-copy cloned-feature handles beyond extrude distance remain open.",
                     ]
                 ),
             ],
             openWork: [
-                "Viewport direct controls for independent-copy cloned-feature edits.",
+                "Viewport direct controls for independent-copy cloned-feature edits beyond extrude distance.",
             ],
-            next: "Add viewport handles that directly expose independent-copy cloned-feature edits."
+            next: "Extend viewport handles from independent-copy extrude distance to additional cloned-feature edits."
         ),
         entry(
             area: .sectionAnalysis,

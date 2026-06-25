@@ -19,6 +19,7 @@ public struct Viewport: View {
     @State private var activeSlotWidthDrag: ViewportSlotWidthDragState?
     @State private var activeSketchVertexOffsetDrag: ViewportSketchVertexOffsetDragState?
     @State private var activePatternArrayLinearAxisDrag: ViewportPatternArrayLinearAxisDragState?
+    @State private var activeIndependentCopyExtrudeDistanceDrag: ViewportIndependentCopyExtrudeDistanceDragState?
     @State private var activePatternArrayRadialAngleDrag: ViewportPatternArrayRadialAngleDragState?
     @State private var activePatternArrayCopyCountDrag: ViewportPatternArrayCopyCountDragState?
     @State private var activePatternArrayCurveExtentDrag: ViewportPatternArrayCurveExtentDragState?
@@ -38,6 +39,7 @@ public struct Viewport: View {
     @State private var hoveredSlotWidthHandle: ViewportSlotWidthHandleTarget?
     @State private var hoveredSketchVertexOffsetHandle: ViewportSketchVertexOffsetHandleTarget?
     @State private var hoveredPatternArrayLinearAxisHandle: ViewportPatternArrayLinearAxisHandleTarget?
+    @State private var hoveredIndependentCopyExtrudeDistanceHandle: ViewportIndependentCopyExtrudeDistanceHandleTarget?
     @State private var hoveredPatternArrayRadialAngleHandle: ViewportPatternArrayRadialAngleHandleTarget?
     @State private var hoveredPatternArrayCopyCountHandle: ViewportPatternArrayCopyCountHandleTarget?
     @State private var hoveredPatternArrayCurveExtentHandle: ViewportPatternArrayCurveExtentHandleTarget?
@@ -56,6 +58,7 @@ public struct Viewport: View {
     @State private var pendingSlotWidthHandle: ViewportSlotWidthHandleTarget?
     @State private var pendingSketchVertexOffsetHandle: ViewportSketchVertexOffsetHandleTarget?
     @State private var pendingPatternArrayLinearAxisHandle: ViewportPatternArrayLinearAxisHandleTarget?
+    @State private var pendingIndependentCopyExtrudeDistanceHandle: ViewportIndependentCopyExtrudeDistanceHandleTarget?
     @State private var pendingPatternArrayRadialAngleHandle: ViewportPatternArrayRadialAngleHandleTarget?
     @State private var pendingPatternArrayCopyCountHandle: ViewportPatternArrayCopyCountHandleTarget?
     @State private var pendingPatternArrayCurveExtentHandle: ViewportPatternArrayCurveExtentHandleTarget?
@@ -112,6 +115,7 @@ public struct Viewport: View {
     private let onSlotWidthDrag: ((ViewportSlotWidthDragTarget) -> Void)?
     private let onSketchVertexOffsetDrag: ((ViewportSketchVertexOffsetDragTarget) -> Void)?
     private let onPatternArrayLinearAxisDrag: ((ViewportPatternArrayLinearAxisDragTarget) -> Void)?
+    private let onIndependentCopyExtrudeDistanceDrag: ((ViewportIndependentCopyExtrudeDistanceDragTarget) -> Void)?
     private let onPatternArrayRadialAngleDrag: ((ViewportPatternArrayRadialAngleDragTarget) -> Void)?
     private let onPatternArrayCopyCountDrag: ((ViewportPatternArrayCopyCountDragTarget) -> Void)?
     private let onPatternArrayCurveExtentDrag: ((ViewportPatternArrayCurveExtentDragTarget) -> Void)?
@@ -172,6 +176,7 @@ public struct Viewport: View {
         onSlotWidthDrag: ((ViewportSlotWidthDragTarget) -> Void)? = nil,
         onSketchVertexOffsetDrag: ((ViewportSketchVertexOffsetDragTarget) -> Void)? = nil,
         onPatternArrayLinearAxisDrag: ((ViewportPatternArrayLinearAxisDragTarget) -> Void)? = nil,
+        onIndependentCopyExtrudeDistanceDrag: ((ViewportIndependentCopyExtrudeDistanceDragTarget) -> Void)? = nil,
         onPatternArrayRadialAngleDrag: ((ViewportPatternArrayRadialAngleDragTarget) -> Void)? = nil,
         onPatternArrayCopyCountDrag: ((ViewportPatternArrayCopyCountDragTarget) -> Void)? = nil,
         onPatternArrayCurveExtentDrag: ((ViewportPatternArrayCurveExtentDragTarget) -> Void)? = nil,
@@ -231,6 +236,7 @@ public struct Viewport: View {
         self.onSlotWidthDrag = onSlotWidthDrag
         self.onSketchVertexOffsetDrag = onSketchVertexOffsetDrag
         self.onPatternArrayLinearAxisDrag = onPatternArrayLinearAxisDrag
+        self.onIndependentCopyExtrudeDistanceDrag = onIndependentCopyExtrudeDistanceDrag
         self.onPatternArrayRadialAngleDrag = onPatternArrayRadialAngleDrag
         self.onPatternArrayCopyCountDrag = onPatternArrayCopyCountDrag
         self.onPatternArrayCurveExtentDrag = onPatternArrayCurveExtentDrag
@@ -881,6 +887,12 @@ public struct Viewport: View {
         )
 
         drawPatternArrayLinearAxisAffordances(
+            scene: scene,
+            layout: layout,
+            in: &context
+        )
+
+        drawIndependentCopyExtrudeDistanceAffordances(
             scene: scene,
             layout: layout,
             in: &context
@@ -4481,6 +4493,80 @@ public struct Viewport: View {
         }
     }
 
+    private func drawIndependentCopyExtrudeDistanceAffordances(
+        scene: ViewportScene,
+        layout: ViewportLayout,
+        in context: inout GraphicsContext
+    ) {
+        guard onIndependentCopyExtrudeDistanceDrag != nil else {
+            return
+        }
+        let candidates = independentCopyExtrudeDistanceAffordanceCandidates(
+            scene: scene,
+            layout: layout
+        )
+        guard !candidates.isEmpty else {
+            return
+        }
+        for candidate in candidates {
+            let identity = candidate.target.identity
+            let dragDistance = activeIndependentCopyExtrudeDistanceDrag?.target.identity == identity
+                ? activeIndependentCopyExtrudeDistanceDrag?.distanceMeters
+                : nil
+            let isHighlighted = hoveredIndependentCopyExtrudeDistanceHandle?.identity == identity
+                || pendingIndependentCopyExtrudeDistanceHandle?.identity == identity
+                || activeIndependentCopyExtrudeDistanceDrag?.target.identity == identity
+            drawIndependentCopyExtrudeDistanceAffordance(
+                candidate,
+                distanceMeters: dragDistance ?? candidate.geometry.baseDistanceMeters,
+                showsLabel: dragDistance != nil || isHighlighted,
+                isHighlighted: isHighlighted,
+                in: &context
+            )
+        }
+    }
+
+    private func drawIndependentCopyExtrudeDistanceAffordance(
+        _ candidate: ViewportIndependentCopyExtrudeDistanceAffordanceCandidate,
+        distanceMeters: Double,
+        showsLabel: Bool,
+        isHighlighted: Bool,
+        in context: inout GraphicsContext
+    ) {
+        let start = candidate.geometry.baseProjectedPoint
+        let end = candidate.geometry.projectedTip(distanceMeters: distanceMeters)
+        let color = Color.orange
+        drawArrow(
+            from: start,
+            to: end,
+            color: color,
+            isHighlighted: isHighlighted,
+            in: &context
+        )
+        drawTransformHandle(
+            at: end,
+            style: .faceCenter,
+            isHighlighted: isHighlighted,
+            in: &context
+        )
+
+        guard showsLabel else {
+            return
+        }
+        let direction = CGVector(dx: end.x - start.x, dy: end.y - start.y).normalized
+        let normal = CGVector(dx: -direction.dy, dy: direction.dx)
+        drawDimensionLabel(
+            "Extrude \(formattedViewportLength(distanceMeters))",
+            at: CGPoint(
+                x: end.x + normal.dx * 20.0 + direction.dx * 10.0,
+                y: end.y + normal.dy * 20.0 + direction.dy * 10.0
+            ),
+            color: color,
+            isHighlighted: isHighlighted,
+            in: &context
+        )
+    }
+
     private func drawPatternArrayRadialAngleAffordances(
         scene: ViewportScene,
         layout: ViewportLayout,
@@ -6605,6 +6691,21 @@ public struct Viewport: View {
         )
     }
 
+    private func independentCopyExtrudeDistanceAffordanceCandidates(
+        scene: ViewportScene,
+        layout: ViewportLayout
+    ) -> [ViewportIndependentCopyExtrudeDistanceAffordanceCandidate] {
+        guard onIndependentCopyExtrudeDistanceDrag != nil else {
+            return []
+        }
+        return ViewportIndependentCopyExtrudeDistanceAffordanceService().candidates(
+            document: document,
+            scene: scene,
+            selection: selection,
+            layout: layout
+        )
+    }
+
     private func patternArrayRadialAngleAffordanceCandidates(
         scene: ViewportScene,
         layout: ViewportLayout
@@ -7351,6 +7452,17 @@ public struct Viewport: View {
         if activeSlotWidthDrag != nil {
             return
         }
+        if let start, let current, let pendingIndependentCopyExtrudeDistanceHandle {
+            updateIndependentCopyExtrudeDistanceDrag(
+                target: pendingIndependentCopyExtrudeDistanceHandle,
+                start: start,
+                current: current
+            )
+            return
+        }
+        if activeIndependentCopyExtrudeDistanceDrag != nil {
+            return
+        }
         if let start, let current, let pendingPatternArrayLinearAxisHandle {
             updatePatternArrayLinearAxisDrag(
                 target: pendingPatternArrayLinearAxisHandle,
@@ -7514,6 +7626,11 @@ public struct Viewport: View {
         }
         if let slotWidthTarget = selectedSlotWidthAffordanceTarget(at: point, size: size) {
             pendingSlotWidthHandle = slotWidthTarget
+            activeCanvasDrag = nil
+            return
+        }
+        if let independentCopyExtrudeDistanceTarget = selectedIndependentCopyExtrudeDistanceAffordanceTarget(at: point, size: size) {
+            pendingIndependentCopyExtrudeDistanceHandle = independentCopyExtrudeDistanceTarget
             activeCanvasDrag = nil
             return
         }
@@ -8528,6 +8645,34 @@ public struct Viewport: View {
         return nil
     }
 
+    private func selectedIndependentCopyExtrudeDistanceAffordanceTarget(
+        at point: CGPoint,
+        size: CGSize
+    ) -> ViewportIndependentCopyExtrudeDistanceHandleTarget? {
+        guard onIndependentCopyExtrudeDistanceDrag != nil else {
+            return nil
+        }
+        let sceneContext = makeSceneContext(
+            size: size,
+            camera: camera,
+            basis: currentProjectionBasis
+        )
+        let candidates = independentCopyExtrudeDistanceAffordanceCandidates(
+            scene: sceneContext.scene,
+            layout: sceneContext.layout
+        )
+        for candidate in candidates.reversed() {
+            let start = candidate.geometry.baseProjectedPoint
+            let end = candidate.geometry.projectedTip()
+            let lineHit = point.distanceToSegment(start: start, end: end) <= 10.0
+            let tipHit = point.distance(to: end) <= 14.0
+            if lineHit || tipHit {
+                return candidate.target
+            }
+        }
+        return nil
+    }
+
     private func selectedPatternArrayRadialAngleAffordanceTarget(
         at point: CGPoint,
         size: CGSize
@@ -9247,6 +9392,21 @@ public struct Viewport: View {
         )
     }
 
+    private func updateIndependentCopyExtrudeDistanceDrag(
+        target: ViewportIndependentCopyExtrudeDistanceHandleTarget,
+        start: CGPoint,
+        current: CGPoint
+    ) {
+        activeIndependentCopyExtrudeDistanceDrag = ViewportIndependentCopyExtrudeDistanceDragState(
+            target: target,
+            startPoint: start,
+            distanceMeters: target.geometry.axisDistance(
+                start: start,
+                current: current
+            )
+        )
+    }
+
     private func updatePatternArrayRadialAngleDrag(
         target: ViewportPatternArrayRadialAngleHandleTarget,
         start: CGPoint,
@@ -9596,6 +9756,11 @@ public struct Viewport: View {
             activeSketchVertexOffsetDrag = nil
             return
         }
+        if pendingIndependentCopyExtrudeDistanceHandle != nil {
+            pendingIndependentCopyExtrudeDistanceHandle = nil
+            activeIndependentCopyExtrudeDistanceDrag = nil
+            return
+        }
         if pendingPatternArrayLinearAxisHandle != nil {
             pendingPatternArrayLinearAxisHandle = nil
             activePatternArrayLinearAxisDrag = nil
@@ -9760,6 +9925,16 @@ public struct Viewport: View {
             activeCanvasDrag = nil
             if let slotWidthDragTarget {
                 onSlotWidthDrag?(slotWidthDragTarget)
+            }
+            return
+        }
+        if pendingIndependentCopyExtrudeDistanceHandle != nil || activeIndependentCopyExtrudeDistanceDrag != nil {
+            let independentCopyExtrudeDistanceDragTarget = committedIndependentCopyExtrudeDistanceDragTarget()
+            pendingIndependentCopyExtrudeDistanceHandle = nil
+            activeIndependentCopyExtrudeDistanceDrag = nil
+            activeCanvasDrag = nil
+            if let independentCopyExtrudeDistanceDragTarget {
+                onIndependentCopyExtrudeDistanceDrag?(independentCopyExtrudeDistanceDragTarget)
             }
             return
         }
@@ -10094,6 +10269,23 @@ public struct Viewport: View {
         return ViewportSlotWidthDragTarget(
             target: activeSlotWidthDrag.target.target,
             width: width
+        )
+    }
+
+    private func committedIndependentCopyExtrudeDistanceDragTarget() -> ViewportIndependentCopyExtrudeDistanceDragTarget? {
+        guard let activeIndependentCopyExtrudeDistanceDrag else {
+            return nil
+        }
+        let distance = activeIndependentCopyExtrudeDistanceDrag.distanceMeters
+        guard abs(distance - activeIndependentCopyExtrudeDistanceDrag.target.geometry.baseDistanceMeters) > 1.0e-12 else {
+            return nil
+        }
+        return ViewportIndependentCopyExtrudeDistanceDragTarget(
+            sourceID: activeIndependentCopyExtrudeDistanceDrag.target.sourceID,
+            outputIndex: activeIndependentCopyExtrudeDistanceDrag.target.outputIndex,
+            outputSceneNodeID: activeIndependentCopyExtrudeDistanceDrag.target.outputSceneNodeID,
+            featureID: activeIndependentCopyExtrudeDistanceDrag.target.featureID,
+            distance: distance
         )
     }
 
@@ -10449,6 +10641,7 @@ public struct Viewport: View {
         hoveredSlotWidthHandle = nil
         hoveredSketchVertexOffsetHandle = nil
         hoveredPatternArrayLinearAxisHandle = nil
+        hoveredIndependentCopyExtrudeDistanceHandle = nil
         hoveredPatternArrayRadialAngleHandle = nil
         hoveredPatternArrayCopyCountHandle = nil
         hoveredPatternArrayCurveExtentHandle = nil
@@ -10565,6 +10758,7 @@ public struct Viewport: View {
             hoveredSlotWidthHandle = slotWidthTarget
             hoveredSketchVertexOffsetHandle = nil
             hoveredPatternArrayLinearAxisHandle = nil
+            hoveredIndependentCopyExtrudeDistanceHandle = nil
             hoveredPatternArrayRadialAngleHandle = nil
             hoveredPatternArrayCopyCountHandle = nil
             hoveredPatternArrayCurveExtentHandle = nil
@@ -10577,8 +10771,25 @@ public struct Viewport: View {
             return
         }
         hoveredSlotWidthHandle = nil
+        if let independentCopyExtrudeDistanceTarget = selectedIndependentCopyExtrudeDistanceAffordanceTarget(at: point, size: size) {
+            hoveredIndependentCopyExtrudeDistanceHandle = independentCopyExtrudeDistanceTarget
+            hoveredPatternArrayLinearAxisHandle = nil
+            hoveredPatternArrayRadialAngleHandle = nil
+            hoveredPatternArrayCopyCountHandle = nil
+            hoveredPatternArrayCurveExtentHandle = nil
+            hoveredPatternArrayCurvePathPointHandle = nil
+            hoveredPatternArrayOutputModeHandle = nil
+            hoveredSketchVertexOffsetHandle = nil
+            hoveredAffordance = nil
+            hoveredCanvasHit = nil
+            hoveredModelPoint = nil
+            clearHoverCallbacks()
+            return
+        }
+        hoveredIndependentCopyExtrudeDistanceHandle = nil
         if let patternArrayLinearAxisTarget = selectedPatternArrayLinearAxisAffordanceTarget(at: point, size: size) {
             hoveredPatternArrayLinearAxisHandle = patternArrayLinearAxisTarget
+            hoveredIndependentCopyExtrudeDistanceHandle = nil
             hoveredPatternArrayRadialAngleHandle = nil
             hoveredPatternArrayCopyCountHandle = nil
             hoveredPatternArrayCurveExtentHandle = nil
@@ -10729,6 +10940,7 @@ public struct Viewport: View {
         hoveredSlotWidthHandle = nil
         hoveredSketchVertexOffsetHandle = nil
         hoveredPatternArrayLinearAxisHandle = nil
+        hoveredIndependentCopyExtrudeDistanceHandle = nil
         hoveredPatternArrayRadialAngleHandle = nil
         hoveredPatternArrayCopyCountHandle = nil
         hoveredPatternArrayCurveExtentHandle = nil
@@ -10969,6 +11181,12 @@ private struct ViewportSlotWidthDragState: Equatable {
 
 private struct ViewportPatternArrayLinearAxisDragState: Equatable {
     var target: ViewportPatternArrayLinearAxisHandleTarget
+    var startPoint: CGPoint
+    var distanceMeters: Double
+}
+
+private struct ViewportIndependentCopyExtrudeDistanceDragState: Equatable {
+    var target: ViewportIndependentCopyExtrudeDistanceHandleTarget
     var startPoint: CGPoint
     var distanceMeters: Double
 }

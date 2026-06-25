@@ -137,6 +137,9 @@ import RupaCore
         evidence.sourceFiles.contains("RupaKit/Sources/RupaRendering/ViewportPatternArrayLinearAxisAffordanceService.swift")
     })
     #expect(arrays.evidence.contains { evidence in
+        evidence.sourceFiles.contains("RupaKit/Sources/RupaRendering/ViewportIndependentCopyExtrudeDistanceAffordanceService.swift")
+    })
+    #expect(arrays.evidence.contains { evidence in
         evidence.sourceFiles.contains("RupaKit/Sources/RupaRendering/ViewportPatternArraySourceSelectionIndex.swift")
     })
     #expect(arrays.evidence.contains { evidence in
@@ -170,6 +173,9 @@ import RupaCore
         evidence.tests.contains("RupaKit/Tests/RupaRenderingTests/ViewportPatternArrayLinearAxisAffordanceServiceTests.swift")
     })
     #expect(arrays.evidence.contains { evidence in
+        evidence.tests.contains("RupaKit/Tests/RupaRenderingTests/ViewportIndependentCopyExtrudeDistanceAffordanceServiceTests.swift")
+    })
+    #expect(arrays.evidence.contains { evidence in
         evidence.tests.contains("RupaKit/Tests/RupaRenderingTests/ViewportPatternArrayRadialAngleAffordanceServiceTests.swift")
     })
     #expect(arrays.evidence.contains { evidence in
@@ -194,19 +200,19 @@ import RupaCore
         evidence.tests.contains("RupaKit/Tests/RupaRenderingTests/ViewportPatternArrayCurvePathReplacementPreviewServiceTests.swift")
     })
     #expect(arrays.evidence.contains { evidence in
-        evidence.notes.contains("Pattern Array summaries expose editable fields, lifecycle actions, source-owned output edit policy, output IDs, and diagnostics without forcing CAD evaluation.")
+        evidence.notes.contains("Pattern Array summaries expose editable fields, lifecycle actions, source-owned scene output policy, cloned feature edit policy, output IDs, independent-copy generation definition identity, per-output source-divergence state, regeneration policy, and diagnostics without forcing CAD evaluation.")
     })
     #expect(arrays.evidence.contains { evidence in
         evidence.notes.contains("Design display snapshots keep invalid PatternArraySource records discoverable with diagnostics instead of dropping sources whose definition, root scene node, or generated outputs are missing.")
     })
     #expect(arrays.evidence.contains { evidence in
-        evidence.notes.contains("Pattern Array summary diagnostics mirror source-owned output invariants for missing instances, mismatched transforms, duplicate ownership, root child mapping, and independent-copy feature closure checks.")
+        evidence.notes.contains("Pattern Array summary diagnostics mirror source-owned output invariants for missing instances, mismatched transforms, duplicate ownership, root child mapping, independent-copy feature closure checks, stale independent-copy definition identity, and downstream feature dependents that block output removal.")
     })
     #expect(arrays.evidence.contains { evidence in
-        evidence.notes.contains("Independent-copy Pattern Array regeneration reuses overlapping output scene roots and cloned feature closures when the source definition is unchanged, preserving edited cloned CAD features while updating planner-owned output transforms.")
+        evidence.notes.contains("Independent-copy Pattern Array regeneration persists a SHA-256 ComponentDefinition identity over scene roots plus remapped feature operation payloads, reuses overlapping output scene roots only while that identity remains unchanged, and rebuilds output features when the source definition identity changes.")
     })
     #expect(arrays.evidence.contains { evidence in
-        evidence.notes.contains("The object Inspector now maps selected source roots, generated outputs, and independent-copy descendants back to their PatternArraySource and displays ownership, lifecycle actions, output mode, selected output index, and diagnostics.")
+        evidence.notes.contains("The object Inspector now maps selected source roots, generated outputs, and independent-copy descendants back to their PatternArraySource and displays ownership, lifecycle actions, output mode, selected output index, cloned feature edit policy, independent-copy source-divergence state, regeneration policy, and diagnostics.")
     })
     #expect(arrays.evidence.contains { evidence in
         evidence.notes.contains("The Pattern Array Inspector exposes source-owned output mode plus rectangular first- and second-axis controls, radial center, axis, angular spacing or extent, radial repetition, and curve count, twist, scale, alignment, and extent controls that update the PatternArraySource instead of generated outputs.")
@@ -225,6 +231,9 @@ import RupaCore
     })
     #expect(arrays.evidence.contains { evidence in
         evidence.notes.contains("The viewport exposes rectangular Pattern Array first- and second-axis distance handles that resolve selected source roots or outputs back to PatternArraySource IDs and commit source-owned distance updates after drag completion.")
+    })
+    #expect(arrays.evidence.contains { evidence in
+        evidence.notes.contains("The viewport exposes independent-copy cloned extrude distance handles that resolve selected output roots or descendants to clone feature IDs, derive normal directions from profile sketch planes, and commit cloned-feature distance edits after drag completion.")
     })
     #expect(arrays.evidence.contains { evidence in
         evidence.notes.contains("The viewport exposes radial Pattern Array angular spacing/extent handles and radial-axis distance handles through the shared PatternArray source-selection index.")

@@ -463,6 +463,7 @@ public struct MainView: View {
                     onSlotWidthDrag: viewportSlotWidthDragHandler,
                     onSketchVertexOffsetDrag: viewportSketchVertexOffsetDragHandler,
                     onPatternArrayLinearAxisDrag: viewportPatternArrayLinearAxisDragHandler,
+                    onIndependentCopyExtrudeDistanceDrag: viewportIndependentCopyExtrudeDistanceDragHandler,
                     onPatternArrayRadialAngleDrag: viewportPatternArrayRadialAngleDragHandler,
                     onPatternArrayCopyCountDrag: viewportPatternArrayCopyCountDragHandler,
                     onPatternArrayCurveExtentDrag: viewportPatternArrayCurveExtentDragHandler,
@@ -683,6 +684,15 @@ public struct MainView: View {
         }
         return { target in
             handleViewportPatternArrayLinearAxisDrag(target)
+        }
+    }
+
+    private var viewportIndependentCopyExtrudeDistanceDragHandler: ((ViewportIndependentCopyExtrudeDistanceDragTarget) -> Void)? {
+        guard session.selectedTool == .select else {
+            return nil
+        }
+        return { target in
+            handleViewportIndependentCopyExtrudeDistanceDrag(target)
         }
     }
 
@@ -3431,6 +3441,20 @@ public struct MainView: View {
         if result?.diagnostics.isEmpty == false {
             isPreviewExpanded = true
         }
+    }
+
+    private func handleViewportIndependentCopyExtrudeDistanceDrag(
+        _ target: ViewportIndependentCopyExtrudeDistanceDragTarget
+    ) {
+        guard session.selectedTool == .select,
+              target.distance.isFinite,
+              target.distance > 0.0 else {
+            return
+        }
+        session.setExtrudeDistance(
+            featureID: target.featureID,
+            distance: .length(target.distance, .meter)
+        )
     }
 
     private func handleViewportPatternArrayRadialAngleDrag(
