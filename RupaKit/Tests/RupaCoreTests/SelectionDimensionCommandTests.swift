@@ -43,6 +43,47 @@ import Testing
     #expect(try measurement.isSatisfied())
 }
 
+@Test func selectionDimensionRemovalCommandMutatesThroughCommandPath() async throws {
+    var document = DesignDocument.empty()
+    let featureID = try document.createLineSketch(
+        name: "Measured Line",
+        plane: .xy,
+        start: SketchPoint(
+            x: .length(0.0, .millimeter),
+            y: .length(0.0, .millimeter)
+        ),
+        end: SketchPoint(
+            x: .length(10.0, .millimeter),
+            y: .length(0.0, .millimeter)
+        )
+    )
+    let targets = try lineEndpointTargets(in: document, featureID: featureID)
+    let session = EditorSession(document: document)
+    let addResult = try session.execute(
+        .addSelectionDimension(
+            name: "Line Length",
+            kind: .distance,
+            first: targets.start,
+            second: targets.end,
+            target: .length(10.0, .millimeter)
+        )
+    )
+    let dimensionID = try #require(addResult.addedSelectionDimensionID)
+
+    let removeResult = try session.execute(.removeSelectionDimension(id: dimensionID))
+
+    #expect(removeResult.commandName == "removeSelectionDimension")
+    #expect(removeResult.didMutate)
+    #expect(removeResult.generation == DocumentGeneration(2))
+    #expect(session.document.cadDocument.selectionDimensions.isEmpty)
+    #expect(session.document.productMetadata.measurements.isEmpty)
+    #expect(session.evaluationStatus == .valid)
+
+    _ = try session.undo()
+    #expect(session.document.cadDocument.selectionDimensions.map(\.id) == [dimensionID])
+    #expect(session.generation == DocumentGeneration(3))
+}
+
 @Test func selectionDimensionCommandMeasuresGeneratedFacePairDistance() async throws {
     var document = DesignDocument.empty()
     try document.createExtrudedRectangle(

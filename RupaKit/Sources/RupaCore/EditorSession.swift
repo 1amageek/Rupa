@@ -2465,6 +2465,32 @@ public final class EditorSession {
     }
 
     @discardableResult
+    public func addSelectionDimension(
+        name: String? = nil,
+        kind: SelectionDimensionKind,
+        first: SelectionTarget,
+        second: SelectionTarget,
+        target: CADExpression
+    ) -> CommandExecutionResult? {
+        perform(
+            .addSelectionDimension(
+                name: name,
+                kind: kind,
+                first: first,
+                second: second,
+                target: target
+            )
+        )
+    }
+
+    @discardableResult
+    public func removeSelectionDimension(
+        id: SelectionDimensionID
+    ) -> CommandExecutionResult? {
+        perform(.removeSelectionDimension(id: id))
+    }
+
+    @discardableResult
     public func offsetCurve(
         target: SelectionTarget,
         distance: CADExpression,

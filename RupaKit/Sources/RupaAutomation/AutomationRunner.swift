@@ -516,6 +516,15 @@ public struct AutomationRunner {
                 diagnostics: result.diagnostics,
                 addedSelectionDimensionID: result.addedSelectionDimensionID
             )
+        case .removeSelectionDimension(let id):
+            let result = try session.execute(.removeSelectionDimension(id: id))
+            return AutomationResult(
+                message: "Selection dimension removed.",
+                commandName: result.commandName,
+                generation: result.generation,
+                didMutate: result.didMutate,
+                diagnostics: result.diagnostics
+            )
         case .addSketchConstraint(let featureID, let constraint):
             let result = try session.execute(
                 .addSketchConstraint(

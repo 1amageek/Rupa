@@ -83,6 +83,7 @@ import SwiftCAD
     #expect(capabilities.contains("setCubeDimensions"))
     #expect(capabilities.contains("setCylinderDimensions"))
     #expect(capabilities.contains("addSelectionDimension"))
+    #expect(capabilities.contains("removeSelectionDimension"))
     #expect(capabilities.contains("objectDimensionSummary"))
     #expect(capabilities.contains("sketchDimensionSummary"))
     #expect(capabilities.contains("selectionDimensionEvaluation"))
@@ -162,6 +163,7 @@ import SwiftCAD
     let cubeDimensions = try #require(descriptors.first { $0.name == "setCubeDimensions" })
     let cylinderDimensions = try #require(descriptors.first { $0.name == "setCylinderDimensions" })
     let selectionDimension = try #require(descriptors.first { $0.name == "addSelectionDimension" })
+    let selectionDimensionRemoval = try #require(descriptors.first { $0.name == "removeSelectionDimension" })
     let objectDimensionSummary = try #require(descriptors.first { $0.name == "objectDimensionSummary" })
     let sketchDimensionSummary = try #require(descriptors.first { $0.name == "sketchDimensionSummary" })
     let selectionMeasurement = try #require(descriptors.first { $0.name == "selectionMeasurement" })
@@ -664,6 +666,14 @@ import SwiftCAD
     #expect(selectionDimension.discovery.contains(.sketchEntitySummary))
     #expect(selectionDimension.targets == [.face, .edge, .vertex, .sketchEntity, .sketchPointHandle])
     #expect(selectionDimension.summary.contains("SwiftCAD document source") || selectionDimension.summary.contains("CAD selection dimension"))
+
+    #expect(selectionDimensionRemoval.category == .solid)
+    #expect(selectionDimensionRemoval.mutatesDocument)
+    #expect(selectionDimensionRemoval.access == .automationCommand)
+    #expect(selectionDimensionRemoval.discovery.contains(.selectionDimensionEvaluation))
+    #expect(selectionDimensionRemoval.targets == [.document, .face, .edge, .vertex, .sketchEntity, .sketchPointHandle])
+    #expect(selectionDimensionRemoval.summary.contains("SelectionDimensionID"))
+    #expect(selectionDimensionRemoval.failureMode.contains("missing selection dimension IDs"))
 
     #expect(selectionMeasurement.category == .read)
     #expect(!selectionMeasurement.mutatesDocument)
@@ -3909,6 +3919,23 @@ private func rawAgentProtocolJSON(_ source: String) -> Data {
     #expect(measurement.dimension.id == dimensionID)
     #expect(measurement.measured == .length(0.016, unit: .meter))
     #expect(abs(measurement.residual.value) <= 1.0e-12)
+
+    let removeResponse = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .removeSelectionDimension(id: dimensionID),
+            expectedGeneration: DocumentGeneration(1)
+        )
+    )
+
+    guard case .command(let removeResult) = removeResponse else {
+        #expect(Bool(false))
+        return
+    }
+    #expect(removeResult.commandName == "removeSelectionDimension")
+    #expect(removeResult.didMutate)
+    #expect(removeResult.generation == DocumentGeneration(2))
+    #expect(session.document.cadDocument.selectionDimensions.isEmpty)
 }
 
 @MainActor

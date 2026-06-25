@@ -841,6 +841,16 @@ public final class AgentCommandController: AgentClientProtocol {
             failureMode: "Rejects object-wide targets, profile regions, unresolved generated topology, unsupported sketch point handles, invalid target quantities, and stale generations before mutation."
         ),
         capability(
+            "removeSelectionDimension",
+            category: .solid,
+            summary: "Remove one persistent CAD selection dimension by SelectionDimensionID after discovering or evaluating existing dimensions.",
+            access: .automationCommand,
+            mutatesDocument: true,
+            discovery: [.selectionDimensionEvaluation],
+            targets: [.document, .face, .edge, .vertex, .sketchEntity, .sketchPointHandle],
+            failureMode: "Rejects missing selection dimension IDs and stale generations before mutation."
+        ),
+        capability(
             "convertSketchLineToArc",
             category: .sourceCurveEditing,
             summary: "Convert a selected source line into a circular arc with a signed sagitta.",

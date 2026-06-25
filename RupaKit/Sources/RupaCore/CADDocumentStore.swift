@@ -610,6 +610,15 @@ public final class CADDocumentStore {
             document = updatedDocument
             try commitMutation()
             evaluateCurrentDocument()
+        case .removeSelectionDimension(let id):
+            var updatedDocument = document
+            try updatedDocument.removeSelectionDimension(
+                id: id,
+                objectRegistry: objectRegistry
+            )
+            document = updatedDocument
+            try commitMutation()
+            evaluateCurrentDocument()
         case .offsetCurve(let target, let distance, let options, let vertexHandle):
             var updatedDocument = document
             try updatedDocument.offsetCurve(

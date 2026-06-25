@@ -42,6 +42,39 @@ public extension DesignDocument {
         return dimensionID
     }
 
+    @discardableResult
+    mutating func removeSelectionDimension(
+        id: SelectionDimensionID,
+        objectRegistry: ObjectTypeRegistry = .builtIn
+    ) throws -> SelectionDimension {
+        guard cadDocument.selectionDimensions.contains(where: { $0.id == id }) else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "Selection dimension removal requires an existing selection dimension."
+            )
+        }
+
+        var updatedCADDocument = cadDocument
+        let removedDimension: SelectionDimension
+        do {
+            removedDimension = try updatedCADDocument.removeSelectionDimension(id: id)
+        } catch {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Selection dimension removal produced an invalid CAD document: \(String(describing: error))"
+            )
+        }
+
+        var updatedDocument = self
+        updatedDocument.cadDocument = updatedCADDocument
+        try updatedDocument.productMetadata.validate(
+            against: updatedDocument.cadDocument,
+            objectRegistry: objectRegistry
+        )
+        self = updatedDocument
+        return removedDimension
+    }
+
     private func normalizedSelectionDimensionName(_ name: String?) -> String? {
         guard let name else {
             return nil

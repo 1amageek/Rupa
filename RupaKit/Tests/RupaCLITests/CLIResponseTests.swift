@@ -3268,73 +3268,98 @@ func cliExecutableSketchDimensionSummaryAndSetMutateClosedDocumentAsJSON() async
     #expect(abs(updatedLength.resolvedValue - 0.020) < 0.000_000_000_001)
 }
 
-@Test(.timeLimit(.minutes(1)))
-func cliExecutableSelectionDimensionAddPersistsClosedDocumentAsJSON() async throws {
-    let temporaryDirectory = try makeTemporaryDirectory()
-    defer {
-        removeTemporaryDirectory(temporaryDirectory)
-    }
-    let documentURL = temporaryDirectory.appendingPathComponent("process-selection-dimension.swcad")
-    var document = DesignDocument.empty(named: "Process Selection Dimension")
-    let featureID = try document.createLineSketch(
-        name: "Measured Line",
-        plane: .xy,
-        start: SketchPoint(
-            x: .length(0.0, .millimeter),
-            y: .length(0.0, .millimeter)
-        ),
-        end: SketchPoint(
-            x: .length(10.0, .millimeter),
-            y: .length(0.0, .millimeter)
+@Suite(.serialized)
+struct CLISelectionDimensionCommandTests {
+    @Test(.timeLimit(.minutes(1)))
+    func executableSelectionDimensionLifecyclePersistsClosedDocumentAsJSON() async throws {
+        let temporaryDirectory = try makeTemporaryDirectory()
+        defer {
+            removeTemporaryDirectory(temporaryDirectory)
+        }
+        let documentURL = temporaryDirectory.appendingPathComponent("process-selection-dimension.swcad")
+        var document = DesignDocument.empty(named: "Process Selection Dimension")
+        let featureID = try document.createLineSketch(
+            name: "Measured Line",
+            plane: .xy,
+            start: SketchPoint(
+                x: .length(0.0, .millimeter),
+                y: .length(0.0, .millimeter)
+            ),
+            end: SketchPoint(
+                x: .length(10.0, .millimeter),
+                y: .length(0.0, .millimeter)
+            )
         )
-    )
-    let endpoints = try cliLineEndpointTargets(in: document, featureID: featureID)
-    try DocumentFileService().save(document, to: documentURL)
+        let endpoints = try cliLineEndpointTargets(in: document, featureID: featureID)
+        try DocumentFileService().save(document, to: documentURL)
 
-    let result = try await runCLI([
-        "dimension",
-        "add-selection",
-        documentURL.path,
-        "--name",
-        "CLI Line Length",
-        "--kind",
-        "distance",
-        "--first-target",
-        try encodedSelectionTarget(endpoints.start),
-        "--second-target",
-        try encodedSelectionTarget(endpoints.end),
-        "--target-value",
-        "10",
-        "--length-unit",
-        "millimeter",
-        "--mode",
-        "file",
-        "--json",
-    ])
-    let response = try JSONDecoder().decode(
-        CLISelectionDimensionAddResponse.self,
-        from: result.standardOutputData
-    )
-    let loaded = try DocumentFileService().load(from: documentURL)
-    let dimensionID = try #require(response.selectionDimensionID)
-    let dimension = try #require(loaded.cadDocument.selectionDimensions.first { $0.id == dimensionID })
-    let evaluation = try SelectionDimensionService().evaluate(
-        document: loaded,
-        dimensionID: dimensionID
-    )
-    let measurement = try #require(evaluation.measurements.first)
+        let result = try await runCLI([
+            "dimension",
+            "add-selection",
+            documentURL.path,
+            "--name",
+            "CLI Line Length",
+            "--kind",
+            "distance",
+            "--first-target",
+            try encodedSelectionTarget(endpoints.start),
+            "--second-target",
+            try encodedSelectionTarget(endpoints.end),
+            "--target-value",
+            "10",
+            "--length-unit",
+            "millimeter",
+            "--mode",
+            "file",
+            "--json",
+        ])
+        let response = try JSONDecoder().decode(
+            CLISelectionDimensionAddResponse.self,
+            from: result.standardOutputData
+        )
+        let loaded = try DocumentFileService().load(from: documentURL)
+        let dimensionID = try #require(response.selectionDimensionID)
+        let dimension = try #require(loaded.cadDocument.selectionDimensions.first { $0.id == dimensionID })
+        let evaluation = try SelectionDimensionService().evaluate(
+            document: loaded,
+            dimensionID: dimensionID
+        )
+        let measurement = try #require(evaluation.measurements.first)
 
-    #expect(result.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: result.standardError))
-    #expect(response.message == "Selection dimension added.")
-    #expect(response.saved)
-    #expect(!response.dirty)
-    #expect(dimension.name == "CLI Line Length")
-    #expect(dimension.kind == .distance)
-    #expect(evaluation.measurements.count == 1)
-    #expect(measurement.dimension.id == dimensionID)
-    #expect(measurement.measured == .length(0.010, unit: .meter))
-    #expect(abs(measurement.residual.value) <= 1.0e-12)
-    #expect(try measurement.isSatisfied())
+        #expect(result.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: result.standardError))
+        #expect(response.message == "Selection dimension added.")
+        #expect(response.saved)
+        #expect(!response.dirty)
+        #expect(dimension.name == "CLI Line Length")
+        #expect(dimension.kind == .distance)
+        #expect(evaluation.measurements.count == 1)
+        #expect(measurement.dimension.id == dimensionID)
+        #expect(measurement.measured == .length(0.010, unit: .meter))
+        #expect(abs(measurement.residual.value) <= 1.0e-12)
+        #expect(try measurement.isSatisfied())
+
+        let removeResult = try await runCLI([
+            "dimension",
+            "remove-selection",
+            documentURL.path,
+            "--dimension-id",
+            dimensionID.description,
+            "--mode",
+            "file",
+            "--json",
+        ])
+        let removeResponse = try JSONDecoder().decode(
+            CLIResponse.self,
+            from: removeResult.standardOutputData
+        )
+        let removedLoaded = try DocumentFileService().load(from: documentURL)
+
+        #expect(removeResult.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: removeResult.standardError))
+        #expect(removeResponse.message == "Selection dimension removed.")
+        #expect(removeResponse.saved)
+        #expect(!removeResponse.dirty)
+        #expect(removedLoaded.cadDocument.selectionDimensions.isEmpty)
+    }
 }
 
 @Test(.timeLimit(.minutes(1)))
