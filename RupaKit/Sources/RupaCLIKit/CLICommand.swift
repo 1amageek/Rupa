@@ -233,7 +233,10 @@ public struct SketchCommand: ParsableCommand {
         subcommands: [
             LineSketchCommand.self,
             CircleSketchCommand.self,
+            ArcSketchCommand.self,
+            SplineSketchCommand.self,
             RectangleSketchCommand.self,
+            PolygonSketchCommand.self,
         ],
         defaultSubcommand: LineSketchCommand.self
     )

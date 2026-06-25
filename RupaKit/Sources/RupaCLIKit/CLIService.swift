@@ -757,6 +757,66 @@ public struct CLIService {
         )
     }
 
+    public func createArcSketch(
+        target: CLIDocumentTarget,
+        name: String,
+        plane: SketchPlane,
+        center: SketchPoint,
+        radius: CADExpression,
+        startAngle: CADExpression,
+        endAngle: CADExpression,
+        mode: CLIEditMode = .auto,
+        expectedGeneration: DocumentGeneration? = nil,
+        dryRun: Bool = false,
+        forceFileEdit: Bool = false,
+        client: AgentClientProtocol? = nil
+    ) throws -> CLIResponse {
+        let command = AutomationCommand.createArcSketch(
+            name: name,
+            plane: plane,
+            center: center,
+            radius: radius,
+            startAngle: startAngle,
+            endAngle: endAngle
+        )
+        return try executeSketchCommand(
+            command,
+            target: target,
+            mode: mode,
+            expectedGeneration: expectedGeneration,
+            dryRun: dryRun,
+            forceFileEdit: forceFileEdit,
+            client: client
+        )
+    }
+
+    public func createSplineSketch(
+        target: CLIDocumentTarget,
+        name: String,
+        plane: SketchPlane,
+        spline: SketchSpline,
+        mode: CLIEditMode = .auto,
+        expectedGeneration: DocumentGeneration? = nil,
+        dryRun: Bool = false,
+        forceFileEdit: Bool = false,
+        client: AgentClientProtocol? = nil
+    ) throws -> CLIResponse {
+        let command = AutomationCommand.createSplineSketch(
+            name: name,
+            plane: plane,
+            spline: spline
+        )
+        return try executeSketchCommand(
+            command,
+            target: target,
+            mode: mode,
+            expectedGeneration: expectedGeneration,
+            dryRun: dryRun,
+            forceFileEdit: forceFileEdit,
+            client: client
+        )
+    }
+
     public func createRectangleSketch(
         target: CLIDocumentTarget,
         name: String,
@@ -774,6 +834,43 @@ public struct CLIService {
             plane: plane,
             width: width,
             height: height
+        )
+        return try executeSketchCommand(
+            command,
+            target: target,
+            mode: mode,
+            expectedGeneration: expectedGeneration,
+            dryRun: dryRun,
+            forceFileEdit: forceFileEdit,
+            client: client
+        )
+    }
+
+    public func createPolygonSketch(
+        target: CLIDocumentTarget,
+        name: String,
+        plane: SketchPlane,
+        center: SketchPoint,
+        radius: CADExpression,
+        sides: Int,
+        sizingMode: PolygonSizingMode,
+        inclinationMode: PolygonInclinationMode,
+        rotationAngle: CADExpression,
+        mode: CLIEditMode = .auto,
+        expectedGeneration: DocumentGeneration? = nil,
+        dryRun: Bool = false,
+        forceFileEdit: Bool = false,
+        client: AgentClientProtocol? = nil
+    ) throws -> CLIResponse {
+        let command = AutomationCommand.createPolygonSketch(
+            name: name,
+            plane: plane,
+            center: center,
+            radius: radius,
+            sides: sides,
+            sizingMode: sizingMode,
+            inclinationMode: inclinationMode,
+            rotationAngle: rotationAngle
         )
         return try executeSketchCommand(
             command,

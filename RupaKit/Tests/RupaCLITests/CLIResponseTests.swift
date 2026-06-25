@@ -1101,6 +1101,185 @@ func cliExecutableInspectsConstructionPlanesAndSnapAsJSON() async throws {
 }
 
 @Suite(.serialized)
+struct CLISketchCommandTests {
+    @Test(.timeLimit(.minutes(1)))
+    func executableSketchCurvePrimitivesPersistClosedDocumentAsJSON() async throws {
+        let temporaryDirectory = try makeTemporaryDirectory()
+        defer {
+            removeTemporaryDirectory(temporaryDirectory)
+        }
+        let documentURL = temporaryDirectory.appendingPathComponent("process-sketch-curves.swcad")
+        try DocumentFileService().save(.empty(named: "Process Sketch Curves"), to: documentURL)
+
+        let arcResult = try await runCLI([
+            "sketch",
+            "arc",
+            documentURL.path,
+            "--name",
+            "CLI Arc",
+            "--center-x",
+            "2",
+            "--center-y",
+            "3",
+            "--radius",
+            "4",
+            "--start-angle",
+            "0",
+            "--end-angle",
+            "90",
+            "--unit",
+            "millimeter",
+            "--angle-unit",
+            "degree",
+            "--mode",
+            "file",
+            "--json",
+        ])
+        let arcResponse = try JSONDecoder().decode(
+            CLIResponse.self,
+            from: arcResult.standardOutputData
+        )
+        let splineResult = try await runCLI([
+            "sketch",
+            "spline",
+            documentURL.path,
+            "--name",
+            "CLI Spline",
+            "--control-point",
+            "0,0",
+            "--control-point",
+            "2,4",
+            "--control-point",
+            "6,4",
+            "--control-point",
+            "8,0",
+            "--unit",
+            "millimeter",
+            "--mode",
+            "file",
+            "--json",
+        ])
+        let splineResponse = try JSONDecoder().decode(
+            CLIResponse.self,
+            from: splineResult.standardOutputData
+        )
+        let loaded = try DocumentFileService().load(from: documentURL)
+        let arcFeatureID = try #require(loaded.cadDocument.designGraph.order.first)
+        let splineFeatureID = try #require(loaded.cadDocument.designGraph.order.last)
+        let arcFeature = try #require(loaded.cadDocument.designGraph.nodes[arcFeatureID])
+        let splineFeature = try #require(loaded.cadDocument.designGraph.nodes[splineFeatureID])
+        guard case let .sketch(arcSketch) = arcFeature.operation,
+              case let .sketch(splineSketch) = splineFeature.operation else {
+            #expect(Bool(false))
+            return
+        }
+        let arcNode = try #require(loaded.productMetadata.sceneNodes.values.first {
+            $0.reference?.featureID == arcFeatureID
+        })
+        let splineNode = try #require(loaded.productMetadata.sceneNodes.values.first {
+            $0.reference?.featureID == splineFeatureID
+        })
+
+        #expect(arcResult.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: arcResult.standardError))
+        #expect(splineResult.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: splineResult.standardError))
+        #expect(arcResponse.message == "Arc sketch CLI Arc created.")
+        #expect(splineResponse.message == "Spline sketch CLI Spline created.")
+        #expect(arcResponse.saved)
+        #expect(splineResponse.saved)
+        #expect(loaded.cadDocument.designGraph.order.count == 2)
+        #expect(arcSketch.entities.values.contains { entity in
+            if case .arc = entity {
+                return true
+            }
+            return false
+        })
+        #expect(splineSketch.entities.values.contains { entity in
+            if case let .spline(spline) = entity {
+                return spline.controlPoints.count == 4
+            }
+            return false
+        })
+        #expect(arcNode.object?.typeID == .arc)
+        #expect(arcNode.object?.properties["radius"] == .length(0.004))
+        #expect(arcNode.object?.properties["start.angle"] == .angle(0.0))
+        #expect(arcNode.object?.properties["end.angle"] == .angle(90.0))
+        #expect(splineNode.object?.typeID == .spline)
+        #expect(splineNode.object?.properties["control.point.count"] == .integer(4))
+    }
+
+    @Test(.timeLimit(.minutes(1)))
+    func executableSketchPolygonPersistsClosedDocumentAsJSON() async throws {
+        let temporaryDirectory = try makeTemporaryDirectory()
+        defer {
+            removeTemporaryDirectory(temporaryDirectory)
+        }
+        let documentURL = temporaryDirectory.appendingPathComponent("process-sketch-polygon.swcad")
+        try DocumentFileService().save(.empty(named: "Process Sketch Polygon"), to: documentURL)
+
+        let result = try await runCLI([
+            "sketch",
+            "polygon",
+            documentURL.path,
+            "--name",
+            "CLI Hexagon",
+            "--center-x",
+            "1",
+            "--center-y",
+            "2",
+            "--radius",
+            "6",
+            "--sides",
+            "6",
+            "--unit",
+            "millimeter",
+            "--sizing-mode",
+            "inradius",
+            "--inclination-mode",
+            "horizontal",
+            "--rotation-angle",
+            "15",
+            "--angle-unit",
+            "degree",
+            "--mode",
+            "file",
+            "--json",
+        ])
+        let response = try JSONDecoder().decode(
+            CLIResponse.self,
+            from: result.standardOutputData
+        )
+        let loaded = try DocumentFileService().load(from: documentURL)
+        let featureID = try #require(loaded.cadDocument.designGraph.order.first)
+        let feature = try #require(loaded.cadDocument.designGraph.nodes[featureID])
+        guard case let .sketch(sketch) = feature.operation else {
+            #expect(Bool(false))
+            return
+        }
+        let lines = sketch.entities.values.compactMap { entity -> SketchLine? in
+            guard case let .line(line) = entity else {
+                return nil
+            }
+            return line
+        }
+        let node = try #require(loaded.productMetadata.sceneNodes.values.first {
+            $0.reference?.featureID == featureID
+        })
+
+        #expect(result.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: result.standardError))
+        #expect(response.message == "Polygon sketch CLI Hexagon created.")
+        #expect(response.saved)
+        #expect(!response.dirty)
+        #expect(lines.count == 6)
+        #expect(node.object?.typeID == .polygon)
+        #expect(node.object?.properties["sides.x"] == .integer(6))
+        #expect(node.object?.properties["radius.is.inradius"] == .boolean(true))
+        #expect(node.object?.properties["inclination.mode"] == .text(PolygonInclinationMode.horizontal.rawValue))
+        #expect(node.object?.properties["sizing.radius"] == .length(0.006))
+        #expect(node.object?.properties["angle"] == .angle(15.0))
+    }
+}
+
+@Suite(.serialized)
 struct CLICommandApplyTests {
     @Test(.timeLimit(.minutes(1)))
     func executableAppliesAutomationCommandPayloadsAsJSON() async throws {
