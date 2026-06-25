@@ -61,7 +61,9 @@ import SwiftCAD
     #expect(capabilities.contains("createSweep"))
     #expect(capabilities.contains("createPolySplineSurface"))
     #expect(capabilities.contains("movePolySplineSurfaceVertex"))
+    #expect(capabilities.contains("moveSurfaceControlPoint"))
     #expect(capabilities.contains("slidePolySplineSurfaceVertices"))
+    #expect(capabilities.contains("slideSurfaceControlPoints"))
     #expect(capabilities.contains("polySplineMeshAnalysis"))
     #expect(capabilities.contains("offsetBodyFace"))
     #expect(capabilities.contains("chamferBodyEdges"))
@@ -133,7 +135,9 @@ import SwiftCAD
     let sweep = try #require(descriptors.first { $0.name == "createSweep" })
     let polySpline = try #require(descriptors.first { $0.name == "createPolySplineSurface" })
     let polySplineVertexMove = try #require(descriptors.first { $0.name == "movePolySplineSurfaceVertex" })
+    let surfaceControlPointMove = try #require(descriptors.first { $0.name == "moveSurfaceControlPoint" })
     let polySplineVertexSlide = try #require(descriptors.first { $0.name == "slidePolySplineSurfaceVertices" })
+    let surfaceControlPointSlide = try #require(descriptors.first { $0.name == "slideSurfaceControlPoints" })
     let polySplineAnalysis = try #require(descriptors.first { $0.name == "polySplineMeshAnalysis" })
     let splineMove = try #require(descriptors.first { $0.name == "moveSketchSplineControlPoint" })
     let splineSlide = try #require(descriptors.first { $0.name == "slideSketchSplineControlPoints" })
@@ -403,6 +407,17 @@ import SwiftCAD
     #expect(polySplineVertexMove.summary.contains("source mesh vertex"))
     #expect(polySplineVertexMove.failureMode.contains("selected boundary role"))
 
+    #expect(surfaceControlPointMove.category == .solid)
+    #expect(surfaceControlPointMove.mutatesDocument)
+    #expect(surfaceControlPointMove.access == .automationCommand)
+    #expect(surfaceControlPointMove.discovery.contains(.surfaceSourceSummary))
+    #expect(surfaceControlPointMove.discovery.contains(.selectionMeasurement))
+    #expect(surfaceControlPointMove.discovery.contains(.surfaceAnalysis))
+    #expect(surfaceControlPointMove.discovery.contains(.surfaceContinuitySummary))
+    #expect(surfaceControlPointMove.targets == [.surfaceControlPoint])
+    #expect(surfaceControlPointMove.summary.contains("SelectionReference"))
+    #expect(surfaceControlPointMove.failureMode.contains("boundary corner control point"))
+
     #expect(polySplineVertexSlide.category == .solid)
     #expect(polySplineVertexSlide.mutatesDocument)
     #expect(polySplineVertexSlide.access == .automationCommand)
@@ -412,6 +427,17 @@ import SwiftCAD
     #expect(polySplineVertexSlide.targets == [.vertex])
     #expect(polySplineVertexSlide.summary.contains("local surface hull U, V, or normal"))
     #expect(polySplineVertexSlide.failureMode.contains("duplicate source-vertex targets"))
+
+    #expect(surfaceControlPointSlide.category == .solid)
+    #expect(surfaceControlPointSlide.mutatesDocument)
+    #expect(surfaceControlPointSlide.access == .automationCommand)
+    #expect(surfaceControlPointSlide.discovery.contains(.surfaceSourceSummary))
+    #expect(surfaceControlPointSlide.discovery.contains(.selectionMeasurement))
+    #expect(surfaceControlPointSlide.discovery.contains(.surfaceAnalysis))
+    #expect(surfaceControlPointSlide.discovery.contains(.surfaceContinuitySummary))
+    #expect(surfaceControlPointSlide.targets == [.surfaceControlPoint])
+    #expect(surfaceControlPointSlide.summary.contains("SelectionReference"))
+    #expect(surfaceControlPointSlide.failureMode.contains("duplicate source-vertex targets"))
 
     #expect(polySplineAnalysis.category == .read)
     #expect(!polySplineAnalysis.mutatesDocument)
@@ -2300,12 +2326,54 @@ import SwiftCAD
         ),
         expectedGeneration: DocumentGeneration(5)
     )
+    let surfaceControlPointReference = SelectionReference.surface(
+        .controlPoint(
+            SurfaceControlPointReference(
+                surface: SurfaceReference(
+                    faceName: PersistentName(components: [
+                        .feature(FeatureID()),
+                        .generated("polySpline"),
+                        .subshape("patch:0:face"),
+                    ])
+                ),
+                uIndex: 3,
+                vIndex: 3
+            )
+        )
+    )
+    let surfaceControlPointMoveRequest = AgentRequest.execute(
+        sessionID: sessionID,
+        command: .moveSurfaceControlPoint(
+            target: surfaceControlPointReference,
+            deltaX: .length(0.0, .millimeter),
+            deltaY: .length(0.0, .millimeter),
+            deltaZ: .length(1.0, .millimeter)
+        ),
+        expectedGeneration: DocumentGeneration(5)
+    )
+    let surfaceControlPointSlideRequest = AgentRequest.execute(
+        sessionID: sessionID,
+        command: .slideSurfaceControlPoints(
+            targets: [surfaceControlPointReference],
+            direction: .positiveV,
+            distance: .length(1.0, .millimeter)
+        ),
+        expectedGeneration: DocumentGeneration(5)
+    )
 
     let decodedRequest = try codec.decodeRequest(from: try codec.encode(request))
     let decodedSlideRequest = try codec.decodeRequest(from: try codec.encode(slideRequest))
+    let decodedSurfaceControlPointMoveRequest = try codec.decodeRequest(
+        from: try codec.encode(surfaceControlPointMoveRequest)
+    )
+    let decodedSurfaceControlPointSlideRequest = try codec.decodeRequest(
+        from: try codec.encode(surfaceControlPointSlideRequest)
+    )
 
     #expect(decodedRequest == request)
     #expect(decodedSlideRequest == slideRequest)
+    #expect(decodedSurfaceControlPointMoveRequest == surfaceControlPointMoveRequest)
+    #expect(decodedSurfaceControlPointSlideRequest == surfaceControlPointSlideRequest)
 }
 
 @Test func agentMessageCodecRoundTripsPolySplineMeshAnalysis() async throws {
@@ -4006,6 +4074,74 @@ import SwiftCAD
 }
 
 @MainActor
+@Test func agentMovesSurfaceControlPointThroughSurfaceSourceReference() async throws {
+    let server = AgentServer()
+    let sessionID = UUID()
+    let session = EditorSession()
+    server.register(session: session, id: sessionID)
+
+    let createResponse = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .createPolySplineSurface(
+                name: "Agent Surface Reference Move",
+                sourceMesh: agentPolySplineQuadMesh(),
+                options: PolySplineOptions()
+            ),
+            expectedGeneration: DocumentGeneration(0)
+        )
+    )
+    guard case .command(let createResult) = createResponse else {
+        Issue.record("Agent must create a PolySpline surface.")
+        return
+    }
+    #expect(createResult.didMutate)
+
+    let summaryResponse = server.handle(
+        .surfaceSourceSummary(
+            sessionID: sessionID,
+            expectedGeneration: DocumentGeneration(1)
+        )
+    )
+    guard case .surfaceSourceSummary(let summary) = summaryResponse else {
+        Issue.record("Agent must return a surface source summary.")
+        return
+    }
+    let source = try #require(summary.sources.first)
+    let patch = try #require(source.patches.first)
+    let controlVertex = try #require(patch.controlVertices.first { $0.role == "uMax:vMax" })
+
+    let moveResponse = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .moveSurfaceControlPoint(
+                target: controlVertex.selectionReference,
+                deltaX: .length(0.0, .millimeter),
+                deltaY: .length(0.0, .millimeter),
+                deltaZ: .length(1.0, .millimeter)
+            ),
+            expectedGeneration: DocumentGeneration(1)
+        )
+    )
+
+    guard case .command(let moveResult) = moveResponse else {
+        Issue.record("Agent must move a surface control point from a surface source reference.")
+        return
+    }
+    let featureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let feature = try #require(session.document.cadDocument.designGraph.nodes[featureID])
+    guard case let .polySpline(polySpline) = feature.operation else {
+        Issue.record("Agent must keep a PolySpline feature.")
+        return
+    }
+    #expect(moveResult.commandName == "moveSurfaceControlPoint")
+    #expect(moveResult.didMutate)
+    #expect(moveResult.generation == DocumentGeneration(2))
+    #expect(abs(polySpline.sourceMesh.positions[2].z - 0.005) <= 1.0e-12)
+    #expect(session.evaluationStatus == .valid)
+}
+
+@MainActor
 @Test func agentSlidesPolySplineSurfaceVerticesThroughGeneratedTargets() async throws {
     let server = AgentServer()
     let sessionID = UUID()
@@ -4069,6 +4205,75 @@ import SwiftCAD
     }
     let length = sqrt((0.02 * 0.02) + (0.004 * 0.004))
     #expect(slideResult.commandName == "slidePolySplineSurfaceVertices")
+    #expect(slideResult.didMutate)
+    #expect(slideResult.generation == DocumentGeneration(2))
+    #expect(abs(polySpline.sourceMesh.positions[1].y - (0.02 / length * 0.001)) <= 1.0e-12)
+    #expect(abs(polySpline.sourceMesh.positions[1].z - (0.004 / length * 0.001)) <= 1.0e-12)
+    #expect(session.evaluationStatus == .valid)
+}
+
+@MainActor
+@Test func agentSlidesSurfaceControlPointsThroughSurfaceSourceReferences() async throws {
+    let server = AgentServer()
+    let sessionID = UUID()
+    let session = EditorSession()
+    server.register(session: session, id: sessionID)
+
+    let createResponse = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .createPolySplineSurface(
+                name: "Agent Surface Reference Slide",
+                sourceMesh: agentPolySplineQuadMesh(),
+                options: PolySplineOptions()
+            ),
+            expectedGeneration: DocumentGeneration(0)
+        )
+    )
+    guard case .command(let createResult) = createResponse else {
+        Issue.record("Agent must create a PolySpline surface.")
+        return
+    }
+    #expect(createResult.didMutate)
+
+    let summaryResponse = server.handle(
+        .surfaceSourceSummary(
+            sessionID: sessionID,
+            expectedGeneration: DocumentGeneration(1)
+        )
+    )
+    guard case .surfaceSourceSummary(let summary) = summaryResponse else {
+        Issue.record("Agent must return a surface source summary.")
+        return
+    }
+    let source = try #require(summary.sources.first)
+    let patch = try #require(source.patches.first)
+    let controlVertex = try #require(patch.controlVertices.first { $0.role == "uMax:vMin" })
+
+    let slideResponse = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .slideSurfaceControlPoints(
+                targets: [controlVertex.selectionReference],
+                direction: .positiveV,
+                distance: .length(1.0, .millimeter)
+            ),
+            expectedGeneration: DocumentGeneration(1)
+        )
+    )
+
+    guard case .command(let slideResult) = slideResponse else {
+        Issue.record("Agent must slide surface control points from surface source references.")
+        return
+    }
+    let featureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let feature = try #require(session.document.cadDocument.designGraph.nodes[featureID])
+    guard case let .polySpline(polySpline) = feature.operation else {
+        Issue.record("Agent must keep a PolySpline feature.")
+        return
+    }
+    let length = sqrt((0.02 * 0.02) + (0.004 * 0.004))
+    #expect(slideResult.commandName == "slideSurfaceControlPoints")
     #expect(slideResult.didMutate)
     #expect(slideResult.generation == DocumentGeneration(2))
     #expect(abs(polySpline.sourceMesh.positions[1].y - (0.02 / length * 0.001)) <= 1.0e-12)

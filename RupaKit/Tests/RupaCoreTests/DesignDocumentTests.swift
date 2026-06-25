@@ -248,6 +248,74 @@ import Testing
     })
 }
 
+@Test func surfaceControlPointReferenceMoveMutatesSourceBoundaryVertex() async throws {
+    var document = DesignDocument.empty()
+
+    let featureID = try document.createPolySplineSurface(
+        name: "Surface Reference Quad Surface",
+        sourceMesh: designDocumentPolySplineQuadMesh()
+    )
+    let summary = try SurfaceSourceSummaryService().summarize(document: document)
+    let source = try #require(summary.sources.first)
+    let patch = try #require(source.patches.first)
+    let controlVertex = try #require(patch.controlVertices.first { $0.role == "uMax:vMax" })
+
+    try document.moveSurfaceControlPoint(
+        target: controlVertex.selectionReference,
+        deltaX: .length(0.0, .millimeter),
+        deltaY: .length(0.0, .millimeter),
+        deltaZ: .length(1.0, .millimeter)
+    )
+
+    let feature = try #require(document.cadDocument.designGraph.nodes[featureID])
+    guard case let .polySpline(polySpline) = feature.operation else {
+        Issue.record("Expected a PolySpline feature.")
+        return
+    }
+    #expect(abs(polySpline.sourceMesh.positions[2].z - 0.005) <= 1.0e-12)
+}
+
+@Test func surfaceControlPointReferenceRejectsInteriorPolySplineControlPoint() async throws {
+    var document = DesignDocument.empty()
+
+    _ = try document.createPolySplineSurface(
+        name: "Rejected Surface Reference Quad Surface",
+        sourceMesh: designDocumentPolySplineQuadMesh()
+    )
+    let summary = try SurfaceSourceSummaryService().summarize(document: document)
+    let source = try #require(summary.sources.first)
+    let patch = try #require(source.patches.first)
+    let controlVertex = try #require(patch.controlVertices.first)
+    guard case .surface(.controlPoint(let reference)) = controlVertex.selectionReference else {
+        Issue.record("Expected a surface control point reference.")
+        return
+    }
+    let interiorReference = SelectionReference.surface(
+        .controlPoint(
+            SurfaceControlPointReference(
+                surface: reference.surface,
+                uIndex: 1,
+                vIndex: 1
+            )
+        )
+    )
+
+    var caught: EditorError?
+    do {
+        try document.moveSurfaceControlPoint(
+            target: interiorReference,
+            deltaX: .length(0.0, .millimeter),
+            deltaY: .length(0.0, .millimeter),
+            deltaZ: .length(1.0, .millimeter)
+        )
+    } catch let error as EditorError {
+        caught = error
+    }
+
+    #expect(caught?.code == .commandInvalid)
+    #expect(caught?.message.contains("boundary corner control points") == true)
+}
+
 @Test func polySplineSurfaceVertexMoveRejectsNonVertexTargets() async throws {
     var document = DesignDocument.empty()
 
@@ -320,6 +388,35 @@ import Testing
 
     try document.slidePolySplineSurfaceVertices(
         targets: [target],
+        direction: .positiveV,
+        distance: .length(1.0, .millimeter)
+    )
+
+    let feature = try #require(document.cadDocument.designGraph.nodes[featureID])
+    guard case let .polySpline(polySpline) = feature.operation else {
+        Issue.record("Expected a PolySpline feature.")
+        return
+    }
+    let length = sqrt((0.02 * 0.02) + (0.004 * 0.004))
+    #expect(abs(polySpline.sourceMesh.positions[1].x - 0.02) <= 1.0e-12)
+    #expect(abs(polySpline.sourceMesh.positions[1].y - (0.02 / length * 0.001)) <= 1.0e-12)
+    #expect(abs(polySpline.sourceMesh.positions[1].z - (0.004 / length * 0.001)) <= 1.0e-12)
+}
+
+@Test func surfaceControlPointReferenceSlideMovesBoundaryVertexAlongPositiveV() async throws {
+    var document = DesignDocument.empty()
+
+    let featureID = try document.createPolySplineSurface(
+        name: "Surface Reference Slide V Quad Surface",
+        sourceMesh: designDocumentPolySplineQuadMesh()
+    )
+    let summary = try SurfaceSourceSummaryService().summarize(document: document)
+    let source = try #require(summary.sources.first)
+    let patch = try #require(source.patches.first)
+    let controlVertex = try #require(patch.controlVertices.first { $0.role == "uMax:vMin" })
+
+    try document.slideSurfaceControlPoints(
+        targets: [controlVertex.selectionReference],
         direction: .positiveV,
         distance: .length(1.0, .millimeter)
     )

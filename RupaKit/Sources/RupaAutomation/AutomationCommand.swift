@@ -199,8 +199,19 @@ public enum AutomationCommand: Codable, Equatable, Sendable {
         deltaY: CADExpression,
         deltaZ: CADExpression
     )
+    case moveSurfaceControlPoint(
+        target: SelectionReference,
+        deltaX: CADExpression,
+        deltaY: CADExpression,
+        deltaZ: CADExpression
+    )
     case slidePolySplineSurfaceVertices(
         targets: [SelectionTarget],
+        direction: PolySplineSurfaceVertexSlideDirection,
+        distance: CADExpression
+    )
+    case slideSurfaceControlPoints(
+        targets: [SelectionReference],
         direction: PolySplineSurfaceVertexSlideDirection,
         distance: CADExpression
     )
@@ -614,8 +625,21 @@ public enum AutomationCommand: Codable, Equatable, Sendable {
                 deltaY: deltaY,
                 deltaZ: deltaZ
             )
+        case .moveSurfaceControlPoint(let target, let deltaX, let deltaY, let deltaZ):
+            .moveSurfaceControlPoint(
+                target: target,
+                deltaX: deltaX,
+                deltaY: deltaY,
+                deltaZ: deltaZ
+            )
         case .slidePolySplineSurfaceVertices(let targets, let direction, let distance):
             .slidePolySplineSurfaceVertices(
+                targets: targets,
+                direction: direction,
+                distance: distance
+            )
+        case .slideSurfaceControlPoints(let targets, let direction, let distance):
+            .slideSurfaceControlPoints(
                 targets: targets,
                 direction: direction,
                 distance: distance

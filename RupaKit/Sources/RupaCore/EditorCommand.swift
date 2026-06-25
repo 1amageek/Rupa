@@ -217,8 +217,19 @@ public enum EditorCommand: Codable, Equatable, Sendable {
         deltaY: CADExpression,
         deltaZ: CADExpression
     )
+    case moveSurfaceControlPoint(
+        target: SelectionReference,
+        deltaX: CADExpression,
+        deltaY: CADExpression,
+        deltaZ: CADExpression
+    )
     case slidePolySplineSurfaceVertices(
         targets: [SelectionTarget],
+        direction: PolySplineSurfaceVertexSlideDirection,
+        distance: CADExpression
+    )
+    case slideSurfaceControlPoints(
+        targets: [SelectionReference],
         direction: PolySplineSurfaceVertexSlideDirection,
         distance: CADExpression
     )
@@ -400,8 +411,12 @@ public enum EditorCommand: Codable, Equatable, Sendable {
             "createPolySplineSurface"
         case .movePolySplineSurfaceVertex:
             "movePolySplineSurfaceVertex"
+        case .moveSurfaceControlPoint:
+            "moveSurfaceControlPoint"
         case .slidePolySplineSurfaceVertices:
             "slidePolySplineSurfaceVertices"
+        case .slideSurfaceControlPoints:
+            "slideSurfaceControlPoints"
         case .createExtrudedRectangle:
             "createExtrudedRectangle"
         case .createExtrudedRectangleFromCorners:
@@ -490,7 +505,9 @@ public enum EditorCommand: Codable, Equatable, Sendable {
              .createSweep,
              .createPolySplineSurface,
              .movePolySplineSurfaceVertex,
+             .moveSurfaceControlPoint,
              .slidePolySplineSurfaceVertices,
+             .slideSurfaceControlPoints,
              .createExtrudedRectangle,
              .createExtrudedRectangleFromCorners,
              .createExtrudedCircle:

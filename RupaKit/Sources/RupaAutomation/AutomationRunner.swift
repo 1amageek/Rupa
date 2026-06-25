@@ -1036,6 +1036,22 @@ public struct AutomationRunner {
                 didMutate: result.didMutate,
                 diagnostics: result.diagnostics
             )
+        case .moveSurfaceControlPoint(let target, let deltaX, let deltaY, let deltaZ):
+            let result = try session.execute(
+                .moveSurfaceControlPoint(
+                    target: target,
+                    deltaX: deltaX,
+                    deltaY: deltaY,
+                    deltaZ: deltaZ
+                )
+            )
+            return AutomationResult(
+                message: "Surface control point moved.",
+                commandName: result.commandName,
+                generation: result.generation,
+                didMutate: result.didMutate,
+                diagnostics: result.diagnostics
+            )
         case .slidePolySplineSurfaceVertices(let targets, let direction, let distance):
             let result = try session.execute(
                 .slidePolySplineSurfaceVertices(
@@ -1046,6 +1062,21 @@ public struct AutomationRunner {
             )
             return AutomationResult(
                 message: "PolySpline surface vertices slid.",
+                commandName: result.commandName,
+                generation: result.generation,
+                didMutate: result.didMutate,
+                diagnostics: result.diagnostics
+            )
+        case .slideSurfaceControlPoints(let targets, let direction, let distance):
+            let result = try session.execute(
+                .slideSurfaceControlPoints(
+                    targets: targets,
+                    direction: direction,
+                    distance: distance
+                )
+            )
+            return AutomationResult(
+                message: "Surface control points slid.",
                 commandName: result.commandName,
                 generation: result.generation,
                 didMutate: result.didMutate,

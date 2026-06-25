@@ -2014,6 +2014,23 @@ public final class EditorSession {
     }
 
     @discardableResult
+    public func moveSurfaceControlPoint(
+        target: SelectionReference,
+        deltaX: CADExpression,
+        deltaY: CADExpression,
+        deltaZ: CADExpression
+    ) -> CommandExecutionResult? {
+        perform(
+            .moveSurfaceControlPoint(
+                target: target,
+                deltaX: deltaX,
+                deltaY: deltaY,
+                deltaZ: deltaZ
+            )
+        )
+    }
+
+    @discardableResult
     public func slidePolySplineSurfaceVertices(
         targets: [SelectionTarget],
         direction: PolySplineSurfaceVertexSlideDirection,
@@ -2021,6 +2038,21 @@ public final class EditorSession {
     ) -> CommandExecutionResult? {
         perform(
             .slidePolySplineSurfaceVertices(
+                targets: targets,
+                direction: direction,
+                distance: distance
+            )
+        )
+    }
+
+    @discardableResult
+    public func slideSurfaceControlPoints(
+        targets: [SelectionReference],
+        direction: PolySplineSurfaceVertexSlideDirection,
+        distance: CADExpression
+    ) -> CommandExecutionResult? {
+        perform(
+            .slideSurfaceControlPoints(
                 targets: targets,
                 direction: direction,
                 distance: distance

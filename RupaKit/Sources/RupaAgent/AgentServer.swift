@@ -1030,6 +1030,16 @@ public final class AgentServer: AgentClientProtocol {
             failureMode: "Rejects non-PolySpline generated vertices, stale generations, zero or invalid deltas, unsupported source meshes, moves that remove the selected patch, moves that change the selected boundary role, and moves that leave the current evaluator unable to rebuild supported B-spline sheet topology."
         ),
         capability(
+            "moveSurfaceControlPoint",
+            category: .solid,
+            summary: "Move a source-owned surface control point from a Swift-CAD SelectionReference without requiring UI scene-node targeting.",
+            access: .automationCommand,
+            mutatesDocument: true,
+            discovery: [.surfaceSourceSummary, .selectionMeasurement, .surfaceAnalysis, .surfaceContinuitySummary],
+            targets: [.surfaceControlPoint],
+            failureMode: "Currently accepts PolySpline patch boundary corner control point references discovered from surfaceSourceSummary; rejects non-control-point references, non-PolySpline surfaces, interior surface CV indexes, stale generations, zero or invalid deltas, unsupported source meshes, moves that change the selected boundary role, and invalid rebuilt B-spline sheet topology."
+        ),
+        capability(
             "slidePolySplineSurfaceVertices",
             category: .solid,
             summary: "Slide generated PolySpline patch boundary CVs along local surface hull U, V, or normal directions with an explicit distance.",
@@ -1038,6 +1048,16 @@ public final class AgentServer: AgentClientProtocol {
             discovery: [.topologySummary, .surfaceAnalysis, .surfaceContinuitySummary],
             targets: [.vertex],
             failureMode: "Rejects non-PolySpline generated vertices, stale generations, empty or duplicate source-vertex targets, zero or invalid distances, collapsed local U/V/normal directions, unsupported source meshes, slides that remove the selected patch, slides that change the selected boundary role, and slides that leave the current evaluator unable to rebuild supported B-spline sheet topology."
+        ),
+        capability(
+            "slideSurfaceControlPoints",
+            category: .solid,
+            summary: "Slide source-owned surface control points from Swift-CAD SelectionReference values along local surface hull U, V, or normal directions.",
+            access: .automationCommand,
+            mutatesDocument: true,
+            discovery: [.surfaceSourceSummary, .selectionMeasurement, .surfaceAnalysis, .surfaceContinuitySummary],
+            targets: [.surfaceControlPoint],
+            failureMode: "Currently accepts PolySpline patch boundary corner control point references discovered from surfaceSourceSummary; rejects non-control-point references, non-PolySpline surfaces, interior surface CV indexes, stale generations, empty or duplicate source-vertex targets, zero or invalid distances, collapsed local U/V/normal directions, slides that change selected boundary roles, and invalid rebuilt B-spline sheet topology."
         ),
         capability(
             "createExtrudedRectangle",

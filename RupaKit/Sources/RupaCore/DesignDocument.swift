@@ -15409,6 +15409,26 @@ public struct DesignDocument: Identifiable, Sendable {
         }
     }
 
+    public mutating func moveSurfaceControlPoint(
+        target: SelectionReference,
+        deltaX: CADExpression,
+        deltaY: CADExpression,
+        deltaZ: CADExpression,
+        objectRegistry: ObjectTypeRegistry = .builtIn
+    ) throws {
+        let resolvedTarget = try SurfaceControlPointSelectionTargetResolver().target(
+            for: target,
+            in: self
+        )
+        try movePolySplineSurfaceVertex(
+            target: resolvedTarget,
+            deltaX: deltaX,
+            deltaY: deltaY,
+            deltaZ: deltaZ,
+            objectRegistry: objectRegistry
+        )
+    }
+
     public mutating func slidePolySplineSurfaceVertices(
         targets: [SelectionTarget],
         direction: PolySplineSurfaceVertexSlideDirection,
@@ -15559,6 +15579,32 @@ public struct DesignDocument: Identifiable, Sendable {
                 message: "PolySpline surface vertex slide produced invalid source geometry: \(error)."
             )
         }
+    }
+
+    public mutating func slideSurfaceControlPoints(
+        targets: [SelectionReference],
+        direction: PolySplineSurfaceVertexSlideDirection,
+        distance: CADExpression,
+        objectRegistry: ObjectTypeRegistry = .builtIn
+    ) throws {
+        guard targets.isEmpty == false else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Surface control point slide requires at least one surface control point selection reference."
+            )
+        }
+        let resolver = SurfaceControlPointSelectionTargetResolver()
+        var resolvedTargets: [SelectionTarget] = []
+        resolvedTargets.reserveCapacity(targets.count)
+        for target in targets {
+            resolvedTargets.append(try resolver.target(for: target, in: self))
+        }
+        try slidePolySplineSurfaceVertices(
+            targets: resolvedTargets,
+            direction: direction,
+            distance: distance,
+            objectRegistry: objectRegistry
+        )
     }
 
     @discardableResult
