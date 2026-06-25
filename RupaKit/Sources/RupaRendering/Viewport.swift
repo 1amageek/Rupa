@@ -3838,11 +3838,9 @@ public struct Viewport: View {
         guard let activePolySplineSurfaceVertexDrag else {
             return
         }
-        let start = layout.project(activePolySplineSurfaceVertexDrag.target.point)
-        let movedPoint = point(
-            activePolySplineSurfaceVertexDrag.target.point,
-            offsetBy: activePolySplineSurfaceVertexDrag.delta
-        )
+        let geometry = activePolySplineSurfaceVertexDrag.target.geometry
+        let start = geometry.projectedPoint(layout: layout)
+        let movedPoint = geometry.displayPoint(offsetByLocalDelta: activePolySplineSurfaceVertexDrag.delta)
         let end = layout.project(movedPoint)
         var path = Path()
         path.move(to: start)
@@ -3863,7 +3861,8 @@ public struct Viewport: View {
         layout: ViewportLayout,
         in context: inout GraphicsContext
     ) {
-        let point = layout.project(target.point)
+        let geometry = target.geometry
+        let point = geometry.projectedPoint(layout: layout)
         drawPolySplineSurfaceVertexAxisHandles(
             target,
             highlightedMode: target.dragMode,
@@ -3893,11 +3892,11 @@ public struct Viewport: View {
         layout: ViewportLayout,
         in context: inout GraphicsContext
     ) {
-        let start = layout.project(target.point)
+        let geometry = target.geometry
+        let start = geometry.projectedPoint(layout: layout)
         for axis in ViewportCoordinateAxis.allCases {
-            guard let end = polySplineSurfaceVertexAxisEndpoint(
+            guard let end = geometry.axisEndpoint(
                 axis: axis,
-                point: target.point,
                 viewportLength: polySplineSurfaceVertexAxisViewportLength,
                 layout: layout
             ) else {
@@ -3918,8 +3917,8 @@ public struct Viewport: View {
                 topologyVertices: topologyVertices
             ),
                   let end = polySplineSurfaceVertexLocalAxisEndpoint(
+                      target: target,
                       direction: direction,
-                      point: target.point,
                       viewportLength: polySplineSurfaceVertexLocalAxisViewportLength,
                       layout: layout
                   ) else {
@@ -3935,41 +3934,6 @@ public struct Viewport: View {
         }
     }
 
-    private func point(_ point: Point3D, offsetBy delta: Point3D) -> Point3D {
-        Point3D(
-            x: point.x + delta.x,
-            y: point.y + delta.y,
-            z: point.z + delta.z
-        )
-    }
-
-    private func point(
-        _ point: Point3D,
-        offsetBy direction: Vector3D,
-        distanceMeters: Double
-    ) -> Point3D {
-        Point3D(
-            x: point.x + direction.x * distanceMeters,
-            y: point.y + direction.y * distanceMeters,
-            z: point.z + direction.z * distanceMeters
-        )
-    }
-
-    private func point(
-        _ point: Point3D,
-        offset axis: ViewportCoordinateAxis,
-        amount: Double
-    ) -> Point3D {
-        switch axis {
-        case .x:
-            Point3D(x: point.x + amount, y: point.y, z: point.z)
-        case .y:
-            Point3D(x: point.x, y: point.y + amount, z: point.z)
-        case .z:
-            Point3D(x: point.x, y: point.y, z: point.z + amount)
-        }
-    }
-
     private var polySplineSurfaceVertexAxisViewportLength: CGFloat {
         52.0
     }
@@ -3978,60 +3942,17 @@ public struct Viewport: View {
         62.0
     }
 
-    private func polySplineSurfaceVertexAxisEndpoint(
-        axis: ViewportCoordinateAxis,
-        point: Point3D,
-        viewportLength: CGFloat,
-        layout: ViewportLayout
-    ) -> CGPoint? {
-        let axisVector = polySplineSurfaceVertexProjectedAxisVector(
-            axis: axis,
-            point: point,
-            layout: layout
-        )
-        guard axisVector.length > 1.0e-9 else {
-            return nil
-        }
-        let amount = Double(viewportLength / axisVector.length)
-        return layout.project(self.point(point, offset: axis, amount: amount))
-    }
-
     private func polySplineSurfaceVertexLocalAxisEndpoint(
+        target: ViewportPolySplineSurfaceVertexHandleTarget,
         direction: Vector3D,
-        point: Point3D,
         viewportLength: CGFloat,
         layout: ViewportLayout
     ) -> CGPoint? {
-        let axisVector = polySplineSurfaceVertexProjectedLocalAxisVector(
+        target.geometry.localAxisEndpoint(
             direction: direction,
-            point: point,
+            viewportLength: viewportLength,
             layout: layout
         )
-        guard axisVector.length > 1.0e-9 else {
-            return nil
-        }
-        let amount = Double(viewportLength / axisVector.length)
-        return layout.project(self.point(point, offsetBy: direction, distanceMeters: amount))
-    }
-
-    private func polySplineSurfaceVertexProjectedAxisVector(
-        axis: ViewportCoordinateAxis,
-        point: Point3D,
-        layout: ViewportLayout
-    ) -> CGVector {
-        let start = layout.project(point)
-        let end = layout.project(self.point(point, offset: axis, amount: 1.0))
-        return CGVector(dx: end.x - start.x, dy: end.y - start.y)
-    }
-
-    private func polySplineSurfaceVertexProjectedLocalAxisVector(
-        direction: Vector3D,
-        point: Point3D,
-        layout: ViewportLayout
-    ) -> CGVector {
-        let start = layout.project(point)
-        let end = layout.project(self.point(point, offsetBy: direction, distanceMeters: 1.0))
-        return CGVector(dx: end.x - start.x, dy: end.y - start.y)
     }
 
     private func polySplineSurfaceVertexLocalDirection(
@@ -8298,6 +8219,7 @@ public struct Viewport: View {
                     target: target.target,
                     componentID: target.componentID,
                     point: target.point,
+                    modelTransform: target.modelTransform,
                     dragMode: .localAxis(localAxisHit.axis, direction: localAxisHit.direction)
                 )
             }
@@ -8311,12 +8233,13 @@ public struct Viewport: View {
                     target: target.target,
                     componentID: target.componentID,
                     point: target.point,
+                    modelTransform: target.modelTransform,
                     dragMode: .axis(axis)
                 )
             }
         }
         for target in polySplineSurfaceVertexHandleTargets(in: scene) {
-            let projectedPoint = layout.project(target.point)
+            let projectedPoint = target.geometry.projectedPoint(layout: layout)
             guard point.distance(to: projectedPoint) <= handleTolerance else {
                 continue
             }
@@ -8406,6 +8329,7 @@ public struct Viewport: View {
                 target: target,
                 componentID: componentID,
                 point: vertex.point,
+                modelTransform: item.modelTransform,
                 dragMode: .planar
             )
         }
@@ -8416,12 +8340,11 @@ public struct Viewport: View {
         target: ViewportPolySplineSurfaceVertexHandleTarget,
         layout: ViewportLayout
     ) -> ViewportCoordinateAxis? {
-        let center = layout.project(target.point)
+        let center = target.geometry.projectedPoint(layout: layout)
         var nearest: (axis: ViewportCoordinateAxis, distance: CGFloat)?
         for axis in ViewportCoordinateAxis.allCases {
-            guard let endpoint = polySplineSurfaceVertexAxisEndpoint(
+            guard let endpoint = target.geometry.axisEndpoint(
                 axis: axis,
-                point: target.point,
                 viewportLength: polySplineSurfaceVertexAxisViewportLength,
                 layout: layout
             ),
@@ -8445,7 +8368,7 @@ public struct Viewport: View {
         topologyVertices: [ViewportBodyTopology.Vertex],
         layout: ViewportLayout
     ) -> ViewportPolySplineSurfaceVertexLocalAxisHit? {
-        let center = layout.project(target.point)
+        let center = target.geometry.projectedPoint(layout: layout)
         var nearest: (hit: ViewportPolySplineSurfaceVertexLocalAxisHit, distance: CGFloat)?
         for localAxis in ViewportPolySplineSurfaceVertexLocalAxis.allCases {
             guard let direction = polySplineSurfaceVertexLocalDirection(
@@ -8454,8 +8377,8 @@ public struct Viewport: View {
                 topologyVertices: topologyVertices
             ),
                   let endpoint = polySplineSurfaceVertexLocalAxisEndpoint(
+                      target: target,
                       direction: direction,
-                      point: target.point,
                       viewportLength: polySplineSurfaceVertexLocalAxisViewportLength,
                       layout: layout
                   ),
@@ -9386,35 +9309,21 @@ public struct Viewport: View {
         let delta: Point3D
         switch target.dragMode {
         case .planar:
-            let startPoint = layout.unproject(start)
-            let currentPoint = layout.unproject(current)
-            delta = Point3D(
-                x: Double(currentPoint.x - startPoint.x),
-                y: 0.0,
-                z: Double(currentPoint.y - startPoint.y)
-            )
+            delta = target.geometry.localPlanarDelta(start: start, current: current, layout: layout)
         case .axis(let axis):
-            let amount = ViewportSurfaceVertexAxisDragMapping.modelAmount(
-                axisVector: polySplineSurfaceVertexProjectedAxisVector(
-                    axis: axis,
-                    point: target.point,
-                    layout: layout
-                ),
+            delta = target.geometry.localDelta(
+                axis: axis,
                 start: start,
-                current: current
+                current: current,
+                layout: layout
             )
-            delta = ViewportSurfaceVertexAxisDragMapping.delta(axis: axis, amount: amount)
         case .localAxis(_, let direction):
-            let amount = ViewportSurfaceVertexAxisDragMapping.modelAmount(
-                axisVector: polySplineSurfaceVertexProjectedLocalAxisVector(
-                    direction: direction,
-                    point: target.point,
-                    layout: layout
-                ),
+            delta = target.geometry.localDelta(
+                direction: direction,
                 start: start,
-                current: current
+                current: current,
+                layout: layout
             )
-            delta = ViewportSurfaceVertexAxisDragMapping.delta(direction: direction, amount: amount)
         }
         activePolySplineSurfaceVertexDrag = ViewportPolySplineSurfaceVertexDragState(
             target: target,
@@ -11662,7 +11571,15 @@ private struct ViewportPolySplineSurfaceVertexHandleTarget: Equatable {
     var target: SelectionTarget
     var componentID: SelectionComponentID
     var point: Point3D
+    var modelTransform: Transform3D
     var dragMode: ViewportPolySplineSurfaceVertexDragMode
+
+    var geometry: ViewportPolySplineSurfaceVertexDragGeometry {
+        ViewportPolySplineSurfaceVertexDragGeometry(
+            localPoint: point,
+            modelTransform: modelTransform
+        )
+    }
 }
 
 private struct ViewportPolySplineSurfaceVertexLocalAxisHit: Equatable {

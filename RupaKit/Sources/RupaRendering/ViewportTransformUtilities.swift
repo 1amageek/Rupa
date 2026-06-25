@@ -53,4 +53,37 @@ extension Transform3D {
             z: values[2] * vector.x + values[6] * vector.y + values[10] * vector.z
         )
     }
+
+    func viewportInverseTransformedVector(_ vector: Vector3D) -> Vector3D? {
+        let values = matrix.values
+        guard values.count == 16 else {
+            return vector
+        }
+        let a = values[0]
+        let b = values[4]
+        let c = values[8]
+        let d = values[1]
+        let e = values[5]
+        let f = values[9]
+        let g = values[2]
+        let h = values[6]
+        let i = values[10]
+        let determinant = a * (e * i - f * h)
+            - b * (d * i - f * g)
+            + c * (d * h - e * g)
+        guard abs(determinant) > 1.0e-12 else {
+            return nil
+        }
+        return Vector3D(
+            x: ((e * i - f * h) * vector.x
+                + (c * h - b * i) * vector.y
+                + (b * f - c * e) * vector.z) / determinant,
+            y: ((f * g - d * i) * vector.x
+                + (a * i - c * g) * vector.y
+                + (c * d - a * f) * vector.z) / determinant,
+            z: ((d * h - e * g) * vector.x
+                + (b * g - a * h) * vector.y
+                + (a * e - b * d) * vector.z) / determinant
+        )
+    }
 }
