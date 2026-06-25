@@ -464,6 +464,7 @@ public struct MainView: View {
                     onSketchVertexOffsetDrag: viewportSketchVertexOffsetDragHandler,
                     onPatternArrayLinearAxisDrag: viewportPatternArrayLinearAxisDragHandler,
                     onIndependentCopyExtrudeDistanceDrag: viewportIndependentCopyExtrudeDistanceDragHandler,
+                    onIndependentCopyBodyDimensionDrag: viewportIndependentCopyBodyDimensionDragHandler,
                     onPatternArrayRadialAngleDrag: viewportPatternArrayRadialAngleDragHandler,
                     onPatternArrayCopyCountDrag: viewportPatternArrayCopyCountDragHandler,
                     onPatternArrayCurveExtentDrag: viewportPatternArrayCurveExtentDragHandler,
@@ -693,6 +694,15 @@ public struct MainView: View {
         }
         return { target in
             handleViewportIndependentCopyExtrudeDistanceDrag(target)
+        }
+    }
+
+    private var viewportIndependentCopyBodyDimensionDragHandler: ((ViewportIndependentCopyBodyDimensionDragTarget) -> Void)? {
+        guard session.selectedTool == .select else {
+            return nil
+        }
+        return { target in
+            handleViewportIndependentCopyBodyDimensionDrag(target)
         }
     }
 
@@ -3455,6 +3465,60 @@ public struct MainView: View {
             featureID: target.featureID,
             distance: .length(target.distance, .meter)
         )
+    }
+
+    private func handleViewportIndependentCopyBodyDimensionDrag(
+        _ target: ViewportIndependentCopyBodyDimensionDragTarget
+    ) {
+        guard session.selectedTool == .select,
+              target.value.isFinite,
+              target.value > 0.0,
+              let bodySceneNodeID = sceneNodeID(forBodyFeatureID: target.featureID) else {
+            return
+        }
+        let summary: ObjectDimensionSummaryResult
+        do {
+            summary = try ObjectDimensionSummaryService().summarize(
+                document: session.document,
+                targets: [SelectionTarget(sceneNodeID: bodySceneNodeID)],
+                objectRegistry: objectRegistry
+            )
+        } catch {
+            isPreviewExpanded = true
+            return
+        }
+        func currentDimension(_ kind: ObjectDimensionKind) -> Double? {
+            summary.entries.first { $0.kind == kind }?.resolvedMeters
+        }
+        switch target.kind {
+        case .sizeX, .sizeZ:
+            guard let sizeX = currentDimension(.sizeX),
+                  let sizeY = currentDimension(.sizeY),
+                  let sizeZ = currentDimension(.sizeZ) else {
+                return
+            }
+            session.setCubeDimensions(
+                featureID: target.featureID,
+                sizeX: .length(target.kind == .sizeX ? target.value : sizeX, .meter),
+                sizeY: .length(sizeY, .meter),
+                sizeZ: .length(target.kind == .sizeZ ? target.value : sizeZ, .meter)
+            )
+        case .radius:
+            guard let sizeY = currentDimension(.sizeY) else {
+                return
+            }
+            session.setCylinderDimensions(
+                featureID: target.featureID,
+                radius: .length(target.value, .meter),
+                sizeY: .length(sizeY, .meter)
+            )
+        }
+    }
+
+    private func sceneNodeID(forBodyFeatureID featureID: FeatureID) -> SceneNodeID? {
+        session.document.productMetadata.sceneNodes.first { _, node in
+            node.reference == .body(featureID)
+        }?.key
     }
 
     private func handleViewportPatternArrayRadialAngleDrag(

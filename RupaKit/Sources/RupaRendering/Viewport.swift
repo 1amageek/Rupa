@@ -20,6 +20,7 @@ public struct Viewport: View {
     @State private var activeSketchVertexOffsetDrag: ViewportSketchVertexOffsetDragState?
     @State private var activePatternArrayLinearAxisDrag: ViewportPatternArrayLinearAxisDragState?
     @State private var activeIndependentCopyExtrudeDistanceDrag: ViewportIndependentCopyExtrudeDistanceDragState?
+    @State private var activeIndependentCopyBodyDimensionDrag: ViewportIndependentCopyBodyDimensionDragState?
     @State private var activePatternArrayRadialAngleDrag: ViewportPatternArrayRadialAngleDragState?
     @State private var activePatternArrayCopyCountDrag: ViewportPatternArrayCopyCountDragState?
     @State private var activePatternArrayCurveExtentDrag: ViewportPatternArrayCurveExtentDragState?
@@ -40,6 +41,7 @@ public struct Viewport: View {
     @State private var hoveredSketchVertexOffsetHandle: ViewportSketchVertexOffsetHandleTarget?
     @State private var hoveredPatternArrayLinearAxisHandle: ViewportPatternArrayLinearAxisHandleTarget?
     @State private var hoveredIndependentCopyExtrudeDistanceHandle: ViewportIndependentCopyExtrudeDistanceHandleTarget?
+    @State private var hoveredIndependentCopyBodyDimensionHandle: ViewportIndependentCopyBodyDimensionHandleTarget?
     @State private var hoveredPatternArrayRadialAngleHandle: ViewportPatternArrayRadialAngleHandleTarget?
     @State private var hoveredPatternArrayCopyCountHandle: ViewportPatternArrayCopyCountHandleTarget?
     @State private var hoveredPatternArrayCurveExtentHandle: ViewportPatternArrayCurveExtentHandleTarget?
@@ -59,6 +61,7 @@ public struct Viewport: View {
     @State private var pendingSketchVertexOffsetHandle: ViewportSketchVertexOffsetHandleTarget?
     @State private var pendingPatternArrayLinearAxisHandle: ViewportPatternArrayLinearAxisHandleTarget?
     @State private var pendingIndependentCopyExtrudeDistanceHandle: ViewportIndependentCopyExtrudeDistanceHandleTarget?
+    @State private var pendingIndependentCopyBodyDimensionHandle: ViewportIndependentCopyBodyDimensionHandleTarget?
     @State private var pendingPatternArrayRadialAngleHandle: ViewportPatternArrayRadialAngleHandleTarget?
     @State private var pendingPatternArrayCopyCountHandle: ViewportPatternArrayCopyCountHandleTarget?
     @State private var pendingPatternArrayCurveExtentHandle: ViewportPatternArrayCurveExtentHandleTarget?
@@ -116,6 +119,7 @@ public struct Viewport: View {
     private let onSketchVertexOffsetDrag: ((ViewportSketchVertexOffsetDragTarget) -> Void)?
     private let onPatternArrayLinearAxisDrag: ((ViewportPatternArrayLinearAxisDragTarget) -> Void)?
     private let onIndependentCopyExtrudeDistanceDrag: ((ViewportIndependentCopyExtrudeDistanceDragTarget) -> Void)?
+    private let onIndependentCopyBodyDimensionDrag: ((ViewportIndependentCopyBodyDimensionDragTarget) -> Void)?
     private let onPatternArrayRadialAngleDrag: ((ViewportPatternArrayRadialAngleDragTarget) -> Void)?
     private let onPatternArrayCopyCountDrag: ((ViewportPatternArrayCopyCountDragTarget) -> Void)?
     private let onPatternArrayCurveExtentDrag: ((ViewportPatternArrayCurveExtentDragTarget) -> Void)?
@@ -177,6 +181,7 @@ public struct Viewport: View {
         onSketchVertexOffsetDrag: ((ViewportSketchVertexOffsetDragTarget) -> Void)? = nil,
         onPatternArrayLinearAxisDrag: ((ViewportPatternArrayLinearAxisDragTarget) -> Void)? = nil,
         onIndependentCopyExtrudeDistanceDrag: ((ViewportIndependentCopyExtrudeDistanceDragTarget) -> Void)? = nil,
+        onIndependentCopyBodyDimensionDrag: ((ViewportIndependentCopyBodyDimensionDragTarget) -> Void)? = nil,
         onPatternArrayRadialAngleDrag: ((ViewportPatternArrayRadialAngleDragTarget) -> Void)? = nil,
         onPatternArrayCopyCountDrag: ((ViewportPatternArrayCopyCountDragTarget) -> Void)? = nil,
         onPatternArrayCurveExtentDrag: ((ViewportPatternArrayCurveExtentDragTarget) -> Void)? = nil,
@@ -237,6 +242,7 @@ public struct Viewport: View {
         self.onSketchVertexOffsetDrag = onSketchVertexOffsetDrag
         self.onPatternArrayLinearAxisDrag = onPatternArrayLinearAxisDrag
         self.onIndependentCopyExtrudeDistanceDrag = onIndependentCopyExtrudeDistanceDrag
+        self.onIndependentCopyBodyDimensionDrag = onIndependentCopyBodyDimensionDrag
         self.onPatternArrayRadialAngleDrag = onPatternArrayRadialAngleDrag
         self.onPatternArrayCopyCountDrag = onPatternArrayCopyCountDrag
         self.onPatternArrayCurveExtentDrag = onPatternArrayCurveExtentDrag
@@ -893,6 +899,12 @@ public struct Viewport: View {
         )
 
         drawIndependentCopyExtrudeDistanceAffordances(
+            scene: scene,
+            layout: layout,
+            in: &context
+        )
+
+        drawIndependentCopyBodyDimensionAffordances(
             scene: scene,
             layout: layout,
             in: &context
@@ -4567,6 +4579,80 @@ public struct Viewport: View {
         )
     }
 
+    private func drawIndependentCopyBodyDimensionAffordances(
+        scene: ViewportScene,
+        layout: ViewportLayout,
+        in context: inout GraphicsContext
+    ) {
+        guard onIndependentCopyBodyDimensionDrag != nil else {
+            return
+        }
+        let candidates = independentCopyBodyDimensionAffordanceCandidates(
+            scene: scene,
+            layout: layout
+        )
+        guard !candidates.isEmpty else {
+            return
+        }
+        for candidate in candidates {
+            let identity = candidate.target.identity
+            let dragValue = activeIndependentCopyBodyDimensionDrag?.target.identity == identity
+                ? activeIndependentCopyBodyDimensionDrag?.valueMeters
+                : nil
+            let isHighlighted = hoveredIndependentCopyBodyDimensionHandle?.identity == identity
+                || pendingIndependentCopyBodyDimensionHandle?.identity == identity
+                || activeIndependentCopyBodyDimensionDrag?.target.identity == identity
+            drawIndependentCopyBodyDimensionAffordance(
+                candidate,
+                valueMeters: dragValue ?? candidate.geometry.baseDistanceMeters,
+                showsLabel: dragValue != nil || isHighlighted,
+                isHighlighted: isHighlighted,
+                in: &context
+            )
+        }
+    }
+
+    private func drawIndependentCopyBodyDimensionAffordance(
+        _ candidate: ViewportIndependentCopyBodyDimensionAffordanceCandidate,
+        valueMeters: Double,
+        showsLabel: Bool,
+        isHighlighted: Bool,
+        in context: inout GraphicsContext
+    ) {
+        let start = candidate.geometry.baseProjectedPoint
+        let end = candidate.geometry.projectedTip(distanceMeters: valueMeters)
+        let color = Color.cyan
+        drawArrow(
+            from: start,
+            to: end,
+            color: color,
+            isHighlighted: isHighlighted,
+            in: &context
+        )
+        drawTransformHandle(
+            at: end,
+            style: .faceCenter,
+            isHighlighted: isHighlighted,
+            in: &context
+        )
+
+        guard showsLabel else {
+            return
+        }
+        let direction = CGVector(dx: end.x - start.x, dy: end.y - start.y).normalized
+        let normal = CGVector(dx: -direction.dy, dy: direction.dx)
+        drawDimensionLabel(
+            "\(candidate.target.label) \(formattedViewportLength(valueMeters))",
+            at: CGPoint(
+                x: end.x + normal.dx * 20.0 + direction.dx * 10.0,
+                y: end.y + normal.dy * 20.0 + direction.dy * 10.0
+            ),
+            color: color,
+            isHighlighted: isHighlighted,
+            in: &context
+        )
+    }
+
     private func drawPatternArrayRadialAngleAffordances(
         scene: ViewportScene,
         layout: ViewportLayout,
@@ -6706,6 +6792,21 @@ public struct Viewport: View {
         )
     }
 
+    private func independentCopyBodyDimensionAffordanceCandidates(
+        scene: ViewportScene,
+        layout: ViewportLayout
+    ) -> [ViewportIndependentCopyBodyDimensionAffordanceCandidate] {
+        guard onIndependentCopyBodyDimensionDrag != nil else {
+            return []
+        }
+        return ViewportIndependentCopyBodyDimensionAffordanceService().candidates(
+            document: document,
+            scene: scene,
+            selection: selection,
+            layout: layout
+        )
+    }
+
     private func patternArrayRadialAngleAffordanceCandidates(
         scene: ViewportScene,
         layout: ViewportLayout
@@ -7463,6 +7564,17 @@ public struct Viewport: View {
         if activeIndependentCopyExtrudeDistanceDrag != nil {
             return
         }
+        if let start, let current, let pendingIndependentCopyBodyDimensionHandle {
+            updateIndependentCopyBodyDimensionDrag(
+                target: pendingIndependentCopyBodyDimensionHandle,
+                start: start,
+                current: current
+            )
+            return
+        }
+        if activeIndependentCopyBodyDimensionDrag != nil {
+            return
+        }
         if let start, let current, let pendingPatternArrayLinearAxisHandle {
             updatePatternArrayLinearAxisDrag(
                 target: pendingPatternArrayLinearAxisHandle,
@@ -7631,6 +7743,11 @@ public struct Viewport: View {
         }
         if let independentCopyExtrudeDistanceTarget = selectedIndependentCopyExtrudeDistanceAffordanceTarget(at: point, size: size) {
             pendingIndependentCopyExtrudeDistanceHandle = independentCopyExtrudeDistanceTarget
+            activeCanvasDrag = nil
+            return
+        }
+        if let independentCopyBodyDimensionTarget = selectedIndependentCopyBodyDimensionAffordanceTarget(at: point, size: size) {
+            pendingIndependentCopyBodyDimensionHandle = independentCopyBodyDimensionTarget
             activeCanvasDrag = nil
             return
         }
@@ -8673,6 +8790,34 @@ public struct Viewport: View {
         return nil
     }
 
+    private func selectedIndependentCopyBodyDimensionAffordanceTarget(
+        at point: CGPoint,
+        size: CGSize
+    ) -> ViewportIndependentCopyBodyDimensionHandleTarget? {
+        guard onIndependentCopyBodyDimensionDrag != nil else {
+            return nil
+        }
+        let sceneContext = makeSceneContext(
+            size: size,
+            camera: camera,
+            basis: currentProjectionBasis
+        )
+        let candidates = independentCopyBodyDimensionAffordanceCandidates(
+            scene: sceneContext.scene,
+            layout: sceneContext.layout
+        )
+        for candidate in candidates.reversed() {
+            let start = candidate.geometry.baseProjectedPoint
+            let end = candidate.geometry.projectedTip()
+            let lineHit = point.distanceToSegment(start: start, end: end) <= 10.0
+            let tipHit = point.distance(to: end) <= 14.0
+            if lineHit || tipHit {
+                return candidate.target
+            }
+        }
+        return nil
+    }
+
     private func selectedPatternArrayRadialAngleAffordanceTarget(
         at point: CGPoint,
         size: CGSize
@@ -9407,6 +9552,21 @@ public struct Viewport: View {
         )
     }
 
+    private func updateIndependentCopyBodyDimensionDrag(
+        target: ViewportIndependentCopyBodyDimensionHandleTarget,
+        start: CGPoint,
+        current: CGPoint
+    ) {
+        activeIndependentCopyBodyDimensionDrag = ViewportIndependentCopyBodyDimensionDragState(
+            target: target,
+            startPoint: start,
+            valueMeters: target.geometry.axisDistance(
+                start: start,
+                current: current
+            )
+        )
+    }
+
     private func updatePatternArrayRadialAngleDrag(
         target: ViewportPatternArrayRadialAngleHandleTarget,
         start: CGPoint,
@@ -9761,6 +9921,11 @@ public struct Viewport: View {
             activeIndependentCopyExtrudeDistanceDrag = nil
             return
         }
+        if pendingIndependentCopyBodyDimensionHandle != nil {
+            pendingIndependentCopyBodyDimensionHandle = nil
+            activeIndependentCopyBodyDimensionDrag = nil
+            return
+        }
         if pendingPatternArrayLinearAxisHandle != nil {
             pendingPatternArrayLinearAxisHandle = nil
             activePatternArrayLinearAxisDrag = nil
@@ -9935,6 +10100,16 @@ public struct Viewport: View {
             activeCanvasDrag = nil
             if let independentCopyExtrudeDistanceDragTarget {
                 onIndependentCopyExtrudeDistanceDrag?(independentCopyExtrudeDistanceDragTarget)
+            }
+            return
+        }
+        if pendingIndependentCopyBodyDimensionHandle != nil || activeIndependentCopyBodyDimensionDrag != nil {
+            let independentCopyBodyDimensionDragTarget = committedIndependentCopyBodyDimensionDragTarget()
+            pendingIndependentCopyBodyDimensionHandle = nil
+            activeIndependentCopyBodyDimensionDrag = nil
+            activeCanvasDrag = nil
+            if let independentCopyBodyDimensionDragTarget {
+                onIndependentCopyBodyDimensionDrag?(independentCopyBodyDimensionDragTarget)
             }
             return
         }
@@ -10286,6 +10461,24 @@ public struct Viewport: View {
             outputSceneNodeID: activeIndependentCopyExtrudeDistanceDrag.target.outputSceneNodeID,
             featureID: activeIndependentCopyExtrudeDistanceDrag.target.featureID,
             distance: distance
+        )
+    }
+
+    private func committedIndependentCopyBodyDimensionDragTarget() -> ViewportIndependentCopyBodyDimensionDragTarget? {
+        guard let activeIndependentCopyBodyDimensionDrag else {
+            return nil
+        }
+        let value = activeIndependentCopyBodyDimensionDrag.valueMeters
+        guard abs(value - activeIndependentCopyBodyDimensionDrag.target.geometry.baseDistanceMeters) > 1.0e-12 else {
+            return nil
+        }
+        return ViewportIndependentCopyBodyDimensionDragTarget(
+            sourceID: activeIndependentCopyBodyDimensionDrag.target.sourceID,
+            outputIndex: activeIndependentCopyBodyDimensionDrag.target.outputIndex,
+            outputSceneNodeID: activeIndependentCopyBodyDimensionDrag.target.outputSceneNodeID,
+            featureID: activeIndependentCopyBodyDimensionDrag.target.featureID,
+            kind: activeIndependentCopyBodyDimensionDrag.target.kind,
+            value: value
         )
     }
 
@@ -10642,6 +10835,7 @@ public struct Viewport: View {
         hoveredSketchVertexOffsetHandle = nil
         hoveredPatternArrayLinearAxisHandle = nil
         hoveredIndependentCopyExtrudeDistanceHandle = nil
+        hoveredIndependentCopyBodyDimensionHandle = nil
         hoveredPatternArrayRadialAngleHandle = nil
         hoveredPatternArrayCopyCountHandle = nil
         hoveredPatternArrayCurveExtentHandle = nil
@@ -10759,6 +10953,7 @@ public struct Viewport: View {
             hoveredSketchVertexOffsetHandle = nil
             hoveredPatternArrayLinearAxisHandle = nil
             hoveredIndependentCopyExtrudeDistanceHandle = nil
+            hoveredIndependentCopyBodyDimensionHandle = nil
             hoveredPatternArrayRadialAngleHandle = nil
             hoveredPatternArrayCopyCountHandle = nil
             hoveredPatternArrayCurveExtentHandle = nil
@@ -10773,6 +10968,7 @@ public struct Viewport: View {
         hoveredSlotWidthHandle = nil
         if let independentCopyExtrudeDistanceTarget = selectedIndependentCopyExtrudeDistanceAffordanceTarget(at: point, size: size) {
             hoveredIndependentCopyExtrudeDistanceHandle = independentCopyExtrudeDistanceTarget
+            hoveredIndependentCopyBodyDimensionHandle = nil
             hoveredPatternArrayLinearAxisHandle = nil
             hoveredPatternArrayRadialAngleHandle = nil
             hoveredPatternArrayCopyCountHandle = nil
@@ -10787,9 +10983,26 @@ public struct Viewport: View {
             return
         }
         hoveredIndependentCopyExtrudeDistanceHandle = nil
+        if let independentCopyBodyDimensionTarget = selectedIndependentCopyBodyDimensionAffordanceTarget(at: point, size: size) {
+            hoveredIndependentCopyBodyDimensionHandle = independentCopyBodyDimensionTarget
+            hoveredPatternArrayLinearAxisHandle = nil
+            hoveredPatternArrayRadialAngleHandle = nil
+            hoveredPatternArrayCopyCountHandle = nil
+            hoveredPatternArrayCurveExtentHandle = nil
+            hoveredPatternArrayCurvePathPointHandle = nil
+            hoveredPatternArrayOutputModeHandle = nil
+            hoveredSketchVertexOffsetHandle = nil
+            hoveredAffordance = nil
+            hoveredCanvasHit = nil
+            hoveredModelPoint = nil
+            clearHoverCallbacks()
+            return
+        }
+        hoveredIndependentCopyBodyDimensionHandle = nil
         if let patternArrayLinearAxisTarget = selectedPatternArrayLinearAxisAffordanceTarget(at: point, size: size) {
             hoveredPatternArrayLinearAxisHandle = patternArrayLinearAxisTarget
             hoveredIndependentCopyExtrudeDistanceHandle = nil
+            hoveredIndependentCopyBodyDimensionHandle = nil
             hoveredPatternArrayRadialAngleHandle = nil
             hoveredPatternArrayCopyCountHandle = nil
             hoveredPatternArrayCurveExtentHandle = nil
@@ -10941,6 +11154,7 @@ public struct Viewport: View {
         hoveredSketchVertexOffsetHandle = nil
         hoveredPatternArrayLinearAxisHandle = nil
         hoveredIndependentCopyExtrudeDistanceHandle = nil
+        hoveredIndependentCopyBodyDimensionHandle = nil
         hoveredPatternArrayRadialAngleHandle = nil
         hoveredPatternArrayCopyCountHandle = nil
         hoveredPatternArrayCurveExtentHandle = nil
@@ -11189,6 +11403,12 @@ private struct ViewportIndependentCopyExtrudeDistanceDragState: Equatable {
     var target: ViewportIndependentCopyExtrudeDistanceHandleTarget
     var startPoint: CGPoint
     var distanceMeters: Double
+}
+
+private struct ViewportIndependentCopyBodyDimensionDragState: Equatable {
+    var target: ViewportIndependentCopyBodyDimensionHandleTarget
+    var startPoint: CGPoint
+    var valueMeters: Double
 }
 
 private struct ViewportPatternArrayRadialAngleDragState: Equatable {
