@@ -256,6 +256,7 @@ public struct SketchCommand: ParsableCommand {
             SketchInsertControlPointCommand.self,
             SketchRebuildCommand.self,
             SketchCutCommand.self,
+            SketchBridgeCommand.self,
         ],
         defaultSubcommand: LineSketchCommand.self
     )

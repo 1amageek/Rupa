@@ -2057,6 +2057,91 @@ struct CLISketchAdvancedCurveEditCommandTests {
         })
     }
 
+    @Test(.timeLimit(.minutes(1)))
+    func executableSketchBridgePersistsClosedDocumentAsJSON() async throws {
+        let temporaryDirectory = try makeTemporaryDirectory()
+        defer {
+            removeTemporaryDirectory(temporaryDirectory)
+        }
+        let documentURL = temporaryDirectory.appendingPathComponent("process-sketch-bridge.swcad")
+        var document = DesignDocument.empty(named: "Process Sketch Bridge")
+        let featureID = try document.createLineSketch(
+            name: "Bridge Sources",
+            plane: .xy,
+            start: SketchPoint(
+                x: .length(0.0, .millimeter),
+                y: .length(0.0, .millimeter)
+            ),
+            end: SketchPoint(
+                x: .length(3.0, .millimeter),
+                y: .length(0.0, .millimeter)
+            )
+        )
+        let secondLineID = SketchEntityID()
+        guard var feature = document.cadDocument.designGraph.nodes[featureID],
+              case var .sketch(sketch) = feature.operation,
+              let firstLineID = sketch.entities.keys.first else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "Bridge CLI setup requires a line sketch."
+            )
+        }
+        sketch.entities[secondLineID] = .line(
+            SketchLine(
+                start: SketchPoint(
+                    x: .length(6.0, .millimeter),
+                    y: .length(3.0, .millimeter)
+                ),
+                end: SketchPoint(
+                    x: .length(6.0, .millimeter),
+                    y: .length(6.0, .millimeter)
+                )
+            )
+        )
+        feature.operation = .sketch(sketch)
+        document.cadDocument.designGraph.nodes[featureID] = feature
+        document.cadDocument.designGraph.revision = document.cadDocument.designGraph.revision.advanced()
+        try DocumentFileService().save(document, to: documentURL)
+
+        let result = try await runCLI([
+            "sketch",
+            "bridge",
+            documentURL.path,
+            "--feature-id",
+            featureID.description,
+            "--first-endpoint",
+            try encodedBridgeCurveEndpoint(
+                BridgeCurveEndpoint(reference: .lineEnd(firstLineID))
+            ),
+            "--second-endpoint",
+            try encodedBridgeCurveEndpoint(
+                BridgeCurveEndpoint(reference: .lineStart(secondLineID))
+            ),
+            "--continuity",
+            "g1",
+            "--mode",
+            "file",
+            "--json",
+        ])
+        let response = try JSONDecoder().decode(CLIResponse.self, from: result.standardOutputData)
+        let loaded = try DocumentFileService().load(from: documentURL)
+        let summary = try SketchEntitySummaryService().summarize(document: loaded)
+        let bridgeSpline = try #require(summary.entries.first { entry in
+            entry.sourceFeatureID == featureID.description && entry.entityKind == "spline"
+        })
+        let source = try #require(loaded.productMetadata.bridgeCurveSources.values.first)
+
+        #expect(result.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: result.standardError))
+        #expect(response.message == "Bridge curve created in sketch \(featureID.description).")
+        #expect(response.saved)
+        #expect(bridgeSpline.controlPoints.count == 7)
+        #expect(source.featureID == featureID)
+        #expect(source.entityID.description == bridgeSpline.entityID)
+        #expect(source.firstEndpoint.reference == .lineEnd(firstLineID))
+        #expect(source.secondEndpoint.reference == .lineStart(secondLineID))
+        #expect(source.continuity == .g1)
+    }
+
     private func namedSketchEntity(
         _ name: String,
         kind: String,
@@ -5217,6 +5302,11 @@ private func encodedSelectionReference(_ reference: SelectionReference) throws -
 
 private func encodedSelectionTarget(_ target: SelectionTarget) throws -> String {
     let data = try JSONEncoder().encode(target)
+    return String(decoding: data, as: UTF8.self)
+}
+
+private func encodedBridgeCurveEndpoint(_ endpoint: BridgeCurveEndpoint) throws -> String {
+    let data = try JSONEncoder().encode(endpoint)
     return String(decoding: data, as: UTF8.self)
 }
 
