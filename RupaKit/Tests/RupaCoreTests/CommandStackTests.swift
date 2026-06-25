@@ -4916,6 +4916,175 @@ import Testing
 }
 
 @MainActor
+@Test func independentPatternArrayRegenerationRebuildsWhenSourceFeatureParametersChange() async throws {
+    let session = EditorSession()
+    _ = try #require(session.createDefaultExtrudedRectangle())
+    let sourceBodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let sourceBodySceneNodeID = try #require(
+        commandStackBodySceneNodeID(for: sourceBodyFeatureID, in: session.document)
+    )
+    _ = try session.execute(
+        .createComponentDefinition(
+            name: "Parameterized Identity Source",
+            rootSceneNodeIDs: [sourceBodySceneNodeID]
+        )
+    )
+    let definition = try #require(session.document.productMetadata.componentDefinitions.values.first {
+        $0.name == "Parameterized Identity Source"
+    })
+    _ = try session.execute(
+        .createPatternArray(
+            name: "Parameterized Identity Array",
+            definitionID: definition.id,
+            distribution: .rectangular(RectangularPatternArray(
+                firstAxis: PatternArrayLinearAxis(
+                    direction: .unitX,
+                    distance: .length(8.0, .millimeter),
+                    copyCount: 2
+                )
+            )),
+            outputMode: .independentCopy
+        )
+    )
+    let source = try #require(session.document.productMetadata.patternArrays.values.first {
+        $0.name == "Parameterized Identity Array"
+    })
+    let initialDefinitionIdentity = try #require(source.definitionIdentity)
+    let initialOutputSceneNodeIDs = source.outputSceneNodeIDs
+    let initialOutputFeatureIDs = source.outputFeatureIDs
+    let firstOutputSceneNodeID = try #require(initialOutputSceneNodeIDs.first)
+    let firstCloneBodyFeatureID = try #require(
+        commandStackBodyFeatureID(
+            inSceneSubtreeRootedAt: firstOutputSceneNodeID,
+            document: session.document
+        )
+    )
+
+    _ = try session.execute(
+        .setExtrudeDistance(
+            featureID: sourceBodyFeatureID,
+            distance: .length(9.0, .millimeter)
+        )
+    )
+    let staleSummary = PatternArraySummaryService().summarize(
+        document: session.document,
+        generation: session.generation,
+        dirty: session.isDirty
+    )
+    let staleCodes = Set(try #require(staleSummary.patternArrays.first).diagnostics.map(\.code))
+
+    _ = try session.execute(
+        .updatePatternArray(
+            id: source.id,
+            name: nil,
+            definitionID: nil,
+            distribution: nil,
+            outputMode: nil
+        )
+    )
+
+    let updatedSource = try #require(session.document.productMetadata.patternArrays[source.id])
+    let updatedDefinitionIdentity = try #require(updatedSource.definitionIdentity)
+
+    #expect(staleCodes.contains("independentCopyDefinitionIdentityMismatch"))
+    #expect(updatedDefinitionIdentity != initialDefinitionIdentity)
+    #expect(updatedSource.outputSceneNodeIDs != initialOutputSceneNodeIDs)
+    #expect(updatedSource.outputFeatureIDs != initialOutputFeatureIDs)
+    #expect(!updatedSource.outputFeatureIDs.contains(firstCloneBodyFeatureID))
+    #expect(session.document.cadDocument.designGraph.nodes[firstCloneBodyFeatureID] == nil)
+}
+
+@MainActor
+@Test func independentPatternArrayUpdateRejectsRemovingOutputsWithExternalDependents() async throws {
+    let session = EditorSession()
+    _ = try #require(session.createDefaultExtrudedRectangle())
+    let sourceBodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let sourceBodySceneNodeID = try #require(
+        commandStackBodySceneNodeID(for: sourceBodyFeatureID, in: session.document)
+    )
+    _ = try session.execute(
+        .createComponentDefinition(
+            name: "Dependent Output Source",
+            rootSceneNodeIDs: [sourceBodySceneNodeID]
+        )
+    )
+    let definition = try #require(session.document.productMetadata.componentDefinitions.values.first {
+        $0.name == "Dependent Output Source"
+    })
+    _ = try session.execute(
+        .createPatternArray(
+            name: "Dependent Output Array",
+            definitionID: definition.id,
+            distribution: .rectangular(RectangularPatternArray(
+                firstAxis: PatternArrayLinearAxis(
+                    direction: .unitX,
+                    distance: .length(8.0, .millimeter),
+                    copyCount: 2
+                )
+            )),
+            outputMode: .independentCopy
+        )
+    )
+    let source = try #require(session.document.productMetadata.patternArrays.values.first {
+        $0.name == "Dependent Output Array"
+    })
+    let firstOutputSceneNodeID = try #require(source.outputSceneNodeIDs.first)
+    let firstCloneBodyFeatureID = try #require(
+        commandStackBodyFeatureID(
+            inSceneSubtreeRootedAt: firstOutputSceneNodeID,
+            document: session.document
+        )
+    )
+
+    var document = session.document
+    let dependentFeatureID = FeatureID()
+    let dependentFeature = FeatureNode(
+        id: dependentFeatureID,
+        name: "Downstream Output Dependent",
+        operation: .faceLoopOffset(FaceLoopOffsetFeature(
+            target: FaceLoopOffsetTargetReference(featureID: firstCloneBodyFeatureID),
+            facePersistentName: PersistentName(components: [
+                .feature(firstCloneBodyFeatureID),
+                .generated("extrude"),
+                .subshape("startFace"),
+            ]),
+            distance: .length(1.0, .millimeter)
+        )),
+        inputs: [FeatureInput(featureID: firstCloneBodyFeatureID, role: .target)],
+        outputs: [FeatureOutput(role: .body)]
+    )
+    try document.cadDocument.appendFeature(dependentFeature)
+    let summary = PatternArraySummaryService().summarize(
+        document: document,
+        generation: session.generation,
+        dirty: session.isDirty
+    )
+    let diagnosticCodes = Set(try #require(summary.patternArrays.first).diagnostics.map(\.code))
+
+    do {
+        try document.updatePatternArray(
+            id: source.id,
+            distribution: .rectangular(RectangularPatternArray(
+                firstAxis: PatternArrayLinearAxis(
+                    direction: .unitX,
+                    distance: .length(8.0, .millimeter),
+                    copyCount: 1
+                )
+            ))
+        )
+        Issue.record("Pattern array update should reject removing owned output features with external dependents.")
+    } catch let error as EditorError {
+        #expect(error.code == .commandInvalid)
+        #expect(error.message.contains("downstream features depend"))
+    }
+
+    #expect(diagnosticCodes.contains("independentCopyExternalFeatureDependents"))
+    #expect(document.productMetadata.patternArrays[source.id]?.outputSceneNodeIDs == source.outputSceneNodeIDs)
+    #expect(document.cadDocument.designGraph.nodes[firstCloneBodyFeatureID] != nil)
+    #expect(document.cadDocument.designGraph.nodes[dependentFeatureID] != nil)
+}
+
+@MainActor
 @Test func rectangularPatternArrayRejectsDeletingReferencedPatternParameterBeforeMutation() async throws {
     let session = EditorSession()
     _ = try #require(session.createDefaultExtrudedRectangle())

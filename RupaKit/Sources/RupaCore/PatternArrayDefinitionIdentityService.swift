@@ -2,7 +2,7 @@ import Foundation
 import SwiftCAD
 
 public struct PatternArrayDefinitionIdentityService: Sendable {
-    private static let algorithm = "fnv1a64-pattern-definition-identity-v1"
+    private static let algorithm = "sha256-pattern-definition-identity-v2"
 
     public init() {}
 
@@ -23,12 +23,14 @@ public struct PatternArrayDefinitionIdentityService: Sendable {
             )
         }
         let featureTokenByID = featureTokenMap(for: sourceFeatureIDs)
+        let featureIDTokenByID = try PatternArrayFeatureIDTokenMapService().tokenMap(for: sourceFeatureIDs)
         let payload = try PatternArrayDefinitionIdentityPayload(
             definition: definition,
             metadata: metadata,
             cadDocument: cadDocument,
             orderedFeatureIDs: sourceFeatureIDs,
-            featureTokenByID: featureTokenByID
+            featureTokenByID: featureTokenByID,
+            featureIDTokenByID: featureIDTokenByID
         )
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys]
@@ -135,7 +137,8 @@ private struct PatternArrayDefinitionIdentityPayload: Encodable {
         metadata: ProductMetadata,
         cadDocument: CADDocument,
         orderedFeatureIDs: [FeatureID],
-        featureTokenByID: [FeatureID: String]
+        featureTokenByID: [FeatureID: String],
+        featureIDTokenByID: [FeatureID: FeatureID]
     ) throws {
         rootSceneNodes = try definition.rootSceneNodeIDs.map { rootSceneNodeID in
             try PatternArrayDefinitionSceneNodeIdentity(
@@ -144,6 +147,7 @@ private struct PatternArrayDefinitionIdentityPayload: Encodable {
                 featureTokenByID: featureTokenByID
             )
         }
+        let remapper = PatternArrayFeatureIDRemapper(featureIDMap: featureIDTokenByID)
         features = try orderedFeatureIDs.map { featureID in
             guard let feature = cadDocument.designGraph.nodes[featureID] else {
                 throw EditorError(
@@ -153,9 +157,23 @@ private struct PatternArrayDefinitionIdentityPayload: Encodable {
             }
             return try PatternArrayDefinitionFeatureIdentity(
                 feature: feature,
-                featureTokenByID: featureTokenByID
+                featureToken: try Self.featureToken(for: featureID, featureTokenByID: featureTokenByID),
+                remapper: remapper
             )
         }
+    }
+
+    private static func featureToken(
+        for featureID: FeatureID,
+        featureTokenByID: [FeatureID: String]
+    ) throws -> String {
+        guard let token = featureTokenByID[featureID] else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "Pattern array definition identity found an ordered feature outside the clone closure."
+            )
+        }
+        return token
     }
 }
 
@@ -286,76 +304,33 @@ private struct PatternArrayDefinitionObjectPropertyIdentity: Encodable {
 }
 
 private struct PatternArrayDefinitionFeatureIdentity: Encodable {
-    var operationKind: String
+    var featureToken: String
+    var name: String?
+    var operation: FeatureOperation
     var inputs: [PatternArrayDefinitionFeatureInputIdentity]
     var outputs: [PatternArrayDefinitionFeatureOutputIdentity]
     var isSuppressed: Bool
 
     init(
         feature: FeatureNode,
-        featureTokenByID: [FeatureID: String]
+        featureToken: String,
+        remapper: PatternArrayFeatureIDRemapper
     ) throws {
-        operationKind = Self.operationKind(for: feature.operation)
-        inputs = try feature.inputs.map {
-            try PatternArrayDefinitionFeatureInputIdentity(
-                input: $0,
-                featureTokenByID: featureTokenByID
-            )
-        }
-        outputs = try feature.outputs.map {
-            try PatternArrayDefinitionFeatureOutputIdentity(
-                output: $0,
-                featureTokenByID: featureTokenByID
-            )
-        }
+        self.featureToken = featureToken
+        name = feature.name
+        operation = try remapper.remappedOperation(feature.operation)
+        inputs = try feature.inputs.map(remapper.remappedInput).map(PatternArrayDefinitionFeatureInputIdentity.init)
+        outputs = try feature.outputs.map(remapper.remappedOutput).map(PatternArrayDefinitionFeatureOutputIdentity.init)
         isSuppressed = feature.isSuppressed
-    }
-
-    private static func operationKind(for operation: FeatureOperation) -> String {
-        switch operation {
-        case .sketch:
-            "sketch"
-        case .extrude:
-            "extrude"
-        case .revolve:
-            "revolve"
-        case .sweep:
-            "sweep"
-        case .polySpline:
-            "polySpline"
-        case .faceLoopOffset:
-            "faceLoopOffset"
-        case .edgeOffset:
-            "edgeOffset"
-        case .faceKnife:
-            "faceKnife"
-        case .bridgeCurve:
-            "bridgeCurve"
-        case .curveEdit:
-            "curveEdit"
-        case .curveOffset:
-            "curveOffset"
-        case .curveTrim:
-            "curveTrim"
-        }
     }
 }
 
 private struct PatternArrayDefinitionFeatureInputIdentity: Encodable {
-    var featureToken: String
+    var featureID: FeatureID
     var role: FeaturePort
 
-    init(
-        input: FeatureInput,
-        featureTokenByID: [FeatureID: String]
-    ) throws {
-        guard let token = featureTokenByID[input.featureID] else {
-            throw EditorError(
-                code: .referenceUnresolved,
-                message: "Pattern array definition identity found a feature input outside the clone closure."
-            )
-        }
-        featureToken = token
+    init(input: FeatureInput) {
+        featureID = input.featureID
         role = input.role
     }
 }
@@ -364,55 +339,30 @@ private struct PatternArrayDefinitionFeatureOutputIdentity: Encodable {
     var role: FeaturePort
     var persistentName: PatternArrayDefinitionPersistentNameIdentity?
 
-    init(
-        output: FeatureOutput,
-        featureTokenByID: [FeatureID: String]
-    ) throws {
+    init(output: FeatureOutput) {
         role = output.role
-        persistentName = try output.persistentName.map {
-            try PatternArrayDefinitionPersistentNameIdentity(
-                name: $0,
-                featureTokenByID: featureTokenByID
-            )
-        }
+        persistentName = output.persistentName.map(PatternArrayDefinitionPersistentNameIdentity.init(name:))
     }
 }
 
 private struct PatternArrayDefinitionPersistentNameIdentity: Encodable {
     var components: [PatternArrayDefinitionPersistentNameComponentIdentity]
 
-    init(
-        name: PersistentName,
-        featureTokenByID: [FeatureID: String]
-    ) throws {
-        components = try name.components.map { component in
-            try PatternArrayDefinitionPersistentNameComponentIdentity(
-                component: component,
-                featureTokenByID: featureTokenByID
-            )
-        }
+    init(name: PersistentName) {
+        components = name.components.map(PatternArrayDefinitionPersistentNameComponentIdentity.init(component:))
     }
 }
 
 private enum PatternArrayDefinitionPersistentNameComponentIdentity: Encodable {
-    case feature(String)
+    case feature(FeatureID)
     case generated(String)
     case subshape(String)
     case index(Int)
 
-    init(
-        component: NameComponent,
-        featureTokenByID: [FeatureID: String]
-    ) throws {
+    init(component: NameComponent) {
         switch component {
         case .feature(let featureID):
-            guard let token = featureTokenByID[featureID] else {
-                throw EditorError(
-                    code: .referenceUnresolved,
-                    message: "Pattern array definition identity found a persistent-name feature outside the clone closure."
-                )
-            }
-            self = .feature(token)
+            self = .feature(featureID)
         case .generated(let value):
             self = .generated(value)
         case .subshape(let value):

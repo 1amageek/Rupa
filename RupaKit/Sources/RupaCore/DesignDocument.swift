@@ -16051,6 +16051,11 @@ public struct DesignDocument: Identifiable, Sendable {
 
         switch source.outputMode {
         case .componentInstance:
+            try requireNoExternalFeatureDependents(
+                of: Set(source.outputFeatureIDs),
+                cadDocument: cadDocument,
+                owner: "Component-instance pattern array conversion"
+            )
             PatternArrayIndependentCopyBuilder().removeOutputs(
                 source: source,
                 metadata: &metadata,
@@ -16090,6 +16095,11 @@ public struct DesignDocument: Identifiable, Sendable {
                     cadDocument: &cadDocument
                 )
             } else {
+                try requireNoExternalFeatureDependents(
+                    of: Set(source.outputFeatureIDs),
+                    cadDocument: cadDocument,
+                    owner: "Independent-copy pattern array rebuild"
+                )
                 PatternArrayIndependentCopyBuilder().removeOutputs(
                     source: source,
                     metadata: &metadata,
@@ -16112,6 +16122,33 @@ public struct DesignDocument: Identifiable, Sendable {
         }
 
         metadata.patternArrays[sourceID] = source
+    }
+
+    private func requireNoExternalFeatureDependents(
+        of removedFeatureIDs: Set<FeatureID>,
+        cadDocument: CADDocument,
+        owner: String
+    ) throws {
+        guard !removedFeatureIDs.isEmpty else {
+            return
+        }
+        let dependentFeatureIDs = cadDocument.designGraph.order.filter { featureID in
+            guard !removedFeatureIDs.contains(featureID),
+                  let feature = cadDocument.designGraph.nodes[featureID] else {
+                return false
+            }
+            return feature.inputs.contains { removedFeatureIDs.contains($0.featureID) }
+        }
+        guard dependentFeatureIDs.isEmpty else {
+            let dependentList = dependentFeatureIDs
+                .prefix(3)
+                .map(\.description)
+                .joined(separator: ", ")
+            throw EditorError(
+                code: .commandInvalid,
+                message: "\(owner) cannot remove independent-copy output features while downstream features depend on them. Delete or detach the dependent features first: \(dependentList)."
+            )
+        }
     }
 
     private func synchronizePatternArrayIndependentCopyOutputs(
@@ -16168,6 +16205,11 @@ public struct DesignDocument: Identifiable, Sendable {
             )
         }
         staleFeatureIDs.formIntersection(ownedFeatureIDs.subtracting(reusedFeatureIDs))
+        try requireNoExternalFeatureDependents(
+            of: staleFeatureIDs,
+            cadDocument: cadDocument,
+            owner: "Independent-copy pattern array tail removal"
+        )
         builder.removeOutputs(
             rootedAt: staleOutputSceneNodeIDs,
             featureIDs: staleFeatureIDs,

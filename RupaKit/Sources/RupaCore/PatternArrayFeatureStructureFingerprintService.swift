@@ -7,14 +7,14 @@ struct PatternArrayFeatureStructureFingerprint: Hashable, Sendable {
 }
 
 struct PatternArrayFeatureStructureFingerprintService: Sendable {
-    private static let algorithm = "fnv1a64-pattern-feature-structure-v1"
+    private static let algorithm = "sha256-pattern-feature-structure-v2"
 
     func fingerprints(
         featureIDs: [FeatureID],
         cadDocument: CADDocument
     ) throws -> [PatternArrayFeatureStructureFingerprint] {
         let remapper = PatternArrayFeatureIDRemapper(
-            featureIDMap: try featureTokenMap(for: featureIDs)
+            featureIDMap: try PatternArrayFeatureIDTokenMapService().tokenMap(for: featureIDs)
         )
         return try featureIDs.map { featureID in
             guard let feature = cadDocument.designGraph.nodes[featureID] else {
@@ -37,28 +37,6 @@ struct PatternArrayFeatureStructureFingerprintService: Sendable {
                 value: PatternArrayStableDigest.hexDigest(for: data)
             )
         }
-    }
-
-    private func featureTokenMap(
-        for featureIDs: [FeatureID]
-    ) throws -> [FeatureID: FeatureID] {
-        var values: [FeatureID: FeatureID] = [:]
-        values.reserveCapacity(featureIDs.count)
-        for (index, featureID) in featureIDs.enumerated() {
-            values[featureID] = try tokenFeatureID(index: index)
-        }
-        return values
-    }
-
-    private func tokenFeatureID(index: Int) throws -> FeatureID {
-        let suffix = String(format: "%012llx", UInt64(index + 1))
-        guard let uuid = UUID(uuidString: "00000000-0000-0000-0000-\(suffix)") else {
-            throw EditorError(
-                code: .commandInvalid,
-                message: "Pattern array feature fingerprint generated an invalid feature token."
-            )
-        }
-        return FeatureID(uuid)
     }
 }
 

@@ -166,6 +166,12 @@ public struct PatternArraySummaryService: Sendable {
                 cadDocument: cadDocument
             )
         }
+        let sourceFingerprints = sourceFeatureIDs.flatMap {
+            featureStructureFingerprints(
+                featureIDs: $0,
+                cadDocument: cadDocument
+            )
+        }
         return source.outputSceneNodeIDs.enumerated().map { outputIndex, sceneNodeID in
             let outputFeatureIDs = orderedFeatureIDs(
                 dependencyFeatureClosure(
@@ -179,6 +185,7 @@ public struct PatternArraySummaryService: Sendable {
             )
             let state = independentCopyOutputState(
                 sourceFeatureIDs: sourceFeatureIDs,
+                sourceFingerprints: sourceFingerprints,
                 outputFeatureIDs: outputFeatureIDs,
                 cadDocument: cadDocument
             )
@@ -225,20 +232,18 @@ public struct PatternArraySummaryService: Sendable {
 
     private func independentCopyOutputState(
         sourceFeatureIDs: [FeatureID]?,
+        sourceFingerprints: [PatternArrayFeatureStructureFingerprint]?,
         outputFeatureIDs: [FeatureID],
         cadDocument: CADDocument
     ) -> PatternArraySummary.IndependentCopyOutputState {
         guard let sourceFeatureIDs,
+              let sourceFingerprints,
               !sourceFeatureIDs.isEmpty,
               !outputFeatureIDs.isEmpty,
               sourceFeatureIDs.count == outputFeatureIDs.count else {
             return .unresolved
         }
         do {
-            let sourceFingerprints = try PatternArrayFeatureStructureFingerprintService().fingerprints(
-                featureIDs: sourceFeatureIDs,
-                cadDocument: cadDocument
-            )
             let outputFingerprints = try PatternArrayFeatureStructureFingerprintService().fingerprints(
                 featureIDs: outputFeatureIDs,
                 cadDocument: cadDocument
@@ -248,6 +253,20 @@ public struct PatternArraySummaryService: Sendable {
                 : .divergedFromSourceDefinition
         } catch {
             return .unresolved
+        }
+    }
+
+    private func featureStructureFingerprints(
+        featureIDs: [FeatureID],
+        cadDocument: CADDocument
+    ) -> [PatternArrayFeatureStructureFingerprint]? {
+        do {
+            return try PatternArrayFeatureStructureFingerprintService().fingerprints(
+                featureIDs: featureIDs,
+                cadDocument: cadDocument
+            )
+        } catch {
+            return nil
         }
     }
 
@@ -543,6 +562,23 @@ public struct PatternArraySummaryService: Sendable {
                 )
             }
         }
+        let externalDependentFeatureIDs = externalDependentFeatureIDs(
+            of: ownedFeatureIDs,
+            cadDocument: cadDocument
+        )
+        if !externalDependentFeatureIDs.isEmpty {
+            let dependentList = externalDependentFeatureIDs
+                .prefix(3)
+                .map(\.description)
+                .joined(separator: ", ")
+            diagnostics.append(
+                PatternArraySummary.Diagnostic(
+                    severity: .warning,
+                    code: "independentCopyExternalFeatureDependents",
+                    message: "Independent-copy output features have downstream feature dependents; rebuild or output removal requires deleting or detaching those dependents first: \(dependentList)."
+                )
+            )
+        }
 
         for (index, outputSceneNodeID) in source.outputSceneNodeIDs.enumerated() {
             guard let outputNode = metadata.sceneNodes[outputSceneNodeID] else {
@@ -669,6 +705,22 @@ public struct PatternArraySummaryService: Sendable {
             }
         }
         return featureIDs
+    }
+
+    private func externalDependentFeatureIDs(
+        of featureIDs: Set<FeatureID>,
+        cadDocument: CADDocument
+    ) -> [FeatureID] {
+        guard !featureIDs.isEmpty else {
+            return []
+        }
+        return cadDocument.designGraph.order.filter { featureID in
+            guard !featureIDs.contains(featureID),
+                  let feature = cadDocument.designGraph.nodes[featureID] else {
+                return false
+            }
+            return feature.inputs.contains { featureIDs.contains($0.featureID) }
+        }
     }
 
     private func orderedFeatureIDs(
