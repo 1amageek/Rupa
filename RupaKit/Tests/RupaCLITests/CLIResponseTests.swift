@@ -970,6 +970,77 @@ func cliExecutableSelectionReferencesSelectsLiveSurfaceControlPointAsJSON() asyn
 }
 
 @Test(.timeLimit(.minutes(1)))
+func cliExecutableInspectsSketchTopologyAndCurvesAsJSON() async throws {
+    let temporaryDirectory = try makeTemporaryDirectory()
+    defer {
+        removeTemporaryDirectory(temporaryDirectory)
+    }
+    let documentURL = temporaryDirectory.appendingPathComponent("process-inspect.swcad")
+    var document = DesignDocument.empty(named: "Process Inspect")
+    _ = try document.createExtrudedRectangle(
+        name: "Inspect Box",
+        plane: .xy,
+        width: .length(20.0, .millimeter),
+        height: .length(10.0, .millimeter),
+        depth: .length(6.0, .millimeter),
+        direction: .normal
+    )
+    try DocumentFileService().save(document, to: documentURL)
+
+    let sketchesResult = try await runCLI([
+        "inspect",
+        "sketches",
+        documentURL.path,
+        "--mode",
+        "file",
+        "--json",
+    ])
+    let sketchesResponse = try JSONDecoder().decode(
+        CLISketchEntitySummaryResponse.self,
+        from: sketchesResult.standardOutputData
+    )
+    let topologyResult = try await runCLI([
+        "inspect",
+        "topology",
+        documentURL.path,
+        "--mode",
+        "file",
+        "--json",
+    ])
+    let topologyResponse = try JSONDecoder().decode(
+        CLITopologySummaryResponse.self,
+        from: topologyResult.standardOutputData
+    )
+    let curvesResult = try await runCLI([
+        "inspect",
+        "curves",
+        documentURL.path,
+        "--mode",
+        "file",
+        "--json",
+    ])
+    let curvesResponse = try JSONDecoder().decode(
+        CLICurveAnalysisResponse.self,
+        from: curvesResult.standardOutputData
+    )
+
+    #expect(sketchesResult.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: sketchesResult.standardError))
+    #expect(sketchesResponse.sketchEntitySummary.counts.sketchCount == 1)
+    #expect(sketchesResponse.sketchEntitySummary.counts.entityCount == 4)
+    #expect(!sketchesResponse.sketchEntitySummary.entries.compactMap { $0.selectionTarget() }.isEmpty)
+    #expect(!sketchesResponse.sketchEntitySummary.regions.compactMap { $0.selectionTarget() }.isEmpty)
+    #expect(topologyResult.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: topologyResult.standardError))
+    #expect(topologyResponse.topologySummary.counts.bodyCount == 1)
+    #expect(topologyResponse.topologySummary.counts.faceCount > 0)
+    #expect(topologyResponse.topologySummary.counts.edgeCount > 0)
+    #expect(!topologyResponse.topologySummary.entries.compactMap { $0.selectionTarget() }.isEmpty)
+    #expect(curvesResult.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: curvesResult.standardError))
+    #expect(curvesResponse.curveAnalysis.counts.curveCount == 4)
+    #expect(curvesResponse.curveAnalysis.counts.sampleCount > 0)
+    #expect(curvesResponse.curveAnalysis.curves.contains { $0.selectionComponentID != nil && !$0.samples.isEmpty })
+}
+
+@Test(.timeLimit(.minutes(1)))
 func cliExecutableSurfaceSourcesReturnsSelectionReferencesAsJSON() async throws {
     let temporaryDirectory = try makeTemporaryDirectory()
     defer {
@@ -996,6 +1067,32 @@ func cliExecutableSurfaceSourcesReturnsSelectionReferencesAsJSON() async throws 
         CLISurfaceSourceSummaryResponse.self,
         from: result.standardOutputData
     )
+    let analysisResult = try await runCLI([
+        "inspect",
+        "surfaces",
+        documentURL.path,
+        "--sample-density",
+        "standard",
+        "--mode",
+        "file",
+        "--json",
+    ])
+    let analysisResponse = try JSONDecoder().decode(
+        CLISurfaceAnalysisResponse.self,
+        from: analysisResult.standardOutputData
+    )
+    let continuityResult = try await runCLI([
+        "inspect",
+        "surface-continuity",
+        documentURL.path,
+        "--mode",
+        "file",
+        "--json",
+    ])
+    let continuityResponse = try JSONDecoder().decode(
+        CLISurfaceContinuitySummaryResponse.self,
+        from: continuityResult.standardOutputData
+    )
     let patch = try #require(response.surfaceSourceSummary.sources.first?.patches.first)
     let controlPoint = try #require(patch.controlPoints.first { $0.uIndex == 1 && $0.vIndex == 1 })
 
@@ -1004,6 +1101,15 @@ func cliExecutableSurfaceSourcesReturnsSelectionReferencesAsJSON() async throws 
     #expect(response.surfaceSourceSummary.counts.patchCount == 2)
     #expect(response.surfaceSourceSummary.counts.controlPointCount > 0)
     #expect(controlPoint.isEditable)
+    #expect(analysisResult.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: analysisResult.standardError))
+    #expect(analysisResponse.surfaceAnalysis.counts.bSplineFaceCount == 2)
+    #expect(analysisResponse.surfaceAnalysis.counts.sampleCount == 50)
+    #expect(analysisResponse.surfaceAnalysis.counts.trimBoundaryCount == 2)
+    #expect(analysisResponse.surfaceAnalysis.counts.trimBoundaryEdgeCount == 8)
+    #expect(continuityResult.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: continuityResult.standardError))
+    #expect(continuityResponse.surfaceContinuitySummary.counts.bSplineFaceCount == 2)
+    #expect(continuityResponse.surfaceContinuitySummary.counts.sharedEdgeCount == 1)
+    #expect(continuityResponse.surfaceContinuitySummary.counts.g1AdjacencyCount == 1)
 }
 
 @Test(.timeLimit(.minutes(1)))
@@ -3148,6 +3254,61 @@ func cliExecutableReturnsDataExitForLiveGenerationMismatch() async throws {
     #expect(response.evaluatedGeneration == 1)
     #expect(response.bodyCount == 1)
     #expect(response.dirty)
+    #expect(loaded.cadDocument.designGraph.order.isEmpty)
+}
+
+@MainActor
+@Test func cliServiceAutoInspectUsesLiveSessionForOpenFile() async throws {
+    let temporaryDirectory = try makeTemporaryDirectory()
+    defer {
+        removeTemporaryDirectory(temporaryDirectory)
+    }
+
+    let documentURL = temporaryDirectory.appendingPathComponent("open-inspect.swcad")
+    try DocumentFileService().save(.empty(named: "Before"), to: documentURL)
+    let server = AgentCommandController()
+    let session = EditorSession(document: .empty(named: "Open Inspect"))
+    _ = try session.execute(
+        .createExtrudedRectangle(
+            name: "Unsaved Inspect",
+            plane: .xy,
+            width: .length(12.0, .millimeter),
+            height: .length(6.0, .millimeter),
+            depth: .length(3.0, .millimeter),
+            direction: .normal
+        )
+    )
+    server.register(session: session, path: documentURL)
+
+    let sketchResponse = try CLIService().sketchEntitySummary(
+        target: CLIDocumentTarget(fileURL: documentURL),
+        mode: .auto,
+        expectedGeneration: DocumentGeneration(1),
+        client: server
+    )
+    let topologyResponse = try CLIService().topologySummary(
+        target: CLIDocumentTarget(fileURL: documentURL),
+        mode: .auto,
+        expectedGeneration: DocumentGeneration(1),
+        client: server
+    )
+    let curveResponse = try CLIService().curveAnalysis(
+        target: CLIDocumentTarget(fileURL: documentURL),
+        mode: .auto,
+        expectedGeneration: DocumentGeneration(1),
+        client: server
+    )
+
+    let loaded = try DocumentFileService().load(from: documentURL)
+    #expect(sketchResponse.generation == 1)
+    #expect(sketchResponse.dirty)
+    #expect(sketchResponse.sketchEntitySummary.counts.entityCount == 4)
+    #expect(topologyResponse.generation == 1)
+    #expect(topologyResponse.dirty)
+    #expect(topologyResponse.topologySummary.counts.bodyCount == 1)
+    #expect(curveResponse.generation == 1)
+    #expect(curveResponse.dirty)
+    #expect(curveResponse.curveAnalysis.counts.curveCount == 4)
     #expect(loaded.cadDocument.designGraph.order.isEmpty)
 }
 

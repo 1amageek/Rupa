@@ -15,6 +15,7 @@ public struct CLICommand: ParsableCommand {
             DimensionCommand.self,
             EvaluateDocument.self,
             ExportDocument.self,
+            InspectCommand.self,
             MeasureDocument.self,
             MeshDocument.self,
             ModelCommand.self,
@@ -374,7 +375,7 @@ public struct SelectionTargetsCommand: ParsableCommand {
     }
 }
 
-private enum CLISelectionInputParser {
+enum CLISelectionInputParser {
     static func sessionID(_ value: String) throws -> UUID {
         guard let id = UUID(uuidString: value) else {
             throw ValidationError("Session ID must be a UUID.")
@@ -1114,7 +1115,7 @@ public struct SurfaceSlideControlPointsCommand: ParsableCommand {
     }
 }
 
-private enum CLIAgentClientFactory {
+enum CLIAgentClientFactory {
     static func makeAgentClient(
         mode: CLIEditMode,
         sessionID: UUID?,
@@ -3246,7 +3247,7 @@ public enum CLIOutput {
         )
     }
 
-    private static func write<Response: Encodable>(
+    static func write<Response: Encodable>(
         _ response: Response,
         fallback: String,
         asJSON: Bool

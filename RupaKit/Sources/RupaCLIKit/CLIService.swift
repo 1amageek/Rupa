@@ -836,6 +836,83 @@ public struct CLIService {
         )
     }
 
+    public func sketchEntitySummaryFile(
+        at url: URL
+    ) throws -> CLISketchEntitySummaryResponse {
+        let session = EditorSession(document: try fileService.load(from: url))
+        return CLISketchEntitySummaryResponse(
+            sketchEntitySummary: try SketchEntitySummaryService().summarize(
+                document: session.document,
+                objectRegistry: session.objectRegistry
+            ),
+            generation: session.generation,
+            dirty: session.isDirty
+        )
+    }
+
+    public func topologySummaryFile(
+        at url: URL
+    ) throws -> CLITopologySummaryResponse {
+        let session = EditorSession(document: try fileService.load(from: url))
+        return CLITopologySummaryResponse(
+            topologySummary: try TopologySummaryService().summarize(
+                document: session.document,
+                objectRegistry: session.objectRegistry,
+                currentEvaluation: session.currentEvaluation,
+                currentGeneration: session.generation
+            ),
+            generation: session.generation,
+            dirty: session.isDirty
+        )
+    }
+
+    public func curveAnalysisFile(
+        at url: URL
+    ) throws -> CLICurveAnalysisResponse {
+        let session = EditorSession(document: try fileService.load(from: url))
+        return CLICurveAnalysisResponse(
+            curveAnalysis: try CurveAnalysisService().analyze(
+                document: session.document,
+                objectRegistry: session.objectRegistry
+            ),
+            generation: session.generation,
+            dirty: session.isDirty
+        )
+    }
+
+    public func surfaceAnalysisFile(
+        at url: URL,
+        options: SurfaceAnalysisOptions = SurfaceAnalysisOptions()
+    ) throws -> CLISurfaceAnalysisResponse {
+        let session = EditorSession(document: try fileService.load(from: url))
+        return CLISurfaceAnalysisResponse(
+            surfaceAnalysis: try SurfaceAnalysisService(options: options).analyze(
+                document: session.document,
+                objectRegistry: session.objectRegistry,
+                currentEvaluation: session.currentEvaluation,
+                currentGeneration: session.generation
+            ),
+            generation: session.generation,
+            dirty: session.isDirty
+        )
+    }
+
+    public func surfaceContinuitySummaryFile(
+        at url: URL
+    ) throws -> CLISurfaceContinuitySummaryResponse {
+        let session = EditorSession(document: try fileService.load(from: url))
+        return CLISurfaceContinuitySummaryResponse(
+            surfaceContinuitySummary: try SurfaceContinuityService().summarize(
+                document: session.document,
+                objectRegistry: session.objectRegistry,
+                currentEvaluation: session.currentEvaluation,
+                currentGeneration: session.generation
+            ),
+            generation: session.generation,
+            dirty: session.isDirty
+        )
+    }
+
     public func surfaceSourceSummaryFile(
         at url: URL
     ) throws -> CLISurfaceSourceSummaryResponse {
@@ -965,6 +1042,164 @@ public struct CLIService {
                 client: client
             )
             return try meshSummaryLiveSession(
+                sessionID: sessionID,
+                expectedGeneration: expectedGeneration,
+                client: requiredClient(client)
+            )
+        }
+    }
+
+    public func sketchEntitySummary(
+        target: CLIDocumentTarget,
+        mode: CLIEditMode = .auto,
+        expectedGeneration: DocumentGeneration? = nil,
+        client: AgentClientProtocol? = nil
+    ) throws -> CLISketchEntitySummaryResponse {
+        switch mode {
+        case .auto:
+            return try sketchEntitySummaryAutomatically(
+                target: target,
+                expectedGeneration: expectedGeneration,
+                client: client
+            )
+        case .file:
+            guard let url = target.fileURL else {
+                throw invalidCommand("File mode requires a document file path.")
+            }
+            return try sketchEntitySummaryFile(at: url)
+        case .live:
+            let sessionID = try resolvedLiveSessionID(
+                target: target,
+                client: client
+            )
+            return try sketchEntitySummaryLiveSession(
+                sessionID: sessionID,
+                expectedGeneration: expectedGeneration,
+                client: requiredClient(client)
+            )
+        }
+    }
+
+    public func topologySummary(
+        target: CLIDocumentTarget,
+        mode: CLIEditMode = .auto,
+        expectedGeneration: DocumentGeneration? = nil,
+        client: AgentClientProtocol? = nil
+    ) throws -> CLITopologySummaryResponse {
+        switch mode {
+        case .auto:
+            return try topologySummaryAutomatically(
+                target: target,
+                expectedGeneration: expectedGeneration,
+                client: client
+            )
+        case .file:
+            guard let url = target.fileURL else {
+                throw invalidCommand("File mode requires a document file path.")
+            }
+            return try topologySummaryFile(at: url)
+        case .live:
+            let sessionID = try resolvedLiveSessionID(
+                target: target,
+                client: client
+            )
+            return try topologySummaryLiveSession(
+                sessionID: sessionID,
+                expectedGeneration: expectedGeneration,
+                client: requiredClient(client)
+            )
+        }
+    }
+
+    public func curveAnalysis(
+        target: CLIDocumentTarget,
+        mode: CLIEditMode = .auto,
+        expectedGeneration: DocumentGeneration? = nil,
+        client: AgentClientProtocol? = nil
+    ) throws -> CLICurveAnalysisResponse {
+        switch mode {
+        case .auto:
+            return try curveAnalysisAutomatically(
+                target: target,
+                expectedGeneration: expectedGeneration,
+                client: client
+            )
+        case .file:
+            guard let url = target.fileURL else {
+                throw invalidCommand("File mode requires a document file path.")
+            }
+            return try curveAnalysisFile(at: url)
+        case .live:
+            let sessionID = try resolvedLiveSessionID(
+                target: target,
+                client: client
+            )
+            return try curveAnalysisLiveSession(
+                sessionID: sessionID,
+                expectedGeneration: expectedGeneration,
+                client: requiredClient(client)
+            )
+        }
+    }
+
+    public func surfaceAnalysis(
+        target: CLIDocumentTarget,
+        options: SurfaceAnalysisOptions = SurfaceAnalysisOptions(),
+        mode: CLIEditMode = .auto,
+        expectedGeneration: DocumentGeneration? = nil,
+        client: AgentClientProtocol? = nil
+    ) throws -> CLISurfaceAnalysisResponse {
+        switch mode {
+        case .auto:
+            return try surfaceAnalysisAutomatically(
+                target: target,
+                options: options,
+                expectedGeneration: expectedGeneration,
+                client: client
+            )
+        case .file:
+            guard let url = target.fileURL else {
+                throw invalidCommand("File mode requires a document file path.")
+            }
+            return try surfaceAnalysisFile(at: url, options: options)
+        case .live:
+            let sessionID = try resolvedLiveSessionID(
+                target: target,
+                client: client
+            )
+            return try surfaceAnalysisLiveSession(
+                sessionID: sessionID,
+                options: options,
+                expectedGeneration: expectedGeneration,
+                client: requiredClient(client)
+            )
+        }
+    }
+
+    public func surfaceContinuitySummary(
+        target: CLIDocumentTarget,
+        mode: CLIEditMode = .auto,
+        expectedGeneration: DocumentGeneration? = nil,
+        client: AgentClientProtocol? = nil
+    ) throws -> CLISurfaceContinuitySummaryResponse {
+        switch mode {
+        case .auto:
+            return try surfaceContinuitySummaryAutomatically(
+                target: target,
+                expectedGeneration: expectedGeneration,
+                client: client
+            )
+        case .file:
+            guard let url = target.fileURL else {
+                throw invalidCommand("File mode requires a document file path.")
+            }
+            return try surfaceContinuitySummaryFile(at: url)
+        case .live:
+            let sessionID = try resolvedLiveSessionID(
+                target: target,
+                client: client
+            )
+            return try surfaceContinuitySummaryLiveSession(
                 sessionID: sessionID,
                 expectedGeneration: expectedGeneration,
                 client: requiredClient(client)
@@ -1572,6 +1807,148 @@ public struct CLIService {
         }
     }
 
+    public func sketchEntitySummaryLiveSession(
+        sessionID: UUID,
+        expectedGeneration: DocumentGeneration? = nil,
+        client: AgentClientProtocol
+    ) throws -> CLISketchEntitySummaryResponse {
+        let response = try client.send(
+            .sketchEntitySummary(
+                sessionID: sessionID,
+                expectedGeneration: expectedGeneration
+            )
+        )
+        switch response {
+        case .sketchEntitySummary(let sketchEntitySummary):
+            let summary = try sessions(client: client)
+                .sessions
+                .first { $0.id == sessionID }
+            return CLISketchEntitySummaryResponse(
+                sketchEntitySummary: sketchEntitySummary,
+                generation: DocumentGeneration(summary?.generation.value ?? 0),
+                dirty: summary?.dirty ?? false
+            )
+        case .failure(let error):
+            throw error
+        default:
+            throw unexpectedResponse("Sketch entity summary request returned an unexpected response.")
+        }
+    }
+
+    public func topologySummaryLiveSession(
+        sessionID: UUID,
+        expectedGeneration: DocumentGeneration? = nil,
+        client: AgentClientProtocol
+    ) throws -> CLITopologySummaryResponse {
+        let response = try client.send(
+            .topologySummary(
+                sessionID: sessionID,
+                expectedGeneration: expectedGeneration
+            )
+        )
+        switch response {
+        case .topologySummary(let topologySummary):
+            let summary = try sessions(client: client)
+                .sessions
+                .first { $0.id == sessionID }
+            return CLITopologySummaryResponse(
+                topologySummary: topologySummary,
+                generation: DocumentGeneration(summary?.generation.value ?? 0),
+                dirty: summary?.dirty ?? false
+            )
+        case .failure(let error):
+            throw error
+        default:
+            throw unexpectedResponse("Topology summary request returned an unexpected response.")
+        }
+    }
+
+    public func curveAnalysisLiveSession(
+        sessionID: UUID,
+        expectedGeneration: DocumentGeneration? = nil,
+        client: AgentClientProtocol
+    ) throws -> CLICurveAnalysisResponse {
+        let response = try client.send(
+            .curveAnalysis(
+                sessionID: sessionID,
+                expectedGeneration: expectedGeneration
+            )
+        )
+        switch response {
+        case .curveAnalysis(let curveAnalysis):
+            let summary = try sessions(client: client)
+                .sessions
+                .first { $0.id == sessionID }
+            return CLICurveAnalysisResponse(
+                curveAnalysis: curveAnalysis,
+                generation: DocumentGeneration(summary?.generation.value ?? 0),
+                dirty: summary?.dirty ?? false
+            )
+        case .failure(let error):
+            throw error
+        default:
+            throw unexpectedResponse("Curve analysis request returned an unexpected response.")
+        }
+    }
+
+    public func surfaceAnalysisLiveSession(
+        sessionID: UUID,
+        options: SurfaceAnalysisOptions = SurfaceAnalysisOptions(),
+        expectedGeneration: DocumentGeneration? = nil,
+        client: AgentClientProtocol
+    ) throws -> CLISurfaceAnalysisResponse {
+        let response = try client.send(
+            .surfaceAnalysis(
+                sessionID: sessionID,
+                options: options,
+                expectedGeneration: expectedGeneration
+            )
+        )
+        switch response {
+        case .surfaceAnalysis(let surfaceAnalysis):
+            let summary = try sessions(client: client)
+                .sessions
+                .first { $0.id == sessionID }
+            return CLISurfaceAnalysisResponse(
+                surfaceAnalysis: surfaceAnalysis,
+                generation: DocumentGeneration(summary?.generation.value ?? 0),
+                dirty: summary?.dirty ?? false
+            )
+        case .failure(let error):
+            throw error
+        default:
+            throw unexpectedResponse("Surface analysis request returned an unexpected response.")
+        }
+    }
+
+    public func surfaceContinuitySummaryLiveSession(
+        sessionID: UUID,
+        expectedGeneration: DocumentGeneration? = nil,
+        client: AgentClientProtocol
+    ) throws -> CLISurfaceContinuitySummaryResponse {
+        let response = try client.send(
+            .surfaceContinuitySummary(
+                sessionID: sessionID,
+                expectedGeneration: expectedGeneration
+            )
+        )
+        switch response {
+        case .surfaceContinuitySummary(let surfaceContinuitySummary):
+            let summary = try sessions(client: client)
+                .sessions
+                .first { $0.id == sessionID }
+            return CLISurfaceContinuitySummaryResponse(
+                surfaceContinuitySummary: surfaceContinuitySummary,
+                generation: DocumentGeneration(summary?.generation.value ?? 0),
+                dirty: summary?.dirty ?? false
+            )
+        case .failure(let error):
+            throw error
+        default:
+            throw unexpectedResponse("Surface continuity summary request returned an unexpected response.")
+        }
+    }
+
     public func surfaceSourceSummaryLiveSession(
         sessionID: UUID,
         expectedGeneration: DocumentGeneration? = nil,
@@ -1821,6 +2198,154 @@ public struct CLIService {
             throw invalidCommand("Mesh summary requires a document file path or live session ID.")
         }
         return try meshSummaryFile(at: url)
+    }
+
+    private func sketchEntitySummaryAutomatically(
+        target: CLIDocumentTarget,
+        expectedGeneration: DocumentGeneration?,
+        client: AgentClientProtocol?
+    ) throws -> CLISketchEntitySummaryResponse {
+        if let sessionID = target.sessionID {
+            return try sketchEntitySummaryLiveSession(
+                sessionID: sessionID,
+                expectedGeneration: expectedGeneration,
+                client: requiredClient(client)
+            )
+        }
+
+        if let url = target.fileURL,
+           let client,
+           let session = try openSession(for: url, client: client) {
+            return try sketchEntitySummaryLiveSession(
+                sessionID: session.id,
+                expectedGeneration: expectedGeneration,
+                client: client
+            )
+        }
+
+        guard let url = target.fileURL else {
+            throw invalidCommand("Sketch entity summary requires a document file path or live session ID.")
+        }
+        return try sketchEntitySummaryFile(at: url)
+    }
+
+    private func topologySummaryAutomatically(
+        target: CLIDocumentTarget,
+        expectedGeneration: DocumentGeneration?,
+        client: AgentClientProtocol?
+    ) throws -> CLITopologySummaryResponse {
+        if let sessionID = target.sessionID {
+            return try topologySummaryLiveSession(
+                sessionID: sessionID,
+                expectedGeneration: expectedGeneration,
+                client: requiredClient(client)
+            )
+        }
+
+        if let url = target.fileURL,
+           let client,
+           let session = try openSession(for: url, client: client) {
+            return try topologySummaryLiveSession(
+                sessionID: session.id,
+                expectedGeneration: expectedGeneration,
+                client: client
+            )
+        }
+
+        guard let url = target.fileURL else {
+            throw invalidCommand("Topology summary requires a document file path or live session ID.")
+        }
+        return try topologySummaryFile(at: url)
+    }
+
+    private func curveAnalysisAutomatically(
+        target: CLIDocumentTarget,
+        expectedGeneration: DocumentGeneration?,
+        client: AgentClientProtocol?
+    ) throws -> CLICurveAnalysisResponse {
+        if let sessionID = target.sessionID {
+            return try curveAnalysisLiveSession(
+                sessionID: sessionID,
+                expectedGeneration: expectedGeneration,
+                client: requiredClient(client)
+            )
+        }
+
+        if let url = target.fileURL,
+           let client,
+           let session = try openSession(for: url, client: client) {
+            return try curveAnalysisLiveSession(
+                sessionID: session.id,
+                expectedGeneration: expectedGeneration,
+                client: client
+            )
+        }
+
+        guard let url = target.fileURL else {
+            throw invalidCommand("Curve analysis requires a document file path or live session ID.")
+        }
+        return try curveAnalysisFile(at: url)
+    }
+
+    private func surfaceAnalysisAutomatically(
+        target: CLIDocumentTarget,
+        options: SurfaceAnalysisOptions,
+        expectedGeneration: DocumentGeneration?,
+        client: AgentClientProtocol?
+    ) throws -> CLISurfaceAnalysisResponse {
+        if let sessionID = target.sessionID {
+            return try surfaceAnalysisLiveSession(
+                sessionID: sessionID,
+                options: options,
+                expectedGeneration: expectedGeneration,
+                client: requiredClient(client)
+            )
+        }
+
+        if let url = target.fileURL,
+           let client,
+           let session = try openSession(for: url, client: client) {
+            return try surfaceAnalysisLiveSession(
+                sessionID: session.id,
+                options: options,
+                expectedGeneration: expectedGeneration,
+                client: client
+            )
+        }
+
+        guard let url = target.fileURL else {
+            throw invalidCommand("Surface analysis requires a document file path or live session ID.")
+        }
+        return try surfaceAnalysisFile(at: url, options: options)
+    }
+
+    private func surfaceContinuitySummaryAutomatically(
+        target: CLIDocumentTarget,
+        expectedGeneration: DocumentGeneration?,
+        client: AgentClientProtocol?
+    ) throws -> CLISurfaceContinuitySummaryResponse {
+        if let sessionID = target.sessionID {
+            return try surfaceContinuitySummaryLiveSession(
+                sessionID: sessionID,
+                expectedGeneration: expectedGeneration,
+                client: requiredClient(client)
+            )
+        }
+
+        if let url = target.fileURL,
+           let client,
+           let session = try openSession(for: url, client: client) {
+            return try surfaceContinuitySummaryLiveSession(
+                sessionID: session.id,
+                expectedGeneration: expectedGeneration,
+                client: client
+            )
+        }
+
+        guard let url = target.fileURL else {
+            throw invalidCommand("Surface continuity summary requires a document file path or live session ID.")
+        }
+        return try surfaceContinuitySummaryFile(at: url)
     }
 
     private func surfaceSourceSummaryAutomatically(

@@ -256,7 +256,7 @@ flowchart TD
 | `RupaPreview` | `RupaCore` | RealityKit, Quick Look, USDZ preview. |
 | `RupaAutomation` | `RupaCore` | Codable command schema, batch execution, stable references. |
 | `RupaAgent` | `RupaCore`, `RupaAutomation` | App and CLI coordination over IPC. |
-| `RupaCLIKit` | `RupaCore`, `RupaAutomation`, `RupaAgent`, ArgumentParser | Testable CLI command implementation, terminal output, and exit mapping. |
+| `RupaCLIKit` | `RupaCore`, `RupaAutomation`, `RupaAgent`, ArgumentParser | Testable CLI command implementation, read-only CAD inspection, terminal output, and exit mapping. |
 | `RupaCLI` | `RupaCLIKit` | Thin `rupa` executable entry point. |
 
 ## Target Responsibilities
