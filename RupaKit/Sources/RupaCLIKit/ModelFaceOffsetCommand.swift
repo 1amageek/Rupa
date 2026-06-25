@@ -2,10 +2,10 @@ import ArgumentParser
 import RupaAutomation
 import RupaCore
 
-public struct SketchSlotCommand: ParsableCommand {
+public struct ModelFaceOffsetCommand: ParsableCommand {
     public static let configuration = CommandConfiguration(
-        commandName: "slot",
-        abstract: "Create a slot profile from a supported open source sketch curve or chain."
+        commandName: "face-offset",
+        abstract: "Offset an editable body face from a SelectionTarget."
     )
 
     @OptionGroup
@@ -14,10 +14,10 @@ public struct SketchSlotCommand: ParsableCommand {
     @OptionGroup
     public var selection: CLISelectionTargetOptions
 
-    @Option(help: "Slot width numeric literal.")
-    public var width: Double
+    @Option(help: "Offset distance numeric literal.")
+    public var distance: Double
 
-    @Option(help: "Length unit for the slot width.")
+    @Option(help: "Length unit for the offset distance.")
     public var unit: String = LengthDisplayUnit.millimeter.rawValue
 
     public init() {}
@@ -25,12 +25,12 @@ public struct SketchSlotCommand: ParsableCommand {
     public func run() throws {
         try CLIAutomationCommandRunner.run(
             document: document,
-            command: .createSlotSketch(
+            command: .offsetBodyFace(
                 target: selection.decodedTarget(),
-                width: try CLIAutomationCommandRunner.lengthExpression(
-                    value: width,
+                distance: try CLIAutomationCommandRunner.lengthExpression(
+                    value: distance,
                     unitName: unit,
-                    valueName: "Slot width"
+                    valueName: "Face offset distance"
                 )
             )
         )

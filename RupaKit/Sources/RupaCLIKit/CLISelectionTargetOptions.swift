@@ -1,7 +1,7 @@
 import ArgumentParser
 import RupaCore
 
-public struct CLISketchEditTargetOptions: ParsableArguments {
+public struct CLISelectionTargetOptions: ParsableArguments {
     @Option(help: "SelectionTarget JSON object.")
     public var target: String?
 

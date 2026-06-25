@@ -1636,6 +1636,162 @@ struct CLISketchEditCommandTests {
 }
 
 @Suite(.serialized)
+struct CLIModelDirectEditCommandTests {
+    @MainActor
+    @Test(.timeLimit(.minutes(1)))
+    func executableModelFaceOffsetPersistsClosedDocumentAsJSON() async throws {
+        let temporaryDirectory = try makeTemporaryDirectory()
+        defer {
+            removeTemporaryDirectory(temporaryDirectory)
+        }
+        let fixture = try cliDefaultBoxFixture()
+        let documentURL = temporaryDirectory.appendingPathComponent("process-model-face-offset.swcad")
+        try DocumentFileService().save(fixture.document, to: documentURL)
+        let beforeBounds = try cliProfileBounds(forBody: fixture.bodyFeatureID, in: fixture.document)
+        let target = SelectionTarget(sceneNodeID: fixture.bodyNodeID, component: .face(.bodyFaceRight))
+
+        let result = try await runCLI([
+            "model",
+            "face-offset",
+            documentURL.path,
+            "--target",
+            try encodedSelectionTarget(target),
+            "--distance",
+            "2",
+            "--unit",
+            "millimeter",
+            "--mode",
+            "file",
+            "--json",
+        ])
+        let response = try JSONDecoder().decode(CLIResponse.self, from: result.standardOutputData)
+        let loaded = try DocumentFileService().load(from: documentURL)
+        let afterBounds = try cliProfileBounds(forBody: fixture.bodyFeatureID, in: loaded)
+
+        #expect(result.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: result.standardError))
+        #expect(response.message == "Body face offset applied.")
+        #expect(response.saved)
+        #expect(cliNearlyEqual(afterBounds.minX, beforeBounds.minX))
+        #expect(cliNearlyEqual(afterBounds.maxX, beforeBounds.maxX + 0.002))
+        #expect(cliNearlyEqual(afterBounds.minY, beforeBounds.minY))
+        #expect(cliNearlyEqual(afterBounds.maxY, beforeBounds.maxY))
+    }
+
+    @MainActor
+    @Test(.timeLimit(.minutes(1)))
+    func executableModelEdgeEditsPersistClosedDocumentAsJSON() async throws {
+        let temporaryDirectory = try makeTemporaryDirectory()
+        defer {
+            removeTemporaryDirectory(temporaryDirectory)
+        }
+
+        let chamferFixture = try cliDefaultBoxFixture()
+        let chamferURL = temporaryDirectory.appendingPathComponent("process-model-edge-chamfer.swcad")
+        try DocumentFileService().save(chamferFixture.document, to: chamferURL)
+        let chamferTarget = SelectionTarget(sceneNodeID: chamferFixture.bodyNodeID, component: .edge(.bodyEdgeRightTop))
+        let chamferResult = try await runCLI([
+            "model",
+            "edge-chamfer",
+            chamferURL.path,
+            "--target",
+            try encodedSelectionTarget(chamferTarget),
+            "--distance",
+            "1",
+            "--unit",
+            "millimeter",
+            "--mode",
+            "file",
+            "--json",
+        ])
+        let chamferResponse = try JSONDecoder().decode(CLIResponse.self, from: chamferResult.standardOutputData)
+        let chamfered = try DocumentFileService().load(from: chamferURL)
+
+        let filletFixture = try cliDefaultBoxFixture()
+        let filletURL = temporaryDirectory.appendingPathComponent("process-model-edge-fillet.swcad")
+        try DocumentFileService().save(filletFixture.document, to: filletURL)
+        let filletTarget = SelectionTarget(sceneNodeID: filletFixture.bodyNodeID, component: .edge(.bodyEdgeRightTop))
+        let filletResult = try await runCLI([
+            "model",
+            "edge-fillet",
+            filletURL.path,
+            "--target",
+            try encodedSelectionTarget(filletTarget),
+            "--radius",
+            "1",
+            "--unit",
+            "millimeter",
+            "--segment-count",
+            "8",
+            "--mode",
+            "file",
+            "--json",
+        ])
+        let filletResponse = try JSONDecoder().decode(CLIResponse.self, from: filletResult.standardOutputData)
+        let filleted = try DocumentFileService().load(from: filletURL)
+
+        #expect(chamferResult.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: chamferResult.standardError))
+        #expect(chamferResponse.message == "Body edge chamfer applied.")
+        #expect(chamferResponse.saved)
+        #expect(try cliProfileLineCount(forBody: chamferFixture.bodyFeatureID, in: chamfered) == 5)
+        #expect(try cliProfileArcCount(forBody: chamferFixture.bodyFeatureID, in: chamfered) == 0)
+        #expect(filletResult.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: filletResult.standardError))
+        #expect(filletResponse.message == "Body edge fillet applied.")
+        #expect(filletResponse.saved)
+        #expect(try cliProfileLineCount(forBody: filletFixture.bodyFeatureID, in: filleted) == 4)
+        #expect(try cliProfileArcCount(forBody: filletFixture.bodyFeatureID, in: filleted) == 1)
+    }
+
+    @MainActor
+    @Test(.timeLimit(.minutes(1)))
+    func executableModelVertexMovePersistsClosedDocumentAsJSON() async throws {
+        let temporaryDirectory = try makeTemporaryDirectory()
+        defer {
+            removeTemporaryDirectory(temporaryDirectory)
+        }
+        let fixture = try cliDefaultBoxFixture()
+        let documentURL = temporaryDirectory.appendingPathComponent("process-model-vertex-move.swcad")
+        try DocumentFileService().save(fixture.document, to: documentURL)
+        let beforeBounds = try cliProfileBounds(forBody: fixture.bodyFeatureID, in: fixture.document)
+        let componentID = try #require(
+            try GeneratedTopologySelectionResolver().componentID(
+                for: fixture.bodyNodeID,
+                cornerVertex: .frontTopRight,
+                in: fixture.document
+            )
+        )
+        let target = SelectionTarget(sceneNodeID: fixture.bodyNodeID, component: .vertex(componentID))
+
+        let result = try await runCLI([
+            "model",
+            "vertex-move",
+            documentURL.path,
+            "--target",
+            try encodedSelectionTarget(target),
+            "--delta-x",
+            "1",
+            "--delta-y",
+            "2",
+            "--unit",
+            "millimeter",
+            "--mode",
+            "file",
+            "--json",
+        ])
+        let response = try JSONDecoder().decode(CLIResponse.self, from: result.standardOutputData)
+        let loaded = try DocumentFileService().load(from: documentURL)
+        let afterBounds = try cliProfileBounds(forBody: fixture.bodyFeatureID, in: loaded)
+
+        #expect(result.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: result.standardError))
+        #expect(response.message == "Body vertex moved.")
+        #expect(response.saved)
+        #expect(cliNearlyEqual(afterBounds.minX, beforeBounds.minX))
+        #expect(cliNearlyEqual(afterBounds.minY, beforeBounds.minY))
+        #expect(cliNearlyEqual(afterBounds.maxX, beforeBounds.maxX + 0.001))
+        #expect(cliNearlyEqual(afterBounds.maxY, beforeBounds.maxY + 0.002))
+    }
+}
+
+@Suite(.serialized)
 struct CLICommandApplyTests {
     @Test(.timeLimit(.minutes(1)))
     func executableAppliesAutomationCommandPayloadsAsJSON() async throws {
@@ -4500,6 +4656,124 @@ private func cliPolySplinePatchNetworkMesh(centerZ: Double) -> Mesh {
             1, 5, 4,
         ]
     )
+}
+
+@MainActor
+private func cliDefaultBoxFixture() throws -> (
+    document: DesignDocument,
+    bodyFeatureID: FeatureID,
+    bodyNodeID: SceneNodeID
+) {
+    let session = EditorSession()
+    _ = try #require(session.createDefaultExtrudedRectangle())
+    let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let bodyNodeID = try #require(cliBodySceneNodeID(for: bodyFeatureID, in: session.document))
+    return (session.document, bodyFeatureID, bodyNodeID)
+}
+
+private func cliBodySceneNodeID(
+    for featureID: FeatureID,
+    in document: DesignDocument
+) -> SceneNodeID? {
+    document.productMetadata.sceneNodes.first { _, node in
+        node.reference == .body(featureID)
+    }?.key
+}
+
+private func cliProfileBounds(
+    forBody featureID: FeatureID,
+    in document: DesignDocument
+) throws -> (minX: Double, minY: Double, maxX: Double, maxY: Double) {
+    let sketch = try cliProfileSketch(forBody: featureID, in: document)
+    var points: [(x: Double, y: Double)] = []
+    for entity in sketch.entities.values {
+        guard case .line(let line) = entity else {
+            continue
+        }
+        points.append((try cliLength(line.start.x, in: document), try cliLength(line.start.y, in: document)))
+        points.append((try cliLength(line.end.x, in: document), try cliLength(line.end.y, in: document)))
+    }
+    let first = try #require(points.first)
+    return points.dropFirst().reduce(
+        (minX: first.x, minY: first.y, maxX: first.x, maxY: first.y)
+    ) { bounds, point in
+        (
+            minX: min(bounds.minX, point.x),
+            minY: min(bounds.minY, point.y),
+            maxX: max(bounds.maxX, point.x),
+            maxY: max(bounds.maxY, point.y)
+        )
+    }
+}
+
+private func cliProfileLineCount(
+    forBody featureID: FeatureID,
+    in document: DesignDocument
+) throws -> Int {
+    try cliProfileSketch(forBody: featureID, in: document).entities.values.filter { entity in
+        if case .line = entity {
+            return true
+        }
+        return false
+    }.count
+}
+
+private func cliProfileArcCount(
+    forBody featureID: FeatureID,
+    in document: DesignDocument
+) throws -> Int {
+    try cliProfileSketch(forBody: featureID, in: document).entities.values.filter { entity in
+        if case .arc = entity {
+            return true
+        }
+        return false
+    }.count
+}
+
+private func cliProfileSketch(
+    forBody featureID: FeatureID,
+    in document: DesignDocument
+) throws -> Sketch {
+    let extrude = try cliExtrudeFeature(for: featureID, in: document)
+    let profileFeature = try #require(document.cadDocument.designGraph.nodes[extrude.profile.featureID])
+    guard case .sketch(let sketch) = profileFeature.operation else {
+        throw EditorError(
+            code: .referenceUnresolved,
+            message: "Body profile must be a sketch."
+        )
+    }
+    return sketch
+}
+
+private func cliExtrudeFeature(
+    for featureID: FeatureID,
+    in document: DesignDocument
+) throws -> ExtrudeFeature {
+    let feature = try #require(document.cadDocument.designGraph.nodes[featureID])
+    guard case .extrude(let extrude) = feature.operation else {
+        throw EditorError(
+            code: .referenceUnresolved,
+            message: "Feature must be an extrude."
+        )
+    }
+    return extrude
+}
+
+private func cliLength(
+    _ expression: CADExpression,
+    in document: DesignDocument
+) throws -> Double {
+    let quantity = try document.cadDocument.parameters.resolvedValue(for: expression)
+    #expect(quantity.kind == .length)
+    return quantity.value
+}
+
+private func cliNearlyEqual(
+    _ lhs: Double,
+    _ rhs: Double,
+    tolerance: Double = 1.0e-9
+) -> Bool {
+    abs(lhs - rhs) <= tolerance
 }
 
 private func encodedSelectionReference(_ reference: SelectionReference) throws -> String {

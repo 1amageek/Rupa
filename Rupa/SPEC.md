@@ -1262,6 +1262,10 @@ Currently implemented command groups:
 | `rupa model box <document> --width <value> --height <value> --depth <value>` | Create an extruded rectangular body from numeric length literals. |
 | `rupa model cylinder <document> --radius <value> --depth <value>` | Create an extruded circular body from numeric length literals. |
 | `rupa model extrude <document> --profile-feature-id <id> --distance <value>` | Extrude an existing closed sketch profile by Feature ID. |
+| `rupa model face-offset <document> --target <json> --distance <value>` | Offset a supported editable body face selected from topology inspection. |
+| `rupa model edge-chamfer <document> --target <json> --distance <value>` | Chamfer one or more supported editable body edges. |
+| `rupa model edge-fillet <document> --target <json> --radius <value>` | Fillet one or more supported editable body edges. |
+| `rupa model vertex-move <document> --target <json> --delta-x <value> --delta-y <value>` | Move a supported editable body vertex in the source profile plane. |
 | `rupa eval <document>` | Evaluate a file or matching live session and return generation-keyed diagnostics. |
 | `rupa mesh <document>` | Summarize evaluated meshes for a file or matching live session and return body, vertex, triangle, bounds, and diagnostics. |
 | `rupa measure <document>` | Measure a file or matching live session and return counts, bounds, profile area, solid volume, and diagnostics. |

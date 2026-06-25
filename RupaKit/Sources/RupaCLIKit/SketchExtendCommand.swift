@@ -35,7 +35,7 @@ public struct SketchExtendCommand: ParsableCommand {
     public var document: CLIWriteDocumentOptions
 
     @OptionGroup
-    public var selection: CLISketchEditTargetOptions
+    public var selection: CLISelectionTargetOptions
 
     @Option(help: "Extension distance numeric literal.")
     public var distance: Double
@@ -49,11 +49,11 @@ public struct SketchExtendCommand: ParsableCommand {
     public init() {}
 
     public func run() throws {
-        try CLISketchEditCommandRunner.run(
+        try CLIAutomationCommandRunner.run(
             document: document,
             command: .extendSketchCurve(
                 target: selection.decodedTarget(),
-                distance: try CLISketchEditCommandRunner.lengthExpression(
+                distance: try CLIAutomationCommandRunner.lengthExpression(
                     value: distance,
                     unitName: unit,
                     valueName: "Extension distance"

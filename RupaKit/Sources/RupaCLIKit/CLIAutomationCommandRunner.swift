@@ -2,7 +2,7 @@ import ArgumentParser
 import RupaAutomation
 import RupaCore
 
-enum CLISketchEditCommandRunner {
+enum CLIAutomationCommandRunner {
     static func run(
         document: CLIWriteDocumentOptions,
         command: AutomationCommand

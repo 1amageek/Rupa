@@ -11,12 +11,12 @@ public struct SketchReverseCommand: ParsableCommand {
     public var document: CLIWriteDocumentOptions
 
     @OptionGroup
-    public var selection: CLISketchEditTargetOptions
+    public var selection: CLISelectionTargetOptions
 
     public init() {}
 
     public func run() throws {
-        try CLISketchEditCommandRunner.run(
+        try CLIAutomationCommandRunner.run(
             document: document,
             command: .reverseSketchCurve(target: selection.decodedTarget())
         )
