@@ -19,7 +19,11 @@ public struct ObjectDimensionSummaryService: Sendable {
         }
 
         let resolver = ObjectDimensionSourceResolver()
-        let summaryEntries = try targets.flatMap { target in
+        let dimensionTargets = dimensionTargets(
+            for: targets,
+            in: document.productMetadata
+        )
+        let summaryEntries = try dimensionTargets.flatMap { target in
             try entries(for: resolver.resolve(target: target, in: document))
         }
         return ObjectDimensionSummaryResult(
@@ -36,6 +40,63 @@ public struct ObjectDimensionSummaryService: Sendable {
                 ),
             ]
         )
+    }
+
+    private func dimensionTargets(
+        for targets: [SelectionTarget],
+        in metadata: ProductMetadata
+    ) -> [SelectionTarget] {
+        targets.flatMap { target in
+            dimensionTargets(for: target, in: metadata)
+        }
+    }
+
+    private func dimensionTargets(
+        for target: SelectionTarget,
+        in metadata: ProductMetadata
+    ) -> [SelectionTarget] {
+        guard target.component == .object,
+              let sceneNode = metadata.sceneNodes[target.sceneNodeID],
+              sceneNode.object?.category != .body else {
+            return [target]
+        }
+        var bodySceneNodeIDs: [SceneNodeID] = []
+        var visitedSceneNodeIDs: Set<SceneNodeID> = []
+        appendBodySceneNodeIDs(
+            rootedAt: target.sceneNodeID,
+            metadata: metadata,
+            bodySceneNodeIDs: &bodySceneNodeIDs,
+            visitedSceneNodeIDs: &visitedSceneNodeIDs
+        )
+        guard !bodySceneNodeIDs.isEmpty else {
+            return [target]
+        }
+        return bodySceneNodeIDs.map { sceneNodeID in
+            SelectionTarget(sceneNodeID: sceneNodeID)
+        }
+    }
+
+    private func appendBodySceneNodeIDs(
+        rootedAt sceneNodeID: SceneNodeID,
+        metadata: ProductMetadata,
+        bodySceneNodeIDs: inout [SceneNodeID],
+        visitedSceneNodeIDs: inout Set<SceneNodeID>
+    ) {
+        guard visitedSceneNodeIDs.insert(sceneNodeID).inserted,
+              let sceneNode = metadata.sceneNodes[sceneNodeID] else {
+            return
+        }
+        if sceneNode.object?.category == .body {
+            bodySceneNodeIDs.append(sceneNodeID)
+        }
+        for childID in sceneNode.childIDs {
+            appendBodySceneNodeIDs(
+                rootedAt: childID,
+                metadata: metadata,
+                bodySceneNodeIDs: &bodySceneNodeIDs,
+                visitedSceneNodeIDs: &visitedSceneNodeIDs
+            )
+        }
     }
 
     private func entries(for source: ObjectDimensionSource) -> [ObjectDimensionSummaryResult.Entry] {

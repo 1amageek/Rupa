@@ -858,6 +858,57 @@ import Testing
     #expect(summary.entries.first { $0.kind == .sizeY }?.sourceExpression == .length(0.5, .meter))
 }
 
+@MainActor
+@Test func objectDimensionSummaryExpandsIndependentCopyOutputRootToBodyDescendants() async throws {
+    let session = EditorSession()
+    _ = try #require(session.createDefaultExtrudedRectangle())
+    let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let bodySceneNodeID = try #require(
+        session.document.productMetadata.sceneNodes.first { _, node in
+            node.reference == .body(bodyFeatureID)
+        }?.key
+    )
+    _ = try session.execute(
+        .createComponentDefinition(
+            name: "Dimension Summary Clone Source",
+            rootSceneNodeIDs: [bodySceneNodeID]
+        )
+    )
+    let definition = try #require(session.document.productMetadata.componentDefinitions.values.first {
+        $0.name == "Dimension Summary Clone Source"
+    })
+    _ = try session.execute(
+        .createPatternArray(
+            name: "Dimension Summary Clone Array",
+            definitionID: definition.id,
+            distribution: .rectangular(RectangularPatternArray(
+                firstAxis: PatternArrayLinearAxis(
+                    direction: .unitX,
+                    distance: .length(8.0, .millimeter),
+                    copyCount: 2
+                )
+            )),
+            outputMode: .independentCopy
+        )
+    )
+    let source = try #require(session.document.productMetadata.patternArrays.values.first {
+        $0.name == "Dimension Summary Clone Array"
+    })
+    let outputSceneNodeID = try #require(source.outputSceneNodeIDs.first)
+
+    let summary = try ObjectDimensionSummaryService().summarize(
+        document: session.document,
+        targets: [SelectionTarget(sceneNodeID: outputSceneNodeID)]
+    )
+    let outputFeatureIDDescriptions = Set(source.outputFeatureIDs.map(\.description))
+
+    #expect(summary.counts.targetCount == 1)
+    #expect(summary.counts.entryCount == 3)
+    #expect(summary.entries.map(\.kind) == [.sizeX, .sizeY, .sizeZ])
+    #expect(summary.entries.allSatisfy { outputFeatureIDDescriptions.contains($0.sourceFeatureID) })
+    #expect(summary.entries.allSatisfy { $0.target.sceneNodeID != outputSceneNodeID })
+}
+
 @Test func objectDimensionSummaryListsCylinderCandidatesFromFaceTarget() async throws {
     var document = DesignDocument.empty()
     try document.createExtrudedCircle(
