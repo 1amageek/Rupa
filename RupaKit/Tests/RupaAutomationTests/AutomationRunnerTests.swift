@@ -216,6 +216,107 @@ import SwiftCAD
 }
 
 @MainActor
+@Test func automationCanSetCubeDimensions() async throws {
+    let session = EditorSession()
+    let runner = AutomationRunner()
+    _ = try runner.execute(
+        .createExtrudedRectangle(
+            name: "Editable Automation Cube",
+            plane: .xy,
+            width: .length(30.0, .millimeter),
+            height: .length(12.0, .millimeter),
+            depth: .length(6.0, .millimeter),
+            direction: .normal
+        ),
+        in: session
+    )
+    let featureID = try #require(session.document.cadDocument.designGraph.order.last)
+
+    let result = try runner.execute(
+        .setCubeDimensions(
+            featureID: featureID,
+            sizeX: .length(40.0, .millimeter),
+            sizeY: .length(9.0, .millimeter),
+            sizeZ: .length(14.0, .millimeter)
+        ),
+        in: session
+    )
+
+    let bodyNode = try #require(session.document.productMetadata.sceneNodes.values.first {
+        $0.reference == .body(featureID)
+    })
+    let sizeX = try #require(bodyNode.object?.properties["size.x"])
+    let sizeY = try #require(bodyNode.object?.properties["size.y"])
+    let sizeZ = try #require(bodyNode.object?.properties["size.z"])
+    guard case .length(let sizeXMeters) = sizeX,
+          case .length(let sizeYMeters) = sizeY,
+          case .length(let sizeZMeters) = sizeZ else {
+        Issue.record("Expected updated cube size properties.")
+        return
+    }
+
+    #expect(result.message == "Cube dimensions updated.")
+    #expect(result.commandName == "setCubeDimensions")
+    #expect(result.didMutate)
+    #expect(result.generation == DocumentGeneration(2))
+    #expect(abs(sizeXMeters - 0.040) < 1.0e-12)
+    #expect(abs(sizeYMeters - 0.009) < 1.0e-12)
+    #expect(abs(sizeZMeters - 0.014) < 1.0e-12)
+    #expect(session.evaluationStatus == .valid)
+    #expect(session.evaluatedBodyCount == 1)
+}
+
+@MainActor
+@Test func automationCanSetCylinderDimensions() async throws {
+    let session = EditorSession()
+    let runner = AutomationRunner()
+    _ = try runner.execute(
+        .createExtrudedCircle(
+            name: "Editable Automation Cylinder",
+            plane: .xy,
+            center: SketchPoint(
+                x: .length(0.0, .millimeter),
+                y: .length(0.0, .millimeter)
+            ),
+            radius: .length(5.0, .millimeter),
+            depth: .length(8.0, .millimeter),
+            direction: .normal
+        ),
+        in: session
+    )
+    let featureID = try #require(session.document.cadDocument.designGraph.order.last)
+
+    let result = try runner.execute(
+        .setCylinderDimensions(
+            featureID: featureID,
+            radius: .length(7.0, .millimeter),
+            sizeY: .length(11.0, .millimeter)
+        ),
+        in: session
+    )
+
+    let bodyNode = try #require(session.document.productMetadata.sceneNodes.values.first {
+        $0.reference == .body(featureID)
+    })
+    let radius = try #require(bodyNode.object?.properties["radius"])
+    let sizeY = try #require(bodyNode.object?.properties["size.y"])
+    guard case .length(let radiusMeters) = radius,
+          case .length(let sizeYMeters) = sizeY else {
+        Issue.record("Expected updated cylinder size properties.")
+        return
+    }
+
+    #expect(result.message == "Cylinder dimensions updated.")
+    #expect(result.commandName == "setCylinderDimensions")
+    #expect(result.didMutate)
+    #expect(result.generation == DocumentGeneration(2))
+    #expect(abs(radiusMeters - 0.007) < 1.0e-12)
+    #expect(abs(sizeYMeters - 0.011) < 1.0e-12)
+    #expect(session.evaluationStatus == .valid)
+    #expect(session.evaluatedBodyCount == 1)
+}
+
+@MainActor
 @Test func automationCanSetSelectedObjectDimension() async throws {
     let session = EditorSession()
     let runner = AutomationRunner()

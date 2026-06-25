@@ -775,6 +775,52 @@ public final class AgentServer: AgentClientProtocol {
             ]
         ),
         capability(
+            "setCubeDimensions",
+            category: .solid,
+            summary: "Set an editable rectangular extrude body's X, Y, and Z dimensions directly by FeatureID, including independent-copy Pattern Array cloned box features.",
+            access: .automationCommand,
+            mutatesDocument: true,
+            discovery: [.designDisplaySnapshot, .patternArraySummary, .objectDimensionSummary],
+            targets: [.body, .sceneNode],
+            failureMode: "Rejects missing feature IDs, non-extrude features, non-rectangle profiles, invalid length expressions, and stale generations before mutation.",
+            optionMatrix: [
+                AgentCapabilityDescriptor.OptionAxis(
+                    name: "featureIDDiscovery",
+                    supportedValues: [
+                        "patternArraySummary.independentCopyOutputs.featureIDs",
+                        "designDisplaySnapshot.extrudes.featureID",
+                    ],
+                    notes: [
+                        "Use independent-copy output feature IDs when editing cloned Pattern Array boxes directly.",
+                        "Use objectDimensionSummary to read current box size candidates before preserving unchanged axes."
+                    ]
+                ),
+            ]
+        ),
+        capability(
+            "setCylinderDimensions",
+            category: .solid,
+            summary: "Set an editable circular extrude body's radius and Y dimension directly by FeatureID, including independent-copy Pattern Array cloned cylinder features.",
+            access: .automationCommand,
+            mutatesDocument: true,
+            discovery: [.designDisplaySnapshot, .patternArraySummary, .objectDimensionSummary],
+            targets: [.body, .sceneNode],
+            failureMode: "Rejects missing feature IDs, non-extrude features, non-circle profiles, invalid length expressions, and stale generations before mutation.",
+            optionMatrix: [
+                AgentCapabilityDescriptor.OptionAxis(
+                    name: "featureIDDiscovery",
+                    supportedValues: [
+                        "patternArraySummary.independentCopyOutputs.featureIDs",
+                        "designDisplaySnapshot.extrudes.featureID",
+                    ],
+                    notes: [
+                        "Use independent-copy output feature IDs when editing cloned Pattern Array cylinders directly.",
+                        "Use objectDimensionSummary to read current cylinder radius and depth candidates before preserving unchanged dimensions."
+                    ]
+                ),
+            ]
+        ),
+        capability(
             "addSelectionDimension",
             category: .solid,
             summary: "Add a persistent CAD selection dimension between measurable topology or sketch curve targets without storing it as Rupa product metadata.",

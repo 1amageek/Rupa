@@ -275,7 +275,7 @@ import RupaCore
         evidence.notes.contains("Pattern Array generation, curve path extent resolution, and viewport affordance placement share the same parameter-aware expression resolver so Agent-authored parametric arrays remain directly editable in the UI.")
     })
     #expect(arrays.evidence.contains { evidence in
-        evidence.notes.contains("Agent and Automation can update independent-copy cloned extrude distances by using patternArraySummary and designDisplaySnapshot to discover clone FeatureIDs, then dispatching setExtrudeDistance through AutomationRunner to Core.")
+        evidence.notes.contains("Agent and Automation can update independent-copy cloned extrude distances plus rectangular-box and cylinder dimensions by using patternArraySummary, designDisplaySnapshot, and objectDimensionSummary to discover clone FeatureIDs and current editable dimensions before dispatching direct feature-dimension commands through AutomationRunner to Core.")
     })
     #expect(!arrays.openWork.contains { $0.contains("output mode editing") })
 

@@ -177,6 +177,8 @@ public enum AutomationCommand: Codable, Equatable, Sendable {
     case cutSketchCurve(target: SelectionTarget, cutter: SelectionTarget, options: CutCurveOptions)
     case extrudeProfile(name: String, profile: ProfileReference, distance: CADExpression, direction: ExtrudeDirection)
     case setExtrudeDistance(featureID: FeatureID, distance: CADExpression)
+    case setCubeDimensions(featureID: FeatureID, sizeX: CADExpression, sizeY: CADExpression, sizeZ: CADExpression)
+    case setCylinderDimensions(featureID: FeatureID, radius: CADExpression, sizeY: CADExpression)
     case createRevolve(name: String, profile: ProfileReference, axis: RevolveAxis, angle: CADExpression)
     case createSweep(
         name: String,
@@ -569,6 +571,19 @@ public enum AutomationCommand: Codable, Equatable, Sendable {
             .setExtrudeDistance(
                 featureID: featureID,
                 distance: distance
+            )
+        case .setCubeDimensions(let featureID, let sizeX, let sizeY, let sizeZ):
+            .setCubeDimensions(
+                featureID: featureID,
+                sizeX: sizeX,
+                sizeY: sizeY,
+                sizeZ: sizeZ
+            )
+        case .setCylinderDimensions(let featureID, let radius, let sizeY):
+            .setCylinderDimensions(
+                featureID: featureID,
+                radius: radius,
+                sizeY: sizeY
             )
         case .createRevolve(let name, let profile, let axis, let angle):
             .createRevolve(

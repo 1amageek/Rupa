@@ -76,6 +76,8 @@ import SwiftCAD
     #expect(capabilities.contains("setSketchEntityDimension"))
     #expect(capabilities.contains("setObjectDimension"))
     #expect(capabilities.contains("setExtrudeDistance"))
+    #expect(capabilities.contains("setCubeDimensions"))
+    #expect(capabilities.contains("setCylinderDimensions"))
     #expect(capabilities.contains("addSelectionDimension"))
     #expect(capabilities.contains("objectDimensionSummary"))
     #expect(capabilities.contains("sketchDimensionSummary"))
@@ -146,6 +148,8 @@ import SwiftCAD
     let sketchEntityDimension = try #require(descriptors.first { $0.name == "setSketchEntityDimension" })
     let objectDimension = try #require(descriptors.first { $0.name == "setObjectDimension" })
     let extrudeDistance = try #require(descriptors.first { $0.name == "setExtrudeDistance" })
+    let cubeDimensions = try #require(descriptors.first { $0.name == "setCubeDimensions" })
+    let cylinderDimensions = try #require(descriptors.first { $0.name == "setCylinderDimensions" })
     let selectionDimension = try #require(descriptors.first { $0.name == "addSelectionDimension" })
     let objectDimensionSummary = try #require(descriptors.first { $0.name == "objectDimensionSummary" })
     let sketchDimensionSummary = try #require(descriptors.first { $0.name == "sketchDimensionSummary" })
@@ -554,6 +558,32 @@ import SwiftCAD
     let extrudeFeatureIDAxis = try #require(extrudeDistance.optionMatrix.first { $0.name == "featureIDDiscovery" })
     #expect(extrudeFeatureIDAxis.supportedValues.contains("patternArraySummary.independentCopyOutputs.featureIDs"))
     #expect(extrudeFeatureIDAxis.supportedValues.contains("designDisplaySnapshot.extrudes.featureID"))
+
+    #expect(cubeDimensions.category == .solid)
+    #expect(cubeDimensions.mutatesDocument)
+    #expect(cubeDimensions.access == .automationCommand)
+    #expect(cubeDimensions.discovery.contains(.patternArraySummary))
+    #expect(cubeDimensions.discovery.contains(.designDisplaySnapshot))
+    #expect(cubeDimensions.discovery.contains(.objectDimensionSummary))
+    #expect(cubeDimensions.targets == [.body, .sceneNode])
+    #expect(cubeDimensions.summary.contains("independent-copy"))
+    #expect(cubeDimensions.failureMode.contains("non-rectangle"))
+    let cubeFeatureIDAxis = try #require(cubeDimensions.optionMatrix.first { $0.name == "featureIDDiscovery" })
+    #expect(cubeFeatureIDAxis.supportedValues.contains("patternArraySummary.independentCopyOutputs.featureIDs"))
+    #expect(cubeFeatureIDAxis.supportedValues.contains("designDisplaySnapshot.extrudes.featureID"))
+
+    #expect(cylinderDimensions.category == .solid)
+    #expect(cylinderDimensions.mutatesDocument)
+    #expect(cylinderDimensions.access == .automationCommand)
+    #expect(cylinderDimensions.discovery.contains(.patternArraySummary))
+    #expect(cylinderDimensions.discovery.contains(.designDisplaySnapshot))
+    #expect(cylinderDimensions.discovery.contains(.objectDimensionSummary))
+    #expect(cylinderDimensions.targets == [.body, .sceneNode])
+    #expect(cylinderDimensions.summary.contains("independent-copy"))
+    #expect(cylinderDimensions.failureMode.contains("non-circle"))
+    let cylinderFeatureIDAxis = try #require(cylinderDimensions.optionMatrix.first { $0.name == "featureIDDiscovery" })
+    #expect(cylinderFeatureIDAxis.supportedValues.contains("patternArraySummary.independentCopyOutputs.featureIDs"))
+    #expect(cylinderFeatureIDAxis.supportedValues.contains("designDisplaySnapshot.extrudes.featureID"))
 
     #expect(selectionDimension.category == .solid)
     #expect(selectionDimension.mutatesDocument)
@@ -1544,6 +1574,223 @@ import SwiftCAD
     #expect(updatedFirstOutput.regenerationPolicy == .reuseUntilDefinitionIdentityChanges)
 }
 
+@MainActor
+@Test func agentSetsIndependentCopyCloneCubeDimensionsThroughDiscoveredFeatureID() async throws {
+    let server = AgentServer()
+    let sessionID = UUID()
+    let session = EditorSession()
+    _ = try #require(session.createDefaultExtrudedRectangle())
+    let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let bodySceneNodeID = try #require(
+        agentPatternArrayBodySceneNodeID(for: bodyFeatureID, in: session.document)
+    )
+    _ = try session.execute(
+        .createComponentDefinition(
+            name: "Agent Clone Cube Source",
+            rootSceneNodeIDs: [bodySceneNodeID]
+        )
+    )
+    let definition = try #require(session.document.productMetadata.componentDefinitions.values.first {
+        $0.name == "Agent Clone Cube Source"
+    })
+    _ = try session.execute(
+        .createPatternArray(
+            name: "Agent Clone Cube Array",
+            definitionID: definition.id,
+            distribution: .rectangular(RectangularPatternArray(
+                firstAxis: PatternArrayLinearAxis(
+                    direction: .unitX,
+                    distance: .length(8.0, .millimeter),
+                    copyCount: 2
+                )
+            )),
+            outputMode: .independentCopy
+        )
+    )
+    let source = try #require(session.document.productMetadata.patternArrays.values.first {
+        $0.name == "Agent Clone Cube Array"
+    })
+    let initialGeneration = session.generation
+    server.register(session: session, id: sessionID)
+
+    let clone = try agentIndependentCopyCloneExtrudeFeature(
+        server: server,
+        sessionID: sessionID,
+        sourceID: source.id,
+        expectedGeneration: initialGeneration
+    )
+    let commandResponse = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .setCubeDimensions(
+                featureID: clone.featureID,
+                sizeX: .length(16.0, .millimeter),
+                sizeY: .length(9.0, .millimeter),
+                sizeZ: .length(12.0, .millimeter)
+            ),
+            expectedGeneration: initialGeneration
+        )
+    )
+    guard case .command(let commandResult) = commandResponse else {
+        Issue.record("Agent must return a command result.")
+        return
+    }
+
+    let dimensionResponse = server.handle(
+        .objectDimensionSummary(
+            sessionID: sessionID,
+            targets: [SelectionTarget(sceneNodeID: clone.output.sceneNodeID)],
+            expectedGeneration: commandResult.generation
+        )
+    )
+    guard case .objectDimensionSummary(let dimensionSummary) = dimensionResponse else {
+        Issue.record("Agent must return an object dimension summary.")
+        return
+    }
+    let sizeX = try #require(dimensionSummary.entries.first { $0.kind == .sizeX })
+    let sizeY = try #require(dimensionSummary.entries.first { $0.kind == .sizeY })
+    let sizeZ = try #require(dimensionSummary.entries.first { $0.kind == .sizeZ })
+
+    let updatedSummaryResponse = server.handle(
+        .patternArraySummary(
+            sessionID: sessionID,
+            expectedGeneration: commandResult.generation
+        )
+    )
+    guard case .patternArraySummary(let updatedSummaryResult) = updatedSummaryResponse else {
+        Issue.record("Agent must return an updated pattern array summary.")
+        return
+    }
+    let updatedSummary = try #require(updatedSummaryResult.patternArrays.first { $0.sourceID == source.id })
+    let updatedOutput = try #require(updatedSummary.independentCopyOutputs.first)
+    let expectedEditedGeneration = try initialGeneration.advanced()
+
+    #expect(commandResult.message == "Cube dimensions updated.")
+    #expect(commandResult.commandName == "setCubeDimensions")
+    #expect(commandResult.didMutate)
+    #expect(commandResult.generation == expectedEditedGeneration)
+    #expect(sizeX.sourceKind == .box)
+    #expect(abs(sizeX.resolvedMeters - 0.016) < 1.0e-12)
+    #expect(abs(sizeY.resolvedMeters - 0.009) < 1.0e-12)
+    #expect(abs(sizeZ.resolvedMeters - 0.012) < 1.0e-12)
+    #expect(updatedOutput.featureIDs.contains(clone.featureID))
+    #expect(updatedOutput.state == .divergedFromSourceDefinition)
+    #expect(updatedOutput.regenerationPolicy == .reuseUntilDefinitionIdentityChanges)
+}
+
+@MainActor
+@Test func agentSetsIndependentCopyCloneCylinderDimensionsThroughDiscoveredFeatureID() async throws {
+    let server = AgentServer()
+    let sessionID = UUID()
+    let session = EditorSession()
+    _ = try session.execute(
+        .createExtrudedCircle(
+            name: "Agent Clone Cylinder",
+            plane: .xy,
+            center: SketchPoint(
+                x: .length(0.0, .millimeter),
+                y: .length(0.0, .millimeter)
+            ),
+            radius: .length(5.0, .millimeter),
+            depth: .length(8.0, .millimeter),
+            direction: .normal
+        )
+    )
+    let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let bodySceneNodeID = try #require(
+        agentPatternArrayBodySceneNodeID(for: bodyFeatureID, in: session.document)
+    )
+    _ = try session.execute(
+        .createComponentDefinition(
+            name: "Agent Clone Cylinder Source",
+            rootSceneNodeIDs: [bodySceneNodeID]
+        )
+    )
+    let definition = try #require(session.document.productMetadata.componentDefinitions.values.first {
+        $0.name == "Agent Clone Cylinder Source"
+    })
+    _ = try session.execute(
+        .createPatternArray(
+            name: "Agent Clone Cylinder Array",
+            definitionID: definition.id,
+            distribution: .rectangular(RectangularPatternArray(
+                firstAxis: PatternArrayLinearAxis(
+                    direction: .unitX,
+                    distance: .length(8.0, .millimeter),
+                    copyCount: 2
+                )
+            )),
+            outputMode: .independentCopy
+        )
+    )
+    let source = try #require(session.document.productMetadata.patternArrays.values.first {
+        $0.name == "Agent Clone Cylinder Array"
+    })
+    let initialGeneration = session.generation
+    server.register(session: session, id: sessionID)
+
+    let clone = try agentIndependentCopyCloneExtrudeFeature(
+        server: server,
+        sessionID: sessionID,
+        sourceID: source.id,
+        expectedGeneration: initialGeneration
+    )
+    let commandResponse = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .setCylinderDimensions(
+                featureID: clone.featureID,
+                radius: .length(7.0, .millimeter),
+                sizeY: .length(13.0, .millimeter)
+            ),
+            expectedGeneration: initialGeneration
+        )
+    )
+    guard case .command(let commandResult) = commandResponse else {
+        Issue.record("Agent must return a command result.")
+        return
+    }
+
+    let dimensionResponse = server.handle(
+        .objectDimensionSummary(
+            sessionID: sessionID,
+            targets: [SelectionTarget(sceneNodeID: clone.output.sceneNodeID)],
+            expectedGeneration: commandResult.generation
+        )
+    )
+    guard case .objectDimensionSummary(let dimensionSummary) = dimensionResponse else {
+        Issue.record("Agent must return an object dimension summary.")
+        return
+    }
+    let radius = try #require(dimensionSummary.entries.first { $0.kind == .radius })
+    let sizeY = try #require(dimensionSummary.entries.first { $0.kind == .sizeY })
+
+    let updatedSummaryResponse = server.handle(
+        .patternArraySummary(
+            sessionID: sessionID,
+            expectedGeneration: commandResult.generation
+        )
+    )
+    guard case .patternArraySummary(let updatedSummaryResult) = updatedSummaryResponse else {
+        Issue.record("Agent must return an updated pattern array summary.")
+        return
+    }
+    let updatedSummary = try #require(updatedSummaryResult.patternArrays.first { $0.sourceID == source.id })
+    let updatedOutput = try #require(updatedSummary.independentCopyOutputs.first)
+    let expectedEditedGeneration = try initialGeneration.advanced()
+
+    #expect(commandResult.message == "Cylinder dimensions updated.")
+    #expect(commandResult.commandName == "setCylinderDimensions")
+    #expect(commandResult.didMutate)
+    #expect(commandResult.generation == expectedEditedGeneration)
+    #expect(radius.sourceKind == .cylinder)
+    #expect(abs(radius.resolvedMeters - 0.007) < 1.0e-12)
+    #expect(abs(sizeY.resolvedMeters - 0.013) < 1.0e-12)
+    #expect(updatedOutput.featureIDs.contains(clone.featureID))
+    #expect(updatedOutput.state == .divergedFromSourceDefinition)
+    #expect(updatedOutput.regenerationPolicy == .reuseUntilDefinitionIdentityChanges)
+}
+
 @Test func agentMessageCodecRoundTripsCommandRequestAndResponse() async throws {
     let codec = AgentMessageCodec()
     let sessionID = UUID()
@@ -1607,6 +1854,36 @@ import SwiftCAD
     let decodedRequest = try codec.decodeRequest(from: try codec.encode(request))
 
     #expect(decodedRequest == request)
+}
+
+@Test func agentMessageCodecRoundTripsDirectBodyDimensionCommands() async throws {
+    let codec = AgentMessageCodec()
+    let sessionID = UUID()
+    let cubeRequest = AgentRequest.execute(
+        sessionID: sessionID,
+        command: .setCubeDimensions(
+            featureID: FeatureID(),
+            sizeX: .length(16.0, .millimeter),
+            sizeY: .length(9.0, .millimeter),
+            sizeZ: .length(12.0, .millimeter)
+        ),
+        expectedGeneration: DocumentGeneration(5)
+    )
+    let cylinderRequest = AgentRequest.execute(
+        sessionID: sessionID,
+        command: .setCylinderDimensions(
+            featureID: FeatureID(),
+            radius: .length(7.0, .millimeter),
+            sizeY: .length(13.0, .millimeter)
+        ),
+        expectedGeneration: DocumentGeneration(5)
+    )
+
+    let decodedCubeRequest = try codec.decodeRequest(from: try codec.encode(cubeRequest))
+    let decodedCylinderRequest = try codec.decodeRequest(from: try codec.encode(cylinderRequest))
+
+    #expect(decodedCubeRequest == cubeRequest)
+    #expect(decodedCylinderRequest == cylinderRequest)
 }
 
 @Test func agentMessageCodecRoundTripsPatternArrayCommand() async throws {
@@ -12364,6 +12641,54 @@ private func agentPatternArrayBodySceneNodeID(
     document.productMetadata.sceneNodes.first { _, node in
         node.reference == .body(featureID)
     }?.key
+}
+
+private struct AgentIndependentCopyCloneExtrudeFeature {
+    var output: PatternArraySummary.IndependentCopyOutputStatus
+    var featureID: FeatureID
+}
+
+private func agentIndependentCopyCloneExtrudeFeature(
+    server: AgentServer,
+    sessionID: UUID,
+    sourceID: PatternArraySourceID,
+    expectedGeneration: DocumentGeneration
+) throws -> AgentIndependentCopyCloneExtrudeFeature {
+    let summaryResponse = server.handle(
+        .patternArraySummary(
+            sessionID: sessionID,
+            expectedGeneration: expectedGeneration
+        )
+    )
+    guard case .patternArraySummary(let summaryResult) = summaryResponse else {
+        Issue.record("Agent must return a pattern array summary.")
+        throw EditorError(
+            code: .commandFailed,
+            message: "Pattern array summary response was not returned."
+        )
+    }
+    let summary = try #require(summaryResult.patternArrays.first { $0.sourceID == sourceID })
+    let output = try #require(summary.independentCopyOutputs.first)
+
+    let snapshotResponse = server.handle(
+        .designDisplaySnapshot(
+            sessionID: sessionID,
+            expectedGeneration: expectedGeneration
+        )
+    )
+    guard case .designDisplaySnapshot(let snapshot) = snapshotResponse else {
+        Issue.record("Agent must return a design display snapshot.")
+        throw EditorError(
+            code: .commandFailed,
+            message: "Design display snapshot response was not returned."
+        )
+    }
+    let extrudeFeatureIDs = Set(snapshot.extrudes.map(\.featureID))
+    let featureID = try #require(output.featureIDs.first { extrudeFeatureIDs.contains($0) })
+    return AgentIndependentCopyCloneExtrudeFeature(
+        output: output,
+        featureID: featureID
+    )
 }
 
 private func agentFeatureID(

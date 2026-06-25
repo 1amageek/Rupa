@@ -472,7 +472,7 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                         "The viewport previews Curve Pattern Array path replacement candidates with planner-derived ghost output markers before committing the pick-mode source update.",
                         "Viewport and inspector Pattern Array edits preserve direct parameter references by updating referenced ParameterTable values when quantity kinds match.",
                         "Pattern Array generation, curve path extent resolution, and viewport affordance placement share the same parameter-aware expression resolver so Agent-authored parametric arrays remain directly editable in the UI.",
-                        "Agent and Automation can update independent-copy cloned extrude distances by using patternArraySummary and designDisplaySnapshot to discover clone FeatureIDs, then dispatching setExtrudeDistance through AutomationRunner to Core.",
+                        "Agent and Automation can update independent-copy cloned extrude distances plus rectangular-box and cylinder dimensions by using patternArraySummary, designDisplaySnapshot, and objectDimensionSummary to discover clone FeatureIDs and current editable dimensions before dispatching direct feature-dimension commands through AutomationRunner to Core.",
                         "Viewport editing workflows for direct independent-copy cloned-feature handles beyond extrude distance remain open.",
                     ]
                 ),

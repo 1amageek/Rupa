@@ -940,6 +940,37 @@ public struct AutomationRunner {
                 didMutate: result.didMutate,
                 diagnostics: result.diagnostics
             )
+        case .setCubeDimensions(let featureID, let sizeX, let sizeY, let sizeZ):
+            let result = try session.execute(
+                .setCubeDimensions(
+                    featureID: featureID,
+                    sizeX: sizeX,
+                    sizeY: sizeY,
+                    sizeZ: sizeZ
+                )
+            )
+            return AutomationResult(
+                message: "Cube dimensions updated.",
+                commandName: result.commandName,
+                generation: result.generation,
+                didMutate: result.didMutate,
+                diagnostics: result.diagnostics
+            )
+        case .setCylinderDimensions(let featureID, let radius, let sizeY):
+            let result = try session.execute(
+                .setCylinderDimensions(
+                    featureID: featureID,
+                    radius: radius,
+                    sizeY: sizeY
+                )
+            )
+            return AutomationResult(
+                message: "Cylinder dimensions updated.",
+                commandName: result.commandName,
+                generation: result.generation,
+                didMutate: result.didMutate,
+                diagnostics: result.diagnostics
+            )
         case .createRevolve(let name, let profile, let axis, let angle):
             let result = try session.execute(
                 .createRevolve(
