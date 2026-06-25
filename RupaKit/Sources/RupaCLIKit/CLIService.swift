@@ -1144,6 +1144,27 @@ public struct CLIService {
         }
     }
 
+    public func applyAutomationCommand(
+        target: CLIDocumentTarget,
+        command: AutomationCommand,
+        mode: CLIEditMode = .auto,
+        expectedGeneration: DocumentGeneration? = nil,
+        dryRun: Bool = false,
+        forceFileEdit: Bool = false,
+        client: AgentClientProtocol? = nil
+    ) throws -> CLIResponse {
+        try executeDocumentMutationCommand(
+            command,
+            target: target,
+            mode: mode,
+            expectedGeneration: expectedGeneration,
+            dryRun: dryRun,
+            forceFileEdit: forceFileEdit,
+            client: client,
+            missingTargetMessage: "Command application requires a document file path or live session ID."
+        )
+    }
+
     public func createConstructionPlane(
         target: CLIDocumentTarget,
         name: String,
@@ -3463,8 +3484,9 @@ public struct CLIService {
 
         let session = EditorSession(document: try fileService.load(from: url))
         let result = try AutomationRunner().execute(command, in: session)
+        let shouldSave = !dryRun && result.didMutate
 
-        if !dryRun {
+        if shouldSave {
             try fileService.save(session.document, to: url)
             session.store.markClean()
         }
@@ -3473,7 +3495,7 @@ public struct CLIService {
             message: result.message,
             generation: result.generation.value,
             dirty: session.isDirty,
-            saved: !dryRun,
+            saved: shouldSave,
             diagnostics: result.diagnostics
         )
     }

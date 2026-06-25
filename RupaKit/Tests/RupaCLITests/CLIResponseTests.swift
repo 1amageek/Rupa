@@ -2,6 +2,7 @@ import ArgumentParser
 import Foundation
 import Testing
 import RupaAgent
+import RupaAutomation
 import RupaCore
 import SwiftCAD
 @testable import RupaCLIKit
@@ -1097,6 +1098,78 @@ func cliExecutableInspectsConstructionPlanesAndSnapAsJSON() async throws {
     #expect(abs(snapResponse.snapResolution.originalPoint.y - 0.0027) < 0.000_000_000_001)
     #expect(abs(snapResponse.snapResolution.resolvedPoint.x - 0.001) < 0.000_000_000_001)
     #expect(abs(snapResponse.snapResolution.resolvedPoint.y - 0.003) < 0.000_000_000_001)
+}
+
+@Suite(.serialized)
+struct CLICommandApplyTests {
+    @Test(.timeLimit(.minutes(1)))
+    func executableAppliesAutomationCommandPayloadsAsJSON() async throws {
+        let temporaryDirectory = try makeTemporaryDirectory()
+        defer {
+            removeTemporaryDirectory(temporaryDirectory)
+        }
+        let documentURL = temporaryDirectory.appendingPathComponent("process-command-apply.swcad")
+        let commandURL = temporaryDirectory.appendingPathComponent("rename-plane-command.json")
+        try DocumentFileService().save(.empty(named: "Process Command Apply"), to: documentURL)
+
+        let createCommand = AutomationCommand.createConstructionPlane(
+            name: "Applied Plane",
+            plane: .xy,
+            activates: true
+        )
+        let createPayload = String(
+            decoding: try JSONEncoder().encode(createCommand),
+            as: UTF8.self
+        )
+        let createResult = try await runCLI([
+            "command",
+            "apply",
+            documentURL.path,
+            "--command",
+            createPayload,
+            "--mode",
+            "file",
+            "--json",
+        ])
+        let createResponse = try JSONDecoder().decode(
+            CLIResponse.self,
+            from: createResult.standardOutputData
+        )
+        let loadedAfterCreate = try DocumentFileService().load(from: documentURL)
+        let createdPlane = try #require(
+            loadedAfterCreate.productMetadata.constructionPlanes.values.first { $0.name == "Applied Plane" }
+        )
+
+        let renameCommand = AutomationCommand.renameConstructionPlane(
+            id: createdPlane.id,
+            name: "Applied Plane Renamed"
+        )
+        try JSONEncoder().encode(renameCommand).write(to: commandURL)
+        let renameResult = try await runCLI([
+            "command",
+            "apply",
+            documentURL.path,
+            "--command-file",
+            commandURL.path,
+            "--mode",
+            "file",
+            "--json",
+        ])
+        let renameResponse = try JSONDecoder().decode(
+            CLIResponse.self,
+            from: renameResult.standardOutputData
+        )
+        let loadedAfterRename = try DocumentFileService().load(from: documentURL)
+
+        #expect(createResult.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: createResult.standardError))
+        #expect(createResponse.message == "Construction plane Applied Plane created.")
+        #expect(createResponse.saved)
+        #expect(loadedAfterCreate.productMetadata.activeConstructionPlaneID == createdPlane.id)
+        #expect(renameResult.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: renameResult.standardError))
+        #expect(renameResponse.message == "Construction plane renamed to Applied Plane Renamed.")
+        #expect(renameResponse.saved)
+        #expect(loadedAfterRename.productMetadata.constructionPlanes[createdPlane.id]?.name == "Applied Plane Renamed")
+    }
 }
 
 @Suite(.serialized)

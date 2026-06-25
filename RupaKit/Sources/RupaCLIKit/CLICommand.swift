@@ -12,6 +12,7 @@ public struct CLICommand: ParsableCommand {
             AgentCommand.self,
             AttachDocument.self,
             Capabilities.self,
+            AutomationCommandGroup.self,
             DimensionCommand.self,
             EvaluateDocument.self,
             ExportDocument.self,
