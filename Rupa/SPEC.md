@@ -1081,6 +1081,9 @@ Live mode requirements:
 
 ## Agent IPC
 
+The canonical external schema is maintained in [AUTOMATION_PROTOCOL.md](AUTOMATION_PROTOCOL.md).
+This section summarizes the app-level transport and method surface.
+
 ### Transport
 
 Initial implementation uses a local Unix domain socket.
@@ -1104,7 +1107,9 @@ The package-level socket listener supports start, stop, stale socket replacement
   "method": "command.apply",
   "params": {
     "sessionID": "open-session-id",
-    "expectedGeneration": 42,
+    "expectedGeneration": {
+      "value": 42
+    },
     "command": {
       "type": "setParameter",
       "name": "width",
@@ -1124,7 +1129,9 @@ The package-level socket listener supports start, stop, stale socket replacement
   "result": {
     "message": "Parameter width updated.",
     "commandName": "setParameter",
-    "generation": 43,
+    "generation": {
+      "value": 43
+    },
     "didMutate": true
   }
 }

@@ -1134,6 +1134,432 @@ import SwiftCAD
     #expect(result["didMutate"] as? Bool == true)
 }
 
+@Test func agentProtocolRawJSONFixturesDecodeRepresentativeRequests() async throws {
+    let codec = AgentMessageCodec()
+    let sessionID = try #require(UUID(uuidString: "00000000-0000-0000-0000-000000000001"))
+    let requestFixtures: [(json: String, validate: (AgentRequestEnvelope) throws -> Void)] = [
+        (
+            """
+            {
+              "jsonrpc": "2.0",
+              "id": "status-1",
+              "method": "agent.status",
+              "params": {}
+            }
+            """,
+            { envelope in
+                #expect(envelope.id == "status-1")
+                #expect(envelope.method == "agent.status")
+                #expect(envelope.params == .status)
+            }
+        ),
+        (
+            """
+            {
+              "jsonrpc": "2.0",
+              "id": "parameters-1",
+              "method": "document.parameters",
+              "params": {
+                "sessionID": "00000000-0000-0000-0000-000000000001",
+                "expectedGeneration": {
+                  "value": 2
+                }
+              }
+            }
+            """,
+            { envelope in
+                guard case .parameters(let decodedSessionID, let expectedGeneration) = envelope.params else {
+                    #expect(Bool(false))
+                    return
+                }
+                #expect(decodedSessionID == sessionID)
+                #expect(expectedGeneration == DocumentGeneration(2))
+            }
+        ),
+        (
+            """
+            {
+              "jsonrpc": "2.0",
+              "id": "command-1",
+              "method": "command.apply",
+              "params": {
+                "sessionID": "00000000-0000-0000-0000-000000000001",
+                "command": {
+                  "renameDocument": {
+                    "name": "Fixture Project"
+                  }
+                },
+                "expectedGeneration": {
+                  "value": 3
+                }
+              }
+            }
+            """,
+            { envelope in
+                guard case .execute(let decodedSessionID, let command, let expectedGeneration) = envelope.params else {
+                    #expect(Bool(false))
+                    return
+                }
+                #expect(decodedSessionID == sessionID)
+                #expect(command == .renameDocument(name: "Fixture Project"))
+                #expect(expectedGeneration == DocumentGeneration(3))
+            }
+        ),
+        (
+            """
+            {
+              "jsonrpc": "2.0",
+              "id": "parameter-1",
+              "method": "parameter.setExpression",
+              "params": {
+                "sessionID": "00000000-0000-0000-0000-000000000001",
+                "name": "height",
+                "expression": "width * 2",
+                "kind": "length",
+                "defaults": {
+                  "lengthUnit": "millimeter",
+                  "angleUnit": "degree"
+                },
+                "expectedGeneration": {
+                  "value": 4
+                }
+              }
+            }
+            """,
+            { envelope in
+                guard case .setParameterExpression(
+                    let decodedSessionID,
+                    let name,
+                    let expression,
+                    let kind,
+                    let defaults,
+                    let expectedGeneration
+                ) = envelope.params else {
+                    #expect(Bool(false))
+                    return
+                }
+                #expect(decodedSessionID == sessionID)
+                #expect(name == "height")
+                #expect(expression == "width * 2")
+                #expect(kind == .length)
+                #expect(defaults == ParameterExpressionDefaults(lengthUnit: .millimeter, angleUnit: .degree))
+                #expect(expectedGeneration == DocumentGeneration(4))
+            }
+        ),
+        (
+            """
+            {
+              "jsonrpc": "2.0",
+              "id": "snap-1",
+              "method": "snap.resolve",
+              "params": {
+                "sessionID": "00000000-0000-0000-0000-000000000001",
+                "point": {
+                  "x": 0.012,
+                  "y": 0.024
+                },
+                "options": {
+                  "usesGrid": true,
+                  "usesObjects": false,
+                  "gridIntervalMeters": 0.001,
+                  "objectSearchRadiusMeters": 0.002,
+                  "maximumCandidateCount": 8
+                },
+                "expectedGeneration": {
+                  "value": 5
+                }
+              }
+            }
+            """,
+            { envelope in
+                guard case .resolveSnap(
+                    let decodedSessionID,
+                    let point,
+                    let options,
+                    let expectedGeneration
+                ) = envelope.params else {
+                    #expect(Bool(false))
+                    return
+                }
+                #expect(decodedSessionID == sessionID)
+                #expect(point == Point2D(x: 0.012, y: 0.024))
+                #expect(options.usesGrid)
+                #expect(!options.usesObjects)
+                #expect(options.maximumCandidateCount == 8)
+                #expect(expectedGeneration == DocumentGeneration(5))
+            }
+        ),
+        (
+            """
+            {
+              "jsonrpc": "2.0",
+              "id": "surface-analysis-1",
+              "method": "document.surfaceAnalysis",
+              "params": {
+                "sessionID": "00000000-0000-0000-0000-000000000001",
+                "options": {
+                  "sampleDensity": "high"
+                },
+                "expectedGeneration": {
+                  "value": 6
+                }
+              }
+            }
+            """,
+            { envelope in
+                guard case .surfaceAnalysis(
+                    let decodedSessionID,
+                    let options,
+                    let expectedGeneration
+                ) = envelope.params else {
+                    #expect(Bool(false))
+                    return
+                }
+                #expect(decodedSessionID == sessionID)
+                #expect(options == SurfaceAnalysisOptions(sampleDensity: .high))
+                #expect(expectedGeneration == DocumentGeneration(6))
+            }
+        ),
+        (
+            """
+            {
+              "jsonrpc": "2.0",
+              "id": "surface-frames-1",
+              "method": "document.surfaceFrames",
+              "params": {
+                "sessionID": "00000000-0000-0000-0000-000000000001",
+                "queries": [
+                  {
+                    "faceID": "face-1",
+                    "u": 0.25,
+                    "v": 0.75
+                  }
+                ],
+                "expectedGeneration": {
+                  "value": 7
+                }
+              }
+            }
+            """,
+            { envelope in
+                guard case .surfaceFrames(
+                    let decodedSessionID,
+                    let queries,
+                    let expectedGeneration
+                ) = envelope.params else {
+                    #expect(Bool(false))
+                    return
+                }
+                #expect(decodedSessionID == sessionID)
+                #expect(queries == [SurfaceFrameQuery(faceID: "face-1", u: 0.25, v: 0.75)])
+                #expect(expectedGeneration == DocumentGeneration(7))
+            }
+        ),
+        (
+            """
+            {
+              "jsonrpc": "2.0",
+              "id": "selection-1",
+              "method": "selection.selectTargets",
+              "params": {
+                "sessionID": "00000000-0000-0000-0000-000000000001",
+                "targets": [],
+                "expectedGeneration": {
+                  "value": 8
+                }
+              }
+            }
+            """,
+            { envelope in
+                guard case .selectTargets(
+                    let decodedSessionID,
+                    let targets,
+                    let expectedGeneration
+                ) = envelope.params else {
+                    #expect(Bool(false))
+                    return
+                }
+                #expect(decodedSessionID == sessionID)
+                #expect(targets.isEmpty)
+                #expect(expectedGeneration == DocumentGeneration(8))
+            }
+        ),
+        (
+            """
+            {
+              "jsonrpc": "2.0",
+              "id": "export-1",
+              "method": "document.export",
+              "params": {
+                "sessionID": "00000000-0000-0000-0000-000000000001",
+                "outputPath": "/tmp/rupa-fixture.obj",
+                "options": {},
+                "dryRun": true,
+                "expectedGeneration": {
+                  "value": 9
+                }
+              }
+            }
+            """,
+            { envelope in
+                guard case .export(
+                    let decodedSessionID,
+                    let outputPath,
+                    let expectedGeneration,
+                    let options,
+                    let dryRun
+                ) = envelope.params else {
+                    #expect(Bool(false))
+                    return
+                }
+                #expect(decodedSessionID == sessionID)
+                #expect(outputPath == "/tmp/rupa-fixture.obj")
+                #expect(expectedGeneration == DocumentGeneration(9))
+                #expect(options == ExportOptions())
+                #expect(dryRun)
+            }
+        ),
+    ]
+
+    for fixture in requestFixtures {
+        let envelope = try codec.decodeRequestEnvelope(from: rawAgentProtocolJSON(fixture.json))
+        try fixture.validate(envelope)
+    }
+}
+
+@Test func agentProtocolRawJSONFixtureDecodesFlatResponses() async throws {
+    let codec = AgentMessageCodec()
+    let statusResponse = try codec.decodeResponse(
+        from: rawAgentProtocolJSON(
+            """
+            {
+              "jsonrpc": "2.0",
+              "id": "status-1",
+              "method": "agent.status",
+              "result": {
+                "running": true,
+                "socketPath": "/tmp/rupa.sock",
+                "sessionCount": 2
+              }
+            }
+            """
+        ),
+        expectedID: "status-1",
+        expectedMethod: "agent.status"
+    )
+    let parameterResponse = try codec.decodeResponse(
+        from: rawAgentProtocolJSON(
+            """
+            {
+              "jsonrpc": "2.0",
+              "id": "parameter-1",
+              "method": "parameter.setExpression",
+              "result": {
+                "message": "Parameter height updated.",
+                "commandName": "upsertParameter",
+                "generation": {
+                  "value": 10
+                },
+                "didMutate": true,
+                "diagnostics": []
+              }
+            }
+            """
+        ),
+        expectedID: "parameter-1",
+        expectedMethod: "parameter.setExpression"
+    )
+
+    #expect(statusResponse == .status(AgentStatus(running: true, socketPath: "/tmp/rupa.sock", sessionCount: 2)))
+    guard case .command(let result) = parameterResponse else {
+        #expect(Bool(false))
+        return
+    }
+    #expect(result.commandName == "upsertParameter")
+    #expect(result.generation == DocumentGeneration(10))
+    #expect(result.didMutate)
+}
+
+@Test func agentProtocolRawJSONFixtureDecodesErrorResponse() async throws {
+    let codec = AgentMessageCodec()
+    let response = try codec.decodeResponse(
+        from: rawAgentProtocolJSON(
+            """
+            {
+              "jsonrpc": "2.0",
+              "id": "command-1",
+              "method": "command.apply",
+              "error": {
+                "code": "document.generationMismatch",
+                "message": "The document has changed since the command was prepared."
+              }
+            }
+            """
+        ),
+        expectedID: "command-1",
+        expectedMethod: "command.apply"
+    )
+
+    guard case .failure(let error) = response else {
+        #expect(Bool(false))
+        return
+    }
+    #expect(error.code == .documentGenerationMismatch)
+    #expect(error.message == "The document has changed since the command was prepared.")
+}
+
+@Test func agentProtocolRejectsUnknownTopLevelParamsFromRawJSON() async throws {
+    let codec = AgentMessageCodec()
+    var caught: EditorError?
+
+    do {
+        _ = try codec.decodeRequestEnvelope(
+            from: rawAgentProtocolJSON(
+                """
+                {
+                  "jsonrpc": "2.0",
+                  "id": "status-unknown-key",
+                  "method": "agent.status",
+                  "params": {
+                    "status": {}
+                  }
+                }
+                """
+            )
+        )
+    } catch let error as EditorError {
+        caught = error
+    }
+
+    #expect(caught?.code == .commandInvalid)
+    #expect(caught?.message.contains("Unsupported params for agent.status") == true)
+}
+
+@Test func agentProtocolEncodesStatusResponseAsFlatResult() async throws {
+    let codec = AgentMessageCodec()
+    let encoded = try codec.encode(
+        AgentResponse.status(
+            AgentStatus(
+                running: true,
+                socketPath: "/tmp/rupa.sock",
+                sessionCount: 2
+            )
+        ),
+        id: "status-encoded"
+    )
+    let json = try #require(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+    let result = try #require(json["result"] as? [String: Any])
+
+    #expect(json["method"] as? String == "agent.status")
+    #expect(result["status"] == nil)
+    #expect(result["running"] as? Bool == true)
+    #expect(result["sessionCount"] as? Int == 2)
+}
+
+private func rawAgentProtocolJSON(_ source: String) -> Data {
+    Data(source.utf8)
+}
+
 @Test func agentMessageCodecRejectsResponseIDMismatch() async throws {
     let codec = AgentMessageCodec()
     let encoded = try codec.encode(
