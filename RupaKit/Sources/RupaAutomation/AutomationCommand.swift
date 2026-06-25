@@ -176,6 +176,7 @@ public enum AutomationCommand: Codable, Equatable, Sendable {
     case trimSketchCurveSegment(target: SelectionTarget)
     case cutSketchCurve(target: SelectionTarget, cutter: SelectionTarget, options: CutCurveOptions)
     case extrudeProfile(name: String, profile: ProfileReference, distance: CADExpression, direction: ExtrudeDirection)
+    case setExtrudeDistance(featureID: FeatureID, distance: CADExpression)
     case createRevolve(name: String, profile: ProfileReference, axis: RevolveAxis, angle: CADExpression)
     case createSweep(
         name: String,
@@ -563,6 +564,11 @@ public enum AutomationCommand: Codable, Equatable, Sendable {
                 profile: profile,
                 distance: distance,
                 direction: direction
+            )
+        case .setExtrudeDistance(let featureID, let distance):
+            .setExtrudeDistance(
+                featureID: featureID,
+                distance: distance
             )
         case .createRevolve(let name, let profile, let axis, let angle):
             .createRevolve(

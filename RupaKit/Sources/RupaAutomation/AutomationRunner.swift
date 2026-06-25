@@ -926,6 +926,20 @@ public struct AutomationRunner {
                 didMutate: result.didMutate,
                 diagnostics: result.diagnostics
             )
+        case .setExtrudeDistance(let featureID, let distance):
+            let result = try session.execute(
+                .setExtrudeDistance(
+                    featureID: featureID,
+                    distance: distance
+                )
+            )
+            return AutomationResult(
+                message: "Extrude distance updated.",
+                commandName: result.commandName,
+                generation: result.generation,
+                didMutate: result.didMutate,
+                diagnostics: result.diagnostics
+            )
         case .createRevolve(let name, let profile, let axis, let angle):
             let result = try session.execute(
                 .createRevolve(

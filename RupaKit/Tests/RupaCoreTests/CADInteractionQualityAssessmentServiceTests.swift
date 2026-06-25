@@ -116,6 +116,15 @@ import RupaCore
         evidence.sourceFiles.contains("RupaKit/Sources/RupaCore/PatternArrayIndependentCopyBuilder.swift")
     })
     #expect(arrays.evidence.contains { evidence in
+        evidence.sourceFiles.contains("RupaKit/Sources/RupaAutomation/AutomationCommand.swift")
+    })
+    #expect(arrays.evidence.contains { evidence in
+        evidence.sourceFiles.contains("RupaKit/Sources/RupaAutomation/AutomationRunner.swift")
+    })
+    #expect(arrays.evidence.contains { evidence in
+        evidence.sourceFiles.contains("RupaKit/Sources/RupaAgent/AgentServer.swift")
+    })
+    #expect(arrays.evidence.contains { evidence in
         evidence.sourceFiles.contains("RupaKit/Sources/RupaUI/PatternArrayInspectorState.swift")
     })
     #expect(arrays.evidence.contains { evidence in
@@ -200,6 +209,12 @@ import RupaCore
         evidence.tests.contains("RupaKit/Tests/RupaRenderingTests/ViewportPatternArrayCurvePathReplacementPreviewServiceTests.swift")
     })
     #expect(arrays.evidence.contains { evidence in
+        evidence.tests.contains("RupaKit/Tests/RupaAutomationTests/AutomationRunnerTests.swift")
+    })
+    #expect(arrays.evidence.contains { evidence in
+        evidence.tests.contains("RupaKit/Tests/RupaAgentTests/AgentServerTests.swift")
+    })
+    #expect(arrays.evidence.contains { evidence in
         evidence.notes.contains("Pattern Array summaries expose editable fields, lifecycle actions, source-owned scene output policy, cloned feature edit policy, output IDs, independent-copy generation definition identity, per-output source-divergence state, regeneration policy, and diagnostics without forcing CAD evaluation.")
     })
     #expect(arrays.evidence.contains { evidence in
@@ -258,6 +273,9 @@ import RupaCore
     })
     #expect(arrays.evidence.contains { evidence in
         evidence.notes.contains("Pattern Array generation, curve path extent resolution, and viewport affordance placement share the same parameter-aware expression resolver so Agent-authored parametric arrays remain directly editable in the UI.")
+    })
+    #expect(arrays.evidence.contains { evidence in
+        evidence.notes.contains("Agent and Automation can update independent-copy cloned extrude distances by using patternArraySummary and designDisplaySnapshot to discover clone FeatureIDs, then dispatching setExtrudeDistance through AutomationRunner to Core.")
     })
     #expect(!arrays.openWork.contains { $0.contains("output mode editing") })
 

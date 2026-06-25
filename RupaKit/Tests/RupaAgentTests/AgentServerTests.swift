@@ -75,6 +75,7 @@ import SwiftCAD
     #expect(capabilities.contains("setSketchArcParameters"))
     #expect(capabilities.contains("setSketchEntityDimension"))
     #expect(capabilities.contains("setObjectDimension"))
+    #expect(capabilities.contains("setExtrudeDistance"))
     #expect(capabilities.contains("addSelectionDimension"))
     #expect(capabilities.contains("objectDimensionSummary"))
     #expect(capabilities.contains("sketchDimensionSummary"))
@@ -144,6 +145,7 @@ import SwiftCAD
     let pointDisplay = try #require(descriptors.first { $0.name == "setPointDisplay" })
     let sketchEntityDimension = try #require(descriptors.first { $0.name == "setSketchEntityDimension" })
     let objectDimension = try #require(descriptors.first { $0.name == "setObjectDimension" })
+    let extrudeDistance = try #require(descriptors.first { $0.name == "setExtrudeDistance" })
     let selectionDimension = try #require(descriptors.first { $0.name == "addSelectionDimension" })
     let objectDimensionSummary = try #require(descriptors.first { $0.name == "objectDimensionSummary" })
     let sketchDimensionSummary = try #require(descriptors.first { $0.name == "sketchDimensionSummary" })
@@ -540,6 +542,18 @@ import SwiftCAD
     #expect(objectDimension.discovery.contains(.topologySummary))
     #expect(objectDimension.discovery.contains(.objectDimensionSummary))
     #expect(objectDimension.targets == [.body, .face, .edge])
+
+    #expect(extrudeDistance.category == .solid)
+    #expect(extrudeDistance.mutatesDocument)
+    #expect(extrudeDistance.access == .automationCommand)
+    #expect(extrudeDistance.discovery.contains(.patternArraySummary))
+    #expect(extrudeDistance.discovery.contains(.designDisplaySnapshot))
+    #expect(extrudeDistance.targets == [.body, .sceneNode])
+    #expect(extrudeDistance.summary.contains("independent-copy"))
+    #expect(extrudeDistance.failureMode.contains("non-extrude"))
+    let extrudeFeatureIDAxis = try #require(extrudeDistance.optionMatrix.first { $0.name == "featureIDDiscovery" })
+    #expect(extrudeFeatureIDAxis.supportedValues.contains("patternArraySummary.independentCopyOutputs.featureIDs"))
+    #expect(extrudeFeatureIDAxis.supportedValues.contains("designDisplaySnapshot.extrudes.featureID"))
 
     #expect(selectionDimension.category == .solid)
     #expect(selectionDimension.mutatesDocument)
@@ -1414,6 +1428,122 @@ import SwiftCAD
     #expect(decodedResponse == summaryResponse)
 }
 
+@MainActor
+@Test func agentSetsIndependentCopyCloneExtrudeDistanceThroughDiscoveredFeatureID() async throws {
+    let server = AgentServer()
+    let sessionID = UUID()
+    let session = EditorSession()
+    _ = try #require(session.createDefaultExtrudedRectangle())
+    let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let bodySceneNodeID = try #require(
+        agentPatternArrayBodySceneNodeID(for: bodyFeatureID, in: session.document)
+    )
+    _ = try session.execute(
+        .createComponentDefinition(
+            name: "Agent Clone Edit Source",
+            rootSceneNodeIDs: [bodySceneNodeID]
+        )
+    )
+    let definition = try #require(session.document.productMetadata.componentDefinitions.values.first {
+        $0.name == "Agent Clone Edit Source"
+    })
+    _ = try session.execute(
+        .createPatternArray(
+            name: "Agent Clone Edit Array",
+            definitionID: definition.id,
+            distribution: .rectangular(RectangularPatternArray(
+                firstAxis: PatternArrayLinearAxis(
+                    direction: .unitX,
+                    distance: .length(8.0, .millimeter),
+                    copyCount: 2
+                )
+            )),
+            outputMode: .independentCopy
+        )
+    )
+    let source = try #require(session.document.productMetadata.patternArrays.values.first {
+        $0.name == "Agent Clone Edit Array"
+    })
+    let initialGeneration = session.generation
+    server.register(session: session, id: sessionID)
+
+    let summaryResponse = server.handle(
+        .patternArraySummary(
+            sessionID: sessionID,
+            expectedGeneration: initialGeneration
+        )
+    )
+    guard case .patternArraySummary(let summaryResult) = summaryResponse else {
+        Issue.record("Agent must return a pattern array summary.")
+        return
+    }
+    let summary = try #require(summaryResult.patternArrays.first { $0.sourceID == source.id })
+    let firstOutput = try #require(summary.independentCopyOutputs.first)
+
+    let snapshotResponse = server.handle(
+        .designDisplaySnapshot(
+            sessionID: sessionID,
+            expectedGeneration: initialGeneration
+        )
+    )
+    guard case .designDisplaySnapshot(let snapshot) = snapshotResponse else {
+        Issue.record("Agent must return a display snapshot.")
+        return
+    }
+    let extrudeFeatureIDs = Set(snapshot.extrudes.map(\.featureID))
+    let cloneExtrudeFeatureID = try #require(firstOutput.featureIDs.first { extrudeFeatureIDs.contains($0) })
+
+    let commandResponse = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .setExtrudeDistance(
+                featureID: cloneExtrudeFeatureID,
+                distance: .length(11.0, .millimeter)
+            ),
+            expectedGeneration: initialGeneration
+        )
+    )
+    guard case .command(let commandResult) = commandResponse else {
+        Issue.record("Agent must return a command result.")
+        return
+    }
+    let expectedEditedGeneration = try initialGeneration.advanced()
+
+    let updatedSnapshotResponse = server.handle(
+        .designDisplaySnapshot(
+            sessionID: sessionID,
+            expectedGeneration: commandResult.generation
+        )
+    )
+    guard case .designDisplaySnapshot(let updatedSnapshot) = updatedSnapshotResponse else {
+        Issue.record("Agent must return an updated display snapshot.")
+        return
+    }
+    let editedExtrude = try #require(updatedSnapshot.extrudes.first { $0.featureID == cloneExtrudeFeatureID })
+
+    let updatedSummaryResponse = server.handle(
+        .patternArraySummary(
+            sessionID: sessionID,
+            expectedGeneration: commandResult.generation
+        )
+    )
+    guard case .patternArraySummary(let updatedSummaryResult) = updatedSummaryResponse else {
+        Issue.record("Agent must return an updated pattern array summary.")
+        return
+    }
+    let updatedSummary = try #require(updatedSummaryResult.patternArrays.first { $0.sourceID == source.id })
+    let updatedFirstOutput = try #require(updatedSummary.independentCopyOutputs.first)
+
+    #expect(commandResult.message == "Extrude distance updated.")
+    #expect(commandResult.commandName == "setExtrudeDistance")
+    #expect(commandResult.didMutate)
+    #expect(commandResult.generation == expectedEditedGeneration)
+    #expect(abs(editedExtrude.depthMeters - 0.011) < 1.0e-12)
+    #expect(updatedFirstOutput.featureIDs.contains(cloneExtrudeFeatureID))
+    #expect(updatedFirstOutput.state == .divergedFromSourceDefinition)
+    #expect(updatedFirstOutput.regenerationPolicy == .reuseUntilDefinitionIdentityChanges)
+}
+
 @Test func agentMessageCodecRoundTripsCommandRequestAndResponse() async throws {
     let codec = AgentMessageCodec()
     let sessionID = UUID()
@@ -1453,6 +1583,23 @@ import SwiftCAD
             radius: .length(3.0, .millimeter),
             startAngle: .angle(0.0, .degree),
             endAngle: .angle(90.0, .degree)
+        ),
+        expectedGeneration: DocumentGeneration(5)
+    )
+
+    let decodedRequest = try codec.decodeRequest(from: try codec.encode(request))
+
+    #expect(decodedRequest == request)
+}
+
+@Test func agentMessageCodecRoundTripsExtrudeDistanceCommand() async throws {
+    let codec = AgentMessageCodec()
+    let sessionID = UUID()
+    let request = AgentRequest.execute(
+        sessionID: sessionID,
+        command: .setExtrudeDistance(
+            featureID: FeatureID(),
+            distance: .length(11.0, .millimeter)
         ),
         expectedGeneration: DocumentGeneration(5)
     )

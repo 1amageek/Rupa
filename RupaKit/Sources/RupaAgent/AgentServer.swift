@@ -752,6 +752,29 @@ public final class AgentServer: AgentClientProtocol {
             failureMode: "Rejects non-body targets, unsupported edge topology, unsupported dimension kinds, invalid values, non-extruded sources, and stale generations before mutation."
         ),
         capability(
+            "setExtrudeDistance",
+            category: .solid,
+            summary: "Set an existing extrude feature distance directly by FeatureID, including independent-copy Pattern Array cloned body features discovered from summaries.",
+            access: .automationCommand,
+            mutatesDocument: true,
+            discovery: [.designDisplaySnapshot, .patternArraySummary],
+            targets: [.body, .sceneNode],
+            failureMode: "Rejects missing feature IDs, non-extrude features, invalid length expressions, and stale generations before mutation.",
+            optionMatrix: [
+                AgentCapabilityDescriptor.OptionAxis(
+                    name: "featureIDDiscovery",
+                    supportedValues: [
+                        "patternArraySummary.independentCopyOutputs.featureIDs",
+                        "designDisplaySnapshot.extrudes.featureID",
+                    ],
+                    notes: [
+                        "Use independent-copy output feature IDs when editing cloned Pattern Array outputs directly.",
+                        "Use source feature IDs when editing a document-owned extrude source."
+                    ]
+                ),
+            ]
+        ),
+        capability(
             "addSelectionDimension",
             category: .solid,
             summary: "Add a persistent CAD selection dimension between measurable topology or sketch curve targets without storing it as Rupa product metadata.",

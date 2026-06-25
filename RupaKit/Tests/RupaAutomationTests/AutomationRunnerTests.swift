@@ -175,6 +175,47 @@ import SwiftCAD
 }
 
 @MainActor
+@Test func automationCanSetExtrudeDistance() async throws {
+    let session = EditorSession()
+    let runner = AutomationRunner()
+    _ = try runner.execute(
+        .createExtrudedRectangle(
+            name: "Editable Automation Box",
+            plane: .xy,
+            width: .length(30.0, .millimeter),
+            height: .length(12.0, .millimeter),
+            depth: .length(6.0, .millimeter),
+            direction: .normal
+        ),
+        in: session
+    )
+    let featureID = try #require(session.document.cadDocument.designGraph.order.last)
+
+    let result = try runner.execute(
+        .setExtrudeDistance(
+            featureID: featureID,
+            distance: .length(9.0, .millimeter)
+        ),
+        in: session
+    )
+
+    let feature = try #require(session.document.cadDocument.designGraph.nodes[featureID])
+    guard case .extrude(let extrude) = feature.operation else {
+        Issue.record("Expected an extrude feature.")
+        return
+    }
+    let distance = try session.document.cadDocument.parameters.resolvedValue(for: extrude.distance)
+    #expect(result.message == "Extrude distance updated.")
+    #expect(result.commandName == "setExtrudeDistance")
+    #expect(result.didMutate)
+    #expect(result.generation == DocumentGeneration(2))
+    #expect(distance.kind == .length)
+    #expect(abs(distance.value - 0.009) < 1.0e-12)
+    #expect(session.evaluationStatus == .valid)
+    #expect(session.evaluatedBodyCount == 1)
+}
+
+@MainActor
 @Test func automationCanSetSelectedObjectDimension() async throws {
     let session = EditorSession()
     let runner = AutomationRunner()
