@@ -32,7 +32,7 @@ public struct CLIService {
     }
 
     public func capabilities() -> [String] {
-        AgentServer().capabilities()
+        AgentCommandController().capabilities()
     }
 
     public func agentStatus(

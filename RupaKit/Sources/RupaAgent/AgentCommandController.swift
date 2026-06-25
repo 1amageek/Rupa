@@ -2,7 +2,7 @@ import Foundation
 import RupaAutomation
 import RupaCore
 
-public final class AgentServer: AgentClientProtocol {
+public final class AgentCommandController: AgentClientProtocol {
     public var name: String
     public var socketPath: String?
     private let registry: WorkspaceRegistry

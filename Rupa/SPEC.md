@@ -151,7 +151,7 @@ ApplicationProfile switching is deliberately excluded from the initial package g
 | Platform integration | WindowGroup, DocumentGroup when introduced, menu commands, app activation. |
 | Security | Entitlements, sandbox, security-scoped file access where required. |
 | Distribution | Assets, signing, provisioning, bundle metadata. |
-| Composition | Import `RupaUI` and start app-level services such as `AgentServer`. |
+| Composition | Import `RupaUI` and start app-level services such as `AgentHost`. |
 
 The app host delegates editor behavior to RupaKit.
 
@@ -849,10 +849,10 @@ RupaAgent coordinates the running app and command-line clients.
 
 | Type | Responsibility |
 |---|---|
-| `AgentServer` | Starts and stops IPC, handles requests, dispatches commands. |
+| `AgentCommandController` | Handles decoded agent requests, exposes capabilities, resolves sessions, and dispatches commands. |
 | `MainActorAgentBridge` | Routes app-hosted agent requests to UI-owned sessions on MainActor. |
 | `AgentSocketListener` | Owns Unix domain socket lifecycle and routes socket requests into the agent service. |
-| `AgentSocketService` | Serializes socket request handling and dispatches decoded requests to the in-memory server or MainActor app bridge. |
+| `AgentSocketService` | Serializes socket request handling and dispatches decoded requests to the in-memory command controller or MainActor app bridge. |
 | `AgentClient` | Connects from CLI, checks status, lists sessions, applies commands. |
 | `AgentClientProtocol` | Provides a testable boundary for in-memory and socket-backed clients. |
 | `AgentMessage` | Request, response, error, and session summary envelopes. |
@@ -1054,8 +1054,10 @@ Live mode routes the command to the running app.
 flowchart TD
     CLI["rupa CLI"] --> Client["AgentClient"]
     Client --> IPC["Unix domain socket"]
-    IPC --> Server["AgentServer inside Rupa.app"]
-    Server --> Registry["WorkspaceRegistry"]
+    IPC --> Listener["AgentSocketListener inside Rupa.app"]
+    Listener --> Bridge["MainActorAgentBridge"]
+    Bridge --> Controller["AgentCommandController"]
+    Controller --> Registry["WorkspaceRegistry"]
     Registry --> Session["EditorSession"]
     Session --> Stack["CommandStack"]
     Stack --> Store["CADDocumentStore"]

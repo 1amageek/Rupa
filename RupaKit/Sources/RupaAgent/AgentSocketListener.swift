@@ -9,11 +9,11 @@ public actor AgentSocketListener {
     private var acceptTask: Task<Void, Never>?
 
     public init(
-        server: sending AgentServer,
+        controller: sending AgentCommandController,
         socketPath: AgentSocketPath = AgentSocketPath()
     ) {
         self.socketPath = socketPath
-        self.service = AgentSocketService(server: server)
+        self.service = AgentSocketService(controller: controller)
     }
 
     public init(
@@ -193,7 +193,7 @@ public actor AgentSocketListener {
 
 public actor AgentSocketService {
     private enum Handler {
-        case server(AgentServer)
+        case controller(AgentCommandController)
         case mainActorBridge(MainActorAgentBridge)
     }
 
@@ -201,10 +201,10 @@ public actor AgentSocketService {
     private let codec: AgentMessageCodec
 
     public init(
-        server: sending AgentServer,
+        controller: sending AgentCommandController,
         codec: AgentMessageCodec = AgentMessageCodec()
     ) {
-        self.handler = .server(server)
+        self.handler = .controller(controller)
         self.codec = codec
     }
 
@@ -218,8 +218,8 @@ public actor AgentSocketService {
 
     public func setSocketPath(_ path: String?) async {
         switch handler {
-        case .server(let server):
-            server.socketPath = path
+        case .controller(let controller):
+            controller.socketPath = path
         case .mainActorBridge(let bridge):
             await bridge.setSocketPath(path)
         }
@@ -257,8 +257,8 @@ public actor AgentSocketService {
 
     private func response(for request: AgentRequest) async -> AgentResponse {
         switch handler {
-        case .server(let server):
-            server.handle(request)
+        case .controller(let controller):
+            controller.handle(request)
         case .mainActorBridge(let bridge):
             await bridge.handle(request)
         }

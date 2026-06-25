@@ -3,10 +3,10 @@ import RupaCore
 
 @MainActor
 public final class MainActorAgentBridge {
-    private let server: AgentServer
+    private let controller: AgentCommandController
 
-    public init(server: AgentServer = AgentServer()) {
-        self.server = server
+    public init(controller: AgentCommandController = AgentCommandController()) {
+        self.controller = controller
     }
 
     @discardableResult
@@ -15,18 +15,18 @@ public final class MainActorAgentBridge {
         path: URL? = nil,
         id: UUID = UUID()
     ) -> UUID {
-        server.register(session: session, path: path, id: id)
+        controller.register(session: session, path: path, id: id)
     }
 
     public func unregister(id: UUID) {
-        server.unregister(id: id)
+        controller.unregister(id: id)
     }
 
     public func setSocketPath(_ path: String?) {
-        server.socketPath = path
+        controller.socketPath = path
     }
 
     public func handle(_ request: AgentRequest) -> AgentResponse {
-        server.handle(request)
+        controller.handle(request)
     }
 }

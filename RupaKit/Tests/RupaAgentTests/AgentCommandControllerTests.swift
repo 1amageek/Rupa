@@ -7,7 +7,7 @@ import SwiftCAD
 @testable import RupaAgent
 
 @Test func agentCapabilitiesExposeAutomationCommands() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let capabilities = server.capabilities()
     let descriptors = server.capabilityDescriptors()
     let descriptorNames = descriptors.map(\.name)
@@ -119,7 +119,7 @@ import SwiftCAD
 }
 
 @Test func agentCapabilityDescriptorsExposeDiscoveryAndMutationContracts() async throws {
-    let descriptors = AgentServer().capabilityDescriptors()
+    let descriptors = AgentCommandController().capabilityDescriptors()
     let fillet = try #require(descriptors.first { $0.name == "filletBodyEdges" })
     let faceOffset = try #require(descriptors.first { $0.name == "offsetBodyFace" })
     let faceKnife = try #require(descriptors.first { $0.name == "createFaceKnife" })
@@ -942,7 +942,7 @@ import SwiftCAD
 }
 
 @Test func agentHandlesCapabilitySchemaRequest() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
 
     let response = server.handle(.capabilities)
 
@@ -1120,7 +1120,7 @@ import SwiftCAD
 }
 
 @Test func agentReturnsCADInteractionQualityAssessmentWithoutSession() async throws {
-    let response = AgentServer().handle(.cadInteractionQualityAssessment)
+    let response = AgentCommandController().handle(.cadInteractionQualityAssessment)
 
     guard case .cadInteractionQualityAssessment(let assessment) = response else {
         #expect(Bool(false))
@@ -1154,7 +1154,7 @@ import SwiftCAD
 
 @MainActor
 @Test func agentReturnsDesignDisplaySnapshotForViewportPlanning() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession()
     _ = try #require(session.createDefaultExtrudedRectangle())
@@ -1198,7 +1198,7 @@ import SwiftCAD
 }
 
 @Test func agentDiscoversPlacedComponentInstancesFromDesignDisplaySnapshot() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession()
     _ = try #require(session.createDefaultExtrudedRectangle())
@@ -1256,7 +1256,7 @@ import SwiftCAD
 }
 
 @Test func agentDiscoversPatternArraySourceFromDesignDisplaySnapshotForLifecycleCommands() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession()
     _ = try #require(session.createDefaultExtrudedRectangle())
@@ -1364,7 +1364,7 @@ import SwiftCAD
 }
 
 @Test func agentReportsPatternArraySummaryForLifecyclePlanning() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession()
     _ = try #require(session.createDefaultExtrudedRectangle())
@@ -1431,7 +1431,7 @@ import SwiftCAD
 }
 
 @Test func agentReportsIndependentCopyOutputStatesForLifecyclePlanning() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession()
     _ = try #require(session.createDefaultExtrudedRectangle())
@@ -1512,7 +1512,7 @@ import SwiftCAD
 
 @MainActor
 @Test func agentSetsIndependentCopyCloneExtrudeDistanceThroughDiscoveredFeatureID() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession()
     _ = try #require(session.createDefaultExtrudedRectangle())
@@ -1628,7 +1628,7 @@ import SwiftCAD
 
 @MainActor
 @Test func agentSetsIndependentCopyCloneCubeDimensionsThroughDiscoveredFeatureID() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession()
     _ = try #require(session.createDefaultExtrudedRectangle())
@@ -1732,7 +1732,7 @@ import SwiftCAD
 
 @MainActor
 @Test func agentSetsIndependentCopyCloneCylinderDimensionsThroughDiscoveredFeatureID() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession()
     _ = try session.execute(
@@ -3071,7 +3071,7 @@ import SwiftCAD
 }
 
 @Test func agentListsRegisteredSessions() async throws {
-    let server = AgentServer(socketPath: "/tmp/rupa.sock")
+    let server = AgentCommandController(socketPath: "/tmp/rupa.sock")
     let sessionID = UUID()
     server.register(
         session: EditorSession(document: .empty(named: "Open Document")),
@@ -3092,7 +3092,7 @@ import SwiftCAD
 }
 
 @Test func agentDispatchesCommandThroughAutomationAndCore() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession()
     server.register(session: session, id: sessionID)
@@ -3130,7 +3130,7 @@ import SwiftCAD
         )
     )
     let targets = try agentLineEndpointTargets(in: document, featureID: featureID)
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession(document: document)
     server.register(session: session, id: sessionID)
@@ -3180,7 +3180,7 @@ import SwiftCAD
 
 @MainActor
 @Test func agentAddsAndEvaluatesGeneratedFacePairSelectionDimension() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession()
     _ = try #require(session.createDefaultExtrudedRectangle())
@@ -3241,7 +3241,7 @@ import SwiftCAD
 }
 
 @Test func agentCreatesReadsAndActivatesConstructionPlanes() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession()
     server.register(session: session, id: sessionID)
@@ -3330,7 +3330,7 @@ import SwiftCAD
 }
 
 @Test func agentCreatesViewAlignedConstructionPlane() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession()
     server.register(session: session, id: sessionID)
@@ -3364,7 +3364,7 @@ import SwiftCAD
 }
 
 @Test func agentCreatesConstructionPlaneFromGeneratedFaceTarget() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession()
     _ = try #require(session.createDefaultExtrudedRectangle())
@@ -3412,7 +3412,7 @@ import SwiftCAD
 }
 
 @Test func agentCreatesMidplaneConstructionPlaneFromGeneratedFaceTargets() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession()
     _ = try #require(session.createDefaultExtrudedRectangle())
@@ -3459,7 +3459,7 @@ import SwiftCAD
 }
 
 @Test func agentCreatesTwoPointConstructionPlaneFromGeneratedVertexTargets() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession()
     _ = try #require(session.createDefaultExtrudedRectangle())
@@ -3506,7 +3506,7 @@ import SwiftCAD
 }
 
 @Test func agentCreatesTwoPointConstructionPlaneFromSourcePointTargets() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let setup = try agentSourcePointSession()
     let session = setup.session
@@ -3551,7 +3551,7 @@ import SwiftCAD
 }
 
 @Test func agentDispatchesModelingCommandThroughAutomationAndCore() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession()
     server.register(session: session, id: sessionID)
@@ -3583,7 +3583,7 @@ import SwiftCAD
 }
 
 @Test func agentDispatchesSelectedObjectDimensionCommand() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession()
     server.register(session: session, id: sessionID)
@@ -3638,7 +3638,7 @@ import SwiftCAD
 }
 
 @Test func agentDispatchesObjectDimensionCommandFromGeneratedDepthEdge() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession()
     server.register(session: session, id: sessionID)
@@ -3702,7 +3702,7 @@ import SwiftCAD
 }
 
 @Test func agentReturnsSelectedObjectDimensionSummaryWithoutMutation() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession()
     server.register(session: session, id: sessionID)
@@ -3761,7 +3761,7 @@ import SwiftCAD
 }
 
 @Test func agentReturnsObjectDimensionSummaryFromGeneratedDepthEdgeWithoutMutation() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession()
     server.register(session: session, id: sessionID)
@@ -3823,7 +3823,7 @@ import SwiftCAD
 }
 
 @Test func agentReturnsSelectedSketchDimensionSummaryWithoutMutation() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession()
     server.register(session: session, id: sessionID)
@@ -3887,7 +3887,7 @@ import SwiftCAD
 }
 
 @Test func agentMapsGeneratedEdgeToSketchDimensionSummaryWithoutMutation() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession()
     server.register(session: session, id: sessionID)
@@ -3956,7 +3956,7 @@ import SwiftCAD
 
 @MainActor
 @Test func agentDispatchesPolySplineCommandAndExposesBSplineTopology() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession()
     server.register(session: session, id: sessionID)
@@ -4022,7 +4022,7 @@ import SwiftCAD
 
 @MainActor
 @Test func agentMovesPolySplineSurfaceVertexThroughGeneratedTarget() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession()
     server.register(session: session, id: sessionID)
@@ -4091,7 +4091,7 @@ import SwiftCAD
 
 @MainActor
 @Test func agentMovesSurfaceControlPointThroughSurfaceSourceReference() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession()
     server.register(session: session, id: sessionID)
@@ -4159,7 +4159,7 @@ import SwiftCAD
 
 @MainActor
 @Test func agentMovesInteriorSurfaceControlPointThroughSurfaceSourceReference() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession()
     server.register(session: session, id: sessionID)
@@ -4230,7 +4230,7 @@ import SwiftCAD
 
 @MainActor
 @Test func agentSlidesPolySplineSurfaceVerticesThroughGeneratedTargets() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession()
     server.register(session: session, id: sessionID)
@@ -4301,7 +4301,7 @@ import SwiftCAD
 
 @MainActor
 @Test func agentSlidesSurfaceControlPointsThroughSurfaceSourceReferences() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession()
     server.register(session: session, id: sessionID)
@@ -4370,7 +4370,7 @@ import SwiftCAD
 
 @MainActor
 @Test func agentPreflightsPolySplineMeshWithoutMutatingDocument() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession()
     server.register(session: session, id: sessionID)
@@ -4401,7 +4401,7 @@ import SwiftCAD
 
 @MainActor
 @Test func agentPreflightsPolySplinePatchGraphWithoutMutatingDocument() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession()
     server.register(session: session, id: sessionID)
@@ -4445,7 +4445,7 @@ import SwiftCAD
 }
 
 @Test func agentPreflightsPlanarUnmergedPolySplinePatchGraphWithoutMutatingDocument() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession()
     server.register(session: session, id: sessionID)
@@ -4481,7 +4481,7 @@ import SwiftCAD
 
 @MainActor
 @Test func agentReportsPolySplineSurfaceSourceSummaryWithoutMutation() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession()
     server.register(session: session, id: sessionID)
@@ -4560,7 +4560,7 @@ import SwiftCAD
 
 @MainActor
 @Test func agentReportsPlanarPolySplineSurfaceAnalysisWithoutMutation() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession()
     server.register(session: session, id: sessionID)
@@ -4629,7 +4629,7 @@ import SwiftCAD
 
 @MainActor
 @Test func agentResolvesPlanarPolySplineSurfaceFramesWithoutMutation() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession()
     server.register(session: session, id: sessionID)
@@ -4699,7 +4699,7 @@ import SwiftCAD
 
 @MainActor
 @Test func agentReportsPlanarPolySplineSurfaceContinuityWithoutMutation() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession()
     server.register(session: session, id: sessionID)
@@ -4748,7 +4748,7 @@ import SwiftCAD
 }
 
 @Test func agentDispatchesFaceOffsetCommandThroughAutomationAndCore() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession()
     _ = try #require(session.createDefaultExtrudedRectangle())
@@ -4778,7 +4778,7 @@ import SwiftCAD
 }
 
 @Test func agentDispatchesGeneratedTopologyFaceOffsetCommandThroughAutomationAndCore() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession()
     _ = try #require(session.createDefaultExtrudedRectangle())
@@ -4821,7 +4821,7 @@ import SwiftCAD
 }
 
 @Test func agentDispatchesFaceKnifeCommandThroughAutomationAndCore() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession()
     _ = try #require(session.createDefaultExtrudedRectangle())
@@ -4886,7 +4886,7 @@ import SwiftCAD
 }
 
 @Test func agentDispatchesGeneratedTopologyEdgeOffsetCommandThroughAutomationAndCore() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession()
     _ = try #require(session.createDefaultExtrudedRectangle())
@@ -4965,7 +4965,7 @@ import SwiftCAD
 
 @MainActor
 @Test func agentDispatchesOffsetEdgeUsingSelectedSupportFaceContext() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession()
     _ = try #require(session.createDefaultExtrudedRectangle())
@@ -5050,7 +5050,7 @@ import SwiftCAD
 
 @MainActor
 @Test func agentDispatchesOffsetEdgeUsingSingleSelectedCapEdgeContext() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession()
     _ = try #require(session.createDefaultExtrudedRectangle())
@@ -5137,7 +5137,7 @@ import SwiftCAD
 }
 
 @Test func agentOffsetsGeneratedCylinderSideFaceThroughAutomationAndCore() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession()
     _ = try #require(session.createDefaultExtrudedCircle())
@@ -5183,7 +5183,7 @@ import SwiftCAD
 }
 
 @Test func agentDispatchesEdgeChamferCommandThroughAutomationAndCore() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession()
     _ = try #require(session.createDefaultExtrudedRectangle())
@@ -5215,7 +5215,7 @@ import SwiftCAD
 }
 
 @Test func agentDispatchesEdgeFilletCommandThroughAutomationAndCore() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession()
     _ = try #require(session.createDefaultExtrudedRectangle())
@@ -5248,7 +5248,7 @@ import SwiftCAD
 }
 
 @Test func agentDispatchesGeneratedTopologyEdgeFilletCommandThroughAutomationAndCore() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession()
     _ = try #require(session.createDefaultExtrudedRectangle())
@@ -5290,7 +5290,7 @@ import SwiftCAD
 }
 
 @Test func agentFilletsLineArcProfileCornerThroughAutomationAndCore() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let setup = try agentLineArcExtrudedSession()
     let session = setup.session
@@ -5334,7 +5334,7 @@ import SwiftCAD
 }
 
 @Test func agentFilletsArcArcProfileCornerThroughAutomationAndCore() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let setup = try agentArcArcExtrudedSession()
     let session = setup.session
@@ -5378,7 +5378,7 @@ import SwiftCAD
 }
 
 @Test func agentFilletsGeneratedEdgeAfterPriorChamferThroughAutomationAndCore() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession()
     _ = try #require(session.createDefaultExtrudedRectangle())
@@ -5442,7 +5442,7 @@ import SwiftCAD
 }
 
 @Test func agentFilletsSharpGeneratedEdgeAfterPriorFilletThroughAutomationAndCore() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession()
     _ = try #require(session.createDefaultExtrudedRectangle())
@@ -5509,7 +5509,7 @@ import SwiftCAD
 }
 
 @Test func agentChamfersArcAdjacentGeneratedEdgeAfterPriorFilletThroughAutomationAndCore() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession()
     _ = try #require(session.createDefaultExtrudedRectangle())
@@ -5575,7 +5575,7 @@ import SwiftCAD
 }
 
 @Test func agentDispatchesGeneratedTopologyVertexMoveCommandThroughAutomationAndCore() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession()
     _ = try #require(session.createDefaultExtrudedRectangle())
@@ -5617,7 +5617,7 @@ import SwiftCAD
 }
 
 @Test func agentMovesSharpGeneratedVertexAfterPriorFilletThroughAutomationAndCore() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession()
     _ = try #require(session.createDefaultExtrudedRectangle())
@@ -5684,7 +5684,7 @@ import SwiftCAD
 }
 
 @Test func agentDispatchesCornerFootprintModelingCommandThroughAutomationAndCore() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession()
     server.register(session: session, id: sessionID)
@@ -5723,7 +5723,7 @@ import SwiftCAD
 
 @MainActor
 @Test func agentDispatchesComponentCommandThroughAutomationAndCore() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession()
     server.register(session: session, id: sessionID)
@@ -5793,7 +5793,7 @@ import SwiftCAD
 
 @MainActor
 @Test func agentDispatchesRectangularPatternArrayThroughAutomationAndCore() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession()
     _ = try #require(session.createDefaultExtrudedRectangle())
@@ -5866,7 +5866,7 @@ import SwiftCAD
 }
 
 @Test func agentRejectsDirectEditsToPatternOwnedComponentInstances() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession()
     _ = try #require(session.createDefaultExtrudedRectangle())
@@ -5956,7 +5956,7 @@ import SwiftCAD
 }
 
 @Test func agentDispatchesRadialPatternArrayCommandThroughAutomationAndCore() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession()
     server.register(session: session, id: sessionID)
@@ -6033,7 +6033,7 @@ import SwiftCAD
 }
 
 @Test func agentDispatchesCurvePatternArrayCommandThroughAutomationAndCore() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession()
     server.register(session: session, id: sessionID)
@@ -6112,7 +6112,7 @@ import SwiftCAD
 }
 
 @Test func agentDispatchesPatternArrayLifecycleCommandsThroughAutomationAndCore() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession()
     server.register(session: session, id: sessionID)
@@ -6242,7 +6242,7 @@ import SwiftCAD
 }
 
 @Test func agentDispatchesCircleModelingCommandThroughAutomationAndCore() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession()
     server.register(session: session, id: sessionID)
@@ -6277,7 +6277,7 @@ import SwiftCAD
 }
 
 @Test func agentDispatchesSketchPrimitiveCommandThroughAutomationAndCore() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession()
     server.register(session: session, id: sessionID)
@@ -6311,7 +6311,7 @@ import SwiftCAD
 }
 
 @Test func agentDispatchesCurveCurvatureDisplayCommandThroughAutomationAndCore() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession()
     server.register(session: session, id: sessionID)
@@ -6358,7 +6358,7 @@ import SwiftCAD
 }
 
 @Test func agentDispatchesPointDisplayCommandThroughAutomationAndCore() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession()
     server.register(session: session, id: sessionID)
@@ -6405,7 +6405,7 @@ import SwiftCAD
 }
 
 @Test func agentDispatchesPolygonSketchCommandThroughAutomationAndCore() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession()
     server.register(session: session, id: sessionID)
@@ -6455,7 +6455,7 @@ import SwiftCAD
 }
 
 @Test func agentDispatchesArcSketchCommandThroughAutomationAndCore() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession()
     server.register(session: session, id: sessionID)
@@ -6503,7 +6503,7 @@ import SwiftCAD
 
 @MainActor
 @Test func agentDispatchesSketchConstraintCommandThroughAutomationAndCore() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession()
     _ = try session.execute(
@@ -6555,7 +6555,7 @@ import SwiftCAD
 
 @MainActor
 @Test func agentDispatchesFixedSplineControlPointConstraintThroughAutomationAndCore() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession()
     _ = try session.execute(
@@ -6621,7 +6621,7 @@ import SwiftCAD
 
 @MainActor
 @Test func agentDispatchesSlideSketchSplineControlPointsThroughAutomationAndCore() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession()
     _ = try session.execute(
@@ -6672,7 +6672,7 @@ import SwiftCAD
 
 @MainActor
 @Test func agentDispatchesCoincidentSplineControlPointConstraintThroughAutomationAndCore() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let setup = try agentSplinePointConstraintDocument(name: "Agent Coincident Spline Point")
     let session = EditorSession(document: setup.document)
@@ -6718,7 +6718,7 @@ import SwiftCAD
 
 @MainActor
 @Test func agentDispatchesSmoothSplineControlPointConstraintThroughAutomationAndCore() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession()
     _ = try session.execute(
@@ -6772,7 +6772,7 @@ import SwiftCAD
 
 @MainActor
 @Test func agentDispatchesSplineEndpointTangentConstraintThroughAutomationAndCore() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let setup = try agentSplineLineTangentSketchDocument(name: "Agent Spline Tangency")
     let session = EditorSession(document: setup.document)
@@ -6815,7 +6815,7 @@ import SwiftCAD
 
 @MainActor
 @Test func agentDispatchesTangentSplineEndpointsConstraintThroughAutomationAndCore() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let setup = try agentTwoSplineTangentSketchDocument(name: "Agent Spline Endpoint Tangency")
     let session = EditorSession(document: setup.document)
@@ -6857,7 +6857,7 @@ import SwiftCAD
 
 @MainActor
 @Test func agentDispatchesSmoothSplineEndpointsConstraintThroughAutomationAndCore() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let setup = try agentTwoSplineTangentSketchDocument(name: "Agent Spline Endpoint Smoothness")
     let session = EditorSession(document: setup.document)
@@ -6902,7 +6902,7 @@ import SwiftCAD
 
 @MainActor
 @Test func agentAddsParallelConstraintAndCoreSatisfiesGeometry() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let setup = try agentTwoLineUnconstrainedSketchDocument(name: "Agent Parallel Constraint Source")
     let session = EditorSession(document: setup.document)
@@ -6935,7 +6935,7 @@ import SwiftCAD
 
 @MainActor
 @Test func agentAddsEqualLengthConstraintAndCoreSatisfiesGeometry() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let setup = try agentTwoLineUnconstrainedSketchDocument(name: "Agent Equal Length Constraint Source")
     let session = EditorSession(document: setup.document)
@@ -6968,7 +6968,7 @@ import SwiftCAD
 
 @MainActor
 @Test func agentAddsTangentConstraintAndCoreSatisfiesGeometry() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let setup = try agentLineCircleTangentSketchDocument(name: "Agent Tangent Constraint Source")
     let session = EditorSession(document: setup.document)
@@ -7002,7 +7002,7 @@ import SwiftCAD
 
 @MainActor
 @Test func agentAddsCircularConstraintsAndCoreSatisfiesGeometry() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let setup = try agentTwoCircleSketchDocument(name: "Agent Circular Constraint Source")
     let session = EditorSession(document: setup.document)
@@ -7049,7 +7049,7 @@ import SwiftCAD
 
 @MainActor
 @Test func agentSetsParameterExpressionAndListsParameters() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession()
     _ = try session.execute(
@@ -7098,7 +7098,7 @@ import SwiftCAD
 
 @MainActor
 @Test func agentDeletesParameterThroughAutomationCommand() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession()
     _ = try session.execute(
@@ -7132,7 +7132,7 @@ import SwiftCAD
 
 @MainActor
 @Test func agentEvaluatesOpenSessionWithoutMutation() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession()
     _ = try session.execute(
@@ -7167,7 +7167,7 @@ import SwiftCAD
 
 @MainActor
 @Test func agentMeasuresOpenSessionWithoutMutation() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession()
     _ = try session.execute(
@@ -7206,7 +7206,7 @@ import SwiftCAD
 
 @MainActor
 @Test func agentMeasuresGeneratedEdgeOffsetDirectEditSolidWithoutDoubleCountingSourceBody() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession()
     _ = try #require(session.createDefaultExtrudedRectangle())
@@ -7284,7 +7284,7 @@ import SwiftCAD
 
 @MainActor
 @Test func agentExecutesSymmetricGeneratedEdgeOffsetDirectEditSolid() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession()
     _ = try #require(session.createDefaultExtrudedRectangle())
@@ -7374,7 +7374,7 @@ import SwiftCAD
 
 @MainActor
 @Test func agentMeasuresSelectedOpenSessionBodyWithoutMutation() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession()
     _ = try session.execute(
@@ -7418,7 +7418,7 @@ import SwiftCAD
 
 @MainActor
 @Test func agentSummarizesOpenSessionMeshesWithoutMutation() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession()
     _ = try session.execute(
@@ -7458,7 +7458,7 @@ import SwiftCAD
 
 @MainActor
 @Test func agentSummarizesOpenSessionSketchEntitiesWithoutMutation() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession()
     _ = try session.execute(
@@ -7512,7 +7512,7 @@ import SwiftCAD
 
 @MainActor
 @Test func agentSummarizesSelectsAndOffsetsRoundRegionThroughAutomationAndCore() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession()
     _ = try session.execute(
@@ -7587,7 +7587,7 @@ import SwiftCAD
 
 @MainActor
 @Test func agentCreatesSymmetricNaturalRegionOffset() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession()
     _ = try session.execute(
@@ -7635,7 +7635,7 @@ import SwiftCAD
 
 @MainActor
 @Test func agentCreatesNaturalOffsetForConcaveSourceRegion() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession(document: try agentConcaveLineLoopDocument())
     server.register(session: session, id: sessionID)
@@ -7685,7 +7685,7 @@ import SwiftCAD
 
 @MainActor
 @Test func agentCreatesCombinedOffsetRegions() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession()
     _ = try session.execute(
@@ -7761,7 +7761,7 @@ import SwiftCAD
 
 @MainActor
 @Test func agentResolvesSnapCandidatesWithoutMutation() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession()
     _ = try session.execute(
@@ -7810,7 +7810,7 @@ import SwiftCAD
 
 @MainActor
 @Test func agentResolvesMeasurementSnapCandidatesWithoutMutation() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     var document = DesignDocument.empty()
     let measurementID = try document.addMeasurementAnnotation(
@@ -7863,7 +7863,7 @@ import SwiftCAD
 
 @MainActor
 @Test func agentResolvesSketchReferenceMeasurementSnapCandidatesWithoutMutation() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     var document = DesignDocument.empty()
     let featureID = try document.createLineSketch(
@@ -7936,7 +7936,7 @@ import SwiftCAD
 
 @MainActor
 @Test func agentResolvesSketchCurveParameterMeasurementSnapCandidatesWithoutMutation() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     var document = DesignDocument.empty()
     let featureID = try document.createLineSketch(
@@ -8010,7 +8010,7 @@ import SwiftCAD
 
 @MainActor
 @Test func agentResolvesSnapProjectedOntoActiveConstructionPlane() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession()
     _ = try session.execute(
@@ -8063,7 +8063,7 @@ import SwiftCAD
 
 @MainActor
 @Test func agentResolvesGeneratedTopologySnapCandidatesWithoutMutation() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession()
     _ = try #require(session.createDefaultExtrudedRectangle())
@@ -8112,7 +8112,7 @@ import SwiftCAD
 
 @MainActor
 @Test func agentResolvesPolySplineSurfaceCVSnapCandidatesWithoutMutation() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession()
     _ = try #require(session.createPolySplineSurface(
@@ -8163,7 +8163,7 @@ import SwiftCAD
 
 @MainActor
 @Test func agentResolvesRegionCenterSnapCandidatesWithoutMutation() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession()
     _ = try session.execute(
@@ -8207,7 +8207,7 @@ import SwiftCAD
 
 @MainActor
 @Test func agentResolvesCurveIntersectionSnapWithoutMutation() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession()
     _ = try session.execute(
@@ -8270,7 +8270,7 @@ import SwiftCAD
 
 @MainActor
 @Test func agentResolvesTangentSnapWithReferencePointWithoutMutation() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession()
     _ = try session.execute(
@@ -8319,7 +8319,7 @@ import SwiftCAD
 
 @MainActor
 @Test func agentResolvesCurveAxisSnapWithoutMutation() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession()
     _ = try session.execute(
@@ -8371,7 +8371,7 @@ import SwiftCAD
 
 @MainActor
 @Test func agentResolvesCurveCoordinatePlaneSnapWithoutMutation() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession()
     _ = try session.execute(
@@ -8424,7 +8424,7 @@ import SwiftCAD
 
 @MainActor
 @Test func agentResolvesControlVertexSnapWithoutMutation() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession()
     _ = try session.execute(
@@ -8471,7 +8471,7 @@ import SwiftCAD
 
 @MainActor
 @Test func agentOffsetsSketchCurveThroughAutomationAndCore() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession()
     _ = try session.execute(
@@ -8527,7 +8527,7 @@ import SwiftCAD
 
 @MainActor
 @Test func agentOffsetsSketchVertexThroughAutomationAndCore() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession()
     _ = try session.execute(
@@ -8583,7 +8583,7 @@ import SwiftCAD
 
 @MainActor
 @Test func agentDispatchesOffsetCurveVertexBranchThroughAutomationAndCore() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession()
     _ = try session.execute(
@@ -8640,7 +8640,7 @@ import SwiftCAD
 
 @MainActor
 @Test func agentDispatchesOffsetCurveArcEndpointVertexBranchThroughAutomationAndCore() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let setup = try agentLineArcOffsetVertexSketchDocument()
     let session = EditorSession(document: setup.document)
@@ -8679,7 +8679,7 @@ import SwiftCAD
 
 @MainActor
 @Test func agentDispatchesOffsetCurveArcArcEndpointVertexBranchThroughAutomationAndCore() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let setup = try agentArcArcOffsetVertexSketchDocument()
     let session = EditorSession(document: setup.document)
@@ -8718,7 +8718,7 @@ import SwiftCAD
 
 @MainActor
 @Test func agentCreatesSlotSketchThroughAutomationAndCore() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession()
     _ = try session.execute(
@@ -8771,7 +8771,7 @@ import SwiftCAD
 
 @MainActor
 @Test func agentCreatesSlotSketchFromOpenLineChainAndExtrudesIt() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let setup = try agentOpenLineChainSlotDocument(name: "Agent Slot Source Chain")
     let session = EditorSession(document: setup.document)
@@ -8833,7 +8833,7 @@ import SwiftCAD
 
 @MainActor
 @Test func agentCreatesSlotSketchFromSourceArcAndExtrudesIt() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession()
     _ = try session.execute(
@@ -8907,7 +8907,7 @@ import SwiftCAD
 
 @MainActor
 @Test func agentCreatesSlotSketchFromOpenLineArcChainAndExtrudesIt() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let setup = try agentOpenLineArcChainSlotDocument(name: "Agent Slot Source Line Arc Chain")
     let session = EditorSession(document: setup.document)
@@ -8969,7 +8969,7 @@ import SwiftCAD
 
 @MainActor
 @Test func agentActivatesSlotModeThroughOffsetCurve() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession()
     _ = try session.execute(
@@ -9024,7 +9024,7 @@ import SwiftCAD
 
 @MainActor
 @Test func agentAnalyzesOpenSessionCurvesWithoutMutation() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession()
     _ = try session.execute(
@@ -9063,7 +9063,7 @@ import SwiftCAD
 
 @MainActor
 @Test func agentAnalyzesConstrainedEndpointContinuityWithoutMutation() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let setup = try agentTwoLineUnconstrainedSketchDocument(name: "Agent Curve Continuity")
     let session = EditorSession(document: setup.document)
@@ -9112,7 +9112,7 @@ import SwiftCAD
 
 @MainActor
 @Test func agentCreatesBridgeCurveThroughAutomationAndCore() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let setup = try agentTwoLineUnconstrainedSketchDocument(name: "Agent Bridge Source")
     let session = EditorSession(document: setup.document)
@@ -9273,7 +9273,7 @@ import SwiftCAD
 
 @MainActor
 @Test func agentDispatchesSketchEntityEditCommandThroughAutomationAndCore() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession()
     _ = try session.execute(
@@ -9334,7 +9334,7 @@ import SwiftCAD
 
 @MainActor
 @Test func agentSetsSketchEntityDimensionThroughAutomationAndCore() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession()
     _ = try session.execute(
@@ -9395,7 +9395,7 @@ import SwiftCAD
 
 @MainActor
 @Test func agentSetsSketchArcAngleDimensionThroughAutomationAndCore() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession()
     _ = try session.execute(
@@ -9456,7 +9456,7 @@ import SwiftCAD
 
 @MainActor
 @Test func agentSetsFixedEndSketchArcAngleDimensionThroughAutomationAndCore() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession()
     _ = try session.execute(
@@ -9527,7 +9527,7 @@ import SwiftCAD
 
 @MainActor
 @Test func agentSetsSketchLineAngleDimensionThroughAutomationAndCore() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession()
     _ = try session.execute(
@@ -9589,7 +9589,7 @@ import SwiftCAD
 
 @MainActor
 @Test func agentSetsFixedEndLineDimensionThroughAutomationAndCore() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession()
     _ = try session.execute(
@@ -9661,7 +9661,7 @@ import SwiftCAD
 
 @MainActor
 @Test func agentCreatesAndMovesSplineControlPointThroughAutomationAndCore() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession()
     server.register(session: session, id: sessionID)
@@ -9775,7 +9775,7 @@ import SwiftCAD
 
 @MainActor
 @Test func agentRefitsSketchCurveThroughAutomationAndCore() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession()
     server.register(session: session, id: sessionID)
@@ -9862,7 +9862,7 @@ import SwiftCAD
 
 @MainActor
 @Test func agentExplicitlyRebuildsSketchCurveThroughAutomationAndCore() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession()
     server.register(session: session, id: sessionID)
@@ -9950,7 +9950,7 @@ import SwiftCAD
 
 @MainActor
 @Test func agentExtrudesClosedSplineProfileThroughAutomationAndCore() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession()
     server.register(session: session, id: sessionID)
@@ -10018,7 +10018,7 @@ import SwiftCAD
             y: .length(20.0, .millimeter)
         )
     )
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession(document: document)
     server.register(session: session, id: sessionID)
@@ -10075,7 +10075,7 @@ import SwiftCAD
         start: agentSketchPoint(x: 0.0, y: 0.0),
         end: agentSketchPoint(x: 0.0, y: 0.020)
     )
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession(document: document)
     server.register(session: session, id: sessionID)
@@ -10137,7 +10137,7 @@ import SwiftCAD
             y: .length(14.0, .millimeter)
         )
     )
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession(document: document)
     server.register(session: session, id: sessionID)
@@ -10187,7 +10187,7 @@ import SwiftCAD
         width: .length(2.0, .millimeter),
         height: .length(1.0, .millimeter)
     )
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession(document: document)
     server.register(session: session, id: sessionID)
@@ -10272,7 +10272,7 @@ import SwiftCAD
 
 @MainActor
 @Test func agentMovesParallelLineAngleThroughAutomationAndCore() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let setup = try agentTwoLineConstrainedSketchDocument(
         name: "Agent Parallel Line Pair",
@@ -10326,7 +10326,7 @@ import SwiftCAD
 
 @MainActor
 @Test func agentMovesConstrainedRectanglePointThroughAutomationAndCore() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession()
     _ = try session.execute(
@@ -10398,7 +10398,7 @@ import SwiftCAD
 
 @MainActor
 @Test func agentSetsConstrainedRectangleSideDimensionThroughAutomationAndCore() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession()
     _ = try session.execute(
@@ -10470,7 +10470,7 @@ import SwiftCAD
 
 @MainActor
 @Test func agentConvertsSketchLineToArcThroughAutomationAndCore() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession()
     _ = try session.execute(
@@ -10529,7 +10529,7 @@ import SwiftCAD
 
 @MainActor
 @Test func agentConvertsSketchLineToSplineThroughAutomationAndCore() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession()
     _ = try session.execute(
@@ -10589,7 +10589,7 @@ import SwiftCAD
 
 @MainActor
 @Test func agentReversesSketchCurveThroughAutomationAndCore() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession()
     _ = try session.execute(
@@ -10645,7 +10645,7 @@ import SwiftCAD
 
 @MainActor
 @Test func agentExtendsSketchCurveThroughAutomationAndCore() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession()
     _ = try session.execute(
@@ -10705,7 +10705,7 @@ import SwiftCAD
 
 @MainActor
 @Test func agentAppliesSketchCornerTreatmentThroughAutomationAndCore() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession()
     _ = try session.execute(
@@ -10771,7 +10771,7 @@ import SwiftCAD
 
 @MainActor
 @Test func agentAppliesSketchCornerTreatmentToLineArcCornerThroughAutomationAndCore() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let setup = try agentLineArcCornerTreatmentSketchDocument()
     let session = EditorSession(document: setup.document)
@@ -10826,7 +10826,7 @@ import SwiftCAD
 
 @MainActor
 @Test func agentAppliesSketchCornerTreatmentToCurvePairThroughAutomationAndCore() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let setup = try agentLineArcCornerTreatmentSketchDocument()
     let session = EditorSession(document: setup.document)
@@ -10883,7 +10883,7 @@ import SwiftCAD
 
 @MainActor
 @Test func agentSplitsSketchCurveThroughAutomationAndCore() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession()
     _ = try session.execute(
@@ -10949,7 +10949,7 @@ import SwiftCAD
 
 @MainActor
 @Test func agentSplitsSketchArcCurveThroughAutomationAndCore() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession()
     _ = try session.execute(
@@ -11006,7 +11006,7 @@ import SwiftCAD
 
 @MainActor
 @Test func agentTrimsSketchCurveSegmentThroughAutomationAndCore() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession()
     _ = try session.execute(
@@ -11083,7 +11083,7 @@ import SwiftCAD
 
 @MainActor
 @Test func agentCutsSketchCurveThroughAutomationAndCore() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession()
     _ = try session.execute(
@@ -11168,7 +11168,7 @@ import SwiftCAD
 
 @MainActor
 @Test func agentCutsSketchCurveWithCircleCutterThroughAutomationAndCore() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession()
     _ = try session.execute(
@@ -11252,7 +11252,7 @@ import SwiftCAD
 
 @MainActor
 @Test func agentCutsSketchCircleTargetWithLineCutterThroughAutomationAndCore() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession()
     _ = try session.execute(
@@ -11335,7 +11335,7 @@ import SwiftCAD
 
 @MainActor
 @Test func agentCutsSketchArcCurveWithLineCutterThroughAutomationAndCore() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession()
     _ = try session.execute(
@@ -11419,7 +11419,7 @@ import SwiftCAD
 
 @MainActor
 @Test func agentSummarizesOpenSessionTopologyWithoutMutation() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession()
     _ = try session.execute(
@@ -11522,7 +11522,7 @@ import SwiftCAD
         targets: [SweepTargetReference(featureID: targetBodyID)],
         options: SweepOptions(booleanOperation: .difference)
     )
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession(document: document)
     server.register(session: session, id: sessionID)
@@ -11606,7 +11606,7 @@ private func hasExpectedAgentCircularEdgeDefinition(_ entry: TopologySummaryResu
 
 @MainActor
 @Test func agentSelectsGeneratedTopologyVertexTargetWithoutMutation() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession()
     _ = try #require(session.createDefaultExtrudedRectangle())
@@ -11655,7 +11655,7 @@ private func hasExpectedAgentCircularEdgeDefinition(_ entry: TopologySummaryResu
     }
     let url = temporaryDirectory.appendingPathComponent("agent-save.swcad")
     try DocumentFileService().save(.empty(named: "Before"), to: url)
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession(document: try DocumentFileService().load(from: url))
     _ = try session.execute(
@@ -11684,7 +11684,7 @@ private func hasExpectedAgentCircularEdgeDefinition(_ entry: TopologySummaryResu
 }
 
 @Test func agentSaveRejectsPathlessSession() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     server.register(session: EditorSession(document: .empty(named: "Pathless")), id: sessionID)
 
@@ -11710,7 +11710,7 @@ private func hasExpectedAgentCircularEdgeDefinition(_ entry: TopologySummaryResu
         removeTemporaryDirectory(temporaryDirectory)
     }
     let outputURL = temporaryDirectory.appendingPathComponent("agent-box.stl")
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession()
     _ = try session.execute(
@@ -11747,7 +11747,7 @@ private func hasExpectedAgentCircularEdgeDefinition(_ entry: TopologySummaryResu
 }
 
 @Test func agentRejectsGenerationMismatchBeforeMutation() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let sessionID = UUID()
     let session = EditorSession()
     server.register(session: session, id: sessionID)
@@ -11770,7 +11770,7 @@ private func hasExpectedAgentCircularEdgeDefinition(_ entry: TopologySummaryResu
 }
 
 @Test func agentReportsSessionNotFoundForUnknownSession() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let response = server.handle(
         .execute(
             sessionID: UUID(),
@@ -11857,10 +11857,10 @@ private func hasExpectedAgentCircularEdgeDefinition(_ entry: TopologySummaryResu
         removeTemporaryDirectory(temporaryDirectory)
     }
     let socketURL = temporaryDirectory.appendingPathComponent("rupa.sock")
-    let server = AgentServer()
+    let server = AgentCommandController()
     server.register(session: EditorSession(document: .empty(named: "Open")))
 
-    try await withRunningListener(server: server, socketURL: socketURL) { listener, client in
+    try await withRunningListener(controller: server, socketURL: socketURL) { listener, client in
         let response = try client.send(.status)
 
         guard case .status(let status) = response else {
@@ -11881,10 +11881,10 @@ private func hasExpectedAgentCircularEdgeDefinition(_ entry: TopologySummaryResu
     }
     let socketURL = temporaryDirectory.appendingPathComponent("rupa.sock")
     let sessionID = UUID()
-    let server = AgentServer()
+    let server = AgentCommandController()
     server.register(session: EditorSession(), id: sessionID)
 
-    try await withRunningListener(server: server, socketURL: socketURL) { _, client in
+    try await withRunningListener(controller: server, socketURL: socketURL) { _, client in
         let response = try client.send(
             .execute(
                 sessionID: sessionID,
@@ -11916,7 +11916,7 @@ private func hasExpectedAgentCircularEdgeDefinition(_ entry: TopologySummaryResu
     }
     let socketURL = temporaryDirectory.appendingPathComponent("rupa.sock")
     let listener = AgentSocketListener(
-        server: AgentServer(),
+        controller: AgentCommandController(),
         socketPath: AgentSocketPath(socketURL.path)
     )
     let client = AgentClient(socketPath: AgentSocketPath(socketURL.path))
@@ -11944,7 +11944,7 @@ private func hasExpectedAgentCircularEdgeDefinition(_ entry: TopologySummaryResu
     try Data("stale".utf8).write(to: socketURL)
 
     try await withRunningListener(
-        server: AgentServer(),
+        controller: AgentCommandController(),
         socketURL: socketURL
     ) { _, client in
         let response = try client.send(.status)
@@ -11964,7 +11964,7 @@ private func hasExpectedAgentCircularEdgeDefinition(_ entry: TopologySummaryResu
     let socketURL = temporaryDirectory.appendingPathComponent("rupa.sock")
 
     try await withRunningListener(
-        server: AgentServer(),
+        controller: AgentCommandController(),
         socketURL: socketURL
     ) { _, client in
         let malformedResponseData = try sendRaw(
@@ -11990,13 +11990,13 @@ private func hasExpectedAgentCircularEdgeDefinition(_ entry: TopologySummaryResu
 }
 
 private func withRunningListener<T>(
-    server: sending AgentServer,
+    controller: sending AgentCommandController,
     socketURL: URL,
     operation: (AgentSocketListener, AgentClient) async throws -> T
 ) async throws -> T {
     let socketPath = AgentSocketPath(socketURL.path)
     let listener = AgentSocketListener(
-        server: server,
+        controller: controller,
         socketPath: socketPath
     )
     let client = AgentClient(socketPath: socketPath)
@@ -13270,7 +13270,7 @@ private struct AgentIndependentCopyCloneExtrudeFeature {
 }
 
 private func agentIndependentCopyCloneExtrudeFeature(
-    server: AgentServer,
+    server: AgentCommandController,
     sessionID: UUID,
     sourceID: PatternArraySourceID,
     expectedGeneration: DocumentGeneration

@@ -213,7 +213,7 @@ func cliExecutableAutoParameterFormulaAndListUsesLiveSessionThroughSocketAsJSON(
     let documentURL = temporaryDirectory.appendingPathComponent("process-live-param-formula.swcad")
     let socketURL = temporaryDirectory.appendingPathComponent("rupa.sock")
     try DocumentFileService().save(.empty(named: "Persisted"), to: documentURL)
-    let server = AgentServer()
+    let server = AgentCommandController()
     let session = EditorSession(document: .empty(named: "Open Params"))
     _ = try session.execute(
         .upsertParameter(
@@ -224,7 +224,7 @@ func cliExecutableAutoParameterFormulaAndListUsesLiveSessionThroughSocketAsJSON(
     )
     server.register(session: session, path: documentURL)
     let listener = AgentSocketListener(
-        server: server,
+        controller: server,
         socketPath: AgentSocketPath(socketURL.path)
     )
 
@@ -798,14 +798,14 @@ func cliExecutableListsAndAttachesOpenSessionThroughSocketAsJSON() async throws 
     let socketURL = temporaryDirectory.appendingPathComponent("rupa.sock")
     let sessionID = UUID()
     try DocumentFileService().save(.empty(named: "Process Open"), to: documentURL)
-    let server = AgentServer()
+    let server = AgentCommandController()
     server.register(
         session: EditorSession(document: .empty(named: "Process Open")),
         path: documentURL,
         id: sessionID
     )
     let listener = AgentSocketListener(
-        server: server,
+        controller: server,
         socketPath: AgentSocketPath(socketURL.path)
     )
 
@@ -854,10 +854,10 @@ func cliExecutableRenameLiveMutatesOpenSessionThroughSocketAsJSON() async throws
     }
     let socketURL = temporaryDirectory.appendingPathComponent("rupa.sock")
     let sessionID = UUID()
-    let server = AgentServer()
+    let server = AgentCommandController()
     server.register(session: EditorSession(document: .empty(named: "Before Live")), id: sessionID)
     let listener = AgentSocketListener(
-        server: server,
+        controller: server,
         socketPath: AgentSocketPath(socketURL.path)
     )
 
@@ -913,7 +913,7 @@ func cliExecutableAutoEvaluateUsesLiveSessionThroughSocketAsJSON() async throws 
     let documentURL = temporaryDirectory.appendingPathComponent("process-live-eval.swcad")
     let socketURL = temporaryDirectory.appendingPathComponent("rupa.sock")
     try DocumentFileService().save(.empty(named: "Persisted"), to: documentURL)
-    let server = AgentServer()
+    let server = AgentCommandController()
     let session = EditorSession(document: .empty(named: "Open"))
     _ = try session.execute(
         .createExtrudedRectangle(
@@ -927,7 +927,7 @@ func cliExecutableAutoEvaluateUsesLiveSessionThroughSocketAsJSON() async throws 
     )
     server.register(session: session, path: documentURL)
     let listener = AgentSocketListener(
-        server: server,
+        controller: server,
         socketPath: AgentSocketPath(socketURL.path)
     )
 
@@ -972,7 +972,7 @@ func cliExecutableAutoSavePersistsLiveSessionThroughSocketAsJSON() async throws 
     let documentURL = temporaryDirectory.appendingPathComponent("process-live-save.swcad")
     let socketURL = temporaryDirectory.appendingPathComponent("rupa.sock")
     try DocumentFileService().save(.empty(named: "Before Save"), to: documentURL)
-    let server = AgentServer()
+    let server = AgentCommandController()
     let session = EditorSession(document: try DocumentFileService().load(from: documentURL))
     _ = try session.execute(
         .renameDocument(name: "Saved From Process"),
@@ -980,7 +980,7 @@ func cliExecutableAutoSavePersistsLiveSessionThroughSocketAsJSON() async throws 
     )
     server.register(session: session, path: documentURL)
     let listener = AgentSocketListener(
-        server: server,
+        controller: server,
         socketPath: AgentSocketPath(socketURL.path)
     )
 
@@ -1039,7 +1039,7 @@ func cliExecutableAutoExportUsesLiveSessionThroughSocketAsJSON() async throws {
     let outputURL = temporaryDirectory.appendingPathComponent("live-export.stl")
     let socketURL = temporaryDirectory.appendingPathComponent("rupa.sock")
     try DocumentFileService().save(.empty(named: "Persisted"), to: documentURL)
-    let server = AgentServer()
+    let server = AgentCommandController()
     let session = EditorSession(document: .empty(named: "Open"))
     _ = try session.execute(
         .createExtrudedRectangle(
@@ -1053,7 +1053,7 @@ func cliExecutableAutoExportUsesLiveSessionThroughSocketAsJSON() async throws {
     )
     server.register(session: session, path: documentURL)
     let listener = AgentSocketListener(
-        server: server,
+        controller: server,
         socketPath: AgentSocketPath(socketURL.path)
     )
 
@@ -1100,13 +1100,13 @@ func cliExecutableFileModeRejectsOpenDocumentConflictAndForceOverridesAsJSON() a
     let documentURL = temporaryDirectory.appendingPathComponent("process-conflict.swcad")
     let socketURL = temporaryDirectory.appendingPathComponent("rupa.sock")
     try DocumentFileService().save(.empty(named: "Before Conflict"), to: documentURL)
-    let server = AgentServer()
+    let server = AgentCommandController()
     server.register(
         session: EditorSession(document: .empty(named: "Open Conflict")),
         path: documentURL
     )
     let listener = AgentSocketListener(
-        server: server,
+        controller: server,
         socketPath: AgentSocketPath(socketURL.path)
     )
 
@@ -1300,11 +1300,11 @@ func cliExecutableReturnsDataExitForLiveGenerationMismatch() async throws {
     }
     let socketURL = temporaryDirectory.appendingPathComponent("rupa.sock")
     let sessionID = UUID()
-    let server = AgentServer()
+    let server = AgentCommandController()
     let session = EditorSession(document: .empty(named: "Open"))
     server.register(session: session, id: sessionID)
     let listener = AgentSocketListener(
-        server: server,
+        controller: server,
         socketPath: AgentSocketPath(socketURL.path)
     )
 
@@ -1353,7 +1353,7 @@ func cliExecutableReturnsDataExitForLiveGenerationMismatch() async throws {
 }
 
 @Test func cliServiceReportsAgentStatus() async throws {
-    let server = AgentServer(socketPath: "/tmp/rupa.sock")
+    let server = AgentCommandController(socketPath: "/tmp/rupa.sock")
     _ = server.register(session: EditorSession(document: .empty(named: "Open")))
 
     let response = try CLIService().agentStatus(client: server)
@@ -1402,7 +1402,7 @@ func cliExecutableReturnsDataExitForLiveGenerationMismatch() async throws {
 }
 
 @Test func cliServiceListsAgentSessions() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let id = UUID()
     server.register(
         session: EditorSession(document: .empty(named: "Open")),
@@ -1418,7 +1418,7 @@ func cliExecutableReturnsDataExitForLiveGenerationMismatch() async throws {
 }
 
 @Test func cliServiceAttachResolvesFileBackedSession() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let id = UUID()
     let url = URL(fileURLWithPath: "/tmp/open-attach.swcad")
     let session = EditorSession(document: .empty(named: "Attach File"))
@@ -1440,7 +1440,7 @@ func cliExecutableReturnsDataExitForLiveGenerationMismatch() async throws {
 }
 
 @Test func cliServiceAttachResolvesExplicitSessionID() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let id = UUID()
     let session = EditorSession(document: .empty(named: "Attach Session"))
     server.register(session: session, id: id)
@@ -1456,7 +1456,7 @@ func cliExecutableReturnsDataExitForLiveGenerationMismatch() async throws {
 }
 
 @Test func cliServiceAttachRejectsMissingOpenSession() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let url = URL(fileURLWithPath: "/tmp/missing-attach.swcad")
 
     var caught: EditorError?
@@ -1473,7 +1473,7 @@ func cliExecutableReturnsDataExitForLiveGenerationMismatch() async throws {
 }
 
 @Test func cliServiceAttachRejectsAmbiguousTarget() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let id = UUID()
     let url = URL(fileURLWithPath: "/tmp/ambiguous-attach.swcad")
     server.register(
@@ -1499,7 +1499,7 @@ func cliExecutableReturnsDataExitForLiveGenerationMismatch() async throws {
 }
 
 @Test func cliServiceRenamesLiveSessionThroughAgent() async throws {
-    let server = AgentServer()
+    let server = AgentCommandController()
     let id = UUID()
     let session = EditorSession()
     server.register(session: session, id: id)
@@ -1526,7 +1526,7 @@ func cliExecutableReturnsDataExitForLiveGenerationMismatch() async throws {
 
     let url = temporaryDirectory.appendingPathComponent("open-auto.swcad")
     try DocumentFileService().save(.empty(named: "Before"), to: url)
-    let server = AgentServer()
+    let server = AgentCommandController()
     let session = EditorSession(document: .empty(named: "Open"))
     server.register(session: session, path: url)
 
@@ -1560,7 +1560,7 @@ func cliExecutableReturnsDataExitForLiveGenerationMismatch() async throws {
         target: CLIDocumentTarget(fileURL: url),
         name: "Auto File",
         mode: .auto,
-        client: AgentServer()
+        client: AgentCommandController()
     )
 
     let loaded = try DocumentFileService().load(from: url)
@@ -1577,7 +1577,7 @@ func cliExecutableReturnsDataExitForLiveGenerationMismatch() async throws {
 
     let url = temporaryDirectory.appendingPathComponent("open-file-mode.swcad")
     try DocumentFileService().save(.empty(named: "Before"), to: url)
-    let server = AgentServer()
+    let server = AgentCommandController()
     server.register(
         session: EditorSession(document: .empty(named: "Open")),
         path: url
@@ -1608,7 +1608,7 @@ func cliExecutableReturnsDataExitForLiveGenerationMismatch() async throws {
 
     let url = temporaryDirectory.appendingPathComponent("live-path.swcad")
     try DocumentFileService().save(.empty(named: "Before"), to: url)
-    let server = AgentServer()
+    let server = AgentCommandController()
     let session = EditorSession(document: .empty(named: "Open"))
     server.register(session: session, path: url)
 
@@ -1660,7 +1660,7 @@ func cliExecutableReturnsDataExitForLiveGenerationMismatch() async throws {
     let url = temporaryDirectory.appendingPathComponent("open.swcad")
     try DocumentFileService().save(.empty(named: "Before"), to: url)
 
-    let server = AgentServer()
+    let server = AgentCommandController()
     server.register(
         session: EditorSession(document: .empty(named: "Open")),
         path: url
@@ -1761,7 +1761,7 @@ func cliExecutableReturnsDataExitForLiveGenerationMismatch() async throws {
 
     let url = temporaryDirectory.appendingPathComponent("open-parameter.swcad")
     try DocumentFileService().save(.empty(named: "Before"), to: url)
-    let server = AgentServer()
+    let server = AgentCommandController()
     let session = EditorSession(document: .empty(named: "Open"))
     server.register(session: session, path: url)
 
@@ -1818,7 +1818,7 @@ func cliExecutableReturnsDataExitForLiveGenerationMismatch() async throws {
 
     let url = temporaryDirectory.appendingPathComponent("open-parameter-delete.swcad")
     try DocumentFileService().save(.empty(named: "Before"), to: url)
-    let server = AgentServer()
+    let server = AgentCommandController()
     let session = EditorSession(document: .empty(named: "Open"))
     _ = try session.execute(
         .upsertParameter(
@@ -1854,7 +1854,7 @@ func cliExecutableReturnsDataExitForLiveGenerationMismatch() async throws {
 
     let url = temporaryDirectory.appendingPathComponent("open-parameter-file.swcad")
     try DocumentFileService().save(.empty(named: "Before"), to: url)
-    let server = AgentServer()
+    let server = AgentCommandController()
     server.register(
         session: EditorSession(document: .empty(named: "Open")),
         path: url
@@ -1923,7 +1923,7 @@ func cliExecutableReturnsDataExitForLiveGenerationMismatch() async throws {
 
     let url = temporaryDirectory.appendingPathComponent("open-parameter-expression.swcad")
     try DocumentFileService().save(.empty(named: "Before"), to: url)
-    let server = AgentServer()
+    let server = AgentCommandController()
     let session = EditorSession(document: .empty(named: "Open"))
     _ = try session.execute(
         .upsertParameter(
@@ -2000,7 +2000,7 @@ func cliExecutableReturnsDataExitForLiveGenerationMismatch() async throws {
 
     let url = temporaryDirectory.appendingPathComponent("open-parameter-list.swcad")
     try DocumentFileService().save(.empty(named: "Before"), to: url)
-    let server = AgentServer()
+    let server = AgentCommandController()
     let session = EditorSession(document: .empty(named: "Open"))
     _ = try session.execute(
         .upsertParameter(
@@ -2175,7 +2175,7 @@ func cliExecutableReturnsDataExitForLiveGenerationMismatch() async throws {
 
     let url = temporaryDirectory.appendingPathComponent("open-box.swcad")
     try DocumentFileService().save(.empty(named: "Before"), to: url)
-    let server = AgentServer()
+    let server = AgentCommandController()
     let session = EditorSession(document: .empty(named: "Open"))
     server.register(session: session, path: url)
 
@@ -2209,7 +2209,7 @@ func cliExecutableReturnsDataExitForLiveGenerationMismatch() async throws {
 
     let url = temporaryDirectory.appendingPathComponent("open-box-corners.swcad")
     try DocumentFileService().save(.empty(named: "Before"), to: url)
-    let server = AgentServer()
+    let server = AgentCommandController()
     let session = EditorSession(document: .empty(named: "Open"))
     server.register(session: session, path: url)
 
@@ -2249,7 +2249,7 @@ func cliExecutableReturnsDataExitForLiveGenerationMismatch() async throws {
 
     let url = temporaryDirectory.appendingPathComponent("open-extrude.swcad")
     try DocumentFileService().save(.empty(named: "Before"), to: url)
-    let server = AgentServer()
+    let server = AgentCommandController()
     let session = EditorSession(document: .empty(named: "Open"))
     _ = try session.execute(
         .createRectangleSketch(
@@ -2374,7 +2374,7 @@ func cliExecutableReturnsDataExitForLiveGenerationMismatch() async throws {
 
     let url = temporaryDirectory.appendingPathComponent("open-circle.swcad")
     try DocumentFileService().save(.empty(named: "Before"), to: url)
-    let server = AgentServer()
+    let server = AgentCommandController()
     let session = EditorSession(document: .empty(named: "Open"))
     server.register(session: session, path: url)
 
@@ -2409,7 +2409,7 @@ func cliExecutableReturnsDataExitForLiveGenerationMismatch() async throws {
 
     let url = temporaryDirectory.appendingPathComponent("open-rectangle.swcad")
     try DocumentFileService().save(.empty(named: "Before"), to: url)
-    let server = AgentServer()
+    let server = AgentCommandController()
     let session = EditorSession(document: .empty(named: "Open"))
     server.register(session: session, path: url)
 
@@ -2441,7 +2441,7 @@ func cliExecutableReturnsDataExitForLiveGenerationMismatch() async throws {
 
     let url = temporaryDirectory.appendingPathComponent("open-box-file.swcad")
     try DocumentFileService().save(.empty(named: "Before"), to: url)
-    let server = AgentServer()
+    let server = AgentCommandController()
     server.register(
         session: EditorSession(document: .empty(named: "Open")),
         path: url
@@ -2597,7 +2597,7 @@ func cliExecutableReturnsDataExitForLiveGenerationMismatch() async throws {
     let documentURL = temporaryDirectory.appendingPathComponent("open-export.swcad")
     let outputURL = temporaryDirectory.appendingPathComponent("open-export.stl")
     try DocumentFileService().save(.empty(named: "Before"), to: documentURL)
-    let server = AgentServer()
+    let server = AgentCommandController()
     let session = EditorSession(document: .empty(named: "Open"))
     _ = try session.execute(
         .createExtrudedRectangle(
@@ -2649,7 +2649,7 @@ func cliExecutableReturnsDataExitForLiveGenerationMismatch() async throws {
     let documentURL = temporaryDirectory.appendingPathComponent("open-preset-export.swcad")
     let outputURL = temporaryDirectory.appendingPathComponent("open-preset-export.stl")
     try DocumentFileService().save(document, to: documentURL)
-    let server = AgentServer()
+    let server = AgentCommandController()
     let session = EditorSession(document: document)
     _ = try session.execute(
         .createExtrudedRectangle(
@@ -2691,7 +2691,7 @@ func cliExecutableReturnsDataExitForLiveGenerationMismatch() async throws {
     let documentURL = temporaryDirectory.appendingPathComponent("open-export-file.swcad")
     let outputURL = temporaryDirectory.appendingPathComponent("rejected-export.stl")
     try DocumentFileService().save(.empty(named: "Before"), to: documentURL)
-    let server = AgentServer()
+    let server = AgentCommandController()
     server.register(
         session: EditorSession(document: .empty(named: "Open")),
         path: documentURL
@@ -2752,7 +2752,7 @@ func cliExecutableReturnsDataExitForLiveGenerationMismatch() async throws {
 
     let documentURL = temporaryDirectory.appendingPathComponent("open-eval.swcad")
     try DocumentFileService().save(.empty(named: "Before"), to: documentURL)
-    let server = AgentServer()
+    let server = AgentCommandController()
     let session = EditorSession(document: .empty(named: "Open"))
     _ = try session.execute(
         .createExtrudedRectangle(
@@ -2826,7 +2826,7 @@ func cliExecutableReturnsDataExitForLiveGenerationMismatch() async throws {
 
     let documentURL = temporaryDirectory.appendingPathComponent("open-measure.swcad")
     try DocumentFileService().save(.empty(named: "Before"), to: documentURL)
-    let server = AgentServer()
+    let server = AgentCommandController()
     let session = EditorSession(document: .empty(named: "Open"))
     _ = try session.execute(
         .createExtrudedRectangle(
@@ -2868,7 +2868,7 @@ func cliExecutableReturnsDataExitForLiveGenerationMismatch() async throws {
 
     let documentURL = temporaryDirectory.appendingPathComponent("open-selected-measure.swcad")
     try DocumentFileService().save(.empty(named: "Before"), to: documentURL)
-    let server = AgentServer()
+    let server = AgentCommandController()
     let session = EditorSession(document: .empty(named: "Open"))
     _ = try session.execute(
         .createExtrudedRectangle(
@@ -2954,7 +2954,7 @@ func cliExecutableReturnsDataExitForLiveGenerationMismatch() async throws {
 
     let documentURL = temporaryDirectory.appendingPathComponent("open-mesh.swcad")
     try DocumentFileService().save(.empty(named: "Before"), to: documentURL)
-    let server = AgentServer()
+    let server = AgentCommandController()
     let session = EditorSession(document: .empty(named: "Open"))
     _ = try session.execute(
         .createExtrudedRectangle(
@@ -3013,7 +3013,7 @@ func cliExecutableReturnsDataExitForLiveGenerationMismatch() async throws {
 
     let documentURL = temporaryDirectory.appendingPathComponent("open-save.swcad")
     try DocumentFileService().save(.empty(named: "Before"), to: documentURL)
-    let server = AgentServer()
+    let server = AgentCommandController()
     let session = EditorSession(document: try DocumentFileService().load(from: documentURL))
     _ = try session.execute(
         .renameDocument(name: "Saved By Auto"),
@@ -3045,7 +3045,7 @@ func cliExecutableReturnsDataExitForLiveGenerationMismatch() async throws {
 
     let documentURL = temporaryDirectory.appendingPathComponent("open-save-file.swcad")
     try DocumentFileService().save(.empty(named: "Before"), to: documentURL)
-    let server = AgentServer()
+    let server = AgentCommandController()
     server.register(
         session: EditorSession(document: .empty(named: "Open")),
         path: documentURL

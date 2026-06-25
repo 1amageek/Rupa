@@ -163,7 +163,7 @@ The first IPC contract should be local, inspectable, and easy to test.
 | Message style | JSON-RPC style request and response envelopes. |
 | Command payload | `RupaAutomation` Codable types. |
 | Result payload | `AutomationResult` with diagnostics and document summary. |
-| Session discovery | `WorkspaceRegistry` exposed through `AgentServer`. |
+| Session discovery | `WorkspaceRegistry` exposed through `AgentCommandController`. |
 
 IPC transports may evolve later. CAD semantics stay in RupaCore and RupaAutomation so transport changes do not redefine commands.
 
