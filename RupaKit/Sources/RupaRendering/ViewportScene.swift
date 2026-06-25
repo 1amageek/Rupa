@@ -164,15 +164,7 @@ public struct ViewportBodyComponent: Equatable {
     }
 }
 
-public struct ViewportBodyMesh: Equatable {
-    public var positions: [Point3D]
-    public var indices: [UInt32]
-
-    public init(positions: [Point3D], indices: [UInt32]) {
-        self.positions = positions
-        self.indices = indices
-    }
-}
+public typealias ViewportBodyMesh = BodyDisplaySnapshot.Mesh
 
 public struct ViewportBodyTopology: Equatable {
     public var faces: [Face]
@@ -3333,10 +3325,7 @@ public struct ViewportSceneBuilder {
             sizeZMeters: max(snapshot.bounds.maxZ - snapshot.bounds.minZ, 1.0e-9),
             yMinMeters: snapshot.bounds.minY,
             yMaxMeters: snapshot.bounds.maxY,
-            mesh: ViewportBodyMesh(
-                positions: snapshot.mesh.positions,
-                indices: snapshot.mesh.indices
-            ),
+            mesh: snapshot.mesh,
             topology: ViewportBodyTopology(snapshot.topology)
         )
         return ViewportSceneItem(

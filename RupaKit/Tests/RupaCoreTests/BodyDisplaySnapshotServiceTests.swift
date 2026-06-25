@@ -1,6 +1,28 @@
+import Foundation
 import Testing
 import SwiftCAD
 @testable import RupaCore
+
+@Test func bodyDisplaySnapshotMeshSharesStorageAcrossValueCopiesAndPreservesCodableValueSemantics() throws {
+    let mesh = BodyDisplaySnapshot.Mesh(
+        positions: [
+            Point3D(x: 0.0, y: 0.0, z: 0.0),
+            Point3D(x: 1.0, y: 0.0, z: 0.0),
+            Point3D(x: 0.0, y: 1.0, z: 0.0),
+        ],
+        indices: [0, 1, 2]
+    )
+    let copiedMesh = mesh
+    let decodedMesh = try JSONDecoder().decode(
+        BodyDisplaySnapshot.Mesh.self,
+        from: try JSONEncoder().encode(mesh)
+    )
+
+    #expect(copiedMesh == mesh)
+    #expect(copiedMesh.sharesStorage(with: mesh))
+    #expect(decodedMesh == mesh)
+    #expect(decodedMesh.sharesStorage(with: mesh) == false)
+}
 
 @MainActor
 @Test func bodyDisplaySnapshotServiceReportsEvaluatedBodyMeshAndTopology() async throws {

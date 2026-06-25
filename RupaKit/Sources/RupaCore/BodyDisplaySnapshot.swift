@@ -25,12 +25,58 @@ public struct BodyDisplaySnapshot: Codable, Equatable, Sendable {
     }
 
     public struct Mesh: Codable, Equatable, Sendable {
-        public var positions: [Point3D]
-        public var indices: [UInt32]
+        private final class Storage: Sendable {
+            let positions: [Point3D]
+            let indices: [UInt32]
+
+            init(positions: [Point3D], indices: [UInt32]) {
+                self.positions = positions
+                self.indices = indices
+            }
+        }
+
+        private enum CodingKeys: String, CodingKey {
+            case positions
+            case indices
+        }
+
+        private let storage: Storage
+
+        public var positions: [Point3D] {
+            storage.positions
+        }
+
+        public var indices: [UInt32] {
+            storage.indices
+        }
 
         public init(positions: [Point3D], indices: [UInt32]) {
-            self.positions = positions
-            self.indices = indices
+            self.storage = Storage(positions: positions, indices: indices)
+        }
+
+        public init(from decoder: any Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            self.init(
+                positions: try container.decode([Point3D].self, forKey: .positions),
+                indices: try container.decode([UInt32].self, forKey: .indices)
+            )
+        }
+
+        public func encode(to encoder: any Encoder) throws {
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            try container.encode(storage.positions, forKey: .positions)
+            try container.encode(storage.indices, forKey: .indices)
+        }
+
+        public static func == (lhs: Mesh, rhs: Mesh) -> Bool {
+            if lhs.sharesStorage(with: rhs) {
+                return true
+            }
+            return lhs.positions == rhs.positions && lhs.indices == rhs.indices
+        }
+
+        public func sharesStorage(with other: Mesh) -> Bool {
+            storage === other.storage
         }
     }
 
