@@ -3,7 +3,16 @@ import SwiftCAD
 
 public struct SelectionModel: Codable, Equatable, Sendable {
     public private(set) var selectedTargets: [SelectionTarget]
+    public private(set) var selectedReferences: [SelectionReference]
     public private(set) var hoveredTarget: SelectionTarget?
+    public private(set) var hoveredReference: SelectionReference?
+
+    private enum CodingKeys: String, CodingKey {
+        case selectedTargets
+        case selectedReferences
+        case hoveredTarget
+        case hoveredReference
+    }
 
     public var selectedSceneNodeIDs: [SceneNodeID] {
         Self.sceneNodeIDs(from: selectedTargets)
@@ -21,12 +30,50 @@ public struct SelectionModel: Codable, Equatable, Sendable {
         selectedTargets.last
     }
 
+    public var primaryReference: SelectionReference? {
+        selectedReferences.last
+    }
+
     public init(
         selectedTargets: [SelectionTarget] = [],
-        hoveredTarget: SelectionTarget? = nil
+        selectedReferences: [SelectionReference] = [],
+        hoveredTarget: SelectionTarget? = nil,
+        hoveredReference: SelectionReference? = nil
     ) {
         self.selectedTargets = Self.uniqueTargets(selectedTargets)
+        self.selectedReferences = Self.uniqueReferences(selectedReferences)
         self.hoveredTarget = hoveredTarget
+        self.hoveredReference = hoveredReference
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(
+            selectedTargets: try container.decodeIfPresent(
+                [SelectionTarget].self,
+                forKey: .selectedTargets
+            ) ?? [],
+            selectedReferences: try container.decodeIfPresent(
+                [SelectionReference].self,
+                forKey: .selectedReferences
+            ) ?? [],
+            hoveredTarget: try container.decodeIfPresent(
+                SelectionTarget.self,
+                forKey: .hoveredTarget
+            ),
+            hoveredReference: try container.decodeIfPresent(
+                SelectionReference.self,
+                forKey: .hoveredReference
+            )
+        )
+    }
+
+    public func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(selectedTargets, forKey: .selectedTargets)
+        try container.encode(selectedReferences, forKey: .selectedReferences)
+        try container.encodeIfPresent(hoveredTarget, forKey: .hoveredTarget)
+        try container.encodeIfPresent(hoveredReference, forKey: .hoveredReference)
     }
 
     public static var empty: SelectionModel {
@@ -39,6 +86,10 @@ public struct SelectionModel: Codable, Equatable, Sendable {
 
     public func containsTarget(_ target: SelectionTarget) -> Bool {
         selectedTargets.contains(target)
+    }
+
+    public func containsReference(_ reference: SelectionReference) -> Bool {
+        selectedReferences.contains(reference)
     }
 
     public mutating func selectSceneNode(
@@ -85,6 +136,28 @@ public struct SelectionModel: Codable, Equatable, Sendable {
         selectValidatedTargets(uniqueTargets)
     }
 
+    public mutating func selectReference(
+        _ reference: SelectionReference?,
+        in document: DesignDocument
+    ) throws {
+        guard let reference else {
+            clearSelection()
+            return
+        }
+        try selectReferences([reference], in: document)
+    }
+
+    public mutating func selectReferences(
+        _ references: [SelectionReference],
+        in document: DesignDocument
+    ) throws {
+        let uniqueReferences = Self.uniqueReferences(references)
+        for reference in uniqueReferences {
+            try validateReference(reference, in: document)
+        }
+        selectValidatedReferences(uniqueReferences)
+    }
+
     public mutating func hoverSceneNode(
         _ id: SceneNodeID?,
         in document: DesignDocument
@@ -109,20 +182,41 @@ public struct SelectionModel: Codable, Equatable, Sendable {
         setValidatedHover(target)
     }
 
+    public mutating func hoverReference(
+        _ reference: SelectionReference?,
+        in document: DesignDocument
+    ) throws {
+        guard let reference else {
+            clearHover()
+            return
+        }
+        try validateReference(reference, in: document)
+        setValidatedHoverReference(reference)
+    }
+
     public mutating func clearSelection() {
         selectedTargets = []
+        selectedReferences = []
     }
 
     public mutating func clearHover() {
         hoveredTarget = nil
+        hoveredReference = nil
     }
 
     public mutating func pruneMissingReferences(in document: DesignDocument) {
         selectedTargets = selectedTargets.filter { target in
             isTargetValid(target, in: document)
         }
+        selectedReferences = selectedReferences.filter { reference in
+            isReferenceValid(reference, in: document)
+        }
         if let hoveredTarget,
            !isTargetValid(hoveredTarget, in: document) {
+            clearHover()
+        }
+        if let hoveredReference,
+           !isReferenceValid(hoveredReference, in: document) {
             clearHover()
         }
     }
@@ -160,6 +254,22 @@ public struct SelectionModel: Codable, Equatable, Sendable {
         }
     }
 
+    private func validateReference(
+        _ reference: SelectionReference,
+        in document: DesignDocument
+    ) throws {
+        switch reference {
+        case .surface(.controlPoint):
+            _ = try SurfaceControlPointSelectionTargetResolver()
+                .validateDisplayTarget(for: reference, in: document)
+        case .topology, .edge, .curve, .surface(_):
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Selection reference is not selectable in the viewport yet."
+            )
+        }
+    }
+
     private func incompatibleTargetError() -> EditorError {
         EditorError(
             code: .referenceUnresolved,
@@ -175,6 +285,18 @@ public struct SelectionModel: Codable, Equatable, Sendable {
             return false
         }
         return isComponent(target.component, compatibleWith: sceneNode.reference, in: document)
+    }
+
+    private func isReferenceValid(
+        _ reference: SelectionReference,
+        in document: DesignDocument
+    ) -> Bool {
+        do {
+            try validateReference(reference, in: document)
+            return true
+        } catch {
+            return false
+        }
     }
 
     private func isComponent(
@@ -339,10 +461,22 @@ public struct SelectionModel: Codable, Equatable, Sendable {
 
     private mutating func selectValidatedTargets(_ targets: [SelectionTarget]) {
         selectedTargets = Self.uniqueTargets(targets)
+        selectedReferences = []
+    }
+
+    private mutating func selectValidatedReferences(_ references: [SelectionReference]) {
+        selectedTargets = []
+        selectedReferences = Self.uniqueReferences(references)
     }
 
     private mutating func setValidatedHover(_ target: SelectionTarget) {
         hoveredTarget = target
+        hoveredReference = nil
+    }
+
+    private mutating func setValidatedHoverReference(_ reference: SelectionReference) {
+        hoveredTarget = nil
+        hoveredReference = reference
     }
 
     private static func uniqueTargets(_ targets: [SelectionTarget]) -> [SelectionTarget] {
@@ -355,6 +489,18 @@ public struct SelectionModel: Codable, Equatable, Sendable {
             uniqueTargets.append(target)
         }
         return uniqueTargets
+    }
+
+    private static func uniqueReferences(_ references: [SelectionReference]) -> [SelectionReference] {
+        var uniqueReferences: [SelectionReference] = []
+        var seenReferences: Set<SelectionReference> = []
+        for reference in references {
+            guard seenReferences.insert(reference).inserted else {
+                continue
+            }
+            uniqueReferences.append(reference)
+        }
+        return uniqueReferences
     }
 
     private static func sceneNodeIDs(from targets: [SelectionTarget]) -> [SceneNodeID] {

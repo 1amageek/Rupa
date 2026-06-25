@@ -187,6 +187,32 @@ import Testing
     #expect(decodedSelection.hoveredSceneNodeID == sceneNodeID)
 }
 
+@Test func selectionModelAcceptsSurfaceControlPointReferences() throws {
+    var document = DesignDocument.empty()
+    _ = try document.createPolySplineSurface(
+        name: "Selectable Surface CV",
+        sourceMesh: selectionModelSurfaceQuadMesh(),
+        options: PolySplineOptions()
+    )
+    let summary = try SurfaceSourceSummaryService().summarize(document: document)
+    let patch = try #require(summary.sources.first?.patches.first)
+    let controlPoint = try #require(patch.controlPoints.first { $0.uIndex == 1 && $0.vIndex == 1 })
+    let reference = controlPoint.selectionReference
+    var selection = SelectionModel()
+
+    try selection.selectReference(reference, in: document)
+    try selection.hoverReference(reference, in: document)
+
+    #expect(selection.selectedTargets.isEmpty)
+    #expect(selection.selectedReferences == [reference])
+    #expect(selection.primaryReference == reference)
+    #expect(selection.hoveredReference == reference)
+
+    let data = try JSONEncoder().encode(selection)
+    let decodedSelection = try JSONDecoder().decode(SelectionModel.self, from: data)
+    #expect(decodedSelection == selection)
+}
+
 @Test func selectionModelPrunesMissingSubobjectTargets() throws {
     let missingID = SceneNodeID()
     var selection = SelectionModel(
@@ -202,6 +228,18 @@ import Testing
     #expect(selection.selectedSceneNodeIDs.isEmpty)
     #expect(selection.hoveredTarget == nil)
     #expect(selection.hoveredSceneNodeID == nil)
+}
+
+private func selectionModelSurfaceQuadMesh() -> Mesh {
+    Mesh(
+        positions: [
+            Point3D(x: 0.0, y: 0.0, z: 0.0),
+            Point3D(x: 0.02, y: 0.0, z: 0.0),
+            Point3D(x: 0.02, y: 0.02, z: 0.0),
+            Point3D(x: 0.0, y: 0.02, z: 0.0),
+        ],
+        indices: [0, 1, 2, 0, 2, 3]
+    )
 }
 
 private func sketchTargetSetup(

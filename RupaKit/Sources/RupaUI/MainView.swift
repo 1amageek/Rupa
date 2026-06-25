@@ -3810,6 +3810,11 @@ public struct MainView: View {
         }
 
         hoveredViewportPickingBackend = hit.pickingBackend
+        if let reference = hit.selectionReference {
+            patternArrayCurvePathPreviewCandidate = nil
+            setHoveredReference(reference)
+            return
+        }
         guard let target = selectionTarget(for: hit) else {
             patternArrayCurvePathPreviewCandidate = nil
             setHoveredTarget(nil)
@@ -3839,6 +3844,10 @@ public struct MainView: View {
             return
         }
 
+        if let reference = hit.selectionReference {
+            applyViewportSelection(references: [reference], intent: intent)
+            return
+        }
         guard let target = selectionTarget(for: hit) else {
             if patternArrayCurvePathPickState.isActive {
                 _ = applyPatternArrayCurvePathPick(targets: [])
@@ -3879,6 +3888,39 @@ public struct MainView: View {
                 }
             }
             _ = session.selectTargets(nextTargets)
+        }
+        dimensionCommandState.deactivate()
+        syncOffsetCommandAvailability()
+    }
+
+    private func applyViewportSelection(
+        references: [SelectionReference],
+        intent: ViewportSelectionIntent
+    ) {
+        selectionDragPreviewTargets = []
+        patternArrayCurvePathPreviewCandidate = nil
+        switch intent {
+        case .replace:
+            guard !references.isEmpty else {
+                session.clearSelection()
+                dimensionCommandState.deactivate()
+                syncOffsetCommandAvailability()
+                return
+            }
+            _ = session.selectReferences(references)
+        case .toggle:
+            guard !references.isEmpty else {
+                return
+            }
+            var nextReferences = session.selection.selectedReferences
+            for reference in references {
+                if let index = nextReferences.firstIndex(of: reference) {
+                    nextReferences.remove(at: index)
+                } else {
+                    nextReferences.append(reference)
+                }
+            }
+            _ = session.selectReferences(nextReferences)
         }
         dimensionCommandState.deactivate()
         syncOffsetCommandAvailability()
@@ -4287,6 +4329,13 @@ public struct MainView: View {
             return
         }
         _ = session.hoverTarget(target)
+    }
+
+    private func setHoveredReference(_ reference: SelectionReference?) {
+        guard session.selection.hoveredReference != reference else {
+            return
+        }
+        _ = session.hoverReference(reference)
     }
 
     private func setHoveredSceneNode(_ id: SceneNodeID, isHovered: Bool) {

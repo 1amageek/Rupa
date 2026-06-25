@@ -73,6 +73,9 @@ public enum ViewportSelectionHitPolicy: Equatable, Sendable {
     }
 
     public func allows(hit: ViewportHit) -> Bool {
+        if hit.selectionReference != nil {
+            return allowsVertexHits
+        }
         if let component = hit.selectionComponent {
             return allows(component: component)
         }

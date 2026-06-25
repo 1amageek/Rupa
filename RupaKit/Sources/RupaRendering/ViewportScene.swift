@@ -1331,6 +1331,7 @@ public struct ViewportHit: Equatable, Sendable {
     public var bodyEdge: ViewportBodyEdge?
     public var bodyVertex: ViewportBodyVertex?
     public var selectionComponent: SelectionComponent?
+    public var selectionReference: SelectionReference?
 
     public init(
         featureID: FeatureID,
@@ -1343,7 +1344,8 @@ public struct ViewportHit: Equatable, Sendable {
         bodyFace: ViewportBodyFace? = nil,
         bodyEdge: ViewportBodyEdge? = nil,
         bodyVertex: ViewportBodyVertex? = nil,
-        selectionComponent: SelectionComponent? = nil
+        selectionComponent: SelectionComponent? = nil,
+        selectionReference: SelectionReference? = nil
     ) {
         self.featureID = featureID
         self.sceneNodeID = sceneNodeID
@@ -1356,6 +1358,7 @@ public struct ViewportHit: Equatable, Sendable {
         self.bodyEdge = bodyEdge
         self.bodyVertex = bodyVertex
         self.selectionComponent = selectionComponent
+        self.selectionReference = selectionReference
     }
 }
 
@@ -2043,6 +2046,24 @@ public struct ViewportHitTester {
                ) {
                 return objectHit
             }
+            if selectionHitPolicy.allowsVertexHits,
+               let surfaceControlPointHit = hitSurfaceControlPointDisplay(
+                   for: item,
+                   component: component,
+                   point: point,
+                   layout: layout
+               ) {
+                return HitCandidate(
+                    hit: ViewportHit(
+                        featureID: item.featureID,
+                        sceneNodeID: item.sceneNodeID,
+                        kind: item.kind.selectableKind,
+                        selectionReference: surfaceControlPointHit.reference
+                    ),
+                    score: surfaceControlPointHit.score,
+                    depth: surfaceControlPointHit.depth
+                )
+            }
             if let topologyHit = ViewportBodyTopologyHitTester(tolerance: tolerance).hitTest(
                 item: item,
                 component: component,
@@ -2099,6 +2120,54 @@ public struct ViewportHitTester {
             }
             return nil
         }
+    }
+
+    private func hitSurfaceControlPointDisplay(
+        for item: ViewportSceneItem,
+        component: ViewportBodyComponent,
+        point: CGPoint,
+        layout: ViewportLayout
+    ) -> (reference: SelectionReference, score: CGFloat, depth: Double?)? {
+        var bestHit: (reference: SelectionReference, score: CGFloat, depth: Double?)?
+        let displayTolerance = max(tolerance, 10.0)
+        for display in component.surfaceControlPointDisplays {
+            let projectedPoint = layout.project(display.point, in: item)
+            let distance = point.distance(to: projectedPoint)
+            guard distance <= displayTolerance else {
+                continue
+            }
+            let depth = layout.projectedDepth(display.point, in: item)
+            let candidate = (reference: display.selectionReference, score: distance, depth: depth)
+            if let current = bestHit {
+                if isReferenceHitCandidate(candidate, betterThan: current) {
+                    bestHit = candidate
+                }
+            } else {
+                bestHit = candidate
+            }
+        }
+        return bestHit
+    }
+
+    private func isReferenceHitCandidate(
+        _ candidate: (reference: SelectionReference, score: CGFloat, depth: Double?),
+        betterThan current: (reference: SelectionReference, score: CGFloat, depth: Double?)
+    ) -> Bool {
+        let scoreDelta = candidate.score - current.score
+        if abs(scoreDelta) > 1.0e-6 {
+            return scoreDelta < 0.0
+        }
+        return isNearer(candidate.depth, than: current.depth)
+    }
+
+    private func isNearer(_ candidateDepth: Double?, than currentDepth: Double?) -> Bool {
+        guard let candidateDepth else {
+            return false
+        }
+        guard let currentDepth else {
+            return true
+        }
+        return candidateDepth > currentDepth
     }
 
     private func hitBodyObject(

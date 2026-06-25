@@ -1639,11 +1639,13 @@ public final class AgentCommandController: AgentClientProtocol {
                 }
                 return .selection(
                     SelectionStateResult(
-                        message: "\(session.selection.selectedTargets.count) target(s) selected.",
+                        message: "\(session.selection.selectedTargets.count) target(s), \(session.selection.selectedReferences.count) reference(s) selected.",
                         generation: session.generation,
                         dirty: session.isDirty,
                         selectedTargets: session.selection.selectedTargets,
+                        selectedReferences: session.selection.selectedReferences,
                         hoveredTarget: session.selection.hoveredTarget,
+                        hoveredReference: session.selection.hoveredReference,
                         diagnostics: session.diagnostics
                     )
                 )

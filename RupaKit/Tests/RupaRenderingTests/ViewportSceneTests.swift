@@ -655,6 +655,18 @@ import Testing
     #expect(abs(display.point.x - controlPoint.point.x) <= 1.0e-12)
     #expect(abs(display.point.y - controlPoint.point.y) <= 1.0e-12)
     #expect(abs(display.point.z - controlPoint.point.z) <= 1.0e-12)
+    let layout = try #require(ViewportLayout(
+        scene: visibleScene,
+        size: CGSize(width: 900.0, height: 700.0)
+    ))
+    let hit = try #require(ViewportHitTester().hitTest(
+        point: layout.project(display.point, in: visibleBody),
+        in: visibleScene,
+        layout: layout,
+        selectionHitPolicy: .vertex
+    ))
+    #expect(hit.selectionReference == controlPoint.selectionReference)
+    #expect(hit.selectionComponent == nil)
 
     try document.setSurfaceControlPointDisplay(
         target: controlPoint.selectionReference,

@@ -2889,6 +2889,28 @@ public final class EditorSession {
         }
     }
 
+    @discardableResult
+    public func selectReference(_ reference: SelectionReference?) -> Bool {
+        do {
+            try selection.selectReference(reference, in: document)
+            return true
+        } catch {
+            reportToolStatus(error.localizedDescription, severity: .warning)
+            return false
+        }
+    }
+
+    @discardableResult
+    public func selectReferences(_ references: [SelectionReference]) -> Bool {
+        do {
+            try selection.selectReferences(references, in: document)
+            return true
+        } catch {
+            reportToolStatus(error.localizedDescription, severity: .warning)
+            return false
+        }
+    }
+
     public func clearSelection() {
         selection.clearSelection()
     }
@@ -2908,6 +2930,17 @@ public final class EditorSession {
     public func hoverTarget(_ target: SelectionTarget?) -> Bool {
         do {
             try selection.hoverTarget(target, in: document)
+            return true
+        } catch {
+            reportToolStatus(error.localizedDescription, severity: .warning)
+            return false
+        }
+    }
+
+    @discardableResult
+    public func hoverReference(_ reference: SelectionReference?) -> Bool {
+        do {
+            try selection.hoverReference(reference, in: document)
             return true
         } catch {
             reportToolStatus(error.localizedDescription, severity: .warning)
