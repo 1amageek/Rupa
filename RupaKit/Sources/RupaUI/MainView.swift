@@ -1466,9 +1466,9 @@ public struct MainView: View {
         workspaceContextDivider
 
         workspaceValuePill(
-            "Profile",
-            sweepPreviewFeatureLabel(preview.profileFeatureID),
-            accessibilityIdentifier: "WorkspaceSweep.profile"
+            "Section",
+            sweepPreviewSectionLabel(preview.section),
+            accessibilityIdentifier: "WorkspaceSweep.section"
         )
         workspaceValuePill(
             "Path",
@@ -2342,6 +2342,13 @@ public struct MainView: View {
 
     private func sweepPreviewFeatureLabel(_ featureID: FeatureID?) -> String {
         featureID.map { shortID($0) } ?? "Missing"
+    }
+
+    private func sweepPreviewSectionLabel(_ section: SweepSectionReference?) -> String {
+        guard let section else {
+            return "Missing"
+        }
+        return sweepSectionSummary(section)
     }
 
     private var selectionQualitySummary: WorkspaceSelectionQualitySummary? {
@@ -9120,7 +9127,7 @@ public struct MainView: View {
                         inspectorRow("Axis Direction", vectorSummary(revolve.axis.direction))
                     case .sweep(let sweep):
                         inspectorRow("Operation", "Sweep")
-                        inspectorRow("Profiles", valueSummary(sweep.profiles.map { shortID($0.featureID) }))
+                        inspectorRow("Sections", valueSummary(sweep.sections.map(sweepSectionSummary)))
                         inspectorRow("Path Source", shortID(sweep.path.featureID))
                         if sweep.guides.isEmpty == false {
                             inspectorRow("Guides", valueSummary(sweep.guides.map { shortID($0.featureID) }))
@@ -9204,8 +9211,8 @@ public struct MainView: View {
         if let sourceFeatureID = object.sourceFeatureID {
             inspectorRow("Source Feature", shortID(sourceFeatureID))
         }
-        if let sourceProfileFeatureID = object.sourceProfileFeatureID {
-            inspectorRow("Source Profile", shortID(sourceProfileFeatureID))
+        if let sourceSection = object.sourceSection {
+            inspectorRow("Source Section", bodySourceSectionSummary(sourceSection))
         }
         if let componentInstanceID = object.componentInstanceID {
             inspectorRow("Component Instance", shortID(componentInstanceID))
@@ -9870,6 +9877,24 @@ public struct MainView: View {
             return "\(visibleValues), +\(uniqueValues.count - 3)"
         }
         return visibleValues
+    }
+
+    private func sweepSectionSummary(_ section: SweepSectionReference) -> String {
+        switch section {
+        case .profile(let profile):
+            return "Profile \(shortID(profile.featureID))"
+        case .curve(let curve):
+            return "Curve \(shortID(curve.featureID))"
+        }
+    }
+
+    private func bodySourceSectionSummary(_ section: BodySourceSectionReference) -> String {
+        switch section {
+        case .profile(let profile):
+            return "Profile \(shortID(profile.featureID))"
+        case .curve(let featureID):
+            return "Curve \(shortID(featureID))"
+        }
     }
 
     private var diagnosticSummary: String {

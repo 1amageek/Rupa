@@ -884,11 +884,11 @@ public final class CADDocumentStore {
             document = updatedDocument
             try commitMutation()
             evaluateCurrentDocument()
-        case .createSweep(let name, let profiles, let path, let guides, let targets, let options):
+        case .createSweep(let name, let sections, let path, let guides, let targets, let options):
             var updatedDocument = document
             try updatedDocument.createSweep(
                 name: name,
-                profiles: profiles,
+                sections: sections,
                 path: path,
                 guides: guides,
                 targets: targets,

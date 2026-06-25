@@ -473,7 +473,7 @@ import SwiftCAD
     let result = try runner.execute(
         .createSweep(
             name: "Automation Sweep",
-            profiles: [ProfileReference(featureID: profileID)],
+            sections: [.profile(ProfileReference(featureID: profileID))],
             path: SweepPathReference(featureID: pathID),
             guides: [],
             targets: [],
@@ -492,7 +492,7 @@ import SwiftCAD
     #expect(result.commandName == "createSweep")
     #expect(result.didMutate)
     #expect(result.generation == DocumentGeneration(1))
-    #expect(sweep.profiles == [ProfileReference(featureID: profileID)])
+    #expect(sweep.sections == [.profile(ProfileReference(featureID: profileID))])
     #expect(sweep.path == SweepPathReference(featureID: pathID))
     #expect(feature.inputs == [
         FeatureInput(featureID: profileID, role: .profile),

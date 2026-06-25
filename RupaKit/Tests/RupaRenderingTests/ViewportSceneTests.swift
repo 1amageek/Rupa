@@ -640,7 +640,7 @@ import Testing
     let session = EditorSession(document: document)
     let result = try session.execute(.createSweep(
         name: "Viewport Sweep",
-        profiles: [ProfileReference(featureID: profileID)],
+        sections: [.profile(ProfileReference(featureID: profileID))],
         path: SweepPathReference(featureID: pathID),
         guides: [],
         targets: [],
@@ -691,7 +691,7 @@ import Testing
     let session = EditorSession(document: document)
     let result = try session.execute(.createSweep(
         name: "Viewport Twisted Scaled Sweep",
-        profiles: [ProfileReference(featureID: profileID)],
+        sections: [.profile(ProfileReference(featureID: profileID))],
         path: SweepPathReference(featureID: pathID),
         guides: [],
         targets: [],
@@ -746,7 +746,7 @@ import Testing
     let session = EditorSession(document: document)
     let result = try session.execute(.createSweep(
         name: "Viewport Sheet Sweep",
-        profiles: [ProfileReference(featureID: profileID)],
+        sections: [.profile(ProfileReference(featureID: profileID))],
         path: SweepPathReference(featureID: pathID),
         guides: [],
         targets: [],
@@ -772,6 +772,64 @@ import Testing
     #expect(mesh.indices.count > 0)
     #expect(mesh.indices.count % 3 == 0)
     #expect(bodyItem.sourceFeatureID == profileID)
+}
+
+@MainActor
+@Test func viewportSceneBuilderCreatesMeshBodyItemForCurveSectionSheetSweep() async throws {
+    var document = DesignDocument.empty()
+    let sectionID = try document.createLineSketch(
+        name: "Viewport Curve Sheet Section",
+        plane: .xy,
+        start: SketchPoint(
+            x: .length(-2.0, .millimeter),
+            y: .length(0.0, .millimeter)
+        ),
+        end: SketchPoint(
+            x: .length(2.0, .millimeter),
+            y: .length(0.0, .millimeter)
+        )
+    )
+    let pathID = try document.createLineSketch(
+        name: "Viewport Curve Sheet Path",
+        plane: .yz,
+        start: SketchPoint(
+            x: .length(0.0, .millimeter),
+            y: .length(0.0, .millimeter)
+        ),
+        end: SketchPoint(
+            x: .length(0.0, .millimeter),
+            y: .length(20.0, .millimeter)
+        )
+    )
+    let session = EditorSession(document: document)
+    let result = try session.execute(.createSweep(
+        name: "Viewport Curve Section Sheet Sweep",
+        sections: [.curve(SweepCurveSectionReference(featureID: sectionID))],
+        path: SweepPathReference(featureID: pathID),
+        guides: [],
+        targets: [],
+        options: SweepOptions(resultKind: .sheet)
+    ))
+
+    let scene = ViewportSceneBuilder().build(document: session.document)
+    let bodyItem = try #require(scene.items.first { item in
+        if case .body = item.kind {
+            return true
+        }
+        return false
+    })
+    guard case .body(let component) = bodyItem.kind else {
+        Issue.record("Expected a curve-section sheet sweep body scene item.")
+        return
+    }
+    let mesh = try #require(component.mesh)
+
+    #expect(result.commandName == "createSweep")
+    #expect(session.evaluationStatus == .valid)
+    #expect(mesh.positions.count > 0)
+    #expect(mesh.indices.count > 0)
+    #expect(mesh.indices.count % 3 == 0)
+    #expect(bodyItem.sourceFeatureID == sectionID)
 }
 
 @MainActor
@@ -810,7 +868,7 @@ import Testing
     let session = EditorSession(document: document)
     let result = try session.execute(.createSweep(
         name: "Viewport Point Guided Sweep",
-        profiles: [ProfileReference(featureID: profileID)],
+        sections: [.profile(ProfileReference(featureID: profileID))],
         path: SweepPathReference(featureID: pathID),
         guides: [SweepGuideReference(featureID: guideID)],
         targets: [],
@@ -2464,7 +2522,7 @@ private func makeCurvedSweepViewportSession() throws -> (
     let session = EditorSession(document: document)
     let result = try session.execute(.createSweep(
         name: "Viewport Curved Sweep",
-        profiles: [ProfileReference(featureID: profileID)],
+        sections: [.profile(ProfileReference(featureID: profileID))],
         path: SweepPathReference(featureID: pathID),
         guides: [],
         targets: [],

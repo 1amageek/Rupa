@@ -980,7 +980,7 @@ import Testing
     )
 
     let bodyNode = try #require(document.productMetadata.sceneNodes.values.first {
-        $0.reference?.kind == .body && $0.object?.sourceProfileFeatureID == featureID
+        $0.reference?.kind == .body && $0.object?.sourceSection?.profileReference?.featureID == featureID
     })
     #expect(document.cadDocument.designGraph.order.count == 2)
     #expect(bodyNode.name == "Panel Extrusion")
@@ -1002,7 +1002,7 @@ import Testing
 
     #expect(document.cadDocument.designGraph.order == [featureID])
     #expect(!document.productMetadata.sceneNodes.values.contains {
-        $0.reference?.kind == .body && $0.object?.sourceProfileFeatureID == featureID
+        $0.reference?.kind == .body && $0.object?.sourceSection?.profileReference?.featureID == featureID
     })
 }
 

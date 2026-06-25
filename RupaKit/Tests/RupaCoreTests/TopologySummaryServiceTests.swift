@@ -130,7 +130,7 @@ import SwiftCAD
     _ = try session.execute(
         .createSweep(
             name: "Semantic Curved Sweep",
-            profiles: [ProfileReference(featureID: profileID)],
+            sections: [.profile(ProfileReference(featureID: profileID))],
             path: SweepPathReference(featureID: pathID),
             guides: [],
             targets: [],
@@ -242,7 +242,7 @@ import SwiftCAD
     )
     _ = try document.createSweep(
         name: "Boolean Result Sweep",
-        profiles: [ProfileReference(featureID: toolProfileID)],
+        sections: [.profile(ProfileReference(featureID: toolProfileID))],
         path: SweepPathReference(featureID: pathID),
         targets: [SweepTargetReference(featureID: targetBodyID)],
         options: SweepOptions(booleanOperation: .union)
@@ -319,7 +319,7 @@ import SwiftCAD
     )
     _ = try document.createSweep(
         name: "Cell Union Boolean Result Sweep",
-        profiles: [ProfileReference(featureID: toolProfileID)],
+        sections: [.profile(ProfileReference(featureID: toolProfileID))],
         path: SweepPathReference(featureID: pathID),
         targets: [SweepTargetReference(featureID: targetBodyID)],
         options: SweepOptions(booleanOperation: .difference)

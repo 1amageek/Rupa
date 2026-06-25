@@ -394,7 +394,7 @@ import Testing
     #expect(topology.counts.edgeCount == 16)
     #expect(topology.counts.vertexCount == 12)
     #expect(generatedOffsetEdges.count == 4)
-    #expect(offsetSceneNode.object?.sourceProfileFeatureID == nil)
+    #expect(offsetSceneNode.object?.sourceSection == nil)
     #expect(offsetSceneNode.object?.typeID == nil)
     #expect(session.evaluationStatus == .valid)
 }
@@ -488,7 +488,7 @@ import Testing
     #expect(topology.counts.vertexCount == 10)
     #expect(generatedOffsetEdges.count == 1)
     #expect(topology.entries.contains { $0.persistentName == edgeEntry.persistentName })
-    #expect(offsetSceneNode.object?.sourceProfileFeatureID == nil)
+    #expect(offsetSceneNode.object?.sourceSection == nil)
     #expect(offsetSceneNode.object?.typeID == nil)
     #expect(session.evaluationStatus == .valid)
 }

@@ -111,7 +111,7 @@ import Testing
     )
     let sweepID = try document.createSweep(
         name: "Sweep Snapshot Body",
-        profiles: [ProfileReference(featureID: sweepProfileID)],
+        sections: [.profile(ProfileReference(featureID: sweepProfileID))],
         path: SweepPathReference(featureID: sweepPathID),
         options: SweepOptions(
             distanceFraction: .constant(.scalar(0.5))

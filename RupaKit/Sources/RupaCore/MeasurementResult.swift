@@ -8,6 +8,7 @@ public struct MeasurementResult: Codable, Equatable, Sendable {
     public var totals: Totals
     public var profiles: [Profile]
     public var solids: [Solid]
+    public var sheets: [Sheet]
     public var diagnostics: [EditorDiagnostic]
 
     public init(
@@ -18,6 +19,7 @@ public struct MeasurementResult: Codable, Equatable, Sendable {
         totals: Totals = Totals(),
         profiles: [Profile] = [],
         solids: [Solid] = [],
+        sheets: [Sheet] = [],
         diagnostics: [EditorDiagnostic] = []
     ) {
         self.scope = scope
@@ -27,6 +29,7 @@ public struct MeasurementResult: Codable, Equatable, Sendable {
         self.totals = totals
         self.profiles = profiles
         self.solids = solids
+        self.sheets = sheets
         self.diagnostics = diagnostics
     }
 
@@ -39,10 +42,11 @@ public struct MeasurementResult: Codable, Equatable, Sendable {
         }
         let volume = formatted(totals.solidVolumeCubicMeters, exponent: 3)
         let area = formatted(totals.profileAreaSquareMeters, exponent: 2)
+        let sheetArea = formatted(totals.sheetAreaSquareMeters, exponent: 2)
         if let bounds {
-            return "\(title): \(counts.sourceFeatures) source features, \(counts.solids) solids, \(area) \(displayUnit.symbol)^2 profile area, \(volume) \(displayUnit.symbol)^3 solid volume, \(bounds.formattedSize(in: displayUnit)) bounds."
+            return "\(title): \(counts.sourceFeatures) source features, \(counts.solids) solids, \(counts.sheets) sheets, \(area) \(displayUnit.symbol)^2 profile area, \(sheetArea) \(displayUnit.symbol)^2 sheet area, \(volume) \(displayUnit.symbol)^3 solid volume, \(bounds.formattedSize(in: displayUnit)) bounds."
         }
-        return "\(title): \(counts.sourceFeatures) source features, \(counts.solids) solids, \(area) \(displayUnit.symbol)^2 profile area, \(volume) \(displayUnit.symbol)^3 solid volume."
+        return "\(title): \(counts.sourceFeatures) source features, \(counts.solids) solids, \(counts.sheets) sheets, \(area) \(displayUnit.symbol)^2 profile area, \(sheetArea) \(displayUnit.symbol)^2 sheet area, \(volume) \(displayUnit.symbol)^3 solid volume."
     }
 
     private func formatted(_ metersValue: Double, exponent: Int) -> String {
@@ -64,19 +68,22 @@ public extension MeasurementResult {
         public var sketchPrimitives: Int
         public var profiles: Int
         public var solids: Int
+        public var sheets: Int
 
         public init(
             sourceFeatures: Int = 0,
             sketches: Int = 0,
             sketchPrimitives: Int = 0,
             profiles: Int = 0,
-            solids: Int = 0
+            solids: Int = 0,
+            sheets: Int = 0
         ) {
             self.sourceFeatures = sourceFeatures
             self.sketches = sketches
             self.sketchPrimitives = sketchPrimitives
             self.profiles = profiles
             self.solids = solids
+            self.sheets = sheets
         }
     }
 
@@ -126,13 +133,16 @@ public extension MeasurementResult {
 
     struct Totals: Codable, Equatable, Sendable {
         public var profileAreaSquareMeters: Double
+        public var sheetAreaSquareMeters: Double
         public var solidVolumeCubicMeters: Double
 
         public init(
             profileAreaSquareMeters: Double = 0.0,
+            sheetAreaSquareMeters: Double = 0.0,
             solidVolumeCubicMeters: Double = 0.0
         ) {
             self.profileAreaSquareMeters = profileAreaSquareMeters
+            self.sheetAreaSquareMeters = sheetAreaSquareMeters
             self.solidVolumeCubicMeters = solidVolumeCubicMeters
         }
     }
@@ -207,6 +217,48 @@ public extension MeasurementResult {
             self.sourceFeatureName = sourceFeatureName
             self.linearDimensions = linearDimensions
             self.volumeCubicMeters = volumeCubicMeters
+            self.surfaceAreaSquareMeters = surfaceAreaSquareMeters
+            self.bounds = bounds
+        }
+    }
+
+    struct Sheet: Codable, Equatable, Sendable {
+        public struct LinearDimension: Codable, Equatable, Sendable {
+            public enum Kind: String, Codable, Sendable {
+                case sweepPathLength
+            }
+
+            public var kind: Kind
+            public var meters: Double
+
+            public init(kind: Kind, meters: Double) {
+                self.kind = kind
+                self.meters = meters
+            }
+        }
+
+        public var featureID: String
+        public var featureName: String?
+        public var sourceFeatureID: String
+        public var sourceFeatureName: String?
+        public var linearDimensions: [LinearDimension]
+        public var surfaceAreaSquareMeters: Double
+        public var bounds: Bounds
+
+        public init(
+            featureID: String,
+            featureName: String?,
+            sourceFeatureID: String,
+            sourceFeatureName: String?,
+            linearDimensions: [LinearDimension],
+            surfaceAreaSquareMeters: Double,
+            bounds: Bounds
+        ) {
+            self.featureID = featureID
+            self.featureName = featureName
+            self.sourceFeatureID = sourceFeatureID
+            self.sourceFeatureName = sourceFeatureName
+            self.linearDimensions = linearDimensions
             self.surfaceAreaSquareMeters = surfaceAreaSquareMeters
             self.bounds = bounds
         }

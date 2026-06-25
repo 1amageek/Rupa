@@ -25,7 +25,7 @@ import SwiftCAD
 
     let sweepID = try document.createSweep(
         name: "Profile Sweep",
-        profiles: [ProfileReference(featureID: profileID)],
+        sections: [.profile(ProfileReference(featureID: profileID))],
         path: SweepPathReference(featureID: pathID),
         options: SweepOptions(
             twistAngle: .angle(30.0, .degree),
@@ -62,7 +62,7 @@ import SwiftCAD
     #expect(document.cadDocument.designGraph.dependencies.contains(
         DependencyEdge(source: pathID, target: sweepID)
     ))
-    #expect(sweep.profiles == [ProfileReference(featureID: profileID)])
+    #expect(sweep.sections == [.profile(ProfileReference(featureID: profileID))])
     #expect(sweep.path == SweepPathReference(featureID: pathID))
     #expect(sweep.options.alignment == .parallel)
     #expect(sweep.options.cornerStyle == .mitre)
@@ -70,7 +70,7 @@ import SwiftCAD
     #expect(sweep.options.simplify == false)
     #expect(sceneNode.object?.category == .body)
     #expect(sceneNode.object?.sourceFeatureID == sweepID)
-    #expect(sceneNode.object?.sourceProfileFeatureID == profileID)
+    #expect(sceneNode.object?.sourceSection == .profile(ProfileReference(featureID: profileID)))
     try document.validate()
 }
 
@@ -97,7 +97,7 @@ import SwiftCAD
 
     let sweepID = try document.createSweep(
         name: "Round Corner Sweep",
-        profiles: [ProfileReference(featureID: profileID)],
+        sections: [.profile(ProfileReference(featureID: profileID))],
         path: SweepPathReference(featureID: pathID),
         options: SweepOptions(cornerStyle: .round)
     )
@@ -127,7 +127,7 @@ import SwiftCAD
 
     let sweepID = try document.createSweep(
         name: "Connected Multi-Path Sweep",
-        profiles: [ProfileReference(featureID: profileID)],
+        sections: [.profile(ProfileReference(featureID: profileID))],
         path: SweepPathReference(featureID: pathID),
         options: SweepOptions(cornerStyle: .mitre)
     )
@@ -162,7 +162,7 @@ import SwiftCAD
     do {
         _ = try document.createSweep(
             name: "Round Multi-Path Sweep",
-            profiles: [ProfileReference(featureID: profileID)],
+            sections: [.profile(ProfileReference(featureID: profileID))],
             path: SweepPathReference(featureID: pathID),
             options: SweepOptions(cornerStyle: .round)
         )
@@ -200,7 +200,7 @@ import SwiftCAD
     do {
         _ = try document.createSweep(
             name: "Simplified Sweep",
-            profiles: [ProfileReference(featureID: profileID)],
+            sections: [.profile(ProfileReference(featureID: profileID))],
             path: SweepPathReference(featureID: pathID),
             options: SweepOptions(simplify: true)
         )
@@ -234,7 +234,7 @@ import SwiftCAD
 
     let sweepID = try document.createSweep(
         name: "Curved Parallel Sweep",
-        profiles: [ProfileReference(featureID: profileID)],
+        sections: [.profile(ProfileReference(featureID: profileID))],
         path: SweepPathReference(featureID: pathID),
         options: SweepOptions(alignment: .parallel)
     )
@@ -271,7 +271,7 @@ import SwiftCAD
 
     let sweepID = try document.createSweep(
         name: "Profile Plane Normal Sweep",
-        profiles: [ProfileReference(featureID: profileID)],
+        sections: [.profile(ProfileReference(featureID: profileID))],
         path: SweepPathReference(featureID: pathID),
         options: SweepOptions(alignment: .normal)
     )
@@ -310,7 +310,7 @@ import SwiftCAD
     do {
         _ = try document.createSweep(
             name: "Profile Plane Parallel Sweep",
-            profiles: [ProfileReference(featureID: profileID)],
+            sections: [.profile(ProfileReference(featureID: profileID))],
             path: SweepPathReference(featureID: pathID),
             options: SweepOptions(alignment: .parallel)
         )
@@ -345,7 +345,7 @@ import SwiftCAD
 
     let sweepID = try document.createSweep(
         name: "Oblique Parallel Sweep",
-        profiles: [ProfileReference(featureID: profileID)],
+        sections: [.profile(ProfileReference(featureID: profileID))],
         path: SweepPathReference(featureID: pathID),
         options: SweepOptions(
             endScale: .constant(.scalar(0.5)),
@@ -409,7 +409,7 @@ import SwiftCAD
 
     let sweepID = try document.createSweep(
         name: "Bilinear Rail Sweep",
-        profiles: [ProfileReference(featureID: profileID)],
+        sections: [.profile(ProfileReference(featureID: profileID))],
         path: SweepPathReference(featureID: pathID),
         guides: [
             SweepGuideReference(featureID: bottomLeftGuideID),
@@ -487,7 +487,7 @@ import SwiftCAD
 
     let sweepID = try document.createSweep(
         name: "Bilinear Quadrilateral Rail Sweep",
-        profiles: [ProfileReference(featureID: profileID)],
+        sections: [.profile(ProfileReference(featureID: profileID))],
         path: SweepPathReference(featureID: pathID),
         guides: [
             SweepGuideReference(featureID: bottomGuideID),
@@ -576,7 +576,7 @@ import SwiftCAD
 
     let sweepID = try document.createSweep(
         name: "Mean Value Cage Rail Sweep",
-        profiles: [ProfileReference(featureID: profileID)],
+        sections: [.profile(ProfileReference(featureID: profileID))],
         path: SweepPathReference(featureID: pathID),
         guides: guideIDs.map { SweepGuideReference(featureID: $0) },
         options: SweepOptions(guideMethod: .point)
@@ -628,7 +628,7 @@ import SwiftCAD
 
     let sweepID = try document.createSweep(
         name: "Boolean Sweep",
-        profiles: [ProfileReference(featureID: profileID)],
+        sections: [.profile(ProfileReference(featureID: profileID))],
         path: SweepPathReference(featureID: pathID),
         targets: [SweepTargetReference(featureID: targetBodyID)],
         options: SweepOptions(booleanOperation: .union)
@@ -672,7 +672,7 @@ import SwiftCAD
 
     let sweepID = try document.createSweep(
         name: "Profile Sweep Sheet",
-        profiles: [ProfileReference(featureID: profileID)],
+        sections: [.profile(ProfileReference(featureID: profileID))],
         path: SweepPathReference(featureID: pathID),
         options: SweepOptions(resultKind: .sheet)
     )
@@ -686,8 +686,202 @@ import SwiftCAD
     #expect(sceneNode.object?.category == .body)
     #expect(sceneNode.object?.geometryRole == .surface)
     #expect(sceneNode.object?.sourceFeatureID == sweepID)
-    #expect(sceneNode.object?.sourceProfileFeatureID == profileID)
+    #expect(sceneNode.object?.sourceSection == .profile(ProfileReference(featureID: profileID)))
     try document.validate()
+}
+
+@Test func createSweepCanCreateSheetFromCurveSection() throws {
+    var document = DesignDocument.empty()
+    let sectionID = try document.createLineSketch(
+        name: "Sweep Curve Section",
+        plane: .xy,
+        start: SketchPoint(
+            x: .length(-2.0, .millimeter),
+            y: .length(0.0, .millimeter)
+        ),
+        end: SketchPoint(
+            x: .length(2.0, .millimeter),
+            y: .length(0.0, .millimeter)
+        )
+    )
+    let pathID = try document.createLineSketch(
+        name: "Sweep Curve Section Path",
+        plane: .yz,
+        start: SketchPoint(
+            x: .length(0.0, .millimeter),
+            y: .length(0.0, .millimeter)
+        ),
+        end: SketchPoint(
+            x: .length(0.0, .millimeter),
+            y: .length(20.0, .millimeter)
+        )
+    )
+
+    let sweepID = try document.createSweep(
+        name: "Curve Section Sheet Sweep",
+        sections: [.curve(SweepCurveSectionReference(featureID: sectionID))],
+        path: SweepPathReference(featureID: pathID),
+        options: SweepOptions(resultKind: .sheet)
+    )
+    let feature = try #require(document.cadDocument.designGraph.nodes[sweepID])
+    let sceneNode = try #require(document.productMetadata.sceneNodes.values.first {
+        $0.reference == .body(sweepID)
+    })
+    let evaluated = try CADPipeline.modelingDefault(for: document).evaluate(document.cadDocument)
+    let body = try #require(evaluated.brep.bodies.values.first)
+
+    guard case .sweep(let sweep) = feature.operation else {
+        Issue.record("Expected a sweep feature.")
+        return
+    }
+    #expect(sweep.sections == [.curve(SweepCurveSectionReference(featureID: sectionID))])
+    #expect(sceneNode.object?.sourceSection == .curve(sectionID))
+    #expect(feature.inputs.contains(FeatureInput(featureID: sectionID, role: .curve)))
+    #expect(feature.outputs == [FeatureOutput(role: .sheet)])
+    #expect(body.kind == .sheet)
+    #expect(evaluated.meshes.values.first?.positions.isEmpty == false)
+    try document.validate()
+}
+
+@Test func measureSweepSheetFromCurveSection() throws {
+    var document = DesignDocument.empty()
+    let sectionID = try document.createLineSketch(
+        name: "Measured Curve Sheet Section",
+        plane: .xy,
+        start: SketchPoint(
+            x: .length(-2.0, .millimeter),
+            y: .length(0.0, .millimeter)
+        ),
+        end: SketchPoint(
+            x: .length(2.0, .millimeter),
+            y: .length(0.0, .millimeter)
+        )
+    )
+    let pathID = try document.createLineSketch(
+        name: "Measured Curve Sheet Path",
+        plane: .yz,
+        start: SketchPoint(
+            x: .length(0.0, .millimeter),
+            y: .length(0.0, .millimeter)
+        ),
+        end: SketchPoint(
+            x: .length(0.0, .millimeter),
+            y: .length(20.0, .millimeter)
+        )
+    )
+    let sweepID = try document.createSweep(
+        name: "Measured Curve Section Sheet Sweep",
+        sections: [.curve(SweepCurveSectionReference(featureID: sectionID))],
+        path: SweepPathReference(featureID: pathID),
+        options: SweepOptions(resultKind: .sheet)
+    )
+
+    let result = try MeasurementService().measure(document: document)
+    let sheet = try #require(result.sheets.first)
+    let pathLength = try #require(sheet.linearDimensions.first {
+        $0.kind == .sweepPathLength
+    })
+
+    #expect(result.counts.sheets == 1)
+    #expect(result.counts.solids == 0)
+    #expect(result.diagnostics.isEmpty)
+    #expect(sheet.featureID == sweepID.description)
+    #expect(sheet.sourceFeatureID == sectionID.description)
+    #expect(sheet.surfaceAreaSquareMeters > 0.0)
+    #expect(result.totals.sheetAreaSquareMeters == sheet.surfaceAreaSquareMeters)
+    #expect(abs(pathLength.meters - 0.020) < 1.0e-12)
+}
+
+@Test func createSweepRejectsSolidOutputFromCurveSectionBeforeMutation() throws {
+    var document = DesignDocument.empty()
+    let sectionID = try document.createLineSketch(
+        name: "Invalid Solid Sweep Curve Section",
+        plane: .xy,
+        start: SketchPoint(
+            x: .length(-2.0, .millimeter),
+            y: .length(0.0, .millimeter)
+        ),
+        end: SketchPoint(
+            x: .length(2.0, .millimeter),
+            y: .length(0.0, .millimeter)
+        )
+    )
+    let pathID = try document.createLineSketch(
+        name: "Invalid Solid Sweep Path",
+        plane: .yz,
+        start: SketchPoint(
+            x: .length(0.0, .millimeter),
+            y: .length(0.0, .millimeter)
+        ),
+        end: SketchPoint(
+            x: .length(0.0, .millimeter),
+            y: .length(20.0, .millimeter)
+        )
+    )
+    let originalOrder = document.cadDocument.designGraph.order
+
+    do {
+        _ = try document.createSweep(
+            name: "Invalid Curve Section Solid Sweep",
+            sections: [.curve(SweepCurveSectionReference(featureID: sectionID))],
+            path: SweepPathReference(featureID: pathID),
+            options: SweepOptions(resultKind: .solid)
+        )
+        Issue.record("Curve-section solid sweeps must be rejected before mutation.")
+    } catch let error as EditorError {
+        #expect(error.code == .commandInvalid)
+        #expect(error.message.contains("Solid sweep sections must reference closed profiles"))
+    } catch {
+        Issue.record("Expected EditorError for curve-section solid sweep, got \(error).")
+    }
+    #expect(document.cadDocument.designGraph.order == originalOrder)
+}
+
+@Test func createSweepRejectsMultipleSectionsBeforeMutation() throws {
+    var document = DesignDocument.empty()
+    let firstProfileID = try document.createRectangleSketch(
+        name: "First Sweep Section",
+        plane: .xy,
+        width: .length(4.0, .millimeter),
+        height: .length(2.0, .millimeter)
+    )
+    let secondProfileID = try document.createRectangleSketch(
+        name: "Second Sweep Section",
+        plane: .xy,
+        width: .length(3.0, .millimeter),
+        height: .length(2.0, .millimeter)
+    )
+    let pathID = try document.createLineSketch(
+        name: "Single Sweep Path",
+        plane: .yz,
+        start: SketchPoint(
+            x: .length(0.0, .millimeter),
+            y: .length(0.0, .millimeter)
+        ),
+        end: SketchPoint(
+            x: .length(0.0, .millimeter),
+            y: .length(20.0, .millimeter)
+        )
+    )
+    let originalOrder = document.cadDocument.designGraph.order
+
+    do {
+        _ = try document.createSweep(
+            name: "Invalid Multi Section Sweep",
+            sections: [
+                .profile(ProfileReference(featureID: firstProfileID)),
+                .profile(ProfileReference(featureID: secondProfileID)),
+            ],
+            path: SweepPathReference(featureID: pathID)
+        )
+        Issue.record("Multi-section sweeps must be rejected before mutation until evaluator support exists.")
+    } catch let error as EditorError {
+        #expect(error.code == .commandInvalid)
+        #expect(error.message.contains("exactly one section"))
+    } catch {
+        Issue.record("Expected EditorError for multi-section sweep, got \(error).")
+    }
+    #expect(document.cadDocument.designGraph.order == originalOrder)
 }
 
 @Test func createSweepRejectsInvalidOptionQuantitiesBeforeMutation() throws {
@@ -715,7 +909,7 @@ import SwiftCAD
     do {
         _ = try document.createSweep(
             name: "Invalid Sweep",
-            profiles: [ProfileReference(featureID: profileID)],
+            sections: [.profile(ProfileReference(featureID: profileID))],
             path: SweepPathReference(featureID: pathID),
             options: SweepOptions(
                 endScale: .length(1.0, .millimeter)
@@ -730,7 +924,7 @@ import SwiftCAD
     do {
         _ = try document.createSweep(
             name: "Zero Distance Sweep",
-            profiles: [ProfileReference(featureID: profileID)],
+            sections: [.profile(ProfileReference(featureID: profileID))],
             path: SweepPathReference(featureID: pathID),
             options: SweepOptions(
                 distanceFraction: .constant(.scalar(0.0))
@@ -768,13 +962,19 @@ import SwiftCAD
     )
     let originalOrder = document.cadDocument.designGraph.order
 
-    #expect(throws: FeatureEvaluationError.self) {
+    do {
         _ = try document.createSweep(
             name: "Invalid Boolean Sweep",
-            profiles: [ProfileReference(featureID: profileID)],
+            sections: [.profile(ProfileReference(featureID: profileID))],
             path: SweepPathReference(featureID: pathID),
             options: SweepOptions(booleanOperation: .union)
         )
+        Issue.record("Boolean sweep without target must be rejected before mutation.")
+    } catch let error as EditorError {
+        #expect(error.code == .commandInvalid)
+        #expect(error.message.contains("target"))
+    } catch {
+        Issue.record("Expected EditorError for targetless boolean sweep, got \(error).")
     }
     #expect(document.cadDocument.designGraph.order == originalOrder)
 }

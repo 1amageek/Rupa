@@ -182,7 +182,7 @@ public enum AutomationCommand: Codable, Equatable, Sendable {
     case createRevolve(name: String, profile: ProfileReference, axis: RevolveAxis, angle: CADExpression)
     case createSweep(
         name: String,
-        profiles: [ProfileReference],
+        sections: [SweepSectionReference],
         path: SweepPathReference,
         guides: [SweepGuideReference],
         targets: [SweepTargetReference],
@@ -592,10 +592,10 @@ public enum AutomationCommand: Codable, Equatable, Sendable {
                 axis: axis,
                 angle: angle
             )
-        case .createSweep(let name, let profiles, let path, let guides, let targets, let options):
+        case .createSweep(let name, let sections, let path, let guides, let targets, let options):
             .createSweep(
                 name: name,
-                profiles: profiles,
+                sections: sections,
                 path: path,
                 guides: guides,
                 targets: targets,

@@ -200,7 +200,7 @@ public enum EditorCommand: Codable, Equatable, Sendable {
     case createRevolve(name: String, profile: ProfileReference, axis: RevolveAxis, angle: CADExpression)
     case createSweep(
         name: String,
-        profiles: [ProfileReference],
+        sections: [SweepSectionReference],
         path: SweepPathReference,
         guides: [SweepGuideReference],
         targets: [SweepTargetReference],

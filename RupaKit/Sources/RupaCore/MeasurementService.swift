@@ -70,6 +70,7 @@ public struct MeasurementService {
         var counts = MeasurementResult.Counts()
         var profiles: [MeasurementResult.Profile] = []
         var solids: [MeasurementResult.Solid] = []
+        var sheets: [MeasurementResult.Sheet] = []
         var totals = MeasurementResult.Totals()
         var bounds = BoundsAccumulator()
         var profileCache: [FeatureID: MeasuredProfile] = [:]
@@ -316,15 +317,15 @@ public struct MeasurementService {
                     continue
                 }
                 includedSourceFeatureIDs.insert(featureID)
-                guard let profileReference = sweep.profiles.first,
-                      let sourceNode = document.cadDocument.designGraph.nodes[profileReference.featureID],
+                guard let sectionReference = sweep.sections.first,
+                      let sourceNode = document.cadDocument.designGraph.nodes[sectionReference.featureID],
                       case .sketch(let sourceSketch) = sourceNode.operation,
                       let pathNode = document.cadDocument.designGraph.nodes[sweep.path.featureID],
                       case .sketch(let pathSketch) = pathNode.operation else {
                     diagnostics.append(
                         EditorDiagnostic(
                             severity: .warning,
-                            message: "Measurement skipped a sweep feature with unresolved profile or path references."
+                            message: "Measurement skipped a sweep feature with unresolved section or path references."
                         )
                     )
                     continue
@@ -337,28 +338,41 @@ public struct MeasurementService {
                     pathSketch,
                     parameters: document.cadDocument.parameters
                 )
-                let profile = try profileCache[profileReference.featureID] ?? measureProfile(
-                    featureID: profileReference.featureID,
-                    featureName: sourceNode.name,
-                    sketch: sourceSketch,
-                    parameters: document.cadDocument.parameters
-                )
-                guard let profile else {
-                    diagnostics.append(
-                        EditorDiagnostic(
-                            severity: .warning,
-                            message: "Measurement skipped a sweep feature with an unsupported profile."
-                        )
+                let measuredProfile: MeasuredProfile?
+                switch sectionReference {
+                case .profile(let profileReference):
+                    let profile = try profileCache[profileReference.featureID] ?? measureProfile(
+                        featureID: profileReference.featureID,
+                        featureName: sourceNode.name,
+                        sketch: sourceSketch,
+                        parameters: document.cadDocument.parameters
                     )
-                    continue
+                    guard let profile else {
+                        diagnostics.append(
+                            EditorDiagnostic(
+                                severity: .warning,
+                                message: "Measurement skipped a sweep feature with an unsupported profile section."
+                            )
+                        )
+                        continue
+                    }
+                    profileCache[profileReference.featureID] = profile
+                    measuredProfile = profile
+                    includeSketch(
+                        featureID: profileReference.featureID,
+                        sketch: sourceSketch,
+                        sketchBounds: sourceSketchBounds,
+                        profile: profile
+                    )
+                case .curve:
+                    measuredProfile = nil
+                    includeSketch(
+                        featureID: sectionReference.featureID,
+                        sketch: sourceSketch,
+                        sketchBounds: sourceSketchBounds,
+                        profile: nil
+                    )
                 }
-                profileCache[profileReference.featureID] = profile
-                includeSketch(
-                    featureID: profileReference.featureID,
-                    sketch: sourceSketch,
-                    sketchBounds: sourceSketchBounds,
-                    profile: profile
-                )
                 includeSketch(
                     featureID: sweep.path.featureID,
                     sketch: pathSketch,
@@ -387,10 +401,48 @@ public struct MeasurementService {
                         profile: nil
                     )
                 }
+                if sweep.options.resultKind == .sheet {
+                    var evaluatedSweepSkipReason: String?
+                    let sheet = try measureEvaluatedSweepSheet(
+                        featureID: featureID,
+                        featureName: node.name,
+                        sourceFeatureID: sectionReference.featureID,
+                        sourceFeatureName: sourceNode.name,
+                        sweep: sweep,
+                        pathSketch: pathSketch,
+                        parameters: document.cadDocument.parameters,
+                        evaluatedDocument: evaluatedDocument(),
+                        unsupportedReason: &evaluatedSweepSkipReason
+                    )
+                    guard let sheet else {
+                        let detail = evaluatedSweepSkipReason.map { " \($0)" } ?? ""
+                        diagnostics.append(
+                            EditorDiagnostic(
+                                severity: .info,
+                                message: "Measurement skipped a sweep sheet outside the supported evaluation subset.\(detail)"
+                            )
+                        )
+                        continue
+                    }
+                    counts.sheets += 1
+                    sheets.append(sheet)
+                    totals.sheetAreaSquareMeters += sheet.surfaceAreaSquareMeters
+                    bounds.include(sheet.bounds)
+                    continue
+                }
+                guard let profile = measuredProfile else {
+                    diagnostics.append(
+                        EditorDiagnostic(
+                            severity: .warning,
+                            message: "Measurement skipped a solid sweep feature without a closed profile section."
+                        )
+                    )
+                    continue
+                }
                 let straightSolid = try measureStraightSweepSolid(
                     featureID: featureID,
                     featureName: node.name,
-                    sourceFeatureID: profileReference.featureID,
+                    sourceFeatureID: sectionReference.featureID,
                     sourceFeatureName: sourceNode.name,
                     profile: profile,
                     sweep: sweep,
@@ -401,7 +453,7 @@ public struct MeasurementService {
                 let solid = try straightSolid ?? measureEvaluatedSweepSolid(
                         featureID: featureID,
                         featureName: node.name,
-                        sourceFeatureID: profileReference.featureID,
+                        sourceFeatureID: sectionReference.featureID,
                         sourceFeatureName: sourceNode.name,
                         sweep: sweep,
                         pathSketch: pathSketch,
@@ -575,6 +627,7 @@ public struct MeasurementService {
         }
 
         counts.profiles = profiles.count
+        counts.sheets = sheets.count
         return MeasurementResult(
             scope: scope,
             displayUnit: document.displayUnit,
@@ -583,6 +636,7 @@ public struct MeasurementService {
             totals: totals,
             profiles: profiles,
             solids: solids,
+            sheets: sheets,
             diagnostics: diagnostics
         )
     }
@@ -738,7 +792,7 @@ public struct MeasurementService {
         pathSketch: Sketch,
         parameters: ParameterTable
     ) throws -> MeasurementResult.Solid? {
-        guard sweep.profiles.count == 1,
+        guard sweep.sections.count == 1,
               sweep.guides.isEmpty,
               sweep.options.resultKind == .solid,
               sweep.options.booleanOperation == .newBody,
@@ -858,6 +912,69 @@ public struct MeasurementService {
                 ),
             ],
             volumeCubicMeters: volumeCubicMeters,
+            surfaceAreaSquareMeters: meshMeasurement.surfaceAreaSquareMeters,
+            bounds: meshMeasurement.bounds
+        )
+    }
+
+    private func measureEvaluatedSweepSheet(
+        featureID: FeatureID,
+        featureName: String?,
+        sourceFeatureID: FeatureID,
+        sourceFeatureName: String?,
+        sweep: SweepFeature,
+        pathSketch: Sketch,
+        parameters: ParameterTable,
+        evaluatedDocument: EvaluatedDocument?,
+        unsupportedReason: inout String?
+    ) throws -> MeasurementResult.Sheet? {
+        guard sweep.options.resultKind == .sheet else {
+            unsupportedReason = "The sweep result kind is not sheet."
+            return nil
+        }
+        guard let evaluatedDocument else {
+            unsupportedReason = "Evaluated geometry is unavailable."
+            return nil
+        }
+        guard let bodyID = evaluatedBodyID(for: featureID, in: evaluatedDocument) else {
+            unsupportedReason = "The evaluated document is missing the sweep generated body name."
+            return nil
+        }
+        guard let body = evaluatedDocument.brep.bodies[bodyID],
+              body.kind == .sheet else {
+            unsupportedReason = "The evaluated sweep body is not a sheet."
+            return nil
+        }
+        guard let mesh = evaluatedDocument.meshes[bodyID] else {
+            unsupportedReason = "The evaluated document is missing the sweep generated body mesh."
+            return nil
+        }
+        let distanceFraction = try resolvedScalar(sweep.options.distanceFraction, parameters: parameters)
+        guard distanceFraction > 0.0,
+              distanceFraction <= 1.0 else {
+            unsupportedReason = "The sweep distance fraction is outside the measurable range."
+            return nil
+        }
+        guard let pathLength = try pathLength(pathSketch, parameters: parameters) else {
+            unsupportedReason = "The sweep path length could not be measured."
+            return nil
+        }
+        let meshMeasurement = try evaluatedMeshMeasurement(mesh)
+        guard meshMeasurement.surfaceAreaSquareMeters > tolerance.distance * tolerance.distance else {
+            unsupportedReason = "The evaluated sweep sheet area is below tolerance."
+            return nil
+        }
+        return MeasurementResult.Sheet(
+            featureID: featureID.description,
+            featureName: featureName,
+            sourceFeatureID: sourceFeatureID.description,
+            sourceFeatureName: sourceFeatureName,
+            linearDimensions: [
+                MeasurementResult.Sheet.LinearDimension(
+                    kind: .sweepPathLength,
+                    meters: pathLength * distanceFraction
+                ),
+            ],
             surfaceAreaSquareMeters: meshMeasurement.surfaceAreaSquareMeters,
             bounds: meshMeasurement.bounds
         )

@@ -987,11 +987,11 @@ public struct AutomationRunner {
                 didMutate: result.didMutate,
                 diagnostics: result.diagnostics
             )
-        case .createSweep(let name, let profiles, let path, let guides, let targets, let options):
+        case .createSweep(let name, let sections, let path, let guides, let targets, let options):
             let result = try session.execute(
                 .createSweep(
                     name: name,
-                    profiles: profiles,
+                    sections: sections,
                     path: path,
                     guides: guides,
                     targets: targets,

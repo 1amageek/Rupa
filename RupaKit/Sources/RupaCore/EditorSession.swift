@@ -1946,7 +1946,7 @@ public final class EditorSession {
     @discardableResult
     public func createSweep(
         name: String,
-        profiles: [ProfileReference],
+        sections: [SweepSectionReference],
         path: SweepPathReference,
         guides: [SweepGuideReference] = [],
         targets: [SweepTargetReference] = [],
@@ -1955,7 +1955,7 @@ public final class EditorSession {
         perform(
             .createSweep(
                 name: name,
-                profiles: profiles,
+                sections: sections,
                 path: path,
                 guides: guides,
                 targets: targets,
@@ -2086,7 +2086,7 @@ public final class EditorSession {
             )
             return createSweep(
                 name: request.name,
-                profiles: [ProfileReference(featureID: request.profileFeatureID)],
+                sections: [request.section],
                 path: SweepPathReference(featureID: request.pathFeatureID),
                 guides: request.guideFeatureIDs.map { SweepGuideReference(featureID: $0) },
                 targets: [],
@@ -2115,7 +2115,7 @@ public final class EditorSession {
 
     private struct SweepSelectionRequest {
         var name: String
-        var profileFeatureID: FeatureID
+        var section: SweepSectionReference
         var pathFeatureID: FeatureID
         var guideFeatureIDs: [FeatureID]
         var options: SweepOptions
@@ -2123,31 +2123,31 @@ public final class EditorSession {
 
     private struct SweepSelectionResolution {
         var name: String
-        var profileFeatureID: FeatureID?
+        var section: SweepSectionReference?
         var pathFeatureID: FeatureID?
         var guideFeatureIDs: [FeatureID]
         var options: SweepOptions
 
         var preview: SweepSelectionPreview {
-            guard let profileFeatureID else {
+            guard let section else {
                 return SweepSelectionPreview(
-                    status: .missingProfile,
+                    status: .missingSection,
                     pathFeatureID: pathFeatureID,
                     guideFeatureIDs: guideFeatureIDs,
-                    message: "Sweep requires a closed profile source."
+                    message: "Sweep requires a profile or curve section source."
                 )
             }
             guard let pathFeatureID else {
                 return SweepSelectionPreview(
                     status: .missingPath,
-                    profileFeatureID: profileFeatureID,
+                    section: section,
                     guideFeatureIDs: guideFeatureIDs,
                     message: "Sweep requires a separate path curve source."
                 )
             }
             return SweepSelectionPreview(
                 status: .ready,
-                profileFeatureID: profileFeatureID,
+                section: section,
                 pathFeatureID: pathFeatureID,
                 guideFeatureIDs: guideFeatureIDs,
                 message: "Sweep source is ready with \(guideFeatureIDs.count) guide curve(s)."
@@ -2155,27 +2155,31 @@ public final class EditorSession {
         }
 
         func request() throws -> SweepSelectionRequest {
-            guard let profileFeatureID,
+            guard let section,
                   let pathFeatureID else {
                 throw EditorError(
                     code: .commandInvalid,
-                    message: "Sweep tool requires one closed profile source, one separate path curve source, and optional guide curve selections."
+                    message: "Sweep tool requires one profile or curve section source, one separate path curve source, and optional guide curve selections."
                 )
+            }
+            var resolvedOptions = options
+            if section.profile == nil {
+                resolvedOptions.resultKind = .sheet
             }
             return SweepSelectionRequest(
                 name: name,
-                profileFeatureID: profileFeatureID,
+                section: section,
                 pathFeatureID: pathFeatureID,
                 guideFeatureIDs: guideFeatureIDs,
-                options: options
+                options: resolvedOptions
             )
         }
     }
 
     private struct SweepSourceCandidate {
         var isTarget: Bool
-        var profileFeatureID: FeatureID?
-        var pathFeatureID: FeatureID?
+        var profileReference: ProfileReference?
+        var curveFeatureID: FeatureID?
     }
 
     private struct SweepCandidateSceneNode {
@@ -2206,26 +2210,41 @@ public final class EditorSession {
                 candidates.append(candidate)
             }
         }
-        let profileFeatureID = candidates.compactMap(\.profileFeatureID).first
-        let curveFeatureIDs = uniqueFeatureIDs(
-            candidates.compactMap(\.pathFeatureID).filter { featureID in
-                featureID != profileFeatureID
-            }
-        )
+        let profileReference = candidates.compactMap(\.profileReference).first
+        let allCurveFeatureIDs = uniqueFeatureIDs(candidates.compactMap(\.curveFeatureID))
         let targetCurveFeatureID = candidates.last { candidate in
             candidate.isTarget
-        }?.pathFeatureID.flatMap { featureID in
-            featureID == profileFeatureID ? nil : featureID
+        }?.curveFeatureID
+        let section: SweepSectionReference?
+        let pathFeatureID: FeatureID?
+        let sectionCurveFeatureID: FeatureID?
+        if let profileReference {
+            section = .profile(profileReference)
+            sectionCurveFeatureID = nil
+            let curveFeatureIDs = allCurveFeatureIDs.filter { $0 != profileReference.featureID }
+            pathFeatureID = targetCurveFeatureID.flatMap { target in
+                target == profileReference.featureID ? nil : target
+            } ?? curveFeatureIDs.last
+        } else {
+            if let targetCurveFeatureID {
+                pathFeatureID = targetCurveFeatureID
+                sectionCurveFeatureID = allCurveFeatureIDs.first { $0 != targetCurveFeatureID }
+            } else {
+                sectionCurveFeatureID = allCurveFeatureIDs.first
+                pathFeatureID = allCurveFeatureIDs.dropFirst().last
+            }
+            section = sectionCurveFeatureID.map {
+                .curve(SweepCurveSectionReference(featureID: $0))
+            }
         }
-        let pathFeatureID = targetCurveFeatureID ?? curveFeatureIDs.last
         let guideFeatureIDs = uniqueFeatureIDs(
-            curveFeatureIDs.filter { featureID in
-                featureID != pathFeatureID
+            allCurveFeatureIDs.filter { featureID in
+                featureID != pathFeatureID && featureID != sectionCurveFeatureID
             }
         )
         return SweepSelectionResolution(
             name: name ?? nextFeatureName(prefix: "Sweep"),
-            profileFeatureID: profileFeatureID,
+            section: section,
             pathFeatureID: pathFeatureID,
             guideFeatureIDs: guideFeatureIDs,
             options: options
@@ -2259,29 +2278,32 @@ public final class EditorSession {
         guard let sceneNode = document.productMetadata.sceneNodes[sceneNodeID] else {
             return nil
         }
-        let objectProfileID = sceneNode.object?.sourceProfileFeatureID
+        let objectProfileReference = sceneNode.object?.sourceSection?.profileReference
         let sketchFeatureID = sceneNode.reference?.kind == .sketch ? sceneNode.reference?.featureID : nil
-        var profileFeatureID: FeatureID?
-        for candidateFeatureID in [objectProfileID, sketchFeatureID].compactMap({ $0 }) {
-            if try isSupportedSweepProfileFeature(candidateFeatureID) {
-                profileFeatureID = candidateFeatureID
+        var profileReference: ProfileReference?
+        for candidateReference in [
+            objectProfileReference,
+            sketchFeatureID.map { ProfileReference(featureID: $0) },
+        ].compactMap({ $0 }) {
+            if try isSupportedSweepProfileFeature(candidateReference.featureID) {
+                profileReference = candidateReference
                 break
             }
         }
-        let pathFeatureID: FeatureID?
+        let curveFeatureID: FeatureID?
         if let sketchFeatureID,
            isSweepPathFeature(sketchFeatureID) {
-            pathFeatureID = sketchFeatureID
+            curveFeatureID = sketchFeatureID
         } else {
-            pathFeatureID = nil
+            curveFeatureID = nil
         }
-        guard profileFeatureID != nil || pathFeatureID != nil else {
+        guard profileReference != nil || curveFeatureID != nil else {
             return nil
         }
         return SweepSourceCandidate(
             isTarget: candidateSceneNode.isTarget,
-            profileFeatureID: profileFeatureID,
-            pathFeatureID: pathFeatureID
+            profileReference: profileReference,
+            curveFeatureID: curveFeatureID
         )
     }
 

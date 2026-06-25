@@ -1288,7 +1288,7 @@ public struct DesignDocument: Identifiable, Sendable {
             reference: .body(featureID),
             object: .body(
                 featureID: featureID,
-                sourceProfileFeatureID: nil,
+                sourceSection: nil,
                 typeID: nil,
                 geometryRole: sceneNode.object?.geometryRole ?? .solid,
                 properties: ObjectPropertySet(),
@@ -2362,7 +2362,7 @@ public struct DesignDocument: Identifiable, Sendable {
             reference: .body(featureID),
             object: .body(
                 featureID: featureID,
-                sourceProfileFeatureID: nil,
+                sourceSection: nil,
                 typeID: nil,
                 geometryRole: sceneNode.object?.geometryRole ?? .solid,
                 properties: ObjectPropertySet(),
@@ -2528,7 +2528,7 @@ public struct DesignDocument: Identifiable, Sendable {
             reference: .body(featureID),
             object: .body(
                 featureID: featureID,
-                sourceProfileFeatureID: nil,
+                sourceSection: nil,
                 typeID: nil,
                 geometryRole: sceneNode.object?.geometryRole ?? .solid,
                 properties: ObjectPropertySet(),
@@ -13730,14 +13730,14 @@ public struct DesignDocument: Identifiable, Sendable {
         let generatedName = generatedExtrusionBodyName(for: sceneNodeID)
         if extrusionMeters <= 1.0e-9 {
             removeGeneratedExtrusionBody(
-                sourceProfileFeatureID: sourceFeatureID,
+                sourceSectionFeatureID: sourceFeatureID,
                 generatedName: generatedName
             )
             return
         }
 
         if let bodyFeatureID = generatedExtrusionBodyFeatureID(
-            sourceProfileFeatureID: sourceFeatureID,
+            sourceSectionFeatureID: sourceFeatureID,
             generatedName: generatedName
         ) {
             try setExtrudeDistance(
@@ -13775,24 +13775,24 @@ public struct DesignDocument: Identifiable, Sendable {
     }
 
     private func generatedExtrusionBodyFeatureID(
-        sourceProfileFeatureID: FeatureID,
+        sourceSectionFeatureID: FeatureID,
         generatedName: String
     ) -> FeatureID? {
         productMetadata.sceneNodes.values.first { node in
             node.name == generatedName &&
                 node.reference?.kind == .body &&
-                node.object?.sourceProfileFeatureID == sourceProfileFeatureID
+                node.object?.sourceSection?.profileReference?.featureID == sourceSectionFeatureID
         }?.reference?.featureID
     }
 
     private mutating func removeGeneratedExtrusionBody(
-        sourceProfileFeatureID: FeatureID,
+        sourceSectionFeatureID: FeatureID,
         generatedName: String
     ) {
         let generatedNodeIDs = productMetadata.sceneNodes.values.compactMap { node -> SceneNodeID? in
             guard node.name == generatedName,
                   node.reference?.kind == .body,
-                  node.object?.sourceProfileFeatureID == sourceProfileFeatureID else {
+                  node.object?.sourceSection?.profileReference?.featureID == sourceSectionFeatureID else {
                 return nil
             }
             return node.id
@@ -15323,7 +15323,7 @@ public struct DesignDocument: Identifiable, Sendable {
             reference: .body(featureID),
             object: .body(
                 featureID: featureID,
-                sourceProfileFeatureID: nil,
+                sourceSection: nil,
                 typeID: .polySpline,
                 geometryRole: .surface,
                 properties: ObjectPropertySet(values: [
@@ -15617,7 +15617,7 @@ public struct DesignDocument: Identifiable, Sendable {
             reference: .body(featureID),
             object: .body(
                 featureID: featureID,
-                sourceProfileFeatureID: profile.featureID,
+                sourceSection: .profile(profile),
                 typeID: typeID,
                 objectRegistry: objectRegistry
             )
@@ -15685,7 +15685,7 @@ public struct DesignDocument: Identifiable, Sendable {
             reference: .body(featureID),
             object: .body(
                 featureID: featureID,
-                sourceProfileFeatureID: profile.featureID,
+                sourceSection: .profile(profile),
                 typeID: nil,
                 objectRegistry: objectRegistry
             )
@@ -15709,7 +15709,7 @@ public struct DesignDocument: Identifiable, Sendable {
     @discardableResult
     public mutating func createSweep(
         name: String,
-        profiles: [ProfileReference],
+        sections: [SweepSectionReference],
         path: SweepPathReference,
         guides: [SweepGuideReference] = [],
         targets: [SweepTargetReference] = [],
@@ -15718,16 +15718,28 @@ public struct DesignDocument: Identifiable, Sendable {
     ) throws -> FeatureID {
         let trimmedName = try normalizedMetadataName(name, owner: "Sweep")
         let sweep = SweepFeature(
-            profiles: profiles,
+            sections: sections,
             path: path,
             guides: guides,
             targets: targets,
             options: options
         )
-        try sweep.validate()
-        try validateSweepOptionQuantities(options)
-        for profile in profiles {
-            try requireSweepSourceProfileFeature(profile.featureID, owner: "Sweep profile")
+        do {
+            try sweep.validate()
+            try validateSweepOptionQuantities(options)
+        } catch {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Sweep command is invalid: \(error)."
+            )
+        }
+        for section in sections {
+            switch section {
+            case .profile(let profile):
+                try requireSweepSourceProfileFeature(profile.featureID, owner: "Sweep profile")
+            case .curve(let curve):
+                try requireSweepSourceCurveFeature(curve.featureID, owner: "Sweep curve section")
+            }
         }
         try requireSweepSourceCurveFeature(path.featureID, owner: "Sweep path")
         for guide in guides {
@@ -15738,8 +15750,8 @@ public struct DesignDocument: Identifiable, Sendable {
         }
 
         let featureID = FeatureID()
-        let inputs = profiles.map { profile in
-            FeatureInput(featureID: profile.featureID, role: .profile)
+        let inputs = sections.map { section in
+            FeatureInput(featureID: section.featureID, role: section.inputRole)
         } + [
             FeatureInput(featureID: path.featureID, role: .path)
         ] + guides.map { guide in
@@ -15771,7 +15783,7 @@ public struct DesignDocument: Identifiable, Sendable {
             reference: .body(featureID),
             object: .body(
                 featureID: featureID,
-                sourceProfileFeatureID: profiles.first?.featureID,
+                sourceSection: sections.first.map(BodySourceSectionReference.init(sweepSection:)),
                 typeID: nil,
                 geometryRole: options.resultKind.objectGeometryRole,
                 objectRegistry: objectRegistry

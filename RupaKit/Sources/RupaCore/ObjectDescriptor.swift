@@ -68,7 +68,7 @@ public struct ObjectDescriptor: Codable, Hashable, Sendable {
     public var typeID: ObjectTypeID?
     public var properties: ObjectPropertySet
     public var sourceFeatureID: FeatureID?
-    public var sourceProfileFeatureID: FeatureID?
+    public var sourceSection: BodySourceSectionReference?
     public var componentInstanceID: ComponentInstanceID?
 
     public init(
@@ -77,7 +77,7 @@ public struct ObjectDescriptor: Codable, Hashable, Sendable {
         typeID: ObjectTypeID? = nil,
         properties: ObjectPropertySet = ObjectPropertySet(),
         sourceFeatureID: FeatureID? = nil,
-        sourceProfileFeatureID: FeatureID? = nil,
+        sourceSection: BodySourceSectionReference? = nil,
         componentInstanceID: ComponentInstanceID? = nil
     ) {
         self.category = category
@@ -85,7 +85,7 @@ public struct ObjectDescriptor: Codable, Hashable, Sendable {
         self.typeID = typeID
         self.properties = properties
         self.sourceFeatureID = sourceFeatureID
-        self.sourceProfileFeatureID = sourceProfileFeatureID
+        self.sourceSection = sourceSection
         self.componentInstanceID = componentInstanceID
     }
 
@@ -112,7 +112,7 @@ public struct ObjectDescriptor: Codable, Hashable, Sendable {
 
     public static func body(
         featureID: FeatureID,
-        sourceProfileFeatureID: FeatureID?,
+        sourceSection: BodySourceSectionReference?,
         typeID: ObjectTypeID?,
         geometryRole: GeometryRole = .solid,
         properties: ObjectPropertySet = ObjectPropertySet(),
@@ -125,7 +125,7 @@ public struct ObjectDescriptor: Codable, Hashable, Sendable {
             typeID: typeID,
             properties: resolvedProperties,
             sourceFeatureID: featureID,
-            sourceProfileFeatureID: sourceProfileFeatureID
+            sourceSection: sourceSection
         )
     }
 
@@ -154,7 +154,7 @@ public struct ObjectDescriptor: Codable, Hashable, Sendable {
                   typeID == nil,
                   properties.values.isEmpty,
                   sourceFeatureID == nil,
-                  sourceProfileFeatureID == nil,
+                  sourceSection == nil,
                   componentInstanceID == nil else {
                 throw DocumentValidationError.invalidProductMetadata(
                     "Group objects must not contain geometry or source references."
@@ -165,7 +165,7 @@ public struct ObjectDescriptor: Codable, Hashable, Sendable {
                   typeID == nil,
                   properties.values.isEmpty,
                   sourceFeatureID == nil,
-                  sourceProfileFeatureID == nil else {
+                  sourceSection == nil else {
                 throw DocumentValidationError.invalidProductMetadata(
                     "Component instance objects must contain exactly one component instance reference."
                 )
@@ -193,7 +193,7 @@ public struct ObjectDescriptor: Codable, Hashable, Sendable {
                   typeID == nil,
                   properties.values.isEmpty,
                   sourceFeatureID == nil,
-                  sourceProfileFeatureID == nil,
+                  sourceSection == nil,
                   componentInstanceID == nil else {
                 throw DocumentValidationError.invalidProductMetadata(
                     "Construction objects must not contain feature or component references."
@@ -201,7 +201,7 @@ public struct ObjectDescriptor: Codable, Hashable, Sendable {
             }
         case .annotation:
             guard componentInstanceID == nil,
-                  sourceProfileFeatureID == nil else {
+                  sourceSection == nil else {
                 throw DocumentValidationError.invalidProductMetadata(
                     "Annotation objects must not contain profile or component references."
                 )
@@ -210,7 +210,7 @@ public struct ObjectDescriptor: Codable, Hashable, Sendable {
         case .camera, .light:
             guard typeID == nil,
                   properties.values.isEmpty,
-                  sourceProfileFeatureID == nil,
+                  sourceSection == nil,
                   componentInstanceID == nil else {
                 throw DocumentValidationError.invalidProductMetadata(
                     "Annotation, camera, and light objects must not contain shape component references."

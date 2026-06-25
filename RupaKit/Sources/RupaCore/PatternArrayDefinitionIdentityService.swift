@@ -107,7 +107,7 @@ public struct PatternArrayDefinitionIdentityService: Sendable {
         if let featureID = sceneNode.object?.sourceFeatureID {
             featureIDs.insert(featureID)
         }
-        if let featureID = sceneNode.object?.sourceProfileFeatureID {
+        if let featureID = sceneNode.object?.sourceSection?.featureID {
             featureIDs.insert(featureID)
         }
         for childID in sceneNode.childIDs {
@@ -259,7 +259,7 @@ private struct PatternArrayDefinitionObjectIdentity: Encodable {
     var typeID: String?
     var properties: [PatternArrayDefinitionObjectPropertyIdentity]
     var sourceFeatureToken: String?
-    var sourceProfileFeatureToken: String?
+    var sourceSection: PatternArrayDefinitionObjectSourceSectionIdentity?
 
     init(
         object: ObjectDescriptor,
@@ -279,8 +279,11 @@ private struct PatternArrayDefinitionObjectIdentity: Encodable {
         sourceFeatureToken = try object.sourceFeatureID.map {
             try Self.featureToken(for: $0, featureTokenByID: featureTokenByID)
         }
-        sourceProfileFeatureToken = try object.sourceProfileFeatureID.map {
-            try Self.featureToken(for: $0, featureTokenByID: featureTokenByID)
+        sourceSection = try object.sourceSection.map {
+            try PatternArrayDefinitionObjectSourceSectionIdentity(
+                sourceSection: $0,
+                featureTokenByID: featureTokenByID
+            )
         }
     }
 
@@ -292,6 +295,37 @@ private struct PatternArrayDefinitionObjectIdentity: Encodable {
             throw EditorError(
                 code: .referenceUnresolved,
                 message: "Pattern array definition identity found an object feature outside the clone closure."
+            )
+        }
+        return token
+    }
+}
+
+private struct PatternArrayDefinitionObjectSourceSectionIdentity: Encodable {
+    var role: FeaturePort
+    var featureToken: String
+    var profileIndex: Int?
+
+    init(
+        sourceSection: BodySourceSectionReference,
+        featureTokenByID: [FeatureID: String]
+    ) throws {
+        role = sourceSection.requiredOutputRole
+        featureToken = try Self.featureToken(
+            for: sourceSection.featureID,
+            featureTokenByID: featureTokenByID
+        )
+        profileIndex = sourceSection.profileReference?.profileIndex
+    }
+
+    private static func featureToken(
+        for featureID: FeatureID,
+        featureTokenByID: [FeatureID: String]
+    ) throws -> String {
+        guard let token = featureTokenByID[featureID] else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "Pattern array definition identity found an object source section outside the clone closure."
             )
         }
         return token

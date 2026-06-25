@@ -44,7 +44,7 @@ struct PatternArrayFeatureIDRemapper: Sendable {
             revolve.profile = try remappedProfileReference(revolve.profile)
             return .revolve(revolve)
         case .sweep(var sweep):
-            sweep.profiles = try sweep.profiles.map(remappedProfileReference)
+            sweep.sections = try sweep.sections.map(remappedSweepSectionReference)
             sweep.path = SweepPathReference(
                 featureID: try remappedFeatureID(sweep.path.featureID)
             )
@@ -111,6 +111,28 @@ struct PatternArrayFeatureIDRemapper: Sendable {
             featureID: try remappedFeatureID(reference.featureID),
             profileIndex: reference.profileIndex
         )
+    }
+
+    func remappedBodySourceSectionReference(
+        _ reference: BodySourceSectionReference
+    ) throws -> BodySourceSectionReference {
+        switch reference {
+        case .profile(let profile):
+            return .profile(try remappedProfileReference(profile))
+        case .curve(let featureID):
+            return .curve(try remappedFeatureID(featureID))
+        }
+    }
+
+    private func remappedSweepSectionReference(
+        _ reference: SweepSectionReference
+    ) throws -> SweepSectionReference {
+        switch reference {
+        case .profile(let profile):
+            return .profile(try remappedProfileReference(profile))
+        case .curve(let curve):
+            return .curve(SweepCurveSectionReference(featureID: try remappedFeatureID(curve.featureID)))
+        }
     }
 
     private func remappedCurveEdit(_ edit: CurveEdit) throws -> CurveEdit {

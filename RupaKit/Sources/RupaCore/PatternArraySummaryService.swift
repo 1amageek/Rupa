@@ -764,7 +764,7 @@ public struct PatternArraySummaryService: Sendable {
         if let featureID = sceneNode.object?.sourceFeatureID {
             featureIDs.insert(featureID)
         }
-        if let featureID = sceneNode.object?.sourceProfileFeatureID {
+        if let featureID = sceneNode.object?.sourceSection?.featureID {
             featureIDs.insert(featureID)
         }
         for childID in sceneNode.childIDs {

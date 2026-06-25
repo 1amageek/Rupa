@@ -350,11 +350,11 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
                     )
                 }
             }
-            if let sourceProfileFeatureID = object.sourceProfileFeatureID {
-                guard let profileFeature = cadDocument.designGraph.nodes[sourceProfileFeatureID],
-                      profileFeature.outputs.contains(where: { $0.role == .profile }) else {
+            if let sourceSection = object.sourceSection {
+                guard let sourceSectionFeature = cadDocument.designGraph.nodes[sourceSection.featureID],
+                      sourceSectionFeature.outputs.contains(where: { $0.role == sourceSection.requiredOutputRole }) else {
                     throw DocumentValidationError.invalidProductMetadata(
-                        "Body object source profiles must point to CAD sketch profile features."
+                        "Body object source sections must point to CAD sketch profile or curve features."
                     )
                 }
             }
@@ -1131,7 +1131,7 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
         if let featureID = sceneNode.object?.sourceFeatureID {
             featureIDs.insert(featureID)
         }
-        if let featureID = sceneNode.object?.sourceProfileFeatureID {
+        if let featureID = sceneNode.object?.sourceSection?.featureID {
             featureIDs.insert(featureID)
         }
         for childID in sceneNode.childIDs {

@@ -45,7 +45,7 @@ import SwiftCAD
     #expect(revolve.angle == .angle(180.0, .degree))
     #expect(sceneNode.object?.category == .body)
     #expect(sceneNode.object?.sourceFeatureID == revolveID)
-    #expect(sceneNode.object?.sourceProfileFeatureID == profileID)
+    #expect(sceneNode.object?.sourceSection == .profile(ProfileReference(featureID: profileID)))
     try document.validate()
 }
 

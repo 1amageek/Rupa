@@ -2647,7 +2647,7 @@ public struct ViewportSceneBuilder {
                     bodyDisplaySnapshots: bodyDisplaySnapshots
                 )
             case .sweep(let sweep):
-                guard let profile = sweep.profiles.first else {
+                guard let section = sweep.sections.first else {
                     return nil
                 }
                 if let sweepSnapshot = designDisplaySnapshot.straightPrismSweeps[featureID],
@@ -2677,7 +2677,7 @@ public struct ViewportSceneBuilder {
 
                 return evaluatedMeshBodyItem(
                     featureID: featureID,
-                    sourceFeatureID: profile.featureID,
+                    sourceFeatureID: section.featureID,
                     document: document,
                     bodyDisplaySnapshots: bodyDisplaySnapshots
                 )
@@ -2695,7 +2695,7 @@ public struct ViewportSceneBuilder {
                         featureID: featureID,
                         kind: .body,
                         document: document
-                    )?.sourceProfileFeatureID,
+                    )?.sourceSection?.featureID,
                     document: document,
                     bodyDisplaySnapshots: bodyDisplaySnapshots
                 )
@@ -2706,7 +2706,7 @@ public struct ViewportSceneBuilder {
                         featureID: featureID,
                         kind: .body,
                         document: document
-                    )?.sourceProfileFeatureID,
+                    )?.sourceSection?.featureID,
                     document: document,
                     bodyDisplaySnapshots: bodyDisplaySnapshots
                 )
@@ -2717,7 +2717,7 @@ public struct ViewportSceneBuilder {
                         featureID: featureID,
                         kind: .body,
                         document: document
-                    )?.sourceProfileFeatureID,
+                    )?.sourceSection?.featureID,
                     document: document,
                     bodyDisplaySnapshots: bodyDisplaySnapshots
                 )

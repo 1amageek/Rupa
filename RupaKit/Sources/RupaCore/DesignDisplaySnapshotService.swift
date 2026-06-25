@@ -579,8 +579,8 @@ public struct DesignDisplaySnapshotService: Sendable {
         sketches: [FeatureID: SketchDisplaySnapshot],
         parameters: ParameterTable
     ) -> StraightPrismSweepDisplaySnapshot? {
-        guard sweep.profiles.count == 1,
-              let profile = sweep.profiles.first,
+        guard sweep.sections.count == 1,
+              let profile = sweep.sections.first?.profile,
               sweep.guides.isEmpty,
               sweep.options.resultKind == .solid,
               sweep.options.booleanOperation == .newBody,

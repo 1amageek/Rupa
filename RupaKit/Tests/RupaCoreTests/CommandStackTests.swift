@@ -920,7 +920,7 @@ import Testing
     _ = try session.execute(
         .createSweep(
             name: "Measured Sweep",
-            profiles: [ProfileReference(featureID: profileID)],
+            sections: [.profile(ProfileReference(featureID: profileID))],
             path: SweepPathReference(featureID: pathID),
             guides: [],
             targets: [],
@@ -975,7 +975,7 @@ import Testing
     _ = try session.execute(
         .createSweep(
             name: "Measured Curved Sweep",
-            profiles: [ProfileReference(featureID: profileID)],
+            sections: [.profile(ProfileReference(featureID: profileID))],
             path: SweepPathReference(featureID: pathID),
             guides: [],
             targets: [],
@@ -1034,7 +1034,7 @@ import Testing
     _ = try session.execute(
         .createSweep(
             name: "Measured Twisted Scaled Sweep",
-            profiles: [ProfileReference(featureID: profileID)],
+            sections: [.profile(ProfileReference(featureID: profileID))],
             path: SweepPathReference(featureID: pathID),
             guides: [],
             targets: [],
@@ -1106,7 +1106,7 @@ import Testing
     let sweepResult = try session.execute(
         .createSweep(
             name: "Measured Point Guided Sweep",
-            profiles: [ProfileReference(featureID: profileID)],
+            sections: [.profile(ProfileReference(featureID: profileID))],
             path: SweepPathReference(featureID: pathID),
             guides: [SweepGuideReference(featureID: guideID)],
             targets: [],
@@ -1190,7 +1190,7 @@ import Testing
     _ = try session.execute(
         .createSweep(
             name: "Measured Multiple Point Guided Sweep",
-            profiles: [ProfileReference(featureID: profileID)],
+            sections: [.profile(ProfileReference(featureID: profileID))],
             path: SweepPathReference(featureID: pathID),
             guides: [
                 SweepGuideReference(featureID: topGuideID),
@@ -1578,10 +1578,82 @@ import Testing
     #expect(result.tool == .sweep)
     #expect(result.commandName == "createSweep")
     #expect(result.didMutate)
-    #expect(sweep.profiles == [ProfileReference(featureID: profileFeatureID)])
+    #expect(sweep.sections == [.profile(ProfileReference(featureID: profileFeatureID))])
     #expect(sweep.path == SweepPathReference(featureID: pathFeatureID))
     #expect(session.selectedSceneNode?.reference == .body(sweepFeatureID))
     #expect(session.selectedTool == .select)
+    #expect(session.evaluatedBodyCount == 1)
+}
+
+@MainActor
+@Test func editorSessionActivatesSweepToolFromSelectedCurveSectionAndCanvasPathTarget() async throws {
+    let session = EditorSession()
+    _ = try session.execute(
+        .createLineSketch(
+            name: "Sweep Curve Section",
+            plane: .xy,
+            start: SketchPoint(
+                x: .length(-2.0, .millimeter),
+                y: .length(0.0, .millimeter)
+            ),
+            end: SketchPoint(
+                x: .length(2.0, .millimeter),
+                y: .length(0.0, .millimeter)
+            )
+        )
+    )
+    let sectionFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let sectionNodeID = try #require(session.document.productMetadata.sceneNodes.first { entry in
+        entry.value.reference == .sketch(sectionFeatureID)
+    }?.key)
+    _ = try session.execute(
+        .createLineSketch(
+            name: "Sweep Curve Path",
+            plane: .yz,
+            start: SketchPoint(
+                x: .length(0.0, .millimeter),
+                y: .length(0.0, .millimeter)
+            ),
+            end: SketchPoint(
+                x: .length(0.0, .millimeter),
+                y: .length(20.0, .millimeter)
+            )
+        )
+    )
+    let pathFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let pathNodeID = try #require(session.document.productMetadata.sceneNodes.first { entry in
+        entry.value.reference == .sketch(pathFeatureID)
+    }?.key)
+
+    _ = session.selectSceneNode(sectionNodeID)
+    session.selectTool(.sweep)
+    let preview = session.sweepSelectionPreview(targetSceneNodeID: pathNodeID)
+    let result = session.activateSelectedToolFromCanvas(targetSceneNodeID: pathNodeID)
+    let sweepFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let sweepFeature = try #require(session.document.cadDocument.designGraph.nodes[sweepFeatureID])
+    let bodySceneNode = try #require(session.document.productMetadata.sceneNodes.values.first {
+        $0.reference == .body(sweepFeatureID)
+    })
+
+    guard case .sweep(let sweep) = sweepFeature.operation else {
+        Issue.record("Sweep tool should create a curve-section sheet sweep feature.")
+        return
+    }
+
+    #expect(preview.status == .ready)
+    #expect(preview.section == .curve(SweepCurveSectionReference(featureID: sectionFeatureID)))
+    #expect(preview.pathFeatureID == pathFeatureID)
+    #expect(result.tool == .sweep)
+    #expect(result.commandName == "createSweep")
+    #expect(result.didMutate)
+    #expect(sweep.sections == [.curve(SweepCurveSectionReference(featureID: sectionFeatureID))])
+    #expect(sweep.path == SweepPathReference(featureID: pathFeatureID))
+    #expect(sweep.options.resultKind == .sheet)
+    #expect(sweepFeature.outputs == [FeatureOutput(role: .sheet)])
+    #expect(bodySceneNode.object?.sourceSection == .curve(sectionFeatureID))
+    #expect(session.selectedSceneNode?.reference == .body(sweepFeatureID))
+    #expect(session.selectedTool == .select)
+    #expect(session.evaluationStatus == .valid)
     #expect(session.evaluatedBodyCount == 1)
 }
 
@@ -1650,7 +1722,7 @@ import Testing
     #expect(preview.guideFeatureIDs == [guideFeatureID])
     #expect(result.commandName == "createSweep")
     #expect(result.didMutate)
-    #expect(sweep.profiles == [ProfileReference(featureID: profileFeatureID)])
+    #expect(sweep.sections == [.profile(ProfileReference(featureID: profileFeatureID))])
     #expect(sweep.path == SweepPathReference(featureID: pathFeatureID))
     #expect(sweep.guides == [SweepGuideReference(featureID: guideFeatureID)])
     #expect(sweepFeature.inputs == [
@@ -5589,7 +5661,7 @@ import Testing
     let outputBodySceneNodeID = try #require(metadata.sceneNodes[outputRootSceneNodeID]?.childIDs.first)
     var outputBodySceneNode = try #require(metadata.sceneNodes[outputBodySceneNodeID])
     var object = try #require(outputBodySceneNode.object)
-    object.sourceProfileFeatureID = originalProfileFeatureID
+    object.sourceSection = .profile(ProfileReference(featureID: originalProfileFeatureID))
     outputBodySceneNode.object = object
     metadata.sceneNodes[outputBodySceneNodeID] = outputBodySceneNode
 

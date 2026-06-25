@@ -328,6 +328,7 @@ import SwiftCAD
     #expect(sweep.targets.contains(.sketchEntity))
     #expect(sweep.targets.contains(.body))
     #expect(sweep.failureMode.contains("profile-plane degenerate parallel alignment"))
+    #expect(sweep.failureMode.contains("solid output from curve sections"))
     #expect(sweep.failureMode.contains("disconnected or branched open path chains"))
     #expect(sweep.failureMode.contains("round corner style on multi-curve paths"))
     #expect(sweep.failureMode.contains("shared typed sweep evaluation contract"))
@@ -335,6 +336,7 @@ import SwiftCAD
     #expect(sweep.failureMode.contains("profile-plane-preserving exact extrusion"))
     #expect(sweep.failureMode.contains("straight-path parallel transformed or guided sections"))
     #expect(sweep.failureMode.contains("profile-plane parallel section sweep"))
+    #expect(sweep.failureMode.contains("curve sections as new-body sheet sweeps"))
     #expect(sweep.failureMode.contains("profile-plane guide projection"))
     #expect(sweep.failureMode.contains("compatible multiple point/chord"))
     #expect(sweep.failureMode.contains("non-uniform affine, signed-axis, convex quadrilateral bilinear, and convex mean-value cage point-guide rail deformation"))
@@ -2197,7 +2199,7 @@ import SwiftCAD
         sessionID: sessionID,
         command: .createSweep(
             name: "Encoded Sweep",
-            profiles: [ProfileReference(featureID: profileID)],
+            sections: [.profile(ProfileReference(featureID: profileID))],
             path: SweepPathReference(featureID: pathID),
             guides: [SweepGuideReference(featureID: guideID)],
             targets: [SweepTargetReference(featureID: targetID)],
@@ -9469,7 +9471,7 @@ import SwiftCAD
             sessionID: sessionID,
             command: .createSweep(
                 name: "Agent Sweep",
-                profiles: [ProfileReference(featureID: profileID)],
+                sections: [.profile(ProfileReference(featureID: profileID))],
                 path: SweepPathReference(featureID: pathID),
                 guides: [],
                 targets: [],
@@ -9493,10 +9495,72 @@ import SwiftCAD
     #expect(result.commandName == "createSweep")
     #expect(result.didMutate)
     #expect(result.generation == DocumentGeneration(1))
-    #expect(sweep.profiles == [ProfileReference(featureID: profileID)])
+    #expect(sweep.sections == [.profile(ProfileReference(featureID: profileID))])
     #expect(sweep.path == SweepPathReference(featureID: pathID))
     #expect(feature.outputs == [FeatureOutput(role: .body)])
     #expect(session.evaluatedBodyCount == 1)
+    #expect(session.evaluationStatus == .valid)
+    #expect(result.diagnostics.contains { diagnostic in diagnostic.severity == .error } == false)
+}
+
+@MainActor
+@Test func agentCreatesCurveSectionSheetSweepThroughAutomationAndCore() async throws {
+    var document = DesignDocument.empty()
+    let sectionID = try document.createLineSketch(
+        name: "Agent Curve Sheet Section",
+        plane: .xy,
+        start: agentSketchPoint(x: -0.002, y: 0.0),
+        end: agentSketchPoint(x: 0.002, y: 0.0)
+    )
+    let pathID = try document.createLineSketch(
+        name: "Agent Curve Sheet Path",
+        plane: .yz,
+        start: agentSketchPoint(x: 0.0, y: 0.0),
+        end: agentSketchPoint(x: 0.0, y: 0.020)
+    )
+    let server = AgentServer()
+    let sessionID = UUID()
+    let session = EditorSession(document: document)
+    server.register(session: session, id: sessionID)
+
+    let response = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .createSweep(
+                name: "Agent Curve Sheet Sweep",
+                sections: [.curve(SweepCurveSectionReference(featureID: sectionID))],
+                path: SweepPathReference(featureID: pathID),
+                guides: [],
+                targets: [],
+                options: SweepOptions(resultKind: .sheet)
+            ),
+            expectedGeneration: DocumentGeneration(0)
+        )
+    )
+
+    guard case .command(let result) = response else {
+        Issue.record("Agent must return a curve-section sheet sweep command result.")
+        return
+    }
+    let sweepID = try #require(session.document.cadDocument.designGraph.order.last)
+    let feature = try #require(session.document.cadDocument.designGraph.nodes[sweepID])
+    let evaluated = try CADPipeline.modelingDefault(for: session.document).evaluate(
+        session.document.cadDocument
+    )
+    let body = try #require(evaluated.brep.bodies.values.first)
+
+    guard case .sweep(let sweep) = feature.operation else {
+        Issue.record("Agent must create a sweep feature.")
+        return
+    }
+    #expect(result.commandName == "createSweep")
+    #expect(result.didMutate)
+    #expect(sweep.sections == [.curve(SweepCurveSectionReference(featureID: sectionID))])
+    #expect(session.document.productMetadata.sceneNodes.values.first {
+        $0.reference == .body(sweepID)
+    }?.object?.sourceSection == .curve(sectionID))
+    #expect(feature.outputs == [FeatureOutput(role: .sheet)])
+    #expect(body.kind == .sheet)
     #expect(session.evaluationStatus == .valid)
     #expect(result.diagnostics.contains { diagnostic in diagnostic.severity == .error } == false)
 }
@@ -9617,7 +9681,7 @@ import SwiftCAD
             sessionID: sessionID,
             command: .createSweep(
                 name: "Agent Connected Multi-Path Sweep",
-                profiles: [ProfileReference(featureID: profileID)],
+                sections: [.profile(ProfileReference(featureID: profileID))],
                 path: SweepPathReference(featureID: pathID),
                 guides: [],
                 targets: [],
@@ -10896,7 +10960,7 @@ import SwiftCAD
     )
     _ = try document.createSweep(
         name: "Agent Cell Union Boolean Result Sweep",
-        profiles: [ProfileReference(featureID: toolProfileID)],
+        sections: [.profile(ProfileReference(featureID: toolProfileID))],
         path: SweepPathReference(featureID: pathID),
         targets: [SweepTargetReference(featureID: targetBodyID)],
         options: SweepOptions(booleanOperation: .difference)

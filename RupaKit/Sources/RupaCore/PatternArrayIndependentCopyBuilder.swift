@@ -334,8 +334,8 @@ struct PatternArrayIndependentCopyBuilder: Sendable {
         if let sourceFeatureID = object.sourceFeatureID {
             clonedObject.sourceFeatureID = try remapper.remappedFeatureID(sourceFeatureID)
         }
-        if let sourceProfileFeatureID = object.sourceProfileFeatureID {
-            clonedObject.sourceProfileFeatureID = try remapper.remappedFeatureID(sourceProfileFeatureID)
+        if let sourceSection = object.sourceSection {
+            clonedObject.sourceSection = try remapper.remappedBodySourceSectionReference(sourceSection)
         }
         return clonedObject
     }
@@ -426,7 +426,7 @@ struct PatternArrayIndependentCopyBuilder: Sendable {
         if let featureID = sceneNode.object?.sourceFeatureID {
             featureIDs.insert(featureID)
         }
-        if let featureID = sceneNode.object?.sourceProfileFeatureID {
+        if let featureID = sceneNode.object?.sourceSection?.featureID {
             featureIDs.insert(featureID)
         }
         for childID in sceneNode.childIDs {
