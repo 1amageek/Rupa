@@ -103,6 +103,7 @@ import SwiftCAD
     #expect(capabilities.contains("meshSummary"))
     #expect(capabilities.contains("sketchEntitySummary"))
     #expect(capabilities.contains("topologySummary"))
+    #expect(capabilities.contains("surfaceSourceSummary"))
     #expect(capabilities.contains("surfaceAnalysis"))
     #expect(capabilities.contains("surfaceFrames"))
     #expect(capabilities.contains("surfaceContinuitySummary"))
@@ -159,6 +160,7 @@ import SwiftCAD
     let sketchSummary = try #require(descriptors.first { $0.name == "sketchEntitySummary" })
     let curveAnalysis = try #require(descriptors.first { $0.name == "curveAnalysis" })
     let topology = try #require(descriptors.first { $0.name == "topologySummary" })
+    let surfaceSourceSummary = try #require(descriptors.first { $0.name == "surfaceSourceSummary" })
     let surfaceAnalysis = try #require(descriptors.first { $0.name == "surfaceAnalysis" })
     let surfaceFrames = try #require(descriptors.first { $0.name == "surfaceFrames" })
     let surfaceContinuity = try #require(descriptors.first { $0.name == "surfaceContinuitySummary" })
@@ -623,6 +625,16 @@ import SwiftCAD
     #expect(!topology.mutatesDocument)
     #expect(topology.access == .agentRequest)
     #expect(topology.targets == [.face, .edge, .vertex])
+
+    #expect(surfaceSourceSummary.category == .read)
+    #expect(!surfaceSourceSummary.mutatesDocument)
+    #expect(surfaceSourceSummary.access == .agentRequest)
+    #expect(surfaceSourceSummary.discovery.contains(.surfaceSourceSummary))
+    #expect(surfaceSourceSummary.discovery.contains(.polySplineMeshAnalysis))
+    #expect(surfaceSourceSummary.discovery.contains(.topologySummary))
+    #expect(surfaceSourceSummary.targets == [.document, .body, .face, .edge, .vertex])
+    #expect(surfaceSourceSummary.summary.contains("source-owned surface contracts"))
+    #expect(surfaceSourceSummary.summary.contains("boundary CV targets"))
 
     #expect(surfaceAnalysis.category == .read)
     #expect(!surfaceAnalysis.mutatesDocument)
@@ -2531,6 +2543,110 @@ import SwiftCAD
             )
         )
     )
+    let surfaceSourceRequest = AgentRequest.surfaceSourceSummary(
+        sessionID: sessionID,
+        expectedGeneration: DocumentGeneration(4)
+    )
+    let surfaceSourceResponse = AgentResponse.surfaceSourceSummary(
+        SurfaceSourceSummaryResult(
+            displayUnit: .millimeter,
+            counts: SurfaceSourceSummaryResult.Counts(
+                sourceCount: 1,
+                patchCount: 1,
+                controlVertexCount: 4,
+                trimLoopCount: 1,
+                adjacencyCount: 0
+            ),
+            sources: [
+                SurfaceSourceSummaryResult.Source(
+                    featureID: UUID().uuidString,
+                    name: "Codec PolySpline",
+                    sceneNodeID: UUID().uuidString,
+                    kind: "polySpline",
+                    meshCounts: SurfaceSourceSummaryResult.MeshCounts(
+                        vertexCount: 4,
+                        usedVertexCount: 4,
+                        triangleCount: 2,
+                        indexedElementCount: 6,
+                        boundaryEdgeCount: 4,
+                        internalEdgeCount: 1
+                    ),
+                    options: SurfaceSourceSummaryResult.PolySplineOptionsSummary(
+                        roundedCorners: false,
+                        mergePatches: false,
+                        interpolateBoundaryExactly: true
+                    ),
+                    support: SurfaceSourceSummaryResult.SupportSummary(
+                        isSupported: true,
+                        candidateKind: "singleQuad",
+                        supportedPatchCount: 1,
+                        candidatePatchCount: 1,
+                        failureMessage: nil
+                    ),
+                    patches: [
+                        SurfaceSourceSummaryResult.Patch(
+                            patchID: 0,
+                            facePersistentName: "feature:a/generated:polySpline/subshape:patch:0:face",
+                            faceSelectionComponentID: SelectionComponentID
+                                .generatedTopology("feature:a/generated:polySpline/subshape:patch:0:face")
+                                .rawValue,
+                            uDomain: SurfaceSourceSummaryResult.ParameterRange(lowerBound: 0.0, upperBound: 1.0),
+                            vDomain: SurfaceSourceSummaryResult.ParameterRange(lowerBound: 0.0, upperBound: 1.0),
+                            basis: SurfaceSourceSummaryResult.Basis(
+                                kind: "cubicBezierBSpline",
+                                uDegree: 3,
+                                vDegree: 3,
+                                uOrder: 4,
+                                vOrder: 4,
+                                uKnots: [0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0],
+                                vKnots: [0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0],
+                                uSpanCount: 1,
+                                vSpanCount: 1,
+                                isRational: false
+                            ),
+                            controlVertices: [
+                                SurfaceSourceSummaryResult.ControlVertex(
+                                    id: "feature:a/patch:0/cv:uMin:vMin",
+                                    role: "uMin:vMin",
+                                    sourceVertexIndex: 0,
+                                    point: SurfaceSourceSummaryResult.Point(x: 0.0, y: 0.0, z: 0.0),
+                                    generatedVertexPersistentName: "feature:a/generated:polySpline/subshape:patch:0:vertex:uMin:vMin",
+                                    selectionComponentID: SelectionComponentID
+                                        .generatedTopology(
+                                            "feature:a/generated:polySpline/subshape:patch:0:vertex:uMin:vMin"
+                                        )
+                                        .rawValue
+                                ),
+                            ],
+                            trimLoops: [
+                                SurfaceSourceSummaryResult.TrimLoop(
+                                    role: "outer",
+                                    parameterAddresses: [
+                                        SurfaceSourceSummaryResult.ParameterAddress(id: "uMin:vMin", u: 0.0, v: 0.0),
+                                    ],
+                                    sourceVertexIndices: [0, 1, 2, 3],
+                                    edgePersistentNames: [
+                                        "feature:a/generated:polySpline/subshape:patch:0:edge:vMin",
+                                    ]
+                                ),
+                            ],
+                            parameterAddresses: [
+                                SurfaceSourceSummaryResult.ParameterAddress(id: "center", u: 0.5, v: 0.5),
+                            ]
+                        ),
+                    ],
+                    adjacencies: [],
+                    diagnostics: [
+                        SurfaceSourceSummaryResult.Diagnostic(
+                            severity: "info",
+                            code: "singleQuadPatchSupported",
+                            message: "Supported."
+                        ),
+                    ]
+                ),
+            ]
+        )
+    )
     let surfaceAnalysisRequest = AgentRequest.surfaceAnalysis(
         sessionID: sessionID,
         options: SurfaceAnalysisOptions(sampleDensity: .high),
@@ -2754,6 +2870,8 @@ import SwiftCAD
     #expect(try codec.decodeResponse(from: try codec.encode(snapResponse)) == snapResponse)
     #expect(try codec.decodeRequest(from: try codec.encode(topologyRequest)) == topologyRequest)
     #expect(try codec.decodeResponse(from: try codec.encode(topologyResponse)) == topologyResponse)
+    #expect(try codec.decodeRequest(from: try codec.encode(surfaceSourceRequest)) == surfaceSourceRequest)
+    #expect(try codec.decodeResponse(from: try codec.encode(surfaceSourceResponse)) == surfaceSourceResponse)
     #expect(try codec.decodeRequest(from: try codec.encode(surfaceAnalysisRequest)) == surfaceAnalysisRequest)
     #expect(try codec.decodeResponse(from: try codec.encode(surfaceAnalysisResponse)) == surfaceAnalysisResponse)
     #expect(try codec.decodeRequest(from: try codec.encode(surfaceFramesRequest)) == surfaceFramesRequest)
@@ -3999,6 +4117,69 @@ import SwiftCAD
     #expect(result.errors.isEmpty)
     #expect(session.generation == DocumentGeneration(0))
     #expect(session.document.cadDocument.designGraph.order.isEmpty)
+}
+
+@MainActor
+@Test func agentReportsPolySplineSurfaceSourceSummaryWithoutMutation() async throws {
+    let server = AgentServer()
+    let sessionID = UUID()
+    let session = EditorSession()
+    server.register(session: session, id: sessionID)
+
+    let createResponse = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .createPolySplineSurface(
+                name: "Agent Surface Source Summary",
+                sourceMesh: agentPolySplinePatchNetworkMesh(centerZ: 0.0),
+                options: PolySplineOptions(mergePatches: false)
+            ),
+            expectedGeneration: DocumentGeneration(0)
+        )
+    )
+    guard case .command(let createResult) = createResponse else {
+        Issue.record("Agent must create a planar PolySpline patch network.")
+        return
+    }
+    #expect(createResult.didMutate)
+    let generation = session.generation
+    let dirty = session.isDirty
+
+    let response = server.handle(
+        .surfaceSourceSummary(
+            sessionID: sessionID,
+            expectedGeneration: generation
+        )
+    )
+
+    guard case .surfaceSourceSummary(let summary) = response else {
+        Issue.record("Agent must return a surface source summary.")
+        return
+    }
+    #expect(summary.counts.sourceCount == 1)
+    #expect(summary.counts.patchCount == 2)
+    #expect(summary.counts.controlVertexCount == 8)
+    #expect(summary.counts.trimLoopCount == 2)
+    #expect(summary.counts.adjacencyCount == 1)
+    let source = try #require(summary.sources.first)
+    #expect(source.kind == "polySpline")
+    #expect(source.support.isSupported)
+    #expect(source.support.candidateKind == "quadPatchGraph")
+    #expect(source.patches.map(\.patchID) == [0, 2])
+    let patch = try #require(source.patches.first)
+    #expect(patch.facePersistentName?.contains("subshape:patch:0:face") == true)
+    #expect(patch.faceSelectionComponentID?.hasPrefix(SelectionComponentID.generatedTopologyPrefix) == true)
+    #expect(patch.basis.kind == "cubicBezierBSpline")
+    #expect(patch.controlVertices.count == 4)
+    #expect(patch.controlVertices.allSatisfy {
+        $0.selectionComponentID.hasPrefix(SelectionComponentID.generatedTopologyPrefix)
+    })
+    #expect(patch.trimLoops.first?.edgePersistentNames.count == 4)
+    let adjacency = try #require(source.adjacencies.first)
+    #expect(adjacency.continuityLevel == "tangentPlane")
+    #expect(adjacency.requiresCurvatureContinuitySolve == false)
+    #expect(session.generation == generation)
+    #expect(session.isDirty == dirty)
 }
 
 @MainActor

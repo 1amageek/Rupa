@@ -1196,6 +1196,16 @@ public final class AgentServer: AgentClientProtocol {
             failureMode: "Rejects stale generations or evaluation failures before returning topology data."
         ),
         capability(
+            "surfaceSourceSummary",
+            category: .read,
+            summary: "Discover source-owned surface contracts for editable PolySpline surfaces, including patch IDs, cubic B-spline basis, boundary CV targets, trim loops, support diagnostics, and generated topology links.",
+            access: .agentRequest,
+            mutatesDocument: false,
+            discovery: [.surfaceSourceSummary, .polySplineMeshAnalysis, .topologySummary],
+            targets: [.document, .body, .face, .edge, .vertex],
+            failureMode: "Rejects stale generations or invalid documents before returning source-owned surface contracts; reports unsupported PolySpline reconstruction options as structured diagnostics instead of exposing silent surface edit targets."
+        ),
+        capability(
             "surfaceAnalysis",
             category: .read,
             summary: "Sample generated B-spline faces for UV points, normals, principal directions, ordered trim-boundary point loops, and finite-difference surface curvature comb diagnostics without mutation; supports low, standard, and high sample density.",
@@ -1519,6 +1529,17 @@ public final class AgentServer: AgentClientProtocol {
                         document: session.document,
                         targets: resolvedTargets,
                         objectRegistry: session.objectRegistry
+                    )
+                )
+            case let .surfaceSourceSummary(sessionID, expectedGeneration):
+                let session = try registry.session(id: sessionID)
+                try session.store.requireGeneration(expectedGeneration)
+                return .surfaceSourceSummary(
+                    try SurfaceSourceSummaryService().summarize(
+                        document: session.document,
+                        objectRegistry: session.objectRegistry,
+                        currentEvaluation: session.currentEvaluation,
+                        currentGeneration: session.generation
                     )
                 )
             case let .surfaceAnalysis(sessionID, options, expectedGeneration):

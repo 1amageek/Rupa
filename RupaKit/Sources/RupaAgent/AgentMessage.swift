@@ -87,6 +87,10 @@ public enum AgentRequest: Codable, Equatable, Sendable {
         targets: [SelectionTarget],
         expectedGeneration: DocumentGeneration?
     )
+    case surfaceSourceSummary(
+        sessionID: UUID,
+        expectedGeneration: DocumentGeneration?
+    )
     case surfaceAnalysis(
         sessionID: UUID,
         options: SurfaceAnalysisOptions,
@@ -140,6 +144,7 @@ public enum AgentResponse: Codable, Equatable, Sendable {
     case curveAnalysis(CurveAnalysisResult)
     case topologySummary(TopologySummaryResult)
     case objectDimensionSummary(ObjectDimensionSummaryResult)
+    case surfaceSourceSummary(SurfaceSourceSummaryResult)
     case surfaceAnalysis(SurfaceAnalysisResult)
     case surfaceFrames(SurfaceFrameResult)
     case surfaceContinuitySummary(RupaCore.SurfaceContinuityResult)
