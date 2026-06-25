@@ -1184,6 +1184,7 @@ The package-level socket listener supports start, stop, stale socket replacement
 | `document.movePolySplineSurfaceVertex` | Move a selected generated PolySpline patch boundary vertex by mutating the owning source mesh vertex through the undoable command pipeline, rejecting unsupported targets or edits that change the selected patch boundary role. Selected viewport boundary-vertex center and global-axis handles route to the same command. |
 | `document.surfaceContinuitySummary` | Summarize generated B-spline face adjacencies, shared persistent edges, G0/G1/G2 continuity status, and unresolved curvature-continuity requirements without mutating source. |
 | `selection.selectTargets` | Replace the open session selection with typed object or subobject targets without mutating CAD source. |
+| `selection.selectReferences` | Replace the open session selection with typed Swift-CAD `SelectionReference` values, including source-owned Surface CV references returned by `surfaceSourceSummary`, without mutating CAD source. |
 | `document.export` | Export an open document session to an exchange artifact without mutating source, using the same `ExportOptions` as file-mode CLI export. |
 
 ## Stable References

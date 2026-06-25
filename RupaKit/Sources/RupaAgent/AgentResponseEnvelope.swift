@@ -302,7 +302,8 @@ public struct AgentResponseEnvelope: Codable, Equatable, Sendable {
             return .surfaceContinuitySummary(
                 try container.decode(RupaCore.SurfaceContinuityResult.self, forKey: .result)
             )
-        case "selection.selectTargets":
+        case "selection.selectTargets",
+             "selection.selectReferences":
             return .selection(try container.decode(SelectionStateResult.self, forKey: .result))
         case "document.save":
             return .save(try container.decode(SaveResult.self, forKey: .result))
@@ -408,6 +409,7 @@ public struct AgentResponseEnvelope: Codable, Equatable, Sendable {
              ("document.surfaceFrames", .surfaceFrames),
              ("document.surfaceContinuitySummary", .surfaceContinuitySummary),
              ("selection.selectTargets", .selection),
+             ("selection.selectReferences", .selection),
              ("document.save", .save),
              ("document.export", .export):
             true

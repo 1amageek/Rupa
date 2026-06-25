@@ -112,6 +112,7 @@ import SwiftCAD
     #expect(capabilities.contains("surfaceFrames"))
     #expect(capabilities.contains("surfaceContinuitySummary"))
     #expect(capabilities.contains("selectTargets"))
+    #expect(capabilities.contains("selectReferences"))
     #expect(capabilities.contains("saveDocument"))
     #expect(capabilities.contains("exportDocument"))
     #expect(capabilities.contains("validateDocument"))
@@ -197,6 +198,7 @@ import SwiftCAD
     let designDisplaySnapshot = try #require(descriptors.first { $0.name == "designDisplaySnapshot" })
     let qualityAssessment = try #require(descriptors.first { $0.name == "cadInteractionQualityAssessment" })
     let selection = try #require(descriptors.first { $0.name == "selectTargets" })
+    let referenceSelection = try #require(descriptors.first { $0.name == "selectReferences" })
     let createSketch = try #require(descriptors.first { $0.name == "createSketch" })
 
     #expect(fillet.category == .directEditing)
@@ -209,6 +211,22 @@ import SwiftCAD
     #expect(faceOffset.category == .directEditing)
     #expect(faceOffset.discovery.contains(.topologySummary))
     #expect(faceOffset.targets == [.face])
+
+    #expect(selection.category == .selection)
+    #expect(selection.access == .agentRequest)
+    #expect(selection.mutatesDocument == false)
+    #expect(selection.discovery.contains(.topologySummary))
+    #expect(selection.discovery.contains(.sketchEntitySummary))
+    #expect(selection.targets.contains(.face))
+
+    #expect(referenceSelection.category == .selection)
+    #expect(referenceSelection.access == .agentRequest)
+    #expect(referenceSelection.mutatesDocument == false)
+    #expect(referenceSelection.discovery.contains(.surfaceSourceSummary))
+    #expect(referenceSelection.discovery.contains(.selectionMeasurement))
+    #expect(referenceSelection.targets == [.surface, .surfaceControlPoint, .surfaceTrim])
+    #expect(referenceSelection.summary.contains("SelectionReference"))
+    #expect(referenceSelection.failureMode.contains("references incompatible"))
 
     #expect(faceKnife.category == .directEditing)
     #expect(faceKnife.mutatesDocument)
@@ -1400,6 +1418,35 @@ import SwiftCAD
             """
             {
               "jsonrpc": "2.0",
+              "id": "selection-reference-1",
+              "method": "selection.selectReferences",
+              "params": {
+                "sessionID": "00000000-0000-0000-0000-000000000001",
+                "references": [],
+                "expectedGeneration": {
+                  "value": 9
+                }
+              }
+            }
+            """,
+            { envelope in
+                guard case .selectReferences(
+                    let decodedSessionID,
+                    let references,
+                    let expectedGeneration
+                ) = envelope.params else {
+                    #expect(Bool(false))
+                    return
+                }
+                #expect(decodedSessionID == sessionID)
+                #expect(references.isEmpty)
+                #expect(expectedGeneration == DocumentGeneration(9))
+            }
+        ),
+        (
+            """
+            {
+              "jsonrpc": "2.0",
               "id": "export-1",
               "method": "document.export",
               "params": {
@@ -1408,7 +1455,7 @@ import SwiftCAD
                 "options": {},
                 "dryRun": true,
                 "expectedGeneration": {
-                  "value": 9
+                  "value": 10
                 }
               }
             }
@@ -1426,7 +1473,7 @@ import SwiftCAD
                 }
                 #expect(decodedSessionID == sessionID)
                 #expect(outputPath == "/tmp/rupa-fixture.obj")
-                #expect(expectedGeneration == DocumentGeneration(9))
+                #expect(expectedGeneration == DocumentGeneration(10))
                 #expect(options == ExportOptions())
                 #expect(dryRun)
             }
@@ -3642,6 +3689,31 @@ private func rawAgentProtocolJSON(_ source: String) -> Data {
             selectedTargets: [selectionTarget]
         )
     )
+    let selectionReference = SelectionReference.surface(.controlPoint(SurfaceControlPointReference(
+        surface: SurfaceReference(
+            faceName: PersistentName(components: [
+                .feature(FeatureID()),
+                .generated("polySpline"),
+                .subshape("patch:0:face"),
+            ])
+        ),
+        uIndex: 1,
+        vIndex: 1
+    )))
+    let selectReferenceRequest = AgentRequest.selectReferences(
+        sessionID: sessionID,
+        references: [selectionReference],
+        expectedGeneration: DocumentGeneration(4)
+    )
+    let selectReferenceResponse = AgentResponse.selection(
+        SelectionStateResult(
+            message: "1 reference selected.",
+            generation: DocumentGeneration(4),
+            dirty: false,
+            selectedTargets: [],
+            selectedReferences: [selectionReference]
+        )
+    )
     let saveRequest = AgentRequest.save(
         sessionID: sessionID,
         expectedGeneration: DocumentGeneration(4)
@@ -3682,6 +3754,8 @@ private func rawAgentProtocolJSON(_ source: String) -> Data {
     #expect(try codec.decodeResponse(from: try codec.encode(surfaceContinuityResponse)) == surfaceContinuityResponse)
     #expect(try codec.decodeRequest(from: try codec.encode(selectRequest)) == selectRequest)
     #expect(try codec.decodeResponse(from: try codec.encode(selectResponse)) == selectResponse)
+    #expect(try codec.decodeRequest(from: try codec.encode(selectReferenceRequest)) == selectReferenceRequest)
+    #expect(try codec.decodeResponse(from: try codec.encode(selectReferenceResponse)) == selectReferenceResponse)
     #expect(try codec.decodeRequest(from: try codec.encode(saveRequest)) == saveRequest)
     #expect(try codec.decodeResponse(from: try codec.encode(saveResponse)) == saveResponse)
 }
@@ -12362,6 +12436,54 @@ private func hasExpectedAgentCircularEdgeDefinition(_ entry: TopologySummaryResu
     }
     #expect(result.selectedTargets == [target])
     #expect(session.selection.selectedTargets == [target])
+    #expect(result.generation == generation)
+    #expect(session.generation == generation)
+    #expect(result.dirty == dirty)
+    #expect(session.isDirty == dirty)
+}
+
+@MainActor
+@Test func agentSelectsSurfaceControlPointReferenceWithoutMutation() async throws {
+    let server = AgentCommandController()
+    let sessionID = UUID()
+    let session = EditorSession()
+    _ = try #require(session.createPolySplineSurface(
+        name: "Agent Reference Selection Surface",
+        sourceMesh: agentPolySplinePatchNetworkMesh(centerZ: 0.0),
+        options: PolySplineOptions(mergePatches: false)
+    ))
+    let generation = session.generation
+    let dirty = session.isDirty
+    server.register(session: session, id: sessionID)
+
+    let summaryResponse = server.handle(
+        .surfaceSourceSummary(
+            sessionID: sessionID,
+            expectedGeneration: generation
+        )
+    )
+    guard case .surfaceSourceSummary(let summary) = summaryResponse else {
+        Issue.record("Agent must return a surface source summary.")
+        return
+    }
+    let patch = try #require(summary.sources.first?.patches.first)
+    let controlPoint = try #require(patch.controlPoints.first { $0.uIndex == 1 && $0.vIndex == 1 })
+
+    let response = server.handle(
+        .selectReferences(
+            sessionID: sessionID,
+            references: [controlPoint.selectionReference],
+            expectedGeneration: generation
+        )
+    )
+
+    guard case .selection(let result) = response else {
+        Issue.record("Agent must return a selection result.")
+        return
+    }
+    #expect(result.selectedTargets.isEmpty)
+    #expect(result.selectedReferences == [controlPoint.selectionReference])
+    #expect(session.selection.selectedReferences == [controlPoint.selectionReference])
     #expect(result.generation == generation)
     #expect(session.generation == generation)
     #expect(result.dirty == dirty)

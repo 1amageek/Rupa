@@ -157,6 +157,15 @@ public struct AgentRequestEnvelope: Codable, Equatable, Sendable {
                 ),
                 forKey: .params
             )
+        case let .selectReferences(sessionID, references, expectedGeneration):
+            try container.encode(
+                SelectionReferencesParams(
+                    sessionID: sessionID,
+                    references: references,
+                    expectedGeneration: expectedGeneration
+                ),
+                forKey: .params
+            )
         case let .selectionDimensionEvaluation(sessionID, dimensionID, expectedGeneration):
             try container.encode(
                 SelectionDimensionEvaluationParams(
@@ -354,6 +363,13 @@ public struct AgentRequestEnvelope: Codable, Equatable, Sendable {
                 targets: payload.targets,
                 expectedGeneration: payload.expectedGeneration
             )
+        case "selection.selectReferences":
+            let payload = try decodeParams(SelectionReferencesParams.self, from: container, method: method)
+            return .selectReferences(
+                sessionID: payload.sessionID,
+                references: payload.references,
+                expectedGeneration: payload.expectedGeneration
+            )
         case "document.save":
             let payload = try decodeParams(SessionGenerationParams.self, from: container, method: method)
             return .save(sessionID: payload.sessionID, expectedGeneration: payload.expectedGeneration)
@@ -489,6 +505,14 @@ private struct SelectionTargetsParams: AgentRequestParameterPayload, Equatable {
 
     var sessionID: UUID
     var targets: [SelectionTarget]
+    var expectedGeneration: DocumentGeneration?
+}
+
+private struct SelectionReferencesParams: AgentRequestParameterPayload, Equatable {
+    static let allowedKeys: Set<String> = ["sessionID", "references", "expectedGeneration"]
+
+    var sessionID: UUID
+    var references: [SelectionReference]
     var expectedGeneration: DocumentGeneration?
 }
 

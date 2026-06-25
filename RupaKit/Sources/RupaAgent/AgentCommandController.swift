@@ -1286,6 +1286,16 @@ public final class AgentCommandController: AgentClientProtocol {
             failureMode: "Rejects stale generations and targets incompatible with the current document."
         ),
         capability(
+            "selectReferences",
+            category: .selection,
+            summary: "Select Agent-discovered Swift-CAD SelectionReference values, including Surface CV references, without mutating CAD source.",
+            access: .agentRequest,
+            mutatesDocument: false,
+            discovery: [.surfaceSourceSummary, .topologySummary, .selectionMeasurement],
+            targets: [.surface, .surfaceControlPoint, .surfaceTrim],
+            failureMode: "Rejects stale generations and references incompatible with the current document."
+        ),
+        capability(
             "saveDocument",
             category: .persistence,
             summary: "Persist the open document back to its registered path and mark the session clean.",
@@ -1635,6 +1645,27 @@ public final class AgentCommandController: AgentClientProtocol {
                     throw EditorError(
                         code: .referenceUnresolved,
                         message: "Agent selection target is not compatible with the current document."
+                    )
+                }
+                return .selection(
+                    SelectionStateResult(
+                        message: "\(session.selection.selectedTargets.count) target(s), \(session.selection.selectedReferences.count) reference(s) selected.",
+                        generation: session.generation,
+                        dirty: session.isDirty,
+                        selectedTargets: session.selection.selectedTargets,
+                        selectedReferences: session.selection.selectedReferences,
+                        hoveredTarget: session.selection.hoveredTarget,
+                        hoveredReference: session.selection.hoveredReference,
+                        diagnostics: session.diagnostics
+                    )
+                )
+            case let .selectReferences(sessionID, references, expectedGeneration):
+                let session = try registry.session(id: sessionID)
+                try session.store.requireGeneration(expectedGeneration)
+                guard session.selectReferences(references) else {
+                    throw EditorError(
+                        code: .referenceUnresolved,
+                        message: "Agent selection reference is not compatible with the current document."
                     )
                 }
                 return .selection(

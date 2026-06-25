@@ -151,6 +151,7 @@ Nested domain payloads use the Codable JSON shape of the public RupaCore, RupaAu
 | `document.surfaceFrames` | `SurfaceFramesParams` | `SurfaceFrameResult` | No |
 | `document.surfaceContinuitySummary` | `SessionGenerationParams` | `SurfaceContinuityResult` | No |
 | `selection.selectTargets` | `SelectionTargetsParams` | `SelectionStateResult` | No |
+| `selection.selectReferences` | `SelectionReferencesParams` | `SelectionStateResult` | No |
 | `document.save` | `SessionGenerationParams` | `SaveResult` | Persists file state |
 | `document.export` | `ExportParams` | `ExportResult` | Writes export artifact unless `dryRun` is true |
 

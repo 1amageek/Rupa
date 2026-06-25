@@ -115,6 +115,11 @@ public enum AgentRequest: Codable, Equatable, Sendable {
         targets: [SelectionTarget],
         expectedGeneration: DocumentGeneration?
     )
+    case selectReferences(
+        sessionID: UUID,
+        references: [SelectionReference],
+        expectedGeneration: DocumentGeneration?
+    )
     case save(
         sessionID: UUID,
         expectedGeneration: DocumentGeneration?
@@ -217,6 +222,8 @@ public extension AgentRequest {
             "document.surfaceContinuitySummary"
         case .selectTargets:
             "selection.selectTargets"
+        case .selectReferences:
+            "selection.selectReferences"
         case .save:
             "document.save"
         case .export:
