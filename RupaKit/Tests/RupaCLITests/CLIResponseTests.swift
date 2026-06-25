@@ -1990,6 +1990,75 @@ struct CLISketchAdvancedCurveEditCommandTests {
     }
 
     @Test(.timeLimit(.minutes(1)))
+    func executableSketchConstraintAddPersistsClosedDocumentAsJSON() async throws {
+        let temporaryDirectory = try makeTemporaryDirectory()
+        defer {
+            removeTemporaryDirectory(temporaryDirectory)
+        }
+        let documentURL = temporaryDirectory.appendingPathComponent("process-sketch-constraint-add.swcad")
+        var document = DesignDocument.empty(named: "Process Sketch Constraint Add")
+        let featureID = try document.createLineSketch(
+            name: "Constraint Source",
+            plane: .xy,
+            start: SketchPoint(
+                x: .length(0.0, .millimeter),
+                y: .length(0.0, .millimeter)
+            ),
+            end: SketchPoint(
+                x: .length(0.0, .millimeter),
+                y: .length(10.0, .millimeter)
+            )
+        )
+        let feature = try #require(document.cadDocument.designGraph.nodes[featureID])
+        guard case .sketch(let sketch) = feature.operation,
+              let lineID = sketch.entities.keys.first else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "Constraint CLI setup requires a line sketch."
+            )
+        }
+        try DocumentFileService().save(document, to: documentURL)
+
+        let result = try await runCLI([
+            "sketch",
+            "constraint-add",
+            documentURL.path,
+            "--feature-id",
+            featureID.description,
+            "--constraint",
+            try encodedSketchConstraint(.horizontal(lineID)),
+            "--mode",
+            "file",
+            "--json",
+        ])
+        let response = try JSONDecoder().decode(CLIResponse.self, from: result.standardOutputData)
+        let loaded = try DocumentFileService().load(from: documentURL)
+        let loadedFeature = try #require(loaded.cadDocument.designGraph.nodes[featureID])
+        guard case .sketch(let loadedSketch) = loadedFeature.operation,
+              case .line(let loadedLine) = try #require(loadedSketch.entities[lineID]) else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "Constraint CLI result requires the constrained line."
+            )
+        }
+        let summary = try SketchEntitySummaryService().summarize(document: loaded)
+        let line = try #require(summary.entries.first { $0.entityID == lineID.description })
+
+        #expect(result.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: result.standardError))
+        #expect(response.message == "Sketch constraint added to \(featureID.description).")
+        #expect(response.saved)
+        #expect(loadedSketch.constraints == [.horizontal(lineID)])
+        #expect(abs(try cliLength(loadedLine.start.x, in: loaded)) < 1.0e-12)
+        #expect(abs(try cliLength(loadedLine.start.y, in: loaded)) < 1.0e-12)
+        #expect(abs(try cliLength(loadedLine.end.x, in: loaded) - 0.010) < 1.0e-12)
+        #expect(abs(try cliLength(loadedLine.end.y, in: loaded)) < 1.0e-12)
+        #expect(abs((line.start?.x ?? -1.0) - 0.0) < 1.0e-12)
+        #expect(abs((line.start?.y ?? -1.0) - 0.0) < 1.0e-12)
+        #expect(abs((line.end?.x ?? -1.0) - 0.010) < 1.0e-12)
+        #expect(abs((line.end?.y ?? -1.0) - 0.0) < 1.0e-12)
+    }
+
+    @Test(.timeLimit(.minutes(1)))
     func executableSketchCutPersistsClosedDocumentAsJSON() async throws {
         let temporaryDirectory = try makeTemporaryDirectory()
         defer {
@@ -5689,6 +5758,11 @@ private func encodedSelectionTarget(_ target: SelectionTarget) throws -> String 
 
 private func encodedBridgeCurveEndpoint(_ endpoint: BridgeCurveEndpoint) throws -> String {
     let data = try JSONEncoder().encode(endpoint)
+    return String(decoding: data, as: UTF8.self)
+}
+
+private func encodedSketchConstraint(_ constraint: SketchConstraint) throws -> String {
+    let data = try JSONEncoder().encode(constraint)
     return String(decoding: data, as: UTF8.self)
 }
 

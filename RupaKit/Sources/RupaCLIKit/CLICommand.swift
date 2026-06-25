@@ -251,6 +251,7 @@ public struct SketchCommand: ParsableCommand {
             SketchOffsetCommand.self,
             SketchOffsetRegionsCommand.self,
             SketchCornerTreatmentCommand.self,
+            SketchConstraintAddCommand.self,
             SketchConvertLineToArcCommand.self,
             SketchConvertLineToSplineCommand.self,
             SketchInsertControlPointCommand.self,
