@@ -21,6 +21,7 @@ public struct CLICommand: ParsableCommand {
             RenameDocument.self,
             RenameLiveDocument.self,
             SaveDocument.self,
+            SelectionCommand.self,
             SketchCommand.self,
             Sessions.self,
             ValidateDocument.self,
@@ -207,6 +208,210 @@ public struct SketchCommand: ParsableCommand {
     )
 
     public init() {}
+}
+
+public struct SelectionCommand: ParsableCommand {
+    public static let configuration = CommandConfiguration(
+        commandName: "selection",
+        abstract: "Select live-session object, subobject, or Swift-CAD reference targets.",
+        subcommands: [
+            SelectionReferencesCommand.self,
+            SelectionTargetsCommand.self,
+        ],
+        defaultSubcommand: SelectionReferencesCommand.self
+    )
+
+    public init() {}
+}
+
+public struct SelectionReferencesCommand: ParsableCommand {
+    public static let configuration = CommandConfiguration(
+        commandName: "references",
+        abstract: "Replace live-session selection with Swift-CAD SelectionReference values."
+    )
+
+    @Option(help: "Open document session UUID.")
+    public var sessionID: String
+
+    @Option(
+        name: .customLong("reference"),
+        help: "SelectionReference JSON object. Repeat to select multiple references."
+    )
+    public var referencePayloads: [String] = []
+
+    @Option(help: "JSON file containing one SelectionReference object or an array of SelectionReference objects.")
+    public var referencesFile: String?
+
+    @Flag(help: "Clear selected references.")
+    public var clear: Bool = false
+
+    @Option(help: "Expected document generation.")
+    public var expectedGeneration: UInt64?
+
+    @Option(help: "Path to the Rupa agent socket.")
+    public var socket: String = AgentSocketPath.defaultPath
+
+    @Flag(help: "Print a JSON result.")
+    public var json: Bool = false
+
+    public init() {}
+
+    public func run() throws {
+        let id = try CLISelectionInputParser.sessionID(sessionID)
+        let references = try decodedReferences()
+
+        try CLIExitCode.run {
+            let response = try CLIService().selectReferencesLiveSession(
+                sessionID: id,
+                references: references,
+                expectedGeneration: expectedGeneration.map(DocumentGeneration.init),
+                client: AgentClient(socketPath: AgentSocketPath(socket))
+            )
+            try CLIOutput.write(
+                response: response,
+                asJSON: json
+            )
+        }
+    }
+
+    private func decodedReferences() throws -> [SelectionReference] {
+        try CLISelectionInputParser.decodeSelectionInput(
+            inlinePayloads: referencePayloads,
+            filePath: referencesFile,
+            clear: clear,
+            valueName: "SelectionReference",
+            arrayName: "SelectionReference"
+        )
+    }
+}
+
+public struct SelectionTargetsCommand: ParsableCommand {
+    public static let configuration = CommandConfiguration(
+        commandName: "targets",
+        abstract: "Replace live-session selection with rendered object or subobject SelectionTarget values."
+    )
+
+    @Option(help: "Open document session UUID.")
+    public var sessionID: String
+
+    @Option(
+        name: .customLong("target"),
+        help: "SelectionTarget JSON object. Repeat to select multiple targets."
+    )
+    public var targetPayloads: [String] = []
+
+    @Option(help: "JSON file containing one SelectionTarget object or an array of SelectionTarget objects.")
+    public var targetsFile: String?
+
+    @Flag(help: "Clear selected targets.")
+    public var clear: Bool = false
+
+    @Option(help: "Expected document generation.")
+    public var expectedGeneration: UInt64?
+
+    @Option(help: "Path to the Rupa agent socket.")
+    public var socket: String = AgentSocketPath.defaultPath
+
+    @Flag(help: "Print a JSON result.")
+    public var json: Bool = false
+
+    public init() {}
+
+    public func run() throws {
+        let id = try CLISelectionInputParser.sessionID(sessionID)
+        let targets = try decodedTargets()
+
+        try CLIExitCode.run {
+            let response = try CLIService().selectTargetsLiveSession(
+                sessionID: id,
+                targets: targets,
+                expectedGeneration: expectedGeneration.map(DocumentGeneration.init),
+                client: AgentClient(socketPath: AgentSocketPath(socket))
+            )
+            try CLIOutput.write(
+                response: response,
+                asJSON: json
+            )
+        }
+    }
+
+    private func decodedTargets() throws -> [SelectionTarget] {
+        try CLISelectionInputParser.decodeSelectionInput(
+            inlinePayloads: targetPayloads,
+            filePath: targetsFile,
+            clear: clear,
+            valueName: "SelectionTarget",
+            arrayName: "SelectionTarget"
+        )
+    }
+}
+
+private enum CLISelectionInputParser {
+    static func sessionID(_ value: String) throws -> UUID {
+        guard let id = UUID(uuidString: value) else {
+            throw ValidationError("Session ID must be a UUID.")
+        }
+        return id
+    }
+
+    static func decodeSelectionInput<Value: Decodable>(
+        inlinePayloads: [String],
+        filePath: String?,
+        clear: Bool,
+        valueName: String,
+        arrayName: String
+    ) throws -> [Value] {
+        let hasPayloadInput = !inlinePayloads.isEmpty || filePath != nil
+        guard clear == false || hasPayloadInput == false else {
+            throw ValidationError("Use --clear without JSON selection input.")
+        }
+        guard clear || hasPayloadInput else {
+            throw ValidationError("Provide JSON selection input or --clear.")
+        }
+        guard clear == false else {
+            return []
+        }
+
+        var values: [Value] = []
+        let decoder = JSONDecoder()
+        for payload in inlinePayloads {
+            let data = Data(payload.utf8)
+            do {
+                values.append(try decoder.decode(Value.self, from: data))
+            } catch {
+                throw ValidationError("\(valueName) JSON is invalid: \(error.localizedDescription)")
+            }
+        }
+        if let filePath {
+            let data = try Data(contentsOf: URL(fileURLWithPath: filePath))
+            values.append(contentsOf: try decodeFilePayload(
+                data,
+                decoder: decoder,
+                valueName: valueName,
+                arrayName: arrayName
+            ))
+        }
+        return values
+    }
+
+    private static func decodeFilePayload<Value: Decodable>(
+        _ data: Data,
+        decoder: JSONDecoder,
+        valueName: String,
+        arrayName: String
+    ) throws -> [Value] {
+        do {
+            return try decoder.decode([Value].self, from: data)
+        } catch let arrayError {
+            do {
+                return [try decoder.decode(Value.self, from: data)]
+            } catch {
+                throw ValidationError(
+                    "\(arrayName) file must contain one \(valueName) object or an array. \(arrayError.localizedDescription)"
+                )
+            }
+        }
+    }
 }
 
 public struct LineSketchCommand: ParsableCommand {
@@ -2268,6 +2473,17 @@ public enum CLIOutput {
 
     public static func write(
         response: CLISaveResponse,
+        asJSON: Bool
+    ) throws {
+        try write(
+            response,
+            fallback: response.message,
+            asJSON: asJSON
+        )
+    }
+
+    public static func write(
+        response: CLISelectionResponse,
         asJSON: Bool
     ) throws {
         try write(

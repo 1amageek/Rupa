@@ -198,3 +198,29 @@ public struct CLISaveResponse: Codable, Equatable, Sendable {
         self.diagnostics = result.diagnostics
     }
 }
+
+public struct CLISelectionResponse: Codable, Equatable, Sendable {
+    public var message: String
+    public var generation: UInt64
+    public var dirty: Bool
+    public var selectedTargetCount: Int
+    public var selectedReferenceCount: Int
+    public var selectedTargets: [SelectionTarget]
+    public var selectedReferences: [SelectionReference]
+    public var hoveredTarget: SelectionTarget?
+    public var hoveredReference: SelectionReference?
+    public var diagnostics: [EditorDiagnostic]
+
+    public init(result: SelectionStateResult) {
+        self.message = result.message
+        self.generation = result.generation.value
+        self.dirty = result.dirty
+        self.selectedTargetCount = result.selectedTargets.count
+        self.selectedReferenceCount = result.selectedReferences.count
+        self.selectedTargets = result.selectedTargets
+        self.selectedReferences = result.selectedReferences
+        self.hoveredTarget = result.hoveredTarget
+        self.hoveredReference = result.hoveredReference
+        self.diagnostics = result.diagnostics
+    }
+}

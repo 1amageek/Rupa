@@ -1264,6 +1264,11 @@ Currently implemented command groups:
 | `rupa export <document> --output <path>` | Export a closed or live document to a Swift-CAD exchange format selected by output extension. |
 | `rupa export <document> --output <path> --preset <name>` | Export using a named `ExportPreset` for format, output unit, and default destination policy. |
 | `rupa export <document> --output <path> --destination-policy <policy>` | Override destination behavior with `prompt`, `overwrite`, or `versioned`. |
+| `rupa selection references --session-id <id> --reference <json>` | Replace a live session selection with one or more Swift-CAD `SelectionReference` values. |
+| `rupa selection references --session-id <id> --references-file <path>` | Replace a live session selection from a JSON file containing one `SelectionReference` or an array. |
+| `rupa selection targets --session-id <id> --target <json>` | Replace a live session selection with one or more rendered `SelectionTarget` object or subobject values. |
+| `rupa selection references --session-id <id> --clear` | Clear live selected references without mutating CAD source. |
+| `rupa selection targets --session-id <id> --clear` | Clear live selected targets without mutating CAD source. |
 | `rupa validate <document>` | Validate a closed document file. |
 
 Required command groups:

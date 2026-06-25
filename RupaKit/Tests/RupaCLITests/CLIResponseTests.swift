@@ -909,6 +909,67 @@ func cliExecutableRenameLiveMutatesOpenSessionThroughSocketAsJSON() async throws
 }
 
 @Test(.timeLimit(.minutes(1)))
+func cliExecutableSelectionReferencesSelectsLiveSurfaceControlPointAsJSON() async throws {
+    let temporaryDirectory = try makeTemporaryDirectory()
+    defer {
+        removeTemporaryDirectory(temporaryDirectory)
+    }
+    let socketURL = temporaryDirectory.appendingPathComponent("rupa.sock")
+    let sessionID = UUID()
+    let server = AgentCommandController()
+    let session = EditorSession(document: .empty(named: "Selection Reference"))
+    _ = try #require(session.createPolySplineSurface(
+        name: "CLI Surface Reference",
+        sourceMesh: cliPolySplinePatchNetworkMesh(centerZ: 0.0),
+        options: PolySplineOptions(mergePatches: false)
+    ))
+    let generation = session.generation
+    let summary = try SurfaceSourceSummaryService().summarize(document: session.document)
+    let patch = try #require(summary.sources.first?.patches.first)
+    let controlPoint = try #require(patch.controlPoints.first { $0.uIndex == 1 && $0.vIndex == 1 })
+    let referenceData = try JSONEncoder().encode(controlPoint.selectionReference)
+    let referenceJSON = String(decoding: referenceData, as: UTF8.self)
+    server.register(session: session, id: sessionID)
+    let listener = AgentSocketListener(
+        controller: server,
+        socketPath: AgentSocketPath(socketURL.path)
+    )
+
+    try await listener.start()
+    do {
+        let result = try await runCLI([
+            "selection",
+            "references",
+            "--session-id",
+            sessionID.uuidString,
+            "--reference",
+            referenceJSON,
+            "--expected-generation",
+            "\(generation.value)",
+            "--socket",
+            socketURL.path,
+            "--json",
+        ])
+        let response = try JSONDecoder().decode(
+            CLISelectionResponse.self,
+            from: result.standardOutputData
+        )
+
+        #expect(result.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: result.standardError))
+        #expect(response.message == "1 reference selected.")
+        #expect(response.generation == generation.value)
+        #expect(!response.dirty)
+        #expect(response.selectedTargetCount == 0)
+        #expect(response.selectedReferenceCount == 1)
+        #expect(response.selectedReferences == [controlPoint.selectionReference])
+        await listener.stop()
+    } catch {
+        await listener.stop()
+        throw error
+    }
+}
+
+@Test(.timeLimit(.minutes(1)))
 func cliExecutableAutoEvaluateUsesLiveSessionThroughSocketAsJSON() async throws {
     let temporaryDirectory = try makeTemporaryDirectory()
     defer {
@@ -1520,6 +1581,70 @@ func cliExecutableReturnsDataExitForLiveGenerationMismatch() async throws {
     #expect(response.dirty)
     #expect(!response.saved)
     #expect(session.document.cadDocument.metadata.name == "Live")
+}
+
+@MainActor
+@Test func cliServiceSelectsTargetsInLiveSessionThroughAgent() async throws {
+    let server = AgentCommandController()
+    let id = UUID()
+    let session = EditorSession()
+    _ = try #require(session.createDefaultExtrudedRectangle())
+    let generation = session.generation
+    let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let bodyNodeID = try #require(session.document.productMetadata.sceneNodes.first { entry in
+        entry.value.reference == .body(bodyFeatureID)
+    }?.key)
+    let target = SelectionTarget(sceneNodeID: bodyNodeID, component: .face(.bodyFaceTop))
+    server.register(session: session, id: id)
+
+    let response = try CLIService().selectTargetsLiveSession(
+        sessionID: id,
+        targets: [target],
+        expectedGeneration: generation,
+        client: server
+    )
+
+    #expect(response.message == "1 target selected.")
+    #expect(response.generation == generation.value)
+    #expect(response.selectedTargetCount == 1)
+    #expect(response.selectedReferenceCount == 0)
+    #expect(response.selectedTargets == [target])
+    #expect(session.selection.selectedTargets == [target])
+    #expect(session.generation == generation)
+}
+
+@MainActor
+@Test func cliServiceSelectsReferencesInLiveSessionThroughAgent() async throws {
+    let server = AgentCommandController()
+    let id = UUID()
+    let session = EditorSession(document: .empty(named: "Service Reference Selection"))
+    _ = try #require(session.createPolySplineSurface(
+        name: "CLI Service Surface Reference",
+        sourceMesh: cliPolySplinePatchNetworkMesh(centerZ: 0.0),
+        options: PolySplineOptions(mergePatches: false)
+    ))
+    let generation = session.generation
+    let dirty = session.isDirty
+    let summary = try SurfaceSourceSummaryService().summarize(document: session.document)
+    let patch = try #require(summary.sources.first?.patches.first)
+    let controlPoint = try #require(patch.controlPoints.first { $0.uIndex == 1 && $0.vIndex == 1 })
+    server.register(session: session, id: id)
+
+    let response = try CLIService().selectReferencesLiveSession(
+        sessionID: id,
+        references: [controlPoint.selectionReference],
+        expectedGeneration: generation,
+        client: server
+    )
+
+    #expect(response.message == "1 reference selected.")
+    #expect(response.generation == generation.value)
+    #expect(response.dirty == dirty)
+    #expect(response.selectedTargetCount == 0)
+    #expect(response.selectedReferenceCount == 1)
+    #expect(response.selectedReferences == [controlPoint.selectionReference])
+    #expect(session.selection.selectedReferences == [controlPoint.selectionReference])
+    #expect(session.generation == generation)
 }
 
 @Test func cliServiceAutoRenameUsesLiveSessionForOpenFile() async throws {
@@ -3085,6 +3210,25 @@ private func removeTemporaryDirectory(_ url: URL) {
     } catch {
         Issue.record("Failed to remove temporary directory: \(error)")
     }
+}
+
+private func cliPolySplinePatchNetworkMesh(centerZ: Double) -> Mesh {
+    Mesh(
+        positions: [
+            Point3D(x: 0.0, y: 0.0, z: 0.0),
+            Point3D(x: 0.01, y: 0.0, z: 0.0),
+            Point3D(x: 0.02, y: 0.0, z: 0.0),
+            Point3D(x: 0.0, y: 0.01, z: 0.0),
+            Point3D(x: 0.01, y: 0.01, z: centerZ),
+            Point3D(x: 0.02, y: 0.01, z: 0.0),
+        ],
+        indices: [
+            0, 1, 4,
+            0, 4, 3,
+            1, 2, 5,
+            1, 5, 4,
+        ]
+    )
 }
 
 private struct CLIProcessResult {

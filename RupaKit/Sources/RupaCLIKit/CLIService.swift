@@ -1173,6 +1173,38 @@ public struct CLIService {
         )
     }
 
+    public func selectTargetsLiveSession(
+        sessionID: UUID,
+        targets: [SelectionTarget],
+        expectedGeneration: DocumentGeneration? = nil,
+        client: AgentClientProtocol
+    ) throws -> CLISelectionResponse {
+        let response = try client.send(
+            .selectTargets(
+                sessionID: sessionID,
+                targets: targets,
+                expectedGeneration: expectedGeneration
+            )
+        )
+        return CLISelectionResponse(result: try selectionResult(from: response))
+    }
+
+    public func selectReferencesLiveSession(
+        sessionID: UUID,
+        references: [SelectionReference],
+        expectedGeneration: DocumentGeneration? = nil,
+        client: AgentClientProtocol
+    ) throws -> CLISelectionResponse {
+        let response = try client.send(
+            .selectReferences(
+                sessionID: sessionID,
+                references: references,
+                expectedGeneration: expectedGeneration
+            )
+        )
+        return CLISelectionResponse(result: try selectionResult(from: response))
+    }
+
     public func createExtrudedRectangleLiveSession(
         sessionID: UUID,
         name: String,
@@ -2088,6 +2120,17 @@ public struct CLIService {
             throw error
         default:
             throw unexpectedResponse("Command request returned an unexpected response.")
+        }
+    }
+
+    private func selectionResult(from response: AgentResponse) throws -> SelectionStateResult {
+        switch response {
+        case .selection(let result):
+            return result
+        case .failure(let error):
+            throw error
+        default:
+            throw unexpectedResponse("Selection request returned an unexpected response.")
         }
     }
 
