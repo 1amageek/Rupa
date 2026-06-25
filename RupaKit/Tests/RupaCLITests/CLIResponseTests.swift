@@ -970,6 +970,91 @@ func cliExecutableSelectionReferencesSelectsLiveSurfaceControlPointAsJSON() asyn
 }
 
 @Test(.timeLimit(.minutes(1)))
+func cliExecutableSurfaceSourcesReturnsSelectionReferencesAsJSON() async throws {
+    let temporaryDirectory = try makeTemporaryDirectory()
+    defer {
+        removeTemporaryDirectory(temporaryDirectory)
+    }
+    let documentURL = temporaryDirectory.appendingPathComponent("process-surface-sources.swcad")
+    var document = DesignDocument.empty(named: "Process Surface Sources")
+    _ = try document.createPolySplineSurface(
+        name: "CLI Source Surface",
+        sourceMesh: cliPolySplinePatchNetworkMesh(centerZ: 0.0),
+        options: PolySplineOptions(mergePatches: false)
+    )
+    try DocumentFileService().save(document, to: documentURL)
+
+    let result = try await runCLI([
+        "surface",
+        "sources",
+        documentURL.path,
+        "--mode",
+        "file",
+        "--json",
+    ])
+    let response = try JSONDecoder().decode(
+        CLISurfaceSourceSummaryResponse.self,
+        from: result.standardOutputData
+    )
+    let patch = try #require(response.surfaceSourceSummary.sources.first?.patches.first)
+    let controlPoint = try #require(patch.controlPoints.first { $0.uIndex == 1 && $0.vIndex == 1 })
+
+    #expect(result.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: result.standardError))
+    #expect(response.surfaceSourceSummary.counts.sourceCount == 1)
+    #expect(response.surfaceSourceSummary.counts.patchCount == 2)
+    #expect(response.surfaceSourceSummary.counts.controlPointCount > 0)
+    #expect(controlPoint.isEditable)
+}
+
+@Test(.timeLimit(.minutes(1)))
+func cliExecutableSurfaceMoveControlPointMutatesClosedDocumentAsJSON() async throws {
+    let temporaryDirectory = try makeTemporaryDirectory()
+    defer {
+        removeTemporaryDirectory(temporaryDirectory)
+    }
+    let documentURL = temporaryDirectory.appendingPathComponent("process-surface-move.swcad")
+    var document = DesignDocument.empty(named: "Process Surface Move")
+    _ = try document.createPolySplineSurface(
+        name: "CLI Move Surface",
+        sourceMesh: cliPolySplinePatchNetworkMesh(centerZ: 0.0),
+        options: PolySplineOptions(mergePatches: false)
+    )
+    let summary = try SurfaceSourceSummaryService().summarize(document: document)
+    let patch = try #require(summary.sources.first?.patches.first)
+    let controlPoint = try #require(patch.controlPoints.first { $0.uIndex == 1 && $0.vIndex == 1 })
+    let referenceJSON = try encodedSelectionReference(controlPoint.selectionReference)
+    try DocumentFileService().save(document, to: documentURL)
+
+    let result = try await runCLI([
+        "surface",
+        "move-control-point",
+        documentURL.path,
+        "--reference",
+        referenceJSON,
+        "--delta-z",
+        "1",
+        "--unit",
+        "millimeter",
+        "--mode",
+        "file",
+        "--json",
+    ])
+    let response = try JSONDecoder().decode(
+        CLIResponse.self,
+        from: result.standardOutputData
+    )
+    let loaded = try DocumentFileService().load(from: documentURL)
+    let movedSummary = try SurfaceSourceSummaryService().summarize(document: loaded)
+    let movedPatch = try #require(movedSummary.sources.first?.patches.first)
+    let movedControlPoint = try #require(movedPatch.controlPoints.first { $0.uIndex == 1 && $0.vIndex == 1 })
+
+    #expect(result.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: result.standardError))
+    #expect(response.message == "Surface control point moved.")
+    #expect(response.saved)
+    #expect(abs(movedControlPoint.point.z - (controlPoint.point.z + 0.001)) < 0.000_000_000_001)
+}
+
+@Test(.timeLimit(.minutes(1)))
 func cliExecutableAutoEvaluateUsesLiveSessionThroughSocketAsJSON() async throws {
     let temporaryDirectory = try makeTemporaryDirectory()
     defer {
@@ -3229,6 +3314,11 @@ private func cliPolySplinePatchNetworkMesh(centerZ: Double) -> Mesh {
             1, 5, 4,
         ]
     )
+}
+
+private func encodedSelectionReference(_ reference: SelectionReference) throws -> String {
+    let data = try JSONEncoder().encode(reference)
+    return String(decoding: data, as: UTF8.self)
 }
 
 private struct CLIProcessResult {

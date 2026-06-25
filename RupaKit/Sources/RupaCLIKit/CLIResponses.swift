@@ -181,6 +181,26 @@ public struct CLIMeshSummaryResponse: Codable, Equatable, Sendable {
     }
 }
 
+public struct CLISurfaceSourceSummaryResponse: Codable, Equatable, Sendable {
+    public var message: String
+    public var generation: UInt64
+    public var dirty: Bool
+    public var surfaceSourceSummary: SurfaceSourceSummaryResult
+    public var diagnostics: [EditorDiagnostic]
+
+    public init(
+        surfaceSourceSummary: SurfaceSourceSummaryResult,
+        generation: DocumentGeneration,
+        dirty: Bool
+    ) {
+        self.message = "Surface source summary: \(surfaceSourceSummary.counts.sourceCount) sources, \(surfaceSourceSummary.counts.patchCount) patches, \(surfaceSourceSummary.counts.controlVertexCount) source control vertices, \(surfaceSourceSummary.counts.controlPointCount) B-spline control points."
+        self.generation = generation.value
+        self.dirty = dirty
+        self.surfaceSourceSummary = surfaceSourceSummary
+        self.diagnostics = surfaceSourceSummary.diagnostics
+    }
+}
+
 public struct CLISaveResponse: Codable, Equatable, Sendable {
     public var message: String
     public var path: String

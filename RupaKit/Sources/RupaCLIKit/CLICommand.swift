@@ -24,6 +24,7 @@ public struct CLICommand: ParsableCommand {
             SelectionCommand.self,
             SketchCommand.self,
             Sessions.self,
+            SurfaceCommand.self,
             ValidateDocument.self,
         ],
         defaultSubcommand: Capabilities.self
@@ -92,6 +93,29 @@ public enum CLIExtrudeDirection: String, CaseIterable, ExpressibleByArgument, Se
             .normal
         case .symmetric:
             .symmetric
+        }
+    }
+}
+
+public enum CLISurfaceSlideDirection: String, CaseIterable, ExpressibleByArgument, Sendable {
+    case positiveU
+    case negativeU
+    case normal
+    case positiveV
+    case negativeV
+
+    public var slideDirection: PolySplineSurfaceVertexSlideDirection {
+        switch self {
+        case .positiveU:
+            .positiveU
+        case .negativeU:
+            .negativeU
+        case .normal:
+            .normal
+        case .positiveV:
+            .positiveV
+        case .negativeV:
+            .negativeV
         }
     }
 }
@@ -354,6 +378,45 @@ private enum CLISelectionInputParser {
         return id
     }
 
+    static func optionalSessionID(_ value: String?) throws -> UUID? {
+        guard let value else {
+            return nil
+        }
+        return try sessionID(value)
+    }
+
+    static func decodeSingleSelectionInput<Value: Decodable>(
+        inlinePayload: String?,
+        filePath: String?,
+        valueName: String
+    ) throws -> Value {
+        guard (inlinePayload != nil) != (filePath != nil) else {
+            throw ValidationError("Provide exactly one \(valueName) JSON input.")
+        }
+        let values: [Value]
+        if let inlinePayload {
+            values = try decodeSelectionInput(
+                inlinePayloads: [inlinePayload],
+                filePath: nil,
+                clear: false,
+                valueName: valueName,
+                arrayName: valueName
+            )
+        } else {
+            values = try decodeSelectionInput(
+                inlinePayloads: [],
+                filePath: filePath,
+                clear: false,
+                valueName: valueName,
+                arrayName: valueName
+            )
+        }
+        guard values.count == 1, let value = values.first else {
+            throw ValidationError("\(valueName) JSON input must contain exactly one value.")
+        }
+        return value
+    }
+
     static func decodeSelectionInput<Value: Decodable>(
         inlinePayloads: [String],
         filePath: String?,
@@ -410,6 +473,292 @@ private enum CLISelectionInputParser {
                     "\(arrayName) file must contain one \(valueName) object or an array. \(arrayError.localizedDescription)"
                 )
             }
+        }
+    }
+}
+
+public struct SurfaceCommand: ParsableCommand {
+    public static let configuration = CommandConfiguration(
+        commandName: "surface",
+        abstract: "Inspect and edit source-owned surface control data.",
+        subcommands: [
+            SurfaceSourcesCommand.self,
+            SurfaceMoveControlPointCommand.self,
+            SurfaceSlideControlPointsCommand.self,
+        ],
+        defaultSubcommand: SurfaceSourcesCommand.self
+    )
+
+    public init() {}
+}
+
+public struct SurfaceSourcesCommand: ParsableCommand {
+    public static let configuration = CommandConfiguration(
+        commandName: "sources",
+        abstract: "Return source-owned surface references and editable control points."
+    )
+
+    @Argument(help: "Path to the .swcad document for file or auto mode.")
+    public var file: String?
+
+    @Option(help: "Edit mode: auto, file, or live.")
+    public var mode: CLIEditMode = .auto
+
+    @Option(help: "Open document session UUID for live mode.")
+    public var sessionID: String?
+
+    @Option(help: "Expected document generation for live mode.")
+    public var expectedGeneration: UInt64?
+
+    @Option(help: "Optional Rupa agent socket used to detect open document conflicts.")
+    public var agentSocket: String?
+
+    @Flag(help: "Print a JSON result.")
+    public var json: Bool = false
+
+    public init() {}
+
+    public func run() throws {
+        let id = try CLISelectionInputParser.optionalSessionID(sessionID)
+
+        try CLIExitCode.run {
+            let agentClient = CLIAgentClientFactory.makeAgentClient(
+                mode: mode,
+                sessionID: id,
+                socket: agentSocket
+            )
+            let response = try CLIService().surfaceSourceSummary(
+                target: CLIDocumentTarget(
+                    fileURL: file.map(URL.init(fileURLWithPath:)),
+                    sessionID: id
+                ),
+                mode: mode,
+                expectedGeneration: expectedGeneration.map(DocumentGeneration.init),
+                client: agentClient
+            )
+            try CLIOutput.write(
+                response: response,
+                asJSON: json
+            )
+        }
+    }
+}
+
+public struct SurfaceMoveControlPointCommand: ParsableCommand {
+    public static let configuration = CommandConfiguration(
+        commandName: "move-control-point",
+        abstract: "Move one source-owned surface control point from a SelectionReference."
+    )
+
+    @Argument(help: "Path to the .swcad document for file or auto mode.")
+    public var file: String?
+
+    @Option(help: "SelectionReference JSON object for one surface control point.")
+    public var reference: String?
+
+    @Option(help: "JSON file containing one SelectionReference object.")
+    public var referenceFile: String?
+
+    @Option(help: "Delta X numeric literal.")
+    public var deltaX: Double = 0.0
+
+    @Option(help: "Delta Y numeric literal.")
+    public var deltaY: Double = 0.0
+
+    @Option(help: "Delta Z numeric literal.")
+    public var deltaZ: Double = 0.0
+
+    @Option(help: "Length unit for delta values.")
+    public var unit: String = LengthDisplayUnit.millimeter.rawValue
+
+    @Option(help: "Edit mode: auto, file, or live.")
+    public var mode: CLIEditMode = .auto
+
+    @Option(help: "Open document session UUID for live mode.")
+    public var sessionID: String?
+
+    @Option(help: "Expected document generation for live mode.")
+    public var expectedGeneration: UInt64?
+
+    @Flag(help: "Validate the command without saving the changed file.")
+    public var dryRun: Bool = false
+
+    @Flag(help: "Allow direct file mutation even if the app reports the same file as open.")
+    public var forceFileEdit: Bool = false
+
+    @Option(help: "Optional Rupa agent socket used to detect open document conflicts.")
+    public var agentSocket: String?
+
+    @Flag(help: "Print a JSON result.")
+    public var json: Bool = false
+
+    public init() {}
+
+    public func run() throws {
+        let id = try CLISelectionInputParser.optionalSessionID(sessionID)
+        let surfaceReference: SelectionReference = try CLISelectionInputParser.decodeSingleSelectionInput(
+            inlinePayload: reference,
+            filePath: referenceFile,
+            valueName: "SelectionReference"
+        )
+        let deltas = try deltaExpressions()
+
+        try CLIExitCode.run {
+            let agentClient = CLIAgentClientFactory.makeAgentClient(
+                mode: mode,
+                sessionID: id,
+                socket: agentSocket
+            )
+            let response = try CLIService().moveSurfaceControlPoint(
+                target: CLIDocumentTarget(
+                    fileURL: file.map(URL.init(fileURLWithPath:)),
+                    sessionID: id
+                ),
+                reference: surfaceReference,
+                deltaX: deltas.x,
+                deltaY: deltas.y,
+                deltaZ: deltas.z,
+                mode: mode,
+                expectedGeneration: expectedGeneration.map(DocumentGeneration.init),
+                dryRun: dryRun,
+                forceFileEdit: forceFileEdit,
+                client: agentClient
+            )
+            try CLIOutput.write(
+                response: response,
+                asJSON: json
+            )
+        }
+    }
+
+    private func deltaExpressions() throws -> (x: CADExpression, y: CADExpression, z: CADExpression) {
+        guard let lengthUnit = LengthDisplayUnit(rawValue: unit) else {
+            throw ValidationError("Length unit must be a supported Rupa display unit.")
+        }
+        return (
+            lengthExpression(deltaX, unit: lengthUnit),
+            lengthExpression(deltaY, unit: lengthUnit),
+            lengthExpression(deltaZ, unit: lengthUnit)
+        )
+    }
+
+    private func lengthExpression(_ value: Double, unit: LengthDisplayUnit) -> CADExpression {
+        .constant(Quantity(value: unit.meters(from: value), kind: .length))
+    }
+}
+
+public struct SurfaceSlideControlPointsCommand: ParsableCommand {
+    public static let configuration = CommandConfiguration(
+        commandName: "slide-control-points",
+        abstract: "Slide source-owned surface control points along local U, V, or normal directions."
+    )
+
+    @Argument(help: "Path to the .swcad document for file or auto mode.")
+    public var file: String?
+
+    @Option(
+        name: .customLong("reference"),
+        help: "SelectionReference JSON object. Repeat to slide multiple surface control points."
+    )
+    public var referencePayloads: [String] = []
+
+    @Option(help: "JSON file containing one SelectionReference object or an array.")
+    public var referencesFile: String?
+
+    @Option(help: "Slide direction: positiveU, negativeU, normal, positiveV, or negativeV.")
+    public var direction: CLISurfaceSlideDirection
+
+    @Option(help: "Slide distance numeric literal.")
+    public var distance: Double
+
+    @Option(help: "Length unit for slide distance.")
+    public var unit: String = LengthDisplayUnit.millimeter.rawValue
+
+    @Option(help: "Edit mode: auto, file, or live.")
+    public var mode: CLIEditMode = .auto
+
+    @Option(help: "Open document session UUID for live mode.")
+    public var sessionID: String?
+
+    @Option(help: "Expected document generation for live mode.")
+    public var expectedGeneration: UInt64?
+
+    @Flag(help: "Validate the command without saving the changed file.")
+    public var dryRun: Bool = false
+
+    @Flag(help: "Allow direct file mutation even if the app reports the same file as open.")
+    public var forceFileEdit: Bool = false
+
+    @Option(help: "Optional Rupa agent socket used to detect open document conflicts.")
+    public var agentSocket: String?
+
+    @Flag(help: "Print a JSON result.")
+    public var json: Bool = false
+
+    public init() {}
+
+    public func run() throws {
+        let id = try CLISelectionInputParser.optionalSessionID(sessionID)
+        let references: [SelectionReference] = try CLISelectionInputParser.decodeSelectionInput(
+            inlinePayloads: referencePayloads,
+            filePath: referencesFile,
+            clear: false,
+            valueName: "SelectionReference",
+            arrayName: "SelectionReference"
+        )
+        let distanceExpression = try lengthExpression()
+
+        try CLIExitCode.run {
+            let agentClient = CLIAgentClientFactory.makeAgentClient(
+                mode: mode,
+                sessionID: id,
+                socket: agentSocket
+            )
+            let response = try CLIService().slideSurfaceControlPoints(
+                target: CLIDocumentTarget(
+                    fileURL: file.map(URL.init(fileURLWithPath:)),
+                    sessionID: id
+                ),
+                references: references,
+                direction: direction.slideDirection,
+                distance: distanceExpression,
+                mode: mode,
+                expectedGeneration: expectedGeneration.map(DocumentGeneration.init),
+                dryRun: dryRun,
+                forceFileEdit: forceFileEdit,
+                client: agentClient
+            )
+            try CLIOutput.write(
+                response: response,
+                asJSON: json
+            )
+        }
+    }
+
+    private func lengthExpression() throws -> CADExpression {
+        guard let lengthUnit = LengthDisplayUnit(rawValue: unit) else {
+            throw ValidationError("Length unit must be a supported Rupa display unit.")
+        }
+        return .constant(Quantity(value: lengthUnit.meters(from: distance), kind: .length))
+    }
+}
+
+private enum CLIAgentClientFactory {
+    static func makeAgentClient(
+        mode: CLIEditMode,
+        sessionID: UUID?,
+        socket: String?
+    ) -> AgentClient? {
+        let resolvedSocket: String?
+        if let socket {
+            resolvedSocket = socket
+        } else if mode == .live || sessionID != nil {
+            resolvedSocket = AgentSocketPath.defaultPath
+        } else {
+            resolvedSocket = nil
+        }
+        return resolvedSocket.map { socket in
+            AgentClient(socketPath: AgentSocketPath(socket))
         }
     }
 }
@@ -2462,6 +2811,17 @@ public enum CLIOutput {
 
     public static func write(
         response: CLIMeshSummaryResponse,
+        asJSON: Bool
+    ) throws {
+        try write(
+            response,
+            fallback: response.message,
+            asJSON: asJSON
+        )
+    }
+
+    public static func write(
+        response: CLISurfaceSourceSummaryResponse,
         asJSON: Bool
     ) throws {
         try write(

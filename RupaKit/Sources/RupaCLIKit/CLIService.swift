@@ -836,6 +836,17 @@ public struct CLIService {
         )
     }
 
+    public func surfaceSourceSummaryFile(
+        at url: URL
+    ) throws -> CLISurfaceSourceSummaryResponse {
+        let session = EditorSession(document: try fileService.load(from: url))
+        return CLISurfaceSourceSummaryResponse(
+            surfaceSourceSummary: try SurfaceSourceSummaryService().summarize(document: session.document),
+            generation: session.generation,
+            dirty: session.isDirty
+        )
+    }
+
     public func evaluateDocument(
         target: CLIDocumentTarget,
         mode: CLIEditMode = .auto,
@@ -927,6 +938,91 @@ public struct CLIService {
                 client: requiredClient(client)
             )
         }
+    }
+
+    public func surfaceSourceSummary(
+        target: CLIDocumentTarget,
+        mode: CLIEditMode = .auto,
+        expectedGeneration: DocumentGeneration? = nil,
+        client: AgentClientProtocol? = nil
+    ) throws -> CLISurfaceSourceSummaryResponse {
+        switch mode {
+        case .auto:
+            return try surfaceSourceSummaryAutomatically(
+                target: target,
+                expectedGeneration: expectedGeneration,
+                client: client
+            )
+        case .file:
+            guard let url = target.fileURL else {
+                throw invalidCommand("File mode requires a document file path.")
+            }
+            return try surfaceSourceSummaryFile(at: url)
+        case .live:
+            let sessionID = try resolvedLiveSessionID(
+                target: target,
+                client: client
+            )
+            return try surfaceSourceSummaryLiveSession(
+                sessionID: sessionID,
+                expectedGeneration: expectedGeneration,
+                client: requiredClient(client)
+            )
+        }
+    }
+
+    public func moveSurfaceControlPoint(
+        target: CLIDocumentTarget,
+        reference: SelectionReference,
+        deltaX: CADExpression,
+        deltaY: CADExpression,
+        deltaZ: CADExpression,
+        mode: CLIEditMode = .auto,
+        expectedGeneration: DocumentGeneration? = nil,
+        dryRun: Bool = false,
+        forceFileEdit: Bool = false,
+        client: AgentClientProtocol? = nil
+    ) throws -> CLIResponse {
+        try executeModelingCommand(
+            .moveSurfaceControlPoint(
+                target: reference,
+                deltaX: deltaX,
+                deltaY: deltaY,
+                deltaZ: deltaZ
+            ),
+            target: target,
+            mode: mode,
+            expectedGeneration: expectedGeneration,
+            dryRun: dryRun,
+            forceFileEdit: forceFileEdit,
+            client: client
+        )
+    }
+
+    public func slideSurfaceControlPoints(
+        target: CLIDocumentTarget,
+        references: [SelectionReference],
+        direction: PolySplineSurfaceVertexSlideDirection,
+        distance: CADExpression,
+        mode: CLIEditMode = .auto,
+        expectedGeneration: DocumentGeneration? = nil,
+        dryRun: Bool = false,
+        forceFileEdit: Bool = false,
+        client: AgentClientProtocol? = nil
+    ) throws -> CLIResponse {
+        try executeModelingCommand(
+            .slideSurfaceControlPoints(
+                targets: references,
+                direction: direction,
+                distance: distance
+            ),
+            target: target,
+            mode: mode,
+            expectedGeneration: expectedGeneration,
+            dryRun: dryRun,
+            forceFileEdit: forceFileEdit,
+            client: client
+        )
     }
 
     public func saveFile(
@@ -1324,6 +1420,34 @@ public struct CLIService {
         }
     }
 
+    public func surfaceSourceSummaryLiveSession(
+        sessionID: UUID,
+        expectedGeneration: DocumentGeneration? = nil,
+        client: AgentClientProtocol
+    ) throws -> CLISurfaceSourceSummaryResponse {
+        let response = try client.send(
+            .surfaceSourceSummary(
+                sessionID: sessionID,
+                expectedGeneration: expectedGeneration
+            )
+        )
+        switch response {
+        case .surfaceSourceSummary(let surfaceSourceSummary):
+            let summary = try sessions(client: client)
+                .sessions
+                .first { $0.id == sessionID }
+            return CLISurfaceSourceSummaryResponse(
+                surfaceSourceSummary: surfaceSourceSummary,
+                generation: DocumentGeneration(summary?.generation.value ?? 0),
+                dirty: summary?.dirty ?? false
+            )
+        case .failure(let error):
+            throw error
+        default:
+            throw unexpectedResponse("Surface source summary request returned an unexpected response.")
+        }
+    }
+
     public func listParametersLiveSession(
         sessionID: UUID,
         expectedGeneration: DocumentGeneration? = nil,
@@ -1485,6 +1609,35 @@ public struct CLIService {
             throw invalidCommand("Mesh summary requires a document file path or live session ID.")
         }
         return try meshSummaryFile(at: url)
+    }
+
+    private func surfaceSourceSummaryAutomatically(
+        target: CLIDocumentTarget,
+        expectedGeneration: DocumentGeneration?,
+        client: AgentClientProtocol?
+    ) throws -> CLISurfaceSourceSummaryResponse {
+        if let sessionID = target.sessionID {
+            return try surfaceSourceSummaryLiveSession(
+                sessionID: sessionID,
+                expectedGeneration: expectedGeneration,
+                client: requiredClient(client)
+            )
+        }
+
+        if let url = target.fileURL,
+           let client,
+           let session = try openSession(for: url, client: client) {
+            return try surfaceSourceSummaryLiveSession(
+                sessionID: session.id,
+                expectedGeneration: expectedGeneration,
+                client: client
+            )
+        }
+
+        guard let url = target.fileURL else {
+            throw invalidCommand("Surface source summary requires a document file path or live session ID.")
+        }
+        return try surfaceSourceSummaryFile(at: url)
     }
 
     private func saveDocumentAutomatically(
