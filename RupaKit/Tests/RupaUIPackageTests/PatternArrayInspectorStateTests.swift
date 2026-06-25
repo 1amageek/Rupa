@@ -24,6 +24,7 @@ import Testing
     #expect(state.selectedOutputTitle == "None")
     #expect(state.ownershipTitle == "Source-owned Component Instances")
     #expect(state.directEditTitle == "Source Controlled")
+    #expect(state.featureEditTitle == "Source Controlled")
     #expect(state.sourceEditTitle == "Update Pattern Array")
     #expect(state.detachTitle == "Explode Pattern Array")
     #expect(state.diagnosticsTitle == "None")
@@ -246,6 +247,28 @@ import Testing
     #expect(state.selectedOutputTitle == "#1")
     #expect(state.outputModeTitle == "Independent Copy")
     #expect(state.ownershipTitle == "Source-owned Independent Copies")
+    #expect(state.featureEditTitle == "Allowed")
+    #expect(state.independentCopyOutputStateTitle == "#1 Diverged")
+    #expect(state.independentCopyRegenerationTitle == "Reuse Until Definition Changes")
+}
+
+@Test func patternArrayInspectorStateSummarizesIndependentCopySourceState() throws {
+    let fixture = PatternArrayInspectorFixture()
+    let rootNode = SceneNode(id: fixture.rootSceneNodeID, name: "Array Root")
+    let state = try #require(PatternArrayInspectorState(
+        selectedNodes: [rootNode],
+        sceneNodes: [rootNode.id: rootNode],
+        summaryResult: PatternArraySummaryResult(
+            generation: DocumentGeneration(7),
+            dirty: true,
+            patternArrays: [fixture.independentCopySummary]
+        )
+    ))
+
+    #expect(state.selectedRole == .sourceRoot)
+    #expect(state.selectedOutputIndices.isEmpty)
+    #expect(state.independentCopyOutputStateTitle == "1 Source Match, 1 Diverged")
+    #expect(state.independentCopyRegenerationTitle == "Reuse Until Definition Changes")
 }
 
 @Test func patternArrayInspectorStateRejectsUnrelatedAndMixedPatternSelections() {
@@ -295,6 +318,8 @@ private struct PatternArrayInspectorFixture {
     var firstOutputSceneNodeID = SceneNodeID()
     var secondOutputSceneNodeID = SceneNodeID()
     var outputBodySceneNodeID = SceneNodeID()
+    var firstOutputFeatureID = FeatureID()
+    var secondOutputFeatureID = FeatureID()
     var name: String
 
     init(name: String = "Array") {
@@ -353,16 +378,36 @@ private struct PatternArrayInspectorFixture {
                 firstOutputSceneNodeID,
                 secondOutputSceneNodeID,
             ],
-            outputFeatureIDs: [FeatureID()],
+            outputFeatureIDs: [
+                firstOutputFeatureID,
+                secondOutputFeatureID,
+            ],
             editableFields: [.name, .definitionID, .distribution, .outputMode],
             lifecycleActions: [.updatePatternArray, .explodePatternArray],
             outputOwnership: PatternArraySummary.OutputOwnership(
                 kind: .sourceOwnedIndependentCopies,
                 directOutputEditingAllowed: false,
+                directFeatureEditingAllowed: true,
                 sourceEditAction: .updatePatternArray,
                 detachAction: .explodePatternArray,
                 editableAfterDetach: true
             ),
+            independentCopyOutputs: [
+                PatternArraySummary.IndependentCopyOutputStatus(
+                    outputIndex: 0,
+                    sceneNodeID: firstOutputSceneNodeID,
+                    featureIDs: [firstOutputFeatureID],
+                    state: .divergedFromSourceDefinition,
+                    regenerationPolicy: .reuseUntilDefinitionIdentityChanges
+                ),
+                PatternArraySummary.IndependentCopyOutputStatus(
+                    outputIndex: 1,
+                    sceneNodeID: secondOutputSceneNodeID,
+                    featureIDs: [secondOutputFeatureID],
+                    state: .matchesSourceDefinition,
+                    regenerationPolicy: .reuseUntilDefinitionIdentityChanges
+                ),
+            ],
             diagnostics: []
         )
     }

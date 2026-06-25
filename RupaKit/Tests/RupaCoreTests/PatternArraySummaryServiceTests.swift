@@ -61,9 +61,11 @@ import Testing
     #expect(summary.lifecycleActions == [.updatePatternArray, .explodePatternArray])
     #expect(summary.outputOwnership.kind == .sourceOwnedComponentInstances)
     #expect(!summary.outputOwnership.directOutputEditingAllowed)
+    #expect(!summary.outputOwnership.directFeatureEditingAllowed)
     #expect(summary.outputOwnership.sourceEditAction == .updatePatternArray)
     #expect(summary.outputOwnership.detachAction == .explodePatternArray)
     #expect(summary.outputOwnership.editableAfterDetach)
+    #expect(summary.independentCopyOutputs.isEmpty)
     #expect(summary.diagnostics.isEmpty)
 }
 
@@ -118,9 +120,84 @@ import Testing
     #expect(!summary.outputFeatureIDs.isEmpty)
     #expect(summary.outputOwnership.kind == .sourceOwnedIndependentCopies)
     #expect(!summary.outputOwnership.directOutputEditingAllowed)
+    #expect(summary.outputOwnership.directFeatureEditingAllowed)
     #expect(summary.outputOwnership.sourceEditAction == .updatePatternArray)
     #expect(summary.outputOwnership.detachAction == .explodePatternArray)
     #expect(summary.outputOwnership.editableAfterDetach)
+    #expect(summary.independentCopyOutputs.count == source.outputSceneNodeIDs.count)
+    #expect(summary.independentCopyOutputs.map(\.sceneNodeID) == source.outputSceneNodeIDs)
+    #expect(summary.independentCopyOutputs.allSatisfy { $0.state == .matchesSourceDefinition })
+    #expect(summary.independentCopyOutputs.allSatisfy {
+        $0.regenerationPolicy == .reuseUntilDefinitionIdentityChanges
+    })
+    #expect(summary.diagnostics.isEmpty)
+}
+
+@Test func patternArraySummaryReportsDivergedIndependentCopyOutputsForAgentPlanning() async throws {
+    let session = EditorSession()
+    _ = try #require(session.createDefaultExtrudedRectangle())
+    let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let bodySceneNodeID = try #require(
+        patternArraySummaryBodySceneNodeID(for: bodyFeatureID, in: session.document)
+    )
+    _ = try session.execute(
+        .createComponentDefinition(
+            name: "Summary Divergence Source",
+            rootSceneNodeIDs: [bodySceneNodeID]
+        )
+    )
+    let definition = try #require(session.document.productMetadata.componentDefinitions.values.first {
+        $0.name == "Summary Divergence Source"
+    })
+    _ = try session.execute(
+        .createPatternArray(
+            name: "Summary Divergence Array",
+            definitionID: definition.id,
+            distribution: .rectangular(RectangularPatternArray(
+                firstAxis: PatternArrayLinearAxis(
+                    direction: .unitX,
+                    distance: .length(8.0, .millimeter),
+                    copyCount: 2
+                )
+            )),
+            outputMode: .independentCopy
+        )
+    )
+    let source = try #require(session.document.productMetadata.patternArrays.values.first {
+        $0.name == "Summary Divergence Array"
+    })
+    let firstOutputSceneNodeID = try #require(source.outputSceneNodeIDs.first)
+    let firstCloneBodyFeatureID = try #require(
+        patternArraySummaryBodyFeatureID(
+            inSceneSubtreeRootedAt: firstOutputSceneNodeID,
+            document: session.document
+        )
+    )
+    _ = try session.execute(
+        .setExtrudeDistance(
+            featureID: firstCloneBodyFeatureID,
+            distance: .length(7.0, .millimeter)
+        )
+    )
+
+    let result = PatternArraySummaryService().summarize(
+        document: session.document,
+        generation: session.generation,
+        dirty: session.isDirty
+    )
+    let summary = try #require(result.patternArrays.first)
+    let firstOutput = try #require(summary.independentCopyOutputs.first)
+    let secondOutput = try #require(summary.independentCopyOutputs.dropFirst().first)
+
+    #expect(summary.independentCopyOutputs.count == 2)
+    #expect(firstOutput.outputIndex == 0)
+    #expect(firstOutput.sceneNodeID == firstOutputSceneNodeID)
+    #expect(firstOutput.featureIDs.contains(firstCloneBodyFeatureID))
+    #expect(firstOutput.state == .divergedFromSourceDefinition)
+    #expect(firstOutput.regenerationPolicy == .reuseUntilDefinitionIdentityChanges)
+    #expect(secondOutput.outputIndex == 1)
+    #expect(secondOutput.state == .matchesSourceDefinition)
+    #expect(secondOutput.regenerationPolicy == .reuseUntilDefinitionIdentityChanges)
     #expect(summary.diagnostics.isEmpty)
 }
 
@@ -249,6 +326,26 @@ import Testing
     #expect(codes.contains("independentCopyOutputTransformMismatch"))
     #expect(codes.contains("duplicateOutputSceneNodeOwnership"))
     #expect(codes.contains("duplicateOutputFeatureOwnership"))
+}
+
+private func patternArraySummaryBodyFeatureID(
+    inSceneSubtreeRootedAt rootSceneNodeID: SceneNodeID,
+    document: DesignDocument
+) -> FeatureID? {
+    var pendingSceneNodeIDs = [rootSceneNodeID]
+    var visitedSceneNodeIDs: Set<SceneNodeID> = []
+    while let sceneNodeID = pendingSceneNodeIDs.popLast() {
+        guard visitedSceneNodeIDs.insert(sceneNodeID).inserted,
+              let sceneNode = document.productMetadata.sceneNodes[sceneNodeID] else {
+            continue
+        }
+        if sceneNode.reference?.kind == .body,
+           let featureID = sceneNode.reference?.featureID {
+            return featureID
+        }
+        pendingSceneNodeIDs.append(contentsOf: sceneNode.childIDs)
+    }
+    return nil
 }
 
 private func patternArraySummaryBodySceneNodeID(

@@ -23,6 +23,11 @@ struct PatternArrayInspectorView: View {
             inspectorRow("Selected Output", state.selectedOutputTitle)
             inspectorRow("Ownership", state.ownershipTitle)
             inspectorRow("Direct Edit", state.directEditTitle)
+            inspectorRow("Feature Edit", state.featureEditTitle)
+            if state.outputMode == .independentCopy {
+                inspectorRow("Copy State", state.independentCopyOutputStateTitle)
+                inspectorRow("Regeneration", state.independentCopyRegenerationTitle)
+            }
             inspectorRow("Source Edit", state.sourceEditTitle)
             inspectorRow("Detach", state.detachTitle)
             inspectorRow("Diagnostics", state.diagnosticsTitle)

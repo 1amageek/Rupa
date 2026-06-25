@@ -395,7 +395,8 @@ public struct DesignDisplaySnapshotService: Sendable {
             let outputs = patternArrayOutputs(
                 source: source,
                 rootNode: rootNode,
-                metadata: metadata
+                metadata: metadata,
+                summary: summariesBySourceID[sourceID]
             )
             snapshots[sourceID] = PatternArrayDisplaySnapshot(
                 sourceID: source.id,
@@ -417,7 +418,8 @@ public struct DesignDisplaySnapshotService: Sendable {
     private func patternArrayOutputs(
         source: PatternArraySource,
         rootNode: SceneNode?,
-        metadata: ProductMetadata
+        metadata: ProductMetadata,
+        summary: PatternArraySummary?
     ) -> [PatternArrayDisplaySnapshot.Output] {
         switch source.outputMode {
         case .componentInstance:
@@ -443,20 +445,35 @@ public struct DesignDisplaySnapshotService: Sendable {
                 )
             }
         case .independentCopy:
+            let outputStatusBySceneNodeID = outputStatusBySceneNodeID(summary?.independentCopyOutputs ?? [])
             return source.outputSceneNodeIDs.compactMap { sceneNodeID -> PatternArrayDisplaySnapshot.Output? in
                 guard let sceneNode = metadata.sceneNodes[sceneNodeID] else {
                     return nil
                 }
+                let outputStatus = outputStatusBySceneNodeID[sceneNodeID]
                 return PatternArrayDisplaySnapshot.Output(
                     sceneNodeID: sceneNodeID,
                     featureIDs: featureIDs(inSceneSubtreeRootedAt: sceneNodeID, metadata: metadata),
                     name: sceneNode.name,
                     localTransform: sceneNode.localTransform,
                     isVisible: sceneNode.isVisible,
-                    isLocked: sceneNode.isLocked
+                    isLocked: sceneNode.isLocked,
+                    independentCopyState: outputStatus?.state,
+                    independentCopyRegenerationPolicy: outputStatus?.regenerationPolicy
                 )
             }
         }
+    }
+
+    private func outputStatusBySceneNodeID(
+        _ statuses: [PatternArraySummary.IndependentCopyOutputStatus]
+    ) -> [SceneNodeID: PatternArraySummary.IndependentCopyOutputStatus] {
+        var statusBySceneNodeID: [SceneNodeID: PatternArraySummary.IndependentCopyOutputStatus] = [:]
+        statusBySceneNodeID.reserveCapacity(statuses.count)
+        for status in statuses where statusBySceneNodeID[status.sceneNodeID] == nil {
+            statusBySceneNodeID[status.sceneNodeID] = status
+        }
+        return statusBySceneNodeID
     }
 
     private func outputCount(for source: PatternArraySource) -> Int {

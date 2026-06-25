@@ -1,3 +1,4 @@
+import Foundation
 import SwiftCAD
 
 public struct PatternArraySummaryService: Sendable {
@@ -40,6 +41,12 @@ public struct PatternArraySummaryService: Sendable {
     ) -> PatternArraySummary {
         let definition = metadata.componentDefinitions[source.definitionID]
         let rootSceneNode = metadata.sceneNodes[source.rootSceneNodeID]
+        let independentCopyOutputs = independentCopyOutputs(
+            for: source,
+            definition: definition,
+            metadata: metadata,
+            cadDocument: cadDocument
+        )
         let diagnostics = diagnostics(
             for: source,
             metadata: metadata,
@@ -62,6 +69,7 @@ public struct PatternArraySummaryService: Sendable {
             editableFields: [.name, .definitionID, .distribution, .outputMode],
             lifecycleActions: [.updatePatternArray, .explodePatternArray],
             outputOwnership: outputOwnership(for: source.outputMode),
+            independentCopyOutputs: independentCopyOutputs,
             diagnostics: diagnostics
         )
     }
@@ -70,6 +78,25 @@ public struct PatternArraySummaryService: Sendable {
         var sourceIDsByOutputInstanceID: [ComponentInstanceID: [PatternArraySourceID]]
         var sourceIDsByOutputSceneNodeID: [SceneNodeID: [PatternArraySourceID]]
         var sourceIDsByOutputFeatureID: [FeatureID: [PatternArraySourceID]]
+    }
+
+    private struct FeatureStructurePayload: Encodable {
+        var operation: FeatureOperation
+        var inputs: [FeatureInput]
+        var outputs: [FeatureOutput]
+        var isSuppressed: Bool
+
+        init(feature: FeatureNode) {
+            operation = feature.operation
+            inputs = feature.inputs
+            outputs = feature.outputs
+            isSuppressed = feature.isSuppressed
+        }
+    }
+
+    private enum FeatureStructureFingerprintError: Error {
+        case missingFeature
+        case invalidEncoding
     }
 
     private func outputOwnershipIndex(
@@ -122,19 +149,184 @@ public struct PatternArraySummaryService: Sendable {
         for outputMode: PatternArrayOutputMode
     ) -> PatternArraySummary.OutputOwnership {
         let kind: PatternArraySummary.OutputOwnershipKind
+        let directFeatureEditingAllowed: Bool
         switch outputMode {
         case .componentInstance:
             kind = .sourceOwnedComponentInstances
+            directFeatureEditingAllowed = false
         case .independentCopy:
             kind = .sourceOwnedIndependentCopies
+            directFeatureEditingAllowed = true
         }
         return PatternArraySummary.OutputOwnership(
             kind: kind,
             directOutputEditingAllowed: false,
+            directFeatureEditingAllowed: directFeatureEditingAllowed,
             sourceEditAction: .updatePatternArray,
             detachAction: .explodePatternArray,
             editableAfterDetach: true
         )
+    }
+
+    private func independentCopyOutputs(
+        for source: PatternArraySource,
+        definition: ComponentDefinition?,
+        metadata: ProductMetadata,
+        cadDocument: CADDocument
+    ) -> [PatternArraySummary.IndependentCopyOutputStatus] {
+        guard source.outputMode == .independentCopy else {
+            return []
+        }
+        let sourceFeatureIDs = definition.flatMap {
+            sourceFeatureIDs(
+                for: $0,
+                metadata: metadata,
+                cadDocument: cadDocument
+            )
+        }
+        return source.outputSceneNodeIDs.enumerated().map { outputIndex, sceneNodeID in
+            let outputFeatureIDs = orderedFeatureIDs(
+                dependencyFeatureClosure(
+                    from: referencedFeatureIDs(
+                        inSceneSubtreeRootedAt: sceneNodeID,
+                        metadata: metadata
+                    ),
+                    cadDocument: cadDocument
+                ),
+                cadDocument: cadDocument
+            )
+            let state = independentCopyOutputState(
+                sourceFeatureIDs: sourceFeatureIDs,
+                outputFeatureIDs: outputFeatureIDs,
+                cadDocument: cadDocument
+            )
+            return PatternArraySummary.IndependentCopyOutputStatus(
+                outputIndex: outputIndex,
+                sceneNodeID: sceneNodeID,
+                featureIDs: outputFeatureIDs,
+                state: state,
+                regenerationPolicy: independentCopyRegenerationPolicy(for: state)
+            )
+        }
+    }
+
+    private func sourceFeatureIDs(
+        for definition: ComponentDefinition,
+        metadata: ProductMetadata,
+        cadDocument: CADDocument
+    ) -> [FeatureID]? {
+        var referencedFeatureIDs: Set<FeatureID> = []
+        for rootSceneNodeID in definition.rootSceneNodeIDs {
+            referencedFeatureIDs.formUnion(
+                self.referencedFeatureIDs(
+                    inSceneSubtreeRootedAt: rootSceneNodeID,
+                    metadata: metadata
+                )
+            )
+        }
+        guard !referencedFeatureIDs.isEmpty else {
+            return nil
+        }
+        let closureFeatureIDs = dependencyFeatureClosure(
+            from: referencedFeatureIDs,
+            cadDocument: cadDocument
+        )
+        let orderedIDs = orderedFeatureIDs(
+            closureFeatureIDs,
+            cadDocument: cadDocument
+        )
+        guard orderedIDs.count == closureFeatureIDs.count else {
+            return nil
+        }
+        return orderedIDs
+    }
+
+    private func independentCopyOutputState(
+        sourceFeatureIDs: [FeatureID]?,
+        outputFeatureIDs: [FeatureID],
+        cadDocument: CADDocument
+    ) -> PatternArraySummary.IndependentCopyOutputState {
+        guard let sourceFeatureIDs,
+              !sourceFeatureIDs.isEmpty,
+              !outputFeatureIDs.isEmpty,
+              sourceFeatureIDs.count == outputFeatureIDs.count else {
+            return .unresolved
+        }
+        do {
+            let sourceFingerprints = try featureStructureFingerprints(
+                featureIDs: sourceFeatureIDs,
+                cadDocument: cadDocument,
+                featureTokenByID: featureTokenMap(for: sourceFeatureIDs)
+            )
+            let outputFingerprints = try featureStructureFingerprints(
+                featureIDs: outputFeatureIDs,
+                cadDocument: cadDocument,
+                featureTokenByID: featureTokenMap(for: outputFeatureIDs)
+            )
+            return sourceFingerprints == outputFingerprints
+                ? .matchesSourceDefinition
+                : .divergedFromSourceDefinition
+        } catch {
+            return .unresolved
+        }
+    }
+
+    private func independentCopyRegenerationPolicy(
+        for state: PatternArraySummary.IndependentCopyOutputState
+    ) -> PatternArraySummary.IndependentCopyRegenerationPolicy {
+        switch state {
+        case .matchesSourceDefinition, .divergedFromSourceDefinition:
+            .reuseUntilDefinitionIdentityChanges
+        case .unresolved:
+            .unavailable
+        }
+    }
+
+    private func featureStructureFingerprints(
+        featureIDs: [FeatureID],
+        cadDocument: CADDocument,
+        featureTokenByID: [FeatureID: String]
+    ) throws -> [String] {
+        try featureIDs.map { featureID in
+            guard let feature = cadDocument.designGraph.nodes[featureID] else {
+                throw FeatureStructureFingerprintError.missingFeature
+            }
+            return try stableEncodedString(
+                FeatureStructurePayload(feature: feature),
+                featureTokenByID: featureTokenByID
+            )
+        }
+    }
+
+    private func featureTokenMap(
+        for featureIDs: [FeatureID]
+    ) -> [FeatureID: String] {
+        Dictionary(
+            uniqueKeysWithValues: featureIDs.enumerated().map { offset, featureID in
+                (featureID, "feature-token-\(offset)")
+            }
+        )
+    }
+
+    private func stableEncodedString<T: Encodable>(
+        _ value: T,
+        featureTokenByID: [FeatureID: String]
+    ) throws -> String {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        let data = try encoder.encode(value)
+        guard var encoded = String(data: data, encoding: .utf8) else {
+            throw FeatureStructureFingerprintError.invalidEncoding
+        }
+        for (featureID, token) in featureTokenByID.sorted(by: { lhs, rhs in
+            lhs.key.description < rhs.key.description
+        }) {
+            encoded = encoded.replacingOccurrences(
+                of: featureID.description,
+                with: token
+            )
+        }
+        return encoded
     }
 
     private func diagnostics(
@@ -499,6 +691,20 @@ public struct PatternArraySummaryService: Sendable {
             }
         }
         return featureIDs
+    }
+
+    private func orderedFeatureIDs(
+        _ featureIDs: Set<FeatureID>,
+        cadDocument: CADDocument
+    ) -> [FeatureID] {
+        let orderedFeatureIDs = cadDocument.designGraph.order.filter {
+            featureIDs.contains($0)
+        }
+        let orderedFeatureIDSet = Set(orderedFeatureIDs)
+        let missingOrderedFeatureIDs = featureIDs
+            .subtracting(orderedFeatureIDSet)
+            .sorted { $0.description < $1.description }
+        return orderedFeatureIDs + missingOrderedFeatureIDs
     }
 
     private func referencedFeatureIDs(

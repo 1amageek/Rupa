@@ -440,12 +440,12 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                         "Curve Array path distribution, twist, scale, Normal, Parallel, Transport, ratio extent, distance extent, explicit polyline paths, and source sketch-entity paths support Core, Automation, and Agent command paths.",
                         "Pattern Array source update and explode lifecycle commands support Core, Automation, and Agent command paths.",
                         "Component-instance Pattern Array explode materializes cloned CAD feature scene outputs before detaching source ownership.",
-                        "Design display snapshots expose ComponentDefinition IDs, ComponentInstance IDs, typed component instance ownership, renderable root scene nodes, dependency feature closures, PatternArraySource IDs, output instance IDs, independent-copy output scene node feature IDs, root scene node IDs, distribution, and output mode for Agent lifecycle planning.",
+                        "Design display snapshots expose ComponentDefinition IDs, ComponentInstance IDs, typed component instance ownership, renderable root scene nodes, dependency feature closures, PatternArraySource IDs, output instance IDs, independent-copy output scene node feature IDs, per-output source-divergence state, root scene node IDs, distribution, and output mode for Agent lifecycle planning.",
                         "Design display snapshots keep invalid PatternArraySource records discoverable with diagnostics instead of dropping sources whose definition, root scene node, or generated outputs are missing.",
-                        "Pattern Array summaries expose editable fields, lifecycle actions, source-owned output edit policy, output IDs, and diagnostics without forcing CAD evaluation.",
+                        "Pattern Array summaries expose editable fields, lifecycle actions, source-owned scene output policy, cloned feature edit policy, output IDs, independent-copy per-output source-divergence state, regeneration policy, and diagnostics without forcing CAD evaluation.",
                         "Pattern Array summary diagnostics mirror source-owned output invariants for missing instances, mismatched transforms, duplicate ownership, root child mapping, and independent-copy feature closure checks.",
                         "Independent-copy Pattern Array regeneration reuses overlapping output scene roots and cloned feature closures when the source definition is unchanged, preserving edited cloned CAD features while updating planner-owned output transforms.",
-                        "The object Inspector now maps selected source roots, generated outputs, and independent-copy descendants back to their PatternArraySource and displays ownership, lifecycle actions, output mode, selected output index, and diagnostics.",
+                        "The object Inspector now maps selected source roots, generated outputs, and independent-copy descendants back to their PatternArraySource and displays ownership, lifecycle actions, output mode, selected output index, cloned feature edit policy, independent-copy source-divergence state, regeneration policy, and diagnostics.",
                         "The Pattern Array Inspector exposes source-owned output mode plus rectangular first- and second-axis controls, radial center, axis, angular spacing or extent, radial repetition, and curve count, twist, scale, alignment, and extent controls that update the PatternArraySource instead of generated outputs.",
                         "The Pattern Array Inspector starts a dedicated viewport Curve Array path pick mode; viewport sketch line, circle, arc, or spline targets update the PatternArraySource path without replacing the active Pattern Array selection.",
                         "Curve Array ratio extent editing clamps UI and service inputs to the Core planner range before source-owned regeneration.",
@@ -460,14 +460,14 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                         "The viewport previews Curve Pattern Array path replacement candidates with planner-derived ghost output markers before committing the pick-mode source update.",
                         "Viewport and inspector Pattern Array edits preserve direct parameter references by updating referenced ParameterTable values when quantity kinds match.",
                         "Pattern Array generation, curve path extent resolution, and viewport affordance placement share the same parameter-aware expression resolver so Agent-authored parametric arrays remain directly editable in the UI.",
-                        "Viewport editing workflows for independent-copy edited output controls remain open.",
+                        "Viewport editing workflows for direct independent-copy cloned-feature handles remain open.",
                     ]
                 ),
             ],
             openWork: [
-                "Viewport-independent copy controls for edited outputs.",
+                "Viewport direct controls for independent-copy cloned-feature edits.",
             ],
-            next: "Add viewport controls that expose and protect edited independent-copy outputs."
+            next: "Add viewport handles that directly expose independent-copy cloned-feature edits."
         ),
         entry(
             area: .sectionAnalysis,

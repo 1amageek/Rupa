@@ -9,6 +9,8 @@ public struct PatternArrayDisplaySnapshot: Codable, Equatable, Sendable {
         public var localTransform: Transform3D
         public var isVisible: Bool
         public var isLocked: Bool
+        public var independentCopyState: PatternArraySummary.IndependentCopyOutputState?
+        public var independentCopyRegenerationPolicy: PatternArraySummary.IndependentCopyRegenerationPolicy?
 
         public init(
             componentInstanceID: ComponentInstanceID? = nil,
@@ -17,7 +19,9 @@ public struct PatternArrayDisplaySnapshot: Codable, Equatable, Sendable {
             name: String,
             localTransform: Transform3D,
             isVisible: Bool,
-            isLocked: Bool
+            isLocked: Bool,
+            independentCopyState: PatternArraySummary.IndependentCopyOutputState? = nil,
+            independentCopyRegenerationPolicy: PatternArraySummary.IndependentCopyRegenerationPolicy? = nil
         ) {
             self.componentInstanceID = componentInstanceID
             self.sceneNodeID = sceneNodeID
@@ -26,6 +30,8 @@ public struct PatternArrayDisplaySnapshot: Codable, Equatable, Sendable {
             self.localTransform = localTransform
             self.isVisible = isVisible
             self.isLocked = isLocked
+            self.independentCopyState = independentCopyState
+            self.independentCopyRegenerationPolicy = independentCopyRegenerationPolicy
         }
     }
 

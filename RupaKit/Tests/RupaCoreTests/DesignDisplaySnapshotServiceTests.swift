@@ -155,6 +155,75 @@ import Testing
 }
 
 @MainActor
+@Test func designDisplaySnapshotReportsIndependentCopyOutputStatesForAgentPlanning() async throws {
+    let session = EditorSession()
+    _ = try #require(session.createDefaultExtrudedRectangle())
+    let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let bodySceneNodeID = try #require(
+        designDisplaySnapshotBodySceneNodeID(for: bodyFeatureID, in: session.document)
+    )
+    _ = try session.execute(
+        .createComponentDefinition(
+            name: "Display Independent Source",
+            rootSceneNodeIDs: [bodySceneNodeID]
+        )
+    )
+    let definition = try #require(session.document.productMetadata.componentDefinitions.values.first {
+        $0.name == "Display Independent Source"
+    })
+    _ = try session.execute(
+        .createPatternArray(
+            name: "Display Independent Array",
+            definitionID: definition.id,
+            distribution: .rectangular(RectangularPatternArray(
+                firstAxis: PatternArrayLinearAxis(
+                    direction: .unitX,
+                    distance: .length(12.0, .millimeter),
+                    copyCount: 2
+                )
+            )),
+            outputMode: .independentCopy
+        )
+    )
+    let source = try #require(session.document.productMetadata.patternArrays.values.first {
+        $0.name == "Display Independent Array"
+    })
+    let firstOutputSceneNodeID = try #require(source.outputSceneNodeIDs.first)
+    let firstCloneBodyFeatureID = try #require(
+        designDisplaySnapshotBodyFeatureID(
+            inSceneSubtreeRootedAt: firstOutputSceneNodeID,
+            document: session.document
+        )
+    )
+    _ = try session.execute(
+        .setExtrudeDistance(
+            featureID: firstCloneBodyFeatureID,
+            distance: .length(7.0, .millimeter)
+        )
+    )
+
+    let result = try DesignDisplaySnapshotService().result(
+        document: session.document,
+        currentEvaluation: session.currentEvaluation,
+        generation: session.generation,
+        dirty: session.isDirty
+    )
+    let patternArray = try #require(result.patternArrays.first)
+    let firstOutput = try #require(patternArray.outputs.first)
+    let secondOutput = try #require(patternArray.outputs.dropFirst().first)
+
+    #expect(patternArray.outputMode == .independentCopy)
+    #expect(patternArray.outputs.count == 2)
+    #expect(firstOutput.sceneNodeID == firstOutputSceneNodeID)
+    #expect(firstOutput.featureIDs.contains(firstCloneBodyFeatureID))
+    #expect(firstOutput.independentCopyState == .divergedFromSourceDefinition)
+    #expect(firstOutput.independentCopyRegenerationPolicy == .reuseUntilDefinitionIdentityChanges)
+    #expect(secondOutput.independentCopyState == .matchesSourceDefinition)
+    #expect(secondOutput.independentCopyRegenerationPolicy == .reuseUntilDefinitionIdentityChanges)
+    #expect(patternArray.diagnostics.isEmpty)
+}
+
+@MainActor
 @Test func designDisplaySnapshotKeepsInvalidPatternArraySourcesForDiagnostics() async throws {
     let session = EditorSession()
     _ = try #require(session.createDefaultExtrudedRectangle())
@@ -221,4 +290,24 @@ private func designDisplaySnapshotBodySceneNodeID(
     document.productMetadata.sceneNodes.first { _, node in
         node.reference == .body(featureID)
     }?.key
+}
+
+private func designDisplaySnapshotBodyFeatureID(
+    inSceneSubtreeRootedAt rootSceneNodeID: SceneNodeID,
+    document: DesignDocument
+) -> FeatureID? {
+    var pendingSceneNodeIDs = [rootSceneNodeID]
+    var visitedSceneNodeIDs: Set<SceneNodeID> = []
+    while let sceneNodeID = pendingSceneNodeIDs.popLast() {
+        guard visitedSceneNodeIDs.insert(sceneNodeID).inserted,
+              let sceneNode = document.productMetadata.sceneNodes[sceneNodeID] else {
+            continue
+        }
+        if sceneNode.reference?.kind == .body,
+           let featureID = sceneNode.reference?.featureID {
+            return featureID
+        }
+        pendingSceneNodeIDs.append(contentsOf: sceneNode.childIDs)
+    }
+    return nil
 }

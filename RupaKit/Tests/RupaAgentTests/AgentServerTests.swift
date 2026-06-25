@@ -1334,6 +1334,86 @@ import SwiftCAD
     #expect(decodedResponse == summaryResponse)
 }
 
+@Test func agentReportsIndependentCopyOutputStatesForLifecyclePlanning() async throws {
+    let server = AgentServer()
+    let sessionID = UUID()
+    let session = EditorSession()
+    _ = try #require(session.createDefaultExtrudedRectangle())
+    let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let bodySceneNodeID = try #require(
+        agentPatternArrayBodySceneNodeID(for: bodyFeatureID, in: session.document)
+    )
+    _ = try session.execute(
+        .createComponentDefinition(
+            name: "Agent Independent Source",
+            rootSceneNodeIDs: [bodySceneNodeID]
+        )
+    )
+    let definition = try #require(session.document.productMetadata.componentDefinitions.values.first {
+        $0.name == "Agent Independent Source"
+    })
+    _ = try session.execute(
+        .createPatternArray(
+            name: "Agent Independent Array",
+            definitionID: definition.id,
+            distribution: .rectangular(RectangularPatternArray(
+                firstAxis: PatternArrayLinearAxis(
+                    direction: .unitX,
+                    distance: .length(8.0, .millimeter),
+                    copyCount: 2
+                )
+            )),
+            outputMode: .independentCopy
+        )
+    )
+    let source = try #require(session.document.productMetadata.patternArrays.values.first {
+        $0.name == "Agent Independent Array"
+    })
+    let firstOutputSceneNodeID = try #require(source.outputSceneNodeIDs.first)
+    let firstCloneBodyFeatureID = try #require(
+        agentFeatureID(
+            inSceneSubtreeRootedAt: firstOutputSceneNodeID,
+            document: session.document
+        )
+    )
+    _ = try session.execute(
+        .setExtrudeDistance(
+            featureID: firstCloneBodyFeatureID,
+            distance: .length(7.0, .millimeter)
+        )
+    )
+    server.register(session: session, id: sessionID)
+
+    let summaryResponse = server.handle(
+        .patternArraySummary(
+            sessionID: sessionID,
+            expectedGeneration: session.generation
+        )
+    )
+    let codec = AgentMessageCodec()
+    let decodedResponse = try codec.decodeResponse(from: try codec.encode(summaryResponse))
+    guard case .patternArraySummary(let result) = summaryResponse else {
+        #expect(Bool(false))
+        return
+    }
+    let summary = try #require(result.patternArrays.first)
+    let firstOutput = try #require(summary.independentCopyOutputs.first)
+    let secondOutput = try #require(summary.independentCopyOutputs.dropFirst().first)
+
+    #expect(summary.sourceID == source.id)
+    #expect(summary.outputMode == .independentCopy)
+    #expect(summary.outputOwnership.kind == .sourceOwnedIndependentCopies)
+    #expect(!summary.outputOwnership.directOutputEditingAllowed)
+    #expect(summary.outputOwnership.directFeatureEditingAllowed)
+    #expect(firstOutput.sceneNodeID == firstOutputSceneNodeID)
+    #expect(firstOutput.featureIDs.contains(firstCloneBodyFeatureID))
+    #expect(firstOutput.state == .divergedFromSourceDefinition)
+    #expect(firstOutput.regenerationPolicy == .reuseUntilDefinitionIdentityChanges)
+    #expect(secondOutput.state == .matchesSourceDefinition)
+    #expect(secondOutput.regenerationPolicy == .reuseUntilDefinitionIdentityChanges)
+    #expect(decodedResponse == summaryResponse)
+}
+
 @Test func agentMessageCodecRoundTripsCommandRequestAndResponse() async throws {
     let codec = AgentMessageCodec()
     let sessionID = UUID()

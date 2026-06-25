@@ -22,6 +22,17 @@ public struct PatternArraySummary: Codable, Equatable, Sendable {
         case sourceOwnedIndependentCopies
     }
 
+    public enum IndependentCopyOutputState: String, Codable, Equatable, Sendable {
+        case matchesSourceDefinition
+        case divergedFromSourceDefinition
+        case unresolved
+    }
+
+    public enum IndependentCopyRegenerationPolicy: String, Codable, Equatable, Sendable {
+        case reuseUntilDefinitionIdentityChanges
+        case unavailable
+    }
+
     public enum DiagnosticSeverity: String, Codable, Equatable, Sendable {
         case warning
         case error
@@ -30,6 +41,7 @@ public struct PatternArraySummary: Codable, Equatable, Sendable {
     public struct OutputOwnership: Codable, Equatable, Sendable {
         public var kind: OutputOwnershipKind
         public var directOutputEditingAllowed: Bool
+        public var directFeatureEditingAllowed: Bool
         public var sourceEditAction: LifecycleAction
         public var detachAction: LifecycleAction
         public var editableAfterDetach: Bool
@@ -37,12 +49,14 @@ public struct PatternArraySummary: Codable, Equatable, Sendable {
         public init(
             kind: OutputOwnershipKind,
             directOutputEditingAllowed: Bool,
+            directFeatureEditingAllowed: Bool = false,
             sourceEditAction: LifecycleAction,
             detachAction: LifecycleAction,
             editableAfterDetach: Bool
         ) {
             self.kind = kind
             self.directOutputEditingAllowed = directOutputEditingAllowed
+            self.directFeatureEditingAllowed = directFeatureEditingAllowed
             self.sourceEditAction = sourceEditAction
             self.detachAction = detachAction
             self.editableAfterDetach = editableAfterDetach
@@ -65,6 +79,28 @@ public struct PatternArraySummary: Codable, Equatable, Sendable {
         }
     }
 
+    public struct IndependentCopyOutputStatus: Codable, Equatable, Sendable {
+        public var outputIndex: Int
+        public var sceneNodeID: SceneNodeID
+        public var featureIDs: [FeatureID]
+        public var state: IndependentCopyOutputState
+        public var regenerationPolicy: IndependentCopyRegenerationPolicy
+
+        public init(
+            outputIndex: Int,
+            sceneNodeID: SceneNodeID,
+            featureIDs: [FeatureID],
+            state: IndependentCopyOutputState,
+            regenerationPolicy: IndependentCopyRegenerationPolicy
+        ) {
+            self.outputIndex = outputIndex
+            self.sceneNodeID = sceneNodeID
+            self.featureIDs = featureIDs
+            self.state = state
+            self.regenerationPolicy = regenerationPolicy
+        }
+    }
+
     public var sourceID: PatternArraySourceID
     public var name: String
     public var definitionID: ComponentDefinitionID
@@ -80,6 +116,7 @@ public struct PatternArraySummary: Codable, Equatable, Sendable {
     public var editableFields: [EditableField]
     public var lifecycleActions: [LifecycleAction]
     public var outputOwnership: OutputOwnership
+    public var independentCopyOutputs: [IndependentCopyOutputStatus]
     public var diagnostics: [Diagnostic]
 
     public init(
@@ -98,6 +135,7 @@ public struct PatternArraySummary: Codable, Equatable, Sendable {
         editableFields: [EditableField],
         lifecycleActions: [LifecycleAction],
         outputOwnership: OutputOwnership,
+        independentCopyOutputs: [IndependentCopyOutputStatus] = [],
         diagnostics: [Diagnostic]
     ) {
         self.sourceID = sourceID
@@ -115,6 +153,7 @@ public struct PatternArraySummary: Codable, Equatable, Sendable {
         self.editableFields = editableFields
         self.lifecycleActions = lifecycleActions
         self.outputOwnership = outputOwnership
+        self.independentCopyOutputs = independentCopyOutputs
         self.diagnostics = diagnostics
     }
 }

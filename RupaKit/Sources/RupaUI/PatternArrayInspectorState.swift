@@ -98,6 +98,7 @@ struct PatternArrayInspectorState: Equatable, Sendable {
     var selectedRole: SelectionRole
     var selectedOutputIndices: [Int]
     var outputOwnership: PatternArraySummary.OutputOwnership
+    var independentCopyOutputs: [PatternArraySummary.IndependentCopyOutputStatus]
     var diagnostics: [PatternArraySummary.Diagnostic]
     var rectangularFirstAxis: LinearAxis?
     var rectangularSecondAxis: LinearAxis?
@@ -141,6 +142,7 @@ struct PatternArrayInspectorState: Equatable, Sendable {
         self.selectedRole = Self.selectedRole(for: matches.map(\.role))
         self.selectedOutputIndices = Self.selectedOutputIndices(from: matches)
         self.outputOwnership = summary.outputOwnership
+        self.independentCopyOutputs = summary.independentCopyOutputs
         self.diagnostics = summary.diagnostics
         let source = patternArrays[summary.sourceID]
         self.rectangularFirstAxis = source.flatMap(Self.rectangularFirstAxis)
@@ -210,6 +212,41 @@ struct PatternArrayInspectorState: Equatable, Sendable {
         outputOwnership.directOutputEditingAllowed ? "Allowed" : "Source Controlled"
     }
 
+    var featureEditTitle: String {
+        outputOwnership.directFeatureEditingAllowed ? "Allowed" : "Source Controlled"
+    }
+
+    var independentCopyOutputStateTitle: String {
+        guard outputMode == .independentCopy else {
+            return "Unavailable"
+        }
+        let statuses = displayIndependentCopyOutputs
+        guard !statuses.isEmpty else {
+            return "Unresolved"
+        }
+        if statuses.count == 1,
+           let status = statuses.first {
+            return "#\(status.outputIndex + 1) \(outputStateTitle(status.state))"
+        }
+        return summarizedOutputStateTitle(for: statuses)
+    }
+
+    var independentCopyRegenerationTitle: String {
+        guard outputMode == .independentCopy else {
+            return "Unavailable"
+        }
+        let statuses = displayIndependentCopyOutputs
+        guard !statuses.isEmpty else {
+            return "Unavailable"
+        }
+        let policies = Set(statuses.map(\.regenerationPolicy))
+        guard policies.count == 1,
+              let policy = policies.first else {
+            return "Mixed"
+        }
+        return regenerationPolicyTitle(policy)
+    }
+
     var sourceEditTitle: String {
         actionTitle(outputOwnership.sourceEditAction)
     }
@@ -238,6 +275,13 @@ struct PatternArrayInspectorState: Equatable, Sendable {
         var summary: PatternArraySummary
         var role: SelectionRole
         var outputIndex: Int?
+    }
+
+    private var displayIndependentCopyOutputs: [PatternArraySummary.IndependentCopyOutputStatus] {
+        let selectedStatuses = selectedOutputIndices.compactMap { outputIndex in
+            independentCopyOutputs.first { $0.outputIndex == outputIndex }
+        }
+        return selectedStatuses.isEmpty ? independentCopyOutputs : selectedStatuses
     }
 
     private static func match(
@@ -456,6 +500,49 @@ struct PatternArrayInspectorState: Equatable, Sendable {
             "Update Pattern Array"
         case .explodePatternArray:
             "Explode Pattern Array"
+        }
+    }
+
+    private func outputStateTitle(
+        _ state: PatternArraySummary.IndependentCopyOutputState
+    ) -> String {
+        switch state {
+        case .matchesSourceDefinition:
+            "Source Match"
+        case .divergedFromSourceDefinition:
+            "Diverged"
+        case .unresolved:
+            "Unresolved"
+        }
+    }
+
+    private func summarizedOutputStateTitle(
+        for statuses: [PatternArraySummary.IndependentCopyOutputStatus]
+    ) -> String {
+        let order: [PatternArraySummary.IndependentCopyOutputState] = [
+            .matchesSourceDefinition,
+            .divergedFromSourceDefinition,
+            .unresolved,
+        ]
+        let counts = Dictionary(grouping: statuses, by: \.state).mapValues(\.count)
+        return order.compactMap { state -> String? in
+            guard let count = counts[state],
+                  count > 0 else {
+                return nil
+            }
+            return "\(count) \(outputStateTitle(state))"
+        }
+        .joined(separator: ", ")
+    }
+
+    private func regenerationPolicyTitle(
+        _ policy: PatternArraySummary.IndependentCopyRegenerationPolicy
+    ) -> String {
+        switch policy {
+        case .reuseUntilDefinitionIdentityChanges:
+            "Reuse Until Definition Changes"
+        case .unavailable:
+            "Unavailable"
         }
     }
 }
