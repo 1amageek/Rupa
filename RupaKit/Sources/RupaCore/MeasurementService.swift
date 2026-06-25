@@ -1326,70 +1326,39 @@ public struct MeasurementService {
         evaluatedDocument: EvaluatedDocument?
     ) throws -> Double? {
         if let sketch {
-            return try pathLength(sketch, parameters: parameters)
+            return try pathLength(
+                sketch,
+                sourceFeatureID: featureID,
+                parameters: parameters
+            )
         }
         guard let curves = evaluatedDocument?.curves[featureID] else {
             return nil
         }
+        return try pathLength(curves)
+    }
+
+    private func pathLength(_ curves: [EvaluatedCurve]) throws -> Double? {
+        let evaluator = EvaluatedCurvePathEvaluator(tolerance: tolerance)
         var totalLength = 0.0
         for curve in curves {
-            guard curve.points.count >= 2 else {
-                continue
-            }
-            for index in 0..<(curve.points.count - 1) {
-                let length = (curve.points[index + 1] - curve.points[index]).length
-                guard length.isFinite,
-                      length > tolerance.distance else {
-                    continue
-                }
-                totalLength += length
-            }
+            totalLength += try evaluator.length(of: curve)
         }
         return totalLength > tolerance.distance ? totalLength : nil
     }
 
     private func pathLength(
         _ sketch: Sketch,
+        sourceFeatureID: FeatureID,
         parameters: ParameterTable
     ) throws -> Double? {
-        let frame = try planeFrame(for: sketch.plane)
-        var totalLength = 0.0
-        for entity in sketch.entities.values {
-            switch entity {
-            case .point:
-                return nil
-            case .line(let line):
-                let start = frame.map(try resolvedPoint(line.start, parameters: parameters))
-                let end = frame.map(try resolvedPoint(line.end, parameters: parameters))
-                totalLength += (end - start).length
-            case .circle(let circle):
-                let radius = try resolvedLength(circle.radius, parameters: parameters)
-                guard radius > tolerance.distance else {
-                    return nil
-                }
-                totalLength += Double.pi * 2.0 * radius
-            case .arc(let arc):
-                let radius = try resolvedLength(arc.radius, parameters: parameters)
-                let startAngle = try resolvedAngle(arc.startAngle, parameters: parameters)
-                let endAngle = try resolvedAngle(arc.endAngle, parameters: parameters)
-                let span = normalizedAngleSpan(startAngle: startAngle, endAngle: endAngle)
-                guard radius > tolerance.distance, span > tolerance.angle else {
-                    return nil
-                }
-                totalLength += radius * span
-            case .spline(let spline):
-                let points = try splineSamplePoints(spline, parameters: parameters)
-                guard points.count >= 2 else {
-                    return nil
-                }
-                for index in 0..<(points.count - 1) {
-                    let start = frame.map(points[index])
-                    let end = frame.map(points[index + 1])
-                    totalLength += (end - start).length
-                }
-            }
-        }
-        return totalLength > tolerance.distance ? totalLength : nil
+        let resolvedParameters = try ParameterResolver().resolve(parameters)
+        let curves = try SketchCurveExtractor(tolerance: tolerance).extractCurves(
+            from: sketch,
+            sourceFeatureID: sourceFeatureID,
+            parameters: resolvedParameters
+        )
+        return try pathLength(curves)
     }
 
     private func resolvedProfileSegments(

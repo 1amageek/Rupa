@@ -921,6 +921,66 @@ import SwiftCAD
     try document.validate()
 }
 
+@Test func measureSweepUsesExactGeneratedCircularPathLength() throws {
+    var document = DesignDocument.empty()
+    let profileID = try document.createRectangleSketch(
+        name: "Generated Arc Path Sweep Profile",
+        plane: .xy,
+        width: .length(4.0, .millimeter),
+        height: .length(2.0, .millimeter)
+    )
+    let sourcePathID = try document.createArcSketch(
+        name: "Generated Sweep Source Arc Path",
+        plane: .yz,
+        center: SketchPoint(
+            x: .length(0.0, .millimeter),
+            y: .length(0.0, .millimeter)
+        ),
+        radius: .length(60.0, .millimeter),
+        startAngle: .angle(0.0, .degree),
+        endAngle: .angle(90.0, .degree)
+    )
+    let generatedPathID = FeatureID()
+    let generatedPath = FeatureNode(
+        id: generatedPathID,
+        name: "Generated Sparse Offset Arc Path",
+        operation: .curveOffset(CurveOffsetFeature(
+            source: CurveOutputReference(featureID: sourcePathID),
+            distance: .length(1.0, .millimeter),
+            planeNormal: .unitX,
+            sampleCount: 4
+        )),
+        inputs: [FeatureInput(featureID: sourcePathID, role: .curve)],
+        outputs: [FeatureOutput(role: .curve)]
+    )
+    try document.cadDocument.appendFeature(generatedPath)
+
+    let sweepID = try document.createSweep(
+        name: "Generated Sparse Offset Arc Sweep",
+        sections: [.profile(ProfileReference(featureID: profileID))],
+        path: SweepPathReference(featureID: generatedPathID)
+    )
+    let result = try MeasurementService().measure(document: document)
+    let solid = try #require(result.solids.first)
+    let pathLength = try #require(solid.linearDimensions.first { $0.kind == .sweepPathLength })
+    let generatedCurve = try #require(
+        CADPipeline.modelingDefault(for: document)
+            .evaluate(document.cadDocument)
+            .curves[generatedPathID]?
+            .first
+    )
+    let sparsePolylineLength = zip(generatedCurve.points, generatedCurve.points.dropFirst()).reduce(0.0) { length, pair in
+        length + (pair.1 - pair.0).length
+    }
+    let expectedPathLength = 0.059 * Double.pi / 2.0
+
+    #expect(solid.featureID == sweepID.description)
+    #expect(abs(pathLength.meters - expectedPathLength) < 1.0e-12)
+    #expect(abs(sparsePolylineLength - expectedPathLength) > 0.0005)
+    #expect(result.diagnostics.isEmpty)
+    try document.validate()
+}
+
 @Test func createSweepRejectsSolidOutputFromCurveSectionBeforeMutation() throws {
     var document = DesignDocument.empty()
     let sectionID = try document.createLineSketch(
