@@ -1836,6 +1836,240 @@ struct CLISketchOffsetCommandTests {
 }
 
 @Suite(.serialized)
+struct CLISketchAdvancedCurveEditCommandTests {
+    @Test(.timeLimit(.minutes(1)))
+    func executableSketchConvertCommandsPersistClosedDocumentAsJSON() async throws {
+        let temporaryDirectory = try makeTemporaryDirectory()
+        defer {
+            removeTemporaryDirectory(temporaryDirectory)
+        }
+
+        let arcURL = temporaryDirectory.appendingPathComponent("process-sketch-convert-arc.swcad")
+        var arcDocument = DesignDocument.empty(named: "Process Sketch Convert Arc")
+        _ = try arcDocument.createLineSketch(
+            name: "Bendable Line",
+            plane: .xy,
+            start: SketchPoint(
+                x: .length(0.0, .millimeter),
+                y: .length(0.0, .millimeter)
+            ),
+            end: SketchPoint(
+                x: .length(10.0, .millimeter),
+                y: .length(0.0, .millimeter)
+            )
+        )
+        try DocumentFileService().save(arcDocument, to: arcURL)
+        let arcSource = try namedSketchEntity("Bendable Line", kind: "line", in: arcDocument)
+        let arcResult = try await runCLI([
+            "sketch",
+            "convert-line-to-arc",
+            arcURL.path,
+            "--target",
+            try encodedSelectionTarget(try #require(arcSource.selectionTarget())),
+            "--sagitta",
+            "2",
+            "--unit",
+            "millimeter",
+            "--mode",
+            "file",
+            "--json",
+        ])
+        let arcResponse = try JSONDecoder().decode(CLIResponse.self, from: arcResult.standardOutputData)
+        let arcLoaded = try DocumentFileService().load(from: arcURL)
+        let convertedArc = try namedSketchEntity("Bendable Line", kind: "arc", in: arcLoaded)
+
+        let splineURL = temporaryDirectory.appendingPathComponent("process-sketch-convert-spline.swcad")
+        var splineDocument = DesignDocument.empty(named: "Process Sketch Convert Spline")
+        _ = try splineDocument.createLineSketch(
+            name: "Spline Convertible Line",
+            plane: .xy,
+            start: SketchPoint(
+                x: .length(0.0, .millimeter),
+                y: .length(0.0, .millimeter)
+            ),
+            end: SketchPoint(
+                x: .length(9.0, .millimeter),
+                y: .length(0.0, .millimeter)
+            )
+        )
+        try DocumentFileService().save(splineDocument, to: splineURL)
+        let splineSource = try namedSketchEntity("Spline Convertible Line", kind: "line", in: splineDocument)
+        let splineResult = try await runCLI([
+            "sketch",
+            "convert-line-to-spline",
+            splineURL.path,
+            "--target",
+            try encodedSelectionTarget(try #require(splineSource.selectionTarget())),
+            "--mode",
+            "file",
+            "--json",
+        ])
+        let splineResponse = try JSONDecoder().decode(CLIResponse.self, from: splineResult.standardOutputData)
+        let splineLoaded = try DocumentFileService().load(from: splineURL)
+        let convertedSpline = try namedSketchEntity("Spline Convertible Line", kind: "spline", in: splineLoaded)
+
+        #expect(arcResult.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: arcResult.standardError))
+        #expect(arcResponse.message == "Sketch line converted to an arc.")
+        #expect(arcResponse.saved)
+        #expect(convertedArc.entityID == arcSource.entityID)
+        #expect(abs((convertedArc.radius ?? -1.0) - 0.00725) < 1.0e-12)
+        #expect(splineResult.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: splineResult.standardError))
+        #expect(splineResponse.message == "Sketch line converted to a spline.")
+        #expect(splineResponse.saved)
+        #expect(convertedSpline.entityID == splineSource.entityID)
+        #expect(convertedSpline.controlPoints.count == 4)
+    }
+
+    @Test(.timeLimit(.minutes(1)))
+    func executableSketchSplineInsertionAndRebuildPersistClosedDocumentAsJSON() async throws {
+        let temporaryDirectory = try makeTemporaryDirectory()
+        defer {
+            removeTemporaryDirectory(temporaryDirectory)
+        }
+        let documentURL = temporaryDirectory.appendingPathComponent("process-sketch-spline-rebuild.swcad")
+        var document = DesignDocument.empty(named: "Process Sketch Spline Rebuild")
+        _ = try document.createSplineSketch(
+            name: "Editable Spline",
+            plane: .xy,
+            spline: SketchSpline(controlPoints: [
+                SketchPoint(x: .length(0.0, .millimeter), y: .length(0.0, .millimeter)),
+                SketchPoint(x: .length(0.0, .millimeter), y: .length(4.0, .millimeter)),
+                SketchPoint(x: .length(8.0, .millimeter), y: .length(4.0, .millimeter)),
+                SketchPoint(x: .length(8.0, .millimeter), y: .length(0.0, .millimeter)),
+            ])
+        )
+        try DocumentFileService().save(document, to: documentURL)
+        let source = try namedSketchEntity("Editable Spline", kind: "spline", in: document)
+        let target = try #require(source.selectionTarget())
+
+        let insertResult = try await runCLI([
+            "sketch",
+            "insert-control-point",
+            documentURL.path,
+            "--target",
+            try encodedSelectionTarget(target),
+            "--fraction",
+            "0.5",
+            "--mode",
+            "file",
+            "--json",
+        ])
+        let insertResponse = try JSONDecoder().decode(CLIResponse.self, from: insertResult.standardOutputData)
+        let inserted = try DocumentFileService().load(from: documentURL)
+        let insertedSpline = try namedSketchEntity("Editable Spline", kind: "spline", in: inserted)
+
+        let rebuildResult = try await runCLI([
+            "sketch",
+            "rebuild",
+            documentURL.path,
+            "--target",
+            try encodedSelectionTarget(target),
+            "--method",
+            "points",
+            "--control-point-count",
+            "4",
+            "--mode",
+            "file",
+            "--json",
+        ])
+        let rebuildResponse = try JSONDecoder().decode(CLIResponse.self, from: rebuildResult.standardOutputData)
+        let rebuilt = try DocumentFileService().load(from: documentURL)
+        let rebuiltSpline = try namedSketchEntity("Editable Spline", kind: "spline", in: rebuilt)
+
+        #expect(insertResult.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: insertResult.standardError))
+        #expect(insertResponse.message == "Sketch spline control point inserted.")
+        #expect(insertResponse.saved)
+        #expect(insertedSpline.controlPoints.count == 7)
+        #expect(abs(insertedSpline.controlPoints[3].x - 0.004) < 1.0e-12)
+        #expect(abs(insertedSpline.controlPoints[3].y - 0.003) < 1.0e-12)
+        #expect(rebuildResult.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: rebuildResult.standardError))
+        #expect(rebuildResponse.message == "Sketch curve rebuilt.")
+        #expect(rebuildResponse.saved)
+        #expect(rebuiltSpline.entityID == source.entityID)
+        #expect(rebuiltSpline.controlPoints.count == 4)
+    }
+
+    @Test(.timeLimit(.minutes(1)))
+    func executableSketchCutPersistsClosedDocumentAsJSON() async throws {
+        let temporaryDirectory = try makeTemporaryDirectory()
+        defer {
+            removeTemporaryDirectory(temporaryDirectory)
+        }
+        let documentURL = temporaryDirectory.appendingPathComponent("process-sketch-cut.swcad")
+        var document = DesignDocument.empty(named: "Process Sketch Cut")
+        _ = try document.createLineSketch(
+            name: "Cut Target",
+            plane: .xy,
+            start: SketchPoint(
+                x: .length(0.0, .millimeter),
+                y: .length(0.0, .millimeter)
+            ),
+            end: SketchPoint(
+                x: .length(10.0, .millimeter),
+                y: .length(0.0, .millimeter)
+            )
+        )
+        _ = try document.createLineSketch(
+            name: "Cut Cutter",
+            plane: .xy,
+            start: SketchPoint(
+                x: .length(4.0, .millimeter),
+                y: .length(-2.0, .millimeter)
+            ),
+            end: SketchPoint(
+                x: .length(4.0, .millimeter),
+                y: .length(2.0, .millimeter)
+            )
+        )
+        try DocumentFileService().save(document, to: documentURL)
+        let targetLine = try namedSketchEntity("Cut Target", kind: "line", in: document)
+        let cutterLine = try namedSketchEntity("Cut Cutter", kind: "line", in: document)
+        let result = try await runCLI([
+            "sketch",
+            "cut",
+            documentURL.path,
+            "--target",
+            try encodedSelectionTarget(try #require(targetLine.selectionTarget())),
+            "--cutter",
+            try encodedSelectionTarget(try #require(cutterLine.selectionTarget())),
+            "--mode",
+            "file",
+            "--json",
+        ])
+        let response = try JSONDecoder().decode(CLIResponse.self, from: result.standardOutputData)
+        let loaded = try DocumentFileService().load(from: documentURL)
+        let summary = try SketchEntitySummaryService().summarize(document: loaded)
+        let targetSegments = summary.entries.filter { $0.sourceFeatureName == "Cut Target" }
+        let cutterSegments = summary.entries.filter { $0.sourceFeatureName == "Cut Cutter" }
+
+        #expect(result.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: result.standardError))
+        #expect(response.message == "Cut Curve applied.")
+        #expect(response.saved)
+        #expect(targetSegments.count == 2)
+        #expect(cutterSegments.count == 1)
+        #expect(targetSegments.contains { entry in
+            abs((entry.start?.x ?? -1.0) - 0.0) < 1.0e-12
+                && abs((entry.end?.x ?? -1.0) - 0.004) < 1.0e-12
+        })
+        #expect(targetSegments.contains { entry in
+            abs((entry.start?.x ?? -1.0) - 0.004) < 1.0e-12
+                && abs((entry.end?.x ?? -1.0) - 0.010) < 1.0e-12
+        })
+    }
+
+    private func namedSketchEntity(
+        _ name: String,
+        kind: String,
+        in document: DesignDocument
+    ) throws -> SketchEntitySummaryResult.EntityEntry {
+        let summary = try SketchEntitySummaryService().summarize(document: document)
+        return try #require(summary.entries.first { entry in
+            entry.sourceFeatureName == name && entry.entityKind == kind
+        })
+    }
+}
+
+@Suite(.serialized)
 struct CLIModelDirectEditCommandTests {
     @MainActor
     @Test(.timeLimit(.minutes(1)))
