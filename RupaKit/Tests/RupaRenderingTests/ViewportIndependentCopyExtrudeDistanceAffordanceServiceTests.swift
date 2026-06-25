@@ -159,6 +159,53 @@ import Testing
 }
 
 @MainActor
+@Test func independentCopyExtrudeDistanceAffordanceUsesSceneTransformedBodyCenterAsBasePoint() async throws {
+    let session = EditorSession()
+    let source = try createIndependentCopyPatternArray(
+        in: session,
+        definitionName: "Extrude Distance Base Point Source",
+        arrayName: "Extrude Distance Base Point Array",
+        distribution: .rectangular(RectangularPatternArray(
+            firstAxis: PatternArrayLinearAxis(
+                direction: .unitX,
+                distance: .length(100.0, .millimeter),
+                copyCount: 1
+            )
+        ))
+    )
+    let firstOutputSceneNodeID = try #require(source.outputSceneNodeIDs.first)
+    let scene = ViewportSceneBuilder().build(document: session.document)
+    let outputBodyItem = try bodyItem(
+        rootedAt: firstOutputSceneNodeID,
+        source: source,
+        scene: scene,
+        document: session.document
+    )
+    let layout = try #require(ViewportLayout(
+        scene: scene,
+        size: CGSize(width: 900.0, height: 700.0)
+    ))
+
+    let candidates = ViewportIndependentCopyExtrudeDistanceAffordanceService().candidates(
+        document: session.document,
+        scene: scene,
+        selection: SelectionModel(selectedTargets: [
+            SelectionTarget(sceneNodeID: firstOutputSceneNodeID),
+        ]),
+        layout: layout
+    )
+
+    let candidate = try #require(candidates.first)
+    let expectedBasePoint = layout.project(Point3D(
+        x: Double(outputBodyItem.modelBounds.midX),
+        y: bodyCenterY(for: outputBodyItem),
+        z: Double(outputBodyItem.modelBounds.midY)
+    ))
+    #expect(abs(candidate.geometry.baseProjectedPoint.x - expectedBasePoint.x) < 1.0e-9)
+    #expect(abs(candidate.geometry.baseProjectedPoint.y - expectedBasePoint.y) < 1.0e-9)
+}
+
+@MainActor
 @Test func independentCopyExtrudeDistanceAffordanceAppliesOutputRotationToHandleAxis() async throws {
     let session = EditorSession()
     let source = try createIndependentCopyPatternArray(
@@ -440,6 +487,33 @@ private func bodyFeatureID(
         subtreeIDs.contains(node.id) && node.reference?.kind == .body
     })
     return try #require(bodySceneNode.reference?.featureID)
+}
+
+private func bodyItem(
+    rootedAt rootSceneNodeID: SceneNodeID,
+    source: PatternArraySource,
+    scene: ViewportScene,
+    document: DesignDocument
+) throws -> ViewportSceneItem {
+    let subtreeIDs = Set(sceneSubtreeIDs(rootedAt: rootSceneNodeID, document: document))
+    return try #require(scene.items.first { item in
+        guard let sceneNodeID = item.sceneNodeID else {
+            return false
+        }
+        if case .body = item.kind {
+            return subtreeIDs.contains(sceneNodeID) && source.outputFeatureIDs.contains(item.featureID)
+        }
+        return false
+    })
+}
+
+private func bodyCenterY(for item: ViewportSceneItem) -> Double {
+    guard case .body(let component) = item.kind,
+          component.yMinMeters.isFinite,
+          component.yMaxMeters.isFinite else {
+        return 0.0
+    }
+    return (component.yMinMeters + component.yMaxMeters) * 0.5
 }
 
 private func sceneNodeID(

@@ -2734,12 +2734,18 @@ public struct ViewportSceneBuilder {
         let resolvedBaseItems = baseItems.map { item in
             itemWithSceneNodeIdentity(item, in: document)
         }
+        let sceneTransformIndex = ViewportSceneTransformIndex(metadata: document.productMetadata)
         let rootItems = resolvedBaseItems.compactMap { resolvedItem -> ViewportSceneItem? in
-            if let sceneNodeID = resolvedItem.sceneNodeID,
-               !effectivelyVisibleSceneNodeIDs.contains(sceneNodeID) {
+            guard let sceneNodeID = resolvedItem.sceneNodeID else {
+                return resolvedItem
+            }
+            guard effectivelyVisibleSceneNodeIDs.contains(sceneNodeID) else {
                 return nil
             }
-            return resolvedItem
+            return transformedSceneTreeItem(
+                resolvedItem,
+                transform: sceneTransformIndex.transform(for: sceneNodeID)
+            )
         }
         let baseItemsBySceneNodeID = Dictionary(
             uniqueKeysWithValues: resolvedBaseItems.compactMap { item -> (SceneNodeID, ViewportSceneItem)? in
@@ -2752,6 +2758,7 @@ public struct ViewportSceneBuilder {
         let instanceItems = componentInstanceItems(
             document: document,
             baseItemsBySceneNodeID: baseItemsBySceneNodeID,
+            sceneTransformIndex: sceneTransformIndex,
             effectivelyVisibleSceneNodeIDs: effectivelyVisibleSceneNodeIDs
         )
         return ViewportScene(items: rootItems + instanceItems)
@@ -2835,6 +2842,7 @@ public struct ViewportSceneBuilder {
     private func componentInstanceItems(
         document: DesignDocument,
         baseItemsBySceneNodeID: [SceneNodeID: ViewportSceneItem],
+        sceneTransformIndex: ViewportSceneTransformIndex,
         effectivelyVisibleSceneNodeIDs: Set<SceneNodeID>
     ) -> [ViewportSceneItem] {
         var items: [ViewportSceneItem] = []
@@ -2846,10 +2854,9 @@ public struct ViewportSceneBuilder {
                   let definition = document.productMetadata.componentDefinitions[instance.definitionID] else {
                 continue
             }
-            let instanceTransform = combinedTransform(
-                sceneNode.localTransform,
-                instance.localTransform
-            )
+            let instanceTransform = sceneTransformIndex
+                .transform(for: sceneNodeID)
+                .concatenating(instance.localTransform)
             for rootSceneNodeID in definition.rootSceneNodeIDs {
                 appendComponentDefinitionItems(
                     sourceSceneNodeID: rootSceneNodeID,
@@ -2885,7 +2892,7 @@ public struct ViewportSceneBuilder {
         }
         var nextVisitedSceneNodeIDs = visitedSceneNodeIDs
         nextVisitedSceneNodeIDs.insert(sourceSceneNodeID)
-        let nodeTransform = combinedTransform(transform, sourceNode.localTransform)
+        let nodeTransform = transform.concatenating(sourceNode.localTransform)
         if let baseItem = baseItemsBySceneNodeID[sourceSceneNodeID] {
             items.append(
                 transformedComponentInstanceItem(
@@ -2905,7 +2912,7 @@ public struct ViewportSceneBuilder {
            !visitedDefinitionIDs.contains(nestedDefinition.id) {
             var nextVisitedDefinitionIDs = visitedDefinitionIDs
             nextVisitedDefinitionIDs.insert(nestedDefinition.id)
-            let nestedTransform = combinedTransform(nodeTransform, nestedInstance.localTransform)
+            let nestedTransform = nodeTransform.concatenating(nestedInstance.localTransform)
             for nestedRootSceneNodeID in nestedDefinition.rootSceneNodeIDs {
                 appendComponentDefinitionItems(
                     sourceSceneNodeID: nestedRootSceneNodeID,
@@ -2942,10 +2949,18 @@ public struct ViewportSceneBuilder {
         componentInstanceID: ComponentInstanceID,
         transform: Transform3D
     ) -> ViewportSceneItem {
-        var item = baseItem
+        var item = transformedSceneTreeItem(baseItem, transform: transform)
         item.id = "\(instanceSceneNodeID.description):\(sourceSceneNodeID.description):\(baseItem.id)"
         item.sceneNodeID = instanceSceneNodeID
         item.componentInstanceID = componentInstanceID
+        return item
+    }
+
+    private func transformedSceneTreeItem(
+        _ baseItem: ViewportSceneItem,
+        transform: Transform3D
+    ) -> ViewportSceneItem {
+        var item = baseItem
         item.modelTransform = .identity
 
         switch baseItem.kind {
@@ -2981,29 +2996,40 @@ public struct ViewportSceneBuilder {
     ) -> ViewportSketchPrimitive {
         switch primitive {
         case .point(let entityID, let point):
-            .point(entityID: entityID, point: transformedSketchPoint(point, transform: transform))
+            return .point(entityID: entityID, point: transformedSketchPoint(point, transform: transform))
         case .line(let entityID, let start, let end):
-            .line(
+            return .line(
                 entityID: entityID,
                 start: transformedSketchPoint(start, transform: transform),
                 end: transformedSketchPoint(end, transform: transform)
             )
         case .circle(let entityID, let center, let radiusMeters):
-            .circle(
+            return .circle(
                 entityID: entityID,
                 center: transformedSketchPoint(center, transform: transform),
-                radiusMeters: radiusMeters
+                radiusMeters: transformedSketchRadius(
+                    center: center,
+                    radiusMeters: radiusMeters,
+                    transform: transform
+                )
             )
         case .arc(let entityID, let center, let radiusMeters, let startAngleRadians, let endAngleRadians):
-            .arc(
-                entityID: entityID,
-                center: transformedSketchPoint(center, transform: transform),
+            let transformedArc = transformedSketchArc(
+                center: center,
                 radiusMeters: radiusMeters,
                 startAngleRadians: startAngleRadians,
-                endAngleRadians: endAngleRadians
+                endAngleRadians: endAngleRadians,
+                transform: transform
+            )
+            return .arc(
+                entityID: entityID,
+                center: transformedArc.center,
+                radiusMeters: transformedArc.radiusMeters,
+                startAngleRadians: transformedArc.startAngleRadians,
+                endAngleRadians: transformedArc.endAngleRadians
             )
         case .spline(let entityID, let points, let controlPoints, let sketchPlane):
-            .spline(
+            return .spline(
                 entityID: entityID,
                 points: points.map { transformedSketchPoint($0, transform: transform) },
                 controlPoints: controlPoints.map { transformedSketchPoint($0, transform: transform) },
@@ -3021,6 +3047,84 @@ public struct ViewportSceneBuilder {
             transform: transform
         )
         return CGPoint(x: transformedPoint.x, y: transformedPoint.z)
+    }
+
+    private func transformedSketchRadius(
+        center: CGPoint,
+        radiusMeters: Double,
+        transform: Transform3D
+    ) -> Double {
+        let radius = max(radiusMeters, 1.0e-12)
+        let centerPoint = transformedSketchPoint(center, transform: transform)
+        let xPoint = transformedSketchPoint(
+            CGPoint(x: center.x + CGFloat(radius), y: center.y),
+            transform: transform
+        )
+        let zPoint = transformedSketchPoint(
+            CGPoint(x: center.x, y: center.y + CGFloat(radius)),
+            transform: transform
+        )
+        let xScale = planarDistance(from: centerPoint, to: xPoint) / radius
+        let zScale = planarDistance(from: centerPoint, to: zPoint) / radius
+        let scale = (xScale + zScale) * 0.5
+        guard scale.isFinite,
+              scale > 1.0e-12 else {
+            return radius
+        }
+        return radius * scale
+    }
+
+    private func transformedSketchArc(
+        center: CGPoint,
+        radiusMeters: Double,
+        startAngleRadians: Double,
+        endAngleRadians: Double,
+        transform: Transform3D
+    ) -> (center: CGPoint, radiusMeters: Double, startAngleRadians: Double, endAngleRadians: Double) {
+        let radius = max(radiusMeters, 1.0e-12)
+        let transformedCenter = transformedSketchPoint(center, transform: transform)
+        let transformedStart = transformedSketchPoint(
+            sketchArcPoint(center: center, radiusMeters: radius, angleRadians: startAngleRadians),
+            transform: transform
+        )
+        let transformedEnd = transformedSketchPoint(
+            sketchArcPoint(center: center, radiusMeters: radius, angleRadians: endAngleRadians),
+            transform: transform
+        )
+        let startRadius = planarDistance(from: transformedCenter, to: transformedStart)
+        let endRadius = planarDistance(from: transformedCenter, to: transformedEnd)
+        let transformedRadius = max((startRadius + endRadius) * 0.5, 1.0e-12)
+        return (
+            transformedCenter,
+            transformedRadius,
+            sketchAngle(from: transformedCenter, to: transformedStart),
+            sketchAngle(from: transformedCenter, to: transformedEnd)
+        )
+    }
+
+    private func sketchArcPoint(
+        center: CGPoint,
+        radiusMeters: Double,
+        angleRadians: Double
+    ) -> CGPoint {
+        CGPoint(
+            x: center.x + CGFloat(cos(angleRadians) * radiusMeters),
+            y: center.y + CGFloat(sin(angleRadians) * radiusMeters)
+        )
+    }
+
+    private func sketchAngle(
+        from center: CGPoint,
+        to point: CGPoint
+    ) -> Double {
+        Double(atan2(point.y - center.y, point.x - center.x))
+    }
+
+    private func planarDistance(
+        from start: CGPoint,
+        to end: CGPoint
+    ) -> Double {
+        Double(hypot(end.x - start.x, end.y - start.y))
     }
 
     private func transformedBodyComponent(
@@ -3163,33 +3267,6 @@ public struct ViewportSceneBuilder {
             y: (values[1] * point.x + values[5] * point.y + values[9] * point.z + values[13]) * scale,
             z: (values[2] * point.x + values[6] * point.y + values[10] * point.z + values[14]) * scale
         )
-    }
-
-    private func combinedTransform(
-        _ lhs: Transform3D,
-        _ rhs: Transform3D
-    ) -> Transform3D {
-        let left = lhs.matrix.values
-        let right = rhs.matrix.values
-        guard left.count == 16,
-              right.count == 16 else {
-            return lhs
-        }
-        var values = Array(repeating: 0.0, count: 16)
-        for column in 0 ..< 4 {
-            for row in 0 ..< 4 {
-                var value = 0.0
-                for index in 0 ..< 4 {
-                    value += left[index * 4 + row] * right[column * 4 + index]
-                }
-                values[column * 4 + row] = value
-            }
-        }
-        do {
-            return Transform3D(matrix: try Matrix4x4(values: values))
-        } catch {
-            return lhs
-        }
     }
 
     private func currentEvaluatedDocument(

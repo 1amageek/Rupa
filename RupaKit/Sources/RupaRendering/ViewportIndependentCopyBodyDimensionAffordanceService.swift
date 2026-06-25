@@ -158,7 +158,7 @@ struct ViewportIndependentCopyBodyDimensionAffordanceService: Sendable {
             return nil
         }
         guard let geometry = ViewportPatternArrayLinearAxisAffordanceGeometry(
-            baseProjectedPoint: layout.project(output.modelTransform.viewportTransformedPoint(descriptor.baseModelPoint)),
+            baseProjectedPoint: layout.project(descriptor.baseModelPoint),
             axisDirection: transformedAxis,
             distanceMeters: entry.resolvedMeters * axisScale,
             layout: layout,

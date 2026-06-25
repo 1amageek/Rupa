@@ -23,17 +23,17 @@ struct ViewportIndependentCopyOutputSelectionIndex {
         scene: ViewportScene
     ) {
         var records: [ViewportSelectedIndependentCopyOutput] = []
+        let transformIndex = ViewportSceneTransformIndex(metadata: metadata)
         let sources = metadata.patternArrays.values.sorted {
             $0.id.description < $1.id.description
         }
         for source in sources where source.outputMode == .independentCopy {
             for (outputIndex, outputSceneNodeID) in source.outputSceneNodeIDs.enumerated() {
-                let outputNode = metadata.sceneNodes[outputSceneNodeID]
                 records.append(ViewportSelectedIndependentCopyOutput(
                     source: source,
                     outputIndex: outputIndex,
                     outputSceneNodeID: outputSceneNodeID,
-                    modelTransform: outputNode?.localTransform ?? .identity
+                    modelTransform: transformIndex.transform(for: outputSceneNodeID)
                 ))
             }
         }

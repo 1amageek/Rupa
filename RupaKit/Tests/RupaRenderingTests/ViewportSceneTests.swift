@@ -96,6 +96,109 @@ import Testing
 }
 
 @MainActor
+@Test func viewportSceneBuilderAppliesDocumentRootTransformToComponentInstanceItems() async throws {
+    let session = EditorSession()
+    _ = try #require(session.createDefaultExtrudedRectangle())
+    let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let bodyNodeID = try #require(bodySceneNodeID(for: bodyFeatureID, in: session.document))
+    _ = try session.execute(
+        .createComponentDefinition(
+            name: "Transformed Component Source",
+            rootSceneNodeIDs: [bodyNodeID]
+        )
+    )
+    let definition = try #require(session.document.productMetadata.componentDefinitions.values.first {
+        $0.name == "Transformed Component Source"
+    })
+    _ = try session.execute(
+        .createPatternArray(
+            name: "Transformed Component Pattern",
+            definitionID: definition.id,
+            distribution: .rectangular(RectangularPatternArray(
+                firstAxis: PatternArrayLinearAxis(
+                    direction: .unitX,
+                    distance: .length(100.0, .millimeter),
+                    copyCount: 1
+                )
+            )),
+            outputMode: .componentInstance
+        )
+    )
+    let source = try #require(session.document.productMetadata.patternArrays.values.first {
+        $0.name == "Transformed Component Pattern"
+    })
+    let documentRootSceneNodeID = try #require(session.document.productMetadata.rootSceneNodeIDs.first)
+    _ = try session.execute(
+        .setSceneNodeTransform(
+            id: documentRootSceneNodeID,
+            localTransform: translationTransform(x: 0.03, y: 0.0, z: 0.0)
+        )
+    )
+    let outputInstanceID = try #require(source.outputInstanceIDs.first)
+
+    let scene = ViewportSceneBuilder().build(document: session.document)
+    let baseBody = try #require(scene.items.first { item in
+        item.componentInstanceID == nil && item.featureID == bodyFeatureID
+    })
+    let instanceBody = try #require(scene.items.first { item in
+        item.componentInstanceID == outputInstanceID && item.featureID == bodyFeatureID
+    })
+
+    #expect(abs(instanceBody.modelTransform.matrix.values[12] - 0.13) < 1.0e-12)
+    #expect(abs(instanceBody.modelBounds.midX - (baseBody.modelBounds.midX + 0.1)) < 1.0e-12)
+}
+
+@MainActor
+@Test func viewportSceneBuilderAppliesIndependentCopyOutputSceneTransforms() async throws {
+    let session = EditorSession()
+    _ = try #require(session.createDefaultExtrudedRectangle())
+    let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let bodyNodeID = try #require(bodySceneNodeID(for: bodyFeatureID, in: session.document))
+    _ = try session.execute(
+        .createComponentDefinition(
+            name: "Independent Copy Viewport Source",
+            rootSceneNodeIDs: [bodyNodeID]
+        )
+    )
+    let definition = try #require(session.document.productMetadata.componentDefinitions.values.first {
+        $0.name == "Independent Copy Viewport Source"
+    })
+    _ = try session.execute(
+        .createPatternArray(
+            name: "Independent Copy Viewport Pattern",
+            definitionID: definition.id,
+            distribution: .rectangular(RectangularPatternArray(
+                firstAxis: PatternArrayLinearAxis(
+                    direction: .unitX,
+                    distance: .length(100.0, .millimeter),
+                    copyCount: 1
+                )
+            )),
+            outputMode: .independentCopy
+        )
+    )
+    let source = try #require(session.document.productMetadata.patternArrays.values.first {
+        $0.name == "Independent Copy Viewport Pattern"
+    })
+    let outputSceneNodeID = try #require(source.outputSceneNodeIDs.first)
+    let outputSubtreeIDs = Set(sceneSubtreeIDs(rootedAt: outputSceneNodeID, document: session.document))
+
+    let scene = ViewportSceneBuilder().build(document: session.document)
+    let baseBody = try #require(scene.items.first { item in
+        item.sceneNodeID == bodyNodeID && item.featureID == bodyFeatureID
+    })
+    let outputBody = try #require(scene.items.first { item in
+        guard let sceneNodeID = item.sceneNodeID else {
+            return false
+        }
+        return outputSubtreeIDs.contains(sceneNodeID) && source.outputFeatureIDs.contains(item.featureID)
+    })
+
+    #expect(abs(outputBody.modelTransform.matrix.values[12] - 0.1) < 1.0e-12)
+    #expect(abs(outputBody.modelBounds.midX - (baseBody.modelBounds.midX + 0.1)) < 1.0e-12)
+}
+
+@MainActor
 @Test func viewportSceneBuilderExpandsNestedComponentInstancePatternDefinitions() async throws {
     let session = EditorSession()
     _ = try #require(session.createDefaultExtrudedRectangle())
@@ -2792,6 +2895,55 @@ private func bodySceneNodeID(
     document.productMetadata.sceneNodes.first { entry in
         entry.value.reference?.kind == .body && entry.value.reference?.featureID == featureID
     }?.key
+}
+
+private func sceneSubtreeIDs(
+    rootedAt rootSceneNodeID: SceneNodeID,
+    document: DesignDocument
+) -> [SceneNodeID] {
+    var result: [SceneNodeID] = []
+    var visited: Set<SceneNodeID> = []
+    appendSceneSubtreeIDs(
+        rootSceneNodeID,
+        document: document,
+        visited: &visited,
+        result: &result
+    )
+    return result
+}
+
+private func appendSceneSubtreeIDs(
+    _ sceneNodeID: SceneNodeID,
+    document: DesignDocument,
+    visited: inout Set<SceneNodeID>,
+    result: inout [SceneNodeID]
+) {
+    guard visited.insert(sceneNodeID).inserted,
+          let node = document.productMetadata.sceneNodes[sceneNodeID] else {
+        return
+    }
+    result.append(sceneNodeID)
+    for childID in node.childIDs {
+        appendSceneSubtreeIDs(
+            childID,
+            document: document,
+            visited: &visited,
+            result: &result
+        )
+    }
+}
+
+private func translationTransform(
+    x: Double,
+    y: Double,
+    z: Double
+) throws -> Transform3D {
+    Transform3D(matrix: try Matrix4x4(values: [
+        1.0, 0.0, 0.0, 0.0,
+        0.0, 1.0, 0.0, 0.0,
+        0.0, 0.0, 1.0, 0.0,
+        x, y, z, 1.0,
+    ]))
 }
 
 private func viewportSurfaceContinuityPatchNetworkMesh(centerZ: Double) -> Mesh {

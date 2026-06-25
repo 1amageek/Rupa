@@ -1,6 +1,30 @@
 import RupaCore
 
 extension Transform3D {
+    func concatenating(_ rhs: Transform3D) -> Transform3D {
+        let left = matrix.values
+        let right = rhs.matrix.values
+        guard left.count == 16,
+              right.count == 16 else {
+            return self
+        }
+        var values = Array(repeating: 0.0, count: 16)
+        for column in 0 ..< 4 {
+            for row in 0 ..< 4 {
+                var value = 0.0
+                for index in 0 ..< 4 {
+                    value += left[index * 4 + row] * right[column * 4 + index]
+                }
+                values[column * 4 + row] = value
+            }
+        }
+        do {
+            return Transform3D(matrix: try Matrix4x4(values: values))
+        } catch {
+            return self
+        }
+    }
+
     func viewportTransformedPoint(_ point: Point3D) -> Point3D {
         let values = matrix.values
         guard values.count == 16 else {
