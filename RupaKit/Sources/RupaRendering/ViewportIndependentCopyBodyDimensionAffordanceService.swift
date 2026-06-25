@@ -34,17 +34,24 @@ struct ViewportIndependentCopyBodyDimensionAffordanceService: Sendable {
         selection: SelectionModel,
         layout: ViewportLayout
     ) -> [ViewportIndependentCopyBodyDimensionAffordanceCandidate] {
-        editableItems(
+        let items = editableItems(
             output: output,
             index: index,
             selection: selection
-        ).flatMap { item in
-            candidates(
-                item: item,
-                output: output,
-                document: document,
-                layout: layout
-            )
+        )
+        let entriesByFeatureID = dimensionEntriesByFeatureID(
+            items: items,
+            document: document
+        )
+        return items.flatMap { item in
+            entriesByFeatureID[item.featureID.description, default: []].compactMap { entry in
+                candidate(
+                    entry: entry,
+                    item: item,
+                    output: output,
+                    layout: layout
+                )
+            }
         }
     }
 
@@ -70,32 +77,29 @@ struct ViewportIndependentCopyBodyDimensionAffordanceService: Sendable {
         return outputItems
     }
 
-    private func candidates(
-        item: ViewportSceneItem,
-        output: ViewportSelectedIndependentCopyOutput,
-        document: DesignDocument,
-        layout: ViewportLayout
-    ) -> [ViewportIndependentCopyBodyDimensionAffordanceCandidate] {
-        guard let sceneNodeID = item.sceneNodeID else {
-            return []
+    private func dimensionEntriesByFeatureID(
+        items: [ViewportSceneItem],
+        document: DesignDocument
+    ) -> [String: [ObjectDimensionSummaryResult.Entry]] {
+        let targets = items.compactMap { item -> SelectionTarget? in
+            guard let sceneNodeID = item.sceneNodeID else {
+                return nil
+            }
+            return SelectionTarget(sceneNodeID: sceneNodeID)
+        }
+        guard !targets.isEmpty else {
+            return [:]
         }
         let summary: ObjectDimensionSummaryResult
         do {
             summary = try ObjectDimensionSummaryService().summarize(
                 document: document,
-                targets: [SelectionTarget(sceneNodeID: sceneNodeID)]
+                targets: targets
             )
         } catch {
-            return []
+            return [:]
         }
-        return summary.entries.compactMap { entry in
-            candidate(
-                entry: entry,
-                item: item,
-                output: output,
-                layout: layout
-            )
-        }
+        return Dictionary(grouping: summary.entries, by: \.sourceFeatureID)
     }
 
     private func candidate(
@@ -116,29 +120,47 @@ struct ViewportIndependentCopyBodyDimensionAffordanceService: Sendable {
                 kind: .sizeX,
                 label: "X",
                 axisDirection: .unitX,
-                baseModelPoint: CGPoint(x: item.modelBounds.minX, y: item.modelBounds.midY)
+                baseModelPoint: Point3D(
+                    x: Double(item.modelBounds.minX),
+                    y: bodyCenterY(for: item),
+                    z: Double(item.modelBounds.midY)
+                )
             )
         case (.box, .sizeZ):
             descriptor = DimensionDescriptor(
                 kind: .sizeZ,
                 label: "Z",
                 axisDirection: .unitZ,
-                baseModelPoint: CGPoint(x: item.modelBounds.midX, y: item.modelBounds.minY)
+                baseModelPoint: Point3D(
+                    x: Double(item.modelBounds.midX),
+                    y: bodyCenterY(for: item),
+                    z: Double(item.modelBounds.minY)
+                )
             )
         case (.cylinder, .radius):
             descriptor = DimensionDescriptor(
                 kind: .radius,
                 label: "R",
                 axisDirection: .unitX,
-                baseModelPoint: CGPoint(x: item.modelBounds.midX, y: item.modelBounds.midY)
+                baseModelPoint: Point3D(
+                    x: Double(item.modelBounds.midX),
+                    y: bodyCenterY(for: item),
+                    z: Double(item.modelBounds.midY)
+                )
             )
         default:
             return nil
         }
+        let transformedAxis = output.modelTransform.viewportTransformedVector(descriptor.axisDirection)
+        let axisScale = transformedAxis.length
+        guard axisScale.isFinite,
+              axisScale > 1.0e-12 else {
+            return nil
+        }
         guard let geometry = ViewportPatternArrayLinearAxisAffordanceGeometry(
-            baseProjectedPoint: layout.project(descriptor.baseModelPoint),
-            axisDirection: descriptor.axisDirection,
-            distanceMeters: entry.resolvedMeters,
+            baseProjectedPoint: layout.project(output.modelTransform.viewportTransformedPoint(descriptor.baseModelPoint)),
+            axisDirection: transformedAxis,
+            distanceMeters: entry.resolvedMeters * axisScale,
             layout: layout,
             viewportLength: 58.0
         ) else {
@@ -152,10 +174,20 @@ struct ViewportIndependentCopyBodyDimensionAffordanceService: Sendable {
                 featureID: item.featureID,
                 kind: descriptor.kind,
                 label: descriptor.label,
+                valueScale: axisScale,
                 geometry: geometry
             ),
             geometry: geometry
         )
+    }
+
+    private func bodyCenterY(for item: ViewportSceneItem) -> Double {
+        guard case .body(let component) = item.kind,
+              component.yMinMeters.isFinite,
+              component.yMaxMeters.isFinite else {
+            return 0.0
+        }
+        return (component.yMinMeters + component.yMaxMeters) * 0.5
     }
 }
 
@@ -163,7 +195,7 @@ private struct DimensionDescriptor {
     var kind: ViewportIndependentCopyBodyDimensionKind
     var label: String
     var axisDirection: Vector3D
-    var baseModelPoint: CGPoint
+    var baseModelPoint: Point3D
 }
 
 struct ViewportIndependentCopyBodyDimensionAffordanceCandidate: Equatable {
@@ -178,6 +210,7 @@ struct ViewportIndependentCopyBodyDimensionHandleTarget: Equatable {
     var featureID: FeatureID
     var kind: ViewportIndependentCopyBodyDimensionKind
     var label: String
+    var valueScale: Double
     var geometry: ViewportPatternArrayLinearAxisAffordanceGeometry
 
     var identity: ViewportIndependentCopyBodyDimensionHandleIdentity {

@@ -10455,12 +10455,17 @@ public struct Viewport: View {
         guard abs(distance - activeIndependentCopyExtrudeDistanceDrag.target.geometry.baseDistanceMeters) > 1.0e-12 else {
             return nil
         }
+        let localDistance = distance / activeIndependentCopyExtrudeDistanceDrag.target.valueScale
+        guard localDistance.isFinite,
+              localDistance > 0.0 else {
+            return nil
+        }
         return ViewportIndependentCopyExtrudeDistanceDragTarget(
             sourceID: activeIndependentCopyExtrudeDistanceDrag.target.sourceID,
             outputIndex: activeIndependentCopyExtrudeDistanceDrag.target.outputIndex,
             outputSceneNodeID: activeIndependentCopyExtrudeDistanceDrag.target.outputSceneNodeID,
             featureID: activeIndependentCopyExtrudeDistanceDrag.target.featureID,
-            distance: distance
+            distance: localDistance
         )
     }
 
@@ -10468,8 +10473,13 @@ public struct Viewport: View {
         guard let activeIndependentCopyBodyDimensionDrag else {
             return nil
         }
-        let value = activeIndependentCopyBodyDimensionDrag.valueMeters
-        guard abs(value - activeIndependentCopyBodyDimensionDrag.target.geometry.baseDistanceMeters) > 1.0e-12 else {
+        let displayValue = activeIndependentCopyBodyDimensionDrag.valueMeters
+        guard abs(displayValue - activeIndependentCopyBodyDimensionDrag.target.geometry.baseDistanceMeters) > 1.0e-12 else {
+            return nil
+        }
+        let localValue = displayValue / activeIndependentCopyBodyDimensionDrag.target.valueScale
+        guard localValue.isFinite,
+              localValue > 0.0 else {
             return nil
         }
         return ViewportIndependentCopyBodyDimensionDragTarget(
@@ -10478,7 +10488,7 @@ public struct Viewport: View {
             outputSceneNodeID: activeIndependentCopyBodyDimensionDrag.target.outputSceneNodeID,
             featureID: activeIndependentCopyBodyDimensionDrag.target.featureID,
             kind: activeIndependentCopyBodyDimensionDrag.target.kind,
-            value: value
+            value: localValue
         )
     }
 

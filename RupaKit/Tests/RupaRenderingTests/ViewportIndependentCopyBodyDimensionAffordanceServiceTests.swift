@@ -83,6 +83,86 @@ import Testing
 }
 
 @MainActor
+@Test func independentCopyBodyDimensionAffordanceAppliesOutputScaleToDisplayedDimensions() async throws {
+    let session = EditorSession()
+    let source = try createIndependentCopyBoxPatternArray(
+        in: session,
+        definitionName: "Body Dimension Scaled Box Source",
+        arrayName: "Body Dimension Scaled Box Array",
+        distribution: .curve(CurvePatternArray(
+            path: .polyline(
+                points: [.origin, Point3D(x: 0.080, y: 0.0, z: 0.0)],
+                normal: .unitZ
+            ),
+            copyCount: 1,
+            endScale: .scalar(2.0),
+            alignment: .parallel
+        ))
+    )
+    let firstOutputSceneNodeID = try #require(source.outputSceneNodeIDs.first)
+    let scene = ViewportSceneBuilder().build(document: session.document)
+    let layout = try #require(ViewportLayout(
+        scene: scene,
+        size: CGSize(width: 900.0, height: 700.0)
+    ))
+
+    let candidates = ViewportIndependentCopyBodyDimensionAffordanceService().candidates(
+        document: session.document,
+        scene: scene,
+        selection: SelectionModel(selectedTargets: [
+            SelectionTarget(sceneNodeID: firstOutputSceneNodeID),
+        ]),
+        layout: layout
+    )
+
+    let sizeX = try #require(candidates.first { $0.target.kind == .sizeX })
+    #expect(abs(sizeX.target.valueScale - 2.0) < 1.0e-12)
+    #expect(abs(sizeX.geometry.baseDistanceMeters - 0.080) < 1.0e-12)
+}
+
+@MainActor
+@Test func independentCopyBodyDimensionAffordanceAppliesOutputRotationToHandleAxis() async throws {
+    let session = EditorSession()
+    let source = try createIndependentCopyBoxPatternArray(
+        in: session,
+        definitionName: "Body Dimension Rotated Box Source",
+        arrayName: "Body Dimension Rotated Box Array",
+        distribution: .radial(RadialPatternArray(
+            angularAxis: PatternArrayAngularAxis(
+                center: .origin,
+                axis: .unitY,
+                angle: .angle(90.0, .degree),
+                copyCount: 1
+            )
+        ))
+    )
+    let firstOutputSceneNodeID = try #require(source.outputSceneNodeIDs.first)
+    let outputTransform = try #require(session.document.productMetadata.sceneNodes[firstOutputSceneNodeID]?.localTransform)
+    let scene = ViewportSceneBuilder().build(document: session.document)
+    let layout = try #require(ViewportLayout(
+        scene: scene,
+        size: CGSize(width: 900.0, height: 700.0)
+    ))
+
+    let candidates = ViewportIndependentCopyBodyDimensionAffordanceService().candidates(
+        document: session.document,
+        scene: scene,
+        selection: SelectionModel(selectedTargets: [
+            SelectionTarget(sceneNodeID: firstOutputSceneNodeID),
+        ]),
+        layout: layout
+    )
+
+    let sizeX = try #require(candidates.first { $0.target.kind == .sizeX })
+    let expectedDirection = projectedDirection(
+        for: outputTransform.viewportTransformedVector(.unitX),
+        layout: layout
+    )
+    #expect(abs(sizeX.geometry.projectedDirection.dx - expectedDirection.dx) < 1.0e-12)
+    #expect(abs(sizeX.geometry.projectedDirection.dy - expectedDirection.dy) < 1.0e-12)
+}
+
+@MainActor
 @Test func independentCopyBodyDimensionAffordanceResolvesCylinderRadiusHandle() async throws {
     let session = EditorSession()
     let source = try createIndependentCopyCylinderPatternArray(
@@ -174,7 +254,8 @@ import Testing
 private func createIndependentCopyBoxPatternArray(
     in session: EditorSession,
     definitionName: String,
-    arrayName: String
+    arrayName: String,
+    distribution: PatternArrayDistribution? = nil
 ) throws -> PatternArraySource {
     _ = try createBoxPatternSourceDefinition(
         in: session,
@@ -183,7 +264,8 @@ private func createIndependentCopyBoxPatternArray(
     return try createIndependentCopyPatternArray(
         in: session,
         definitionName: definitionName,
-        arrayName: arrayName
+        arrayName: arrayName,
+        distribution: distribution
     )
 }
 
@@ -256,22 +338,24 @@ private func createCylinderPatternSourceDefinition(
 private func createIndependentCopyPatternArray(
     in session: EditorSession,
     definitionName: String,
-    arrayName: String
+    arrayName: String,
+    distribution: PatternArrayDistribution? = nil
 ) throws -> PatternArraySource {
     let definition = try #require(session.document.productMetadata.componentDefinitions.values.first {
         $0.name == definitionName
     })
+    let resolvedDistribution = distribution ?? .rectangular(RectangularPatternArray(
+        firstAxis: PatternArrayLinearAxis(
+            direction: .unitX,
+            distance: .length(8.0, .millimeter),
+            copyCount: 2
+        )
+    ))
     _ = try session.execute(
         .createPatternArray(
             name: arrayName,
             definitionID: definition.id,
-            distribution: .rectangular(RectangularPatternArray(
-                firstAxis: PatternArrayLinearAxis(
-                    direction: .unitX,
-                    distance: .length(8.0, .millimeter),
-                    copyCount: 2
-                )
-            )),
+            distribution: resolvedDistribution,
             outputMode: .independentCopy
         )
     )
@@ -355,4 +439,23 @@ private func appendSceneSubtreeIDs(
             result: &result
         )
     }
+}
+
+private func projectedDirection(
+    for axis: Vector3D,
+    layout: ViewportLayout
+) -> CGVector {
+    let projected = CGVector(
+        dx: (
+            layout.basis.xDirection.dx * CGFloat(axis.x)
+                + layout.basis.yDirection.dx * CGFloat(axis.y)
+                + layout.basis.zDirection.dx * CGFloat(axis.z)
+        ) * layout.scale,
+        dy: (
+            layout.basis.xDirection.dy * CGFloat(axis.x)
+                + layout.basis.yDirection.dy * CGFloat(axis.y)
+                + layout.basis.zDirection.dy * CGFloat(axis.z)
+        ) * layout.scale
+    )
+    return projected.normalized
 }

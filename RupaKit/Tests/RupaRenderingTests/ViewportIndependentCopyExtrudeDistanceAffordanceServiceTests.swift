@@ -121,6 +121,86 @@ import Testing
 }
 
 @MainActor
+@Test func independentCopyExtrudeDistanceAffordanceAppliesOutputScaleToDisplayedDistance() async throws {
+    let session = EditorSession()
+    let source = try createIndependentCopyPatternArray(
+        in: session,
+        definitionName: "Extrude Distance Scaled Source",
+        arrayName: "Extrude Distance Scaled Array",
+        distribution: .curve(CurvePatternArray(
+            path: .polyline(
+                points: [.origin, Point3D(x: 0.080, y: 0.0, z: 0.0)],
+                normal: .unitZ
+            ),
+            copyCount: 1,
+            endScale: .scalar(2.0),
+            alignment: .parallel
+        ))
+    )
+    let firstOutputSceneNodeID = try #require(source.outputSceneNodeIDs.first)
+    let scene = ViewportSceneBuilder().build(document: session.document)
+    let layout = try #require(ViewportLayout(
+        scene: scene,
+        size: CGSize(width: 900.0, height: 700.0)
+    ))
+
+    let candidates = ViewportIndependentCopyExtrudeDistanceAffordanceService().candidates(
+        document: session.document,
+        scene: scene,
+        selection: SelectionModel(selectedTargets: [
+            SelectionTarget(sceneNodeID: firstOutputSceneNodeID),
+        ]),
+        layout: layout
+    )
+
+    let candidate = try #require(candidates.first)
+    #expect(abs(candidate.target.valueScale - 2.0) < 1.0e-12)
+    #expect(abs(candidate.geometry.baseDistanceMeters - 0.020) < 1.0e-12)
+}
+
+@MainActor
+@Test func independentCopyExtrudeDistanceAffordanceAppliesOutputRotationToHandleAxis() async throws {
+    let session = EditorSession()
+    let source = try createIndependentCopyPatternArray(
+        in: session,
+        definitionName: "Extrude Distance Rotated Source",
+        arrayName: "Extrude Distance Rotated Array",
+        distribution: .radial(RadialPatternArray(
+            angularAxis: PatternArrayAngularAxis(
+                center: .origin,
+                axis: .unitY,
+                angle: .angle(90.0, .degree),
+                copyCount: 1
+            )
+        ))
+    )
+    let firstOutputSceneNodeID = try #require(source.outputSceneNodeIDs.first)
+    let outputTransform = try #require(session.document.productMetadata.sceneNodes[firstOutputSceneNodeID]?.localTransform)
+    let scene = ViewportSceneBuilder().build(document: session.document)
+    let layout = try #require(ViewportLayout(
+        scene: scene,
+        size: CGSize(width: 900.0, height: 700.0)
+    ))
+
+    let candidates = ViewportIndependentCopyExtrudeDistanceAffordanceService().candidates(
+        document: session.document,
+        scene: scene,
+        selection: SelectionModel(selectedTargets: [
+            SelectionTarget(sceneNodeID: firstOutputSceneNodeID),
+        ]),
+        layout: layout
+    )
+
+    let candidate = try #require(candidates.first)
+    let expectedDirection = projectedDirection(
+        for: outputTransform.viewportTransformedVector(.unitZ),
+        layout: layout
+    )
+    #expect(abs(candidate.geometry.projectedDirection.dx - expectedDirection.dx) < 1.0e-12)
+    #expect(abs(candidate.geometry.projectedDirection.dy - expectedDirection.dy) < 1.0e-12)
+}
+
+@MainActor
 @Test func independentCopyExtrudeDistanceAffordanceUsesProfilePlaneNormal() async throws {
     let session = EditorSession()
     _ = try #require(session.createConstructionPlane(
@@ -260,7 +340,8 @@ private func createIndependentCopyPatternArray(
     in session: EditorSession,
     definitionName: String,
     arrayName: String,
-    sourceBodyCount: Int = 1
+    sourceBodyCount: Int = 1,
+    distribution: PatternArrayDistribution? = nil
 ) throws -> PatternArraySource {
     _ = try createPatternSourceDefinition(
         in: session,
@@ -270,17 +351,18 @@ private func createIndependentCopyPatternArray(
     let definition = try #require(session.document.productMetadata.componentDefinitions.values.first {
         $0.name == definitionName
     })
+    let resolvedDistribution = distribution ?? .rectangular(RectangularPatternArray(
+        firstAxis: PatternArrayLinearAxis(
+            direction: .unitX,
+            distance: .length(8.0, .millimeter),
+            copyCount: 2
+        )
+    ))
     _ = try session.execute(
         .createPatternArray(
             name: arrayName,
             definitionID: definition.id,
-            distribution: .rectangular(RectangularPatternArray(
-                firstAxis: PatternArrayLinearAxis(
-                    direction: .unitX,
-                    distance: .length(8.0, .millimeter),
-                    copyCount: 2
-                )
-            )),
+            distribution: resolvedDistribution,
             outputMode: .independentCopy
         )
     )

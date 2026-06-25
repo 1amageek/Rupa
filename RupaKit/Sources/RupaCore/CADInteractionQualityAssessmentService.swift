@@ -400,6 +400,7 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                         "RupaKit/Sources/RupaRendering/ViewportPatternArrayPreview.swift",
                         "RupaKit/Sources/RupaRendering/ViewportPatternArrayPreviewService.swift",
                         "RupaKit/Sources/RupaRendering/ViewportPatternArraySourceSelectionIndex.swift",
+                        "RupaKit/Sources/RupaRendering/ViewportTransformUtilities.swift",
                         "RupaKit/Sources/RupaRendering/ViewportPatternArrayLinearAxisDragTarget.swift",
                         "RupaKit/Sources/RupaRendering/ViewportPatternArrayLinearAxisAffordanceGeometry.swift",
                         "RupaKit/Sources/RupaRendering/ViewportPatternArrayLinearAxisAffordanceService.swift",

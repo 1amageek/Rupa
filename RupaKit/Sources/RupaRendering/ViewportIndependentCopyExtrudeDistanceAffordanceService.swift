@@ -80,15 +80,13 @@ struct ViewportIndependentCopyExtrudeDistanceAffordanceService: Sendable {
     ) -> ViewportIndependentCopyExtrudeDistanceAffordanceCandidate? {
         guard let feature = document.cadDocument.designGraph.nodes[item.featureID],
               case .extrude(let extrude) = feature.operation,
-              let axisDirection = axisDirection(for: extrude, document: document),
-              let distanceMeters = resolvedLengthMeters(
-                  extrude.distance,
-                  document: document
-              ),
+              let localAxisDirection = axisDirection(for: extrude, document: document),
+              let localDistanceMeters = resolvedLengthMeters(extrude.distance, document: document),
+              let transform = outputTransform(for: output, localAxisDirection: localAxisDirection),
               let geometry = ViewportPatternArrayLinearAxisAffordanceGeometry(
-                  baseProjectedPoint: baseProjectedPoint(for: item, layout: layout),
-                  axisDirection: axisDirection,
-                  distanceMeters: distanceMeters,
+                  baseProjectedPoint: baseProjectedPoint(for: item, transform: output.modelTransform, layout: layout),
+                  axisDirection: transform.axisDirection,
+                  distanceMeters: localDistanceMeters * transform.axisScale,
                   layout: layout,
                   viewportLength: 70.0
               ) else {
@@ -100,10 +98,24 @@ struct ViewportIndependentCopyExtrudeDistanceAffordanceService: Sendable {
                 outputIndex: output.outputIndex,
                 outputSceneNodeID: output.outputSceneNodeID,
                 featureID: item.featureID,
+                valueScale: transform.axisScale,
                 geometry: geometry
             ),
             geometry: geometry
         )
+    }
+
+    private func outputTransform(
+        for output: ViewportSelectedIndependentCopyOutput,
+        localAxisDirection: Vector3D
+    ) -> (axisDirection: Vector3D, axisScale: Double)? {
+        let transformedAxis = output.modelTransform.viewportTransformedVector(localAxisDirection)
+        let axisScale = transformedAxis.length
+        guard axisScale.isFinite,
+              axisScale > 1.0e-12 else {
+            return nil
+        }
+        return (transformedAxis, axisScale)
     }
 
     private func resolvedLengthMeters(
@@ -169,12 +181,24 @@ struct ViewportIndependentCopyExtrudeDistanceAffordanceService: Sendable {
 
     private func baseProjectedPoint(
         for item: ViewportSceneItem,
+        transform: Transform3D,
         layout: ViewportLayout
     ) -> CGPoint {
-        if let projection = layout.bodyProjection(for: item) {
-            return projection.center
+        let point = Point3D(
+            x: Double(item.modelBounds.midX),
+            y: bodyCenterY(for: item),
+            z: Double(item.modelBounds.midY)
+        )
+        return layout.project(transform.viewportTransformedPoint(point))
+    }
+
+    private func bodyCenterY(for item: ViewportSceneItem) -> Double {
+        guard case .body(let component) = item.kind,
+              component.yMinMeters.isFinite,
+              component.yMaxMeters.isFinite else {
+            return 0.0
         }
-        return layout.projectedFootprint(item.modelBounds).center
+        return (component.yMinMeters + component.yMaxMeters) * 0.5
     }
 
 }
@@ -188,6 +212,7 @@ struct ViewportIndependentCopyExtrudeDistanceHandleTarget: Equatable {
     var outputIndex: Int
     var outputSceneNodeID: SceneNodeID
     var featureID: FeatureID
+    var valueScale: Double
     var geometry: ViewportPatternArrayLinearAxisAffordanceGeometry
 
     var identity: ViewportIndependentCopyExtrudeDistanceHandleIdentity {

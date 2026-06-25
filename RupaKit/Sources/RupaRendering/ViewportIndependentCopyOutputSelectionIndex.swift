@@ -4,6 +4,7 @@ struct ViewportSelectedIndependentCopyOutput: Equatable {
     var source: PatternArraySource
     var outputIndex: Int
     var outputSceneNodeID: SceneNodeID
+    var modelTransform: Transform3D
 }
 
 struct ViewportIndependentCopyOutputIdentity: Hashable {
@@ -27,10 +28,12 @@ struct ViewportIndependentCopyOutputSelectionIndex {
         }
         for source in sources where source.outputMode == .independentCopy {
             for (outputIndex, outputSceneNodeID) in source.outputSceneNodeIDs.enumerated() {
+                let outputNode = metadata.sceneNodes[outputSceneNodeID]
                 records.append(ViewportSelectedIndependentCopyOutput(
                     source: source,
                     outputIndex: outputIndex,
-                    outputSceneNodeID: outputSceneNodeID
+                    outputSceneNodeID: outputSceneNodeID,
+                    modelTransform: outputNode?.localTransform ?? .identity
                 ))
             }
         }
