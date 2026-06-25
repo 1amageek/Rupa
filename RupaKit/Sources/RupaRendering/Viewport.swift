@@ -7132,7 +7132,8 @@ public struct Viewport: View {
             return ViewportPolySplineSurfaceVertexSlideInput(
                 target: parsedTarget,
                 selectionTarget: selectionTarget,
-                point: vertex.point
+                point: vertex.point,
+                modelTransform: item.modelTransform
             )
         }
     }

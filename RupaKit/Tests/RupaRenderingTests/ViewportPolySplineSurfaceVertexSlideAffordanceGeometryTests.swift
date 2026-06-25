@@ -87,6 +87,87 @@ import Testing
     #expect(abs(geometry.modelDirection.z) < 1.0e-12)
 }
 
+@Test func viewportPolySplineSurfaceVertexSlideAffordanceAppliesModelTransformAndKeepsLocalDistance() throws {
+    let layout = polySplineSurfaceVertexSlideLayout()
+    let featureID = FeatureID()
+    let sceneNodeID = SceneNodeID()
+    let modelTransform = try polySplineSurfaceVertexSlideTransform(
+        scale: 2.0,
+        translationX: 0.006
+    )
+    let inputs = [
+        try polySplineSurfaceVertexSlideInput(
+            featureID: featureID,
+            sceneNodeID: sceneNodeID,
+            role: .uMinVMin,
+            point: Point3D(x: 0.0, y: 0.0, z: 0.0),
+            modelTransform: modelTransform
+        )
+    ]
+    let topologyVertices = polySplineSurfaceVertexSlideTopologyVertices(featureID: featureID)
+    let geometry = try #require(
+        ViewportPolySplineSurfaceVertexSlideAffordanceGeometry(
+            selectedVertices: inputs,
+            topologyVertices: topologyVertices,
+            direction: .positiveU,
+            layout: layout
+        )
+    )
+
+    let start = layout.project(geometry.baseModelPoint)
+    let current = layout.project(Point3D(x: 0.008, y: 0.0, z: 0.0))
+    let tip = geometry.projectedTip(layout: layout, distanceMeters: 0.001)
+    let expectedTip = layout.project(Point3D(x: 0.008, y: 0.0, z: 0.0))
+
+    #expect(abs(geometry.baseModelPoint.x - 0.006) < 1.0e-12)
+    #expect(abs(geometry.modelDirection.x - 2.0) < 1.0e-12)
+    #expect(abs(geometry.slideDistance(start: start, current: current, layout: layout) - 0.001) < 1.0e-12)
+    #expect(abs(tip.x - expectedTip.x) < 1.0e-9)
+    #expect(abs(tip.y - expectedTip.y) < 1.0e-9)
+}
+
+@Test func viewportPolySplineSurfaceVertexSlidePreviewAppliesModelTransform() throws {
+    let featureID = FeatureID()
+    let sceneNodeID = SceneNodeID()
+    let modelTransform = try polySplineSurfaceVertexSlideTransform(
+        scale: 2.0,
+        translationX: 0.006
+    )
+    let inputs = [
+        try polySplineSurfaceVertexSlideInput(
+            featureID: featureID,
+            sceneNodeID: sceneNodeID,
+            role: .uMinVMin,
+            point: Point3D(x: 0.0, y: 0.0, z: 0.0),
+            modelTransform: modelTransform
+        )
+    ]
+    let topologyVertices = polySplineSurfaceVertexSlideTopologyVertices(featureID: featureID)
+
+    let previewVertex = try #require(
+        ViewportPolySplineSurfaceVertexSlideAffordanceGeometry.previewVertices(
+            selectedVertices: inputs,
+            topologyVertices: topologyVertices,
+            direction: .positiveU,
+            distanceMeters: 0.001
+        )?.first
+    )
+    let previewSurface = try #require(
+        ViewportPolySplineSurfaceVertexSlideAffordanceGeometry.previewSurfaces(
+            selectedVertices: inputs,
+            topologyVertices: topologyVertices,
+            direction: .positiveU,
+            distanceMeters: 0.001,
+            sampleSegmentCount: 1
+        )?.first
+    )
+
+    #expect(abs(previewVertex.originalPoint.x - 0.006) < 1.0e-12)
+    #expect(abs(previewVertex.movedPoint.x - 0.008) < 1.0e-12)
+    #expect(previewSurface.originalMesh.positions.contains { abs($0.x - 0.006) < 1.0e-12 })
+    #expect(previewSurface.movedMesh.positions.contains { abs($0.x - 0.008) < 1.0e-12 })
+}
+
 @Test func viewportPolySplineSurfaceVertexLocalDirectionUsesSharedPatchHullFrame() throws {
     let featureID = FeatureID()
     let sceneNodeID = SceneNodeID()
@@ -233,7 +314,8 @@ private func polySplineSurfaceVertexSlideInput(
     featureID: FeatureID,
     sceneNodeID: SceneNodeID,
     role: PolySplineSurfaceVertexTarget.BoundaryRole,
-    point: Point3D
+    point: Point3D,
+    modelTransform: Transform3D = .identity
 ) throws -> ViewportPolySplineSurfaceVertexSlideInput {
     let componentID = polySplineSurfaceVertexSlideComponentID(
         featureID: featureID,
@@ -246,8 +328,21 @@ private func polySplineSurfaceVertexSlideInput(
             sceneNodeID: sceneNodeID,
             component: .vertex(componentID)
         ),
-        point: point
+        point: point,
+        modelTransform: modelTransform
     )
+}
+
+private func polySplineSurfaceVertexSlideTransform(
+    scale: Double,
+    translationX: Double
+) throws -> Transform3D {
+    Transform3D(matrix: try Matrix4x4(values: [
+        scale, 0.0, 0.0, 0.0,
+        0.0, scale, 0.0, 0.0,
+        0.0, 0.0, scale, 0.0,
+        translationX, 0.0, 0.0, 1.0,
+    ]))
 }
 
 private func polySplineSurfaceVertexSlideTopologyVertices(
