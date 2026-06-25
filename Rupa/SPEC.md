@@ -1259,6 +1259,9 @@ Currently implemented command groups:
 | `rupa sketch trim <document> --target <json>` | Trim a supported source sketch curve segment. |
 | `rupa sketch extend <document> --target <json> --distance <value>` | Extend a supported source sketch curve endpoint target. |
 | `rupa sketch slot <document> --target <json> --width <value>` | Create a Slot profile from a supported open source curve or chain. |
+| `rupa sketch offset <document> --target <json> --distance <value>` | Route a supported source curve, region, generated face, generated edge, or vertex target through the Offset Curve dispatcher. |
+| `rupa sketch offset-regions <document> --target <json> --distance <value>` | Offset one or more supported source profile region targets. |
+| `rupa sketch corner-treatment <document> --target <json> --treatment <fillet|chamfer> --distance <value>` | Apply a supported source sketch corner fillet or chamfer. |
 | `rupa model box <document> --width <value> --height <value> --depth <value>` | Create an extruded rectangular body from numeric length literals. |
 | `rupa model cylinder <document> --radius <value> --depth <value>` | Create an extruded circular body from numeric length literals. |
 | `rupa model extrude <document> --profile-feature-id <id> --distance <value>` | Extrude an existing closed sketch profile by Feature ID. |

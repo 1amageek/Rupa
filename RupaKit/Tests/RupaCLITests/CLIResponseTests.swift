@@ -1636,6 +1636,206 @@ struct CLISketchEditCommandTests {
 }
 
 @Suite(.serialized)
+struct CLISketchOffsetCommandTests {
+    @Test(.timeLimit(.minutes(1)))
+    func executableSketchOffsetPersistsClosedDocumentAsJSON() async throws {
+        let temporaryDirectory = try makeTemporaryDirectory()
+        defer {
+            removeTemporaryDirectory(temporaryDirectory)
+        }
+        let documentURL = temporaryDirectory.appendingPathComponent("process-sketch-offset.swcad")
+        var document = DesignDocument.empty(named: "Process Sketch Offset")
+        _ = try document.createLineSketch(
+            name: "Offset Source Line",
+            plane: .xy,
+            start: SketchPoint(
+                x: .length(0.0, .millimeter),
+                y: .length(0.0, .millimeter)
+            ),
+            end: SketchPoint(
+                x: .length(10.0, .millimeter),
+                y: .length(0.0, .millimeter)
+            )
+        )
+        try DocumentFileService().save(document, to: documentURL)
+
+        let sourceLine = try #require(try SketchEntitySummaryService().summarize(document: document).entries.first {
+            $0.entityKind == "line"
+        })
+        let target = try #require(sourceLine.selectionTarget())
+        let result = try await runCLI([
+            "sketch",
+            "offset",
+            documentURL.path,
+            "--target",
+            try encodedSelectionTarget(target),
+            "--distance",
+            "2",
+            "--unit",
+            "millimeter",
+            "--gap-fill",
+            "natural",
+            "--mode",
+            "file",
+            "--json",
+        ])
+        let response = try JSONDecoder().decode(CLIResponse.self, from: result.standardOutputData)
+        let loaded = try DocumentFileService().load(from: documentURL)
+        let summary = try SketchEntitySummaryService().summarize(document: loaded)
+        let lines = summary.entries.filter { $0.entityKind == "line" }
+        let offsetLine = try #require(lines.first { entry in
+            abs((entry.start?.y ?? -1.0) - 0.002) < 1.0e-12
+                && abs((entry.end?.y ?? -1.0) - 0.002) < 1.0e-12
+        })
+
+        #expect(result.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: result.standardError))
+        #expect(response.message == "Sketch curve offset created.")
+        #expect(response.saved)
+        #expect(summary.counts.sketchCount == 2)
+        #expect(lines.count == 2)
+        #expect(offsetLine.sourceFeatureID != sourceLine.sourceFeatureID)
+        #expect(abs((offsetLine.start?.x ?? -1.0) - 0.0) < 1.0e-12)
+        #expect(abs((offsetLine.end?.x ?? -1.0) - 0.010) < 1.0e-12)
+    }
+
+    @Test(.timeLimit(.minutes(1)))
+    func executableSketchOffsetRegionsPersistsClosedDocumentAsJSON() async throws {
+        let temporaryDirectory = try makeTemporaryDirectory()
+        defer {
+            removeTemporaryDirectory(temporaryDirectory)
+        }
+        let documentURL = temporaryDirectory.appendingPathComponent("process-sketch-offset-region.swcad")
+        var document = DesignDocument.empty(named: "Process Sketch Offset Region")
+        _ = try document.createRectangleSketchFromCorners(
+            name: "Offset Source Region",
+            plane: .xy,
+            firstCorner: SketchPoint(
+                x: .length(0.0, .millimeter),
+                y: .length(0.0, .millimeter)
+            ),
+            oppositeCorner: SketchPoint(
+                x: .length(10.0, .millimeter),
+                y: .length(6.0, .millimeter)
+            )
+        )
+        try DocumentFileService().save(document, to: documentURL)
+
+        let before = try SketchEntitySummaryService().summarize(document: document)
+        let sourceRegion = try #require(before.regions.first)
+        let target = try #require(sourceRegion.selectionTarget())
+        let result = try await runCLI([
+            "sketch",
+            "offset-regions",
+            documentURL.path,
+            "--target",
+            try encodedSelectionTarget(target),
+            "--distance",
+            "1",
+            "--unit",
+            "millimeter",
+            "--gap-fill",
+            "natural",
+            "--mode",
+            "file",
+            "--json",
+        ])
+        let response = try JSONDecoder().decode(CLIResponse.self, from: result.standardOutputData)
+        let loaded = try DocumentFileService().load(from: documentURL)
+        let after = try SketchEntitySummaryService().summarize(document: loaded)
+        let newRegion = try #require(after.regions.first { region in
+            region.sourceFeatureID != sourceRegion.sourceFeatureID
+        })
+
+        #expect(result.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: result.standardError))
+        #expect(response.message == "Sketch regions offset created.")
+        #expect(response.saved)
+        #expect(after.counts.regionCount == before.counts.regionCount + 1)
+        #expect(newRegion.boundaryPointCount == 4)
+        #expect(abs(newRegion.areaSquareMeters - 0.000_096) < 1.0e-12)
+    }
+
+    @Test(.timeLimit(.minutes(1)))
+    func executableSketchCornerTreatmentPersistsClosedDocumentAsJSON() async throws {
+        let temporaryDirectory = try makeTemporaryDirectory()
+        defer {
+            removeTemporaryDirectory(temporaryDirectory)
+        }
+        let documentURL = temporaryDirectory.appendingPathComponent("process-sketch-corner-treatment.swcad")
+        var document = DesignDocument.empty(named: "Process Sketch Corner Treatment")
+        _ = try document.createRectangleSketchFromCorners(
+            name: "Source Fillet Rectangle",
+            plane: .xy,
+            firstCorner: SketchPoint(
+                x: .length(0.0, .millimeter),
+                y: .length(0.0, .millimeter)
+            ),
+            oppositeCorner: SketchPoint(
+                x: .length(10.0, .millimeter),
+                y: .length(6.0, .millimeter)
+            )
+        )
+        try DocumentFileService().save(document, to: documentURL)
+
+        let before = try SketchEntitySummaryService().summarize(document: document)
+        let bottomLine = try #require(bottomRectangleLine(in: before))
+        let target = try lineHandleTarget(bottomLine, handle: .lineEnd)
+        let result = try await runCLI([
+            "sketch",
+            "corner-treatment",
+            documentURL.path,
+            "--target",
+            try encodedSelectionTarget(target),
+            "--treatment",
+            "fillet",
+            "--distance",
+            "2",
+            "--unit",
+            "millimeter",
+            "--mode",
+            "file",
+            "--json",
+        ])
+        let response = try JSONDecoder().decode(CLIResponse.self, from: result.standardOutputData)
+        let loaded = try DocumentFileService().load(from: documentURL)
+        let after = try SketchEntitySummaryService().summarize(document: loaded)
+        let lines = after.entries.filter { $0.sourceFeatureID == bottomLine.sourceFeatureID && $0.entityKind == "line" }
+        let arcs = after.entries.filter { $0.sourceFeatureID == bottomLine.sourceFeatureID && $0.entityKind == "arc" }
+        let filletArc = try #require(arcs.first)
+
+        #expect(result.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: result.standardError))
+        #expect(response.message == "Sketch corner fillet applied.")
+        #expect(response.saved)
+        #expect(lines.count == 4)
+        #expect(arcs.count == 1)
+        #expect(abs((filletArc.center?.x ?? -1.0) - 0.008) < 1.0e-12)
+        #expect(abs((filletArc.center?.y ?? -1.0) - 0.002) < 1.0e-12)
+        #expect(abs((filletArc.radius ?? -1.0) - 0.002) < 1.0e-12)
+    }
+
+    private func bottomRectangleLine(
+        in summary: SketchEntitySummaryResult
+    ) -> SketchEntitySummaryResult.EntityEntry? {
+        summary.entries.first { entry in
+            entry.entityKind == "line"
+                && abs((entry.start?.y ?? -1.0) - 0.0) < 1.0e-12
+                && abs((entry.end?.y ?? -1.0) - 0.0) < 1.0e-12
+        }
+    }
+
+    private func lineHandleTarget(
+        _ line: SketchEntitySummaryResult.EntityEntry,
+        handle: SketchEntityPointHandle
+    ) throws -> SelectionTarget {
+        let wholeTarget = try #require(line.selectionTarget())
+        let handleEntry = try #require(line.pointHandles.first { $0.handle == handle })
+        return SelectionTarget(
+            sceneNodeID: wholeTarget.sceneNodeID,
+            component: .sketchEntity(SelectionComponentID(rawValue: handleEntry.selectionComponentID))
+        )
+    }
+}
+
+@Suite(.serialized)
 struct CLIModelDirectEditCommandTests {
     @MainActor
     @Test(.timeLimit(.minutes(1)))

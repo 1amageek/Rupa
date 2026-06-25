@@ -248,6 +248,9 @@ public struct SketchCommand: ParsableCommand {
             SketchTrimCommand.self,
             SketchExtendCommand.self,
             SketchSlotCommand.self,
+            SketchOffsetCommand.self,
+            SketchOffsetRegionsCommand.self,
+            SketchCornerTreatmentCommand.self,
         ],
         defaultSubcommand: LineSketchCommand.self
     )
