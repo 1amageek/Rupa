@@ -239,6 +239,11 @@ public struct SketchCommand: ParsableCommand {
             SplineSketchCommand.self,
             RectangleSketchCommand.self,
             PolygonSketchCommand.self,
+            SketchReverseCommand.self,
+            SketchSplitCommand.self,
+            SketchTrimCommand.self,
+            SketchExtendCommand.self,
+            SketchSlotCommand.self,
         ],
         defaultSubcommand: LineSketchCommand.self
     )

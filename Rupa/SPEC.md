@@ -1254,6 +1254,11 @@ Currently implemented command groups:
 | `rupa sketch line <document> --start-x <value> --start-y <value> --end-x <value> --end-y <value>` | Create a line sketch from numeric length literals. |
 | `rupa sketch circle <document> --center-x <value> --center-y <value> --radius <value>` | Create a circle sketch from numeric length literals. |
 | `rupa sketch rectangle <document> --width <value> --height <value>` | Create a closed rectangle sketch profile from numeric length literals. |
+| `rupa sketch reverse <document> --target <json>` | Reverse a supported source sketch curve selected from sketch inspection. |
+| `rupa sketch split <document> --target <json> --fraction <value>` | Split a supported source sketch curve at a scalar fraction. |
+| `rupa sketch trim <document> --target <json>` | Trim a supported source sketch curve segment. |
+| `rupa sketch extend <document> --target <json> --distance <value>` | Extend a supported source sketch curve endpoint target. |
+| `rupa sketch slot <document> --target <json> --width <value>` | Create a Slot profile from a supported open source curve or chain. |
 | `rupa model box <document> --width <value> --height <value> --depth <value>` | Create an extruded rectangular body from numeric length literals. |
 | `rupa model cylinder <document> --radius <value> --depth <value>` | Create an extruded circular body from numeric length literals. |
 | `rupa model extrude <document> --profile-feature-id <id> --distance <value>` | Extrude an existing closed sketch profile by Feature ID. |

@@ -1444,6 +1444,198 @@ struct CLISketchCommandTests {
 }
 
 @Suite(.serialized)
+struct CLISketchEditCommandTests {
+    @Test(.timeLimit(.minutes(1)))
+    func executableSketchCurveEditCommandsPersistClosedDocumentAsJSON() async throws {
+        let temporaryDirectory = try makeTemporaryDirectory()
+        defer {
+            removeTemporaryDirectory(temporaryDirectory)
+        }
+        let documentURL = temporaryDirectory.appendingPathComponent("process-sketch-edits.swcad")
+        var document = DesignDocument.empty(named: "Process Sketch Edits")
+        _ = try document.createLineSketch(
+            name: "Editable Line",
+            plane: .xy,
+            start: SketchPoint(
+                x: .length(0.0, .millimeter),
+                y: .length(0.0, .millimeter)
+            ),
+            end: SketchPoint(
+                x: .length(12.0, .millimeter),
+                y: .length(0.0, .millimeter)
+            )
+        )
+        try DocumentFileService().save(document, to: documentURL)
+
+        let initialLine = try sourceLine(in: document)
+        let wholeTarget = try #require(initialLine.selectionTarget())
+        let endTarget = try lineHandleTarget(initialLine, handle: .lineEnd)
+        let extendResult = try await runCLI([
+            "sketch",
+            "extend",
+            documentURL.path,
+            "--target",
+            try encodedSelectionTarget(endTarget),
+            "--distance",
+            "2",
+            "--unit",
+            "millimeter",
+            "--shape",
+            "linear",
+            "--mode",
+            "file",
+            "--json",
+        ])
+        let extendResponse = try JSONDecoder().decode(CLIResponse.self, from: extendResult.standardOutputData)
+        let extended = try DocumentFileService().load(from: documentURL)
+        let extendedLine = try sourceLine(in: extended)
+
+        let reverseResult = try await runCLI([
+            "sketch",
+            "reverse",
+            documentURL.path,
+            "--target",
+            try encodedSelectionTarget(wholeTarget),
+            "--mode",
+            "file",
+            "--json",
+        ])
+        let reverseResponse = try JSONDecoder().decode(CLIResponse.self, from: reverseResult.standardOutputData)
+        let reversed = try DocumentFileService().load(from: documentURL)
+        let reversedLine = try sourceLine(in: reversed)
+
+        let splitResult = try await runCLI([
+            "sketch",
+            "split",
+            documentURL.path,
+            "--target",
+            try encodedSelectionTarget(wholeTarget),
+            "--fraction",
+            "0.5",
+            "--mode",
+            "file",
+            "--json",
+        ])
+        let splitResponse = try JSONDecoder().decode(CLIResponse.self, from: splitResult.standardOutputData)
+        let split = try DocumentFileService().load(from: documentURL)
+        let splitSummary = try SketchEntitySummaryService().summarize(document: split)
+        let trimEntry = try #require(splitSummary.entries.first { entry in
+            entry.entityKind == "line" && entry.entityID != initialLine.entityID
+        })
+        let trimTarget = try #require(trimEntry.selectionTarget())
+
+        let trimResult = try await runCLI([
+            "sketch",
+            "trim",
+            documentURL.path,
+            "--target",
+            try encodedSelectionTarget(trimTarget),
+            "--mode",
+            "file",
+            "--json",
+        ])
+        let trimResponse = try JSONDecoder().decode(CLIResponse.self, from: trimResult.standardOutputData)
+        let trimmed = try DocumentFileService().load(from: documentURL)
+        let trimmedSummary = try SketchEntitySummaryService().summarize(document: trimmed)
+
+        #expect(extendResult.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: extendResult.standardError))
+        #expect(extendResponse.message == "Sketch curve extended.")
+        #expect(extendResponse.saved)
+        #expect(abs((extendedLine.end?.x ?? -1.0) - 0.014) < 0.000_000_000_001)
+        #expect(reverseResult.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: reverseResult.standardError))
+        #expect(reverseResponse.message == "Sketch curve direction reversed.")
+        #expect(reverseResponse.saved)
+        #expect(abs((reversedLine.start?.x ?? -1.0) - 0.014) < 0.000_000_000_001)
+        #expect(abs((reversedLine.end?.x ?? -1.0) - 0.0) < 0.000_000_000_001)
+        #expect(splitResult.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: splitResult.standardError))
+        #expect(splitResponse.message == "Sketch curve segment split.")
+        #expect(splitResponse.saved)
+        #expect(splitSummary.entries.filter { $0.entityKind == "line" }.count == 2)
+        #expect(trimResult.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: trimResult.standardError))
+        #expect(trimResponse.message == "Sketch curve segment trimmed.")
+        #expect(trimResponse.saved)
+        #expect(trimmedSummary.entries.filter { $0.entityKind == "line" }.count == 1)
+    }
+
+    @Test(.timeLimit(.minutes(1)))
+    func executableSketchSlotPersistsClosedDocumentAsJSON() async throws {
+        let temporaryDirectory = try makeTemporaryDirectory()
+        defer {
+            removeTemporaryDirectory(temporaryDirectory)
+        }
+        let documentURL = temporaryDirectory.appendingPathComponent("process-sketch-slot.swcad")
+        var document = DesignDocument.empty(named: "Process Sketch Slot")
+        _ = try document.createLineSketch(
+            name: "Slot Source",
+            plane: .xy,
+            start: SketchPoint(
+                x: .length(0.0, .millimeter),
+                y: .length(0.0, .millimeter)
+            ),
+            end: SketchPoint(
+                x: .length(10.0, .millimeter),
+                y: .length(0.0, .millimeter)
+            )
+        )
+        try DocumentFileService().save(document, to: documentURL)
+
+        let source = try sourceLine(in: document)
+        let target = try #require(source.selectionTarget())
+        let result = try await runCLI([
+            "sketch",
+            "slot",
+            documentURL.path,
+            "--target",
+            try encodedSelectionTarget(target),
+            "--width",
+            "2",
+            "--unit",
+            "millimeter",
+            "--mode",
+            "file",
+            "--json",
+        ])
+        let response = try JSONDecoder().decode(CLIResponse.self, from: result.standardOutputData)
+        let loaded = try DocumentFileService().load(from: documentURL)
+        let summary = try SketchEntitySummaryService().summarize(document: loaded)
+        let slotFeature = try #require(
+            loaded.cadDocument.designGraph.nodes.values.first { $0.name == "Slot Source Slot" }
+        )
+        let slotObject = try #require(
+            loaded.productMetadata.sceneNodes.values.compactMap(\.object).first { object in
+                object.sourceFeatureID == slotFeature.id
+            }
+        )
+
+        #expect(result.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: result.standardError))
+        #expect(response.message == "Slot sketch profile created.")
+        #expect(response.saved)
+        #expect(summary.counts.sketchCount == 2)
+        #expect(summary.entries.filter { $0.sourceFeatureID == slotFeature.id.description && $0.entityKind == "line" }.count == 2)
+        #expect(summary.entries.filter { $0.sourceFeatureID == slotFeature.id.description && $0.entityKind == "arc" }.count == 2)
+        #expect(slotObject.typeID == .slot)
+        #expect(slotObject.properties["width"] == .length(0.002))
+    }
+
+    private func sourceLine(in document: DesignDocument) throws -> SketchEntitySummaryResult.EntityEntry {
+        let summary = try SketchEntitySummaryService().summarize(document: document)
+        return try #require(summary.entries.first { $0.entityKind == "line" })
+    }
+
+    private func lineHandleTarget(
+        _ line: SketchEntitySummaryResult.EntityEntry,
+        handle: SketchEntityPointHandle
+    ) throws -> SelectionTarget {
+        let wholeTarget = try #require(line.selectionTarget())
+        let handleEntry = try #require(line.pointHandles.first { $0.handle == handle })
+        return SelectionTarget(
+            sceneNodeID: wholeTarget.sceneNodeID,
+            component: .sketchEntity(SelectionComponentID(rawValue: handleEntry.selectionComponentID))
+        )
+    }
+}
+
+@Suite(.serialized)
 struct CLICommandApplyTests {
     @Test(.timeLimit(.minutes(1)))
     func executableAppliesAutomationCommandPayloadsAsJSON() async throws {
