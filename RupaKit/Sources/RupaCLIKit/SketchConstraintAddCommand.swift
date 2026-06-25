@@ -20,6 +20,9 @@ public struct SketchConstraintAddCommand: ParsableCommand {
     @Option(help: "JSON file containing one SketchConstraint object.")
     public var constraintFile: String?
 
+    @OptionGroup
+    public var typedConstraint: CLISketchConstraintTypedOptions
+
     public init() {}
 
     public func run() throws {
@@ -27,11 +30,7 @@ public struct SketchConstraintAddCommand: ParsableCommand {
             featureID,
             valueName: "Sketch feature ID"
         )
-        let parsedConstraint: SketchConstraint = try CLISelectionInputParser.decodeSingleSelectionInput(
-            inlinePayload: constraint,
-            filePath: constraintFile,
-            valueName: "SketchConstraint"
-        )
+        let parsedConstraint = try parsedSketchConstraint()
 
         try CLIAutomationCommandRunner.run(
             document: document,
@@ -40,5 +39,20 @@ public struct SketchConstraintAddCommand: ParsableCommand {
                 constraint: parsedConstraint
             )
         )
+    }
+
+    private func parsedSketchConstraint() throws -> SketchConstraint {
+        let hasJSONInput = constraint != nil || constraintFile != nil
+        if hasJSONInput {
+            guard !typedConstraint.hasInput else {
+                throw ValidationError("Provide either SketchConstraint JSON input or typed --kind options, not both.")
+            }
+            return try CLISelectionInputParser.decodeSingleSelectionInput(
+                inlinePayload: constraint,
+                filePath: constraintFile,
+                valueName: "SketchConstraint"
+            )
+        }
+        return try typedConstraint.decodedConstraint()
     }
 }

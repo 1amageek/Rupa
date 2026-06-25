@@ -2059,6 +2059,71 @@ struct CLISketchAdvancedCurveEditCommandTests {
     }
 
     @Test(.timeLimit(.minutes(1)))
+    func executableSketchConstraintAddTypedOptionsPersistsClosedDocumentAsJSON() async throws {
+        let temporaryDirectory = try makeTemporaryDirectory()
+        defer {
+            removeTemporaryDirectory(temporaryDirectory)
+        }
+        let documentURL = temporaryDirectory.appendingPathComponent("process-sketch-constraint-add-typed.swcad")
+        var document = DesignDocument.empty(named: "Process Sketch Constraint Add Typed")
+        let featureID = try document.createLineSketch(
+            name: "Typed Constraint Source",
+            plane: .xy,
+            start: SketchPoint(
+                x: .length(0.0, .millimeter),
+                y: .length(0.0, .millimeter)
+            ),
+            end: SketchPoint(
+                x: .length(0.0, .millimeter),
+                y: .length(10.0, .millimeter)
+            )
+        )
+        let feature = try #require(document.cadDocument.designGraph.nodes[featureID])
+        guard case .sketch(let sketch) = feature.operation,
+              let lineID = sketch.entities.keys.first else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "Typed constraint CLI setup requires a line sketch."
+            )
+        }
+        try DocumentFileService().save(document, to: documentURL)
+
+        let result = try await runCLI([
+            "sketch",
+            "constraint-add",
+            documentURL.path,
+            "--feature-id",
+            featureID.description,
+            "--kind",
+            "horizontal",
+            "--entity-id",
+            lineID.description,
+            "--mode",
+            "file",
+            "--json",
+        ])
+        let response = try JSONDecoder().decode(CLIResponse.self, from: result.standardOutputData)
+        let loaded = try DocumentFileService().load(from: documentURL)
+        let loadedFeature = try #require(loaded.cadDocument.designGraph.nodes[featureID])
+        guard case .sketch(let loadedSketch) = loadedFeature.operation,
+              case .line(let loadedLine) = try #require(loadedSketch.entities[lineID]) else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "Typed constraint CLI result requires the constrained line."
+            )
+        }
+
+        #expect(result.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: result.standardError))
+        #expect(response.message == "Sketch constraint added to \(featureID.description).")
+        #expect(response.saved)
+        #expect(loadedSketch.constraints == [.horizontal(lineID)])
+        #expect(abs(try cliLength(loadedLine.start.x, in: loaded)) < 1.0e-12)
+        #expect(abs(try cliLength(loadedLine.start.y, in: loaded)) < 1.0e-12)
+        #expect(abs(try cliLength(loadedLine.end.x, in: loaded) - 0.010) < 1.0e-12)
+        #expect(abs(try cliLength(loadedLine.end.y, in: loaded)) < 1.0e-12)
+    }
+
+    @Test(.timeLimit(.minutes(1)))
     func executableSketchCutPersistsClosedDocumentAsJSON() async throws {
         let temporaryDirectory = try makeTemporaryDirectory()
         defer {
