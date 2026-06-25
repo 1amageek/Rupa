@@ -836,6 +836,52 @@ public struct CLIService {
         )
     }
 
+    public func constructionPlaneSummaryFile(
+        at url: URL
+    ) throws -> CLIConstructionPlaneSummaryResponse {
+        let session = EditorSession(document: try fileService.load(from: url))
+        return CLIConstructionPlaneSummaryResponse(
+            constructionPlaneSummary: ConstructionPlaneSummaryService().summarize(document: session.document),
+            generation: session.generation,
+            dirty: session.isDirty
+        )
+    }
+
+    public func resolveSnapFile(
+        at url: URL,
+        point: Point2D,
+        options: SnapResolutionOptions = SnapResolutionOptions()
+    ) throws -> CLISnapResolutionResponse {
+        let session = EditorSession(document: try fileService.load(from: url))
+        return CLISnapResolutionResponse(
+            snapResolution: try SnapResolver().resolve(
+                point: point,
+                in: session.document,
+                options: options
+            ),
+            generation: session.generation,
+            dirty: session.isDirty
+        )
+    }
+
+    public func selectionMeasurementFile(
+        at url: URL,
+        query: CADAgentMeasurementQuery
+    ) throws -> CLISelectionMeasurementResponse {
+        let session = EditorSession(document: try fileService.load(from: url))
+        return CLISelectionMeasurementResponse(
+            selectionMeasurement: try SelectionMeasurementService().measure(
+                query: query,
+                document: session.document,
+                objectRegistry: session.objectRegistry,
+                currentEvaluation: session.currentEvaluation,
+                currentGeneration: session.generation
+            ),
+            generation: session.generation,
+            dirty: session.isDirty
+        )
+    }
+
     public func sketchEntitySummaryFile(
         at url: URL
     ) throws -> CLISketchEntitySummaryResponse {
@@ -1061,6 +1107,108 @@ public struct CLIService {
             )
             return try meshSummaryLiveSession(
                 sessionID: sessionID,
+                expectedGeneration: expectedGeneration,
+                client: requiredClient(client)
+            )
+        }
+    }
+
+    public func constructionPlaneSummary(
+        target: CLIDocumentTarget,
+        mode: CLIEditMode = .auto,
+        expectedGeneration: DocumentGeneration? = nil,
+        client: AgentClientProtocol? = nil
+    ) throws -> CLIConstructionPlaneSummaryResponse {
+        switch mode {
+        case .auto:
+            return try constructionPlaneSummaryAutomatically(
+                target: target,
+                expectedGeneration: expectedGeneration,
+                client: client
+            )
+        case .file:
+            guard let url = target.fileURL else {
+                throw invalidCommand("File mode requires a document file path.")
+            }
+            return try constructionPlaneSummaryFile(at: url)
+        case .live:
+            let sessionID = try resolvedLiveSessionID(
+                target: target,
+                client: client
+            )
+            return try constructionPlaneSummaryLiveSession(
+                sessionID: sessionID,
+                expectedGeneration: expectedGeneration,
+                client: requiredClient(client)
+            )
+        }
+    }
+
+    public func resolveSnap(
+        target: CLIDocumentTarget,
+        point: Point2D,
+        options: SnapResolutionOptions = SnapResolutionOptions(),
+        mode: CLIEditMode = .auto,
+        expectedGeneration: DocumentGeneration? = nil,
+        client: AgentClientProtocol? = nil
+    ) throws -> CLISnapResolutionResponse {
+        switch mode {
+        case .auto:
+            return try resolveSnapAutomatically(
+                target: target,
+                point: point,
+                options: options,
+                expectedGeneration: expectedGeneration,
+                client: client
+            )
+        case .file:
+            guard let url = target.fileURL else {
+                throw invalidCommand("File mode requires a document file path.")
+            }
+            return try resolveSnapFile(at: url, point: point, options: options)
+        case .live:
+            let sessionID = try resolvedLiveSessionID(
+                target: target,
+                client: client
+            )
+            return try resolveSnapLiveSession(
+                sessionID: sessionID,
+                point: point,
+                options: options,
+                expectedGeneration: expectedGeneration,
+                client: requiredClient(client)
+            )
+        }
+    }
+
+    public func selectionMeasurement(
+        target: CLIDocumentTarget,
+        query: CADAgentMeasurementQuery,
+        mode: CLIEditMode = .auto,
+        expectedGeneration: DocumentGeneration? = nil,
+        client: AgentClientProtocol? = nil
+    ) throws -> CLISelectionMeasurementResponse {
+        switch mode {
+        case .auto:
+            return try selectionMeasurementAutomatically(
+                target: target,
+                query: query,
+                expectedGeneration: expectedGeneration,
+                client: client
+            )
+        case .file:
+            guard let url = target.fileURL else {
+                throw invalidCommand("File mode requires a document file path.")
+            }
+            return try selectionMeasurementFile(at: url, query: query)
+        case .live:
+            let sessionID = try resolvedLiveSessionID(
+                target: target,
+                client: client
+            )
+            return try selectionMeasurementLiveSession(
+                sessionID: sessionID,
+                query: query,
                 expectedGeneration: expectedGeneration,
                 client: requiredClient(client)
             )
@@ -1859,6 +2007,96 @@ public struct CLIService {
         }
     }
 
+    public func constructionPlaneSummaryLiveSession(
+        sessionID: UUID,
+        expectedGeneration: DocumentGeneration? = nil,
+        client: AgentClientProtocol
+    ) throws -> CLIConstructionPlaneSummaryResponse {
+        let response = try client.send(
+            .constructionPlaneSummary(
+                sessionID: sessionID,
+                expectedGeneration: expectedGeneration
+            )
+        )
+        switch response {
+        case .constructionPlaneSummary(let constructionPlaneSummary):
+            let summary = try sessions(client: client)
+                .sessions
+                .first { $0.id == sessionID }
+            return CLIConstructionPlaneSummaryResponse(
+                constructionPlaneSummary: constructionPlaneSummary,
+                generation: DocumentGeneration(summary?.generation.value ?? 0),
+                dirty: summary?.dirty ?? false
+            )
+        case .failure(let error):
+            throw error
+        default:
+            throw unexpectedResponse("Construction plane summary request returned an unexpected response.")
+        }
+    }
+
+    public func resolveSnapLiveSession(
+        sessionID: UUID,
+        point: Point2D,
+        options: SnapResolutionOptions = SnapResolutionOptions(),
+        expectedGeneration: DocumentGeneration? = nil,
+        client: AgentClientProtocol
+    ) throws -> CLISnapResolutionResponse {
+        let response = try client.send(
+            .resolveSnap(
+                sessionID: sessionID,
+                point: point,
+                options: options,
+                expectedGeneration: expectedGeneration
+            )
+        )
+        switch response {
+        case .snapResolution(let snapResolution):
+            let summary = try sessions(client: client)
+                .sessions
+                .first { $0.id == sessionID }
+            return CLISnapResolutionResponse(
+                snapResolution: snapResolution,
+                generation: DocumentGeneration(summary?.generation.value ?? 0),
+                dirty: summary?.dirty ?? false
+            )
+        case .failure(let error):
+            throw error
+        default:
+            throw unexpectedResponse("Snap resolution request returned an unexpected response.")
+        }
+    }
+
+    public func selectionMeasurementLiveSession(
+        sessionID: UUID,
+        query: CADAgentMeasurementQuery,
+        expectedGeneration: DocumentGeneration? = nil,
+        client: AgentClientProtocol
+    ) throws -> CLISelectionMeasurementResponse {
+        let response = try client.send(
+            .selectionMeasurement(
+                sessionID: sessionID,
+                query: query,
+                expectedGeneration: expectedGeneration
+            )
+        )
+        switch response {
+        case .selectionMeasurement(let selectionMeasurement):
+            let summary = try sessions(client: client)
+                .sessions
+                .first { $0.id == sessionID }
+            return CLISelectionMeasurementResponse(
+                selectionMeasurement: selectionMeasurement,
+                generation: DocumentGeneration(summary?.generation.value ?? 0),
+                dirty: summary?.dirty ?? false
+            )
+        case .failure(let error):
+            throw error
+        default:
+            throw unexpectedResponse("Selection measurement request returned an unexpected response.")
+        }
+    }
+
     public func sketchEntitySummaryLiveSession(
         sessionID: UUID,
         expectedGeneration: DocumentGeneration? = nil,
@@ -2280,6 +2518,102 @@ public struct CLIService {
             throw invalidCommand("Mesh summary requires a document file path or live session ID.")
         }
         return try meshSummaryFile(at: url)
+    }
+
+    private func constructionPlaneSummaryAutomatically(
+        target: CLIDocumentTarget,
+        expectedGeneration: DocumentGeneration?,
+        client: AgentClientProtocol?
+    ) throws -> CLIConstructionPlaneSummaryResponse {
+        if let sessionID = target.sessionID {
+            return try constructionPlaneSummaryLiveSession(
+                sessionID: sessionID,
+                expectedGeneration: expectedGeneration,
+                client: requiredClient(client)
+            )
+        }
+
+        if let url = target.fileURL,
+           let client,
+           let session = try openSession(for: url, client: client) {
+            return try constructionPlaneSummaryLiveSession(
+                sessionID: session.id,
+                expectedGeneration: expectedGeneration,
+                client: client
+            )
+        }
+
+        guard let url = target.fileURL else {
+            throw invalidCommand("Construction plane summary requires a document file path or live session ID.")
+        }
+        return try constructionPlaneSummaryFile(at: url)
+    }
+
+    private func resolveSnapAutomatically(
+        target: CLIDocumentTarget,
+        point: Point2D,
+        options: SnapResolutionOptions,
+        expectedGeneration: DocumentGeneration?,
+        client: AgentClientProtocol?
+    ) throws -> CLISnapResolutionResponse {
+        if let sessionID = target.sessionID {
+            return try resolveSnapLiveSession(
+                sessionID: sessionID,
+                point: point,
+                options: options,
+                expectedGeneration: expectedGeneration,
+                client: requiredClient(client)
+            )
+        }
+
+        if let url = target.fileURL,
+           let client,
+           let session = try openSession(for: url, client: client) {
+            return try resolveSnapLiveSession(
+                sessionID: session.id,
+                point: point,
+                options: options,
+                expectedGeneration: expectedGeneration,
+                client: client
+            )
+        }
+
+        guard let url = target.fileURL else {
+            throw invalidCommand("Snap resolution requires a document file path or live session ID.")
+        }
+        return try resolveSnapFile(at: url, point: point, options: options)
+    }
+
+    private func selectionMeasurementAutomatically(
+        target: CLIDocumentTarget,
+        query: CADAgentMeasurementQuery,
+        expectedGeneration: DocumentGeneration?,
+        client: AgentClientProtocol?
+    ) throws -> CLISelectionMeasurementResponse {
+        if let sessionID = target.sessionID {
+            return try selectionMeasurementLiveSession(
+                sessionID: sessionID,
+                query: query,
+                expectedGeneration: expectedGeneration,
+                client: requiredClient(client)
+            )
+        }
+
+        if let url = target.fileURL,
+           let client,
+           let session = try openSession(for: url, client: client) {
+            return try selectionMeasurementLiveSession(
+                sessionID: session.id,
+                query: query,
+                expectedGeneration: expectedGeneration,
+                client: client
+            )
+        }
+
+        guard let url = target.fileURL else {
+            throw invalidCommand("Selection measurement requires a document file path or live session ID.")
+        }
+        return try selectionMeasurementFile(at: url, query: query)
     }
 
     private func sketchEntitySummaryAutomatically(

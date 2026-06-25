@@ -1041,6 +1041,65 @@ func cliExecutableInspectsSketchTopologyAndCurvesAsJSON() async throws {
 }
 
 @Test(.timeLimit(.minutes(1)))
+func cliExecutableInspectsConstructionPlanesAndSnapAsJSON() async throws {
+    let temporaryDirectory = try makeTemporaryDirectory()
+    defer {
+        removeTemporaryDirectory(temporaryDirectory)
+    }
+    let documentURL = temporaryDirectory.appendingPathComponent("process-inspect-snap.swcad")
+    var document = DesignDocument.empty(named: "Process Inspect Snap")
+    let planeID = try document.createConstructionPlane(
+        name: "CLI Work Plane",
+        plane: .xy
+    )
+    try DocumentFileService().save(document, to: documentURL)
+
+    let planesResult = try await runCLI([
+        "inspect",
+        "construction-planes",
+        documentURL.path,
+        "--mode",
+        "file",
+        "--json",
+    ])
+    let planesResponse = try JSONDecoder().decode(
+        CLIConstructionPlaneSummaryResponse.self,
+        from: planesResult.standardOutputData
+    )
+    let snapResult = try await runCLI([
+        "inspect",
+        "snap",
+        documentURL.path,
+        "--x",
+        "1.2",
+        "--y",
+        "2.7",
+        "--unit",
+        "millimeter",
+        "--mode",
+        "file",
+        "--json",
+    ])
+    let snapResponse = try JSONDecoder().decode(
+        CLISnapResolutionResponse.self,
+        from: snapResult.standardOutputData
+    )
+
+    #expect(planesResult.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: planesResult.standardError))
+    #expect(planesResponse.constructionPlaneSummary.activePlaneID == planeID)
+    #expect(planesResponse.constructionPlaneSummary.planes.count == 1)
+    let plane = try #require(planesResponse.constructionPlaneSummary.planes.first)
+    #expect(plane.name == "CLI Work Plane")
+    #expect(plane.isActive)
+    #expect(snapResult.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: snapResult.standardError))
+    #expect(snapResponse.snapResolution.selectedCandidate?.kind == .grid)
+    #expect(abs(snapResponse.snapResolution.originalPoint.x - 0.0012) < 0.000_000_000_001)
+    #expect(abs(snapResponse.snapResolution.originalPoint.y - 0.0027) < 0.000_000_000_001)
+    #expect(abs(snapResponse.snapResolution.resolvedPoint.x - 0.001) < 0.000_000_000_001)
+    #expect(abs(snapResponse.snapResolution.resolvedPoint.y - 0.003) < 0.000_000_000_001)
+}
+
+@Test(.timeLimit(.minutes(1)))
 func cliExecutableSurfaceSourcesReturnsSelectionReferencesAsJSON() async throws {
     let temporaryDirectory = try makeTemporaryDirectory()
     defer {
@@ -1129,9 +1188,30 @@ func cliExecutableSurfaceSourcesReturnsSelectionReferencesAsJSON() async throws 
         CLISurfaceFramesResponse.self,
         from: frameResult.standardOutputData
     )
-    let frame = try #require(frameResponse.surfaceFrames.frames.first)
     let patch = try #require(response.surfaceSourceSummary.sources.first?.patches.first)
     let controlPoint = try #require(patch.controlPoints.first { $0.uIndex == 1 && $0.vIndex == 1 })
+    let measurementQueryJSON = try encodedSelectionMeasurementQuery(
+        CADAgentMeasurementQuery(kind: .point, first: controlPoint.selectionReference)
+    )
+    let selectionMeasurementResult = try await runCLI([
+        "inspect",
+        "selection-measurement",
+        documentURL.path,
+        "--query",
+        measurementQueryJSON,
+        "--mode",
+        "file",
+        "--json",
+    ])
+    let selectionMeasurementResponse = try JSONDecoder().decode(
+        CLISelectionMeasurementResponse.self,
+        from: selectionMeasurementResult.standardOutputData
+    )
+    guard case .point(let measuredPoint) = selectionMeasurementResponse.selectionMeasurement else {
+        Issue.record("Selection measurement must return a point result.")
+        return
+    }
+    let frame = try #require(frameResponse.surfaceFrames.frames.first)
 
     #expect(result.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: result.standardError))
     #expect(response.surfaceSourceSummary.counts.sourceCount == 1)
@@ -1154,6 +1234,13 @@ func cliExecutableSurfaceSourcesReturnsSelectionReferencesAsJSON() async throws 
     #expect(frame.u == 0.5)
     #expect(frame.v == 0.5)
     #expect(abs(abs(frame.handedness) - 1.0) < 0.000_000_01)
+    #expect(
+        selectionMeasurementResult.terminationStatus == CLIExitCode.success.rawValue,
+        Comment(rawValue: selectionMeasurementResult.standardError)
+    )
+    #expect(abs(measuredPoint.point.x - controlPoint.point.x) <= 1.0e-12)
+    #expect(abs(measuredPoint.point.y - controlPoint.point.y) <= 1.0e-12)
+    #expect(abs(measuredPoint.point.z - controlPoint.point.z) <= 1.0e-12)
 }
 
 @Test(.timeLimit(.minutes(1)))
@@ -3688,6 +3775,11 @@ private func encodedSelectionTarget(_ target: SelectionTarget) throws -> String 
 }
 
 private func encodedSurfaceFrameQuery(_ query: SurfaceFrameQuery) throws -> String {
+    let data = try JSONEncoder().encode(query)
+    return String(decoding: data, as: UTF8.self)
+}
+
+private func encodedSelectionMeasurementQuery(_ query: CADAgentMeasurementQuery) throws -> String {
     let data = try JSONEncoder().encode(query)
     return String(decoding: data, as: UTF8.self)
 }

@@ -1,5 +1,16 @@
 public extension CLIOutput {
     static func write(
+        response: CLIConstructionPlaneSummaryResponse,
+        asJSON: Bool
+    ) throws {
+        try write(
+            response,
+            fallback: response.message,
+            asJSON: asJSON
+        )
+    }
+
+    static func write(
         response: CLISketchEntitySummaryResponse,
         asJSON: Bool
     ) throws {
@@ -56,6 +67,28 @@ public extension CLIOutput {
 
     static func write(
         response: CLISurfaceFramesResponse,
+        asJSON: Bool
+    ) throws {
+        try write(
+            response,
+            fallback: response.message,
+            asJSON: asJSON
+        )
+    }
+
+    static func write(
+        response: CLISnapResolutionResponse,
+        asJSON: Bool
+    ) throws {
+        try write(
+            response,
+            fallback: response.message,
+            asJSON: asJSON
+        )
+    }
+
+    static func write(
+        response: CLISelectionMeasurementResponse,
         asJSON: Bool
     ) throws {
         try write(

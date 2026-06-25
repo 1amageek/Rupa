@@ -1,5 +1,23 @@
 import RupaCore
 
+public struct CLIConstructionPlaneSummaryResponse: Codable, Equatable, Sendable {
+    public var message: String
+    public var generation: UInt64
+    public var dirty: Bool
+    public var constructionPlaneSummary: ConstructionPlaneSummaryResult
+
+    public init(
+        constructionPlaneSummary: ConstructionPlaneSummaryResult,
+        generation: DocumentGeneration,
+        dirty: Bool
+    ) {
+        self.message = "Construction plane summary: \(constructionPlaneSummary.planes.count) saved planes."
+        self.generation = generation.value
+        self.dirty = dirty
+        self.constructionPlaneSummary = constructionPlaneSummary
+    }
+}
+
 public struct CLISketchEntitySummaryResponse: Codable, Equatable, Sendable {
     public var message: String
     public var generation: UInt64
@@ -117,5 +135,42 @@ public struct CLISurfaceFramesResponse: Codable, Equatable, Sendable {
         self.dirty = dirty
         self.surfaceFrames = surfaceFrames
         self.diagnostics = surfaceFrames.diagnostics
+    }
+}
+
+public struct CLISnapResolutionResponse: Codable, Equatable, Sendable {
+    public var message: String
+    public var generation: UInt64
+    public var dirty: Bool
+    public var snapResolution: SnapResolutionResult
+
+    public init(
+        snapResolution: SnapResolutionResult,
+        generation: DocumentGeneration,
+        dirty: Bool
+    ) {
+        let selectedLabel = snapResolution.selectedCandidate?.label ?? "none"
+        self.message = "Snap resolution: \(snapResolution.candidates.count) candidates, selected \(selectedLabel)."
+        self.generation = generation.value
+        self.dirty = dirty
+        self.snapResolution = snapResolution
+    }
+}
+
+public struct CLISelectionMeasurementResponse: Codable, Equatable, Sendable {
+    public var message: String
+    public var generation: UInt64
+    public var dirty: Bool
+    public var selectionMeasurement: CADAgentMeasurementQueryResult
+
+    public init(
+        selectionMeasurement: CADAgentMeasurementQueryResult,
+        generation: DocumentGeneration,
+        dirty: Bool
+    ) {
+        self.message = "Selection measurement resolved."
+        self.generation = generation.value
+        self.dirty = dirty
+        self.selectionMeasurement = selectionMeasurement
     }
 }
