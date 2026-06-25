@@ -5222,6 +5222,28 @@ public struct MainView: View {
         }
     }
 
+    private var selectedSurfaceControlPointInspectorStateResult:
+        Result<SurfaceControlPointInspectorState?, Error> {
+        guard !selectedSurfaceControlPointReferences.isEmpty else {
+            return .success(nil)
+        }
+        do {
+            let summary = try SurfaceSourceSummaryService().summarize(document: session.document)
+            guard let state = SurfaceControlPointInspectorState(
+                selectedReferences: selectedSurfaceControlPointReferences,
+                summaryResult: summary
+            ) else {
+                throw EditorError(
+                    code: .referenceUnresolved,
+                    message: "Selected surface control point references could not be resolved in the current surface source summary."
+                )
+            }
+            return .success(state)
+        } catch {
+            return .failure(error)
+        }
+    }
+
     private var selectedSurfaceContinuitySummary: RupaCore.SurfaceContinuityResult? {
         switch selectedSurfaceContinuitySummaryResult(for: selectedSceneNodes) {
         case .success(let summary):
@@ -6157,10 +6179,8 @@ public struct MainView: View {
                 case .success(let sketchEntity):
                     if let sketchEntity {
                         sketchEntityInspectorSections(sketchEntity)
-                    } else if selectedSceneNodes.isEmpty {
-                        canvasInspectorSections
                     } else {
-                        objectInspectorSections(selectedSceneNodes)
+                        nonSketchInspectorSections
                     }
                 case .failure(let error):
                     sketchEntityInspectorErrorSections(error)
@@ -6173,6 +6193,22 @@ public struct MainView: View {
         .scrollIndicators(.visible)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .accessibilityIdentifier("InspectorPanel")
+    }
+
+    @ViewBuilder
+    private var nonSketchInspectorSections: some View {
+        switch selectedSurfaceControlPointInspectorStateResult {
+        case .success(let state):
+            if let state {
+                surfaceControlPointInspectorSection(state)
+            } else if selectedSceneNodes.isEmpty {
+                canvasInspectorSections
+            } else {
+                objectInspectorSections(selectedSceneNodes)
+            }
+        case .failure(let error):
+            surfaceControlPointInspectorErrorSections(error)
+        }
     }
 
     private func inspectorSection<Content: View>(
@@ -6445,6 +6481,39 @@ public struct MainView: View {
             onStartCurvePathPick: startPatternArrayCurvePathPick,
             onCancelCurvePathPick: cancelPatternArrayCurvePathPick
         )
+    }
+
+    private func surfaceControlPointInspectorSection(
+        _ state: SurfaceControlPointInspectorState
+    ) -> some View {
+        SurfaceControlPointInspectorView(
+            state: state,
+            session: session,
+            positionSliderRange: transformPositionSliderRange,
+            slideDistanceMeters: $polySplineSurfaceVertexSlideDistanceMeters,
+            isSlideActive: slideCommandState.isSurfaceControlVerticesActive,
+            slideRouteTitle: slideCommandState.routeTitle,
+            onSetPointDisplay: setSurfaceControlPointDisplay,
+            onSetCoordinate: { axis, meters in
+                setSurfaceControlPointCoordinate(axis, meters: meters, state: state)
+            },
+            onActivateSlide: activateSlideSurfaceControlVerticesCommand,
+            onSlide: { direction in
+                slideSelectedSurfaceControlPoints(
+                    state.selectedReferences,
+                    direction: direction
+                )
+            }
+        )
+    }
+
+    @ViewBuilder
+    private func surfaceControlPointInspectorErrorSections(_ error: Error) -> some View {
+        inspectorSection("Surface CV") {
+            inspectorRow("Target", selectedTargetSummary)
+            inspectorRow("Status", "Unavailable")
+            inspectorRow("Reason", error.localizedDescription)
+        }
     }
 
     private func startPatternArrayCurvePathPick(sourceID: PatternArraySourceID) {
@@ -8440,6 +8509,66 @@ public struct MainView: View {
             distance: .length(resolvedDistanceMeters, .meter)
         )
         if result?.diagnostics.isEmpty == false || result == nil {
+            isPreviewExpanded = true
+        }
+    }
+
+    private func setSurfaceControlPointDisplay(
+        _ targets: [SelectionReference],
+        isVisible: Bool
+    ) {
+        var shouldExpandPreview = false
+        for target in targets {
+            let result = session.setSurfaceControlPointDisplay(
+                target: target,
+                isVisible: isVisible
+            )
+            if result?.diagnostics.isEmpty == false || result == nil {
+                shouldExpandPreview = true
+            }
+        }
+        if shouldExpandPreview {
+            isPreviewExpanded = true
+        }
+    }
+
+    private func setSurfaceControlPointCoordinate(
+        _ axis: SurfaceControlPointInspectorState.CoordinateAxis,
+        meters: Double,
+        state: SurfaceControlPointInspectorState
+    ) {
+        guard state.canEditCoordinates else {
+            return
+        }
+
+        var shouldExpandPreview = false
+        for entry in state.entries where entry.isEditable {
+            let currentMeters: Double
+            switch axis {
+            case .x:
+                currentMeters = entry.point.x
+            case .y:
+                currentMeters = entry.point.y
+            case .z:
+                currentMeters = entry.point.z
+            }
+
+            let delta = meters - currentMeters
+            guard abs(delta) > 1.0e-12 else {
+                continue
+            }
+
+            let result = session.moveSurfaceControlPoint(
+                target: entry.selectionReference,
+                deltaX: .length(axis == .x ? delta : 0.0, .meter),
+                deltaY: .length(axis == .y ? delta : 0.0, .meter),
+                deltaZ: .length(axis == .z ? delta : 0.0, .meter)
+            )
+            if result?.diagnostics.isEmpty == false || result == nil {
+                shouldExpandPreview = true
+            }
+        }
+        if shouldExpandPreview {
             isPreviewExpanded = true
         }
     }
