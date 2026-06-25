@@ -2142,6 +2142,93 @@ struct CLISketchAdvancedCurveEditCommandTests {
         #expect(source.continuity == .g1)
     }
 
+    @Test(.timeLimit(.minutes(1)))
+    func executableSketchBridgeUpdatePersistsClosedDocumentAsJSON() async throws {
+        let temporaryDirectory = try makeTemporaryDirectory()
+        defer {
+            removeTemporaryDirectory(temporaryDirectory)
+        }
+        let documentURL = temporaryDirectory.appendingPathComponent("process-sketch-bridge-update.swcad")
+        var document = DesignDocument.empty(named: "Process Sketch Bridge Update")
+        let featureID = try document.createLineSketch(
+            name: "Bridge Update Sources",
+            plane: .xy,
+            start: SketchPoint(
+                x: .length(0.0, .millimeter),
+                y: .length(0.0, .millimeter)
+            ),
+            end: SketchPoint(
+                x: .length(3.0, .millimeter),
+                y: .length(0.0, .millimeter)
+            )
+        )
+        let secondLineID = SketchEntityID()
+        guard var feature = document.cadDocument.designGraph.nodes[featureID],
+              case var .sketch(sketch) = feature.operation,
+              let firstLineID = sketch.entities.keys.first else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "Bridge update CLI setup requires a line sketch."
+            )
+        }
+        sketch.entities[secondLineID] = .line(
+            SketchLine(
+                start: SketchPoint(
+                    x: .length(6.0, .millimeter),
+                    y: .length(3.0, .millimeter)
+                ),
+                end: SketchPoint(
+                    x: .length(6.0, .millimeter),
+                    y: .length(6.0, .millimeter)
+                )
+            )
+        )
+        feature.operation = .sketch(sketch)
+        document.cadDocument.designGraph.nodes[featureID] = feature
+        document.cadDocument.designGraph.revision = document.cadDocument.designGraph.revision.advanced()
+        _ = try document.createBridgeCurve(
+            featureID: featureID,
+            firstEndpoint: BridgeCurveEndpoint(reference: .lineEnd(firstLineID)),
+            secondEndpoint: BridgeCurveEndpoint(reference: .lineStart(secondLineID)),
+            continuity: .g1
+        )
+        let source = try #require(document.productMetadata.bridgeCurveSources.values.first)
+        try DocumentFileService().save(document, to: documentURL)
+        let firstEndpoint = BridgeCurveEndpoint(
+            reference: .lineEnd(firstLineID),
+            tension: BridgeCurveTension(
+                first: .scalar(1.2),
+                second: .scalar(0.8),
+                third: .scalar(2.0)
+            )
+        )
+
+        let result = try await runCLI([
+            "sketch",
+            "bridge-update",
+            documentURL.path,
+            "--source-id",
+            source.id.description,
+            "--first-endpoint",
+            try encodedBridgeCurveEndpoint(firstEndpoint),
+            "--continuity",
+            "g0",
+            "--mode",
+            "file",
+            "--json",
+        ])
+        let response = try JSONDecoder().decode(CLIResponse.self, from: result.standardOutputData)
+        let loaded = try DocumentFileService().load(from: documentURL)
+        let updatedSource = try #require(loaded.productMetadata.bridgeCurveSources[source.id])
+
+        #expect(result.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: result.standardError))
+        #expect(response.message == "Bridge curve \(source.id.description) updated.")
+        #expect(response.saved)
+        #expect(updatedSource.firstEndpoint == firstEndpoint)
+        #expect(updatedSource.secondEndpoint.reference == .lineStart(secondLineID))
+        #expect(updatedSource.continuity == .g0)
+    }
+
     private func namedSketchEntity(
         _ name: String,
         kind: String,

@@ -1268,6 +1268,7 @@ Currently implemented command groups:
 | `rupa sketch rebuild <document> --target <json> --method <points|refit|explicit-control>` | Rebuild a supported source sketch curve with typed rebuild options. |
 | `rupa sketch cut <document> --target <json> --cutter <json>` | Cut a supported source sketch curve with another source curve. |
 | `rupa sketch bridge <document> --feature-id <uuid> --first-endpoint <json> --second-endpoint <json>` | Create a bridge curve in an editable sketch feature with endpoint continuity control. |
+| `rupa sketch bridge-update <document> --source-id <uuid>` | Update an existing bridge curve source endpoint or continuity contract. |
 | `rupa model box <document> --width <value> --height <value> --depth <value>` | Create an extruded rectangular body from numeric length literals. |
 | `rupa model cylinder <document> --radius <value> --depth <value>` | Create an extruded circular body from numeric length literals. |
 | `rupa model extrude <document> --profile-feature-id <id> --distance <value>` | Extrude an existing closed sketch profile by Feature ID. |
