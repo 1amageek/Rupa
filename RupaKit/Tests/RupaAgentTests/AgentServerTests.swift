@@ -416,7 +416,7 @@ import SwiftCAD
     #expect(surfaceControlPointMove.discovery.contains(.surfaceContinuitySummary))
     #expect(surfaceControlPointMove.targets == [.surfaceControlPoint])
     #expect(surfaceControlPointMove.summary.contains("SelectionReference"))
-    #expect(surfaceControlPointMove.failureMode.contains("boundary corner control point"))
+    #expect(surfaceControlPointMove.failureMode.contains("strict interior B-spline control point"))
 
     #expect(polySplineVertexSlide.category == .solid)
     #expect(polySplineVertexSlide.mutatesDocument)
@@ -437,7 +437,7 @@ import SwiftCAD
     #expect(surfaceControlPointSlide.discovery.contains(.surfaceContinuitySummary))
     #expect(surfaceControlPointSlide.targets == [.surfaceControlPoint])
     #expect(surfaceControlPointSlide.summary.contains("SelectionReference"))
-    #expect(surfaceControlPointSlide.failureMode.contains("duplicate source-vertex targets"))
+    #expect(surfaceControlPointSlide.failureMode.contains("duplicate targets"))
 
     #expect(polySplineAnalysis.category == .read)
     #expect(!polySplineAnalysis.mutatesDocument)
@@ -2670,6 +2670,7 @@ import SwiftCAD
                 sourceCount: 1,
                 patchCount: 1,
                 controlVertexCount: 4,
+                controlPointCount: 16,
                 trimLoopCount: 1,
                 adjacencyCount: 0
             ),
@@ -2734,6 +2735,21 @@ import SwiftCAD
                                         )
                                         .rawValue,
                                     selectionReference: surfaceCodecControlPointReference
+                                ),
+                            ],
+                            controlPoints: [
+                                SurfaceSourceSummaryResult.ControlPoint(
+                                    id: "feature:a/patch:0/surfaceControlPoint:u1:v1",
+                                    uIndex: 1,
+                                    vIndex: 1,
+                                    point: SurfaceSourceSummaryResult.Point(x: 0.25, y: 0.25, z: 0.0),
+                                    isBoundary: false,
+                                    isEditable: true,
+                                    selectionReference: .surface(.controlPoint(SurfaceControlPointReference(
+                                        surface: surfaceCodecReference,
+                                        uIndex: 1,
+                                        vIndex: 1
+                                    )))
                                 ),
                             ],
                             trimLoops: [
@@ -4138,6 +4154,77 @@ import SwiftCAD
     #expect(moveResult.didMutate)
     #expect(moveResult.generation == DocumentGeneration(2))
     #expect(abs(polySpline.sourceMesh.positions[2].z - 0.005) <= 1.0e-12)
+    #expect(session.evaluationStatus == .valid)
+}
+
+@MainActor
+@Test func agentMovesInteriorSurfaceControlPointThroughSurfaceSourceReference() async throws {
+    let server = AgentServer()
+    let sessionID = UUID()
+    let session = EditorSession()
+    server.register(session: session, id: sessionID)
+
+    let createResponse = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .createPolySplineSurface(
+                name: "Agent Interior Surface Reference Move",
+                sourceMesh: agentPolySplineQuadMesh(),
+                options: PolySplineOptions()
+            ),
+            expectedGeneration: DocumentGeneration(0)
+        )
+    )
+    guard case .command(let createResult) = createResponse else {
+        Issue.record("Agent must create a PolySpline surface.")
+        return
+    }
+    #expect(createResult.didMutate)
+
+    let summaryResponse = server.handle(
+        .surfaceSourceSummary(
+            sessionID: sessionID,
+            expectedGeneration: DocumentGeneration(1)
+        )
+    )
+    guard case .surfaceSourceSummary(let summary) = summaryResponse else {
+        Issue.record("Agent must return a surface source summary.")
+        return
+    }
+    let source = try #require(summary.sources.first)
+    let patch = try #require(source.patches.first)
+    let controlPoint = try #require(patch.controlPoints.first { $0.uIndex == 1 && $0.vIndex == 1 })
+
+    let moveResponse = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .moveSurfaceControlPoint(
+                target: controlPoint.selectionReference,
+                deltaX: .length(0.0, .millimeter),
+                deltaY: .length(0.0, .millimeter),
+                deltaZ: .length(1.0, .millimeter)
+            ),
+            expectedGeneration: DocumentGeneration(1)
+        )
+    )
+
+    guard case .command(let moveResult) = moveResponse else {
+        Issue.record("Agent must move an interior surface control point from a surface source reference.")
+        return
+    }
+    let featureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let feature = try #require(session.document.cadDocument.designGraph.nodes[featureID])
+    guard case let .polySpline(polySpline) = feature.operation else {
+        Issue.record("Agent must keep a PolySpline feature.")
+        return
+    }
+    let override = try #require(polySpline.controlPointOverrides.first)
+    #expect(moveResult.commandName == "moveSurfaceControlPoint")
+    #expect(moveResult.didMutate)
+    #expect(moveResult.generation == DocumentGeneration(2))
+    #expect(override.uIndex == 1)
+    #expect(override.vIndex == 1)
+    #expect(abs(override.point.z - (controlPoint.point.z + 0.001)) <= 1.0e-12)
     #expect(session.evaluationStatus == .valid)
 }
 

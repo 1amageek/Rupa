@@ -15416,17 +15416,77 @@ public struct DesignDocument: Identifiable, Sendable {
         deltaZ: CADExpression,
         objectRegistry: ObjectTypeRegistry = .builtIn
     ) throws {
-        let resolvedTarget = try SurfaceControlPointSelectionTargetResolver().target(
+        let resolvedTarget = try SurfaceControlPointSelectionTargetResolver().editTarget(
             for: target,
             in: self
         )
-        try movePolySplineSurfaceVertex(
-            target: resolvedTarget,
-            deltaX: deltaX,
-            deltaY: deltaY,
-            deltaZ: deltaZ,
-            objectRegistry: objectRegistry
+        switch resolvedTarget {
+        case .boundaryVertex(let target):
+            try movePolySplineSurfaceVertex(
+                target: target,
+                deltaX: deltaX,
+                deltaY: deltaY,
+                deltaZ: deltaZ,
+                objectRegistry: objectRegistry
+            )
+        case .interiorControlPoint(let target):
+            try movePolySplineInteriorSurfaceControlPoint(
+                target: target,
+                deltaX: deltaX,
+                deltaY: deltaY,
+                deltaZ: deltaZ,
+                objectRegistry: objectRegistry
+            )
+        }
+    }
+
+    private mutating func movePolySplineInteriorSurfaceControlPoint(
+        target: PolySplineSurfaceControlPointEditTarget,
+        deltaX: CADExpression,
+        deltaY: CADExpression,
+        deltaZ: CADExpression,
+        objectRegistry: ObjectTypeRegistry
+    ) throws {
+        let delta = Vector3D(
+            x: try resolvedLengthValue(deltaX, owner: "PolySpline surface control point delta x"),
+            y: try resolvedLengthValue(deltaY, owner: "PolySpline surface control point delta y"),
+            z: try resolvedLengthValue(deltaZ, owner: "PolySpline surface control point delta z")
         )
+        guard delta.length > ModelingTolerance.standard.distance else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "PolySpline surface control point move requires a non-zero delta."
+            )
+        }
+        guard var feature = cadDocument.designGraph.nodes[target.featureID],
+              case let .polySpline(polySpline) = feature.operation else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "PolySpline surface control point move requires an existing PolySpline source feature."
+            )
+        }
+
+        let controlPointEditor = PolySplineSurfaceControlPointEditingService()
+        feature.operation = .polySpline(try controlPointEditor.updatedPolySpline(
+            moving: target,
+            by: delta,
+            in: polySpline,
+            owner: "PolySpline surface control point move"
+        ))
+
+        var updatedCADDocument = cadDocument
+        let previousCADDocument = cadDocument
+        do {
+            try updatedCADDocument.replaceFeature(feature)
+            cadDocument = updatedCADDocument
+            try validate(objectRegistry: objectRegistry)
+        } catch {
+            cadDocument = previousCADDocument
+            throw EditorError(
+                code: .commandInvalid,
+                message: "PolySpline surface control point move produced invalid source geometry: \(error)."
+            )
+        }
     }
 
     public mutating func slidePolySplineSurfaceVertices(
@@ -15594,17 +15654,149 @@ public struct DesignDocument: Identifiable, Sendable {
             )
         }
         let resolver = SurfaceControlPointSelectionTargetResolver()
-        var resolvedTargets: [SelectionTarget] = []
-        resolvedTargets.reserveCapacity(targets.count)
+        var boundaryTargets: [SelectionTarget] = []
+        var interiorTargets: [PolySplineSurfaceControlPointEditTarget] = []
+        boundaryTargets.reserveCapacity(targets.count)
+        interiorTargets.reserveCapacity(targets.count)
         for target in targets {
-            resolvedTargets.append(try resolver.target(for: target, in: self))
+            switch try resolver.editTarget(for: target, in: self) {
+            case .boundaryVertex(let target):
+                boundaryTargets.append(target)
+            case .interiorControlPoint(let target):
+                interiorTargets.append(target)
+            }
         }
-        try slidePolySplineSurfaceVertices(
-            targets: resolvedTargets,
-            direction: direction,
-            distance: distance,
-            objectRegistry: objectRegistry
+        let previousCADDocument = cadDocument
+        do {
+            if boundaryTargets.isEmpty == false {
+                try slidePolySplineSurfaceVertices(
+                    targets: boundaryTargets,
+                    direction: direction,
+                    distance: distance,
+                    objectRegistry: objectRegistry
+                )
+            }
+            if interiorTargets.isEmpty == false {
+                try slidePolySplineInteriorSurfaceControlPoints(
+                    targets: interiorTargets,
+                    direction: direction,
+                    distance: distance,
+                    objectRegistry: objectRegistry
+                )
+            }
+        } catch {
+            cadDocument = previousCADDocument
+            throw error
+        }
+    }
+
+    private mutating func slidePolySplineInteriorSurfaceControlPoints(
+        targets: [PolySplineSurfaceControlPointEditTarget],
+        direction: PolySplineSurfaceVertexSlideDirection,
+        distance: CADExpression,
+        objectRegistry: ObjectTypeRegistry
+    ) throws {
+        guard targets.isEmpty == false else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "PolySpline surface control point slide requires at least one interior control point target."
+            )
+        }
+        let resolvedDistance = try resolvedLengthValue(
+            distance,
+            owner: "PolySpline surface control point slide distance"
         )
+        guard abs(resolvedDistance) > ModelingTolerance.standard.distance else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "PolySpline surface control point slide requires a non-zero distance."
+            )
+        }
+
+        struct ControlPointKey: Hashable {
+            var featureID: FeatureID
+            var patchID: Int
+            var uIndex: Int
+            var vIndex: Int
+        }
+
+        var featuresByID: [FeatureID: FeatureNode] = [:]
+        var polySplinesByID: [FeatureID: PolySplineFeature] = [:]
+        var seenTargets: Set<ControlPointKey> = []
+        let controlPointEditor = PolySplineSurfaceControlPointEditingService()
+
+        for target in targets {
+            let duplicateKey = ControlPointKey(
+                featureID: target.featureID,
+                patchID: target.patchID,
+                uIndex: target.uIndex,
+                vIndex: target.vIndex
+            )
+            guard seenTargets.insert(duplicateKey).inserted else {
+                throw EditorError(
+                    code: .commandInvalid,
+                    message: "PolySpline surface control point slide cannot receive duplicate targets."
+                )
+            }
+            let polySpline: PolySplineFeature
+            if let cachedPolySpline = polySplinesByID[target.featureID] {
+                polySpline = cachedPolySpline
+            } else {
+                guard let sourceFeature = cadDocument.designGraph.nodes[target.featureID],
+                      case let .polySpline(sourcePolySpline) = sourceFeature.operation else {
+                    throw EditorError(
+                        code: .referenceUnresolved,
+                        message: "PolySpline surface control point slide requires an existing PolySpline source feature."
+                    )
+                }
+                featuresByID[target.featureID] = sourceFeature
+                polySpline = sourcePolySpline
+            }
+
+            let unitDirection = try controlPointEditor.slideUnitVector(
+                for: target,
+                in: polySpline,
+                direction: direction
+            )
+            let delta = Vector3D(
+                x: unitDirection.x * resolvedDistance,
+                y: unitDirection.y * resolvedDistance,
+                z: unitDirection.z * resolvedDistance
+            )
+            polySplinesByID[target.featureID] = try controlPointEditor.updatedPolySpline(
+                moving: target,
+                by: delta,
+                in: polySpline,
+                owner: "PolySpline surface control point slide"
+            )
+        }
+
+        var replacementFeatures: [FeatureNode] = []
+        for (featureID, feature) in featuresByID {
+            guard let polySpline = polySplinesByID[featureID] else {
+                throw EditorError(
+                    code: .referenceUnresolved,
+                    message: "PolySpline surface control point slide lost a resolved source update."
+                )
+            }
+            var updatedFeature = feature
+            updatedFeature.operation = .polySpline(polySpline)
+            replacementFeatures.append(updatedFeature)
+        }
+
+        var updatedCADDocument = cadDocument
+        let previousCADDocument = cadDocument
+        do {
+            try updatedCADDocument.replaceFeatures(replacementFeatures)
+            cadDocument = updatedCADDocument
+            try validate(objectRegistry: objectRegistry)
+        } catch {
+            cadDocument = previousCADDocument
+            throw EditorError(
+                code: .commandInvalid,
+                message: "PolySpline surface control point slide produced invalid source geometry: \(error)."
+            )
+        }
     }
 
     @discardableResult

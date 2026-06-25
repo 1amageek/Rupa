@@ -5,6 +5,7 @@ public struct SurfaceSourceSummaryResult: Codable, Equatable, Sendable {
         public var sourceCount: Int
         public var patchCount: Int
         public var controlVertexCount: Int
+        public var controlPointCount: Int
         public var trimLoopCount: Int
         public var adjacencyCount: Int
 
@@ -12,12 +13,14 @@ public struct SurfaceSourceSummaryResult: Codable, Equatable, Sendable {
             sourceCount: Int = 0,
             patchCount: Int = 0,
             controlVertexCount: Int = 0,
+            controlPointCount: Int = 0,
             trimLoopCount: Int = 0,
             adjacencyCount: Int = 0
         ) {
             self.sourceCount = sourceCount
             self.patchCount = patchCount
             self.controlVertexCount = controlVertexCount
+            self.controlPointCount = controlPointCount
             self.trimLoopCount = trimLoopCount
             self.adjacencyCount = adjacencyCount
         }
@@ -192,6 +195,34 @@ public struct SurfaceSourceSummaryResult: Codable, Equatable, Sendable {
         }
     }
 
+    public struct ControlPoint: Codable, Equatable, Sendable {
+        public var id: String
+        public var uIndex: Int
+        public var vIndex: Int
+        public var point: Point
+        public var isBoundary: Bool
+        public var isEditable: Bool
+        public var selectionReference: SelectionReference
+
+        public init(
+            id: String,
+            uIndex: Int,
+            vIndex: Int,
+            point: Point,
+            isBoundary: Bool,
+            isEditable: Bool,
+            selectionReference: SelectionReference
+        ) {
+            self.id = id
+            self.uIndex = uIndex
+            self.vIndex = vIndex
+            self.point = point
+            self.isBoundary = isBoundary
+            self.isEditable = isEditable
+            self.selectionReference = selectionReference
+        }
+    }
+
     public struct TrimLoop: Codable, Equatable, Sendable {
         public var role: String
         public var parameterAddresses: [ParameterAddress]
@@ -223,6 +254,7 @@ public struct SurfaceSourceSummaryResult: Codable, Equatable, Sendable {
         public var vDomain: ParameterRange
         public var basis: Basis
         public var controlVertices: [ControlVertex]
+        public var controlPoints: [ControlPoint]
         public var trimLoops: [TrimLoop]
         public var parameterAddresses: [ParameterAddress]
 
@@ -235,6 +267,7 @@ public struct SurfaceSourceSummaryResult: Codable, Equatable, Sendable {
             vDomain: ParameterRange,
             basis: Basis,
             controlVertices: [ControlVertex],
+            controlPoints: [ControlPoint] = [],
             trimLoops: [TrimLoop],
             parameterAddresses: [ParameterAddress]
         ) {
@@ -246,6 +279,7 @@ public struct SurfaceSourceSummaryResult: Codable, Equatable, Sendable {
             self.vDomain = vDomain
             self.basis = basis
             self.controlVertices = controlVertices
+            self.controlPoints = controlPoints
             self.trimLoops = trimLoops
             self.parameterAddresses = parameterAddresses
         }

@@ -275,45 +275,48 @@ import Testing
     #expect(abs(polySpline.sourceMesh.positions[2].z - 0.005) <= 1.0e-12)
 }
 
-@Test func surfaceControlPointReferenceRejectsInteriorPolySplineControlPoint() async throws {
+@Test func surfaceControlPointReferenceMoveMutatesInteriorControlPointOverride() async throws {
     var document = DesignDocument.empty()
 
-    _ = try document.createPolySplineSurface(
-        name: "Rejected Surface Reference Quad Surface",
+    let featureID = try document.createPolySplineSurface(
+        name: "Interior Surface Reference Quad Surface",
         sourceMesh: designDocumentPolySplineQuadMesh()
     )
     let summary = try SurfaceSourceSummaryService().summarize(document: document)
     let source = try #require(summary.sources.first)
     let patch = try #require(source.patches.first)
-    let controlVertex = try #require(patch.controlVertices.first)
-    guard case .surface(.controlPoint(let reference)) = controlVertex.selectionReference else {
-        Issue.record("Expected a surface control point reference.")
-        return
-    }
-    let interiorReference = SelectionReference.surface(
-        .controlPoint(
-            SurfaceControlPointReference(
-                surface: reference.surface,
-                uIndex: 1,
-                vIndex: 1
-            )
-        )
+    let controlPoint = try #require(patch.controlPoints.first { $0.uIndex == 1 && $0.vIndex == 1 })
+
+    try document.moveSurfaceControlPoint(
+        target: controlPoint.selectionReference,
+        deltaX: .length(0.0, .millimeter),
+        deltaY: .length(0.0, .millimeter),
+        deltaZ: .length(1.0, .millimeter)
     )
 
-    var caught: EditorError?
-    do {
-        try document.moveSurfaceControlPoint(
-            target: interiorReference,
-            deltaX: .length(0.0, .millimeter),
-            deltaY: .length(0.0, .millimeter),
-            deltaZ: .length(1.0, .millimeter)
-        )
-    } catch let error as EditorError {
-        caught = error
+    let feature = try #require(document.cadDocument.designGraph.nodes[featureID])
+    guard case let .polySpline(polySpline) = feature.operation else {
+        Issue.record("Expected a PolySpline feature.")
+        return
     }
+    let override = try #require(polySpline.controlPointOverrides.first)
+    #expect(polySpline.controlPointOverrides.count == 1)
+    #expect(override.patchID == 0)
+    #expect(override.uIndex == 1)
+    #expect(override.vIndex == 1)
+    #expect(abs(override.point.x - controlPoint.point.x) <= 1.0e-12)
+    #expect(abs(override.point.y - controlPoint.point.y) <= 1.0e-12)
+    #expect(abs(override.point.z - (controlPoint.point.z + 0.001)) <= 1.0e-12)
 
-    #expect(caught?.code == .commandInvalid)
-    #expect(caught?.message.contains("boundary corner control points") == true)
+    let measurement = try SelectionMeasurementService().measure(
+        query: CADAgentMeasurementQuery(kind: .point, first: controlPoint.selectionReference),
+        document: document
+    )
+    guard case .point(let measuredPoint) = measurement else {
+        Issue.record("Expected moved interior control point measurement.")
+        return
+    }
+    #expect(abs(measuredPoint.point.z - override.point.z) <= 1.0e-12)
 }
 
 @Test func polySplineSurfaceVertexMoveRejectsNonVertexTargets() async throws {
@@ -430,6 +433,36 @@ import Testing
     #expect(abs(polySpline.sourceMesh.positions[1].x - 0.02) <= 1.0e-12)
     #expect(abs(polySpline.sourceMesh.positions[1].y - (0.02 / length * 0.001)) <= 1.0e-12)
     #expect(abs(polySpline.sourceMesh.positions[1].z - (0.004 / length * 0.001)) <= 1.0e-12)
+}
+
+@Test func surfaceControlPointReferenceSlideMovesInteriorControlPointAlongPositiveU() async throws {
+    var document = DesignDocument.empty()
+
+    let featureID = try document.createPolySplineSurface(
+        name: "Surface Reference Interior Slide U Quad Surface",
+        sourceMesh: designDocumentPolySplineQuadMesh()
+    )
+    let summary = try SurfaceSourceSummaryService().summarize(document: document)
+    let source = try #require(summary.sources.first)
+    let patch = try #require(source.patches.first)
+    let controlPoint = try #require(patch.controlPoints.first { $0.uIndex == 1 && $0.vIndex == 1 })
+
+    try document.slideSurfaceControlPoints(
+        targets: [controlPoint.selectionReference],
+        direction: .positiveU,
+        distance: .length(1.0, .millimeter)
+    )
+
+    let feature = try #require(document.cadDocument.designGraph.nodes[featureID])
+    guard case let .polySpline(polySpline) = feature.operation else {
+        Issue.record("Expected a PolySpline feature.")
+        return
+    }
+    let override = try #require(polySpline.controlPointOverrides.first)
+    let length = sqrt((0.02 * 0.02) + (0.002 * 0.002))
+    #expect(abs(override.point.x - (controlPoint.point.x + (0.02 / length * 0.001))) <= 1.0e-12)
+    #expect(abs(override.point.y - controlPoint.point.y) <= 1.0e-12)
+    #expect(abs(override.point.z - (controlPoint.point.z + (0.002 / length * 0.001))) <= 1.0e-12)
 }
 
 @Test func polySplineSurfaceVertexSlideMovesBoundaryVertexAlongNormal() async throws {

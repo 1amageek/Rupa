@@ -1037,7 +1037,7 @@ public final class AgentServer: AgentClientProtocol {
             mutatesDocument: true,
             discovery: [.surfaceSourceSummary, .selectionMeasurement, .surfaceAnalysis, .surfaceContinuitySummary],
             targets: [.surfaceControlPoint],
-            failureMode: "Currently accepts PolySpline patch boundary corner control point references discovered from surfaceSourceSummary; rejects non-control-point references, non-PolySpline surfaces, interior surface CV indexes, stale generations, zero or invalid deltas, unsupported source meshes, moves that change the selected boundary role, and invalid rebuilt B-spline sheet topology."
+            failureMode: "Accepts PolySpline patch corner control point references and strict interior B-spline control point references discovered from surfaceSourceSummary; rejects non-control-point references, non-PolySpline surfaces, boundary edge-only CV indexes, stale generations, zero or invalid deltas, unsupported source meshes, moves that change selected corner boundary roles, and invalid rebuilt B-spline sheet topology."
         ),
         capability(
             "slidePolySplineSurfaceVertices",
@@ -1057,7 +1057,7 @@ public final class AgentServer: AgentClientProtocol {
             mutatesDocument: true,
             discovery: [.surfaceSourceSummary, .selectionMeasurement, .surfaceAnalysis, .surfaceContinuitySummary],
             targets: [.surfaceControlPoint],
-            failureMode: "Currently accepts PolySpline patch boundary corner control point references discovered from surfaceSourceSummary; rejects non-control-point references, non-PolySpline surfaces, interior surface CV indexes, stale generations, empty or duplicate source-vertex targets, zero or invalid distances, collapsed local U/V/normal directions, slides that change selected boundary roles, and invalid rebuilt B-spline sheet topology."
+            failureMode: "Accepts PolySpline patch corner control point references and strict interior B-spline control point references discovered from surfaceSourceSummary; rejects non-control-point references, non-PolySpline surfaces, boundary edge-only CV indexes, stale generations, empty or duplicate targets, zero or invalid distances, collapsed local U/V/normal directions, slides that change selected corner boundary roles, and invalid rebuilt B-spline sheet topology."
         ),
         capability(
             "createExtrudedRectangle",

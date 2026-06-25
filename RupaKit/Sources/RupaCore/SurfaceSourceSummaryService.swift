@@ -89,7 +89,7 @@ public struct SurfaceSourceSummaryService: Sendable {
             patch(
                 featureID: featureID,
                 patchCandidate: patchCandidate,
-                sourceMesh: polySpline.sourceMesh,
+                polySpline: polySpline,
                 topologyEntriesByPersistentName: topologyEntriesByPersistentName
             )
         }
@@ -139,10 +139,11 @@ public struct SurfaceSourceSummaryService: Sendable {
     private func patch(
         featureID: FeatureID,
         patchCandidate: PatchCandidate,
-        sourceMesh: Mesh,
+        polySpline: PolySplineFeature,
         topologyEntriesByPersistentName: [String: TopologySummaryResult.Entry]
     ) -> SurfaceSourceSummaryResult.Patch {
         let patchID = patchCandidate.patchID
+        let sourceMesh = polySpline.sourceMesh
         let faceName = persistentName(
             featureID: featureID,
             subshape: "patch:\(patchID):face"
@@ -180,6 +181,13 @@ public struct SurfaceSourceSummaryService: Sendable {
                 sourceMesh: sourceMesh
             )
         }
+        let controlPoints = surfaceControlPoints(
+            featureID: featureID,
+            patchID: patchID,
+            surfaceReference: surfaceReference,
+            patchCandidate: patchCandidate,
+            polySpline: polySpline
+        )
         return SurfaceSourceSummaryResult.Patch(
             patchID: patchID,
             facePersistentName: topologyEntriesByPersistentName[facePersistentName]?.persistentName,
@@ -189,6 +197,7 @@ public struct SurfaceSourceSummaryService: Sendable {
             vDomain: SurfaceSourceSummaryResult.ParameterRange(lowerBound: 0.0, upperBound: 1.0),
             basis: cubicBezierBasis(),
             controlVertices: controlVertices,
+            controlPoints: controlPoints,
             trimLoops: [
                 SurfaceSourceSummaryResult.TrimLoop(
                     role: "outer",
@@ -200,6 +209,68 @@ public struct SurfaceSourceSummaryService: Sendable {
             ],
             parameterAddresses: patchParameterAddresses(surfaceReference: surfaceReference)
         )
+    }
+
+    private func surfaceControlPoints(
+        featureID: FeatureID,
+        patchID: Int,
+        surfaceReference: SurfaceReference,
+        patchCandidate: PatchCandidate,
+        polySpline: PolySplineFeature
+    ) -> [SurfaceSourceSummaryResult.ControlPoint] {
+        guard patchCandidate.boundaryVertexIndices.count == 4 else {
+            return []
+        }
+        let points = patchCandidate.boundaryVertexIndices.compactMap { sourceVertexIndex -> Point3D? in
+            guard polySpline.sourceMesh.positions.indices.contains(sourceVertexIndex) else {
+                return nil
+            }
+            return polySpline.sourceMesh.positions[sourceVertexIndex]
+        }
+        guard points.count == 4 else {
+            return []
+        }
+        let surface = BSplineSurface3D.cubicBezierPatch(
+            bottomLeft: points[0],
+            bottomRight: points[1],
+            topRight: points[2],
+            topLeft: points[3]
+        )
+        var controlPoints = surface.controlPoints
+        for override in polySpline.controlPointOverrides where override.patchID == patchID {
+            let address = override.address
+            guard address.isStrictInterior,
+                  controlPoints.indices.contains(address.vIndex),
+                  controlPoints[address.vIndex].indices.contains(address.uIndex),
+                  override.point.isFinite else {
+                continue
+            }
+            controlPoints[address.vIndex][address.uIndex] = override.point
+        }
+
+        var result: [SurfaceSourceSummaryResult.ControlPoint] = []
+        result.reserveCapacity(16)
+        for vIndex in 0..<controlPoints.count {
+            for uIndex in 0..<controlPoints[vIndex].count {
+                let point = controlPoints[vIndex][uIndex]
+                let isBoundary = uIndex == 0 || uIndex == 3 || vIndex == 0 || vIndex == 3
+                let isCorner = (uIndex == 0 || uIndex == 3) && (vIndex == 0 || vIndex == 3)
+                result.append(SurfaceSourceSummaryResult.ControlPoint(
+                    id: "feature:\(featureID.description)/patch:\(patchID)/surfaceControlPoint:u\(uIndex):v\(vIndex)",
+                    uIndex: uIndex,
+                    vIndex: vIndex,
+                    point: SurfaceSourceSummaryResult.Point(x: point.x, y: point.y, z: point.z),
+                    isBoundary: isBoundary,
+                    isEditable: isBoundary == false || isCorner,
+                    selectionReference: .surface(.controlPoint(SurfaceControlPointReference(
+                        surface: surfaceReference,
+                        uIndex: uIndex,
+                        vIndex: vIndex
+                    )))
+                ))
+            }
+        }
+        return result
     }
 
     private func controlVertex(
@@ -443,6 +514,9 @@ public struct SurfaceSourceSummaryService: Sendable {
             patchCount: sources.reduce(0) { $0 + $1.patches.count },
             controlVertexCount: sources.reduce(0) { partial, source in
                 partial + source.patches.reduce(0) { $0 + $1.controlVertices.count }
+            },
+            controlPointCount: sources.reduce(0) { partial, source in
+                partial + source.patches.reduce(0) { $0 + $1.controlPoints.count }
             },
             trimLoopCount: sources.reduce(0) { partial, source in
                 partial + source.patches.reduce(0) { $0 + $1.trimLoops.count }

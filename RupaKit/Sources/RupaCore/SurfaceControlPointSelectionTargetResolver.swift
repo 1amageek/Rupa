@@ -12,19 +12,45 @@ public struct SurfaceControlPointSelectionTargetResolver: Sendable {
         for selection: SelectionReference,
         in document: DesignDocument
     ) throws -> SelectionTarget {
+        guard case .boundaryVertex(let target) = try editTarget(for: selection, in: document) else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Surface control point boundary vertex editing requires a corner control point selection reference."
+            )
+        }
+        return target
+    }
+
+    public func editTarget(
+        for selection: SelectionReference,
+        in document: DesignDocument
+    ) throws -> SurfaceControlPointEditTarget {
         guard case .surface(.controlPoint(let reference)) = selection else {
             throw EditorError(
                 code: .commandInvalid,
                 message: "Surface control point editing requires a surface control point selection reference."
             )
         }
-        return try target(for: reference, in: document)
+        return try editTarget(for: reference, in: document)
     }
 
     public func target(
         for reference: SurfaceControlPointReference,
         in document: DesignDocument
     ) throws -> SelectionTarget {
+        guard case .boundaryVertex(let target) = try editTarget(for: reference, in: document) else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Surface control point boundary vertex editing requires a corner control point selection reference."
+            )
+        }
+        return target
+    }
+
+    public func editTarget(
+        for reference: SurfaceControlPointReference,
+        in document: DesignDocument
+    ) throws -> SurfaceControlPointEditTarget {
         do {
             try reference.validate()
         } catch {
@@ -35,7 +61,6 @@ public struct SurfaceControlPointSelectionTargetResolver: Sendable {
         }
 
         let patchFace = try polySplinePatchFace(from: reference.surface.faceName)
-        let boundaryRole = try boundaryRole(uIndex: reference.uIndex, vIndex: reference.vIndex)
         guard let feature = document.cadDocument.designGraph.nodes[patchFace.featureID],
               case .polySpline = feature.operation else {
             throw EditorError(
@@ -43,6 +68,39 @@ public struct SurfaceControlPointSelectionTargetResolver: Sendable {
                 message: "Surface control point editing requires an existing PolySpline source feature."
             )
         }
+        if let boundaryRole = boundaryRole(uIndex: reference.uIndex, vIndex: reference.vIndex) {
+            return .boundaryVertex(try boundaryTarget(
+                patchFace: patchFace,
+                boundaryRole: boundaryRole,
+                in: document
+            ))
+        }
+        let address = PolySplineSurfaceControlPointAddress(
+            patchID: patchFace.patchID,
+            uIndex: reference.uIndex,
+            vIndex: reference.vIndex
+        )
+        do {
+            try address.validate()
+        } catch {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Surface control point editing currently supports PolySpline corner and strict interior control points: \(error)."
+            )
+        }
+        return .interiorControlPoint(PolySplineSurfaceControlPointEditTarget(
+            featureID: patchFace.featureID,
+            patchID: patchFace.patchID,
+            uIndex: reference.uIndex,
+            vIndex: reference.vIndex
+        ))
+    }
+
+    private func boundaryTarget(
+        patchFace: PolySplinePatchFace,
+        boundaryRole: PolySplineSurfaceVertexTarget.BoundaryRole,
+        in document: DesignDocument
+    ) throws -> SelectionTarget {
         let sceneNodeID = try sceneNodeID(for: patchFace.featureID, in: document)
         let persistentName = persistentNameString(
             PersistentName(components: [
@@ -91,7 +149,7 @@ public struct SurfaceControlPointSelectionTargetResolver: Sendable {
     private func boundaryRole(
         uIndex: Int,
         vIndex: Int
-    ) throws -> PolySplineSurfaceVertexTarget.BoundaryRole {
+    ) -> PolySplineSurfaceVertexTarget.BoundaryRole? {
         switch (uIndex, vIndex) {
         case (0, 0):
             .uMinVMin
@@ -102,10 +160,7 @@ public struct SurfaceControlPointSelectionTargetResolver: Sendable {
         case (0, 3):
             .uMinVMax
         default:
-            throw EditorError(
-                code: .commandInvalid,
-                message: "Surface control point editing currently supports PolySpline boundary corner control points only."
-            )
+            nil
         }
     }
 

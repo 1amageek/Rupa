@@ -15,6 +15,7 @@ import SwiftCAD
     #expect(result.counts.sourceCount == 1)
     #expect(result.counts.patchCount == 2)
     #expect(result.counts.controlVertexCount == 8)
+    #expect(result.counts.controlPointCount == 32)
     #expect(result.counts.trimLoopCount == 2)
     #expect(result.counts.adjacencyCount == 1)
     let source = try #require(result.sources.first)
@@ -67,6 +68,7 @@ import SwiftCAD
     #expect(trimLoop.parameterAddresses.map(\.id) == ["uMin:vMin", "uMax:vMin", "uMax:vMax", "uMin:vMax"])
     #expect(trimLoop.parameterAddresses.allSatisfy { $0.selectionReference != nil })
     #expect(patch.controlVertices.count == 4)
+    #expect(patch.controlPoints.count == 16)
     let controlVertex = try #require(patch.controlVertices.first)
     #expect(controlVertex.role == "uMin:vMin")
     #expect(controlVertex.sourceVertexIndex == 0)
@@ -78,6 +80,15 @@ import SwiftCAD
     }
     #expect(controlPointReference.uIndex == 0)
     #expect(controlPointReference.vIndex == 0)
+    let interiorControlPoint = try #require(patch.controlPoints.first { $0.uIndex == 1 && $0.vIndex == 1 })
+    #expect(interiorControlPoint.isBoundary == false)
+    #expect(interiorControlPoint.isEditable)
+    guard case .surface(.controlPoint(let interiorReference)) = interiorControlPoint.selectionReference else {
+        Issue.record("Surface source control point must expose a kernel surface control-point reference.")
+        return
+    }
+    #expect(interiorReference.uIndex == 1)
+    #expect(interiorReference.vIndex == 1)
     let measurement = try SelectionMeasurementService().measure(
         query: CADAgentMeasurementQuery(kind: .point, first: controlVertex.selectionReference),
         document: document
