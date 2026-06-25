@@ -258,6 +258,8 @@ public struct SketchCommand: ParsableCommand {
             SketchCutCommand.self,
             SketchBridgeCommand.self,
             SketchBridgeUpdateCommand.self,
+            SketchCurvatureDisplayCommand.self,
+            SketchPointDisplayCommand.self,
         ],
         defaultSubcommand: LineSketchCommand.self
     )

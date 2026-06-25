@@ -2229,6 +2229,83 @@ struct CLISketchAdvancedCurveEditCommandTests {
         #expect(updatedSource.continuity == .g0)
     }
 
+    @Test(.timeLimit(.minutes(1)))
+    func executableSketchDisplayCommandsPersistClosedDocumentAsJSON() async throws {
+        let temporaryDirectory = try makeTemporaryDirectory()
+        defer {
+            removeTemporaryDirectory(temporaryDirectory)
+        }
+        let documentURL = temporaryDirectory.appendingPathComponent("process-sketch-display.swcad")
+        var document = DesignDocument.empty(named: "Process Sketch Display")
+        _ = try document.createCircleSketch(
+            name: "Curvature Circle",
+            plane: .xy,
+            center: SketchPoint(
+                x: .length(0.0, .millimeter),
+                y: .length(0.0, .millimeter)
+            ),
+            radius: .length(5.0, .millimeter)
+        )
+        _ = try document.createSplineSketch(
+            name: "Point Display Spline",
+            plane: .xy,
+            spline: SketchSpline(controlPoints: [
+                SketchPoint(x: .length(0.0, .millimeter), y: .length(0.0, .millimeter)),
+                SketchPoint(x: .length(2.0, .millimeter), y: .length(4.0, .millimeter)),
+                SketchPoint(x: .length(6.0, .millimeter), y: .length(4.0, .millimeter)),
+                SketchPoint(x: .length(8.0, .millimeter), y: .length(0.0, .millimeter)),
+            ])
+        )
+        try DocumentFileService().save(document, to: documentURL)
+        let circleTarget = try #require(
+            try namedSketchEntity("Curvature Circle", kind: "circle", in: document).selectionTarget()
+        )
+        let splineTarget = try #require(
+            try namedSketchEntity("Point Display Spline", kind: "spline", in: document).selectionTarget()
+        )
+        let circleComponentID = try sketchEntityComponentID(from: circleTarget)
+        let splineComponentID = try sketchEntityComponentID(from: splineTarget)
+
+        let curvatureResult = try await runCLI([
+            "sketch",
+            "curvature-display",
+            documentURL.path,
+            "--target",
+            try encodedSelectionTarget(circleTarget),
+            "--show",
+            "--comb-scale",
+            "0.25",
+            "--mode",
+            "file",
+            "--json",
+        ])
+        let curvatureResponse = try JSONDecoder().decode(CLIResponse.self, from: curvatureResult.standardOutputData)
+        let loadedAfterCurvature = try DocumentFileService().load(from: documentURL)
+
+        let pointResult = try await runCLI([
+            "sketch",
+            "point-display",
+            documentURL.path,
+            "--target",
+            try encodedSelectionTarget(splineTarget),
+            "--hide",
+            "--mode",
+            "file",
+            "--json",
+        ])
+        let pointResponse = try JSONDecoder().decode(CLIResponse.self, from: pointResult.standardOutputData)
+        let loadedAfterPoint = try DocumentFileService().load(from: documentURL)
+
+        #expect(curvatureResult.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: curvatureResult.standardError))
+        #expect(curvatureResponse.message == "Curve curvature display enabled at comb scale 0.25.")
+        #expect(curvatureResponse.saved)
+        #expect(loadedAfterCurvature.productMetadata.curveCurvatureDisplays[circleComponentID]?.combScale == 0.25)
+        #expect(pointResult.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: pointResult.standardError))
+        #expect(pointResponse.message == "Point display hidden.")
+        #expect(pointResponse.saved)
+        #expect(loadedAfterPoint.productMetadata.pointDisplays[splineComponentID]?.isVisible == false)
+    }
+
     private func namedSketchEntity(
         _ name: String,
         kind: String,
@@ -2238,6 +2315,16 @@ struct CLISketchAdvancedCurveEditCommandTests {
         return try #require(summary.entries.first { entry in
             entry.sourceFeatureName == name && entry.entityKind == kind
         })
+    }
+
+    private func sketchEntityComponentID(from target: SelectionTarget) throws -> SelectionComponentID {
+        guard case .sketchEntity(let componentID) = target.component else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "Expected a sketch entity selection target."
+            )
+        }
+        return componentID
     }
 }
 
