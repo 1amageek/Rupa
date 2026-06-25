@@ -1535,6 +1535,51 @@ import Testing
     }
 }
 
+@Test func viewportIdentityPickRenderPlanCarriesMeshStorageIdentityForMeshFallbackDrawItems() throws {
+    let mesh = ViewportBodyMesh(
+        positions: [
+            Point3D(x: -0.010, y: 0.0, z: -0.010),
+            Point3D(x: 0.010, y: 0.0, z: -0.010),
+            Point3D(x: 0.0, y: 0.0, z: 0.010),
+        ],
+        indices: [0, 1, 2]
+    )
+    let component = ViewportBodyComponent(
+        sizeXMeters: 0.020,
+        sizeYMeters: 0.001,
+        sizeZMeters: 0.020,
+        yMinMeters: 0.0,
+        yMaxMeters: 0.001,
+        mesh: mesh
+    )
+    let featureID = FeatureID()
+    let scene = ViewportScene(items: [
+        ViewportSceneItem(
+            id: featureID.description,
+            featureID: featureID,
+            modelBounds: CGRect(x: -0.010, y: -0.010, width: 0.020, height: 0.020),
+            kind: .body(component: component)
+        )
+    ])
+    let layout = try #require(ViewportLayout(
+        scene: scene,
+        size: CGSize(width: 800.0, height: 600.0)
+    ))
+
+    let plan = ViewportIdentityPickRenderPlanBuilder().build(scene: scene, layout: layout)
+    let meshItems = plan.drawItems.filter { $0.meshStorageIdentity != nil }
+    let bodyItem = try #require(meshItems.first { $0.geometry == .body })
+
+    #expect(meshItems.count == 1)
+    #expect(bodyItem.meshStorageIdentity == mesh.storageIdentity)
+    #expect(bodyItem.hit.pickingBackend == .identityBuffer)
+    if case .polygon(let points) = bodyItem.primitive {
+        #expect(points.count == 3)
+    } else {
+        Issue.record("Expected mesh fallback body draw item to render as a triangle polygon.")
+    }
+}
+
 @MainActor
 @Test func viewportIdentityPickIndexCanOmitSketchControlPointRecords() async throws {
     let session = EditorSession()

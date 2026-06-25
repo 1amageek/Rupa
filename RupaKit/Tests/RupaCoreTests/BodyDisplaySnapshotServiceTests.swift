@@ -20,8 +20,10 @@ import SwiftCAD
 
     #expect(copiedMesh == mesh)
     #expect(copiedMesh.sharesStorage(with: mesh))
+    #expect(copiedMesh.storageIdentity == mesh.storageIdentity)
     #expect(decodedMesh == mesh)
     #expect(decodedMesh.sharesStorage(with: mesh) == false)
+    #expect(decodedMesh.storageIdentity != mesh.storageIdentity)
 }
 
 @MainActor

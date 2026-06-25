@@ -26,6 +26,7 @@ public struct ViewportIdentityPickDrawItem: Equatable, Sendable {
     public var featureID: FeatureID
     public var geometry: ViewportIdentityPickGeometry
     public var primitive: ViewportIdentityPickPrimitive
+    public var meshStorageIdentity: ViewportBodyMesh.StorageIdentity?
     public var depth: Double?
     public var hit: ViewportHit
 
@@ -34,6 +35,7 @@ public struct ViewportIdentityPickDrawItem: Equatable, Sendable {
         featureID: FeatureID,
         geometry: ViewportIdentityPickGeometry,
         primitive: ViewportIdentityPickPrimitive,
+        meshStorageIdentity: ViewportBodyMesh.StorageIdentity? = nil,
         depth: Double? = nil,
         hit: ViewportHit
     ) {
@@ -41,6 +43,7 @@ public struct ViewportIdentityPickDrawItem: Equatable, Sendable {
         self.featureID = featureID
         self.geometry = geometry
         self.primitive = primitive
+        self.meshStorageIdentity = meshStorageIdentity
         self.depth = depth
         self.hit = hit
     }
@@ -342,6 +345,7 @@ public struct ViewportIdentityPickRenderPlanBuilder: Sendable {
             appendDrawItem(
                 record: record,
                 primitive: .polygon(points: points.map { layout.project($0, in: item) }),
+                meshStorageIdentity: mesh.storageIdentity,
                 depth: averageDepth(points, item: item, layout: layout),
                 drawItems: &drawItems
             )
@@ -580,6 +584,7 @@ public struct ViewportIdentityPickRenderPlanBuilder: Sendable {
     private func appendDrawItem(
         record: ViewportIdentityPickRecord,
         primitive: ViewportIdentityPickPrimitive,
+        meshStorageIdentity: ViewportBodyMesh.StorageIdentity? = nil,
         depth: Double?,
         drawItems: inout [ViewportIdentityPickDrawItem]
     ) {
@@ -589,6 +594,7 @@ public struct ViewportIdentityPickRenderPlanBuilder: Sendable {
                 featureID: record.featureID,
                 geometry: record.geometry,
                 primitive: primitive,
+                meshStorageIdentity: meshStorageIdentity,
                 depth: depth,
                 hit: record.hit
             )

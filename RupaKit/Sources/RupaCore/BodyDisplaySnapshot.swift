@@ -25,6 +25,10 @@ public struct BodyDisplaySnapshot: Codable, Equatable, Sendable {
     }
 
     public struct Mesh: Codable, Equatable, Sendable {
+        public struct StorageIdentity: Hashable, Sendable {
+            fileprivate let value: ObjectIdentifier
+        }
+
         private final class Storage: Sendable {
             let positions: [Point3D]
             let indices: [UInt32]
@@ -48,6 +52,10 @@ public struct BodyDisplaySnapshot: Codable, Equatable, Sendable {
 
         public var indices: [UInt32] {
             storage.indices
+        }
+
+        public var storageIdentity: StorageIdentity {
+            StorageIdentity(value: ObjectIdentifier(storage))
         }
 
         public init(positions: [Point3D], indices: [UInt32]) {
