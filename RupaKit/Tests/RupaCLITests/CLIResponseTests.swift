@@ -956,7 +956,7 @@ func cliExecutableSelectionReferencesSelectsLiveSurfaceControlPointAsJSON() asyn
         )
 
         #expect(result.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: result.standardError))
-        #expect(response.message == "1 reference selected.")
+        #expect(response.message == "0 target(s), 1 reference(s) selected.")
         #expect(response.generation == generation.value)
         #expect(!response.dirty)
         #expect(response.selectedTargetCount == 0)
@@ -1097,6 +1097,136 @@ func cliExecutableInspectsConstructionPlanesAndSnapAsJSON() async throws {
     #expect(abs(snapResponse.snapResolution.originalPoint.y - 0.0027) < 0.000_000_000_001)
     #expect(abs(snapResponse.snapResolution.resolvedPoint.x - 0.001) < 0.000_000_000_001)
     #expect(abs(snapResponse.snapResolution.resolvedPoint.y - 0.003) < 0.000_000_000_001)
+}
+
+@Suite(.serialized)
+struct CLIPlaneCommandTests {
+    @Test(.timeLimit(.minutes(1)))
+    func executableConstructionPlaneCommandsMutateClosedDocumentAsJSON() async throws {
+        let temporaryDirectory = try makeTemporaryDirectory()
+        defer {
+            removeTemporaryDirectory(temporaryDirectory)
+        }
+        let documentURL = temporaryDirectory.appendingPathComponent("process-plane-commands.swcad")
+        try DocumentFileService().save(.empty(named: "Process Planes"), to: documentURL)
+
+        let createResult = try await runCLI([
+            "plane",
+            "create",
+            documentURL.path,
+            "--name",
+            "Base XY",
+            "--plane",
+            "xy",
+            "--mode",
+            "file",
+            "--json",
+        ])
+        let createResponse = try JSONDecoder().decode(
+            CLIResponse.self,
+            from: createResult.standardOutputData
+        )
+        let loadedAfterCreate = try DocumentFileService().load(from: documentURL)
+        let basePlane = try #require(
+            loadedAfterCreate.productMetadata.constructionPlanes.values.first { $0.name == "Base XY" }
+        )
+
+        let createViewResult = try await runCLI([
+            "plane",
+            "create-view",
+            documentURL.path,
+            "--name",
+            "Camera Plane",
+            "--origin-x",
+            "10",
+            "--origin-y",
+            "20",
+            "--origin-z",
+            "30",
+            "--unit",
+            "millimeter",
+            "--normal-x",
+            "0",
+            "--normal-y",
+            "0",
+            "--normal-z",
+            "1",
+            "--mode",
+            "file",
+            "--json",
+        ])
+        let createViewResponse = try JSONDecoder().decode(
+            CLIResponse.self,
+            from: createViewResult.standardOutputData
+        )
+        let loadedAfterView = try DocumentFileService().load(from: documentURL)
+        let viewPlane = try #require(
+            loadedAfterView.productMetadata.constructionPlanes.values.first { $0.name == "Camera Plane" }
+        )
+
+        let setActiveResult = try await runCLI([
+            "plane",
+            "set-active",
+            documentURL.path,
+            "--id",
+            basePlane.id.description,
+            "--mode",
+            "file",
+            "--json",
+        ])
+        let setActiveResponse = try JSONDecoder().decode(
+            CLIResponse.self,
+            from: setActiveResult.standardOutputData
+        )
+
+        let renameResult = try await runCLI([
+            "plane",
+            "rename",
+            documentURL.path,
+            "--id",
+            viewPlane.id.description,
+            "--name",
+            "Renamed View Plane",
+            "--mode",
+            "file",
+            "--json",
+        ])
+        let renameResponse = try JSONDecoder().decode(
+            CLIResponse.self,
+            from: renameResult.standardOutputData
+        )
+
+        let inspectResult = try await runCLI([
+            "inspect",
+            "construction-planes",
+            documentURL.path,
+            "--mode",
+            "file",
+            "--json",
+        ])
+        let inspectResponse = try JSONDecoder().decode(
+            CLIConstructionPlaneSummaryResponse.self,
+            from: inspectResult.standardOutputData
+        )
+
+        #expect(createResult.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: createResult.standardError))
+        #expect(createResponse.message == "Construction plane Base XY created.")
+        #expect(createResponse.saved)
+        #expect(loadedAfterCreate.productMetadata.activeConstructionPlaneID == basePlane.id)
+        #expect(createViewResult.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: createViewResult.standardError))
+        #expect(createViewResponse.message == "View-aligned construction plane Camera Plane created.")
+        #expect(createViewResponse.saved)
+        #expect(loadedAfterView.productMetadata.activeConstructionPlaneID == viewPlane.id)
+        #expect(setActiveResult.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: setActiveResult.standardError))
+        #expect(setActiveResponse.message == "Active construction plane set to Base XY.")
+        #expect(setActiveResponse.saved)
+        #expect(renameResult.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: renameResult.standardError))
+        #expect(renameResponse.message == "Construction plane renamed to Renamed View Plane.")
+        #expect(renameResponse.saved)
+        #expect(inspectResult.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: inspectResult.standardError))
+        #expect(inspectResponse.constructionPlaneSummary.activePlaneID == basePlane.id)
+        #expect(inspectResponse.constructionPlaneSummary.planes.map(\.name) == ["Base XY", "Renamed View Plane"])
+    }
 }
 
 @Test(.timeLimit(.minutes(1)))
@@ -2082,7 +2212,7 @@ func cliExecutableReturnsDataExitForLiveGenerationMismatch() async throws {
         client: server
     )
 
-    #expect(response.message == "1 target selected.")
+    #expect(response.message == "1 target(s), 0 reference(s) selected.")
     #expect(response.generation == generation.value)
     #expect(response.selectedTargetCount == 1)
     #expect(response.selectedReferenceCount == 0)
@@ -2115,7 +2245,7 @@ func cliExecutableReturnsDataExitForLiveGenerationMismatch() async throws {
         client: server
     )
 
-    #expect(response.message == "1 reference selected.")
+    #expect(response.message == "0 target(s), 1 reference(s) selected.")
     #expect(response.generation == generation.value)
     #expect(response.dirty == dirty)
     #expect(response.selectedTargetCount == 0)

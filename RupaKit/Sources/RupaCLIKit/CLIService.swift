@@ -1144,6 +1144,108 @@ public struct CLIService {
         }
     }
 
+    public func createConstructionPlane(
+        target: CLIDocumentTarget,
+        name: String,
+        plane: SketchPlane,
+        activates: Bool = true,
+        mode: CLIEditMode = .auto,
+        expectedGeneration: DocumentGeneration? = nil,
+        dryRun: Bool = false,
+        forceFileEdit: Bool = false,
+        client: AgentClientProtocol? = nil
+    ) throws -> CLIResponse {
+        try executeDocumentMutationCommand(
+            .createConstructionPlane(
+                name: name,
+                plane: plane,
+                activates: activates
+            ),
+            target: target,
+            mode: mode,
+            expectedGeneration: expectedGeneration,
+            dryRun: dryRun,
+            forceFileEdit: forceFileEdit,
+            client: client,
+            missingTargetMessage: "Construction plane mutation requires a document file path or live session ID."
+        )
+    }
+
+    public func createViewAlignedConstructionPlane(
+        target: CLIDocumentTarget,
+        name: String,
+        origin: Point3D,
+        viewNormal: Vector3D,
+        activates: Bool = true,
+        mode: CLIEditMode = .auto,
+        expectedGeneration: DocumentGeneration? = nil,
+        dryRun: Bool = false,
+        forceFileEdit: Bool = false,
+        client: AgentClientProtocol? = nil
+    ) throws -> CLIResponse {
+        try executeDocumentMutationCommand(
+            .createViewAlignedConstructionPlane(
+                name: name,
+                origin: origin,
+                viewNormal: viewNormal,
+                activates: activates
+            ),
+            target: target,
+            mode: mode,
+            expectedGeneration: expectedGeneration,
+            dryRun: dryRun,
+            forceFileEdit: forceFileEdit,
+            client: client,
+            missingTargetMessage: "Construction plane mutation requires a document file path or live session ID."
+        )
+    }
+
+    public func setActiveConstructionPlane(
+        target: CLIDocumentTarget,
+        id: ConstructionPlaneSourceID?,
+        mode: CLIEditMode = .auto,
+        expectedGeneration: DocumentGeneration? = nil,
+        dryRun: Bool = false,
+        forceFileEdit: Bool = false,
+        client: AgentClientProtocol? = nil
+    ) throws -> CLIResponse {
+        try executeDocumentMutationCommand(
+            .setActiveConstructionPlane(id: id),
+            target: target,
+            mode: mode,
+            expectedGeneration: expectedGeneration,
+            dryRun: dryRun,
+            forceFileEdit: forceFileEdit,
+            client: client,
+            missingTargetMessage: "Construction plane mutation requires a document file path or live session ID."
+        )
+    }
+
+    public func renameConstructionPlane(
+        target: CLIDocumentTarget,
+        id: ConstructionPlaneSourceID,
+        name: String,
+        mode: CLIEditMode = .auto,
+        expectedGeneration: DocumentGeneration? = nil,
+        dryRun: Bool = false,
+        forceFileEdit: Bool = false,
+        client: AgentClientProtocol? = nil
+    ) throws -> CLIResponse {
+        try executeDocumentMutationCommand(
+            .renameConstructionPlane(
+                id: id,
+                name: name
+            ),
+            target: target,
+            mode: mode,
+            expectedGeneration: expectedGeneration,
+            dryRun: dryRun,
+            forceFileEdit: forceFileEdit,
+            client: client,
+            missingTargetMessage: "Construction plane mutation requires a document file path or live session ID."
+        )
+    }
+
     public func resolveSnap(
         target: CLIDocumentTarget,
         point: Point2D,
@@ -3222,82 +3324,15 @@ public struct CLIService {
         forceFileEdit: Bool,
         client: AgentClientProtocol?
     ) throws -> CLIResponse {
-        switch mode {
-        case .auto:
-            return try executeModelingCommandAutomatically(
-                command,
-                target: target,
-                expectedGeneration: expectedGeneration,
-                dryRun: dryRun,
-                forceFileEdit: forceFileEdit,
-                client: client
-            )
-        case .file:
-            guard let url = target.fileURL else {
-                throw invalidCommand("File mode requires a document file path.")
-            }
-            return try executeModelingCommandFile(
-                command,
-                at: url,
-                dryRun: dryRun,
-                forceFileEdit: forceFileEdit,
-                conflictClient: client
-            )
-        case .live:
-            let sessionID = try resolvedLiveSessionID(
-                target: target,
-                client: client
-            )
-            return try executeModelingCommandLiveSession(
-                command,
-                sessionID: sessionID,
-                expectedGeneration: expectedGeneration,
-                client: requiredClient(client)
-            )
-        }
-    }
-
-    private func executeModelingCommandAutomatically(
-        _ command: AutomationCommand,
-        target: CLIDocumentTarget,
-        expectedGeneration: DocumentGeneration?,
-        dryRun: Bool,
-        forceFileEdit: Bool,
-        client: AgentClientProtocol?
-    ) throws -> CLIResponse {
-        if let sessionID = target.sessionID {
-            return try executeModelingCommandLiveSession(
-                command,
-                sessionID: sessionID,
-                expectedGeneration: expectedGeneration,
-                client: requiredClient(client)
-            )
-        }
-
-        if let url = target.fileURL,
-           !forceFileEdit,
-           let client,
-           let session = try openSession(for: url, client: client) {
-            guard !dryRun else {
-                throw invalidCommand("Dry-run is not supported for live document mutation.")
-            }
-            return try executeModelingCommandLiveSession(
-                command,
-                sessionID: session.id,
-                expectedGeneration: expectedGeneration,
-                client: client
-            )
-        }
-
-        guard let url = target.fileURL else {
-            throw invalidCommand("Modeling requires a document file path or live session ID.")
-        }
-        return try executeModelingCommandFile(
+        try executeDocumentMutationCommand(
             command,
-            at: url,
+            target: target,
+            mode: mode,
+            expectedGeneration: expectedGeneration,
             dryRun: dryRun,
             forceFileEdit: forceFileEdit,
-            conflictClient: client
+            client: client,
+            missingTargetMessage: "Modeling requires a document file path or live session ID."
         )
     }
 
@@ -3310,15 +3345,38 @@ public struct CLIService {
         forceFileEdit: Bool,
         client: AgentClientProtocol?
     ) throws -> CLIResponse {
+        try executeDocumentMutationCommand(
+            command,
+            target: target,
+            mode: mode,
+            expectedGeneration: expectedGeneration,
+            dryRun: dryRun,
+            forceFileEdit: forceFileEdit,
+            client: client,
+            missingTargetMessage: "Sketch creation requires a document file path or live session ID."
+        )
+    }
+
+    private func executeDocumentMutationCommand(
+        _ command: AutomationCommand,
+        target: CLIDocumentTarget,
+        mode: CLIEditMode,
+        expectedGeneration: DocumentGeneration?,
+        dryRun: Bool,
+        forceFileEdit: Bool,
+        client: AgentClientProtocol?,
+        missingTargetMessage: String
+    ) throws -> CLIResponse {
         switch mode {
         case .auto:
-            return try executeSketchCommandAutomatically(
+            return try executeDocumentMutationCommandAutomatically(
                 command,
                 target: target,
                 expectedGeneration: expectedGeneration,
                 dryRun: dryRun,
                 forceFileEdit: forceFileEdit,
-                client: client
+                client: client,
+                missingTargetMessage: missingTargetMessage
             )
         case .file:
             guard let url = target.fileURL else {
@@ -3345,13 +3403,14 @@ public struct CLIService {
         }
     }
 
-    private func executeSketchCommandAutomatically(
+    private func executeDocumentMutationCommandAutomatically(
         _ command: AutomationCommand,
         target: CLIDocumentTarget,
         expectedGeneration: DocumentGeneration?,
         dryRun: Bool,
         forceFileEdit: Bool,
-        client: AgentClientProtocol?
+        client: AgentClientProtocol?,
+        missingTargetMessage: String
     ) throws -> CLIResponse {
         if let sessionID = target.sessionID {
             return try executeModelingCommandLiveSession(
@@ -3378,7 +3437,7 @@ public struct CLIService {
         }
 
         guard let url = target.fileURL else {
-            throw invalidCommand("Sketch creation requires a document file path or live session ID.")
+            throw invalidCommand(missingTargetMessage)
         }
         return try executeModelingCommandFile(
             command,

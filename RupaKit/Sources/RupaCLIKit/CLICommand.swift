@@ -20,6 +20,7 @@ public struct CLICommand: ParsableCommand {
             MeshDocument.self,
             ModelCommand.self,
             ParameterCommand.self,
+            PlaneCommand.self,
             RenameDocument.self,
             RenameLiveDocument.self,
             SaveDocument.self,
