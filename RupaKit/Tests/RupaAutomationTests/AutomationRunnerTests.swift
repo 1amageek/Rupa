@@ -1722,6 +1722,51 @@ import SwiftCAD
 }
 
 @MainActor
+@Test func automationCanRemoveSketchConstraint() async throws {
+    let session = EditorSession()
+    let runner = AutomationRunner()
+    _ = try session.execute(
+        .createLineSketch(
+            name: "Automation Constraint Removal Source",
+            plane: .xy,
+            start: SketchPoint(
+                x: .length(0.0, .millimeter),
+                y: .length(0.0, .millimeter)
+            ),
+            end: SketchPoint(
+                x: .length(8.0, .millimeter),
+                y: .length(0.0, .millimeter)
+            )
+        )
+    )
+    let featureID = try #require(session.document.cadDocument.designGraph.order.first)
+    let lineID = try #require(automationSingleSketchEntityID(in: session.document, featureID: featureID))
+    _ = try runner.execute(
+        .addSketchConstraint(
+            featureID: featureID,
+            constraint: .horizontal(lineID)
+        ),
+        in: session
+    )
+
+    let result = try runner.execute(
+        .removeSketchConstraint(
+            featureID: featureID,
+            constraint: .horizontal(lineID)
+        ),
+        in: session
+    )
+
+    let sketch = try #require(automationSketchFeature(in: session.document, featureID: featureID))
+    #expect(result.message == "Sketch constraint removed from \(featureID.description).")
+    #expect(result.commandName == "removeSketchConstraint")
+    #expect(result.didMutate)
+    #expect(result.generation == DocumentGeneration(3))
+    #expect(sketch.constraints.isEmpty)
+    #expect(session.evaluationStatus == .valid)
+}
+
+@MainActor
 @Test func automationCanEditBridgeCurveParameters() async throws {
     let setup = try automationTwoLineUnequalLengthDocument(name: "Automation Bridge Source")
     let session = EditorSession(document: setup.document)

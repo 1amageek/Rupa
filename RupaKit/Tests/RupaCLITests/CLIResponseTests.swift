@@ -2124,6 +2124,72 @@ struct CLISketchAdvancedCurveEditCommandTests {
     }
 
     @Test(.timeLimit(.minutes(1)))
+    func executableSketchConstraintRemoveTypedOptionsPersistsClosedDocumentAsJSON() async throws {
+        let temporaryDirectory = try makeTemporaryDirectory()
+        defer {
+            removeTemporaryDirectory(temporaryDirectory)
+        }
+        let documentURL = temporaryDirectory.appendingPathComponent("process-sketch-constraint-remove-typed.swcad")
+        var document = DesignDocument.empty(named: "Process Sketch Constraint Remove Typed")
+        let featureID = try document.createLineSketch(
+            name: "Typed Constraint Removal Source",
+            plane: .xy,
+            start: SketchPoint(
+                x: .length(0.0, .millimeter),
+                y: .length(0.0, .millimeter)
+            ),
+            end: SketchPoint(
+                x: .length(8.0, .millimeter),
+                y: .length(0.0, .millimeter)
+            )
+        )
+        let feature = try #require(document.cadDocument.designGraph.nodes[featureID])
+        guard case .sketch(let sketch) = feature.operation,
+              let lineID = sketch.entities.keys.first else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "Typed constraint removal CLI setup requires a line sketch."
+            )
+        }
+        try document.addSketchConstraint(featureID: featureID, constraint: .horizontal(lineID))
+        try DocumentFileService().save(document, to: documentURL)
+
+        let result = try await runCLI([
+            "sketch",
+            "constraint-remove",
+            documentURL.path,
+            "--feature-id",
+            featureID.description,
+            "--kind",
+            "horizontal",
+            "--entity-id",
+            lineID.description,
+            "--mode",
+            "file",
+            "--json",
+        ])
+        let response = try JSONDecoder().decode(CLIResponse.self, from: result.standardOutputData)
+        let loaded = try DocumentFileService().load(from: documentURL)
+        let loadedFeature = try #require(loaded.cadDocument.designGraph.nodes[featureID])
+        guard case .sketch(let loadedSketch) = loadedFeature.operation,
+              case .line(let loadedLine) = try #require(loadedSketch.entities[lineID]) else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "Typed constraint removal CLI result requires the constrained line."
+            )
+        }
+
+        #expect(result.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: result.standardError))
+        #expect(response.message == "Sketch constraint removed from \(featureID.description).")
+        #expect(response.saved)
+        #expect(loadedSketch.constraints.isEmpty)
+        #expect(abs(try cliLength(loadedLine.start.x, in: loaded)) < 1.0e-12)
+        #expect(abs(try cliLength(loadedLine.start.y, in: loaded)) < 1.0e-12)
+        #expect(abs(try cliLength(loadedLine.end.x, in: loaded) - 0.008) < 1.0e-12)
+        #expect(abs(try cliLength(loadedLine.end.y, in: loaded)) < 1.0e-12)
+    }
+
+    @Test(.timeLimit(.minutes(1)))
     func executableSketchCutPersistsClosedDocumentAsJSON() async throws {
         let temporaryDirectory = try makeTemporaryDirectory()
         defer {

@@ -90,6 +90,7 @@ public enum AutomationCommand: Codable, Equatable, Sendable {
         target: CADExpression
     )
     case addSketchConstraint(featureID: FeatureID, constraint: SketchConstraint)
+    case removeSketchConstraint(featureID: FeatureID, constraint: SketchConstraint)
     case createBridgeCurve(
         featureID: FeatureID,
         firstEndpoint: BridgeCurveEndpoint,
@@ -430,6 +431,11 @@ public enum AutomationCommand: Codable, Equatable, Sendable {
             )
         case .addSketchConstraint(let featureID, let constraint):
             .addSketchConstraint(
+                featureID: featureID,
+                constraint: constraint
+            )
+        case .removeSketchConstraint(let featureID, let constraint):
+            .removeSketchConstraint(
                 featureID: featureID,
                 constraint: constraint
             )

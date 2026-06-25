@@ -923,6 +923,19 @@ public final class EditorSession {
     }
 
     @discardableResult
+    public func removeSketchConstraint(
+        featureID: FeatureID,
+        constraint: SketchConstraint
+    ) -> CommandExecutionResult? {
+        perform(
+            .removeSketchConstraint(
+                featureID: featureID,
+                constraint: constraint
+            )
+        )
+    }
+
+    @discardableResult
     public func createBridgeCurve(
         featureID: FeatureID,
         firstEndpoint: BridgeCurveEndpoint,

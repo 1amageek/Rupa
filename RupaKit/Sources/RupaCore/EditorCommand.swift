@@ -81,6 +81,7 @@ public enum EditorCommand: Codable, Equatable, Sendable {
     )
     case createFaceKnife(name: String, target: SelectionTarget, loop: [Point3D])
     case addSketchConstraint(featureID: FeatureID, constraint: SketchConstraint)
+    case removeSketchConstraint(featureID: FeatureID, constraint: SketchConstraint)
     case createBridgeCurve(
         featureID: FeatureID,
         firstEndpoint: BridgeCurveEndpoint,
@@ -341,6 +342,8 @@ public enum EditorCommand: Codable, Equatable, Sendable {
             "createFaceKnife"
         case .addSketchConstraint:
             "addSketchConstraint"
+        case .removeSketchConstraint:
+            "removeSketchConstraint"
         case .createBridgeCurve:
             "createBridgeCurve"
         case .setBridgeCurveParameters:
@@ -474,6 +477,7 @@ public enum EditorCommand: Codable, Equatable, Sendable {
              .createPolygonSketch,
              .createFaceKnife,
              .addSketchConstraint,
+             .removeSketchConstraint,
              .createBridgeCurve,
              .setBridgeCurveParameters,
              .createRectangleSketchFromCorners,

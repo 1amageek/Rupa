@@ -505,6 +505,16 @@ public final class CADDocumentStore {
             document = updatedDocument
             try commitMutation()
             evaluateCurrentDocument()
+        case .removeSketchConstraint(let featureID, let constraint):
+            var updatedDocument = document
+            try updatedDocument.removeSketchConstraint(
+                featureID: featureID,
+                constraint: constraint,
+                objectRegistry: objectRegistry
+            )
+            document = updatedDocument
+            try commitMutation()
+            evaluateCurrentDocument()
         case .createBridgeCurve(let featureID, let firstEndpoint, let secondEndpoint, let continuity, let trimsSourceCurves):
             var updatedDocument = document
             try updatedDocument.createBridgeCurve(

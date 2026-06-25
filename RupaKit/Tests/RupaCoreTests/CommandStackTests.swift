@@ -2948,6 +2948,53 @@ import Testing
 }
 
 @MainActor
+@Test func removeSketchConstraintCommandMutatesExistingSketchThroughCommandPath() async throws {
+    let session = EditorSession()
+    _ = try session.execute(
+        .createLineSketch(
+            name: "Constraint Removal Source",
+            plane: .xy,
+            start: SketchPoint(
+                x: .length(0.0, .millimeter),
+                y: .length(0.0, .millimeter)
+            ),
+            end: SketchPoint(
+                x: .length(12.0, .millimeter),
+                y: .length(0.0, .millimeter)
+            )
+        )
+    )
+    let featureID = try #require(session.document.cadDocument.designGraph.order.first)
+    let lineID = try #require(singleSketchEntityID(in: session.document, featureID: featureID))
+    _ = try session.execute(
+        .addSketchConstraint(
+            featureID: featureID,
+            constraint: .horizontal(lineID)
+        )
+    )
+
+    let result = try session.execute(
+        .removeSketchConstraint(
+            featureID: featureID,
+            constraint: .horizontal(lineID)
+        )
+    )
+
+    let sketch = try #require(sketchFeature(in: session.document, featureID: featureID))
+    #expect(result.commandName == "removeSketchConstraint")
+    #expect(result.didMutate)
+    #expect(result.generation == DocumentGeneration(3))
+    #expect(sketch.constraints.isEmpty)
+    #expect(session.evaluationStatus == .valid)
+    #expect(session.commandStack.canUndo)
+
+    _ = try session.undo()
+    let restoredSketch = try #require(sketchFeature(in: session.document, featureID: featureID))
+    #expect(restoredSketch.constraints == [.horizontal(lineID)])
+    #expect(session.generation == DocumentGeneration(4))
+}
+
+@MainActor
 @Test func addSketchConstraintCommandSatisfiesHorizontalGeometry() async throws {
     let session = EditorSession()
     _ = try session.execute(

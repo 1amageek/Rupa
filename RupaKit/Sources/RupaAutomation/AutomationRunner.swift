@@ -530,6 +530,20 @@ public struct AutomationRunner {
                 didMutate: result.didMutate,
                 diagnostics: result.diagnostics
             )
+        case .removeSketchConstraint(let featureID, let constraint):
+            let result = try session.execute(
+                .removeSketchConstraint(
+                    featureID: featureID,
+                    constraint: constraint
+                )
+            )
+            return AutomationResult(
+                message: "Sketch constraint removed from \(featureID.description).",
+                commandName: result.commandName,
+                generation: result.generation,
+                didMutate: result.didMutate,
+                diagnostics: result.diagnostics
+            )
         case .createBridgeCurve(let featureID, let firstEndpoint, let secondEndpoint, let continuity, let trimsSourceCurves):
             let result = try session.execute(
                 .createBridgeCurve(

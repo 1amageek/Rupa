@@ -51,6 +51,7 @@ import SwiftCAD
     #expect(capabilities.contains("createPolygonSketch"))
     #expect(capabilities.contains("createFaceKnife"))
     #expect(capabilities.contains("addSketchConstraint"))
+    #expect(capabilities.contains("removeSketchConstraint"))
     #expect(capabilities.contains("createBridgeCurve"))
     #expect(capabilities.contains("setBridgeCurveParameters"))
     #expect(capabilities.contains("offsetCurve"))
@@ -126,6 +127,7 @@ import SwiftCAD
     let faceOffset = try #require(descriptors.first { $0.name == "offsetBodyFace" })
     let faceKnife = try #require(descriptors.first { $0.name == "createFaceKnife" })
     let sketchConstraint = try #require(descriptors.first { $0.name == "addSketchConstraint" })
+    let sketchConstraintRemoval = try #require(descriptors.first { $0.name == "removeSketchConstraint" })
     let bridgeCurve = try #require(descriptors.first { $0.name == "createBridgeCurve" })
     let bridgeCurveUpdate = try #require(descriptors.first { $0.name == "setBridgeCurveParameters" })
     let curveOffset = try #require(descriptors.first { $0.name == "offsetCurve" })
@@ -244,6 +246,13 @@ import SwiftCAD
     #expect(sketchConstraint.summary.contains("spline endpoint tangency"))
     #expect(sketchConstraint.summary.contains("tangent spline endpoints"))
     #expect(sketchConstraint.summary.contains("smooth spline endpoints"))
+
+    #expect(sketchConstraintRemoval.category == .sourceCurveEditing)
+    #expect(sketchConstraintRemoval.mutatesDocument)
+    #expect(sketchConstraintRemoval.discovery.contains(.sketchEntitySummary))
+    #expect(sketchConstraintRemoval.targets == [.sketchEntity])
+    #expect(sketchConstraintRemoval.summary.contains("Remove one existing sketch constraint"))
+    #expect(sketchConstraintRemoval.failureMode.contains("nonexistent constraints"))
 
     #expect(bridgeCurve.category == .sourceCurveEditing)
     #expect(bridgeCurve.mutatesDocument)
@@ -7345,6 +7354,57 @@ private func rawAgentProtocolJSON(_ source: String) -> Data {
     #expect(abs((line.start?.y ?? -1.0) - 0.0) < 1.0e-12)
     #expect(abs((line.end?.x ?? -1.0) - 0.010) < 1.0e-12)
     #expect(abs((line.end?.y ?? -1.0) - 0.0) < 1.0e-12)
+    #expect(session.evaluationStatus == .valid)
+}
+
+@Test func agentDispatchesSketchConstraintRemovalCommandThroughAutomationAndCore() async throws {
+    let server = AgentCommandController()
+    let sessionID = UUID()
+    let session = EditorSession()
+    _ = try session.execute(
+        .createLineSketch(
+            name: "Agent Constraint Removal Source",
+            plane: .xy,
+            start: SketchPoint(
+                x: .length(0.0, .millimeter),
+                y: .length(0.0, .millimeter)
+            ),
+            end: SketchPoint(
+                x: .length(8.0, .millimeter),
+                y: .length(0.0, .millimeter)
+            )
+        )
+    )
+    let featureID = try #require(session.document.cadDocument.designGraph.order.first)
+    let lineID = try #require(agentSingleSketchEntityID(in: session.document, featureID: featureID))
+    _ = try session.execute(
+        .addSketchConstraint(
+            featureID: featureID,
+            constraint: .horizontal(lineID)
+        )
+    )
+    server.register(session: session, id: sessionID)
+
+    let response = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .removeSketchConstraint(
+                featureID: featureID,
+                constraint: .horizontal(lineID)
+            ),
+            expectedGeneration: DocumentGeneration(2)
+        )
+    )
+
+    guard case .command(let result) = response else {
+        #expect(Bool(false))
+        return
+    }
+    let sketch = try #require(agentSketchFeature(in: session.document, featureID: featureID))
+    #expect(result.commandName == "removeSketchConstraint")
+    #expect(result.didMutate)
+    #expect(result.generation == DocumentGeneration(3))
+    #expect(sketch.constraints.isEmpty)
     #expect(session.evaluationStatus == .valid)
 }
 

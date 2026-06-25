@@ -562,6 +562,16 @@ public final class AgentCommandController: AgentClientProtocol {
             failureMode: "Rejects duplicate, unsupported, over-constrained, missing-reference, invalid spline control-point, unsmoothable fixed handles, unsatisfied fixed spline tangent handles or endpoints, and stale constraint mutations before commit."
         ),
         capability(
+            "removeSketchConstraint",
+            category: .sourceCurveEditing,
+            summary: "Remove one existing sketch constraint from a sketch feature without changing the current solved geometry.",
+            access: .automationCommand,
+            mutatesDocument: true,
+            discovery: [.sketchEntitySummary],
+            targets: [.sketchEntity],
+            failureMode: "Rejects missing sketch features, non-sketch features, nonexistent constraints, invalid post-removal sketch state, and stale constraint mutations before commit."
+        ),
+        capability(
             "createBridgeCurve",
             category: .sourceCurveEditing,
             summary: "Create a multi-span cubic Bezier bridge source curve between two sketch curve positions, with optional endpoint parameter and sense, optional source-curve Trim, endpoint-specific Tension 1/2/3 values, and endpoint-specific G0/G1/G2 continuity constraints where persistent endpoint constraints are available; G3 is reported as unsupported before mutation.",

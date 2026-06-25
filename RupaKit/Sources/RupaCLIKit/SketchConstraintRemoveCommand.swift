@@ -2,10 +2,10 @@ import ArgumentParser
 import RupaAutomation
 import RupaCore
 
-public struct SketchConstraintAddCommand: ParsableCommand {
+public struct SketchConstraintRemoveCommand: ParsableCommand {
     public static let configuration = CommandConfiguration(
-        commandName: "constraint-add",
-        abstract: "Add one supported SketchConstraint to a sketch feature."
+        commandName: "constraint-remove",
+        abstract: "Remove one existing SketchConstraint from a sketch feature."
     )
 
     @OptionGroup
@@ -28,7 +28,7 @@ public struct SketchConstraintAddCommand: ParsableCommand {
 
         try CLIAutomationCommandRunner.run(
             document: document,
-            command: .addSketchConstraint(
+            command: .removeSketchConstraint(
                 featureID: parsedFeatureID,
                 constraint: parsedConstraint
             )
