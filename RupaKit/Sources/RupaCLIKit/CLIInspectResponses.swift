@@ -99,3 +99,23 @@ public struct CLISurfaceContinuitySummaryResponse: Codable, Equatable, Sendable 
         self.diagnostics = surfaceContinuitySummary.diagnostics
     }
 }
+
+public struct CLISurfaceFramesResponse: Codable, Equatable, Sendable {
+    public var message: String
+    public var generation: UInt64
+    public var dirty: Bool
+    public var surfaceFrames: SurfaceFrameResult
+    public var diagnostics: [EditorDiagnostic]
+
+    public init(
+        surfaceFrames: SurfaceFrameResult,
+        generation: DocumentGeneration,
+        dirty: Bool
+    ) {
+        self.message = "Surface frames: \(surfaceFrames.frames.count) UVN frames."
+        self.generation = generation.value
+        self.dirty = dirty
+        self.surfaceFrames = surfaceFrames
+        self.diagnostics = surfaceFrames.diagnostics
+    }
+}

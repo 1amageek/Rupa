@@ -53,4 +53,15 @@ public extension CLIOutput {
             asJSON: asJSON
         )
     }
+
+    static func write(
+        response: CLISurfaceFramesResponse,
+        asJSON: Bool
+    ) throws {
+        try write(
+            response,
+            fallback: response.message,
+            asJSON: asJSON
+        )
+    }
 }

@@ -913,6 +913,24 @@ public struct CLIService {
         )
     }
 
+    public func surfaceFramesFile(
+        at url: URL,
+        queries: [SurfaceFrameQuery]
+    ) throws -> CLISurfaceFramesResponse {
+        let session = EditorSession(document: try fileService.load(from: url))
+        return CLISurfaceFramesResponse(
+            surfaceFrames: try SurfaceFrameService().resolve(
+                document: session.document,
+                queries: queries,
+                objectRegistry: session.objectRegistry,
+                currentEvaluation: session.currentEvaluation,
+                currentGeneration: session.generation
+            ),
+            generation: session.generation,
+            dirty: session.isDirty
+        )
+    }
+
     public func surfaceSourceSummaryFile(
         at url: URL
     ) throws -> CLISurfaceSourceSummaryResponse {
@@ -1201,6 +1219,40 @@ public struct CLIService {
             )
             return try surfaceContinuitySummaryLiveSession(
                 sessionID: sessionID,
+                expectedGeneration: expectedGeneration,
+                client: requiredClient(client)
+            )
+        }
+    }
+
+    public func surfaceFrames(
+        target: CLIDocumentTarget,
+        queries: [SurfaceFrameQuery],
+        mode: CLIEditMode = .auto,
+        expectedGeneration: DocumentGeneration? = nil,
+        client: AgentClientProtocol? = nil
+    ) throws -> CLISurfaceFramesResponse {
+        switch mode {
+        case .auto:
+            return try surfaceFramesAutomatically(
+                target: target,
+                queries: queries,
+                expectedGeneration: expectedGeneration,
+                client: client
+            )
+        case .file:
+            guard let url = target.fileURL else {
+                throw invalidCommand("File mode requires a document file path.")
+            }
+            return try surfaceFramesFile(at: url, queries: queries)
+        case .live:
+            let sessionID = try resolvedLiveSessionID(
+                target: target,
+                client: client
+            )
+            return try surfaceFramesLiveSession(
+                sessionID: sessionID,
+                queries: queries,
                 expectedGeneration: expectedGeneration,
                 client: requiredClient(client)
             )
@@ -1949,6 +2001,36 @@ public struct CLIService {
         }
     }
 
+    public func surfaceFramesLiveSession(
+        sessionID: UUID,
+        queries: [SurfaceFrameQuery],
+        expectedGeneration: DocumentGeneration? = nil,
+        client: AgentClientProtocol
+    ) throws -> CLISurfaceFramesResponse {
+        let response = try client.send(
+            .surfaceFrames(
+                sessionID: sessionID,
+                queries: queries,
+                expectedGeneration: expectedGeneration
+            )
+        )
+        switch response {
+        case .surfaceFrames(let surfaceFrames):
+            let summary = try sessions(client: client)
+                .sessions
+                .first { $0.id == sessionID }
+            return CLISurfaceFramesResponse(
+                surfaceFrames: surfaceFrames,
+                generation: DocumentGeneration(summary?.generation.value ?? 0),
+                dirty: summary?.dirty ?? false
+            )
+        case .failure(let error):
+            throw error
+        default:
+            throw unexpectedResponse("Surface frame request returned an unexpected response.")
+        }
+    }
+
     public func surfaceSourceSummaryLiveSession(
         sessionID: UUID,
         expectedGeneration: DocumentGeneration? = nil,
@@ -2346,6 +2428,38 @@ public struct CLIService {
             throw invalidCommand("Surface continuity summary requires a document file path or live session ID.")
         }
         return try surfaceContinuitySummaryFile(at: url)
+    }
+
+    private func surfaceFramesAutomatically(
+        target: CLIDocumentTarget,
+        queries: [SurfaceFrameQuery],
+        expectedGeneration: DocumentGeneration?,
+        client: AgentClientProtocol?
+    ) throws -> CLISurfaceFramesResponse {
+        if let sessionID = target.sessionID {
+            return try surfaceFramesLiveSession(
+                sessionID: sessionID,
+                queries: queries,
+                expectedGeneration: expectedGeneration,
+                client: requiredClient(client)
+            )
+        }
+
+        if let url = target.fileURL,
+           let client,
+           let session = try openSession(for: url, client: client) {
+            return try surfaceFramesLiveSession(
+                sessionID: session.id,
+                queries: queries,
+                expectedGeneration: expectedGeneration,
+                client: client
+            )
+        }
+
+        guard let url = target.fileURL else {
+            throw invalidCommand("Surface frame resolution requires a document file path or live session ID.")
+        }
+        return try surfaceFramesFile(at: url, queries: queries)
     }
 
     private func surfaceSourceSummaryAutomatically(

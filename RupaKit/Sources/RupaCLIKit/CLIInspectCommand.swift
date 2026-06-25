@@ -9,6 +9,7 @@ public struct InspectCommand: ParsableCommand {
             InspectTopologyCommand.self,
             InspectCurvesCommand.self,
             InspectSurfacesCommand.self,
+            InspectSurfaceFramesCommand.self,
             InspectSurfaceContinuityCommand.self,
         ],
         defaultSubcommand: InspectTopologyCommand.self

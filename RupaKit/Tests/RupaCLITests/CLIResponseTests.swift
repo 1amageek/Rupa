@@ -1093,6 +1093,43 @@ func cliExecutableSurfaceSourcesReturnsSelectionReferencesAsJSON() async throws 
         CLISurfaceContinuitySummaryResponse.self,
         from: continuityResult.standardOutputData
     )
+    let topologyResult = try await runCLI([
+        "inspect",
+        "topology",
+        documentURL.path,
+        "--mode",
+        "file",
+        "--json",
+    ])
+    let topologyResponse = try JSONDecoder().decode(
+        CLITopologySummaryResponse.self,
+        from: topologyResult.standardOutputData
+    )
+    let facePersistentName = try #require(
+        topologyResponse.topologySummary.entries.first { $0.kind == .face }?.persistentName
+    )
+    let frameQueryJSON = try encodedSurfaceFrameQuery(
+        SurfaceFrameQuery(
+            facePersistentName: facePersistentName,
+            u: 0.5,
+            v: 0.5
+        )
+    )
+    let frameResult = try await runCLI([
+        "inspect",
+        "surface-frames",
+        documentURL.path,
+        "--query",
+        frameQueryJSON,
+        "--mode",
+        "file",
+        "--json",
+    ])
+    let frameResponse = try JSONDecoder().decode(
+        CLISurfaceFramesResponse.self,
+        from: frameResult.standardOutputData
+    )
+    let frame = try #require(frameResponse.surfaceFrames.frames.first)
     let patch = try #require(response.surfaceSourceSummary.sources.first?.patches.first)
     let controlPoint = try #require(patch.controlPoints.first { $0.uIndex == 1 && $0.vIndex == 1 })
 
@@ -1110,6 +1147,13 @@ func cliExecutableSurfaceSourcesReturnsSelectionReferencesAsJSON() async throws 
     #expect(continuityResponse.surfaceContinuitySummary.counts.bSplineFaceCount == 2)
     #expect(continuityResponse.surfaceContinuitySummary.counts.sharedEdgeCount == 1)
     #expect(continuityResponse.surfaceContinuitySummary.counts.g1AdjacencyCount == 1)
+    #expect(topologyResult.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: topologyResult.standardError))
+    #expect(frameResult.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: frameResult.standardError))
+    #expect(frameResponse.surfaceFrames.frames.count == 1)
+    #expect(frame.facePersistentNames.contains(facePersistentName))
+    #expect(frame.u == 0.5)
+    #expect(frame.v == 0.5)
+    #expect(abs(abs(frame.handedness) - 1.0) < 0.000_000_01)
 }
 
 @Test(.timeLimit(.minutes(1)))
@@ -3640,6 +3684,11 @@ private func encodedSelectionReference(_ reference: SelectionReference) throws -
 
 private func encodedSelectionTarget(_ target: SelectionTarget) throws -> String {
     let data = try JSONEncoder().encode(target)
+    return String(decoding: data, as: UTF8.self)
+}
+
+private func encodedSurfaceFrameQuery(_ query: SurfaceFrameQuery) throws -> String {
+    let data = try JSONEncoder().encode(query)
     return String(decoding: data, as: UTF8.self)
 }
 
