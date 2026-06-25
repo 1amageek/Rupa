@@ -617,6 +617,59 @@ import Testing
 }
 
 @MainActor
+@Test func viewportSceneBuilderExposesVisibleSurfaceControlPointDisplays() async throws {
+    var document = DesignDocument.empty()
+    let featureID = try document.createPolySplineSurface(
+        name: "Viewport Surface CV Display",
+        sourceMesh: viewportSurfaceAnalysisSingleQuadMesh(topRightZ: 0.0),
+        options: PolySplineOptions()
+    )
+    let initialScene = ViewportSceneBuilder().build(document: document)
+    let initialBody = try #require(initialScene.items.first { $0.featureID == featureID })
+    guard case .body(let initialComponent) = initialBody.kind else {
+        Issue.record("Expected a PolySpline body scene item.")
+        return
+    }
+    #expect(initialComponent.surfaceControlPointDisplays.isEmpty)
+
+    let summary = try SurfaceSourceSummaryService().summarize(document: document)
+    let patch = try #require(summary.sources.first?.patches.first)
+    let controlPoint = try #require(patch.controlPoints.first { $0.uIndex == 1 && $0.vIndex == 1 })
+    try document.setSurfaceControlPointDisplay(
+        target: controlPoint.selectionReference,
+        isVisible: true
+    )
+
+    let visibleScene = ViewportSceneBuilder().build(document: document)
+    let visibleBody = try #require(visibleScene.items.first { $0.featureID == featureID })
+    guard case .body(let visibleComponent) = visibleBody.kind else {
+        Issue.record("Expected a PolySpline body scene item.")
+        return
+    }
+    let display = try #require(visibleComponent.surfaceControlPointDisplays.first)
+    #expect(visibleComponent.surfaceControlPointDisplays.count == 1)
+    #expect(display.selectionReference == controlPoint.selectionReference)
+    #expect(display.uIndex == 1)
+    #expect(display.vIndex == 1)
+    #expect(display.isBoundary == false)
+    #expect(abs(display.point.x - controlPoint.point.x) <= 1.0e-12)
+    #expect(abs(display.point.y - controlPoint.point.y) <= 1.0e-12)
+    #expect(abs(display.point.z - controlPoint.point.z) <= 1.0e-12)
+
+    try document.setSurfaceControlPointDisplay(
+        target: controlPoint.selectionReference,
+        isVisible: false
+    )
+    let hiddenScene = ViewportSceneBuilder().build(document: document)
+    let hiddenBody = try #require(hiddenScene.items.first { $0.featureID == featureID })
+    guard case .body(let hiddenComponent) = hiddenBody.kind else {
+        Issue.record("Expected a PolySpline body scene item.")
+        return
+    }
+    #expect(hiddenComponent.surfaceControlPointDisplays.isEmpty)
+}
+
+@MainActor
 @Test func viewportSceneBuilderCreatesBodyItemForSupportedStraightPathSweep() async throws {
     var document = DesignDocument.empty()
     let profileID = try document.createRectangleSketch(

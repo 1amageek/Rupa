@@ -1109,6 +1109,11 @@ public struct Viewport: View {
             layout: layout,
             in: &context
         )
+        drawSurfaceControlPointDisplays(
+            scene: scene,
+            layout: layout,
+            in: &context
+        )
 
         drawSurfaceAnalysisOverlay(
             in: &context,
@@ -3829,6 +3834,53 @@ public struct Viewport: View {
             with: .color(style.color.opacity(style.strokeOpacity)),
             lineWidth: style.lineWidth
         )
+    }
+
+    private func drawSurfaceControlPointDisplays(
+        scene: ViewportScene,
+        layout: ViewportLayout,
+        in context: inout GraphicsContext
+    ) {
+        for item in scene.items {
+            guard case .body(let component) = item.kind else {
+                continue
+            }
+            for display in component.surfaceControlPointDisplays {
+                drawSurfaceControlPointDisplay(
+                    display,
+                    item: item,
+                    layout: layout,
+                    in: &context
+                )
+            }
+        }
+    }
+
+    private func drawSurfaceControlPointDisplay(
+        _ display: ViewportSurfaceControlPointDisplay,
+        item: ViewportSceneItem,
+        layout: ViewportLayout,
+        in context: inout GraphicsContext
+    ) {
+        let point = layout.project(display.point, in: item)
+        let size: CGFloat = display.isBoundary ? 7.0 : 8.6
+        let rect = CGRect(
+            x: point.x - size / 2.0,
+            y: point.y - size / 2.0,
+            width: size,
+            height: size
+        )
+        let path = Path(roundedRect: rect, cornerRadius: 1.6)
+        context.fill(path, with: .color(ViewportTheme.surfaceEdit.opacity(0.78)))
+        context.stroke(path, with: .color(Color.black.opacity(0.48)), lineWidth: 0.9)
+        if display.isBoundary == false {
+            let ringRect = rect.insetBy(dx: -2.4, dy: -2.4)
+            context.stroke(
+                Path(ellipseIn: ringRect),
+                with: .color(ViewportTheme.surfaceEdit.opacity(0.38)),
+                lineWidth: 1.0
+            )
+        }
     }
 
     private func drawActivePolySplineSurfaceVertexDrag(

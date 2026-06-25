@@ -138,6 +138,7 @@ public struct ViewportBodyComponent: Equatable {
     public var cylinder: ViewportCylinderComponent?
     public var mesh: ViewportBodyMesh?
     public var topology: ViewportBodyTopology?
+    public var surfaceControlPointDisplays: [ViewportSurfaceControlPointDisplay]
 
     public init(
         typeID: ObjectTypeID? = nil,
@@ -149,7 +150,8 @@ public struct ViewportBodyComponent: Equatable {
         yMaxMeters: Double,
         cylinder: ViewportCylinderComponent? = nil,
         mesh: ViewportBodyMesh? = nil,
-        topology: ViewportBodyTopology? = nil
+        topology: ViewportBodyTopology? = nil,
+        surfaceControlPointDisplays: [ViewportSurfaceControlPointDisplay] = []
     ) {
         self.typeID = typeID
         self.properties = properties
@@ -161,10 +163,33 @@ public struct ViewportBodyComponent: Equatable {
         self.cylinder = cylinder
         self.mesh = mesh
         self.topology = topology
+        self.surfaceControlPointDisplays = surfaceControlPointDisplays
     }
 }
 
 public typealias ViewportBodyMesh = BodyDisplaySnapshot.Mesh
+
+public struct ViewportSurfaceControlPointDisplay: Equatable, Sendable {
+    public var selectionReference: SelectionReference
+    public var point: Point3D
+    public var uIndex: Int
+    public var vIndex: Int
+    public var isBoundary: Bool
+
+    public init(
+        selectionReference: SelectionReference,
+        point: Point3D,
+        uIndex: Int,
+        vIndex: Int,
+        isBoundary: Bool
+    ) {
+        self.selectionReference = selectionReference
+        self.point = point
+        self.uIndex = uIndex
+        self.vIndex = vIndex
+        self.isBoundary = isBoundary
+    }
+}
 
 public struct ViewportBodyTopology: Equatable {
     public var faces: [Face]
@@ -2584,6 +2609,9 @@ public struct ViewportSceneBuilder {
             }
         }
 
+        let surfaceControlPointDisplaysByFeatureID = visibleSurfaceControlPointDisplaysByFeatureID(
+            in: document
+        )
         let effectivelyVisibleSceneNodeIDs = effectivelyVisibleSceneNodeIDs(in: document.productMetadata)
         let baseItems = graph.order.compactMap { featureID -> ViewportSceneItem? in
             guard let feature = graph.nodes[featureID] else {
@@ -2636,6 +2664,7 @@ public struct ViewportSceneBuilder {
                     featureID: featureID,
                     sourceFeatureID: revolve.profile.featureID,
                     document: document,
+                    surfaceControlPointDisplaysByFeatureID: surfaceControlPointDisplaysByFeatureID,
                     bodyDisplaySnapshots: bodyDisplaySnapshots
                 )
             case .sweep(let sweep):
@@ -2671,6 +2700,7 @@ public struct ViewportSceneBuilder {
                     featureID: featureID,
                     sourceFeatureID: section.featureID,
                     document: document,
+                    surfaceControlPointDisplaysByFeatureID: surfaceControlPointDisplaysByFeatureID,
                     bodyDisplaySnapshots: bodyDisplaySnapshots
                 )
             case .polySpline:
@@ -2678,6 +2708,7 @@ public struct ViewportSceneBuilder {
                     featureID: featureID,
                     sourceFeatureID: nil,
                     document: document,
+                    surfaceControlPointDisplaysByFeatureID: surfaceControlPointDisplaysByFeatureID,
                     bodyDisplaySnapshots: bodyDisplaySnapshots
                 )
             case .faceLoopOffset:
@@ -2689,6 +2720,7 @@ public struct ViewportSceneBuilder {
                         document: document
                     )?.sourceSection?.featureID,
                     document: document,
+                    surfaceControlPointDisplaysByFeatureID: surfaceControlPointDisplaysByFeatureID,
                     bodyDisplaySnapshots: bodyDisplaySnapshots
                 )
             case .edgeOffset:
@@ -2700,6 +2732,7 @@ public struct ViewportSceneBuilder {
                         document: document
                     )?.sourceSection?.featureID,
                     document: document,
+                    surfaceControlPointDisplaysByFeatureID: surfaceControlPointDisplaysByFeatureID,
                     bodyDisplaySnapshots: bodyDisplaySnapshots
                 )
             case .faceKnife:
@@ -2711,6 +2744,7 @@ public struct ViewportSceneBuilder {
                         document: document
                     )?.sourceSection?.featureID,
                     document: document,
+                    surfaceControlPointDisplaysByFeatureID: surfaceControlPointDisplaysByFeatureID,
                     bodyDisplaySnapshots: bodyDisplaySnapshots
                 )
             case .bridgeCurve:
@@ -3261,6 +3295,50 @@ public struct ViewportSceneBuilder {
         )
     }
 
+    private func visibleSurfaceControlPointDisplaysByFeatureID(
+        in document: DesignDocument
+    ) -> [FeatureID: [ViewportSurfaceControlPointDisplay]] {
+        guard document.productMetadata.surfaceControlPointDisplays.values.contains(where: { $0.isVisible }) else {
+            return [:]
+        }
+        let featureIDsByDescription = Dictionary(
+            uniqueKeysWithValues: document.cadDocument.designGraph.order.map { featureID in
+                (featureID.description, featureID)
+            }
+        )
+        do {
+            let summary = try SurfaceSourceSummaryService().summarize(document: document)
+            var displaysByFeatureID: [FeatureID: [ViewportSurfaceControlPointDisplay]] = [:]
+            for source in summary.sources {
+                guard let featureID = featureIDsByDescription[source.featureID] else {
+                    continue
+                }
+                var displays: [ViewportSurfaceControlPointDisplay] = []
+                for patch in source.patches {
+                    for controlPoint in patch.controlPoints where controlPoint.isPointDisplayVisible {
+                        displays.append(ViewportSurfaceControlPointDisplay(
+                            selectionReference: controlPoint.selectionReference,
+                            point: Point3D(
+                                x: controlPoint.point.x,
+                                y: controlPoint.point.y,
+                                z: controlPoint.point.z
+                            ),
+                            uIndex: controlPoint.uIndex,
+                            vIndex: controlPoint.vIndex,
+                            isBoundary: controlPoint.isBoundary
+                        ))
+                    }
+                }
+                if displays.isEmpty == false {
+                    displaysByFeatureID[featureID, default: []].append(contentsOf: displays)
+                }
+            }
+            return displaysByFeatureID
+        } catch {
+            return [:]
+        }
+    }
+
     private func currentEvaluatedDocument(
         for document: DesignDocument,
         currentEvaluation: DocumentEvaluationContext?,
@@ -3302,6 +3380,7 @@ public struct ViewportSceneBuilder {
         featureID: FeatureID,
         sourceFeatureID: FeatureID?,
         document: DesignDocument,
+        surfaceControlPointDisplaysByFeatureID: [FeatureID: [ViewportSurfaceControlPointDisplay]] = [:],
         bodyDisplaySnapshots: [FeatureID: BodyDisplaySnapshot]
     ) -> ViewportSceneItem? {
         guard let snapshot = bodyDisplaySnapshots[featureID] else {
@@ -3326,7 +3405,8 @@ public struct ViewportSceneBuilder {
             yMinMeters: snapshot.bounds.minY,
             yMaxMeters: snapshot.bounds.maxY,
             mesh: snapshot.mesh,
-            topology: ViewportBodyTopology(snapshot.topology)
+            topology: ViewportBodyTopology(snapshot.topology),
+            surfaceControlPointDisplays: surfaceControlPointDisplaysByFeatureID[featureID] ?? []
         )
         return ViewportSceneItem(
             id: featureID.description,
