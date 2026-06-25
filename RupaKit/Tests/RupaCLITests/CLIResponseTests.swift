@@ -598,6 +598,92 @@ func cliExecutableModelExtrudeExistingProfilePersistsClosedDocumentAsJSON() asyn
     #expect(extrude.profile.featureID == sketchFeatureID)
 }
 
+@Suite(.serialized)
+struct CLIModelCommandTests {
+    @Test(.timeLimit(.minutes(1)))
+    func executableModelSweepPersistsClosedDocumentAsJSON() async throws {
+        let temporaryDirectory = try makeTemporaryDirectory()
+        defer {
+            removeTemporaryDirectory(temporaryDirectory)
+        }
+        let documentURL = temporaryDirectory.appendingPathComponent("process-sweep.swcad")
+        var document = DesignDocument.empty(named: "Process Sweep")
+        let profileID = try document.createRectangleSketch(
+            name: "Sweep Profile",
+            plane: .xy,
+            width: .length(4.0, .millimeter),
+            height: .length(2.0, .millimeter)
+        )
+        let pathID = try document.createLineSketch(
+            name: "Sweep Path",
+            plane: .xy,
+            start: SketchPoint(
+                x: .length(0.0, .millimeter),
+                y: .length(0.0, .millimeter)
+            ),
+            end: SketchPoint(
+                x: .length(0.0, .millimeter),
+                y: .length(20.0, .millimeter)
+            )
+        )
+        try DocumentFileService().save(document, to: documentURL)
+
+        let result = try await runCLI([
+            "model",
+            "sweep",
+            documentURL.path,
+            "--name",
+            "CLI Sweep",
+            "--profile-feature-id",
+            profileID.description,
+            "--path-feature-id",
+            pathID.description,
+            "--twist-angle",
+            "0",
+            "--angle-unit",
+            "degree",
+            "--end-scale",
+            "1",
+            "--distance-fraction",
+            "1",
+            "--alignment",
+            "normal",
+            "--corner-style",
+            "mitre",
+            "--result-kind",
+            "solid",
+            "--mode",
+            "file",
+            "--json",
+        ])
+        let response = try JSONDecoder().decode(
+            CLIResponse.self,
+            from: result.standardOutputData
+        )
+        let loaded = try DocumentFileService().load(from: documentURL)
+        let sweepFeatureID = try #require(loaded.cadDocument.designGraph.order.last)
+        let feature = try #require(loaded.cadDocument.designGraph.nodes[sweepFeatureID])
+        guard case let .sweep(sweep) = feature.operation else {
+            #expect(Bool(false))
+            return
+        }
+
+        #expect(result.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: result.standardError))
+        #expect(response.message == "Sweep CLI Sweep source created.")
+        #expect(response.saved)
+        #expect(!response.dirty)
+        #expect(loaded.cadDocument.designGraph.order.count == 3)
+        #expect(sweep.sections == [.profile(ProfileReference(featureID: profileID))])
+        #expect(sweep.path == SweepPathReference(featureID: pathID))
+        #expect(sweep.options.resultKind == .solid)
+        #expect(feature.inputs == [
+            FeatureInput(featureID: profileID, role: .profile),
+            FeatureInput(featureID: pathID, role: .path),
+        ])
+        #expect(loaded.productMetadata.sceneNodes.values.contains { $0.reference == .body(sweepFeatureID) })
+    }
+}
+
 @Test(.timeLimit(.minutes(1)))
 func cliExecutableModelBoxDryRunDoesNotPersistClosedDocumentAsJSON() async throws {
     let temporaryDirectory = try makeTemporaryDirectory()

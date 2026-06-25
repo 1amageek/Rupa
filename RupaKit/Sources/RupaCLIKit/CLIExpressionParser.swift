@@ -26,4 +26,11 @@ enum CLIExpressionParser {
         }
         return .constant(.angle(value, unit: angleUnit))
     }
+
+    static func scalar(value: Double, valueName: String = "Scalar") throws -> CADExpression {
+        guard value.isFinite else {
+            throw ValidationError("\(valueName) must be finite.")
+        }
+        return .constant(.scalar(value))
+    }
 }

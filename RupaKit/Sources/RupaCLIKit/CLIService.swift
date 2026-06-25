@@ -699,6 +699,39 @@ public struct CLIService {
         )
     }
 
+    public func createSweep(
+        target: CLIDocumentTarget,
+        name: String,
+        sections: [SweepSectionReference],
+        path: SweepPathReference,
+        guides: [SweepGuideReference],
+        targets: [SweepTargetReference],
+        options: SweepOptions,
+        mode: CLIEditMode = .auto,
+        expectedGeneration: DocumentGeneration? = nil,
+        dryRun: Bool = false,
+        forceFileEdit: Bool = false,
+        client: AgentClientProtocol? = nil
+    ) throws -> CLIResponse {
+        let command = AutomationCommand.createSweep(
+            name: name,
+            sections: sections,
+            path: path,
+            guides: guides,
+            targets: targets,
+            options: options
+        )
+        return try executeModelingCommand(
+            command,
+            target: target,
+            mode: mode,
+            expectedGeneration: expectedGeneration,
+            dryRun: dryRun,
+            forceFileEdit: forceFileEdit,
+            client: client
+        )
+    }
+
     public func createLineSketch(
         target: CLIDocumentTarget,
         name: String,

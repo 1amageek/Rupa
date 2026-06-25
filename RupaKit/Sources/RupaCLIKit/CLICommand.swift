@@ -219,6 +219,7 @@ public struct ModelCommand: ParsableCommand {
             BoxCornersModelCommand.self,
             CylinderModelCommand.self,
             ExtrudeModelCommand.self,
+            SweepModelCommand.self,
         ],
         defaultSubcommand: BoxModelCommand.self
     )
