@@ -1086,6 +1086,16 @@ public final class AgentServer: AgentClientProtocol {
             failureMode: "Rejects stale generations before measuring."
         ),
         capability(
+            "selectionMeasurement",
+            category: .read,
+            summary: "Measure a typed Swift-CAD SelectionReference as a point, distance, or angle without mutation, including topology, edge parameters, curve CVs, surface parameters, surface CVs, and surface trims.",
+            access: .agentRequest,
+            mutatesDocument: false,
+            discovery: [.selectionMeasurement, .surfaceSourceSummary, .topologySummary, .sketchEntitySummary],
+            targets: [.face, .edge, .vertex, .sketchEntity, .surface, .surfaceControlPoint, .surfaceTrim],
+            failureMode: "Rejects stale generations, invalid selection references, unresolved generated topology, unsupported ambiguous body or surface-knot measurements, and evaluation failures before returning measured geometry."
+        ),
+        capability(
             "objectDimensionSummary",
             category: .read,
             summary: "List editable Dimension command candidates for selected object, face, or generated extrusion depth edge targets without mutation, including box size axes and cylinder diameter, radius, and depth.",
@@ -1403,6 +1413,18 @@ public final class AgentServer: AgentClientProtocol {
                     try MeasurementService().measure(
                         document: session.document,
                         selection: session.selection,
+                        objectRegistry: session.objectRegistry,
+                        currentEvaluation: session.currentEvaluation,
+                        currentGeneration: session.generation
+                    )
+                )
+            case let .selectionMeasurement(sessionID, query, expectedGeneration):
+                let session = try registry.session(id: sessionID)
+                try session.store.requireGeneration(expectedGeneration)
+                return .selectionMeasurement(
+                    try SelectionMeasurementService().measure(
+                        query: query,
+                        document: session.document,
                         objectRegistry: session.objectRegistry,
                         currentEvaluation: session.currentEvaluation,
                         currentGeneration: session.generation

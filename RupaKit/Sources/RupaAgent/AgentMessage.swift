@@ -32,6 +32,11 @@ public enum AgentRequest: Codable, Equatable, Sendable {
         sessionID: UUID,
         expectedGeneration: DocumentGeneration?
     )
+    case selectionMeasurement(
+        sessionID: UUID,
+        query: CADAgentMeasurementQuery,
+        expectedGeneration: DocumentGeneration?
+    )
     case resolveSnap(
         sessionID: UUID,
         point: Point2D,
@@ -132,6 +137,7 @@ public enum AgentResponse: Codable, Equatable, Sendable {
     case parameters(ParameterListResult)
     case evaluation(EvaluationSnapshot)
     case measurement(MeasurementResult)
+    case selectionMeasurement(CADAgentMeasurementQueryResult)
     case snapResolution(SnapResolutionResult)
     case constructionPlaneSummary(ConstructionPlaneSummaryResult)
     case designDisplaySnapshot(DesignDisplaySnapshotResult)

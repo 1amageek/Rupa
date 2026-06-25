@@ -99,6 +99,7 @@ import SwiftCAD
     #expect(capabilities.contains("createExtrudedCircle"))
     #expect(capabilities.contains("evaluateDocument"))
     #expect(capabilities.contains("measureDocument"))
+    #expect(capabilities.contains("selectionMeasurement"))
     #expect(capabilities.contains("resolveSnap"))
     #expect(capabilities.contains("meshSummary"))
     #expect(capabilities.contains("sketchEntitySummary"))
@@ -154,6 +155,7 @@ import SwiftCAD
     let selectionDimension = try #require(descriptors.first { $0.name == "addSelectionDimension" })
     let objectDimensionSummary = try #require(descriptors.first { $0.name == "objectDimensionSummary" })
     let sketchDimensionSummary = try #require(descriptors.first { $0.name == "sketchDimensionSummary" })
+    let selectionMeasurement = try #require(descriptors.first { $0.name == "selectionMeasurement" })
     let selectionDimensionEvaluation = try #require(
         descriptors.first { $0.name == "selectionDimensionEvaluation" }
     )
@@ -597,6 +599,16 @@ import SwiftCAD
     #expect(selectionDimension.discovery.contains(.sketchEntitySummary))
     #expect(selectionDimension.targets == [.face, .edge, .vertex, .sketchEntity, .sketchPointHandle])
     #expect(selectionDimension.summary.contains("SwiftCAD document source") || selectionDimension.summary.contains("CAD selection dimension"))
+
+    #expect(selectionMeasurement.category == .read)
+    #expect(!selectionMeasurement.mutatesDocument)
+    #expect(selectionMeasurement.access == .agentRequest)
+    #expect(selectionMeasurement.discovery.contains(.selectionMeasurement))
+    #expect(selectionMeasurement.discovery.contains(.surfaceSourceSummary))
+    #expect(selectionMeasurement.discovery.contains(.topologySummary))
+    #expect(selectionMeasurement.targets.contains(.surfaceControlPoint))
+    #expect(selectionMeasurement.targets.contains(.surfaceTrim))
+    #expect(selectionMeasurement.summary.contains("SelectionReference"))
 
     #expect(objectDimensionSummary.category == .read)
     #expect(!objectDimensionSummary.mutatesDocument)
@@ -2412,6 +2424,27 @@ import SwiftCAD
             )
         )
     )
+    let selectionMeasurementFaceName = PersistentName(components: [
+        .feature(FeatureID(UUID())),
+        .generated("polySpline"),
+        .subshape("patch:0:face"),
+    ])
+    let selectionMeasurementReference = SelectionReference.surface(.controlPoint(SurfaceControlPointReference(
+        surface: SurfaceReference(faceName: selectionMeasurementFaceName),
+        uIndex: 0,
+        vIndex: 0
+    )))
+    let selectionMeasurementRequest = AgentRequest.selectionMeasurement(
+        sessionID: sessionID,
+        query: CADAgentMeasurementQuery(kind: .point, first: selectionMeasurementReference),
+        expectedGeneration: DocumentGeneration(4)
+    )
+    let selectionMeasurementResponse = AgentResponse.selectionMeasurement(
+        .point(SelectionMeasurementPoint(
+            selection: selectionMeasurementReference,
+            point: Point3D(x: 0.0, y: 0.0, z: 0.0)
+        ))
+    )
     let meshRequest = AgentRequest.meshSummary(
         sessionID: sessionID,
         expectedGeneration: DocumentGeneration(4)
@@ -2547,6 +2580,21 @@ import SwiftCAD
         sessionID: sessionID,
         expectedGeneration: DocumentGeneration(4)
     )
+    let surfaceCodecFeatureID = FeatureID(UUID())
+    let surfaceCodecFacePersistentName = "feature:\(surfaceCodecFeatureID.description)/generated:polySpline/subshape:patch:0:face"
+    let surfaceCodecEdgePersistentName = "feature:\(surfaceCodecFeatureID.description)/generated:polySpline/subshape:patch:0:edge:vMin"
+    let surfaceCodecVertexPersistentName = "feature:\(surfaceCodecFeatureID.description)/generated:polySpline/subshape:patch:0:vertex:uMin:vMin"
+    let surfaceCodecFaceName = PersistentName(components: [
+        .feature(surfaceCodecFeatureID),
+        .generated("polySpline"),
+        .subshape("patch:0:face"),
+    ])
+    let surfaceCodecReference = SurfaceReference(faceName: surfaceCodecFaceName)
+    let surfaceCodecControlPointReference = SelectionReference.surface(.controlPoint(SurfaceControlPointReference(
+        surface: surfaceCodecReference,
+        uIndex: 0,
+        vIndex: 0
+    )))
     let surfaceSourceResponse = AgentResponse.surfaceSourceSummary(
         SurfaceSourceSummaryResult(
             displayUnit: .millimeter,
@@ -2559,7 +2607,7 @@ import SwiftCAD
             ),
             sources: [
                 SurfaceSourceSummaryResult.Source(
-                    featureID: UUID().uuidString,
+                    featureID: surfaceCodecFeatureID.description,
                     name: "Codec PolySpline",
                     sceneNodeID: UUID().uuidString,
                     kind: "polySpline",
@@ -2586,10 +2634,11 @@ import SwiftCAD
                     patches: [
                         SurfaceSourceSummaryResult.Patch(
                             patchID: 0,
-                            facePersistentName: "feature:a/generated:polySpline/subshape:patch:0:face",
+                            facePersistentName: surfaceCodecFacePersistentName,
                             faceSelectionComponentID: SelectionComponentID
-                                .generatedTopology("feature:a/generated:polySpline/subshape:patch:0:face")
+                                .generatedTopology(surfaceCodecFacePersistentName)
                                 .rawValue,
+                            faceSelectionReference: .surface(.whole(surfaceCodecReference)),
                             uDomain: SurfaceSourceSummaryResult.ParameterRange(lowerBound: 0.0, upperBound: 1.0),
                             vDomain: SurfaceSourceSummaryResult.ParameterRange(lowerBound: 0.0, upperBound: 1.0),
                             basis: SurfaceSourceSummaryResult.Basis(
@@ -2610,12 +2659,13 @@ import SwiftCAD
                                     role: "uMin:vMin",
                                     sourceVertexIndex: 0,
                                     point: SurfaceSourceSummaryResult.Point(x: 0.0, y: 0.0, z: 0.0),
-                                    generatedVertexPersistentName: "feature:a/generated:polySpline/subshape:patch:0:vertex:uMin:vMin",
+                                    generatedVertexPersistentName: surfaceCodecVertexPersistentName,
                                     selectionComponentID: SelectionComponentID
                                         .generatedTopology(
-                                            "feature:a/generated:polySpline/subshape:patch:0:vertex:uMin:vMin"
+                                            surfaceCodecVertexPersistentName
                                         )
-                                        .rawValue
+                                        .rawValue,
+                                    selectionReference: surfaceCodecControlPointReference
                                 ),
                             ],
                             trimLoops: [
@@ -2626,12 +2676,28 @@ import SwiftCAD
                                     ],
                                     sourceVertexIndices: [0, 1, 2, 3],
                                     edgePersistentNames: [
-                                        "feature:a/generated:polySpline/subshape:patch:0:edge:vMin",
+                                        surfaceCodecEdgePersistentName,
+                                    ],
+                                    selectionReferences: [
+                                        .surface(.trim(SurfaceTrimReference(
+                                            surface: surfaceCodecReference,
+                                            loopIndex: 0,
+                                            edgeIndex: 0
+                                        ))),
                                     ]
                                 ),
                             ],
                             parameterAddresses: [
-                                SurfaceSourceSummaryResult.ParameterAddress(id: "center", u: 0.5, v: 0.5),
+                                SurfaceSourceSummaryResult.ParameterAddress(
+                                    id: "center",
+                                    u: 0.5,
+                                    v: 0.5,
+                                    selectionReference: .surface(.parameter(SurfaceParameterReference(
+                                        surface: surfaceCodecReference,
+                                        u: 0.5,
+                                        v: 0.5
+                                    )))
+                                ),
                             ]
                         ),
                     ],
@@ -2860,6 +2926,8 @@ import SwiftCAD
     #expect(try codec.decodeResponse(from: try codec.encode(evaluateResponse)) == evaluateResponse)
     #expect(try codec.decodeRequest(from: try codec.encode(measureRequest)) == measureRequest)
     #expect(try codec.decodeResponse(from: try codec.encode(measureResponse)) == measureResponse)
+    #expect(try codec.decodeRequest(from: try codec.encode(selectionMeasurementRequest)) == selectionMeasurementRequest)
+    #expect(try codec.decodeResponse(from: try codec.encode(selectionMeasurementResponse)) == selectionMeasurementResponse)
     #expect(try codec.decodeRequest(from: try codec.encode(meshRequest)) == meshRequest)
     #expect(try codec.decodeResponse(from: try codec.encode(meshResponse)) == meshResponse)
     #expect(try codec.decodeRequest(from: try codec.encode(sketchRequest)) == sketchRequest)
@@ -4174,7 +4242,23 @@ import SwiftCAD
     #expect(patch.controlVertices.allSatisfy {
         $0.selectionComponentID.hasPrefix(SelectionComponentID.generatedTopologyPrefix)
     })
+    let firstControlVertex = try #require(patch.controlVertices.first)
+    let measurementResponse = server.handle(
+        .selectionMeasurement(
+            sessionID: sessionID,
+            query: CADAgentMeasurementQuery(kind: .point, first: firstControlVertex.selectionReference),
+            expectedGeneration: generation
+        )
+    )
+    guard case .selectionMeasurement(.point(let measuredPoint)) = measurementResponse else {
+        Issue.record("Agent must measure a discovered surface control-point selection reference.")
+        return
+    }
+    #expect(abs(measuredPoint.point.x - firstControlVertex.point.x) <= 1.0e-12)
+    #expect(abs(measuredPoint.point.y - firstControlVertex.point.y) <= 1.0e-12)
+    #expect(abs(measuredPoint.point.z - firstControlVertex.point.z) <= 1.0e-12)
     #expect(patch.trimLoops.first?.edgePersistentNames.count == 4)
+    #expect(patch.trimLoops.first?.selectionReferences.count == 4)
     let adjacency = try #require(source.adjacencies.first)
     #expect(adjacency.continuityLevel == "tangentPlane")
     #expect(adjacency.requiresCurvatureContinuitySolve == false)

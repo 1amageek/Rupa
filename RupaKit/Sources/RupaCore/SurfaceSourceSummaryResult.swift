@@ -1,3 +1,5 @@
+import SwiftCAD
+
 public struct SurfaceSourceSummaryResult: Codable, Equatable, Sendable {
     public struct Counts: Codable, Equatable, Sendable {
         public var sourceCount: Int
@@ -147,11 +149,18 @@ public struct SurfaceSourceSummaryResult: Codable, Equatable, Sendable {
         public var id: String
         public var u: Double
         public var v: Double
+        public var selectionReference: SelectionReference?
 
-        public init(id: String, u: Double, v: Double) {
+        public init(
+            id: String,
+            u: Double,
+            v: Double,
+            selectionReference: SelectionReference? = nil
+        ) {
             self.id = id
             self.u = u
             self.v = v
+            self.selectionReference = selectionReference
         }
     }
 
@@ -162,6 +171,7 @@ public struct SurfaceSourceSummaryResult: Codable, Equatable, Sendable {
         public var point: Point
         public var generatedVertexPersistentName: String
         public var selectionComponentID: String
+        public var selectionReference: SelectionReference
 
         public init(
             id: String,
@@ -169,7 +179,8 @@ public struct SurfaceSourceSummaryResult: Codable, Equatable, Sendable {
             sourceVertexIndex: Int,
             point: Point,
             generatedVertexPersistentName: String,
-            selectionComponentID: String
+            selectionComponentID: String,
+            selectionReference: SelectionReference
         ) {
             self.id = id
             self.role = role
@@ -177,6 +188,7 @@ public struct SurfaceSourceSummaryResult: Codable, Equatable, Sendable {
             self.point = point
             self.generatedVertexPersistentName = generatedVertexPersistentName
             self.selectionComponentID = selectionComponentID
+            self.selectionReference = selectionReference
         }
     }
 
@@ -185,17 +197,20 @@ public struct SurfaceSourceSummaryResult: Codable, Equatable, Sendable {
         public var parameterAddresses: [ParameterAddress]
         public var sourceVertexIndices: [Int]
         public var edgePersistentNames: [String]
+        public var selectionReferences: [SelectionReference]
 
         public init(
             role: String,
             parameterAddresses: [ParameterAddress],
             sourceVertexIndices: [Int],
-            edgePersistentNames: [String]
+            edgePersistentNames: [String],
+            selectionReferences: [SelectionReference] = []
         ) {
             self.role = role
             self.parameterAddresses = parameterAddresses
             self.sourceVertexIndices = sourceVertexIndices
             self.edgePersistentNames = edgePersistentNames
+            self.selectionReferences = selectionReferences
         }
     }
 
@@ -203,6 +218,7 @@ public struct SurfaceSourceSummaryResult: Codable, Equatable, Sendable {
         public var patchID: Int
         public var facePersistentName: String?
         public var faceSelectionComponentID: String?
+        public var faceSelectionReference: SelectionReference?
         public var uDomain: ParameterRange
         public var vDomain: ParameterRange
         public var basis: Basis
@@ -214,6 +230,7 @@ public struct SurfaceSourceSummaryResult: Codable, Equatable, Sendable {
             patchID: Int,
             facePersistentName: String?,
             faceSelectionComponentID: String?,
+            faceSelectionReference: SelectionReference?,
             uDomain: ParameterRange,
             vDomain: ParameterRange,
             basis: Basis,
@@ -224,6 +241,7 @@ public struct SurfaceSourceSummaryResult: Codable, Equatable, Sendable {
             self.patchID = patchID
             self.facePersistentName = facePersistentName
             self.faceSelectionComponentID = faceSelectionComponentID
+            self.faceSelectionReference = faceSelectionReference
             self.uDomain = uDomain
             self.vDomain = vDomain
             self.basis = basis

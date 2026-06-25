@@ -31,6 +31,7 @@ public struct AgentCapabilityDescriptor: Codable, Equatable, Sendable {
         case surfaceContinuitySummary
         case meshSummary
         case polySplineMeshAnalysis
+        case selectionMeasurement
         case objectDimensionSummary
         case selectionDimensionEvaluation
         case measurement
@@ -51,6 +52,9 @@ public struct AgentCapabilityDescriptor: Codable, Equatable, Sendable {
         case face
         case edge
         case vertex
+        case surface
+        case surfaceControlPoint
+        case surfaceTrim
         case region
         case sketchEntity
         case sketchPointHandle
