@@ -403,6 +403,7 @@ public struct DesignDisplaySnapshotService: Sendable {
                 name: source.name,
                 definitionID: source.definitionID,
                 definitionName: definition?.name,
+                definitionIdentity: source.definitionIdentity,
                 distribution: source.distribution,
                 outputMode: source.outputMode,
                 rootSceneNodeID: source.rootSceneNodeID,

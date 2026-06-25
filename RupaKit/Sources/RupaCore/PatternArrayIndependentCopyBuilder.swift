@@ -205,7 +205,8 @@ struct PatternArrayIndependentCopyBuilder: Sendable {
         cadDocument: CADDocument,
         outputIndex: Int
     ) throws -> [FeatureNode] {
-        try sourceFeatureIDs.map { sourceFeatureID in
+        let remapper = PatternArrayFeatureIDRemapper(featureIDMap: featureIDMap)
+        return try sourceFeatureIDs.map { sourceFeatureID in
             guard var feature = cadDocument.designGraph.nodes[sourceFeatureID],
                   let clonedFeatureID = featureIDMap[sourceFeatureID] else {
                 throw EditorError(
@@ -217,21 +218,9 @@ struct PatternArrayIndependentCopyBuilder: Sendable {
             if let name = feature.name {
                 feature.name = "\(name) Copy \(outputIndex + 1)"
             }
-            feature.inputs = try feature.inputs.map { input in
-                FeatureInput(
-                    featureID: try remappedFeatureID(input.featureID, using: featureIDMap),
-                    role: input.role
-                )
-            }
-            feature.outputs = try feature.outputs.map { output in
-                FeatureOutput(
-                    role: output.role,
-                    persistentName: try output.persistentName.map {
-                        try remappedPersistentName($0, using: featureIDMap)
-                    }
-                )
-            }
-            feature.operation = try remappedOperation(feature.operation, using: featureIDMap)
+            feature.inputs = try feature.inputs.map(remapper.remappedInput)
+            feature.outputs = try feature.outputs.map(remapper.remappedOutput)
+            feature.operation = try remapper.remappedOperation(feature.operation)
             return feature
         }
     }
@@ -303,22 +292,23 @@ struct PatternArrayIndependentCopyBuilder: Sendable {
         _ reference: SceneNodeReference,
         using featureIDMap: [FeatureID: FeatureID]
     ) throws -> SceneNodeReference {
+        let remapper = PatternArrayFeatureIDRemapper(featureIDMap: featureIDMap)
         switch reference.kind {
         case .feature:
             guard let featureID = reference.featureID else {
                 throw EditorError(code: .commandInvalid, message: "Feature scene references require a feature ID.")
             }
-            return .feature(try remappedFeatureID(featureID, using: featureIDMap))
+            return .feature(try remapper.remappedFeatureID(featureID))
         case .body:
             guard let featureID = reference.featureID else {
                 throw EditorError(code: .commandInvalid, message: "Body scene references require a feature ID.")
             }
-            return .body(try remappedFeatureID(featureID, using: featureIDMap))
+            return .body(try remapper.remappedFeatureID(featureID))
         case .sketch:
             guard let featureID = reference.featureID else {
                 throw EditorError(code: .commandInvalid, message: "Sketch scene references require a feature ID.")
             }
-            return .sketch(try remappedFeatureID(featureID, using: featureIDMap))
+            return .sketch(try remapper.remappedFeatureID(featureID))
         case .componentInstance:
             throw EditorError(
                 code: .commandInvalid,
@@ -333,6 +323,7 @@ struct PatternArrayIndependentCopyBuilder: Sendable {
         _ object: ObjectDescriptor,
         using featureIDMap: [FeatureID: FeatureID]
     ) throws -> ObjectDescriptor {
+        let remapper = PatternArrayFeatureIDRemapper(featureIDMap: featureIDMap)
         guard object.category != .componentInstance else {
             throw EditorError(
                 code: .commandInvalid,
@@ -341,165 +332,12 @@ struct PatternArrayIndependentCopyBuilder: Sendable {
         }
         var clonedObject = object
         if let sourceFeatureID = object.sourceFeatureID {
-            clonedObject.sourceFeatureID = try remappedFeatureID(sourceFeatureID, using: featureIDMap)
+            clonedObject.sourceFeatureID = try remapper.remappedFeatureID(sourceFeatureID)
         }
         if let sourceProfileFeatureID = object.sourceProfileFeatureID {
-            clonedObject.sourceProfileFeatureID = try remappedFeatureID(
-                sourceProfileFeatureID,
-                using: featureIDMap
-            )
+            clonedObject.sourceProfileFeatureID = try remapper.remappedFeatureID(sourceProfileFeatureID)
         }
         return clonedObject
-    }
-
-    private func remappedOperation(
-        _ operation: FeatureOperation,
-        using featureIDMap: [FeatureID: FeatureID]
-    ) throws -> FeatureOperation {
-        switch operation {
-        case .sketch:
-            return operation
-        case .extrude(var extrude):
-            extrude.profile = try remappedProfileReference(extrude.profile, using: featureIDMap)
-            return .extrude(extrude)
-        case .revolve(var revolve):
-            revolve.profile = try remappedProfileReference(revolve.profile, using: featureIDMap)
-            return .revolve(revolve)
-        case .sweep(var sweep):
-            sweep.profiles = try sweep.profiles.map {
-                try remappedProfileReference($0, using: featureIDMap)
-            }
-            sweep.path = SweepPathReference(
-                featureID: try remappedFeatureID(sweep.path.featureID, using: featureIDMap)
-            )
-            sweep.guides = try sweep.guides.map {
-                SweepGuideReference(featureID: try remappedFeatureID($0.featureID, using: featureIDMap))
-            }
-            sweep.targets = try sweep.targets.map {
-                SweepTargetReference(featureID: try remappedFeatureID($0.featureID, using: featureIDMap))
-            }
-            return .sweep(sweep)
-        case .polySpline:
-            return operation
-        case .faceLoopOffset(var faceLoopOffset):
-            faceLoopOffset.target = FaceLoopOffsetTargetReference(
-                featureID: try remappedFeatureID(faceLoopOffset.target.featureID, using: featureIDMap)
-            )
-            faceLoopOffset.facePersistentName = try remappedPersistentName(
-                faceLoopOffset.facePersistentName,
-                using: featureIDMap
-            )
-            return .faceLoopOffset(faceLoopOffset)
-        case .edgeOffset(var edgeOffset):
-            edgeOffset.target = EdgeOffsetTargetReference(
-                featureID: try remappedFeatureID(edgeOffset.target.featureID, using: featureIDMap)
-            )
-            edgeOffset.edgePersistentName = try remappedPersistentName(
-                edgeOffset.edgePersistentName,
-                using: featureIDMap
-            )
-            edgeOffset.supportFacePersistentName = try remappedPersistentName(
-                edgeOffset.supportFacePersistentName,
-                using: featureIDMap
-            )
-            return .edgeOffset(edgeOffset)
-        case .faceKnife(var faceKnife):
-            faceKnife.target = FaceKnifeTargetReference(
-                featureID: try remappedFeatureID(faceKnife.target.featureID, using: featureIDMap)
-            )
-            faceKnife.facePersistentName = try remappedPersistentName(
-                faceKnife.facePersistentName,
-                using: featureIDMap
-            )
-            return .faceKnife(faceKnife)
-        case .bridgeCurve:
-            return operation
-        case .curveEdit(var curveEdit):
-            curveEdit.source = try remappedCurveOutputReference(curveEdit.source, using: featureIDMap)
-            curveEdit.edits = try curveEdit.edits.map {
-                try remappedCurveEdit($0, using: featureIDMap)
-            }
-            return .curveEdit(curveEdit)
-        case .curveOffset(var curveOffset):
-            curveOffset.source = try remappedCurveOutputReference(curveOffset.source, using: featureIDMap)
-            return .curveOffset(curveOffset)
-        case .curveTrim(var curveTrim):
-            curveTrim.source = try remappedCurveOutputReference(curveTrim.source, using: featureIDMap)
-            return .curveTrim(curveTrim)
-        }
-    }
-
-    private func remappedProfileReference(
-        _ reference: ProfileReference,
-        using featureIDMap: [FeatureID: FeatureID]
-    ) throws -> ProfileReference {
-        ProfileReference(
-            featureID: try remappedFeatureID(reference.featureID, using: featureIDMap),
-            profileIndex: reference.profileIndex
-        )
-    }
-
-    private func remappedCurveEdit(
-        _ edit: CurveEdit,
-        using featureIDMap: [FeatureID: FeatureID]
-    ) throws -> CurveEdit {
-        switch edit {
-        case .setControlPoint(var controlPointEdit):
-            controlPointEdit.target = CurveControlPointReference(
-                curve: try remappedCurveOutputReference(controlPointEdit.target.curve, using: featureIDMap),
-                controlPointIndex: controlPointEdit.target.controlPointIndex
-            )
-            return .setControlPoint(controlPointEdit)
-        case .setKnot(var knotEdit):
-            knotEdit.target = CurveKnotReference(
-                curve: try remappedCurveOutputReference(knotEdit.target.curve, using: featureIDMap),
-                knotIndex: knotEdit.target.knotIndex
-            )
-            return .setKnot(knotEdit)
-        case .setWeight(var weightEdit):
-            weightEdit.target = CurveControlPointReference(
-                curve: try remappedCurveOutputReference(weightEdit.target.curve, using: featureIDMap),
-                controlPointIndex: weightEdit.target.controlPointIndex
-            )
-            return .setWeight(weightEdit)
-        }
-    }
-
-    private func remappedCurveOutputReference(
-        _ reference: CurveOutputReference,
-        using featureIDMap: [FeatureID: FeatureID]
-    ) throws -> CurveOutputReference {
-        CurveOutputReference(
-            featureID: try remappedFeatureID(reference.featureID, using: featureIDMap),
-            curveIndex: reference.curveIndex
-        )
-    }
-
-    private func remappedPersistentName(
-        _ name: PersistentName,
-        using featureIDMap: [FeatureID: FeatureID]
-    ) throws -> PersistentName {
-        PersistentName(components: try name.components.map { component in
-            switch component {
-            case .feature(let featureID):
-                return .feature(try remappedFeatureID(featureID, using: featureIDMap))
-            case .generated, .subshape, .index:
-                return component
-            }
-        })
-    }
-
-    private func remappedFeatureID(
-        _ featureID: FeatureID,
-        using featureIDMap: [FeatureID: FeatureID]
-    ) throws -> FeatureID {
-        guard let remapped = featureIDMap[featureID] else {
-            throw EditorError(
-                code: .commandInvalid,
-                message: "Independent-copy pattern arrays can only reference cloned source feature dependencies."
-            )
-        }
-        return remapped
     }
 
     private func removeSceneSubtrees(

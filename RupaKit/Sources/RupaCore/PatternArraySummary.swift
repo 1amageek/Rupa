@@ -105,6 +105,7 @@ public struct PatternArraySummary: Codable, Equatable, Sendable {
     public var name: String
     public var definitionID: ComponentDefinitionID
     public var definitionName: String?
+    public var definitionIdentity: PatternArrayDefinitionIdentity?
     public var rootSceneNodeID: SceneNodeID
     public var rootSceneNodeName: String?
     public var distributionKind: DistributionKind
@@ -124,6 +125,7 @@ public struct PatternArraySummary: Codable, Equatable, Sendable {
         name: String,
         definitionID: ComponentDefinitionID,
         definitionName: String?,
+        definitionIdentity: PatternArrayDefinitionIdentity? = nil,
         rootSceneNodeID: SceneNodeID,
         rootSceneNodeName: String?,
         distributionKind: DistributionKind,
@@ -142,6 +144,7 @@ public struct PatternArraySummary: Codable, Equatable, Sendable {
         self.name = name
         self.definitionID = definitionID
         self.definitionName = definitionName
+        self.definitionIdentity = definitionIdentity
         self.rootSceneNodeID = rootSceneNodeID
         self.rootSceneNodeName = rootSceneNodeName
         self.distributionKind = distributionKind

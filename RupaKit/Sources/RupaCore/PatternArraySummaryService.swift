@@ -58,6 +58,7 @@ public struct PatternArraySummaryService: Sendable {
             name: source.name,
             definitionID: source.definitionID,
             definitionName: definition?.name,
+            definitionIdentity: source.definitionIdentity,
             rootSceneNodeID: source.rootSceneNodeID,
             rootSceneNodeName: rootSceneNode?.name,
             distributionKind: distributionKind(for: source.distribution),
@@ -78,25 +79,6 @@ public struct PatternArraySummaryService: Sendable {
         var sourceIDsByOutputInstanceID: [ComponentInstanceID: [PatternArraySourceID]]
         var sourceIDsByOutputSceneNodeID: [SceneNodeID: [PatternArraySourceID]]
         var sourceIDsByOutputFeatureID: [FeatureID: [PatternArraySourceID]]
-    }
-
-    private struct FeatureStructurePayload: Encodable {
-        var operation: FeatureOperation
-        var inputs: [FeatureInput]
-        var outputs: [FeatureOutput]
-        var isSuppressed: Bool
-
-        init(feature: FeatureNode) {
-            operation = feature.operation
-            inputs = feature.inputs
-            outputs = feature.outputs
-            isSuppressed = feature.isSuppressed
-        }
-    }
-
-    private enum FeatureStructureFingerprintError: Error {
-        case missingFeature
-        case invalidEncoding
     }
 
     private func outputOwnershipIndex(
@@ -253,15 +235,13 @@ public struct PatternArraySummaryService: Sendable {
             return .unresolved
         }
         do {
-            let sourceFingerprints = try featureStructureFingerprints(
+            let sourceFingerprints = try PatternArrayFeatureStructureFingerprintService().fingerprints(
                 featureIDs: sourceFeatureIDs,
-                cadDocument: cadDocument,
-                featureTokenByID: featureTokenMap(for: sourceFeatureIDs)
+                cadDocument: cadDocument
             )
-            let outputFingerprints = try featureStructureFingerprints(
+            let outputFingerprints = try PatternArrayFeatureStructureFingerprintService().fingerprints(
                 featureIDs: outputFeatureIDs,
-                cadDocument: cadDocument,
-                featureTokenByID: featureTokenMap(for: outputFeatureIDs)
+                cadDocument: cadDocument
             )
             return sourceFingerprints == outputFingerprints
                 ? .matchesSourceDefinition
@@ -280,53 +260,6 @@ public struct PatternArraySummaryService: Sendable {
         case .unresolved:
             .unavailable
         }
-    }
-
-    private func featureStructureFingerprints(
-        featureIDs: [FeatureID],
-        cadDocument: CADDocument,
-        featureTokenByID: [FeatureID: String]
-    ) throws -> [String] {
-        try featureIDs.map { featureID in
-            guard let feature = cadDocument.designGraph.nodes[featureID] else {
-                throw FeatureStructureFingerprintError.missingFeature
-            }
-            return try stableEncodedString(
-                FeatureStructurePayload(feature: feature),
-                featureTokenByID: featureTokenByID
-            )
-        }
-    }
-
-    private func featureTokenMap(
-        for featureIDs: [FeatureID]
-    ) -> [FeatureID: String] {
-        Dictionary(
-            uniqueKeysWithValues: featureIDs.enumerated().map { offset, featureID in
-                (featureID, "feature-token-\(offset)")
-            }
-        )
-    }
-
-    private func stableEncodedString<T: Encodable>(
-        _ value: T,
-        featureTokenByID: [FeatureID: String]
-    ) throws -> String {
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.sortedKeys]
-        let data = try encoder.encode(value)
-        guard var encoded = String(data: data, encoding: .utf8) else {
-            throw FeatureStructureFingerprintError.invalidEncoding
-        }
-        for (featureID, token) in featureTokenByID.sorted(by: { lhs, rhs in
-            lhs.key.description < rhs.key.description
-        }) {
-            encoded = encoded.replacingOccurrences(
-                of: featureID.description,
-                with: token
-            )
-        }
-        return encoded
     }
 
     private func diagnostics(
@@ -551,6 +484,12 @@ public struct PatternArraySummaryService: Sendable {
                 to: &diagnostics
             )
         }
+        independentCopyDefinitionIdentityDiagnostics(
+            for: source,
+            metadata: metadata,
+            cadDocument: cadDocument,
+            diagnostics: &diagnostics
+        )
         if !source.outputInstanceIDs.isEmpty {
             appendDiagnostic(
                 code: "mixedIndependentCopyOutputs",
@@ -657,6 +596,45 @@ public struct PatternArraySummaryService: Sendable {
             appendDiagnostic(
                 code: "independentCopyFeatureClosureMismatch",
                 message: "Independent-copy pattern array output features must exactly match generated output dependencies.",
+                to: &diagnostics
+            )
+        }
+    }
+
+    private func independentCopyDefinitionIdentityDiagnostics(
+        for source: PatternArraySource,
+        metadata: ProductMetadata,
+        cadDocument: CADDocument,
+        diagnostics: inout [PatternArraySummary.Diagnostic]
+    ) {
+        guard let definition = metadata.componentDefinitions[source.definitionID] else {
+            return
+        }
+        guard let storedIdentity = source.definitionIdentity else {
+            appendDiagnostic(
+                code: "missingIndependentCopyDefinitionIdentity",
+                message: "Independent-copy pattern array source must record the definition identity used to generate outputs.",
+                to: &diagnostics
+            )
+            return
+        }
+        do {
+            let currentIdentity = try PatternArrayDefinitionIdentityService().identity(
+                for: definition,
+                metadata: metadata,
+                cadDocument: cadDocument
+            )
+            if storedIdentity != currentIdentity {
+                appendDiagnostic(
+                    code: "independentCopyDefinitionIdentityMismatch",
+                    message: "Independent-copy pattern array outputs were generated from an older component definition identity.",
+                    to: &diagnostics
+                )
+            }
+        } catch {
+            appendDiagnostic(
+                code: "invalidIndependentCopyDefinitionIdentity",
+                message: error.localizedDescription,
                 to: &diagnostics
             )
         }

@@ -134,6 +134,7 @@ import Testing
     #expect(patternArray.name == "Display Array")
     #expect(patternArray.definitionID == definition.id)
     #expect(patternArray.definitionName == "Display Array Source")
+    #expect(patternArray.definitionIdentity == nil)
     #expect(patternArray.rootSceneNodeID == source.rootSceneNodeID)
     #expect(patternArray.outputMode == .componentInstance)
     #expect(patternArray.outputCount == source.outputInstanceIDs.count)
@@ -213,6 +214,8 @@ import Testing
     let secondOutput = try #require(patternArray.outputs.dropFirst().first)
 
     #expect(patternArray.outputMode == .independentCopy)
+    #expect(patternArray.definitionIdentity == source.definitionIdentity)
+    #expect(patternArray.definitionIdentity != nil)
     #expect(patternArray.outputs.count == 2)
     #expect(firstOutput.sceneNodeID == firstOutputSceneNodeID)
     #expect(firstOutput.featureIDs.contains(firstCloneBodyFeatureID))

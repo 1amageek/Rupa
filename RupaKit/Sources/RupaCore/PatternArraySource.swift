@@ -277,6 +277,7 @@ public struct PatternArraySource: Codable, Hashable, Identifiable, Sendable {
     public var outputInstanceIDs: [ComponentInstanceID]
     public var outputSceneNodeIDs: [SceneNodeID]
     public var outputFeatureIDs: [FeatureID]
+    public var definitionIdentity: PatternArrayDefinitionIdentity?
     public var rootSceneNodeID: SceneNodeID
 
     public init(
@@ -288,6 +289,7 @@ public struct PatternArraySource: Codable, Hashable, Identifiable, Sendable {
         outputInstanceIDs: [ComponentInstanceID] = [],
         outputSceneNodeIDs: [SceneNodeID] = [],
         outputFeatureIDs: [FeatureID] = [],
+        definitionIdentity: PatternArrayDefinitionIdentity? = nil,
         rootSceneNodeID: SceneNodeID
     ) {
         self.id = id
@@ -298,6 +300,7 @@ public struct PatternArraySource: Codable, Hashable, Identifiable, Sendable {
         self.outputInstanceIDs = outputInstanceIDs
         self.outputSceneNodeIDs = outputSceneNodeIDs
         self.outputFeatureIDs = outputFeatureIDs
+        self.definitionIdentity = definitionIdentity
         self.rootSceneNodeID = rootSceneNodeID
     }
 
@@ -320,6 +323,11 @@ public struct PatternArraySource: Codable, Hashable, Identifiable, Sendable {
                     "Component-instance pattern array sources must not own direct scene nodes or cloned features."
                 )
             }
+            guard definitionIdentity == nil else {
+                throw DocumentValidationError.invalidProductMetadata(
+                    "Component-instance pattern array sources must not store independent-copy definition identity."
+                )
+            }
         case .independentCopy:
             guard !outputSceneNodeIDs.isEmpty else {
                 throw DocumentValidationError.invalidProductMetadata(
@@ -334,6 +342,11 @@ public struct PatternArraySource: Codable, Hashable, Identifiable, Sendable {
             guard outputInstanceIDs.isEmpty else {
                 throw DocumentValidationError.invalidProductMetadata(
                     "Independent-copy pattern array sources must not own component instances."
+                )
+            }
+            guard definitionIdentity != nil else {
+                throw DocumentValidationError.invalidProductMetadata(
+                    "Independent-copy pattern array sources must store their generated definition identity."
                 )
             }
         }

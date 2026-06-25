@@ -16022,7 +16022,7 @@ public struct DesignDocument: Identifiable, Sendable {
                 message: "Pattern array regeneration requires an existing pattern source."
             )
         }
-        guard metadata.componentDefinitions[source.definitionID] != nil else {
+        guard let definition = metadata.componentDefinitions[source.definitionID] else {
             throw EditorError(
                 code: .referenceUnresolved,
                 message: "Pattern array regeneration requires an existing component definition."
@@ -16058,6 +16058,7 @@ public struct DesignDocument: Identifiable, Sendable {
             )
             source.outputSceneNodeIDs = []
             source.outputFeatureIDs = []
+            source.definitionIdentity = nil
             try synchronizePatternArrayComponentInstanceOutputs(
                 source: &source,
                 rootNode: &rootNode,
@@ -16070,15 +16071,15 @@ public struct DesignDocument: Identifiable, Sendable {
                 rootNode: rootNode,
                 metadata: &metadata
             )
-            guard let definition = metadata.componentDefinitions[source.definitionID] else {
-                throw EditorError(
-                    code: .referenceUnresolved,
-                    message: "Pattern array regeneration requires an existing component definition."
-                )
-            }
+            let definitionIdentity = try PatternArrayDefinitionIdentityService().identity(
+                for: definition,
+                metadata: metadata,
+                cadDocument: cadDocument
+            )
             let reuseCandidate = previousSource ?? source
             let canReuseIndependentCopies = reuseCandidate.outputMode == .independentCopy &&
-                reuseCandidate.definitionID == source.definitionID
+                reuseCandidate.definitionID == source.definitionID &&
+                reuseCandidate.definitionIdentity == definitionIdentity
             if canReuseIndependentCopies {
                 try synchronizePatternArrayIndependentCopyOutputs(
                     source: &source,
@@ -16107,6 +16108,7 @@ public struct DesignDocument: Identifiable, Sendable {
                 metadata.sceneNodes[source.rootSceneNodeID] = rootNode
             }
             source.outputInstanceIDs = []
+            source.definitionIdentity = definitionIdentity
         }
 
         metadata.patternArrays[sourceID] = source

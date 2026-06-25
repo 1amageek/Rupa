@@ -4819,6 +4819,103 @@ import Testing
 }
 
 @MainActor
+@Test func independentPatternArrayRegenerationRebuildsWhenDefinitionIdentityChanges() async throws {
+    let session = EditorSession()
+    _ = try #require(session.createDefaultExtrudedRectangle())
+    let firstBodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let firstBodySceneNodeID = try #require(
+        commandStackBodySceneNodeID(for: firstBodyFeatureID, in: session.document)
+    )
+    _ = try #require(
+        session.createExtrudedRectangleFromCanvasClick(
+            centerModelPoint: Point2D(x: 0.08, y: 0.0)
+        )
+    )
+    let secondBodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let secondBodySceneNodeID = try #require(
+        commandStackBodySceneNodeID(for: secondBodyFeatureID, in: session.document)
+    )
+    _ = try session.execute(
+        .createComponentDefinition(
+            name: "Definition Identity Source",
+            rootSceneNodeIDs: [firstBodySceneNodeID]
+        )
+    )
+    let definition = try #require(session.document.productMetadata.componentDefinitions.values.first {
+        $0.name == "Definition Identity Source"
+    })
+    _ = try session.execute(
+        .createPatternArray(
+            name: "Definition Identity Array",
+            definitionID: definition.id,
+            distribution: .rectangular(RectangularPatternArray(
+                firstAxis: PatternArrayLinearAxis(
+                    direction: .unitX,
+                    distance: .length(8.0, .millimeter),
+                    copyCount: 2
+                )
+            )),
+            outputMode: .independentCopy
+        )
+    )
+    let source = try #require(session.document.productMetadata.patternArrays.values.first {
+        $0.name == "Definition Identity Array"
+    })
+    let initialDefinitionIdentity = try #require(source.definitionIdentity)
+    let initialOutputSceneNodeIDs = source.outputSceneNodeIDs
+    let initialOutputFeatureIDs = source.outputFeatureIDs
+    let firstOutputSceneNodeID = try #require(initialOutputSceneNodeIDs.first)
+    let firstCloneBodyFeatureID = try #require(
+        commandStackBodyFeatureID(
+            inSceneSubtreeRootedAt: firstOutputSceneNodeID,
+            document: session.document
+        )
+    )
+    _ = try session.execute(
+        .setExtrudeDistance(
+            featureID: firstCloneBodyFeatureID,
+            distance: .length(7.0, .millimeter)
+        )
+    )
+
+    var metadata = session.document.productMetadata
+    metadata.componentDefinitions[definition.id]?.rootSceneNodeIDs = [secondBodySceneNodeID]
+    _ = try session.execute(.replaceProductMetadata(metadata))
+    let staleSummary = PatternArraySummaryService().summarize(
+        document: session.document,
+        generation: session.generation,
+        dirty: session.isDirty
+    )
+    let staleCodes = Set(try #require(staleSummary.patternArrays.first).diagnostics.map(\.code))
+
+    _ = try session.execute(
+        .updatePatternArray(
+            id: source.id,
+            name: nil,
+            definitionID: nil,
+            distribution: .rectangular(RectangularPatternArray(
+                firstAxis: PatternArrayLinearAxis(
+                    direction: .unitX,
+                    distance: .length(12.0, .millimeter),
+                    copyCount: 2
+                )
+            )),
+            outputMode: nil
+        )
+    )
+
+    let updatedSource = try #require(session.document.productMetadata.patternArrays[source.id])
+    let updatedDefinitionIdentity = try #require(updatedSource.definitionIdentity)
+
+    #expect(staleCodes.contains("independentCopyDefinitionIdentityMismatch"))
+    #expect(updatedDefinitionIdentity != initialDefinitionIdentity)
+    #expect(updatedSource.outputSceneNodeIDs != initialOutputSceneNodeIDs)
+    #expect(updatedSource.outputFeatureIDs != initialOutputFeatureIDs)
+    #expect(!updatedSource.outputFeatureIDs.contains(firstCloneBodyFeatureID))
+    #expect(session.document.cadDocument.designGraph.nodes[firstCloneBodyFeatureID] == nil)
+}
+
+@MainActor
 @Test func rectangularPatternArrayRejectsDeletingReferencedPatternParameterBeforeMutation() async throws {
     let session = EditorSession()
     _ = try #require(session.createDefaultExtrudedRectangle())

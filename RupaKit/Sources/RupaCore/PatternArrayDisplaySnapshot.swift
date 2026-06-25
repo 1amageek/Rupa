@@ -39,6 +39,7 @@ public struct PatternArrayDisplaySnapshot: Codable, Equatable, Sendable {
     public var name: String
     public var definitionID: ComponentDefinitionID
     public var definitionName: String?
+    public var definitionIdentity: PatternArrayDefinitionIdentity?
     public var distribution: PatternArrayDistribution
     public var outputMode: PatternArrayOutputMode
     public var rootSceneNodeID: SceneNodeID
@@ -52,6 +53,7 @@ public struct PatternArrayDisplaySnapshot: Codable, Equatable, Sendable {
         name: String,
         definitionID: ComponentDefinitionID,
         definitionName: String?,
+        definitionIdentity: PatternArrayDefinitionIdentity? = nil,
         distribution: PatternArrayDistribution,
         outputMode: PatternArrayOutputMode,
         rootSceneNodeID: SceneNodeID,
@@ -64,6 +66,7 @@ public struct PatternArrayDisplaySnapshot: Codable, Equatable, Sendable {
         self.name = name
         self.definitionID = definitionID
         self.definitionName = definitionName
+        self.definitionIdentity = definitionIdentity
         self.distribution = distribution
         self.outputMode = outputMode
         self.rootSceneNodeID = rootSceneNodeID
