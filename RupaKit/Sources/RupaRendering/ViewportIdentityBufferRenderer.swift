@@ -1,6 +1,7 @@
 import CoreGraphics
 import Foundation
 import Metal
+import RupaCore
 
 public enum ViewportIdentityBufferRendererError: Error, Equatable, Sendable {
     case invalidViewportSize
@@ -38,6 +39,8 @@ public struct ViewportIdentityBufferRenderMetrics: Codable, Equatable, Sendable 
     public var viewportHeight: Int
     public var encodedCommandCount: Int
     public var encodedPointCount: Int
+    public var encodedMeshPrimitiveCacheHitCount: Int
+    public var encodedMeshPrimitiveCacheMissCount: Int
     public var pixelCount: Int
     public var encodeDurationSeconds: Double
     public var gpuDurationSeconds: Double
@@ -49,6 +52,8 @@ public struct ViewportIdentityBufferRenderMetrics: Codable, Equatable, Sendable 
         viewportHeight: Int,
         encodedCommandCount: Int,
         encodedPointCount: Int,
+        encodedMeshPrimitiveCacheHitCount: Int = 0,
+        encodedMeshPrimitiveCacheMissCount: Int = 0,
         pixelCount: Int,
         encodeDurationSeconds: Double,
         gpuDurationSeconds: Double,
@@ -59,6 +64,8 @@ public struct ViewportIdentityBufferRenderMetrics: Codable, Equatable, Sendable 
         self.viewportHeight = viewportHeight
         self.encodedCommandCount = encodedCommandCount
         self.encodedPointCount = encodedPointCount
+        self.encodedMeshPrimitiveCacheHitCount = encodedMeshPrimitiveCacheHitCount
+        self.encodedMeshPrimitiveCacheMissCount = encodedMeshPrimitiveCacheMissCount
         self.pixelCount = pixelCount
         self.encodeDurationSeconds = encodeDurationSeconds
         self.gpuDurationSeconds = gpuDurationSeconds
@@ -172,6 +179,7 @@ public final class ViewportIdentityBufferRenderer {
     private let device: any MTLDevice
     private let commandQueue: any MTLCommandQueue
     private let pipelineState: any MTLComputePipelineState
+    private var commandEncoder: ViewportIdentityBufferCommandEncoder
 
     public init(device: (any MTLDevice)? = MTLCreateSystemDefaultDevice()) throws {
         guard let device else {
@@ -207,6 +215,7 @@ public final class ViewportIdentityBufferRenderer {
         self.device = device
         self.commandQueue = commandQueue
         self.pipelineState = pipelineState
+        self.commandEncoder = ViewportIdentityBufferCommandEncoder()
     }
 
     public func render(
@@ -216,8 +225,7 @@ public final class ViewportIdentityBufferRenderer {
         let totalStart = Self.timestamp()
         let size = try renderSize(for: viewportSize)
         let encodeStart = Self.timestamp()
-        let encodedPlan = try ViewportIdentityBufferCommandEncoder()
-            .encode(plan: plan)
+        let encodedPlan = try commandEncoder.encode(plan: plan)
         let encodeDurationSeconds = Self.duration(since: encodeStart)
         let commandBuffer = try makeCommandBuffer()
         let texture = try makeTexture(width: size.width, height: size.height)
@@ -273,6 +281,8 @@ public final class ViewportIdentityBufferRenderer {
             viewportHeight: size.height,
             encodedCommandCount: encodedPlan.commands.count,
             encodedPointCount: encodedPlan.points.count,
+            encodedMeshPrimitiveCacheHitCount: encodedPlan.meshPrimitiveCacheHitCount,
+            encodedMeshPrimitiveCacheMissCount: encodedPlan.meshPrimitiveCacheMissCount,
             pixelCount: size.width * size.height,
             encodeDurationSeconds: encodeDurationSeconds,
             gpuDurationSeconds: gpuDurationSeconds,
@@ -612,16 +622,79 @@ private struct ViewportIdentityMetalParameters {
     var padding: UInt32
 }
 
+private struct ViewportIdentityEncodedPlan {
+    var commands: [ViewportIdentityMetalCommand]
+    var points: [ViewportIdentityMetalPoint]
+    var meshPrimitiveCacheHitCount: Int
+    var meshPrimitiveCacheMissCount: Int
+}
+
+private struct ViewportIdentityEncodedPrimitive {
+    var kind: UInt32
+    var points: [ViewportIdentityMetalPoint]
+    var radius: Float
+}
+
+private struct ViewportIdentityMeshPrimitiveCacheKey: Hashable {
+    var storageIdentity: ViewportBodyMesh.StorageIdentity
+    var primitiveIndex: Int
+    var fingerprint: ViewportIdentityProjectedTriangleFingerprint
+}
+
+private struct ViewportIdentityProjectedTriangleFingerprint: Hashable {
+    var firstX: UInt64
+    var firstY: UInt64
+    var secondX: UInt64
+    var secondY: UInt64
+    var thirdX: UInt64
+    var thirdY: UInt64
+
+    init?(_ primitive: ViewportIdentityPickPrimitive) {
+        guard case .polygon(let points) = primitive,
+              points.count == 3 else {
+            return nil
+        }
+        self.firstX = Self.bitPattern(points[0].x)
+        self.firstY = Self.bitPattern(points[0].y)
+        self.secondX = Self.bitPattern(points[1].x)
+        self.secondY = Self.bitPattern(points[1].y)
+        self.thirdX = Self.bitPattern(points[2].x)
+        self.thirdY = Self.bitPattern(points[2].y)
+    }
+
+    private static func bitPattern(_ value: CGFloat) -> UInt64 {
+        Double(value).bitPattern
+    }
+}
+
+private struct ViewportIdentityEncodedPrimitiveCacheEntry {
+    var primitive: ViewportIdentityEncodedPrimitive
+    var lastUsedGeneration: UInt64
+}
+
 private struct ViewportIdentityBufferCommandEncoder {
-    func encode(plan: ViewportIdentityPickRenderPlan) throws -> (
-        commands: [ViewportIdentityMetalCommand],
-        points: [ViewportIdentityMetalPoint]
-    ) {
+    private var meshPrimitiveCache: [
+        ViewportIdentityMeshPrimitiveCacheKey: ViewportIdentityEncodedPrimitiveCacheEntry
+    ] = [:]
+    private var cacheGeneration: UInt64 = 0
+    private var maximumCachedMeshPrimitiveCount: Int = 16_384
+
+    mutating func encode(plan: ViewportIdentityPickRenderPlan) throws -> ViewportIdentityEncodedPlan {
+        advanceCacheGeneration()
         var commands: [ViewportIdentityMetalCommand] = []
         var points: [ViewportIdentityMetalPoint] = []
+        var cacheHitCount = 0
+        var cacheMissCount = 0
+        commands.reserveCapacity(plan.drawItems.count)
+        points.reserveCapacity(plan.encodedPointCount)
+
         for (order, item) in plan.drawItems.enumerated() {
             let pointStart = UInt32(points.count)
-            let encoded = encodePrimitive(item.primitive)
+            let encoded = encodedPrimitive(
+                for: item,
+                cacheHitCount: &cacheHitCount,
+                cacheMissCount: &cacheMissCount
+            )
             points.append(contentsOf: encoded.points)
             commands.append(
                 ViewportIdentityMetalCommand(
@@ -636,33 +709,115 @@ private struct ViewportIdentityBufferCommandEncoder {
                 )
             )
         }
-        return (commands, points)
+        return ViewportIdentityEncodedPlan(
+            commands: commands,
+            points: points,
+            meshPrimitiveCacheHitCount: cacheHitCount,
+            meshPrimitiveCacheMissCount: cacheMissCount
+        )
+    }
+
+    private mutating func advanceCacheGeneration() {
+        guard cacheGeneration < UInt64.max else {
+            cacheGeneration = 1
+            meshPrimitiveCache.removeAll(keepingCapacity: true)
+            return
+        }
+        cacheGeneration += 1
+    }
+
+    private mutating func encodedPrimitive(
+        for item: ViewportIdentityPickDrawItem,
+        cacheHitCount: inout Int,
+        cacheMissCount: inout Int
+    ) -> ViewportIdentityEncodedPrimitive {
+        guard let key = meshPrimitiveCacheKey(for: item) else {
+            return encodePrimitive(item.primitive)
+        }
+
+        if var entry = meshPrimitiveCache[key] {
+            entry.lastUsedGeneration = cacheGeneration
+            meshPrimitiveCache[key] = entry
+            cacheHitCount += 1
+            return entry.primitive
+        }
+
+        let encoded = encodePrimitive(item.primitive)
+        cacheMissCount += 1
+        store(encoded, for: key)
+        return encoded
+    }
+
+    private func meshPrimitiveCacheKey(
+        for item: ViewportIdentityPickDrawItem
+    ) -> ViewportIdentityMeshPrimitiveCacheKey? {
+        guard let storageIdentity = item.meshStorageIdentity,
+              let primitiveIndex = item.meshPrimitiveIndex,
+              let fingerprint = ViewportIdentityProjectedTriangleFingerprint(item.primitive) else {
+            return nil
+        }
+        return ViewportIdentityMeshPrimitiveCacheKey(
+            storageIdentity: storageIdentity,
+            primitiveIndex: primitiveIndex,
+            fingerprint: fingerprint
+        )
+    }
+
+    private mutating func store(
+        _ primitive: ViewportIdentityEncodedPrimitive,
+        for key: ViewportIdentityMeshPrimitiveCacheKey
+    ) {
+        guard maximumCachedMeshPrimitiveCount > 0 else {
+            return
+        }
+        if meshPrimitiveCache.count >= maximumCachedMeshPrimitiveCount {
+            evictLeastRecentlyUsedMeshPrimitives()
+        }
+        meshPrimitiveCache[key] = ViewportIdentityEncodedPrimitiveCacheEntry(
+            primitive: primitive,
+            lastUsedGeneration: cacheGeneration
+        )
+    }
+
+    private mutating func evictLeastRecentlyUsedMeshPrimitives() {
+        let evictionCount = max(maximumCachedMeshPrimitiveCount / 4, 1)
+        let targetCount = max(maximumCachedMeshPrimitiveCount - evictionCount, 0)
+        let removeCount = max(meshPrimitiveCache.count - targetCount, 1)
+        let keys = meshPrimitiveCache
+            .sorted { lhs, rhs in
+                lhs.value.lastUsedGeneration < rhs.value.lastUsedGeneration
+            }
+            .prefix(removeCount)
+            .map(\.key)
+        for key in keys {
+            meshPrimitiveCache.removeValue(forKey: key)
+        }
     }
 
     private func encodePrimitive(
         _ primitive: ViewportIdentityPickPrimitive
-    ) -> (kind: UInt32, points: [ViewportIdentityMetalPoint], radius: Float) {
+    ) -> ViewportIdentityEncodedPrimitive {
         switch primitive {
         case .polygon(let points):
-            return (
+            return ViewportIdentityEncodedPrimitive(
                 kind: 0,
                 points: points.map(metalPoint),
                 radius: 0.0
             )
         case .polyline(let points, let radius, let isClosed):
-            return (
+            return ViewportIdentityEncodedPrimitive(
                 kind: isClosed ? 2 : 1,
                 points: points.map(metalPoint),
                 radius: Float(radius)
             )
         case .segment(let start, let end, let radius):
-            return (
+            return ViewportIdentityEncodedPrimitive(
                 kind: 3,
                 points: [metalPoint(start), metalPoint(end)],
                 radius: Float(radius)
             )
         case .point(let center, let radius):
-            return (
+            return ViewportIdentityEncodedPrimitive(
                 kind: 4,
                 points: [metalPoint(center)],
                 radius: Float(radius)

@@ -27,6 +27,7 @@ public struct ViewportIdentityPickDrawItem: Equatable, Sendable {
     public var geometry: ViewportIdentityPickGeometry
     public var primitive: ViewportIdentityPickPrimitive
     public var meshStorageIdentity: ViewportBodyMesh.StorageIdentity?
+    public var meshPrimitiveIndex: Int?
     public var depth: Double?
     public var hit: ViewportHit
 
@@ -36,6 +37,7 @@ public struct ViewportIdentityPickDrawItem: Equatable, Sendable {
         geometry: ViewportIdentityPickGeometry,
         primitive: ViewportIdentityPickPrimitive,
         meshStorageIdentity: ViewportBodyMesh.StorageIdentity? = nil,
+        meshPrimitiveIndex: Int? = nil,
         depth: Double? = nil,
         hit: ViewportHit
     ) {
@@ -44,6 +46,7 @@ public struct ViewportIdentityPickDrawItem: Equatable, Sendable {
         self.geometry = geometry
         self.primitive = primitive
         self.meshStorageIdentity = meshStorageIdentity
+        self.meshPrimitiveIndex = meshPrimitiveIndex
         self.depth = depth
         self.hit = hit
     }
@@ -327,6 +330,7 @@ public struct ViewportIdentityPickRenderPlanBuilder: Sendable {
     ) {
         var index = 0
         while index + 2 < mesh.indices.count {
+            let meshPrimitiveIndex = index / 3
             let firstIndex = Int(mesh.indices[index])
             let secondIndex = Int(mesh.indices[index + 1])
             let thirdIndex = Int(mesh.indices[index + 2])
@@ -346,6 +350,7 @@ public struct ViewportIdentityPickRenderPlanBuilder: Sendable {
                 record: record,
                 primitive: .polygon(points: points.map { layout.project($0, in: item) }),
                 meshStorageIdentity: mesh.storageIdentity,
+                meshPrimitiveIndex: meshPrimitiveIndex,
                 depth: averageDepth(points, item: item, layout: layout),
                 drawItems: &drawItems
             )
@@ -585,6 +590,7 @@ public struct ViewportIdentityPickRenderPlanBuilder: Sendable {
         record: ViewportIdentityPickRecord,
         primitive: ViewportIdentityPickPrimitive,
         meshStorageIdentity: ViewportBodyMesh.StorageIdentity? = nil,
+        meshPrimitiveIndex: Int? = nil,
         depth: Double?,
         drawItems: inout [ViewportIdentityPickDrawItem]
     ) {
@@ -595,6 +601,7 @@ public struct ViewportIdentityPickRenderPlanBuilder: Sendable {
                 geometry: record.geometry,
                 primitive: primitive,
                 meshStorageIdentity: meshStorageIdentity,
+                meshPrimitiveIndex: meshPrimitiveIndex,
                 depth: depth,
                 hit: record.hit
             )

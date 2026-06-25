@@ -88,11 +88,43 @@ import Testing
     #expect(metrics.viewportHeight == 180)
     #expect(metrics.encodedCommandCount == plan.drawItems.count)
     #expect(metrics.encodedPointCount > 0)
+    #expect(metrics.encodedMeshPrimitiveCacheHitCount == 0)
+    #expect(metrics.encodedMeshPrimitiveCacheMissCount == 0)
     #expect(metrics.pixelCount == buffer.rawValues.count)
     #expect(metrics.encodeDurationSeconds >= 0.0)
     #expect(metrics.gpuDurationSeconds >= 0.0)
     #expect(metrics.readbackDurationSeconds >= 0.0)
     #expect(metrics.totalDurationSeconds >= metrics.readbackDurationSeconds)
+}
+
+@Test func viewportIdentityBufferRendererCachesStableMeshPrimitiveEncoding() throws {
+    let scene = identityBufferMeshFallbackScene()
+    let viewportSize = CGSize(width: 240.0, height: 180.0)
+    let layout = try #require(ViewportLayout(scene: scene, size: viewportSize))
+    let plan = ViewportIdentityPickRenderPlanBuilder().build(scene: scene, layout: layout)
+    let renderer = try ViewportIdentityBufferRenderer()
+
+    let firstBuffer = try renderer.render(plan: plan, viewportSize: viewportSize)
+    let secondBuffer = try renderer.render(plan: plan, viewportSize: viewportSize)
+    let firstMetrics = try #require(firstBuffer.renderMetrics)
+    let secondMetrics = try #require(secondBuffer.renderMetrics)
+
+    #expect(firstMetrics.encodedMeshPrimitiveCacheHitCount == 0)
+    #expect(firstMetrics.encodedMeshPrimitiveCacheMissCount == 1)
+    #expect(secondMetrics.encodedMeshPrimitiveCacheHitCount == 1)
+    #expect(secondMetrics.encodedMeshPrimitiveCacheMissCount == 0)
+
+    let resizedViewportSize = CGSize(width: 320.0, height: 180.0)
+    let resizedLayout = try #require(ViewportLayout(scene: scene, size: resizedViewportSize))
+    let resizedPlan = ViewportIdentityPickRenderPlanBuilder().build(
+        scene: scene,
+        layout: resizedLayout
+    )
+    let resizedBuffer = try renderer.render(plan: resizedPlan, viewportSize: resizedViewportSize)
+    let resizedMetrics = try #require(resizedBuffer.renderMetrics)
+
+    #expect(resizedMetrics.encodedMeshPrimitiveCacheHitCount == 0)
+    #expect(resizedMetrics.encodedMeshPrimitiveCacheMissCount == 1)
 }
 
 @MainActor
@@ -661,6 +693,33 @@ private func identityBufferGeneratedTopologyScene() -> ViewportScene {
         id: featureID.description,
         featureID: featureID,
         modelBounds: CGRect(x: -0.020, y: -0.020, width: 0.040, height: 0.040),
+        kind: .body(component: component)
+    )
+    return ViewportScene(items: [item])
+}
+
+private func identityBufferMeshFallbackScene() -> ViewportScene {
+    let mesh = ViewportBodyMesh(
+        positions: [
+            Point3D(x: -0.010, y: 0.0, z: -0.010),
+            Point3D(x: 0.010, y: 0.0, z: -0.010),
+            Point3D(x: 0.0, y: 0.0, z: 0.010),
+        ],
+        indices: [0, 1, 2]
+    )
+    let component = ViewportBodyComponent(
+        sizeXMeters: 0.020,
+        sizeYMeters: 0.001,
+        sizeZMeters: 0.020,
+        yMinMeters: 0.0,
+        yMaxMeters: 0.001,
+        mesh: mesh
+    )
+    let featureID = FeatureID()
+    let item = ViewportSceneItem(
+        id: featureID.description,
+        featureID: featureID,
+        modelBounds: CGRect(x: -0.010, y: -0.010, width: 0.020, height: 0.020),
         kind: .body(component: component)
     )
     return ViewportScene(items: [item])

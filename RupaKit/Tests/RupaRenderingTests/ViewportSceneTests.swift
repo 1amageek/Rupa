@@ -1572,6 +1572,7 @@ import Testing
 
     #expect(meshItems.count == 1)
     #expect(bodyItem.meshStorageIdentity == mesh.storageIdentity)
+    #expect(bodyItem.meshPrimitiveIndex == 0)
     #expect(bodyItem.hit.pickingBackend == .identityBuffer)
     if case .polygon(let points) = bodyItem.primitive {
         #expect(points.count == 3)
