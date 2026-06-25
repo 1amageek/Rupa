@@ -1658,6 +1658,86 @@ import Testing
 }
 
 @MainActor
+@Test func editorSessionActivatesSweepToolFromSelectedGeneratedCurveFeatureAndCanvasPathTarget() async throws {
+    var document = DesignDocument.empty()
+    let sourceSectionID = try document.createLineSketch(
+        name: "Generated Sweep Source Section",
+        plane: .xy,
+        start: SketchPoint(
+            x: .length(-2.0, .millimeter),
+            y: .length(0.0, .millimeter)
+        ),
+        end: SketchPoint(
+            x: .length(2.0, .millimeter),
+            y: .length(0.0, .millimeter)
+        )
+    )
+    let generatedSectionID = FeatureID()
+    let generatedSection = FeatureNode(
+        id: generatedSectionID,
+        name: "Generated Offset Section",
+        operation: .curveOffset(CurveOffsetFeature(
+            source: CurveOutputReference(featureID: sourceSectionID),
+            distance: .length(1.0, .millimeter),
+            planeNormal: .unitZ
+        )),
+        inputs: [FeatureInput(featureID: sourceSectionID, role: .curve)],
+        outputs: [FeatureOutput(role: .curve)]
+    )
+    try document.cadDocument.appendFeature(generatedSection)
+    let generatedNodeID = try document.productMetadata.appendSceneNodeToFirstRoot(
+        name: "Generated Offset Section",
+        reference: .feature(generatedSectionID)
+    )
+    let pathID = try document.createLineSketch(
+        name: "Generated Sweep Path",
+        plane: .yz,
+        start: SketchPoint(
+            x: .length(0.0, .millimeter),
+            y: .length(0.0, .millimeter)
+        ),
+        end: SketchPoint(
+            x: .length(0.0, .millimeter),
+            y: .length(20.0, .millimeter)
+        )
+    )
+    let pathNodeID = try #require(document.productMetadata.sceneNodes.first { entry in
+        entry.value.reference == .sketch(pathID)
+    }?.key)
+    try document.validate()
+    let session = EditorSession(document: document)
+
+    _ = session.selectSceneNode(generatedNodeID)
+    session.selectTool(.sweep)
+    let preview = session.sweepSelectionPreview(targetSceneNodeID: pathNodeID)
+    let result = session.activateSelectedToolFromCanvas(targetSceneNodeID: pathNodeID)
+    let sweepFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let sweepFeature = try #require(session.document.cadDocument.designGraph.nodes[sweepFeatureID])
+    let bodySceneNode = try #require(session.document.productMetadata.sceneNodes.values.first {
+        $0.reference == .body(sweepFeatureID)
+    })
+
+    guard case .sweep(let sweep) = sweepFeature.operation else {
+        Issue.record("Sweep tool should create a generated-curve sheet sweep feature.")
+        return
+    }
+
+    #expect(preview.status == .ready)
+    #expect(preview.section == .curve(SweepCurveSectionReference(featureID: generatedSectionID)))
+    #expect(preview.pathFeatureID == pathID)
+    #expect(result.commandName == "createSweep")
+    #expect(result.didMutate)
+    #expect(sweep.sections == [.curve(SweepCurveSectionReference(featureID: generatedSectionID))])
+    #expect(sweep.path == SweepPathReference(featureID: pathID))
+    #expect(sweep.options.resultKind == .sheet)
+    #expect(bodySceneNode.object?.sourceSection == .curve(generatedSectionID))
+    #expect(session.selectedSceneNode?.reference == .body(sweepFeatureID))
+    #expect(session.selectedTool == .select)
+    #expect(session.evaluationStatus == .valid)
+    #expect(session.evaluatedBodyCount == 1)
+}
+
+@MainActor
 @Test func editorSessionSweepToolCreatesGuideReferencesFromSelectedCurvesAndClickedPath() async throws {
     let session = EditorSession()
     _ = try #require(session.createDefaultRectangleSketch())
@@ -1760,7 +1840,7 @@ import Testing
     #expect(session.generation == generation)
     #expect(session.selectedTool == .sweep)
     #expect(session.document.cadDocument.designGraph.order == [profileFeatureID])
-    #expect(session.diagnostics.last?.message == "Sweep tool requires one closed profile source, one separate path curve source, and optional guide curve selections.")
+    #expect(session.diagnostics.last?.message == "Sweep tool requires one profile or curve section source, one separate path curve source, and optional guide curve selections.")
 }
 
 @MainActor

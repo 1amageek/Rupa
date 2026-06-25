@@ -154,6 +154,30 @@ public struct MeasurementService {
             }
         }
 
+        func includeCurveSource(
+            featureID: FeatureID,
+            node: FeatureNode
+        ) throws {
+            if case .sketch(let sketch) = node.operation {
+                includeSketch(
+                    featureID: featureID,
+                    sketch: sketch,
+                    sketchBounds: try boundsForSketch(
+                        sketch,
+                        parameters: document.cadDocument.parameters
+                    ),
+                    profile: nil
+                )
+                return
+            }
+            guard includedSourceFeatureIDs.insert(featureID).inserted else {
+                return
+            }
+            if let curveBounds = boundsForEvaluatedCurves(evaluatedDocument()?.curves[featureID]) {
+                bounds.include(curveBounds)
+            }
+        }
+
         for featureID in document.cadDocument.designGraph.order {
             guard let node = document.cadDocument.designGraph.nodes[featureID] else {
                 continue
@@ -319,9 +343,7 @@ public struct MeasurementService {
                 includedSourceFeatureIDs.insert(featureID)
                 guard let sectionReference = sweep.sections.first,
                       let sourceNode = document.cadDocument.designGraph.nodes[sectionReference.featureID],
-                      case .sketch(let sourceSketch) = sourceNode.operation,
-                      let pathNode = document.cadDocument.designGraph.nodes[sweep.path.featureID],
-                      case .sketch(let pathSketch) = pathNode.operation else {
+                      let pathNode = document.cadDocument.designGraph.nodes[sweep.path.featureID] else {
                     diagnostics.append(
                         EditorDiagnostic(
                             severity: .warning,
@@ -330,17 +352,30 @@ public struct MeasurementService {
                     )
                     continue
                 }
-                let sourceSketchBounds = try boundsForSketch(
-                    sourceSketch,
-                    parameters: document.cadDocument.parameters
-                )
-                let pathSketchBounds = try boundsForSketch(
-                    pathSketch,
-                    parameters: document.cadDocument.parameters
+                let pathSketch: Sketch?
+                if case .sketch(let sketch) = pathNode.operation {
+                    pathSketch = sketch
+                } else {
+                    pathSketch = nil
+                }
+                let pathLengthMeters = try pathLength(
+                    featureID: sweep.path.featureID,
+                    sketch: pathSketch,
+                    parameters: document.cadDocument.parameters,
+                    evaluatedDocument: pathSketch == nil ? evaluatedDocument() : nil
                 )
                 let measuredProfile: MeasuredProfile?
                 switch sectionReference {
                 case .profile(let profileReference):
+                    guard case .sketch(let sourceSketch) = sourceNode.operation else {
+                        diagnostics.append(
+                            EditorDiagnostic(
+                                severity: .warning,
+                                message: "Measurement skipped a sweep feature with an unresolved profile section."
+                            )
+                        )
+                        continue
+                    }
                     let profile = try profileCache[profileReference.featureID] ?? measureProfile(
                         featureID: profileReference.featureID,
                         featureName: sourceNode.name,
@@ -361,44 +396,36 @@ public struct MeasurementService {
                     includeSketch(
                         featureID: profileReference.featureID,
                         sketch: sourceSketch,
-                        sketchBounds: sourceSketchBounds,
+                        sketchBounds: try boundsForSketch(
+                            sourceSketch,
+                            parameters: document.cadDocument.parameters
+                        ),
                         profile: profile
                     )
                 case .curve:
                     measuredProfile = nil
-                    includeSketch(
+                    try includeCurveSource(
                         featureID: sectionReference.featureID,
-                        sketch: sourceSketch,
-                        sketchBounds: sourceSketchBounds,
-                        profile: nil
+                        node: sourceNode
                     )
                 }
-                includeSketch(
+                try includeCurveSource(
                     featureID: sweep.path.featureID,
-                    sketch: pathSketch,
-                    sketchBounds: pathSketchBounds,
-                    profile: nil
+                    node: pathNode
                 )
                 for guide in sweep.guides {
-                    guard let guideNode = document.cadDocument.designGraph.nodes[guide.featureID],
-                          case .sketch(let guideSketch) = guideNode.operation else {
+                    guard let guideNode = document.cadDocument.designGraph.nodes[guide.featureID] else {
                         diagnostics.append(
                             EditorDiagnostic(
                                 severity: .warning,
-                                message: "Measurement skipped a sweep guide with an unresolved sketch reference."
+                                message: "Measurement skipped a sweep guide with an unresolved curve reference."
                             )
                         )
                         continue
                     }
-                    let guideSketchBounds = try boundsForSketch(
-                        guideSketch,
-                        parameters: document.cadDocument.parameters
-                    )
-                    includeSketch(
+                    try includeCurveSource(
                         featureID: guide.featureID,
-                        sketch: guideSketch,
-                        sketchBounds: guideSketchBounds,
-                        profile: nil
+                        node: guideNode
                     )
                 }
                 if sweep.options.resultKind == .sheet {
@@ -409,7 +436,7 @@ public struct MeasurementService {
                         sourceFeatureID: sectionReference.featureID,
                         sourceFeatureName: sourceNode.name,
                         sweep: sweep,
-                        pathSketch: pathSketch,
+                        pathLengthMeters: pathLengthMeters,
                         parameters: document.cadDocument.parameters,
                         evaluatedDocument: evaluatedDocument(),
                         unsupportedReason: &evaluatedSweepSkipReason
@@ -456,7 +483,7 @@ public struct MeasurementService {
                         sourceFeatureID: sectionReference.featureID,
                         sourceFeatureName: sourceNode.name,
                         sweep: sweep,
-                        pathSketch: pathSketch,
+                        pathLengthMeters: pathLengthMeters,
                         parameters: document.cadDocument.parameters,
                         evaluatedDocument: evaluatedDocument(),
                         unsupportedReason: &evaluatedSweepSkipReason
@@ -789,14 +816,15 @@ public struct MeasurementService {
         sourceFeatureName: String?,
         profile: MeasuredProfile,
         sweep: SweepFeature,
-        pathSketch: Sketch,
+        pathSketch: Sketch?,
         parameters: ParameterTable
     ) throws -> MeasurementResult.Solid? {
         guard sweep.sections.count == 1,
               sweep.guides.isEmpty,
               sweep.options.resultKind == .solid,
               sweep.options.booleanOperation == .newBody,
-              sweep.options.keepTools == false else {
+              sweep.options.keepTools == false,
+              let pathSketch else {
             return nil
         }
         let twistAngle = try resolvedAngle(sweep.options.twistAngle, parameters: parameters)
@@ -862,7 +890,7 @@ public struct MeasurementService {
         sourceFeatureID: FeatureID,
         sourceFeatureName: String?,
         sweep: SweepFeature,
-        pathSketch: Sketch,
+        pathLengthMeters: Double?,
         parameters: ParameterTable,
         evaluatedDocument: EvaluatedDocument?,
         unsupportedReason: inout String?
@@ -889,7 +917,7 @@ public struct MeasurementService {
             unsupportedReason = "The sweep distance fraction is outside the measurable range."
             return nil
         }
-        guard let pathLength = try pathLength(pathSketch, parameters: parameters) else {
+        guard let pathLength = pathLengthMeters else {
             unsupportedReason = "The sweep path length could not be measured."
             return nil
         }
@@ -923,7 +951,7 @@ public struct MeasurementService {
         sourceFeatureID: FeatureID,
         sourceFeatureName: String?,
         sweep: SweepFeature,
-        pathSketch: Sketch,
+        pathLengthMeters: Double?,
         parameters: ParameterTable,
         evaluatedDocument: EvaluatedDocument?,
         unsupportedReason: inout String?
@@ -955,7 +983,7 @@ public struct MeasurementService {
             unsupportedReason = "The sweep distance fraction is outside the measurable range."
             return nil
         }
-        guard let pathLength = try pathLength(pathSketch, parameters: parameters) else {
+        guard let pathLength = pathLengthMeters else {
             unsupportedReason = "The sweep path length could not be measured."
             return nil
         }
@@ -1210,6 +1238,19 @@ public struct MeasurementService {
         return bounds.bounds
     }
 
+    private func boundsForEvaluatedCurves(_ curves: [EvaluatedCurve]?) -> MeasurementResult.Bounds? {
+        guard let curves else {
+            return nil
+        }
+        var bounds = BoundsAccumulator()
+        for curve in curves {
+            for point in curve.points {
+                bounds.include(point)
+            }
+        }
+        return bounds.bounds
+    }
+
     private func resolvedPoint(
         _ point: SketchPoint,
         parameters: ParameterTable
@@ -1276,6 +1317,35 @@ public struct MeasurementService {
         let start = frame.map(try resolvedPoint(line.start, parameters: parameters))
         let end = frame.map(try resolvedPoint(line.end, parameters: parameters))
         return end - start
+    }
+
+    private func pathLength(
+        featureID: FeatureID,
+        sketch: Sketch?,
+        parameters: ParameterTable,
+        evaluatedDocument: EvaluatedDocument?
+    ) throws -> Double? {
+        if let sketch {
+            return try pathLength(sketch, parameters: parameters)
+        }
+        guard let curves = evaluatedDocument?.curves[featureID] else {
+            return nil
+        }
+        var totalLength = 0.0
+        for curve in curves {
+            guard curve.points.count >= 2 else {
+                continue
+            }
+            for index in 0..<(curve.points.count - 1) {
+                let length = (curve.points[index + 1] - curve.points[index]).length
+                guard length.isFinite,
+                      length > tolerance.distance else {
+                    continue
+                }
+                totalLength += length
+            }
+        }
+        return totalLength > tolerance.distance ? totalLength : nil
     }
 
     private func pathLength(

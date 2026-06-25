@@ -2237,9 +2237,12 @@ public final class EditorSession {
                 .curve(SweepCurveSectionReference(featureID: $0))
             }
         }
+        let reservedCurveFeatureIDs = Set(
+            [pathFeatureID, section?.featureID].compactMap { $0 }
+        )
         let guideFeatureIDs = uniqueFeatureIDs(
             allCurveFeatureIDs.filter { featureID in
-                featureID != pathFeatureID && featureID != sectionCurveFeatureID
+                reservedCurveFeatureIDs.contains(featureID) == false
             }
         )
         return SweepSelectionResolution(
@@ -2279,7 +2282,8 @@ public final class EditorSession {
             return nil
         }
         let objectProfileReference = sceneNode.object?.sourceSection?.profileReference
-        let sketchFeatureID = sceneNode.reference?.kind == .sketch ? sceneNode.reference?.featureID : nil
+        let referencedFeatureID = sceneNode.reference?.featureID
+        let sketchFeatureID = sceneNode.reference?.kind == .sketch ? referencedFeatureID : nil
         var profileReference: ProfileReference?
         for candidateReference in [
             objectProfileReference,
@@ -2291,9 +2295,10 @@ public final class EditorSession {
             }
         }
         let curveFeatureID: FeatureID?
-        if let sketchFeatureID,
-           isSweepPathFeature(sketchFeatureID) {
-            curveFeatureID = sketchFeatureID
+        if profileReference == nil,
+           let referencedFeatureID,
+           isSweepCurveFeature(referencedFeatureID) {
+            curveFeatureID = referencedFeatureID
         } else {
             curveFeatureID = nil
         }
@@ -2329,10 +2334,9 @@ public final class EditorSession {
         }
     }
 
-    private func isSweepPathFeature(_ featureID: FeatureID) -> Bool {
+    private func isSweepCurveFeature(_ featureID: FeatureID) -> Bool {
         guard let feature = document.cadDocument.designGraph.nodes[featureID],
-              feature.outputs.contains(where: { $0.role == .curve }),
-              case .sketch = feature.operation else {
+              feature.outputs.contains(where: { $0.role == .curve }) else {
             return false
         }
         return true

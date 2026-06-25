@@ -15854,13 +15854,7 @@ public struct DesignDocument: Identifiable, Sendable {
               source.outputs.contains(where: { $0.role == .curve }) else {
             throw EditorError(
                 code: .referenceUnresolved,
-                message: "\(owner) must reference an existing sketch curve feature."
-            )
-        }
-        guard case .sketch = source.operation else {
-            throw EditorError(
-                code: .referenceUnresolved,
-                message: "\(owner) must reference a sketch curve feature."
+                message: "\(owner) must reference an existing curve-producing feature."
             )
         }
     }

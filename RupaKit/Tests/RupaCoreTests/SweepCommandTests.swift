@@ -792,6 +792,135 @@ import SwiftCAD
     #expect(abs(pathLength.meters - 0.020) < 1.0e-12)
 }
 
+@Test func createSweepCanUseGeneratedCurveSectionFromCurveOffset() throws {
+    var document = DesignDocument.empty()
+    let sourceSectionID = try document.createLineSketch(
+        name: "Generated Sweep Source Section",
+        plane: .xy,
+        start: SketchPoint(
+            x: .length(-2.0, .millimeter),
+            y: .length(0.0, .millimeter)
+        ),
+        end: SketchPoint(
+            x: .length(2.0, .millimeter),
+            y: .length(0.0, .millimeter)
+        )
+    )
+    let generatedSectionID = FeatureID()
+    let generatedSection = FeatureNode(
+        id: generatedSectionID,
+        name: "Generated Offset Section",
+        operation: .curveOffset(CurveOffsetFeature(
+            source: CurveOutputReference(featureID: sourceSectionID),
+            distance: .length(1.0, .millimeter),
+            planeNormal: .unitZ
+        )),
+        inputs: [FeatureInput(featureID: sourceSectionID, role: .curve)],
+        outputs: [FeatureOutput(role: .curve)]
+    )
+    try document.cadDocument.appendFeature(generatedSection)
+    let pathID = try document.createLineSketch(
+        name: "Generated Curve Section Sweep Path",
+        plane: .yz,
+        start: SketchPoint(
+            x: .length(0.0, .millimeter),
+            y: .length(0.0, .millimeter)
+        ),
+        end: SketchPoint(
+            x: .length(0.0, .millimeter),
+            y: .length(20.0, .millimeter)
+        )
+    )
+
+    let sweepID = try document.createSweep(
+        name: "Generated Curve Section Sheet Sweep",
+        sections: [.curve(SweepCurveSectionReference(featureID: generatedSectionID))],
+        path: SweepPathReference(featureID: pathID),
+        options: SweepOptions(resultKind: .sheet)
+    )
+    let feature = try #require(document.cadDocument.designGraph.nodes[sweepID])
+    let evaluated = try CADPipeline.modelingDefault(for: document).evaluate(document.cadDocument)
+    let body = try #require(evaluated.brep.bodies.values.first)
+    let generatedCurves = try #require(evaluated.curves[generatedSectionID])
+    let result = try MeasurementService().measure(document: document)
+    let sheet = try #require(result.sheets.first)
+
+    guard case .sweep(let sweep) = feature.operation else {
+        Issue.record("Expected a sweep feature.")
+        return
+    }
+    #expect(generatedCurves.first?.plane == .xy)
+    #expect(sweep.sections == [.curve(SweepCurveSectionReference(featureID: generatedSectionID))])
+    #expect(feature.inputs.contains(FeatureInput(featureID: generatedSectionID, role: .curve)))
+    #expect(feature.outputs == [FeatureOutput(role: .sheet)])
+    #expect(body.kind == .sheet)
+    #expect(sheet.featureID == sweepID.description)
+    #expect(sheet.sourceFeatureID == generatedSectionID.description)
+    #expect(abs(sheet.surfaceAreaSquareMeters - 0.00008) < 1.0e-12)
+    #expect(result.diagnostics.isEmpty)
+    try document.validate()
+}
+
+@Test func createSweepCanUseGeneratedCurvePathFromCurveOffset() throws {
+    var document = DesignDocument.empty()
+    let profileID = try document.createRectangleSketch(
+        name: "Generated Path Sweep Profile",
+        plane: .xy,
+        width: .length(4.0, .millimeter),
+        height: .length(2.0, .millimeter)
+    )
+    let sourcePathID = try document.createLineSketch(
+        name: "Generated Sweep Source Path",
+        plane: .yz,
+        start: SketchPoint(
+            x: .length(0.0, .millimeter),
+            y: .length(0.0, .millimeter)
+        ),
+        end: SketchPoint(
+            x: .length(0.0, .millimeter),
+            y: .length(20.0, .millimeter)
+        )
+    )
+    let generatedPathID = FeatureID()
+    let generatedPath = FeatureNode(
+        id: generatedPathID,
+        name: "Generated Offset Path",
+        operation: .curveOffset(CurveOffsetFeature(
+            source: CurveOutputReference(featureID: sourcePathID),
+            distance: .length(1.0, .millimeter),
+            planeNormal: .unitX
+        )),
+        inputs: [FeatureInput(featureID: sourcePathID, role: .curve)],
+        outputs: [FeatureOutput(role: .curve)]
+    )
+    try document.cadDocument.appendFeature(generatedPath)
+
+    let sweepID = try document.createSweep(
+        name: "Generated Curve Path Sweep",
+        sections: [.profile(ProfileReference(featureID: profileID))],
+        path: SweepPathReference(featureID: generatedPathID)
+    )
+    let feature = try #require(document.cadDocument.designGraph.nodes[sweepID])
+    let evaluated = try CADPipeline.modelingDefault(for: document).evaluate(document.cadDocument)
+    let result = try MeasurementService().measure(document: document)
+    let solid = try #require(result.solids.first)
+    let pathLength = try #require(solid.linearDimensions.first { $0.kind == .sweepPathLength })
+
+    guard case .sweep(let sweep) = feature.operation else {
+        Issue.record("Expected a sweep feature.")
+        return
+    }
+    #expect(evaluated.curves[generatedPathID]?.first?.plane == .yz)
+    #expect(sweep.path == SweepPathReference(featureID: generatedPathID))
+    #expect(feature.inputs.contains(FeatureInput(featureID: generatedPathID, role: .path)))
+    #expect(solid.featureID == sweepID.description)
+    #expect(solid.sourceFeatureID == profileID.description)
+    #expect(abs(pathLength.meters - 0.020) < 1.0e-12)
+    #expect(abs(solid.volumeCubicMeters - 0.00000016) < 1.0e-12)
+    #expect(result.diagnostics.isEmpty)
+    try document.validate()
+}
+
 @Test func createSweepRejectsSolidOutputFromCurveSectionBeforeMutation() throws {
     var document = DesignDocument.empty()
     let sectionID = try document.createLineSketch(
