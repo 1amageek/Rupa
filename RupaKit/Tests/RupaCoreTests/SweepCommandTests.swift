@@ -144,6 +144,36 @@ import SwiftCAD
     try document.validate()
 }
 
+@Test func measureSweepUsesExactLengthForConnectedLineArcPathSketch() throws {
+    var document = DesignDocument.empty()
+    let profileID = try document.createRectangleSketch(
+        name: "Connected Line Arc Sweep Profile",
+        plane: .xy,
+        width: .length(2.0, .millimeter),
+        height: .length(1.0, .millimeter)
+    )
+    let pathID = try document.createSketch(
+        name: "Connected Line Arc Sweep Path",
+        sketch: connectedLineArcPathSketch(),
+        geometryRole: .curve
+    )
+    let sweepID = try document.createSweep(
+        name: "Connected Line Arc Sweep",
+        sections: [.profile(ProfileReference(featureID: profileID))],
+        path: SweepPathReference(featureID: pathID),
+        options: SweepOptions(cornerStyle: .mitre)
+    )
+    let result = try MeasurementService().measure(document: document)
+    let solid = try #require(result.solids.first)
+    let pathLength = try #require(solid.linearDimensions.first { $0.kind == .sweepPathLength })
+    let expectedPathLength = 0.010 + 0.060 * Double.pi / 2.0
+
+    #expect(solid.featureID == sweepID.description)
+    #expect(abs(pathLength.meters - expectedPathLength) < 1.0e-12)
+    #expect(result.diagnostics.isEmpty)
+    try document.validate()
+}
+
 @Test func createSweepRejectsRoundCornerStyleForConnectedMultiEntityPathSketch() throws {
     var document = DesignDocument.empty()
     let profileID = try document.createRectangleSketch(
@@ -1222,6 +1252,35 @@ private func connectedLinePathSketch() -> Sketch {
                 end: SketchPoint(
                     x: .length(8.0, .millimeter),
                     y: .length(25.0, .millimeter)
+                )
+            )),
+        ]
+    )
+}
+
+private func connectedLineArcPathSketch() -> Sketch {
+    let arcID = SketchEntityID()
+    let lineID = SketchEntityID()
+    return Sketch(
+        plane: .yz,
+        entities: [
+            arcID: .arc(SketchArc(
+                center: SketchPoint(
+                    x: .length(0.0, .millimeter),
+                    y: .length(0.0, .millimeter)
+                ),
+                radius: .length(60.0, .millimeter),
+                startAngle: .angle(0.0, .degree),
+                endAngle: .angle(90.0, .degree)
+            )),
+            lineID: .line(SketchLine(
+                start: SketchPoint(
+                    x: .length(0.0, .millimeter),
+                    y: .length(60.0, .millimeter)
+                ),
+                end: SketchPoint(
+                    x: .length(0.0, .millimeter),
+                    y: .length(70.0, .millimeter)
                 )
             )),
         ]

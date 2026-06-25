@@ -1339,11 +1339,11 @@ public struct MeasurementService {
     }
 
     private func pathLength(_ curves: [EvaluatedCurve]) throws -> Double? {
-        let evaluator = EvaluatedCurvePathEvaluator(tolerance: tolerance)
-        var totalLength = 0.0
-        for curve in curves {
-            totalLength += try evaluator.length(of: curve)
+        guard curves.isEmpty == false else {
+            return nil
         }
+        let evaluator = EvaluatedCurvePathEvaluator(tolerance: tolerance)
+        let totalLength = try evaluator.length(of: curves)
         return totalLength > tolerance.distance ? totalLength : nil
     }
 
