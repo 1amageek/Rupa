@@ -1055,6 +1055,162 @@ func cliExecutableSurfaceMoveControlPointMutatesClosedDocumentAsJSON() async thr
 }
 
 @Test(.timeLimit(.minutes(1)))
+func cliExecutableSketchDimensionSummaryAndSetMutateClosedDocumentAsJSON() async throws {
+    let temporaryDirectory = try makeTemporaryDirectory()
+    defer {
+        removeTemporaryDirectory(temporaryDirectory)
+    }
+    let documentURL = temporaryDirectory.appendingPathComponent("process-sketch-dimension.swcad")
+    var document = DesignDocument.empty(named: "Process Sketch Dimension")
+    _ = try document.createLineSketch(
+        name: "Dimension Line",
+        plane: .xy,
+        start: SketchPoint(
+            x: .length(0.0, .millimeter),
+            y: .length(0.0, .millimeter)
+        ),
+        end: SketchPoint(
+            x: .length(10.0, .millimeter),
+            y: .length(0.0, .millimeter)
+        )
+    )
+    let sketchSummary = try SketchEntitySummaryService().summarize(document: document)
+    let line = try #require(sketchSummary.entries.first { $0.entityKind == "line" })
+    let target = try #require(line.selectionTarget())
+    let targetJSON = try encodedSelectionTarget(target)
+    try DocumentFileService().save(document, to: documentURL)
+
+    let summaryResult = try await runCLI([
+        "dimension",
+        "sketch-summary",
+        documentURL.path,
+        "--target",
+        targetJSON,
+        "--mode",
+        "file",
+        "--json",
+    ])
+    let summaryResponse = try JSONDecoder().decode(
+        CLISketchDimensionSummaryResponse.self,
+        from: summaryResult.standardOutputData
+    )
+    let setResult = try await runCLI([
+        "dimension",
+        "set-sketch",
+        documentURL.path,
+        "--target",
+        targetJSON,
+        "--kind",
+        "length",
+        "--value",
+        "20",
+        "--unit",
+        "millimeter",
+        "--mode",
+        "file",
+        "--json",
+    ])
+    let setResponse = try JSONDecoder().decode(
+        CLIResponse.self,
+        from: setResult.standardOutputData
+    )
+    let loaded = try DocumentFileService().load(from: documentURL)
+    let updatedSummary = try SketchDimensionSummaryService().summarize(
+        document: loaded,
+        targets: [target]
+    )
+    let updatedLength = try #require(updatedSummary.entries.first { $0.kind == .length })
+
+    #expect(summaryResult.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: summaryResult.standardError))
+    #expect(summaryResponse.sketchDimensionSummary.counts.entryCount == 2)
+    #expect(summaryResponse.sketchDimensionSummary.entries.map(\.kind) == [.length, .angle])
+    #expect(setResult.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: setResult.standardError))
+    #expect(setResponse.message == "Sketch entity dimension updated.")
+    #expect(setResponse.saved)
+    #expect(abs(updatedLength.resolvedValue - 0.020) < 0.000_000_000_001)
+}
+
+@Test(.timeLimit(.minutes(1)))
+func cliExecutableObjectDimensionSummaryAndSetMutateClosedDocumentAsJSON() async throws {
+    let temporaryDirectory = try makeTemporaryDirectory()
+    defer {
+        removeTemporaryDirectory(temporaryDirectory)
+    }
+    let documentURL = temporaryDirectory.appendingPathComponent("process-object-dimension.swcad")
+    try DocumentFileService().save(.empty(named: "Process Object Dimension"), to: documentURL)
+
+    let modelResult = try await runCLI([
+        "model",
+        "box",
+        documentURL.path,
+        "--width",
+        "10",
+        "--height",
+        "12",
+        "--depth",
+        "8",
+        "--mode",
+        "file",
+    ])
+    let modeled = try DocumentFileService().load(from: documentURL)
+    let bodyFeatureID = try #require(modeled.cadDocument.designGraph.order.last)
+    let bodyNodeID = try #require(modeled.productMetadata.sceneNodes.first { entry in
+        entry.value.reference == .body(bodyFeatureID)
+    }?.key)
+    let target = SelectionTarget(sceneNodeID: bodyNodeID)
+    let targetJSON = try encodedSelectionTarget(target)
+    let summaryResult = try await runCLI([
+        "dimension",
+        "object-summary",
+        documentURL.path,
+        "--target",
+        targetJSON,
+        "--mode",
+        "file",
+        "--json",
+    ])
+    let summaryResponse = try JSONDecoder().decode(
+        CLIObjectDimensionSummaryResponse.self,
+        from: summaryResult.standardOutputData
+    )
+    let setResult = try await runCLI([
+        "dimension",
+        "set-object",
+        documentURL.path,
+        "--target",
+        targetJSON,
+        "--kind",
+        "sizeX",
+        "--value",
+        "30",
+        "--unit",
+        "millimeter",
+        "--mode",
+        "file",
+        "--json",
+    ])
+    let setResponse = try JSONDecoder().decode(
+        CLIResponse.self,
+        from: setResult.standardOutputData
+    )
+    let loaded = try DocumentFileService().load(from: documentURL)
+    let updatedSummary = try ObjectDimensionSummaryService().summarize(
+        document: loaded,
+        targets: [target]
+    )
+    let updatedSizeX = try #require(updatedSummary.entries.first { $0.kind == .sizeX })
+
+    #expect(modelResult.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: modelResult.standardError))
+    #expect(summaryResult.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: summaryResult.standardError))
+    #expect(summaryResponse.objectDimensionSummary.counts.entryCount == 3)
+    #expect(summaryResponse.objectDimensionSummary.entries.map(\.kind) == [.sizeX, .sizeY, .sizeZ])
+    #expect(setResult.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: setResult.standardError))
+    #expect(setResponse.message == "Object dimension updated.")
+    #expect(setResponse.saved)
+    #expect(abs(updatedSizeX.resolvedMeters - 0.030) < 0.000_000_000_001)
+}
+
+@Test(.timeLimit(.minutes(1)))
 func cliExecutableAutoEvaluateUsesLiveSessionThroughSocketAsJSON() async throws {
     let temporaryDirectory = try makeTemporaryDirectory()
     defer {
@@ -3318,6 +3474,11 @@ private func cliPolySplinePatchNetworkMesh(centerZ: Double) -> Mesh {
 
 private func encodedSelectionReference(_ reference: SelectionReference) throws -> String {
     let data = try JSONEncoder().encode(reference)
+    return String(decoding: data, as: UTF8.self)
+}
+
+private func encodedSelectionTarget(_ target: SelectionTarget) throws -> String {
+    let data = try JSONEncoder().encode(target)
     return String(decoding: data, as: UTF8.self)
 }
 

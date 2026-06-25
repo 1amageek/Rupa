@@ -1269,6 +1269,10 @@ Currently implemented command groups:
 | `rupa selection targets --session-id <id> --target <json>` | Replace a live session selection with one or more rendered `SelectionTarget` object or subobject values. |
 | `rupa selection references --session-id <id> --clear` | Clear live selected references without mutating CAD source. |
 | `rupa selection targets --session-id <id> --clear` | Clear live selected targets without mutating CAD source. |
+| `rupa dimension sketch-summary <document> --target <json>` | Return editable source sketch dimension candidates for selected curve or generated cap-edge targets. |
+| `rupa dimension object-summary <document> --target <json>` | Return editable object dimension candidates for selected body, face, or supported generated depth-edge targets. |
+| `rupa dimension set-sketch <document> --target <json>` | Update one supported source sketch dimension through the shared command pipeline. |
+| `rupa dimension set-object <document> --target <json>` | Update one supported object dimension through the shared command pipeline. |
 | `rupa surface sources <document>` | Return source-owned surface references, patch contracts, trim references, and editable Surface CV references for a file or live session. |
 | `rupa surface move-control-point <document> --reference <json>` | Move one editable Surface CV selected by a Swift-CAD `SelectionReference`. |
 | `rupa surface slide-control-points <document> --reference <json>` | Slide one or more editable Surface CV references along local U, V, or normal directions. |

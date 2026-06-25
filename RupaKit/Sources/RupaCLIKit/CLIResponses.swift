@@ -201,6 +201,46 @@ public struct CLISurfaceSourceSummaryResponse: Codable, Equatable, Sendable {
     }
 }
 
+public struct CLISketchDimensionSummaryResponse: Codable, Equatable, Sendable {
+    public var message: String
+    public var generation: UInt64
+    public var dirty: Bool
+    public var sketchDimensionSummary: SketchDimensionSummaryResult
+    public var diagnostics: [EditorDiagnostic]
+
+    public init(
+        sketchDimensionSummary: SketchDimensionSummaryResult,
+        generation: DocumentGeneration,
+        dirty: Bool
+    ) {
+        self.message = "Sketch dimension summary: \(sketchDimensionSummary.counts.targetCount) targets, \(sketchDimensionSummary.counts.entryCount) candidates."
+        self.generation = generation.value
+        self.dirty = dirty
+        self.sketchDimensionSummary = sketchDimensionSummary
+        self.diagnostics = sketchDimensionSummary.diagnostics
+    }
+}
+
+public struct CLIObjectDimensionSummaryResponse: Codable, Equatable, Sendable {
+    public var message: String
+    public var generation: UInt64
+    public var dirty: Bool
+    public var objectDimensionSummary: ObjectDimensionSummaryResult
+    public var diagnostics: [EditorDiagnostic]
+
+    public init(
+        objectDimensionSummary: ObjectDimensionSummaryResult,
+        generation: DocumentGeneration,
+        dirty: Bool
+    ) {
+        self.message = "Object dimension summary: \(objectDimensionSummary.counts.targetCount) targets, \(objectDimensionSummary.counts.entryCount) candidates."
+        self.generation = generation.value
+        self.dirty = dirty
+        self.objectDimensionSummary = objectDimensionSummary
+        self.diagnostics = objectDimensionSummary.diagnostics
+    }
+}
+
 public struct CLISaveResponse: Codable, Equatable, Sendable {
     public var message: String
     public var path: String

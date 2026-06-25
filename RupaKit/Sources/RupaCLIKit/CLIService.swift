@@ -847,6 +847,38 @@ public struct CLIService {
         )
     }
 
+    public func sketchDimensionSummaryFile(
+        at url: URL,
+        targets: [SelectionTarget]
+    ) throws -> CLISketchDimensionSummaryResponse {
+        let session = EditorSession(document: try fileService.load(from: url))
+        return CLISketchDimensionSummaryResponse(
+            sketchDimensionSummary: try SketchDimensionSummaryService().summarize(
+                document: session.document,
+                targets: targets,
+                objectRegistry: session.objectRegistry
+            ),
+            generation: session.generation,
+            dirty: session.isDirty
+        )
+    }
+
+    public func objectDimensionSummaryFile(
+        at url: URL,
+        targets: [SelectionTarget]
+    ) throws -> CLIObjectDimensionSummaryResponse {
+        let session = EditorSession(document: try fileService.load(from: url))
+        return CLIObjectDimensionSummaryResponse(
+            objectDimensionSummary: try ObjectDimensionSummaryService().summarize(
+                document: session.document,
+                targets: targets,
+                objectRegistry: session.objectRegistry
+            ),
+            generation: session.generation,
+            dirty: session.isDirty
+        )
+    }
+
     public func evaluateDocument(
         target: CLIDocumentTarget,
         mode: CLIEditMode = .auto,
@@ -1015,6 +1047,126 @@ public struct CLIService {
                 targets: references,
                 direction: direction,
                 distance: distance
+            ),
+            target: target,
+            mode: mode,
+            expectedGeneration: expectedGeneration,
+            dryRun: dryRun,
+            forceFileEdit: forceFileEdit,
+            client: client
+        )
+    }
+
+    public func sketchDimensionSummary(
+        target: CLIDocumentTarget,
+        targets: [SelectionTarget],
+        mode: CLIEditMode = .auto,
+        expectedGeneration: DocumentGeneration? = nil,
+        client: AgentClientProtocol? = nil
+    ) throws -> CLISketchDimensionSummaryResponse {
+        switch mode {
+        case .auto:
+            return try sketchDimensionSummaryAutomatically(
+                target: target,
+                targets: targets,
+                expectedGeneration: expectedGeneration,
+                client: client
+            )
+        case .file:
+            guard let url = target.fileURL else {
+                throw invalidCommand("File mode requires a document file path.")
+            }
+            return try sketchDimensionSummaryFile(at: url, targets: targets)
+        case .live:
+            let sessionID = try resolvedLiveSessionID(
+                target: target,
+                client: client
+            )
+            return try sketchDimensionSummaryLiveSession(
+                sessionID: sessionID,
+                targets: targets,
+                expectedGeneration: expectedGeneration,
+                client: requiredClient(client)
+            )
+        }
+    }
+
+    public func objectDimensionSummary(
+        target: CLIDocumentTarget,
+        targets: [SelectionTarget],
+        mode: CLIEditMode = .auto,
+        expectedGeneration: DocumentGeneration? = nil,
+        client: AgentClientProtocol? = nil
+    ) throws -> CLIObjectDimensionSummaryResponse {
+        switch mode {
+        case .auto:
+            return try objectDimensionSummaryAutomatically(
+                target: target,
+                targets: targets,
+                expectedGeneration: expectedGeneration,
+                client: client
+            )
+        case .file:
+            guard let url = target.fileURL else {
+                throw invalidCommand("File mode requires a document file path.")
+            }
+            return try objectDimensionSummaryFile(at: url, targets: targets)
+        case .live:
+            let sessionID = try resolvedLiveSessionID(
+                target: target,
+                client: client
+            )
+            return try objectDimensionSummaryLiveSession(
+                sessionID: sessionID,
+                targets: targets,
+                expectedGeneration: expectedGeneration,
+                client: requiredClient(client)
+            )
+        }
+    }
+
+    public func setSketchEntityDimension(
+        target: CLIDocumentTarget,
+        selectionTarget: SelectionTarget,
+        kind: SketchEntityDimensionKind,
+        value: CADExpression,
+        mode: CLIEditMode = .auto,
+        expectedGeneration: DocumentGeneration? = nil,
+        dryRun: Bool = false,
+        forceFileEdit: Bool = false,
+        client: AgentClientProtocol? = nil
+    ) throws -> CLIResponse {
+        try executeModelingCommand(
+            .setSketchEntityDimension(
+                target: selectionTarget,
+                kind: kind,
+                value: value
+            ),
+            target: target,
+            mode: mode,
+            expectedGeneration: expectedGeneration,
+            dryRun: dryRun,
+            forceFileEdit: forceFileEdit,
+            client: client
+        )
+    }
+
+    public func setObjectDimension(
+        target: CLIDocumentTarget,
+        selectionTarget: SelectionTarget,
+        kind: ObjectDimensionKind,
+        value: CADExpression,
+        mode: CLIEditMode = .auto,
+        expectedGeneration: DocumentGeneration? = nil,
+        dryRun: Bool = false,
+        forceFileEdit: Bool = false,
+        client: AgentClientProtocol? = nil
+    ) throws -> CLIResponse {
+        try executeModelingCommand(
+            .setObjectDimension(
+                target: selectionTarget,
+                kind: kind,
+                value: value
             ),
             target: target,
             mode: mode,
@@ -1448,6 +1600,66 @@ public struct CLIService {
         }
     }
 
+    public func sketchDimensionSummaryLiveSession(
+        sessionID: UUID,
+        targets: [SelectionTarget],
+        expectedGeneration: DocumentGeneration? = nil,
+        client: AgentClientProtocol
+    ) throws -> CLISketchDimensionSummaryResponse {
+        let response = try client.send(
+            .sketchDimensionSummary(
+                sessionID: sessionID,
+                targets: targets,
+                expectedGeneration: expectedGeneration
+            )
+        )
+        switch response {
+        case .sketchDimensionSummary(let sketchDimensionSummary):
+            let summary = try sessions(client: client)
+                .sessions
+                .first { $0.id == sessionID }
+            return CLISketchDimensionSummaryResponse(
+                sketchDimensionSummary: sketchDimensionSummary,
+                generation: DocumentGeneration(summary?.generation.value ?? 0),
+                dirty: summary?.dirty ?? false
+            )
+        case .failure(let error):
+            throw error
+        default:
+            throw unexpectedResponse("Sketch dimension summary request returned an unexpected response.")
+        }
+    }
+
+    public func objectDimensionSummaryLiveSession(
+        sessionID: UUID,
+        targets: [SelectionTarget],
+        expectedGeneration: DocumentGeneration? = nil,
+        client: AgentClientProtocol
+    ) throws -> CLIObjectDimensionSummaryResponse {
+        let response = try client.send(
+            .objectDimensionSummary(
+                sessionID: sessionID,
+                targets: targets,
+                expectedGeneration: expectedGeneration
+            )
+        )
+        switch response {
+        case .objectDimensionSummary(let objectDimensionSummary):
+            let summary = try sessions(client: client)
+                .sessions
+                .first { $0.id == sessionID }
+            return CLIObjectDimensionSummaryResponse(
+                objectDimensionSummary: objectDimensionSummary,
+                generation: DocumentGeneration(summary?.generation.value ?? 0),
+                dirty: summary?.dirty ?? false
+            )
+        case .failure(let error):
+            throw error
+        default:
+            throw unexpectedResponse("Object dimension summary request returned an unexpected response.")
+        }
+    }
+
     public func listParametersLiveSession(
         sessionID: UUID,
         expectedGeneration: DocumentGeneration? = nil,
@@ -1638,6 +1850,70 @@ public struct CLIService {
             throw invalidCommand("Surface source summary requires a document file path or live session ID.")
         }
         return try surfaceSourceSummaryFile(at: url)
+    }
+
+    private func sketchDimensionSummaryAutomatically(
+        target: CLIDocumentTarget,
+        targets: [SelectionTarget],
+        expectedGeneration: DocumentGeneration?,
+        client: AgentClientProtocol?
+    ) throws -> CLISketchDimensionSummaryResponse {
+        if let sessionID = target.sessionID {
+            return try sketchDimensionSummaryLiveSession(
+                sessionID: sessionID,
+                targets: targets,
+                expectedGeneration: expectedGeneration,
+                client: requiredClient(client)
+            )
+        }
+
+        if let url = target.fileURL,
+           let client,
+           let session = try openSession(for: url, client: client) {
+            return try sketchDimensionSummaryLiveSession(
+                sessionID: session.id,
+                targets: targets,
+                expectedGeneration: expectedGeneration,
+                client: client
+            )
+        }
+
+        guard let url = target.fileURL else {
+            throw invalidCommand("Sketch dimension summary requires a document file path or live session ID.")
+        }
+        return try sketchDimensionSummaryFile(at: url, targets: targets)
+    }
+
+    private func objectDimensionSummaryAutomatically(
+        target: CLIDocumentTarget,
+        targets: [SelectionTarget],
+        expectedGeneration: DocumentGeneration?,
+        client: AgentClientProtocol?
+    ) throws -> CLIObjectDimensionSummaryResponse {
+        if let sessionID = target.sessionID {
+            return try objectDimensionSummaryLiveSession(
+                sessionID: sessionID,
+                targets: targets,
+                expectedGeneration: expectedGeneration,
+                client: requiredClient(client)
+            )
+        }
+
+        if let url = target.fileURL,
+           let client,
+           let session = try openSession(for: url, client: client) {
+            return try objectDimensionSummaryLiveSession(
+                sessionID: session.id,
+                targets: targets,
+                expectedGeneration: expectedGeneration,
+                client: client
+            )
+        }
+
+        guard let url = target.fileURL else {
+            throw invalidCommand("Object dimension summary requires a document file path or live session ID.")
+        }
+        return try objectDimensionSummaryFile(at: url, targets: targets)
     }
 
     private func saveDocumentAutomatically(

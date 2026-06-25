@@ -12,6 +12,7 @@ public struct CLICommand: ParsableCommand {
             AgentCommand.self,
             AttachDocument.self,
             Capabilities.self,
+            DimensionCommand.self,
             EvaluateDocument.self,
             ExportDocument.self,
             MeasureDocument.self,
@@ -119,6 +120,9 @@ public enum CLISurfaceSlideDirection: String, CaseIterable, ExpressibleByArgumen
         }
     }
 }
+
+extension SketchEntityDimensionKind: ExpressibleByArgument {}
+extension ObjectDimensionKind: ExpressibleByArgument {}
 
 public struct AgentCommand: ParsableCommand {
     public static let configuration = CommandConfiguration(
@@ -417,6 +421,24 @@ private enum CLISelectionInputParser {
         return value
     }
 
+    static func decodeOptionalSelectionInput<Value: Decodable>(
+        inlinePayloads: [String],
+        filePath: String?,
+        valueName: String,
+        arrayName: String
+    ) throws -> [Value] {
+        guard !inlinePayloads.isEmpty || filePath != nil else {
+            return []
+        }
+        return try decodeSelectionInput(
+            inlinePayloads: inlinePayloads,
+            filePath: filePath,
+            clear: false,
+            valueName: valueName,
+            arrayName: arrayName
+        )
+    }
+
     static func decodeSelectionInput<Value: Decodable>(
         inlinePayloads: [String],
         filePath: String?,
@@ -474,6 +496,355 @@ private enum CLISelectionInputParser {
                 )
             }
         }
+    }
+}
+
+public struct DimensionCommand: ParsableCommand {
+    public static let configuration = CommandConfiguration(
+        commandName: "dimension",
+        abstract: "Discover and edit supported sketch and object dimensions.",
+        subcommands: [
+            DimensionSketchSummaryCommand.self,
+            DimensionObjectSummaryCommand.self,
+            DimensionSetSketchCommand.self,
+            DimensionSetObjectCommand.self,
+        ],
+        defaultSubcommand: DimensionObjectSummaryCommand.self
+    )
+
+    public init() {}
+}
+
+public struct DimensionSketchSummaryCommand: ParsableCommand {
+    public static let configuration = CommandConfiguration(
+        commandName: "sketch-summary",
+        abstract: "Return editable sketch dimension candidates for SelectionTarget values."
+    )
+
+    @Argument(help: "Path to the .swcad document for file or auto mode.")
+    public var file: String?
+
+    @Option(
+        name: .customLong("target"),
+        help: "SelectionTarget JSON object. Repeat for multiple targets. Live mode may omit this to use current selection."
+    )
+    public var targetPayloads: [String] = []
+
+    @Option(help: "JSON file containing one SelectionTarget object or an array.")
+    public var targetsFile: String?
+
+    @Option(help: "Edit mode: auto, file, or live.")
+    public var mode: CLIEditMode = .auto
+
+    @Option(help: "Open document session UUID for live mode.")
+    public var sessionID: String?
+
+    @Option(help: "Expected document generation for live mode.")
+    public var expectedGeneration: UInt64?
+
+    @Option(help: "Optional Rupa agent socket used to detect open document conflicts.")
+    public var agentSocket: String?
+
+    @Flag(help: "Print a JSON result.")
+    public var json: Bool = false
+
+    public init() {}
+
+    public func run() throws {
+        let id = try CLISelectionInputParser.optionalSessionID(sessionID)
+        let targets: [SelectionTarget] = try CLISelectionInputParser.decodeOptionalSelectionInput(
+            inlinePayloads: targetPayloads,
+            filePath: targetsFile,
+            valueName: "SelectionTarget",
+            arrayName: "SelectionTarget"
+        )
+
+        try CLIExitCode.run {
+            let agentClient = CLIAgentClientFactory.makeAgentClient(
+                mode: mode,
+                sessionID: id,
+                socket: agentSocket
+            )
+            let response = try CLIService().sketchDimensionSummary(
+                target: CLIDocumentTarget(
+                    fileURL: file.map(URL.init(fileURLWithPath:)),
+                    sessionID: id
+                ),
+                targets: targets,
+                mode: mode,
+                expectedGeneration: expectedGeneration.map(DocumentGeneration.init),
+                client: agentClient
+            )
+            try CLIOutput.write(
+                response: response,
+                asJSON: json
+            )
+        }
+    }
+}
+
+public struct DimensionObjectSummaryCommand: ParsableCommand {
+    public static let configuration = CommandConfiguration(
+        commandName: "object-summary",
+        abstract: "Return editable object dimension candidates for SelectionTarget values."
+    )
+
+    @Argument(help: "Path to the .swcad document for file or auto mode.")
+    public var file: String?
+
+    @Option(
+        name: .customLong("target"),
+        help: "SelectionTarget JSON object. Repeat for multiple targets. Live mode may omit this to use current selection."
+    )
+    public var targetPayloads: [String] = []
+
+    @Option(help: "JSON file containing one SelectionTarget object or an array.")
+    public var targetsFile: String?
+
+    @Option(help: "Edit mode: auto, file, or live.")
+    public var mode: CLIEditMode = .auto
+
+    @Option(help: "Open document session UUID for live mode.")
+    public var sessionID: String?
+
+    @Option(help: "Expected document generation for live mode.")
+    public var expectedGeneration: UInt64?
+
+    @Option(help: "Optional Rupa agent socket used to detect open document conflicts.")
+    public var agentSocket: String?
+
+    @Flag(help: "Print a JSON result.")
+    public var json: Bool = false
+
+    public init() {}
+
+    public func run() throws {
+        let id = try CLISelectionInputParser.optionalSessionID(sessionID)
+        let targets: [SelectionTarget] = try CLISelectionInputParser.decodeOptionalSelectionInput(
+            inlinePayloads: targetPayloads,
+            filePath: targetsFile,
+            valueName: "SelectionTarget",
+            arrayName: "SelectionTarget"
+        )
+
+        try CLIExitCode.run {
+            let agentClient = CLIAgentClientFactory.makeAgentClient(
+                mode: mode,
+                sessionID: id,
+                socket: agentSocket
+            )
+            let response = try CLIService().objectDimensionSummary(
+                target: CLIDocumentTarget(
+                    fileURL: file.map(URL.init(fileURLWithPath:)),
+                    sessionID: id
+                ),
+                targets: targets,
+                mode: mode,
+                expectedGeneration: expectedGeneration.map(DocumentGeneration.init),
+                client: agentClient
+            )
+            try CLIOutput.write(
+                response: response,
+                asJSON: json
+            )
+        }
+    }
+}
+
+public struct DimensionSetSketchCommand: ParsableCommand {
+    public static let configuration = CommandConfiguration(
+        commandName: "set-sketch",
+        abstract: "Set a supported sketch dimension on one SelectionTarget."
+    )
+
+    @Argument(help: "Path to the .swcad document for file or auto mode.")
+    public var file: String?
+
+    @Option(help: "SelectionTarget JSON object.")
+    public var target: String?
+
+    @Option(help: "JSON file containing one SelectionTarget object.")
+    public var targetFile: String?
+
+    @Option(help: "Sketch dimension kind: length, radius, diameter, or angle.")
+    public var kind: SketchEntityDimensionKind
+
+    @Option(help: "Dimension value numeric literal.")
+    public var value: Double
+
+    @Option(help: "Unit for the value. Use a length unit for length/radius/diameter, or degree/radian for angle.")
+    public var unit: String = LengthDisplayUnit.millimeter.rawValue
+
+    @Option(help: "Edit mode: auto, file, or live.")
+    public var mode: CLIEditMode = .auto
+
+    @Option(help: "Open document session UUID for live mode.")
+    public var sessionID: String?
+
+    @Option(help: "Expected document generation for live mode.")
+    public var expectedGeneration: UInt64?
+
+    @Flag(help: "Validate the command without saving the changed file.")
+    public var dryRun: Bool = false
+
+    @Flag(help: "Allow direct file mutation even if the app reports the same file as open.")
+    public var forceFileEdit: Bool = false
+
+    @Option(help: "Optional Rupa agent socket used to detect open document conflicts.")
+    public var agentSocket: String?
+
+    @Flag(help: "Print a JSON result.")
+    public var json: Bool = false
+
+    public init() {}
+
+    public func run() throws {
+        let id = try CLISelectionInputParser.optionalSessionID(sessionID)
+        let selectionTarget: SelectionTarget = try CLISelectionInputParser.decodeSingleSelectionInput(
+            inlinePayload: target,
+            filePath: targetFile,
+            valueName: "SelectionTarget"
+        )
+        let expression = try CLIDimensionExpressionParser.expression(
+            value: value,
+            unit: unit,
+            sketchKind: kind
+        )
+
+        try CLIExitCode.run {
+            let agentClient = CLIAgentClientFactory.makeAgentClient(
+                mode: mode,
+                sessionID: id,
+                socket: agentSocket
+            )
+            let response = try CLIService().setSketchEntityDimension(
+                target: CLIDocumentTarget(
+                    fileURL: file.map(URL.init(fileURLWithPath:)),
+                    sessionID: id
+                ),
+                selectionTarget: selectionTarget,
+                kind: kind,
+                value: expression,
+                mode: mode,
+                expectedGeneration: expectedGeneration.map(DocumentGeneration.init),
+                dryRun: dryRun,
+                forceFileEdit: forceFileEdit,
+                client: agentClient
+            )
+            try CLIOutput.write(
+                response: response,
+                asJSON: json
+            )
+        }
+    }
+}
+
+public struct DimensionSetObjectCommand: ParsableCommand {
+    public static let configuration = CommandConfiguration(
+        commandName: "set-object",
+        abstract: "Set a supported object dimension on one SelectionTarget."
+    )
+
+    @Argument(help: "Path to the .swcad document for file or auto mode.")
+    public var file: String?
+
+    @Option(help: "SelectionTarget JSON object.")
+    public var target: String?
+
+    @Option(help: "JSON file containing one SelectionTarget object.")
+    public var targetFile: String?
+
+    @Option(help: "Object dimension kind: sizeX, sizeY, sizeZ, radius, or diameter.")
+    public var kind: ObjectDimensionKind
+
+    @Option(help: "Dimension value numeric literal.")
+    public var value: Double
+
+    @Option(help: "Length unit for the value.")
+    public var unit: String = LengthDisplayUnit.millimeter.rawValue
+
+    @Option(help: "Edit mode: auto, file, or live.")
+    public var mode: CLIEditMode = .auto
+
+    @Option(help: "Open document session UUID for live mode.")
+    public var sessionID: String?
+
+    @Option(help: "Expected document generation for live mode.")
+    public var expectedGeneration: UInt64?
+
+    @Flag(help: "Validate the command without saving the changed file.")
+    public var dryRun: Bool = false
+
+    @Flag(help: "Allow direct file mutation even if the app reports the same file as open.")
+    public var forceFileEdit: Bool = false
+
+    @Option(help: "Optional Rupa agent socket used to detect open document conflicts.")
+    public var agentSocket: String?
+
+    @Flag(help: "Print a JSON result.")
+    public var json: Bool = false
+
+    public init() {}
+
+    public func run() throws {
+        let id = try CLISelectionInputParser.optionalSessionID(sessionID)
+        let selectionTarget: SelectionTarget = try CLISelectionInputParser.decodeSingleSelectionInput(
+            inlinePayload: target,
+            filePath: targetFile,
+            valueName: "SelectionTarget"
+        )
+        let expression = try CLIDimensionExpressionParser.lengthExpression(value: value, unit: unit)
+
+        try CLIExitCode.run {
+            let agentClient = CLIAgentClientFactory.makeAgentClient(
+                mode: mode,
+                sessionID: id,
+                socket: agentSocket
+            )
+            let response = try CLIService().setObjectDimension(
+                target: CLIDocumentTarget(
+                    fileURL: file.map(URL.init(fileURLWithPath:)),
+                    sessionID: id
+                ),
+                selectionTarget: selectionTarget,
+                kind: kind,
+                value: expression,
+                mode: mode,
+                expectedGeneration: expectedGeneration.map(DocumentGeneration.init),
+                dryRun: dryRun,
+                forceFileEdit: forceFileEdit,
+                client: agentClient
+            )
+            try CLIOutput.write(
+                response: response,
+                asJSON: json
+            )
+        }
+    }
+}
+
+private enum CLIDimensionExpressionParser {
+    static func expression(
+        value: Double,
+        unit: String,
+        sketchKind: SketchEntityDimensionKind
+    ) throws -> CADExpression {
+        switch sketchKind {
+        case .angle:
+            guard let angleUnit = AngleUnit(rawValue: unit) else {
+                throw ValidationError("Angle dimension unit must be degree or radian.")
+            }
+            return .constant(.angle(value, unit: angleUnit))
+        case .length, .radius, .diameter:
+            return try lengthExpression(value: value, unit: unit)
+        }
+    }
+
+    static func lengthExpression(value: Double, unit: String) throws -> CADExpression {
+        guard let lengthUnit = LengthDisplayUnit(rawValue: unit) else {
+            throw ValidationError("Length dimension unit must be a supported Rupa display unit.")
+        }
+        return .constant(Quantity(value: lengthUnit.meters(from: value), kind: .length))
     }
 }
 
@@ -2822,6 +3193,28 @@ public enum CLIOutput {
 
     public static func write(
         response: CLISurfaceSourceSummaryResponse,
+        asJSON: Bool
+    ) throws {
+        try write(
+            response,
+            fallback: response.message,
+            asJSON: asJSON
+        )
+    }
+
+    public static func write(
+        response: CLISketchDimensionSummaryResponse,
+        asJSON: Bool
+    ) throws {
+        try write(
+            response,
+            fallback: response.message,
+            asJSON: asJSON
+        )
+    }
+
+    public static func write(
+        response: CLIObjectDimensionSummaryResponse,
         asJSON: Bool
     ) throws {
         try write(
