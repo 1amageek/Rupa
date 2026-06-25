@@ -963,12 +963,36 @@ import SwiftCAD
     let encoded = try codec.encode(AgentRequest.status, id: "request-1")
     let envelope = try codec.decodeRequestEnvelope(from: encoded)
     let json = try #require(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+    let params = try #require(json["params"] as? [String: Any])
 
     #expect(envelope == AgentRequestEnvelope(id: "request-1", params: .status))
     #expect(json["jsonrpc"] as? String == "2.0")
     #expect(json["id"] as? String == "request-1")
     #expect(json["method"] as? String == "agent.status")
-    #expect(json["params"] != nil)
+    #expect(params.isEmpty)
+    #expect(params["status"] == nil)
+}
+
+@Test func agentMessageCodecUsesMethodSpecificRequestParams() async throws {
+    let codec = AgentMessageCodec()
+    let sessionID = UUID()
+    let request = AgentRequest.execute(
+        sessionID: sessionID,
+        command: .renameDocument(name: "Flat Params"),
+        expectedGeneration: DocumentGeneration(7)
+    )
+
+    let encoded = try codec.encode(request, id: "request-params")
+    let decoded = try codec.decodeRequest(from: encoded)
+    let json = try #require(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+    let params = try #require(json["params"] as? [String: Any])
+
+    #expect(decoded == request)
+    #expect(json["method"] as? String == "command.apply")
+    #expect(params["execute"] == nil)
+    #expect(params["sessionID"] as? String == sessionID.uuidString)
+    #expect(params["command"] != nil)
+    #expect(params["expectedGeneration"] != nil)
 }
 
 @Test func agentMessageCodecWrapsResponsesInJSONRPCEnvelope() async throws {
@@ -985,13 +1009,19 @@ import SwiftCAD
     let decoded = try codec.decodeResponse(from: encoded, expectedID: "request-2")
     let envelope = try codec.decodeResponseEnvelope(from: encoded)
     let json = try #require(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+    let result = try #require(json["result"] as? [String: Any])
 
     #expect(decoded == response)
     #expect(envelope.id == "request-2")
+    #expect(envelope.method == "agent.status")
     #expect(json["jsonrpc"] as? String == "2.0")
     #expect(json["id"] as? String == "request-2")
-    #expect(json["result"] != nil)
+    #expect(json["method"] as? String == "agent.status")
     #expect(json["error"] == nil)
+    #expect(result["status"] == nil)
+    #expect(result["running"] as? Bool == true)
+    #expect(result["socketPath"] as? String == "/tmp/rupa.sock")
+    #expect(result["sessionCount"] as? Int == 2)
 }
 
 @Test func agentMessageCodecWrapsFailuresAsResponseErrors() async throws {
@@ -1001,12 +1031,21 @@ import SwiftCAD
         message: "Malformed command."
     )
 
-    let encoded = try codec.encode(AgentResponse.failure(error), id: "request-3")
-    let decoded = try codec.decodeResponse(from: encoded, expectedID: "request-3")
+    let encoded = try codec.encode(
+        AgentResponse.failure(error),
+        id: "request-3",
+        method: "agent.status"
+    )
+    let decoded = try codec.decodeResponse(
+        from: encoded,
+        expectedID: "request-3",
+        expectedMethod: "agent.status"
+    )
     let json = try #require(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
     let errorJSON = try #require(json["error"] as? [String: Any])
 
     #expect(decoded == .failure(error))
+    #expect(json["method"] as? String == "agent.status")
     #expect(json["result"] == nil)
     #expect(errorJSON["code"] as? String == EditorError.Code.commandInvalid.rawValue)
     #expect(errorJSON["message"] as? String == "Malformed command.")
@@ -1035,6 +1074,64 @@ import SwiftCAD
     }
 
     #expect(caught?.code == .commandInvalid)
+}
+
+@Test func agentMessageCodecRejectsResponseMethodMismatch() async throws {
+    let codec = AgentMessageCodec()
+    let encoded = try codec.encode(
+        AgentResponse.status(
+            AgentStatus(
+                running: true,
+                socketPath: "/tmp/rupa.sock",
+                sessionCount: 1
+            )
+        ),
+        id: "request-5"
+    )
+    var caught: EditorError?
+
+    do {
+        _ = try codec.decodeResponse(
+            from: encoded,
+            expectedID: "request-5",
+            expectedMethod: "sessions.list"
+        )
+    } catch let error as EditorError {
+        caught = error
+    }
+
+    #expect(caught?.code == .agentConnectionFailed)
+}
+
+@Test func agentMessageCodecTreatsParameterExpressionResponseAsCommandResult() async throws {
+    let codec = AgentMessageCodec()
+    let response = AgentResponse.command(
+        AutomationResult(
+            message: "Parameter height updated.",
+            commandName: "upsertParameter",
+            generation: DocumentGeneration(2),
+            didMutate: true
+        )
+    )
+
+    let encoded = try codec.encode(
+        response,
+        id: "request-parameter-expression",
+        method: "parameter.setExpression"
+    )
+    let decoded = try codec.decodeResponse(
+        from: encoded,
+        expectedID: "request-parameter-expression",
+        expectedMethod: "parameter.setExpression"
+    )
+    let json = try #require(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+    let result = try #require(json["result"] as? [String: Any])
+
+    #expect(decoded == response)
+    #expect(json["method"] as? String == "parameter.setExpression")
+    #expect(result["command"] == nil)
+    #expect(result["commandName"] as? String == "upsertParameter")
+    #expect(result["didMutate"] as? Bool == true)
 }
 
 @Test func agentMessageCodecRejectsResponseIDMismatch() async throws {

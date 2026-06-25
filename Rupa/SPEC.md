@@ -1103,14 +1103,12 @@ The package-level socket listener supports start, stop, stale socket replacement
   "id": "request-id",
   "method": "command.apply",
   "params": {
-    "execute": {
-      "sessionID": "open-session-id",
-      "expectedGeneration": 42,
-      "command": {
-        "type": "setParameter",
-        "name": "width",
-        "expression": "50mm"
-      }
+    "sessionID": "open-session-id",
+    "expectedGeneration": 42,
+    "command": {
+      "type": "setParameter",
+      "name": "width",
+      "expression": "50mm"
     }
   }
 }
@@ -1122,13 +1120,12 @@ The package-level socket listener supports start, stop, stale socket replacement
 {
   "jsonrpc": "2.0",
   "id": "request-id",
+  "method": "command.apply",
   "result": {
-    "command": {
-      "message": "Parameter width updated.",
-      "commandName": "setParameter",
-      "generation": 43,
-      "didMutate": true
-    }
+    "message": "Parameter width updated.",
+    "commandName": "setParameter",
+    "generation": 43,
+    "didMutate": true
   }
 }
 ```
@@ -1139,6 +1136,7 @@ The package-level socket listener supports start, stop, stale socket replacement
 {
   "jsonrpc": "2.0",
   "id": "request-id",
+  "method": "command.apply",
   "error": {
     "code": "document.generationMismatch",
     "message": "The document has changed since the CLI command was prepared."

@@ -48,7 +48,22 @@ public enum CLIExitCode: Int32, Codable, Equatable, Sendable {
         do {
             try body()
         } catch {
+            writeError(error)
             throw exitCode(for: error)
         }
+    }
+
+    private static func writeError(_ error: Error) {
+        let message: String
+        if let localizedError = error as? LocalizedError,
+           let errorDescription = localizedError.errorDescription {
+            message = errorDescription
+        } else {
+            message = String(describing: error)
+        }
+        guard let data = "\(message)\n".data(using: .utf8) else {
+            return
+        }
+        FileHandle.standardError.write(data)
     }
 }

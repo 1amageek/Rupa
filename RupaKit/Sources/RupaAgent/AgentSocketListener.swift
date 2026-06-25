@@ -229,7 +229,11 @@ public actor AgentSocketService {
         do {
             let requestEnvelope = try codec.decodeRequestEnvelope(from: requestData)
             let response = await response(for: requestEnvelope.params)
-            return try codec.encode(response, id: requestEnvelope.id)
+            return try codec.encode(
+                response,
+                id: requestEnvelope.id,
+                method: requestEnvelope.method
+            )
         } catch {
             return failureResponseData(for: error)
         }

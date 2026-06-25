@@ -22,8 +22,12 @@ public struct AgentMessageCodec {
         return try encoder.encode(envelope)
     }
 
-    public func encode(_ response: AgentResponse, id: String? = nil) throws -> Data {
-        try encode(AgentResponseEnvelope(id: id, response: response))
+    public func encode(
+        _ response: AgentResponse,
+        id: String? = nil,
+        method: String? = nil
+    ) throws -> Data {
+        try encode(AgentResponseEnvelope(id: id, response: response, method: method))
     }
 
     public func encode(_ envelope: AgentResponseEnvelope) throws -> Data {
@@ -52,11 +56,28 @@ public struct AgentMessageCodec {
     }
 
     public func decodeResponse(from data: Data, expectedID: String) throws -> AgentResponse {
+        try decodeResponse(from: data, expectedID: expectedID, expectedMethod: nil)
+    }
+
+    public func decodeResponse(
+        from data: Data,
+        expectedID: String,
+        expectedMethod: String?
+    ) throws -> AgentResponse {
         let envelope = try decodeResponseEnvelope(from: data)
         guard envelope.id == expectedID else {
+            if envelope.error != nil {
+                return try envelope.decodedResponse()
+            }
             throw EditorError(
                 code: .agentConnectionFailed,
                 message: "Agent response id mismatch. Expected \(expectedID), received \(envelope.id ?? "nil")."
+            )
+        }
+        if let expectedMethod, envelope.method != expectedMethod {
+            throw EditorError(
+                code: .agentConnectionFailed,
+                message: "Agent response method mismatch. Expected \(expectedMethod), received \(envelope.method ?? "nil")."
             )
         }
         return try envelope.decodedResponse()

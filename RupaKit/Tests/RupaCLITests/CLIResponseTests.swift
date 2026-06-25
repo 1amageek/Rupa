@@ -8,7 +8,7 @@ import SwiftCAD
 
 @Test(.timeLimit(.minutes(1)))
 func cliExecutablePrintsCapabilities() async throws {
-    let result = try runCLI(["capabilities"])
+    let result = try await runCLI(["capabilities"])
 
     #expect(result.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: result.standardError))
     #expect(result.standardOutput.contains("describeDocument"))
@@ -24,7 +24,7 @@ func cliExecutableValidatesClosedDocumentAsJSON() async throws {
     let documentURL = temporaryDirectory.appendingPathComponent("process-validate.swcad")
     try DocumentFileService().save(.empty(named: "Process Validate"), to: documentURL)
 
-    let result = try runCLI([
+    let result = try await runCLI([
         "validate",
         documentURL.path,
         "--json",
@@ -50,7 +50,7 @@ func cliExecutableParameterSetPersistsClosedDocumentAsJSON() async throws {
     let documentURL = temporaryDirectory.appendingPathComponent("process-param.swcad")
     try DocumentFileService().save(.empty(named: "Process Parameter"), to: documentURL)
 
-    let result = try runCLI([
+    let result = try await runCLI([
         "param",
         "set",
         documentURL.path,
@@ -89,7 +89,7 @@ func cliExecutableParameterFormulaAndListClosedDocumentAsJSON() async throws {
     let documentURL = temporaryDirectory.appendingPathComponent("process-param-formula.swcad")
     try DocumentFileService().save(.empty(named: "Process Formula"), to: documentURL)
 
-    let widthResult = try runCLI([
+    let widthResult = try await runCLI([
         "param",
         "set",
         documentURL.path,
@@ -100,7 +100,7 @@ func cliExecutableParameterFormulaAndListClosedDocumentAsJSON() async throws {
         "--mode",
         "file",
     ])
-    let heightResult = try runCLI([
+    let heightResult = try await runCLI([
         "param",
         "set",
         documentURL.path,
@@ -117,7 +117,7 @@ func cliExecutableParameterFormulaAndListClosedDocumentAsJSON() async throws {
         CLIResponse.self,
         from: heightResult.standardOutputData
     )
-    let listResult = try runCLI([
+    let listResult = try await runCLI([
         "param",
         "list",
         documentURL.path,
@@ -155,7 +155,7 @@ func cliExecutableParameterDeleteClosedDocumentAsJSON() async throws {
     let documentURL = temporaryDirectory.appendingPathComponent("process-param-delete.swcad")
     try DocumentFileService().save(.empty(named: "Process Delete"), to: documentURL)
 
-    let setResult = try runCLI([
+    let setResult = try await runCLI([
         "param",
         "set",
         documentURL.path,
@@ -166,7 +166,7 @@ func cliExecutableParameterDeleteClosedDocumentAsJSON() async throws {
         "--mode",
         "file",
     ])
-    let deleteResult = try runCLI([
+    let deleteResult = try await runCLI([
         "param",
         "delete",
         documentURL.path,
@@ -179,7 +179,7 @@ func cliExecutableParameterDeleteClosedDocumentAsJSON() async throws {
         CLIResponse.self,
         from: deleteResult.standardOutputData
     )
-    let listResult = try runCLI([
+    let listResult = try await runCLI([
         "param",
         "list",
         documentURL.path,
@@ -230,7 +230,7 @@ func cliExecutableAutoParameterFormulaAndListUsesLiveSessionThroughSocketAsJSON(
 
     try await listener.start()
     do {
-        let setResult = try runCLI([
+        let setResult = try await runCLI([
             "param",
             "set",
             documentURL.path,
@@ -247,11 +247,16 @@ func cliExecutableAutoParameterFormulaAndListUsesLiveSessionThroughSocketAsJSON(
             socketURL.path,
             "--json",
         ])
+        #expect(setResult.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: setResult.standardError))
+        let setOutputData = try #require(
+            setResult.standardOutputData.isEmpty ? nil : setResult.standardOutputData,
+            Comment(rawValue: "stdout was empty. stderr: \(setResult.standardError)")
+        )
         let setResponse = try JSONDecoder().decode(
             CLIResponse.self,
-            from: setResult.standardOutputData
+            from: setOutputData
         )
-        let listResult = try runCLI([
+        let listResult = try await runCLI([
             "param",
             "list",
             documentURL.path,
@@ -270,7 +275,6 @@ func cliExecutableAutoParameterFormulaAndListUsesLiveSessionThroughSocketAsJSON(
         let loaded = try DocumentFileService().load(from: documentURL)
         let height = try #require(listResponse.parameters.first { $0.name == "height" })
 
-        #expect(setResult.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: setResult.standardError))
         #expect(setResponse.message == "Parameter height updated.")
         #expect(setResponse.generation == 2)
         #expect(setResponse.dirty)
@@ -297,7 +301,7 @@ func cliExecutableRenameFileModePersistsClosedDocumentAsJSON() async throws {
     let documentURL = temporaryDirectory.appendingPathComponent("process-rename.swcad")
     try DocumentFileService().save(.empty(named: "Before"), to: documentURL)
 
-    let result = try runCLI([
+    let result = try await runCLI([
         "rename",
         documentURL.path,
         "--name",
@@ -328,7 +332,7 @@ func cliExecutableRenameDryRunDoesNotPersistClosedDocumentAsJSON() async throws 
     let documentURL = temporaryDirectory.appendingPathComponent("process-rename-dry.swcad")
     try DocumentFileService().save(.empty(named: "Before"), to: documentURL)
 
-    let result = try runCLI([
+    let result = try await runCLI([
         "rename",
         documentURL.path,
         "--name",
@@ -360,7 +364,7 @@ func cliExecutableSketchLineClosedDocumentAsJSON() async throws {
     let documentURL = temporaryDirectory.appendingPathComponent("process-line.swcad")
     try DocumentFileService().save(.empty(named: "Before"), to: documentURL)
 
-    let result = try runCLI([
+    let result = try await runCLI([
         "sketch",
         "line",
         documentURL.path,
@@ -401,7 +405,7 @@ func cliExecutableSketchRectangleClosedDocumentAsJSON() async throws {
     let documentURL = temporaryDirectory.appendingPathComponent("process-rectangle.swcad")
     try DocumentFileService().save(.empty(named: "Before"), to: documentURL)
 
-    let result = try runCLI([
+    let result = try await runCLI([
         "sketch",
         "rectangle",
         documentURL.path,
@@ -446,7 +450,7 @@ func cliExecutableModelEvaluateAndExportClosedDocumentAsJSON() async throws {
     let outputURL = temporaryDirectory.appendingPathComponent("process-box.stl")
     try DocumentFileService().save(.empty(named: "Before"), to: documentURL)
 
-    let modelResult = try runCLI([
+    let modelResult = try await runCLI([
         "model",
         "box",
         documentURL.path,
@@ -470,7 +474,7 @@ func cliExecutableModelEvaluateAndExportClosedDocumentAsJSON() async throws {
     )
     let loadedAfterModel = try DocumentFileService().load(from: documentURL)
 
-    let evalResult = try runCLI([
+    let evalResult = try await runCLI([
         "eval",
         documentURL.path,
         "--mode",
@@ -482,7 +486,7 @@ func cliExecutableModelEvaluateAndExportClosedDocumentAsJSON() async throws {
         from: evalResult.standardOutputData
     )
 
-    let meshResult = try runCLI([
+    let meshResult = try await runCLI([
         "mesh",
         documentURL.path,
         "--mode",
@@ -494,7 +498,7 @@ func cliExecutableModelEvaluateAndExportClosedDocumentAsJSON() async throws {
         from: meshResult.standardOutputData
     )
 
-    let exportResult = try runCLI([
+    let exportResult = try await runCLI([
         "export",
         documentURL.path,
         "--output",
@@ -534,7 +538,7 @@ func cliExecutableModelExtrudeExistingProfilePersistsClosedDocumentAsJSON() asyn
     let documentURL = temporaryDirectory.appendingPathComponent("process-extrude.swcad")
     try DocumentFileService().save(.empty(named: "Before"), to: documentURL)
 
-    let sketchResult = try runCLI([
+    let sketchResult = try await runCLI([
         "sketch",
         "rectangle",
         documentURL.path,
@@ -553,7 +557,7 @@ func cliExecutableModelExtrudeExistingProfilePersistsClosedDocumentAsJSON() asyn
     let loadedAfterSketch = try DocumentFileService().load(from: documentURL)
     let sketchFeatureID = try #require(loadedAfterSketch.cadDocument.designGraph.order.first)
 
-    let extrudeResult = try runCLI([
+    let extrudeResult = try await runCLI([
         "model",
         "extrude",
         documentURL.path,
@@ -602,7 +606,7 @@ func cliExecutableModelBoxDryRunDoesNotPersistClosedDocumentAsJSON() async throw
     let documentURL = temporaryDirectory.appendingPathComponent("process-box-dry.swcad")
     try DocumentFileService().save(.empty(named: "Before"), to: documentURL)
 
-    let result = try runCLI([
+    let result = try await runCLI([
         "model",
         "box",
         documentURL.path,
@@ -641,7 +645,7 @@ func cliExecutableModelBoxCornersPersistsClosedDocumentAsJSON() async throws {
     let documentURL = temporaryDirectory.appendingPathComponent("process-box-corners.swcad")
     try DocumentFileService().save(.empty(named: "Before"), to: documentURL)
 
-    let result = try runCLI([
+    let result = try await runCLI([
         "model",
         "box-corners",
         documentURL.path,
@@ -688,7 +692,7 @@ func cliExecutableExportDryRunDoesNotWriteOutputAsJSON() async throws {
     let documentURL = temporaryDirectory.appendingPathComponent("process-export-dry.swcad")
     let outputURL = temporaryDirectory.appendingPathComponent("dry.stl")
     try DocumentFileService().save(.empty(named: "Before"), to: documentURL)
-    let modelResult = try runCLI([
+    let modelResult = try await runCLI([
         "model",
         "box",
         documentURL.path,
@@ -703,7 +707,7 @@ func cliExecutableExportDryRunDoesNotWriteOutputAsJSON() async throws {
     ])
     #expect(modelResult.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: modelResult.standardError))
 
-    let result = try runCLI([
+    let result = try await runCLI([
         "export",
         documentURL.path,
         "--output",
@@ -746,7 +750,7 @@ func cliExecutableExportPresetAndVersionedPolicyAsJSON() async throws {
     try DocumentFileService().save(document, to: documentURL)
     try Data("existing".utf8).write(to: outputURL)
 
-    let modelResult = try runCLI([
+    let modelResult = try await runCLI([
         "model",
         "box",
         documentURL.path,
@@ -759,7 +763,7 @@ func cliExecutableExportPresetAndVersionedPolicyAsJSON() async throws {
         "--mode",
         "file",
     ])
-    let result = try runCLI([
+    let result = try await runCLI([
         "export",
         documentURL.path,
         "--output",
@@ -811,7 +815,7 @@ func cliExecutableListsAndAttachesOpenSessionThroughSocketAsJSON() async throws 
 
     try await listener.start()
     do {
-        let sessionsResult = try runCLI([
+        let sessionsResult = try await runCLI([
             "sessions",
             "--socket",
             socketURL.path,
@@ -821,7 +825,7 @@ func cliExecutableListsAndAttachesOpenSessionThroughSocketAsJSON() async throws 
             CLISessionsResponse.self,
             from: sessionsResult.standardOutputData
         )
-        let attachResult = try runCLI([
+        let attachResult = try await runCLI([
             "attach",
             documentURL.path,
             "--socket",
@@ -863,7 +867,7 @@ func cliExecutableRenameLiveMutatesOpenSessionThroughSocketAsJSON() async throws
 
     try await listener.start()
     do {
-        let renameResult = try runCLI([
+        let renameResult = try await runCLI([
             "rename-live",
             sessionID.uuidString,
             "--name",
@@ -878,7 +882,7 @@ func cliExecutableRenameLiveMutatesOpenSessionThroughSocketAsJSON() async throws
             CLIResponse.self,
             from: renameResult.standardOutputData
         )
-        let sessionsResult = try runCLI([
+        let sessionsResult = try await runCLI([
             "sessions",
             "--socket",
             socketURL.path,
@@ -933,7 +937,7 @@ func cliExecutableAutoEvaluateUsesLiveSessionThroughSocketAsJSON() async throws 
 
     try await listener.start()
     do {
-        let result = try runCLI([
+        let result = try await runCLI([
             "eval",
             documentURL.path,
             "--mode",
@@ -986,7 +990,7 @@ func cliExecutableAutoSavePersistsLiveSessionThroughSocketAsJSON() async throws 
 
     try await listener.start()
     do {
-        let result = try runCLI([
+        let result = try await runCLI([
             "save",
             documentURL.path,
             "--mode",
@@ -1001,7 +1005,7 @@ func cliExecutableAutoSavePersistsLiveSessionThroughSocketAsJSON() async throws 
             CLISaveResponse.self,
             from: result.standardOutputData
         )
-        let sessionsResult = try runCLI([
+        let sessionsResult = try await runCLI([
             "sessions",
             "--socket",
             socketURL.path,
@@ -1059,7 +1063,7 @@ func cliExecutableAutoExportUsesLiveSessionThroughSocketAsJSON() async throws {
 
     try await listener.start()
     do {
-        let result = try runCLI([
+        let result = try await runCLI([
             "export",
             documentURL.path,
             "--output",
@@ -1112,7 +1116,7 @@ func cliExecutableFileModeRejectsOpenDocumentConflictAndForceOverridesAsJSON() a
 
     try await listener.start()
     do {
-        let rejected = try runCLI([
+        let rejected = try await runCLI([
             "rename",
             documentURL.path,
             "--name",
@@ -1123,7 +1127,7 @@ func cliExecutableFileModeRejectsOpenDocumentConflictAndForceOverridesAsJSON() a
             socketURL.path,
         ])
         let unchanged = try DocumentFileService().load(from: documentURL)
-        let forced = try runCLI([
+        let forced = try await runCLI([
             "rename",
             documentURL.path,
             "--name",
@@ -1139,7 +1143,7 @@ func cliExecutableFileModeRejectsOpenDocumentConflictAndForceOverridesAsJSON() a
             CLIResponse.self,
             from: forced.standardOutputData
         )
-        let sessionsResult = try runCLI([
+        let sessionsResult = try await runCLI([
             "sessions",
             "--socket",
             socketURL.path,
@@ -1168,7 +1172,7 @@ func cliExecutableFileModeRejectsOpenDocumentConflictAndForceOverridesAsJSON() a
 
 @Test(.timeLimit(.minutes(1)))
 func cliExecutableReturnsUsageExitForInvalidArguments() async throws {
-    let result = try runCLI([
+    let result = try await runCLI([
         "attach",
         "--session",
         "not-a-uuid",
@@ -1186,7 +1190,7 @@ func cliExecutableReturnsUsageExitForInvalidModelUnit() async throws {
     let documentURL = temporaryDirectory.appendingPathComponent("invalid-unit.swcad")
     try DocumentFileService().save(.empty(named: "Invalid Unit"), to: documentURL)
 
-    let result = try runCLI([
+    let result = try await runCLI([
         "model",
         "box",
         documentURL.path,
@@ -1214,7 +1218,7 @@ func cliExecutableReturnsSoftwareExitForUnsupportedExportFormat() async throws {
     let documentURL = temporaryDirectory.appendingPathComponent("unsupported-export.swcad")
     let outputURL = temporaryDirectory.appendingPathComponent("unsupported.xyz")
     try DocumentFileService().save(.empty(named: "Unsupported Export"), to: documentURL)
-    let modelResult = try runCLI([
+    let modelResult = try await runCLI([
         "model",
         "box",
         documentURL.path,
@@ -1228,7 +1232,7 @@ func cliExecutableReturnsSoftwareExitForUnsupportedExportFormat() async throws {
         "file",
     ])
 
-    let result = try runCLI([
+    let result = try await runCLI([
         "export",
         documentURL.path,
         "--output",
@@ -1244,14 +1248,14 @@ func cliExecutableReturnsSoftwareExitForUnsupportedExportFormat() async throws {
 
 @Test(.timeLimit(.minutes(1)))
 func cliExecutableReturnsUsageExitForUnknownCommand() async throws {
-    let result = try runCLI(["does-not-exist"])
+    let result = try await runCLI(["does-not-exist"])
 
     #expect(result.terminationStatus == CLIExitCode.usage.rawValue)
 }
 
 @Test(.timeLimit(.minutes(1)))
 func cliExecutablePrintsHelpSuccessfully() async throws {
-    let result = try runCLI(["--help"])
+    let result = try await runCLI(["--help"])
 
     #expect(result.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: result.standardError))
     #expect(result.standardOutput.contains("USAGE: rupa"))
@@ -1266,7 +1270,7 @@ func cliExecutableReturnsInputOutputExitForMissingDocument() async throws {
     }
     let documentURL = temporaryDirectory.appendingPathComponent("missing.swcad")
 
-    let result = try runCLI([
+    let result = try await runCLI([
         "validate",
         documentURL.path,
     ])
@@ -1282,7 +1286,7 @@ func cliExecutableReturnsUnavailableExitForMissingAgentSocket() async throws {
     }
     let socketURL = temporaryDirectory.appendingPathComponent("missing.sock")
 
-    let result = try runCLI([
+    let result = try await runCLI([
         "agent",
         "status",
         "--socket",
@@ -1310,7 +1314,7 @@ func cliExecutableReturnsDataExitForLiveGenerationMismatch() async throws {
 
     try await listener.start()
     do {
-        let result = try runCLI([
+        let result = try await runCLI([
             "rename-live",
             sessionID.uuidString,
             "--name",
@@ -3097,7 +3101,19 @@ private struct CLIProcessResult {
     }
 }
 
-private func runCLI(_ arguments: [String]) throws -> CLIProcessResult {
+private actor CLIProcessGate {
+    static let shared = CLIProcessGate()
+
+    func run(_ arguments: [String]) throws -> CLIProcessResult {
+        try runCLIProcess(arguments)
+    }
+}
+
+private func runCLI(_ arguments: [String]) async throws -> CLIProcessResult {
+    try await CLIProcessGate.shared.run(arguments)
+}
+
+private func runCLIProcess(_ arguments: [String]) throws -> CLIProcessResult {
     let executableURL = try rupaExecutableURL()
     let process = Process()
     process.executableURL = executableURL
