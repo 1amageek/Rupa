@@ -22,6 +22,7 @@ public struct Viewport: View {
     @State private var activePatternArrayRadialAngleDrag: ViewportPatternArrayRadialAngleDragState?
     @State private var activePatternArrayCopyCountDrag: ViewportPatternArrayCopyCountDragState?
     @State private var activePatternArrayCurveExtentDrag: ViewportPatternArrayCurveExtentDragState?
+    @State private var activePatternArrayCurvePathPointDrag: ViewportPatternArrayCurvePathPointDragState?
     @State private var camera: ViewportCamera = .identity
     @State private var editedBodies: [FeatureID: ViewportObjectEditState] = [:]
     @State private var hoveredAffordance: ViewportAffordanceTarget?
@@ -40,6 +41,7 @@ public struct Viewport: View {
     @State private var hoveredPatternArrayRadialAngleHandle: ViewportPatternArrayRadialAngleHandleTarget?
     @State private var hoveredPatternArrayCopyCountHandle: ViewportPatternArrayCopyCountHandleTarget?
     @State private var hoveredPatternArrayCurveExtentHandle: ViewportPatternArrayCurveExtentHandleTarget?
+    @State private var hoveredPatternArrayCurvePathPointHandle: ViewportPatternArrayCurvePathPointHandleTarget?
     @State private var hoveredPatternArrayOutputModeHandle: ViewportPatternArrayOutputModeHandleTarget?
     @State private var pendingAffordance: ViewportAffordanceTarget?
     @State private var pendingSketchCurveHandle: ViewportSketchCurveHandleTarget?
@@ -57,6 +59,7 @@ public struct Viewport: View {
     @State private var pendingPatternArrayRadialAngleHandle: ViewportPatternArrayRadialAngleHandleTarget?
     @State private var pendingPatternArrayCopyCountHandle: ViewportPatternArrayCopyCountHandleTarget?
     @State private var pendingPatternArrayCurveExtentHandle: ViewportPatternArrayCurveExtentHandleTarget?
+    @State private var pendingPatternArrayCurvePathPointHandle: ViewportPatternArrayCurvePathPointHandleTarget?
     @State private var pendingPatternArrayOutputModeHandle: ViewportPatternArrayOutputModeHandleTarget?
     @State private var orbitBasis: ViewportProjectionBasis?
     @State private var projectionTransition: ViewportProjectionTransition?
@@ -112,6 +115,7 @@ public struct Viewport: View {
     private let onPatternArrayRadialAngleDrag: ((ViewportPatternArrayRadialAngleDragTarget) -> Void)?
     private let onPatternArrayCopyCountDrag: ((ViewportPatternArrayCopyCountDragTarget) -> Void)?
     private let onPatternArrayCurveExtentDrag: ((ViewportPatternArrayCurveExtentDragTarget) -> Void)?
+    private let onPatternArrayCurvePathPointDrag: ((ViewportPatternArrayCurvePathPointDragTarget) -> Void)?
     private let onPatternArrayOutputModeChange: ((ViewportPatternArrayOutputModeTarget) -> Void)?
     private let onSketchCurveHandleDrag: ((ViewportSketchCurveHandleDragTarget) -> Void)?
     private let onSketchDimensionDrag: ((ViewportSketchDimensionDragTarget) -> Void)?
@@ -171,6 +175,7 @@ public struct Viewport: View {
         onPatternArrayRadialAngleDrag: ((ViewportPatternArrayRadialAngleDragTarget) -> Void)? = nil,
         onPatternArrayCopyCountDrag: ((ViewportPatternArrayCopyCountDragTarget) -> Void)? = nil,
         onPatternArrayCurveExtentDrag: ((ViewportPatternArrayCurveExtentDragTarget) -> Void)? = nil,
+        onPatternArrayCurvePathPointDrag: ((ViewportPatternArrayCurvePathPointDragTarget) -> Void)? = nil,
         onPatternArrayOutputModeChange: ((ViewportPatternArrayOutputModeTarget) -> Void)? = nil,
         onSketchCurveHandleDrag: ((ViewportSketchCurveHandleDragTarget) -> Void)? = nil,
         onSketchDimensionDrag: ((ViewportSketchDimensionDragTarget) -> Void)? = nil,
@@ -229,6 +234,7 @@ public struct Viewport: View {
         self.onPatternArrayRadialAngleDrag = onPatternArrayRadialAngleDrag
         self.onPatternArrayCopyCountDrag = onPatternArrayCopyCountDrag
         self.onPatternArrayCurveExtentDrag = onPatternArrayCurveExtentDrag
+        self.onPatternArrayCurvePathPointDrag = onPatternArrayCurvePathPointDrag
         self.onPatternArrayOutputModeChange = onPatternArrayOutputModeChange
         self.onSketchCurveHandleDrag = onSketchCurveHandleDrag
         self.onSketchDimensionDrag = onSketchDimensionDrag
@@ -893,6 +899,12 @@ public struct Viewport: View {
         )
 
         drawPatternArrayCurveExtentAffordances(
+            scene: scene,
+            layout: layout,
+            in: &context
+        )
+
+        drawPatternArrayCurvePathPointAffordances(
             scene: scene,
             layout: layout,
             in: &context
@@ -4733,6 +4745,78 @@ public struct Viewport: View {
         }
     }
 
+    private func drawPatternArrayCurvePathPointAffordances(
+        scene: ViewportScene,
+        layout: ViewportLayout,
+        in context: inout GraphicsContext
+    ) {
+        guard onPatternArrayCurvePathPointDrag != nil else {
+            return
+        }
+        let candidates = patternArrayCurvePathPointAffordanceCandidates(
+            scene: scene,
+            layout: layout
+        )
+        guard !candidates.isEmpty else {
+            return
+        }
+        let color = Color.green
+        var drawnSourceIDs: Set<PatternArraySourceID> = []
+        for candidate in candidates {
+            if drawnSourceIDs.insert(candidate.target.sourceID).inserted {
+                let pathPoints = patternArrayCurvePathPointProjectedPath(
+                    target: candidate.target,
+                    layout: layout
+                )
+                if pathPoints.count >= 2 {
+                    context.stroke(
+                        polylinePath(for: pathPoints),
+                        with: .color(color.opacity(0.4)),
+                        style: StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round, dash: [5.0, 4.0])
+                    )
+                }
+            }
+            let identity = candidate.target.identity
+            let dragPoint = activePatternArrayCurvePathPointDrag?.target.identity == identity
+                ? activePatternArrayCurvePathPointDrag?.point
+                : nil
+            let projectedPoint = dragPoint.map(layout.project) ?? candidate.projectedPoint
+            let isHighlighted = hoveredPatternArrayCurvePathPointHandle?.identity == identity
+                || pendingPatternArrayCurvePathPointHandle?.identity == identity
+                || activePatternArrayCurvePathPointDrag?.target.identity == identity
+            drawTransformHandle(
+                at: projectedPoint,
+                style: .vertex,
+                isHighlighted: isHighlighted,
+                in: &context
+            )
+            guard isHighlighted else {
+                continue
+            }
+            drawDimensionLabel(
+                candidate.target.title,
+                at: CGPoint(x: projectedPoint.x + 18.0, y: projectedPoint.y - 18.0),
+                color: color,
+                isHighlighted: true,
+                in: &context
+            )
+        }
+    }
+
+    private func patternArrayCurvePathPointProjectedPath(
+        target: ViewportPatternArrayCurvePathPointHandleTarget,
+        layout: ViewportLayout
+    ) -> [CGPoint] {
+        target.pathPoints.enumerated().map { index, point in
+            if activePatternArrayCurvePathPointDrag?.target.sourceID == target.sourceID,
+               activePatternArrayCurvePathPointDrag?.target.pointIndex == index,
+               let activePoint = activePatternArrayCurvePathPointDrag?.point {
+                return layout.project(activePoint)
+            }
+            return layout.project(point)
+        }
+    }
+
     private func drawPatternArrayOutputModeAffordances(
         scene: ViewportScene,
         layout: ViewportLayout,
@@ -6566,6 +6650,21 @@ public struct Viewport: View {
         )
     }
 
+    private func patternArrayCurvePathPointAffordanceCandidates(
+        scene: ViewportScene,
+        layout: ViewportLayout
+    ) -> [ViewportPatternArrayCurvePathPointAffordanceCandidate] {
+        guard onPatternArrayCurvePathPointDrag != nil else {
+            return []
+        }
+        return ViewportPatternArrayCurvePathPointAffordanceService().candidates(
+            document: document,
+            scene: scene,
+            selection: selection,
+            layout: layout
+        )
+    }
+
     private func patternArrayOutputModeAffordanceCandidates(
         scene: ViewportScene,
         layout: ViewportLayout
@@ -7296,6 +7395,18 @@ public struct Viewport: View {
         if activePatternArrayCurveExtentDrag != nil {
             return
         }
+        if let start, let current, let pendingPatternArrayCurvePathPointHandle {
+            updatePatternArrayCurvePathPointDrag(
+                target: pendingPatternArrayCurvePathPointHandle,
+                start: start,
+                current: current,
+                size: size
+            )
+            return
+        }
+        if activePatternArrayCurvePathPointDrag != nil {
+            return
+        }
         if let start, let current, let pendingSketchVertexOffsetHandle {
             updateSketchVertexOffsetDrag(
                 target: pendingSketchVertexOffsetHandle,
@@ -7423,6 +7534,11 @@ public struct Viewport: View {
         }
         if let patternArrayCurveExtentTarget = selectedPatternArrayCurveExtentAffordanceTarget(at: point, size: size) {
             pendingPatternArrayCurveExtentHandle = patternArrayCurveExtentTarget
+            activeCanvasDrag = nil
+            return
+        }
+        if let patternArrayCurvePathPointTarget = selectedPatternArrayCurvePathPointAffordanceTarget(at: point, size: size) {
+            pendingPatternArrayCurvePathPointHandle = patternArrayCurvePathPointTarget
             activeCanvasDrag = nil
             return
         }
@@ -8491,6 +8607,30 @@ public struct Viewport: View {
         return nil
     }
 
+    private func selectedPatternArrayCurvePathPointAffordanceTarget(
+        at point: CGPoint,
+        size: CGSize
+    ) -> ViewportPatternArrayCurvePathPointHandleTarget? {
+        guard onPatternArrayCurvePathPointDrag != nil else {
+            return nil
+        }
+        let sceneContext = makeSceneContext(
+            size: size,
+            camera: camera,
+            basis: currentProjectionBasis
+        )
+        let candidates = patternArrayCurvePathPointAffordanceCandidates(
+            scene: sceneContext.scene,
+            layout: sceneContext.layout
+        )
+        for candidate in candidates.reversed() {
+            if point.distance(to: candidate.projectedPoint) <= 13.0 {
+                return candidate.target
+            }
+        }
+        return nil
+    }
+
     private func selectedPatternArrayOutputModeAffordanceTarget(
         at point: CGPoint,
         size: CGSize
@@ -9149,6 +9289,30 @@ public struct Viewport: View {
         )
     }
 
+    private func updatePatternArrayCurvePathPointDrag(
+        target: ViewportPatternArrayCurvePathPointHandleTarget,
+        start: CGPoint,
+        current: CGPoint,
+        size: CGSize
+    ) {
+        let layout = makeLayout(
+            size: size,
+            camera: camera,
+            basis: currentProjectionBasis
+        )
+        let startPoint = layout.unproject(start)
+        let currentPoint = layout.unproject(current)
+        activePatternArrayCurvePathPointDrag = ViewportPatternArrayCurvePathPointDragState(
+            target: target,
+            startPoint: start,
+            point: Point3D(
+                x: target.basePoint.x + Double(currentPoint.x - startPoint.x),
+                y: target.basePoint.y,
+                z: target.basePoint.z + Double(currentPoint.y - startPoint.y)
+            )
+        )
+    }
+
     private func updateSketchVertexOffsetDrag(
         target: ViewportSketchVertexOffsetHandleTarget,
         start: CGPoint,
@@ -9452,6 +9616,11 @@ public struct Viewport: View {
             activePatternArrayCurveExtentDrag = nil
             return
         }
+        if pendingPatternArrayCurvePathPointHandle != nil {
+            pendingPatternArrayCurvePathPointHandle = nil
+            activePatternArrayCurvePathPointDrag = nil
+            return
+        }
         if let pendingPatternArrayOutputModeHandle {
             self.pendingPatternArrayOutputModeHandle = nil
             activeCanvasDrag = nil
@@ -9631,6 +9800,16 @@ public struct Viewport: View {
             activeCanvasDrag = nil
             if let patternArrayCurveExtentDragTarget {
                 onPatternArrayCurveExtentDrag?(patternArrayCurveExtentDragTarget)
+            }
+            return
+        }
+        if pendingPatternArrayCurvePathPointHandle != nil || activePatternArrayCurvePathPointDrag != nil {
+            let patternArrayCurvePathPointDragTarget = committedPatternArrayCurvePathPointDragTarget()
+            pendingPatternArrayCurvePathPointHandle = nil
+            activePatternArrayCurvePathPointDrag = nil
+            activeCanvasDrag = nil
+            if let patternArrayCurvePathPointDragTarget {
+                onPatternArrayCurvePathPointDrag?(patternArrayCurvePathPointDragTarget)
             }
             return
         }
@@ -9983,6 +10162,37 @@ public struct Viewport: View {
         )
     }
 
+    private func committedPatternArrayCurvePathPointDragTarget() -> ViewportPatternArrayCurvePathPointDragTarget? {
+        guard let activePatternArrayCurvePathPointDrag else {
+            return nil
+        }
+        let point = activePatternArrayCurvePathPointDrag.point
+        guard point.x.isFinite,
+              point.y.isFinite,
+              point.z.isFinite,
+              patternArrayCurvePathPointDistance(
+                point,
+                activePatternArrayCurvePathPointDrag.target.basePoint
+              ) > 1.0e-12 else {
+            return nil
+        }
+        return ViewportPatternArrayCurvePathPointDragTarget(
+            sourceID: activePatternArrayCurvePathPointDrag.target.sourceID,
+            pointIndex: activePatternArrayCurvePathPointDrag.target.pointIndex,
+            point: point
+        )
+    }
+
+    private func patternArrayCurvePathPointDistance(
+        _ lhs: Point3D,
+        _ rhs: Point3D
+    ) -> Double {
+        let dx = lhs.x - rhs.x
+        let dy = lhs.y - rhs.y
+        let dz = lhs.z - rhs.z
+        return (dx * dx + dy * dy + dz * dz).squareRoot()
+    }
+
     private func committedSketchVertexOffsetDragTarget() -> ViewportSketchVertexOffsetDragTarget? {
         guard let activeSketchVertexOffsetDrag else {
             return nil
@@ -10242,6 +10452,7 @@ public struct Viewport: View {
         hoveredPatternArrayRadialAngleHandle = nil
         hoveredPatternArrayCopyCountHandle = nil
         hoveredPatternArrayCurveExtentHandle = nil
+        hoveredPatternArrayCurvePathPointHandle = nil
         hoveredPatternArrayOutputModeHandle = nil
         hoveredSplineControlPointSlideHandle = nil
         hoveredPolySplineSurfaceVertexSlideHandle = nil
@@ -10357,6 +10568,7 @@ public struct Viewport: View {
             hoveredPatternArrayRadialAngleHandle = nil
             hoveredPatternArrayCopyCountHandle = nil
             hoveredPatternArrayCurveExtentHandle = nil
+            hoveredPatternArrayCurvePathPointHandle = nil
             hoveredPatternArrayOutputModeHandle = nil
             hoveredAffordance = nil
             hoveredCanvasHit = nil
@@ -10370,6 +10582,7 @@ public struct Viewport: View {
             hoveredPatternArrayRadialAngleHandle = nil
             hoveredPatternArrayCopyCountHandle = nil
             hoveredPatternArrayCurveExtentHandle = nil
+            hoveredPatternArrayCurvePathPointHandle = nil
             hoveredPatternArrayOutputModeHandle = nil
             hoveredSketchVertexOffsetHandle = nil
             hoveredAffordance = nil
@@ -10383,6 +10596,7 @@ public struct Viewport: View {
             hoveredPatternArrayRadialAngleHandle = patternArrayRadialAngleTarget
             hoveredPatternArrayCopyCountHandle = nil
             hoveredPatternArrayCurveExtentHandle = nil
+            hoveredPatternArrayCurvePathPointHandle = nil
             hoveredPatternArrayOutputModeHandle = nil
             hoveredSketchVertexOffsetHandle = nil
             hoveredAffordance = nil
@@ -10395,6 +10609,7 @@ public struct Viewport: View {
         if let patternArrayCopyCountTarget = selectedPatternArrayCopyCountAffordanceTarget(at: point, size: size) {
             hoveredPatternArrayCopyCountHandle = patternArrayCopyCountTarget
             hoveredPatternArrayCurveExtentHandle = nil
+            hoveredPatternArrayCurvePathPointHandle = nil
             hoveredPatternArrayOutputModeHandle = nil
             hoveredSketchVertexOffsetHandle = nil
             hoveredAffordance = nil
@@ -10406,6 +10621,7 @@ public struct Viewport: View {
         hoveredPatternArrayCopyCountHandle = nil
         if let patternArrayCurveExtentTarget = selectedPatternArrayCurveExtentAffordanceTarget(at: point, size: size) {
             hoveredPatternArrayCurveExtentHandle = patternArrayCurveExtentTarget
+            hoveredPatternArrayCurvePathPointHandle = nil
             hoveredPatternArrayOutputModeHandle = nil
             hoveredSketchVertexOffsetHandle = nil
             hoveredAffordance = nil
@@ -10415,6 +10631,16 @@ public struct Viewport: View {
             return
         }
         hoveredPatternArrayCurveExtentHandle = nil
+        if let patternArrayCurvePathPointTarget = selectedPatternArrayCurvePathPointAffordanceTarget(at: point, size: size) {
+            hoveredPatternArrayCurvePathPointHandle = patternArrayCurvePathPointTarget
+            hoveredSketchVertexOffsetHandle = nil
+            hoveredAffordance = nil
+            hoveredCanvasHit = nil
+            hoveredModelPoint = nil
+            clearHoverCallbacks()
+            return
+        }
+        hoveredPatternArrayCurvePathPointHandle = nil
         if let patternArrayOutputModeTarget = selectedPatternArrayOutputModeAffordanceTarget(at: point, size: size) {
             hoveredPatternArrayOutputModeHandle = patternArrayOutputModeTarget
             hoveredSketchVertexOffsetHandle = nil
@@ -10506,6 +10732,7 @@ public struct Viewport: View {
         hoveredPatternArrayRadialAngleHandle = nil
         hoveredPatternArrayCopyCountHandle = nil
         hoveredPatternArrayCurveExtentHandle = nil
+        hoveredPatternArrayCurvePathPointHandle = nil
         hoveredPatternArrayOutputModeHandle = nil
         hoveredCanvasHit = nil
         hoveredModelPoint = nil
@@ -10762,6 +10989,12 @@ private struct ViewportPatternArrayCurveExtentDragState: Equatable {
     var target: ViewportPatternArrayCurveExtentHandleTarget
     var startPoint: CGPoint
     var distanceMeters: Double
+}
+
+private struct ViewportPatternArrayCurvePathPointDragState: Equatable {
+    var target: ViewportPatternArrayCurvePathPointHandleTarget
+    var startPoint: CGPoint
+    var point: Point3D
 }
 
 private struct ViewportSketchVertexOffsetDragState: Equatable {

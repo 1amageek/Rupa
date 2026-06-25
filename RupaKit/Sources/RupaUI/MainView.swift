@@ -466,6 +466,7 @@ public struct MainView: View {
                     onPatternArrayRadialAngleDrag: viewportPatternArrayRadialAngleDragHandler,
                     onPatternArrayCopyCountDrag: viewportPatternArrayCopyCountDragHandler,
                     onPatternArrayCurveExtentDrag: viewportPatternArrayCurveExtentDragHandler,
+                    onPatternArrayCurvePathPointDrag: viewportPatternArrayCurvePathPointDragHandler,
                     onPatternArrayOutputModeChange: viewportPatternArrayOutputModeChangeHandler,
                     onSketchCurveHandleDrag: viewportSketchCurveHandleDragHandler,
                     onSketchDimensionDrag: viewportSketchDimensionDragHandler,
@@ -730,6 +731,16 @@ public struct MainView: View {
             if result?.diagnostics.isEmpty == false {
                 isPreviewExpanded = true
             }
+        }
+    }
+
+    private var viewportPatternArrayCurvePathPointDragHandler: ((ViewportPatternArrayCurvePathPointDragTarget) -> Void)? {
+        guard session.selectedTool == .select,
+              patternArrayInspectorState(for: selectedSceneNodes) != nil else {
+            return nil
+        }
+        return { target in
+            handleViewportPatternArrayCurvePathPointDrag(target)
         }
     }
 
@@ -3479,6 +3490,26 @@ public struct MainView: View {
             session: session,
             sourceID: target.sourceID
         ).setOutputMode(target.outputMode)
+        if result?.diagnostics.isEmpty == false {
+            isPreviewExpanded = true
+        }
+    }
+
+    private func handleViewportPatternArrayCurvePathPointDrag(
+        _ target: ViewportPatternArrayCurvePathPointDragTarget
+    ) {
+        guard session.selectedTool == .select,
+              let state = patternArrayInspectorState(for: selectedSceneNodes),
+              state.sourceID == target.sourceID else {
+            return
+        }
+        let result = PatternArrayEditingService(
+            session: session,
+            sourceID: target.sourceID
+        ).setCurvePathPoint(
+            index: target.pointIndex,
+            point: target.point
+        )
         if result?.diagnostics.isEmpty == false {
             isPreviewExpanded = true
         }

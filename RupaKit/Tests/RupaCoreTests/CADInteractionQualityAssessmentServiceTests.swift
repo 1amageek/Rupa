@@ -92,7 +92,8 @@ import RupaCore
     #expect(!arrays.openWork.contains { $0.contains("curve count/path") })
     #expect(!arrays.openWork.contains { $0.contains("extent-density count editing") })
     #expect(!arrays.openWork.contains { $0.contains("curve-path replacement previews") })
-    #expect(arrays.openWork.contains { $0.contains("Direct viewport curve-path edit handles") })
+    #expect(!arrays.openWork.contains { $0.contains("Direct viewport curve-path edit handles") })
+    #expect(arrays.openWork.contains { $0.contains("independent-copy") })
     #expect(arrays.evidence.contains { evidence in
         evidence.sourceFiles.contains("RupaKit/Sources/RupaCore/PatternArraySource.swift")
     })
@@ -142,6 +143,12 @@ import RupaCore
         evidence.sourceFiles.contains("RupaKit/Sources/RupaRendering/ViewportPatternArrayCurveExtentAffordanceService.swift")
     })
     #expect(arrays.evidence.contains { evidence in
+        evidence.sourceFiles.contains("RupaKit/Sources/RupaRendering/ViewportPatternArrayCurvePathPointDragTarget.swift")
+    })
+    #expect(arrays.evidence.contains { evidence in
+        evidence.sourceFiles.contains("RupaKit/Sources/RupaRendering/ViewportPatternArrayCurvePathPointAffordanceService.swift")
+    })
+    #expect(arrays.evidence.contains { evidence in
         evidence.sourceFiles.contains("RupaKit/Sources/RupaRendering/ViewportPatternArrayOutputModeTarget.swift")
     })
     #expect(arrays.evidence.contains { evidence in
@@ -173,6 +180,9 @@ import RupaCore
     })
     #expect(arrays.evidence.contains { evidence in
         evidence.tests.contains("RupaKit/Tests/RupaRenderingTests/ViewportPatternArrayCurveExtentAffordanceServiceTests.swift")
+    })
+    #expect(arrays.evidence.contains { evidence in
+        evidence.tests.contains("RupaKit/Tests/RupaRenderingTests/ViewportPatternArrayCurvePathPointAffordanceServiceTests.swift")
     })
     #expect(arrays.evidence.contains { evidence in
         evidence.tests.contains("RupaKit/Tests/RupaRenderingTests/ViewportPatternArrayOutputModeAffordanceServiceTests.swift")
@@ -218,6 +228,9 @@ import RupaCore
     })
     #expect(arrays.evidence.contains { evidence in
         evidence.notes.contains("The viewport exposes Curve Pattern Array extent handles that use the shared Core curve-path geometry resolver so viewport dragging and generated copy placement agree on path length and sampling.")
+    })
+    #expect(arrays.evidence.contains { evidence in
+        evidence.notes.contains("The viewport exposes direct Curve Pattern Array polyline path-point handles that commit source-owned path point edits without mutating sketch-entity paths.")
     })
     #expect(arrays.evidence.contains { evidence in
         evidence.notes.contains("The viewport exposes Pattern Array output-mode badges that resolve selected source roots, generated outputs, and independent-copy descendants back to source-owned output mode regeneration.")

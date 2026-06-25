@@ -568,6 +568,87 @@ import Testing
 }
 
 @MainActor
+@Test func patternArrayEditingServiceMovesPolylineCurvePathPoint() async throws {
+    let session = EditorSession()
+    _ = try #require(session.createDefaultExtrudedRectangle())
+    let sourceID = try createPatternArray(
+        in: session,
+        name: "Editable Polyline Curve Path",
+        distribution: .curve(CurvePatternArray(
+            path: .polyline(
+                points: [
+                    .origin,
+                    Point3D(x: 0.03, y: 0.0, z: 0.0),
+                    Point3D(x: 0.06, y: 0.0, z: 0.0),
+                ],
+                normal: .unitZ
+            ),
+            copyCount: 2
+        ))
+    )
+
+    let result = PatternArrayEditingService(
+        session: session,
+        sourceID: sourceID
+    ).setCurvePathPoint(
+        index: 1,
+        point: Point3D(x: 0.03, y: 0.01, z: 0.02)
+    )
+
+    let source = try #require(session.document.productMetadata.patternArrays[sourceID])
+    guard case .curve(let curve) = source.distribution,
+          case .polyline(let points, let normal) = curve.path else {
+        Issue.record("Expected an editable polyline Curve Pattern Array.")
+        return
+    }
+    #expect(result?.didMutate == true)
+    #expect(points[0] == .origin)
+    #expect(points[1] == Point3D(x: 0.03, y: 0.01, z: 0.02))
+    #expect(points[2] == Point3D(x: 0.06, y: 0.0, z: 0.0))
+    #expect(normal == .unitZ)
+}
+
+@MainActor
+@Test func patternArrayEditingServiceRejectsOutOfRangePolylinePointMove() async throws {
+    let session = EditorSession()
+    _ = try #require(session.createDefaultExtrudedRectangle())
+    let sourceID = try createPatternArray(
+        in: session,
+        name: "Out Of Range Polyline Curve Path",
+        distribution: .curve(CurvePatternArray(
+            path: .polyline(
+                points: [
+                    .origin,
+                    Point3D(x: 0.03, y: 0.0, z: 0.0),
+                ],
+                normal: .unitZ
+            ),
+            copyCount: 2
+        ))
+    )
+
+    let result = PatternArrayEditingService(
+        session: session,
+        sourceID: sourceID
+    ).setCurvePathPoint(
+        index: 3,
+        point: Point3D(x: 0.03, y: 0.01, z: 0.02)
+    )
+
+    let source = try #require(session.document.productMetadata.patternArrays[sourceID])
+    guard case .curve(let curve) = source.distribution,
+          case .polyline(let points, _) = curve.path else {
+        Issue.record("Expected an editable polyline Curve Pattern Array.")
+        return
+    }
+    #expect(result == nil)
+    #expect(points == [
+        .origin,
+        Point3D(x: 0.03, y: 0.0, z: 0.0),
+    ])
+}
+
+@MainActor
 @Test func patternArrayEditingServiceClampsCurveExtentRatioToPlannerRange() async throws {
     let session = EditorSession()
     _ = try #require(session.createDefaultExtrudedRectangle())

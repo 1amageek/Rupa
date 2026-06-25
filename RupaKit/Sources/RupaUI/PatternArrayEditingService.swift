@@ -253,6 +253,25 @@ struct PatternArrayEditingService {
     }
 
     @discardableResult
+    func setCurvePathPoint(
+        index: Int,
+        point: Point3D
+    ) -> CommandExecutionResult? {
+        guard let source = session.document.productMetadata.patternArrays[sourceID],
+              case .curve(var curve) = source.distribution,
+              case .polyline(var points, let normal) = curve.path,
+              points.indices.contains(index) else {
+            return nil
+        }
+        points[index] = point
+        curve.path = .polyline(points: points, normal: normal)
+        return session.updatePatternArray(
+            id: sourceID,
+            distribution: .curve(curve)
+        )
+    }
+
+    @discardableResult
     func setCurveCopyCount(_ copyCount: Int) -> CommandExecutionResult? {
         updateCurve { curve in
             curve.copyCount = max(copyCount, 1)

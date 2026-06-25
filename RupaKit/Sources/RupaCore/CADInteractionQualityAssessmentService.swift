@@ -404,6 +404,8 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                         "RupaKit/Sources/RupaRendering/ViewportPatternArrayCurveExtentDragTarget.swift",
                         "RupaKit/Sources/RupaRendering/ViewportPatternArrayCurveExtentAffordanceGeometry.swift",
                         "RupaKit/Sources/RupaRendering/ViewportPatternArrayCurveExtentAffordanceService.swift",
+                        "RupaKit/Sources/RupaRendering/ViewportPatternArrayCurvePathPointDragTarget.swift",
+                        "RupaKit/Sources/RupaRendering/ViewportPatternArrayCurvePathPointAffordanceService.swift",
                         "RupaKit/Sources/RupaRendering/ViewportPatternArrayOutputModeTarget.swift",
                         "RupaKit/Sources/RupaRendering/ViewportPatternArrayOutputModeAffordanceService.swift",
                         "RupaKit/Sources/RupaRendering/ViewportPatternArrayCurvePathReplacementPreviewRequest.swift",
@@ -426,6 +428,7 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                         "RupaKit/Tests/RupaCoreTests/PatternArrayExpressionResolverTests.swift",
                         "RupaKit/Tests/RupaCoreTests/PatternArrayCurvePathGeometryServiceTests.swift",
                         "RupaKit/Tests/RupaRenderingTests/ViewportPatternArrayCurveExtentAffordanceServiceTests.swift",
+                        "RupaKit/Tests/RupaRenderingTests/ViewportPatternArrayCurvePathPointAffordanceServiceTests.swift",
                         "RupaKit/Tests/RupaRenderingTests/ViewportPatternArrayOutputModeAffordanceServiceTests.swift",
                         "RupaKit/Tests/RupaRenderingTests/ViewportPatternArrayCurvePathReplacementPreviewServiceTests.swift",
                     ],
@@ -450,6 +453,7 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                         "The viewport exposes radial Pattern Array angular spacing/extent handles and radial-axis distance handles through the shared PatternArray source-selection index.",
                         "The viewport exposes Pattern Array copy-count handles for rectangular axes, radial angular/radial axes, extent-density modes, and Curve Pattern Array density counts while preserving distance, angle, path extent, and source-owned output regeneration semantics.",
                         "The viewport exposes Curve Pattern Array extent handles that use the shared Core curve-path geometry resolver so viewport dragging and generated copy placement agree on path length and sampling.",
+                        "The viewport exposes direct Curve Pattern Array polyline path-point handles that commit source-owned path point edits without mutating sketch-entity paths.",
                         "The viewport exposes Pattern Array output-mode badges that resolve selected source roots, generated outputs, and independent-copy descendants back to source-owned output mode regeneration.",
                         "The viewport previews Curve Pattern Array path replacement candidates with planner-derived ghost output markers before committing the pick-mode source update.",
                         "Viewport and inspector Pattern Array edits preserve direct parameter references by updating referenced ParameterTable values when quantity kinds match.",
@@ -460,9 +464,8 @@ public struct CADInteractionQualityAssessmentService: Sendable {
             ],
             openWork: [
                 "Viewport-independent copy controls and regeneration reuse for edited outputs.",
-                "Direct viewport curve-path edit handles beyond the current pick-mode preview and commit flow.",
             ],
-            next: "Add direct viewport path-edit handles and independent-copy reuse diagnostics."
+            next: "Add independent-copy reuse diagnostics and controls for edited outputs."
         ),
         entry(
             area: .sectionAnalysis,
