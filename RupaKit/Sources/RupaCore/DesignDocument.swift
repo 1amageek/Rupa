@@ -340,9 +340,11 @@ public struct DesignDocument: Identifiable, Sendable {
         }
         source.outputMode = nextOutputMode
 
+        let previousSource = updatedMetadata.patternArrays[id]
         updatedMetadata.patternArrays[id] = source
         try synchronizePatternArrayOutputs(
             for: id,
+            previousSource: previousSource,
             metadata: &updatedMetadata,
             cadDocument: &updatedCADDocument
         )
@@ -16010,6 +16012,7 @@ public struct DesignDocument: Identifiable, Sendable {
 
     private func synchronizePatternArrayOutputs(
         for sourceID: PatternArraySourceID,
+        previousSource: PatternArraySource? = nil,
         metadata: inout ProductMetadata,
         cadDocument: inout CADDocument
     ) throws {
@@ -16067,32 +16070,135 @@ public struct DesignDocument: Identifiable, Sendable {
                 rootNode: rootNode,
                 metadata: &metadata
             )
-            PatternArrayIndependentCopyBuilder().removeOutputs(
-                source: source,
-                metadata: &metadata,
-                cadDocument: &cadDocument
-            )
             guard let definition = metadata.componentDefinitions[source.definitionID] else {
                 throw EditorError(
                     code: .referenceUnresolved,
                     message: "Pattern array regeneration requires an existing component definition."
                 )
             }
-            let result = try PatternArrayIndependentCopyBuilder().createOutputs(
-                name: source.name,
-                definition: definition,
-                transforms: transforms,
-                metadata: &metadata,
-                cadDocument: &cadDocument
-            )
+            let reuseCandidate = previousSource ?? source
+            let canReuseIndependentCopies = reuseCandidate.outputMode == .independentCopy &&
+                reuseCandidate.definitionID == source.definitionID
+            if canReuseIndependentCopies {
+                try synchronizePatternArrayIndependentCopyOutputs(
+                    source: &source,
+                    rootNode: &rootNode,
+                    definition: definition,
+                    transforms: transforms,
+                    metadata: &metadata,
+                    cadDocument: &cadDocument
+                )
+            } else {
+                PatternArrayIndependentCopyBuilder().removeOutputs(
+                    source: source,
+                    metadata: &metadata,
+                    cadDocument: &cadDocument
+                )
+                let result = try PatternArrayIndependentCopyBuilder().createOutputs(
+                    name: source.name,
+                    definition: definition,
+                    transforms: transforms,
+                    metadata: &metadata,
+                    cadDocument: &cadDocument
+                )
+                source.outputSceneNodeIDs = result.outputSceneNodeIDs
+                source.outputFeatureIDs = result.outputFeatureIDs
+                rootNode.childIDs = result.outputSceneNodeIDs
+                metadata.sceneNodes[source.rootSceneNodeID] = rootNode
+            }
             source.outputInstanceIDs = []
-            source.outputSceneNodeIDs = result.outputSceneNodeIDs
-            source.outputFeatureIDs = result.outputFeatureIDs
-            rootNode.childIDs = result.outputSceneNodeIDs
-            metadata.sceneNodes[source.rootSceneNodeID] = rootNode
         }
 
         metadata.patternArrays[sourceID] = source
+    }
+
+    private func synchronizePatternArrayIndependentCopyOutputs(
+        source: inout PatternArraySource,
+        rootNode: inout SceneNode,
+        definition: ComponentDefinition,
+        transforms: [Transform3D],
+        metadata: inout ProductMetadata,
+        cadDocument: inout CADDocument
+    ) throws {
+        let builder = PatternArrayIndependentCopyBuilder()
+        let reusedCount = min(source.outputSceneNodeIDs.count, transforms.count)
+        let reusableOutputSceneNodeIDs = Array(source.outputSceneNodeIDs.prefix(reusedCount))
+        let staleOutputSceneNodeIDs = Array(source.outputSceneNodeIDs.dropFirst(reusedCount))
+        let ownedFeatureIDs = Set(source.outputFeatureIDs)
+
+        var reusedFeatureIDs: Set<FeatureID> = []
+        reusedFeatureIDs.reserveCapacity(ownedFeatureIDs.count)
+        for (index, outputSceneNodeID) in reusableOutputSceneNodeIDs.enumerated() {
+            guard var outputNode = metadata.sceneNodes[outputSceneNodeID],
+                  outputNode.reference == nil,
+                  outputNode.object?.category == .group else {
+                throw EditorError(
+                    code: .referenceUnresolved,
+                    message: "Independent-copy pattern array reuse requires existing group output scene nodes."
+                )
+            }
+            outputNode.name = "\(source.name) \(index + 1)"
+            outputNode.localTransform = transforms[index]
+            metadata.sceneNodes[outputSceneNodeID] = outputNode
+            let outputFeatureIDs = builder.outputFeatureClosure(
+                rootedAt: outputSceneNodeID,
+                metadata: metadata,
+                cadDocument: cadDocument
+            )
+            guard !outputFeatureIDs.isEmpty,
+                  outputFeatureIDs.isSubset(of: ownedFeatureIDs) else {
+                throw EditorError(
+                    code: .referenceUnresolved,
+                    message: "Independent-copy pattern array reuse requires owned output feature closures."
+                )
+            }
+            reusedFeatureIDs.formUnion(outputFeatureIDs)
+        }
+
+        var staleFeatureIDs: Set<FeatureID> = []
+        for staleOutputSceneNodeID in staleOutputSceneNodeIDs {
+            staleFeatureIDs.formUnion(
+                builder.outputFeatureClosure(
+                    rootedAt: staleOutputSceneNodeID,
+                    metadata: metadata,
+                    cadDocument: cadDocument
+                )
+            )
+        }
+        staleFeatureIDs.formIntersection(ownedFeatureIDs.subtracting(reusedFeatureIDs))
+        builder.removeOutputs(
+            rootedAt: staleOutputSceneNodeIDs,
+            featureIDs: staleFeatureIDs,
+            metadata: &metadata,
+            cadDocument: &cadDocument
+        )
+
+        let appendedTransforms = Array(transforms.dropFirst(reusedCount))
+        let appendedResult: PatternArrayIndependentCopyBuildResult
+        if appendedTransforms.isEmpty {
+            appendedResult = PatternArrayIndependentCopyBuildResult(
+                outputSceneNodeIDs: [],
+                outputFeatureIDs: []
+            )
+        } else {
+            appendedResult = try builder.createOutputs(
+                name: source.name,
+                definition: definition,
+                transforms: appendedTransforms,
+                startingOutputIndex: reusedCount,
+                metadata: &metadata,
+                cadDocument: &cadDocument
+            )
+        }
+
+        source.outputSceneNodeIDs = reusableOutputSceneNodeIDs + appendedResult.outputSceneNodeIDs
+        let nextFeatureIDs = reusedFeatureIDs.union(appendedResult.outputFeatureIDs)
+        source.outputFeatureIDs = builder.orderedFeatureIDs(
+            nextFeatureIDs,
+            cadDocument: cadDocument
+        )
+        rootNode.childIDs = source.outputSceneNodeIDs
+        metadata.sceneNodes[source.rootSceneNodeID] = rootNode
     }
 
     private func synchronizePatternArrayComponentInstanceOutputs(

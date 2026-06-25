@@ -113,6 +113,9 @@ import RupaCore
         evidence.sourceFiles.contains("RupaKit/Sources/RupaCore/PatternArrayCurvePathGeometryService.swift")
     })
     #expect(arrays.evidence.contains { evidence in
+        evidence.sourceFiles.contains("RupaKit/Sources/RupaCore/PatternArrayIndependentCopyBuilder.swift")
+    })
+    #expect(arrays.evidence.contains { evidence in
         evidence.sourceFiles.contains("RupaKit/Sources/RupaUI/PatternArrayInspectorState.swift")
     })
     #expect(arrays.evidence.contains { evidence in
@@ -198,6 +201,9 @@ import RupaCore
     })
     #expect(arrays.evidence.contains { evidence in
         evidence.notes.contains("Pattern Array summary diagnostics mirror source-owned output invariants for missing instances, mismatched transforms, duplicate ownership, root child mapping, and independent-copy feature closure checks.")
+    })
+    #expect(arrays.evidence.contains { evidence in
+        evidence.notes.contains("Independent-copy Pattern Array regeneration reuses overlapping output scene roots and cloned feature closures when the source definition is unchanged, preserving edited cloned CAD features while updating planner-owned output transforms.")
     })
     #expect(arrays.evidence.contains { evidence in
         evidence.notes.contains("The object Inspector now maps selected source roots, generated outputs, and independent-copy descendants back to their PatternArraySource and displays ownership, lifecycle actions, output mode, selected output index, and diagnostics.")

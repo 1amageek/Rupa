@@ -5,6 +5,7 @@ struct PatternArrayIndependentCopyBuilder: Sendable {
         name: String,
         definition: ComponentDefinition,
         transforms: [Transform3D],
+        startingOutputIndex: Int = 0,
         metadata: inout ProductMetadata,
         cadDocument: inout CADDocument
     ) throws -> PatternArrayIndependentCopyBuildResult {
@@ -26,7 +27,8 @@ struct PatternArrayIndependentCopyBuilder: Sendable {
         outputFeatureIDs.reserveCapacity(transforms.count * sourceFeatureIDs.count)
 
         var updatedCADDocument = cadDocument
-        for (outputIndex, transform) in transforms.enumerated() {
+        for (relativeOutputIndex, transform) in transforms.enumerated() {
+            let outputIndex = startingOutputIndex + relativeOutputIndex
             let featureIDMap = featureIDMap(for: sourceFeatureIDs)
             let clonedFeatures = try clonedFeatureNodes(
                 sourceFeatureIDs: sourceFeatureIDs,
@@ -71,14 +73,52 @@ struct PatternArrayIndependentCopyBuilder: Sendable {
         metadata: inout ProductMetadata,
         cadDocument: inout CADDocument
     ) {
-        removeSceneSubtrees(
+        removeOutputs(
             rootedAt: source.outputSceneNodeIDs,
+            featureIDs: Set(source.outputFeatureIDs),
+            metadata: &metadata,
+            cadDocument: &cadDocument
+        )
+    }
+
+    func removeOutputs(
+        rootedAt sceneNodeIDs: [SceneNodeID],
+        featureIDs: Set<FeatureID>,
+        metadata: inout ProductMetadata,
+        cadDocument: inout CADDocument
+    ) {
+        removeSceneSubtrees(
+            rootedAt: sceneNodeIDs,
             metadata: &metadata
         )
         removeFeatures(
-            Set(source.outputFeatureIDs),
+            featureIDs,
             from: &cadDocument
         )
+    }
+
+    func outputFeatureClosure(
+        rootedAt sceneNodeID: SceneNodeID,
+        metadata: ProductMetadata,
+        cadDocument: CADDocument
+    ) -> Set<FeatureID> {
+        let referencedFeatureIDs = referencedFeatureIDs(
+            inSceneSubtreeRootedAt: sceneNodeID,
+            metadata: metadata
+        )
+        return dependencyFeatureClosure(
+            from: referencedFeatureIDs,
+            cadDocument: cadDocument
+        )
+    }
+
+    func orderedFeatureIDs(
+        _ featureIDs: Set<FeatureID>,
+        cadDocument: CADDocument
+    ) -> [FeatureID] {
+        cadDocument.designGraph.order.filter {
+            featureIDs.contains($0)
+        }
     }
 
     private func sourceFeatureClosure(
@@ -519,5 +559,61 @@ struct PatternArrayIndependentCopyBuilder: Sendable {
             featureIDs.contains($0.source) || featureIDs.contains($0.target)
         }
         cadDocument.designGraph.revision = cadDocument.designGraph.revision.advanced()
+    }
+
+    private func referencedFeatureIDs(
+        inSceneSubtreeRootedAt rootSceneNodeID: SceneNodeID,
+        metadata: ProductMetadata
+    ) -> Set<FeatureID> {
+        var featureIDs: Set<FeatureID> = []
+        collectReferencedFeatureIDs(
+            rootSceneNodeID,
+            metadata: metadata,
+            featureIDs: &featureIDs
+        )
+        return featureIDs
+    }
+
+    private func collectReferencedFeatureIDs(
+        _ sceneNodeID: SceneNodeID,
+        metadata: ProductMetadata,
+        featureIDs: inout Set<FeatureID>
+    ) {
+        guard let sceneNode = metadata.sceneNodes[sceneNodeID] else {
+            return
+        }
+        if let featureID = sceneNode.reference?.featureID {
+            featureIDs.insert(featureID)
+        }
+        if let featureID = sceneNode.object?.sourceFeatureID {
+            featureIDs.insert(featureID)
+        }
+        if let featureID = sceneNode.object?.sourceProfileFeatureID {
+            featureIDs.insert(featureID)
+        }
+        for childID in sceneNode.childIDs {
+            collectReferencedFeatureIDs(
+                childID,
+                metadata: metadata,
+                featureIDs: &featureIDs
+            )
+        }
+    }
+
+    private func dependencyFeatureClosure(
+        from seedFeatureIDs: Set<FeatureID>,
+        cadDocument: CADDocument
+    ) -> Set<FeatureID> {
+        var featureIDs = seedFeatureIDs
+        var pendingFeatureIDs = Array(seedFeatureIDs)
+        while let featureID = pendingFeatureIDs.popLast() {
+            guard let feature = cadDocument.designGraph.nodes[featureID] else {
+                continue
+            }
+            for input in feature.inputs where featureIDs.insert(input.featureID).inserted {
+                pendingFeatureIDs.append(input.featureID)
+            }
+        }
+        return featureIDs
     }
 }

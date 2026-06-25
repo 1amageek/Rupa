@@ -873,6 +873,8 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
     private func validatePatternArrays(against cadDocument: CADDocument) throws {
         var names: Set<String> = []
         var sourceIDByOutputInstanceID: [ComponentInstanceID: PatternArraySourceID] = [:]
+        var sourceIDByOutputSceneNodeID: [SceneNodeID: PatternArraySourceID] = [:]
+        var sourceIDByOutputFeatureID: [FeatureID: PatternArraySourceID] = [:]
         for (sourceID, source) in patternArrays {
             guard source.id == sourceID else {
                 throw DocumentValidationError.invalidProductMetadata(
@@ -889,9 +891,11 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
                 )
             }
             try source.validate()
-            try validatePatternArrayOutputInstanceOwnership(
+            try validatePatternArrayOutputOwnership(
                 source: source,
-                sourceIDByOutputInstanceID: &sourceIDByOutputInstanceID
+                sourceIDByOutputInstanceID: &sourceIDByOutputInstanceID,
+                sourceIDByOutputSceneNodeID: &sourceIDByOutputSceneNodeID,
+                sourceIDByOutputFeatureID: &sourceIDByOutputFeatureID
             )
         }
 
@@ -927,23 +931,48 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
         }
     }
 
-    private func validatePatternArrayOutputInstanceOwnership(
+    private func validatePatternArrayOutputOwnership(
         source: PatternArraySource,
-        sourceIDByOutputInstanceID: inout [ComponentInstanceID: PatternArraySourceID]
+        sourceIDByOutputInstanceID: inout [ComponentInstanceID: PatternArraySourceID],
+        sourceIDByOutputSceneNodeID: inout [SceneNodeID: PatternArraySourceID],
+        sourceIDByOutputFeatureID: inout [FeatureID: PatternArraySourceID]
     ) throws {
-        guard source.outputMode == .componentInstance else {
-            return
-        }
-        for instanceID in source.outputInstanceIDs {
-            if let existingSourceID = sourceIDByOutputInstanceID[instanceID] {
-                throw DocumentValidationError.invalidProductMetadata(
-                    """
-                    Pattern array output component instances must be owned by exactly one pattern source; \
-                    instance \(instanceID) is referenced by \(existingSourceID) and \(source.id).
-                    """
-                )
+        switch source.outputMode {
+        case .componentInstance:
+            for instanceID in source.outputInstanceIDs {
+                if let existingSourceID = sourceIDByOutputInstanceID[instanceID] {
+                    throw DocumentValidationError.invalidProductMetadata(
+                        """
+                        Pattern array output component instances must be owned by exactly one pattern source; \
+                        instance \(instanceID) is referenced by \(existingSourceID) and \(source.id).
+                        """
+                    )
+                }
+                sourceIDByOutputInstanceID[instanceID] = source.id
             }
-            sourceIDByOutputInstanceID[instanceID] = source.id
+        case .independentCopy:
+            for sceneNodeID in source.outputSceneNodeIDs {
+                if let existingSourceID = sourceIDByOutputSceneNodeID[sceneNodeID] {
+                    throw DocumentValidationError.invalidProductMetadata(
+                        """
+                        Independent-copy pattern array output scene nodes must be owned by exactly one pattern source; \
+                        scene node \(sceneNodeID) is referenced by \(existingSourceID) and \(source.id).
+                        """
+                    )
+                }
+                sourceIDByOutputSceneNodeID[sceneNodeID] = source.id
+            }
+            for featureID in source.outputFeatureIDs {
+                if let existingSourceID = sourceIDByOutputFeatureID[featureID] {
+                    throw DocumentValidationError.invalidProductMetadata(
+                        """
+                        Independent-copy pattern array output features must be owned by exactly one pattern source; \
+                        feature \(featureID) is referenced by \(existingSourceID) and \(source.id).
+                        """
+                    )
+                }
+                sourceIDByOutputFeatureID[featureID] = source.id
+            }
         }
     }
 

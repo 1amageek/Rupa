@@ -4583,6 +4583,175 @@ import Testing
 }
 
 @MainActor
+@Test func independentPatternArrayRegenerationReusesEditedFeatureCopies() async throws {
+    let session = EditorSession()
+    _ = try #require(session.createDefaultExtrudedRectangle())
+    let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let bodySceneNodeID = try #require(commandStackBodySceneNodeID(for: bodyFeatureID, in: session.document))
+    _ = try session.execute(
+        .createComponentDefinition(
+            name: "Reusable Independent Copy Source",
+            rootSceneNodeIDs: [bodySceneNodeID]
+        )
+    )
+    let definition = try #require(session.document.productMetadata.componentDefinitions.values.first {
+        $0.name == "Reusable Independent Copy Source"
+    })
+    _ = try session.execute(
+        .createPatternArray(
+            name: "Reusable Independent Copy Array",
+            definitionID: definition.id,
+            distribution: .rectangular(RectangularPatternArray(
+                firstAxis: PatternArrayLinearAxis(
+                    direction: .unitX,
+                    distance: .length(8.0, .millimeter),
+                    copyCount: 2
+                )
+            )),
+            outputMode: .independentCopy
+        )
+    )
+    let source = try #require(session.document.productMetadata.patternArrays.values.first {
+        $0.name == "Reusable Independent Copy Array"
+    })
+    let initialOutputSceneNodeIDs = source.outputSceneNodeIDs
+    let firstOutputSceneNodeID = try #require(initialOutputSceneNodeIDs.first)
+    let secondOutputSceneNodeID = try #require(initialOutputSceneNodeIDs.dropFirst().first)
+    let firstCloneBodyFeatureID = try #require(
+        commandStackBodyFeatureID(
+            inSceneSubtreeRootedAt: firstOutputSceneNodeID,
+            document: session.document
+        )
+    )
+    let editedDistance = CADExpression.length(7.0, .millimeter)
+    _ = try session.execute(
+        .setExtrudeDistance(
+            featureID: firstCloneBodyFeatureID,
+            distance: editedDistance
+        )
+    )
+
+    _ = try session.execute(
+        .updatePatternArray(
+            id: source.id,
+            name: nil,
+            definitionID: nil,
+            distribution: .rectangular(RectangularPatternArray(
+                firstAxis: PatternArrayLinearAxis(
+                    direction: .unitX,
+                    distance: .length(20.0, .millimeter),
+                    copyCount: 2
+                )
+            )),
+            outputMode: nil
+        )
+    )
+
+    let updatedSource = try #require(session.document.productMetadata.patternArrays[source.id])
+    let updatedFirstCloneFeature = try #require(
+        session.document.cadDocument.designGraph.nodes[firstCloneBodyFeatureID]
+    )
+    guard case .extrude(let updatedExtrude) = updatedFirstCloneFeature.operation else {
+        Issue.record("Reused independent-copy output should keep the edited extrude feature.")
+        return
+    }
+    let secondOutputNode = try #require(
+        session.document.productMetadata.sceneNodes[secondOutputSceneNodeID]
+    )
+
+    #expect(updatedSource.outputSceneNodeIDs == initialOutputSceneNodeIDs)
+    #expect(updatedSource.outputFeatureIDs.contains(firstCloneBodyFeatureID))
+    #expect(updatedExtrude.distance == editedDistance)
+    #expect(secondOutputNode.localTransform.matrix.values[12] == 0.02)
+}
+
+@MainActor
+@Test func independentPatternArrayRegenerationRemovesOnlyStaleTailOutputs() async throws {
+    let session = EditorSession()
+    _ = try #require(session.createDefaultExtrudedRectangle())
+    let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let bodySceneNodeID = try #require(commandStackBodySceneNodeID(for: bodyFeatureID, in: session.document))
+    _ = try session.execute(
+        .createComponentDefinition(
+            name: "Tail Reuse Independent Source",
+            rootSceneNodeIDs: [bodySceneNodeID]
+        )
+    )
+    let definition = try #require(session.document.productMetadata.componentDefinitions.values.first {
+        $0.name == "Tail Reuse Independent Source"
+    })
+    _ = try session.execute(
+        .createPatternArray(
+            name: "Tail Reuse Independent Array",
+            definitionID: definition.id,
+            distribution: .rectangular(RectangularPatternArray(
+                firstAxis: PatternArrayLinearAxis(
+                    direction: .unitX,
+                    distance: .length(8.0, .millimeter),
+                    copyCount: 2
+                )
+            )),
+            outputMode: .independentCopy
+        )
+    )
+    let source = try #require(session.document.productMetadata.patternArrays.values.first {
+        $0.name == "Tail Reuse Independent Array"
+    })
+    let firstOutputSceneNodeID = try #require(source.outputSceneNodeIDs.first)
+    let secondOutputSceneNodeID = try #require(source.outputSceneNodeIDs.dropFirst().first)
+    let firstCloneBodyFeatureID = try #require(
+        commandStackBodyFeatureID(
+            inSceneSubtreeRootedAt: firstOutputSceneNodeID,
+            document: session.document
+        )
+    )
+    let secondCloneBodyFeatureID = try #require(
+        commandStackBodyFeatureID(
+            inSceneSubtreeRootedAt: secondOutputSceneNodeID,
+            document: session.document
+        )
+    )
+    let editedDistance = CADExpression.length(6.0, .millimeter)
+    _ = try session.execute(
+        .setExtrudeDistance(
+            featureID: firstCloneBodyFeatureID,
+            distance: editedDistance
+        )
+    )
+
+    _ = try session.execute(
+        .updatePatternArray(
+            id: source.id,
+            name: nil,
+            definitionID: nil,
+            distribution: .rectangular(RectangularPatternArray(
+                firstAxis: PatternArrayLinearAxis(
+                    direction: .unitX,
+                    distance: .length(12.0, .millimeter),
+                    copyCount: 1
+                )
+            )),
+            outputMode: nil
+        )
+    )
+
+    let updatedSource = try #require(session.document.productMetadata.patternArrays[source.id])
+    let updatedFirstCloneFeature = try #require(
+        session.document.cadDocument.designGraph.nodes[firstCloneBodyFeatureID]
+    )
+    guard case .extrude(let updatedExtrude) = updatedFirstCloneFeature.operation else {
+        Issue.record("Reused independent-copy output should keep the edited extrude feature.")
+        return
+    }
+
+    #expect(updatedSource.outputSceneNodeIDs == [firstOutputSceneNodeID])
+    #expect(updatedSource.outputFeatureIDs.contains(firstCloneBodyFeatureID))
+    #expect(updatedExtrude.distance == editedDistance)
+    #expect(session.document.productMetadata.sceneNodes[secondOutputSceneNodeID] == nil)
+    #expect(session.document.cadDocument.designGraph.nodes[secondCloneBodyFeatureID] == nil)
+}
+
+@MainActor
 @Test func componentDefinitionRejectsPatternArrayOutputSceneSubtree() async throws {
     let session = EditorSession()
     _ = try #require(session.createDefaultExtrudedRectangle())
@@ -4816,6 +4985,130 @@ import Testing
     }
     #expect(result.didMutate)
     #expect(message.contains("owned by exactly one pattern source"))
+    #expect(session.diagnostics.first?.severity == .error)
+}
+
+@MainActor
+@Test func productMetadataRejectsIndependentPatternArrayOutputSceneNodeOwnedByMultipleSources() async throws {
+    let session = EditorSession()
+    _ = try #require(session.createDefaultExtrudedRectangle())
+    let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let bodySceneNodeID = try #require(commandStackBodySceneNodeID(for: bodyFeatureID, in: session.document))
+    _ = try session.execute(
+        .createComponentDefinition(
+            name: "Exclusive Independent Source",
+            rootSceneNodeIDs: [bodySceneNodeID]
+        )
+    )
+    let definition = try #require(session.document.productMetadata.componentDefinitions.values.first {
+        $0.name == "Exclusive Independent Source"
+    })
+    _ = try session.execute(
+        .createPatternArray(
+            name: "Exclusive Independent Array A",
+            definitionID: definition.id,
+            distribution: .rectangular(RectangularPatternArray(
+                firstAxis: PatternArrayLinearAxis(
+                    direction: .unitX,
+                    distance: .length(10.0, .millimeter),
+                    copyCount: 1
+                )
+            )),
+            outputMode: .independentCopy
+        )
+    )
+    _ = try session.execute(
+        .createPatternArray(
+            name: "Exclusive Independent Array B",
+            definitionID: definition.id,
+            distribution: .rectangular(RectangularPatternArray(
+                firstAxis: PatternArrayLinearAxis(
+                    direction: .unitY,
+                    distance: .length(10.0, .millimeter),
+                    copyCount: 1
+                )
+            )),
+            outputMode: .independentCopy
+        )
+    )
+    let sources = session.document.productMetadata.patternArrays.values.sorted { $0.name < $1.name }
+    let firstSource = try #require(sources.first)
+    var secondSource = try #require(sources.last)
+    let firstOutputSceneNodeID = try #require(firstSource.outputSceneNodeIDs.first)
+    var metadata = session.document.productMetadata
+    secondSource.outputSceneNodeIDs = [firstOutputSceneNodeID]
+    metadata.sceneNodes[secondSource.rootSceneNodeID]?.childIDs = [firstOutputSceneNodeID]
+    metadata.patternArrays[secondSource.id] = secondSource
+
+    let result = try session.execute(.replaceProductMetadata(metadata))
+
+    guard case .failed(let message) = session.evaluationStatus else {
+        #expect(Bool(false))
+        return
+    }
+    #expect(result.didMutate)
+    #expect(message.contains("output scene nodes must be owned by exactly one pattern source"))
+    #expect(session.diagnostics.first?.severity == .error)
+}
+
+@MainActor
+@Test func productMetadataRejectsIndependentPatternArrayOutputFeatureOwnedByMultipleSources() async throws {
+    let session = EditorSession()
+    _ = try #require(session.createDefaultExtrudedRectangle())
+    let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let bodySceneNodeID = try #require(commandStackBodySceneNodeID(for: bodyFeatureID, in: session.document))
+    _ = try session.execute(
+        .createComponentDefinition(
+            name: "Exclusive Independent Feature Source",
+            rootSceneNodeIDs: [bodySceneNodeID]
+        )
+    )
+    let definition = try #require(session.document.productMetadata.componentDefinitions.values.first {
+        $0.name == "Exclusive Independent Feature Source"
+    })
+    _ = try session.execute(
+        .createPatternArray(
+            name: "Exclusive Independent Feature Array A",
+            definitionID: definition.id,
+            distribution: .rectangular(RectangularPatternArray(
+                firstAxis: PatternArrayLinearAxis(
+                    direction: .unitX,
+                    distance: .length(10.0, .millimeter),
+                    copyCount: 1
+                )
+            )),
+            outputMode: .independentCopy
+        )
+    )
+    _ = try session.execute(
+        .createPatternArray(
+            name: "Exclusive Independent Feature Array B",
+            definitionID: definition.id,
+            distribution: .rectangular(RectangularPatternArray(
+                firstAxis: PatternArrayLinearAxis(
+                    direction: .unitY,
+                    distance: .length(10.0, .millimeter),
+                    copyCount: 1
+                )
+            )),
+            outputMode: .independentCopy
+        )
+    )
+    let sources = session.document.productMetadata.patternArrays.values.sorted { $0.name < $1.name }
+    let firstSource = try #require(sources.first)
+    var secondSource = try #require(sources.last)
+    var metadata = session.document.productMetadata
+    secondSource.outputFeatureIDs = firstSource.outputFeatureIDs
+    metadata.patternArrays[secondSource.id] = secondSource
+
+    let result = try session.execute(.replaceProductMetadata(metadata))
+
+    guard case .failed(let message) = session.evaluationStatus else {
+        #expect(Bool(false))
+        return
+    }
+    #expect(result.didMutate)
+    #expect(message.contains("output features must be owned by exactly one pattern source"))
     #expect(session.diagnostics.first?.severity == .error)
 }
 
