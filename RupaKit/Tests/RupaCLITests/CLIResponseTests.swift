@@ -2597,6 +2597,120 @@ struct CLIPlaneCommandTests {
         #expect(inspectResponse.constructionPlaneSummary.activePlaneID == basePlane.id)
         #expect(inspectResponse.constructionPlaneSummary.planes.map(\.name) == ["Base XY", "Renamed View Plane"])
     }
+
+    @MainActor
+    @Test(.timeLimit(.minutes(1)))
+    func executableConstructionPlaneTargetCommandsMutateClosedDocumentAsJSON() async throws {
+        let temporaryDirectory = try makeTemporaryDirectory()
+        defer {
+            removeTemporaryDirectory(temporaryDirectory)
+        }
+        let fixture = try cliDefaultBoxFixture()
+        let documentURL = temporaryDirectory.appendingPathComponent("process-plane-target-commands.swcad")
+        try DocumentFileService().save(fixture.document, to: documentURL)
+        let topology = try TopologySummaryService().summarize(document: fixture.document)
+        let faceTarget = try #require(topology.entries.first { entry in
+            entry.kind == .face && entry.selectionTarget() != nil
+        }?.selectionTarget())
+        let facePair = try parallelFaceTargets(in: topology)
+
+        let targetResult = try await runCLI([
+            "plane",
+            "create-target",
+            documentURL.path,
+            "--name",
+            "Top Face Plane",
+            "--target",
+            try encodedSelectionTarget(faceTarget),
+            "--mode",
+            "file",
+            "--json",
+        ])
+        let targetResponse = try JSONDecoder().decode(CLIResponse.self, from: targetResult.standardOutputData)
+        let loadedAfterTarget = try DocumentFileService().load(from: documentURL)
+        let topFacePlane = try #require(
+            loadedAfterTarget.productMetadata.constructionPlanes.values.first { $0.name == "Top Face Plane" }
+        )
+
+        let targetsResult = try await runCLI([
+            "plane",
+            "create-targets",
+            documentURL.path,
+            "--name",
+            "Left Right Midplane",
+            "--target",
+            try encodedSelectionTarget(facePair.first),
+            "--target",
+            try encodedSelectionTarget(facePair.second),
+            "--mode",
+            "file",
+            "--json",
+        ])
+        let targetsResponse = try JSONDecoder().decode(CLIResponse.self, from: targetsResult.standardOutputData)
+        let loadedAfterTargets = try DocumentFileService().load(from: documentURL)
+        let midplane = try #require(
+            loadedAfterTargets.productMetadata.constructionPlanes.values.first { $0.name == "Left Right Midplane" }
+        )
+
+        #expect(targetResult.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: targetResult.standardError))
+        #expect(targetResponse.message.hasPrefix("Construction plane Top Face Plane created from target"))
+        #expect(targetResponse.saved)
+        #expect(loadedAfterTarget.productMetadata.activeConstructionPlaneID == topFacePlane.id)
+        if case .plane = topFacePlane.plane {
+            #expect(true)
+        } else {
+            Issue.record("Top face construction plane should be stored as a custom plane.")
+        }
+        #expect(targetsResult.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: targetsResult.standardError))
+        #expect(targetsResponse.message == "Construction plane Left Right Midplane created from 2 targets.")
+        #expect(targetsResponse.saved)
+        #expect(loadedAfterTargets.productMetadata.activeConstructionPlaneID == midplane.id)
+        #expect(loadedAfterTargets.productMetadata.constructionPlanes.count == 2)
+        if case .plane = midplane.plane {
+            #expect(true)
+        } else {
+            Issue.record("Generated face midplane should be stored as a custom plane.")
+        }
+    }
+
+    private func parallelFaceTargets(
+        in topology: TopologySummaryResult
+    ) throws -> (first: SelectionTarget, second: SelectionTarget) {
+        let faces = topology.entries.filter { $0.kind == .face }
+        for firstIndex in faces.indices {
+            let first = faces[firstIndex]
+            guard let firstCenter = first.center,
+                  let firstNormal = first.normal,
+                  let firstTarget = first.selectionTarget() else {
+                continue
+            }
+            for second in faces.dropFirst(firstIndex + 1) {
+                guard let secondCenter = second.center,
+                      let secondNormal = second.normal,
+                      let secondTarget = second.selectionTarget() else {
+                    continue
+                }
+                let dot = firstNormal.x * secondNormal.x
+                    + firstNormal.y * secondNormal.y
+                    + firstNormal.z * secondNormal.z
+                let deltaX = secondCenter.x - firstCenter.x
+                let deltaY = secondCenter.y - firstCenter.y
+                let deltaZ = secondCenter.z - firstCenter.z
+                let separation = deltaX * firstNormal.x
+                    + deltaY * firstNormal.y
+                    + deltaZ * firstNormal.z
+                guard abs(abs(dot) - 1.0) <= 1.0e-8,
+                      abs(separation) > 1.0e-9 else {
+                    continue
+                }
+                return (firstTarget, secondTarget)
+            }
+        }
+        throw EditorError(
+            code: .referenceUnresolved,
+            message: "CLI plane test setup requires two separated parallel face targets."
+        )
+    }
 }
 
 @Test(.timeLimit(.minutes(1)))

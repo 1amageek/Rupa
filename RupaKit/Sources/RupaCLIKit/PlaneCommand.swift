@@ -1,5 +1,6 @@
 import ArgumentParser
 import Foundation
+import RupaAutomation
 import RupaCore
 import SwiftCAD
 
@@ -10,6 +11,8 @@ public struct PlaneCommand: ParsableCommand {
         subcommands: [
             PlaneCreateCommand.self,
             PlaneCreateViewCommand.self,
+            PlaneCreateTargetCommand.self,
+            PlaneCreateTargetsCommand.self,
             PlaneSetActiveCommand.self,
             PlaneRenameCommand.self,
         ],
@@ -125,6 +128,93 @@ public struct PlaneCreateViewCommand: ParsableCommand {
             )
             try CLIOutput.write(response: response, asJSON: document.json)
         }
+    }
+}
+
+public struct PlaneCreateTargetCommand: ParsableCommand {
+    public static let configuration = CommandConfiguration(
+        commandName: "create-target",
+        abstract: "Create a saved construction plane aligned to one selection target."
+    )
+
+    @OptionGroup
+    public var document: CLIWriteDocumentOptions
+
+    @Option(help: "Saved construction-plane name.")
+    public var name: String
+
+    @OptionGroup
+    public var selection: CLISelectionTargetOptions
+
+    @Flag(name: .customLong("no-activate"), help: "Create the plane without making it active.")
+    public var noActivate: Bool = false
+
+    public init() {}
+
+    public func run() throws {
+        try CLIAutomationCommandRunner.run(
+            document: document,
+            command: .createConstructionPlaneFromTarget(
+                name: name,
+                target: selection.decodedTarget(),
+                activates: !noActivate
+            )
+        )
+    }
+}
+
+public struct PlaneCreateTargetsCommand: ParsableCommand {
+    public static let configuration = CommandConfiguration(
+        commandName: "create-targets",
+        abstract: "Create a saved construction plane from multiple selection targets."
+    )
+
+    @OptionGroup
+    public var document: CLIWriteDocumentOptions
+
+    @Option(help: "Saved construction-plane name.")
+    public var name: String
+
+    @OptionGroup
+    public var selection: CLISelectionTargetsOptions
+
+    @Option(help: "View normal X component for target combinations that need camera context.")
+    public var viewNormalX: Double?
+
+    @Option(help: "View normal Y component for target combinations that need camera context.")
+    public var viewNormalY: Double?
+
+    @Option(help: "View normal Z component for target combinations that need camera context.")
+    public var viewNormalZ: Double?
+
+    @Flag(name: .customLong("no-activate"), help: "Create the plane without making it active.")
+    public var noActivate: Bool = false
+
+    public init() {}
+
+    public func run() throws {
+        try CLIAutomationCommandRunner.run(
+            document: document,
+            command: .createConstructionPlaneFromTargets(
+                name: name,
+                targets: selection.decodedTargets(),
+                viewNormal: try viewNormal(),
+                activates: !noActivate
+            )
+        )
+    }
+
+    private func viewNormal() throws -> Vector3D? {
+        let values = [viewNormalX, viewNormalY, viewNormalZ]
+        guard values.contains(where: { $0 != nil }) else {
+            return nil
+        }
+        guard let x = viewNormalX,
+              let y = viewNormalY,
+              let z = viewNormalZ else {
+            throw ValidationError("Provide all view normal components or none.")
+        }
+        return Vector3D(x: x, y: y, z: z)
     }
 }
 

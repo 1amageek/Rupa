@@ -1251,6 +1251,12 @@ Currently implemented command groups:
 | `rupa param set <document> <name> --expression <formula>` | Set a parameter from a parsed formula using units, parameter references, arithmetic, parentheses, and basic trigonometric functions. |
 | `rupa param delete <document> <name>` | Delete a parameter in file, live, or auto mode after dependency validation. |
 | `rupa param list <document>` | List file or live-session parameters with resolved values and diagnostics. |
+| `rupa plane create <document> --name <name> --plane <xy|yz|zx>` | Create a saved standard construction plane. |
+| `rupa plane create-view <document> --name <name> --normal-x <value> --normal-y <value> --normal-z <value>` | Create a saved view-aligned construction plane from explicit origin and view normal. |
+| `rupa plane create-target <document> --name <name> --target <json>` | Create a saved construction plane from one supported selection target. |
+| `rupa plane create-targets <document> --name <name> --target <json> --target <json>` | Create a saved construction plane from multiple supported selection targets. |
+| `rupa plane set-active <document> --id <uuid>` | Activate a saved construction plane. |
+| `rupa plane rename <document> --id <uuid> --name <name>` | Rename a saved construction plane. |
 | `rupa sketch line <document> --start-x <value> --start-y <value> --end-x <value> --end-y <value>` | Create a line sketch from numeric length literals. |
 | `rupa sketch circle <document> --center-x <value> --center-y <value> --radius <value>` | Create a circle sketch from numeric length literals. |
 | `rupa sketch rectangle <document> --width <value> --height <value>` | Create a closed rectangle sketch profile from numeric length literals. |
