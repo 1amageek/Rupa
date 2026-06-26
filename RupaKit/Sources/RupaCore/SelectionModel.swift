@@ -262,10 +262,35 @@ public struct SelectionModel: Codable, Equatable, Sendable {
         case .surface(.controlPoint):
             _ = try SurfaceControlPointSelectionTargetResolver()
                 .validateDisplayTarget(for: reference, in: document)
+        case .sketchPoint(let point):
+            try validateSketchPointReference(point, in: document)
         case .topology, .edge, .curve, .surface(_):
             throw EditorError(
                 code: .commandInvalid,
                 message: "Selection reference is not selectable in the viewport yet."
+            )
+        }
+    }
+
+    private func validateSketchPointReference(
+        _ reference: SketchPointSelectionReference,
+        in document: DesignDocument
+    ) throws {
+        guard let feature = document.cadDocument.designGraph.nodes[reference.featureID],
+              case let .sketch(sketch) = feature.operation,
+              case .point = sketch.entities[reference.entityID] else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "Selection sketch point reference could not resolve its source sketch point."
+            )
+        }
+        let hasSceneNode = document.productMetadata.sceneNodes.values.contains { node in
+            node.reference == .sketch(reference.featureID)
+        }
+        guard hasSceneNode else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "Selection sketch point reference requires a visible source sketch scene node."
             )
         }
     }

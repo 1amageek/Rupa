@@ -3696,6 +3696,142 @@ struct CLISelectionDimensionCommandTests {
         #expect(abs(appliedMeasurement.residual.value) <= 1.0e-12)
         #expect(try appliedMeasurement.isSatisfied())
     }
+
+    @Test(.timeLimit(.minutes(1)))
+    func executableSelectionDimensionApplyMovesStandaloneSketchPointAsJSON() async throws {
+        let temporaryDirectory = try makeTemporaryDirectory()
+        defer {
+            removeTemporaryDirectory(temporaryDirectory)
+        }
+        let documentURL = temporaryDirectory.appendingPathComponent("process-selection-standalone-point-dimension.swcad")
+        var document = DesignDocument.empty(named: "Process Selection Standalone Point Dimension")
+        let pointFeatureID = try createCLIStandalonePointSketch(
+            in: &document,
+            name: "Measured Point",
+            plane: .xy,
+            point: SketchPoint(
+                x: .length(10.0, .millimeter),
+                y: .length(0.0, .millimeter)
+            )
+        )
+        let anchorFeatureID = try document.createLineSketch(
+            name: "Anchor Line",
+            plane: .xy,
+            start: SketchPoint(
+                x: .length(0.0, .millimeter),
+                y: .length(0.0, .millimeter)
+            ),
+            end: SketchPoint(
+                x: .length(0.0, .millimeter),
+                y: .length(10.0, .millimeter)
+            )
+        )
+        let pointTarget = try cliStandalonePointTarget(in: document, featureID: pointFeatureID)
+        let anchorTargets = try cliLineEndpointTargets(in: document, featureID: anchorFeatureID)
+        try DocumentFileService().save(document, to: documentURL)
+
+        let result = try await runCLI([
+            "dimension",
+            "add-selection",
+            documentURL.path,
+            "--name",
+            "CLI Point Distance",
+            "--kind",
+            "distance",
+            "--first-target",
+            try encodedSelectionTarget(pointTarget),
+            "--second-target",
+            try encodedSelectionTarget(anchorTargets.start),
+            "--target-value",
+            "10",
+            "--length-unit",
+            "millimeter",
+            "--mode",
+            "file",
+            "--json",
+        ])
+        let response = try JSONDecoder().decode(
+            CLISelectionDimensionAddResponse.self,
+            from: result.standardOutputData
+        )
+        let dimensionID = try #require(response.selectionDimensionID)
+
+        #expect(result.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: result.standardError))
+        #expect(response.message == "Selection dimension added.")
+        #expect(response.saved)
+        #expect(!response.dirty)
+
+        let setResult = try await runCLI([
+            "dimension",
+            "set-selection",
+            documentURL.path,
+            "--dimension-id",
+            dimensionID.description,
+            "--kind",
+            "distance",
+            "--target-value",
+            "6",
+            "--length-unit",
+            "millimeter",
+            "--mode",
+            "file",
+            "--json",
+        ])
+        let setResponse = try JSONDecoder().decode(
+            CLIResponse.self,
+            from: setResult.standardOutputData
+        )
+
+        #expect(setResult.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: setResult.standardError))
+        #expect(setResponse.message == "Selection dimension target updated.")
+        #expect(setResponse.saved)
+        #expect(!setResponse.dirty)
+
+        let applyResult = try await runCLI([
+            "dimension",
+            "apply-selection",
+            documentURL.path,
+            "--dimension-id",
+            dimensionID.description,
+            "--mode",
+            "file",
+            "--json",
+        ])
+        guard applyResult.terminationStatus == CLIExitCode.success.rawValue else {
+            Issue.record(
+                "Standalone point selection dimension apply failed: \(applyResult.standardError)\(applyResult.standardOutput)"
+            )
+            return
+        }
+        let applyResponse = try JSONDecoder().decode(
+            CLIResponse.self,
+            from: applyResult.standardOutputData
+        )
+        let appliedLoaded = try DocumentFileService().load(from: documentURL)
+        let appliedEvaluation = try SelectionDimensionService().evaluate(
+            document: appliedLoaded,
+            dimensionID: dimensionID
+        )
+        let appliedMeasurement = try #require(appliedEvaluation.measurements.first)
+        let movedPoint = try cliStandalonePoint(in: appliedLoaded, featureID: pointFeatureID)
+
+        #expect(applyResponse.message == "Selection dimension target applied.")
+        #expect(applyResponse.saved)
+        #expect(!applyResponse.dirty)
+        #expect(abs(movedPoint.x - 0.006) <= 1.0e-12)
+        #expect(abs(movedPoint.y) <= 1.0e-12)
+        #expect(appliedMeasurement.measured.kind == .length)
+        #expect(abs(appliedMeasurement.measured.value - 0.006) <= 1.0e-12)
+        #expect(appliedMeasurement.target.kind == .length)
+        #expect(abs(appliedMeasurement.target.value - 0.006) <= 1.0e-12)
+        #expect(abs(appliedMeasurement.residual.value) <= 1.0e-12)
+        #expect(try appliedMeasurement.isSatisfied())
+        guard case .sketchPoint(let point) = appliedMeasurement.dimension.first else {
+            Issue.record("Expected standalone point selection reference")
+            return
+        }
+        #expect(point.featureID == pointFeatureID)
+    }
 }
 
 @Test(.timeLimit(.minutes(1)))
@@ -6263,6 +6399,50 @@ private func cliArcEndpointTargets(
     )
 }
 
+private func createCLIStandalonePointSketch(
+    in document: inout DesignDocument,
+    name: String,
+    plane: SketchPlane,
+    point: SketchPoint
+) throws -> FeatureID {
+    let featureID = try document.createLineSketch(
+        name: name,
+        plane: plane,
+        start: SketchPoint(x: .length(0.0, .millimeter), y: .length(0.0, .millimeter)),
+        end: SketchPoint(x: .length(1.0, .millimeter), y: .length(0.0, .millimeter))
+    )
+    let pointID = SketchEntityID()
+    guard var feature = document.cadDocument.designGraph.nodes[featureID],
+          case var .sketch(sketch) = feature.operation else {
+        throw EditorError(
+            code: .referenceUnresolved,
+            message: "CLI standalone point test requires a sketch feature."
+        )
+    }
+    sketch.entities[pointID] = .point(point)
+    feature.operation = .sketch(sketch)
+    document.cadDocument.designGraph.nodes[featureID] = feature
+    document.cadDocument.designGraph.revision = document.cadDocument.designGraph.revision.advanced()
+    return featureID
+}
+
+private func cliStandalonePointTarget(
+    in document: DesignDocument,
+    featureID: FeatureID
+) throws -> SelectionTarget {
+    let summary = try SketchEntitySummaryService().summarize(document: document)
+    let entry = try #require(summary.entries.first {
+        $0.sourceFeatureID == featureID.description && $0.entityKind == "point"
+    })
+    let sceneNodeIDString = try #require(entry.sceneNodeID)
+    let sceneNodeUUID = try #require(UUID(uuidString: sceneNodeIDString))
+    let pointHandle = try #require(entry.pointHandles.first { $0.handle == .point })
+    return SelectionTarget(
+        sceneNodeID: SceneNodeID(sceneNodeUUID),
+        component: .sketchEntity(SelectionComponentID(rawValue: pointHandle.selectionComponentID))
+    )
+}
+
 private func cliSplineControlPointTargets(
     in document: DesignDocument,
     featureID: FeatureID
@@ -6319,6 +6499,30 @@ private func cliSplineControlPoints(
             y: try cliLength(controlPoint.y, in: document)
         )
     }
+}
+
+private func cliStandalonePoint(
+    in document: DesignDocument,
+    featureID: FeatureID
+) throws -> (x: Double, y: Double) {
+    guard let feature = document.cadDocument.designGraph.nodes[featureID],
+          case let .sketch(sketch) = feature.operation,
+          let pointEntity = sketch.entities.values.first(where: { entity in
+              if case .point = entity {
+                  return true
+              }
+              return false
+          }),
+          case let .point(point) = pointEntity else {
+        throw EditorError(
+            code: .referenceUnresolved,
+            message: "Expected one standalone source point."
+        )
+    }
+    return (
+        x: try cliLength(point.x, in: document),
+        y: try cliLength(point.y, in: document)
+    )
 }
 
 private func encodedSelectionReference(_ reference: SelectionReference) throws -> String {

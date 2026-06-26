@@ -165,6 +165,25 @@ public struct SelectionDimensionTargetResolver: Sendable {
                 message: "Selection dimension sketch point target could not resolve its source sketch entity."
             )
         }
+        if reference.handle == .point {
+            guard case .point = entity else {
+                throw EditorError(
+                    code: .commandInvalid,
+                    message: "Selection dimension sketch point handle requires a source sketch point entity."
+                )
+            }
+            try requireSketchEntityInSummary(
+                featureID: reference.featureID,
+                entityID: reference.entityID,
+                target: target,
+                document: document,
+                objectRegistry: objectRegistry
+            )
+            return .sketchPoint(SketchPointSelectionReference(
+                featureID: reference.featureID,
+                entityID: reference.entityID
+            ))
+        }
         let curveIndex = try curveIndex(
             featureID: reference.featureID,
             entityID: reference.entityID,
@@ -212,7 +231,7 @@ public struct SelectionDimensionTargetResolver: Sendable {
         default:
             throw EditorError(
                 code: .commandInvalid,
-                message: "Selection dimension sketch point targets currently support line start/end plus circle/arc center and arc start/end handles."
+                message: "Selection dimension sketch point targets currently support standalone points, line start/end, circle/arc center, and arc start/end handles."
             )
         }
     }
@@ -286,6 +305,30 @@ public struct SelectionDimensionTargetResolver: Sendable {
             )
         }
         return index
+    }
+
+    private func requireSketchEntityInSummary(
+        featureID: FeatureID,
+        entityID: SketchEntityID,
+        target: SelectionTarget,
+        document: DesignDocument,
+        objectRegistry: ObjectTypeRegistry
+    ) throws {
+        let summary = try sketchEntityService.summarize(
+            document: document,
+            objectRegistry: objectRegistry
+        )
+        let found = summary.entries.contains { entry in
+            entry.sourceFeatureID == featureID.description &&
+                entry.sceneNodeID == target.sceneNodeID.description &&
+                entry.entityID == entityID.description
+        }
+        guard found else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "Selection dimension sketch target was not found in the current sketch summary."
+            )
+        }
     }
 
     private func curveEntityIDs(

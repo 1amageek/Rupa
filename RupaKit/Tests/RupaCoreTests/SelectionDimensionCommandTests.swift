@@ -347,6 +347,72 @@ import Testing
     )
 }
 
+@Test func selectionDimensionApplyUpdatesStandaloneSketchPointDistance() async throws {
+    var document = DesignDocument.empty()
+    let pointFeatureID = try createStandalonePointSketch(
+        in: &document,
+        name: "Editable Point",
+        plane: .xy,
+        point: SketchPoint(
+            x: .length(10.0, .millimeter),
+            y: .length(0.0, .millimeter)
+        )
+    )
+    let anchorFeatureID = try document.createLineSketch(
+        name: "Anchor Line",
+        plane: .xy,
+        start: SketchPoint(
+            x: .length(0.0, .millimeter),
+            y: .length(0.0, .millimeter)
+        ),
+        end: SketchPoint(
+            x: .length(0.0, .millimeter),
+            y: .length(10.0, .millimeter)
+        )
+    )
+    let pointTarget = try standalonePointTarget(in: document, featureID: pointFeatureID)
+    let anchorTargets = try lineEndpointTargets(in: document, featureID: anchorFeatureID)
+    let session = EditorSession(document: document)
+    let addResult = try session.execute(
+        .addSelectionDimension(
+            name: "Point Distance",
+            kind: .distance,
+            first: pointTarget,
+            second: anchorTargets.start,
+            target: .length(10.0, .millimeter)
+        )
+    )
+    let dimensionID = try #require(addResult.addedSelectionDimensionID)
+
+    _ = try session.execute(
+        .setSelectionDimensionTarget(
+            id: dimensionID,
+            target: .length(6.0, .millimeter)
+        )
+    )
+    let applyResult = try session.execute(.applySelectionDimensionTarget(id: dimensionID))
+    let appliedEvaluation = try SelectionDimensionService().evaluate(
+        document: session.document,
+        dimensionID: dimensionID
+    )
+    let appliedMeasurement = try #require(appliedEvaluation.measurements.first)
+    let movedPoint = try standalonePoint(in: session.document, featureID: pointFeatureID)
+
+    #expect(applyResult.commandName == "applySelectionDimensionTarget")
+    #expect(applyResult.didMutate)
+    #expect(abs(movedPoint.x - 0.006) <= 1.0e-12)
+    #expect(abs(movedPoint.y) <= 1.0e-12)
+    assertLengthQuantity(appliedMeasurement.measured, equals: 0.006)
+    assertLengthQuantity(appliedMeasurement.target, equals: 0.006)
+    #expect(abs(appliedMeasurement.residual.value) <= 1.0e-12)
+    #expect(try appliedMeasurement.isSatisfied())
+    assertStandalonePointAndLineStartReferences(
+        appliedMeasurement.dimension,
+        pointFeatureID: pointFeatureID,
+        lineFeatureID: anchorFeatureID
+    )
+}
+
 @Test func selectionDimensionApplyRejectsImpossibleArcEndpointPointDistance() async throws {
     var document = DesignDocument.empty()
     let arcFeatureID = try document.createArcSketch(
@@ -919,6 +985,50 @@ private func splineControlPointTargets(
         }
 }
 
+private func createStandalonePointSketch(
+    in document: inout DesignDocument,
+    name: String,
+    plane: SketchPlane,
+    point: SketchPoint
+) throws -> FeatureID {
+    let featureID = try document.createLineSketch(
+        name: name,
+        plane: plane,
+        start: SketchPoint(x: .length(0.0, .millimeter), y: .length(0.0, .millimeter)),
+        end: SketchPoint(x: .length(1.0, .millimeter), y: .length(0.0, .millimeter))
+    )
+    let pointID = SketchEntityID()
+    guard var feature = document.cadDocument.designGraph.nodes[featureID],
+          case var .sketch(sketch) = feature.operation else {
+        throw EditorError(
+            code: .referenceUnresolved,
+            message: "Standalone point test requires a sketch feature."
+        )
+    }
+    sketch.entities[pointID] = .point(point)
+    feature.operation = .sketch(sketch)
+    document.cadDocument.designGraph.nodes[featureID] = feature
+    document.cadDocument.designGraph.revision = document.cadDocument.designGraph.revision.advanced()
+    return featureID
+}
+
+private func standalonePointTarget(
+    in document: DesignDocument,
+    featureID: FeatureID
+) throws -> SelectionTarget {
+    let summary = try SketchEntitySummaryService().summarize(document: document)
+    let entry = try #require(summary.entries.first {
+        $0.sourceFeatureID == featureID.description && $0.entityKind == "point"
+    })
+    let sceneNodeIDString = try #require(entry.sceneNodeID)
+    let sceneNodeUUID = try #require(UUID(uuidString: sceneNodeIDString))
+    let pointHandle = try #require(entry.pointHandles.first { $0.handle == .point })
+    return SelectionTarget(
+        sceneNodeID: SceneNodeID(sceneNodeUUID),
+        component: .sketchEntity(SelectionComponentID(rawValue: pointHandle.selectionComponentID))
+    )
+}
+
 private func opposingFaceTargets(
     in document: DesignDocument
 ) throws -> (first: SelectionTarget, second: SelectionTarget) {
@@ -1038,6 +1148,25 @@ private func splineControlPoints(
     return try spline.controlPoints.map { try point($0, in: document) }
 }
 
+private func standalonePoint(
+    in document: DesignDocument,
+    featureID: FeatureID
+) throws -> Point2D {
+    guard let feature = document.cadDocument.designGraph.nodes[featureID],
+          case let .sketch(sketch) = feature.operation,
+          let pointEntity = sketch.entities.values.first(where: { entity in
+              if case .point = entity {
+                  return true
+              }
+              return false
+          }),
+          case let .point(sketchPoint) = pointEntity else {
+        Issue.record("Expected one standalone source point")
+        return Point2D(x: 0.0, y: 0.0)
+    }
+    return try point(sketchPoint, in: document)
+}
+
 private func arcStartAngle(
     in document: DesignDocument,
     featureID: FeatureID
@@ -1109,6 +1238,21 @@ private func assertSplineControlPointAndLineStartReferences(
     }
     #expect(controlPoint.curve.featureID == splineFeatureID)
     #expect(controlPoint.controlPointIndex == expectedControlPointIndex)
+    #expect(lineStart.curve.featureID == lineFeatureID)
+    #expect(abs(lineStart.parameter) <= 1.0e-12)
+}
+
+private func assertStandalonePointAndLineStartReferences(
+    _ dimension: SelectionDimension,
+    pointFeatureID: FeatureID,
+    lineFeatureID: FeatureID
+) {
+    guard case .sketchPoint(let point) = dimension.first,
+          case .curve(.parameter(let lineStart)) = dimension.second else {
+        Issue.record("Expected standalone point and line start references")
+        return
+    }
+    #expect(point.featureID == pointFeatureID)
     #expect(lineStart.curve.featureID == lineFeatureID)
     #expect(abs(lineStart.parameter) <= 1.0e-12)
 }

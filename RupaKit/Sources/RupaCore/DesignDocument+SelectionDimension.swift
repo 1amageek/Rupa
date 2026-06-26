@@ -307,6 +307,10 @@ public extension DesignDocument {
             case (.curve(.controlPoint), .curve),
                  (.curve, .curve(.controlPoint)):
                 return .sourcePointDistance(try sourcePointDistanceDimensionContext(for: dimension))
+            case (.sketchPoint, .curve),
+                 (.curve, .sketchPoint),
+                 (.sketchPoint, .sketchPoint):
+                return .sourcePointDistance(try sourcePointDistanceDimensionContext(for: dimension))
             default:
                 throw EditorError(
                     code: .commandInvalid,
@@ -713,23 +717,27 @@ public extension DesignDocument {
     private func sourcePointContext(
         reference: SelectionReference
     ) throws -> SelectionDimensionSourcePointContext {
-        guard case .curve(let curveReference) = reference else {
+        switch reference {
+        case .curve(let curveReference):
+            switch curveReference {
+            case .parameter(let parameter):
+                return try sourceParameterPointContext(parameter)
+            case .center(let center):
+                return try sourceCenterPointContext(center)
+            case .controlPoint(let controlPoint):
+                return try sourceControlPointContext(controlPoint)
+            case .whole, .span, .knot:
+                throw EditorError(
+                    code: .commandInvalid,
+                    message: "Selection point distance application requires line endpoint, circle center, arc center, arc endpoint, spline control point, or standalone sketch point references."
+                )
+            }
+        case .sketchPoint(let point):
+            return try sourceStandalonePointContext(point)
+        case .topology, .edge, .surface:
             throw EditorError(
                 code: .commandInvalid,
-                message: "Selection point distance application requires source sketch point curve references."
-            )
-        }
-        switch curveReference {
-        case .parameter(let parameter):
-            return try sourceParameterPointContext(parameter)
-        case .center(let center):
-            return try sourceCenterPointContext(center)
-        case .controlPoint(let controlPoint):
-            return try sourceControlPointContext(controlPoint)
-        case .whole, .span, .knot:
-            throw EditorError(
-                code: .commandInvalid,
-                message: "Selection point distance application requires line endpoint, circle center, arc center, arc endpoint, or spline control point references."
+                message: "Selection point distance application requires source sketch point references."
             )
         }
     }
@@ -856,6 +864,28 @@ public extension DesignDocument {
             plane: sketch.plane,
             target: try sourceSketchEntityTarget(featureID: featureID, entityID: entityID),
             role: .splineControlPoint(controlPoint.controlPointIndex)
+        )
+    }
+
+    private func sourceStandalonePointContext(
+        _ point: SketchPointSelectionReference
+    ) throws -> SelectionDimensionSourcePointContext {
+        guard let feature = cadDocument.designGraph.nodes[point.featureID],
+              case let .sketch(sketch) = feature.operation,
+              case .point = sketch.entities[point.entityID] else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "Selection point distance application requires an existing standalone source sketch point."
+            )
+        }
+
+        return SelectionDimensionSourcePointContext(
+            featureID: point.featureID,
+            entityID: point.entityID,
+            curve: nil,
+            plane: sketch.plane,
+            target: try sourceSketchEntityTarget(featureID: point.featureID, entityID: point.entityID),
+            role: .handle(.point)
         )
     }
 
@@ -1484,41 +1514,59 @@ public extension DesignDocument {
     ) throws -> SelectionReference {
         switch context.role {
         case .handle(.lineStart):
+            let curve = try sourceCurve(context, owner: "Selection point distance line start reference")
             return .curve(.parameter(CurveParameterReference(
-                curve: context.curve,
+                curve: curve,
                 parameter: 0.0
             )))
         case .handle(.lineEnd):
+            let curve = try sourceCurve(context, owner: "Selection point distance line end reference")
             return .curve(.parameter(CurveParameterReference(
-                curve: context.curve,
+                curve: curve,
                 parameter: try sourceLineLength(
                     featureID: context.featureID,
                     entityID: context.entityID
                 )
             )))
         case .handle(.circleCenter), .handle(.arcCenter):
-            return .curve(.center(CurveCenterReference(curve: context.curve)))
+            let curve = try sourceCurve(context, owner: "Selection point distance center reference")
+            return .curve(.center(CurveCenterReference(curve: curve)))
         case .handle(.arcStart), .handle(.arcEnd):
+            let curve = try sourceCurve(context, owner: "Selection point distance arc endpoint reference")
             let endpointParameters = try sourceArcEndpointParameters(
                 featureID: context.featureID,
                 entityID: context.entityID
             )
             return selectionReference(
-                curve: context.curve,
+                curve: curve,
                 role: context.role == .handle(.arcStart) ? .start : .end,
                 arcEndpointParameters: endpointParameters
             )
         case .splineControlPoint(let index):
+            let curve = try sourceCurve(context, owner: "Selection point distance spline control point reference")
             return .curve(.controlPoint(CurveControlPointReference(
-                curve: context.curve,
+                curve: curve,
                 controlPointIndex: index
             )))
         case .handle(.point):
+            return .sketchPoint(SketchPointSelectionReference(
+                featureID: context.featureID,
+                entityID: context.entityID
+            ))
+        }
+    }
+
+    private func sourceCurve(
+        _ context: SelectionDimensionSourcePointContext,
+        owner: String
+    ) throws -> CurveOutputReference {
+        guard let curve = context.curve else {
             throw EditorError(
                 code: .commandInvalid,
-                message: "Selection point distance application cannot persist standalone sketch point references yet."
+                message: "\(owner) requires a source curve reference."
             )
         }
+        return curve
     }
 
     private func lineAngleClosestToCurrent(
@@ -1616,7 +1664,7 @@ private enum SelectionDimensionSourcePointRole: Equatable, Sendable {
 private struct SelectionDimensionSourcePointContext: Sendable {
     var featureID: FeatureID
     var entityID: SketchEntityID
-    var curve: CurveOutputReference
+    var curve: CurveOutputReference?
     var plane: SketchPlane
     var target: SelectionTarget
     var role: SelectionDimensionSourcePointRole
