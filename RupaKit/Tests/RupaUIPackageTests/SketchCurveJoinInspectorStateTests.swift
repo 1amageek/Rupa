@@ -23,6 +23,7 @@ import Testing
         entityID: firstLineID,
         target: target,
         joinedCurveSourceID: nil,
+        joinedCurveGroupSourceID: nil,
         selectedTargets: [target, adjacentTarget],
         entityKindsByTarget: [
             target: "line",
@@ -41,7 +42,6 @@ import Testing
     let otherFeatureID = FeatureID()
     let lineID = SketchEntityID()
     let otherLineID = SketchEntityID()
-    let arcID = SketchEntityID()
     let target = SelectionTarget(
         sceneNodeID: sceneNodeID,
         component: .sketchEntity(.sketchEntity(featureID: featureID, entityID: lineID))
@@ -60,7 +60,36 @@ import Testing
         sceneNodeID: sceneNodeID,
         component: .sketchEntity(.sketchEntity(featureID: otherFeatureID, entityID: otherLineID))
     )
-    let arcTarget = SelectionTarget(
+
+    let state = SketchCurveJoinInspectorState(
+        entityKind: "line",
+        sourceFeatureID: featureID,
+        entityID: lineID,
+        target: target,
+        joinedCurveSourceID: nil,
+        joinedCurveGroupSourceID: nil,
+        selectedTargets: [target, sameEntityHandleTarget, otherSketchLineTarget],
+        entityKindsByTarget: [
+            target: "line",
+            sameEntityHandleTarget: "line",
+            otherSketchLineTarget: "line",
+        ]
+    )
+
+    #expect(state.joinAdjacentTarget == nil)
+    #expect(!state.canJoin)
+}
+
+@Test func sketchCurveJoinInspectorStateAcceptsSameSketchArcCandidate() {
+    let sceneNodeID = SceneNodeID()
+    let featureID = FeatureID()
+    let lineID = SketchEntityID()
+    let arcID = SketchEntityID()
+    let target = SelectionTarget(
+        sceneNodeID: sceneNodeID,
+        component: .sketchEntity(.sketchEntity(featureID: featureID, entityID: lineID))
+    )
+    let adjacentTarget = SelectionTarget(
         sceneNodeID: sceneNodeID,
         component: .sketchEntity(.sketchEntity(featureID: featureID, entityID: arcID))
     )
@@ -71,17 +100,16 @@ import Testing
         entityID: lineID,
         target: target,
         joinedCurveSourceID: nil,
-        selectedTargets: [target, sameEntityHandleTarget, otherSketchLineTarget, arcTarget],
+        joinedCurveGroupSourceID: nil,
+        selectedTargets: [target, adjacentTarget],
         entityKindsByTarget: [
             target: "line",
-            sameEntityHandleTarget: "line",
-            otherSketchLineTarget: "line",
-            arcTarget: "arc",
+            adjacentTarget: "arc",
         ]
     )
 
-    #expect(state.joinAdjacentTarget == nil)
-    #expect(!state.canJoin)
+    #expect(state.joinAdjacentTarget == adjacentTarget)
+    #expect(state.canJoin)
 }
 
 @Test func sketchCurveJoinInspectorStateEnablesUnjoinOnlyForJoinedLines() {
@@ -100,6 +128,7 @@ import Testing
         entityID: lineID,
         target: target,
         joinedCurveSourceID: joinedSourceID,
+        joinedCurveGroupSourceID: nil,
         selectedTargets: [target],
         entityKindsByTarget: [target: "line"]
     )
@@ -109,10 +138,35 @@ import Testing
         entityID: lineID,
         target: target,
         joinedCurveSourceID: joinedSourceID,
+        joinedCurveGroupSourceID: nil,
         selectedTargets: [target],
         entityKindsByTarget: [target: "arc"]
     )
 
     #expect(joinedLineState.canUnjoin)
     #expect(!joinedArcState.canUnjoin)
+}
+
+@Test func sketchCurveJoinInspectorStateEnablesUnjoinForJoinedGroups() {
+    let sceneNodeID = SceneNodeID()
+    let featureID = FeatureID()
+    let arcID = SketchEntityID()
+    let target = SelectionTarget(
+        sceneNodeID: sceneNodeID,
+        component: .sketchEntity(.sketchEntity(featureID: featureID, entityID: arcID))
+    )
+    let joinedGroupSourceID = JoinedCurveGroupSourceID()
+
+    let state = SketchCurveJoinInspectorState(
+        entityKind: "arc",
+        sourceFeatureID: featureID,
+        entityID: arcID,
+        target: target,
+        joinedCurveSourceID: nil,
+        joinedCurveGroupSourceID: joinedGroupSourceID,
+        selectedTargets: [target],
+        entityKindsByTarget: [target: "arc"]
+    )
+
+    #expect(state.canUnjoin)
 }

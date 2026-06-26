@@ -6216,6 +6216,84 @@ import Testing
 }
 
 @MainActor
+@Test func joinSketchCurvesGroupsAlignedLineAndArcWithoutRemovingEntities() async throws {
+    let setup = try lineArcChainSlotSession(
+        name: "Join Source Line Arc",
+        includeCoincidentConstraint: false
+    )
+    let session = setup.session
+    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let line = try #require(before.entries.first { $0.entityID == setup.lineID.description })
+    let arc = try #require(before.entries.first { $0.entityID == setup.arcID.description })
+
+    let result = try session.execute(
+        .joinSketchCurves(
+            target: try #require(line.selectionTarget()),
+            adjacentTarget: try #require(arc.selectionTarget())
+        )
+    )
+
+    let feature = try #require(session.document.cadDocument.designGraph.nodes[setup.featureID])
+    guard case .sketch(let sketch) = feature.operation else {
+        Issue.record("Join line-arc feature must remain a sketch.")
+        return
+    }
+    #expect(result.commandName == "joinSketchCurves")
+    #expect(result.didMutate)
+    #expect(sketch.entities.count == 2)
+    #expect(sketch.entities[setup.lineID] != nil)
+    #expect(sketch.entities[setup.arcID] != nil)
+    #expect(sketch.constraints.contains(.coincident(.lineEnd(setup.lineID), .arcStart(setup.arcID))))
+    #expect(session.document.productMetadata.joinedCurveSources.isEmpty)
+    #expect(session.document.productMetadata.joinedCurveGroupSources.count == 1)
+    let joinedSource = try #require(session.document.productMetadata.joinedCurveGroupSources.values.first)
+    #expect(joinedSource.featureID == setup.featureID)
+    #expect(joinedSource.memberEntityIDs == [setup.lineID, setup.arcID])
+    #expect(joinedSource.firstJoinedReference == .lineEnd(setup.lineID))
+    #expect(joinedSource.secondJoinedReference == .arcStart(setup.arcID))
+    #expect(session.evaluationStatus == .valid)
+}
+
+@MainActor
+@Test func unjoinSketchCurveRestoresCompositeLineArcJoinGroup() async throws {
+    let setup = try lineArcChainSlotSession(
+        name: "Unjoin Source Line Arc",
+        includeCoincidentConstraint: false
+    )
+    let session = setup.session
+    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let line = try #require(before.entries.first { $0.entityID == setup.lineID.description })
+    let arc = try #require(before.entries.first { $0.entityID == setup.arcID.description })
+    _ = try session.execute(
+        .joinSketchCurves(
+            target: try #require(line.selectionTarget()),
+            adjacentTarget: try #require(arc.selectionTarget())
+        )
+    )
+    let joined = try SketchEntitySummaryService().summarize(document: session.document)
+    let joinedArc = try #require(joined.entries.first { $0.entityID == setup.arcID.description })
+
+    let result = try session.execute(
+        .unjoinSketchCurve(target: try #require(joinedArc.selectionTarget()))
+    )
+
+    let feature = try #require(session.document.cadDocument.designGraph.nodes[setup.featureID])
+    guard case .sketch(let sketch) = feature.operation else {
+        Issue.record("Unjoin line-arc feature must remain a sketch.")
+        return
+    }
+    #expect(result.commandName == "unjoinSketchCurve")
+    #expect(result.didMutate)
+    #expect(sketch.entities.count == 2)
+    #expect(sketch.entities[setup.lineID] != nil)
+    #expect(sketch.entities[setup.arcID] != nil)
+    #expect(!sketch.constraints.contains(.coincident(.lineEnd(setup.lineID), .arcStart(setup.arcID))))
+    #expect(session.document.productMetadata.joinedCurveSources.isEmpty)
+    #expect(session.document.productMetadata.joinedCurveGroupSources.isEmpty)
+    #expect(session.evaluationStatus == .valid)
+}
+
+@MainActor
 @Test func unjoinSketchCurveRejectsChangedJoinedLineWithoutMutation() async throws {
     let setup = try lineChainSlotSession(
         name: "Unjoin Changed Source Line",
@@ -8415,7 +8493,8 @@ private func lineChainSlotSession(
 
 @MainActor
 private func lineArcChainSlotSession(
-    name: String
+    name: String,
+    includeCoincidentConstraint: Bool = true
 ) throws -> (
     session: EditorSession,
     featureID: FeatureID,
@@ -8437,6 +8516,9 @@ private func lineArcChainSlotSession(
             message: "Line-arc Slot setup requires a sketch feature."
         )
     }
+    let constraints: [SketchConstraint] = includeCoincidentConstraint
+        ? [.coincident(.lineEnd(lineID), .arcStart(arcID))]
+        : []
     feature.operation = .sketch(Sketch(
         plane: .xy,
         entities: [
@@ -8451,9 +8533,7 @@ private func lineArcChainSlotSession(
                 endAngle: .angle(0.0, .radian)
             )),
         ],
-        constraints: [
-            .coincident(.lineEnd(lineID), .arcStart(arcID)),
-        ]
+        constraints: constraints
     ))
     document.cadDocument.designGraph.nodes[featureID] = feature
     document.cadDocument.designGraph.revision = document.cadDocument.designGraph.revision.advanced()

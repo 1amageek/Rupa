@@ -6,16 +6,18 @@ struct SketchCurveJoinInspectorState {
     var entityID: SketchEntityID
     var target: SelectionTarget
     var joinedCurveSourceID: JoinedCurveSourceID?
+    var joinedCurveGroupSourceID: JoinedCurveGroupSourceID?
     var selectedTargets: [SelectionTarget]
     var entityKindsByTarget: [SelectionTarget: String]
 
     var joinAdjacentTarget: SelectionTarget? {
-        guard entityKind == "line" else {
+        guard ["line", "arc"].contains(entityKind) else {
             return nil
         }
         return selectedTargets.first { candidate in
             guard candidate != target,
-                  entityKindsByTarget[candidate] == "line",
+                  let candidateKind = entityKindsByTarget[candidate],
+                  ["line", "arc"].contains(candidateKind),
                   case .sketchEntity(let componentID) = candidate.component,
                   let reference = componentID.sketchEntityBaseReference,
                   reference.featureID == sourceFeatureID,
@@ -31,6 +33,7 @@ struct SketchCurveJoinInspectorState {
     }
 
     var canUnjoin: Bool {
-        entityKind == "line" && joinedCurveSourceID != nil
+        (entityKind == "line" && joinedCurveSourceID != nil) ||
+            (["line", "arc"].contains(entityKind) && joinedCurveGroupSourceID != nil)
     }
 }

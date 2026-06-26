@@ -5419,6 +5419,33 @@ public struct DesignDocument: Identifiable, Sendable {
             for: adjacentTarget,
             operationName: "Join Curves adjacent"
         )
+        if case .line = targetSelection.entity,
+           case .line = adjacentSelection.entity {
+            try joinSketchLinePair(
+                target: target,
+                targetSelection: targetSelection,
+                adjacentTarget: adjacentTarget,
+                adjacentSelection: adjacentSelection,
+                objectRegistry: objectRegistry
+            )
+            return
+        }
+        try joinSketchCurveGroup(
+            target: target,
+            targetSelection: targetSelection,
+            adjacentTarget: adjacentTarget,
+            adjacentSelection: adjacentSelection,
+            objectRegistry: objectRegistry
+        )
+    }
+
+    private mutating func joinSketchLinePair(
+        target: SelectionTarget,
+        targetSelection: EditableSketchEntitySelection,
+        adjacentTarget: SelectionTarget,
+        adjacentSelection: EditableSketchEntitySelection,
+        objectRegistry: ObjectTypeRegistry
+    ) throws {
         let join = try sketchLineJoinPlan(
             target: target,
             targetSelection: targetSelection,
@@ -5485,6 +5512,64 @@ public struct DesignDocument: Identifiable, Sendable {
         didCommitJoin = true
     }
 
+    private mutating func joinSketchCurveGroup(
+        target: SelectionTarget,
+        targetSelection: EditableSketchEntitySelection,
+        adjacentTarget: SelectionTarget,
+        adjacentSelection: EditableSketchEntitySelection,
+        objectRegistry: ObjectTypeRegistry
+    ) throws {
+        let join = try sketchCurveGroupJoinPlan(
+            target: target,
+            targetSelection: targetSelection,
+            adjacentTarget: adjacentTarget,
+            adjacentSelection: adjacentSelection
+        )
+        try validateSketchCurveGroupJoin(
+            join,
+            sketch: targetSelection.sketch,
+            featureID: targetSelection.featureID
+        )
+
+        var feature = targetSelection.feature
+        var sketch = targetSelection.sketch
+        let constraintsBeforeJoin = sketch.constraints
+        let dimensionsBeforeJoin = sketch.dimensions
+        sketch.constraints = constraintsAfterSketchCurveGroupJoin(
+            sketch.constraints,
+            join: join
+        )
+
+        let previousCADDocument = cadDocument
+        let previousProductMetadata = productMetadata
+        var didCommitJoin = false
+        defer {
+            if didCommitJoin == false {
+                cadDocument = previousCADDocument
+                productMetadata = previousProductMetadata
+            }
+        }
+        let joinedSource = JoinedCurveGroupSource(
+            featureID: targetSelection.featureID,
+            memberEntityIDs: join.memberEntityIDs,
+            firstJoinedReference: join.firstJoinedReference,
+            secondJoinedReference: join.secondJoinedReference,
+            constraintsBeforeJoin: constraintsBeforeJoin,
+            dimensionsBeforeJoin: dimensionsBeforeJoin,
+            constraintsAfterJoin: sketch.constraints,
+            dimensionsAfterJoin: sketch.dimensions
+        )
+        productMetadata.joinedCurveGroupSources[joinedSource.id] = joinedSource
+        try commitSketchEntityEdit(
+            featureID: targetSelection.featureID,
+            feature: &feature,
+            sketch: sketch,
+            objectRegistry: objectRegistry,
+            errorOwner: "Join Curves"
+        )
+        didCommitJoin = true
+    }
+
     public mutating func unjoinSketchCurve(
         target: SelectionTarget,
         objectRegistry: ObjectTypeRegistry = .builtIn
@@ -5493,7 +5578,33 @@ public struct DesignDocument: Identifiable, Sendable {
             for: target,
             operationName: "Unjoin Curve"
         )
-        let source = try joinedCurveSource(for: selection)
+        if let source = try joinedCurveSourceIfPresent(for: selection) {
+            try unjoinSketchLinePair(
+                source,
+                selection: selection,
+                objectRegistry: objectRegistry
+            )
+            return
+        }
+        if let source = try joinedCurveGroupSourceIfPresent(for: selection) {
+            try unjoinSketchCurveGroup(
+                source,
+                selection: selection,
+                objectRegistry: objectRegistry
+            )
+            return
+        }
+        throw EditorError(
+            code: .commandInvalid,
+            message: "Unjoin Curve requires a source curve retained by a prior Join Curves operation."
+        )
+    }
+
+    private mutating func unjoinSketchLinePair(
+        _ source: JoinedCurveSource,
+        selection: EditableSketchEntitySelection,
+        objectRegistry: ObjectTypeRegistry
+    ) throws {
         guard case .line(let currentLine) = selection.entity else {
             throw EditorError(
                 code: .commandInvalid,
@@ -5523,6 +5634,41 @@ public struct DesignDocument: Identifiable, Sendable {
             }
         }
         productMetadata.joinedCurveSources.removeValue(forKey: source.id)
+        try commitSketchEntityEdit(
+            featureID: selection.featureID,
+            feature: &feature,
+            sketch: sketch,
+            objectRegistry: objectRegistry,
+            errorOwner: "Unjoin Curve"
+        )
+        didCommitUnjoin = true
+    }
+
+    private mutating func unjoinSketchCurveGroup(
+        _ source: JoinedCurveGroupSource,
+        selection: EditableSketchEntitySelection,
+        objectRegistry: ObjectTypeRegistry
+    ) throws {
+        try validateSketchCurveGroupUnjoin(
+            source,
+            sketch: selection.sketch
+        )
+
+        var feature = selection.feature
+        var sketch = selection.sketch
+        sketch.constraints = source.constraintsBeforeJoin
+        sketch.dimensions = source.dimensionsBeforeJoin
+
+        let previousCADDocument = cadDocument
+        let previousProductMetadata = productMetadata
+        var didCommitUnjoin = false
+        defer {
+            if didCommitUnjoin == false {
+                cadDocument = previousCADDocument
+                productMetadata = previousProductMetadata
+            }
+        }
+        productMetadata.joinedCurveGroupSources.removeValue(forKey: source.id)
         try commitSketchEntityEdit(
             featureID: selection.featureID,
             feature: &feature,
@@ -12187,6 +12333,12 @@ public struct DesignDocument: Identifiable, Sendable {
         var migratedRemovedOuterReference: SketchReference
     }
 
+    private struct SketchCurveGroupJoinPlan {
+        var memberEntityIDs: [SketchEntityID]
+        var firstJoinedReference: SketchReference
+        var secondJoinedReference: SketchReference
+    }
+
     private func sketchLineJoinPlan(
         target: SelectionTarget,
         targetSelection: EditableSketchEntitySelection,
@@ -12278,6 +12430,72 @@ public struct DesignDocument: Identifiable, Sendable {
         return join
     }
 
+    private func sketchCurveGroupJoinPlan(
+        target: SelectionTarget,
+        targetSelection: EditableSketchEntitySelection,
+        adjacentTarget: SelectionTarget,
+        adjacentSelection: EditableSketchEntitySelection
+    ) throws -> SketchCurveGroupJoinPlan {
+        guard targetSelection.featureID == adjacentSelection.featureID else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "Join Curves requires both source curves to belong to the same sketch."
+            )
+        }
+        guard targetSelection.entityID != adjacentSelection.entityID else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Join Curves requires two distinct source curves."
+            )
+        }
+        let targetEndpointCandidates = try joinCurveEndpointCandidates(
+            target: target,
+            selection: targetSelection,
+            owner: "Join Curves target"
+        )
+        let adjacentEndpointCandidates = try joinCurveEndpointCandidates(
+            target: adjacentTarget,
+            selection: adjacentSelection,
+            owner: "Join Curves adjacent"
+        )
+        var candidates: [SketchCurveGroupJoinPlan] = []
+        for targetReference in targetEndpointCandidates {
+            for adjacentReference in adjacentEndpointCandidates {
+                guard try joinCurveEndpointsAreAligned(
+                    targetReference,
+                    adjacentReference,
+                    sketch: targetSelection.sketch
+                ) else {
+                    continue
+                }
+                candidates.append(
+                    SketchCurveGroupJoinPlan(
+                        memberEntityIDs: [
+                            targetSelection.entityID,
+                            adjacentSelection.entityID,
+                        ],
+                        firstJoinedReference: targetReference,
+                        secondJoinedReference: adjacentReference
+                    )
+                )
+            }
+        }
+        guard candidates.count == 1,
+              let join = candidates.first else {
+            if candidates.isEmpty {
+                throw EditorError(
+                    code: .commandInvalid,
+                    message: "Join Curves requires exactly one aligned endpoint pair between the selected source curves."
+                )
+            }
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Join Curves found multiple aligned endpoint pairs; select explicit endpoints to disambiguate."
+            )
+        }
+        return join
+    }
+
     private func joinLineEndpointCandidates(
         target: SelectionTarget,
         selection: EditableSketchEntitySelection,
@@ -12327,6 +12545,110 @@ public struct DesignDocument: Identifiable, Sendable {
         ]
     }
 
+    private func joinCurveEndpointCandidates(
+        target: SelectionTarget,
+        selection: EditableSketchEntitySelection,
+        owner: String
+    ) throws -> [SketchReference] {
+        guard case .sketchEntity(let componentID) = target.component else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "\(owner) requires a source line, arc, or endpoint target."
+            )
+        }
+        if let handleReference = componentID.sketchPointHandleReference {
+            guard handleReference.featureID == selection.featureID,
+                  handleReference.entityID == selection.entityID else {
+                throw EditorError(
+                    code: .referenceUnresolved,
+                    message: "\(owner) endpoint target does not match the selected source curve."
+                )
+            }
+            return [
+                try joinCurveEndpointReference(
+                    handleReference.handle,
+                    selection: selection,
+                    owner: owner
+                ),
+            ]
+        }
+        guard let entityReference = componentID.sketchEntityReference,
+              entityReference.featureID == selection.featureID,
+              entityReference.entityID == selection.entityID else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "\(owner) requires a source line or arc entity target."
+            )
+        }
+        switch selection.entity {
+        case .line:
+            return [
+                .lineStart(selection.entityID),
+                .lineEnd(selection.entityID),
+            ]
+        case .arc:
+            return [
+                .arcStart(selection.entityID),
+                .arcEnd(selection.entityID),
+            ]
+        case .point,
+             .circle,
+             .spline:
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Join Curves composite join currently supports source line and arc endpoints."
+            )
+        }
+    }
+
+    private func joinCurveEndpointReference(
+        _ handle: SketchEntityPointHandle,
+        selection: EditableSketchEntitySelection,
+        owner: String
+    ) throws -> SketchReference {
+        switch selection.entity {
+        case .line:
+            switch handle {
+            case .lineStart:
+                return .lineStart(selection.entityID)
+            case .lineEnd:
+                return .lineEnd(selection.entityID)
+            case .point,
+                 .circleCenter,
+                 .arcCenter,
+                 .arcStart,
+                 .arcEnd:
+                throw EditorError(
+                    code: .commandInvalid,
+                    message: "\(owner) requires a source line endpoint target."
+                )
+            }
+        case .arc:
+            switch handle {
+            case .arcStart:
+                return .arcStart(selection.entityID)
+            case .arcEnd:
+                return .arcEnd(selection.entityID)
+            case .point,
+                 .lineStart,
+                 .lineEnd,
+                 .circleCenter,
+                 .arcCenter:
+                throw EditorError(
+                    code: .commandInvalid,
+                    message: "\(owner) requires a source arc endpoint target."
+                )
+            }
+        case .point,
+             .circle,
+             .spline:
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Join Curves composite join currently supports source line and arc endpoints."
+            )
+        }
+    }
+
     private func joinLineEndpointsAreAligned(
         _ first: SketchReference,
         _ second: SketchReference,
@@ -12337,6 +12659,21 @@ public struct DesignDocument: Identifiable, Sendable {
             throw EditorError(
                 code: .referenceUnresolved,
                 message: "Join Curves requires source line endpoint references."
+            )
+        }
+        return squaredDistance(firstPoint, secondPoint) <= joinCurveEndpointToleranceSquared
+    }
+
+    private func joinCurveEndpointsAreAligned(
+        _ first: SketchReference,
+        _ second: SketchReference,
+        sketch: Sketch
+    ) throws -> Bool {
+        guard let firstPoint = try resolvedPoint(first, in: sketch, owner: "Join Curves endpoint"),
+              let secondPoint = try resolvedPoint(second, in: sketch, owner: "Join Curves endpoint") else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "Join Curves requires source curve endpoint references."
             )
         }
         return squaredDistance(firstPoint, secondPoint) <= joinCurveEndpointToleranceSquared
@@ -12479,6 +12816,14 @@ public struct DesignDocument: Identifiable, Sendable {
                 )
             }
         }
+        for source in productMetadata.joinedCurveGroupSources.values where source.featureID == featureID {
+            guard source.memberEntityIDs.allSatisfy({ affectedEntityIDs.contains($0) == false }) else {
+                throw EditorError(
+                    code: .commandInvalid,
+                    message: "Join Curves cannot join curves that already carry joined-curve ownership metadata."
+                )
+            }
+        }
         for source in productMetadata.bridgeCurveSources.values where source.featureID == featureID {
             guard bridgeEndpointReferencesAnyJoinEntity(source.firstEndpoint, affectedEntityIDs: affectedEntityIDs) == false,
                   bridgeEndpointReferencesAnyJoinEntity(source.secondEndpoint, affectedEntityIDs: affectedEntityIDs) == false,
@@ -12492,6 +12837,48 @@ public struct DesignDocument: Identifiable, Sendable {
         }
         _ = try constraintsAfterSketchLineJoin(sketch.constraints, join: join)
         _ = try dimensionsAfterSketchLineJoin(sketch.dimensions, join: join)
+    }
+
+    private func validateSketchCurveGroupJoin(
+        _ join: SketchCurveGroupJoinPlan,
+        sketch: Sketch,
+        featureID: FeatureID
+    ) throws {
+        let affectedEntityIDs = Set(join.memberEntityIDs)
+        for source in productMetadata.joinedCurveSources.values where source.featureID == featureID {
+            guard affectedEntityIDs.contains(source.retainedEntityID) == false,
+                  affectedEntityIDs.contains(source.restoredEntityID) == false else {
+                throw EditorError(
+                    code: .commandInvalid,
+                    message: "Join Curves cannot join curves that already carry joined-curve ownership metadata."
+                )
+            }
+        }
+        for source in productMetadata.joinedCurveGroupSources.values where source.featureID == featureID {
+            guard source.memberEntityIDs.allSatisfy({ affectedEntityIDs.contains($0) == false }) else {
+                throw EditorError(
+                    code: .commandInvalid,
+                    message: "Join Curves cannot join curves that already carry joined-curve ownership metadata."
+                )
+            }
+        }
+        for source in productMetadata.bridgeCurveSources.values where source.featureID == featureID {
+            guard bridgeEndpointReferencesAnyJoinEntity(source.firstEndpoint, affectedEntityIDs: affectedEntityIDs) == false,
+                  bridgeEndpointReferencesAnyJoinEntity(source.secondEndpoint, affectedEntityIDs: affectedEntityIDs) == false,
+                  affectedEntityIDs.contains(source.entityID) == false else {
+                throw EditorError(
+                    code: .commandInvalid,
+                    message: "Join Curves cannot preserve generated Bridge Curve source metadata for joined curves yet."
+                )
+            }
+        }
+        guard sketch.entities.keys.contains(join.memberEntityIDs[0]),
+              sketch.entities.keys.contains(join.memberEntityIDs[1]) else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "Join Curves requires existing source curve entities."
+            )
+        }
     }
 
     private func bridgeEndpointReferencesAnyJoinEntity(
@@ -12576,6 +12963,36 @@ public struct DesignDocument: Identifiable, Sendable {
         return updated
     }
 
+    private func constraintsAfterSketchCurveGroupJoin(
+        _ constraints: [SketchConstraint],
+        join: SketchCurveGroupJoinPlan
+    ) -> [SketchConstraint] {
+        if constraints.contains(where: { constraint in
+            joinConstraintMatchesEndpoints(
+                constraint,
+                first: join.firstJoinedReference,
+                second: join.secondJoinedReference
+            )
+        }) {
+            return constraints
+        }
+        var updated = constraints
+        updated.append(.coincident(join.firstJoinedReference, join.secondJoinedReference))
+        return updated
+    }
+
+    private func joinConstraintMatchesEndpoints(
+        _ constraint: SketchConstraint,
+        first: SketchReference,
+        second: SketchReference
+    ) -> Bool {
+        guard case .coincident(let existingFirst, let existingSecond) = constraint else {
+            return false
+        }
+        return (existingFirst == first && existingSecond == second) ||
+            (existingFirst == second && existingSecond == first)
+    }
+
     private func dimensionsAfterSketchLineJoin(
         _ dimensions: [SketchDimension],
         join: SketchLineJoinPlan
@@ -12658,21 +13075,36 @@ public struct DesignDocument: Identifiable, Sendable {
         return reference
     }
 
-    private func joinedCurveSource(
+    private func joinedCurveSourceIfPresent(
         for selection: EditableSketchEntitySelection
-    ) throws -> JoinedCurveSource {
+    ) throws -> JoinedCurveSource? {
         let matches = productMetadata.joinedCurveSources.values.filter { source in
             source.featureID == selection.featureID &&
                 source.retainedEntityID == selection.entityID
         }
-        guard matches.count == 1,
-              let source = matches.first else {
+        guard matches.count <= 1 else {
             throw EditorError(
                 code: .commandInvalid,
-                message: "Unjoin Curve requires a source line retained by a prior Join Curves operation."
+                message: "Unjoin Curve found duplicate joined-curve ownership metadata for the selected source curve."
             )
         }
-        return source
+        return matches.first
+    }
+
+    private func joinedCurveGroupSourceIfPresent(
+        for selection: EditableSketchEntitySelection
+    ) throws -> JoinedCurveGroupSource? {
+        let matches = productMetadata.joinedCurveGroupSources.values.filter { source in
+            source.featureID == selection.featureID &&
+                source.memberEntityIDs.contains(selection.entityID)
+        }
+        guard matches.count <= 1 else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Unjoin Curve found duplicate joined-curve ownership metadata for the selected source curve."
+            )
+        }
+        return matches.first
     }
 
     private func validateSketchLineUnjoin(
@@ -12715,6 +13147,44 @@ public struct DesignDocument: Identifiable, Sendable {
         }
         _ = try resolvedLineMetrics(source.retainedOriginalLine, owner: "Unjoin Curve retained result")
         _ = try resolvedLineMetrics(source.restoredOriginalLine, owner: "Unjoin Curve restored result")
+    }
+
+    private func validateSketchCurveGroupUnjoin(
+        _ source: JoinedCurveGroupSource,
+        sketch: Sketch
+    ) throws {
+        for entityID in source.memberEntityIDs {
+            guard sketch.entities[entityID] != nil else {
+                throw EditorError(
+                    code: .referenceUnresolved,
+                    message: "Unjoin Curve cannot restore a joined curve group after a member source curve was removed."
+                )
+            }
+        }
+        guard sketch.constraints == source.constraintsAfterJoin,
+              sketch.dimensions == source.dimensionsAfterJoin else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Unjoin Curve cannot restore a joined curve group after its constraints or dimensions changed."
+            )
+        }
+        let affectedEntityIDs = Set(source.memberEntityIDs)
+        for bridgeSource in productMetadata.bridgeCurveSources.values where bridgeSource.featureID == source.featureID {
+            guard bridgeEndpointReferencesAnyJoinEntity(
+                bridgeSource.firstEndpoint,
+                affectedEntityIDs: affectedEntityIDs
+            ) == false,
+            bridgeEndpointReferencesAnyJoinEntity(
+                bridgeSource.secondEndpoint,
+                affectedEntityIDs: affectedEntityIDs
+            ) == false,
+            affectedEntityIDs.contains(bridgeSource.entityID) == false else {
+                throw EditorError(
+                    code: .commandInvalid,
+                    message: "Unjoin Curve cannot preserve generated Bridge Curve source metadata for joined curves yet."
+                )
+            }
+        }
     }
 
     private func sketchLinesMatch(

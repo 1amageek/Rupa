@@ -4765,6 +4765,7 @@ public struct MainView: View {
         var analysis: InspectorCurveAnalysis?
         var bridgeCurve: InspectorBridgeCurve?
         var joinedCurveSourceID: JoinedCurveSourceID?
+        var joinedCurveGroupSourceID: JoinedCurveGroupSourceID?
         var start: SketchEntitySummaryResult.Point?
         var end: SketchEntitySummaryResult.Point?
         var center: SketchEntitySummaryResult.Point?
@@ -5228,6 +5229,7 @@ public struct MainView: View {
             entityID: entity.entityID,
             target: entity.target,
             joinedCurveSourceID: entity.joinedCurveSourceID,
+            joinedCurveGroupSourceID: entity.joinedCurveGroupSourceID,
             selectedTargets: session.selection.selectedTargets,
             entityKindsByTarget: entityKindsByTarget
         )
@@ -5461,6 +5463,28 @@ public struct MainView: View {
         }
     }
 
+    @ViewBuilder
+    private func sketchCurveJoinControls(_ entity: InspectorSketchEntity) -> some View {
+        let joinState = sketchCurveJoinInspectorState(for: entity)
+        inspectorActionRow {
+            Button {
+                joinSelectedSketchCurves(entity)
+            } label: {
+                Label("Join", systemImage: "link.badge.plus")
+            }
+            .disabled(!joinState.canJoin)
+            .accessibilityIdentifier("InspectorCurve.\(entity.entityKind).join")
+
+            Button {
+                unjoinSelectedSketchCurve(entity)
+            } label: {
+                Label("Unjoin", systemImage: "link.badge.minus")
+            }
+            .disabled(!joinState.canUnjoin)
+            .accessibilityIdentifier("InspectorCurve.\(entity.entityKind).unjoin")
+        }
+    }
+
     private func canApplySketchCornerTreatment(_ entity: InspectorSketchEntity) -> Bool {
         guard case .sketchEntity(let componentID) = entity.target.component,
               entity.entityKind == "line" || entity.entityKind == "arc" else {
@@ -5535,6 +5559,9 @@ public struct MainView: View {
         let joinedCurveSourceID = session.document.productMetadata.joinedCurveSources.values.first { source in
             source.featureID == reference.featureID && source.retainedEntityID == reference.entityID
         }?.id
+        let joinedCurveGroupSourceID = session.document.productMetadata.joinedCurveGroupSources.values.first { source in
+            source.featureID == reference.featureID && source.memberEntityIDs.contains(reference.entityID)
+        }?.id
 
         switch entity {
         case .point(let point):
@@ -5556,6 +5583,7 @@ public struct MainView: View {
                 entityKind: "line",
                 analysis: analysis,
                 joinedCurveSourceID: joinedCurveSourceID,
+                joinedCurveGroupSourceID: joinedCurveGroupSourceID,
                 start: try resolvedSketchPoint(line.start),
                 end: try resolvedSketchPoint(line.end)
             )
@@ -5582,6 +5610,7 @@ public struct MainView: View {
                 sourceFeatureName: feature.name,
                 entityKind: "arc",
                 analysis: analysis,
+                joinedCurveGroupSourceID: joinedCurveGroupSourceID,
                 start: pointOnSketchCircle(center: center, radius: radius, angle: startAngle),
                 end: pointOnSketchCircle(center: center, radius: radius, angle: endAngle),
                 center: center,
@@ -6974,6 +7003,9 @@ public struct MainView: View {
             if let joinedCurveSourceID = entity.joinedCurveSourceID {
                 inspectorRow("Join Source", shortID(joinedCurveSourceID))
             }
+            if let joinedCurveGroupSourceID = entity.joinedCurveGroupSourceID {
+                inspectorRow("Join Group", shortID(joinedCurveGroupSourceID))
+            }
             if let center = entity.center {
                 inspectorRow("Center", sketchPointSummary(center))
             }
@@ -7309,7 +7341,7 @@ public struct MainView: View {
             }
             sketchCurveExtendControls(entity)
             sketchCornerTreatmentControls(entity)
-            let joinState = sketchCurveJoinInspectorState(for: entity)
+            sketchCurveJoinControls(entity)
             inspectorActionRow {
                 Button {
                     createSlotFromOffsetCurve(entity.target, width: slotProfileWidthMeters)
@@ -7338,23 +7370,6 @@ public struct MainView: View {
                     Label("Trim", systemImage: "delete.left")
                 }
                 .accessibilityIdentifier("InspectorCurve.line.trim")
-            }
-            inspectorActionRow {
-                Button {
-                    joinSelectedSketchCurves(entity)
-                } label: {
-                    Label("Join", systemImage: "link.badge.plus")
-                }
-                .disabled(!joinState.canJoin)
-                .accessibilityIdentifier("InspectorCurve.line.join")
-
-                Button {
-                    unjoinSelectedSketchCurve(entity)
-                } label: {
-                    Label("Unjoin", systemImage: "link.badge.minus")
-                }
-                .disabled(!joinState.canUnjoin)
-                .accessibilityIdentifier("InspectorCurve.line.unjoin")
             }
             if let cutter = selectedSketchEntityCutterTarget(excluding: entity.target) {
                 inspectorActionRow {
@@ -7492,6 +7507,7 @@ public struct MainView: View {
                 "t"
             }
             sketchCurveExtendControls(entity)
+            sketchCurveJoinControls(entity)
             inspectorActionRow {
                 Button {
                     splitSelectedSketchCurve(entity.target)

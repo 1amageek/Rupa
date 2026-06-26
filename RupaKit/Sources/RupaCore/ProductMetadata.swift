@@ -12,6 +12,7 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
     public var exportPresets: [ExportPresetID: ExportPreset]
     public var bridgeCurveSources: [BridgeCurveSourceID: BridgeCurveSource]
     public var joinedCurveSources: [JoinedCurveSourceID: JoinedCurveSource]
+    public var joinedCurveGroupSources: [JoinedCurveGroupSourceID: JoinedCurveGroupSource]
     public var constructionPlanes: [ConstructionPlaneSourceID: ConstructionPlaneSource]
     public var activeConstructionPlaneID: ConstructionPlaneSourceID?
     public var curveCurvatureDisplays: [SelectionComponentID: CurveCurvatureDisplay]
@@ -31,6 +32,7 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
         exportPresets: [ExportPresetID: ExportPreset] = [:],
         bridgeCurveSources: [BridgeCurveSourceID: BridgeCurveSource] = [:],
         joinedCurveSources: [JoinedCurveSourceID: JoinedCurveSource] = [:],
+        joinedCurveGroupSources: [JoinedCurveGroupSourceID: JoinedCurveGroupSource] = [:],
         constructionPlanes: [ConstructionPlaneSourceID: ConstructionPlaneSource] = [:],
         activeConstructionPlaneID: ConstructionPlaneSourceID? = nil,
         curveCurvatureDisplays: [SelectionComponentID: CurveCurvatureDisplay] = [:],
@@ -49,6 +51,7 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
         self.exportPresets = exportPresets
         self.bridgeCurveSources = bridgeCurveSources
         self.joinedCurveSources = joinedCurveSources
+        self.joinedCurveGroupSources = joinedCurveGroupSources
         self.constructionPlanes = constructionPlanes
         self.activeConstructionPlaneID = activeConstructionPlaneID
         self.curveCurvatureDisplays = curveCurvatureDisplays
@@ -69,6 +72,7 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
         case exportPresets
         case bridgeCurveSources
         case joinedCurveSources
+        case joinedCurveGroupSources
         case constructionPlanes
         case activeConstructionPlaneID
         case curveCurvatureDisplays
@@ -115,6 +119,10 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
                 [JoinedCurveSourceID: JoinedCurveSource].self,
                 forKey: .joinedCurveSources
             ) ?? [:],
+            joinedCurveGroupSources: try container.decodeIfPresent(
+                [JoinedCurveGroupSourceID: JoinedCurveGroupSource].self,
+                forKey: .joinedCurveGroupSources
+            ) ?? [:],
             constructionPlanes: try container.decodeIfPresent(
                 [ConstructionPlaneSourceID: ConstructionPlaneSource].self,
                 forKey: .constructionPlanes
@@ -158,6 +166,7 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
         try container.encode(exportPresets, forKey: .exportPresets)
         try container.encode(bridgeCurveSources, forKey: .bridgeCurveSources)
         try container.encode(joinedCurveSources, forKey: .joinedCurveSources)
+        try container.encode(joinedCurveGroupSources, forKey: .joinedCurveGroupSources)
         try container.encode(constructionPlanes, forKey: .constructionPlanes)
         try container.encodeIfPresent(activeConstructionPlaneID, forKey: .activeConstructionPlaneID)
         try container.encode(curveCurvatureDisplays, forKey: .curveCurvatureDisplays)
@@ -189,6 +198,7 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
         try validateExportPresets()
         try validateBridgeCurveSources(against: cadDocument)
         try validateJoinedCurveSources(against: cadDocument)
+        try validateJoinedCurveGroupSources(against: cadDocument)
         try validateConstructionPlanes()
         try validateCurveCurvatureDisplays(against: cadDocument)
         try validatePointDisplays(against: cadDocument)
@@ -566,9 +576,84 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
         }
     }
 
+    private func validateJoinedCurveGroupSources(against cadDocument: CADDocument) throws {
+        var ownedKeys: Set<JoinedCurveOwnershipKey> = []
+        for source in joinedCurveSources.values {
+            ownedKeys.insert(
+                JoinedCurveOwnershipKey(featureID: source.featureID, entityID: source.retainedEntityID)
+            )
+            ownedKeys.insert(
+                JoinedCurveOwnershipKey(featureID: source.featureID, entityID: source.restoredEntityID)
+            )
+        }
+        for (sourceID, source) in joinedCurveGroupSources {
+            guard source.id == sourceID else {
+                throw DocumentValidationError.invalidProductMetadata(
+                    "Joined curve group source keys must match joined curve group source IDs."
+                )
+            }
+            guard source.memberEntityIDs.count >= 2 else {
+                throw DocumentValidationError.invalidProductMetadata(
+                    "Joined curve group sources must contain at least two source entities."
+                )
+            }
+            guard Set(source.memberEntityIDs).count == source.memberEntityIDs.count else {
+                throw DocumentValidationError.invalidProductMetadata(
+                    "Joined curve group source members must be unique."
+                )
+            }
+            guard let feature = cadDocument.designGraph.nodes[source.featureID],
+                  case .sketch(let sketch) = feature.operation else {
+                throw DocumentValidationError.invalidProductMetadata(
+                    "Joined curve group sources must point to existing sketch features."
+                )
+            }
+            for entityID in source.memberEntityIDs {
+                guard sketch.entities[entityID] != nil else {
+                    throw DocumentValidationError.invalidProductMetadata(
+                        "Joined curve group source members must exist in the source sketch."
+                    )
+                }
+                let key = JoinedCurveOwnershipKey(featureID: source.featureID, entityID: entityID)
+                guard ownedKeys.insert(key).inserted else {
+                    throw DocumentValidationError.invalidProductMetadata(
+                        "A source curve can only be owned by one joined curve source."
+                    )
+                }
+            }
+            guard joinedCurveGroupReference(
+                source.firstJoinedReference,
+                referencesAnyOf: Set(source.memberEntityIDs),
+                in: sketch
+            ),
+            joinedCurveGroupReference(
+                source.secondJoinedReference,
+                referencesAnyOf: Set(source.memberEntityIDs),
+                in: sketch
+            ) else {
+                throw DocumentValidationError.invalidProductMetadata(
+                    "Joined curve group sources must store source line or arc endpoint references."
+                )
+            }
+            guard joinedCurveGroupReferenceEntityID(source.firstJoinedReference) !=
+                    joinedCurveGroupReferenceEntityID(source.secondJoinedReference) else {
+                throw DocumentValidationError.invalidProductMetadata(
+                    "Joined curve group endpoint references must connect distinct source entities."
+                )
+            }
+        }
+    }
+
+    private struct JoinedCurveOwnershipKey: Hashable {
+        var featureID: FeatureID
+        var entityID: SketchEntityID
+    }
+
     private enum JoinedCurveEndpointKind {
         case lineStart
         case lineEnd
+        case arcStart
+        case arcEnd
     }
 
     private func joinedCurveReference(
@@ -581,15 +666,65 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
             referenceEntityID == entityID && allowed.contains(.lineStart)
         case .lineEnd(let referenceEntityID):
             referenceEntityID == entityID && allowed.contains(.lineEnd)
+        case .arcStart(let referenceEntityID):
+            referenceEntityID == entityID && allowed.contains(.arcStart)
+        case .arcEnd(let referenceEntityID):
+            referenceEntityID == entityID && allowed.contains(.arcEnd)
         case .entity,
              .circleCenter,
              .circleRadius,
              .arcCenter,
-             .arcStart,
-             .arcEnd,
              .arcRadius,
              .splineControlPoint:
             false
+        }
+    }
+
+    private func joinedCurveGroupReference(
+        _ reference: SketchReference,
+        referencesAnyOf entityIDs: Set<SketchEntityID>,
+        in sketch: Sketch
+    ) -> Bool {
+        guard let entityID = joinedCurveGroupReferenceEntityID(reference),
+              entityIDs.contains(entityID),
+              let entity = sketch.entities[entityID] else {
+            return false
+        }
+        switch (reference, entity) {
+        case (.lineStart(_), .line),
+             (.lineEnd(_), .line),
+             (.arcStart(_), .arc),
+             (.arcEnd(_), .arc):
+            return true
+        case (.entity, _),
+             (.circleCenter, _),
+             (.circleRadius, _),
+             (.arcCenter, _),
+             (.arcRadius, _),
+             (.splineControlPoint, _):
+            return false
+        case (.lineStart(_), _),
+             (.lineEnd(_), _),
+             (.arcStart(_), _),
+             (.arcEnd(_), _):
+            return false
+        }
+    }
+
+    private func joinedCurveGroupReferenceEntityID(_ reference: SketchReference) -> SketchEntityID? {
+        switch reference {
+        case .lineStart(let entityID),
+             .lineEnd(let entityID),
+             .arcStart(let entityID),
+             .arcEnd(let entityID):
+            return entityID
+        case .entity,
+             .circleCenter,
+             .circleRadius,
+             .arcCenter,
+             .arcRadius,
+             .splineControlPoint:
+            return nil
         }
     }
 

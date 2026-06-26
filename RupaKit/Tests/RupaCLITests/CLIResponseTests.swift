@@ -1722,6 +1722,129 @@ struct CLISketchEditCommandTests {
         #expect(unjoined.productMetadata.joinedCurveSources.isEmpty)
     }
 
+    @Test(.timeLimit(.minutes(1)))
+    func executableSketchJoinAndUnjoinPersistCompositeLineArcGroupAsJSON() async throws {
+        let temporaryDirectory = try makeTemporaryDirectory()
+        defer {
+            removeTemporaryDirectory(temporaryDirectory)
+        }
+        let documentURL = temporaryDirectory.appendingPathComponent("process-sketch-join-line-arc.swcad")
+        var document = DesignDocument.empty(named: "Process Sketch Join Line Arc")
+        let featureID = try document.createLineSketch(
+            name: "Join Line Arc Sources",
+            plane: .xy,
+            start: SketchPoint(
+                x: .length(0.0, .millimeter),
+                y: .length(0.0, .millimeter)
+            ),
+            end: SketchPoint(
+                x: .length(10.0, .millimeter),
+                y: .length(0.0, .millimeter)
+            )
+        )
+        let lineID = SketchEntityID()
+        let arcID = SketchEntityID()
+        guard var feature = document.cadDocument.designGraph.nodes[featureID] else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "CLI join line-arc setup requires a sketch feature."
+            )
+        }
+        feature.operation = .sketch(Sketch(
+            plane: .xy,
+            entities: [
+                lineID: .line(SketchLine(
+                    start: SketchPoint(
+                        x: .length(0.0, .meter),
+                        y: .length(0.0, .meter)
+                    ),
+                    end: SketchPoint(
+                        x: .length(0.010, .meter),
+                        y: .length(0.0, .meter)
+                    )
+                )),
+                arcID: .arc(SketchArc(
+                    center: SketchPoint(
+                        x: .length(0.010, .meter),
+                        y: .length(0.005, .meter)
+                    ),
+                    radius: .length(0.005, .meter),
+                    startAngle: .angle(-Double.pi / 2.0, .radian),
+                    endAngle: .angle(0.0, .radian)
+                )),
+            ],
+            constraints: []
+        ))
+        document.cadDocument.designGraph.nodes[featureID] = feature
+        document.cadDocument.designGraph.revision = document.cadDocument.designGraph.revision.advanced()
+        try DocumentFileService().save(document, to: documentURL)
+
+        let before = try SketchEntitySummaryService().summarize(document: document)
+        let line = try #require(before.entries.first { $0.entityID == lineID.description })
+        let arc = try #require(before.entries.first { $0.entityID == arcID.description })
+        let joinResult = try await runCLI([
+            "sketch",
+            "join",
+            documentURL.path,
+            "--target",
+            try encodedSelectionTarget(try #require(line.selectionTarget())),
+            "--adjacent-target",
+            try encodedSelectionTarget(try #require(arc.selectionTarget())),
+            "--mode",
+            "file",
+            "--json",
+        ])
+        let joinResponse = try JSONDecoder().decode(
+            CLIResponse.self,
+            from: joinResult.standardOutputData
+        )
+        let joined = try DocumentFileService().load(from: documentURL)
+        let joinedSummary = try SketchEntitySummaryService().summarize(document: joined)
+        let joinedArc = try #require(joinedSummary.entries.first { $0.entityID == arcID.description })
+        let joinedFeature = try #require(joined.cadDocument.designGraph.nodes[featureID])
+        guard case .sketch(let joinedSketch) = joinedFeature.operation else {
+            Issue.record("CLI joined line-arc feature must remain a sketch.")
+            return
+        }
+
+        let unjoinResult = try await runCLI([
+            "sketch",
+            "unjoin",
+            documentURL.path,
+            "--target",
+            try encodedSelectionTarget(try #require(joinedArc.selectionTarget())),
+            "--mode",
+            "file",
+            "--json",
+        ])
+        let unjoinResponse = try JSONDecoder().decode(
+            CLIResponse.self,
+            from: unjoinResult.standardOutputData
+        )
+        let unjoined = try DocumentFileService().load(from: documentURL)
+        let unjoinedFeature = try #require(unjoined.cadDocument.designGraph.nodes[featureID])
+        guard case .sketch(let unjoinedSketch) = unjoinedFeature.operation else {
+            Issue.record("CLI unjoined line-arc feature must remain a sketch.")
+            return
+        }
+
+        #expect(joinResult.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: joinResult.standardError))
+        #expect(joinResponse.message == "Sketch curves joined.")
+        #expect(joinResponse.saved)
+        #expect(joinedSummary.entries.filter {
+            $0.sourceFeatureID == featureID.description && ($0.entityKind == "line" || $0.entityKind == "arc")
+        }.count == 2)
+        #expect(joined.productMetadata.joinedCurveSources.isEmpty)
+        #expect(joined.productMetadata.joinedCurveGroupSources.count == 1)
+        #expect(joinedSketch.constraints.contains(.coincident(.lineEnd(lineID), .arcStart(arcID))))
+        #expect(unjoinResult.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: unjoinResult.standardError))
+        #expect(unjoinResponse.message == "Sketch curve unjoined.")
+        #expect(unjoinResponse.saved)
+        #expect(unjoined.productMetadata.joinedCurveSources.isEmpty)
+        #expect(unjoined.productMetadata.joinedCurveGroupSources.isEmpty)
+        #expect(!unjoinedSketch.constraints.contains(.coincident(.lineEnd(lineID), .arcStart(arcID))))
+    }
+
     private func sourceLine(in document: DesignDocument) throws -> SketchEntitySummaryResult.EntityEntry {
         let summary = try SketchEntitySummaryService().summarize(document: document)
         return try #require(summary.entries.first { $0.entityKind == "line" })
