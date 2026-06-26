@@ -923,12 +923,22 @@ public final class AgentCommandController: AgentClientProtocol {
         capability(
             "joinSketchCurves",
             category: .sourceCurveEditing,
-            summary: "Join Curves for the first source-owned subset: merge two same-sketch collinear source lines with exactly one aligned endpoint pair into one retained source line while migrating safe outer endpoint references.",
+            summary: "Join Curves for the first source-owned subset: merge two same-sketch collinear source lines with exactly one aligned endpoint pair into one retained source line while recording joined-curve ownership for exact Unjoin.",
             access: .automationCommand,
             mutatesDocument: true,
             discovery: [.sketchEntitySummary],
             targets: [.sketchEntity],
             failureMode: "Rejects different sketches, same-curve pairs, non-line targets, non-collinear or ambiguous endpoint pairs, dimensions or constraints attached to the joined interior endpoint, removed-line whole-curve relationships, generated Bridge Curve source metadata, and stale generations before mutation."
+        ),
+        capability(
+            "unjoinSketchCurve",
+            category: .sourceCurveEditing,
+            summary: "Unjoin Curve for the current source-owned subset: restore a retained source line from Join Curves back into the original two source line entities when the joined geometry, constraints, and dimensions still match the stored ownership snapshot.",
+            access: .automationCommand,
+            mutatesDocument: true,
+            discovery: [.sketchEntitySummary],
+            targets: [.sketchEntity],
+            failureMode: "Rejects targets without joined-curve ownership, changed joined-line geometry, changed constraints or dimensions, entity ID collisions, generated Bridge Curve source metadata, non-line targets, and stale generations before mutation."
         ),
         capability(
             "splitSketchCurve",

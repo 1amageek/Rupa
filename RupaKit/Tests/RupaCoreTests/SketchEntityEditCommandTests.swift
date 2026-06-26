@@ -6146,7 +6146,130 @@ import Testing
     #expect(sketch.constraints.contains(.fixed(.lineEnd(firstLineID))))
     #expect(!sketch.constraints.contains(.fixed(.lineEnd(secondLineID))))
     #expect(!sketch.constraints.contains(.coincident(.lineEnd(firstLineID), .lineStart(secondLineID))))
+    #expect(session.document.productMetadata.joinedCurveSources.count == 1)
+    let joinedSource = try #require(session.document.productMetadata.joinedCurveSources.values.first)
+    #expect(joinedSource.featureID == setup.featureID)
+    #expect(joinedSource.retainedEntityID == firstLineID)
+    #expect(joinedSource.restoredEntityID == secondLineID)
     #expect(session.evaluationStatus == .valid)
+}
+
+@MainActor
+@Test func unjoinSketchCurveRestoresJoinedSourceLinesAndReferences() async throws {
+    let setup = try lineChainSlotSession(
+        name: "Unjoin Source Lines",
+        points: [
+            sketchTestPoint(x: 0.000, y: 0.000),
+            sketchTestPoint(x: 0.005, y: 0.000),
+            sketchTestPoint(x: 0.010, y: 0.000),
+        ]
+    )
+    let session = setup.session
+    let firstLineID = setup.lineIDs[0]
+    let secondLineID = setup.lineIDs[1]
+    _ = try session.execute(
+        .addSketchConstraint(
+            featureID: setup.featureID,
+            constraint: .fixed(.lineEnd(secondLineID))
+        )
+    )
+    let beforeJoin = try SketchEntitySummaryService().summarize(document: session.document)
+    let firstLine = try #require(beforeJoin.entries.first { $0.entityID == firstLineID.description })
+    let secondLine = try #require(beforeJoin.entries.first { $0.entityID == secondLineID.description })
+
+    _ = try session.execute(
+        .joinSketchCurves(
+            target: try #require(firstLine.selectionTarget()),
+            adjacentTarget: try #require(secondLine.selectionTarget())
+        )
+    )
+    let joined = try SketchEntitySummaryService().summarize(document: session.document)
+    let joinedLine = try #require(joined.entries.first { $0.entityID == firstLineID.description })
+
+    let result = try session.execute(
+        .unjoinSketchCurve(target: try #require(joinedLine.selectionTarget()))
+    )
+
+    let feature = try #require(session.document.cadDocument.designGraph.nodes[setup.featureID])
+    guard case .sketch(let sketch) = feature.operation else {
+        Issue.record("Unjoin line feature must remain a sketch.")
+        return
+    }
+    let retainedEntity = try #require(sketch.entities[firstLineID])
+    let restoredEntity = try #require(sketch.entities[secondLineID])
+    guard case .line(let retainedLine) = retainedEntity,
+          case .line(let restoredLine) = restoredEntity else {
+        Issue.record("Unjoin should restore both source entities as lines.")
+        return
+    }
+    #expect(result.commandName == "unjoinSketchCurve")
+    #expect(result.didMutate)
+    #expect(sketch.entities.count == 2)
+    #expect(abs((try resolvedTestLength(retainedLine.start.x, in: session.document)) - 0.000) < 1.0e-12)
+    #expect(abs((try resolvedTestLength(retainedLine.end.x, in: session.document)) - 0.005) < 1.0e-12)
+    #expect(abs((try resolvedTestLength(restoredLine.start.x, in: session.document)) - 0.005) < 1.0e-12)
+    #expect(abs((try resolvedTestLength(restoredLine.end.x, in: session.document)) - 0.010) < 1.0e-12)
+    #expect(sketch.constraints.contains(.fixed(.lineEnd(secondLineID))))
+    #expect(sketch.constraints.contains(.coincident(.lineEnd(firstLineID), .lineStart(secondLineID))))
+    #expect(session.document.productMetadata.joinedCurveSources.isEmpty)
+    #expect(session.evaluationStatus == .valid)
+}
+
+@MainActor
+@Test func unjoinSketchCurveRejectsChangedJoinedLineWithoutMutation() async throws {
+    let setup = try lineChainSlotSession(
+        name: "Unjoin Changed Source Line",
+        points: [
+            sketchTestPoint(x: 0.000, y: 0.000),
+            sketchTestPoint(x: 0.005, y: 0.000),
+            sketchTestPoint(x: 0.010, y: 0.000),
+        ]
+    )
+    let session = setup.session
+    let firstLineID = setup.lineIDs[0]
+    let secondLineID = setup.lineIDs[1]
+    let beforeJoin = try SketchEntitySummaryService().summarize(document: session.document)
+    let firstLine = try #require(beforeJoin.entries.first { $0.entityID == firstLineID.description })
+    let secondLine = try #require(beforeJoin.entries.first { $0.entityID == secondLineID.description })
+    _ = try session.execute(
+        .joinSketchCurves(
+            target: try #require(firstLine.selectionTarget()),
+            adjacentTarget: try #require(secondLine.selectionTarget())
+        )
+    )
+    let joined = try SketchEntitySummaryService().summarize(document: session.document)
+    let joinedLine = try #require(joined.entries.first { $0.entityID == firstLineID.description })
+    let joinedTarget = try #require(joinedLine.selectionTarget())
+    _ = try session.execute(
+        .moveSketchEntityPoint(
+            target: joinedTarget,
+            handle: .lineEnd,
+            deltaX: .length(0.001, .meter),
+            deltaY: .length(0.0, .meter)
+        )
+    )
+    let beforeRejectGeneration = session.generation
+
+    do {
+        _ = try session.execute(.unjoinSketchCurve(target: joinedTarget))
+        Issue.record("Unjoin Curve must reject joined lines after geometry changes.")
+    } catch let error as EditorError {
+        #expect(error.code == .commandInvalid)
+        #expect(error.message == "Unjoin Curve cannot restore a joined line after its geometry changed.")
+    } catch {
+        Issue.record("Unjoin Curve must throw EditorError.")
+    }
+
+    let feature = try #require(session.document.cadDocument.designGraph.nodes[setup.featureID])
+    guard case .sketch(let sketch) = feature.operation else {
+        Issue.record("Unjoin rejection feature must remain a sketch.")
+        return
+    }
+    #expect(session.generation == beforeRejectGeneration)
+    #expect(sketch.entities.count == 1)
+    #expect(sketch.entities.keys.contains(firstLineID))
+    #expect(!sketch.entities.keys.contains(secondLineID))
+    #expect(session.document.productMetadata.joinedCurveSources.count == 1)
 }
 
 @MainActor

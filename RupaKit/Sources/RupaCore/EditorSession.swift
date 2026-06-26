@@ -2876,6 +2876,15 @@ public final class EditorSession {
     }
 
     @discardableResult
+    public func unjoinSketchCurve(
+        target: SelectionTarget
+    ) -> CommandExecutionResult? {
+        perform(
+            .unjoinSketchCurve(target: target)
+        )
+    }
+
+    @discardableResult
     public func splitSketchCurve(
         target: SelectionTarget,
         fraction: CADExpression

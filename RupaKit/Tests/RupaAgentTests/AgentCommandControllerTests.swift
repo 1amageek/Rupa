@@ -95,6 +95,7 @@ import SwiftCAD
     #expect(capabilities.contains("rebuildSketchCurve"))
     #expect(capabilities.contains("extendSketchCurve"))
     #expect(capabilities.contains("joinSketchCurves"))
+    #expect(capabilities.contains("unjoinSketchCurve"))
     #expect(capabilities.contains("splitSketchCurve"))
     #expect(capabilities.contains("trimSketchCurveSegment"))
     #expect(capabilities.contains("cutSketchCurve"))
@@ -156,6 +157,7 @@ import SwiftCAD
     let curveRebuild = try #require(descriptors.first { $0.name == "rebuildSketchCurve" })
     let curveExtend = try #require(descriptors.first { $0.name == "extendSketchCurve" })
     let curveJoin = try #require(descriptors.first { $0.name == "joinSketchCurves" })
+    let curveUnjoin = try #require(descriptors.first { $0.name == "unjoinSketchCurve" })
     let curveSplit = try #require(descriptors.first { $0.name == "splitSketchCurve" })
     let curveTrim = try #require(descriptors.first { $0.name == "trimSketchCurveSegment" })
     let curveCut = try #require(descriptors.first { $0.name == "cutSketchCurve" })
@@ -567,8 +569,19 @@ import SwiftCAD
     #expect(curveJoin.targets == [.sketchEntity])
     #expect(curveJoin.summary.contains("Join Curves"))
     #expect(curveJoin.summary.contains("collinear source lines"))
+    #expect(curveJoin.summary.contains("Unjoin"))
     #expect(curveJoin.failureMode.contains("interior endpoint"))
     #expect(curveJoin.failureMode.contains("Bridge Curve"))
+
+    #expect(curveUnjoin.category == .sourceCurveEditing)
+    #expect(curveUnjoin.mutatesDocument)
+    #expect(curveUnjoin.access == .automationCommand)
+    #expect(curveUnjoin.discovery.contains(.sketchEntitySummary))
+    #expect(curveUnjoin.targets == [.sketchEntity])
+    #expect(curveUnjoin.summary.contains("Unjoin Curve"))
+    #expect(curveUnjoin.summary.contains("ownership snapshot"))
+    #expect(curveUnjoin.failureMode.contains("joined-curve ownership"))
+    #expect(curveUnjoin.failureMode.contains("Bridge Curve"))
 
     #expect(curveSplit.category == .sourceCurveEditing)
     #expect(curveSplit.mutatesDocument)
@@ -13293,6 +13306,72 @@ private func rawAgentProtocolJSON(_ source: String) -> Data {
     #expect(joinedLine.entityKind == "line")
     #expect(abs((joinedLine.start?.x ?? -1.0) - 0.000) < 1.0e-12)
     #expect(abs((joinedLine.end?.x ?? -1.0) - 0.010) < 1.0e-12)
+    #expect(session.evaluationStatus == .valid)
+}
+
+@MainActor
+@Test func agentUnjoinsSketchCurveThroughAutomationAndCore() async throws {
+    let server = AgentCommandController()
+    let sessionID = UUID()
+    let setup = try agentCollinearLineChainSketchDocument(name: "Agent Unjoin Source Lines")
+    let session = EditorSession(document: setup.document)
+    let firstLineID = setup.lineIDs[0]
+    let secondLineID = setup.lineIDs[1]
+    server.register(session: session, id: sessionID)
+
+    let summaryResponse = server.handle(
+        .sketchEntitySummary(
+            sessionID: sessionID,
+            expectedGeneration: session.generation
+        )
+    )
+    guard case .sketchEntitySummary(let summary) = summaryResponse else {
+        Issue.record("Agent must return a sketch entity summary.")
+        return
+    }
+    let firstLine = try #require(summary.entries.first { $0.entityID == firstLineID.description })
+    let secondLine = try #require(summary.entries.first { $0.entityID == secondLineID.description })
+
+    let joinResponse = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .joinSketchCurves(
+                target: try #require(firstLine.selectionTarget()),
+                adjacentTarget: try #require(secondLine.selectionTarget())
+            ),
+            expectedGeneration: session.generation
+        )
+    )
+    guard case .command(let joinResult) = joinResponse else {
+        Issue.record("Agent must return a join command result.")
+        return
+    }
+    let joinedSummary = try SketchEntitySummaryService().summarize(document: session.document)
+    let joinedLine = try #require(joinedSummary.entries.first { $0.entityID == firstLineID.description })
+
+    let unjoinResponse = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .unjoinSketchCurve(target: try #require(joinedLine.selectionTarget())),
+            expectedGeneration: session.generation
+        )
+    )
+    guard case .command(let unjoinResult) = unjoinResponse else {
+        Issue.record("Agent must return an unjoin command result.")
+        return
+    }
+    let updatedSummary = try SketchEntitySummaryService().summarize(document: session.document)
+    let retainedLine = try #require(updatedSummary.entries.first { $0.entityID == firstLineID.description })
+    let restoredLine = try #require(updatedSummary.entries.first { $0.entityID == secondLineID.description })
+    #expect(joinResult.commandName == "joinSketchCurves")
+    #expect(unjoinResult.commandName == "unjoinSketchCurve")
+    #expect(unjoinResult.didMutate)
+    #expect(updatedSummary.entries.filter { $0.sourceFeatureName == "Agent Unjoin Source Lines" }.count == 2)
+    #expect(retainedLine.entityKind == "line")
+    #expect(restoredLine.entityKind == "line")
+    #expect(abs((retainedLine.end?.x ?? -1.0) - 0.005) < 1.0e-12)
+    #expect(abs((restoredLine.start?.x ?? -1.0) - 0.005) < 1.0e-12)
+    #expect(session.document.productMetadata.joinedCurveSources.isEmpty)
     #expect(session.evaluationStatus == .valid)
 }
 

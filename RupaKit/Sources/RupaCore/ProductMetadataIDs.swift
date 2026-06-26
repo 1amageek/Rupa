@@ -7,6 +7,7 @@ public enum PatternArraySourceTag {}
 public enum ValidationRuleTag {}
 public enum ExportPresetTag {}
 public enum BridgeCurveSourceTag {}
+public enum JoinedCurveSourceTag {}
 public enum ConstructionPlaneSourceTag {}
 public enum MeasurementAnnotationTag {}
 
@@ -17,5 +18,6 @@ public typealias PatternArraySourceID = TaggedID<PatternArraySourceTag>
 public typealias ValidationRuleID = TaggedID<ValidationRuleTag>
 public typealias ExportPresetID = TaggedID<ExportPresetTag>
 public typealias BridgeCurveSourceID = TaggedID<BridgeCurveSourceTag>
+public typealias JoinedCurveSourceID = TaggedID<JoinedCurveSourceTag>
 public typealias ConstructionPlaneSourceID = TaggedID<ConstructionPlaneSourceTag>
 public typealias MeasurementAnnotationID = TaggedID<MeasurementAnnotationTag>

@@ -942,6 +942,17 @@ public struct AutomationRunner {
                 didMutate: result.didMutate,
                 diagnostics: result.diagnostics
             )
+        case .unjoinSketchCurve(let target):
+            let result = try session.execute(
+                .unjoinSketchCurve(target: target)
+            )
+            return AutomationResult(
+                message: "Sketch curve unjoined.",
+                commandName: result.commandName,
+                generation: result.generation,
+                didMutate: result.didMutate,
+                diagnostics: result.diagnostics
+            )
         case .splitSketchCurve(let target, let fraction):
             let result = try session.execute(
                 .splitSketchCurve(

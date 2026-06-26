@@ -11,6 +11,7 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
     public var validationRules: [ValidationRuleID: ValidationRule]
     public var exportPresets: [ExportPresetID: ExportPreset]
     public var bridgeCurveSources: [BridgeCurveSourceID: BridgeCurveSource]
+    public var joinedCurveSources: [JoinedCurveSourceID: JoinedCurveSource]
     public var constructionPlanes: [ConstructionPlaneSourceID: ConstructionPlaneSource]
     public var activeConstructionPlaneID: ConstructionPlaneSourceID?
     public var curveCurvatureDisplays: [SelectionComponentID: CurveCurvatureDisplay]
@@ -29,6 +30,7 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
         validationRules: [ValidationRuleID: ValidationRule] = [:],
         exportPresets: [ExportPresetID: ExportPreset] = [:],
         bridgeCurveSources: [BridgeCurveSourceID: BridgeCurveSource] = [:],
+        joinedCurveSources: [JoinedCurveSourceID: JoinedCurveSource] = [:],
         constructionPlanes: [ConstructionPlaneSourceID: ConstructionPlaneSource] = [:],
         activeConstructionPlaneID: ConstructionPlaneSourceID? = nil,
         curveCurvatureDisplays: [SelectionComponentID: CurveCurvatureDisplay] = [:],
@@ -46,6 +48,7 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
         self.validationRules = validationRules
         self.exportPresets = exportPresets
         self.bridgeCurveSources = bridgeCurveSources
+        self.joinedCurveSources = joinedCurveSources
         self.constructionPlanes = constructionPlanes
         self.activeConstructionPlaneID = activeConstructionPlaneID
         self.curveCurvatureDisplays = curveCurvatureDisplays
@@ -65,6 +68,7 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
         case validationRules
         case exportPresets
         case bridgeCurveSources
+        case joinedCurveSources
         case constructionPlanes
         case activeConstructionPlaneID
         case curveCurvatureDisplays
@@ -106,6 +110,10 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
             bridgeCurveSources: try container.decodeIfPresent(
                 [BridgeCurveSourceID: BridgeCurveSource].self,
                 forKey: .bridgeCurveSources
+            ) ?? [:],
+            joinedCurveSources: try container.decodeIfPresent(
+                [JoinedCurveSourceID: JoinedCurveSource].self,
+                forKey: .joinedCurveSources
             ) ?? [:],
             constructionPlanes: try container.decodeIfPresent(
                 [ConstructionPlaneSourceID: ConstructionPlaneSource].self,
@@ -149,6 +157,7 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
         try container.encode(validationRules, forKey: .validationRules)
         try container.encode(exportPresets, forKey: .exportPresets)
         try container.encode(bridgeCurveSources, forKey: .bridgeCurveSources)
+        try container.encode(joinedCurveSources, forKey: .joinedCurveSources)
         try container.encode(constructionPlanes, forKey: .constructionPlanes)
         try container.encodeIfPresent(activeConstructionPlaneID, forKey: .activeConstructionPlaneID)
         try container.encode(curveCurvatureDisplays, forKey: .curveCurvatureDisplays)
@@ -179,6 +188,7 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
         try validateValidationRules()
         try validateExportPresets()
         try validateBridgeCurveSources(against: cadDocument)
+        try validateJoinedCurveSources(against: cadDocument)
         try validateConstructionPlanes()
         try validateCurveCurvatureDisplays(against: cadDocument)
         try validatePointDisplays(against: cadDocument)
@@ -490,6 +500,96 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
                 owner: "Bridge curve second tension",
                 cadDocument: cadDocument
             )
+        }
+    }
+
+    private func validateJoinedCurveSources(against cadDocument: CADDocument) throws {
+        var retainedKeys: Set<String> = []
+        for (sourceID, source) in joinedCurveSources {
+            guard source.id == sourceID else {
+                throw DocumentValidationError.invalidProductMetadata(
+                    "Joined curve source keys must match joined curve source IDs."
+                )
+            }
+            guard source.retainedEntityID != source.restoredEntityID else {
+                throw DocumentValidationError.invalidProductMetadata(
+                    "Joined curve sources must store distinct retained and restored entity IDs."
+                )
+            }
+            let retainedKey = "\(source.featureID):\(source.retainedEntityID)"
+            guard retainedKeys.insert(retainedKey).inserted else {
+                throw DocumentValidationError.invalidProductMetadata(
+                    "A joined curve source target can only be owned by one joined source."
+                )
+            }
+            guard let feature = cadDocument.designGraph.nodes[source.featureID],
+                  case .sketch(let sketch) = feature.operation else {
+                throw DocumentValidationError.invalidProductMetadata(
+                    "Joined curve sources must point to existing sketch features."
+                )
+            }
+            guard case .line = sketch.entities[source.retainedEntityID] else {
+                throw DocumentValidationError.invalidProductMetadata(
+                    "Joined curve sources must point to retained source line entities."
+                )
+            }
+            guard sketch.entities[source.restoredEntityID] == nil else {
+                throw DocumentValidationError.invalidProductMetadata(
+                    "Joined curve restored entities must not exist while the source remains joined."
+                )
+            }
+            guard joinedCurveReference(
+                source.retainedSharedReference,
+                references: source.retainedEntityID,
+                allowed: [.lineStart, .lineEnd]
+            ),
+            joinedCurveReference(
+                source.migratedRestoredOuterReference,
+                references: source.retainedEntityID,
+                allowed: [.lineStart, .lineEnd]
+            ),
+            joinedCurveReference(
+                source.restoredSharedReference,
+                references: source.restoredEntityID,
+                allowed: [.lineStart, .lineEnd]
+            ),
+            joinedCurveReference(
+                source.restoredOuterReference,
+                references: source.restoredEntityID,
+                allowed: [.lineStart, .lineEnd]
+            ),
+            source.restoredSharedReference != source.restoredOuterReference else {
+                throw DocumentValidationError.invalidProductMetadata(
+                    "Joined curve sources must store source line endpoint references."
+                )
+            }
+        }
+    }
+
+    private enum JoinedCurveEndpointKind {
+        case lineStart
+        case lineEnd
+    }
+
+    private func joinedCurveReference(
+        _ reference: SketchReference,
+        references entityID: SketchEntityID,
+        allowed: Set<JoinedCurveEndpointKind>
+    ) -> Bool {
+        switch reference {
+        case .lineStart(let referenceEntityID):
+            referenceEntityID == entityID && allowed.contains(.lineStart)
+        case .lineEnd(let referenceEntityID):
+            referenceEntityID == entityID && allowed.contains(.lineEnd)
+        case .entity,
+             .circleCenter,
+             .circleRadius,
+             .arcCenter,
+             .arcStart,
+             .arcEnd,
+             .arcRadius,
+             .splineControlPoint:
+            false
         }
     }
 

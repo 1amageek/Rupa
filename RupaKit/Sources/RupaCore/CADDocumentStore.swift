@@ -878,6 +878,15 @@ public final class CADDocumentStore {
             document = updatedDocument
             try commitMutation()
             evaluateCurrentDocument()
+        case .unjoinSketchCurve(let target):
+            var updatedDocument = document
+            try updatedDocument.unjoinSketchCurve(
+                target: target,
+                objectRegistry: objectRegistry
+            )
+            document = updatedDocument
+            try commitMutation()
+            evaluateCurrentDocument()
         case .splitSketchCurve(let target, let fraction):
             var updatedDocument = document
             try updatedDocument.splitSketchCurve(
