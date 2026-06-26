@@ -774,12 +774,12 @@ public final class AgentCommandController: AgentClientProtocol {
         capability(
             "applySelectionDimensionTarget",
             category: .sourceCurveEditing,
-            summary: "Apply the stored target of an existing persistent CAD selection dimension to supported source line endpoint dimensions by SelectionDimensionID.",
+            summary: "Apply the stored target of an existing persistent CAD selection dimension to supported source line length or circle/arc radius dimensions by SelectionDimensionID.",
             access: .automationCommand,
             mutatesDocument: true,
             discovery: [.selectionDimensionEvaluation, .sketchEntitySummary],
             targets: [.document, .sketchEntity, .sketchPointHandle],
-            failureMode: "Rejects missing selection dimension IDs, non-distance dimensions, non-source-line endpoint references, mismatched or stale endpoint parameters, invalid target values, fixed conflicts, unsupported propagated constraints, and stale generations before mutation."
+            failureMode: "Rejects missing selection dimension IDs, non-distance dimensions, unsupported source line or circular radius references, mismatched or stale endpoint parameters, invalid target values, fixed conflicts, unsupported propagated constraints, and stale generations before mutation."
         ),
         capability(
             "setExtrudeDistance",

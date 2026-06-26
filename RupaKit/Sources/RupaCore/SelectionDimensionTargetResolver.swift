@@ -175,10 +175,14 @@ public struct SelectionDimensionTargetResolver: Sendable {
                 curve: CurveOutputReference(featureID: reference.featureID, curveIndex: curveIndex),
                 parameter: try lineLength(line, document: document)
             )))
+        case (.circleCenter, .circle), (.arcCenter, .arc):
+            return .curve(.center(CurveCenterReference(
+                curve: CurveOutputReference(featureID: reference.featureID, curveIndex: curveIndex)
+            )))
         default:
             throw EditorError(
                 code: .commandInvalid,
-                message: "Selection dimension sketch point targets currently support line start and line end handles."
+                message: "Selection dimension sketch point targets currently support line start/end and circle/arc center handles."
             )
         }
     }

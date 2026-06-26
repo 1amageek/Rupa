@@ -127,6 +127,59 @@ import Testing
     #expect(session.document.productMetadata.measurements.isEmpty)
 }
 
+@MainActor
+@Test func automationAppliesSelectionDimensionToCircleRadius() async throws {
+    var document = DesignDocument.empty()
+    let featureID = try document.createCircleSketch(
+        name: "Automation Circle",
+        plane: .xy,
+        center: SketchPoint(
+            x: .length(0.0, .millimeter),
+            y: .length(0.0, .millimeter)
+        ),
+        radius: .length(6.0, .millimeter)
+    )
+    let targets = try circleCenterAndCurveTargets(in: document, featureID: featureID)
+    let session = EditorSession(document: document)
+    let runner = AutomationRunner()
+    let addResult = try runner.execute(
+        .addSelectionDimension(
+            name: "Automation Radius",
+            kind: .distance,
+            first: targets.center,
+            second: targets.curve,
+            target: .length(6.0, .millimeter)
+        ),
+        in: session
+    )
+    let dimensionID = try #require(addResult.addedSelectionDimensionID)
+
+    _ = try runner.execute(
+        .setSelectionDimensionTarget(
+            id: dimensionID,
+            target: .length(4.0, .millimeter)
+        ),
+        in: session
+    )
+    let applyResult = try runner.execute(
+        .applySelectionDimensionTarget(id: dimensionID),
+        in: session
+    )
+    let appliedEvaluation = try SelectionDimensionService().evaluate(
+        document: session.document,
+        dimensionID: dimensionID
+    )
+    let appliedMeasurement = try #require(appliedEvaluation.measurements.first)
+
+    #expect(applyResult.message == "Selection dimension target applied.")
+    #expect(applyResult.commandName == "applySelectionDimensionTarget")
+    #expect(applyResult.didMutate)
+    #expect(abs(try circleRadius(in: session.document, featureID: featureID) - 0.004) <= 1.0e-12)
+    #expect(appliedMeasurement.measured == .length(0.004, unit: .meter))
+    #expect(appliedMeasurement.target == .length(0.004, unit: .meter))
+    #expect(abs(appliedMeasurement.residual.value) <= 1.0e-12)
+}
+
 private func lineEndpointTargets(
     in document: DesignDocument,
     featureID: FeatureID
@@ -150,4 +203,42 @@ private func lineEndpointTargets(
             component: .sketchEntity(SelectionComponentID(rawValue: endHandle.selectionComponentID))
         )
     )
+}
+
+private func circleCenterAndCurveTargets(
+    in document: DesignDocument,
+    featureID: FeatureID
+) throws -> (center: SelectionTarget, curve: SelectionTarget) {
+    let summary = try SketchEntitySummaryService().summarize(document: document)
+    let entry = try #require(summary.entries.first {
+        $0.sourceFeatureID == featureID.description && $0.entityKind == "circle"
+    })
+    let sceneNodeIDString = try #require(entry.sceneNodeID)
+    let sceneNodeUUID = try #require(UUID(uuidString: sceneNodeIDString))
+    let sceneNodeID = SceneNodeID(sceneNodeUUID)
+    let centerHandle = try #require(entry.pointHandles.first { $0.handle == .circleCenter })
+    let curveComponentID = try #require(entry.selectionComponentID)
+    return (
+        center: SelectionTarget(
+            sceneNodeID: sceneNodeID,
+            component: .sketchEntity(SelectionComponentID(rawValue: centerHandle.selectionComponentID))
+        ),
+        curve: SelectionTarget(
+            sceneNodeID: sceneNodeID,
+            component: .sketchEntity(SelectionComponentID(rawValue: curveComponentID))
+        )
+    )
+}
+
+private func circleRadius(
+    in document: DesignDocument,
+    featureID: FeatureID
+) throws -> Double {
+    guard let feature = document.cadDocument.designGraph.nodes[featureID],
+          case let .sketch(sketch) = feature.operation,
+          case let .circle(circle) = sketch.entities.values.first else {
+        Issue.record("Expected one source circle")
+        return 0.0
+    }
+    return try document.cadDocument.parameters.resolvedValue(for: circle.radius).value
 }

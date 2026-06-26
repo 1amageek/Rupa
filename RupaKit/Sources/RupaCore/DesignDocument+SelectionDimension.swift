@@ -94,40 +94,60 @@ public extension DesignDocument {
             }
 
             let dimension = cadDocument.selectionDimensions[dimensionIndex]
-            let context = try sourceLineEndpointDimensionContext(for: dimension)
-            try setSketchEntityDimension(
-                target: context.target,
-                kind: .length,
-                value: dimension.target,
-                objectRegistry: objectRegistry
-            )
-
-            let updatedLength = try sourceLineLength(
-                featureID: context.featureID,
-                entityID: context.entityID
-            )
-            let updatedFirst = selectionReference(
-                curve: context.curve,
-                role: context.firstRole,
-                lineLength: updatedLength
-            )
-            let updatedSecond = selectionReference(
-                curve: context.curve,
-                role: context.secondRole,
-                lineLength: updatedLength
-            )
-            guard let updatedDimensionIndex = cadDocument.selectionDimensions.firstIndex(where: { $0.id == id }) else {
-                throw EditorError(
-                    code: .referenceUnresolved,
-                    message: "Selection dimension application lost the source selection dimension."
+            let application = try sourceSelectionDimensionApplication(for: dimension)
+            switch application {
+            case .lineLength(let context):
+                try setSketchEntityDimension(
+                    target: context.target,
+                    kind: .length,
+                    value: dimension.target,
+                    objectRegistry: objectRegistry
                 )
-            }
 
-            cadDocument.selectionDimensions[updatedDimensionIndex].first = updatedFirst
-            cadDocument.selectionDimensions[updatedDimensionIndex].second = updatedSecond
-            try cadDocument.validate()
-            try productMetadata.validate(against: cadDocument, objectRegistry: objectRegistry)
-            return cadDocument.selectionDimensions[updatedDimensionIndex]
+                let updatedLength = try sourceLineLength(
+                    featureID: context.featureID,
+                    entityID: context.entityID
+                )
+                let updatedFirst = selectionReference(
+                    curve: context.curve,
+                    role: context.firstRole,
+                    lineLength: updatedLength
+                )
+                let updatedSecond = selectionReference(
+                    curve: context.curve,
+                    role: context.secondRole,
+                    lineLength: updatedLength
+                )
+                guard let updatedDimensionIndex = cadDocument.selectionDimensions.firstIndex(where: { $0.id == id }) else {
+                    throw EditorError(
+                        code: .referenceUnresolved,
+                        message: "Selection dimension application lost the source selection dimension."
+                    )
+                }
+
+                cadDocument.selectionDimensions[updatedDimensionIndex].first = updatedFirst
+                cadDocument.selectionDimensions[updatedDimensionIndex].second = updatedSecond
+                try cadDocument.validate()
+                try productMetadata.validate(against: cadDocument, objectRegistry: objectRegistry)
+                return cadDocument.selectionDimensions[updatedDimensionIndex]
+            case .circularRadius(let context):
+                try setSketchEntityDimension(
+                    target: context.target,
+                    kind: .radius,
+                    value: dimension.target,
+                    objectRegistry: objectRegistry
+                )
+                guard let updatedDimensionIndex = cadDocument.selectionDimensions.firstIndex(where: { $0.id == id }) else {
+                    throw EditorError(
+                        code: .referenceUnresolved,
+                        message: "Selection dimension application lost the source selection dimension."
+                    )
+                }
+
+                try cadDocument.validate()
+                try productMetadata.validate(against: cadDocument, objectRegistry: objectRegistry)
+                return cadDocument.selectionDimensions[updatedDimensionIndex]
+            }
         } catch let error as EditorError {
             self = originalDocument
             throw error
@@ -181,15 +201,40 @@ public extension DesignDocument {
         return trimmedName.isEmpty ? nil : trimmedName
     }
 
-    private func sourceLineEndpointDimensionContext(
+    private func sourceSelectionDimensionApplication(
         for dimension: SelectionDimension
-    ) throws -> SelectionDimensionSourceLineContext {
+    ) throws -> SelectionDimensionSourceApplication {
         guard dimension.kind == .distance else {
             throw EditorError(
                 code: .commandInvalid,
                 message: "Selection dimension application currently supports distance dimensions only."
             )
         }
+
+        switch (dimension.first, dimension.second) {
+        case (.curve(.parameter(_)), .curve(.parameter(_))):
+            return .lineLength(try sourceLineEndpointDimensionContext(for: dimension))
+        case (.curve(.center(let center)), .curve(let radialReference)):
+            return .circularRadius(try sourceCircularRadiusDimensionContext(
+                center: center,
+                radialReference: radialReference
+            ))
+        case (.curve(let radialReference), .curve(.center(let center))):
+            return .circularRadius(try sourceCircularRadiusDimensionContext(
+                center: center,
+                radialReference: radialReference
+            ))
+        default:
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Selection dimension application currently supports source line length and source circle/arc radius dimensions."
+            )
+        }
+    }
+
+    private func sourceLineEndpointDimensionContext(
+        for dimension: SelectionDimension
+    ) throws -> SelectionDimensionSourceLineContext {
         guard case .curve(.parameter(let firstParameter)) = dimension.first,
               case .curve(.parameter(let secondParameter)) = dimension.second else {
             throw EditorError(
@@ -254,6 +299,76 @@ public extension DesignDocument {
             firstRole: firstRole,
             secondRole: secondRole
         )
+    }
+
+    private func sourceCircularRadiusDimensionContext(
+        center: CurveCenterReference,
+        radialReference: CurveSubobjectReference
+    ) throws -> SelectionDimensionSourceCircularContext {
+        let radialCurve = try radialCurveOutputReference(from: radialReference)
+        guard center.curve == radialCurve else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Selection dimension application requires the center and radial reference to belong to the same source curve."
+            )
+        }
+
+        let featureID = center.curve.featureID
+        let entityID = try sourceCurveEntityID(
+            featureID: featureID,
+            curveIndex: center.curve.curveIndex
+        )
+        guard let feature = cadDocument.designGraph.nodes[featureID],
+              case let .sketch(sketch) = feature.operation,
+              let entity = sketch.entities[entityID] else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "Selection dimension application requires an existing source circular entity."
+            )
+        }
+        switch entity {
+        case .circle, .arc:
+            break
+        case .point, .line, .spline:
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Selection dimension application currently supports source circle and arc radius dimensions only."
+            )
+        }
+
+        let target = SelectionTarget(
+            sceneNodeID: try sketchSceneNodeID(featureID: featureID),
+            component: .sketchEntity(
+                SelectionComponentID.sketchEntity(
+                    featureID: featureID,
+                    entityID: entityID
+                )
+            )
+        )
+        return SelectionDimensionSourceCircularContext(
+            featureID: featureID,
+            entityID: entityID,
+            curve: center.curve,
+            target: target
+        )
+    }
+
+    private func radialCurveOutputReference(
+        from reference: CurveSubobjectReference
+    ) throws -> CurveOutputReference {
+        switch reference {
+        case .whole(let curve):
+            return curve
+        case .parameter(let parameter):
+            return parameter.curve
+        case .span(let span):
+            return span.curve
+        case .center, .controlPoint, .knot:
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Selection dimension application requires a radial curve point or whole curve reference."
+            )
+        }
     }
 
     private func sourceCurveEntityID(
@@ -410,6 +525,11 @@ private enum SelectionDimensionLineEndpointRole: Equatable, Sendable {
     case end
 }
 
+private enum SelectionDimensionSourceApplication: Sendable {
+    case lineLength(SelectionDimensionSourceLineContext)
+    case circularRadius(SelectionDimensionSourceCircularContext)
+}
+
 private struct SelectionDimensionSourceLineContext: Sendable {
     var featureID: FeatureID
     var entityID: SketchEntityID
@@ -417,4 +537,11 @@ private struct SelectionDimensionSourceLineContext: Sendable {
     var target: SelectionTarget
     var firstRole: SelectionDimensionLineEndpointRole
     var secondRole: SelectionDimensionLineEndpointRole
+}
+
+private struct SelectionDimensionSourceCircularContext: Sendable {
+    var featureID: FeatureID
+    var entityID: SketchEntityID
+    var curve: CurveOutputReference
+    var target: SelectionTarget
 }

@@ -686,7 +686,7 @@ import SwiftCAD
     #expect(selectionDimensionApply.discovery.contains(.sketchEntitySummary))
     #expect(selectionDimensionApply.targets == [.document, .sketchEntity, .sketchPointHandle])
     #expect(selectionDimensionApply.summary.contains("SelectionDimensionID"))
-    #expect(selectionDimensionApply.failureMode.contains("source-line endpoint references"))
+    #expect(selectionDimensionApply.failureMode.contains("circular radius references"))
 
     #expect(selectionDimensionRemoval.category == .solid)
     #expect(selectionDimensionRemoval.mutatesDocument)
@@ -4027,6 +4027,92 @@ private func rawAgentProtocolJSON(_ source: String) -> Data {
     #expect(removeResult.didMutate)
     #expect(removeResult.generation == DocumentGeneration(4))
     #expect(session.document.cadDocument.selectionDimensions.isEmpty)
+}
+
+@MainActor
+@Test func agentAppliesSelectionDimensionTargetToCircleRadius() async throws {
+    var document = DesignDocument.empty()
+    let featureID = try document.createCircleSketch(
+        name: "Agent Circle",
+        plane: .xy,
+        center: SketchPoint(
+            x: .length(0.0, .millimeter),
+            y: .length(0.0, .millimeter)
+        ),
+        radius: .length(6.0, .millimeter)
+    )
+    let targets = try agentCircleCenterAndCurveTargets(in: document, featureID: featureID)
+    let server = AgentCommandController()
+    let sessionID = UUID()
+    let session = EditorSession(document: document)
+    server.register(session: session, id: sessionID)
+
+    let addResponse = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .addSelectionDimension(
+                name: "Agent Radius",
+                kind: .distance,
+                first: targets.center,
+                second: targets.curve,
+                target: .length(6.0, .millimeter)
+            ),
+            expectedGeneration: DocumentGeneration(0)
+        )
+    )
+    guard case .command(let addResult) = addResponse else {
+        #expect(Bool(false))
+        return
+    }
+    let dimensionID = try #require(addResult.addedSelectionDimensionID)
+
+    let setResponse = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .setSelectionDimensionTarget(
+                id: dimensionID,
+                target: .length(4.0, .millimeter)
+            ),
+            expectedGeneration: DocumentGeneration(1)
+        )
+    )
+    guard case .command(let setResult) = setResponse else {
+        #expect(Bool(false))
+        return
+    }
+    #expect(setResult.commandName == "setSelectionDimensionTarget")
+    #expect(setResult.didMutate)
+
+    let applyResponse = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .applySelectionDimensionTarget(id: dimensionID),
+            expectedGeneration: DocumentGeneration(2)
+        )
+    )
+    guard case .command(let applyResult) = applyResponse else {
+        #expect(Bool(false))
+        return
+    }
+    #expect(applyResult.commandName == "applySelectionDimensionTarget")
+    #expect(applyResult.didMutate)
+
+    let evaluationResponse = server.handle(
+        .selectionDimensionEvaluation(
+            sessionID: sessionID,
+            dimensionID: dimensionID,
+            expectedGeneration: DocumentGeneration(3)
+        )
+    )
+    guard case .selectionDimensionEvaluation(let evaluation) = evaluationResponse else {
+        #expect(Bool(false))
+        return
+    }
+    let measurement = try #require(evaluation.measurements.first)
+    #expect(abs(try agentCircleRadius(in: session.document, featureID: featureID) - 0.004) <= 1.0e-12)
+    #expect(measurement.measured == .length(0.004, unit: .meter))
+    #expect(measurement.target == .length(0.004, unit: .meter))
+    #expect(abs(measurement.residual.value) <= 1.0e-12)
 }
 
 @MainActor
@@ -14274,6 +14360,44 @@ private func agentLineEndpointTargets(
             component: .sketchEntity(SelectionComponentID(rawValue: endHandle.selectionComponentID))
         )
     )
+}
+
+private func agentCircleCenterAndCurveTargets(
+    in document: DesignDocument,
+    featureID: FeatureID
+) throws -> (center: SelectionTarget, curve: SelectionTarget) {
+    let summary = try SketchEntitySummaryService().summarize(document: document)
+    let entry = try #require(summary.entries.first {
+        $0.sourceFeatureID == featureID.description && $0.entityKind == "circle"
+    })
+    let sceneNodeIDString = try #require(entry.sceneNodeID)
+    let sceneNodeUUID = try #require(UUID(uuidString: sceneNodeIDString))
+    let sceneNodeID = SceneNodeID(sceneNodeUUID)
+    let centerHandle = try #require(entry.pointHandles.first { $0.handle == .circleCenter })
+    let curveComponentID = try #require(entry.selectionComponentID)
+    return (
+        center: SelectionTarget(
+            sceneNodeID: sceneNodeID,
+            component: .sketchEntity(SelectionComponentID(rawValue: centerHandle.selectionComponentID))
+        ),
+        curve: SelectionTarget(
+            sceneNodeID: sceneNodeID,
+            component: .sketchEntity(SelectionComponentID(rawValue: curveComponentID))
+        )
+    )
+}
+
+private func agentCircleRadius(
+    in document: DesignDocument,
+    featureID: FeatureID
+) throws -> Double {
+    guard let feature = document.cadDocument.designGraph.nodes[featureID],
+          case let .sketch(sketch) = feature.operation,
+          case let .circle(circle) = sketch.entities.values.first else {
+        Issue.record("Expected one source circle")
+        return 0.0
+    }
+    return try document.cadDocument.parameters.resolvedValue(for: circle.radius).value
 }
 
 private func agentPatternArrayBodySceneNodeID(
