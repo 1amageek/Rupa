@@ -2228,6 +2228,58 @@ import SwiftCAD
 }
 
 @MainActor
+@Test func automationCanProjectSketchCurvesToConstructionPlane() async throws {
+    let session = EditorSession()
+    let runner = AutomationRunner()
+    let splineID = SketchEntityID()
+    _ = try runner.execute(
+        .createSketch(
+            name: "Automation Projection Source",
+            sketch: Sketch(
+                plane: .xy,
+                entities: [
+                    splineID: .spline(SketchSpline(controlPoints: [
+                        SketchPoint(x: .length(0.0, .millimeter), y: .length(0.0, .millimeter)),
+                        SketchPoint(x: .length(2.0, .millimeter), y: .length(3.0, .millimeter)),
+                        SketchPoint(x: .length(4.0, .millimeter), y: .length(3.0, .millimeter)),
+                        SketchPoint(x: .length(6.0, .millimeter), y: .length(0.0, .millimeter)),
+                    ])),
+                ]
+            ),
+            geometryRole: .curve
+        ),
+        in: session
+    )
+    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let spline = try #require(before.entries.first { $0.entityID == splineID.description })
+
+    let result = try runner.execute(
+        .projectSketchCurvesToConstructionPlane(
+            targets: [try #require(spline.selectionTarget())],
+            plane: .plane(Plane3D(
+                origin: Point3D(x: 0.0, y: 0.0, z: 0.020),
+                normal: .unitZ
+            )),
+            name: "Automation Projected Spline"
+        ),
+        in: session
+    )
+
+    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let projected = try #require(after.entries.first { $0.sourceFeatureName == "Automation Projected Spline" })
+
+    #expect(result.message == "Sketch curves projected.")
+    #expect(result.commandName == "projectSketchCurvesToConstructionPlane")
+    #expect(result.didMutate)
+    #expect(result.generation == DocumentGeneration(2))
+    #expect(projected.entityKind == "spline")
+    #expect(projected.controlPoints.count == 4)
+    #expect(abs(projected.controlPoints[3].x - 0.006) < 1.0e-12)
+    #expect(abs(projected.controlPoints[3].y - 0.0) < 1.0e-12)
+    #expect(session.evaluationStatus == .valid)
+}
+
+@MainActor
 @Test func automationCanAddCoincidentSplineControlPointConstraint() async throws {
     let setup = try automationSplinePointConstraintDocument(name: "Automation Coincident Spline Point")
     let session = EditorSession(document: setup.document)

@@ -5585,8 +5585,7 @@ public struct MainView: View {
         }
         if let reference = componentID.sketchControlPointReference,
            entityKind == "spline",
-           let controlPointCount = sketchSplineControlPointCount(for: target),
-           reference.entityID == componentID.sketchEntityReference?.entityID {
+           let controlPointCount = sketchSplineControlPointCount(for: target) {
             return reference.index == 0 || reference.index == controlPointCount - 1
         }
         return false
@@ -5594,7 +5593,7 @@ public struct MainView: View {
 
     private func sketchSplineControlPointCount(for target: SelectionTarget) -> Int? {
         guard case .sketchEntity(let componentID) = target.component,
-              let reference = componentID.sketchEntityReference,
+              let reference = sketchEntityReference(in: componentID),
               let sceneNode = session.document.productMetadata.sceneNodes[target.sceneNodeID],
               sceneNode.reference?.kind == .sketch,
               sceneNode.reference?.featureID == reference.featureID,
@@ -5604,6 +5603,79 @@ public struct MainView: View {
             return nil
         }
         return spline.controlPoints.count
+    }
+
+    private func sketchEntityReference(
+        in componentID: SelectionComponentID
+    ) -> (featureID: FeatureID, entityID: SketchEntityID)? {
+        if let reference = componentID.sketchEntityReference {
+            return reference
+        }
+        if let reference = componentID.sketchPointHandleReference {
+            return (reference.featureID, reference.entityID)
+        }
+        if let reference = componentID.sketchControlPointReference {
+            return (reference.featureID, reference.entityID)
+        }
+        return nil
+    }
+
+    @ViewBuilder
+    private func sketchCurveProjectionControls(_ entity: InspectorSketchEntity) -> some View {
+        inspectorActionRow {
+            Button {
+                projectSelectedSketchCurvesToConstructionPlane(entity)
+            } label: {
+                Label("Project", systemImage: "square.on.square")
+            }
+            .disabled(selectedSketchCurveProjectionTargets(for: entity).isEmpty)
+            .accessibilityIdentifier("InspectorCurve.\(entity.entityKind).project")
+        }
+    }
+
+    private func selectedSketchCurveProjectionTargets(
+        for entity: InspectorSketchEntity
+    ) -> [SelectionTarget] {
+        var projectedTargets: [SelectionTarget] = []
+        var seen = Set<String>()
+        for target in session.selection.selectedTargets {
+            guard let curveTarget = wholeSketchCurveTarget(for: target) else {
+                continue
+            }
+            let key = "\(curveTarget.sceneNodeID.description):\(String(describing: curveTarget.component))"
+            if seen.insert(key).inserted {
+                projectedTargets.append(curveTarget)
+            }
+        }
+        if projectedTargets.isEmpty,
+           let fallback = wholeSketchCurveTarget(for: entity.target) {
+            projectedTargets.append(fallback)
+        }
+        return projectedTargets
+    }
+
+    private func wholeSketchCurveTarget(for target: SelectionTarget) -> SelectionTarget? {
+        guard case .sketchEntity(let componentID) = target.component else {
+            return nil
+        }
+        let reference = sketchEntityReference(in: componentID)
+        guard let reference else {
+            return nil
+        }
+        let curveTarget = SelectionTarget(
+            sceneNodeID: target.sceneNodeID,
+            component: .sketchEntity(
+                SelectionComponentID.sketchEntity(
+                    featureID: reference.featureID,
+                    entityID: reference.entityID
+                )
+            )
+        )
+        guard let kind = sketchEntityKind(for: curveTarget),
+              ["line", "circle", "arc", "spline"].contains(kind) else {
+            return nil
+        }
+        return curveTarget
     }
 
     private func canApplySketchCornerTreatment(_ entity: InspectorSketchEntity) -> Bool {
@@ -7450,6 +7522,7 @@ public struct MainView: View {
                 accessibilityPrefix: "InspectorCurve.lineEnd"
             )
             sketchVertexAlignmentControls(entity)
+            sketchCurveProjectionControls(entity)
             sketchVertexOffsetControls(entity)
             lengthControl(
                 "Slot Width",
@@ -7549,6 +7622,7 @@ public struct MainView: View {
                 accessibilityPrefix: "InspectorCurve.circleCenter"
             )
             sketchVertexAlignmentControls(entity)
+            sketchCurveProjectionControls(entity)
             if let cutter = selectedSketchEntityCutterTarget(excluding: entity.target) {
                 inspectorActionRow {
                     Button {
@@ -7626,6 +7700,7 @@ public struct MainView: View {
                 accessibilityPrefix: "InspectorCurve.arcEnd"
             )
             sketchVertexAlignmentControls(entity)
+            sketchCurveProjectionControls(entity)
             sketchVertexOffsetControls(entity)
             numericControl(
                 "Split",
@@ -7636,7 +7711,6 @@ public struct MainView: View {
             } unitLabel: {
                 "t"
             }
-            sketchVertexAlignmentControls(entity)
             sketchCurveExtendControls(entity)
             sketchCurveJoinControls(entity)
             inspectorActionRow {
@@ -7681,6 +7755,7 @@ public struct MainView: View {
             } unitLabel: {
                 "t"
             }
+            sketchCurveProjectionControls(entity)
             sketchCurveExtendControls(entity)
             inspectorControlRow("Rebuild CVs") {
                 Stepper(
@@ -9396,6 +9471,23 @@ public struct MainView: View {
             options: SketchVertexAlignmentOptions(
                 continuity: sketchVertexAlignmentContinuity
             )
+        )
+        if result?.diagnostics.isEmpty == false {
+            isPreviewExpanded = true
+        }
+    }
+
+    private func projectSelectedSketchCurvesToConstructionPlane(
+        _ entity: InspectorSketchEntity
+    ) {
+        let targets = selectedSketchCurveProjectionTargets(for: entity)
+        guard targets.isEmpty == false else {
+            return
+        }
+        let result = session.projectSketchCurvesToConstructionPlane(
+            targets: targets,
+            plane: nil,
+            name: nil
         )
         if result?.diagnostics.isEmpty == false {
             isPreviewExpanded = true

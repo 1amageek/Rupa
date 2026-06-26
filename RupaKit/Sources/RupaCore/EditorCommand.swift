@@ -80,6 +80,11 @@ public enum EditorCommand: Codable, Equatable, Sendable {
         rotationAngle: CADExpression
     )
     case createFaceKnife(name: String, target: SelectionTarget, loop: [Point3D])
+    case projectSketchCurvesToConstructionPlane(
+        targets: [SelectionTarget],
+        plane: SketchPlane?,
+        name: String?
+    )
     case addSketchConstraint(featureID: FeatureID, constraint: SketchConstraint)
     case removeSketchConstraint(featureID: FeatureID, constraint: SketchConstraint)
     case createBridgeCurve(
@@ -357,6 +362,8 @@ public enum EditorCommand: Codable, Equatable, Sendable {
             "createPolygonSketch"
         case .createFaceKnife:
             "createFaceKnife"
+        case .projectSketchCurvesToConstructionPlane:
+            "projectSketchCurvesToConstructionPlane"
         case .addSketchConstraint:
             "addSketchConstraint"
         case .removeSketchConstraint:
@@ -505,6 +512,7 @@ public enum EditorCommand: Codable, Equatable, Sendable {
              .createRectangleSketch,
              .createPolygonSketch,
              .createFaceKnife,
+             .projectSketchCurvesToConstructionPlane,
              .addSketchConstraint,
              .removeSketchConstraint,
              .createBridgeCurve,

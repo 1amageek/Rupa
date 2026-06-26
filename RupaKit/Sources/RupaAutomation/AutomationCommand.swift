@@ -77,6 +77,11 @@ public enum AutomationCommand: Codable, Equatable, Sendable {
         rotationAngle: CADExpression
     )
     case createFaceKnife(name: String, target: SelectionTarget, loop: [Point3D])
+    case projectSketchCurvesToConstructionPlane(
+        targets: [SelectionTarget],
+        plane: SketchPlane?,
+        name: String?
+    )
     case setObjectDimension(
         target: SelectionTarget,
         kind: ObjectDimensionKind,
@@ -431,6 +436,12 @@ public enum AutomationCommand: Codable, Equatable, Sendable {
                 name: name,
                 target: target,
                 loop: loop
+            )
+        case .projectSketchCurvesToConstructionPlane(let targets, let plane, let name):
+            .projectSketchCurvesToConstructionPlane(
+                targets: targets,
+                plane: plane,
+                name: name
             )
         case .setObjectDimension(let target, let kind, let value):
             .setObjectDimension(

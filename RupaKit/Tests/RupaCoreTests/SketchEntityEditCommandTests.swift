@@ -280,6 +280,107 @@ import Testing
 }
 
 @MainActor
+@Test func projectSketchCurvesToConstructionPlaneCreatesProjectedSourceSketch() async throws {
+    let session = EditorSession()
+    let lineID = SketchEntityID()
+    _ = try session.execute(
+        .createSketch(
+            name: "Projection Source",
+            sketch: Sketch(
+                plane: .xy,
+                entities: [
+                    lineID: .line(SketchLine(
+                        start: SketchPoint(x: .length(1.0, .millimeter), y: .length(2.0, .millimeter)),
+                        end: SketchPoint(x: .length(5.0, .millimeter), y: .length(4.0, .millimeter))
+                    )),
+                ]
+            ),
+            geometryRole: .curve
+        )
+    )
+    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let line = try #require(before.entries.first { $0.entityID == lineID.description })
+    let targetPlane = SketchPlane.plane(Plane3D(
+        origin: Point3D(x: 0.0, y: 0.0, z: 0.010),
+        normal: .unitZ
+    ))
+
+    let result = try session.execute(
+        .projectSketchCurvesToConstructionPlane(
+            targets: [try #require(line.selectionTarget())],
+            plane: targetPlane,
+            name: "Projected Line"
+        )
+    )
+
+    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let projected = try #require(after.entries.first { $0.sourceFeatureName == "Projected Line" })
+    let featureID = try #require(UUID(uuidString: projected.sourceFeatureID)).featureID
+    let feature = try #require(session.document.cadDocument.designGraph.nodes[featureID])
+    guard case .sketch(let projectedSketch) = feature.operation else {
+        Issue.record("Projected curve feature must be a sketch.")
+        return
+    }
+
+    #expect(result.commandName == "projectSketchCurvesToConstructionPlane")
+    #expect(result.didMutate)
+    #expect(session.generation == DocumentGeneration(2))
+    #expect(projectedSketch.plane == targetPlane)
+    #expect(projected.entityKind == "line")
+    #expect(abs((projected.start?.x ?? -1.0) - 0.001) < 1.0e-12)
+    #expect(abs((projected.start?.y ?? -1.0) - 0.002) < 1.0e-12)
+    #expect(abs((projected.end?.x ?? -1.0) - 0.005) < 1.0e-12)
+    #expect(abs((projected.end?.y ?? -1.0) - 0.004) < 1.0e-12)
+    #expect(before.counts.entityCount == 1)
+    #expect(after.counts.entityCount == 2)
+    #expect(session.evaluationStatus == .valid)
+}
+
+@MainActor
+@Test func projectSketchCurvesRejectsNonparallelArcProjectionBeforeMutation() async throws {
+    let session = EditorSession()
+    let arcID = SketchEntityID()
+    _ = try session.execute(
+        .createSketch(
+            name: "Projection Arc Source",
+            sketch: Sketch(
+                plane: .xy,
+                entities: [
+                    arcID: .arc(SketchArc(
+                        center: SketchPoint(x: .length(0.0, .millimeter), y: .length(0.0, .millimeter)),
+                        radius: .length(5.0, .millimeter),
+                        startAngle: .angle(0.0, .radian),
+                        endAngle: .angle(Double.pi / 2.0, .radian)
+                    )),
+                ]
+            ),
+            geometryRole: .curve
+        )
+    )
+    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let arc = try #require(before.entries.first { $0.entityID == arcID.description })
+
+    do {
+        _ = try session.execute(
+            .projectSketchCurvesToConstructionPlane(
+                targets: [try #require(arc.selectionTarget())],
+                plane: .yz,
+                name: "Invalid Arc Projection"
+            )
+        )
+        Issue.record("Nonparallel arc projection must fail before mutation.")
+    } catch let error as EditorError {
+        #expect(error.code == .commandInvalid)
+        #expect(error.message.contains("circle and arc"))
+    }
+
+    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    #expect(session.generation == DocumentGeneration(1))
+    #expect(after.counts.entityCount == before.counts.entityCount)
+    #expect(after.counts.constraintCount == before.counts.constraintCount)
+}
+
+@MainActor
 @Test func offsetCurveCommandCreatesParallelSourceLineWithoutChangingOriginal() async throws {
     let session = EditorSession()
     _ = try session.execute(

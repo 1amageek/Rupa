@@ -552,6 +552,16 @@ public final class AgentCommandController: AgentClientProtocol {
             failureMode: "Rejects non-face targets, unresolved generated topology, loop counts below three, non-finite points, off-plane loops, outside or boundary-touching loops, non-convex loops, non-planar target faces, target faces with inner loops, non-line target face loops, unsupported target topology, and stale generations before mutation."
         ),
         capability(
+            "projectSketchCurvesToConstructionPlane",
+            category: .sketch,
+            summary: "Alternative Duplicate subset: project selected source sketch curves onto the active or supplied construction plane along that plane normal, creating a new source curve sketch for downstream editing.",
+            access: .automationCommand,
+            mutatesDocument: true,
+            discovery: [.sketchEntitySummary, .constructionPlaneSummary],
+            targets: [.sketchEntity, .constructionPlane],
+            failureMode: "Rejects empty target lists, duplicate targets, non-curve sketch entities, unresolved source sketches, collapsed projected lines, invalid target planes, nonparallel circle or arc projections until exact conic projection sources exist, invalid output sketches, and stale generations before mutation."
+        ),
+        capability(
             "addSketchConstraint",
             category: .sourceCurveEditing,
             summary: "Attach and immediately solve supported line, circular, and spline sketch constraints, including smooth spline knots, spline endpoint tangency to lines, tangent spline endpoints, and smooth spline endpoints, on an existing sketch feature.",

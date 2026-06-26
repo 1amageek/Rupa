@@ -1333,6 +1333,264 @@ public struct DesignDocument: Identifiable, Sendable {
     }
 
     @discardableResult
+    public mutating func projectSketchCurvesToConstructionPlane(
+        targets: [SelectionTarget],
+        plane explicitPlane: SketchPlane? = nil,
+        name: String? = nil,
+        objectRegistry: ObjectTypeRegistry = .builtIn
+    ) throws -> FeatureID {
+        let operationName = "Alternative Duplicate"
+        guard targets.isEmpty == false else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "\(operationName) requires at least one source curve target."
+            )
+        }
+
+        let targetPlane = explicitPlane ?? activeConstructionPlane?.plane ?? .xy
+        let targetSystem = try SketchPlaneCoordinateSystem(plane: targetPlane)
+        var projectedEntities: [SketchEntityID: SketchEntity] = [:]
+        var sourceNames: [String] = []
+        var seenTargets = Set<String>()
+        for target in targets {
+            let targetKey = "\(target.sceneNodeID.description):\(String(describing: target.component))"
+            guard seenTargets.insert(targetKey).inserted else {
+                throw EditorError(
+                    code: .commandInvalid,
+                    message: "\(operationName) received the same source curve target more than once."
+                )
+            }
+            let selection = try editableSketchEntity(
+                for: target,
+                operationName: "\(operationName) source"
+            )
+            let sourceSystem = try SketchPlaneCoordinateSystem(plane: selection.sketch.plane)
+            let projectedEntity = try projectedSketchEntity(
+                selection.entity,
+                from: sourceSystem,
+                to: targetSystem,
+                owner: operationName
+            )
+            projectedEntities[SketchEntityID()] = projectedEntity
+            sourceNames.append(selection.feature.name ?? "Sketch Curve")
+        }
+
+        let projectedSketch = Sketch(
+            plane: targetPlane,
+            entities: projectedEntities
+        )
+        try projectedSketch.validate()
+        try projectedSketch.validateExpressions(using: cadDocument.parameters)
+        let outputName = try normalizedMetadataName(
+            name ?? projectedSketchName(from: sourceNames),
+            owner: operationName
+        )
+        return try appendSketchFeature(
+            name: outputName,
+            sketch: projectedSketch,
+            geometryRole: .curve,
+            objectRegistry: objectRegistry
+        )
+    }
+
+    private func projectedSketchName(from sourceNames: [String]) -> String {
+        if sourceNames.count == 1,
+           let sourceName = sourceNames.first {
+            return "\(sourceName) Projection"
+        }
+        return "Projected Curves"
+    }
+
+    private func projectedSketchEntity(
+        _ entity: SketchEntity,
+        from sourceSystem: SketchPlaneCoordinateSystem,
+        to targetSystem: SketchPlaneCoordinateSystem,
+        owner: String
+    ) throws -> SketchEntity {
+        switch entity {
+        case .point:
+            throw EditorError(
+                code: .commandInvalid,
+                message: "\(owner) requires curve entities, not source point entities."
+            )
+        case .line(let line):
+            let start = try projectedSketchPoint(
+                line.start,
+                from: sourceSystem,
+                to: targetSystem,
+                owner: "\(owner) line start"
+            )
+            let end = try projectedSketchPoint(
+                line.end,
+                from: sourceSystem,
+                to: targetSystem,
+                owner: "\(owner) line end"
+            )
+            let startPoint = try resolvedPoint(start, owner: "\(owner) projected line start")
+            let endPoint = try resolvedPoint(end, owner: "\(owner) projected line end")
+            guard hypot(endPoint.x - startPoint.x, endPoint.y - startPoint.y) > 1.0e-12 else {
+                throw EditorError(
+                    code: .commandInvalid,
+                    message: "\(owner) projected line collapsed on the target construction plane."
+                )
+            }
+            return .line(SketchLine(start: start, end: end))
+        case .circle(let circle):
+            try validateCircularProjection(
+                from: sourceSystem,
+                to: targetSystem,
+                owner: owner
+            )
+            let radius = try resolvedPositiveLengthValue(circle.radius, owner: "\(owner) circle radius")
+            return .circle(SketchCircle(
+                center: try projectedSketchPoint(
+                    circle.center,
+                    from: sourceSystem,
+                    to: targetSystem,
+                    owner: "\(owner) circle center"
+                ),
+                radius: .length(radius, .meter)
+            ))
+        case .arc(let arc):
+            try validateCircularProjection(
+                from: sourceSystem,
+                to: targetSystem,
+                owner: owner
+            )
+            return .arc(try projectedSketchArc(
+                arc,
+                from: sourceSystem,
+                to: targetSystem,
+                owner: owner
+            ))
+        case .spline(let spline):
+            return .spline(SketchSpline(
+                controlPoints: try spline.controlPoints.enumerated().map { index, point in
+                    try projectedSketchPoint(
+                        point,
+                        from: sourceSystem,
+                        to: targetSystem,
+                        owner: "\(owner) spline control point \(index)"
+                    )
+                }
+            ))
+        }
+    }
+
+    private func validateCircularProjection(
+        from sourceSystem: SketchPlaneCoordinateSystem,
+        to targetSystem: SketchPlaneCoordinateSystem,
+        owner: String
+    ) throws {
+        guard sourceSystem.projectsParallel(to: targetSystem) else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "\(owner) can project circle and arc sources only onto a parallel construction plane until ellipse or exact conic projection sources exist."
+            )
+        }
+    }
+
+    private func projectedSketchArc(
+        _ arc: SketchArc,
+        from sourceSystem: SketchPlaneCoordinateSystem,
+        to targetSystem: SketchPlaneCoordinateSystem,
+        owner: String
+    ) throws -> SketchArc {
+        let resolvedCenter = try resolvedPoint(arc.center, owner: "\(owner) arc center")
+        let sourceCenter = Point2D(x: resolvedCenter.x, y: resolvedCenter.y)
+        let radius = try resolvedPositiveLengthValue(arc.radius, owner: "\(owner) arc radius")
+        let startAngle = try resolvedAngleValue(arc.startAngle, owner: "\(owner) arc start angle")
+        let span = try normalizedPartialArcSpan(
+            startAngle: startAngle,
+            endAngle: try resolvedAngleValue(arc.endAngle, owner: "\(owner) arc end angle")
+        )
+        let endAngle = startAngle + span
+        let sourceStart = Point2D(
+            x: sourceCenter.x + cos(startAngle) * radius,
+            y: sourceCenter.y + sin(startAngle) * radius
+        )
+        let sourceEnd = Point2D(
+            x: sourceCenter.x + cos(endAngle) * radius,
+            y: sourceCenter.y + sin(endAngle) * radius
+        )
+        let sourceMid = Point2D(
+            x: sourceCenter.x + cos(startAngle + span / 2.0) * radius,
+            y: sourceCenter.y + sin(startAngle + span / 2.0) * radius
+        )
+        let center = targetSystem.project(sourceSystem.point(from: sourceCenter)).point
+        let projectedStart = targetSystem.project(sourceSystem.point(from: sourceStart)).point
+        let projectedEnd = targetSystem.project(sourceSystem.point(from: sourceEnd)).point
+        let projectedMid = targetSystem.project(sourceSystem.point(from: sourceMid)).point
+        let targetStartAngle = atan2(projectedStart.y - center.y, projectedStart.x - center.x)
+        let targetEndAngle = atan2(projectedEnd.y - center.y, projectedEnd.x - center.x)
+        let directDistance = projectedArcMidpointDistance(
+            center: center,
+            radius: radius,
+            startAngle: targetStartAngle,
+            endAngle: targetEndAngle,
+            expected: projectedMid
+        )
+        let reversedDistance = projectedArcMidpointDistance(
+            center: center,
+            radius: radius,
+            startAngle: targetEndAngle,
+            endAngle: targetStartAngle,
+            expected: projectedMid
+        )
+        if reversedDistance < directDistance {
+            return SketchArc(
+                center: sketchPoint(from: center),
+                radius: .length(radius, .meter),
+                startAngle: .angle(targetEndAngle, .radian),
+                endAngle: .angle(targetStartAngle, .radian)
+            )
+        }
+        return SketchArc(
+            center: sketchPoint(from: center),
+            radius: .length(radius, .meter),
+            startAngle: .angle(targetStartAngle, .radian),
+            endAngle: .angle(targetEndAngle, .radian)
+        )
+    }
+
+    private func projectedArcMidpointDistance(
+        center: Point2D,
+        radius: Double,
+        startAngle: Double,
+        endAngle: Double,
+        expected: Point2D
+    ) -> Double {
+        let span = (endAngle - startAngle).truncatingRemainder(dividingBy: Double.pi * 2.0)
+        let positiveSpan = span > 0.0 ? span : span + Double.pi * 2.0
+        let midpointAngle = startAngle + positiveSpan / 2.0
+        let midpoint = Point2D(
+            x: center.x + cos(midpointAngle) * radius,
+            y: center.y + sin(midpointAngle) * radius
+        )
+        return hypot(midpoint.x - expected.x, midpoint.y - expected.y)
+    }
+
+    private func projectedSketchPoint(
+        _ point: SketchPoint,
+        from sourceSystem: SketchPlaneCoordinateSystem,
+        to targetSystem: SketchPlaneCoordinateSystem,
+        owner: String
+    ) throws -> SketchPoint {
+        let sourcePoint = try resolvedPoint(point, owner: owner)
+        let projected = targetSystem.project(
+            sourceSystem.point(from: Point2D(x: sourcePoint.x, y: sourcePoint.y))
+        ).point
+        return sketchPoint(from: projected)
+    }
+
+    private func sketchPoint(from point: Point2D) -> SketchPoint {
+        SketchPoint(
+            x: .length(point.x, .meter),
+            y: .length(point.y, .meter)
+        )
+    }
+
+    @discardableResult
     public mutating func createSlotSketch(
         target: SelectionTarget,
         width: CADExpression,

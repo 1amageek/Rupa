@@ -1580,6 +1580,21 @@ public final class EditorSession {
         )
     }
 
+    @discardableResult
+    public func projectSketchCurvesToConstructionPlane(
+        targets: [SelectionTarget],
+        plane: SketchPlane? = nil,
+        name: String? = nil
+    ) -> CommandExecutionResult? {
+        perform(
+            .projectSketchCurvesToConstructionPlane(
+                targets: targets,
+                plane: plane,
+                name: name
+            )
+        )
+    }
+
     private func selectedFaceKnifeDraftContext() -> (
         target: SelectionTarget,
         coordinateSystem: SketchPlaneCoordinateSystem

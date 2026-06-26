@@ -50,6 +50,7 @@ import SwiftCAD
     #expect(capabilities.contains("createRectangleSketch"))
     #expect(capabilities.contains("createPolygonSketch"))
     #expect(capabilities.contains("createFaceKnife"))
+    #expect(capabilities.contains("projectSketchCurvesToConstructionPlane"))
     #expect(capabilities.contains("addSketchConstraint"))
     #expect(capabilities.contains("removeSketchConstraint"))
     #expect(capabilities.contains("createBridgeCurve"))
@@ -132,6 +133,9 @@ import SwiftCAD
     let fillet = try #require(descriptors.first { $0.name == "filletBodyEdges" })
     let faceOffset = try #require(descriptors.first { $0.name == "offsetBodyFace" })
     let faceKnife = try #require(descriptors.first { $0.name == "createFaceKnife" })
+    let projectCurves = try #require(
+        descriptors.first { $0.name == "projectSketchCurvesToConstructionPlane" }
+    )
     let sketchConstraint = try #require(descriptors.first { $0.name == "addSketchConstraint" })
     let sketchConstraintRemoval = try #require(descriptors.first { $0.name == "removeSketchConstraint" })
     let bridgeCurve = try #require(descriptors.first { $0.name == "createBridgeCurve" })
@@ -249,6 +253,16 @@ import SwiftCAD
     #expect(faceKnife.discovery.contains(.snapResolution))
     #expect(faceKnife.targets == [.face])
     #expect(faceKnife.failureMode.contains("off-plane"))
+
+    #expect(projectCurves.category == .sketch)
+    #expect(projectCurves.mutatesDocument)
+    #expect(projectCurves.access == .automationCommand)
+    #expect(projectCurves.discovery.contains(.sketchEntitySummary))
+    #expect(projectCurves.discovery.contains(.constructionPlaneSummary))
+    #expect(projectCurves.targets == [.sketchEntity, .constructionPlane])
+    #expect(projectCurves.summary.contains("Alternative Duplicate"))
+    #expect(projectCurves.summary.contains("source curve sketch"))
+    #expect(projectCurves.failureMode.contains("nonparallel circle or arc"))
 
     #expect(sketchConstraint.category == .sourceCurveEditing)
     #expect(sketchConstraint.discovery.contains(.sketchEntitySummary))
@@ -2808,6 +2822,33 @@ private func rawAgentProtocolJSON(_ source: String) -> Data {
             distance: .length(2.0, .millimeter),
             options: OffsetCurveOptions(),
             vertexHandle: .lineEnd
+        ),
+        expectedGeneration: DocumentGeneration(7)
+    )
+
+    let decodedRequest = try codec.decodeRequest(from: try codec.encode(request))
+
+    #expect(decodedRequest == request)
+}
+
+@Test func agentMessageCodecRoundTripsProjectSketchCurvesCommand() async throws {
+    let codec = AgentMessageCodec()
+    let sessionID = UUID()
+    let target = SelectionTarget(
+        sceneNodeID: SceneNodeID(),
+        component: .sketchEntity(
+            SelectionComponentID.sketchEntity(
+                featureID: FeatureID(),
+                entityID: SketchEntityID()
+            )
+        )
+    )
+    let request = AgentRequest.execute(
+        sessionID: sessionID,
+        command: .projectSketchCurvesToConstructionPlane(
+            targets: [target],
+            plane: .xy,
+            name: "Projected Curves"
         ),
         expectedGeneration: DocumentGeneration(7)
     )
