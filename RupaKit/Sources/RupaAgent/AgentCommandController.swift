@@ -702,6 +702,16 @@ public final class AgentCommandController: AgentClientProtocol {
             failureMode: "Rejects non-spline targets, out-of-range indexes, invalid deltas, invalid spline geometry, and stale generations before mutation."
         ),
         capability(
+            "alignSketchVertex",
+            category: .sourceCurveEditing,
+            summary: "Align Vertex for source sketch vertices: use ordered point-handle or spline-CV target/reference selections to add persistent G0 coincidence, with supported G1 line/arc/spline endpoint continuity and G2 spline-endpoint smooth continuity through the shared constraint solver.",
+            access: .automationCommand,
+            mutatesDocument: true,
+            discovery: [.sketchEntitySummary, .curveAnalysis],
+            targets: [.sketchEntity, .sketchPointHandle, .sketchControlPoint],
+            failureMode: "Rejects stale generations, non-point-backed selections, different sketch features, identical target/reference vertices, reference parameter requests, CV continuity distance controls, command-scoped curvature display requests, unsupported G1/G2 endpoint combinations, fixed conflicts, and over-constrained continuity before mutation."
+        ),
+        capability(
             "slideSketchSplineControlPoints",
             category: .sourceCurveEditing,
             summary: "Slide selected spline CVs using the official Slide Curve CV contract: Positive U, Negative U, or Normal control-cage direction with an explicit distance.",

@@ -147,6 +147,11 @@ public enum AutomationCommand: Codable, Equatable, Sendable {
         deltaX: CADExpression,
         deltaY: CADExpression
     )
+    case alignSketchVertex(
+        target: SelectionTarget,
+        reference: SelectionTarget,
+        options: SketchVertexAlignmentOptions
+    )
     case slideSketchSplineControlPoints(
         target: SelectionTarget,
         controlPointIndexes: [Int],
@@ -543,6 +548,12 @@ public enum AutomationCommand: Codable, Equatable, Sendable {
                 controlPointIndex: controlPointIndex,
                 deltaX: deltaX,
                 deltaY: deltaY
+            )
+        case .alignSketchVertex(let target, let reference, let options):
+            .alignSketchVertex(
+                target: target,
+                reference: reference,
+                options: options
             )
         case .slideSketchSplineControlPoints(let target, let controlPointIndexes, let direction, let distance):
             .slideSketchSplineControlPoints(

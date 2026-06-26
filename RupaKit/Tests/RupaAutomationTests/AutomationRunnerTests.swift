@@ -2169,6 +2169,65 @@ import SwiftCAD
 }
 
 @MainActor
+@Test func automationCanAlignSketchVerticesWithPersistentG0Constraint() async throws {
+    let session = EditorSession()
+    let runner = AutomationRunner()
+    let referenceLineID = SketchEntityID()
+    let targetLineID = SketchEntityID()
+    _ = try runner.execute(
+        .createSketch(
+            name: "Automation Align Vertex",
+            sketch: Sketch(
+                plane: .xy,
+                entities: [
+                    referenceLineID: .line(SketchLine(
+                        start: SketchPoint(x: .length(0.0, .millimeter), y: .length(0.0, .millimeter)),
+                        end: SketchPoint(x: .length(4.0, .millimeter), y: .length(0.0, .millimeter))
+                    )),
+                    targetLineID: .line(SketchLine(
+                        start: SketchPoint(x: .length(8.0, .millimeter), y: .length(2.0, .millimeter)),
+                        end: SketchPoint(x: .length(12.0, .millimeter), y: .length(2.0, .millimeter))
+                    )),
+                ]
+            ),
+            geometryRole: .curve
+        ),
+        in: session
+    )
+    let summary = try SketchEntitySummaryService().summarize(document: session.document)
+    let referenceLine = try #require(summary.entries.first { $0.entityID == referenceLineID.description })
+    let targetLine = try #require(summary.entries.first { $0.entityID == targetLineID.description })
+
+    let result = try runner.execute(
+        .alignSketchVertex(
+            target: try automationPointHandleSelectionTarget(targetLine, handle: .lineStart),
+            reference: try automationPointHandleSelectionTarget(referenceLine, handle: .lineEnd),
+            options: SketchVertexAlignmentOptions()
+        ),
+        in: session
+    )
+
+    let featureID = try #require(UUID(uuidString: referenceLine.sourceFeatureID)).featureID
+    let feature = try #require(session.document.cadDocument.designGraph.nodes[featureID])
+    guard case .sketch(let sketch) = feature.operation else {
+        Issue.record("Automation Align Vertex feature must remain a sketch.")
+        return
+    }
+    let updatedSummary = try SketchEntitySummaryService().summarize(document: session.document)
+    let movedReferenceLine = try #require(updatedSummary.entries.first { $0.entityID == referenceLineID.description })
+    let movedTargetLine = try #require(updatedSummary.entries.first { $0.entityID == targetLineID.description })
+
+    #expect(result.message == "Sketch vertex aligned.")
+    #expect(result.commandName == "alignSketchVertex")
+    #expect(result.didMutate)
+    #expect(result.generation == DocumentGeneration(2))
+    #expect(abs((movedTargetLine.start?.x ?? -1.0) - (movedReferenceLine.end?.x ?? -2.0)) < 1.0e-12)
+    #expect(abs((movedTargetLine.start?.y ?? -1.0) - (movedReferenceLine.end?.y ?? -2.0)) < 1.0e-12)
+    #expect(sketch.constraints.contains(.coincident(.lineEnd(referenceLineID), .lineStart(targetLineID))))
+    #expect(session.evaluationStatus == .valid)
+}
+
+@MainActor
 @Test func automationCanAddCoincidentSplineControlPointConstraint() async throws {
     let setup = try automationSplinePointConstraintDocument(name: "Automation Coincident Spline Point")
     let session = EditorSession(document: setup.document)

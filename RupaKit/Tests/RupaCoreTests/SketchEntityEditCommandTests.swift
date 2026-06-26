@@ -46,6 +46,240 @@ import Testing
 }
 
 @MainActor
+@Test func alignSketchVertexCommandAddsG1LineEndpointAlignment() async throws {
+    let session = EditorSession()
+    let referenceLineID = SketchEntityID()
+    let targetLineID = SketchEntityID()
+    _ = try session.execute(
+        .createSketch(
+            name: "Align Vertex Lines",
+            sketch: Sketch(
+                plane: .xy,
+                entities: [
+                    referenceLineID: .line(SketchLine(
+                        start: SketchPoint(x: .length(0.0, .millimeter), y: .length(0.0, .millimeter)),
+                        end: SketchPoint(x: .length(5.0, .millimeter), y: .length(0.0, .millimeter))
+                    )),
+                    targetLineID: .line(SketchLine(
+                        start: SketchPoint(x: .length(10.0, .millimeter), y: .length(3.0, .millimeter)),
+                        end: SketchPoint(x: .length(15.0, .millimeter), y: .length(4.0, .millimeter))
+                    )),
+                ]
+            ),
+            geometryRole: .curve
+        )
+    )
+    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let referenceLine = try #require(before.entries.first { $0.entityID == referenceLineID.description })
+    let targetLine = try #require(before.entries.first { $0.entityID == targetLineID.description })
+
+    let result = try session.execute(
+        .alignSketchVertex(
+            target: try pointHandleSelectionTarget(targetLine, handle: .lineStart),
+            reference: try pointHandleSelectionTarget(referenceLine, handle: .lineEnd),
+            options: SketchVertexAlignmentOptions(continuity: .g1)
+        )
+    )
+
+    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let movedReferenceLine = try #require(after.entries.first { $0.entityID == referenceLineID.description })
+    let movedTargetLine = try #require(after.entries.first { $0.entityID == targetLineID.description })
+    let featureID = try #require(UUID(uuidString: referenceLine.sourceFeatureID)).featureID
+    let feature = try #require(session.document.cadDocument.designGraph.nodes[featureID])
+    guard case .sketch(let sketch) = feature.operation else {
+        Issue.record("Align Vertex feature must remain a sketch.")
+        return
+    }
+
+    #expect(result.commandName == "alignSketchVertex")
+    #expect(result.didMutate)
+    #expect(session.generation == DocumentGeneration(2))
+    #expect(abs((movedTargetLine.start?.x ?? -1.0) - (movedReferenceLine.end?.x ?? -2.0)) < 1.0e-12)
+    #expect(abs((movedTargetLine.start?.y ?? -1.0) - (movedReferenceLine.end?.y ?? -2.0)) < 1.0e-12)
+    #expect(lineEntriesAreParallel(movedReferenceLine, movedTargetLine))
+    #expect(sketch.constraints.contains(.coincident(.lineEnd(referenceLineID), .lineStart(targetLineID))))
+    #expect(sketch.constraints.contains(.parallel(referenceLineID, targetLineID)))
+    #expect(session.evaluationStatus == .valid)
+}
+
+@MainActor
+@Test func alignSketchVertexCommandAddsG2SplineEndpointAlignmentAndAnalysisReadback() async throws {
+    let session = EditorSession()
+    let referenceSplineID = SketchEntityID()
+    let targetSplineID = SketchEntityID()
+    _ = try session.execute(
+        .createSketch(
+            name: "Align Vertex Splines",
+            sketch: Sketch(
+                plane: .xy,
+                entities: [
+                    referenceSplineID: .spline(SketchSpline(controlPoints: [
+                        SketchPoint(x: .length(0.0, .millimeter), y: .length(0.0, .millimeter)),
+                        SketchPoint(x: .length(1.0, .millimeter), y: .length(0.0, .millimeter)),
+                        SketchPoint(x: .length(2.0, .millimeter), y: .length(0.0, .millimeter)),
+                        SketchPoint(x: .length(3.0, .millimeter), y: .length(0.0, .millimeter)),
+                    ])),
+                    targetSplineID: .spline(SketchSpline(controlPoints: [
+                        SketchPoint(x: .length(5.0, .millimeter), y: .length(2.0, .millimeter)),
+                        SketchPoint(x: .length(6.0, .millimeter), y: .length(4.0, .millimeter)),
+                        SketchPoint(x: .length(7.0, .millimeter), y: .length(4.0, .millimeter)),
+                        SketchPoint(x: .length(8.0, .millimeter), y: .length(2.0, .millimeter)),
+                    ])),
+                ]
+            ),
+            geometryRole: .curve
+        )
+    )
+    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let referenceSpline = try #require(before.entries.first { $0.entityID == referenceSplineID.description })
+    let targetSpline = try #require(before.entries.first { $0.entityID == targetSplineID.description })
+
+    let result = try session.execute(
+        .alignSketchVertex(
+            target: try controlPointSelectionTarget(targetSpline, index: 0),
+            reference: try controlPointSelectionTarget(referenceSpline, index: 3),
+            options: SketchVertexAlignmentOptions(continuity: .g2)
+        )
+    )
+
+    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let movedReferenceSpline = try #require(after.entries.first { $0.entityID == referenceSplineID.description })
+    let movedTargetSpline = try #require(after.entries.first { $0.entityID == targetSplineID.description })
+    let featureID = try #require(UUID(uuidString: referenceSpline.sourceFeatureID)).featureID
+    let feature = try #require(session.document.cadDocument.designGraph.nodes[featureID])
+    guard case .sketch(let sketch) = feature.operation else {
+        Issue.record("Align Vertex feature must remain a sketch.")
+        return
+    }
+    let analysis = try CurveAnalysisService().analyze(document: session.document)
+    let continuityJoin = try #require(analysis.continuityJoins.first { join in
+        Set([join.firstEntityID, join.secondEntityID]) == Set([
+            referenceSplineID.description,
+            targetSplineID.description,
+        ])
+    })
+
+    #expect(result.commandName == "alignSketchVertex")
+    #expect(result.didMutate)
+    #expect(session.generation == DocumentGeneration(2))
+    #expect(movedReferenceSpline.controlPoints.count == 4)
+    #expect(movedTargetSpline.controlPoints.count == 4)
+    #expect(abs(movedTargetSpline.controlPoints[0].x - movedReferenceSpline.controlPoints[3].x) < 1.0e-12)
+    #expect(abs(movedTargetSpline.controlPoints[0].y - movedReferenceSpline.controlPoints[3].y) < 1.0e-12)
+    #expect(sketch.constraints.contains(.coincident(
+        .splineControlPoint(entity: referenceSplineID, index: 3),
+        .splineControlPoint(entity: targetSplineID, index: 0)
+    )))
+    #expect(sketch.constraints.contains(.smoothSplineEndpoints(
+        first: SketchSplineEndpointReference(splineID: referenceSplineID, endpoint: .end),
+        second: SketchSplineEndpointReference(splineID: targetSplineID, endpoint: .start)
+    )))
+    #expect(continuityJoin.requiredContinuity == .g2)
+    #expect(continuityJoin.continuity == .g2)
+    #expect(continuityJoin.constraintKinds.contains("smoothSplineEndpoints"))
+    #expect(session.evaluationStatus == .valid)
+}
+
+@MainActor
+@Test func alignSketchVertexRejectsUnsupportedReferenceParameterBeforeMutation() async throws {
+    let session = EditorSession()
+    _ = try session.execute(
+        .createLineSketch(
+            name: "Invalid Align Vertex Parameter",
+            plane: .xy,
+            start: SketchPoint(x: .length(0.0, .millimeter), y: .length(0.0, .millimeter)),
+            end: SketchPoint(x: .length(10.0, .millimeter), y: .length(0.0, .millimeter))
+        )
+    )
+    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let line = try #require(before.entries.first { $0.entityKind == "line" })
+
+    do {
+        _ = try session.execute(
+            .alignSketchVertex(
+                target: try pointHandleSelectionTarget(line, handle: .lineStart),
+                reference: try pointHandleSelectionTarget(line, handle: .lineEnd),
+                options: SketchVertexAlignmentOptions(
+                    continuity: .g0,
+                    referenceParameter: .scalar(0.5)
+                )
+            )
+        )
+        Issue.record("Align Vertex reference parameter must fail before mutation.")
+    } catch let error as EditorError {
+        #expect(error.code == .commandInvalid)
+        #expect(error.message.contains("reference parameter"))
+    }
+
+    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    #expect(session.generation == DocumentGeneration(1))
+    #expect(after.counts.entityCount == before.counts.entityCount)
+    #expect(after.counts.constraintCount == before.counts.constraintCount)
+}
+
+@MainActor
+@Test func alignSketchVertexRejectsNonVertexPointBackedTargetsBeforeMutation() async throws {
+    let session = EditorSession()
+    let lineID = SketchEntityID()
+    let circleID = SketchEntityID()
+    let splineID = SketchEntityID()
+    _ = try session.execute(
+        .createSketch(
+            name: "Invalid Align Vertex Handles",
+            sketch: Sketch(
+                plane: .xy,
+                entities: [
+                    lineID: .line(SketchLine(
+                        start: SketchPoint(x: .length(0.0, .millimeter), y: .length(0.0, .millimeter)),
+                        end: SketchPoint(x: .length(10.0, .millimeter), y: .length(0.0, .millimeter))
+                    )),
+                    circleID: .circle(SketchCircle(
+                        center: SketchPoint(x: .length(4.0, .millimeter), y: .length(4.0, .millimeter)),
+                        radius: .length(2.0, .millimeter)
+                    )),
+                    splineID: .spline(SketchSpline(controlPoints: [
+                        SketchPoint(x: .length(0.0, .millimeter), y: .length(4.0, .millimeter)),
+                        SketchPoint(x: .length(2.0, .millimeter), y: .length(7.0, .millimeter)),
+                        SketchPoint(x: .length(4.0, .millimeter), y: .length(7.0, .millimeter)),
+                        SketchPoint(x: .length(6.0, .millimeter), y: .length(4.0, .millimeter)),
+                    ])),
+                ]
+            ),
+            geometryRole: .curve
+        )
+    )
+    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let line = try #require(before.entries.first { $0.entityID == lineID.description })
+    let circle = try #require(before.entries.first { $0.entityID == circleID.description })
+    let spline = try #require(before.entries.first { $0.entityID == splineID.description })
+    let reference = try pointHandleSelectionTarget(line, handle: .lineStart)
+
+    for target in [
+        try pointHandleSelectionTarget(circle, handle: .circleCenter),
+        try controlPointSelectionTarget(spline, index: 1),
+    ] {
+        do {
+            _ = try session.execute(
+                .alignSketchVertex(
+                    target: target,
+                    reference: reference,
+                    options: SketchVertexAlignmentOptions()
+                )
+            )
+            Issue.record("Align Vertex non-vertex point-backed targets must fail before mutation.")
+        } catch let error as EditorError {
+            #expect(error.code == .commandInvalid)
+            #expect(error.message.contains("source point entity"))
+        }
+    }
+
+    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    #expect(session.generation == DocumentGeneration(1))
+    #expect(after.counts.entityCount == before.counts.entityCount)
+    #expect(after.counts.constraintCount == before.counts.constraintCount)
+}
+
+@MainActor
 @Test func offsetCurveCommandCreatesParallelSourceLineWithoutChangingOriginal() async throws {
     let session = EditorSession()
     _ = try session.execute(

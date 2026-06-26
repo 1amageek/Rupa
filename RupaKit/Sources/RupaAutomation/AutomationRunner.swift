@@ -785,6 +785,21 @@ public struct AutomationRunner {
                 didMutate: result.didMutate,
                 diagnostics: result.diagnostics
             )
+        case .alignSketchVertex(let target, let reference, let options):
+            let result = try session.execute(
+                .alignSketchVertex(
+                    target: target,
+                    reference: reference,
+                    options: options
+                )
+            )
+            return AutomationResult(
+                message: "Sketch vertex aligned.",
+                commandName: result.commandName,
+                generation: result.generation,
+                didMutate: result.didMutate,
+                diagnostics: result.diagnostics
+            )
         case .slideSketchSplineControlPoints(let target, let controlPointIndexes, let direction, let distance):
             let result = try session.execute(
                 .slideSketchSplineControlPoints(

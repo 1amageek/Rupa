@@ -168,6 +168,11 @@ public enum EditorCommand: Codable, Equatable, Sendable {
         deltaX: CADExpression,
         deltaY: CADExpression
     )
+    case alignSketchVertex(
+        target: SelectionTarget,
+        reference: SelectionTarget,
+        options: SketchVertexAlignmentOptions
+    )
     case slideSketchSplineControlPoints(
         target: SelectionTarget,
         controlPointIndexes: [Int],
@@ -400,6 +405,8 @@ public enum EditorCommand: Codable, Equatable, Sendable {
             "moveSketchEntityPoint"
         case .moveSketchSplineControlPoint:
             "moveSketchSplineControlPoint"
+        case .alignSketchVertex:
+            "alignSketchVertex"
         case .slideSketchSplineControlPoints:
             "slideSketchSplineControlPoints"
         case .insertSketchSplineControlPoint:
@@ -522,6 +529,7 @@ public enum EditorCommand: Codable, Equatable, Sendable {
              .moveBodyVertex,
              .moveSketchEntityPoint,
              .moveSketchSplineControlPoint,
+             .alignSketchVertex,
              .slideSketchSplineControlPoints,
              .insertSketchSplineControlPoint,
              .setSketchCircleParameters,

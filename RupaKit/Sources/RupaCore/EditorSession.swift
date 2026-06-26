@@ -2708,6 +2708,21 @@ public final class EditorSession {
     }
 
     @discardableResult
+    public func alignSketchVertex(
+        target: SelectionTarget,
+        reference: SelectionTarget,
+        options: SketchVertexAlignmentOptions = SketchVertexAlignmentOptions()
+    ) -> CommandExecutionResult? {
+        perform(
+            .alignSketchVertex(
+                target: target,
+                reference: reference,
+                options: options
+            )
+        )
+    }
+
+    @discardableResult
     public func slideSketchSplineControlPoints(
         target: SelectionTarget,
         controlPointIndexes: [Int],

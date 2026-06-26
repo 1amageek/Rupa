@@ -761,6 +761,17 @@ public final class CADDocumentStore {
             document = updatedDocument
             try commitMutation()
             evaluateCurrentDocument()
+        case .alignSketchVertex(let target, let reference, let options):
+            var updatedDocument = document
+            try updatedDocument.alignSketchVertex(
+                target: target,
+                reference: reference,
+                options: options,
+                objectRegistry: objectRegistry
+            )
+            document = updatedDocument
+            try commitMutation()
+            evaluateCurrentDocument()
         case .slideSketchSplineControlPoints(let target, let controlPointIndexes, let direction, let distance):
             var updatedDocument = document
             try updatedDocument.slideSketchSplineControlPoints(

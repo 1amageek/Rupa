@@ -55,6 +55,7 @@ public struct MainView: View {
     @State private var sketchCornerTreatmentDistanceMeters: Double
     @State private var sketchCornerTreatment: SketchCornerTreatment
     @State private var sketchCurveJoinContinuity: SketchCurveJoinContinuity
+    @State private var sketchVertexAlignmentContinuity: SketchVertexAlignmentContinuity
     @State private var regionOffsetDistanceMeters: Double
     @State private var regionOffsetGapFill: OffsetCurveGapFill
     @State private var regionOffsetCommandState: RegionOffsetCommandState
@@ -120,6 +121,7 @@ public struct MainView: View {
         self._sketchCornerTreatmentDistanceMeters = State(initialValue: 0.001)
         self._sketchCornerTreatment = State(initialValue: .fillet)
         self._sketchCurveJoinContinuity = State(initialValue: .g0)
+        self._sketchVertexAlignmentContinuity = State(initialValue: .g0)
         self._regionOffsetDistanceMeters = State(initialValue: 0.001)
         self._regionOffsetGapFill = State(initialValue: .round)
         self._regionOffsetCommandState = State(initialValue: .inactive)
@@ -5509,6 +5511,101 @@ public struct MainView: View {
         }
     }
 
+    @ViewBuilder
+    private func sketchVertexAlignmentControls(_ entity: InspectorSketchEntity) -> some View {
+        inspectorControlRow("Align") {
+            Picker("", selection: $sketchVertexAlignmentContinuity) {
+                ForEach(SketchVertexAlignmentContinuity.allCases, id: \.self) { continuity in
+                    Text(sketchVertexAlignmentContinuityTitle(continuity)).tag(continuity)
+                }
+            }
+            .labelsHidden()
+            .pickerStyle(.segmented)
+            .accessibilityIdentifier("InspectorCurve.\(entity.entityKind).alignContinuity")
+        }
+        inspectorActionRow {
+            Button {
+                alignSelectedSketchVertex(entity)
+            } label: {
+                Label("Align", systemImage: "arrow.triangle.merge")
+            }
+            .disabled(selectedSketchVertexAlignmentReferenceTarget(for: entity) == nil)
+            .accessibilityIdentifier("InspectorCurve.\(entity.entityKind).alignVertex")
+        }
+    }
+
+    private func sketchVertexAlignmentContinuityTitle(_ continuity: SketchVertexAlignmentContinuity) -> String {
+        switch continuity {
+        case .g0:
+            "G0"
+        case .g1:
+            "G1"
+        case .g2:
+            "G2"
+        }
+    }
+
+    private func selectedSketchVertexAlignmentReferenceTarget(
+        for entity: InspectorSketchEntity
+    ) -> SelectionTarget? {
+        guard isSketchVertexAlignmentTarget(entity.target, entityKind: entity.entityKind) else {
+            return nil
+        }
+        let referenceTargets = session.selection.selectedTargets.filter { target in
+            guard target != entity.target,
+                  let entityKind = sketchEntityKind(for: target) else {
+                return false
+            }
+            return isSketchVertexAlignmentTarget(target, entityKind: entityKind)
+        }
+        guard referenceTargets.count == 1 else {
+            return nil
+        }
+        return referenceTargets.first
+    }
+
+    private func isSketchVertexAlignmentTarget(
+        _ target: SelectionTarget,
+        entityKind: String
+    ) -> Bool {
+        guard case .sketchEntity(let componentID) = target.component else {
+            return false
+        }
+        if let reference = componentID.sketchPointHandleReference {
+            switch (entityKind, reference.handle) {
+            case ("point", .point),
+                 ("line", .lineStart),
+                 ("line", .lineEnd),
+                 ("arc", .arcStart),
+                 ("arc", .arcEnd):
+                return true
+            default:
+                return false
+            }
+        }
+        if let reference = componentID.sketchControlPointReference,
+           entityKind == "spline",
+           let controlPointCount = sketchSplineControlPointCount(for: target),
+           reference.entityID == componentID.sketchEntityReference?.entityID {
+            return reference.index == 0 || reference.index == controlPointCount - 1
+        }
+        return false
+    }
+
+    private func sketchSplineControlPointCount(for target: SelectionTarget) -> Int? {
+        guard case .sketchEntity(let componentID) = target.component,
+              let reference = componentID.sketchEntityReference,
+              let sceneNode = session.document.productMetadata.sceneNodes[target.sceneNodeID],
+              sceneNode.reference?.kind == .sketch,
+              sceneNode.reference?.featureID == reference.featureID,
+              let feature = session.document.cadDocument.designGraph.nodes[reference.featureID],
+              case .sketch(let sketch) = feature.operation,
+              case .spline(let spline) = sketch.entities[reference.entityID] else {
+            return nil
+        }
+        return spline.controlPoints.count
+    }
+
     private func canApplySketchCornerTreatment(_ entity: InspectorSketchEntity) -> Bool {
         guard case .sketchEntity(let componentID) = entity.target.component,
               entity.entityKind == "line" || entity.entityKind == "arc" else {
@@ -7314,6 +7411,7 @@ public struct MainView: View {
                 handle: .point,
                 accessibilityPrefix: "InspectorCurve.point"
             )
+            sketchVertexAlignmentControls(entity)
         case "line":
             if let length = sketchLineLength(for: entity) {
                 lengthControl(
@@ -7351,6 +7449,7 @@ public struct MainView: View {
                 handle: .lineEnd,
                 accessibilityPrefix: "InspectorCurve.lineEnd"
             )
+            sketchVertexAlignmentControls(entity)
             sketchVertexOffsetControls(entity)
             lengthControl(
                 "Slot Width",
@@ -7449,6 +7548,7 @@ public struct MainView: View {
                 handle: .circleCenter,
                 accessibilityPrefix: "InspectorCurve.circleCenter"
             )
+            sketchVertexAlignmentControls(entity)
             if let cutter = selectedSketchEntityCutterTarget(excluding: entity.target) {
                 inspectorActionRow {
                     Button {
@@ -7525,6 +7625,7 @@ public struct MainView: View {
                 handle: .arcEnd,
                 accessibilityPrefix: "InspectorCurve.arcEnd"
             )
+            sketchVertexAlignmentControls(entity)
             sketchVertexOffsetControls(entity)
             numericControl(
                 "Split",
@@ -7535,6 +7636,7 @@ public struct MainView: View {
             } unitLabel: {
                 "t"
             }
+            sketchVertexAlignmentControls(entity)
             sketchCurveExtendControls(entity)
             sketchCurveJoinControls(entity)
             inspectorActionRow {
@@ -9277,6 +9379,24 @@ public struct MainView: View {
             return
         }
         let result = session.unjoinSketchCurve(target: entity.target)
+        if result?.diagnostics.isEmpty == false {
+            isPreviewExpanded = true
+        }
+    }
+
+    private func alignSelectedSketchVertex(
+        _ entity: InspectorSketchEntity
+    ) {
+        guard let referenceTarget = selectedSketchVertexAlignmentReferenceTarget(for: entity) else {
+            return
+        }
+        let result = session.alignSketchVertex(
+            target: entity.target,
+            reference: referenceTarget,
+            options: SketchVertexAlignmentOptions(
+                continuity: sketchVertexAlignmentContinuity
+            )
+        )
         if result?.diagnostics.isEmpty == false {
             isPreviewExpanded = true
         }
