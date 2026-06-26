@@ -413,6 +413,74 @@ import Testing
     )
 }
 
+@Test func selectionDimensionApplyUpdatesStandalonePointToWholeSourceLineDistance() async throws {
+    var document = DesignDocument.empty()
+    let pointFeatureID = try createStandalonePointSketch(
+        in: &document,
+        name: "Editable Point",
+        plane: .xy,
+        point: SketchPoint(
+            x: .length(10.0, .millimeter),
+            y: .length(5.0, .millimeter)
+        )
+    )
+    let lineFeatureID = try document.createLineSketch(
+        name: "Reference Line",
+        plane: .xy,
+        start: SketchPoint(
+            x: .length(0.0, .millimeter),
+            y: .length(0.0, .millimeter)
+        ),
+        end: SketchPoint(
+            x: .length(0.0, .millimeter),
+            y: .length(10.0, .millimeter)
+        )
+    )
+    let pointTarget = try standalonePointTarget(in: document, featureID: pointFeatureID)
+    let lineTarget = try lineCurveTarget(in: document, featureID: lineFeatureID)
+    let session = EditorSession(document: document)
+    let addResult = try session.execute(
+        .addSelectionDimension(
+            name: "Point To Line Distance",
+            kind: .distance,
+            first: pointTarget,
+            second: lineTarget,
+            target: .length(10.0, .millimeter)
+        )
+    )
+    let dimensionID = try #require(addResult.addedSelectionDimensionID)
+
+    _ = try session.execute(
+        .setSelectionDimensionTarget(
+            id: dimensionID,
+            target: .length(6.0, .millimeter)
+        )
+    )
+    let applyResult = try session.execute(.applySelectionDimensionTarget(id: dimensionID))
+    let appliedEvaluation = try SelectionDimensionService().evaluate(
+        document: session.document,
+        dimensionID: dimensionID
+    )
+    let appliedMeasurement = try #require(appliedEvaluation.measurements.first)
+    let movedPoint = try standalonePoint(in: session.document, featureID: pointFeatureID)
+
+    #expect(applyResult.commandName == "applySelectionDimensionTarget")
+    #expect(applyResult.didMutate)
+    #expect(abs(movedPoint.x - 0.006) <= 1.0e-12)
+    #expect(abs(movedPoint.y - 0.005) <= 1.0e-12)
+    assertLengthQuantity(appliedMeasurement.measured, equals: 0.006)
+    assertLengthQuantity(appliedMeasurement.target, equals: 0.006)
+    #expect(abs(appliedMeasurement.residual.value) <= 1.0e-12)
+    #expect(try appliedMeasurement.isSatisfied())
+    guard case .sketchPoint(let pointReference) = appliedMeasurement.dimension.first,
+          case .curve(.whole(let lineReference)) = appliedMeasurement.dimension.second else {
+        Issue.record("Expected point-to-whole-line selection dimension references")
+        return
+    }
+    #expect(pointReference.featureID == pointFeatureID)
+    #expect(lineReference.featureID == lineFeatureID)
+}
+
 @Test func selectionDimensionApplyMovesSecondStandalonePointWhenFirstIsFixed() async throws {
     var document = DesignDocument.empty()
     let fixedFeatureID = try createStandalonePointSketch(

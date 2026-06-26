@@ -223,6 +223,23 @@ public extension DesignDocument {
                 try cadDocument.validate()
                 try productMetadata.validate(against: cadDocument, objectRegistry: objectRegistry)
                 return cadDocument.selectionDimensions[updatedDimensionIndex]
+            case .sourcePointLineDistance(let context):
+                try applySourcePointLineDistanceDimension(
+                    id: id,
+                    dimension: dimension,
+                    context: context,
+                    objectRegistry: objectRegistry
+                )
+                guard let updatedDimensionIndex = cadDocument.selectionDimensions.firstIndex(where: { $0.id == id }) else {
+                    throw EditorError(
+                        code: .referenceUnresolved,
+                        message: "Selection dimension application lost the source selection dimension."
+                    )
+                }
+
+                try cadDocument.validate()
+                try productMetadata.validate(against: cadDocument, objectRegistry: objectRegistry)
+                return cadDocument.selectionDimensions[updatedDimensionIndex]
             }
         } catch let error as EditorError {
             self = originalDocument
@@ -282,6 +299,9 @@ public extension DesignDocument {
     ) throws -> SelectionDimensionSourceApplication {
         switch dimension.kind {
         case .distance:
+            if let pointLineContext = try sourcePointLineDistanceDimensionContextIfPresent(for: dimension) {
+                return .sourcePointLineDistance(pointLineContext)
+            }
             switch (dimension.first, dimension.second) {
             case (.curve(.parameter(let firstParameter)), .curve(.parameter(let secondParameter))):
                 if try isSourceLineParameterPair(firstParameter, secondParameter) {
@@ -418,6 +438,75 @@ public extension DesignDocument {
         try refreshSourcePointDistanceReferences(id: id, context: context)
     }
 
+    private mutating func applySourcePointLineDistanceDimension(
+        id: SelectionDimensionID,
+        dimension: SelectionDimension,
+        context: SelectionDimensionSourcePointLineDistanceContext,
+        objectRegistry: ObjectTypeRegistry
+    ) throws {
+        let targetDistance = try resolvedLength(
+            dimension.target,
+            owner: "Selection point-line distance application target"
+        )
+        guard targetDistance >= 0.0 else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Selection point-line distance application target must not be negative."
+            )
+        }
+
+        let point = try sourcePoint(context.point)
+        let line = try sourceLineDistanceGeometry(context.line)
+        let projection = try projectedPointOnSourceLine(point, line: line)
+        let currentDistance = hypot(projection.deltaX, projection.deltaY)
+        if abs(currentDistance - targetDistance) <= selectionDimensionEndpointTolerance {
+            try refreshSourcePointLineDistanceReferences(id: id, context: context)
+            return
+        }
+        guard try isSourcePointAnchored(context.point) == false else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Selection point-line distance application requires a non-fixed source point."
+            )
+        }
+
+        let unitNormal: Point2D
+        if currentDistance > selectionDimensionEndpointTolerance {
+            unitNormal = Point2D(
+                x: projection.deltaX / currentDistance,
+                y: projection.deltaY / currentDistance
+            )
+        } else {
+            unitNormal = Point2D(
+                x: -projection.lineUnitY,
+                y: projection.lineUnitX
+            )
+        }
+        let targetPoint = Point2D(
+            x: projection.closest.x + unitNormal.x * targetDistance,
+            y: projection.closest.y + unitNormal.y * targetDistance
+        )
+        let deltaX = targetPoint.x - point.x
+        let deltaY = targetPoint.y - point.y
+        guard deltaX.isFinite, deltaY.isFinite else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Selection point-line distance application produced a non-finite movement delta."
+            )
+        }
+
+        if abs(deltaX) > selectionDimensionEndpointTolerance ||
+            abs(deltaY) > selectionDimensionEndpointTolerance {
+            try moveSourcePoint(
+                context.point,
+                deltaX: .length(deltaX, .meter),
+                deltaY: .length(deltaY, .meter),
+                objectRegistry: objectRegistry
+            )
+        }
+        try refreshSourcePointLineDistanceReferences(id: id, context: context)
+    }
+
     private mutating func refreshSourcePointDistanceReferences(
         id: SelectionDimensionID,
         context: SelectionDimensionSourcePointDistanceContext
@@ -430,6 +519,27 @@ public extension DesignDocument {
         }
         cadDocument.selectionDimensions[updatedDimensionIndex].first = try selectionReference(point: context.first)
         cadDocument.selectionDimensions[updatedDimensionIndex].second = try selectionReference(point: context.second)
+    }
+
+    private mutating func refreshSourcePointLineDistanceReferences(
+        id: SelectionDimensionID,
+        context: SelectionDimensionSourcePointLineDistanceContext
+    ) throws {
+        guard let updatedDimensionIndex = cadDocument.selectionDimensions.firstIndex(where: { $0.id == id }) else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "Selection point-line distance application lost the source selection dimension."
+            )
+        }
+        let pointReference = try selectionReference(point: context.point)
+        let lineReference = SelectionReference.curve(.whole(context.line.curve))
+        if context.pointIsFirst {
+            cadDocument.selectionDimensions[updatedDimensionIndex].first = pointReference
+            cadDocument.selectionDimensions[updatedDimensionIndex].second = lineReference
+        } else {
+            cadDocument.selectionDimensions[updatedDimensionIndex].first = lineReference
+            cadDocument.selectionDimensions[updatedDimensionIndex].second = pointReference
+        }
     }
 
     private mutating func applySourceArcEndpointPointDistanceDimension(
@@ -695,6 +805,65 @@ public extension DesignDocument {
             target: try sourceSketchEntityTarget(featureID: featureID, entityID: entityID),
             firstRole: firstRole,
             secondRole: secondRole
+        )
+    }
+
+    private func sourcePointLineDistanceDimensionContextIfPresent(
+        for dimension: SelectionDimension
+    ) throws -> SelectionDimensionSourcePointLineDistanceContext? {
+        switch (dimension.first, dimension.second) {
+        case (.curve(.whole(let lineCurve)), let pointReference):
+            guard try isSourceLineWholeCurve(lineCurve) else {
+                return nil
+            }
+            return try sourcePointLineDistanceDimensionContext(
+                pointReference: pointReference,
+                lineCurve: lineCurve,
+                pointIsFirst: false
+            )
+        case (let pointReference, .curve(.whole(let lineCurve))):
+            guard try isSourceLineWholeCurve(lineCurve) else {
+                return nil
+            }
+            return try sourcePointLineDistanceDimensionContext(
+                pointReference: pointReference,
+                lineCurve: lineCurve,
+                pointIsFirst: true
+            )
+        default:
+            return nil
+        }
+    }
+
+    private func sourcePointLineDistanceDimensionContext(
+        pointReference: SelectionReference,
+        lineCurve: CurveOutputReference,
+        pointIsFirst: Bool
+    ) throws -> SelectionDimensionSourcePointLineDistanceContext {
+        let point = try sourcePointContext(reference: pointReference)
+        guard isArcEndpointRole(point.role) == false else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Selection point-line distance application currently does not support source arc endpoint points."
+            )
+        }
+        let line = try sourceLineDistanceContext(curve: lineCurve)
+        guard point.plane == line.plane else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Selection point-line distance application requires the source point and line to share the same sketch plane."
+            )
+        }
+        guard point.featureID != line.featureID || point.entityID != line.entityID else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Selection point-line distance application requires the source point to be separate from the measured source line."
+            )
+        }
+        return SelectionDimensionSourcePointLineDistanceContext(
+            point: point,
+            line: line,
+            pointIsFirst: pointIsFirst
         )
     }
 
@@ -1011,6 +1180,49 @@ public extension DesignDocument {
         return false
     }
 
+    private func isSourceLineWholeCurve(_ curve: CurveOutputReference) throws -> Bool {
+        let entityID = try sourceCurveEntityID(
+            featureID: curve.featureID,
+            curveIndex: curve.curveIndex
+        )
+        guard let feature = cadDocument.designGraph.nodes[curve.featureID],
+              case let .sketch(sketch) = feature.operation,
+              let entity = sketch.entities[entityID] else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "Selection point-line distance application could not resolve the source curve entity."
+            )
+        }
+        if case .line = entity {
+            return true
+        }
+        return false
+    }
+
+    private func sourceLineDistanceContext(
+        curve: CurveOutputReference
+    ) throws -> SelectionDimensionSourceLineDistanceLineContext {
+        let featureID = curve.featureID
+        let entityID = try sourceCurveEntityID(
+            featureID: featureID,
+            curveIndex: curve.curveIndex
+        )
+        guard let feature = cadDocument.designGraph.nodes[featureID],
+              case let .sketch(sketch) = feature.operation,
+              case .line = sketch.entities[entityID] else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Selection point-line distance application currently supports whole source line references only."
+            )
+        }
+        return SelectionDimensionSourceLineDistanceLineContext(
+            featureID: featureID,
+            entityID: entityID,
+            curve: curve,
+            plane: sketch.plane
+        )
+    }
+
     private func isSourceCircularRadiusDistance(
         center: CurveCenterReference,
         radialReference: CurveSubobjectReference
@@ -1171,6 +1383,64 @@ public extension DesignDocument {
         let dx = end.x - start.x
         let dy = end.y - start.y
         return (dx * dx + dy * dy).squareRoot()
+    }
+
+    private func sourceLineDistanceGeometry(
+        _ context: SelectionDimensionSourceLineDistanceLineContext
+    ) throws -> SelectionDimensionSourceLineDistanceGeometry {
+        guard let feature = cadDocument.designGraph.nodes[context.featureID],
+              case let .sketch(sketch) = feature.operation,
+              case let .line(line) = sketch.entities[context.entityID] else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "Selection point-line distance application requires an existing source line."
+            )
+        }
+        let start = try resolvedPoint(line.start, owner: "Selection point-line distance line start")
+        let end = try resolvedPoint(line.end, owner: "Selection point-line distance line end")
+        let dx = end.x - start.x
+        let dy = end.y - start.y
+        let length = hypot(dx, dy)
+        guard length > selectionDimensionEndpointTolerance else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Selection point-line distance application requires a non-degenerate source line."
+            )
+        }
+        return SelectionDimensionSourceLineDistanceGeometry(
+            start: start,
+            end: end,
+            length: length
+        )
+    }
+
+    private func projectedPointOnSourceLine(
+        _ point: Point2D,
+        line: SelectionDimensionSourceLineDistanceGeometry
+    ) throws -> SelectionDimensionSourceLineProjection {
+        let unitX = (line.end.x - line.start.x) / line.length
+        let unitY = (line.end.y - line.start.y) / line.length
+        let rawParameter = (point.x - line.start.x) * unitX + (point.y - line.start.y) * unitY
+        let clampedParameter = min(max(rawParameter, 0.0), line.length)
+        let closest = Point2D(
+            x: line.start.x + unitX * clampedParameter,
+            y: line.start.y + unitY * clampedParameter
+        )
+        let deltaX = point.x - closest.x
+        let deltaY = point.y - closest.y
+        guard deltaX.isFinite, deltaY.isFinite else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Selection point-line distance application produced a non-finite projection."
+            )
+        }
+        return SelectionDimensionSourceLineProjection(
+            closest: closest,
+            deltaX: deltaX,
+            deltaY: deltaY,
+            lineUnitX: unitX,
+            lineUnitY: unitY
+        )
     }
 
     private func sourceLineAngleContext(
@@ -1687,6 +1957,7 @@ private enum SelectionDimensionSourceApplication: Sendable {
     case lineRelativeAngle(SelectionDimensionSourceLineAngleContext)
     case arcSpanAngle(SelectionDimensionSourceArcAngleContext)
     case sourcePointDistance(SelectionDimensionSourcePointDistanceContext)
+    case sourcePointLineDistance(SelectionDimensionSourcePointLineDistanceContext)
 }
 
 private struct SelectionDimensionSourceLineContext: Sendable {
@@ -1726,6 +1997,33 @@ private struct SelectionDimensionSourceArcAngleContext: Sendable {
 private struct SelectionDimensionSourcePointDistanceContext: Sendable {
     var first: SelectionDimensionSourcePointContext
     var second: SelectionDimensionSourcePointContext
+}
+
+private struct SelectionDimensionSourcePointLineDistanceContext: Sendable {
+    var point: SelectionDimensionSourcePointContext
+    var line: SelectionDimensionSourceLineDistanceLineContext
+    var pointIsFirst: Bool
+}
+
+private struct SelectionDimensionSourceLineDistanceLineContext: Sendable {
+    var featureID: FeatureID
+    var entityID: SketchEntityID
+    var curve: CurveOutputReference
+    var plane: SketchPlane
+}
+
+private struct SelectionDimensionSourceLineDistanceGeometry: Sendable {
+    var start: Point2D
+    var end: Point2D
+    var length: Double
+}
+
+private struct SelectionDimensionSourceLineProjection: Sendable {
+    var closest: Point2D
+    var deltaX: Double
+    var deltaY: Double
+    var lineUnitX: Double
+    var lineUnitY: Double
 }
 
 private struct SelectionDimensionSourcePointMovePlan: Sendable {
