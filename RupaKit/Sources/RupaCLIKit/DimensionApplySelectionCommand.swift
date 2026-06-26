@@ -4,7 +4,7 @@ import RupaCore
 public struct DimensionApplySelectionCommand: ParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "apply-selection",
-        abstract: "Apply one persistent selection dimension target to supported source length, radius, or angle geometry by SelectionDimensionID."
+        abstract: "Apply one persistent selection dimension target to supported source length, point-distance, radius, or angle geometry by SelectionDimensionID."
     )
 
     @OptionGroup

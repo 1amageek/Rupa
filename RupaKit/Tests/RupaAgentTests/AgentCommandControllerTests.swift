@@ -4030,6 +4030,116 @@ private func rawAgentProtocolJSON(_ source: String) -> Data {
 }
 
 @MainActor
+@Test func agentAppliesSelectionDimensionTargetToSourcePointDistance() async throws {
+    var document = DesignDocument.empty()
+    let anchorFeatureID = try document.createLineSketch(
+        name: "Agent Anchor Line",
+        plane: .xy,
+        start: SketchPoint(
+            x: .length(0.0, .millimeter),
+            y: .length(0.0, .millimeter)
+        ),
+        end: SketchPoint(
+            x: .length(0.0, .millimeter),
+            y: .length(10.0, .millimeter)
+        )
+    )
+    let editableFeatureID = try document.createLineSketch(
+        name: "Agent Editable Point Line",
+        plane: .xy,
+        start: SketchPoint(
+            x: .length(10.0, .millimeter),
+            y: .length(0.0, .millimeter)
+        ),
+        end: SketchPoint(
+            x: .length(10.0, .millimeter),
+            y: .length(10.0, .millimeter)
+        )
+    )
+    let anchorTargets = try agentLineEndpointTargets(in: document, featureID: anchorFeatureID)
+    let editableTargets = try agentLineEndpointTargets(in: document, featureID: editableFeatureID)
+    let server = AgentCommandController()
+    let sessionID = UUID()
+    let session = EditorSession(document: document)
+    server.register(session: session, id: sessionID)
+
+    let addResponse = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .addSelectionDimension(
+                name: "Agent Point Distance",
+                kind: .distance,
+                first: editableTargets.start,
+                second: anchorTargets.start,
+                target: .length(10.0, .millimeter)
+            ),
+            expectedGeneration: DocumentGeneration(0)
+        )
+    )
+    guard case .command(let addResult) = addResponse else {
+        #expect(Bool(false))
+        return
+    }
+    let dimensionID = try #require(addResult.addedSelectionDimensionID)
+
+    let setResponse = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .setSelectionDimensionTarget(
+                id: dimensionID,
+                target: .length(6.0, .millimeter)
+            ),
+            expectedGeneration: DocumentGeneration(1)
+        )
+    )
+    guard case .command(let setResult) = setResponse else {
+        #expect(Bool(false))
+        return
+    }
+    #expect(setResult.commandName == "setSelectionDimensionTarget")
+    #expect(setResult.didMutate)
+
+    let applyResponse = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .applySelectionDimensionTarget(id: dimensionID),
+            expectedGeneration: DocumentGeneration(2)
+        )
+    )
+    guard case .command(let applyResult) = applyResponse else {
+        #expect(Bool(false))
+        return
+    }
+    #expect(applyResult.commandName == "applySelectionDimensionTarget")
+    #expect(applyResult.didMutate)
+
+    let evaluationResponse = server.handle(
+        .selectionDimensionEvaluation(
+            sessionID: sessionID,
+            dimensionID: dimensionID,
+            expectedGeneration: DocumentGeneration(3)
+        )
+    )
+    guard case .selectionDimensionEvaluation(let evaluation) = evaluationResponse else {
+        #expect(Bool(false))
+        return
+    }
+    let measurement = try #require(evaluation.measurements.first)
+    let editableEndpoints = try agentLineEndpoints(
+        in: session.document,
+        featureID: editableFeatureID
+    )
+
+    #expect(abs(editableEndpoints.start.x - 0.006) <= 1.0e-12)
+    #expect(abs(editableEndpoints.start.y) <= 1.0e-12)
+    #expect(abs(editableEndpoints.end.x - 0.010) <= 1.0e-12)
+    #expect(abs(editableEndpoints.end.y - 0.010) <= 1.0e-12)
+    #expect(measurement.measured == .length(0.006, unit: .meter))
+    #expect(measurement.target == .length(0.006, unit: .meter))
+    #expect(abs(measurement.residual.value) <= 1.0e-12)
+}
+
+@MainActor
 @Test func agentAppliesSelectionDimensionTargetToCircleRadius() async throws {
     var document = DesignDocument.empty()
     let featureID = try document.createCircleSketch(
@@ -14523,15 +14633,24 @@ private func agentLineAngle(
     in document: DesignDocument,
     featureID: FeatureID
 ) throws -> Double {
+    let endpoints = try agentLineEndpoints(in: document, featureID: featureID)
+    return atan2(endpoints.end.y - endpoints.start.y, endpoints.end.x - endpoints.start.x)
+}
+
+private func agentLineEndpoints(
+    in document: DesignDocument,
+    featureID: FeatureID
+) throws -> (start: Point2D, end: Point2D) {
     guard let feature = document.cadDocument.designGraph.nodes[featureID],
           case let .sketch(sketch) = feature.operation,
           case let .line(line) = sketch.entities.values.first else {
         Issue.record("Expected one source line")
-        return 0.0
+        return (Point2D(x: 0.0, y: 0.0), Point2D(x: 0.0, y: 0.0))
     }
-    let start = try agentPoint(line.start, in: document)
-    let end = try agentPoint(line.end, in: document)
-    return atan2(end.y - start.y, end.x - start.x)
+    return (
+        start: try agentPoint(line.start, in: document),
+        end: try agentPoint(line.end, in: document)
+    )
 }
 
 private func assertAgentAngleQuantity(

@@ -131,6 +131,134 @@ import Testing
     #expect(session.generation == DocumentGeneration(5))
 }
 
+@Test func selectionDimensionApplyUpdatesSourcePointDistanceBetweenLineEndpoints() async throws {
+    var document = DesignDocument.empty()
+    let anchorFeatureID = try document.createLineSketch(
+        name: "Anchor Line",
+        plane: .xy,
+        start: SketchPoint(
+            x: .length(0.0, .millimeter),
+            y: .length(0.0, .millimeter)
+        ),
+        end: SketchPoint(
+            x: .length(0.0, .millimeter),
+            y: .length(10.0, .millimeter)
+        )
+    )
+    let editableFeatureID = try document.createLineSketch(
+        name: "Editable Line",
+        plane: .xy,
+        start: SketchPoint(
+            x: .length(10.0, .millimeter),
+            y: .length(0.0, .millimeter)
+        ),
+        end: SketchPoint(
+            x: .length(10.0, .millimeter),
+            y: .length(10.0, .millimeter)
+        )
+    )
+    let anchorTargets = try lineEndpointTargets(in: document, featureID: anchorFeatureID)
+    let editableTargets = try lineEndpointTargets(in: document, featureID: editableFeatureID)
+    let session = EditorSession(document: document)
+    let addResult = try session.execute(
+        .addSelectionDimension(
+            name: "Point Distance",
+            kind: .distance,
+            first: editableTargets.start,
+            second: anchorTargets.start,
+            target: .length(10.0, .millimeter)
+        )
+    )
+    let dimensionID = try #require(addResult.addedSelectionDimensionID)
+
+    _ = try session.execute(
+        .setSelectionDimensionTarget(
+            id: dimensionID,
+            target: .length(6.0, .millimeter)
+        )
+    )
+    let applyResult = try session.execute(.applySelectionDimensionTarget(id: dimensionID))
+    let appliedEvaluation = try SelectionDimensionService().evaluate(
+        document: session.document,
+        dimensionID: dimensionID
+    )
+    let appliedMeasurement = try #require(appliedEvaluation.measurements.first)
+    let editableEndpoints = try lineEndpoints(
+        in: session.document,
+        featureID: editableFeatureID
+    )
+
+    #expect(applyResult.commandName == "applySelectionDimensionTarget")
+    #expect(applyResult.didMutate)
+    #expect(abs(editableEndpoints.start.x - 0.006) <= 1.0e-12)
+    #expect(abs(editableEndpoints.start.y) <= 1.0e-12)
+    #expect(abs(editableEndpoints.end.x - 0.010) <= 1.0e-12)
+    #expect(abs(editableEndpoints.end.y - 0.010) <= 1.0e-12)
+    #expect(appliedMeasurement.measured == .length(0.006, unit: .meter))
+    #expect(appliedMeasurement.target == .length(0.006, unit: .meter))
+    #expect(abs(appliedMeasurement.residual.value) <= 1.0e-12)
+    #expect(try appliedMeasurement.isSatisfied())
+    guard case .curve(.parameter(let firstParameter)) = appliedMeasurement.dimension.first,
+          case .curve(.parameter(let secondParameter)) = appliedMeasurement.dimension.second else {
+        Issue.record("Expected point distance endpoint parameter references")
+        return
+    }
+    #expect(firstParameter.curve.featureID == editableFeatureID)
+    #expect(secondParameter.curve.featureID == anchorFeatureID)
+    #expect(abs(firstParameter.parameter) <= 1.0e-12)
+    #expect(abs(secondParameter.parameter) <= 1.0e-12)
+}
+
+@Test func selectionDimensionApplyRejectsMovingArcEndpointPointDistance() async throws {
+    var document = DesignDocument.empty()
+    let arcFeatureID = try document.createArcSketch(
+        name: "Arc Endpoint",
+        plane: .xy,
+        center: SketchPoint(
+            x: .length(0.0, .millimeter),
+            y: .length(0.0, .millimeter)
+        ),
+        radius: .length(6.0, .millimeter),
+        startAngle: .angle(0.0, .degree),
+        endAngle: .angle(90.0, .degree)
+    )
+    let anchorFeatureID = try document.createLineSketch(
+        name: "Anchor Line",
+        plane: .xy,
+        start: SketchPoint(
+            x: .length(0.0, .millimeter),
+            y: .length(0.0, .millimeter)
+        ),
+        end: SketchPoint(
+            x: .length(0.0, .millimeter),
+            y: .length(10.0, .millimeter)
+        )
+    )
+    let arcTargets = try arcEndpointTargets(in: document, featureID: arcFeatureID)
+    let anchorTargets = try lineEndpointTargets(in: document, featureID: anchorFeatureID)
+    let session = EditorSession(document: document)
+    let addResult = try session.execute(
+        .addSelectionDimension(
+            name: "Arc Endpoint Distance",
+            kind: .distance,
+            first: arcTargets.start,
+            second: anchorTargets.start,
+            target: .length(6.0, .millimeter)
+        )
+    )
+    let dimensionID = try #require(addResult.addedSelectionDimensionID)
+
+    _ = try session.execute(
+        .setSelectionDimensionTarget(
+            id: dimensionID,
+            target: .length(4.0, .millimeter)
+        )
+    )
+    #expect(throws: EditorError.self) {
+        try session.execute(.applySelectionDimensionTarget(id: dimensionID))
+    }
+}
+
 @Test func selectionDimensionApplyUpdatesCircleRadiusFromCenterReference() async throws {
     var document = DesignDocument.empty()
     let featureID = try document.createCircleSketch(
@@ -653,17 +781,26 @@ private func lineLength(
     in document: DesignDocument,
     featureID: FeatureID
 ) throws -> Double {
+    let endpoints = try lineEndpoints(in: document, featureID: featureID)
+    let dx = endpoints.end.x - endpoints.start.x
+    let dy = endpoints.end.y - endpoints.start.y
+    return (dx * dx + dy * dy).squareRoot()
+}
+
+private func lineEndpoints(
+    in document: DesignDocument,
+    featureID: FeatureID
+) throws -> (start: Point2D, end: Point2D) {
     guard let feature = document.cadDocument.designGraph.nodes[featureID],
           case let .sketch(sketch) = feature.operation,
           case let .line(line) = sketch.entities.values.first else {
         Issue.record("Expected one source line")
-        return 0.0
+        return (Point2D(x: 0.0, y: 0.0), Point2D(x: 0.0, y: 0.0))
     }
-    let start = try point(line.start, in: document)
-    let end = try point(line.end, in: document)
-    let dx = end.x - start.x
-    let dy = end.y - start.y
-    return (dx * dx + dy * dy).squareRoot()
+    return (
+        start: try point(line.start, in: document),
+        end: try point(line.end, in: document)
+    )
 }
 
 private func lineAngle(
