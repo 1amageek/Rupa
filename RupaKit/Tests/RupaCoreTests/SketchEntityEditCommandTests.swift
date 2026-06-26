@@ -7322,7 +7322,7 @@ import Testing
 }
 
 @MainActor
-@Test func cutSketchCurveRejectsArcCutterExtensionWithoutMutation() async throws {
+@Test func cutSketchCurveSupportsExtendedArcCutterAsBaseCircle() async throws {
     let session = EditorSession()
     _ = try session.execute(
         .createLineSketch(
@@ -7357,25 +7357,34 @@ import Testing
     let target = try #require(targetLine.selectionTarget())
     let cutter = try #require(cutterArc.selectionTarget())
 
-    do {
-        _ = try session.execute(
-            .cutSketchCurve(
-                target: target,
-                cutter: cutter,
-                options: CutCurveOptions(extendsCutter: true)
-            )
+    let result = try session.execute(
+        .cutSketchCurve(
+            target: target,
+            cutter: cutter,
+            options: CutCurveOptions(extendsCutter: true)
         )
-        Issue.record("Cut Curve must reject arc cutter extension until arc extension is represented.")
-    } catch let error as EditorError {
-        #expect(error.code == .commandInvalid)
-        #expect(error.message == "Cut Curve arc cutter extension is not represented in the current source subset.")
-    } catch {
-        Issue.record("Cut Curve must throw EditorError.")
-    }
+    )
 
-    let after = try SketchEntitySummaryService().summarize(document: session.document)
-    #expect(session.generation == DocumentGeneration(2))
-    #expect(after.entries.count == before.entries.count)
+    let updatedSummary = try SketchEntitySummaryService().summarize(document: session.document)
+    let targetSegments = updatedSummary.entries.filter { $0.sourceFeatureName == "Cut Arc Extend Target" }
+    let cutterSegments = updatedSummary.entries.filter { $0.sourceFeatureName == "Cut Arc Extend Cutter" }
+    #expect(result.commandName == "cutSketchCurve")
+    #expect(result.didMutate)
+    #expect(result.generation == DocumentGeneration(3))
+    #expect(targetSegments.count == 3)
+    #expect(cutterSegments.count == 1)
+    #expect(targetSegments.contains { entry in
+        abs((entry.start?.x ?? -1.0) - 0.0) < 1.0e-12 &&
+            abs((entry.end?.x ?? -1.0) - 0.003) < 1.0e-12
+    })
+    #expect(targetSegments.contains { entry in
+        abs((entry.start?.x ?? -1.0) - 0.003) < 1.0e-12 &&
+            abs((entry.end?.x ?? -1.0) - 0.007) < 1.0e-12
+    })
+    #expect(targetSegments.contains { entry in
+        abs((entry.start?.x ?? -1.0) - 0.007) < 1.0e-12 &&
+            abs((entry.end?.x ?? -1.0) - 0.010) < 1.0e-12
+    })
     #expect(session.evaluationStatus == .valid)
 }
 

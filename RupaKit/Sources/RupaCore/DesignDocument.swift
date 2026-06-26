@@ -12445,17 +12445,11 @@ public struct DesignDocument: Identifiable, Sendable {
                 restrictToArc: nil
             )
         case .arc(let arc):
-            guard extendsCutter == false else {
-                throw EditorError(
-                    code: .commandInvalid,
-                    message: "Cut Curve arc cutter extension is not represented in the current source subset."
-                )
-            }
             let cutter = try resolvedCutCurveArc(arc, owner: "Cut Curve cutter")
             return cutFractionsForLineCircleIntersection(
                 target: target,
                 circle: cutter.circle,
-                restrictToArc: cutter
+                restrictToArc: extendsCutter ? nil : cutter
             )
         case .spline(let spline):
             guard extendsCutter == false else {
@@ -12516,18 +12510,12 @@ public struct DesignDocument: Identifiable, Sendable {
                 )
             }
         case .arc(let arc):
-            guard extendsCutter == false else {
-                throw EditorError(
-                    code: .commandInvalid,
-                    message: "Cut Curve arc cutter extension is not represented in the current source subset."
-                )
-            }
             let cutter = try resolvedCutCurveArc(arc, owner: "Cut Curve cutter")
             return cutCurveSplineSampleSegments(samples).flatMap { segment in
                 cutFractionsForSplineSegmentCircleIntersection(
                     segment: segment,
                     circle: cutter.circle,
-                    restrictToArc: cutter
+                    restrictToArc: extendsCutter ? nil : cutter
                 )
             }
         case .spline(let spline):
@@ -12707,17 +12695,11 @@ public struct DesignDocument: Identifiable, Sendable {
                 restrictToArc: nil
             )
         case .arc(let arc):
-            guard extendsCutter == false else {
-                throw EditorError(
-                    code: .commandInvalid,
-                    message: "Cut Curve arc cutter extension is not represented in the current source subset."
-                )
-            }
             let cutter = try resolvedCutCurveArc(arc, owner: "Cut Curve cutter")
             angles = try cutAnglesForCircleCircleIntersection(
                 target: target,
                 circle: cutter.circle,
-                restrictToArc: cutter
+                restrictToArc: extendsCutter ? nil : cutter
             )
         case .spline(let spline):
             guard extendsCutter == false else {
@@ -12777,17 +12759,11 @@ public struct DesignDocument: Identifiable, Sendable {
                 restrictToArc: nil
             )
         case .arc(let arc):
-            guard extendsCutter == false else {
-                throw EditorError(
-                    code: .commandInvalid,
-                    message: "Cut Curve arc cutter extension is not represented in the current source subset."
-                )
-            }
             let cutter = try resolvedCutCurveArc(arc, owner: "Cut Curve cutter")
             return try cutFractionsForArcCircleIntersection(
                 target: target,
                 circle: cutter.circle,
-                restrictToArc: cutter
+                restrictToArc: extendsCutter ? nil : cutter
             )
         case .spline(let spline):
             guard extendsCutter == false else {
