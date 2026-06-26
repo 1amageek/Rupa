@@ -203,6 +203,58 @@ import Testing
     #expect(try appliedMeasurement.isSatisfied())
 }
 
+@Test func selectionDimensionApplyUpdatesArcRadiusFromCenterReference() async throws {
+    var document = DesignDocument.empty()
+    let featureID = try document.createArcSketch(
+        name: "Measured Arc",
+        plane: .xy,
+        center: SketchPoint(
+            x: .length(0.0, .millimeter),
+            y: .length(0.0, .millimeter)
+        ),
+        radius: .length(6.0, .millimeter),
+        startAngle: .angle(0.0, .degree),
+        endAngle: .angle(90.0, .degree)
+    )
+    let targets = try arcCenterAndCurveTargets(in: document, featureID: featureID)
+    let session = EditorSession(document: document)
+    let addResult = try session.execute(
+        .addSelectionDimension(
+            name: "Arc Radius",
+            kind: .distance,
+            first: targets.center,
+            second: targets.curve,
+            target: .length(6.0, .millimeter)
+        )
+    )
+    let dimensionID = try #require(addResult.addedSelectionDimensionID)
+
+    _ = try session.execute(
+        .setSelectionDimensionTarget(
+            id: dimensionID,
+            target: .length(4.0, .millimeter)
+        )
+    )
+    let applyResult = try session.execute(.applySelectionDimensionTarget(id: dimensionID))
+    let appliedEvaluation = try SelectionDimensionService().evaluate(
+        document: session.document,
+        dimensionID: dimensionID
+    )
+    let appliedMeasurement = try #require(appliedEvaluation.measurements.first)
+    let radius = try arcRadius(
+        in: session.document,
+        featureID: featureID
+    )
+
+    #expect(applyResult.commandName == "applySelectionDimensionTarget")
+    #expect(applyResult.didMutate)
+    #expect(abs(radius - 0.004) <= 1.0e-12)
+    #expect(appliedMeasurement.measured == .length(0.004, unit: .meter))
+    #expect(appliedMeasurement.target == .length(0.004, unit: .meter))
+    #expect(abs(appliedMeasurement.residual.value) <= 1.0e-12)
+    #expect(try appliedMeasurement.isSatisfied())
+}
+
 @Test func selectionDimensionCommandMeasuresGeneratedFacePairDistance() async throws {
     var document = DesignDocument.empty()
     try document.createExtrudedRectangle(
@@ -325,6 +377,36 @@ private func circleCenterAndCurveTargets(
     )
 }
 
+private func arcCenterAndCurveTargets(
+    in document: DesignDocument,
+    featureID: FeatureID
+) throws -> (
+    sceneNodeID: SceneNodeID,
+    center: SelectionTarget,
+    curve: SelectionTarget
+) {
+    let summary = try SketchEntitySummaryService().summarize(document: document)
+    let entry = try #require(summary.entries.first {
+        $0.sourceFeatureID == featureID.description && $0.entityKind == "arc"
+    })
+    let sceneNodeIDString = try #require(entry.sceneNodeID)
+    let sceneNodeUUID = try #require(UUID(uuidString: sceneNodeIDString))
+    let sceneNodeID = SceneNodeID(sceneNodeUUID)
+    let centerHandle = try #require(entry.pointHandles.first { $0.handle == .arcCenter })
+    let curveComponentID = try #require(entry.selectionComponentID)
+    return (
+        sceneNodeID: sceneNodeID,
+        center: SelectionTarget(
+            sceneNodeID: sceneNodeID,
+            component: .sketchEntity(SelectionComponentID(rawValue: centerHandle.selectionComponentID))
+        ),
+        curve: SelectionTarget(
+            sceneNodeID: sceneNodeID,
+            component: .sketchEntity(SelectionComponentID(rawValue: curveComponentID))
+        )
+    )
+}
+
 private func opposingFaceTargets(
     in document: DesignDocument
 ) throws -> (first: SelectionTarget, second: SelectionTarget) {
@@ -370,6 +452,19 @@ private func circleRadius(
         return 0.0
     }
     return try document.cadDocument.parameters.resolvedValue(for: circle.radius).value
+}
+
+private func arcRadius(
+    in document: DesignDocument,
+    featureID: FeatureID
+) throws -> Double {
+    guard let feature = document.cadDocument.designGraph.nodes[featureID],
+          case let .sketch(sketch) = feature.operation,
+          case let .arc(arc) = sketch.entities.values.first else {
+        Issue.record("Expected one source arc")
+        return 0.0
+    }
+    return try document.cadDocument.parameters.resolvedValue(for: arc.radius).value
 }
 
 private func point(
