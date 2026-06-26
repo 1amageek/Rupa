@@ -84,6 +84,7 @@ import SwiftCAD
     #expect(capabilities.contains("setCylinderDimensions"))
     #expect(capabilities.contains("addSelectionDimension"))
     #expect(capabilities.contains("setSelectionDimensionTarget"))
+    #expect(capabilities.contains("applySelectionDimensionTarget"))
     #expect(capabilities.contains("removeSelectionDimension"))
     #expect(capabilities.contains("objectDimensionSummary"))
     #expect(capabilities.contains("sketchDimensionSummary"))
@@ -165,6 +166,7 @@ import SwiftCAD
     let cylinderDimensions = try #require(descriptors.first { $0.name == "setCylinderDimensions" })
     let selectionDimension = try #require(descriptors.first { $0.name == "addSelectionDimension" })
     let selectionDimensionTarget = try #require(descriptors.first { $0.name == "setSelectionDimensionTarget" })
+    let selectionDimensionApply = try #require(descriptors.first { $0.name == "applySelectionDimensionTarget" })
     let selectionDimensionRemoval = try #require(descriptors.first { $0.name == "removeSelectionDimension" })
     let objectDimensionSummary = try #require(descriptors.first { $0.name == "objectDimensionSummary" })
     let sketchDimensionSummary = try #require(descriptors.first { $0.name == "sketchDimensionSummary" })
@@ -676,6 +678,15 @@ import SwiftCAD
     #expect(selectionDimensionTarget.targets == [.document, .face, .edge, .vertex, .sketchEntity, .sketchPointHandle])
     #expect(selectionDimensionTarget.summary.contains("SelectionDimensionID"))
     #expect(selectionDimensionTarget.failureMode.contains("target quantity kinds"))
+
+    #expect(selectionDimensionApply.category == .sourceCurveEditing)
+    #expect(selectionDimensionApply.mutatesDocument)
+    #expect(selectionDimensionApply.access == .automationCommand)
+    #expect(selectionDimensionApply.discovery.contains(.selectionDimensionEvaluation))
+    #expect(selectionDimensionApply.discovery.contains(.sketchEntitySummary))
+    #expect(selectionDimensionApply.targets == [.document, .sketchEntity, .sketchPointHandle])
+    #expect(selectionDimensionApply.summary.contains("SelectionDimensionID"))
+    #expect(selectionDimensionApply.failureMode.contains("source-line endpoint references"))
 
     #expect(selectionDimensionRemoval.category == .solid)
     #expect(selectionDimensionRemoval.mutatesDocument)
@@ -3967,11 +3978,44 @@ private func rawAgentProtocolJSON(_ source: String) -> Data {
     #expect(updatedMeasurement.target == .length(0.012, unit: .meter))
     #expect(abs(updatedMeasurement.residual.value - 0.004) <= 1.0e-12)
 
+    let applyResponse = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .applySelectionDimensionTarget(id: dimensionID),
+            expectedGeneration: DocumentGeneration(2)
+        )
+    )
+
+    guard case .command(let applyResult) = applyResponse else {
+        #expect(Bool(false))
+        return
+    }
+    #expect(applyResult.commandName == "applySelectionDimensionTarget")
+    #expect(applyResult.didMutate)
+    #expect(applyResult.generation == DocumentGeneration(3))
+
+    let appliedEvaluationResponse = server.handle(
+        .selectionDimensionEvaluation(
+            sessionID: sessionID,
+            dimensionID: dimensionID,
+            expectedGeneration: DocumentGeneration(3)
+        )
+    )
+
+    guard case .selectionDimensionEvaluation(let appliedEvaluation) = appliedEvaluationResponse else {
+        #expect(Bool(false))
+        return
+    }
+    let appliedMeasurement = try #require(appliedEvaluation.measurements.first)
+    #expect(appliedMeasurement.measured == .length(0.012, unit: .meter))
+    #expect(appliedMeasurement.target == .length(0.012, unit: .meter))
+    #expect(abs(appliedMeasurement.residual.value) <= 1.0e-12)
+
     let removeResponse = server.handle(
         .execute(
             sessionID: sessionID,
             command: .removeSelectionDimension(id: dimensionID),
-            expectedGeneration: DocumentGeneration(2)
+            expectedGeneration: DocumentGeneration(3)
         )
     )
 
@@ -3981,7 +4025,7 @@ private func rawAgentProtocolJSON(_ source: String) -> Data {
     }
     #expect(removeResult.commandName == "removeSelectionDimension")
     #expect(removeResult.didMutate)
-    #expect(removeResult.generation == DocumentGeneration(3))
+    #expect(removeResult.generation == DocumentGeneration(4))
     #expect(session.document.cadDocument.selectionDimensions.isEmpty)
 }
 

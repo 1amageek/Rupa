@@ -96,6 +96,24 @@ import Testing
     #expect(setResult.generation == DocumentGeneration(2))
     #expect(session.document.cadDocument.selectionDimensions.first?.target == .length(10.0, .millimeter))
 
+    let applyResult = try runner.execute(
+        .applySelectionDimensionTarget(id: dimensionID),
+        in: session
+    )
+    let appliedEvaluation = try SelectionDimensionService().evaluate(
+        document: session.document,
+        dimensionID: dimensionID
+    )
+    let appliedMeasurement = try #require(appliedEvaluation.measurements.first)
+
+    #expect(applyResult.message == "Selection dimension target applied.")
+    #expect(applyResult.commandName == "applySelectionDimensionTarget")
+    #expect(applyResult.didMutate)
+    #expect(applyResult.generation == DocumentGeneration(3))
+    #expect(appliedMeasurement.measured == .length(0.010, unit: .meter))
+    #expect(appliedMeasurement.target == .length(0.010, unit: .meter))
+    #expect(abs(appliedMeasurement.residual.value) <= 1.0e-12)
+
     let removeResult = try runner.execute(
         .removeSelectionDimension(id: dimensionID),
         in: session
@@ -104,7 +122,7 @@ import Testing
     #expect(removeResult.message == "Selection dimension removed.")
     #expect(removeResult.commandName == "removeSelectionDimension")
     #expect(removeResult.didMutate)
-    #expect(removeResult.generation == DocumentGeneration(3))
+    #expect(removeResult.generation == DocumentGeneration(4))
     #expect(session.document.cadDocument.selectionDimensions.isEmpty)
     #expect(session.document.productMetadata.measurements.isEmpty)
 }

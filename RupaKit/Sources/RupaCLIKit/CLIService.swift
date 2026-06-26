@@ -1961,6 +1961,27 @@ public struct CLIService {
         )
     }
 
+    public func applySelectionDimensionTarget(
+        target: CLIDocumentTarget,
+        id: SelectionDimensionID,
+        mode: CLIEditMode = .auto,
+        expectedGeneration: DocumentGeneration? = nil,
+        dryRun: Bool = false,
+        forceFileEdit: Bool = false,
+        client: AgentClientProtocol? = nil
+    ) throws -> CLIResponse {
+        try executeDocumentMutationCommand(
+            .applySelectionDimensionTarget(id: id),
+            target: target,
+            mode: mode,
+            expectedGeneration: expectedGeneration,
+            dryRun: dryRun,
+            forceFileEdit: forceFileEdit,
+            client: client,
+            missingTargetMessage: "Selection dimension mutation requires a document file path or live session ID."
+        )
+    }
+
     public func removeSelectionDimension(
         target: CLIDocumentTarget,
         id: SelectionDimensionID,

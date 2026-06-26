@@ -93,6 +93,7 @@ public enum AutomationCommand: Codable, Equatable, Sendable {
         id: SelectionDimensionID,
         target: CADExpression
     )
+    case applySelectionDimensionTarget(id: SelectionDimensionID)
     case removeSelectionDimension(id: SelectionDimensionID)
     case addSketchConstraint(featureID: FeatureID, constraint: SketchConstraint)
     case removeSketchConstraint(featureID: FeatureID, constraint: SketchConstraint)
@@ -439,6 +440,8 @@ public enum AutomationCommand: Codable, Equatable, Sendable {
                 id: id,
                 target: target
             )
+        case .applySelectionDimensionTarget(let id):
+            .applySelectionDimensionTarget(id: id)
         case .removeSelectionDimension(let id):
             .removeSelectionDimension(id: id)
         case .addSketchConstraint(let featureID, let constraint):

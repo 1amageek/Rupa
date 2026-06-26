@@ -3374,6 +3374,35 @@ struct CLISelectionDimensionCommandTests {
         #expect(setMeasurement.target == .length(0.008, unit: .meter))
         #expect(abs(setMeasurement.residual.value - 0.002) <= 1.0e-12)
 
+        let applyResult = try await runCLI([
+            "dimension",
+            "apply-selection",
+            documentURL.path,
+            "--dimension-id",
+            dimensionID.description,
+            "--mode",
+            "file",
+            "--json",
+        ])
+        let applyResponse = try JSONDecoder().decode(
+            CLIResponse.self,
+            from: applyResult.standardOutputData
+        )
+        let appliedLoaded = try DocumentFileService().load(from: documentURL)
+        let appliedEvaluation = try SelectionDimensionService().evaluate(
+            document: appliedLoaded,
+            dimensionID: dimensionID
+        )
+        let appliedMeasurement = try #require(appliedEvaluation.measurements.first)
+
+        #expect(applyResult.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: applyResult.standardError))
+        #expect(applyResponse.message == "Selection dimension target applied.")
+        #expect(applyResponse.saved)
+        #expect(!applyResponse.dirty)
+        #expect(appliedMeasurement.measured == .length(0.008, unit: .meter))
+        #expect(appliedMeasurement.target == .length(0.008, unit: .meter))
+        #expect(abs(appliedMeasurement.residual.value) <= 1.0e-12)
+
         let removeResult = try await runCLI([
             "dimension",
             "remove-selection",

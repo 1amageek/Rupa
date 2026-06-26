@@ -91,18 +91,44 @@ import Testing
     #expect(setMeasurement.target == .length(0.008, unit: .meter))
     #expect(abs(setMeasurement.residual.value - 0.002) <= 1.0e-12)
 
+    let applyResult = try session.execute(.applySelectionDimensionTarget(id: dimensionID))
+    let appliedEvaluation = try SelectionDimensionService().evaluate(
+        document: session.document,
+        dimensionID: dimensionID
+    )
+    let appliedMeasurement = try #require(appliedEvaluation.measurements.first)
+    let appliedLineLength = try lineLength(
+        in: session.document,
+        featureID: featureID
+    )
+    let appliedDimension = try #require(session.document.cadDocument.selectionDimensions.first)
+
+    #expect(applyResult.commandName == "applySelectionDimensionTarget")
+    #expect(applyResult.didMutate)
+    #expect(applyResult.generation == DocumentGeneration(3))
+    #expect(abs(appliedLineLength - 0.008) <= 1.0e-12)
+    #expect(appliedMeasurement.dimension.id == dimensionID)
+    #expect(appliedMeasurement.measured == .length(0.008, unit: .meter))
+    #expect(appliedMeasurement.target == .length(0.008, unit: .meter))
+    #expect(abs(appliedMeasurement.residual.value) <= 1.0e-12)
+    #expect(try appliedMeasurement.isSatisfied())
+    assertLineEndpointReferences(
+        appliedDimension,
+        expectedLength: 0.008
+    )
+
     let removeResult = try session.execute(.removeSelectionDimension(id: dimensionID))
 
     #expect(removeResult.commandName == "removeSelectionDimension")
     #expect(removeResult.didMutate)
-    #expect(removeResult.generation == DocumentGeneration(3))
+    #expect(removeResult.generation == DocumentGeneration(4))
     #expect(session.document.cadDocument.selectionDimensions.isEmpty)
     #expect(session.document.productMetadata.measurements.isEmpty)
     #expect(session.evaluationStatus == .valid)
 
     _ = try session.undo()
     #expect(session.document.cadDocument.selectionDimensions.map(\.id) == [dimensionID])
-    #expect(session.generation == DocumentGeneration(4))
+    #expect(session.generation == DocumentGeneration(5))
 }
 
 @Test func selectionDimensionCommandMeasuresGeneratedFacePairDistance() async throws {
@@ -212,4 +238,45 @@ private func opposingFaceTargets(
     let upperFace = try #require(faceEntries.max { $0.centerZ < $1.centerZ })
     #expect(upperFace.centerZ - lowerFace.centerZ > 0.0)
     return (lowerFace.target, upperFace.target)
+}
+
+private func lineLength(
+    in document: DesignDocument,
+    featureID: FeatureID
+) throws -> Double {
+    guard let feature = document.cadDocument.designGraph.nodes[featureID],
+          case let .sketch(sketch) = feature.operation,
+          case let .line(line) = sketch.entities.values.first else {
+        Issue.record("Expected one source line")
+        return 0.0
+    }
+    let start = try point(line.start, in: document)
+    let end = try point(line.end, in: document)
+    let dx = end.x - start.x
+    let dy = end.y - start.y
+    return (dx * dx + dy * dy).squareRoot()
+}
+
+private func point(
+    _ point: SketchPoint,
+    in document: DesignDocument
+) throws -> Point2D {
+    Point2D(
+        x: try document.cadDocument.parameters.resolvedValue(for: point.x).value,
+        y: try document.cadDocument.parameters.resolvedValue(for: point.y).value
+    )
+}
+
+private func assertLineEndpointReferences(
+    _ dimension: SelectionDimension,
+    expectedLength: Double
+) {
+    guard case .curve(.parameter(let first)) = dimension.first,
+          case .curve(.parameter(let second)) = dimension.second else {
+        Issue.record("Expected line endpoint parameter references")
+        return
+    }
+    let parameters = [first.parameter, second.parameter].sorted()
+    #expect(abs(parameters[0]) <= 1.0e-12)
+    #expect(abs(parameters[1] - expectedLength) <= 1.0e-12)
 }

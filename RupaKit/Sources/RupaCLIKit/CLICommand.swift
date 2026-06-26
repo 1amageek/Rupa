@@ -539,6 +539,7 @@ public struct DimensionCommand: ParsableCommand {
             DimensionObjectSummaryCommand.self,
             DimensionAddSelectionCommand.self,
             DimensionSetSelectionCommand.self,
+            DimensionApplySelectionCommand.self,
             DimensionRemoveSelectionCommand.self,
             DimensionSetSketchCommand.self,
             DimensionSetObjectCommand.self,

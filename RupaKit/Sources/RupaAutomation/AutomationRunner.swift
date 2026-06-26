@@ -530,6 +530,15 @@ public struct AutomationRunner {
                 didMutate: result.didMutate,
                 diagnostics: result.diagnostics
             )
+        case .applySelectionDimensionTarget(let id):
+            let result = try session.execute(.applySelectionDimensionTarget(id: id))
+            return AutomationResult(
+                message: "Selection dimension target applied.",
+                commandName: result.commandName,
+                generation: result.generation,
+                didMutate: result.didMutate,
+                diagnostics: result.diagnostics
+            )
         case .removeSelectionDimension(let id):
             let result = try session.execute(.removeSelectionDimension(id: id))
             return AutomationResult(

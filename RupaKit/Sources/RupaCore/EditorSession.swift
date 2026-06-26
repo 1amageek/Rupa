@@ -2492,6 +2492,13 @@ public final class EditorSession {
     }
 
     @discardableResult
+    public func applySelectionDimensionTarget(
+        id: SelectionDimensionID
+    ) -> CommandExecutionResult? {
+        perform(.applySelectionDimensionTarget(id: id))
+    }
+
+    @discardableResult
     public func removeSelectionDimension(
         id: SelectionDimensionID
     ) -> CommandExecutionResult? {

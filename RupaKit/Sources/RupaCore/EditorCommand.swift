@@ -130,6 +130,7 @@ public enum EditorCommand: Codable, Equatable, Sendable {
         id: SelectionDimensionID,
         target: CADExpression
     )
+    case applySelectionDimensionTarget(id: SelectionDimensionID)
     case removeSelectionDimension(id: SelectionDimensionID)
     case offsetCurve(
         target: SelectionTarget,
@@ -367,6 +368,8 @@ public enum EditorCommand: Codable, Equatable, Sendable {
             "addSelectionDimension"
         case .setSelectionDimensionTarget:
             "setSelectionDimensionTarget"
+        case .applySelectionDimensionTarget:
+            "applySelectionDimensionTarget"
         case .removeSelectionDimension:
             "removeSelectionDimension"
         case .offsetCurve:
@@ -496,6 +499,7 @@ public enum EditorCommand: Codable, Equatable, Sendable {
              .setObjectDimension,
              .addSelectionDimension,
              .setSelectionDimensionTarget,
+             .applySelectionDimensionTarget,
              .removeSelectionDimension,
              .offsetCurve,
              .offsetRegions,
