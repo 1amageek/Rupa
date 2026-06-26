@@ -6697,6 +6697,68 @@ import Testing
 }
 
 @MainActor
+@Test func cutSketchCurveSplitsTargetLineAtSplineCutterIntersection() async throws {
+    let session = EditorSession()
+    _ = try session.execute(
+        .createLineSketch(
+            name: "Cut Line Spline Target",
+            plane: .xy,
+            start: SketchPoint(
+                x: .length(0.0, .millimeter),
+                y: .length(0.0, .millimeter)
+            ),
+            end: SketchPoint(
+                x: .length(10.0, .millimeter),
+                y: .length(0.0, .millimeter)
+            )
+        )
+    )
+    _ = try session.execute(
+        .createSplineSketch(
+            name: "Cut Line Spline Cutter",
+            plane: .xy,
+            spline: SketchSpline(controlPoints: [
+                SketchPoint(x: .length(5.0, .millimeter), y: .length(-2.0, .millimeter)),
+                SketchPoint(x: .length(5.0, .millimeter), y: .length(-2.0 / 3.0, .millimeter)),
+                SketchPoint(x: .length(5.0, .millimeter), y: .length(2.0 / 3.0, .millimeter)),
+                SketchPoint(x: .length(5.0, .millimeter), y: .length(2.0, .millimeter)),
+            ])
+        )
+    )
+    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let targetLine = try #require(before.entries.first { $0.sourceFeatureName == "Cut Line Spline Target" })
+    let cutterSpline = try #require(before.entries.first { $0.sourceFeatureName == "Cut Line Spline Cutter" })
+    let target = try #require(targetLine.selectionTarget())
+    let cutter = try #require(cutterSpline.selectionTarget())
+
+    let result = try session.execute(
+        .cutSketchCurve(
+            target: target,
+            cutter: cutter,
+            options: CutCurveOptions()
+        )
+    )
+
+    let updatedSummary = try SketchEntitySummaryService().summarize(document: session.document)
+    let targetSegments = updatedSummary.entries.filter { $0.sourceFeatureName == "Cut Line Spline Target" }
+    let cutterSegments = updatedSummary.entries.filter { $0.sourceFeatureName == "Cut Line Spline Cutter" }
+    #expect(result.commandName == "cutSketchCurve")
+    #expect(result.didMutate)
+    #expect(result.generation == DocumentGeneration(3))
+    #expect(targetSegments.count == 2)
+    #expect(cutterSegments.count == 1)
+    #expect(targetSegments.contains { entry in
+        abs((entry.start?.x ?? -1.0) - 0.0) < 1.0e-12 &&
+            abs((entry.end?.x ?? -1.0) - 0.005) < 1.0e-12
+    })
+    #expect(targetSegments.contains { entry in
+        abs((entry.start?.x ?? -1.0) - 0.005) < 1.0e-12 &&
+            abs((entry.end?.x ?? -1.0) - 0.010) < 1.0e-12
+    })
+    #expect(session.evaluationStatus == .valid)
+}
+
+@MainActor
 @Test func cutSketchCurveSplitsTargetSplineAtLineCutterIntersection() async throws {
     let session = EditorSession()
     _ = try session.execute(
@@ -6807,6 +6869,61 @@ import Testing
 }
 
 @MainActor
+@Test func cutSketchCurveSplitsTargetSplineAtSplineCutterIntersection() async throws {
+    let session = EditorSession()
+    _ = try session.execute(
+        .createSplineSketch(
+            name: "Cut Spline Spline Target",
+            plane: .xy,
+            spline: SketchSpline(controlPoints: [
+                SketchPoint(x: .length(0.0, .millimeter), y: .length(0.0, .millimeter)),
+                SketchPoint(x: .length(10.0 / 3.0, .millimeter), y: .length(0.0, .millimeter)),
+                SketchPoint(x: .length(20.0 / 3.0, .millimeter), y: .length(0.0, .millimeter)),
+                SketchPoint(x: .length(10.0, .millimeter), y: .length(0.0, .millimeter)),
+            ])
+        )
+    )
+    _ = try session.execute(
+        .createSplineSketch(
+            name: "Cut Spline Spline Cutter",
+            plane: .xy,
+            spline: SketchSpline(controlPoints: [
+                SketchPoint(x: .length(5.0, .millimeter), y: .length(-2.0, .millimeter)),
+                SketchPoint(x: .length(5.0, .millimeter), y: .length(-2.0 / 3.0, .millimeter)),
+                SketchPoint(x: .length(5.0, .millimeter), y: .length(2.0 / 3.0, .millimeter)),
+                SketchPoint(x: .length(5.0, .millimeter), y: .length(2.0, .millimeter)),
+            ])
+        )
+    )
+    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let targetSpline = try #require(before.entries.first { $0.sourceFeatureName == "Cut Spline Spline Target" })
+    let cutterSpline = try #require(before.entries.first { $0.sourceFeatureName == "Cut Spline Spline Cutter" })
+    let target = try #require(targetSpline.selectionTarget())
+    let cutter = try #require(cutterSpline.selectionTarget())
+
+    let result = try session.execute(
+        .cutSketchCurve(
+            target: target,
+            cutter: cutter,
+            options: CutCurveOptions()
+        )
+    )
+
+    let updatedSummary = try SketchEntitySummaryService().summarize(document: session.document)
+    let targetSegments = updatedSummary.entries.filter { $0.sourceFeatureName == "Cut Spline Spline Target" }
+    let cutterSegments = updatedSummary.entries.filter { $0.sourceFeatureName == "Cut Spline Spline Cutter" }
+    #expect(result.commandName == "cutSketchCurve")
+    #expect(result.didMutate)
+    #expect(result.generation == DocumentGeneration(3))
+    #expect(targetSegments.count == 2)
+    #expect(targetSegments.allSatisfy { $0.entityKind == "spline" })
+    #expect(cutterSegments.count == 1)
+    #expect(targetSegments.contains { splineSegmentMatches($0, startX: 0.0, startY: 0.0, endX: 0.005, endY: 0.0) })
+    #expect(targetSegments.contains { splineSegmentMatches($0, startX: 0.005, startY: 0.0, endX: 0.010, endY: 0.0) })
+    #expect(session.evaluationStatus == .valid)
+}
+
+@MainActor
 @Test func cutSketchCurveSplitsTargetArcAtLineCutterIntersection() async throws {
     let session = EditorSession()
     _ = try session.execute(
@@ -6853,6 +6970,61 @@ import Testing
     let updatedSummary = try SketchEntitySummaryService().summarize(document: session.document)
     let targetSegments = updatedSummary.entries.filter { $0.sourceFeatureName == "Cut Arc Target" }
     let cutterSegments = updatedSummary.entries.filter { $0.sourceFeatureName == "Cut Arc Line Cutter" }
+    #expect(result.commandName == "cutSketchCurve")
+    #expect(result.didMutate)
+    #expect(result.generation == DocumentGeneration(3))
+    #expect(targetSegments.count == 2)
+    #expect(cutterSegments.count == 1)
+    #expect(targetSegments.contains { arcMatches($0, startAngle: 0.0, endAngle: Double.pi / 2.0) })
+    #expect(targetSegments.contains { arcMatches($0, startAngle: Double.pi / 2.0, endAngle: Double.pi) })
+    #expect(session.evaluationStatus == .valid)
+}
+
+@MainActor
+@Test func cutSketchCurveSplitsTargetArcAtSplineCutterIntersection() async throws {
+    let session = EditorSession()
+    _ = try session.execute(
+        .createArcSketch(
+            name: "Cut Arc Spline Target",
+            plane: .xy,
+            center: SketchPoint(
+                x: .length(0.0, .millimeter),
+                y: .length(0.0, .millimeter)
+            ),
+            radius: .length(5.0, .millimeter),
+            startAngle: .angle(0.0, .radian),
+            endAngle: .angle(Double.pi, .radian)
+        )
+    )
+    _ = try session.execute(
+        .createSplineSketch(
+            name: "Cut Arc Spline Cutter",
+            plane: .xy,
+            spline: SketchSpline(controlPoints: [
+                SketchPoint(x: .length(0.0, .millimeter), y: .length(-6.0, .millimeter)),
+                SketchPoint(x: .length(0.0, .millimeter), y: .length(-2.0, .millimeter)),
+                SketchPoint(x: .length(0.0, .millimeter), y: .length(2.0, .millimeter)),
+                SketchPoint(x: .length(0.0, .millimeter), y: .length(6.0, .millimeter)),
+            ])
+        )
+    )
+    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let targetArc = try #require(before.entries.first { $0.sourceFeatureName == "Cut Arc Spline Target" })
+    let cutterSpline = try #require(before.entries.first { $0.sourceFeatureName == "Cut Arc Spline Cutter" })
+    let target = try #require(targetArc.selectionTarget())
+    let cutter = try #require(cutterSpline.selectionTarget())
+
+    let result = try session.execute(
+        .cutSketchCurve(
+            target: target,
+            cutter: cutter,
+            options: CutCurveOptions()
+        )
+    )
+
+    let updatedSummary = try SketchEntitySummaryService().summarize(document: session.document)
+    let targetSegments = updatedSummary.entries.filter { $0.sourceFeatureName == "Cut Arc Spline Target" }
+    let cutterSegments = updatedSummary.entries.filter { $0.sourceFeatureName == "Cut Arc Spline Cutter" }
     #expect(result.commandName == "cutSketchCurve")
     #expect(result.didMutate)
     #expect(result.generation == DocumentGeneration(3))
@@ -6917,6 +7089,64 @@ import Testing
     #expect(targetSegments.contains { arcMatches($0, startAngle: 0.0, endAngle: firstCutAngle) })
     #expect(targetSegments.contains { arcMatches($0, startAngle: firstCutAngle, endAngle: secondCutAngle) })
     #expect(targetSegments.contains { arcMatches($0, startAngle: secondCutAngle, endAngle: Double.pi) })
+    #expect(session.evaluationStatus == .valid)
+}
+
+@MainActor
+@Test func cutSketchCurveSplitsTargetCircleAtSplineCutterIntersections() async throws {
+    let session = EditorSession()
+    _ = try session.execute(
+        .createCircleSketch(
+            name: "Cut Circle Spline Target",
+            plane: .xy,
+            center: SketchPoint(
+                x: .length(0.0, .millimeter),
+                y: .length(0.0, .millimeter)
+            ),
+            radius: .length(5.0, .millimeter)
+        )
+    )
+    _ = try session.execute(
+        .createSplineSketch(
+            name: "Cut Circle Spline Cutter",
+            plane: .xy,
+            spline: SketchSpline(controlPoints: [
+                SketchPoint(x: .length(0.0, .millimeter), y: .length(-6.0, .millimeter)),
+                SketchPoint(x: .length(0.0, .millimeter), y: .length(-2.0, .millimeter)),
+                SketchPoint(x: .length(0.0, .millimeter), y: .length(2.0, .millimeter)),
+                SketchPoint(x: .length(0.0, .millimeter), y: .length(6.0, .millimeter)),
+            ])
+        )
+    )
+    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let targetCircle = try #require(before.entries.first { $0.sourceFeatureName == "Cut Circle Spline Target" })
+    let cutterSpline = try #require(before.entries.first { $0.sourceFeatureName == "Cut Circle Spline Cutter" })
+    let target = try #require(targetCircle.selectionTarget())
+    let cutter = try #require(cutterSpline.selectionTarget())
+
+    let result = try session.execute(
+        .cutSketchCurve(
+            target: target,
+            cutter: cutter,
+            options: CutCurveOptions()
+        )
+    )
+
+    let updatedSummary = try SketchEntitySummaryService().summarize(document: session.document)
+    let targetSegments = updatedSummary.entries.filter { $0.sourceFeatureName == "Cut Circle Spline Target" }
+    let cutterSegments = updatedSummary.entries.filter { $0.sourceFeatureName == "Cut Circle Spline Cutter" }
+    #expect(result.commandName == "cutSketchCurve")
+    #expect(result.didMutate)
+    #expect(result.generation == DocumentGeneration(3))
+    #expect(targetSegments.count == 2)
+    #expect(targetSegments.allSatisfy { $0.entityKind == "arc" })
+    #expect(cutterSegments.count == 1)
+    #expect(targetSegments.contains {
+        arcMatches($0, startAngle: Double.pi / 2.0, endAngle: Double.pi * 1.5)
+    })
+    #expect(targetSegments.contains {
+        arcMatches($0, startAngle: Double.pi * 1.5, endAngle: Double.pi / 2.0)
+    })
     #expect(session.evaluationStatus == .valid)
 }
 

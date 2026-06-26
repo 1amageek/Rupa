@@ -943,12 +943,12 @@ public final class AgentCommandController: AgentClientProtocol {
         capability(
             "cutSketchCurve",
             category: .sourceCurveEditing,
-            summary: "Cut Curve for the current source curve subset: cut a target source line, source arc, sampled open cubic Bezier spline, or unconstrained source circle at its intersections with a distinct source line, circle, or arc cutter, optionally extending a line cutter.",
+            summary: "Cut Curve for the current source curve subset: cut a target source line, source arc, sampled open cubic Bezier spline, or unconstrained source circle at its intersections with a distinct source line, circle, arc, or sampled open cubic Bezier spline cutter, optionally extending a line cutter.",
             access: .automationCommand,
             mutatesDocument: true,
             discovery: [.sketchEntitySummary],
             targets: [.sketchEntity],
-            failureMode: "Rejects non-line/non-arc/non-spline/non-circle targets, closed spline targets, constrained or dimensioned circle targets, non-line/circle/arc cutters, same-curve target/cutter pairs, different sketch planes, parallel or endpoint-only intersections, tangent circle-target cuts with fewer than two distinct intersections, line cutter misses without extendsCutter, coincident circular curve intersections, unsupported arc-cutter extension, screen-space direction requests, unsupported constraints inherited from Split Segment, and stale generations before mutation."
+            failureMode: "Rejects non-line/non-arc/non-spline/non-circle targets, closed spline targets, constrained or dimensioned circle targets, non-line/circle/arc/spline cutters, closed spline cutters, same-curve target/cutter pairs, different sketch planes, parallel or endpoint-only intersections, tangent circle-target cuts with fewer than two distinct intersections, line cutter misses without extendsCutter, coincident circular curve intersections, unsupported arc-cutter extension, unsupported spline-cutter extension, screen-space direction requests, unsupported constraints inherited from Split Segment, and stale generations before mutation."
         ),
         capability(
             "extrudeProfile",
