@@ -5100,6 +5100,55 @@ import Testing
 }
 
 @MainActor
+@Test func setSketchEntityDimensionReTrimsExtrudeProfileFilletArcRadius() async throws {
+    let session = EditorSession()
+    _ = try #require(session.createDefaultExtrudedRectangle())
+    let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let bodyNodeID = try #require(bodySceneNodeID(for: bodyFeatureID, in: session.document))
+    let baseSummary = try SketchEntitySummaryService().summarize(document: session.document)
+    let bounds = try #require(sketchSummaryBounds(baseSummary))
+    _ = try session.execute(
+        .filletBodyEdges(
+            targets: [
+                SelectionTarget(sceneNodeID: bodyNodeID, component: .edge(.bodyEdgeRightTop)),
+            ],
+            radius: .length(1.0, .millimeter),
+            segmentCount: 8
+        )
+    )
+    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let arc = try #require(before.entries.first {
+        $0.entityKind == "arc" &&
+            abs(($0.radius ?? -1.0) - 0.001) < 1.0e-12
+    })
+    let target = try #require(arc.selectionTarget())
+
+    let result = try session.execute(
+        .setSketchEntityDimension(
+            target: target,
+            kind: .radius,
+            value: .length(2.0, .millimeter)
+        )
+    )
+
+    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let updatedArc = try #require(after.entries.first { $0.entityID == arc.entityID })
+    let dimension = try #require(updatedArc.dimensions.first { $0.kind == "radius" })
+    #expect(result.commandName == "setSketchEntityDimension")
+    #expect(result.didMutate)
+    #expect(updatedArc.entityKind == "arc")
+    #expect(abs((updatedArc.radius ?? -1.0) - 0.002) < 1.0e-12)
+    #expect(abs((updatedArc.center?.x ?? -1.0) - (bounds.maxX - 0.002)) < 1.0e-12)
+    #expect(abs((updatedArc.center?.y ?? -1.0) - (bounds.maxY - 0.002)) < 1.0e-12)
+    #expect(abs(dimension.resolvedValue - 0.002) < 1.0e-12)
+    #expect(sketchLineEntries(after).count == 4)
+    #expect(after.entries.filter { $0.entityKind == "arc" }.count == 1)
+    #expect(containsSketchPoint(after, x: bounds.maxX, y: bounds.maxY - 0.002))
+    #expect(containsSketchPoint(after, x: bounds.maxX - 0.002, y: bounds.maxY))
+    #expect(session.evaluationStatus == .valid)
+}
+
+@MainActor
 @Test func setSketchEntityDimensionUpdatesArcSpanAndStoresAngleDimension() async throws {
     let session = EditorSession()
     _ = try session.execute(
@@ -6758,6 +6807,33 @@ private func sketchLineEntries(
     _ summary: SketchEntitySummaryResult
 ) -> [SketchEntitySummaryResult.EntityEntry] {
     summary.entries.filter { $0.entityKind == "line" }
+}
+
+private func sketchSummaryBounds(
+    _ summary: SketchEntitySummaryResult
+) -> (minX: Double, minY: Double, maxX: Double, maxY: Double)? {
+    var points: [SketchEntitySummaryResult.Point] = []
+    for entry in sketchLineEntries(summary) {
+        if let start = entry.start {
+            points.append(start)
+        }
+        if let end = entry.end {
+            points.append(end)
+        }
+    }
+    guard let first = points.first else {
+        return nil
+    }
+    return points.reduce(
+        (minX: first.x, minY: first.y, maxX: first.x, maxY: first.y)
+    ) { partial, point in
+        (
+            minX: min(partial.minX, point.x),
+            minY: min(partial.minY, point.y),
+            maxX: max(partial.maxX, point.x),
+            maxY: max(partial.maxY, point.y)
+        )
+    }
 }
 
 private func isHorizontalLine(

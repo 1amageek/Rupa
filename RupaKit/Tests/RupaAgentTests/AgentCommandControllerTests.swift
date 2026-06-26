@@ -5989,6 +5989,131 @@ private func rawAgentProtocolJSON(_ source: String) -> Data {
 }
 
 @MainActor
+@Test func agentEditsGeneratedFilletArcRadiusThroughSourceDimensionTarget() async throws {
+    let server = AgentCommandController()
+    let sessionID = UUID()
+    let session = EditorSession()
+    server.register(session: session, id: sessionID)
+
+    let createResponse = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .createExtrudedRectangle(
+                name: "Agent Editable Fillet Radius Box",
+                plane: .xy,
+                width: .length(24.0, .millimeter),
+                height: .length(12.0, .millimeter),
+                depth: .length(8.0, .millimeter),
+                direction: .normal
+            ),
+            expectedGeneration: DocumentGeneration(0)
+        )
+    )
+    guard case .command = createResponse else {
+        #expect(Bool(false))
+        return
+    }
+    let baseSummary = try SketchEntitySummaryService().summarize(document: session.document)
+    let bounds = try #require(agentSketchSummaryBounds(baseSummary))
+    let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let bodyNodeID = try #require(agentSceneNodeID(for: bodyFeatureID, in: session.document))
+    let filletResponse = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .filletBodyEdges(
+                targets: [
+                    SelectionTarget(sceneNodeID: bodyNodeID, component: .edge(.bodyEdgeRightTop)),
+                ],
+                radius: .length(1.0, .millimeter),
+                segmentCount: 8
+            ),
+            expectedGeneration: DocumentGeneration(1)
+        )
+    )
+    guard case .command = filletResponse else {
+        #expect(Bool(false))
+        return
+    }
+
+    let topologyResponse = server.handle(
+        .topologySummary(
+            sessionID: sessionID,
+            expectedGeneration: session.generation
+        )
+    )
+    guard case .topologySummary(let topology) = topologyResponse else {
+        #expect(Bool(false))
+        return
+    }
+    let filletArcEdge = try #require(topology.entries.first {
+        guard let radius = $0.curveRadius else {
+            return false
+        }
+        return $0.kind == .edge &&
+            $0.generatedRole == "edge" &&
+            $0.curveKind == "circle" &&
+            abs(radius - 0.001) < 1.0e-12
+    })
+    let edgeTarget = try #require(filletArcEdge.selectionTarget())
+    let dimensionResponse = server.handle(
+        .sketchDimensionSummary(
+            sessionID: sessionID,
+            targets: [edgeTarget],
+            expectedGeneration: session.generation
+        )
+    )
+    guard case .sketchDimensionSummary(let dimensionSummary) = dimensionResponse else {
+        #expect(Bool(false))
+        return
+    }
+    let editableRadius = try #require(dimensionSummary.entries.first { $0.isPrimaryForTarget })
+    #expect(editableRadius.kind == .radius)
+
+    let editResponse = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .setSketchEntityDimension(
+                target: editableRadius.target,
+                kind: .radius,
+                value: .length(2.0, .millimeter)
+            ),
+            expectedGeneration: session.generation
+        )
+    )
+
+    guard case .command(let result) = editResponse else {
+        Issue.record("Agent must return a command result.")
+        return
+    }
+    let updatedSummary = try SketchEntitySummaryService().summarize(document: session.document)
+    let updatedArc = try #require(updatedSummary.entries.first { $0.entityID == editableRadius.entityID })
+    let updatedDimension = try #require(updatedArc.dimensions.first { $0.kind == "radius" })
+    let updatedTopology = try TopologySummaryService().summarize(document: session.document)
+    let updatedGeneratedArc = try #require(updatedTopology.entries.first {
+        guard let radius = $0.curveRadius else {
+            return false
+        }
+        return $0.kind == .edge &&
+            $0.generatedRole == "edge" &&
+            $0.curveKind == "circle" &&
+            abs(radius - 0.002) < 1.0e-12
+    })
+
+    #expect(result.commandName == "setSketchEntityDimension")
+    #expect(result.didMutate)
+    #expect(result.generation == DocumentGeneration(3))
+    #expect(updatedArc.entityKind == "arc")
+    #expect(abs((updatedArc.radius ?? -1.0) - 0.002) < 1.0e-12)
+    #expect(abs((updatedArc.center?.x ?? -1.0) - (bounds.maxX - 0.002)) < 1.0e-12)
+    #expect(abs((updatedArc.center?.y ?? -1.0) - (bounds.maxY - 0.002)) < 1.0e-12)
+    #expect(abs(updatedDimension.resolvedValue - 0.002) < 1.0e-12)
+    #expect(agentContainsSketchPoint(updatedSummary, x: bounds.maxX, y: bounds.maxY - 0.002))
+    #expect(agentContainsSketchPoint(updatedSummary, x: bounds.maxX - 0.002, y: bounds.maxY))
+    #expect(abs((updatedGeneratedArc.curveRadius ?? -1.0) - 0.002) < 1.0e-12)
+    #expect(session.evaluationStatus == .valid)
+}
+
+@MainActor
 @Test func agentDispatchesPolySplineCommandAndExposesBSplineTopology() async throws {
     let server = AgentCommandController()
     let sessionID = UUID()
@@ -14456,6 +14581,33 @@ private func agentContainsSketchPoint(
         }
         return agentPointMatches(entry.start, x: x, y: y) ||
             agentPointMatches(entry.end, x: x, y: y)
+    }
+}
+
+private func agentSketchSummaryBounds(
+    _ summary: SketchEntitySummaryResult
+) -> (minX: Double, minY: Double, maxX: Double, maxY: Double)? {
+    var points: [SketchEntitySummaryResult.Point] = []
+    for entry in summary.entries where entry.entityKind == "line" {
+        if let start = entry.start {
+            points.append(start)
+        }
+        if let end = entry.end {
+            points.append(end)
+        }
+    }
+    guard let first = points.first else {
+        return nil
+    }
+    return points.reduce(
+        (minX: first.x, minY: first.y, maxX: first.x, maxY: first.y)
+    ) { partial, point in
+        (
+            minX: min(partial.minX, point.x),
+            minY: min(partial.minY, point.y),
+            maxX: max(partial.maxX, point.x),
+            maxY: max(partial.maxY, point.y)
+        )
     }
 }
 
