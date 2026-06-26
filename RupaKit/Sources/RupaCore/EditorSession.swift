@@ -2865,12 +2865,14 @@ public final class EditorSession {
     @discardableResult
     public func joinSketchCurves(
         target: SelectionTarget,
-        adjacentTarget: SelectionTarget
+        adjacentTarget: SelectionTarget,
+        continuity: SketchCurveJoinContinuity = .g0
     ) -> CommandExecutionResult? {
         perform(
             .joinSketchCurves(
                 target: target,
-                adjacentTarget: adjacentTarget
+                adjacentTarget: adjacentTarget,
+                continuity: continuity
             )
         )
     }

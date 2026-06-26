@@ -54,6 +54,7 @@ public struct MainView: View {
     @State private var sketchVertexOffsetDistanceMeters: Double
     @State private var sketchCornerTreatmentDistanceMeters: Double
     @State private var sketchCornerTreatment: SketchCornerTreatment
+    @State private var sketchCurveJoinContinuity: SketchCurveJoinContinuity
     @State private var regionOffsetDistanceMeters: Double
     @State private var regionOffsetGapFill: OffsetCurveGapFill
     @State private var regionOffsetCommandState: RegionOffsetCommandState
@@ -118,6 +119,7 @@ public struct MainView: View {
         self._sketchVertexOffsetDistanceMeters = State(initialValue: 0.001)
         self._sketchCornerTreatmentDistanceMeters = State(initialValue: 0.001)
         self._sketchCornerTreatment = State(initialValue: .fillet)
+        self._sketchCurveJoinContinuity = State(initialValue: .g0)
         self._regionOffsetDistanceMeters = State(initialValue: 0.001)
         self._regionOffsetGapFill = State(initialValue: .round)
         self._regionOffsetCommandState = State(initialValue: .inactive)
@@ -4766,6 +4768,7 @@ public struct MainView: View {
         var bridgeCurve: InspectorBridgeCurve?
         var joinedCurveSourceID: JoinedCurveSourceID?
         var joinedCurveGroupSourceID: JoinedCurveGroupSourceID?
+        var joinedCurveGroupContinuity: SketchCurveJoinContinuity?
         var start: SketchEntitySummaryResult.Point?
         var end: SketchEntitySummaryResult.Point?
         var center: SketchEntitySummaryResult.Point?
@@ -5466,6 +5469,16 @@ public struct MainView: View {
     @ViewBuilder
     private func sketchCurveJoinControls(_ entity: InspectorSketchEntity) -> some View {
         let joinState = sketchCurveJoinInspectorState(for: entity)
+        inspectorControlRow("Continuity") {
+            Picker("", selection: $sketchCurveJoinContinuity) {
+                ForEach([SketchCurveJoinContinuity.g0, .g1], id: \.self) { continuity in
+                    Text(sketchCurveJoinContinuityTitle(continuity)).tag(continuity)
+                }
+            }
+            .labelsHidden()
+            .pickerStyle(.segmented)
+            .accessibilityIdentifier("InspectorCurve.\(entity.entityKind).joinContinuity")
+        }
         inspectorActionRow {
             Button {
                 joinSelectedSketchCurves(entity)
@@ -5482,6 +5495,17 @@ public struct MainView: View {
             }
             .disabled(!joinState.canUnjoin)
             .accessibilityIdentifier("InspectorCurve.\(entity.entityKind).unjoin")
+        }
+    }
+
+    private func sketchCurveJoinContinuityTitle(_ continuity: SketchCurveJoinContinuity) -> String {
+        switch continuity {
+        case .g0:
+            "G0"
+        case .g1:
+            "G1"
+        case .g2:
+            "G2"
         }
     }
 
@@ -5559,9 +5583,9 @@ public struct MainView: View {
         let joinedCurveSourceID = session.document.productMetadata.joinedCurveSources.values.first { source in
             source.featureID == reference.featureID && source.retainedEntityID == reference.entityID
         }?.id
-        let joinedCurveGroupSourceID = session.document.productMetadata.joinedCurveGroupSources.values.first { source in
+        let joinedCurveGroupSource = session.document.productMetadata.joinedCurveGroupSources.values.first { source in
             source.featureID == reference.featureID && source.memberEntityIDs.contains(reference.entityID)
-        }?.id
+        }
 
         switch entity {
         case .point(let point):
@@ -5583,7 +5607,8 @@ public struct MainView: View {
                 entityKind: "line",
                 analysis: analysis,
                 joinedCurveSourceID: joinedCurveSourceID,
-                joinedCurveGroupSourceID: joinedCurveGroupSourceID,
+                joinedCurveGroupSourceID: joinedCurveGroupSource?.id,
+                joinedCurveGroupContinuity: joinedCurveGroupSource?.continuity,
                 start: try resolvedSketchPoint(line.start),
                 end: try resolvedSketchPoint(line.end)
             )
@@ -5610,7 +5635,8 @@ public struct MainView: View {
                 sourceFeatureName: feature.name,
                 entityKind: "arc",
                 analysis: analysis,
-                joinedCurveGroupSourceID: joinedCurveGroupSourceID,
+                joinedCurveGroupSourceID: joinedCurveGroupSource?.id,
+                joinedCurveGroupContinuity: joinedCurveGroupSource?.continuity,
                 start: pointOnSketchCircle(center: center, radius: radius, angle: startAngle),
                 end: pointOnSketchCircle(center: center, radius: radius, angle: endAngle),
                 center: center,
@@ -7005,6 +7031,9 @@ public struct MainView: View {
             }
             if let joinedCurveGroupSourceID = entity.joinedCurveGroupSourceID {
                 inspectorRow("Join Group", shortID(joinedCurveGroupSourceID))
+            }
+            if let continuity = entity.joinedCurveGroupContinuity {
+                inspectorRow("Join Continuity", sketchCurveJoinContinuityTitle(continuity))
             }
             if let center = entity.center {
                 inspectorRow("Center", sketchPointSummary(center))
@@ -9233,7 +9262,8 @@ public struct MainView: View {
         }
         let result = session.joinSketchCurves(
             target: entity.target,
-            adjacentTarget: adjacentTarget
+            adjacentTarget: adjacentTarget,
+            continuity: sketchCurveJoinContinuity
         )
         if result?.diagnostics.isEmpty == false {
             isPreviewExpanded = true

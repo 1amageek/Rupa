@@ -868,11 +868,12 @@ public final class CADDocumentStore {
             document = updatedDocument
             try commitMutation()
             evaluateCurrentDocument()
-        case .joinSketchCurves(let target, let adjacentTarget):
+        case .joinSketchCurves(let target, let adjacentTarget, let continuity):
             var updatedDocument = document
             try updatedDocument.joinSketchCurves(
                 target: target,
                 adjacentTarget: adjacentTarget,
+                continuity: continuity,
                 objectRegistry: objectRegistry
             )
             document = updatedDocument

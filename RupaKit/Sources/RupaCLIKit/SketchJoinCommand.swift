@@ -20,6 +20,9 @@ public struct SketchJoinCommand: ParsableCommand {
     @Option(help: "JSON file containing one adjacent SelectionTarget object.")
     public var adjacentTargetFile: String?
 
+    @Option(help: "Join continuity: g0, g1, or g2. G2 is reserved and rejected until the source continuity solver exists.")
+    public var continuity: String = SketchCurveJoinContinuity.g0.rawValue
+
     public init() {}
 
     public func run() throws {
@@ -27,7 +30,8 @@ public struct SketchJoinCommand: ParsableCommand {
             document: document,
             command: .joinSketchCurves(
                 target: selection.decodedTarget(),
-                adjacentTarget: try decodedAdjacentTarget()
+                adjacentTarget: try decodedAdjacentTarget(),
+                continuity: try decodedContinuity()
             )
         )
     }
@@ -38,5 +42,12 @@ public struct SketchJoinCommand: ParsableCommand {
             filePath: adjacentTargetFile,
             valueName: "Adjacent SelectionTarget"
         )
+    }
+
+    private func decodedContinuity() throws -> SketchCurveJoinContinuity {
+        guard let decoded = SketchCurveJoinContinuity(rawValue: continuity.lowercased()) else {
+            throw ValidationError("Join continuity must be one of: g0, g1, g2.")
+        }
+        return decoded
     }
 }

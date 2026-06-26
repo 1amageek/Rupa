@@ -6251,7 +6251,112 @@ import Testing
     #expect(joinedSource.memberEntityIDs == [setup.lineID, setup.arcID])
     #expect(joinedSource.firstJoinedReference == .lineEnd(setup.lineID))
     #expect(joinedSource.secondJoinedReference == .arcStart(setup.arcID))
+    #expect(joinedSource.continuity == .g0)
     #expect(session.evaluationStatus == .valid)
+}
+
+@MainActor
+@Test func joinSketchCurvesStoresValidatedG1LineArcContinuityAndAnalysisReadback() async throws {
+    let setup = try lineArcChainSlotSession(
+        name: "Join Source Line Arc G1",
+        includeCoincidentConstraint: false
+    )
+    let session = setup.session
+    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let line = try #require(before.entries.first { $0.entityID == setup.lineID.description })
+    let arc = try #require(before.entries.first { $0.entityID == setup.arcID.description })
+
+    let result = try session.execute(
+        .joinSketchCurves(
+            target: try #require(line.selectionTarget()),
+            adjacentTarget: try #require(arc.selectionTarget()),
+            continuity: .g1
+        )
+    )
+
+    let feature = try #require(session.document.cadDocument.designGraph.nodes[setup.featureID])
+    guard case .sketch(let sketch) = feature.operation else {
+        Issue.record("Join G1 line-arc feature must remain a sketch.")
+        return
+    }
+    let joinedSource = try #require(session.document.productMetadata.joinedCurveGroupSources.values.first)
+    let analysis = try CurveAnalysisService().analyze(document: session.document)
+    let continuityJoin = try #require(analysis.continuityJoins.first { join in
+        Set([join.firstEntityID, join.secondEntityID]) == Set([setup.lineID.description, setup.arcID.description])
+    })
+
+    #expect(result.commandName == "joinSketchCurves")
+    #expect(result.didMutate)
+    #expect(joinedSource.continuity == .g1)
+    #expect(sketch.constraints.contains(.coincident(.lineEnd(setup.lineID), .arcStart(setup.arcID))))
+    #expect(sketch.constraints.contains(.tangent(setup.lineID, setup.arcID)))
+    #expect(continuityJoin.requiredContinuity == .g1)
+    #expect(continuityJoin.continuity == .g1)
+    #expect(continuityJoin.constraintKinds.contains("joinedCurveGroup"))
+    #expect(session.evaluationStatus == .valid)
+}
+
+@MainActor
+@Test func joinSketchCurvesRejectsG1LineArcWhenEndpointsAreNotTangent() async throws {
+    var document = DesignDocument.empty()
+    let featureID = try document.createLineSketch(
+        name: "Reject G1 Join Non Tangent",
+        plane: .xy,
+        start: sketchTestPoint(x: 0.0, y: 0.0),
+        end: sketchTestPoint(x: 0.010, y: 0.0)
+    )
+    let lineID = SketchEntityID()
+    let arcID = SketchEntityID()
+    guard var feature = document.cadDocument.designGraph.nodes[featureID] else {
+        Issue.record("G1 rejection setup requires a sketch feature.")
+        return
+    }
+    feature.operation = .sketch(Sketch(
+        plane: .xy,
+        entities: [
+            lineID: .line(SketchLine(
+                start: sketchTestPoint(x: 0.0, y: 0.0),
+                end: sketchTestPoint(x: 0.010, y: 0.0)
+            )),
+            arcID: .arc(SketchArc(
+                center: sketchTestPoint(x: 0.015, y: 0.0),
+                radius: .length(0.005, .meter),
+                startAngle: .angle(Double.pi, .radian),
+                endAngle: .angle(Double.pi / 2.0, .radian)
+            )),
+        ],
+        constraints: []
+    ))
+    document.cadDocument.designGraph.nodes[featureID] = feature
+    document.cadDocument.designGraph.revision = document.cadDocument.designGraph.revision.advanced()
+    let session = EditorSession(document: document)
+    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let line = try #require(before.entries.first { $0.entityID == lineID.description })
+    let arc = try #require(before.entries.first { $0.entityID == arcID.description })
+    let beforeEvaluationStatus = session.evaluationStatus
+
+    do {
+        _ = try session.execute(
+            .joinSketchCurves(
+                target: try #require(line.selectionTarget()),
+                adjacentTarget: try #require(arc.selectionTarget()),
+                continuity: .g1
+            )
+        )
+        Issue.record("Join Curves must reject non-tangent G1 line-arc pairs.")
+    } catch let error as EditorError {
+        #expect(error.message == "Join Curves G1 continuity requires the selected endpoints to already be tangent.")
+    } catch {
+        Issue.record("Join Curves must throw EditorError.")
+    }
+    let rejectedFeature = try #require(session.document.cadDocument.designGraph.nodes[featureID])
+    guard case .sketch(let rejectedSketch) = rejectedFeature.operation else {
+        Issue.record("G1 rejection feature must remain a sketch.")
+        return
+    }
+    #expect(rejectedSketch.constraints.isEmpty)
+    #expect(session.document.productMetadata.joinedCurveGroupSources.isEmpty)
+    #expect(session.evaluationStatus == beforeEvaluationStatus)
 }
 
 @MainActor

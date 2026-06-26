@@ -641,6 +641,7 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
                     "Joined curve group endpoint references must connect distinct source entities."
                 )
             }
+            try validateJoinedCurveGroupContinuity(source, in: sketch)
         }
     }
 
@@ -726,6 +727,72 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
              .splineControlPoint:
             return nil
         }
+    }
+
+    private func validateJoinedCurveGroupContinuity(
+        _ source: JoinedCurveGroupSource,
+        in sketch: Sketch
+    ) throws {
+        switch source.continuity {
+        case .g0:
+            return
+        case .g1:
+            guard let tangentConstraint = joinedCurveGroupTangentConstraint(source, in: sketch) else {
+                throw DocumentValidationError.invalidProductMetadata(
+                    "Joined curve group G1 continuity currently requires one source line and one source arc."
+                )
+            }
+            guard sketch.constraints.contains(where: { constraint in
+                joinedCurveGroupTangentConstraintMatches(constraint, tangentConstraint)
+            }) else {
+                throw DocumentValidationError.invalidProductMetadata(
+                    "Joined curve group G1 continuity must store a matching tangent constraint."
+                )
+            }
+        case .g2:
+            throw DocumentValidationError.invalidProductMetadata(
+                "Joined curve group G2 continuity is not supported yet."
+            )
+        }
+    }
+
+    private func joinedCurveGroupTangentConstraint(
+        _ source: JoinedCurveGroupSource,
+        in sketch: Sketch
+    ) -> SketchConstraint? {
+        guard let firstEntityID = joinedCurveGroupReferenceEntityID(source.firstJoinedReference),
+              let secondEntityID = joinedCurveGroupReferenceEntityID(source.secondJoinedReference),
+              let firstEntity = sketch.entities[firstEntityID],
+              let secondEntity = sketch.entities[secondEntityID] else {
+            return nil
+        }
+        switch (firstEntity, secondEntity) {
+        case (.line, .arc):
+            return .tangent(firstEntityID, secondEntityID)
+        case (.arc, .line):
+            return .tangent(secondEntityID, firstEntityID)
+        case (.line, .line),
+             (.arc, .arc),
+             (.point, _),
+             (.circle, _),
+             (.spline, _),
+             (_, .point),
+             (_, .circle),
+             (_, .spline):
+            return nil
+        }
+    }
+
+    private func joinedCurveGroupTangentConstraintMatches(
+        _ constraint: SketchConstraint,
+        _ expected: SketchConstraint
+    ) -> Bool {
+        guard case .tangent(let first, let second) = constraint,
+              case .tangent(let expectedFirst, let expectedSecond) = expected else {
+            return false
+        }
+        return (first == expectedFirst && second == expectedSecond) ||
+            (first == expectedSecond && second == expectedFirst)
     }
 
     private func validateConstructionPlanes() throws {

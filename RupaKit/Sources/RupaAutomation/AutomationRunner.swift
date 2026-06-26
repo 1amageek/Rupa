@@ -928,11 +928,12 @@ public struct AutomationRunner {
                 didMutate: result.didMutate,
                 diagnostics: result.diagnostics
             )
-        case .joinSketchCurves(let target, let adjacentTarget):
+        case .joinSketchCurves(let target, let adjacentTarget, let continuity):
             let result = try session.execute(
                 .joinSketchCurves(
                     target: target,
-                    adjacentTarget: adjacentTarget
+                    adjacentTarget: adjacentTarget,
+                    continuity: continuity
                 )
             )
             return AutomationResult(

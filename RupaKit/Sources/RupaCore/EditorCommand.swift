@@ -200,7 +200,11 @@ public enum EditorCommand: Codable, Equatable, Sendable {
     case reverseSketchCurve(target: SelectionTarget)
     case rebuildSketchCurve(target: SelectionTarget, options: CurveRebuildOptions)
     case extendSketchCurve(target: SelectionTarget, distance: CADExpression, shape: ExtendCurveShape)
-    case joinSketchCurves(target: SelectionTarget, adjacentTarget: SelectionTarget)
+    case joinSketchCurves(
+        target: SelectionTarget,
+        adjacentTarget: SelectionTarget,
+        continuity: SketchCurveJoinContinuity = .g0
+    )
     case unjoinSketchCurve(target: SelectionTarget)
     case splitSketchCurve(target: SelectionTarget, fraction: CADExpression)
     case trimSketchCurveSegment(target: SelectionTarget)

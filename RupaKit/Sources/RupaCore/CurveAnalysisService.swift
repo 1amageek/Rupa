@@ -366,6 +366,15 @@ public struct CurveAnalysisService: Sendable {
                 continue
             }
         }
+        for source in document.productMetadata.joinedCurveGroupSources.values where source.featureID == featureID {
+            try mergeEndpointJoin(
+                first: endpointSample(for: source.firstJoinedReference, sketch: sketch, document: document),
+                second: endpointSample(for: source.secondJoinedReference, sketch: sketch, document: document),
+                constraintKind: "joinedCurveGroup",
+                requiredContinuity: curveAnalysisContinuityLevel(source.continuity),
+                into: &pendingByPair
+            )
+        }
 
         return pendingByPair.values
             .sorted {
@@ -663,6 +672,19 @@ public struct CurveAnalysisService: Sendable {
             return "arcRadius:\(entityID.description)"
         case let .splineControlPoint(entityID, index):
             return "splineControlPoint:\(entityID.description):\(index)"
+        }
+    }
+
+    private func curveAnalysisContinuityLevel(
+        _ continuity: SketchCurveJoinContinuity
+    ) -> CurveAnalysisResult.ContinuityLevel {
+        switch continuity {
+        case .g0:
+            return .g0
+        case .g1:
+            return .g1
+        case .g2:
+            return .g2
         }
     }
 

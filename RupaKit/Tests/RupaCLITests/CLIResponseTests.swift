@@ -1790,6 +1790,8 @@ struct CLISketchEditCommandTests {
             try encodedSelectionTarget(try #require(line.selectionTarget())),
             "--adjacent-target",
             try encodedSelectionTarget(try #require(arc.selectionTarget())),
+            "--continuity",
+            "g1",
             "--mode",
             "file",
             "--json",
@@ -1836,13 +1838,17 @@ struct CLISketchEditCommandTests {
         }.count == 2)
         #expect(joined.productMetadata.joinedCurveSources.isEmpty)
         #expect(joined.productMetadata.joinedCurveGroupSources.count == 1)
+        let joinedSource = try #require(joined.productMetadata.joinedCurveGroupSources.values.first)
+        #expect(joinedSource.continuity == .g1)
         #expect(joinedSketch.constraints.contains(.coincident(.lineEnd(lineID), .arcStart(arcID))))
+        #expect(joinedSketch.constraints.contains(.tangent(lineID, arcID)))
         #expect(unjoinResult.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: unjoinResult.standardError))
         #expect(unjoinResponse.message == "Sketch curve unjoined.")
         #expect(unjoinResponse.saved)
         #expect(unjoined.productMetadata.joinedCurveSources.isEmpty)
         #expect(unjoined.productMetadata.joinedCurveGroupSources.isEmpty)
         #expect(!unjoinedSketch.constraints.contains(.coincident(.lineEnd(lineID), .arcStart(arcID))))
+        #expect(!unjoinedSketch.constraints.contains(.tangent(lineID, arcID)))
     }
 
     private func sourceLine(in document: DesignDocument) throws -> SketchEntitySummaryResult.EntityEntry {

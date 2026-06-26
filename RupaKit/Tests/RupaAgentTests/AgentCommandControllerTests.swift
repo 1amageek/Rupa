@@ -569,7 +569,13 @@ import SwiftCAD
     #expect(curveJoin.targets == [.sketchEntity])
     #expect(curveJoin.summary.contains("Join Curves"))
     #expect(curveJoin.summary.contains("collinear source lines"))
+    #expect(curveJoin.summary.contains("line/arc endpoints"))
+    #expect(curveJoin.summary.contains("G0"))
+    #expect(curveJoin.summary.contains("G1"))
+    #expect(curveJoin.summary.contains("curve-analysis readback"))
     #expect(curveJoin.summary.contains("Unjoin"))
+    #expect(curveJoin.failureMode.contains("unsupported G2 continuity"))
+    #expect(curveJoin.failureMode.contains("not already tangent"))
     #expect(curveJoin.failureMode.contains("interior endpoint"))
     #expect(curveJoin.failureMode.contains("Bridge Curve"))
 
@@ -580,6 +586,7 @@ import SwiftCAD
     #expect(curveUnjoin.targets == [.sketchEntity])
     #expect(curveUnjoin.summary.contains("Unjoin Curve"))
     #expect(curveUnjoin.summary.contains("ownership snapshot"))
+    #expect(curveUnjoin.summary.contains("line/arc group"))
     #expect(curveUnjoin.failureMode.contains("joined-curve ownership"))
     #expect(curveUnjoin.failureMode.contains("Bridge Curve"))
 
