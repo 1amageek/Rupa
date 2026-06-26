@@ -247,6 +247,8 @@ public struct SketchCommand: ParsableCommand {
             SketchSplitCommand.self,
             SketchTrimCommand.self,
             SketchExtendCommand.self,
+            SketchJoinCommand.self,
+            SketchUnjoinCommand.self,
             SketchSlotCommand.self,
             SketchOffsetCommand.self,
             SketchOffsetRegionsCommand.self,

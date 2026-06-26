@@ -1273,6 +1273,8 @@ Currently implemented command groups:
 | `rupa sketch split <document> --target <json> --fraction <value>` | Split a supported source sketch curve at a scalar fraction. |
 | `rupa sketch trim <document> --target <json>` | Trim a supported source sketch curve segment. |
 | `rupa sketch extend <document> --target <json> --distance <value>` | Extend a supported source sketch curve endpoint target. |
+| `rupa sketch join <document> --target <json> --adjacent-target <json>` | Join two supported same-sketch source curve targets through the shared Automation/Core command path. |
+| `rupa sketch unjoin <document> --target <json>` | Restore a supported joined source sketch curve through the shared Automation/Core command path. |
 | `rupa sketch slot <document> --target <json> --width <value>` | Create a Slot profile from a supported open source curve or chain. |
 | `rupa sketch offset <document> --target <json> --distance <value>` | Route a supported source curve, region, generated face, generated edge, or vertex target through the Offset Curve dispatcher. |
 | `rupa sketch offset-regions <document> --target <json> --distance <value>` | Offset one or more supported source profile region targets. |

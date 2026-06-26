@@ -1617,6 +1617,111 @@ struct CLISketchEditCommandTests {
         #expect(slotObject.properties["width"] == .length(0.002))
     }
 
+    @Test(.timeLimit(.minutes(1)))
+    func executableSketchJoinAndUnjoinPersistClosedDocumentAsJSON() async throws {
+        let temporaryDirectory = try makeTemporaryDirectory()
+        defer {
+            removeTemporaryDirectory(temporaryDirectory)
+        }
+        let documentURL = temporaryDirectory.appendingPathComponent("process-sketch-join.swcad")
+        var document = DesignDocument.empty(named: "Process Sketch Join")
+        let featureID = try document.createLineSketch(
+            name: "Join Sources",
+            plane: .xy,
+            start: SketchPoint(
+                x: .length(0.0, .millimeter),
+                y: .length(0.0, .millimeter)
+            ),
+            end: SketchPoint(
+                x: .length(5.0, .millimeter),
+                y: .length(0.0, .millimeter)
+            )
+        )
+        let secondLineID = SketchEntityID()
+        guard var feature = document.cadDocument.designGraph.nodes[featureID],
+              case var .sketch(sketch) = feature.operation,
+              let firstLineID = sketch.entities.keys.first else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "Join CLI setup requires a line sketch."
+            )
+        }
+        sketch.entities[secondLineID] = .line(
+            SketchLine(
+                start: SketchPoint(
+                    x: .length(5.0, .millimeter),
+                    y: .length(0.0, .millimeter)
+                ),
+                end: SketchPoint(
+                    x: .length(10.0, .millimeter),
+                    y: .length(0.0, .millimeter)
+                )
+            )
+        )
+        sketch.constraints.append(.coincident(.lineEnd(firstLineID), .lineStart(secondLineID)))
+        feature.operation = .sketch(sketch)
+        document.cadDocument.designGraph.nodes[featureID] = feature
+        document.cadDocument.designGraph.revision = document.cadDocument.designGraph.revision.advanced()
+        try DocumentFileService().save(document, to: documentURL)
+
+        let before = try SketchEntitySummaryService().summarize(document: document)
+        let firstLine = try #require(before.entries.first { $0.entityID == firstLineID.description })
+        let secondLine = try #require(before.entries.first { $0.entityID == secondLineID.description })
+        let joinResult = try await runCLI([
+            "sketch",
+            "join",
+            documentURL.path,
+            "--target",
+            try encodedSelectionTarget(try #require(firstLine.selectionTarget())),
+            "--adjacent-target",
+            try encodedSelectionTarget(try #require(secondLine.selectionTarget())),
+            "--mode",
+            "file",
+            "--json",
+        ])
+        let joinResponse = try JSONDecoder().decode(
+            CLIResponse.self,
+            from: joinResult.standardOutputData
+        )
+        let joined = try DocumentFileService().load(from: documentURL)
+        let joinedSummary = try SketchEntitySummaryService().summarize(document: joined)
+        let joinedLine = try #require(joinedSummary.entries.first { $0.entityID == firstLineID.description })
+
+        let unjoinResult = try await runCLI([
+            "sketch",
+            "unjoin",
+            documentURL.path,
+            "--target",
+            try encodedSelectionTarget(try #require(joinedLine.selectionTarget())),
+            "--mode",
+            "file",
+            "--json",
+        ])
+        let unjoinResponse = try JSONDecoder().decode(
+            CLIResponse.self,
+            from: unjoinResult.standardOutputData
+        )
+        let unjoined = try DocumentFileService().load(from: documentURL)
+        let unjoinedSummary = try SketchEntitySummaryService().summarize(document: unjoined)
+
+        #expect(joinResult.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: joinResult.standardError))
+        #expect(joinResponse.message == "Sketch curves joined.")
+        #expect(joinResponse.saved)
+        #expect(joinedSummary.entries.filter {
+            $0.sourceFeatureID == featureID.description && $0.entityKind == "line"
+        }.count == 1)
+        #expect(joined.productMetadata.joinedCurveSources.count == 1)
+        #expect(abs((joinedLine.start?.x ?? -1.0) - 0.0) < 1.0e-12)
+        #expect(abs((joinedLine.end?.x ?? -1.0) - 0.010) < 1.0e-12)
+        #expect(unjoinResult.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: unjoinResult.standardError))
+        #expect(unjoinResponse.message == "Sketch curve unjoined.")
+        #expect(unjoinResponse.saved)
+        #expect(unjoinedSummary.entries.filter {
+            $0.sourceFeatureID == featureID.description && $0.entityKind == "line"
+        }.count == 2)
+        #expect(unjoined.productMetadata.joinedCurveSources.isEmpty)
+    }
+
     private func sourceLine(in document: DesignDocument) throws -> SketchEntitySummaryResult.EntityEntry {
         let summary = try SketchEntitySummaryService().summarize(document: document)
         return try #require(summary.entries.first { $0.entityKind == "line" })
