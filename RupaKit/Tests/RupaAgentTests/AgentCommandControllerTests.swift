@@ -586,11 +586,13 @@ import SwiftCAD
     #expect(curveCut.summary.contains("Cut Curve"))
     #expect(curveCut.summary.contains("source line"))
     #expect(curveCut.summary.contains("source arc"))
+    #expect(curveCut.summary.contains("open cubic Bezier spline"))
     #expect(curveCut.summary.contains("source circle"))
     #expect(curveCut.summary.contains("circle"))
     #expect(curveCut.summary.contains("arc"))
     #expect(curveCut.failureMode.contains("extendsCutter"))
-    #expect(curveCut.failureMode.contains("non-line/non-arc/non-circle targets"))
+    #expect(curveCut.failureMode.contains("non-line/non-arc/non-spline/non-circle targets"))
+    #expect(curveCut.failureMode.contains("closed spline"))
     #expect(curveCut.failureMode.contains("arc-cutter extension"))
     #expect(curveCut.failureMode.contains("coincident circular"))
     #expect(curveCut.failureMode.contains("screen-space"))
@@ -13772,6 +13774,100 @@ private func rawAgentProtocolJSON(_ source: String) -> Data {
     #expect(targetSegments.contains { entry in
         abs((entry.start?.x ?? -1.0) - 0.007) < 1.0e-12 &&
             abs((entry.end?.x ?? -1.0) - 0.010) < 1.0e-12
+    })
+    #expect(session.evaluationStatus == .valid)
+}
+
+@MainActor
+@Test func agentCutsSketchSplineTargetWithLineCutterThroughAutomationAndCore() async throws {
+    let server = AgentCommandController()
+    let sessionID = UUID()
+    let session = EditorSession()
+    _ = try session.execute(
+        .createSplineSketch(
+            name: "Agent Spline Cut Target",
+            plane: .xy,
+            spline: SketchSpline(controlPoints: [
+                SketchPoint(x: .length(0.0, .millimeter), y: .length(0.0, .millimeter)),
+                SketchPoint(x: .length(3.0, .millimeter), y: .length(4.0, .millimeter)),
+                SketchPoint(x: .length(7.0, .millimeter), y: .length(4.0, .millimeter)),
+                SketchPoint(x: .length(10.0, .millimeter), y: .length(0.0, .millimeter)),
+            ])
+        )
+    )
+    _ = try session.execute(
+        .createLineSketch(
+            name: "Agent Spline Cut Cutter",
+            plane: .xy,
+            start: SketchPoint(
+                x: .length(5.0, .millimeter),
+                y: .length(-1.0, .millimeter)
+            ),
+            end: SketchPoint(
+                x: .length(5.0, .millimeter),
+                y: .length(5.0, .millimeter)
+            )
+        )
+    )
+    server.register(session: session, id: sessionID)
+
+    let summaryResponse = server.handle(
+        .sketchEntitySummary(
+            sessionID: sessionID,
+            expectedGeneration: DocumentGeneration(2)
+        )
+    )
+    guard case .sketchEntitySummary(let summary) = summaryResponse else {
+        Issue.record("Agent must return a sketch entity summary.")
+        return
+    }
+    let targetSpline = try #require(summary.entries.first { $0.sourceFeatureName == "Agent Spline Cut Target" })
+    let cutterLine = try #require(summary.entries.first { $0.sourceFeatureName == "Agent Spline Cut Cutter" })
+    let target = try #require(targetSpline.selectionTarget())
+    let cutter = try #require(cutterLine.selectionTarget())
+
+    let editResponse = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .cutSketchCurve(
+                target: target,
+                cutter: cutter,
+                options: CutCurveOptions()
+            ),
+            expectedGeneration: DocumentGeneration(2)
+        )
+    )
+
+    guard case .command(let result) = editResponse else {
+        Issue.record("Agent must return a command result.")
+        return
+    }
+    let updatedSummary = try SketchEntitySummaryService().summarize(document: session.document)
+    let targetSegments = updatedSummary.entries.filter { $0.sourceFeatureName == "Agent Spline Cut Target" }
+    #expect(result.commandName == "cutSketchCurve")
+    #expect(result.didMutate)
+    #expect(result.generation == DocumentGeneration(3))
+    #expect(targetSegments.count == 2)
+    #expect(targetSegments.allSatisfy { $0.entityKind == "spline" })
+    #expect(targetSegments.contains { entry in
+        guard let start = entry.controlPoints.first,
+              let end = entry.controlPoints.last else {
+            return false
+        }
+        return abs(start.x - 0.0) < 1.0e-9 &&
+            abs(start.y - 0.0) < 1.0e-9 &&
+            abs(end.x - 0.005) < 1.0e-9 &&
+            abs(end.y - 0.003) < 1.0e-9
+    })
+    #expect(targetSegments.contains { entry in
+        guard let start = entry.controlPoints.first,
+              let end = entry.controlPoints.last else {
+            return false
+        }
+        return abs(start.x - 0.005) < 1.0e-9 &&
+            abs(start.y - 0.003) < 1.0e-9 &&
+            abs(end.x - 0.010) < 1.0e-9 &&
+            abs(end.y - 0.0) < 1.0e-9
     })
     #expect(session.evaluationStatus == .valid)
 }

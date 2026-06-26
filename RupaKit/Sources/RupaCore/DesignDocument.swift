@@ -12360,6 +12360,8 @@ public struct DesignDocument: Identifiable, Sendable {
         var endAngle: Double
     }
 
+    private static let cutCurveSplineSamplesPerSegment = 64
+
     private func cutSketchCurveFractions(
         targetSelection: EditableSketchEntitySelection,
         cutterSelection: EditableSketchEntitySelection,
@@ -12386,10 +12388,20 @@ public struct DesignDocument: Identifiable, Sendable {
                 cutterSelection: cutterSelection,
                 extendsCutter: options.extendsCutter
             )
-        case .point, .circle, .spline:
+        case .spline(let targetSpline):
+            let samples = try resolvedCutCurveSplineSamples(
+                targetSpline,
+                owner: "Cut Curve target"
+            )
+            fractions = try cutFractionsForSplineTarget(
+                samples: samples,
+                cutterSelection: cutterSelection,
+                extendsCutter: options.extendsCutter
+            )
+        case .point, .circle:
             throw EditorError(
                 code: .commandInvalid,
-                message: "Cut Curve source subset requires a line or arc target curve."
+                message: "Cut Curve source subset requires a line, arc, or open spline target curve."
             )
         }
         let uniqueFractions = uniqueInteriorCutFractions(fractions)
@@ -12441,6 +12453,64 @@ public struct DesignDocument: Identifiable, Sendable {
                 circle: cutter.circle,
                 restrictToArc: cutter
             )
+        case .point, .spline:
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Cut Curve source subset requires a line, circle, or arc cutter curve."
+            )
+        }
+    }
+
+    private func cutFractionsForSplineTarget(
+        samples: [CurveEvaluationSample],
+        cutterSelection: EditableSketchEntitySelection,
+        extendsCutter: Bool
+    ) throws -> [Double] {
+        switch cutterSelection.entity {
+        case .line(let cutterLine):
+            let cutter = try resolvedCutCurveLineSegment(cutterLine, owner: "Cut Curve cutter")
+            var rejectedByCutterReach = false
+            var fractions: [Double] = []
+            for segment in cutCurveSplineSampleSegments(samples) {
+                let result = cutFractionsForSplineSegmentLineIntersection(
+                    segment: segment,
+                    cutter: cutter,
+                    extendsCutter: extendsCutter
+                )
+                rejectedByCutterReach = rejectedByCutterReach || result.rejectedByCutterReach
+                fractions.append(contentsOf: result.fractions)
+            }
+            if fractions.isEmpty && rejectedByCutterReach {
+                throw EditorError(
+                    code: .commandInvalid,
+                    message: "Cut Curve cutter does not reach the target curve; enable cutter extension for this case."
+                )
+            }
+            return fractions
+        case .circle(let circle):
+            let cutter = try resolvedCutCurveCircle(circle, owner: "Cut Curve cutter")
+            return cutCurveSplineSampleSegments(samples).flatMap { segment in
+                cutFractionsForSplineSegmentCircleIntersection(
+                    segment: segment,
+                    circle: cutter,
+                    restrictToArc: nil
+                )
+            }
+        case .arc(let arc):
+            guard extendsCutter == false else {
+                throw EditorError(
+                    code: .commandInvalid,
+                    message: "Cut Curve arc cutter extension is not represented in the current source subset."
+                )
+            }
+            let cutter = try resolvedCutCurveArc(arc, owner: "Cut Curve cutter")
+            return cutCurveSplineSampleSegments(samples).flatMap { segment in
+                cutFractionsForSplineSegmentCircleIntersection(
+                    segment: segment,
+                    circle: cutter.circle,
+                    restrictToArc: cutter
+                )
+            }
         case .point, .spline:
             throw EditorError(
                 code: .commandInvalid,
@@ -12725,6 +12795,40 @@ public struct DesignDocument: Identifiable, Sendable {
         return CutCurveArc(circle: circle, startAngle: startAngle, endAngle: endAngle)
     }
 
+    private func resolvedCutCurveSplineSamples(
+        _ spline: SketchSpline,
+        owner: String
+    ) throws -> [CurveEvaluationSample] {
+        guard spline.isClosed == false else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "\(owner) requires an open spline curve."
+            )
+        }
+        let controlPoints = try spline.controlPoints.map { point in
+            let resolved = try resolvedPoint(point, owner: owner)
+            return Point2D(x: resolved.x, y: resolved.y)
+        }
+        guard controlPoints.count >= 4,
+              (controlPoints.count - 1).isMultiple(of: 3) else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "\(owner) requires a cubic Bezier spline."
+            )
+        }
+        let samples = SketchCurveSampler(
+            samplesPerSegment: Self.cutCurveSplineSamplesPerSegment
+        )
+        .splineSamples(for: controlPoints)
+        guard samples.count >= 2 else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "\(owner) requires a spline with non-zero sampled length."
+            )
+        }
+        return samples
+    }
+
     private func cutFractionsForLineLineIntersection(
         target: CutCurveLineSegment,
         cutter: CutCurveLineSegment,
@@ -12764,6 +12868,120 @@ public struct DesignDocument: Identifiable, Sendable {
             }
         }
         return [targetFraction]
+    }
+
+    private func cutCurveSplineSampleSegments(
+        _ samples: [CurveEvaluationSample]
+    ) -> [(start: CurveEvaluationSample, end: CurveEvaluationSample)] {
+        zip(samples, samples.dropFirst()).compactMap { start, end in
+            let length = hypot(end.point.x - start.point.x, end.point.y - start.point.y)
+            guard length > ModelingTolerance.standard.distance else {
+                return nil
+            }
+            return (start: start, end: end)
+        }
+    }
+
+    private func cutFractionsForSplineSegmentLineIntersection(
+        segment: (start: CurveEvaluationSample, end: CurveEvaluationSample),
+        cutter: CutCurveLineSegment,
+        extendsCutter: Bool
+    ) -> (fractions: [Double], rejectedByCutterReach: Bool) {
+        let targetX = segment.end.point.x - segment.start.point.x
+        let targetY = segment.end.point.y - segment.start.point.y
+        let cutterX = cutter.endX - cutter.startX
+        let cutterY = cutter.endY - cutter.startY
+        let denominator = targetX * cutterY - targetY * cutterX
+        guard abs(denominator) > 1.0e-14 else {
+            return (fractions: [], rejectedByCutterReach: false)
+        }
+
+        let deltaX = cutter.startX - segment.start.point.x
+        let deltaY = cutter.startY - segment.start.point.y
+        let targetFraction = (deltaX * cutterY - deltaY * cutterX) / denominator
+        let cutterFraction = (deltaX * targetY - deltaY * targetX) / denominator
+        let tolerance = 1.0e-10
+        guard targetFraction >= -tolerance,
+              targetFraction <= 1.0 + tolerance else {
+            return (fractions: [], rejectedByCutterReach: false)
+        }
+        if extendsCutter == false &&
+            (cutterFraction < -tolerance || cutterFraction > 1.0 + tolerance) {
+            return (fractions: [], rejectedByCutterReach: true)
+        }
+        return (
+            fractions: [
+                cutCurveSplineSegmentParameter(
+                    segment: segment,
+                    localFraction: targetFraction
+                ),
+            ],
+            rejectedByCutterReach: false
+        )
+    }
+
+    private func cutFractionsForSplineSegmentCircleIntersection(
+        segment: (start: CurveEvaluationSample, end: CurveEvaluationSample),
+        circle: CutCurveCircle,
+        restrictToArc arc: CutCurveArc?
+    ) -> [Double] {
+        let targetX = segment.end.point.x - segment.start.point.x
+        let targetY = segment.end.point.y - segment.start.point.y
+        let lengthSquared = targetX * targetX + targetY * targetY
+        guard lengthSquared > 1.0e-24 else {
+            return []
+        }
+        let offsetX = segment.start.point.x - circle.centerX
+        let offsetY = segment.start.point.y - circle.centerY
+        let b = 2.0 * (offsetX * targetX + offsetY * targetY)
+        let c = offsetX * offsetX + offsetY * offsetY - circle.radius * circle.radius
+        let discriminant = b * b - 4.0 * lengthSquared * c
+        guard discriminant >= -1.0e-14 else {
+            return []
+        }
+
+        let root = sqrt(max(discriminant, 0.0))
+        let localFractions: [Double]
+        if abs(discriminant) <= 1.0e-14 {
+            localFractions = [-b / (2.0 * lengthSquared)]
+        } else {
+            localFractions = [
+                (-b - root) / (2.0 * lengthSquared),
+                (-b + root) / (2.0 * lengthSquared),
+            ]
+        }
+        let tolerance = 1.0e-10
+        return localFractions.compactMap { localFraction -> Double? in
+            guard localFraction >= -tolerance,
+                  localFraction <= 1.0 + tolerance else {
+                return nil
+            }
+            let pointX = segment.start.point.x + targetX * localFraction
+            let pointY = segment.start.point.y + targetY * localFraction
+            if let arc {
+                let angle = atan2(pointY - arc.circle.centerY, pointX - arc.circle.centerX)
+                guard cutCurveAngleIsOnArc(
+                    angle,
+                    startAngle: arc.startAngle,
+                    endAngle: arc.endAngle
+                ) else {
+                    return nil
+                }
+            }
+            return cutCurveSplineSegmentParameter(
+                segment: segment,
+                localFraction: localFraction
+            )
+        }
+    }
+
+    private func cutCurveSplineSegmentParameter(
+        segment: (start: CurveEvaluationSample, end: CurveEvaluationSample),
+        localFraction: Double
+    ) -> Double {
+        let clampedFraction = min(max(localFraction, 0.0), 1.0)
+        return segment.start.parameter +
+            (segment.end.parameter - segment.start.parameter) * clampedFraction
     }
 
     private func cutFractionsForLineCircleIntersection(
