@@ -23,8 +23,17 @@ public struct ObjectDimensionSummaryService: Sendable {
             for: targets,
             in: document.productMetadata
         )
-        let summaryEntries = try dimensionTargets.flatMap { target in
-            try entries(for: resolver.resolve(target: target, in: document))
+        let summaryEntries: [ObjectDimensionSummaryResult.Entry]
+        if let facePairEntry = try facePairEntryIfPresent(
+            for: dimensionTargets,
+            in: document,
+            objectRegistry: objectRegistry
+        ) {
+            summaryEntries = [facePairEntry]
+        } else {
+            summaryEntries = try dimensionTargets.flatMap { target in
+                try entries(for: resolver.resolve(target: target, in: document))
+            }
         }
         return ObjectDimensionSummaryResult(
             displayUnit: document.displayUnit,
@@ -39,6 +48,42 @@ public struct ObjectDimensionSummaryService: Sendable {
                     message: "Object dimension summary completed with \(summaryEntries.count) editable dimension candidate(s)."
                 ),
             ]
+        )
+    }
+
+    private func facePairEntryIfPresent(
+        for targets: [SelectionTarget],
+        in document: DesignDocument,
+        objectRegistry: ObjectTypeRegistry
+    ) throws -> ObjectDimensionSummaryResult.Entry? {
+        guard targets.count == 2,
+              let first = targets.first,
+              let second = targets.dropFirst().first else {
+            return nil
+        }
+        guard let dimension = try ObjectFacePairDimensionResolver().resolveIfPresent(
+            first: first,
+            second: second,
+            in: document,
+            objectRegistry: objectRegistry,
+            operationName: "Object dimension face-pair summary"
+        ) else {
+            return nil
+        }
+        let resolvedMeters = resolvedDimensionValue(
+            source: dimension.source,
+            kind: dimension.kind
+        )
+        return entry(
+            source: dimension.source,
+            sourceKind: sourceKind(for: dimension.source),
+            kind: dimension.kind,
+            label: "Face Distance",
+            inputExpression: .length(resolvedMeters, .meter),
+            sourceExpression: sourceExpression(source: dimension.source, kind: dimension.kind),
+            resolvedMeters: resolvedMeters,
+            isPrimaryForTarget: true,
+            target: dimension.target
         )
     }
 
@@ -176,10 +221,11 @@ public struct ObjectDimensionSummaryService: Sendable {
         inputExpression: CADExpression,
         sourceExpression: CADExpression? = nil,
         resolvedMeters: Double,
-        isPrimaryForTarget: Bool
+        isPrimaryForTarget: Bool,
+        target: SelectionTarget? = nil
     ) -> ObjectDimensionSummaryResult.Entry {
         ObjectDimensionSummaryResult.Entry(
-            target: source.target,
+            target: target ?? source.target,
             sceneNodeID: source.sceneNodeID.description,
             sourceFeatureID: source.featureID.description,
             sourceKind: sourceKind,
@@ -190,6 +236,45 @@ public struct ObjectDimensionSummaryService: Sendable {
             resolvedMeters: resolvedMeters,
             isPrimaryForTarget: isPrimaryForTarget
         )
+    }
+
+    private func sourceKind(for source: ObjectDimensionSource) -> ObjectDimensionSummaryResult.SourceKind {
+        switch source.shape {
+        case .box:
+            .box
+        case .cylinder:
+            .cylinder
+        }
+    }
+
+    private func resolvedDimensionValue(
+        source: ObjectDimensionSource,
+        kind: ObjectDimensionKind
+    ) -> Double {
+        switch kind {
+        case .sizeX, .diameter:
+            source.sizeX
+        case .sizeY:
+            source.sizeY
+        case .sizeZ:
+            source.sizeZ
+        case .radius:
+            source.radius ?? source.sizeX / 2.0
+        }
+    }
+
+    private func sourceExpression(
+        source: ObjectDimensionSource,
+        kind: ObjectDimensionKind
+    ) -> CADExpression? {
+        switch kind {
+        case .sizeY:
+            source.depthExpression
+        case .radius:
+            source.radiusExpression
+        case .sizeX, .sizeZ, .diameter:
+            nil
+        }
     }
 
     private func isPrimary(source: ObjectDimensionSource, kind: ObjectDimensionKind) -> Bool {

@@ -1110,6 +1110,43 @@ import Testing
     #expect(abs((values[.sizeY] ?? 0.0) - 0.5) < 0.000_000_000_001)
 }
 
+@Test func objectDimensionSummaryListsFacePairDistanceCandidateFromGeneratedFaces() async throws {
+    var document = DesignDocument.empty()
+    try document.createExtrudedRectangle(
+        name: "Dimension Summary Face Pair Box",
+        plane: .xy,
+        width: .length(1.0, .meter),
+        height: .length(1.5, .meter),
+        depth: .length(0.5, .meter),
+        direction: .normal
+    )
+    let targets = try opposingGeneratedFaceTargets(in: document)
+
+    let summary = try ObjectDimensionSummaryService().summarize(
+        document: document,
+        targets: [targets.first, targets.second]
+    )
+
+    #expect(summary.counts.targetCount == 2)
+    #expect(summary.counts.entryCount == 1)
+    let entry = try #require(summary.entries.first)
+    #expect(entry.kind == .sizeY)
+    #expect(entry.label == "Face Distance")
+    #expect(entry.sourceKind == .box)
+    #expect(entry.isPrimaryForTarget)
+    #expect(entry.target == targets.first)
+    #expect(entry.sourceExpression == .length(0.5, .meter))
+    #expect(abs(entry.resolvedMeters - 0.5) < 0.000_000_000_001)
+
+    try document.setObjectDimension(
+        target: entry.target,
+        kind: entry.kind,
+        value: .length(0.75, .meter)
+    )
+    let bodyNode = try #require(document.productMetadata.sceneNodes[entry.target.sceneNodeID])
+    #expect(bodyNode.object?.properties["size.y"] == .length(0.75))
+}
+
 @Test func objectDimensionCommandUpdatesDepthFromGeneratedEdgeTarget() async throws {
     var document = DesignDocument.empty()
     try document.createExtrudedRectangle(
@@ -1599,6 +1636,23 @@ private func generatedDepthEdge(
             abs(start.y - end.y) <= tolerance &&
             abs(start.z - end.z) > tolerance
     }
+}
+
+private func opposingGeneratedFaceTargets(
+    in document: DesignDocument
+) throws -> (first: SelectionTarget, second: SelectionTarget) {
+    let topology = try TopologySummaryService().summarize(document: document)
+    let faces = try topology.entries.compactMap { entry -> (centerZ: Double, target: SelectionTarget)? in
+        guard entry.kind == .face,
+              let centerZ = entry.center?.z else {
+            return nil
+        }
+        return (centerZ, try #require(entry.selectionTarget()))
+    }
+    let first = try #require(faces.min { $0.centerZ < $1.centerZ })
+    let second = try #require(faces.max { $0.centerZ < $1.centerZ })
+    #expect(second.centerZ - first.centerZ > 0.0)
+    return (first.target, second.target)
 }
 
 private func resolvedPoint(

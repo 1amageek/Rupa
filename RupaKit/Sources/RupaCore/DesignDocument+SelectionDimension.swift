@@ -437,38 +437,22 @@ public extension DesignDocument {
         else {
             return nil
         }
-        let topologyResolver = GeneratedTopologySelectionResolver()
-        let firstFace = try topologyResolver.bodyFace(
-            for: firstTarget,
+        guard let dimension = try ObjectFacePairDimensionResolver().resolveIfPresent(
+            first: firstTarget,
+            second: secondTarget,
             in: self,
             objectRegistry: objectRegistry,
+            topology: topology,
             operationName: "Selection face-distance application"
-        )
-        let secondFace = try topologyResolver.bodyFace(
-            for: secondTarget,
-            in: self,
-            objectRegistry: objectRegistry,
-            operationName: "Selection face-distance application"
-        )
-        let objectResolver = ObjectDimensionSourceResolver()
-        let firstSource = try objectResolver.resolve(target: firstTarget, in: self)
-        let secondSource = try objectResolver.resolve(target: secondTarget, in: self)
-        guard firstSource.featureID == secondSource.featureID,
-              firstSource.sceneNodeID == secondSource.sceneNodeID,
-              firstSource.shape == secondSource.shape else {
+        ) else {
             throw EditorError(
                 code: .commandInvalid,
-                message: "Selection face-distance application requires generated faces from one editable source body."
+                message: "Selection face-distance application requires generated face targets."
             )
         }
-        let dimensionKind = try objectDimensionKind(
-            firstFace: firstFace,
-            secondFace: secondFace,
-            sourceShape: firstSource.shape
-        )
         return SelectionDimensionObjectFaceDistanceContext(
-            target: firstTarget,
-            kind: dimensionKind
+            target: dimension.target,
+            kind: dimension.kind
         )
     }
 
@@ -495,34 +479,6 @@ public extension DesignDocument {
             )
         }
         return target
-    }
-
-    private func objectDimensionKind(
-        firstFace: BodyFace,
-        secondFace: BodyFace,
-        sourceShape: ObjectDimensionSource.Shape
-    ) throws -> ObjectDimensionKind {
-        let facePair = Set([firstFace, secondFace])
-        switch sourceShape {
-        case .box:
-            if facePair == Set([.left, .right]) {
-                return .sizeX
-            }
-            if facePair == Set([.front, .back]) {
-                return .sizeY
-            }
-            if facePair == Set([.bottom, .top]) {
-                return .sizeZ
-            }
-        case .cylinder:
-            if facePair == Set([.front, .back]) {
-                return .sizeY
-            }
-        }
-        throw EditorError(
-            code: .commandInvalid,
-            message: "Selection face-distance application requires opposing editable body faces."
-        )
     }
 
     private mutating func applySourcePointDistanceDimension(

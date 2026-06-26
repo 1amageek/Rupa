@@ -754,12 +754,12 @@ public final class AgentCommandController: AgentClientProtocol {
         capability(
             "setObjectDimension",
             category: .solid,
-            summary: "Set supported selected object dimensions for rectangle-extrude bodies, circle-extrude cylinder bodies, and generated extrusion depth edges.",
+            summary: "Set supported selected object dimensions for rectangle-extrude bodies, circle-extrude cylinder bodies, generated extrusion depth edges, and object-dimension candidates discovered from opposing generated face pairs.",
             access: .automationCommand,
             mutatesDocument: true,
             discovery: [.topologySummary, .objectDimensionSummary],
             targets: [.body, .face, .edge],
-            failureMode: "Rejects non-body targets, unsupported edge topology, unsupported dimension kinds, invalid values, non-extruded sources, and stale generations before mutation."
+            failureMode: "Rejects non-body targets, unsupported edge or face-pair topology, unsupported dimension kinds, invalid values, non-extruded sources, and stale generations before mutation."
         ),
         capability(
             "setSelectionDimensionTarget",
@@ -774,12 +774,12 @@ public final class AgentCommandController: AgentClientProtocol {
         capability(
             "applySelectionDimensionTarget",
             category: .sourceCurveEditing,
-            summary: "Apply the stored target of an existing persistent CAD selection dimension to supported source line length, source sketch point-to-point distance including solved arc endpoint and spline control-point distances, source circle/arc radius, source line relative angle, or source arc span angle dimensions by SelectionDimensionID.",
+            summary: "Apply the stored target of an existing persistent CAD selection dimension to supported source line length, source sketch point-to-point distance including solved arc endpoint and spline control-point distances, source circle/arc radius, source line relative angle, source arc span angle, or generated opposing editable body face-pair distance dimensions by SelectionDimensionID.",
             access: .automationCommand,
             mutatesDocument: true,
-            discovery: [.selectionDimensionEvaluation, .sketchEntitySummary],
-            targets: [.document, .sketchEntity, .sketchPointHandle, .sketchControlPoint],
-            failureMode: "Rejects missing selection dimension IDs, unsupported source line length, point-distance, circular radius, line angle, or arc span references, impossible arc endpoint distance targets, mismatched or stale endpoint/control-point parameters, invalid target values, fixed conflicts, unsupported propagated constraints, and stale generations before mutation."
+            discovery: [.selectionDimensionEvaluation, .sketchEntitySummary, .topologySummary, .objectDimensionSummary],
+            targets: [.document, .face, .sketchEntity, .sketchPointHandle, .sketchControlPoint],
+            failureMode: "Rejects missing selection dimension IDs, unsupported source line length, point-distance, circular radius, line angle, arc span, or face-pair references, impossible arc endpoint distance targets, mismatched or stale endpoint/control-point parameters, invalid target values, fixed conflicts, unsupported propagated constraints, unsupported generated face pairs, and stale generations before mutation."
         ),
         capability(
             "setExtrudeDistance",
@@ -1158,12 +1158,12 @@ public final class AgentCommandController: AgentClientProtocol {
         capability(
             "objectDimensionSummary",
             category: .read,
-            summary: "List editable Dimension command candidates for selected object, face, or generated extrusion depth edge targets without mutation, including box size axes and cylinder diameter, radius, and depth.",
+            summary: "List editable Dimension command candidates for selected object, face, generated extrusion depth edge, or generated opposing face-pair targets without mutation, including box size axes, cylinder diameter, radius, depth, and supported face-distance candidates.",
             access: .agentRequest,
             mutatesDocument: false,
             discovery: [.objectDimensionSummary, .topologySummary],
             targets: [.body, .face, .edge],
-            failureMode: "Rejects stale generations, non-body targets, unsupported edge topology, unsupported source profiles, and invalid source expressions before returning candidates."
+            failureMode: "Rejects stale generations, non-body targets, unsupported edge or face-pair topology, unsupported source profiles, and invalid source expressions before returning candidates."
         ),
         capability(
             "sketchDimensionSummary",

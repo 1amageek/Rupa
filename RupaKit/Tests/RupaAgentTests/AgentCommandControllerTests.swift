@@ -684,7 +684,9 @@ import SwiftCAD
     #expect(selectionDimensionApply.access == .automationCommand)
     #expect(selectionDimensionApply.discovery.contains(.selectionDimensionEvaluation))
     #expect(selectionDimensionApply.discovery.contains(.sketchEntitySummary))
-    #expect(selectionDimensionApply.targets == [.document, .sketchEntity, .sketchPointHandle, .sketchControlPoint])
+    #expect(selectionDimensionApply.discovery.contains(.topologySummary))
+    #expect(selectionDimensionApply.discovery.contains(.objectDimensionSummary))
+    #expect(selectionDimensionApply.targets == [.document, .face, .sketchEntity, .sketchPointHandle, .sketchControlPoint])
     #expect(selectionDimensionApply.summary.contains("SelectionDimensionID"))
     #expect(selectionDimensionApply.failureMode.contains("line angle"))
 
@@ -5602,6 +5604,100 @@ private func rawAgentProtocolJSON(_ source: String) -> Data {
     #expect(abs(depth.resolvedMeters - 0.006) < 0.000_000_000_001)
     #expect(session.generation == generation)
     #expect(session.isDirty == dirty)
+}
+
+@Test func agentUsesGeneratedFacePairObjectDimensionSummaryForMutation() async throws {
+    let server = AgentCommandController()
+    let sessionID = UUID()
+    let session = EditorSession()
+    server.register(session: session, id: sessionID)
+
+    let createResponse = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .createExtrudedRectangle(
+                name: "Agent Dimension Summary Face Pair Box",
+                plane: .xy,
+                width: .length(24.0, .millimeter),
+                height: .length(12.0, .millimeter),
+                depth: .length(6.0, .millimeter),
+                direction: .normal
+            ),
+            expectedGeneration: DocumentGeneration(0)
+        )
+    )
+    guard case .command = createResponse else {
+        #expect(Bool(false))
+        return
+    }
+    let topologyResponse = server.handle(
+        .topologySummary(
+            sessionID: sessionID,
+            expectedGeneration: session.generation
+        )
+    )
+    guard case .topologySummary(let topology) = topologyResponse else {
+        #expect(Bool(false))
+        return
+    }
+    let facePair = try agentParallelFaceDimensionTargets(in: topology)
+    let generation = session.generation
+    let dirty = session.isDirty
+
+    let response = server.handle(
+        .objectDimensionSummary(
+            sessionID: sessionID,
+            targets: [facePair.first, facePair.second],
+            expectedGeneration: generation
+        )
+    )
+
+    guard case .objectDimensionSummary(let summary) = response else {
+        #expect(Bool(false))
+        return
+    }
+    #expect(summary.counts.targetCount == 2)
+    #expect(summary.counts.entryCount == 1)
+    let entry = try #require(summary.entries.first)
+    #expect(entry.label == "Face Distance")
+    #expect(entry.isPrimaryForTarget)
+    #expect(abs(entry.resolvedMeters - facePair.distance) < 1.0e-12)
+    #expect(session.generation == generation)
+    #expect(session.isDirty == dirty)
+
+    let targetDistance = facePair.distance + 0.004
+    let setResponse = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .setObjectDimension(
+                target: entry.target,
+                kind: entry.kind,
+                value: .length(targetDistance, .meter)
+            ),
+            expectedGeneration: session.generation
+        )
+    )
+    guard case .command(let setResult) = setResponse else {
+        #expect(Bool(false))
+        return
+    }
+    #expect(setResult.commandName == "setObjectDimension")
+    #expect(setResult.didMutate)
+
+    let updatedResponse = server.handle(
+        .objectDimensionSummary(
+            sessionID: sessionID,
+            targets: [facePair.first, facePair.second],
+            expectedGeneration: session.generation
+        )
+    )
+    guard case .objectDimensionSummary(let updatedSummary) = updatedResponse else {
+        #expect(Bool(false))
+        return
+    }
+    let updatedEntry = try #require(updatedSummary.entries.first)
+    #expect(updatedEntry.inputExpression == .length(targetDistance, .meter))
+    #expect(abs(updatedEntry.resolvedMeters - targetDistance) < 1.0e-12)
 }
 
 @Test func agentReturnsSelectedSketchDimensionSummaryWithoutMutation() async throws {

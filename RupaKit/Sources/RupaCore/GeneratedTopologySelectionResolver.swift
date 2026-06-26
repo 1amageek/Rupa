@@ -147,6 +147,24 @@ public struct GeneratedTopologySelectionResolver: Sendable {
         objectRegistry: ObjectTypeRegistry = .builtIn,
         operationName: String = "Generated topology face"
     ) throws -> BodyFace {
+        let topology = try topologyService.summarize(
+            document: document,
+            objectRegistry: objectRegistry
+        )
+        return try bodyFace(
+            for: target,
+            in: document,
+            topology: topology,
+            operationName: operationName
+        )
+    }
+
+    public func bodyFace(
+        for target: SelectionTarget,
+        in document: DesignDocument,
+        topology: TopologySummaryResult,
+        operationName: String = "Generated topology face"
+    ) throws -> BodyFace {
         guard case .face(let componentID) = target.component,
               let persistentName = componentID.generatedTopologyPersistentName else {
             throw EditorError(
@@ -154,10 +172,6 @@ public struct GeneratedTopologySelectionResolver: Sendable {
                 message: "\(operationName) requires a generated topology face target."
             )
         }
-        let topology = try topologyService.summarize(
-            document: document,
-            objectRegistry: objectRegistry
-        )
         let resolvedSceneNodeID = try resolvedBodySceneNodeID(
             for: target.sceneNodeID,
             preferredFeatureID: sourceFeatureID(in: persistentName, operationName: operationName),
