@@ -255,6 +255,184 @@ import Testing
     #expect(try appliedMeasurement.isSatisfied())
 }
 
+@Test func selectionDimensionApplyUpdatesFirstLineRelativeAngle() async throws {
+    var document = DesignDocument.empty()
+    let referenceFeatureID = try document.createLineSketch(
+        name: "Reference Line",
+        plane: .xy,
+        start: SketchPoint(
+            x: .length(0.0, .millimeter),
+            y: .length(0.0, .millimeter)
+        ),
+        end: SketchPoint(
+            x: .length(10.0, .millimeter),
+            y: .length(0.0, .millimeter)
+        )
+    )
+    let editableFeatureID = try document.createLineSketch(
+        name: "Editable Line",
+        plane: .xy,
+        start: SketchPoint(
+            x: .length(0.0, .millimeter),
+            y: .length(0.0, .millimeter)
+        ),
+        end: SketchPoint(
+            x: .length(0.0, .millimeter),
+            y: .length(10.0, .millimeter)
+        )
+    )
+    let reference = try lineCurveTarget(in: document, featureID: referenceFeatureID)
+    let editable = try lineCurveTarget(in: document, featureID: editableFeatureID)
+    let session = EditorSession(document: document)
+    let addResult = try session.execute(
+        .addSelectionDimension(
+            name: "Relative Angle",
+            kind: .angle,
+            first: editable,
+            second: reference,
+            target: .angle(90.0, .degree)
+        )
+    )
+    let dimensionID = try #require(addResult.addedSelectionDimensionID)
+
+    _ = try session.execute(
+        .setSelectionDimensionTarget(
+            id: dimensionID,
+            target: .angle(45.0, .degree)
+        )
+    )
+    let applyResult = try session.execute(.applySelectionDimensionTarget(id: dimensionID))
+    let appliedEvaluation = try SelectionDimensionService().evaluate(
+        document: session.document,
+        dimensionID: dimensionID
+    )
+    let appliedMeasurement = try #require(appliedEvaluation.measurements.first)
+    let angle = try lineAngle(
+        in: session.document,
+        featureID: editableFeatureID
+    )
+
+    #expect(applyResult.commandName == "applySelectionDimensionTarget")
+    #expect(applyResult.didMutate)
+    #expect(abs(angle - Double.pi / 4.0) <= 1.0e-12)
+    assertAngleQuantity(appliedMeasurement.measured, equals: Double.pi / 4.0)
+    assertAngleQuantity(appliedMeasurement.target, equals: Double.pi / 4.0)
+    #expect(abs(appliedMeasurement.residual.value) <= 1.0e-12)
+    #expect(try appliedMeasurement.isSatisfied())
+}
+
+@Test func selectionDimensionApplyUpdatesArcSpanFromEndpointReferences() async throws {
+    var document = DesignDocument.empty()
+    let featureID = try document.createArcSketch(
+        name: "Measured Arc Span",
+        plane: .xy,
+        center: SketchPoint(
+            x: .length(0.0, .millimeter),
+            y: .length(0.0, .millimeter)
+        ),
+        radius: .length(6.0, .millimeter),
+        startAngle: .angle(0.0, .degree),
+        endAngle: .angle(90.0, .degree)
+    )
+    let targets = try arcEndpointTargets(in: document, featureID: featureID)
+    let session = EditorSession(document: document)
+    let addResult = try session.execute(
+        .addSelectionDimension(
+            name: "Arc Span",
+            kind: .angle,
+            first: targets.start,
+            second: targets.end,
+            target: .angle(90.0, .degree)
+        )
+    )
+    let dimensionID = try #require(addResult.addedSelectionDimensionID)
+
+    _ = try session.execute(
+        .setSelectionDimensionTarget(
+            id: dimensionID,
+            target: .angle(60.0, .degree)
+        )
+    )
+    let applyResult = try session.execute(.applySelectionDimensionTarget(id: dimensionID))
+    let appliedEvaluation = try SelectionDimensionService().evaluate(
+        document: session.document,
+        dimensionID: dimensionID
+    )
+    let appliedMeasurement = try #require(appliedEvaluation.measurements.first)
+    let span = try arcSpan(
+        in: session.document,
+        featureID: featureID
+    )
+
+    #expect(applyResult.commandName == "applySelectionDimensionTarget")
+    #expect(applyResult.didMutate)
+    #expect(abs(span - Double.pi / 3.0) <= 1.0e-12)
+    assertAngleQuantity(appliedMeasurement.measured, equals: Double.pi / 3.0)
+    assertAngleQuantity(appliedMeasurement.target, equals: Double.pi / 3.0)
+    #expect(abs(appliedMeasurement.residual.value) <= 1.0e-12)
+    #expect(try appliedMeasurement.isSatisfied())
+    assertArcEndpointReferences(
+        appliedMeasurement.dimension,
+        expectedSpan: Double.pi / 3.0
+    )
+}
+
+@Test func selectionDimensionApplyUpdatesArcSpanFromEndpointReferencesOnZXPlane() async throws {
+    var document = DesignDocument.empty()
+    let featureID = try document.createArcSketch(
+        name: "Measured ZX Arc Span",
+        plane: .zx,
+        center: SketchPoint(
+            x: .length(0.0, .millimeter),
+            y: .length(0.0, .millimeter)
+        ),
+        radius: .length(6.0, .millimeter),
+        startAngle: .angle(0.0, .degree),
+        endAngle: .angle(90.0, .degree)
+    )
+    let targets = try arcEndpointTargets(in: document, featureID: featureID)
+    let session = EditorSession(document: document)
+    let addResult = try session.execute(
+        .addSelectionDimension(
+            name: "ZX Arc Span",
+            kind: .angle,
+            first: targets.start,
+            second: targets.end,
+            target: .angle(90.0, .degree)
+        )
+    )
+    let dimensionID = try #require(addResult.addedSelectionDimensionID)
+
+    _ = try session.execute(
+        .setSelectionDimensionTarget(
+            id: dimensionID,
+            target: .angle(60.0, .degree)
+        )
+    )
+    let applyResult = try session.execute(.applySelectionDimensionTarget(id: dimensionID))
+    let appliedEvaluation = try SelectionDimensionService().evaluate(
+        document: session.document,
+        dimensionID: dimensionID
+    )
+    let appliedMeasurement = try #require(appliedEvaluation.measurements.first)
+    let span = try arcSpan(
+        in: session.document,
+        featureID: featureID
+    )
+
+    #expect(applyResult.commandName == "applySelectionDimensionTarget")
+    #expect(applyResult.didMutate)
+    #expect(abs(span - Double.pi / 3.0) <= 1.0e-12)
+    assertAngleQuantity(appliedMeasurement.measured, equals: Double.pi / 3.0)
+    assertAngleQuantity(appliedMeasurement.target, equals: Double.pi / 3.0)
+    #expect(abs(appliedMeasurement.residual.value) <= 1.0e-12)
+    #expect(try appliedMeasurement.isSatisfied())
+    assertArcEndpointReferences(
+        appliedMeasurement.dimension,
+        expectedSpan: Double.pi / 3.0
+    )
+}
+
 @Test func selectionDimensionCommandMeasuresGeneratedFacePairDistance() async throws {
     var document = DesignDocument.empty()
     try document.createExtrudedRectangle(
@@ -347,6 +525,23 @@ private func lineEndpointTargets(
     )
 }
 
+private func lineCurveTarget(
+    in document: DesignDocument,
+    featureID: FeatureID
+) throws -> SelectionTarget {
+    let summary = try SketchEntitySummaryService().summarize(document: document)
+    let entry = try #require(summary.entries.first {
+        $0.sourceFeatureID == featureID.description && $0.entityKind == "line"
+    })
+    let sceneNodeIDString = try #require(entry.sceneNodeID)
+    let sceneNodeUUID = try #require(UUID(uuidString: sceneNodeIDString))
+    let curveComponentID = try #require(entry.selectionComponentID)
+    return SelectionTarget(
+        sceneNodeID: SceneNodeID(sceneNodeUUID),
+        component: .sketchEntity(SelectionComponentID(rawValue: curveComponentID))
+    )
+}
+
 private func circleCenterAndCurveTargets(
     in document: DesignDocument,
     featureID: FeatureID
@@ -407,6 +602,36 @@ private func arcCenterAndCurveTargets(
     )
 }
 
+private func arcEndpointTargets(
+    in document: DesignDocument,
+    featureID: FeatureID
+) throws -> (
+    sceneNodeID: SceneNodeID,
+    start: SelectionTarget,
+    end: SelectionTarget
+) {
+    let summary = try SketchEntitySummaryService().summarize(document: document)
+    let entry = try #require(summary.entries.first {
+        $0.sourceFeatureID == featureID.description && $0.entityKind == "arc"
+    })
+    let sceneNodeIDString = try #require(entry.sceneNodeID)
+    let sceneNodeUUID = try #require(UUID(uuidString: sceneNodeIDString))
+    let sceneNodeID = SceneNodeID(sceneNodeUUID)
+    let startHandle = try #require(entry.pointHandles.first { $0.handle == .arcStart })
+    let endHandle = try #require(entry.pointHandles.first { $0.handle == .arcEnd })
+    return (
+        sceneNodeID: sceneNodeID,
+        start: SelectionTarget(
+            sceneNodeID: sceneNodeID,
+            component: .sketchEntity(SelectionComponentID(rawValue: startHandle.selectionComponentID))
+        ),
+        end: SelectionTarget(
+            sceneNodeID: sceneNodeID,
+            component: .sketchEntity(SelectionComponentID(rawValue: endHandle.selectionComponentID))
+        )
+    )
+}
+
 private func opposingFaceTargets(
     in document: DesignDocument
 ) throws -> (first: SelectionTarget, second: SelectionTarget) {
@@ -441,6 +666,21 @@ private func lineLength(
     return (dx * dx + dy * dy).squareRoot()
 }
 
+private func lineAngle(
+    in document: DesignDocument,
+    featureID: FeatureID
+) throws -> Double {
+    guard let feature = document.cadDocument.designGraph.nodes[featureID],
+          case let .sketch(sketch) = feature.operation,
+          case let .line(line) = sketch.entities.values.first else {
+        Issue.record("Expected one source line")
+        return 0.0
+    }
+    let start = try point(line.start, in: document)
+    let end = try point(line.end, in: document)
+    return atan2(end.y - start.y, end.x - start.x)
+}
+
 private func circleRadius(
     in document: DesignDocument,
     featureID: FeatureID
@@ -467,6 +707,28 @@ private func arcRadius(
     return try document.cadDocument.parameters.resolvedValue(for: arc.radius).value
 }
 
+private func arcSpan(
+    in document: DesignDocument,
+    featureID: FeatureID
+) throws -> Double {
+    guard let feature = document.cadDocument.designGraph.nodes[featureID],
+          case let .sketch(sketch) = feature.operation,
+          case let .arc(arc) = sketch.entities.values.first else {
+        Issue.record("Expected one source arc")
+        return 0.0
+    }
+    let start = try document.cadDocument.parameters.resolvedValue(for: arc.startAngle).value
+    let end = try document.cadDocument.parameters.resolvedValue(for: arc.endAngle).value
+    var span = end - start
+    while span <= 0.0 {
+        span += Double.pi * 2.0
+    }
+    while span > Double.pi * 2.0 {
+        span -= Double.pi * 2.0
+    }
+    return span
+}
+
 private func point(
     _ point: SketchPoint,
     in document: DesignDocument
@@ -475,6 +737,15 @@ private func point(
         x: try document.cadDocument.parameters.resolvedValue(for: point.x).value,
         y: try document.cadDocument.parameters.resolvedValue(for: point.y).value
     )
+}
+
+private func assertAngleQuantity(
+    _ quantity: Quantity,
+    equals expectedValue: Double,
+    tolerance: Double = 1.0e-12
+) {
+    #expect(quantity.kind == .angle)
+    #expect(abs(quantity.value - expectedValue) <= tolerance)
 }
 
 private func assertLineEndpointReferences(
@@ -489,4 +760,17 @@ private func assertLineEndpointReferences(
     let parameters = [first.parameter, second.parameter].sorted()
     #expect(abs(parameters[0]) <= 1.0e-12)
     #expect(abs(parameters[1] - expectedLength) <= 1.0e-12)
+}
+
+private func assertArcEndpointReferences(
+    _ dimension: SelectionDimension,
+    expectedSpan: Double
+) {
+    guard case .curve(.parameter(let first)) = dimension.first,
+          case .curve(.parameter(let second)) = dimension.second else {
+        Issue.record("Expected arc endpoint parameter references")
+        return
+    }
+    let parameters = [first.parameter, second.parameter].sorted()
+    #expect(abs((parameters[1] - parameters[0]) - expectedSpan) <= 1.0e-12)
 }

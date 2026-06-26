@@ -175,6 +175,28 @@ public struct SelectionDimensionTargetResolver: Sendable {
                 curve: CurveOutputReference(featureID: reference.featureID, curveIndex: curveIndex),
                 parameter: try lineLength(line, document: document)
             )))
+        case (.arcStart, .arc(let arc)):
+            let parameters = try SketchArcEndpointParameterResolver().endpointParameters(
+                for: arc,
+                plane: sketch.plane,
+                in: document,
+                owner: "Selection dimension"
+            )
+            return .curve(.parameter(CurveParameterReference(
+                curve: CurveOutputReference(featureID: reference.featureID, curveIndex: curveIndex),
+                parameter: parameters.start
+            )))
+        case (.arcEnd, .arc(let arc)):
+            let parameters = try SketchArcEndpointParameterResolver().endpointParameters(
+                for: arc,
+                plane: sketch.plane,
+                in: document,
+                owner: "Selection dimension"
+            )
+            return .curve(.parameter(CurveParameterReference(
+                curve: CurveOutputReference(featureID: reference.featureID, curveIndex: curveIndex),
+                parameter: parameters.end
+            )))
         case (.circleCenter, .circle), (.arcCenter, .arc):
             return .curve(.center(CurveCenterReference(
                 curve: CurveOutputReference(featureID: reference.featureID, curveIndex: curveIndex)
@@ -182,7 +204,7 @@ public struct SelectionDimensionTargetResolver: Sendable {
         default:
             throw EditorError(
                 code: .commandInvalid,
-                message: "Selection dimension sketch point targets currently support line start/end and circle/arc center handles."
+                message: "Selection dimension sketch point targets currently support line start/end plus circle/arc center and arc start/end handles."
             )
         }
     }
@@ -284,4 +306,5 @@ public struct SelectionDimensionTargetResolver: Sendable {
         }
         return quantity.value
     }
+
 }

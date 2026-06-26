@@ -147,6 +147,65 @@ public extension DesignDocument {
                 try cadDocument.validate()
                 try productMetadata.validate(against: cadDocument, objectRegistry: objectRegistry)
                 return cadDocument.selectionDimensions[updatedDimensionIndex]
+            case .lineRelativeAngle(let context):
+                let targetAngle = try resolvedAngle(
+                    dimension.target,
+                    owner: "Selection dimension application target angle"
+                )
+                let appliedAngle = lineAngleClosestToCurrent(
+                    referenceAngle: context.referenceAngle,
+                    targetAngle: targetAngle,
+                    currentAngle: context.currentAngle
+                )
+                try setSketchEntityDimension(
+                    target: context.target,
+                    kind: .angle,
+                    value: .angle(appliedAngle, .radian),
+                    objectRegistry: objectRegistry
+                )
+                guard let updatedDimensionIndex = cadDocument.selectionDimensions.firstIndex(where: { $0.id == id }) else {
+                    throw EditorError(
+                        code: .referenceUnresolved,
+                        message: "Selection dimension application lost the source selection dimension."
+                    )
+                }
+
+                try cadDocument.validate()
+                try productMetadata.validate(against: cadDocument, objectRegistry: objectRegistry)
+                return cadDocument.selectionDimensions[updatedDimensionIndex]
+            case .arcSpanAngle(let context):
+                try setSketchEntityDimension(
+                    target: context.target,
+                    kind: .angle,
+                    value: dimension.target,
+                    objectRegistry: objectRegistry
+                )
+                let updatedParameters = try sourceArcEndpointParameters(
+                    featureID: context.featureID,
+                    entityID: context.entityID
+                )
+                let updatedFirst = selectionReference(
+                    curve: context.curve,
+                    role: context.firstRole,
+                    arcEndpointParameters: updatedParameters
+                )
+                let updatedSecond = selectionReference(
+                    curve: context.curve,
+                    role: context.secondRole,
+                    arcEndpointParameters: updatedParameters
+                )
+                guard let updatedDimensionIndex = cadDocument.selectionDimensions.firstIndex(where: { $0.id == id }) else {
+                    throw EditorError(
+                        code: .referenceUnresolved,
+                        message: "Selection dimension application lost the source selection dimension."
+                    )
+                }
+
+                cadDocument.selectionDimensions[updatedDimensionIndex].first = updatedFirst
+                cadDocument.selectionDimensions[updatedDimensionIndex].second = updatedSecond
+                try cadDocument.validate()
+                try productMetadata.validate(against: cadDocument, objectRegistry: objectRegistry)
+                return cadDocument.selectionDimensions[updatedDimensionIndex]
             }
         } catch let error as EditorError {
             self = originalDocument
@@ -204,31 +263,48 @@ public extension DesignDocument {
     private func sourceSelectionDimensionApplication(
         for dimension: SelectionDimension
     ) throws -> SelectionDimensionSourceApplication {
-        guard dimension.kind == .distance else {
-            throw EditorError(
-                code: .commandInvalid,
-                message: "Selection dimension application currently supports distance dimensions only."
-            )
-        }
-
-        switch (dimension.first, dimension.second) {
-        case (.curve(.parameter(_)), .curve(.parameter(_))):
-            return .lineLength(try sourceLineEndpointDimensionContext(for: dimension))
-        case (.curve(.center(let center)), .curve(let radialReference)):
-            return .circularRadius(try sourceCircularRadiusDimensionContext(
-                center: center,
-                radialReference: radialReference
-            ))
-        case (.curve(let radialReference), .curve(.center(let center))):
-            return .circularRadius(try sourceCircularRadiusDimensionContext(
-                center: center,
-                radialReference: radialReference
-            ))
-        default:
-            throw EditorError(
-                code: .commandInvalid,
-                message: "Selection dimension application currently supports source line length and source circle/arc radius dimensions."
-            )
+        switch dimension.kind {
+        case .distance:
+            switch (dimension.first, dimension.second) {
+            case (.curve(.parameter(_)), .curve(.parameter(_))):
+                return .lineLength(try sourceLineEndpointDimensionContext(for: dimension))
+            case (.curve(.center(let center)), .curve(let radialReference)):
+                return .circularRadius(try sourceCircularRadiusDimensionContext(
+                    center: center,
+                    radialReference: radialReference
+                ))
+            case (.curve(let radialReference), .curve(.center(let center))):
+                return .circularRadius(try sourceCircularRadiusDimensionContext(
+                    center: center,
+                    radialReference: radialReference
+                ))
+            default:
+                throw EditorError(
+                    code: .commandInvalid,
+                    message: "Selection dimension application currently supports source line length and source circle/arc radius distance dimensions."
+                )
+            }
+        case .angle:
+            switch (dimension.first, dimension.second) {
+            case (.curve(.parameter(let firstParameter)), .curve(.parameter(let secondParameter))):
+                if try isSourceArcParameterPair(firstParameter, secondParameter) {
+                    return .arcSpanAngle(try sourceArcSpanAngleDimensionContext(for: dimension))
+                }
+                return .lineRelativeAngle(try sourceLineAngleDimensionContext(
+                    firstReference: .parameter(firstParameter),
+                    secondReference: .parameter(secondParameter)
+                ))
+            case (.curve(let firstReference), .curve(let secondReference)):
+                return .lineRelativeAngle(try sourceLineAngleDimensionContext(
+                    firstReference: firstReference,
+                    secondReference: secondReference
+                ))
+            default:
+                throw EditorError(
+                    code: .commandInvalid,
+                    message: "Selection dimension application currently supports source line relative angle and source arc span angle dimensions."
+                )
+            }
         }
     }
 
@@ -353,6 +429,132 @@ public extension DesignDocument {
         )
     }
 
+    private func sourceLineAngleDimensionContext(
+        firstReference: CurveSubobjectReference,
+        secondReference: CurveSubobjectReference
+    ) throws -> SelectionDimensionSourceLineAngleContext {
+        let firstCurve = try angleCurveOutputReference(from: firstReference)
+        let secondCurve = try angleCurveOutputReference(from: secondReference)
+        guard firstCurve != secondCurve else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Selection angle application requires two different source line references."
+            )
+        }
+
+        let firstLine = try sourceLineAngleContext(curve: firstCurve)
+        let referenceLine = try sourceLineAngleContext(curve: secondCurve)
+        guard firstLine.plane == referenceLine.plane else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Selection line angle application requires both source lines to share the same sketch plane."
+            )
+        }
+
+        return SelectionDimensionSourceLineAngleContext(
+            featureID: firstLine.featureID,
+            entityID: firstLine.entityID,
+            curve: firstCurve,
+            target: firstLine.target,
+            currentAngle: firstLine.angle,
+            referenceAngle: referenceLine.angle
+        )
+    }
+
+    private func sourceArcSpanAngleDimensionContext(
+        for dimension: SelectionDimension
+    ) throws -> SelectionDimensionSourceArcAngleContext {
+        guard case .curve(.parameter(let firstParameter)) = dimension.first,
+              case .curve(.parameter(let secondParameter)) = dimension.second else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Selection arc span application requires source arc endpoint parameters."
+            )
+        }
+        guard firstParameter.curve == secondParameter.curve else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Selection arc span application requires both references to belong to the same source arc."
+            )
+        }
+
+        let featureID = firstParameter.curve.featureID
+        let entityID = try sourceCurveEntityID(
+            featureID: featureID,
+            curveIndex: firstParameter.curve.curveIndex
+        )
+        guard let feature = cadDocument.designGraph.nodes[featureID],
+              case let .sketch(sketch) = feature.operation,
+              case .arc = sketch.entities[entityID] else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Selection arc span application currently supports source arc endpoint parameters only."
+            )
+        }
+
+        let endpointParameters = try sourceArcEndpointParameters(
+            featureID: featureID,
+            entityID: entityID
+        )
+        let firstRole = try arcEndpointRole(
+            parameter: firstParameter.parameter,
+            endpointParameters: endpointParameters
+        )
+        let secondRole = try arcEndpointRole(
+            parameter: secondParameter.parameter,
+            endpointParameters: endpointParameters
+        )
+        guard firstRole != secondRole else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Selection arc span application requires one arc start reference and one arc end reference."
+            )
+        }
+
+        let target = SelectionTarget(
+            sceneNodeID: try sketchSceneNodeID(featureID: featureID),
+            component: .sketchEntity(
+                SelectionComponentID.sketchEntity(
+                    featureID: featureID,
+                    entityID: entityID
+                )
+            )
+        )
+        return SelectionDimensionSourceArcAngleContext(
+            featureID: featureID,
+            entityID: entityID,
+            curve: firstParameter.curve,
+            target: target,
+            firstRole: firstRole,
+            secondRole: secondRole
+        )
+    }
+
+    private func isSourceArcParameterPair(
+        _ first: CurveParameterReference,
+        _ second: CurveParameterReference
+    ) throws -> Bool {
+        guard first.curve == second.curve else {
+            return false
+        }
+        let entityID = try sourceCurveEntityID(
+            featureID: first.curve.featureID,
+            curveIndex: first.curve.curveIndex
+        )
+        guard let feature = cadDocument.designGraph.nodes[first.curve.featureID],
+              case let .sketch(sketch) = feature.operation,
+              let entity = sketch.entities[entityID] else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "Selection angle application could not resolve the source curve entity."
+            )
+        }
+        if case .arc = entity {
+            return true
+        }
+        return false
+    }
+
     private func radialCurveOutputReference(
         from reference: CurveSubobjectReference
     ) throws -> CurveOutputReference {
@@ -367,6 +569,24 @@ public extension DesignDocument {
             throw EditorError(
                 code: .commandInvalid,
                 message: "Selection dimension application requires a radial curve point or whole curve reference."
+            )
+        }
+    }
+
+    private func angleCurveOutputReference(
+        from reference: CurveSubobjectReference
+    ) throws -> CurveOutputReference {
+        switch reference {
+        case .whole(let curve):
+            return curve
+        case .parameter(let parameter):
+            return parameter.curve
+        case .span(let span):
+            return span.curve
+        case .center, .controlPoint, .knot:
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Selection angle application requires source curve references with tangent direction."
             )
         }
     }
@@ -444,6 +664,70 @@ public extension DesignDocument {
         return (dx * dx + dy * dy).squareRoot()
     }
 
+    private func sourceLineAngleContext(
+        curve: CurveOutputReference
+    ) throws -> SourceLineAngleContext {
+        let featureID = curve.featureID
+        let entityID = try sourceCurveEntityID(
+            featureID: featureID,
+            curveIndex: curve.curveIndex
+        )
+        guard let feature = cadDocument.designGraph.nodes[featureID],
+              case let .sketch(sketch) = feature.operation,
+              case let .line(line) = sketch.entities[entityID] else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Selection line angle application currently supports source line references only."
+            )
+        }
+        let start = try resolvedPoint(line.start, owner: "Selection line angle application line start")
+        let end = try resolvedPoint(line.end, owner: "Selection line angle application line end")
+        let dx = end.x - start.x
+        let dy = end.y - start.y
+        guard dx.isFinite, dy.isFinite, hypot(dx, dy) > selectionDimensionEndpointTolerance else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Selection line angle application requires non-degenerate source lines."
+            )
+        }
+        let target = SelectionTarget(
+            sceneNodeID: try sketchSceneNodeID(featureID: featureID),
+            component: .sketchEntity(
+                SelectionComponentID.sketchEntity(
+                    featureID: featureID,
+                    entityID: entityID
+                )
+            )
+        )
+        return SourceLineAngleContext(
+            featureID: featureID,
+            entityID: entityID,
+            plane: sketch.plane,
+            target: target,
+            angle: atan2(dy, dx)
+        )
+    }
+
+    private func sourceArcEndpointParameters(
+        featureID: FeatureID,
+        entityID: SketchEntityID
+    ) throws -> SketchArcEndpointParameterResolver.EndpointParameters {
+        guard let feature = cadDocument.designGraph.nodes[featureID],
+              case let .sketch(sketch) = feature.operation,
+              case let .arc(arc) = sketch.entities[entityID] else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "Selection arc span application requires an existing source arc."
+            )
+        }
+        return try SketchArcEndpointParameterResolver().endpointParameters(
+            for: arc,
+            plane: sketch.plane,
+            in: self,
+            owner: "Selection arc span application"
+        )
+    }
+
     private func resolvedPoint(
         _ point: SketchPoint,
         owner: String
@@ -474,6 +758,26 @@ public extension DesignDocument {
         return quantity.value
     }
 
+    private func resolvedAngle(
+        _ expression: CADExpression,
+        owner: String
+    ) throws -> Double {
+        let quantity = try cadDocument.parameters.resolvedValue(for: expression)
+        guard quantity.kind == .angle else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "\(owner) must resolve to an angle."
+            )
+        }
+        guard quantity.value.isFinite else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "\(owner) must resolve to a finite angle."
+            )
+        }
+        return quantity.value
+    }
+
     private func lineEndpointRole(
         parameter: Double,
         lineLength: Double
@@ -496,6 +800,28 @@ public extension DesignDocument {
         )
     }
 
+    private func arcEndpointRole(
+        parameter: Double,
+        endpointParameters: SketchArcEndpointParameterResolver.EndpointParameters
+    ) throws -> SelectionDimensionCurveEndpointRole {
+        guard parameter.isFinite else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Selection arc span application requires finite arc endpoint parameters."
+            )
+        }
+        if abs(parameter - endpointParameters.start) <= selectionDimensionEndpointTolerance {
+            return .start
+        }
+        if abs(parameter - endpointParameters.end) <= selectionDimensionEndpointTolerance {
+            return .end
+        }
+        throw EditorError(
+            code: .commandInvalid,
+            message: "Selection arc span application requires current arc start and arc end references."
+        )
+    }
+
     private func selectionReference(
         curve: CurveOutputReference,
         role: SelectionDimensionLineEndpointRole,
@@ -515,6 +841,50 @@ public extension DesignDocument {
         }
     }
 
+    private func selectionReference(
+        curve: CurveOutputReference,
+        role: SelectionDimensionCurveEndpointRole,
+        arcEndpointParameters: SketchArcEndpointParameterResolver.EndpointParameters
+    ) -> SelectionReference {
+        switch role {
+        case .start:
+            return .curve(.parameter(CurveParameterReference(
+                curve: curve,
+                parameter: arcEndpointParameters.start
+            )))
+        case .end:
+            return .curve(.parameter(CurveParameterReference(
+                curve: curve,
+                parameter: arcEndpointParameters.end
+            )))
+        }
+    }
+
+    private func lineAngleClosestToCurrent(
+        referenceAngle: Double,
+        targetAngle: Double,
+        currentAngle: Double
+    ) -> Double {
+        let positive = referenceAngle + targetAngle
+        let negative = referenceAngle - targetAngle
+        if abs(normalizedSignedAngle(positive - currentAngle)) <=
+            abs(normalizedSignedAngle(negative - currentAngle)) {
+            return positive
+        }
+        return negative
+    }
+
+    private func normalizedSignedAngle(_ angle: Double) -> Double {
+        let period = Double.pi * 2.0
+        var result = angle.truncatingRemainder(dividingBy: period)
+        if result > Double.pi {
+            result -= period
+        } else if result < -Double.pi {
+            result += period
+        }
+        return result
+    }
+
     private var selectionDimensionEndpointTolerance: Double {
         1.0e-8
     }
@@ -525,9 +895,16 @@ private enum SelectionDimensionLineEndpointRole: Equatable, Sendable {
     case end
 }
 
+private enum SelectionDimensionCurveEndpointRole: Equatable, Sendable {
+    case start
+    case end
+}
+
 private enum SelectionDimensionSourceApplication: Sendable {
     case lineLength(SelectionDimensionSourceLineContext)
     case circularRadius(SelectionDimensionSourceCircularContext)
+    case lineRelativeAngle(SelectionDimensionSourceLineAngleContext)
+    case arcSpanAngle(SelectionDimensionSourceArcAngleContext)
 }
 
 private struct SelectionDimensionSourceLineContext: Sendable {
@@ -544,4 +921,30 @@ private struct SelectionDimensionSourceCircularContext: Sendable {
     var entityID: SketchEntityID
     var curve: CurveOutputReference
     var target: SelectionTarget
+}
+
+private struct SelectionDimensionSourceLineAngleContext: Sendable {
+    var featureID: FeatureID
+    var entityID: SketchEntityID
+    var curve: CurveOutputReference
+    var target: SelectionTarget
+    var currentAngle: Double
+    var referenceAngle: Double
+}
+
+private struct SelectionDimensionSourceArcAngleContext: Sendable {
+    var featureID: FeatureID
+    var entityID: SketchEntityID
+    var curve: CurveOutputReference
+    var target: SelectionTarget
+    var firstRole: SelectionDimensionCurveEndpointRole
+    var secondRole: SelectionDimensionCurveEndpointRole
+}
+
+private struct SourceLineAngleContext: Sendable {
+    var featureID: FeatureID
+    var entityID: SketchEntityID
+    var plane: SketchPlane
+    var target: SelectionTarget
+    var angle: Double
 }
