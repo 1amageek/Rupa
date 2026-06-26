@@ -23,16 +23,32 @@ public struct ObjectDimensionSummaryService: Sendable {
             for: targets,
             in: document.productMetadata
         )
+        let topology = try topologyIfGeneratedFaceTargetsExist(
+            for: dimensionTargets,
+            in: document,
+            objectRegistry: objectRegistry
+        )
         let summaryEntries: [ObjectDimensionSummaryResult.Entry]
         if let facePairEntry = try facePairEntryIfPresent(
             for: dimensionTargets,
             in: document,
-            objectRegistry: objectRegistry
+            objectRegistry: objectRegistry,
+            topology: topology
         ) {
             summaryEntries = [facePairEntry]
         } else {
+            let faceResolver = ObjectFaceDimensionResolver()
             summaryEntries = try dimensionTargets.flatMap { target in
-                try entries(for: resolver.resolve(target: target, in: document))
+                let source = try resolver.resolve(target: target, in: document)
+                let faceDimension = try faceResolver.resolveSingleIfPresent(
+                    target: target,
+                    source: source,
+                    in: document,
+                    objectRegistry: objectRegistry,
+                    topology: topology,
+                    operationName: "Object dimension face summary"
+                )
+                return entries(for: source, primaryKind: faceDimension?.kind)
             }
         }
         return ObjectDimensionSummaryResult(
@@ -54,18 +70,20 @@ public struct ObjectDimensionSummaryService: Sendable {
     private func facePairEntryIfPresent(
         for targets: [SelectionTarget],
         in document: DesignDocument,
-        objectRegistry: ObjectTypeRegistry
+        objectRegistry: ObjectTypeRegistry,
+        topology: TopologySummaryResult?
     ) throws -> ObjectDimensionSummaryResult.Entry? {
         guard targets.count == 2,
               let first = targets.first,
               let second = targets.dropFirst().first else {
             return nil
         }
-        guard let dimension = try ObjectFacePairDimensionResolver().resolveIfPresent(
+        guard let dimension = try ObjectFaceDimensionResolver().resolvePairIfPresent(
             first: first,
             second: second,
             in: document,
             objectRegistry: objectRegistry,
+            topology: topology,
             operationName: "Object dimension face-pair summary"
         ) else {
             return nil
@@ -85,6 +103,27 @@ public struct ObjectDimensionSummaryService: Sendable {
             isPrimaryForTarget: true,
             target: dimension.target
         )
+    }
+
+    private func topologyIfGeneratedFaceTargetsExist(
+        for targets: [SelectionTarget],
+        in document: DesignDocument,
+        objectRegistry: ObjectTypeRegistry
+    ) throws -> TopologySummaryResult? {
+        guard targets.contains(where: isGeneratedFaceTarget) else {
+            return nil
+        }
+        return try TopologySummaryService().summarize(
+            document: document,
+            objectRegistry: objectRegistry
+        )
+    }
+
+    private func isGeneratedFaceTarget(_ target: SelectionTarget) -> Bool {
+        guard case .face(let componentID) = target.component else {
+            return false
+        }
+        return componentID.generatedTopologyPersistentName != nil
     }
 
     private func dimensionTargets(
@@ -144,7 +183,10 @@ public struct ObjectDimensionSummaryService: Sendable {
         }
     }
 
-    private func entries(for source: ObjectDimensionSource) -> [ObjectDimensionSummaryResult.Entry] {
+    private func entries(
+        for source: ObjectDimensionSource,
+        primaryKind: ObjectDimensionKind? = nil
+    ) -> [ObjectDimensionSummaryResult.Entry] {
         switch source.shape {
         case .box:
             return [
@@ -155,7 +197,7 @@ public struct ObjectDimensionSummaryService: Sendable {
                     label: "Size X",
                     inputExpression: .length(source.sizeX, .meter),
                     resolvedMeters: source.sizeX,
-                    isPrimaryForTarget: isPrimary(source: source, kind: .sizeX)
+                    isPrimaryForTarget: isPrimary(source: source, kind: .sizeX, inferredPrimaryKind: primaryKind)
                 ),
                 entry(
                     source: source,
@@ -165,7 +207,7 @@ public struct ObjectDimensionSummaryService: Sendable {
                     inputExpression: .length(source.sizeY, .meter),
                     sourceExpression: source.depthExpression,
                     resolvedMeters: source.sizeY,
-                    isPrimaryForTarget: isPrimary(source: source, kind: .sizeY)
+                    isPrimaryForTarget: isPrimary(source: source, kind: .sizeY, inferredPrimaryKind: primaryKind)
                 ),
                 entry(
                     source: source,
@@ -174,7 +216,7 @@ public struct ObjectDimensionSummaryService: Sendable {
                     label: "Size Z",
                     inputExpression: .length(source.sizeZ, .meter),
                     resolvedMeters: source.sizeZ,
-                    isPrimaryForTarget: isPrimary(source: source, kind: .sizeZ)
+                    isPrimaryForTarget: isPrimary(source: source, kind: .sizeZ, inferredPrimaryKind: primaryKind)
                 ),
             ]
         case .cylinder:
@@ -187,7 +229,7 @@ public struct ObjectDimensionSummaryService: Sendable {
                     label: "Diameter",
                     inputExpression: .length(radius * 2.0, .meter),
                     resolvedMeters: radius * 2.0,
-                    isPrimaryForTarget: isPrimary(source: source, kind: .diameter)
+                    isPrimaryForTarget: isPrimary(source: source, kind: .diameter, inferredPrimaryKind: primaryKind)
                 ),
                 entry(
                     source: source,
@@ -197,7 +239,7 @@ public struct ObjectDimensionSummaryService: Sendable {
                     inputExpression: .length(radius, .meter),
                     sourceExpression: source.radiusExpression,
                     resolvedMeters: radius,
-                    isPrimaryForTarget: isPrimary(source: source, kind: .radius)
+                    isPrimaryForTarget: isPrimary(source: source, kind: .radius, inferredPrimaryKind: primaryKind)
                 ),
                 entry(
                     source: source,
@@ -207,7 +249,7 @@ public struct ObjectDimensionSummaryService: Sendable {
                     inputExpression: .length(source.sizeY, .meter),
                     sourceExpression: source.depthExpression,
                     resolvedMeters: source.sizeY,
-                    isPrimaryForTarget: isPrimary(source: source, kind: .sizeY)
+                    isPrimaryForTarget: isPrimary(source: source, kind: .sizeY, inferredPrimaryKind: primaryKind)
                 ),
             ]
         }
@@ -277,7 +319,14 @@ public struct ObjectDimensionSummaryService: Sendable {
         }
     }
 
-    private func isPrimary(source: ObjectDimensionSource, kind: ObjectDimensionKind) -> Bool {
+    private func isPrimary(
+        source: ObjectDimensionSource,
+        kind: ObjectDimensionKind,
+        inferredPrimaryKind: ObjectDimensionKind? = nil
+    ) -> Bool {
+        if let inferredPrimaryKind {
+            return kind == inferredPrimaryKind
+        }
         switch source.target.component {
         case .object:
             switch source.shape {

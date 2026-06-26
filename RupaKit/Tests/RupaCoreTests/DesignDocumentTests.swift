@@ -988,6 +988,49 @@ import Testing
     #expect(summary.entries.first { $0.kind == .sizeY }?.sourceExpression == .length(0.5, .meter))
 }
 
+@Test func objectDimensionSummaryInfersPrimaryDimensionFromGeneratedBoxFace() async throws {
+    var document = DesignDocument.empty()
+    try document.createExtrudedRectangle(
+        name: "Dimension Summary Generated Face Box",
+        plane: .xy,
+        width: .length(1.0, .meter),
+        height: .length(1.5, .meter),
+        depth: .length(0.5, .meter),
+        direction: .normal
+    )
+    let bodyNode = try #require(document.productMetadata.sceneNodes.values.first {
+        $0.reference?.kind == .body
+    })
+    let resolver = GeneratedTopologySelectionResolver()
+    let requestedFaces: [(face: BodyFace, expectedKind: ObjectDimensionKind)] = [
+        (.right, .sizeX),
+        (.front, .sizeY),
+        (.top, .sizeZ),
+    ]
+
+    for requestedFace in requestedFaces {
+        let componentID = try #require(
+            try resolver.componentID(
+                for: bodyNode.id,
+                bodyFace: requestedFace.face,
+                in: document
+            )
+        )
+        let target = SelectionTarget(sceneNodeID: bodyNode.id, component: .face(componentID))
+
+        let summary = try ObjectDimensionSummaryService().summarize(
+            document: document,
+            targets: [target]
+        )
+
+        #expect(summary.counts.targetCount == 1)
+        #expect(summary.counts.entryCount == 3)
+        let primary = try #require(summary.entries.first { $0.isPrimaryForTarget })
+        #expect(primary.kind == requestedFace.expectedKind)
+        #expect(primary.target == target)
+    }
+}
+
 @MainActor
 @Test func objectDimensionSummaryExpandsIndependentCopyOutputRootToBodyDescendants() async throws {
     let session = EditorSession()
@@ -1078,6 +1121,51 @@ import Testing
     #expect(abs((values[.sizeY] ?? 0.0) - 1.0) < 0.000_000_000_001)
     #expect(summary.entries.first { $0.kind == .radius }?.sourceExpression == .length(0.5, .meter))
     #expect(summary.entries.first { $0.kind == .sizeY }?.sourceExpression == .length(1.0, .meter))
+}
+
+@Test func objectDimensionSummaryInfersPrimaryDimensionFromGeneratedCylinderFace() async throws {
+    var document = DesignDocument.empty()
+    try document.createExtrudedCircle(
+        name: "Dimension Summary Generated Face Cylinder",
+        plane: .xy,
+        center: SketchPoint(
+            x: .length(0.0, .meter),
+            y: .length(0.0, .meter)
+        ),
+        radius: .length(0.5, .meter),
+        depth: .length(1.0, .meter),
+        direction: .normal
+    )
+    let bodyNode = try #require(document.productMetadata.sceneNodes.values.first {
+        $0.reference?.kind == .body && $0.object?.typeID == .cylinder
+    })
+    let resolver = GeneratedTopologySelectionResolver()
+    let requestedFaces: [(face: BodyFace, expectedKind: ObjectDimensionKind)] = [
+        (.side, .diameter),
+        (.front, .sizeY),
+    ]
+
+    for requestedFace in requestedFaces {
+        let componentID = try #require(
+            try resolver.componentID(
+                for: bodyNode.id,
+                bodyFace: requestedFace.face,
+                in: document
+            )
+        )
+        let target = SelectionTarget(sceneNodeID: bodyNode.id, component: .face(componentID))
+
+        let summary = try ObjectDimensionSummaryService().summarize(
+            document: document,
+            targets: [target]
+        )
+
+        #expect(summary.counts.targetCount == 1)
+        #expect(summary.counts.entryCount == 3)
+        let primary = try #require(summary.entries.first { $0.isPrimaryForTarget })
+        #expect(primary.kind == requestedFace.expectedKind)
+        #expect(primary.target == target)
+    }
 }
 
 @Test func objectDimensionSummaryListsDepthCandidateFromGeneratedEdgeTarget() async throws {

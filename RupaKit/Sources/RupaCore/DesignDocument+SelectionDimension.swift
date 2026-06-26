@@ -437,7 +437,7 @@ public extension DesignDocument {
         else {
             return nil
         }
-        guard let dimension = try ObjectFacePairDimensionResolver().resolveIfPresent(
+        guard let dimension = try ObjectFaceDimensionResolver().resolvePairIfPresent(
             first: firstTarget,
             second: secondTarget,
             in: self,

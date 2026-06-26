@@ -5606,6 +5606,69 @@ private func rawAgentProtocolJSON(_ source: String) -> Data {
     #expect(session.isDirty == dirty)
 }
 
+@Test func agentInfersObjectDimensionPrimaryFromGeneratedFaceWithoutMutation() async throws {
+    let server = AgentCommandController()
+    let sessionID = UUID()
+    let session = EditorSession()
+    server.register(session: session, id: sessionID)
+
+    let createResponse = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .createExtrudedRectangle(
+                name: "Agent Dimension Summary Generated Face Box",
+                plane: .xy,
+                width: .length(24.0, .millimeter),
+                height: .length(12.0, .millimeter),
+                depth: .length(6.0, .millimeter),
+                direction: .normal
+            ),
+            expectedGeneration: DocumentGeneration(0)
+        )
+    )
+    guard case .command = createResponse else {
+        #expect(Bool(false))
+        return
+    }
+    let topologyResponse = server.handle(
+        .topologySummary(
+            sessionID: sessionID,
+            expectedGeneration: session.generation
+        )
+    )
+    guard case .topologySummary(let topology) = topologyResponse else {
+        #expect(Bool(false))
+        return
+    }
+    let endFace = try #require(topology.entries.first {
+        $0.kind == .face && $0.generatedRole == "endFace"
+    })
+    let faceTarget = try #require(endFace.selectionTarget())
+    let generation = session.generation
+    let dirty = session.isDirty
+
+    let response = server.handle(
+        .objectDimensionSummary(
+            sessionID: sessionID,
+            targets: [faceTarget],
+            expectedGeneration: generation
+        )
+    )
+
+    guard case .objectDimensionSummary(let summary) = response else {
+        #expect(Bool(false))
+        return
+    }
+    #expect(summary.counts.targetCount == 1)
+    #expect(summary.counts.entryCount == 3)
+    let primary = try #require(summary.entries.first { $0.isPrimaryForTarget })
+    #expect(primary.kind == .sizeY)
+    #expect(primary.target == faceTarget)
+    #expect(abs(primary.resolvedMeters - 0.006) < 1.0e-12)
+    #expect(session.generation == generation)
+    #expect(session.isDirty == dirty)
+}
+
 @Test func agentUsesGeneratedFacePairObjectDimensionSummaryForMutation() async throws {
     let server = AgentCommandController()
     let sessionID = UUID()

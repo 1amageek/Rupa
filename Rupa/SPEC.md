@@ -1183,7 +1183,7 @@ The package-level socket listener supports start, stop, stale socket replacement
 | `selection.dimensionEvaluation` | Evaluate an existing selection dimension without mutating source. |
 | `document.curveAnalysis` | Return source curve and curvature diagnostics without mutating source. |
 | `document.topologySummary` | Summarize Swift-CAD generated BRep topology and persistent names for an open document through its app session without mutating source. |
-| `document.objectDimensionSummary` | Return editable object dimension candidates for selected object, face, generated depth-edge, or supported generated opposing face-pair targets without mutating source. |
+| `document.objectDimensionSummary` | Return editable object dimension candidates for selected object, face including generated face-normal primary inference, generated depth-edge, or supported generated opposing face-pair targets without mutating source. |
 | `document.surfaceSourceSummary` | Return source and generated surface references for Agent targeting without mutating source. |
 | `document.surfaceAnalysis` | Sample generated B-spline faces for bounded UV points, oriented normals, analytic tangents, mean/Gaussian/U/V/principal curvature, principal directions, ordered trim-boundary points, and finite-difference surface curvature-comb diagnostics without mutating source. |
 | `document.surfaceFrames` | Return evaluated UVN frame data for selected supported surface samples without mutating source. |

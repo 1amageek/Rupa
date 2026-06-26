@@ -754,7 +754,7 @@ public final class AgentCommandController: AgentClientProtocol {
         capability(
             "setObjectDimension",
             category: .solid,
-            summary: "Set supported selected object dimensions for rectangle-extrude bodies, circle-extrude cylinder bodies, generated extrusion depth edges, and object-dimension candidates discovered from opposing generated face pairs.",
+            summary: "Set supported selected object dimensions for rectangle-extrude bodies, circle-extrude cylinder bodies, generated face-normal candidates, generated extrusion depth edges, and object-dimension candidates discovered from opposing generated face pairs.",
             access: .automationCommand,
             mutatesDocument: true,
             discovery: [.topologySummary, .objectDimensionSummary],
@@ -1158,7 +1158,7 @@ public final class AgentCommandController: AgentClientProtocol {
         capability(
             "objectDimensionSummary",
             category: .read,
-            summary: "List editable Dimension command candidates for selected object, face, generated extrusion depth edge, or generated opposing face-pair targets without mutation, including box size axes, cylinder diameter, radius, depth, and supported face-distance candidates.",
+            summary: "List editable Dimension command candidates for selected object, face, generated face-normal, generated extrusion depth edge, or generated opposing face-pair targets without mutation, including box size axes, cylinder diameter, radius, depth, and supported face-distance candidates.",
             access: .agentRequest,
             mutatesDocument: false,
             discovery: [.objectDimensionSummary, .topologySummary],
