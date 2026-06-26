@@ -762,6 +762,16 @@ public final class AgentCommandController: AgentClientProtocol {
             failureMode: "Rejects non-body targets, unsupported edge topology, unsupported dimension kinds, invalid values, non-extruded sources, and stale generations before mutation."
         ),
         capability(
+            "setSelectionDimensionTarget",
+            category: .solid,
+            summary: "Set the target expression of an existing persistent CAD selection dimension by SelectionDimensionID after evaluating current selection dimensions.",
+            access: .automationCommand,
+            mutatesDocument: true,
+            discovery: [.selectionDimensionEvaluation],
+            targets: [.document, .face, .edge, .vertex, .sketchEntity, .sketchPointHandle],
+            failureMode: "Rejects missing selection dimension IDs, target quantity kinds that do not match the stored selection dimension kind, invalid values, and stale generations before mutation."
+        ),
+        capability(
             "setExtrudeDistance",
             category: .solid,
             summary: "Set an existing extrude feature distance directly by FeatureID, including independent-copy Pattern Array cloned body features discovered from summaries.",

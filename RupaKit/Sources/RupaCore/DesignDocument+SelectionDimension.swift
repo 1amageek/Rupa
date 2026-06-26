@@ -43,6 +43,43 @@ public extension DesignDocument {
     }
 
     @discardableResult
+    mutating func setSelectionDimensionTarget(
+        id: SelectionDimensionID,
+        target: CADExpression,
+        objectRegistry: ObjectTypeRegistry = .builtIn
+    ) throws -> SelectionDimension {
+        guard cadDocument.selectionDimensions.contains(where: { $0.id == id }) else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "Selection dimension target update requires an existing selection dimension."
+            )
+        }
+
+        var updatedCADDocument = cadDocument
+        let updatedDimension: SelectionDimension
+        do {
+            updatedDimension = try updatedCADDocument.setSelectionDimensionTarget(
+                id: id,
+                target: target
+            )
+        } catch {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Selection dimension target update produced an invalid CAD document: \(String(describing: error))"
+            )
+        }
+
+        var updatedDocument = self
+        updatedDocument.cadDocument = updatedCADDocument
+        try updatedDocument.productMetadata.validate(
+            against: updatedDocument.cadDocument,
+            objectRegistry: objectRegistry
+        )
+        self = updatedDocument
+        return updatedDimension
+    }
+
+    @discardableResult
     mutating func removeSelectionDimension(
         id: SelectionDimensionID,
         objectRegistry: ObjectTypeRegistry = .builtIn

@@ -82,6 +82,20 @@ import Testing
     )
     let dimensionID = try #require(addResult.addedSelectionDimensionID)
 
+    let setResult = try runner.execute(
+        .setSelectionDimensionTarget(
+            id: dimensionID,
+            target: .length(10.0, .millimeter)
+        ),
+        in: session
+    )
+
+    #expect(setResult.message == "Selection dimension target updated.")
+    #expect(setResult.commandName == "setSelectionDimensionTarget")
+    #expect(setResult.didMutate)
+    #expect(setResult.generation == DocumentGeneration(2))
+    #expect(session.document.cadDocument.selectionDimensions.first?.target == .length(10.0, .millimeter))
+
     let removeResult = try runner.execute(
         .removeSelectionDimension(id: dimensionID),
         in: session
@@ -90,7 +104,7 @@ import Testing
     #expect(removeResult.message == "Selection dimension removed.")
     #expect(removeResult.commandName == "removeSelectionDimension")
     #expect(removeResult.didMutate)
-    #expect(removeResult.generation == DocumentGeneration(2))
+    #expect(removeResult.generation == DocumentGeneration(3))
     #expect(session.document.cadDocument.selectionDimensions.isEmpty)
     #expect(session.document.productMetadata.measurements.isEmpty)
 }

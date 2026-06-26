@@ -2484,6 +2484,14 @@ public final class EditorSession {
     }
 
     @discardableResult
+    public func setSelectionDimensionTarget(
+        id: SelectionDimensionID,
+        target: CADExpression
+    ) -> CommandExecutionResult? {
+        perform(.setSelectionDimensionTarget(id: id, target: target))
+    }
+
+    @discardableResult
     public func removeSelectionDimension(
         id: SelectionDimensionID
     ) -> CommandExecutionResult? {

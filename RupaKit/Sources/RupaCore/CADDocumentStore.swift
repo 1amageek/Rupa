@@ -610,6 +610,16 @@ public final class CADDocumentStore {
             document = updatedDocument
             try commitMutation()
             evaluateCurrentDocument()
+        case .setSelectionDimensionTarget(let id, let target):
+            var updatedDocument = document
+            try updatedDocument.setSelectionDimensionTarget(
+                id: id,
+                target: target,
+                objectRegistry: objectRegistry
+            )
+            document = updatedDocument
+            try commitMutation()
+            evaluateCurrentDocument()
         case .removeSelectionDimension(let id):
             var updatedDocument = document
             try updatedDocument.removeSelectionDimension(

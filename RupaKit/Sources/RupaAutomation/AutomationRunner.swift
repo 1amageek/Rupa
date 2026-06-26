@@ -516,6 +516,20 @@ public struct AutomationRunner {
                 diagnostics: result.diagnostics,
                 addedSelectionDimensionID: result.addedSelectionDimensionID
             )
+        case .setSelectionDimensionTarget(let id, let target):
+            let result = try session.execute(
+                .setSelectionDimensionTarget(
+                    id: id,
+                    target: target
+                )
+            )
+            return AutomationResult(
+                message: "Selection dimension target updated.",
+                commandName: result.commandName,
+                generation: result.generation,
+                didMutate: result.didMutate,
+                diagnostics: result.diagnostics
+            )
         case .removeSelectionDimension(let id):
             let result = try session.execute(.removeSelectionDimension(id: id))
             return AutomationResult(

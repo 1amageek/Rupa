@@ -43,7 +43,7 @@ import Testing
     #expect(try measurement.isSatisfied())
 }
 
-@Test func selectionDimensionRemovalCommandMutatesThroughCommandPath() async throws {
+@Test func selectionDimensionTargetAndRemovalCommandsMutateThroughCommandPath() async throws {
     var document = DesignDocument.empty()
     let featureID = try document.createLineSketch(
         name: "Measured Line",
@@ -70,18 +70,39 @@ import Testing
     )
     let dimensionID = try #require(addResult.addedSelectionDimensionID)
 
+    let setResult = try session.execute(
+        .setSelectionDimensionTarget(
+            id: dimensionID,
+            target: .length(8.0, .millimeter)
+        )
+    )
+    let setEvaluation = try SelectionDimensionService().evaluate(
+        document: session.document,
+        dimensionID: dimensionID
+    )
+    let setMeasurement = try #require(setEvaluation.measurements.first)
+
+    #expect(setResult.commandName == "setSelectionDimensionTarget")
+    #expect(setResult.didMutate)
+    #expect(setResult.generation == DocumentGeneration(2))
+    #expect(session.document.cadDocument.selectionDimensions.first?.target == .length(8.0, .millimeter))
+    #expect(setMeasurement.dimension.id == dimensionID)
+    #expect(setMeasurement.measured == .length(0.010, unit: .meter))
+    #expect(setMeasurement.target == .length(0.008, unit: .meter))
+    #expect(abs(setMeasurement.residual.value - 0.002) <= 1.0e-12)
+
     let removeResult = try session.execute(.removeSelectionDimension(id: dimensionID))
 
     #expect(removeResult.commandName == "removeSelectionDimension")
     #expect(removeResult.didMutate)
-    #expect(removeResult.generation == DocumentGeneration(2))
+    #expect(removeResult.generation == DocumentGeneration(3))
     #expect(session.document.cadDocument.selectionDimensions.isEmpty)
     #expect(session.document.productMetadata.measurements.isEmpty)
     #expect(session.evaluationStatus == .valid)
 
     _ = try session.undo()
     #expect(session.document.cadDocument.selectionDimensions.map(\.id) == [dimensionID])
-    #expect(session.generation == DocumentGeneration(3))
+    #expect(session.generation == DocumentGeneration(4))
 }
 
 @Test func selectionDimensionCommandMeasuresGeneratedFacePairDistance() async throws {
