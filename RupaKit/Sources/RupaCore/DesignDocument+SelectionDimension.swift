@@ -351,6 +351,16 @@ public extension DesignDocument {
             )
         }
 
+        if isArcEndpointHandle(context.first.handle) {
+            try applySourceArcEndpointPointDistanceDimension(
+                id: id,
+                targetDistance: targetDistance,
+                context: context,
+                objectRegistry: objectRegistry
+            )
+            return
+        }
+
         let firstPoint = try sourcePoint(context.first)
         let secondPoint = try sourcePoint(context.second)
         let currentDeltaX = firstPoint.x - secondPoint.x
@@ -406,6 +416,71 @@ public extension DesignDocument {
         }
         cadDocument.selectionDimensions[updatedDimensionIndex].first = try selectionReference(point: context.first)
         cadDocument.selectionDimensions[updatedDimensionIndex].second = try selectionReference(point: context.second)
+    }
+
+    private mutating func applySourceArcEndpointPointDistanceDimension(
+        id: SelectionDimensionID,
+        targetDistance: Double,
+        context: SelectionDimensionSourcePointDistanceContext,
+        objectRegistry: ObjectTypeRegistry
+    ) throws {
+        let arc = try sourceArc(
+            for: context.first,
+            owner: "Selection arc endpoint distance application"
+        )
+        let center = try resolvedPoint(
+            arc.center,
+            owner: "Selection arc endpoint distance application center"
+        )
+        let radius = try resolvedLength(
+            arc.radius,
+            owner: "Selection arc endpoint distance application radius"
+        )
+        let endpointRole: SelectionDimensionCurveEndpointRole
+        switch context.first.handle {
+        case .arcStart:
+            endpointRole = .start
+        case .arcEnd:
+            endpointRole = .end
+        case .point, .lineStart, .lineEnd, .circleCenter, .arcCenter:
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Selection arc endpoint distance application requires an arc endpoint as the moving source point."
+            )
+        }
+        let currentPoint = try sourceArcEndpointPoint(
+            arc,
+            endpoint: endpointRole,
+            owner: "Selection arc endpoint distance application current endpoint"
+        )
+        let anchorPoint = try sourcePoint(context.second)
+        let targetPoint = try sourceArcEndpointTargetPoint(
+            center: center,
+            radius: radius,
+            anchor: anchorPoint,
+            targetDistance: targetDistance,
+            currentPoint: currentPoint
+        )
+        let deltaX = targetPoint.x - currentPoint.x
+        let deltaY = targetPoint.y - currentPoint.y
+        guard deltaX.isFinite, deltaY.isFinite else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Selection arc endpoint distance application produced a non-finite movement delta."
+            )
+        }
+
+        if abs(deltaX) > selectionDimensionEndpointTolerance ||
+            abs(deltaY) > selectionDimensionEndpointTolerance {
+            try moveSketchEntityPoint(
+                target: context.first.target,
+                handle: context.first.handle,
+                deltaX: .length(deltaX, .meter),
+                deltaY: .length(deltaY, .meter),
+                objectRegistry: objectRegistry
+            )
+        }
+        try refreshSourcePointDistanceReferences(id: id, context: context)
     }
 
     private func sourceLineEndpointDimensionContext(
@@ -607,12 +682,10 @@ public extension DesignDocument {
         for dimension: SelectionDimension
     ) throws -> SelectionDimensionSourcePointDistanceContext {
         let first = try sourcePointContext(
-            reference: dimension.first,
-            role: .moving
+            reference: dimension.first
         )
         let second = try sourcePointContext(
-            reference: dimension.second,
-            role: .anchor
+            reference: dimension.second
         )
         guard first.plane == second.plane else {
             throw EditorError(
@@ -632,8 +705,7 @@ public extension DesignDocument {
     }
 
     private func sourcePointContext(
-        reference: SelectionReference,
-        role: SelectionDimensionSourcePointDistanceRole
+        reference: SelectionReference
     ) throws -> SelectionDimensionSourcePointContext {
         guard case .curve(let curveReference) = reference else {
             throw EditorError(
@@ -643,10 +715,7 @@ public extension DesignDocument {
         }
         switch curveReference {
         case .parameter(let parameter):
-            return try sourceParameterPointContext(
-                parameter,
-                role: role
-            )
+            return try sourceParameterPointContext(parameter)
         case .center(let center):
             return try sourceCenterPointContext(center)
         case .whole, .span, .controlPoint, .knot:
@@ -658,8 +727,7 @@ public extension DesignDocument {
     }
 
     private func sourceParameterPointContext(
-        _ parameter: CurveParameterReference,
-        role: SelectionDimensionSourcePointDistanceRole
+        _ parameter: CurveParameterReference
     ) throws -> SelectionDimensionSourcePointContext {
         let featureID = parameter.curve.featureID
         let entityID = try sourceCurveEntityID(
@@ -693,16 +761,10 @@ public extension DesignDocument {
             case .end:
                 handle = .arcEnd
             }
-            if role == .moving {
-                throw EditorError(
-                    code: .commandInvalid,
-                    message: "Selection point distance application cannot move arc endpoints directly; use arc angle or radius dimensions instead."
-                )
-            }
         case .point, .circle, .spline:
             throw EditorError(
                 code: .commandInvalid,
-                message: "Selection point distance application parameter references currently support source line endpoints and anchor arc endpoints only."
+                message: "Selection point distance application parameter references currently support source line endpoints and source arc endpoints only."
             )
         }
 
@@ -1045,6 +1107,21 @@ public extension DesignDocument {
         }
     }
 
+    private func sourceArc(
+        for context: SelectionDimensionSourcePointContext,
+        owner: String
+    ) throws -> SketchArc {
+        guard let feature = cadDocument.designGraph.nodes[context.featureID],
+              case let .sketch(sketch) = feature.operation,
+              case let .arc(arc) = sketch.entities[context.entityID] else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "\(owner) requires an existing source arc."
+            )
+        }
+        return arc
+    }
+
     private func sourceArcEndpointPoint(
         _ arc: SketchArc,
         endpoint: SelectionDimensionCurveEndpointRole,
@@ -1063,6 +1140,90 @@ public extension DesignDocument {
             x: center.x + cos(angle) * radius,
             y: center.y + sin(angle) * radius
         )
+    }
+
+    private func sourceArcEndpointTargetPoint(
+        center: Point2D,
+        radius: Double,
+        anchor: Point2D,
+        targetDistance: Double,
+        currentPoint: Point2D
+    ) throws -> Point2D {
+        guard radius > selectionDimensionEndpointTolerance else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Selection arc endpoint distance application requires a positive source arc radius."
+            )
+        }
+        let centerToAnchorX = anchor.x - center.x
+        let centerToAnchorY = anchor.y - center.y
+        let centerToAnchorDistance = hypot(centerToAnchorX, centerToAnchorY)
+        if centerToAnchorDistance <= selectionDimensionEndpointTolerance {
+            guard abs(targetDistance - radius) <= selectionDimensionEndpointTolerance else {
+                throw EditorError(
+                    code: .commandInvalid,
+                    message: "Selection arc endpoint distance target has no solution on the source arc circle."
+                )
+            }
+            return currentPoint
+        }
+
+        let maximumDistance = radius + centerToAnchorDistance
+        let minimumDistance = abs(radius - centerToAnchorDistance)
+        guard targetDistance <= maximumDistance + selectionDimensionEndpointTolerance,
+              targetDistance + selectionDimensionEndpointTolerance >= minimumDistance else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Selection arc endpoint distance target has no solution on the source arc circle."
+            )
+        }
+
+        let unitX = centerToAnchorX / centerToAnchorDistance
+        let unitY = centerToAnchorY / centerToAnchorDistance
+        let along = (
+            radius * radius -
+                targetDistance * targetDistance +
+                centerToAnchorDistance * centerToAnchorDistance
+        ) / (2.0 * centerToAnchorDistance)
+        let heightSquared = radius * radius - along * along
+        guard heightSquared >= -selectionDimensionEndpointTolerance else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Selection arc endpoint distance target has no finite intersection solution."
+            )
+        }
+        let height = sqrt(max(0.0, heightSquared))
+        let base = Point2D(
+            x: center.x + along * unitX,
+            y: center.y + along * unitY
+        )
+        let first = Point2D(
+            x: base.x - unitY * height,
+            y: base.y + unitX * height
+        )
+        guard height > selectionDimensionEndpointTolerance else {
+            return first
+        }
+        let second = Point2D(
+            x: base.x + unitY * height,
+            y: base.y - unitX * height
+        )
+        return squaredDistance(first, currentPoint) <= squaredDistance(second, currentPoint) ? first : second
+    }
+
+    private func squaredDistance(_ lhs: Point2D, _ rhs: Point2D) -> Double {
+        let dx = lhs.x - rhs.x
+        let dy = lhs.y - rhs.y
+        return dx * dx + dy * dy
+    }
+
+    private func isArcEndpointHandle(_ handle: SketchEntityPointHandle) -> Bool {
+        switch handle {
+        case .arcStart, .arcEnd:
+            return true
+        case .point, .lineStart, .lineEnd, .circleCenter, .arcCenter:
+            return false
+        }
     }
 
     private func sourceArcEndpointParameters(
@@ -1334,11 +1495,6 @@ private struct SelectionDimensionSourceArcAngleContext: Sendable {
     var target: SelectionTarget
     var firstRole: SelectionDimensionCurveEndpointRole
     var secondRole: SelectionDimensionCurveEndpointRole
-}
-
-private enum SelectionDimensionSourcePointDistanceRole: Equatable, Sendable {
-    case moving
-    case anchor
 }
 
 private struct SelectionDimensionSourcePointDistanceContext: Sendable {

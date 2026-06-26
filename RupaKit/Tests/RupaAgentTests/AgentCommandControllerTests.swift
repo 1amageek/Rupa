@@ -4140,6 +4140,108 @@ private func rawAgentProtocolJSON(_ source: String) -> Data {
 }
 
 @MainActor
+@Test func agentAppliesSelectionDimensionTargetToArcEndpointDistance() async throws {
+    var document = DesignDocument.empty()
+    let arcFeatureID = try document.createArcSketch(
+        name: "Agent Arc Endpoint",
+        plane: .xy,
+        center: SketchPoint(
+            x: .length(0.0, .millimeter),
+            y: .length(0.0, .millimeter)
+        ),
+        radius: .length(6.0, .millimeter),
+        startAngle: .angle(0.0, .degree),
+        endAngle: .angle(90.0, .degree)
+    )
+    let anchorFeatureID = try document.createLineSketch(
+        name: "Agent Arc Anchor",
+        plane: .xy,
+        start: SketchPoint(
+            x: .length(0.0, .millimeter),
+            y: .length(6.0, .millimeter)
+        ),
+        end: SketchPoint(
+            x: .length(0.0, .millimeter),
+            y: .length(10.0, .millimeter)
+        )
+    )
+    let arcTargets = try agentArcEndpointTargets(in: document, featureID: arcFeatureID)
+    let anchorTargets = try agentLineEndpointTargets(in: document, featureID: anchorFeatureID)
+    let server = AgentCommandController()
+    let sessionID = UUID()
+    let session = EditorSession(document: document)
+    server.register(session: session, id: sessionID)
+
+    let addResponse = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .addSelectionDimension(
+                name: "Agent Arc Endpoint Distance",
+                kind: .distance,
+                first: arcTargets.start,
+                second: anchorTargets.start,
+                target: .length(sqrt(72.0), .millimeter)
+            ),
+            expectedGeneration: DocumentGeneration(0)
+        )
+    )
+    guard case .command(let addResult) = addResponse else {
+        #expect(Bool(false))
+        return
+    }
+    let dimensionID = try #require(addResult.addedSelectionDimensionID)
+
+    let setResponse = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .setSelectionDimensionTarget(
+                id: dimensionID,
+                target: .length(6.0, .millimeter)
+            ),
+            expectedGeneration: DocumentGeneration(1)
+        )
+    )
+    guard case .command(let setResult) = setResponse else {
+        #expect(Bool(false))
+        return
+    }
+    #expect(setResult.commandName == "setSelectionDimensionTarget")
+    #expect(setResult.didMutate)
+
+    let applyResponse = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .applySelectionDimensionTarget(id: dimensionID),
+            expectedGeneration: DocumentGeneration(2)
+        )
+    )
+    guard case .command(let applyResult) = applyResponse else {
+        #expect(Bool(false))
+        return
+    }
+    #expect(applyResult.commandName == "applySelectionDimensionTarget")
+    #expect(applyResult.didMutate)
+
+    let evaluationResponse = server.handle(
+        .selectionDimensionEvaluation(
+            sessionID: sessionID,
+            dimensionID: dimensionID,
+            expectedGeneration: DocumentGeneration(3)
+        )
+    )
+    guard case .selectionDimensionEvaluation(let evaluation) = evaluationResponse else {
+        #expect(Bool(false))
+        return
+    }
+    let measurement = try #require(evaluation.measurements.first)
+
+    #expect(abs(try agentArcStartAngle(in: session.document, featureID: arcFeatureID) - Double.pi / 6.0) <= 1.0e-12)
+    assertAgentLengthQuantity(measurement.measured, equals: 0.006)
+    assertAgentLengthQuantity(measurement.target, equals: 0.006)
+    #expect(abs(measurement.residual.value) <= 1.0e-12)
+}
+
+@MainActor
 @Test func agentAppliesSelectionDimensionTargetToCircleRadius() async throws {
     var document = DesignDocument.empty()
     let featureID = try document.createCircleSketch(
@@ -14591,6 +14693,31 @@ private func agentLineCurveTarget(
     )
 }
 
+private func agentArcEndpointTargets(
+    in document: DesignDocument,
+    featureID: FeatureID
+) throws -> (start: SelectionTarget, end: SelectionTarget) {
+    let summary = try SketchEntitySummaryService().summarize(document: document)
+    let entry = try #require(summary.entries.first {
+        $0.sourceFeatureID == featureID.description && $0.entityKind == "arc"
+    })
+    let sceneNodeIDString = try #require(entry.sceneNodeID)
+    let sceneNodeUUID = try #require(UUID(uuidString: sceneNodeIDString))
+    let sceneNodeID = SceneNodeID(sceneNodeUUID)
+    let startHandle = try #require(entry.pointHandles.first { $0.handle == .arcStart })
+    let endHandle = try #require(entry.pointHandles.first { $0.handle == .arcEnd })
+    return (
+        start: SelectionTarget(
+            sceneNodeID: sceneNodeID,
+            component: .sketchEntity(SelectionComponentID(rawValue: startHandle.selectionComponentID))
+        ),
+        end: SelectionTarget(
+            sceneNodeID: sceneNodeID,
+            component: .sketchEntity(SelectionComponentID(rawValue: endHandle.selectionComponentID))
+        )
+    )
+}
+
 private func agentCircleCenterAndCurveTargets(
     in document: DesignDocument,
     featureID: FeatureID
@@ -14629,6 +14756,19 @@ private func agentCircleRadius(
     return try document.cadDocument.parameters.resolvedValue(for: circle.radius).value
 }
 
+private func agentArcStartAngle(
+    in document: DesignDocument,
+    featureID: FeatureID
+) throws -> Double {
+    guard let feature = document.cadDocument.designGraph.nodes[featureID],
+          case let .sketch(sketch) = feature.operation,
+          case let .arc(arc) = sketch.entities.values.first else {
+        Issue.record("Expected one source arc")
+        return 0.0
+    }
+    return try document.cadDocument.parameters.resolvedValue(for: arc.startAngle).value
+}
+
 private func agentLineAngle(
     in document: DesignDocument,
     featureID: FeatureID
@@ -14659,6 +14799,15 @@ private func assertAgentAngleQuantity(
     tolerance: Double = 1.0e-12
 ) {
     #expect(quantity.kind == .angle)
+    #expect(abs(quantity.value - expectedValue) <= tolerance)
+}
+
+private func assertAgentLengthQuantity(
+    _ quantity: Quantity,
+    equals expectedValue: Double,
+    tolerance: Double = 1.0e-12
+) {
+    #expect(quantity.kind == .length)
     #expect(abs(quantity.value - expectedValue) <= tolerance)
 }
 

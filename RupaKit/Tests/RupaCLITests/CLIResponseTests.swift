@@ -3425,6 +3425,133 @@ struct CLISelectionDimensionCommandTests {
         #expect(!removeResponse.dirty)
         #expect(removedLoaded.cadDocument.selectionDimensions.isEmpty)
     }
+
+    @Test(.timeLimit(.minutes(1)))
+    func executableSelectionDimensionApplySolvesArcEndpointDistanceAsJSON() async throws {
+        let temporaryDirectory = try makeTemporaryDirectory()
+        defer {
+            removeTemporaryDirectory(temporaryDirectory)
+        }
+        let documentURL = temporaryDirectory.appendingPathComponent("process-selection-arc-endpoint-dimension.swcad")
+        var document = DesignDocument.empty(named: "Process Selection Arc Endpoint Dimension")
+        let arcFeatureID = try document.createArcSketch(
+            name: "Measured Arc Endpoint",
+            plane: .xy,
+            center: SketchPoint(
+                x: .length(0.0, .millimeter),
+                y: .length(0.0, .millimeter)
+            ),
+            radius: .length(6.0, .millimeter),
+            startAngle: .angle(0.0, .degree),
+            endAngle: .angle(90.0, .degree)
+        )
+        let anchorFeatureID = try document.createLineSketch(
+            name: "Anchor Line",
+            plane: .xy,
+            start: SketchPoint(
+                x: .length(0.0, .millimeter),
+                y: .length(6.0, .millimeter)
+            ),
+            end: SketchPoint(
+                x: .length(0.0, .millimeter),
+                y: .length(10.0, .millimeter)
+            )
+        )
+        let arcTargets = try cliArcEndpointTargets(in: document, featureID: arcFeatureID)
+        let anchorTargets = try cliLineEndpointTargets(in: document, featureID: anchorFeatureID)
+        try DocumentFileService().save(document, to: documentURL)
+
+        let result = try await runCLI([
+            "dimension",
+            "add-selection",
+            documentURL.path,
+            "--name",
+            "CLI Arc Endpoint Distance",
+            "--kind",
+            "distance",
+            "--first-target",
+            try encodedSelectionTarget(arcTargets.start),
+            "--second-target",
+            try encodedSelectionTarget(anchorTargets.start),
+            "--target-value",
+            "\(sqrt(72.0))",
+            "--length-unit",
+            "millimeter",
+            "--mode",
+            "file",
+            "--json",
+        ])
+        let response = try JSONDecoder().decode(
+            CLISelectionDimensionAddResponse.self,
+            from: result.standardOutputData
+        )
+        let dimensionID = try #require(response.selectionDimensionID)
+
+        #expect(result.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: result.standardError))
+        #expect(response.message == "Selection dimension added.")
+        #expect(response.saved)
+        #expect(!response.dirty)
+
+        let setResult = try await runCLI([
+            "dimension",
+            "set-selection",
+            documentURL.path,
+            "--dimension-id",
+            dimensionID.description,
+            "--kind",
+            "distance",
+            "--target-value",
+            "6",
+            "--length-unit",
+            "millimeter",
+            "--mode",
+            "file",
+            "--json",
+        ])
+        let setResponse = try JSONDecoder().decode(
+            CLIResponse.self,
+            from: setResult.standardOutputData
+        )
+
+        #expect(setResult.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: setResult.standardError))
+        #expect(setResponse.message == "Selection dimension target updated.")
+        #expect(setResponse.saved)
+        #expect(!setResponse.dirty)
+
+        let applyResult = try await runCLI([
+            "dimension",
+            "apply-selection",
+            documentURL.path,
+            "--dimension-id",
+            dimensionID.description,
+            "--mode",
+            "file",
+            "--json",
+        ])
+        let applyResponse = try JSONDecoder().decode(
+            CLIResponse.self,
+            from: applyResult.standardOutputData
+        )
+        let appliedLoaded = try DocumentFileService().load(from: documentURL)
+        let appliedEvaluation = try SelectionDimensionService().evaluate(
+            document: appliedLoaded,
+            dimensionID: dimensionID
+        )
+        let appliedMeasurement = try #require(appliedEvaluation.measurements.first)
+        let startAngle = try cliArcStartAngle(in: appliedLoaded, featureID: arcFeatureID)
+
+        #expect(applyResult.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: applyResult.standardError))
+        #expect(applyResponse.message == "Selection dimension target applied.")
+        #expect(applyResponse.saved)
+        #expect(!applyResponse.dirty)
+        #expect(abs(startAngle - Double.pi / 6.0) <= 1.0e-12)
+        #expect(appliedMeasurement.measured.kind == .length)
+        #expect(abs(appliedMeasurement.measured.value - 0.006) <= 1.0e-12)
+        #expect(appliedMeasurement.target.kind == .length)
+        #expect(abs(appliedMeasurement.target.value - 0.006) <= 1.0e-12)
+        #expect(abs(appliedMeasurement.residual.value) <= 1.0e-12)
+        #expect(try appliedMeasurement.isSatisfied())
+    }
 }
 
 @Test(.timeLimit(.minutes(1)))
@@ -5965,6 +6092,48 @@ private func cliLineEndpointTargets(
             component: .sketchEntity(SelectionComponentID(rawValue: endHandle.selectionComponentID))
         )
     )
+}
+
+private func cliArcEndpointTargets(
+    in document: DesignDocument,
+    featureID: FeatureID
+) throws -> (start: SelectionTarget, end: SelectionTarget) {
+    let summary = try SketchEntitySummaryService().summarize(document: document)
+    let entry = try #require(summary.entries.first {
+        $0.sourceFeatureID == featureID.description && $0.entityKind == "arc"
+    })
+    let sceneNodeIDString = try #require(entry.sceneNodeID)
+    let sceneNodeUUID = try #require(UUID(uuidString: sceneNodeIDString))
+    let sceneNodeID = SceneNodeID(sceneNodeUUID)
+    let startHandle = try #require(entry.pointHandles.first { $0.handle == .arcStart })
+    let endHandle = try #require(entry.pointHandles.first { $0.handle == .arcEnd })
+    return (
+        start: SelectionTarget(
+            sceneNodeID: sceneNodeID,
+            component: .sketchEntity(SelectionComponentID(rawValue: startHandle.selectionComponentID))
+        ),
+        end: SelectionTarget(
+            sceneNodeID: sceneNodeID,
+            component: .sketchEntity(SelectionComponentID(rawValue: endHandle.selectionComponentID))
+        )
+    )
+}
+
+private func cliArcStartAngle(
+    in document: DesignDocument,
+    featureID: FeatureID
+) throws -> Double {
+    guard let feature = document.cadDocument.designGraph.nodes[featureID],
+          case let .sketch(sketch) = feature.operation,
+          case let .arc(arc) = sketch.entities.values.first else {
+        throw EditorError(
+            code: .referenceUnresolved,
+            message: "Expected one source arc."
+        )
+    }
+    let quantity = try document.cadDocument.parameters.resolvedValue(for: arc.startAngle)
+    #expect(quantity.kind == .angle)
+    return quantity.value
 }
 
 private func encodedSelectionReference(_ reference: SelectionReference) throws -> String {
