@@ -6114,6 +6114,116 @@ private func rawAgentProtocolJSON(_ source: String) -> Data {
 }
 
 @MainActor
+@Test func agentEditsGeneratedFilletArcRadiusThroughGeneratedEdgeTarget() async throws {
+    let server = AgentCommandController()
+    let sessionID = UUID()
+    let session = EditorSession()
+    server.register(session: session, id: sessionID)
+
+    let createResponse = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .createExtrudedRectangle(
+                name: "Agent Direct Fillet Radius Box",
+                plane: .xy,
+                width: .length(24.0, .millimeter),
+                height: .length(12.0, .millimeter),
+                depth: .length(8.0, .millimeter),
+                direction: .normal
+            ),
+            expectedGeneration: DocumentGeneration(0)
+        )
+    )
+    guard case .command = createResponse else {
+        #expect(Bool(false))
+        return
+    }
+    let baseSummary = try SketchEntitySummaryService().summarize(document: session.document)
+    let bounds = try #require(agentSketchSummaryBounds(baseSummary))
+    let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let bodyNodeID = try #require(agentSceneNodeID(for: bodyFeatureID, in: session.document))
+    let filletResponse = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .filletBodyEdges(
+                targets: [
+                    SelectionTarget(sceneNodeID: bodyNodeID, component: .edge(.bodyEdgeRightTop)),
+                ],
+                radius: .length(1.0, .millimeter),
+                segmentCount: 8
+            ),
+            expectedGeneration: DocumentGeneration(1)
+        )
+    )
+    guard case .command = filletResponse else {
+        #expect(Bool(false))
+        return
+    }
+    let topologyResponse = server.handle(
+        .topologySummary(
+            sessionID: sessionID,
+            expectedGeneration: session.generation
+        )
+    )
+    guard case .topologySummary(let topology) = topologyResponse else {
+        #expect(Bool(false))
+        return
+    }
+    let filletArcEdge = try #require(topology.entries.first {
+        guard let radius = $0.curveRadius else {
+            return false
+        }
+        return $0.kind == .edge &&
+            $0.generatedRole == "edge" &&
+            $0.curveKind == "circle" &&
+            abs(radius - 0.001) < 1.0e-12
+    })
+    let edgeTarget = try #require(filletArcEdge.selectionTarget())
+
+    let editResponse = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .setSketchEntityDimension(
+                target: edgeTarget,
+                kind: .radius,
+                value: .length(2.0, .millimeter)
+            ),
+            expectedGeneration: session.generation
+        )
+    )
+
+    guard case .command(let result) = editResponse else {
+        Issue.record("Agent must return a command result.")
+        return
+    }
+    let updatedSummary = try SketchEntitySummaryService().summarize(document: session.document)
+    let updatedArc = try #require(updatedSummary.entries.first {
+        $0.entityKind == "arc" &&
+            abs(($0.radius ?? -1.0) - 0.002) < 1.0e-12
+    })
+    let updatedTopology = try TopologySummaryService().summarize(document: session.document)
+    let updatedGeneratedArc = try #require(updatedTopology.entries.first {
+        guard let radius = $0.curveRadius else {
+            return false
+        }
+        return $0.kind == .edge &&
+            $0.generatedRole == "edge" &&
+            $0.curveKind == "circle" &&
+            abs(radius - 0.002) < 1.0e-12
+    })
+
+    #expect(result.commandName == "setSketchEntityDimension")
+    #expect(result.didMutate)
+    #expect(result.generation == DocumentGeneration(3))
+    #expect(abs((updatedArc.center?.x ?? -1.0) - (bounds.maxX - 0.002)) < 1.0e-12)
+    #expect(abs((updatedArc.center?.y ?? -1.0) - (bounds.maxY - 0.002)) < 1.0e-12)
+    #expect(abs((updatedGeneratedArc.curveRadius ?? -1.0) - 0.002) < 1.0e-12)
+    #expect(agentContainsSketchPoint(updatedSummary, x: bounds.maxX, y: bounds.maxY - 0.002))
+    #expect(agentContainsSketchPoint(updatedSummary, x: bounds.maxX - 0.002, y: bounds.maxY))
+    #expect(session.evaluationStatus == .valid)
+}
+
+@MainActor
 @Test func agentDispatchesPolySplineCommandAndExposesBSplineTopology() async throws {
     let server = AgentCommandController()
     let sessionID = UUID()

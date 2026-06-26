@@ -4396,7 +4396,12 @@ public struct DesignDocument: Identifiable, Sendable {
             kind: kind,
             owner: "Sketch entity dimension"
         )
-        let selection = try editableSketchEntity(for: target, operationName: "Sketch entity dimension update")
+        let editTarget = try sketchEntityDimensionEditTarget(
+            for: target,
+            kind: kind,
+            objectRegistry: objectRegistry
+        )
+        let selection = try editableSketchEntity(for: editTarget, operationName: "Sketch entity dimension update")
         try validateResolvedSketchEntityDimensionValue(
             resolvedValue,
             kind: kind,
@@ -4610,6 +4615,34 @@ public struct DesignDocument: Identifiable, Sendable {
             objectRegistry: objectRegistry,
             errorOwner: "Sketch entity dimension update"
         )
+    }
+
+    private func sketchEntityDimensionEditTarget(
+        for target: SelectionTarget,
+        kind: SketchEntityDimensionKind,
+        objectRegistry: ObjectTypeRegistry
+    ) throws -> SelectionTarget {
+        if case .sketchEntity = target.component {
+            return target
+        }
+        guard case .edge = target.component else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Sketch entity dimension update requires a sketch entity or editable generated edge target."
+            )
+        }
+        let summary = try SketchDimensionSummaryService().summarize(
+            document: self,
+            targets: [target],
+            objectRegistry: objectRegistry
+        )
+        guard let entry = summary.entries.first(where: { $0.kind == kind }) else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Sketch entity dimension update found no editable \(kind.rawValue) dimension for the generated edge target."
+            )
+        }
+        return entry.target
     }
 
     private func profileArcRadiusDimensionSketch(
