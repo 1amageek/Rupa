@@ -1179,7 +1179,7 @@ The package-level socket listener supports start, stop, stale socket replacement
 | `document.meshSummary` | Summarize generated meshes for an open document through its app session without mutating source. |
 | `document.polySplineMeshAnalysis` | Preflight source meshes for supported PolySpline surface conversion and diagnostics. |
 | `document.sketchEntitySummary` | Summarize source sketch entities and selection component IDs for an open document through its app session without mutating source. |
-| `document.sketchDimensionSummary` | Return editable source sketch dimensions for selected targets without mutating source. |
+| `document.sketchDimensionSummary` | Return editable source sketch dimensions for selected sketch entities, generated cap edges, and supported generated arc edges without mutating source. Generated fillet arc edges resolve back to source arc radius candidates for Agent/UI readback. |
 | `selection.dimensionEvaluation` | Evaluate an existing selection dimension without mutating source. |
 | `document.curveAnalysis` | Return source curve and curvature diagnostics without mutating source. |
 | `document.topologySummary` | Summarize Swift-CAD generated BRep topology and persistent names for an open document through its app session without mutating source. |

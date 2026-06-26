@@ -163,3 +163,59 @@ import Testing
         return
     }
 }
+
+@MainActor
+@Test func sketchDimensionSummaryMapsGeneratedFilletArcEdgeToSourceArcRadius() async throws {
+    let session = EditorSession()
+    _ = try #require(session.createDefaultExtrudedRectangle())
+    let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let bodyNodeID = try #require(sceneNodeID(forBody: bodyFeatureID, in: session.document))
+    _ = try session.execute(
+        .filletBodyEdges(
+            targets: [
+                SelectionTarget(sceneNodeID: bodyNodeID, component: .edge(.bodyEdgeRightTop)),
+            ],
+            radius: .length(1.0, .millimeter),
+            segmentCount: 8
+        )
+    )
+    let topology = try TopologySummaryService().summarize(document: session.document)
+    let filletArcEdge = try #require(topology.entries.first {
+        guard let radius = $0.curveRadius else {
+            return false
+        }
+        return $0.kind == .edge &&
+            $0.generatedRole == "edge" &&
+            $0.curveKind == "circle" &&
+            abs(radius - 0.001) < 1.0e-12
+    })
+    let target = try #require(filletArcEdge.selectionTarget())
+
+    let summary = try SketchDimensionSummaryService().summarize(
+        document: session.document,
+        targets: [target]
+    )
+
+    #expect(summary.counts.targetCount == 1)
+    #expect(summary.counts.entryCount == 3)
+    #expect(summary.entries.map(\.kind) == [.diameter, .radius, .angle])
+    #expect(summary.entries.allSatisfy { $0.requestedTarget == target })
+    #expect(summary.entries.allSatisfy { $0.target != target })
+    #expect(summary.entries.allSatisfy { $0.entityKind == "arc" })
+    let primary = try #require(summary.entries.first { $0.isPrimaryForTarget })
+    #expect(primary.kind == .radius)
+    #expect(abs(primary.resolvedValue - 0.001) < 1.0e-12)
+    guard case .sketchEntity = primary.target.component else {
+        Issue.record("Generated fillet arc edge dimensions must resolve to an editable sketch arc target.")
+        return
+    }
+}
+
+private func sceneNodeID(
+    forBody featureID: FeatureID,
+    in document: DesignDocument
+) -> SceneNodeID? {
+    document.productMetadata.sceneNodes.first { _, node in
+        node.reference == .body(featureID)
+    }?.key
+}

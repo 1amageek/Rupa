@@ -5895,6 +5895,99 @@ private func rawAgentProtocolJSON(_ source: String) -> Data {
     #expect(session.isDirty == dirty)
 }
 
+@Test func agentMapsGeneratedFilletArcEdgeToSketchRadiusDimensionWithoutMutation() async throws {
+    let server = AgentCommandController()
+    let sessionID = UUID()
+    let session = EditorSession()
+    server.register(session: session, id: sessionID)
+
+    let createResponse = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .createExtrudedRectangle(
+                name: "Agent Dimension Fillet Radius Box",
+                plane: .xy,
+                width: .length(24.0, .millimeter),
+                height: .length(12.0, .millimeter),
+                depth: .length(8.0, .millimeter),
+                direction: .normal
+            ),
+            expectedGeneration: DocumentGeneration(0)
+        )
+    )
+    guard case .command = createResponse else {
+        #expect(Bool(false))
+        return
+    }
+    let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let bodyNodeID = try #require(agentSceneNodeID(for: bodyFeatureID, in: session.document))
+    let filletResponse = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .filletBodyEdges(
+                targets: [
+                    SelectionTarget(sceneNodeID: bodyNodeID, component: .edge(.bodyEdgeRightTop)),
+                ],
+                radius: .length(1.0, .millimeter),
+                segmentCount: 8
+            ),
+            expectedGeneration: DocumentGeneration(1)
+        )
+    )
+    guard case .command = filletResponse else {
+        #expect(Bool(false))
+        return
+    }
+    let topologyResponse = server.handle(
+        .topologySummary(
+            sessionID: sessionID,
+            expectedGeneration: session.generation
+        )
+    )
+    guard case .topologySummary(let topology) = topologyResponse else {
+        #expect(Bool(false))
+        return
+    }
+    let filletArcEdge = try #require(topology.entries.first {
+        guard let radius = $0.curveRadius else {
+            return false
+        }
+        return $0.kind == .edge &&
+            $0.generatedRole == "edge" &&
+            $0.curveKind == "circle" &&
+            abs(radius - 0.001) < 1.0e-12
+    })
+    let edgeTarget = try #require(filletArcEdge.selectionTarget())
+    let generation = session.generation
+    let dirty = session.isDirty
+
+    let response = server.handle(
+        .sketchDimensionSummary(
+            sessionID: sessionID,
+            targets: [edgeTarget],
+            expectedGeneration: generation
+        )
+    )
+
+    guard case .sketchDimensionSummary(let summary) = response else {
+        #expect(Bool(false))
+        return
+    }
+    #expect(summary.counts.entryCount == 3)
+    #expect(summary.entries.map(\.kind) == [.diameter, .radius, .angle])
+    #expect(summary.entries.allSatisfy { $0.requestedTarget == edgeTarget })
+    #expect(summary.entries.allSatisfy { $0.entityKind == "arc" })
+    let radius = try #require(summary.entries.first { $0.isPrimaryForTarget })
+    #expect(radius.kind == .radius)
+    #expect(abs(radius.resolvedValue - 0.001) < 1.0e-12)
+    guard case .sketchEntity = radius.target.component else {
+        Issue.record("Agent generated fillet arc dimension must return an editable sketch arc target.")
+        return
+    }
+    #expect(session.generation == generation)
+    #expect(session.isDirty == dirty)
+}
+
 @MainActor
 @Test func agentDispatchesPolySplineCommandAndExposesBSplineTopology() async throws {
     let server = AgentCommandController()

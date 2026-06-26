@@ -1168,7 +1168,7 @@ public final class AgentCommandController: AgentClientProtocol {
         capability(
             "sketchDimensionSummary",
             category: .read,
-            summary: "List editable Dimension command candidates for selected sketch line, circle, arc, or generated extrude cap edge targets without mutation.",
+            summary: "List editable Dimension command candidates for selected sketch line, circle, arc, generated extrude cap edge, or supported generated arc edge targets without mutation, including fillet-radius readback for generated fillet arc edges.",
             access: .agentRequest,
             mutatesDocument: false,
             discovery: [.sketchDimensionSummary, .sketchEntitySummary, .topologySummary],

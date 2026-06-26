@@ -97,6 +97,7 @@ public struct SketchDimensionSummaryService: Sendable {
                 target: target,
                 radius: radius,
                 includesSpanAngle: true,
+                primaryKind: primaryKindForArc(target: target),
                 spanAngle: span
             )
         default:
@@ -109,6 +110,7 @@ public struct SketchDimensionSummaryService: Sendable {
         target: SketchDimensionTargetResolver.ResolvedTarget,
         radius: Double,
         includesSpanAngle: Bool,
+        primaryKind: SketchEntityDimensionKind = .diameter,
         spanAngle: Double? = nil
     ) -> [SketchDimensionSummaryResult.Entry] {
         var entries: [SketchDimensionSummaryResult.Entry] = [
@@ -119,7 +121,7 @@ public struct SketchDimensionSummaryService: Sendable {
                 label: "Diameter",
                 inputExpression: .length(radius * 2.0, .meter),
                 resolvedValue: radius * 2.0,
-                isPrimaryForTarget: true
+                isPrimaryForTarget: primaryKind == .diameter
             ),
             entry(
                 entity: entity,
@@ -128,7 +130,7 @@ public struct SketchDimensionSummaryService: Sendable {
                 label: "Radius",
                 inputExpression: .length(radius, .meter),
                 resolvedValue: radius,
-                isPrimaryForTarget: false
+                isPrimaryForTarget: primaryKind == .radius
             ),
         ]
         if includesSpanAngle,
@@ -146,6 +148,17 @@ public struct SketchDimensionSummaryService: Sendable {
             )
         }
         return entries
+    }
+
+    private func primaryKindForArc(
+        target: SketchDimensionTargetResolver.ResolvedTarget
+    ) -> SketchEntityDimensionKind {
+        switch target.requestedTarget.component {
+        case .edge:
+            .radius
+        case .object, .face, .vertex, .sketchEntity, .region:
+            .diameter
+        }
     }
 
     private func entry(
