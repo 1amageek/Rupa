@@ -413,6 +413,136 @@ import Testing
     )
 }
 
+@Test func selectionDimensionApplyMovesSecondStandalonePointWhenFirstIsFixed() async throws {
+    var document = DesignDocument.empty()
+    let fixedFeatureID = try createStandalonePointSketch(
+        in: &document,
+        name: "Fixed Point",
+        plane: .xy,
+        point: SketchPoint(
+            x: .length(0.0, .millimeter),
+            y: .length(0.0, .millimeter)
+        )
+    )
+    let movingFeatureID = try createStandalonePointSketch(
+        in: &document,
+        name: "Moving Point",
+        plane: .xy,
+        point: SketchPoint(
+            x: .length(10.0, .millimeter),
+            y: .length(0.0, .millimeter)
+        )
+    )
+    let fixedPointID = try standalonePointEntityID(in: document, featureID: fixedFeatureID)
+    try document.addSketchConstraint(
+        featureID: fixedFeatureID,
+        constraint: .fixed(.entity(fixedPointID))
+    )
+    let fixedTarget = try standalonePointTarget(in: document, featureID: fixedFeatureID)
+    let movingTarget = try standalonePointTarget(in: document, featureID: movingFeatureID)
+    let session = EditorSession(document: document)
+    let addResult = try session.execute(
+        .addSelectionDimension(
+            name: "Fixed To Moving Point Distance",
+            kind: .distance,
+            first: fixedTarget,
+            second: movingTarget,
+            target: .length(10.0, .millimeter)
+        )
+    )
+    let dimensionID = try #require(addResult.addedSelectionDimensionID)
+
+    _ = try session.execute(
+        .setSelectionDimensionTarget(
+            id: dimensionID,
+            target: .length(6.0, .millimeter)
+        )
+    )
+    let applyResult = try session.execute(.applySelectionDimensionTarget(id: dimensionID))
+    let fixedPoint = try standalonePoint(in: session.document, featureID: fixedFeatureID)
+    let movedPoint = try standalonePoint(in: session.document, featureID: movingFeatureID)
+    let appliedEvaluation = try SelectionDimensionService().evaluate(
+        document: session.document,
+        dimensionID: dimensionID
+    )
+    let appliedMeasurement = try #require(appliedEvaluation.measurements.first)
+
+    #expect(applyResult.commandName == "applySelectionDimensionTarget")
+    #expect(applyResult.didMutate)
+    #expect(abs(fixedPoint.x) <= 1.0e-12)
+    #expect(abs(fixedPoint.y) <= 1.0e-12)
+    #expect(abs(movedPoint.x - 0.006) <= 1.0e-12)
+    #expect(abs(movedPoint.y) <= 1.0e-12)
+    assertLengthQuantity(appliedMeasurement.measured, equals: 0.006)
+    assertLengthQuantity(appliedMeasurement.target, equals: 0.006)
+    #expect(abs(appliedMeasurement.residual.value) <= 1.0e-12)
+    #expect(try appliedMeasurement.isSatisfied())
+}
+
+@Test func selectionDimensionApplyAllowsSatisfiedZeroDistanceBetweenFixedStandalonePoints() async throws {
+    var document = DesignDocument.empty()
+    let firstFeatureID = try createStandalonePointSketch(
+        in: &document,
+        name: "First Fixed Point",
+        plane: .xy,
+        point: SketchPoint(
+            x: .length(0.0, .millimeter),
+            y: .length(0.0, .millimeter)
+        )
+    )
+    let secondFeatureID = try createStandalonePointSketch(
+        in: &document,
+        name: "Second Fixed Point",
+        plane: .xy,
+        point: SketchPoint(
+            x: .length(0.0, .millimeter),
+            y: .length(0.0, .millimeter)
+        )
+    )
+    let firstPointID = try standalonePointEntityID(in: document, featureID: firstFeatureID)
+    let secondPointID = try standalonePointEntityID(in: document, featureID: secondFeatureID)
+    try document.addSketchConstraint(
+        featureID: firstFeatureID,
+        constraint: .fixed(.entity(firstPointID))
+    )
+    try document.addSketchConstraint(
+        featureID: secondFeatureID,
+        constraint: .fixed(.entity(secondPointID))
+    )
+    let firstTarget = try standalonePointTarget(in: document, featureID: firstFeatureID)
+    let secondTarget = try standalonePointTarget(in: document, featureID: secondFeatureID)
+    let session = EditorSession(document: document)
+    let addResult = try session.execute(
+        .addSelectionDimension(
+            name: "Fixed Coincident Point Distance",
+            kind: .distance,
+            first: firstTarget,
+            second: secondTarget,
+            target: .length(0.0, .millimeter)
+        )
+    )
+    let dimensionID = try #require(addResult.addedSelectionDimensionID)
+
+    let applyResult = try session.execute(.applySelectionDimensionTarget(id: dimensionID))
+    let firstPoint = try standalonePoint(in: session.document, featureID: firstFeatureID)
+    let secondPoint = try standalonePoint(in: session.document, featureID: secondFeatureID)
+    let appliedEvaluation = try SelectionDimensionService().evaluate(
+        document: session.document,
+        dimensionID: dimensionID
+    )
+    let appliedMeasurement = try #require(appliedEvaluation.measurements.first)
+
+    #expect(applyResult.commandName == "applySelectionDimensionTarget")
+    #expect(abs(firstPoint.x) <= 1.0e-12)
+    #expect(abs(firstPoint.y) <= 1.0e-12)
+    #expect(abs(secondPoint.x) <= 1.0e-12)
+    #expect(abs(secondPoint.y) <= 1.0e-12)
+    assertLengthQuantity(appliedMeasurement.measured, equals: 0.0)
+    assertLengthQuantity(appliedMeasurement.target, equals: 0.0)
+    #expect(abs(appliedMeasurement.residual.value) <= 1.0e-12)
+    #expect(try appliedMeasurement.isSatisfied())
+}
+
 @Test func selectionDimensionApplyRejectsImpossibleArcEndpointPointDistance() async throws {
     var document = DesignDocument.empty()
     let arcFeatureID = try document.createArcSketch(
@@ -1165,6 +1295,24 @@ private func standalonePoint(
         return Point2D(x: 0.0, y: 0.0)
     }
     return try point(sketchPoint, in: document)
+}
+
+private func standalonePointEntityID(
+    in document: DesignDocument,
+    featureID: FeatureID
+) throws -> SketchEntityID {
+    guard let feature = document.cadDocument.designGraph.nodes[featureID],
+          case let .sketch(sketch) = feature.operation,
+          let entityID = sketch.entities.first(where: { _, entity in
+              if case .point = entity {
+                  return true
+              }
+              return false
+          })?.key else {
+        Issue.record("Expected one standalone source point entity ID")
+        return SketchEntityID()
+    }
+    return entityID
 }
 
 private func arcStartAngle(

@@ -358,16 +358,6 @@ public extension DesignDocument {
             )
         }
 
-        if isArcEndpointRole(context.first.role) {
-            try applySourceArcEndpointPointDistanceDimension(
-                id: id,
-                targetDistance: targetDistance,
-                context: context,
-                objectRegistry: objectRegistry
-            )
-            return
-        }
-
         let firstPoint = try sourcePoint(context.first)
         let secondPoint = try sourcePoint(context.second)
         let currentDeltaX = firstPoint.x - secondPoint.x
@@ -384,13 +374,31 @@ public extension DesignDocument {
             return
         }
 
+        let movePlan = try sourcePointDistanceMovePlan(for: context)
+        if isArcEndpointRole(movePlan.moving.role) {
+            try applySourceArcEndpointPointDistanceDimension(
+                id: id,
+                targetDistance: targetDistance,
+                moving: movePlan.moving,
+                anchor: movePlan.anchor,
+                refreshContext: context,
+                objectRegistry: objectRegistry
+            )
+            return
+        }
+
+        let movingPoint = try sourcePoint(movePlan.moving)
+        let anchorPoint = try sourcePoint(movePlan.anchor)
+        let movingDeltaX = movingPoint.x - anchorPoint.x
+        let movingDeltaY = movingPoint.y - anchorPoint.y
+
         let scale = targetDistance / currentDistance
         let targetPoint = Point2D(
-            x: secondPoint.x + currentDeltaX * scale,
-            y: secondPoint.y + currentDeltaY * scale
+            x: anchorPoint.x + movingDeltaX * scale,
+            y: anchorPoint.y + movingDeltaY * scale
         )
-        let deltaX = targetPoint.x - firstPoint.x
-        let deltaY = targetPoint.y - firstPoint.y
+        let deltaX = targetPoint.x - movingPoint.x
+        let deltaY = targetPoint.y - movingPoint.y
         guard deltaX.isFinite, deltaY.isFinite else {
             throw EditorError(
                 code: .commandInvalid,
@@ -401,7 +409,7 @@ public extension DesignDocument {
         if abs(deltaX) > selectionDimensionEndpointTolerance ||
             abs(deltaY) > selectionDimensionEndpointTolerance {
             try moveSourcePoint(
-                context.first,
+                movePlan.moving,
                 deltaX: .length(deltaX, .meter),
                 deltaY: .length(deltaY, .meter),
                 objectRegistry: objectRegistry
@@ -427,11 +435,13 @@ public extension DesignDocument {
     private mutating func applySourceArcEndpointPointDistanceDimension(
         id: SelectionDimensionID,
         targetDistance: Double,
-        context: SelectionDimensionSourcePointDistanceContext,
+        moving: SelectionDimensionSourcePointContext,
+        anchor: SelectionDimensionSourcePointContext,
+        refreshContext: SelectionDimensionSourcePointDistanceContext,
         objectRegistry: ObjectTypeRegistry
     ) throws {
         let arc = try sourceArc(
-            for: context.first,
+            for: moving,
             owner: "Selection arc endpoint distance application"
         )
         let center = try resolvedPoint(
@@ -443,7 +453,7 @@ public extension DesignDocument {
             owner: "Selection arc endpoint distance application radius"
         )
         let endpointRole: SelectionDimensionCurveEndpointRole
-        switch context.first.role {
+        switch moving.role {
         case .handle(.arcStart):
             endpointRole = .start
         case .handle(.arcEnd):
@@ -464,7 +474,7 @@ public extension DesignDocument {
             endpoint: endpointRole,
             owner: "Selection arc endpoint distance application current endpoint"
         )
-        let anchorPoint = try sourcePoint(context.second)
+        let anchorPoint = try sourcePoint(anchor)
         let targetPoint = try sourceArcEndpointTargetPoint(
             center: center,
             radius: radius,
@@ -484,13 +494,13 @@ public extension DesignDocument {
         if abs(deltaX) > selectionDimensionEndpointTolerance ||
             abs(deltaY) > selectionDimensionEndpointTolerance {
             try moveSourcePoint(
-                context.first,
+                moving,
                 deltaX: .length(deltaX, .meter),
                 deltaY: .length(deltaY, .meter),
                 objectRegistry: objectRegistry
             )
         }
-        try refreshSourcePointDistanceReferences(id: id, context: context)
+        try refreshSourcePointDistanceReferences(id: id, context: refreshContext)
     }
 
     private func sourceLineEndpointDimensionContext(
@@ -712,6 +722,68 @@ public extension DesignDocument {
             )
         }
         return SelectionDimensionSourcePointDistanceContext(first: first, second: second)
+    }
+
+    private func sourcePointDistanceMovePlan(
+        for context: SelectionDimensionSourcePointDistanceContext
+    ) throws -> SelectionDimensionSourcePointMovePlan {
+        if try isSourcePointAnchored(context.first) == false {
+            return SelectionDimensionSourcePointMovePlan(
+                moving: context.first,
+                anchor: context.second
+            )
+        }
+        if try isSourcePointAnchored(context.second) == false {
+            return SelectionDimensionSourcePointMovePlan(
+                moving: context.second,
+                anchor: context.first
+            )
+        }
+        throw EditorError(
+            code: .commandInvalid,
+            message: "Selection point distance application requires at least one non-fixed source point."
+        )
+    }
+
+    private func isSourcePointAnchored(
+        _ context: SelectionDimensionSourcePointContext
+    ) throws -> Bool {
+        guard let feature = cadDocument.designGraph.nodes[context.featureID],
+              case let .sketch(sketch) = feature.operation else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "Selection point distance application requires an existing source sketch feature."
+            )
+        }
+        let reference = try sketchReference(for: context)
+        return SketchPointConstraintPropagator(parameters: cadDocument.parameters)
+            .isAnchored(reference, in: sketch)
+    }
+
+    private func sketchReference(
+        for context: SelectionDimensionSourcePointContext
+    ) throws -> SketchReference {
+        switch context.role {
+        case .handle(let handle):
+            switch handle {
+            case .point:
+                return .entity(context.entityID)
+            case .lineStart:
+                return .lineStart(context.entityID)
+            case .lineEnd:
+                return .lineEnd(context.entityID)
+            case .circleCenter:
+                return .circleCenter(context.entityID)
+            case .arcCenter:
+                return .arcCenter(context.entityID)
+            case .arcStart:
+                return .arcStart(context.entityID)
+            case .arcEnd:
+                return .arcEnd(context.entityID)
+            }
+        case .splineControlPoint(let index):
+            return .splineControlPoint(entity: context.entityID, index: index)
+        }
     }
 
     private func sourcePointContext(
@@ -1654,6 +1726,11 @@ private struct SelectionDimensionSourceArcAngleContext: Sendable {
 private struct SelectionDimensionSourcePointDistanceContext: Sendable {
     var first: SelectionDimensionSourcePointContext
     var second: SelectionDimensionSourcePointContext
+}
+
+private struct SelectionDimensionSourcePointMovePlan: Sendable {
+    var moving: SelectionDimensionSourcePointContext
+    var anchor: SelectionDimensionSourcePointContext
 }
 
 private enum SelectionDimensionSourcePointRole: Equatable, Sendable {
