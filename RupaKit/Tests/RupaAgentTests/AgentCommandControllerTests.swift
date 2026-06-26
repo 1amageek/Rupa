@@ -668,14 +668,14 @@ import SwiftCAD
     #expect(selectionDimension.discovery.contains(.selectionDimensionEvaluation))
     #expect(selectionDimension.discovery.contains(.topologySummary))
     #expect(selectionDimension.discovery.contains(.sketchEntitySummary))
-    #expect(selectionDimension.targets == [.face, .edge, .vertex, .sketchEntity, .sketchPointHandle])
+    #expect(selectionDimension.targets == [.face, .edge, .vertex, .sketchEntity, .sketchPointHandle, .sketchControlPoint])
     #expect(selectionDimension.summary.contains("SwiftCAD document source") || selectionDimension.summary.contains("CAD selection dimension"))
 
     #expect(selectionDimensionTarget.category == .solid)
     #expect(selectionDimensionTarget.mutatesDocument)
     #expect(selectionDimensionTarget.access == .automationCommand)
     #expect(selectionDimensionTarget.discovery.contains(.selectionDimensionEvaluation))
-    #expect(selectionDimensionTarget.targets == [.document, .face, .edge, .vertex, .sketchEntity, .sketchPointHandle])
+    #expect(selectionDimensionTarget.targets == [.document, .face, .edge, .vertex, .sketchEntity, .sketchPointHandle, .sketchControlPoint])
     #expect(selectionDimensionTarget.summary.contains("SelectionDimensionID"))
     #expect(selectionDimensionTarget.failureMode.contains("target quantity kinds"))
 
@@ -684,7 +684,7 @@ import SwiftCAD
     #expect(selectionDimensionApply.access == .automationCommand)
     #expect(selectionDimensionApply.discovery.contains(.selectionDimensionEvaluation))
     #expect(selectionDimensionApply.discovery.contains(.sketchEntitySummary))
-    #expect(selectionDimensionApply.targets == [.document, .sketchEntity, .sketchPointHandle])
+    #expect(selectionDimensionApply.targets == [.document, .sketchEntity, .sketchPointHandle, .sketchControlPoint])
     #expect(selectionDimensionApply.summary.contains("SelectionDimensionID"))
     #expect(selectionDimensionApply.failureMode.contains("line angle"))
 
@@ -692,7 +692,7 @@ import SwiftCAD
     #expect(selectionDimensionRemoval.mutatesDocument)
     #expect(selectionDimensionRemoval.access == .automationCommand)
     #expect(selectionDimensionRemoval.discovery.contains(.selectionDimensionEvaluation))
-    #expect(selectionDimensionRemoval.targets == [.document, .face, .edge, .vertex, .sketchEntity, .sketchPointHandle])
+    #expect(selectionDimensionRemoval.targets == [.document, .face, .edge, .vertex, .sketchEntity, .sketchPointHandle, .sketchControlPoint])
     #expect(selectionDimensionRemoval.summary.contains("SelectionDimensionID"))
     #expect(selectionDimensionRemoval.failureMode.contains("missing selection dimension IDs"))
 
@@ -727,7 +727,7 @@ import SwiftCAD
     #expect(!selectionDimensionEvaluation.mutatesDocument)
     #expect(selectionDimensionEvaluation.access == .agentRequest)
     #expect(selectionDimensionEvaluation.discovery.contains(.selectionDimensionEvaluation))
-    #expect(selectionDimensionEvaluation.targets == [.document, .face, .edge, .vertex, .sketchEntity, .sketchPointHandle])
+    #expect(selectionDimensionEvaluation.targets == [.document, .face, .edge, .vertex, .sketchEntity, .sketchPointHandle, .sketchControlPoint])
 
     #expect(topology.category == .read)
     #expect(!topology.mutatesDocument)
@@ -4236,6 +4236,114 @@ private func rawAgentProtocolJSON(_ source: String) -> Data {
     let measurement = try #require(evaluation.measurements.first)
 
     #expect(abs(try agentArcStartAngle(in: session.document, featureID: arcFeatureID) - Double.pi / 6.0) <= 1.0e-12)
+    assertAgentLengthQuantity(measurement.measured, equals: 0.006)
+    assertAgentLengthQuantity(measurement.target, equals: 0.006)
+    #expect(abs(measurement.residual.value) <= 1.0e-12)
+}
+
+@MainActor
+@Test func agentAppliesSelectionDimensionTargetToSplineControlPointDistance() async throws {
+    var document = DesignDocument.empty()
+    let splineFeatureID = try document.createSplineSketch(
+        name: "Agent Editable Spline",
+        plane: .xy,
+        spline: SketchSpline(controlPoints: [
+            SketchPoint(x: .length(10.0, .millimeter), y: .length(0.0, .millimeter)),
+            SketchPoint(x: .length(12.0, .millimeter), y: .length(3.0, .millimeter)),
+            SketchPoint(x: .length(14.0, .millimeter), y: .length(3.0, .millimeter)),
+            SketchPoint(x: .length(16.0, .millimeter), y: .length(0.0, .millimeter)),
+        ])
+    )
+    let anchorFeatureID = try document.createLineSketch(
+        name: "Agent Spline Anchor",
+        plane: .xy,
+        start: SketchPoint(
+            x: .length(0.0, .millimeter),
+            y: .length(0.0, .millimeter)
+        ),
+        end: SketchPoint(
+            x: .length(0.0, .millimeter),
+            y: .length(10.0, .millimeter)
+        )
+    )
+    let splineTargets = try agentSplineControlPointTargets(in: document, featureID: splineFeatureID)
+    let anchorTargets = try agentLineEndpointTargets(in: document, featureID: anchorFeatureID)
+    let server = AgentCommandController()
+    let sessionID = UUID()
+    let session = EditorSession(document: document)
+    server.register(session: session, id: sessionID)
+
+    let addResponse = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .addSelectionDimension(
+                name: "Agent Spline CV Distance",
+                kind: .distance,
+                first: splineTargets[0],
+                second: anchorTargets.start,
+                target: .length(10.0, .millimeter)
+            ),
+            expectedGeneration: DocumentGeneration(0)
+        )
+    )
+    guard case .command(let addResult) = addResponse else {
+        #expect(Bool(false))
+        return
+    }
+    let dimensionID = try #require(addResult.addedSelectionDimensionID)
+
+    let setResponse = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .setSelectionDimensionTarget(
+                id: dimensionID,
+                target: .length(6.0, .millimeter)
+            ),
+            expectedGeneration: DocumentGeneration(1)
+        )
+    )
+    guard case .command(let setResult) = setResponse else {
+        #expect(Bool(false))
+        return
+    }
+    #expect(setResult.commandName == "setSelectionDimensionTarget")
+    #expect(setResult.didMutate)
+
+    let applyResponse = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .applySelectionDimensionTarget(id: dimensionID),
+            expectedGeneration: DocumentGeneration(2)
+        )
+    )
+    guard case .command(let applyResult) = applyResponse else {
+        #expect(Bool(false))
+        return
+    }
+    #expect(applyResult.commandName == "applySelectionDimensionTarget")
+    #expect(applyResult.didMutate)
+
+    let evaluationResponse = server.handle(
+        .selectionDimensionEvaluation(
+            sessionID: sessionID,
+            dimensionID: dimensionID,
+            expectedGeneration: DocumentGeneration(3)
+        )
+    )
+    guard case .selectionDimensionEvaluation(let evaluation) = evaluationResponse else {
+        #expect(Bool(false))
+        return
+    }
+    let measurement = try #require(evaluation.measurements.first)
+    let controlPoints = try agentSplineControlPoints(
+        in: session.document,
+        featureID: splineFeatureID
+    )
+
+    #expect(abs(controlPoints[0].x - 0.006) <= 1.0e-12)
+    #expect(abs(controlPoints[0].y) <= 1.0e-12)
+    #expect(abs(controlPoints[1].x - 0.012) <= 1.0e-12)
+    #expect(abs(controlPoints[1].y - 0.003) <= 1.0e-12)
     assertAgentLengthQuantity(measurement.measured, equals: 0.006)
     assertAgentLengthQuantity(measurement.target, equals: 0.006)
     #expect(abs(measurement.residual.value) <= 1.0e-12)
@@ -14718,6 +14826,27 @@ private func agentArcEndpointTargets(
     )
 }
 
+private func agentSplineControlPointTargets(
+    in document: DesignDocument,
+    featureID: FeatureID
+) throws -> [SelectionTarget] {
+    let summary = try SketchEntitySummaryService().summarize(document: document)
+    let entry = try #require(summary.entries.first {
+        $0.sourceFeatureID == featureID.description && $0.entityKind == "spline"
+    })
+    let sceneNodeIDString = try #require(entry.sceneNodeID)
+    let sceneNodeUUID = try #require(UUID(uuidString: sceneNodeIDString))
+    let sceneNodeID = SceneNodeID(sceneNodeUUID)
+    return entry.controlPointTargets
+        .sorted { $0.index < $1.index }
+        .map { controlPoint in
+            SelectionTarget(
+                sceneNodeID: sceneNodeID,
+                component: .sketchEntity(SelectionComponentID(rawValue: controlPoint.selectionComponentID))
+            )
+        }
+}
+
 private func agentCircleCenterAndCurveTargets(
     in document: DesignDocument,
     featureID: FeatureID
@@ -14767,6 +14896,19 @@ private func agentArcStartAngle(
         return 0.0
     }
     return try document.cadDocument.parameters.resolvedValue(for: arc.startAngle).value
+}
+
+private func agentSplineControlPoints(
+    in document: DesignDocument,
+    featureID: FeatureID
+) throws -> [Point2D] {
+    guard let feature = document.cadDocument.designGraph.nodes[featureID],
+          case let .sketch(sketch) = feature.operation,
+          case let .spline(spline) = sketch.entities.values.first else {
+        Issue.record("Expected one source spline")
+        return []
+    }
+    return try spline.controlPoints.map { try agentPoint($0, in: document) }
 }
 
 private func agentLineAngle(

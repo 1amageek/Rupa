@@ -119,6 +119,14 @@ public struct SelectionDimensionTargetResolver: Sendable {
                 objectRegistry: objectRegistry
             )
         }
+        if let controlPoint = componentID.sketchControlPointReference {
+            return try sketchControlPointReference(
+                controlPoint,
+                target: target,
+                document: document,
+                objectRegistry: objectRegistry
+            )
+        }
 
         guard let reference = componentID.sketchEntityReference else {
             throw EditorError(
@@ -207,6 +215,43 @@ public struct SelectionDimensionTargetResolver: Sendable {
                 message: "Selection dimension sketch point targets currently support line start/end plus circle/arc center and arc start/end handles."
             )
         }
+    }
+
+    private func sketchControlPointReference(
+        _ reference: (
+            featureID: FeatureID,
+            entityID: SketchEntityID,
+            index: Int
+        ),
+        target: SelectionTarget,
+        document: DesignDocument,
+        objectRegistry: ObjectTypeRegistry
+    ) throws -> SelectionReference {
+        guard let feature = document.cadDocument.designGraph.nodes[reference.featureID],
+              case let .sketch(sketch) = feature.operation,
+              case let .spline(spline) = sketch.entities[reference.entityID] else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "Selection dimension sketch control point target requires an existing source spline entity."
+            )
+        }
+        guard spline.controlPoints.indices.contains(reference.index) else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "Selection dimension sketch control point target requires an existing source spline control point."
+            )
+        }
+        let curveIndex = try curveIndex(
+            featureID: reference.featureID,
+            entityID: reference.entityID,
+            target: target,
+            document: document,
+            objectRegistry: objectRegistry
+        )
+        return .curve(.controlPoint(CurveControlPointReference(
+            curve: CurveOutputReference(featureID: reference.featureID, curveIndex: curveIndex),
+            controlPointIndex: reference.index
+        )))
     }
 
     private func curveIndex(

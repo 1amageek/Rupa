@@ -768,18 +768,18 @@ public final class AgentCommandController: AgentClientProtocol {
             access: .automationCommand,
             mutatesDocument: true,
             discovery: [.selectionDimensionEvaluation],
-            targets: [.document, .face, .edge, .vertex, .sketchEntity, .sketchPointHandle],
+            targets: [.document, .face, .edge, .vertex, .sketchEntity, .sketchPointHandle, .sketchControlPoint],
             failureMode: "Rejects missing selection dimension IDs, target quantity kinds that do not match the stored selection dimension kind, invalid values, and stale generations before mutation."
         ),
         capability(
             "applySelectionDimensionTarget",
             category: .sourceCurveEditing,
-            summary: "Apply the stored target of an existing persistent CAD selection dimension to supported source line length, source sketch point-to-point distance including solved arc endpoint distances, source circle/arc radius, source line relative angle, or source arc span angle dimensions by SelectionDimensionID.",
+            summary: "Apply the stored target of an existing persistent CAD selection dimension to supported source line length, source sketch point-to-point distance including solved arc endpoint and spline control-point distances, source circle/arc radius, source line relative angle, or source arc span angle dimensions by SelectionDimensionID.",
             access: .automationCommand,
             mutatesDocument: true,
             discovery: [.selectionDimensionEvaluation, .sketchEntitySummary],
-            targets: [.document, .sketchEntity, .sketchPointHandle],
-            failureMode: "Rejects missing selection dimension IDs, unsupported source line length, point-distance, circular radius, line angle, or arc span references, impossible arc endpoint distance targets, mismatched or stale endpoint parameters, invalid target values, fixed conflicts, unsupported propagated constraints, and stale generations before mutation."
+            targets: [.document, .sketchEntity, .sketchPointHandle, .sketchControlPoint],
+            failureMode: "Rejects missing selection dimension IDs, unsupported source line length, point-distance, circular radius, line angle, or arc span references, impossible arc endpoint distance targets, mismatched or stale endpoint/control-point parameters, invalid target values, fixed conflicts, unsupported propagated constraints, and stale generations before mutation."
         ),
         capability(
             "setExtrudeDistance",
@@ -857,8 +857,8 @@ public final class AgentCommandController: AgentClientProtocol {
             access: .automationCommand,
             mutatesDocument: true,
             discovery: [.topologySummary, .sketchEntitySummary, .selectionDimensionEvaluation],
-            targets: [.face, .edge, .vertex, .sketchEntity, .sketchPointHandle],
-            failureMode: "Rejects object-wide targets, profile regions, unresolved generated topology, unsupported sketch point handles, invalid target quantities, and stale generations before mutation."
+            targets: [.face, .edge, .vertex, .sketchEntity, .sketchPointHandle, .sketchControlPoint],
+            failureMode: "Rejects object-wide targets, profile regions, unresolved generated topology, unsupported sketch point handles or control points, invalid target quantities, and stale generations before mutation."
         ),
         capability(
             "removeSelectionDimension",
@@ -867,7 +867,7 @@ public final class AgentCommandController: AgentClientProtocol {
             access: .automationCommand,
             mutatesDocument: true,
             discovery: [.selectionDimensionEvaluation],
-            targets: [.document, .face, .edge, .vertex, .sketchEntity, .sketchPointHandle],
+            targets: [.document, .face, .edge, .vertex, .sketchEntity, .sketchPointHandle, .sketchControlPoint],
             failureMode: "Rejects missing selection dimension IDs and stale generations before mutation."
         ),
         capability(
@@ -1182,7 +1182,7 @@ public final class AgentCommandController: AgentClientProtocol {
             access: .agentRequest,
             mutatesDocument: false,
             discovery: [.selectionDimensionEvaluation, .topologySummary, .sketchEntitySummary],
-            targets: [.document, .face, .edge, .vertex, .sketchEntity, .sketchPointHandle],
+            targets: [.document, .face, .edge, .vertex, .sketchEntity, .sketchPointHandle, .sketchControlPoint],
             failureMode: "Rejects stale generations, invalid CAD source, unresolved selection references, or missing dimension IDs before returning measured residuals."
         ),
         capability(

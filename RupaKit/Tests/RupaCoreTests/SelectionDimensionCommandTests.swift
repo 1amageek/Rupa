@@ -277,6 +277,76 @@ import Testing
     )
 }
 
+@Test func selectionDimensionApplyUpdatesSplineControlPointDistance() async throws {
+    var document = DesignDocument.empty()
+    let splineFeatureID = try document.createSplineSketch(
+        name: "Editable Spline",
+        plane: .xy,
+        spline: SketchSpline(controlPoints: [
+            SketchPoint(x: .length(10.0, .millimeter), y: .length(0.0, .millimeter)),
+            SketchPoint(x: .length(12.0, .millimeter), y: .length(3.0, .millimeter)),
+            SketchPoint(x: .length(14.0, .millimeter), y: .length(3.0, .millimeter)),
+            SketchPoint(x: .length(16.0, .millimeter), y: .length(0.0, .millimeter)),
+        ])
+    )
+    let anchorFeatureID = try document.createLineSketch(
+        name: "Anchor Line",
+        plane: .xy,
+        start: SketchPoint(
+            x: .length(0.0, .millimeter),
+            y: .length(0.0, .millimeter)
+        ),
+        end: SketchPoint(
+            x: .length(0.0, .millimeter),
+            y: .length(10.0, .millimeter)
+        )
+    )
+    let splineTargets = try splineControlPointTargets(in: document, featureID: splineFeatureID)
+    let anchorTargets = try lineEndpointTargets(in: document, featureID: anchorFeatureID)
+    let session = EditorSession(document: document)
+    let addResult = try session.execute(
+        .addSelectionDimension(
+            name: "Spline CV Distance",
+            kind: .distance,
+            first: splineTargets[0],
+            second: anchorTargets.start,
+            target: .length(10.0, .millimeter)
+        )
+    )
+    let dimensionID = try #require(addResult.addedSelectionDimensionID)
+
+    _ = try session.execute(
+        .setSelectionDimensionTarget(
+            id: dimensionID,
+            target: .length(6.0, .millimeter)
+        )
+    )
+    let applyResult = try session.execute(.applySelectionDimensionTarget(id: dimensionID))
+    let appliedEvaluation = try SelectionDimensionService().evaluate(
+        document: session.document,
+        dimensionID: dimensionID
+    )
+    let appliedMeasurement = try #require(appliedEvaluation.measurements.first)
+    let controlPoints = try splineControlPoints(in: session.document, featureID: splineFeatureID)
+
+    #expect(applyResult.commandName == "applySelectionDimensionTarget")
+    #expect(applyResult.didMutate)
+    #expect(abs(controlPoints[0].x - 0.006) <= 1.0e-12)
+    #expect(abs(controlPoints[0].y) <= 1.0e-12)
+    #expect(abs(controlPoints[1].x - 0.012) <= 1.0e-12)
+    #expect(abs(controlPoints[1].y - 0.003) <= 1.0e-12)
+    assertLengthQuantity(appliedMeasurement.measured, equals: 0.006)
+    assertLengthQuantity(appliedMeasurement.target, equals: 0.006)
+    #expect(abs(appliedMeasurement.residual.value) <= 1.0e-12)
+    #expect(try appliedMeasurement.isSatisfied())
+    assertSplineControlPointAndLineStartReferences(
+        appliedMeasurement.dimension,
+        splineFeatureID: splineFeatureID,
+        expectedControlPointIndex: 0,
+        lineFeatureID: anchorFeatureID
+    )
+}
+
 @Test func selectionDimensionApplyRejectsImpossibleArcEndpointPointDistance() async throws {
     var document = DesignDocument.empty()
     let arcFeatureID = try document.createArcSketch(
@@ -828,6 +898,27 @@ private func arcEndpointTargets(
     )
 }
 
+private func splineControlPointTargets(
+    in document: DesignDocument,
+    featureID: FeatureID
+) throws -> [SelectionTarget] {
+    let summary = try SketchEntitySummaryService().summarize(document: document)
+    let entry = try #require(summary.entries.first {
+        $0.sourceFeatureID == featureID.description && $0.entityKind == "spline"
+    })
+    let sceneNodeIDString = try #require(entry.sceneNodeID)
+    let sceneNodeUUID = try #require(UUID(uuidString: sceneNodeIDString))
+    let sceneNodeID = SceneNodeID(sceneNodeUUID)
+    return entry.controlPointTargets
+        .sorted { $0.index < $1.index }
+        .map { controlPoint in
+            SelectionTarget(
+                sceneNodeID: sceneNodeID,
+                component: .sketchEntity(SelectionComponentID(rawValue: controlPoint.selectionComponentID))
+            )
+        }
+}
+
 private func opposingFaceTargets(
     in document: DesignDocument
 ) throws -> (first: SelectionTarget, second: SelectionTarget) {
@@ -934,6 +1025,19 @@ private func arcSpan(
     return span
 }
 
+private func splineControlPoints(
+    in document: DesignDocument,
+    featureID: FeatureID
+) throws -> [Point2D] {
+    guard let feature = document.cadDocument.designGraph.nodes[featureID],
+          case let .sketch(sketch) = feature.operation,
+          case let .spline(spline) = sketch.entities.values.first else {
+        Issue.record("Expected one source spline")
+        return []
+    }
+    return try spline.controlPoints.map { try point($0, in: document) }
+}
+
 private func arcStartAngle(
     in document: DesignDocument,
     featureID: FeatureID
@@ -988,6 +1092,23 @@ private func assertArcEndpointAndLineStartReferences(
     }
     #expect(arcEndpoint.curve.featureID == arcFeatureID)
     #expect(abs(arcEndpoint.parameter - expectedArcParameter) <= 1.0e-12)
+    #expect(lineStart.curve.featureID == lineFeatureID)
+    #expect(abs(lineStart.parameter) <= 1.0e-12)
+}
+
+private func assertSplineControlPointAndLineStartReferences(
+    _ dimension: SelectionDimension,
+    splineFeatureID: FeatureID,
+    expectedControlPointIndex: Int,
+    lineFeatureID: FeatureID
+) {
+    guard case .curve(.controlPoint(let controlPoint)) = dimension.first,
+          case .curve(.parameter(let lineStart)) = dimension.second else {
+        Issue.record("Expected spline control point and line start references")
+        return
+    }
+    #expect(controlPoint.curve.featureID == splineFeatureID)
+    #expect(controlPoint.controlPointIndex == expectedControlPointIndex)
     #expect(lineStart.curve.featureID == lineFeatureID)
     #expect(abs(lineStart.parameter) <= 1.0e-12)
 }

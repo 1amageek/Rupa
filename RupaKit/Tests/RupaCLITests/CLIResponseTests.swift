@@ -3384,6 +3384,12 @@ struct CLISelectionDimensionCommandTests {
             "file",
             "--json",
         ])
+        guard applyResult.terminationStatus == CLIExitCode.success.rawValue else {
+            Issue.record(
+                "Selection dimension apply failed: \(applyResult.standardError)\(applyResult.standardOutput)"
+            )
+            return
+        }
         let applyResponse = try JSONDecoder().decode(
             CLIResponse.self,
             from: applyResult.standardOutputData
@@ -3395,7 +3401,6 @@ struct CLISelectionDimensionCommandTests {
         )
         let appliedMeasurement = try #require(appliedEvaluation.measurements.first)
 
-        #expect(applyResult.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: applyResult.standardError))
         #expect(applyResponse.message == "Selection dimension target applied.")
         #expect(applyResponse.saved)
         #expect(!applyResponse.dirty)
@@ -3528,6 +3533,12 @@ struct CLISelectionDimensionCommandTests {
             "file",
             "--json",
         ])
+        guard applyResult.terminationStatus == CLIExitCode.success.rawValue else {
+            Issue.record(
+                "Arc endpoint selection dimension apply failed: \(applyResult.standardError)\(applyResult.standardOutput)"
+            )
+            return
+        }
         let applyResponse = try JSONDecoder().decode(
             CLIResponse.self,
             from: applyResult.standardOutputData
@@ -3540,11 +3551,144 @@ struct CLISelectionDimensionCommandTests {
         let appliedMeasurement = try #require(appliedEvaluation.measurements.first)
         let startAngle = try cliArcStartAngle(in: appliedLoaded, featureID: arcFeatureID)
 
-        #expect(applyResult.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: applyResult.standardError))
         #expect(applyResponse.message == "Selection dimension target applied.")
         #expect(applyResponse.saved)
         #expect(!applyResponse.dirty)
         #expect(abs(startAngle - Double.pi / 6.0) <= 1.0e-12)
+        #expect(appliedMeasurement.measured.kind == .length)
+        #expect(abs(appliedMeasurement.measured.value - 0.006) <= 1.0e-12)
+        #expect(appliedMeasurement.target.kind == .length)
+        #expect(abs(appliedMeasurement.target.value - 0.006) <= 1.0e-12)
+        #expect(abs(appliedMeasurement.residual.value) <= 1.0e-12)
+        #expect(try appliedMeasurement.isSatisfied())
+    }
+
+    @Test(.timeLimit(.minutes(1)))
+    func executableSelectionDimensionApplyMovesSplineControlPointAsJSON() async throws {
+        let temporaryDirectory = try makeTemporaryDirectory()
+        defer {
+            removeTemporaryDirectory(temporaryDirectory)
+        }
+        let documentURL = temporaryDirectory.appendingPathComponent("process-selection-spline-cv-dimension.swcad")
+        var document = DesignDocument.empty(named: "Process Selection Spline CV Dimension")
+        let splineFeatureID = try document.createSplineSketch(
+            name: "Measured Spline CV",
+            plane: .xy,
+            spline: SketchSpline(controlPoints: [
+                SketchPoint(x: .length(10.0, .millimeter), y: .length(0.0, .millimeter)),
+                SketchPoint(x: .length(12.0, .millimeter), y: .length(3.0, .millimeter)),
+                SketchPoint(x: .length(14.0, .millimeter), y: .length(3.0, .millimeter)),
+                SketchPoint(x: .length(16.0, .millimeter), y: .length(0.0, .millimeter)),
+            ])
+        )
+        let anchorFeatureID = try document.createLineSketch(
+            name: "Anchor Line",
+            plane: .xy,
+            start: SketchPoint(
+                x: .length(0.0, .millimeter),
+                y: .length(0.0, .millimeter)
+            ),
+            end: SketchPoint(
+                x: .length(0.0, .millimeter),
+                y: .length(10.0, .millimeter)
+            )
+        )
+        let splineTargets = try cliSplineControlPointTargets(in: document, featureID: splineFeatureID)
+        let anchorTargets = try cliLineEndpointTargets(in: document, featureID: anchorFeatureID)
+        try DocumentFileService().save(document, to: documentURL)
+
+        let result = try await runCLI([
+            "dimension",
+            "add-selection",
+            documentURL.path,
+            "--name",
+            "CLI Spline CV Distance",
+            "--kind",
+            "distance",
+            "--first-target",
+            try encodedSelectionTarget(splineTargets[0]),
+            "--second-target",
+            try encodedSelectionTarget(anchorTargets.start),
+            "--target-value",
+            "10",
+            "--length-unit",
+            "millimeter",
+            "--mode",
+            "file",
+            "--json",
+        ])
+        let response = try JSONDecoder().decode(
+            CLISelectionDimensionAddResponse.self,
+            from: result.standardOutputData
+        )
+        let dimensionID = try #require(response.selectionDimensionID)
+
+        #expect(result.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: result.standardError))
+        #expect(response.message == "Selection dimension added.")
+        #expect(response.saved)
+        #expect(!response.dirty)
+
+        let setResult = try await runCLI([
+            "dimension",
+            "set-selection",
+            documentURL.path,
+            "--dimension-id",
+            dimensionID.description,
+            "--kind",
+            "distance",
+            "--target-value",
+            "6",
+            "--length-unit",
+            "millimeter",
+            "--mode",
+            "file",
+            "--json",
+        ])
+        let setResponse = try JSONDecoder().decode(
+            CLIResponse.self,
+            from: setResult.standardOutputData
+        )
+
+        #expect(setResult.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: setResult.standardError))
+        #expect(setResponse.message == "Selection dimension target updated.")
+        #expect(setResponse.saved)
+        #expect(!setResponse.dirty)
+
+        let applyResult = try await runCLI([
+            "dimension",
+            "apply-selection",
+            documentURL.path,
+            "--dimension-id",
+            dimensionID.description,
+            "--mode",
+            "file",
+            "--json",
+        ])
+        guard applyResult.terminationStatus == CLIExitCode.success.rawValue else {
+            Issue.record(
+                "Spline control-point selection dimension apply failed: \(applyResult.standardError)\(applyResult.standardOutput)"
+            )
+            return
+        }
+        let applyResponse = try JSONDecoder().decode(
+            CLIResponse.self,
+            from: applyResult.standardOutputData
+        )
+        let appliedLoaded = try DocumentFileService().load(from: documentURL)
+        let appliedEvaluation = try SelectionDimensionService().evaluate(
+            document: appliedLoaded,
+            dimensionID: dimensionID
+        )
+        let appliedMeasurement = try #require(appliedEvaluation.measurements.first)
+        let controlPoints = try cliSplineControlPoints(in: appliedLoaded, featureID: splineFeatureID)
+
+        #expect(applyResponse.message == "Selection dimension target applied.")
+        #expect(applyResponse.saved)
+        #expect(!applyResponse.dirty)
+        #expect(abs(controlPoints[0].x - 0.006) <= 1.0e-12)
+        #expect(abs(controlPoints[0].y) <= 1.0e-12)
+        #expect(abs(controlPoints[1].x - 0.012) <= 1.0e-12)
+        #expect(abs(controlPoints[1].y - 0.003) <= 1.0e-12)
         #expect(appliedMeasurement.measured.kind == .length)
         #expect(abs(appliedMeasurement.measured.value - 0.006) <= 1.0e-12)
         #expect(appliedMeasurement.target.kind == .length)
@@ -6119,6 +6263,27 @@ private func cliArcEndpointTargets(
     )
 }
 
+private func cliSplineControlPointTargets(
+    in document: DesignDocument,
+    featureID: FeatureID
+) throws -> [SelectionTarget] {
+    let summary = try SketchEntitySummaryService().summarize(document: document)
+    let entry = try #require(summary.entries.first {
+        $0.sourceFeatureID == featureID.description && $0.entityKind == "spline"
+    })
+    let sceneNodeIDString = try #require(entry.sceneNodeID)
+    let sceneNodeUUID = try #require(UUID(uuidString: sceneNodeIDString))
+    let sceneNodeID = SceneNodeID(sceneNodeUUID)
+    return entry.controlPointTargets
+        .sorted { $0.index < $1.index }
+        .map { controlPoint in
+            SelectionTarget(
+                sceneNodeID: sceneNodeID,
+                component: .sketchEntity(SelectionComponentID(rawValue: controlPoint.selectionComponentID))
+            )
+        }
+}
+
 private func cliArcStartAngle(
     in document: DesignDocument,
     featureID: FeatureID
@@ -6134,6 +6299,26 @@ private func cliArcStartAngle(
     let quantity = try document.cadDocument.parameters.resolvedValue(for: arc.startAngle)
     #expect(quantity.kind == .angle)
     return quantity.value
+}
+
+private func cliSplineControlPoints(
+    in document: DesignDocument,
+    featureID: FeatureID
+) throws -> [(x: Double, y: Double)] {
+    guard let feature = document.cadDocument.designGraph.nodes[featureID],
+          case let .sketch(sketch) = feature.operation,
+          case let .spline(spline) = sketch.entities.values.first else {
+        throw EditorError(
+            code: .referenceUnresolved,
+            message: "Expected one source spline."
+        )
+    }
+    return try spline.controlPoints.map { controlPoint in
+        (
+            x: try cliLength(controlPoint.x, in: document),
+            y: try cliLength(controlPoint.y, in: document)
+        )
+    }
 }
 
 private func encodedSelectionReference(_ reference: SelectionReference) throws -> String {

@@ -304,10 +304,13 @@ public extension DesignDocument {
                     ))
                 }
                 return .sourcePointDistance(try sourcePointDistanceDimensionContext(for: dimension))
+            case (.curve(.controlPoint), .curve),
+                 (.curve, .curve(.controlPoint)):
+                return .sourcePointDistance(try sourcePointDistanceDimensionContext(for: dimension))
             default:
                 throw EditorError(
                     code: .commandInvalid,
-                    message: "Selection dimension application currently supports source line length, source circle/arc radius, and source sketch point-to-point distance dimensions."
+                    message: "Selection dimension application currently supports source line length, source circle/arc radius, source sketch point-to-point distance, and source spline control-point distance dimensions."
                 )
             }
         case .angle:
@@ -351,7 +354,7 @@ public extension DesignDocument {
             )
         }
 
-        if isArcEndpointHandle(context.first.handle) {
+        if isArcEndpointRole(context.first.role) {
             try applySourceArcEndpointPointDistanceDimension(
                 id: id,
                 targetDistance: targetDistance,
@@ -393,9 +396,8 @@ public extension DesignDocument {
 
         if abs(deltaX) > selectionDimensionEndpointTolerance ||
             abs(deltaY) > selectionDimensionEndpointTolerance {
-            try moveSketchEntityPoint(
-                target: context.first.target,
-                handle: context.first.handle,
+            try moveSourcePoint(
+                context.first,
                 deltaX: .length(deltaX, .meter),
                 deltaY: .length(deltaY, .meter),
                 objectRegistry: objectRegistry
@@ -437,12 +439,17 @@ public extension DesignDocument {
             owner: "Selection arc endpoint distance application radius"
         )
         let endpointRole: SelectionDimensionCurveEndpointRole
-        switch context.first.handle {
-        case .arcStart:
+        switch context.first.role {
+        case .handle(.arcStart):
             endpointRole = .start
-        case .arcEnd:
+        case .handle(.arcEnd):
             endpointRole = .end
-        case .point, .lineStart, .lineEnd, .circleCenter, .arcCenter:
+        case .handle(.point),
+             .handle(.lineStart),
+             .handle(.lineEnd),
+             .handle(.circleCenter),
+             .handle(.arcCenter),
+             .splineControlPoint:
             throw EditorError(
                 code: .commandInvalid,
                 message: "Selection arc endpoint distance application requires an arc endpoint as the moving source point."
@@ -472,9 +479,8 @@ public extension DesignDocument {
 
         if abs(deltaX) > selectionDimensionEndpointTolerance ||
             abs(deltaY) > selectionDimensionEndpointTolerance {
-            try moveSketchEntityPoint(
-                target: context.first.target,
-                handle: context.first.handle,
+            try moveSourcePoint(
+                context.first,
                 deltaX: .length(deltaX, .meter),
                 deltaY: .length(deltaY, .meter),
                 objectRegistry: objectRegistry
@@ -695,7 +701,7 @@ public extension DesignDocument {
         }
         guard first.featureID != second.featureID ||
             first.entityID != second.entityID ||
-            first.handle != second.handle else {
+            first.role != second.role else {
             throw EditorError(
                 code: .commandInvalid,
                 message: "Selection point distance application requires two distinct source point handles."
@@ -718,10 +724,12 @@ public extension DesignDocument {
             return try sourceParameterPointContext(parameter)
         case .center(let center):
             return try sourceCenterPointContext(center)
-        case .whole, .span, .controlPoint, .knot:
+        case .controlPoint(let controlPoint):
+            return try sourceControlPointContext(controlPoint)
+        case .whole, .span, .knot:
             throw EditorError(
                 code: .commandInvalid,
-                message: "Selection point distance application requires line endpoint, circle center, arc center, or anchor arc endpoint references."
+                message: "Selection point distance application requires line endpoint, circle center, arc center, arc endpoint, or spline control point references."
             )
         }
     }
@@ -774,7 +782,7 @@ public extension DesignDocument {
             curve: parameter.curve,
             plane: sketch.plane,
             target: try sourceSketchEntityTarget(featureID: featureID, entityID: entityID),
-            handle: handle
+            role: .handle(handle)
         )
     }
 
@@ -814,7 +822,40 @@ public extension DesignDocument {
             curve: center.curve,
             plane: sketch.plane,
             target: try sourceSketchEntityTarget(featureID: featureID, entityID: entityID),
-            handle: handle
+            role: .handle(handle)
+        )
+    }
+
+    private func sourceControlPointContext(
+        _ controlPoint: CurveControlPointReference
+    ) throws -> SelectionDimensionSourcePointContext {
+        let featureID = controlPoint.curve.featureID
+        let entityID = try sourceCurveEntityID(
+            featureID: featureID,
+            curveIndex: controlPoint.curve.curveIndex
+        )
+        guard let feature = cadDocument.designGraph.nodes[featureID],
+              case let .sketch(sketch) = feature.operation,
+              case let .spline(spline) = sketch.entities[entityID] else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "Selection point distance application requires an existing source spline control point."
+            )
+        }
+        guard spline.controlPoints.indices.contains(controlPoint.controlPointIndex) else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "Selection point distance application requires an existing source spline control point index."
+            )
+        }
+
+        return SelectionDimensionSourcePointContext(
+            featureID: featureID,
+            entityID: entityID,
+            curve: controlPoint.curve,
+            plane: sketch.plane,
+            target: try sourceSketchEntityTarget(featureID: featureID, entityID: entityID),
+            role: .splineControlPoint(controlPoint.controlPointIndex)
         )
     }
 
@@ -1076,33 +1117,74 @@ public extension DesignDocument {
                 message: "Selection point distance application requires an existing source sketch point."
             )
         }
-        switch (context.handle, entity) {
-        case (.lineStart, .line(let line)):
-            return try resolvedPoint(line.start, owner: "Selection point distance line start")
-        case (.lineEnd, .line(let line)):
-            return try resolvedPoint(line.end, owner: "Selection point distance line end")
-        case (.circleCenter, .circle(let circle)):
-            return try resolvedPoint(circle.center, owner: "Selection point distance circle center")
-        case (.arcCenter, .arc(let arc)):
-            return try resolvedPoint(arc.center, owner: "Selection point distance arc center")
-        case (.arcStart, .arc(let arc)):
-            return try sourceArcEndpointPoint(
-                arc,
-                endpoint: .start,
-                owner: "Selection point distance arc start"
+        switch context.role {
+        case .handle(let handle):
+            switch (handle, entity) {
+            case (.lineStart, .line(let line)):
+                return try resolvedPoint(line.start, owner: "Selection point distance line start")
+            case (.lineEnd, .line(let line)):
+                return try resolvedPoint(line.end, owner: "Selection point distance line end")
+            case (.circleCenter, .circle(let circle)):
+                return try resolvedPoint(circle.center, owner: "Selection point distance circle center")
+            case (.arcCenter, .arc(let arc)):
+                return try resolvedPoint(arc.center, owner: "Selection point distance arc center")
+            case (.arcStart, .arc(let arc)):
+                return try sourceArcEndpointPoint(
+                    arc,
+                    endpoint: .start,
+                    owner: "Selection point distance arc start"
+                )
+            case (.arcEnd, .arc(let arc)):
+                return try sourceArcEndpointPoint(
+                    arc,
+                    endpoint: .end,
+                    owner: "Selection point distance arc end"
+                )
+            case (.point, .point(let point)):
+                return try resolvedPoint(point, owner: "Selection point distance point")
+            default:
+                throw EditorError(
+                    code: .commandInvalid,
+                    message: "Selection point distance application source point handle no longer matches the source entity."
+                )
+            }
+        case .splineControlPoint(let index):
+            guard case .spline(let spline) = entity,
+                  spline.controlPoints.indices.contains(index) else {
+                throw EditorError(
+                    code: .commandInvalid,
+                    message: "Selection point distance application source spline control point no longer matches the source entity."
+                )
+            }
+            return try resolvedPoint(
+                spline.controlPoints[index],
+                owner: "Selection point distance spline control point"
             )
-        case (.arcEnd, .arc(let arc)):
-            return try sourceArcEndpointPoint(
-                arc,
-                endpoint: .end,
-                owner: "Selection point distance arc end"
+        }
+    }
+
+    private mutating func moveSourcePoint(
+        _ context: SelectionDimensionSourcePointContext,
+        deltaX: CADExpression,
+        deltaY: CADExpression,
+        objectRegistry: ObjectTypeRegistry
+    ) throws {
+        switch context.role {
+        case .handle(let handle):
+            try moveSketchEntityPoint(
+                target: context.target,
+                handle: handle,
+                deltaX: deltaX,
+                deltaY: deltaY,
+                objectRegistry: objectRegistry
             )
-        case (.point, .point(let point)):
-            return try resolvedPoint(point, owner: "Selection point distance point")
-        default:
-            throw EditorError(
-                code: .commandInvalid,
-                message: "Selection point distance application source point handle no longer matches the source entity."
+        case .splineControlPoint(let index):
+            try moveSketchSplineControlPoint(
+                target: context.target,
+                controlPointIndex: index,
+                deltaX: deltaX,
+                deltaY: deltaY,
+                objectRegistry: objectRegistry
             )
         }
     }
@@ -1111,6 +1193,20 @@ public extension DesignDocument {
         for context: SelectionDimensionSourcePointContext,
         owner: String
     ) throws -> SketchArc {
+        switch context.role {
+        case .handle(.arcStart), .handle(.arcEnd):
+            break
+        case .handle(.point),
+             .handle(.lineStart),
+             .handle(.lineEnd),
+             .handle(.circleCenter),
+             .handle(.arcCenter),
+             .splineControlPoint:
+            throw EditorError(
+                code: .commandInvalid,
+                message: "\(owner) requires an arc endpoint source point."
+            )
+        }
         guard let feature = cadDocument.designGraph.nodes[context.featureID],
               case let .sketch(sketch) = feature.operation,
               case let .arc(arc) = sketch.entities[context.entityID] else {
@@ -1217,11 +1313,16 @@ public extension DesignDocument {
         return dx * dx + dy * dy
     }
 
-    private func isArcEndpointHandle(_ handle: SketchEntityPointHandle) -> Bool {
-        switch handle {
-        case .arcStart, .arcEnd:
+    private func isArcEndpointRole(_ role: SelectionDimensionSourcePointRole) -> Bool {
+        switch role {
+        case .handle(.arcStart), .handle(.arcEnd):
             return true
-        case .point, .lineStart, .lineEnd, .circleCenter, .arcCenter:
+        case .handle(.point),
+             .handle(.lineStart),
+             .handle(.lineEnd),
+             .handle(.circleCenter),
+             .handle(.arcCenter),
+             .splineControlPoint:
             return false
         }
     }
@@ -1381,13 +1482,13 @@ public extension DesignDocument {
     private func selectionReference(
         point context: SelectionDimensionSourcePointContext
     ) throws -> SelectionReference {
-        switch context.handle {
-        case .lineStart:
+        switch context.role {
+        case .handle(.lineStart):
             return .curve(.parameter(CurveParameterReference(
                 curve: context.curve,
                 parameter: 0.0
             )))
-        case .lineEnd:
+        case .handle(.lineEnd):
             return .curve(.parameter(CurveParameterReference(
                 curve: context.curve,
                 parameter: try sourceLineLength(
@@ -1395,19 +1496,24 @@ public extension DesignDocument {
                     entityID: context.entityID
                 )
             )))
-        case .circleCenter, .arcCenter:
+        case .handle(.circleCenter), .handle(.arcCenter):
             return .curve(.center(CurveCenterReference(curve: context.curve)))
-        case .arcStart, .arcEnd:
+        case .handle(.arcStart), .handle(.arcEnd):
             let endpointParameters = try sourceArcEndpointParameters(
                 featureID: context.featureID,
                 entityID: context.entityID
             )
             return selectionReference(
                 curve: context.curve,
-                role: context.handle == .arcStart ? .start : .end,
+                role: context.role == .handle(.arcStart) ? .start : .end,
                 arcEndpointParameters: endpointParameters
             )
-        case .point:
+        case .splineControlPoint(let index):
+            return .curve(.controlPoint(CurveControlPointReference(
+                curve: context.curve,
+                controlPointIndex: index
+            )))
+        case .handle(.point):
             throw EditorError(
                 code: .commandInvalid,
                 message: "Selection point distance application cannot persist standalone sketch point references yet."
@@ -1502,13 +1608,18 @@ private struct SelectionDimensionSourcePointDistanceContext: Sendable {
     var second: SelectionDimensionSourcePointContext
 }
 
+private enum SelectionDimensionSourcePointRole: Equatable, Sendable {
+    case handle(SketchEntityPointHandle)
+    case splineControlPoint(Int)
+}
+
 private struct SelectionDimensionSourcePointContext: Sendable {
     var featureID: FeatureID
     var entityID: SketchEntityID
     var curve: CurveOutputReference
     var plane: SketchPlane
     var target: SelectionTarget
-    var handle: SketchEntityPointHandle
+    var role: SelectionDimensionSourcePointRole
 }
 
 private struct SourceLineAngleContext: Sendable {
