@@ -1980,6 +1980,37 @@ import Testing
 }
 
 @MainActor
+@Test func offsetCurveCommandCreatesRoundOffsetConcaveSourceRegion() async throws {
+    let session = EditorSession(document: try concaveLineLoopDocument())
+    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let sourceRegion = try #require(before.regions.first)
+    let target = try #require(sourceRegion.selectionTarget())
+
+    let result = try session.execute(
+        .offsetCurve(
+            target: target,
+            distance: .length(1.0, .millimeter),
+            options: OffsetCurveOptions(),
+            vertexHandle: nil
+        )
+    )
+
+    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let offsetRegion = try #require(after.regions.first { $0.sourceFeatureID != sourceRegion.sourceFeatureID })
+    let offsetEntries = after.entries.filter { $0.sourceFeatureID == offsetRegion.sourceFeatureID }
+    #expect(result.commandName == "offsetCurve")
+    #expect(result.didMutate)
+    #expect(session.generation == DocumentGeneration(1))
+    #expect(offsetRegion.boundaryPointCount > 11)
+    #expect(offsetRegion.boundarySegmentCount == 11)
+    #expect(offsetRegion.areaSquareMeters > 0.000_105_5)
+    #expect(offsetRegion.areaSquareMeters < 0.000_108)
+    #expect(offsetEntries.filter { $0.entityKind == "line" }.count == 6)
+    #expect(offsetEntries.filter { $0.entityKind == "arc" }.count == 5)
+    #expect(session.evaluationStatus == .valid)
+}
+
+@MainActor
 @Test func offsetCurveCommandCreatesRoundOffsetSourceRegionByDefault() async throws {
     let session = EditorSession()
     _ = try session.execute(
@@ -2333,19 +2364,29 @@ import Testing
     #expect(abs(result.areaSquareMeters - 0.000_094) < 1.0e-12)
 }
 
-@Test func offsetRegionBuilderRejectsRoundConcaveProfile() throws {
-    do {
-        _ = try OffsetRegionBuilder().buildOffset(
-            profile: concaveLineLoopProfile(),
-            gapFill: .round,
-            distanceMeters: 0.001
-        )
-        Issue.record("Offset Region builder must reject round gap fill for concave source regions.")
-    } catch let error as EditorError {
-        #expect(error.code == .commandInvalid)
-        #expect(error.message.contains("round"))
-        #expect(error.message.contains("concave"))
-    }
+@Test func offsetRegionBuilderCreatesRoundConcaveProfile() throws {
+    let result = try OffsetRegionBuilder().buildOffset(
+        profile: concaveLineLoopProfile(),
+        gapFill: .round,
+        distanceMeters: 0.001
+    )
+    let lineCount = result.sketch.entities.values.filter { entity in
+        if case .line = entity {
+            return true
+        }
+        return false
+    }.count
+    let arcCount = result.sketch.entities.values.filter { entity in
+        if case .arc = entity {
+            return true
+        }
+        return false
+    }.count
+
+    #expect(result.boundaryPointCount == 11)
+    #expect(abs(result.areaSquareMeters - 0.000_105_5) < 1.0e-12)
+    #expect(lineCount == 6)
+    #expect(arcCount == 5)
 }
 
 @MainActor

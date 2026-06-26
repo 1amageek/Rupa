@@ -22,6 +22,29 @@ struct OffsetRegionBuilder: Sendable {
         case arc(center: Point2D, radius: Double, startAngle: Double, endAngle: Double)
     }
 
+    private enum CornerConnection: Sendable {
+        case rounded(entry: Point2D, exit: Point2D)
+        case miter(Point2D)
+
+        var entry: Point2D {
+            switch self {
+            case .rounded(let entry, _):
+                entry
+            case .miter(let point):
+                point
+            }
+        }
+
+        var exit: Point2D {
+            switch self {
+            case .rounded(_, let exit):
+                exit
+            case .miter(let point):
+                point
+            }
+        }
+    }
+
     private let tolerance: Double
 
     init(tolerance: Double = 1.0e-9) {
@@ -83,17 +106,6 @@ struct OffsetRegionBuilder: Sendable {
             sourcePoints,
             context: "Offset Region source region"
         )
-        let sourceHasConcaveCorner = hasConcaveCorner(
-            in: sourcePoints,
-            signedArea: sourceSignedArea
-        )
-        if sourceHasConcaveCorner, gapFill == .round {
-            throw EditorError(
-                code: .commandInvalid,
-                message: "Offset Region round gap fill for concave source regions requires curved concave-corner offset support."
-            )
-        }
-
         let offsetLines = try offsetLines(
             for: sourcePoints,
             sourceSignedArea: sourceSignedArea,
@@ -237,63 +249,6 @@ struct OffsetRegionBuilder: Sendable {
         }
     }
 
-    private func hasConcaveCorner(
-        in points: [Point2D],
-        signedArea: Double
-    ) -> Bool {
-        let windingSign = signedArea >= 0.0 ? 1.0 : -1.0
-        for index in points.indices {
-            let previous = points[(index + points.count - 1) % points.count]
-            let current = points[index]
-            let next = points[(index + 1) % points.count]
-            let incoming = Point2D(
-                x: current.x - previous.x,
-                y: current.y - previous.y
-            )
-            let outgoing = Point2D(
-                x: next.x - current.x,
-                y: next.y - current.y
-            )
-            let incomingLength = hypot(incoming.x, incoming.y)
-            let outgoingLength = hypot(outgoing.x, outgoing.y)
-            if isConcaveTurn(
-                incoming: incoming,
-                outgoing: outgoing,
-                windingSign: windingSign,
-                incomingLength: incomingLength,
-                outgoingLength: outgoingLength
-            ) {
-                return true
-            }
-        }
-        return false
-    }
-
-    private func isConcaveCorner(
-        at index: Int,
-        in points: [Point2D],
-        signedArea: Double
-    ) -> Bool {
-        let previous = points[(index + points.count - 1) % points.count]
-        let current = points[index]
-        let next = points[(index + 1) % points.count]
-        let incoming = Point2D(
-            x: current.x - previous.x,
-            y: current.y - previous.y
-        )
-        let outgoing = Point2D(
-            x: next.x - current.x,
-            y: next.y - current.y
-        )
-        return isConcaveTurn(
-            incoming: incoming,
-            outgoing: outgoing,
-            windingSign: signedArea >= 0.0 ? 1.0 : -1.0,
-            incomingLength: hypot(incoming.x, incoming.y),
-            outgoingLength: hypot(outgoing.x, outgoing.y)
-        )
-    }
-
     private func isConvexCorner(
         at index: Int,
         in points: [Point2D],
@@ -317,18 +272,6 @@ struct OffsetRegionBuilder: Sendable {
             incomingLength: hypot(incoming.x, incoming.y),
             outgoingLength: hypot(outgoing.x, outgoing.y)
         )
-    }
-
-    private func isConcaveTurn(
-        incoming: Point2D,
-        outgoing: Point2D,
-        windingSign: Double,
-        incomingLength: Double,
-        outgoingLength: Double
-    ) -> Bool {
-        let turn = Self.cross(incoming, outgoing) * windingSign
-        let turnTolerance = tolerance * max(incomingLength * outgoingLength, tolerance)
-        return turn < -turnTolerance
     }
 
     private func isConvexTurn(
@@ -419,6 +362,7 @@ struct OffsetRegionBuilder: Sendable {
             return try roundedEntities(
                 sourcePoints: sourcePoints,
                 offsetLines: offsetLines,
+                sourceSignedArea: sourceSignedArea,
                 radius: radius
             )
         }
@@ -443,7 +387,11 @@ struct OffsetRegionBuilder: Sendable {
                 sourceSignedArea: sourceSignedArea
             )
         case .round:
-            return chamferPoints(offsetLines: offsetLines)
+            return try roundedValidationPoints(
+                sourcePoints: sourcePoints,
+                offsetLines: offsetLines,
+                sourceSignedArea: sourceSignedArea
+            )
         }
     }
 
@@ -457,12 +405,6 @@ struct OffsetRegionBuilder: Sendable {
                 sourcePoints: sourcePoints,
                 offsetLines: offsetLines
             )
-        }
-    }
-
-    private func chamferPoints(offsetLines: [OffsetLine]) -> [Point2D] {
-        offsetLines.flatMap { line in
-            [line.start, line.end]
         }
     }
 
@@ -494,6 +436,7 @@ struct OffsetRegionBuilder: Sendable {
     private func roundedEntities(
         sourcePoints: [Point2D],
         offsetLines: [OffsetLine],
+        sourceSignedArea: Double,
         radius: Double
     ) throws -> [RegionEntity] {
         guard radius > tolerance else {
@@ -502,21 +445,94 @@ struct OffsetRegionBuilder: Sendable {
                 message: "Offset Region round gap fill requires a non-zero corner radius."
             )
         }
+        let connections = try roundedCornerConnections(
+            sourcePoints: sourcePoints,
+            offsetLines: offsetLines,
+            sourceSignedArea: sourceSignedArea
+        )
         var entities: [RegionEntity] = []
         for index in offsetLines.indices {
-            let line = offsetLines[index]
             let nextIndex = (index + 1) % offsetLines.count
-            let nextLine = offsetLines[nextIndex]
-            let corner = sourcePoints[nextIndex]
-            entities.append(.line(start: line.start, end: line.end))
-            entities.append(.arc(
-                center: corner,
-                radius: radius,
-                startAngle: Self.angle(from: corner, to: line.end),
-                endAngle: Self.angle(from: corner, to: nextLine.start)
-            ))
+            let lineStart = connections[index].exit
+            let lineEnd = connections[nextIndex].entry
+            if distance(lineStart, lineEnd) > tolerance {
+                entities.append(.line(start: lineStart, end: lineEnd))
+            }
+            if case .rounded = connections[nextIndex] {
+                let corner = sourcePoints[nextIndex]
+                entities.append(.arc(
+                    center: corner,
+                    radius: radius,
+                    startAngle: Self.angle(from: corner, to: lineEnd),
+                    endAngle: Self.angle(from: corner, to: connections[nextIndex].exit)
+                ))
+            }
+        }
+        guard entities.count >= 3 else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Offset Region round gap fill produced too few boundary entities."
+            )
         }
         return entities
+    }
+
+    private func roundedCornerConnections(
+        sourcePoints: [Point2D],
+        offsetLines: [OffsetLine],
+        sourceSignedArea: Double
+    ) throws -> [CornerConnection] {
+        try sourcePoints.indices.map { index in
+            if isConvexCorner(
+                at: index,
+                in: sourcePoints,
+                signedArea: sourceSignedArea
+            ) {
+                let previous = offsetLines[(index + offsetLines.count - 1) % offsetLines.count]
+                let current = offsetLines[index]
+                return .rounded(entry: previous.end, exit: current.start)
+            }
+            return try .miter(miterPoint(
+                at: index,
+                sourcePoints: sourcePoints,
+                offsetLines: offsetLines
+            ))
+        }
+    }
+
+    private func roundedValidationPoints(
+        sourcePoints: [Point2D],
+        offsetLines: [OffsetLine],
+        sourceSignedArea: Double
+    ) throws -> [Point2D] {
+        let connections = try roundedCornerConnections(
+            sourcePoints: sourcePoints,
+            offsetLines: offsetLines,
+            sourceSignedArea: sourceSignedArea
+        )
+        var points: [Point2D] = []
+        for index in offsetLines.indices {
+            let nextIndex = (index + 1) % offsetLines.count
+            appendBoundaryPoint(connections[index].exit, to: &points)
+            appendBoundaryPoint(connections[nextIndex].entry, to: &points)
+            if case .rounded = connections[nextIndex] {
+                appendBoundaryPoint(connections[nextIndex].exit, to: &points)
+            }
+        }
+        if let first = points.first,
+           let last = points.last,
+           distance(first, last) <= tolerance {
+            points.removeLast()
+        }
+        return points
+    }
+
+    private func appendBoundaryPoint(_ point: Point2D, to points: inout [Point2D]) {
+        if let last = points.last,
+           distance(last, point) <= tolerance {
+            return
+        }
+        points.append(point)
     }
 
     private func miterPoint(

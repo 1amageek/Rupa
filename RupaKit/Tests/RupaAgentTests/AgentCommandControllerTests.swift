@@ -10075,6 +10075,60 @@ private func rawAgentProtocolJSON(_ source: String) -> Data {
 }
 
 @MainActor
+@Test func agentCreatesRoundOffsetForConcaveSourceRegion() async throws {
+    let server = AgentCommandController()
+    let sessionID = UUID()
+    let session = EditorSession(document: try agentConcaveLineLoopDocument())
+    server.register(session: session, id: sessionID)
+
+    let summaryResponse = server.handle(
+        .sketchEntitySummary(
+            sessionID: sessionID,
+            expectedGeneration: DocumentGeneration(0)
+        )
+    )
+    guard case .sketchEntitySummary(let summary) = summaryResponse else {
+        Issue.record("Agent must return a sketch summary containing a concave region.")
+        return
+    }
+    let region = try #require(summary.regions.first)
+    let target = try #require(region.selectionTarget())
+
+    let offsetResponse = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .offsetCurve(
+                target: target,
+                distance: .length(1.0, .millimeter),
+                options: OffsetCurveOptions(),
+                vertexHandle: nil
+            ),
+            expectedGeneration: DocumentGeneration(0)
+        )
+    )
+
+    guard case .command(let result) = offsetResponse else {
+        Issue.record("Agent must return an offsetCurve command result for a round concave region offset.")
+        return
+    }
+    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let offsetRegion = try #require(after.regions.first { $0.sourceFeatureID != region.sourceFeatureID })
+    let offsetEntries = after.entries.filter { $0.sourceFeatureID == offsetRegion.sourceFeatureID }
+    #expect(result.commandName == "offsetCurve")
+    #expect(result.didMutate)
+    #expect(result.generation == DocumentGeneration(1))
+    #expect(after.counts.regionCount == 2)
+    #expect(offsetRegion.boundaryPointCount > 11)
+    #expect(offsetRegion.boundarySegmentCount == 11)
+    #expect(offsetRegion.areaSquareMeters > 0.000_105_5)
+    #expect(offsetRegion.areaSquareMeters < 0.000_108)
+    #expect(offsetEntries.filter { $0.entityKind == "line" }.count == 6)
+    #expect(offsetEntries.filter { $0.entityKind == "arc" }.count == 5)
+    #expect(session.generation == DocumentGeneration(1))
+    #expect(session.commandStack.canUndo)
+}
+
+@MainActor
 @Test func agentCreatesCombinedOffsetRegions() async throws {
     let server = AgentCommandController()
     let sessionID = UUID()
