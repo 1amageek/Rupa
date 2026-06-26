@@ -3425,7 +3425,7 @@ public struct DesignDocument: Identifiable, Sendable {
             }
         }
 
-        guard let resolvedSceneNodeID = sceneNodeID else {
+        guard sceneNodeID != nil else {
             throw EditorError(
                 code: .commandInvalid,
                 message: "Edge chamfer requires an editable body edge."
@@ -3554,7 +3554,7 @@ public struct DesignDocument: Identifiable, Sendable {
             }
         }
 
-        guard let resolvedSceneNodeID = sceneNodeID else {
+        guard sceneNodeID != nil else {
             throw EditorError(
                 code: .commandInvalid,
                 message: "Edge fillet requires an editable body edge."
@@ -3907,6 +3907,79 @@ public struct DesignDocument: Identifiable, Sendable {
             sketch: sketch,
             objectRegistry: objectRegistry,
             errorOwner: "Sketch point move"
+        )
+    }
+
+    mutating func translateSketchLine(
+        target: SelectionTarget,
+        deltaX: CADExpression,
+        deltaY: CADExpression,
+        objectRegistry: ObjectTypeRegistry = .builtIn
+    ) throws {
+        let deltaXMeters = try resolvedLengthValue(deltaX, owner: "Sketch line translation delta X")
+        let deltaYMeters = try resolvedLengthValue(deltaY, owner: "Sketch line translation delta Y")
+        guard abs(deltaXMeters) > 1.0e-12 || abs(deltaYMeters) > 1.0e-12 else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Sketch line translation delta must not be zero."
+            )
+        }
+
+        let selection = try editableSketchEntity(for: target, operationName: "Sketch line translation")
+        guard case .line(var line) = selection.entity else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Sketch line translation requires a line entity."
+            )
+        }
+        var feature = selection.feature
+        var sketch = selection.sketch
+        let startReference = SketchReference.lineStart(selection.entityID)
+        let endReference = SketchReference.lineEnd(selection.entityID)
+        let pointPropagator = SketchPointConstraintPropagator(parameters: cadDocument.parameters)
+        try pointPropagator.validateCanMove(
+            startReference,
+            in: sketch,
+            owner: "Sketch line translation"
+        )
+        try pointPropagator.validateCanMove(
+            endReference,
+            in: sketch,
+            owner: "Sketch line translation"
+        )
+
+        line.start = translatedSketchPoint(
+            line.start,
+            deltaX: deltaX,
+            deltaY: deltaY,
+            deltaXMeters: deltaXMeters,
+            deltaYMeters: deltaYMeters
+        )
+        line.end = translatedSketchPoint(
+            line.end,
+            deltaX: deltaX,
+            deltaY: deltaY,
+            deltaXMeters: deltaXMeters,
+            deltaYMeters: deltaYMeters
+        )
+        _ = try resolvedLineMetrics(line, owner: "Sketch line")
+        sketch.entities[selection.entityID] = .line(line)
+        try pointPropagator.propagate(
+            from: startReference,
+            in: &sketch,
+            owner: "Sketch line translation"
+        )
+        try pointPropagator.propagate(
+            from: endReference,
+            in: &sketch,
+            owner: "Sketch line translation"
+        )
+        try commitSketchEntityEdit(
+            featureID: selection.featureID,
+            feature: &feature,
+            sketch: sketch,
+            objectRegistry: objectRegistry,
+            errorOwner: "Sketch line translation"
         )
     }
 

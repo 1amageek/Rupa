@@ -463,13 +463,6 @@ public extension DesignDocument {
             try refreshSourcePointLineDistanceReferences(id: id, context: context)
             return
         }
-        guard try isSourcePointAnchored(context.point) == false else {
-            throw EditorError(
-                code: .commandInvalid,
-                message: "Selection point-line distance application requires a non-fixed source point."
-            )
-        }
-
         let unitNormal: Point2D
         if currentDistance > selectionDimensionEndpointTolerance {
             unitNormal = Point2D(
@@ -482,25 +475,48 @@ public extension DesignDocument {
                 y: projection.lineUnitX
             )
         }
-        let targetPoint = Point2D(
-            x: projection.closest.x + unitNormal.x * targetDistance,
-            y: projection.closest.y + unitNormal.y * targetDistance
-        )
-        let deltaX = targetPoint.x - point.x
-        let deltaY = targetPoint.y - point.y
-        guard deltaX.isFinite, deltaY.isFinite else {
-            throw EditorError(
-                code: .commandInvalid,
-                message: "Selection point-line distance application produced a non-finite movement delta."
+
+        if try isSourcePointAnchored(context.point) == false {
+            let targetPoint = Point2D(
+                x: projection.closest.x + unitNormal.x * targetDistance,
+                y: projection.closest.y + unitNormal.y * targetDistance
             )
+            let deltaX = targetPoint.x - point.x
+            let deltaY = targetPoint.y - point.y
+            guard deltaX.isFinite, deltaY.isFinite else {
+                throw EditorError(
+                    code: .commandInvalid,
+                    message: "Selection point-line distance application produced a non-finite movement delta."
+                )
+            }
+
+            if abs(deltaX) > selectionDimensionEndpointTolerance ||
+                abs(deltaY) > selectionDimensionEndpointTolerance {
+                try moveSourcePoint(
+                    context.point,
+                    deltaX: .length(deltaX, .meter),
+                    deltaY: .length(deltaY, .meter),
+                    objectRegistry: objectRegistry
+                )
+            }
+            try refreshSourcePointLineDistanceReferences(id: id, context: context)
+            return
         }
 
-        if abs(deltaX) > selectionDimensionEndpointTolerance ||
-            abs(deltaY) > selectionDimensionEndpointTolerance {
-            try moveSourcePoint(
-                context.point,
-                deltaX: .length(deltaX, .meter),
-                deltaY: .length(deltaY, .meter),
+        let lineDeltaX = unitNormal.x * (currentDistance - targetDistance)
+        let lineDeltaY = unitNormal.y * (currentDistance - targetDistance)
+        guard lineDeltaX.isFinite, lineDeltaY.isFinite else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Selection point-line distance application produced a non-finite line translation delta."
+            )
+        }
+        if abs(lineDeltaX) > selectionDimensionEndpointTolerance ||
+            abs(lineDeltaY) > selectionDimensionEndpointTolerance {
+            try translateSketchLine(
+                target: context.line.target,
+                deltaX: .length(lineDeltaX, .meter),
+                deltaY: .length(lineDeltaY, .meter),
                 objectRegistry: objectRegistry
             )
         }
@@ -1219,7 +1235,8 @@ public extension DesignDocument {
             featureID: featureID,
             entityID: entityID,
             curve: curve,
-            plane: sketch.plane
+            plane: sketch.plane,
+            target: try sourceSketchEntityTarget(featureID: featureID, entityID: entityID)
         )
     }
 
@@ -2010,6 +2027,7 @@ private struct SelectionDimensionSourceLineDistanceLineContext: Sendable {
     var entityID: SketchEntityID
     var curve: CurveOutputReference
     var plane: SketchPlane
+    var target: SelectionTarget
 }
 
 private struct SelectionDimensionSourceLineDistanceGeometry: Sendable {

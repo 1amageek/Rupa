@@ -4458,6 +4458,125 @@ private func rawAgentProtocolJSON(_ source: String) -> Data {
 }
 
 @MainActor
+@Test func agentAppliesSelectionDimensionTargetByTranslatingLineWhenPointIsFixed() async throws {
+    var document = DesignDocument.empty()
+    let pointFeatureID = try createAgentStandalonePointSketch(
+        in: &document,
+        name: "Agent Fixed Point",
+        plane: .xy,
+        point: SketchPoint(
+            x: .length(10.0, .millimeter),
+            y: .length(5.0, .millimeter)
+        )
+    )
+    let lineFeatureID = try document.createLineSketch(
+        name: "Agent Movable Reference Line",
+        plane: .xy,
+        start: SketchPoint(
+            x: .length(0.0, .millimeter),
+            y: .length(0.0, .millimeter)
+        ),
+        end: SketchPoint(
+            x: .length(0.0, .millimeter),
+            y: .length(10.0, .millimeter)
+        )
+    )
+    let pointEntityID = try agentStandalonePointEntityID(in: document, featureID: pointFeatureID)
+    try document.addSketchConstraint(
+        featureID: pointFeatureID,
+        constraint: .fixed(.entity(pointEntityID))
+    )
+    let pointTarget = try agentStandalonePointTarget(in: document, featureID: pointFeatureID)
+    let lineTarget = try agentLineCurveTarget(in: document, featureID: lineFeatureID)
+    let server = AgentCommandController()
+    let sessionID = UUID()
+    let session = EditorSession(document: document)
+    server.register(session: session, id: sessionID)
+
+    let addResponse = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .addSelectionDimension(
+                name: "Agent Fixed Point To Line Distance",
+                kind: .distance,
+                first: pointTarget,
+                second: lineTarget,
+                target: .length(10.0, .millimeter)
+            ),
+            expectedGeneration: DocumentGeneration(0)
+        )
+    )
+    guard case .command(let addResult) = addResponse else {
+        #expect(Bool(false))
+        return
+    }
+    let dimensionID = try #require(addResult.addedSelectionDimensionID)
+
+    let setResponse = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .setSelectionDimensionTarget(
+                id: dimensionID,
+                target: .length(6.0, .millimeter)
+            ),
+            expectedGeneration: DocumentGeneration(1)
+        )
+    )
+    guard case .command(let setResult) = setResponse else {
+        #expect(Bool(false))
+        return
+    }
+    #expect(setResult.commandName == "setSelectionDimensionTarget")
+    #expect(setResult.didMutate)
+
+    let applyResponse = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .applySelectionDimensionTarget(id: dimensionID),
+            expectedGeneration: DocumentGeneration(2)
+        )
+    )
+    guard case .command(let applyResult) = applyResponse else {
+        #expect(Bool(false))
+        return
+    }
+    #expect(applyResult.commandName == "applySelectionDimensionTarget")
+    #expect(applyResult.didMutate)
+
+    let evaluationResponse = server.handle(
+        .selectionDimensionEvaluation(
+            sessionID: sessionID,
+            dimensionID: dimensionID,
+            expectedGeneration: DocumentGeneration(3)
+        )
+    )
+    guard case .selectionDimensionEvaluation(let evaluation) = evaluationResponse else {
+        #expect(Bool(false))
+        return
+    }
+    let measurement = try #require(evaluation.measurements.first)
+    let fixedPoint = try agentStandalonePoint(in: session.document, featureID: pointFeatureID)
+    let movedLine = try agentLineEndpoints(in: session.document, featureID: lineFeatureID)
+
+    #expect(abs(fixedPoint.x - 0.010) <= 1.0e-12)
+    #expect(abs(fixedPoint.y - 0.005) <= 1.0e-12)
+    #expect(abs(movedLine.start.x - 0.004) <= 1.0e-12)
+    #expect(abs(movedLine.start.y) <= 1.0e-12)
+    #expect(abs(movedLine.end.x - 0.004) <= 1.0e-12)
+    #expect(abs(movedLine.end.y - 0.010) <= 1.0e-12)
+    assertAgentLengthQuantity(measurement.measured, equals: 0.006)
+    assertAgentLengthQuantity(measurement.target, equals: 0.006)
+    #expect(abs(measurement.residual.value) <= 1.0e-12)
+    guard case .sketchPoint(let point) = measurement.dimension.first,
+          case .curve(.whole(let line)) = measurement.dimension.second else {
+        Issue.record("Expected standalone point to whole line selection references")
+        return
+    }
+    #expect(point.featureID == pointFeatureID)
+    #expect(line.featureID == lineFeatureID)
+}
+
+@MainActor
 @Test func agentAppliesSelectionDimensionTargetToSplineControlPointDistance() async throws {
     var document = DesignDocument.empty()
     let splineFeatureID = try document.createSplineSketch(
@@ -15059,6 +15178,24 @@ private func agentStandalonePointTarget(
         sceneNodeID: SceneNodeID(sceneNodeUUID),
         component: .sketchEntity(SelectionComponentID(rawValue: pointHandle.selectionComponentID))
     )
+}
+
+private func agentStandalonePointEntityID(
+    in document: DesignDocument,
+    featureID: FeatureID
+) throws -> SketchEntityID {
+    guard let feature = document.cadDocument.designGraph.nodes[featureID],
+          case let .sketch(sketch) = feature.operation,
+          let entityID = sketch.entities.first(where: { _, entity in
+              if case .point = entity {
+                  return true
+              }
+              return false
+          })?.key else {
+        Issue.record("Expected one standalone source point entity ID")
+        return SketchEntityID()
+    }
+    return entityID
 }
 
 private func agentArcEndpointTargets(

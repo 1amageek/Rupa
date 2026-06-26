@@ -481,6 +481,159 @@ import Testing
     #expect(lineReference.featureID == lineFeatureID)
 }
 
+@Test func selectionDimensionApplyTranslatesWholeSourceLineWhenPointIsFixed() async throws {
+    var document = DesignDocument.empty()
+    let pointFeatureID = try createStandalonePointSketch(
+        in: &document,
+        name: "Fixed Point",
+        plane: .xy,
+        point: SketchPoint(
+            x: .length(10.0, .millimeter),
+            y: .length(5.0, .millimeter)
+        )
+    )
+    let lineFeatureID = try document.createLineSketch(
+        name: "Movable Reference Line",
+        plane: .xy,
+        start: SketchPoint(
+            x: .length(0.0, .millimeter),
+            y: .length(0.0, .millimeter)
+        ),
+        end: SketchPoint(
+            x: .length(0.0, .millimeter),
+            y: .length(10.0, .millimeter)
+        )
+    )
+    let pointEntityID = try standalonePointEntityID(in: document, featureID: pointFeatureID)
+    try document.addSketchConstraint(
+        featureID: pointFeatureID,
+        constraint: .fixed(.entity(pointEntityID))
+    )
+    let pointTarget = try standalonePointTarget(in: document, featureID: pointFeatureID)
+    let lineTarget = try lineCurveTarget(in: document, featureID: lineFeatureID)
+    let session = EditorSession(document: document)
+    let addResult = try session.execute(
+        .addSelectionDimension(
+            name: "Fixed Point To Movable Line Distance",
+            kind: .distance,
+            first: pointTarget,
+            second: lineTarget,
+            target: .length(10.0, .millimeter)
+        )
+    )
+    let dimensionID = try #require(addResult.addedSelectionDimensionID)
+
+    _ = try session.execute(
+        .setSelectionDimensionTarget(
+            id: dimensionID,
+            target: .length(6.0, .millimeter)
+        )
+    )
+    let applyResult = try session.execute(.applySelectionDimensionTarget(id: dimensionID))
+    let fixedPoint = try standalonePoint(in: session.document, featureID: pointFeatureID)
+    let movedLine = try lineEndpoints(in: session.document, featureID: lineFeatureID)
+    let appliedEvaluation = try SelectionDimensionService().evaluate(
+        document: session.document,
+        dimensionID: dimensionID
+    )
+    let appliedMeasurement = try #require(appliedEvaluation.measurements.first)
+
+    #expect(applyResult.commandName == "applySelectionDimensionTarget")
+    #expect(applyResult.didMutate)
+    #expect(abs(fixedPoint.x - 0.010) <= 1.0e-12)
+    #expect(abs(fixedPoint.y - 0.005) <= 1.0e-12)
+    #expect(abs(movedLine.start.x - 0.004) <= 1.0e-12)
+    #expect(abs(movedLine.start.y) <= 1.0e-12)
+    #expect(abs(movedLine.end.x - 0.004) <= 1.0e-12)
+    #expect(abs(movedLine.end.y - 0.010) <= 1.0e-12)
+    assertLengthQuantity(appliedMeasurement.measured, equals: 0.006)
+    assertLengthQuantity(appliedMeasurement.target, equals: 0.006)
+    #expect(abs(appliedMeasurement.residual.value) <= 1.0e-12)
+    #expect(try appliedMeasurement.isSatisfied())
+    guard case .sketchPoint(let pointReference) = appliedMeasurement.dimension.first,
+          case .curve(.whole(let lineReference)) = appliedMeasurement.dimension.second else {
+        Issue.record("Expected point-to-whole-line selection dimension references")
+        return
+    }
+    #expect(pointReference.featureID == pointFeatureID)
+    #expect(lineReference.featureID == lineFeatureID)
+}
+
+@Test func selectionDimensionApplyRejectsFixedPointToFixedSourceLineDistance() async throws {
+    var document = DesignDocument.empty()
+    let pointFeatureID = try createStandalonePointSketch(
+        in: &document,
+        name: "Fixed Point",
+        plane: .xy,
+        point: SketchPoint(
+            x: .length(10.0, .millimeter),
+            y: .length(5.0, .millimeter)
+        )
+    )
+    let lineFeatureID = try document.createLineSketch(
+        name: "Fixed Reference Line",
+        plane: .xy,
+        start: SketchPoint(
+            x: .length(0.0, .millimeter),
+            y: .length(0.0, .millimeter)
+        ),
+        end: SketchPoint(
+            x: .length(0.0, .millimeter),
+            y: .length(10.0, .millimeter)
+        )
+    )
+    let pointEntityID = try standalonePointEntityID(in: document, featureID: pointFeatureID)
+    let lineEntityID = try lineEntityID(in: document, featureID: lineFeatureID)
+    try document.addSketchConstraint(
+        featureID: pointFeatureID,
+        constraint: .fixed(.entity(pointEntityID))
+    )
+    try document.addSketchConstraint(
+        featureID: lineFeatureID,
+        constraint: .fixed(.lineStart(lineEntityID))
+    )
+    let pointTarget = try standalonePointTarget(in: document, featureID: pointFeatureID)
+    let lineTarget = try lineCurveTarget(in: document, featureID: lineFeatureID)
+    let session = EditorSession(document: document)
+    let addResult = try session.execute(
+        .addSelectionDimension(
+            name: "Fixed Point To Fixed Line Distance",
+            kind: .distance,
+            first: pointTarget,
+            second: lineTarget,
+            target: .length(10.0, .millimeter)
+        )
+    )
+    let dimensionID = try #require(addResult.addedSelectionDimensionID)
+
+    _ = try session.execute(
+        .setSelectionDimensionTarget(
+            id: dimensionID,
+            target: .length(6.0, .millimeter)
+        )
+    )
+    #expect(throws: EditorError.self) {
+        try session.execute(.applySelectionDimensionTarget(id: dimensionID))
+    }
+    let fixedPoint = try standalonePoint(in: session.document, featureID: pointFeatureID)
+    let fixedLine = try lineEndpoints(in: session.document, featureID: lineFeatureID)
+    let unappliedEvaluation = try SelectionDimensionService().evaluate(
+        document: session.document,
+        dimensionID: dimensionID
+    )
+    let unappliedMeasurement = try #require(unappliedEvaluation.measurements.first)
+
+    #expect(abs(fixedPoint.x - 0.010) <= 1.0e-12)
+    #expect(abs(fixedPoint.y - 0.005) <= 1.0e-12)
+    #expect(abs(fixedLine.start.x) <= 1.0e-12)
+    #expect(abs(fixedLine.start.y) <= 1.0e-12)
+    #expect(abs(fixedLine.end.x) <= 1.0e-12)
+    #expect(abs(fixedLine.end.y - 0.010) <= 1.0e-12)
+    assertLengthQuantity(unappliedMeasurement.measured, equals: 0.010)
+    assertLengthQuantity(unappliedMeasurement.target, equals: 0.006)
+    #expect(abs(unappliedMeasurement.residual.value - 0.004) <= 1.0e-12)
+}
+
 @Test func selectionDimensionApplyMovesSecondStandalonePointWhenFirstIsFixed() async throws {
     var document = DesignDocument.empty()
     let fixedFeatureID = try createStandalonePointSketch(
@@ -1070,6 +1223,24 @@ private func lineCurveTarget(
         sceneNodeID: SceneNodeID(sceneNodeUUID),
         component: .sketchEntity(SelectionComponentID(rawValue: curveComponentID))
     )
+}
+
+private func lineEntityID(
+    in document: DesignDocument,
+    featureID: FeatureID
+) throws -> SketchEntityID {
+    guard let feature = document.cadDocument.designGraph.nodes[featureID],
+          case let .sketch(sketch) = feature.operation,
+          let entityID = sketch.entities.first(where: { _, entity in
+              if case .line = entity {
+                  return true
+              }
+              return false
+          })?.key else {
+        Issue.record("Expected one source line entity ID")
+        return SketchEntityID()
+    }
+    return entityID
 }
 
 private func circleCenterAndCurveTargets(
