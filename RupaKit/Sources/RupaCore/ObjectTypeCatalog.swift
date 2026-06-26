@@ -197,6 +197,7 @@ public enum ObjectTypeCatalog {
     ]
 
     private static let slotProperties: [ObjectPropertyDefinition] = [
+        .text(id: "source.kind", title: "Source", defaultValue: "curve"),
         .length(id: "width", title: "Width", binding: nil, defaultValue: 0.1),
         .length(id: "path.length", title: "Path", binding: nil, defaultValue: 1.0),
         .length(id: "radius", title: "Cap Radius", binding: .radius, defaultValue: 0.05),

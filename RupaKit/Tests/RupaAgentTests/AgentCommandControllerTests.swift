@@ -334,8 +334,10 @@ import SwiftCAD
     #expect(slotSketch.summary.contains("line-chain"))
     #expect(slotSketch.summary.contains("open source arc"))
     #expect(slotSketch.summary.contains("line/arc chain"))
+    #expect(slotSketch.summary.contains("open cubic Bezier spline"))
     #expect(slotSketch.failureMode.contains("branched line/arc chain"))
     #expect(slotSketch.failureMode.contains("disconnected line/arc"))
+    #expect(slotSketch.failureMode.contains("closed spline"))
     #expect(slotSketch.failureMode.contains("inner radius"))
 
     #expect(createSketch.category == .sketch)
@@ -11340,6 +11342,85 @@ private func rawAgentProtocolJSON(_ source: String) -> Data {
 
     guard case .command(let extrudeResult) = extrudeResponse else {
         Issue.record("Agent must return an extrudeProfile command result for an arc Slot.")
+        return
+    }
+    #expect(extrudeResult.commandName == "extrudeProfile")
+    #expect(extrudeResult.didMutate)
+    #expect(extrudeResult.generation == DocumentGeneration(3))
+    #expect(session.evaluationStatus == .valid)
+    #expect(session.evaluatedBodyCount == 1)
+    #expect(session.commandStack.canUndo)
+}
+
+@MainActor
+@Test func agentCreatesSlotSketchFromSourceSplineAndExtrudesIt() async throws {
+    let server = AgentCommandController()
+    let sessionID = UUID()
+    let session = EditorSession()
+    _ = try session.execute(
+        .createSplineSketch(
+            name: "Agent Slot Source Spline",
+            plane: .xy,
+            spline: SketchSpline(controlPoints: [
+                SketchPoint(x: .length(0.0, .millimeter), y: .length(0.0, .millimeter)),
+                SketchPoint(x: .length(3.0, .millimeter), y: .length(4.0, .millimeter)),
+                SketchPoint(x: .length(7.0, .millimeter), y: .length(4.0, .millimeter)),
+                SketchPoint(x: .length(10.0, .millimeter), y: .length(0.0, .millimeter)),
+            ])
+        )
+    )
+    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let sourceSpline = try #require(before.entries.first { $0.entityKind == "spline" })
+    let target = try #require(sourceSpline.selectionTarget())
+    server.register(session: session, id: sessionID)
+
+    let response = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .createSlotSketch(
+                target: target,
+                width: .length(1.0, .millimeter)
+            ),
+            expectedGeneration: DocumentGeneration(1)
+        )
+    )
+
+    guard case .command(let result) = response else {
+        Issue.record("Agent must return a createSlotSketch command result for a source spline.")
+        return
+    }
+    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let slotFeature = try #require(
+        session.document.cadDocument.designGraph.nodes.values.first { $0.name == "Agent Slot Source Spline Slot" }
+    )
+    let slotObject = try #require(
+        session.document.productMetadata.sceneNodes.values.compactMap(\.object).first { object in
+            object.sourceFeatureID == slotFeature.id
+        }
+    )
+    let slotEntries = after.entries.filter { $0.sourceFeatureID == slotFeature.id.description }
+    #expect(result.commandName == "createSlotSketch")
+    #expect(result.didMutate)
+    #expect(result.generation == DocumentGeneration(2))
+    #expect(slotObject.properties["source.kind"] == .text("spline"))
+    #expect(slotEntries.filter { $0.entityKind == "line" }.count == SlotProfileBuilder.defaultSplineSamplesPerSegment * 2)
+    #expect(slotEntries.filter { $0.entityKind == "arc" }.count == 2)
+
+    let extrudeResponse = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .extrudeProfile(
+                name: "Agent Extruded Spline Slot",
+                profile: ProfileReference(featureID: slotFeature.id),
+                distance: .length(3.0, .millimeter),
+                direction: .normal
+            ),
+            expectedGeneration: DocumentGeneration(2)
+        )
+    )
+
+    guard case .command(let extrudeResult) = extrudeResponse else {
+        Issue.record("Agent must return an extrudeProfile command result for a spline Slot.")
         return
     }
     #expect(extrudeResult.commandName == "extrudeProfile")

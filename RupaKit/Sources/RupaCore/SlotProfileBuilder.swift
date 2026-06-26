@@ -2,6 +2,8 @@ import Foundation
 import SwiftCAD
 
 public struct SlotProfileBuilder: Sendable {
+    public static let defaultSplineSamplesPerSegment = 32
+
     public struct PathPoint: Sendable, Equatable {
         public var point: SketchPoint
         public var resolved: Point2D
@@ -69,6 +71,19 @@ public struct SlotProfileBuilder: Sendable {
             case .arc:
                 return false
             }
+        }
+    }
+
+    public struct SampledSplinePath: Sendable, Equatable {
+        public var points: [Point2D]
+        public var samplesPerSegment: Int
+
+        public init(
+            points: [Point2D],
+            samplesPerSegment: Int
+        ) {
+            self.points = points
+            self.samplesPerSegment = max(samplesPerSegment, 1)
         }
     }
 
@@ -478,6 +493,29 @@ public struct SlotProfileBuilder: Sendable {
             pathLength: segments.reduce(0.0) { $0 + $1.length },
             width: resolvedWidth,
             capRadius: halfWidth
+        )
+    }
+
+    public func buildSampledSplineSlot(
+        path: SampledSplinePath,
+        plane: SketchPlane,
+        width: CADExpression,
+        resolvedWidth: Double
+    ) throws -> Result {
+        guard path.points.count >= 2 else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Slot spline source requires at least two sampled points."
+            )
+        }
+        let points = path.points.map { point in
+            PathPoint(point: sketchPoint(point), resolved: point)
+        }
+        return try buildLineChainSlot(
+            points: points,
+            plane: plane,
+            width: width,
+            resolvedWidth: resolvedWidth
         )
     }
 

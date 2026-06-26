@@ -1283,6 +1283,75 @@ import Testing
 }
 
 @MainActor
+@Test func createSlotSketchCommandCreatesExtrudableProfileFromOpenSpline() async throws {
+    let session = EditorSession()
+    _ = try session.execute(
+        .createSplineSketch(
+            name: "Slot Source Spline",
+            plane: .xy,
+            spline: SketchSpline(controlPoints: [
+                SketchPoint(x: .length(0.0, .millimeter), y: .length(0.0, .millimeter)),
+                SketchPoint(x: .length(3.0, .millimeter), y: .length(4.0, .millimeter)),
+                SketchPoint(x: .length(7.0, .millimeter), y: .length(4.0, .millimeter)),
+                SketchPoint(x: .length(10.0, .millimeter), y: .length(0.0, .millimeter)),
+            ])
+        )
+    )
+    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let sourceSpline = try #require(before.entries.first { $0.entityKind == "spline" })
+    let target = try #require(sourceSpline.selectionTarget())
+
+    let result = try session.execute(
+        .createSlotSketch(
+            target: target,
+            width: .length(1.0, .millimeter)
+        )
+    )
+
+    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let slotFeature = try #require(
+        session.document.cadDocument.designGraph.nodes.values.first { $0.name == "Slot Source Spline Slot" }
+    )
+    let slotObject = try #require(
+        session.document.productMetadata.sceneNodes.values.compactMap(\.object).first { object in
+            object.sourceFeatureID == slotFeature.id
+        }
+    )
+    let slotEntries = after.entries.filter { $0.sourceFeatureID == slotFeature.id.description }
+
+    #expect(result.commandName == "createSlotSketch")
+    #expect(result.didMutate)
+    #expect(session.generation == DocumentGeneration(2))
+    #expect(after.counts.sketchCount == 2)
+    #expect(slotObject.typeID == .slot)
+    #expect(slotObject.geometryRole == .sketchProfile)
+    #expect(slotObject.properties["source.kind"] == .text("spline"))
+    #expect(slotObject.properties["width"] == .length(0.001))
+    #expect(slotObject.properties["radius"] == .length(0.0005))
+    if case .length(let pathLength) = slotObject.properties["path.length"] {
+        #expect(pathLength > 0.010)
+        #expect(pathLength < 0.020)
+    } else {
+        Issue.record("Spline Slot must store the sampled source path length.")
+    }
+    #expect(slotEntries.filter { $0.entityKind == "line" }.count == SlotProfileBuilder.defaultSplineSamplesPerSegment * 2)
+    #expect(slotEntries.filter { $0.entityKind == "arc" }.count == 2)
+
+    let extrudeResult = try session.execute(
+        .extrudeProfile(
+            name: "Extruded Spline Slot",
+            profile: ProfileReference(featureID: slotFeature.id),
+            distance: .length(3.0, .millimeter),
+            direction: .normal
+        )
+    )
+    #expect(extrudeResult.commandName == "extrudeProfile")
+    #expect(session.generation == DocumentGeneration(3))
+    #expect(session.evaluationStatus == .valid)
+    #expect(session.evaluatedBodyCount == 1)
+}
+
+@MainActor
 @Test func offsetCurveCommandActivatesSlotModeForSourceLine() async throws {
     let session = EditorSession()
     _ = try session.execute(
@@ -1413,6 +1482,55 @@ import Testing
 }
 
 @MainActor
+@Test func offsetCurveCommandActivatesSlotModeForSourceSpline() async throws {
+    let session = EditorSession()
+    _ = try session.execute(
+        .createSplineSketch(
+            name: "Offset Slot Source Spline",
+            plane: .xy,
+            spline: SketchSpline(controlPoints: [
+                SketchPoint(x: .length(0.0, .millimeter), y: .length(0.0, .millimeter)),
+                SketchPoint(x: .length(3.0, .millimeter), y: .length(4.0, .millimeter)),
+                SketchPoint(x: .length(7.0, .millimeter), y: .length(4.0, .millimeter)),
+                SketchPoint(x: .length(10.0, .millimeter), y: .length(0.0, .millimeter)),
+            ])
+        )
+    )
+    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let sourceSpline = try #require(before.entries.first { $0.entityKind == "spline" })
+    let target = try #require(sourceSpline.selectionTarget())
+
+    let result = try session.execute(
+        .offsetCurve(
+            target: target,
+            distance: .length(1.0, .millimeter),
+            options: OffsetCurveOptions(mode: .slot),
+            vertexHandle: nil
+        )
+    )
+
+    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let slotFeature = try #require(
+        session.document.cadDocument.designGraph.nodes.values.first { $0.name == "Offset Slot Source Spline Slot" }
+    )
+    let slotObject = try #require(
+        session.document.productMetadata.sceneNodes.values.compactMap(\.object).first { object in
+            object.sourceFeatureID == slotFeature.id
+        }
+    )
+    let slotEntries = after.entries.filter { $0.sourceFeatureID == slotFeature.id.description }
+    #expect(result.commandName == "offsetCurve")
+    #expect(result.didMutate)
+    #expect(session.generation == DocumentGeneration(2))
+    #expect(slotObject.typeID == .slot)
+    #expect(slotObject.geometryRole == .sketchProfile)
+    #expect(slotObject.properties["source.kind"] == .text("spline"))
+    #expect(slotEntries.filter { $0.entityKind == "line" }.count == SlotProfileBuilder.defaultSplineSamplesPerSegment * 2)
+    #expect(slotEntries.filter { $0.entityKind == "arc" }.count == 2)
+    #expect(session.evaluationStatus == .valid)
+}
+
+@MainActor
 @Test func createSlotSketchCommandRejectsClosedLineChainBeforeMutation() async throws {
     let session = EditorSession()
     _ = try session.execute(
@@ -1444,6 +1562,47 @@ import Testing
     } catch let error as EditorError {
         #expect(error.code == .commandInvalid)
         #expect(error.message.contains("open curve"))
+    }
+
+    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    #expect(session.generation == DocumentGeneration(1))
+    #expect(after.counts.sketchCount == before.counts.sketchCount)
+    #expect(after.counts.entityCount == before.counts.entityCount)
+}
+
+@MainActor
+@Test func createSlotSketchCommandRejectsClosedSplineBeforeMutation() async throws {
+    let session = EditorSession()
+    _ = try session.execute(
+        .createSplineSketch(
+            name: "Closed Slot Spline",
+            plane: .xy,
+            spline: SketchSpline(
+                controlPoints: [
+                    SketchPoint(x: .length(0.0, .millimeter), y: .length(0.0, .millimeter)),
+                    SketchPoint(x: .length(3.0, .millimeter), y: .length(4.0, .millimeter)),
+                    SketchPoint(x: .length(7.0, .millimeter), y: .length(4.0, .millimeter)),
+                    SketchPoint(x: .length(10.0, .millimeter), y: .length(0.0, .millimeter)),
+                ],
+                isClosed: true
+            )
+        )
+    )
+    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let sourceSpline = try #require(before.entries.first { $0.entityKind == "spline" })
+    let target = try #require(sourceSpline.selectionTarget())
+
+    do {
+        _ = try session.execute(
+            .createSlotSketch(
+                target: target,
+                width: .length(1.0, .millimeter)
+            )
+        )
+        Issue.record("Closed spline Slot must fail before mutation.")
+    } catch let error as EditorError {
+        #expect(error.code == .commandInvalid)
+        #expect(error.message.contains("closed spline"))
     }
 
     let after = try SketchEntitySummaryService().summarize(document: session.document)

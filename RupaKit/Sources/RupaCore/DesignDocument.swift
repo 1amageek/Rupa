@@ -1364,6 +1364,7 @@ public struct DesignDocument: Identifiable, Sendable {
                 typeID: .slot,
                 geometryRole: .sketchProfile,
                 properties: ObjectPropertySet(values: [
+                    "source.kind": .text(curveChain.allSatisfy(\.isLineSegment) ? "lineChain" : "lineArcChain"),
                     "width": .length(result.width),
                     "path.length": .length(result.pathLength),
                     "radius": .length(result.capRadius),
@@ -1395,6 +1396,7 @@ public struct DesignDocument: Identifiable, Sendable {
                 typeID: .slot,
                 geometryRole: .sketchProfile,
                 properties: ObjectPropertySet(values: [
+                    "source.kind": .text(curveChain.count == 1 ? "arc" : "lineArcChain"),
                     "width": .length(result.width),
                     "path.length": .length(result.pathLength),
                     "radius": .length(result.capRadius),
@@ -1403,9 +1405,26 @@ public struct DesignDocument: Identifiable, Sendable {
                 objectRegistry: objectRegistry
             )
         case .spline:
-            throw EditorError(
-                code: .commandInvalid,
-                message: "Slot supports selected source line, connected open source line-chain, open source arc, and connected open line/arc chain targets; spline slots require joined curve offset support before mutation."
+            let path = try slotSplinePath(for: selection)
+            let result = try SlotProfileBuilder().buildSampledSplineSlot(
+                path: path,
+                plane: selection.sketch.plane,
+                width: width,
+                resolvedWidth: resolvedWidth
+            )
+            return try appendSketchFeature(
+                name: name,
+                sketch: result.sketch,
+                typeID: .slot,
+                geometryRole: .sketchProfile,
+                properties: ObjectPropertySet(values: [
+                    "source.kind": .text("spline"),
+                    "width": .length(result.width),
+                    "path.length": .length(result.pathLength),
+                    "radius": .length(result.capRadius),
+                    ProfileTessellationPolicy.arcSegmentsPropertyID: .integer(32),
+                ]),
+                objectRegistry: objectRegistry
             )
         case .circle:
             throw EditorError(
@@ -5843,6 +5862,59 @@ public struct DesignDocument: Identifiable, Sendable {
                 )
             }
         }
+    }
+
+    private func slotSplinePath(
+        for selection: (
+            featureID: FeatureID,
+            entityID: SketchEntityID,
+            feature: FeatureNode,
+            sketch: Sketch,
+            entity: SketchEntity
+        )
+    ) throws -> SlotProfileBuilder.SampledSplinePath {
+        guard case .spline(let spline) = selection.entity else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Slot spline path resolution requires a selected spline target."
+            )
+        }
+        guard spline.isClosed == false else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Slot requires an open curve; closed spline targets are not supported."
+            )
+        }
+
+        let controlPoints = try spline.controlPoints.map { point in
+            let resolved = try resolvedPoint(point, owner: "Slot source spline")
+            return Point2D(x: resolved.x, y: resolved.y)
+        }
+        let samplesPerSegment = SlotProfileBuilder.defaultSplineSamplesPerSegment
+        let samples = SketchCurveSampler(samplesPerSegment: samplesPerSegment)
+            .splineSamples(for: controlPoints)
+        var points: [Point2D] = []
+        points.reserveCapacity(samples.count)
+        for sample in samples {
+            if let last = points.last {
+                let deltaX = sample.point.x - last.x
+                let deltaY = sample.point.y - last.y
+                if deltaX * deltaX + deltaY * deltaY <= 1.0e-24 {
+                    continue
+                }
+            }
+            points.append(sample.point)
+        }
+        guard points.count >= 2 else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Slot source spline must have a non-zero sampled length."
+            )
+        }
+        return SlotProfileBuilder.SampledSplinePath(
+            points: points,
+            samplesPerSegment: samplesPerSegment
+        )
     }
 
     private func resolvedPathPoint(
