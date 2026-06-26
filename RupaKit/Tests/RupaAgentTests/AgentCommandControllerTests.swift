@@ -4934,6 +4934,94 @@ private func rawAgentProtocolJSON(_ source: String) -> Data {
     #expect(abs(measurement.residual.value) <= 1.0e-12)
 }
 
+@MainActor
+@Test func agentAppliesGeneratedFacePairSelectionDimensionTarget() async throws {
+    let server = AgentCommandController()
+    let sessionID = UUID()
+    let session = EditorSession()
+    _ = try #require(session.createDefaultExtrudedRectangle())
+    server.register(session: session, id: sessionID)
+
+    let topologyResponse = server.handle(
+        .topologySummary(
+            sessionID: sessionID,
+            expectedGeneration: session.generation
+        )
+    )
+    guard case .topologySummary(let topology) = topologyResponse else {
+        #expect(Bool(false))
+        return
+    }
+    let facePair = try agentParallelFaceDimensionTargets(in: topology)
+    let targetDistance = facePair.distance + 0.004
+
+    let addResponse = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .addSelectionDimension(
+                name: "Agent Editable Face Distance",
+                kind: .distance,
+                first: facePair.first,
+                second: facePair.second,
+                target: .length(facePair.distance, .meter)
+            ),
+            expectedGeneration: session.generation
+        )
+    )
+    guard case .command(let addResult) = addResponse else {
+        #expect(Bool(false))
+        return
+    }
+    let dimensionID = try #require(addResult.addedSelectionDimensionID)
+
+    let setResponse = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .setSelectionDimensionTarget(
+                id: dimensionID,
+                target: .length(targetDistance, .meter)
+            ),
+            expectedGeneration: session.generation
+        )
+    )
+    guard case .command(let setResult) = setResponse else {
+        #expect(Bool(false))
+        return
+    }
+    #expect(setResult.commandName == "setSelectionDimensionTarget")
+    #expect(setResult.didMutate)
+
+    let applyResponse = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .applySelectionDimensionTarget(id: dimensionID),
+            expectedGeneration: session.generation
+        )
+    )
+    guard case .command(let applyResult) = applyResponse else {
+        #expect(Bool(false))
+        return
+    }
+    #expect(applyResult.commandName == "applySelectionDimensionTarget")
+    #expect(applyResult.didMutate)
+
+    let evaluationResponse = server.handle(
+        .selectionDimensionEvaluation(
+            sessionID: sessionID,
+            dimensionID: dimensionID,
+            expectedGeneration: session.generation
+        )
+    )
+    guard case .selectionDimensionEvaluation(let evaluation) = evaluationResponse else {
+        #expect(Bool(false))
+        return
+    }
+    let measurement = try #require(evaluation.measurements.first)
+    assertAgentLengthQuantity(measurement.measured, equals: targetDistance)
+    assertAgentLengthQuantity(measurement.target, equals: targetDistance)
+    #expect(abs(measurement.residual.value) <= 1.0e-12)
+}
+
 @Test func agentCreatesReadsAndActivatesConstructionPlanes() async throws {
     let server = AgentCommandController()
     let sessionID = UUID()

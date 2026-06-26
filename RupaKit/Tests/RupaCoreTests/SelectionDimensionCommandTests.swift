@@ -1151,6 +1151,88 @@ import Testing
     #expect(try measurement.isSatisfied())
 }
 
+@Test func selectionDimensionApplyUpdatesGeneratedFacePairObjectDistance() async throws {
+    var document = DesignDocument.empty()
+    try document.createExtrudedRectangle(
+        name: "Editable Box",
+        plane: .xy,
+        width: .length(20.0, .millimeter),
+        height: .length(10.0, .millimeter),
+        depth: .length(6.0, .millimeter),
+        direction: .normal
+    )
+    let targets = try opposingFaceTargets(in: document)
+    let session = EditorSession(document: document)
+    let addResult = try session.execute(
+        .addSelectionDimension(
+            name: "Editable Box Depth",
+            kind: .distance,
+            first: targets.first,
+            second: targets.second,
+            target: .length(6.0, .millimeter)
+        )
+    )
+    let dimensionID = try #require(addResult.addedSelectionDimensionID)
+
+    _ = try session.execute(
+        .setSelectionDimensionTarget(
+            id: dimensionID,
+            target: .length(9.0, .millimeter)
+        )
+    )
+    let applyResult = try session.execute(.applySelectionDimensionTarget(id: dimensionID))
+    let appliedEvaluation = try SelectionDimensionService().evaluate(
+        document: session.document,
+        dimensionID: dimensionID
+    )
+    let appliedMeasurement = try #require(appliedEvaluation.measurements.first)
+    let objectSummary = try ObjectDimensionSummaryService().summarize(
+        document: session.document,
+        targets: [targets.first]
+    )
+    let depthEntry = try #require(objectSummary.entries.first { $0.kind == .sizeY })
+
+    #expect(applyResult.commandName == "applySelectionDimensionTarget")
+    #expect(applyResult.didMutate)
+    assertLengthQuantity(appliedMeasurement.measured, equals: 0.009)
+    assertLengthQuantity(appliedMeasurement.target, equals: 0.009)
+    #expect(abs(appliedMeasurement.residual.value) <= 1.0e-12)
+    #expect(try appliedMeasurement.isSatisfied())
+    #expect(abs(depthEntry.resolvedMeters - 0.009) <= 1.0e-12)
+}
+
+@Test func selectionDimensionApplyLeavesNonFaceTopologyPairsUnsupported() async throws {
+    var document = DesignDocument.empty()
+    try document.createExtrudedRectangle(
+        name: "Editable Box",
+        plane: .xy,
+        width: .length(20.0, .millimeter),
+        height: .length(10.0, .millimeter),
+        depth: .length(6.0, .millimeter),
+        direction: .normal
+    )
+    let targets = try generatedEdgeTargets(in: document)
+    let session = EditorSession(document: document)
+    let addResult = try session.execute(
+        .addSelectionDimension(
+            name: "Unsupported Edge Pair",
+            kind: .distance,
+            first: targets.first,
+            second: targets.second,
+            target: .length(1.0, .millimeter)
+        )
+    )
+    let dimensionID = try #require(addResult.addedSelectionDimensionID)
+
+    do {
+        _ = try session.execute(.applySelectionDimensionTarget(id: dimensionID))
+        Issue.record("Expected generated edge pair selection dimension application to remain unsupported.")
+    } catch let error as EditorError {
+        #expect(error.code == .commandInvalid)
+        #expect(error.message.contains("supported object face-distance dimensions"))
+    }
+}
+
 @Test func selectionDimensionCommandRejectsObjectWideTargets() async throws {
     var document = DesignDocument.empty()
     let featureID = try document.createLineSketch(
@@ -1413,6 +1495,21 @@ private func opposingFaceTargets(
     let upperFace = try #require(faceEntries.max { $0.centerZ < $1.centerZ })
     #expect(upperFace.centerZ - lowerFace.centerZ > 0.0)
     return (lowerFace.target, upperFace.target)
+}
+
+private func generatedEdgeTargets(
+    in document: DesignDocument
+) throws -> (first: SelectionTarget, second: SelectionTarget) {
+    let topology = try TopologySummaryService().summarize(document: document)
+    let edgeTargets = try topology.entries.compactMap { entry -> SelectionTarget? in
+        guard entry.kind == .edge else {
+            return nil
+        }
+        return try #require(entry.selectionTarget())
+    }
+    let first = try #require(edgeTargets.first)
+    let second = try #require(edgeTargets.dropFirst().first)
+    return (first, second)
 }
 
 private func lineLength(

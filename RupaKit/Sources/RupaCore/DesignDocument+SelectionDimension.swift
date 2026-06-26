@@ -94,7 +94,10 @@ public extension DesignDocument {
             }
 
             let dimension = cadDocument.selectionDimensions[dimensionIndex]
-            let application = try sourceSelectionDimensionApplication(for: dimension)
+            let application = try sourceSelectionDimensionApplication(
+                for: dimension,
+                objectRegistry: objectRegistry
+            )
             switch application {
             case .lineLength(let context):
                 try setSketchEntityDimension(
@@ -240,6 +243,22 @@ public extension DesignDocument {
                 try cadDocument.validate()
                 try productMetadata.validate(against: cadDocument, objectRegistry: objectRegistry)
                 return cadDocument.selectionDimensions[updatedDimensionIndex]
+            case .objectFaceDistance(let context):
+                try applyObjectFaceDistanceDimension(
+                    dimension: dimension,
+                    context: context,
+                    objectRegistry: objectRegistry
+                )
+                guard let updatedDimensionIndex = cadDocument.selectionDimensions.firstIndex(where: { $0.id == id }) else {
+                    throw EditorError(
+                        code: .referenceUnresolved,
+                        message: "Selection dimension application lost the source selection dimension."
+                    )
+                }
+
+                try cadDocument.validate()
+                try productMetadata.validate(against: cadDocument, objectRegistry: objectRegistry)
+                return cadDocument.selectionDimensions[updatedDimensionIndex]
             }
         } catch let error as EditorError {
             self = originalDocument
@@ -295,10 +314,17 @@ public extension DesignDocument {
     }
 
     private func sourceSelectionDimensionApplication(
-        for dimension: SelectionDimension
+        for dimension: SelectionDimension,
+        objectRegistry: ObjectTypeRegistry
     ) throws -> SelectionDimensionSourceApplication {
         switch dimension.kind {
         case .distance:
+            if let objectFaceContext = try sourceObjectFaceDistanceDimensionContextIfPresent(
+                for: dimension,
+                objectRegistry: objectRegistry
+            ) {
+                return .objectFaceDistance(objectFaceContext)
+            }
             if let pointLineContext = try sourcePointLineDistanceDimensionContextIfPresent(for: dimension) {
                 return .sourcePointLineDistance(pointLineContext)
             }
@@ -334,7 +360,7 @@ public extension DesignDocument {
             default:
                 throw EditorError(
                     code: .commandInvalid,
-                    message: "Selection dimension application currently supports source line length, source circle/arc radius, source sketch point-to-point distance, and source spline control-point distance dimensions."
+                    message: "Selection dimension application currently supports source line length, source circle/arc radius, source sketch point-to-point distance, source spline control-point distance, source point-line distance, and supported object face-distance dimensions."
                 )
             }
         case .angle:
@@ -359,6 +385,144 @@ public extension DesignDocument {
                 )
             }
         }
+    }
+
+    private mutating func applyObjectFaceDistanceDimension(
+        dimension: SelectionDimension,
+        context: SelectionDimensionObjectFaceDistanceContext,
+        objectRegistry: ObjectTypeRegistry
+    ) throws {
+        let targetDistance = try resolvedLength(
+            dimension.target,
+            owner: "Selection face-distance application target"
+        )
+        guard targetDistance > selectionDimensionEndpointTolerance else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Selection face-distance application target must be positive."
+            )
+        }
+
+        try setObjectDimension(
+            target: context.target,
+            kind: context.kind,
+            value: dimension.target,
+            objectRegistry: objectRegistry
+        )
+    }
+
+    private func sourceObjectFaceDistanceDimensionContextIfPresent(
+        for dimension: SelectionDimension,
+        objectRegistry: ObjectTypeRegistry
+    ) throws -> SelectionDimensionObjectFaceDistanceContext? {
+        guard case .topology(let firstName) = dimension.first,
+              case .topology(let secondName) = dimension.second else {
+            return nil
+        }
+        let topology = try TopologySummaryService().summarize(
+            document: self,
+            objectRegistry: objectRegistry
+        )
+        guard
+            let firstTarget = try generatedFaceTargetIfPresent(
+                for: firstName,
+                in: topology,
+                owner: "Selection face-distance application"
+            ),
+            let secondTarget = try generatedFaceTargetIfPresent(
+                for: secondName,
+                in: topology,
+                owner: "Selection face-distance application"
+            )
+        else {
+            return nil
+        }
+        let topologyResolver = GeneratedTopologySelectionResolver()
+        let firstFace = try topologyResolver.bodyFace(
+            for: firstTarget,
+            in: self,
+            objectRegistry: objectRegistry,
+            operationName: "Selection face-distance application"
+        )
+        let secondFace = try topologyResolver.bodyFace(
+            for: secondTarget,
+            in: self,
+            objectRegistry: objectRegistry,
+            operationName: "Selection face-distance application"
+        )
+        let objectResolver = ObjectDimensionSourceResolver()
+        let firstSource = try objectResolver.resolve(target: firstTarget, in: self)
+        let secondSource = try objectResolver.resolve(target: secondTarget, in: self)
+        guard firstSource.featureID == secondSource.featureID,
+              firstSource.sceneNodeID == secondSource.sceneNodeID,
+              firstSource.shape == secondSource.shape else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Selection face-distance application requires generated faces from one editable source body."
+            )
+        }
+        let dimensionKind = try objectDimensionKind(
+            firstFace: firstFace,
+            secondFace: secondFace,
+            sourceShape: firstSource.shape
+        )
+        return SelectionDimensionObjectFaceDistanceContext(
+            target: firstTarget,
+            kind: dimensionKind
+        )
+    }
+
+    private func generatedFaceTargetIfPresent(
+        for name: PersistentName,
+        in topology: TopologySummaryResult,
+        owner: String
+    ) throws -> SelectionTarget? {
+        let persistentName = persistentNameString(name)
+        guard let entry = topology.entries.first(where: { $0.persistentName == persistentName }) else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "\(owner) generated topology target was not found in the current topology."
+            )
+        }
+        guard entry.kind == .face else {
+            return nil
+        }
+        guard let target = entry.selectionTarget(),
+              case .face = target.component else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "\(owner) requires generated face selection targets."
+            )
+        }
+        return target
+    }
+
+    private func objectDimensionKind(
+        firstFace: BodyFace,
+        secondFace: BodyFace,
+        sourceShape: ObjectDimensionSource.Shape
+    ) throws -> ObjectDimensionKind {
+        let facePair = Set([firstFace, secondFace])
+        switch sourceShape {
+        case .box:
+            if facePair == Set([.left, .right]) {
+                return .sizeX
+            }
+            if facePair == Set([.front, .back]) {
+                return .sizeY
+            }
+            if facePair == Set([.bottom, .top]) {
+                return .sizeZ
+            }
+        case .cylinder:
+            if facePair == Set([.front, .back]) {
+                return .sizeY
+            }
+        }
+        throw EditorError(
+            code: .commandInvalid,
+            message: "Selection face-distance application requires opposing editable body faces."
+        )
     }
 
     private mutating func applySourcePointDistanceDimension(
@@ -1953,6 +2117,22 @@ public extension DesignDocument {
         return result
     }
 
+    private func persistentNameString(_ name: PersistentName) -> String {
+        name.components.map { component in
+            switch component {
+            case .feature(let featureID):
+                return "feature:\(featureID.description)"
+            case .generated(let value):
+                return "generated:\(value)"
+            case .subshape(let value):
+                return "subshape:\(value)"
+            case .index(let index):
+                return "index:\(index)"
+            }
+        }
+        .joined(separator: "/")
+    }
+
     private var selectionDimensionEndpointTolerance: Double {
         1.0e-8
     }
@@ -1975,6 +2155,7 @@ private enum SelectionDimensionSourceApplication: Sendable {
     case arcSpanAngle(SelectionDimensionSourceArcAngleContext)
     case sourcePointDistance(SelectionDimensionSourcePointDistanceContext)
     case sourcePointLineDistance(SelectionDimensionSourcePointLineDistanceContext)
+    case objectFaceDistance(SelectionDimensionObjectFaceDistanceContext)
 }
 
 private struct SelectionDimensionSourceLineContext: Sendable {
@@ -2034,6 +2215,11 @@ private struct SelectionDimensionSourceLineDistanceGeometry: Sendable {
     var start: Point2D
     var end: Point2D
     var length: Double
+}
+
+private struct SelectionDimensionObjectFaceDistanceContext: Sendable {
+    var target: SelectionTarget
+    var kind: ObjectDimensionKind
 }
 
 private struct SelectionDimensionSourceLineProjection: Sendable {
