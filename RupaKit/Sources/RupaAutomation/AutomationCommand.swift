@@ -179,6 +179,7 @@ public enum AutomationCommand: Codable, Equatable, Sendable {
     case reverseSketchCurve(target: SelectionTarget)
     case rebuildSketchCurve(target: SelectionTarget, options: CurveRebuildOptions)
     case extendSketchCurve(target: SelectionTarget, distance: CADExpression, shape: ExtendCurveShape)
+    case joinSketchCurves(target: SelectionTarget, adjacentTarget: SelectionTarget)
     case splitSketchCurve(target: SelectionTarget, fraction: CADExpression)
     case trimSketchCurveSegment(target: SelectionTarget)
     case cutSketchCurve(target: SelectionTarget, cutter: SelectionTarget, options: CutCurveOptions)
@@ -586,6 +587,11 @@ public enum AutomationCommand: Codable, Equatable, Sendable {
                 target: target,
                 distance: distance,
                 shape: shape
+            )
+        case .joinSketchCurves(let target, let adjacentTarget):
+            .joinSketchCurves(
+                target: target,
+                adjacentTarget: adjacentTarget
             )
         case .splitSketchCurve(let target, let fraction):
             .splitSketchCurve(target: target, fraction: fraction)

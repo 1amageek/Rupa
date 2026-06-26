@@ -921,6 +921,16 @@ public final class AgentCommandController: AgentClientProtocol {
             failureMode: "Rejects stale generations, non-endpoint targets, generated Bridge Curve sources, non-positive distances, constrained or dimensioned source curves, unsupported shape/entity combinations, closed splines, and target-dependent curve or solid matching until that interaction phase is implemented."
         ),
         capability(
+            "joinSketchCurves",
+            category: .sourceCurveEditing,
+            summary: "Join Curves for the first source-owned subset: merge two same-sketch collinear source lines with exactly one aligned endpoint pair into one retained source line while migrating safe outer endpoint references.",
+            access: .automationCommand,
+            mutatesDocument: true,
+            discovery: [.sketchEntitySummary],
+            targets: [.sketchEntity],
+            failureMode: "Rejects different sketches, same-curve pairs, non-line targets, non-collinear or ambiguous endpoint pairs, dimensions or constraints attached to the joined interior endpoint, removed-line whole-curve relationships, generated Bridge Curve source metadata, and stale generations before mutation."
+        ),
+        capability(
             "splitSketchCurve",
             category: .sourceCurveEditing,
             summary: "Split Segment for a selected source line, source arc, or cubic Bezier spline at a scalar fraction, preserving physical start/end references and inserting a coincident split vertex.",

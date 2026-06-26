@@ -928,6 +928,20 @@ public struct AutomationRunner {
                 didMutate: result.didMutate,
                 diagnostics: result.diagnostics
             )
+        case .joinSketchCurves(let target, let adjacentTarget):
+            let result = try session.execute(
+                .joinSketchCurves(
+                    target: target,
+                    adjacentTarget: adjacentTarget
+                )
+            )
+            return AutomationResult(
+                message: "Sketch curves joined.",
+                commandName: result.commandName,
+                generation: result.generation,
+                didMutate: result.didMutate,
+                diagnostics: result.diagnostics
+            )
         case .splitSketchCurve(let target, let fraction):
             let result = try session.execute(
                 .splitSketchCurve(

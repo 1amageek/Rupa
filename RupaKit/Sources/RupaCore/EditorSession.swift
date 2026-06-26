@@ -2863,6 +2863,19 @@ public final class EditorSession {
     }
 
     @discardableResult
+    public func joinSketchCurves(
+        target: SelectionTarget,
+        adjacentTarget: SelectionTarget
+    ) -> CommandExecutionResult? {
+        perform(
+            .joinSketchCurves(
+                target: target,
+                adjacentTarget: adjacentTarget
+            )
+        )
+    }
+
+    @discardableResult
     public func splitSketchCurve(
         target: SelectionTarget,
         fraction: CADExpression
