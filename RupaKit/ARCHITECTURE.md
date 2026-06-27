@@ -65,7 +65,7 @@ flowchart LR
 
 | File | Current issue | Preferred next split |
 |---|---|---|
-| `RupaCore/DesignDocument.swift` | Command facade still contains sketch constraints, sketch curve editing, and remaining shared helper implementations | Move high-cohesion sketch command families into focused `DesignDocument+Sketch*` extensions and shared internal command utilities |
+| `RupaCore/DesignDocument.swift` | Command facade still contains sketch curve editing and remaining shared helper implementations | Move high-cohesion sketch command families into focused `DesignDocument+Sketch*` extensions and shared internal command utilities |
 | `RupaRendering/Viewport.swift` | Drawing, hit testing, drag state, and interaction commit logic share one SwiftUI type | Extract draw layers and drag controllers without changing the public `Viewport` API |
 | `RupaUI/MainView.swift` | Workspace layout, command panels, keyboard handling, and inspectors share one view | Extract command panels, workspace rail, and keyboard router |
 
@@ -88,3 +88,4 @@ flowchart LR
 | `RupaCore/DesignDocument.swift` | Sketch projection and face-derived sketch commands for face knife, construction-plane projection, generated-face projection, and body outline projection |
 | `RupaCore/DesignDocument.swift` | Object dimension commands for extrude distance, cube dimensions, cylinder dimensions, object dimension dispatch, and extruded body dimension resolution |
 | `RupaCore/DesignDocument.swift` | Slot sketch commands for open line, arc, line-arc, and sampled spline slots plus Offset Curve slot-mode dispatch |
+| `RupaCore/DesignDocument.swift` | Sketch constraint add/remove commands with constraint propagation and sketch object source synchronization |
