@@ -4354,34 +4354,48 @@ public struct MainView: View {
         0.001
     }
 
-    @ViewBuilder
-    private func sketchCurveExtendControls(_ entity: InspectorSketchEntity) -> some View {
-        lengthControl(
-            "Extend",
-            meters: sketchExtendDistanceMeters,
-            sliderRange: lengthSliderRange(for: sketchExtendDistanceMeters)
-        ) { meters in
-            sketchExtendDistanceMeters = max(meters, 1.0e-9)
-        }
-        inspectorControlRow("Shape") {
-            Picker("", selection: $sketchExtendShape) {
-                ForEach(ExtendCurveShape.allCases, id: \.self) { shape in
-                    Text(extendCurveShapeTitle(shape)).tag(shape)
-                }
-            }
-            .labelsHidden()
-            .pickerStyle(.menu)
-            .accessibilityIdentifier("InspectorCurve.extendShape")
-        }
-        inspectorActionRow {
-            Button {
-                extendSelectedSketchCurve(entity.target)
-            } label: {
-                Label("Extend", systemImage: "arrow.up.right.line")
-            }
-            .disabled(canExtendSketchCurve(entity) == false)
-            .accessibilityIdentifier("InspectorCurve.extend")
-        }
+    private func sketchCurveOperationControls(
+        _ entity: InspectorSketchEntity,
+        controls: [WorkspaceSketchCurveOperationControl]
+    ) -> some View {
+        WorkspaceSketchCurveOperationControlsView(
+            entity: entity,
+            controls: controls,
+            state: sketchCurveOperationControlsState(for: entity),
+            displayUnit: session.document.displayUnit,
+            extendDistanceMeters: $sketchExtendDistanceMeters,
+            extendShape: $sketchExtendShape,
+            vertexOffsetDistanceMeters: $sketchVertexOffsetDistanceMeters,
+            cornerTreatmentDistanceMeters: $sketchCornerTreatmentDistanceMeters,
+            cornerTreatment: $sketchCornerTreatment,
+            joinContinuity: $sketchCurveJoinContinuity,
+            vertexAlignmentContinuity: $sketchVertexAlignmentContinuity,
+            sliderRange: { meters in
+                lengthSliderRange(for: meters)
+            },
+            onExtend: extendSelectedSketchCurve,
+            onOffsetVertex: offsetSelectedSketchVertex,
+            onApplyCornerTreatment: applySelectedSketchCornerTreatment,
+            onJoin: joinSelectedSketchCurves,
+            onUnjoin: unjoinSelectedSketchCurve,
+            onAlignVertex: alignSelectedSketchVertex,
+            onProject: projectSelectedSketchCurvesToConstructionPlane
+        )
+    }
+
+    private func sketchCurveOperationControlsState(
+        for entity: InspectorSketchEntity
+    ) -> WorkspaceSketchCurveOperationControlsState {
+        let joinState = sketchCurveJoinInspectorState(for: entity)
+        return WorkspaceSketchCurveOperationControlsState(
+            canExtend: canExtendSketchCurve(entity),
+            canOffsetVertex: selectedSketchVertexOffsetHandle(entity) != nil,
+            canApplyCornerTreatment: canApplySketchCornerTreatment(entity),
+            canJoin: joinState.canJoin,
+            canUnjoin: joinState.canUnjoin,
+            canAlignVertex: selectedSketchVertexAlignmentReferenceTarget(for: entity) != nil,
+            canProject: selectedSketchCurveProjectionTargets(for: entity).isEmpty == false
+        )
     }
 
     private func canExtendSketchCurve(_ entity: InspectorSketchEntity) -> Bool {
@@ -4412,26 +4426,6 @@ public struct MainView: View {
         return false
     }
 
-    @ViewBuilder
-    private func sketchVertexOffsetControls(_ entity: InspectorSketchEntity) -> some View {
-        lengthControl(
-            "Vertex Offset",
-            meters: sketchVertexOffsetDistanceMeters,
-            sliderRange: lengthSliderRange(for: sketchVertexOffsetDistanceMeters)
-        ) { meters in
-            sketchVertexOffsetDistanceMeters = max(meters, 1.0e-9)
-        }
-        inspectorActionRow {
-            Button {
-                offsetSelectedSketchVertex(entity)
-            } label: {
-                Label("Offset Vertex", systemImage: "arrow.left.and.right")
-            }
-            .disabled(selectedSketchVertexOffsetHandle(entity) == nil)
-            .accessibilityIdentifier("InspectorCurve.offsetVertex")
-        }
-    }
-
     private func selectedSketchVertexOffsetHandle(_ entity: InspectorSketchEntity) -> SketchEntityPointHandle? {
         SketchVertexOffsetInspectorState(
             entityKind: entity.entityKind,
@@ -4439,116 +4433,6 @@ public struct MainView: View {
             target: entity.target
         )
         .handle
-    }
-
-    @ViewBuilder
-    private func sketchCornerTreatmentControls(_ entity: InspectorSketchEntity) -> some View {
-        lengthControl(
-            "Corner",
-            meters: sketchCornerTreatmentDistanceMeters,
-            sliderRange: lengthSliderRange(for: sketchCornerTreatmentDistanceMeters)
-        ) { meters in
-            sketchCornerTreatmentDistanceMeters = max(meters, 1.0e-9)
-        }
-        inspectorControlRow("Treatment") {
-            Picker("", selection: $sketchCornerTreatment) {
-                ForEach(SketchCornerTreatment.allCases, id: \.self) { treatment in
-                    Text(sketchCornerTreatmentTitle(treatment)).tag(treatment)
-                }
-            }
-            .labelsHidden()
-            .pickerStyle(.segmented)
-            .accessibilityIdentifier("InspectorCurve.cornerTreatment")
-        }
-        inspectorActionRow {
-            Button {
-                applySelectedSketchCornerTreatment(entity.target)
-            } label: {
-                Label(
-                    sketchCornerTreatmentTitle(sketchCornerTreatment),
-                    systemImage: sketchCornerTreatment == .fillet ? "circle.dashed" : "line.diagonal"
-                )
-            }
-            .disabled(canApplySketchCornerTreatment(entity) == false)
-            .accessibilityIdentifier("InspectorCurve.cornerTreatment.apply")
-        }
-    }
-
-    @ViewBuilder
-    private func sketchCurveJoinControls(_ entity: InspectorSketchEntity) -> some View {
-        let joinState = sketchCurveJoinInspectorState(for: entity)
-        inspectorControlRow("Continuity") {
-            Picker("", selection: $sketchCurveJoinContinuity) {
-                ForEach([SketchCurveJoinContinuity.g0, .g1], id: \.self) { continuity in
-                    Text(sketchCurveJoinContinuityTitle(continuity)).tag(continuity)
-                }
-            }
-            .labelsHidden()
-            .pickerStyle(.segmented)
-            .accessibilityIdentifier("InspectorCurve.\(entity.entityKind).joinContinuity")
-        }
-        inspectorActionRow {
-            Button {
-                joinSelectedSketchCurves(entity)
-            } label: {
-                Label("Join", systemImage: "link.badge.plus")
-            }
-            .disabled(!joinState.canJoin)
-            .accessibilityIdentifier("InspectorCurve.\(entity.entityKind).join")
-
-            Button {
-                unjoinSelectedSketchCurve(entity)
-            } label: {
-                Label("Unjoin", systemImage: "link.badge.minus")
-            }
-            .disabled(!joinState.canUnjoin)
-            .accessibilityIdentifier("InspectorCurve.\(entity.entityKind).unjoin")
-        }
-    }
-
-    private func sketchCurveJoinContinuityTitle(_ continuity: SketchCurveJoinContinuity) -> String {
-        switch continuity {
-        case .g0:
-            "G0"
-        case .g1:
-            "G1"
-        case .g2:
-            "G2"
-        }
-    }
-
-    @ViewBuilder
-    private func sketchVertexAlignmentControls(_ entity: InspectorSketchEntity) -> some View {
-        inspectorControlRow("Align") {
-            Picker("", selection: $sketchVertexAlignmentContinuity) {
-                ForEach(SketchVertexAlignmentContinuity.allCases, id: \.self) { continuity in
-                    Text(sketchVertexAlignmentContinuityTitle(continuity)).tag(continuity)
-                }
-            }
-            .labelsHidden()
-            .pickerStyle(.segmented)
-            .accessibilityIdentifier("InspectorCurve.\(entity.entityKind).alignContinuity")
-        }
-        inspectorActionRow {
-            Button {
-                alignSelectedSketchVertex(entity)
-            } label: {
-                Label("Align", systemImage: "arrow.triangle.merge")
-            }
-            .disabled(selectedSketchVertexAlignmentReferenceTarget(for: entity) == nil)
-            .accessibilityIdentifier("InspectorCurve.\(entity.entityKind).alignVertex")
-        }
-    }
-
-    private func sketchVertexAlignmentContinuityTitle(_ continuity: SketchVertexAlignmentContinuity) -> String {
-        switch continuity {
-        case .g0:
-            "G0"
-        case .g1:
-            "G1"
-        case .g2:
-            "G2"
-        }
     }
 
     private func selectedSketchVertexAlignmentReferenceTarget(
@@ -4626,19 +4510,6 @@ public struct MainView: View {
         return nil
     }
 
-    @ViewBuilder
-    private func sketchCurveProjectionControls(_ entity: InspectorSketchEntity) -> some View {
-        inspectorActionRow {
-            Button {
-                projectSelectedSketchCurvesToConstructionPlane(entity)
-            } label: {
-                Label("Project", systemImage: "square.on.square")
-            }
-            .disabled(selectedSketchCurveProjectionTargets(for: entity).isEmpty)
-            .accessibilityIdentifier("InspectorCurve.\(entity.entityKind).project")
-        }
-    }
-
     private func selectedSketchCurveProjectionTargets(
         for entity: InspectorSketchEntity
     ) -> [SelectionTarget] {
@@ -4708,30 +4579,6 @@ public struct MainView: View {
             return false
         }
         return selectedSketchCornerTreatmentAdjacentTarget(excluding: entity.target) != nil
-    }
-
-    private func extendCurveShapeTitle(_ shape: ExtendCurveShape) -> String {
-        switch shape {
-        case .natural:
-            "Natural"
-        case .linear:
-            "Linear"
-        case .soft:
-            "Soft"
-        case .reflective:
-            "Reflective"
-        case .arc:
-            "Arc"
-        }
-    }
-
-    private func sketchCornerTreatmentTitle(_ treatment: SketchCornerTreatment) -> String {
-        switch treatment {
-        case .fillet:
-            "Fillet"
-        case .chamfer:
-            "Chamfer"
-        }
     }
 
     private func resolveSelectedSketchEntity() throws -> InspectorSketchEntity? {
@@ -5818,7 +5665,7 @@ public struct MainView: View {
                 handle: .point,
                 accessibilityPrefix: "InspectorCurve.point"
             )
-            sketchVertexAlignmentControls(entity)
+            sketchCurveOperationControls(entity, controls: [.alignment])
         case "line":
             if let length = sketchLineLength(for: entity) {
                 lengthControl(
@@ -5856,9 +5703,10 @@ public struct MainView: View {
                 handle: .lineEnd,
                 accessibilityPrefix: "InspectorCurve.lineEnd"
             )
-            sketchVertexAlignmentControls(entity)
-            sketchCurveProjectionControls(entity)
-            sketchVertexOffsetControls(entity)
+            sketchCurveOperationControls(
+                entity,
+                controls: [.alignment, .projection, .vertexOffset]
+            )
             lengthControl(
                 "Slot Width",
                 meters: slotProfileWidthMeters,
@@ -5875,9 +5723,10 @@ public struct MainView: View {
             } unitLabel: {
                 "t"
             }
-            sketchCurveExtendControls(entity)
-            sketchCornerTreatmentControls(entity)
-            sketchCurveJoinControls(entity)
+            sketchCurveOperationControls(
+                entity,
+                controls: [.extend, .cornerTreatment, .join]
+            )
             inspectorActionRow {
                 Button {
                     createSlotFromOffsetCurve(entity.target, width: slotProfileWidthMeters)
@@ -5956,8 +5805,7 @@ public struct MainView: View {
                 handle: .circleCenter,
                 accessibilityPrefix: "InspectorCurve.circleCenter"
             )
-            sketchVertexAlignmentControls(entity)
-            sketchCurveProjectionControls(entity)
+            sketchCurveOperationControls(entity, controls: [.alignment, .projection])
             if let cutter = selectedSketchEntityCutterTarget(excluding: entity.target) {
                 inspectorActionRow {
                     Button {
@@ -6034,9 +5882,10 @@ public struct MainView: View {
                 handle: .arcEnd,
                 accessibilityPrefix: "InspectorCurve.arcEnd"
             )
-            sketchVertexAlignmentControls(entity)
-            sketchCurveProjectionControls(entity)
-            sketchVertexOffsetControls(entity)
+            sketchCurveOperationControls(
+                entity,
+                controls: [.alignment, .projection, .vertexOffset]
+            )
             numericControl(
                 "Split",
                 values: [sketchSplitFraction],
@@ -6046,8 +5895,7 @@ public struct MainView: View {
             } unitLabel: {
                 "t"
             }
-            sketchCurveExtendControls(entity)
-            sketchCurveJoinControls(entity)
+            sketchCurveOperationControls(entity, controls: [.extend, .join])
             inspectorActionRow {
                 Button {
                     splitSelectedSketchCurve(entity.target)
@@ -6090,8 +5938,7 @@ public struct MainView: View {
             } unitLabel: {
                 "t"
             }
-            sketchCurveProjectionControls(entity)
-            sketchCurveExtendControls(entity)
+            sketchCurveOperationControls(entity, controls: [.projection, .extend])
             inspectorControlRow("Rebuild CVs") {
                 Stepper(
                     value: $sketchRebuildControlPointCount,

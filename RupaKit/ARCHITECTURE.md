@@ -130,3 +130,4 @@ flowchart LR
 | `RupaUI/MainView.swift` | Spline control point index, move, slide, and smooth control-point constraint controls split into a dedicated control point view with mutation callbacks owned by MainView |
 | `RupaUI/MainView.swift` | Face, edge, vertex, and region direct-edit inspector sections split into a topology edit inspector state/view pair with selection resolution owned by MainView |
 | `RupaUI/MainView.swift` | Surface analysis and continuity inspector rendering split into a dedicated surface inspector view with selection/result resolution owned by MainView |
+| `RupaUI/MainView.swift` | Sketch curve operation controls for projection, alignment, vertex offset, corner treatment, extend, and join split into a dedicated operation controls state/view pair |
