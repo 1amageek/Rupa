@@ -1,0 +1,478 @@
+import Testing
+import Darwin
+import Foundation
+import RupaAutomation
+import RupaCore
+import SwiftCAD
+@testable import RupaAgent
+
+@MainActor
+@Test func agentCreatesSweepSourceThroughAutomationAndCore() async throws {
+    var document = DesignDocument.empty()
+    let profileID = try document.createRectangleSketch(
+        name: "Agent Sweep Profile",
+        plane: .xy,
+        width: .length(4.0, .millimeter),
+        height: .length(2.0, .millimeter)
+    )
+    let pathID = try document.createLineSketch(
+        name: "Agent Sweep Path",
+        plane: .yz,
+        start: SketchPoint(
+            x: .length(0.0, .millimeter),
+            y: .length(0.0, .millimeter)
+        ),
+        end: SketchPoint(
+            x: .length(0.0, .millimeter),
+            y: .length(20.0, .millimeter)
+        )
+    )
+    let server = AgentCommandController()
+    let sessionID = UUID()
+    let session = EditorSession(document: document)
+    server.register(session: session, id: sessionID)
+
+    let response = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .createSweep(
+                name: "Agent Sweep",
+                sections: [.profile(ProfileReference(featureID: profileID))],
+                path: SweepPathReference(featureID: pathID),
+                guides: [],
+                targets: [],
+                options: SweepOptions()
+            ),
+            expectedGeneration: DocumentGeneration(0)
+        )
+    )
+
+    guard case .command(let result) = response else {
+        Issue.record("Agent must return a sweep command result.")
+        return
+    }
+    let sweepID = try #require(session.document.cadDocument.designGraph.order.last)
+    let feature = try #require(session.document.cadDocument.designGraph.nodes[sweepID])
+    guard case .sweep(let sweep) = feature.operation else {
+        Issue.record("Agent must create a sweep feature.")
+        return
+    }
+
+    #expect(result.commandName == "createSweep")
+    #expect(result.didMutate)
+    #expect(result.generation == DocumentGeneration(1))
+    #expect(sweep.sections == [.profile(ProfileReference(featureID: profileID))])
+    #expect(sweep.path == SweepPathReference(featureID: pathID))
+    #expect(feature.outputs == [FeatureOutput(role: .body)])
+    #expect(session.evaluatedBodyCount == 1)
+    #expect(session.evaluationStatus == .valid)
+    #expect(result.diagnostics.contains { diagnostic in diagnostic.severity == .error } == false)
+}
+
+@MainActor
+@Test func agentCreatesCurveSectionSheetSweepThroughAutomationAndCore() async throws {
+    var document = DesignDocument.empty()
+    let sectionID = try document.createLineSketch(
+        name: "Agent Curve Sheet Section",
+        plane: .xy,
+        start: agentSketchPoint(x: -0.002, y: 0.0),
+        end: agentSketchPoint(x: 0.002, y: 0.0)
+    )
+    let pathID = try document.createLineSketch(
+        name: "Agent Curve Sheet Path",
+        plane: .yz,
+        start: agentSketchPoint(x: 0.0, y: 0.0),
+        end: agentSketchPoint(x: 0.0, y: 0.020)
+    )
+    let server = AgentCommandController()
+    let sessionID = UUID()
+    let session = EditorSession(document: document)
+    server.register(session: session, id: sessionID)
+
+    let response = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .createSweep(
+                name: "Agent Curve Sheet Sweep",
+                sections: [.curve(SweepCurveSectionReference(featureID: sectionID))],
+                path: SweepPathReference(featureID: pathID),
+                guides: [],
+                targets: [],
+                options: SweepOptions(resultKind: .sheet)
+            ),
+            expectedGeneration: DocumentGeneration(0)
+        )
+    )
+
+    guard case .command(let result) = response else {
+        Issue.record("Agent must return a curve-section sheet sweep command result.")
+        return
+    }
+    let sweepID = try #require(session.document.cadDocument.designGraph.order.last)
+    let feature = try #require(session.document.cadDocument.designGraph.nodes[sweepID])
+    let evaluated = try CADPipeline.modelingDefault(for: session.document).evaluate(
+        session.document.cadDocument
+    )
+    let body = try #require(evaluated.brep.bodies.values.first)
+
+    guard case .sweep(let sweep) = feature.operation else {
+        Issue.record("Agent must create a sweep feature.")
+        return
+    }
+    #expect(result.commandName == "createSweep")
+    #expect(result.didMutate)
+    #expect(sweep.sections == [.curve(SweepCurveSectionReference(featureID: sectionID))])
+    #expect(session.document.productMetadata.sceneNodes.values.first {
+        $0.reference == .body(sweepID)
+    }?.object?.sourceSection == .curve(sectionID))
+    #expect(feature.outputs == [FeatureOutput(role: .sheet)])
+    #expect(body.kind == .sheet)
+    #expect(session.evaluationStatus == .valid)
+    #expect(result.diagnostics.contains { diagnostic in diagnostic.severity == .error } == false)
+}
+
+@MainActor
+@Test func agentCreatesRevolveSourceThroughAutomationAndCore() async throws {
+    var document = DesignDocument.empty()
+    let profileID = try document.createRectangleSketchFromCorners(
+        name: "Agent Revolve Profile",
+        plane: .xy,
+        firstCorner: SketchPoint(
+            x: .length(0.0, .millimeter),
+            y: .length(0.0, .millimeter)
+        ),
+        oppositeCorner: SketchPoint(
+            x: .length(4.0, .millimeter),
+            y: .length(14.0, .millimeter)
+        )
+    )
+    let server = AgentCommandController()
+    let sessionID = UUID()
+    let session = EditorSession(document: document)
+    server.register(session: session, id: sessionID)
+
+    let response = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .createRevolve(
+                name: "Agent Revolved Body",
+                profile: ProfileReference(featureID: profileID),
+                axis: RevolveAxis(origin: .origin, direction: .unitY),
+                angle: .angle(180.0, .degree)
+            ),
+            expectedGeneration: DocumentGeneration(0)
+        )
+    )
+
+    guard case .command(let result) = response else {
+        Issue.record("Agent must return a revolve command result.")
+        return
+    }
+    let revolveID = try #require(session.document.cadDocument.designGraph.order.last)
+    let feature = try #require(session.document.cadDocument.designGraph.nodes[revolveID])
+    guard case .revolve(let revolve) = feature.operation else {
+        Issue.record("Agent must create a revolve feature.")
+        return
+    }
+
+    #expect(result.commandName == "createRevolve")
+    #expect(result.didMutate)
+    #expect(result.generation == DocumentGeneration(1))
+    #expect(revolve.profile == ProfileReference(featureID: profileID))
+    #expect(revolve.axis == RevolveAxis(origin: .origin, direction: .unitY))
+    #expect(revolve.angle == .angle(180.0, .degree))
+    #expect(feature.outputs == [FeatureOutput(role: .body)])
+    #expect(session.evaluatedBodyCount == 1)
+    #expect(session.evaluationStatus == .valid)
+    #expect(result.diagnostics.contains { diagnostic in diagnostic.severity == .error } == false)
+}
+
+@MainActor
+@Test func agentCreatesConnectedMultiEntitySweepPathAndSweepThroughAutomation() async throws {
+    var document = DesignDocument.empty()
+    let profileID = try document.createRectangleSketch(
+        name: "Agent Connected Sweep Profile",
+        plane: .xy,
+        width: .length(2.0, .millimeter),
+        height: .length(1.0, .millimeter)
+    )
+    let server = AgentCommandController()
+    let sessionID = UUID()
+    let session = EditorSession(document: document)
+    server.register(session: session, id: sessionID)
+
+    let pathResponse = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .createSketch(
+                name: "Agent Connected Sweep Path",
+                sketch: Sketch(
+                    plane: .yz,
+                    entities: [
+                        SketchEntityID(): .line(SketchLine(
+                            start: SketchPoint(
+                                x: .length(0.0, .millimeter),
+                                y: .length(0.0, .millimeter)
+                            ),
+                            end: SketchPoint(
+                                x: .length(0.0, .millimeter),
+                                y: .length(15.0, .millimeter)
+                            )
+                        )),
+                        SketchEntityID(): .line(SketchLine(
+                            start: SketchPoint(
+                                x: .length(0.0, .millimeter),
+                                y: .length(15.0, .millimeter)
+                            ),
+                            end: SketchPoint(
+                                x: .length(8.0, .millimeter),
+                                y: .length(25.0, .millimeter)
+                            )
+                        )),
+                    ]
+                ),
+                geometryRole: .curve
+            ),
+            expectedGeneration: DocumentGeneration(0)
+        )
+    )
+    guard case .command(let pathResult) = pathResponse else {
+        Issue.record("Agent must return a createSketch command result.")
+        return
+    }
+    let pathID = try #require(session.document.cadDocument.designGraph.order.last)
+
+    let sweepResponse = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .createSweep(
+                name: "Agent Connected Multi-Path Sweep",
+                sections: [.profile(ProfileReference(featureID: profileID))],
+                path: SweepPathReference(featureID: pathID),
+                guides: [],
+                targets: [],
+                options: SweepOptions(cornerStyle: .mitre)
+            ),
+            expectedGeneration: pathResult.generation
+        )
+    )
+    guard case .command(let sweepResult) = sweepResponse else {
+        Issue.record("Agent must return a connected sweep command result.")
+        return
+    }
+    let sweepID = try #require(session.document.cadDocument.designGraph.order.last)
+    let pathFeature = try #require(session.document.cadDocument.designGraph.nodes[pathID])
+    let sweepFeature = try #require(session.document.cadDocument.designGraph.nodes[sweepID])
+
+    guard case .sketch(let pathSketch) = pathFeature.operation,
+          case .sweep(let sweep) = sweepFeature.operation else {
+        Issue.record("Agent must create a sketch path and a sweep feature.")
+        return
+    }
+    #expect(pathResult.commandName == "createSketch")
+    #expect(pathSketch.entities.count == 2)
+    #expect(sweepResult.commandName == "createSweep")
+    #expect(sweepResult.generation == DocumentGeneration(2))
+    #expect(sweep.path == SweepPathReference(featureID: pathID))
+    #expect(session.evaluatedBodyCount == 1)
+    #expect(session.evaluationStatus == .valid)
+    #expect(sweepResult.diagnostics.contains { diagnostic in diagnostic.severity == .error } == false)
+}
+
+@MainActor
+@Test func agentMovesParallelLineAngleThroughAutomationAndCore() async throws {
+    let server = AgentCommandController()
+    let sessionID = UUID()
+    let setup = try agentTwoLineConstrainedSketchDocument(
+        name: "Agent Parallel Line Pair",
+        constraint: { .parallel($0, $1) }
+    )
+    let session = EditorSession(document: setup.document)
+    server.register(session: session, id: sessionID)
+
+    let summaryResponse = server.handle(
+        .sketchEntitySummary(
+            sessionID: sessionID,
+            expectedGeneration: DocumentGeneration(0)
+        )
+    )
+    guard case .sketchEntitySummary(let summary) = summaryResponse else {
+        Issue.record("Agent must return a sketch entity summary.")
+        return
+    }
+    let sourceLine = try #require(summary.entries.first { $0.entityID == setup.firstLineID.description })
+    let target = try #require(sourceLine.selectionTarget())
+
+    let editResponse = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .moveSketchEntityPoint(
+                target: target,
+                handle: .lineEnd,
+                deltaX: .length(0.0, .meter),
+                deltaY: .length(0.010, .meter)
+            ),
+            expectedGeneration: DocumentGeneration(0)
+        )
+    )
+
+    guard case .command(let result) = editResponse else {
+        Issue.record("Agent must return a command result.")
+        return
+    }
+    let updatedSummary = try SketchEntitySummaryService().summarize(document: session.document)
+    let movedSource = try #require(updatedSummary.entries.first { $0.entityID == setup.firstLineID.description })
+    let movedFollower = try #require(updatedSummary.entries.first { $0.entityID == setup.secondLineID.description })
+    let expectedFollowerEndOffset = 0.005 / sqrt(2.0)
+    #expect(result.commandName == "moveSketchEntityPoint")
+    #expect(result.didMutate)
+    #expect(result.generation == DocumentGeneration(1))
+    #expect(agentLineEntriesAreParallel(movedSource, movedFollower))
+    #expect(abs((movedFollower.end?.x ?? -1.0) - expectedFollowerEndOffset) < 1.0e-12)
+    #expect(abs((movedFollower.end?.y ?? -1.0) - (0.005 + expectedFollowerEndOffset)) < 1.0e-12)
+    #expect(session.evaluationStatus == .valid)
+}
+
+@MainActor
+@Test func agentMovesConstrainedRectanglePointThroughAutomationAndCore() async throws {
+    let server = AgentCommandController()
+    let sessionID = UUID()
+    let session = EditorSession()
+    _ = try session.execute(
+        .createExtrudedRectangleFromCorners(
+            name: "Agent Move Constrained Box",
+            plane: .xy,
+            firstCorner: SketchPoint(
+                x: .length(0.0, .millimeter),
+                y: .length(0.0, .millimeter)
+            ),
+            oppositeCorner: SketchPoint(
+                x: .length(10.0, .millimeter),
+                y: .length(5.0, .millimeter)
+            ),
+            depth: .length(3.0, .millimeter),
+            direction: .normal
+        )
+    )
+    let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
+    server.register(session: session, id: sessionID)
+
+    let summaryResponse = server.handle(
+        .sketchEntitySummary(
+            sessionID: sessionID,
+            expectedGeneration: DocumentGeneration(1)
+        )
+    )
+    guard case .sketchEntitySummary(let summary) = summaryResponse else {
+        Issue.record("Agent must return a sketch entity summary.")
+        return
+    }
+    let bottomLine = try #require(summary.entries.first { entry in
+        agentIsHorizontalLine(entry, y: 0.0)
+    })
+    let target = try #require(bottomLine.selectionTarget())
+
+    let editResponse = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .moveSketchEntityPoint(
+                target: target,
+                handle: .lineEnd,
+                deltaX: .length(2.0, .millimeter),
+                deltaY: .length(0.0, .millimeter)
+            ),
+            expectedGeneration: DocumentGeneration(1)
+        )
+    )
+
+    guard case .command(let result) = editResponse else {
+        Issue.record("Agent must return a command result.")
+        return
+    }
+    let updatedSummary = try SketchEntitySummaryService().summarize(document: session.document)
+    let movedBottom = try #require(updatedSummary.entries.first { $0.entityID == bottomLine.entityID })
+    let bodyNode = try #require(agentBodySceneNode(for: bodyFeatureID, in: session.document))
+    #expect(result.commandName == "moveSketchEntityPoint")
+    #expect(result.didMutate)
+    #expect(result.generation == DocumentGeneration(2))
+    #expect(abs((movedBottom.end?.x ?? -1.0) - 0.012) < 1.0e-12)
+    #expect(agentContainsSketchPoint(updatedSummary, x: 0.0, y: 0.0))
+    #expect(agentContainsSketchPoint(updatedSummary, x: 0.012, y: 0.0))
+    #expect(agentContainsSketchPoint(updatedSummary, x: 0.012, y: 0.005))
+    #expect(agentContainsSketchPoint(updatedSummary, x: 0.0, y: 0.005))
+    #expect(abs((bodyNode.object?.properties["size.x"]?.lengthValue ?? -1.0) - 0.012) < 1.0e-12)
+    #expect(abs((bodyNode.object?.properties["size.z"]?.lengthValue ?? -1.0) - 0.005) < 1.0e-12)
+    #expect(session.evaluationStatus == .valid)
+}
+
+@MainActor
+@Test func agentSetsConstrainedRectangleSideDimensionThroughAutomationAndCore() async throws {
+    let server = AgentCommandController()
+    let sessionID = UUID()
+    let session = EditorSession()
+    _ = try session.execute(
+        .createExtrudedRectangleFromCorners(
+            name: "Agent Dimensioned Box",
+            plane: .xy,
+            firstCorner: SketchPoint(
+                x: .length(0.0, .millimeter),
+                y: .length(0.0, .millimeter)
+            ),
+            oppositeCorner: SketchPoint(
+                x: .length(10.0, .millimeter),
+                y: .length(5.0, .millimeter)
+            ),
+            depth: .length(3.0, .millimeter),
+            direction: .normal
+        )
+    )
+    let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
+    server.register(session: session, id: sessionID)
+
+    let summaryResponse = server.handle(
+        .sketchEntitySummary(
+            sessionID: sessionID,
+            expectedGeneration: DocumentGeneration(1)
+        )
+    )
+    guard case .sketchEntitySummary(let summary) = summaryResponse else {
+        Issue.record("Agent must return a sketch entity summary.")
+        return
+    }
+    let bottomLine = try #require(summary.entries.first { entry in
+        agentIsHorizontalLine(entry, y: 0.0)
+    })
+    let target = try #require(bottomLine.selectionTarget())
+
+    let editResponse = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .setSketchEntityDimension(
+                target: target,
+                kind: .length,
+                value: .length(25.0, .millimeter)
+            ),
+            expectedGeneration: DocumentGeneration(1)
+        )
+    )
+
+    guard case .command(let result) = editResponse else {
+        Issue.record("Agent must return a command result.")
+        return
+    }
+    let updatedSummary = try SketchEntitySummaryService().summarize(document: session.document)
+    let updatedBottom = try #require(updatedSummary.entries.first { $0.entityID == bottomLine.entityID })
+    let dimension = try #require(updatedBottom.dimensions.first { $0.kind == "distance" })
+    let bodyNode = try #require(agentBodySceneNode(for: bodyFeatureID, in: session.document))
+    #expect(result.commandName == "setSketchEntityDimension")
+    #expect(result.didMutate)
+    #expect(result.generation == DocumentGeneration(2))
+    #expect(abs(dimension.resolvedValue - 0.025) < 1.0e-12)
+    #expect(agentContainsSketchPoint(updatedSummary, x: 0.0, y: 0.0))
+    #expect(agentContainsSketchPoint(updatedSummary, x: 0.025, y: 0.0))
+    #expect(agentContainsSketchPoint(updatedSummary, x: 0.025, y: 0.005))
+    #expect(agentContainsSketchPoint(updatedSummary, x: 0.0, y: 0.005))
+    #expect(abs((bodyNode.object?.properties["size.x"]?.lengthValue ?? -1.0) - 0.025) < 1.0e-12)
+    #expect(abs((bodyNode.object?.properties["size.z"]?.lengthValue ?? -1.0) - 0.005) < 1.0e-12)
+    #expect(session.evaluationStatus == .valid)
+}
