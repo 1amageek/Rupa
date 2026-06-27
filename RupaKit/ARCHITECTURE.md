@@ -65,7 +65,10 @@ flowchart LR
 
 | File | Current issue | Preferred next split |
 |---|---|---|
-| `RupaCore/DesignDocument.swift` | Shared sketch endpoint, dimension, validation, and commit utilities remain in the main document type | Move shared endpoint/dimension utilities into focused internal services or `DesignDocument+Sketch*` utility extensions |
+| `RupaCore/DesignDocument+SelectionDimension.swift` | Selection dimension creation, target resolution, generated-face application, and source-curve application remain in one document extension | Extract target resolution/application strategies and generated-topology dimension handlers into focused services |
+| `RupaCore/DesignDocument+SketchCurveCutGeometry.swift` | Cut Curve planning, intersection geometry, and mutation support share one large helper extension | Split source-curve mutation planning from sampled intersection geometry |
+| `RupaCore/DesignDocument+SolidDirectEditing.swift` | Face offset, edge treatment, and vertex movement helpers still share direct-modeling source rewrite logic | Split direct-edit target rewrite services by face, edge, and vertex workflows |
+| `RupaCore/DesignDocument+SketchProjection.swift` | Face, construction-plane, and generated-topology projection helpers share one extension | Split projection source resolvers from sketch entity construction helpers |
 | `RupaRendering/Viewport.swift` | Drawing, hit testing, drag state, and interaction commit logic share one SwiftUI type | Extract draw layers and drag controllers without changing the public `Viewport` API |
 | `RupaUI/MainView.swift` | Workspace layout, command panels, keyboard handling, and inspectors share one view | Extract command panels, workspace rail, and keyboard router |
 
@@ -108,3 +111,4 @@ flowchart LR
 | `RupaCore/DesignDocument.swift` | Sketch curve join and unjoin commands split from join ownership metadata and reference migration planning helpers |
 | `RupaCore/DesignDocument.swift` | Sketch curve rebuild command split from rebuild fitting, analytic deviation, shared rebuild types, and reference migration helpers |
 | `RupaCore/DesignDocument+SketchCurveJoinPlanning.swift` | Sketch curve join planning split into line-pair planning, curve-group planning, shared join types, and unjoin validation helpers |
+| `RupaCore/DesignDocument.swift` | Sketch selection types, reference utilities, dimension measurement, sketch geometry helpers, and sketch object synchronization split into focused document extensions |
