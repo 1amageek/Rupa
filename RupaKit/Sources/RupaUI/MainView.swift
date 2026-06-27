@@ -1460,85 +1460,22 @@ public struct MainView: View {
     private func dimensionContextPanelContent() -> some View {
         if let entry = dimensionCommandState.activeEntry,
            let currentValue = dimensionCommandState.currentValue {
-            workspaceStatusChip(
-                "Dimension",
-                systemImage: "ruler",
-                tint: .accentColor
-            )
-            workspaceContextDivider
-            workspaceValuePill(
-                "Target",
-                selectedTargetSummary,
-                accessibilityIdentifier: "WorkspaceDimension.target"
-            )
-            workspaceValuePill(
-                "Kind",
-                entry.label,
-                accessibilityIdentifier: "WorkspaceDimension.kind"
-            )
-            workspaceValuePill(
-                "Source",
-                entry.sourceTitle,
-                accessibilityIdentifier: "WorkspaceDimension.source"
-            )
-            workspaceValuePill(
-                "Item",
-                "\(dimensionCommandState.activeOrdinal)/\(dimensionCommandState.activeCount)",
-                accessibilityIdentifier: "WorkspaceDimension.index"
-            )
-
-            if dimensionCommandState.isInputModeActive {
+            WorkspaceDimensionContextPanel(
+                targetTitle: selectedTargetSummary,
+                kindTitle: entry.label,
+                sourceTitle: entry.sourceTitle,
+                itemTitle: "\(dimensionCommandState.activeOrdinal)/\(dimensionCommandState.activeCount)",
+                valueTitle: formattedDimensionValue(currentValue, kind: entry.valueKind),
+                isInputModeActive: dimensionCommandState.isInputModeActive,
+                canMoveBetweenDimensions: dimensionCommandState.activeCount >= 2,
+                canCommit: dimensionCommandState.canCommit,
+                focusPrevious: { dimensionCommandState.focusPrevious() },
+                activateInputMode: { dimensionCommandState.activateInputMode() },
+                focusNext: { dimensionCommandState.focusNext() },
+                confirm: { commitDimensionCommand() },
+                cancel: { dimensionCommandState.deactivate() }
+            ) {
                 workspaceDimensionInputField
-            } else {
-                workspaceValuePill(
-                    "Value",
-                    formattedDimensionValue(currentValue, kind: entry.valueKind),
-                    accessibilityIdentifier: "WorkspaceDimension.value"
-                )
-            }
-
-            workspaceIconButton(
-                systemImage: "chevron.left",
-                help: "Previous Dimension",
-                accessibilityIdentifier: "WorkspaceDimension.previous"
-            ) {
-                dimensionCommandState.focusPrevious()
-            }
-            .disabled(dimensionCommandState.activeCount < 2)
-
-            workspaceIconButton(
-                systemImage: "keyboard",
-                help: "Enter Dimension Input",
-                accessibilityIdentifier: "WorkspaceDimension.input"
-            ) {
-                dimensionCommandState.activateInputMode()
-            }
-            .disabled(dimensionCommandState.isInputModeActive)
-
-            workspaceIconButton(
-                systemImage: "chevron.right",
-                help: "Next Dimension",
-                accessibilityIdentifier: "WorkspaceDimension.next"
-            ) {
-                dimensionCommandState.focusNext()
-            }
-            .disabled(dimensionCommandState.activeCount < 2)
-
-            workspaceIconButton(
-                systemImage: "checkmark",
-                help: "Confirm Dimension",
-                accessibilityIdentifier: "WorkspaceDimension.confirm"
-            ) {
-                commitDimensionCommand()
-            }
-            .disabled(!dimensionCommandState.canCommit)
-
-            workspaceIconButton(
-                systemImage: "xmark",
-                help: "Cancel Dimension",
-                accessibilityIdentifier: "WorkspaceDimension.cancel"
-            ) {
-                dimensionCommandState.deactivate()
             }
         }
     }
@@ -1777,142 +1714,62 @@ public struct MainView: View {
 
     @ViewBuilder
     private func slotProfileContextPanelContent(_ target: SelectionTarget) -> some View {
-        workspaceStatusChip(
-            "Slot",
-            systemImage: "capsule",
-            tint: slotProfileCommandState.isActive ? .accentColor : .secondary
+        WorkspaceSlotContextPanel(
+            isActive: slotProfileCommandState.isActive,
+            widthTitle: formatted(slotProfileWidthMeters),
+            inputModeTitle: slotProfileCommandState.inputModeTitle,
+            create: { createSlotFromOffsetCurve(target, width: slotProfileWidthMeters) }
         )
-
-        workspaceValuePill(
-            "Width",
-            formatted(slotProfileWidthMeters),
-            accessibilityIdentifier: "WorkspaceSlot.width"
-        )
-        workspaceValuePill(
-            "Input",
-            slotProfileCommandState.inputModeTitle,
-            accessibilityIdentifier: "WorkspaceSlot.inputMode"
-        )
-
-        workspaceIconButton(
-            systemImage: "capsule",
-            help: "Create Slot Profile",
-            accessibilityIdentifier: "WorkspaceSlot.create"
-        ) {
-            createSlotFromOffsetCurve(target, width: slotProfileWidthMeters)
-        }
     }
 
     @ViewBuilder
     private func edgeOffsetContextPanelContent(_ targets: [SelectionTarget]) -> some View {
         let supportResolution = edgeOffsetSupportResolution(for: targets)
-        workspaceStatusChip(
-            "Offset Edge",
-            systemImage: "arrow.up.left.and.arrow.down.right",
-            tint: supportResolution.isSupported ? .accentColor : .orange
+        WorkspaceEdgeOffsetContextPanel(
+            isSupported: supportResolution.isSupported,
+            distanceTitle: formatted(edgeOffsetDistanceMeters),
+            gapFillTitle: regionOffsetGapFillTitle(edgeOffsetGapFill),
+            inputModeTitle: edgeOffsetCommandState.inputModeTitle,
+            lockedDistanceTitle: edgeOffsetCommandState.usesLockedDistance ? "On" : "Off",
+            supportTitle: edgeOffsetSupportTitle(supportResolution),
+            offset: {
+                offsetSelectedEdges(
+                    targets,
+                    by: edgeOffsetDistanceMeters,
+                    gapFill: edgeOffsetGapFill,
+                    isSymmetric: edgeOffsetCommandState.usesLockedDistance
+                )
+            }
         )
-
-        workspaceValuePill(
-            "Distance",
-            formatted(edgeOffsetDistanceMeters),
-            accessibilityIdentifier: "WorkspaceEdgeOffset.distance"
-        )
-        workspaceValuePill(
-            "Gap",
-            regionOffsetGapFillTitle(edgeOffsetGapFill),
-            accessibilityIdentifier: "WorkspaceEdgeOffset.gapFill"
-        )
-        workspaceValuePill(
-            "Input",
-            edgeOffsetCommandState.inputModeTitle,
-            accessibilityIdentifier: "WorkspaceEdgeOffset.inputMode"
-        )
-        workspaceValuePill(
-            "Lock",
-            edgeOffsetCommandState.usesLockedDistance ? "On" : "Off",
-            accessibilityIdentifier: "WorkspaceEdgeOffset.lockedDistance"
-        )
-        workspaceValuePill(
-            "Support",
-            edgeOffsetSupportTitle(supportResolution),
-            accessibilityIdentifier: "WorkspaceEdgeOffset.support"
-        )
-
-        workspaceIconButton(
-            systemImage: "arrow.up.left.and.arrow.down.right",
-            help: "Offset Edge",
-            accessibilityIdentifier: "WorkspaceEdgeOffset.offset"
-        ) {
-            offsetSelectedEdges(
-                targets,
-                by: edgeOffsetDistanceMeters,
-                gapFill: edgeOffsetGapFill,
-                isSymmetric: edgeOffsetCommandState.usesLockedDistance
-            )
-        }
     }
 
     @ViewBuilder
     private func regionOffsetContextPanelContent(_ targets: [SelectionTarget]) -> some View {
-        workspaceStatusChip(
-            "Offset Region",
-            systemImage: "arrow.up.left.and.arrow.down.right",
-            tint: .accentColor
+        WorkspaceRegionOffsetContextPanel(
+            distanceTitle: formatted(regionOffsetDistanceMeters),
+            gapFillTitle: regionOffsetGapFillTitle(regionOffsetGapFill),
+            inputModeTitle: regionOffsetCommandState.inputModeTitle,
+            lockedDistanceTitle: regionOffsetCommandState.usesLockedDistance ? "On" : "Off",
+            modeTitle: regionOffsetCommandState.usesCombinedRegions ? "Combined" : "Individual",
+            offsetInward: {
+                offsetSelectedRegions(
+                    targets,
+                    by: -regionOffsetDistanceMeters,
+                    gapFill: regionOffsetGapFill,
+                    isSymmetric: regionOffsetCommandState.usesLockedDistance,
+                    combinesRegions: regionOffsetCommandState.usesCombinedRegions
+                )
+            },
+            offsetOutward: {
+                offsetSelectedRegions(
+                    targets,
+                    by: regionOffsetDistanceMeters,
+                    gapFill: regionOffsetGapFill,
+                    isSymmetric: regionOffsetCommandState.usesLockedDistance,
+                    combinesRegions: regionOffsetCommandState.usesCombinedRegions
+                )
+            }
         )
-
-        workspaceValuePill(
-            "Distance",
-            formatted(regionOffsetDistanceMeters),
-            accessibilityIdentifier: "WorkspaceRegionOffset.distance"
-        )
-        workspaceValuePill(
-            "Gap",
-            regionOffsetGapFillTitle(regionOffsetGapFill),
-            accessibilityIdentifier: "WorkspaceRegionOffset.gapFill"
-        )
-        workspaceValuePill(
-            "Input",
-            regionOffsetCommandState.inputModeTitle,
-            accessibilityIdentifier: "WorkspaceRegionOffset.inputMode"
-        )
-        workspaceValuePill(
-            "Lock",
-            regionOffsetCommandState.usesLockedDistance ? "On" : "Off",
-            accessibilityIdentifier: "WorkspaceRegionOffset.lockedDistance"
-        )
-        workspaceValuePill(
-            "Mode",
-            regionOffsetCommandState.usesCombinedRegions ? "Combined" : "Individual",
-            accessibilityIdentifier: "WorkspaceRegionOffset.regionMode"
-        )
-
-        workspaceIconButton(
-            systemImage: "minus.circle",
-            help: "Offset Inward",
-            accessibilityIdentifier: "WorkspaceRegionOffset.inward"
-        ) {
-            offsetSelectedRegions(
-                targets,
-                by: -regionOffsetDistanceMeters,
-                gapFill: regionOffsetGapFill,
-                isSymmetric: regionOffsetCommandState.usesLockedDistance,
-                combinesRegions: regionOffsetCommandState.usesCombinedRegions
-            )
-        }
-
-        workspaceIconButton(
-            systemImage: "plus.circle",
-            help: "Offset Outward",
-            accessibilityIdentifier: "WorkspaceRegionOffset.outward"
-        ) {
-            offsetSelectedRegions(
-                targets,
-                by: regionOffsetDistanceMeters,
-                gapFill: regionOffsetGapFill,
-                isSymmetric: regionOffsetCommandState.usesLockedDistance,
-                combinesRegions: regionOffsetCommandState.usesCombinedRegions
-            )
-        }
     }
 
     private func workspaceConstructionPlaneRow(

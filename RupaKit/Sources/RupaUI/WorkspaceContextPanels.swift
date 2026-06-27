@@ -152,3 +152,244 @@ struct WorkspaceSweepContextPanel: View {
         )
     }
 }
+
+@MainActor
+struct WorkspaceDimensionContextPanel<DimensionInputField: View>: View {
+    var targetTitle: String
+    var kindTitle: String
+    var sourceTitle: String
+    var itemTitle: String
+    var valueTitle: String
+    var isInputModeActive: Bool
+    var canMoveBetweenDimensions: Bool
+    var canCommit: Bool
+    var focusPrevious: () -> Void
+    var activateInputMode: () -> Void
+    var focusNext: () -> Void
+    var confirm: () -> Void
+    var cancel: () -> Void
+    @ViewBuilder var inputField: () -> DimensionInputField
+
+    var body: some View {
+        workspaceStatusChip(
+            "Dimension",
+            systemImage: "ruler",
+            tint: .accentColor
+        )
+        workspaceContextDivider
+        workspaceValuePill(
+            "Target",
+            targetTitle,
+            accessibilityIdentifier: "WorkspaceDimension.target"
+        )
+        workspaceValuePill(
+            "Kind",
+            kindTitle,
+            accessibilityIdentifier: "WorkspaceDimension.kind"
+        )
+        workspaceValuePill(
+            "Source",
+            sourceTitle,
+            accessibilityIdentifier: "WorkspaceDimension.source"
+        )
+        workspaceValuePill(
+            "Item",
+            itemTitle,
+            accessibilityIdentifier: "WorkspaceDimension.index"
+        )
+
+        if isInputModeActive {
+            inputField()
+        } else {
+            workspaceValuePill(
+                "Value",
+                valueTitle,
+                accessibilityIdentifier: "WorkspaceDimension.value"
+            )
+        }
+
+        workspaceIconButton(
+            systemImage: "chevron.left",
+            help: "Previous Dimension",
+            accessibilityIdentifier: "WorkspaceDimension.previous",
+            action: focusPrevious
+        )
+        .disabled(!canMoveBetweenDimensions)
+
+        workspaceIconButton(
+            systemImage: "keyboard",
+            help: "Enter Dimension Input",
+            accessibilityIdentifier: "WorkspaceDimension.input",
+            action: activateInputMode
+        )
+        .disabled(isInputModeActive)
+
+        workspaceIconButton(
+            systemImage: "chevron.right",
+            help: "Next Dimension",
+            accessibilityIdentifier: "WorkspaceDimension.next",
+            action: focusNext
+        )
+        .disabled(!canMoveBetweenDimensions)
+
+        workspaceIconButton(
+            systemImage: "checkmark",
+            help: "Confirm Dimension",
+            accessibilityIdentifier: "WorkspaceDimension.confirm",
+            action: confirm
+        )
+        .disabled(!canCommit)
+
+        workspaceIconButton(
+            systemImage: "xmark",
+            help: "Cancel Dimension",
+            accessibilityIdentifier: "WorkspaceDimension.cancel",
+            action: cancel
+        )
+    }
+}
+
+@MainActor
+struct WorkspaceSlotContextPanel: View {
+    var isActive: Bool
+    var widthTitle: String
+    var inputModeTitle: String
+    var create: () -> Void
+
+    var body: some View {
+        workspaceStatusChip(
+            "Slot",
+            systemImage: "capsule",
+            tint: isActive ? .accentColor : .secondary
+        )
+
+        workspaceValuePill(
+            "Width",
+            widthTitle,
+            accessibilityIdentifier: "WorkspaceSlot.width"
+        )
+        workspaceValuePill(
+            "Input",
+            inputModeTitle,
+            accessibilityIdentifier: "WorkspaceSlot.inputMode"
+        )
+
+        workspaceIconButton(
+            systemImage: "capsule",
+            help: "Create Slot Profile",
+            accessibilityIdentifier: "WorkspaceSlot.create",
+            action: create
+        )
+    }
+}
+
+@MainActor
+struct WorkspaceEdgeOffsetContextPanel: View {
+    var isSupported: Bool
+    var distanceTitle: String
+    var gapFillTitle: String
+    var inputModeTitle: String
+    var lockedDistanceTitle: String
+    var supportTitle: String
+    var offset: () -> Void
+
+    var body: some View {
+        workspaceStatusChip(
+            "Offset Edge",
+            systemImage: "arrow.up.left.and.arrow.down.right",
+            tint: isSupported ? .accentColor : .orange
+        )
+
+        workspaceValuePill(
+            "Distance",
+            distanceTitle,
+            accessibilityIdentifier: "WorkspaceEdgeOffset.distance"
+        )
+        workspaceValuePill(
+            "Gap",
+            gapFillTitle,
+            accessibilityIdentifier: "WorkspaceEdgeOffset.gapFill"
+        )
+        workspaceValuePill(
+            "Input",
+            inputModeTitle,
+            accessibilityIdentifier: "WorkspaceEdgeOffset.inputMode"
+        )
+        workspaceValuePill(
+            "Lock",
+            lockedDistanceTitle,
+            accessibilityIdentifier: "WorkspaceEdgeOffset.lockedDistance"
+        )
+        workspaceValuePill(
+            "Support",
+            supportTitle,
+            accessibilityIdentifier: "WorkspaceEdgeOffset.support"
+        )
+
+        workspaceIconButton(
+            systemImage: "arrow.up.left.and.arrow.down.right",
+            help: "Offset Edge",
+            accessibilityIdentifier: "WorkspaceEdgeOffset.offset",
+            action: offset
+        )
+    }
+}
+
+@MainActor
+struct WorkspaceRegionOffsetContextPanel: View {
+    var distanceTitle: String
+    var gapFillTitle: String
+    var inputModeTitle: String
+    var lockedDistanceTitle: String
+    var modeTitle: String
+    var offsetInward: () -> Void
+    var offsetOutward: () -> Void
+
+    var body: some View {
+        workspaceStatusChip(
+            "Offset Region",
+            systemImage: "arrow.up.left.and.arrow.down.right",
+            tint: .accentColor
+        )
+
+        workspaceValuePill(
+            "Distance",
+            distanceTitle,
+            accessibilityIdentifier: "WorkspaceRegionOffset.distance"
+        )
+        workspaceValuePill(
+            "Gap",
+            gapFillTitle,
+            accessibilityIdentifier: "WorkspaceRegionOffset.gapFill"
+        )
+        workspaceValuePill(
+            "Input",
+            inputModeTitle,
+            accessibilityIdentifier: "WorkspaceRegionOffset.inputMode"
+        )
+        workspaceValuePill(
+            "Lock",
+            lockedDistanceTitle,
+            accessibilityIdentifier: "WorkspaceRegionOffset.lockedDistance"
+        )
+        workspaceValuePill(
+            "Mode",
+            modeTitle,
+            accessibilityIdentifier: "WorkspaceRegionOffset.regionMode"
+        )
+
+        workspaceIconButton(
+            systemImage: "minus.circle",
+            help: "Offset Inward",
+            accessibilityIdentifier: "WorkspaceRegionOffset.inward",
+            action: offsetInward
+        )
+
+        workspaceIconButton(
+            systemImage: "plus.circle",
+            help: "Offset Outward",
+            accessibilityIdentifier: "WorkspaceRegionOffset.outward",
+            action: offsetOutward
+        )
+    }
+}
