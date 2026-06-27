@@ -65,8 +65,8 @@ flowchart LR
 
 | File | Current issue | Preferred next split |
 |---|---|---|
-| `RupaCore/DesignDocument.swift` | Command facade still contains Sketch Curve Rebuild and shared sketch endpoint/dimension utilities | Move rebuild fitting/deviation helpers and shared endpoint utilities into focused `DesignDocument+Sketch*` extensions |
-| `RupaCore/DesignDocument+SketchCurveJoinPlanning.swift` | Join/unjoin planning, reference migration, validation, and unjoin checks share one helper extension | Split line-pair join planning from composite curve-group join planning once rebuild is out of the main document facade |
+| `RupaCore/DesignDocument.swift` | Shared sketch endpoint, dimension, validation, and commit utilities remain in the main document type | Move shared endpoint/dimension utilities into focused internal services or `DesignDocument+Sketch*` utility extensions |
+| `RupaCore/DesignDocument+SketchCurveJoinPlanning.swift` | Join/unjoin planning, reference migration, validation, and unjoin checks share one helper extension | Split line-pair join planning from composite curve-group join planning |
 | `RupaRendering/Viewport.swift` | Drawing, hit testing, drag state, and interaction commit logic share one SwiftUI type | Extract draw layers and drag controllers without changing the public `Viewport` API |
 | `RupaUI/MainView.swift` | Workspace layout, command panels, keyboard handling, and inspectors share one view | Extract command panels, workspace rail, and keyboard router |
 
@@ -107,3 +107,4 @@ flowchart LR
 | `RupaCore/DesignDocument.swift` | Sketch curve split command split from shared split geometry primitives and reference migration helpers |
 | `RupaCore/DesignDocument.swift` | Sketch curve cut command split from source curve mutation and sampled curve intersection geometry helpers |
 | `RupaCore/DesignDocument.swift` | Sketch curve join and unjoin commands split from join ownership metadata and reference migration planning helpers |
+| `RupaCore/DesignDocument.swift` | Sketch curve rebuild command split from rebuild fitting, analytic deviation, shared rebuild types, and reference migration helpers |
