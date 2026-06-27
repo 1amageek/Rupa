@@ -1416,7 +1416,7 @@ public struct MainView: View {
         }
 
         if nodes.count == 1, let node = nodes.first {
-            let nodeTranslation = translation(for: node)
+            let nodeTranslation = WorkspaceTransformMatrix.translation(for: node)
             workspaceValuePill("X", formatted(nodeTranslation.x))
             workspaceValuePill("Y", formatted(nodeTranslation.y))
             workspaceValuePill("Z", formatted(nodeTranslation.z))
@@ -5515,24 +5515,6 @@ public struct MainView: View {
         WorkspaceInspectorTextSectionView(section: overviewState.referenceSection)
         WorkspaceInspectorTextSectionView(section: overviewState.hierarchySection)
 
-        inspectorSection("State") {
-            boolChoicePicker(
-                "Visible",
-                nodes: nodes,
-                keyPath: \.isVisible
-            ) { id, isVisible in
-                session.setSceneNodeVisibility(id, isVisible: isVisible)
-            }
-
-            boolChoicePicker(
-                "Locked",
-                nodes: nodes,
-                keyPath: \.isLocked
-            ) { id, isLocked in
-                session.setSceneNodeLock(id, isLocked: isLocked)
-            }
-        }
-
         surfaceAnalysisSection(nodes)
         surfaceContinuitySection(nodes)
 
@@ -5545,74 +5527,29 @@ public struct MainView: View {
 
         objectShapeSection(nodes)
 
-        inspectorSection("Position") {
-            transformLengthControl(
-                "X",
-                values: nodes.map { translation(for: $0).x },
-                sliderRange: transformPositionSliderRange
-            ) { meters in
-                setTransformComponent(.translationX, to: meters, for: nodes)
-            }
-            transformLengthControl(
-                "Y",
-                values: nodes.map { translation(for: $0).y },
-                sliderRange: transformPositionSliderRange
-            ) { meters in
-                setTransformComponent(.translationY, to: meters, for: nodes)
-            }
-            transformLengthControl(
-                "Z",
-                values: nodes.map { translation(for: $0).z },
-                sliderRange: transformPositionSliderRange
-            ) { meters in
-                setTransformComponent(.translationZ, to: meters, for: nodes)
-            }
-        }
-
-        inspectorSection("Transform Scale") {
-            numericControl(
-                "X",
-                values: nodes.map { scale(for: $0).x },
-                sliderRange: 0.01 ... 10.0
-            ) { value in
-                setTransformComponent(.scaleX, to: max(value, 0.0001), for: nodes)
-            }
-            numericControl(
-                "Y",
-                values: nodes.map { scale(for: $0).y },
-                sliderRange: 0.01 ... 10.0
-            ) { value in
-                setTransformComponent(.scaleY, to: max(value, 0.0001), for: nodes)
-            }
-            numericControl(
-                "Z",
-                values: nodes.map { scale(for: $0).z },
-                sliderRange: 0.01 ... 10.0
-            ) { value in
-                setTransformComponent(.scaleZ, to: max(value, 0.0001), for: nodes)
-            }
-        }
-
-        inspectorSection("Material") {
-            materialPicker(nodes)
-        }
-
-        inspectorSection("Transform") {
-            inspectorRow("Local", transformSummary(for: nodes))
-            inspectorRow("Custom", "\(nodes.filter { $0.localTransform.matrix != .identity }.count)")
-            if nodes.count == 1, let node = nodes.first {
-                matrixInspectorRows(node.localTransform.matrix.values)
-            }
-
-            inspectorActionRow {
-                Button("Reset Transform") {
-                    for node in nodes {
-                        session.setSceneNodeTransform(node.id, localTransform: .identity)
-                    }
+        WorkspaceObjectTransformInspectorView(
+            nodes: nodes,
+            displayUnit: session.document.displayUnit,
+            positionSliderRange: transformPositionSliderRange,
+            materialOptions: sortedMaterialOptions,
+            onSetVisibility: { id, isVisible in
+                session.setSceneNodeVisibility(id, isVisible: isVisible)
+            },
+            onSetLock: { id, isLocked in
+                session.setSceneNodeLock(id, isLocked: isLocked)
+            },
+            onSetTransformComponent: { component, value in
+                setTransformComponent(component, to: value, for: nodes)
+            },
+            onSetMaterial: { id, materialID in
+                session.setSceneNodeMaterial(id, materialID: materialID)
+            },
+            onResetTransform: {
+                for node in nodes {
+                    session.setSceneNodeTransform(node.id, localTransform: .identity)
                 }
-                .disabled(nodes.allSatisfy { $0.localTransform.matrix == .identity })
             }
-        }
+        )
     }
 
     private func patternArrayInspectorSection(_ state: PatternArrayInspectorState) -> some View {
@@ -5669,57 +5606,6 @@ public struct MainView: View {
         patternArrayCurvePathPreviewCandidate = nil
         patternArrayCurvePathPickState.cancel()
         session.reportToolStatus("Curve Array path pick canceled.")
-    }
-
-    private func boolChoicePicker(
-        _ title: String,
-        nodes: [SceneNode],
-        keyPath: KeyPath<SceneNode, Bool>,
-        apply: @escaping (SceneNodeID, Bool) -> Void
-    ) -> some View {
-        inspectorControlRow(title) {
-            Picker(
-                "",
-                selection: Binding(
-                    get: {
-                        boolChoice(nodes: nodes, keyPath: keyPath)
-                    },
-                    set: { choice in
-                        switch choice {
-                        case .mixed:
-                            return
-                        case .on:
-                            for node in nodes {
-                                apply(node.id, true)
-                            }
-                        case .off:
-                            for node in nodes {
-                                apply(node.id, false)
-                            }
-                        }
-                    }
-                )
-            ) {
-                ForEach(InspectorBoolChoice.allCases) { choice in
-                    Text(choice.rawValue)
-                        .tag(choice)
-                }
-            }
-            .labelsHidden()
-            .controlSize(.small)
-            .frame(width: inspectorControlWidth)
-        }
-    }
-
-    private func boolChoice(
-        nodes: [SceneNode],
-        keyPath: KeyPath<SceneNode, Bool>
-    ) -> InspectorBoolChoice {
-        guard let first = nodes.first?[keyPath: keyPath],
-              nodes.allSatisfy({ $0[keyPath: keyPath] == first }) else {
-            return .mixed
-        }
-        return first ? .on : .off
     }
 
     @ViewBuilder
@@ -7444,7 +7330,7 @@ public struct MainView: View {
         guard let item = scene.items.first(where: { $0.featureID == featureID }) else {
             return nil
         }
-        let translation = translation(for: node)
+        let translation = WorkspaceTransformMatrix.translation(for: node)
         let sourceCenter: InspectorVector3D
         let size: InspectorVector3D
         let cylinder: InspectorCylinderShape?
@@ -7512,7 +7398,7 @@ public struct MainView: View {
             guard let node = session.document.productMetadata.sceneNodes[shape.id] else {
                 continue
             }
-            var values = normalizedMatrixValues(node.localTransform.matrix.values)
+            var values = WorkspaceTransformMatrix.normalizedValues(node.localTransform.matrix.values)
             switch axis {
             case .x:
                 values[InspectorTransformComponent.translationX.matrixIndex] = meters - shape.sourceCenter.x
@@ -8609,7 +8495,7 @@ public struct MainView: View {
         }
         let sourceCenterRatio = shape.sourceCenter.y / shape.size.y
         let nextSourceCenterY = sourceCenterRatio * sizeYMeters
-        var values = normalizedMatrixValues(node.localTransform.matrix.values)
+        var values = WorkspaceTransformMatrix.normalizedValues(node.localTransform.matrix.values)
         values[InspectorTransformComponent.translationY.matrixIndex] = shape.center.y - nextSourceCenterY
         do {
             let matrix = try Matrix4x4(values: values)
@@ -8652,23 +8538,13 @@ public struct MainView: View {
         return 0.0 ... visibleSpan
     }
 
-    private func translation(for node: SceneNode) -> InspectorVector3D {
-        let values = normalizedMatrixValues(node.localTransform.matrix.values)
-        return InspectorVector3D(x: values[12], y: values[13], z: values[14])
-    }
-
-    private func scale(for node: SceneNode) -> InspectorVector3D {
-        let values = normalizedMatrixValues(node.localTransform.matrix.values)
-        return InspectorVector3D(x: values[0], y: values[5], z: values[10])
-    }
-
     private func setTransformComponent(
         _ component: InspectorTransformComponent,
         to value: Double,
         for nodes: [SceneNode]
     ) {
         for node in nodes {
-            var values = normalizedMatrixValues(node.localTransform.matrix.values)
+            var values = WorkspaceTransformMatrix.normalizedValues(node.localTransform.matrix.values)
             values[component.matrixIndex] = value
             do {
                 let matrix = try Matrix4x4(values: values)
@@ -8680,13 +8556,6 @@ public struct MainView: View {
                 session.reportToolStatus(error.localizedDescription, severity: .warning)
             }
         }
-    }
-
-    private func normalizedMatrixValues(_ values: [Double]) -> [Double] {
-        guard values.count == 16 else {
-            return Matrix4x4.identity.values
-        }
-        return values
     }
 
     private func extrudeFeatureID(for node: SceneNode) -> FeatureID? {
@@ -8714,72 +8583,14 @@ public struct MainView: View {
         }
     }
 
-    @ViewBuilder
-    private func materialPicker(_ nodes: [SceneNode]) -> some View {
-        let materialIDs = sortedMaterialIDs
-        if materialIDs.isEmpty {
-            inspectorRow("Material", "No Materials")
-        } else {
-            inspectorControlRow("Material") {
-                Picker(
-                    "",
-                    selection: Binding(
-                        get: {
-                            materialChoice(for: nodes)
-                        },
-                        set: { choice in
-                            switch choice {
-                            case .mixed:
-                                return
-                            case .none:
-                                for node in nodes {
-                                    session.setSceneNodeMaterial(node.id, materialID: nil)
-                                }
-                            case .material(let materialID):
-                                for node in nodes {
-                                    session.setSceneNodeMaterial(node.id, materialID: materialID)
-                                }
-                            }
-                        }
-                    )
-                ) {
-                    if materialChoice(for: nodes) == .mixed {
-                        Text("Mixed").tag(InspectorMaterialChoice.mixed)
-                    }
-                    Text("None").tag(InspectorMaterialChoice.none)
-                    ForEach(materialIDs, id: \.self) { materialID in
-                        if let material = session.document.productMetadata.materialLibrary.materials[materialID] {
-                            Text(material.name)
-                                .tag(InspectorMaterialChoice.material(materialID))
-                        }
-                    }
-                }
-                .labelsHidden()
-                .controlSize(.small)
-                .frame(minWidth: inspectorControlWidth)
-            }
-        }
-    }
-
-    private var sortedMaterialIDs: [MaterialID] {
+    private var sortedMaterialOptions: [WorkspaceObjectMaterialOption] {
         session.document.productMetadata.materialLibrary.materials
             .sorted { lhs, rhs in
                 lhs.value.name.localizedStandardCompare(rhs.value.name) == .orderedAscending
             }
-            .map(\.key)
-    }
-
-    private func materialChoice(for nodes: [SceneNode]) -> InspectorMaterialChoice {
-        guard let first = nodes.first?.materialID else {
-            if nodes.allSatisfy({ $0.materialID == nil }) {
-                return .none
+            .map { id, material in
+                WorkspaceObjectMaterialOption(id: id, name: material.name)
             }
-            return .mixed
-        }
-        guard nodes.allSatisfy({ $0.materialID == first }) else {
-            return .mixed
-        }
-        return .material(first)
     }
 
     private func objectShapeTitle(_ shape: InspectorObjectShape) -> String {
@@ -9323,40 +9134,6 @@ public struct MainView: View {
         }
         let bounded = min(length / 4.0, max(session.document.ruler.visibleSpanMeters / 20.0, 0.001))
         return max(bounded, defaultSketchEntityMoveStepMeters)
-    }
-
-    @ViewBuilder
-    private func matrixInspectorRows(_ values: [Double]) -> some View {
-        if values.count == 16 {
-            inspectorRow("M1", matrixRow(values, row: 0))
-            inspectorRow("M2", matrixRow(values, row: 1))
-            inspectorRow("M3", matrixRow(values, row: 2))
-            inspectorRow("M4", matrixRow(values, row: 3))
-        } else {
-            inspectorRow("Matrix", "Invalid")
-        }
-    }
-
-    private func matrixRow(_ values: [Double], row: Int) -> String {
-        let offset = row * 4
-        return values[offset ..< offset + 4]
-            .map { formattedMatrixValue($0) }
-            .joined(separator: "  ")
-    }
-
-    private func formattedMatrixValue(_ value: Double) -> String {
-        value.formatted(.number.precision(.fractionLength(0...3)))
-    }
-
-    private func transformSummary(for nodes: [SceneNode]) -> String {
-        let identityCount = nodes.filter { $0.localTransform.matrix == .identity }.count
-        if identityCount == nodes.count {
-            return "Identity"
-        }
-        if identityCount == 0 {
-            return nodes.count == 1 ? "Custom Matrix" : "Custom Matrices"
-        }
-        return "Mixed"
     }
 
     private func valueSummary(_ values: [String]) -> String {
