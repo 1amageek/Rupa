@@ -68,7 +68,6 @@ flowchart LR
 | `RupaCore/DesignDocument.swift` | Command facade also contains many command implementations and private helpers | Move commands into `DesignDocument+Sketch`, `DesignDocument+Solid`, `DesignDocument+Surface`, and shared internal command utilities |
 | `RupaRendering/Viewport.swift` | Drawing, hit testing, drag state, and interaction commit logic share one SwiftUI type | Extract draw layers and drag controllers without changing the public `Viewport` API |
 | `RupaUI/MainView.swift` | Workspace layout, command panels, keyboard handling, and inspectors share one view | Extract command panels, workspace rail, and keyboard router |
-| `RupaAgentTests/AgentIntegrationFixtures.swift` | Agent test fixtures and geometry builders remain grouped in one support file | Split fixture builders by sketch, solid, surface, pattern, topology, and transport workflows |
 
 ## Completed Organization Splits
 
@@ -76,3 +75,4 @@ flowchart LR
 |---|---|
 | `RupaAgentTests/AgentCommandControllerTests.swift` | Capability contract tests and protocol codec/fixture tests |
 | `RupaAgentTests/AgentCommandIntegrationTests.swift` | Agent workflow test files for display, projection, dimensions, construction planes, direct modeling, patterns, sketch commands, inspection, offsets, sweeps/revolves, topology, persistence, and transport |
+| `RupaAgentTests/AgentIntegrationFixtures.swift` | Agent support files for socket transport, sketch/profile fixtures, topology targets, selection dimensions, and pattern arrays |
