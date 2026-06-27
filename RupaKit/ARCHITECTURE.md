@@ -65,7 +65,6 @@ flowchart LR
 
 | File | Current issue | Preferred next split |
 |---|---|---|
-| `RupaCore/DesignDocument+SelectionDimension.swift` | Selection dimension creation, target resolution, generated-face application, and source-curve application remain in one document extension | Extract target resolution/application strategies and generated-topology dimension handlers into focused services |
 | `RupaCore/DesignDocument+SketchCurveCutGeometry.swift` | Cut Curve planning, intersection geometry, and mutation support share one large helper extension | Split source-curve mutation planning from sampled intersection geometry |
 | `RupaCore/DesignDocument+SolidDirectEditing.swift` | Face offset, edge treatment, and vertex movement helpers still share direct-modeling source rewrite logic | Split direct-edit target rewrite services by face, edge, and vertex workflows |
 | `RupaCore/DesignDocument+SketchProjection.swift` | Face, construction-plane, and generated-topology projection helpers share one extension | Split projection source resolvers from sketch entity construction helpers |
@@ -112,3 +111,4 @@ flowchart LR
 | `RupaCore/DesignDocument.swift` | Sketch curve rebuild command split from rebuild fitting, analytic deviation, shared rebuild types, and reference migration helpers |
 | `RupaCore/DesignDocument+SketchCurveJoinPlanning.swift` | Sketch curve join planning split into line-pair planning, curve-group planning, shared join types, and unjoin validation helpers |
 | `RupaCore/DesignDocument.swift` | Sketch selection types, reference utilities, dimension measurement, sketch geometry helpers, and sketch object synchronization split into focused document extensions |
+| `RupaCore/DesignDocument+SelectionDimension.swift` | Selection dimension commands split into application routing, target application, point context resolution, curve context resolution, geometry helpers, and shared selection-dimension types |
