@@ -768,7 +768,7 @@ public struct CADInteractionQualityAssessmentService: Sendable {
             ],
             openWork: [
                 "First-class NURBS and B-spline source entities with degree, order, knot vectors, weights, spans, stable CV/knot/span IDs, and trim-loop ownership.",
-                "Viewport surface-frame handles and surface editing commands that consume the Agent-readable UVN frame contract.",
+                "Viewport surface-frame handles, snap consumption, trim editing, offset, and sweep or loft section placement that consume the Agent-readable UVN frame contract.",
                 "Typed continuity contracts for G0/G1/G2 surface boundaries and G0/G1/G2/G3 curve matching.",
                 "Non-planar G2 multi-patch reconstruction.",
                 "Patch merge and rounded-corner policy output.",

@@ -135,6 +135,162 @@ import SwiftCAD
     #expect(!result.diagnostics.contains { $0.severity == .warning })
 }
 
+@Test func surfaceFrameServiceResolvesFrameFromFaceSelectionReference() async throws {
+    var document = DesignDocument.empty()
+    _ = try document.createPolySplineSurface(
+        name: "Frame Face Selection Surface",
+        sourceMesh: surfaceAnalysisPolySplinePatchNetworkMesh(centerZ: 0.0),
+        options: PolySplineOptions(mergePatches: false)
+    )
+    let surfaceSummary = try SurfaceSourceSummaryService().summarize(document: document)
+    let source = try #require(surfaceSummary.sources.first)
+    let patch = try #require(source.patches.first)
+    let faceSelectionReference = try #require(patch.faceSelectionReference)
+    let facePersistentName = try #require(patch.facePersistentName)
+
+    let result = try SurfaceFrameService().resolve(
+        document: document,
+        queries: [
+            SurfaceFrameQuery(
+                selectionReference: faceSelectionReference,
+                u: 0.25,
+                v: 0.75
+            ),
+        ]
+    )
+
+    let frame = try #require(result.frames.first)
+    #expect(frame.facePersistentNames.contains(facePersistentName))
+    #expect(abs(frame.u - 0.25) <= 1.0e-12)
+    #expect(abs(frame.v - 0.75) <= 1.0e-12)
+    #expect(abs(vectorLength(frame.uAxis) - 1.0) <= 1.0e-8)
+    #expect(abs(vectorLength(frame.vAxis) - 1.0) <= 1.0e-8)
+    #expect(abs(dot(cross(frame.uAxis, frame.vAxis), frame.normal) - 1.0) <= 1.0e-8)
+}
+
+@Test func surfaceFrameServiceResolvesFrameFromSurfaceParameterSelectionReference() async throws {
+    var document = DesignDocument.empty()
+    _ = try document.createPolySplineSurface(
+        name: "Frame Parameter Selection Surface",
+        sourceMesh: surfaceAnalysisPolySplinePatchNetworkMesh(centerZ: 0.0),
+        options: PolySplineOptions(mergePatches: false)
+    )
+    let surfaceSummary = try SurfaceSourceSummaryService().summarize(document: document)
+    let source = try #require(surfaceSummary.sources.first)
+    let patch = try #require(source.patches.first)
+    let facePersistentName = try #require(patch.facePersistentName)
+    let surfaceReference = try #require(patch.faceSelectionReference)
+    guard case .surface(.whole(let wholeSurfaceReference)) = surfaceReference else {
+        Issue.record("Expected a whole surface selection reference.")
+        return
+    }
+
+    let result = try SurfaceFrameService().resolve(
+        document: document,
+        queries: [
+            SurfaceFrameQuery(
+                selectionReference: .surface(.parameter(SurfaceParameterReference(
+                    surface: wholeSurfaceReference,
+                    u: 0.25,
+                    v: 0.75
+                )))
+            ),
+        ]
+    )
+
+    let frame = try #require(result.frames.first)
+    #expect(frame.facePersistentNames.contains(facePersistentName))
+    #expect(abs(frame.u - 0.25) <= 1.0e-12)
+    #expect(abs(frame.v - 0.75) <= 1.0e-12)
+    #expect(abs(vectorLength(frame.normal) - 1.0) <= 1.0e-8)
+}
+
+@Test func surfaceFrameServiceResolvesGrevilleFrameFromSurfaceControlPointReference() async throws {
+    var document = DesignDocument.empty()
+    _ = try document.createPolySplineSurface(
+        name: "Frame Surface CV Selection Surface",
+        sourceMesh: surfaceAnalysisPolySplinePatchNetworkMesh(centerZ: 0.0),
+        options: PolySplineOptions(mergePatches: false)
+    )
+    let surfaceSummary = try SurfaceSourceSummaryService().summarize(document: document)
+    let source = try #require(surfaceSummary.sources.first)
+    let patch = try #require(source.patches.first)
+    let facePersistentName = try #require(patch.facePersistentName)
+    let controlPoint = try #require(patch.controlPoints.first { $0.uIndex == 2 && $0.vIndex == 1 })
+
+    let result = try SurfaceFrameService().resolve(
+        document: document,
+        queries: [
+            SurfaceFrameQuery(selectionReference: controlPoint.selectionReference),
+        ]
+    )
+
+    let frame = try #require(result.frames.first)
+    #expect(frame.facePersistentNames.contains(facePersistentName))
+    #expect(abs(frame.u - (2.0 / 3.0)) <= 1.0e-12)
+    #expect(abs(frame.v - (1.0 / 3.0)) <= 1.0e-12)
+    #expect(abs(vectorLength(frame.uAxis) - 1.0) <= 1.0e-8)
+    #expect(abs(vectorLength(frame.vAxis) - 1.0) <= 1.0e-8)
+    #expect(abs(dot(cross(frame.uAxis, frame.vAxis), frame.normal) - 1.0) <= 1.0e-8)
+}
+
+@Test func surfaceFrameServiceRejectsAmbiguousSurfaceParameterInput() async throws {
+    var document = DesignDocument.empty()
+    _ = try document.createPolySplineSurface(
+        name: "Frame Ambiguous Parameter Surface",
+        sourceMesh: surfaceAnalysisPolySplinePatchNetworkMesh(centerZ: 0.0),
+        options: PolySplineOptions(mergePatches: false)
+    )
+    let surfaceSummary = try SurfaceSourceSummaryService().summarize(document: document)
+    let source = try #require(surfaceSummary.sources.first)
+    let patch = try #require(source.patches.first)
+    let surfaceReference = try #require(patch.faceSelectionReference)
+    guard case .surface(.whole(let wholeSurfaceReference)) = surfaceReference else {
+        Issue.record("Expected a whole surface selection reference.")
+        return
+    }
+
+    #expect(throws: EditorError.self) {
+        try SurfaceFrameService().resolve(
+            document: document,
+            queries: [
+                SurfaceFrameQuery(
+                    selectionReference: .surface(.parameter(SurfaceParameterReference(
+                        surface: wholeSurfaceReference,
+                        u: 0.25,
+                        v: 0.75
+                    ))),
+                    u: 0.5,
+                    v: 0.5
+                ),
+            ]
+        )
+    }
+}
+
+@Test func surfaceFrameServiceRejectsTrimSelectionReferences() async throws {
+    var document = DesignDocument.empty()
+    _ = try document.createPolySplineSurface(
+        name: "Frame Trim Rejection Surface",
+        sourceMesh: surfaceAnalysisPolySplinePatchNetworkMesh(centerZ: 0.0),
+        options: PolySplineOptions(mergePatches: false)
+    )
+    let surfaceSummary = try SurfaceSourceSummaryService().summarize(document: document)
+    let source = try #require(surfaceSummary.sources.first)
+    let patch = try #require(source.patches.first)
+    let trimLoop = try #require(patch.trimLoops.first)
+    let trimReference = try #require(trimLoop.selectionReferences.first)
+
+    #expect(throws: EditorError.self) {
+        try SurfaceFrameService().resolve(
+            document: document,
+            queries: [
+                SurfaceFrameQuery(selectionReference: trimReference),
+            ]
+        )
+    }
+}
+
 private func vectorLength(_ vector: SurfaceAnalysisResult.Vector) -> Double {
     hypot(hypot(vector.x, vector.y), vector.z)
 }

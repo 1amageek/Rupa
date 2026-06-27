@@ -19,6 +19,18 @@ public struct SurfaceFrameService: Sendable {
         var sourceFeatureIDsByFaceID: [FaceID: FeatureID]
     }
 
+    private struct ResolvedFrameTarget {
+        var faceID: FaceID
+        var explicitU: Double?
+        var explicitV: Double?
+        var controlPointIndex: ControlPointIndex?
+    }
+
+    private struct ControlPointIndex {
+        var uIndex: Int
+        var vIndex: Int
+    }
+
     public func resolve(
         document: DesignDocument,
         queries: [SurfaceFrameQuery],
@@ -87,8 +99,8 @@ public struct SurfaceFrameService: Sendable {
         sceneNodeIDsByFeatureID: [FeatureID: SceneNodeID]
     ) throws -> SurfaceFrameResult.Frame {
         try validate(query)
-        let faceID = try resolvedFaceID(for: query, persistentNames: persistentNames)
-        guard let face = evaluatedDocument.brep.faces[faceID],
+        let target = try resolvedTarget(for: query, persistentNames: persistentNames)
+        guard let face = evaluatedDocument.brep.faces[target.faceID],
               let storedSurface = evaluatedDocument.brep.geometry.surfaces[face.surfaceID],
               case let .bSpline(surface) = storedSurface else {
             throw EditorError(
@@ -98,7 +110,8 @@ public struct SurfaceFrameService: Sendable {
         }
         let uBounds = try parameterBounds(surface.uDomain)
         let vBounds = try parameterBounds(surface.vDomain)
-        let geometry = try surface.differentialGeometry(atU: query.u, v: query.v, tolerance: tolerance)
+        let parameter = try resolvedParameter(target, surface: surface)
+        let geometry = try surface.differentialGeometry(atU: parameter.u, v: parameter.v, tolerance: tolerance)
         let orientationScale = face.orientation == .forward ? 1.0 : -1.0
         let orientedNormal = face.orientation == .forward ? geometry.normal : -geometry.normal
         let uAxis = try geometry.tangentU.normalized(tolerance: tolerance.distance)
@@ -119,14 +132,14 @@ public struct SurfaceFrameService: Sendable {
             minimumPrincipalDirection = geometry.maximumPrincipalDirection
             maximumPrincipalDirection = geometry.minimumPrincipalDirection
         }
-        let sourceFeatureID = persistentNames.sourceFeatureIDsByFaceID[faceID]
+        let sourceFeatureID = persistentNames.sourceFeatureIDsByFaceID[target.faceID]
         return SurfaceFrameResult.Frame(
-            faceID: faceID.description,
-            facePersistentNames: persistentNames.faceNamesByID[faceID] ?? [],
+            faceID: target.faceID.description,
+            facePersistentNames: persistentNames.faceNamesByID[target.faceID] ?? [],
             sourceFeatureID: sourceFeatureID?.description,
             sceneNodeID: sourceFeatureID.flatMap { sceneNodeIDsByFeatureID[$0]?.description },
-            u: query.u,
-            v: query.v,
+            u: parameter.u,
+            v: parameter.v,
             uDomain: SurfaceAnalysisResult.ParameterRange(
                 lowerBound: uBounds.lowerBound,
                 upperBound: uBounds.upperBound
@@ -158,14 +171,38 @@ public struct SurfaceFrameService: Sendable {
         let hasPersistentName = query.facePersistentName.map {
             !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         } ?? false
-        guard hasFaceID != hasPersistentName else {
+        let hasSelectionReference = query.selectionReference != nil
+        guard [hasFaceID, hasPersistentName, hasSelectionReference].filter({ $0 }).count == 1 else {
             throw EditorError(
                 code: .referenceUnresolved,
-                message: "Surface frame queries require exactly one faceID or facePersistentName."
+                message: "Surface frame queries require exactly one faceID, facePersistentName, or selectionReference."
             )
         }
-        guard query.u.isFinite,
-              query.v.isFinite else {
+        if let selectionReference = query.selectionReference {
+            do {
+                try selectionReference.validate()
+            } catch {
+                throw EditorError(
+                    code: .commandInvalid,
+                    message: "Surface frame selectionReference is invalid: \(String(describing: error))."
+                )
+            }
+            try validateSelectionReferenceMode(selectionReference, query: query)
+        } else {
+            try validateExplicitUV(query)
+        }
+    }
+
+    private func validateExplicitUV(_ query: SurfaceFrameQuery) throws {
+        guard let u = query.u,
+              let v = query.v else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Surface frame faceID or facePersistentName queries require both u and v parameters."
+            )
+        }
+        guard u.isFinite,
+              v.isFinite else {
             throw EditorError(
                 code: .commandInvalid,
                 message: "Surface frame UV parameters must be finite."
@@ -173,10 +210,35 @@ public struct SurfaceFrameService: Sendable {
         }
     }
 
-    private func resolvedFaceID(
+    private func validateSelectionReferenceMode(
+        _ selectionReference: SelectionReference,
+        query: SurfaceFrameQuery
+    ) throws {
+        switch selectionReference {
+        case .topology:
+            try validateExplicitUV(query)
+        case .surface(.whole):
+            try validateExplicitUV(query)
+        case .surface(.parameter), .surface(.controlPoint):
+            guard query.u == nil,
+                  query.v == nil else {
+                throw EditorError(
+                    code: .commandInvalid,
+                    message: "Surface frame parameter and control-point selectionReference queries carry their own UV address and must not also provide u or v."
+                )
+            }
+        case .surface(.span), .surface(.knot), .surface(.trim), .edge, .curve, .sketchPoint:
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Surface frame selectionReference must target a generated face, surface parameter, or surface control point."
+            )
+        }
+    }
+
+    private func resolvedTarget(
         for query: SurfaceFrameQuery,
         persistentNames: PersistentTopologyNames
-    ) throws -> FaceID {
+    ) throws -> ResolvedFrameTarget {
         if let faceID = query.faceID {
             let trimmed = faceID.trimmingCharacters(in: .whitespacesAndNewlines)
             guard let uuid = UUID(uuidString: trimmed) else {
@@ -185,14 +247,91 @@ public struct SurfaceFrameService: Sendable {
                     message: "Surface frame faceID must be a valid generated face UUID."
                 )
             }
-            return FaceID(uuid)
+            return ResolvedFrameTarget(
+                faceID: FaceID(uuid),
+                explicitU: query.u,
+                explicitV: query.v
+            )
         }
-        guard let facePersistentName = query.facePersistentName else {
+        if let facePersistentName = query.facePersistentName {
+            return ResolvedFrameTarget(
+                faceID: try resolvedFaceID(
+                    forPersistentName: facePersistentName,
+                    persistentNames: persistentNames
+                ),
+                explicitU: query.u,
+                explicitV: query.v
+            )
+        }
+        guard let selectionReference = query.selectionReference else {
             throw EditorError(
                 code: .referenceUnresolved,
                 message: "Surface frame query is missing a face target."
             )
         }
+        return try resolvedTarget(
+            forSelectionReference: selectionReference,
+            query: query,
+            persistentNames: persistentNames
+        )
+    }
+
+    private func resolvedTarget(
+        forSelectionReference selectionReference: SelectionReference,
+        query: SurfaceFrameQuery,
+        persistentNames: PersistentTopologyNames
+    ) throws -> ResolvedFrameTarget {
+        switch selectionReference {
+        case .topology(let name):
+            return ResolvedFrameTarget(
+                faceID: try resolvedFaceID(
+                    forPersistentName: persistentNameString(name),
+                    persistentNames: persistentNames
+                ),
+                explicitU: query.u,
+                explicitV: query.v
+            )
+        case .surface(.whole(let reference)):
+            return ResolvedFrameTarget(
+                faceID: try resolvedFaceID(
+                    forPersistentName: persistentNameString(reference.faceName),
+                    persistentNames: persistentNames
+                ),
+                explicitU: query.u,
+                explicitV: query.v
+            )
+        case .surface(.parameter(let reference)):
+            return ResolvedFrameTarget(
+                faceID: try resolvedFaceID(
+                    forPersistentName: persistentNameString(reference.surface.faceName),
+                    persistentNames: persistentNames
+                ),
+                explicitU: reference.u,
+                explicitV: reference.v
+            )
+        case .surface(.controlPoint(let reference)):
+            return ResolvedFrameTarget(
+                faceID: try resolvedFaceID(
+                    forPersistentName: persistentNameString(reference.surface.faceName),
+                    persistentNames: persistentNames
+                ),
+                controlPointIndex: ControlPointIndex(
+                    uIndex: reference.uIndex,
+                    vIndex: reference.vIndex
+                )
+            )
+        case .surface(.span), .surface(.knot), .surface(.trim), .edge, .curve, .sketchPoint:
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Surface frame selectionReference must target a generated face, surface parameter, or surface control point."
+            )
+        }
+    }
+
+    private func resolvedFaceID(
+        forPersistentName facePersistentName: String,
+        persistentNames: PersistentTopologyNames
+    ) throws -> FaceID {
         let trimmed = facePersistentName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let faceID = persistentNames.faceIDsByName[trimmed] else {
             throw EditorError(
@@ -201,6 +340,77 @@ public struct SurfaceFrameService: Sendable {
             )
         }
         return faceID
+    }
+
+    private func resolvedParameter(
+        _ target: ResolvedFrameTarget,
+        surface: BSplineSurface3D
+    ) throws -> (u: Double, v: Double) {
+        if let controlPointIndex = target.controlPointIndex {
+            return (
+                u: try grevilleParameter(
+                    controlPointIndex.uIndex,
+                    degree: surface.uDegree,
+                    knots: surface.uKnots,
+                    controlPointCount: surface.uControlPointCount,
+                    direction: "U"
+                ),
+                v: try grevilleParameter(
+                    controlPointIndex.vIndex,
+                    degree: surface.vDegree,
+                    knots: surface.vKnots,
+                    controlPointCount: surface.vControlPointCount,
+                    direction: "V"
+                )
+            )
+        }
+        guard let u = target.explicitU,
+              let v = target.explicitV else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Surface frame query requires resolved finite UV parameters."
+            )
+        }
+        return (u, v)
+    }
+
+    private func grevilleParameter(
+        _ controlPointIndex: Int,
+        degree: Int,
+        knots: [Double],
+        controlPointCount: Int,
+        direction: String
+    ) throws -> Double {
+        guard (0 ..< controlPointCount).contains(controlPointIndex) else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "Surface frame \(direction) control point index is outside the generated B-spline control net."
+            )
+        }
+        guard degree > 0 else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Surface frame control-point queries require a positive B-spline degree."
+            )
+        }
+        guard controlPointIndex + degree < knots.count else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "Surface frame \(direction) control point index cannot resolve a Greville parameter from the knot vector."
+            )
+        }
+        var sum = 0.0
+        for knotIndex in (controlPointIndex + 1)...(controlPointIndex + degree) {
+            let knot = knots[knotIndex]
+            guard knot.isFinite else {
+                throw EditorError(
+                    code: .commandInvalid,
+                    message: "Surface frame \(direction) knot vector contains a non-finite value."
+                )
+            }
+            sum += knot
+        }
+        return sum / Double(degree)
     }
 
     private func parameterBounds(

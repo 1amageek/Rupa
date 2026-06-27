@@ -860,10 +860,11 @@ import SwiftCAD
     #expect(!surfaceFrames.mutatesDocument)
     #expect(surfaceFrames.access == .agentRequest)
     #expect(surfaceFrames.discovery.contains(.topologySummary))
+    #expect(surfaceFrames.discovery.contains(.surfaceSourceSummary))
     #expect(surfaceFrames.discovery.contains(.surfaceFrames))
-    #expect(surfaceFrames.targets == [.face])
+    #expect(surfaceFrames.targets == [.face, .surfaceControlPoint])
     #expect(surfaceFrames.summary.contains("UVN local frames"))
-    #expect(surfaceFrames.failureMode.contains("face persistent names"))
+    #expect(surfaceFrames.failureMode.contains("surface selection references"))
 
     #expect(surfaceContinuity.category == .read)
     #expect(!surfaceContinuity.mutatesDocument)
@@ -7385,6 +7386,20 @@ private func rawAgentProtocolJSON(_ source: String) -> Data {
         Issue.record("Agent must discover generated face topology before resolving UVN frames.")
         return
     }
+    let sourceResponse = server.handle(
+        .surfaceSourceSummary(
+            sessionID: sessionID,
+            expectedGeneration: generation
+        )
+    )
+    guard case .surfaceSourceSummary(let surfaceSources) = sourceResponse,
+          let source = surfaceSources.sources.first,
+          let patch = source.patches.first,
+          let faceSelectionReference = patch.faceSelectionReference,
+          let controlPoint = patch.controlPoints.first(where: { $0.uIndex == 2 && $0.vIndex == 1 }) else {
+        Issue.record("Agent must discover Surface source references before resolving selection-based UVN frames.")
+        return
+    }
 
     let response = server.handle(
         .surfaceFrames(
@@ -7395,6 +7410,14 @@ private func rawAgentProtocolJSON(_ source: String) -> Data {
                     u: 0.5,
                     v: 0.5
                 ),
+                SurfaceFrameQuery(
+                    selectionReference: faceSelectionReference,
+                    u: 0.25,
+                    v: 0.75
+                ),
+                SurfaceFrameQuery(
+                    selectionReference: controlPoint.selectionReference
+                ),
             ],
             expectedGeneration: generation
         )
@@ -7404,7 +7427,7 @@ private func rawAgentProtocolJSON(_ source: String) -> Data {
         Issue.record("Agent must return surface frame data.")
         return
     }
-    #expect(frames.frames.count == 1)
+    #expect(frames.frames.count == 3)
     let frame = try #require(frames.frames.first)
     #expect(frame.facePersistentNames.contains(faceEntry.persistentName))
     #expect(abs(surfaceVectorLength(frame.uAxis) - 1.0) <= 1.0e-8)
@@ -7414,6 +7437,14 @@ private func rawAgentProtocolJSON(_ source: String) -> Data {
     #expect(frame.handedness > 0.999_999)
     #expect(abs(frame.normalCurvatureU) <= 1.0e-8)
     #expect(abs(frame.normalCurvatureV) <= 1.0e-8)
+    let faceSelectionFrame = try #require(frames.frames.dropFirst().first)
+    #expect(faceSelectionFrame.facePersistentNames.contains(faceEntry.persistentName))
+    #expect(abs(faceSelectionFrame.u - 0.25) <= 1.0e-12)
+    #expect(abs(faceSelectionFrame.v - 0.75) <= 1.0e-12)
+    let controlPointFrame = try #require(frames.frames.dropFirst(2).first)
+    #expect(controlPointFrame.facePersistentNames.contains(faceEntry.persistentName))
+    #expect(abs(controlPointFrame.u - (2.0 / 3.0)) <= 1.0e-12)
+    #expect(abs(controlPointFrame.v - (1.0 / 3.0)) <= 1.0e-12)
     #expect(session.generation == generation)
     #expect(session.isDirty == dirty)
 }

@@ -1358,12 +1358,12 @@ public final class AgentCommandController: AgentClientProtocol {
         capability(
             "surfaceFrames",
             category: .read,
-            summary: "Resolve explicit generated B-spline face UV addresses into oriented UVN local frames, derivative tangents, principal directions, and curvature values without mutation.",
+            summary: "Resolve generated B-spline face UV addresses or surface selection references into oriented UVN local frames, derivative tangents, principal directions, and curvature values without mutation.",
             access: .agentRequest,
             mutatesDocument: false,
-            discovery: [.topologySummary, .surfaceFrames],
-            targets: [.face],
-            failureMode: "Rejects stale generations, unresolved face persistent names or face IDs, non-B-spline faces, unbounded domains, and UV parameters outside the face surface domain."
+            discovery: [.topologySummary, .surfaceSourceSummary, .surfaceFrames],
+            targets: [.face, .surfaceControlPoint],
+            failureMode: "Rejects stale generations, unresolved face persistent names, face IDs, or surface selection references, non-B-spline faces, unbounded domains, ambiguous UV input, and UV parameters outside the face surface domain."
         ),
         capability(
             "surfaceContinuitySummary",
