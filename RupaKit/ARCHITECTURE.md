@@ -66,7 +66,7 @@ flowchart LR
 | File | Current issue | Preferred next split |
 |---|---|---|
 | `RupaRendering/Viewport.swift` | Drawing, hit testing, and interaction commit logic still share one SwiftUI type | Extract draw layers and drag controllers now that interaction/edit support types are separate |
-| `RupaUI/MainView.swift` | Workspace layout, command panels, keyboard handling, and inspector sections still share one view | Extract command panels, inspector sections, workspace rail, and keyboard router after support DTOs are separate |
+| `RupaUI/MainView.swift` | Workspace layout, command panels, keyboard handling, and inspector sections still share one view | Extract command panels, inspector sections, and keyboard router after workspace chrome is separate |
 
 ## Completed Organization Splits
 
@@ -114,3 +114,4 @@ flowchart LR
 | `RupaCore/DesignDocument+SketchProjection.swift` | Sketch projection commands split into command entry points, source-curve projection, generated-edge projection, outline projection, and shared projection geometry helpers |
 | `RupaRendering/Viewport.swift` | Viewport interaction state, object edit state, sketch geometry support, and selection/theme support split from the main SwiftUI viewport surface |
 | `RupaUI/MainView.swift` | MainView support DTOs, inspector state value types, and shared workspace glass modifier split from the main SwiftUI workspace surface |
+| `RupaUI/MainView.swift` | Workspace chrome controls and tool palette split from the main SwiftUI workspace surface |
