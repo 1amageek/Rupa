@@ -65,7 +65,7 @@ flowchart LR
 
 | File | Current issue | Preferred next split |
 |---|---|---|
-| `RupaCore/DesignDocument.swift` | Command facade still contains offset curve/vertex editing, sketch curve editing, and remaining shared helper implementations | Move high-cohesion sketch command families into focused `DesignDocument+Sketch*` extensions and shared internal command utilities |
+| `RupaCore/DesignDocument.swift` | Command facade still contains sketch vertex offset, corner treatment, sketch curve editing, and remaining shared helper implementations | Move high-cohesion sketch command families into focused `DesignDocument+Sketch*` extensions and shared internal command utilities |
 | `RupaRendering/Viewport.swift` | Drawing, hit testing, drag state, and interaction commit logic share one SwiftUI type | Extract draw layers and drag controllers without changing the public `Viewport` API |
 | `RupaUI/MainView.swift` | Workspace layout, command panels, keyboard handling, and inspectors share one view | Extract command panels, workspace rail, and keyboard router |
 
@@ -91,3 +91,4 @@ flowchart LR
 | `RupaCore/DesignDocument.swift` | Sketch constraint add/remove commands with constraint propagation and sketch object source synchronization |
 | `RupaCore/DesignDocument.swift` | Bridge curve creation and parameter update commands with bridge continuity, trimming, and source ownership helpers |
 | `RupaCore/DesignDocument.swift` | Sketch region offset commands for individual and combined profile-region offsets plus Offset Curve region dispatch |
+| `RupaCore/DesignDocument.swift` | Offset Curve command dispatch for sketch curves, regions, generated face loops, generated edges, generated vertices, and shared planar offset helpers |
