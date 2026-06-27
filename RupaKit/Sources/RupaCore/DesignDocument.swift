@@ -153,7 +153,10 @@ public struct DesignDocument: Identifiable, Sendable {
                     message: "Component definition root scene nodes must exist."
                 )
             }
-            guard patternArraySourceID(containingOutputSceneNode: rootSceneNodeID) == nil else {
+            guard PatternArrayOwnershipResolver().sourceID(
+                containingOutputSceneNode: rootSceneNodeID,
+                in: productMetadata
+            ) == nil else {
                 throw EditorError(
                     code: .commandInvalid,
                     message: "Component definitions cannot use source-owned pattern array output scene nodes."
@@ -211,204 +214,6 @@ public struct DesignDocument: Identifiable, Sendable {
         return instance.id
     }
 
-    @discardableResult
-    public mutating func createPatternArray(
-        name: String,
-        definitionID: ComponentDefinitionID,
-        distribution: PatternArrayDistribution,
-        outputMode: PatternArrayOutputMode = .componentInstance,
-        objectRegistry: ObjectTypeRegistry = .builtIn
-    ) throws -> PatternArraySourceID {
-        let trimmedName = try normalizedMetadataName(
-            name,
-            owner: "Pattern array"
-        )
-        try distribution.validate()
-        guard productMetadata.patternArrays.values.allSatisfy({
-            $0.name.trimmingCharacters(in: .whitespacesAndNewlines) != trimmedName
-        }) else {
-            throw EditorError(
-                code: .commandInvalid,
-                message: "Pattern array source names must be unique."
-            )
-        }
-        _ = try requireRenderablePatternArrayDefinition(
-            definitionID,
-            metadata: productMetadata
-        )
-
-        switch outputMode {
-        case .componentInstance, .independentCopy:
-            break
-        }
-
-        var updatedCADDocument = cadDocument
-        var updatedMetadata = productMetadata
-        guard let rootSceneNodeID = updatedMetadata.rootSceneNodeIDs.first,
-              updatedMetadata.sceneNodes[rootSceneNodeID] != nil else {
-            throw EditorError(
-                code: .commandInvalid,
-                message: "Pattern arrays require a valid root scene node."
-            )
-        }
-
-        let groupNode = SceneNode(
-            name: trimmedName,
-            object: .group()
-        )
-        updatedMetadata.sceneNodes[groupNode.id] = groupNode
-        updatedMetadata.sceneNodes[rootSceneNodeID]?.childIDs.append(groupNode.id)
-
-        let source = PatternArraySource(
-            name: trimmedName,
-            definitionID: definitionID,
-            distribution: distribution,
-            outputMode: outputMode,
-            outputInstanceIDs: [],
-            rootSceneNodeID: groupNode.id
-        )
-        updatedMetadata.patternArrays[source.id] = source
-        try synchronizePatternArrayOutputs(
-            for: source.id,
-            metadata: &updatedMetadata,
-            cadDocument: &updatedCADDocument
-        )
-        try updatedMetadata.validate(against: updatedCADDocument, objectRegistry: objectRegistry)
-        cadDocument = updatedCADDocument
-        productMetadata = updatedMetadata
-        return source.id
-    }
-
-    public mutating func updatePatternArray(
-        id: PatternArraySourceID,
-        name: String? = nil,
-        definitionID: ComponentDefinitionID? = nil,
-        distribution: PatternArrayDistribution? = nil,
-        outputMode: PatternArrayOutputMode? = nil,
-        objectRegistry: ObjectTypeRegistry = .builtIn
-    ) throws {
-        var updatedCADDocument = cadDocument
-        var updatedMetadata = productMetadata
-        guard var source = updatedMetadata.patternArrays[id] else {
-            throw EditorError(
-                code: .referenceUnresolved,
-                message: "Pattern array update requires an existing pattern source."
-            )
-        }
-
-        if let name {
-            let trimmedName = try normalizedMetadataName(
-                name,
-                owner: "Pattern array"
-            )
-            guard updatedMetadata.patternArrays.values.allSatisfy({
-                $0.id == id || $0.name.trimmingCharacters(in: .whitespacesAndNewlines) != trimmedName
-            }) else {
-                throw EditorError(
-                    code: .commandInvalid,
-                    message: "Pattern array source names must be unique."
-                )
-            }
-            source.name = trimmedName
-            guard var rootNode = updatedMetadata.sceneNodes[source.rootSceneNodeID],
-                  rootNode.reference == nil,
-                  rootNode.object?.category == .group else {
-                throw EditorError(
-                    code: .referenceUnresolved,
-                    message: "Pattern array update requires an existing output group scene node."
-                )
-            }
-            rootNode.name = trimmedName
-            updatedMetadata.sceneNodes[source.rootSceneNodeID] = rootNode
-        }
-
-        let nextDefinitionID = definitionID ?? source.definitionID
-        let definition = try requireRenderablePatternArrayDefinition(
-            nextDefinitionID,
-            metadata: updatedMetadata
-        )
-        source.definitionID = definition.id
-
-        if let distribution {
-            try distribution.validate()
-            source.distribution = distribution
-        }
-
-        let nextOutputMode = outputMode ?? source.outputMode
-        switch nextOutputMode {
-        case .componentInstance, .independentCopy:
-            break
-        }
-        source.outputMode = nextOutputMode
-
-        let previousSource = updatedMetadata.patternArrays[id]
-        updatedMetadata.patternArrays[id] = source
-        try synchronizePatternArrayOutputs(
-            for: id,
-            previousSource: previousSource,
-            metadata: &updatedMetadata,
-            cadDocument: &updatedCADDocument
-        )
-        try updatedMetadata.validate(against: updatedCADDocument, objectRegistry: objectRegistry)
-        cadDocument = updatedCADDocument
-        productMetadata = updatedMetadata
-    }
-
-    @discardableResult
-    public mutating func explodePatternArray(
-        id: PatternArraySourceID,
-        objectRegistry: ObjectTypeRegistry = .builtIn
-    ) throws -> PatternArrayExplodeResult {
-        var updatedCADDocument = cadDocument
-        var updatedMetadata = productMetadata
-        guard let source = updatedMetadata.patternArrays[id] else {
-            throw EditorError(
-                code: .referenceUnresolved,
-                message: "Pattern array explode requires an existing pattern source."
-            )
-        }
-        guard updatedMetadata.sceneNodes[source.rootSceneNodeID] != nil else {
-            throw EditorError(
-                code: .referenceUnresolved,
-                message: "Pattern array explode requires an existing output group scene node."
-            )
-        }
-
-        let result = try materializedPatternArrayOutputsForExplode(
-            source: source,
-            metadata: &updatedMetadata,
-            cadDocument: &updatedCADDocument
-        )
-        updatedMetadata.patternArrays.removeValue(forKey: id)
-        try updatedMetadata.validate(against: updatedCADDocument, objectRegistry: objectRegistry)
-        cadDocument = updatedCADDocument
-        productMetadata = updatedMetadata
-        return result
-    }
-
-    public mutating func regeneratePatternArrays(
-        objectRegistry: ObjectTypeRegistry = .builtIn
-    ) throws {
-        guard productMetadata.patternArrays.isEmpty == false else {
-            return
-        }
-        var updatedCADDocument = cadDocument
-        var updatedMetadata = productMetadata
-        let sourceIDs = updatedMetadata.patternArrays.keys.sorted {
-            $0.description < $1.description
-        }
-        for sourceID in sourceIDs {
-            try synchronizePatternArrayOutputs(
-                for: sourceID,
-                metadata: &updatedMetadata,
-                cadDocument: &updatedCADDocument
-            )
-        }
-        try updatedMetadata.validate(against: updatedCADDocument, objectRegistry: objectRegistry)
-        cadDocument = updatedCADDocument
-        productMetadata = updatedMetadata
-    }
-
     public mutating func setSceneNodeVisibility(
         id: SceneNodeID,
         isVisible: Bool,
@@ -420,7 +225,10 @@ public struct DesignDocument: Identifiable, Sendable {
                 message: "Scene node visibility requires an existing scene node."
             )
         }
-        guard patternArraySourceID(containingGeneratedOutputSceneNode: id) == nil else {
+        guard PatternArrayOwnershipResolver().sourceID(
+            containingGeneratedOutputSceneNode: id,
+            in: productMetadata
+        ) == nil else {
             throw EditorError(
                 code: .commandInvalid,
                 message: "Pattern array output scene node visibility is controlled by the pattern source."
@@ -442,7 +250,10 @@ public struct DesignDocument: Identifiable, Sendable {
                 message: "Scene node lock requires an existing scene node."
             )
         }
-        guard patternArraySourceID(containingGeneratedOutputSceneNode: id) == nil else {
+        guard PatternArrayOwnershipResolver().sourceID(
+            containingGeneratedOutputSceneNode: id,
+            in: productMetadata
+        ) == nil else {
             throw EditorError(
                 code: .commandInvalid,
                 message: "Pattern array output scene node locks are controlled by the pattern source."
@@ -464,7 +275,10 @@ public struct DesignDocument: Identifiable, Sendable {
                 message: "Scene node transform requires an existing scene node."
             )
         }
-        guard patternArraySourceID(containingOutputSceneNode: id) == nil else {
+        guard PatternArrayOwnershipResolver().sourceID(
+            containingOutputSceneNode: id,
+            in: productMetadata
+        ) == nil else {
             throw EditorError(
                 code: .commandInvalid,
                 message: "Pattern array output scene node transforms are controlled by the pattern source."
@@ -487,7 +301,10 @@ public struct DesignDocument: Identifiable, Sendable {
                 message: "Scene node material requires an existing scene node."
             )
         }
-        guard patternArraySourceID(containingGeneratedOutputSceneNode: id) == nil else {
+        guard PatternArrayOwnershipResolver().sourceID(
+            containingGeneratedOutputSceneNode: id,
+            in: productMetadata
+        ) == nil else {
             throw EditorError(
                 code: .commandInvalid,
                 message: "Pattern array output scene node materials are controlled by the pattern source."
@@ -518,7 +335,10 @@ public struct DesignDocument: Identifiable, Sendable {
                 message: "Object property changes require an existing object scene node."
             )
         }
-        guard patternArraySourceID(containingGeneratedOutputSceneNode: id) == nil else {
+        guard PatternArrayOwnershipResolver().sourceID(
+            containingGeneratedOutputSceneNode: id,
+            in: productMetadata
+        ) == nil else {
             throw EditorError(
                 code: .commandInvalid,
                 message: "Pattern array output object properties are controlled by the pattern source."
@@ -576,7 +396,10 @@ public struct DesignDocument: Identifiable, Sendable {
                 message: "Component instance visibility requires an existing component instance."
             )
         }
-        guard patternArraySourceID(owningOutputInstance: id) == nil else {
+        guard PatternArrayOwnershipResolver().sourceID(
+            owningOutputInstance: id,
+            in: productMetadata
+        ) == nil else {
             throw EditorError(
                 code: .commandInvalid,
                 message: "Pattern array output instance visibility is controlled by the pattern source."
@@ -598,7 +421,10 @@ public struct DesignDocument: Identifiable, Sendable {
                 message: "Component instance lock requires an existing component instance."
             )
         }
-        guard patternArraySourceID(owningOutputInstance: id) == nil else {
+        guard PatternArrayOwnershipResolver().sourceID(
+            owningOutputInstance: id,
+            in: productMetadata
+        ) == nil else {
             throw EditorError(
                 code: .commandInvalid,
                 message: "Pattern array output instance locks are controlled by the pattern source."
@@ -620,7 +446,10 @@ public struct DesignDocument: Identifiable, Sendable {
                 message: "Component instance transform requires an existing component instance."
             )
         }
-        guard patternArraySourceID(owningOutputInstance: id) == nil else {
+        guard PatternArrayOwnershipResolver().sourceID(
+            owningOutputInstance: id,
+            in: productMetadata
+        ) == nil else {
             throw EditorError(
                 code: .commandInvalid,
                 message: "Pattern array output instance transforms are controlled by the pattern source."
@@ -19690,532 +19519,6 @@ public struct DesignDocument: Identifiable, Sendable {
             )
         }
         return trimmedName
-    }
-
-    private func nextAvailableMetadataName(
-        prefix: String,
-        existingNames: inout Set<String>
-    ) -> String {
-        if existingNames.insert(prefix).inserted {
-            return prefix
-        }
-
-        var index = 2
-        while !existingNames.insert("\(prefix) \(index)").inserted {
-            index += 1
-        }
-        return "\(prefix) \(index)"
-    }
-
-    private func requireRenderablePatternArrayDefinition(
-        _ definitionID: ComponentDefinitionID,
-        metadata: ProductMetadata
-    ) throws -> ComponentDefinition {
-        guard let definition = metadata.componentDefinitions[definitionID] else {
-            throw EditorError(
-                code: .referenceUnresolved,
-                message: "Pattern arrays must reference an existing component definition."
-            )
-        }
-        guard ComponentDefinitionSceneResolver().containsRenderableSceneNode(
-            in: definition,
-            metadata: metadata
-        ) else {
-            throw EditorError(
-                code: .commandInvalid,
-                message: "Pattern arrays require a component definition with at least one renderable scene node."
-            )
-        }
-        return definition
-    }
-
-    private func synchronizePatternArrayOutputs(
-        for sourceID: PatternArraySourceID,
-        previousSource: PatternArraySource? = nil,
-        metadata: inout ProductMetadata,
-        cadDocument: inout CADDocument
-    ) throws {
-        guard var source = metadata.patternArrays[sourceID] else {
-            throw EditorError(
-                code: .referenceUnresolved,
-                message: "Pattern array regeneration requires an existing pattern source."
-            )
-        }
-        guard let definition = metadata.componentDefinitions[source.definitionID] else {
-            throw EditorError(
-                code: .referenceUnresolved,
-                message: "Pattern array regeneration requires an existing component definition."
-            )
-        }
-        guard var rootNode = metadata.sceneNodes[source.rootSceneNodeID],
-              rootNode.reference == nil,
-              rootNode.object?.category == .group else {
-            throw EditorError(
-                code: .referenceUnresolved,
-                message: "Pattern array regeneration requires an existing output group scene node."
-            )
-        }
-
-        let transforms = try PatternArrayInstancePlanner().transforms(
-            for: source.distribution,
-            parameters: cadDocument.parameters,
-            cadDocument: cadDocument
-        )
-        guard transforms.isEmpty == false else {
-            throw EditorError(
-                code: .commandInvalid,
-                message: "Pattern arrays must create at least one output instance."
-            )
-        }
-
-        switch source.outputMode {
-        case .componentInstance:
-            try requireNoExternalFeatureDependents(
-                of: Set(source.outputFeatureIDs),
-                cadDocument: cadDocument,
-                owner: "Component-instance pattern array conversion"
-            )
-            PatternArrayIndependentCopyBuilder().removeOutputs(
-                source: source,
-                metadata: &metadata,
-                cadDocument: &cadDocument
-            )
-            source.outputSceneNodeIDs = []
-            source.outputFeatureIDs = []
-            source.definitionIdentity = nil
-            try synchronizePatternArrayComponentInstanceOutputs(
-                source: &source,
-                rootNode: &rootNode,
-                transforms: transforms,
-                metadata: &metadata
-            )
-        case .independentCopy:
-            removePatternArrayComponentInstanceOutputs(
-                source: source,
-                rootNode: rootNode,
-                metadata: &metadata
-            )
-            let definitionIdentity = try PatternArrayDefinitionIdentityService().identity(
-                for: definition,
-                metadata: metadata,
-                cadDocument: cadDocument
-            )
-            let reuseCandidate = previousSource ?? source
-            let canReuseIndependentCopies = reuseCandidate.outputMode == .independentCopy &&
-                reuseCandidate.definitionID == source.definitionID &&
-                reuseCandidate.definitionIdentity == definitionIdentity
-            if canReuseIndependentCopies {
-                try synchronizePatternArrayIndependentCopyOutputs(
-                    source: &source,
-                    rootNode: &rootNode,
-                    definition: definition,
-                    transforms: transforms,
-                    metadata: &metadata,
-                    cadDocument: &cadDocument
-                )
-            } else {
-                try requireNoExternalFeatureDependents(
-                    of: Set(source.outputFeatureIDs),
-                    cadDocument: cadDocument,
-                    owner: "Independent-copy pattern array rebuild"
-                )
-                PatternArrayIndependentCopyBuilder().removeOutputs(
-                    source: source,
-                    metadata: &metadata,
-                    cadDocument: &cadDocument
-                )
-                let result = try PatternArrayIndependentCopyBuilder().createOutputs(
-                    name: source.name,
-                    definition: definition,
-                    transforms: transforms,
-                    metadata: &metadata,
-                    cadDocument: &cadDocument
-                )
-                source.outputSceneNodeIDs = result.outputSceneNodeIDs
-                source.outputFeatureIDs = result.outputFeatureIDs
-                rootNode.childIDs = result.outputSceneNodeIDs
-                metadata.sceneNodes[source.rootSceneNodeID] = rootNode
-            }
-            source.outputInstanceIDs = []
-            source.definitionIdentity = definitionIdentity
-        }
-
-        metadata.patternArrays[sourceID] = source
-    }
-
-    private func requireNoExternalFeatureDependents(
-        of removedFeatureIDs: Set<FeatureID>,
-        cadDocument: CADDocument,
-        owner: String
-    ) throws {
-        guard !removedFeatureIDs.isEmpty else {
-            return
-        }
-        let dependentFeatureIDs = cadDocument.designGraph.order.filter { featureID in
-            guard !removedFeatureIDs.contains(featureID),
-                  let feature = cadDocument.designGraph.nodes[featureID] else {
-                return false
-            }
-            return feature.inputs.contains { removedFeatureIDs.contains($0.featureID) }
-        }
-        guard dependentFeatureIDs.isEmpty else {
-            let dependentList = dependentFeatureIDs
-                .prefix(3)
-                .map(\.description)
-                .joined(separator: ", ")
-            throw EditorError(
-                code: .commandInvalid,
-                message: "\(owner) cannot remove independent-copy output features while downstream features depend on them. Delete or detach the dependent features first: \(dependentList)."
-            )
-        }
-    }
-
-    private func synchronizePatternArrayIndependentCopyOutputs(
-        source: inout PatternArraySource,
-        rootNode: inout SceneNode,
-        definition: ComponentDefinition,
-        transforms: [Transform3D],
-        metadata: inout ProductMetadata,
-        cadDocument: inout CADDocument
-    ) throws {
-        let builder = PatternArrayIndependentCopyBuilder()
-        let reusedCount = min(source.outputSceneNodeIDs.count, transforms.count)
-        let reusableOutputSceneNodeIDs = Array(source.outputSceneNodeIDs.prefix(reusedCount))
-        let staleOutputSceneNodeIDs = Array(source.outputSceneNodeIDs.dropFirst(reusedCount))
-        let ownedFeatureIDs = Set(source.outputFeatureIDs)
-        if transforms.count < source.outputSceneNodeIDs.count {
-            try requireNoExternalFeatureDependents(
-                of: ownedFeatureIDs,
-                cadDocument: cadDocument,
-                owner: "Independent-copy pattern array output removal"
-            )
-        }
-
-        var reusedFeatureIDs: Set<FeatureID> = []
-        reusedFeatureIDs.reserveCapacity(ownedFeatureIDs.count)
-        for (index, outputSceneNodeID) in reusableOutputSceneNodeIDs.enumerated() {
-            guard var outputNode = metadata.sceneNodes[outputSceneNodeID],
-                  outputNode.reference == nil,
-                  outputNode.object?.category == .group else {
-                throw EditorError(
-                    code: .referenceUnresolved,
-                    message: "Independent-copy pattern array reuse requires existing group output scene nodes."
-                )
-            }
-            outputNode.name = "\(source.name) \(index + 1)"
-            outputNode.localTransform = transforms[index]
-            metadata.sceneNodes[outputSceneNodeID] = outputNode
-            let outputFeatureIDs = builder.outputFeatureClosure(
-                rootedAt: outputSceneNodeID,
-                metadata: metadata,
-                cadDocument: cadDocument
-            )
-            guard !outputFeatureIDs.isEmpty,
-                  outputFeatureIDs.isSubset(of: ownedFeatureIDs) else {
-                throw EditorError(
-                    code: .referenceUnresolved,
-                    message: "Independent-copy pattern array reuse requires owned output feature closures."
-                )
-            }
-            reusedFeatureIDs.formUnion(outputFeatureIDs)
-        }
-
-        var staleFeatureIDs: Set<FeatureID> = []
-        for staleOutputSceneNodeID in staleOutputSceneNodeIDs {
-            staleFeatureIDs.formUnion(
-                builder.outputFeatureClosure(
-                    rootedAt: staleOutputSceneNodeID,
-                    metadata: metadata,
-                    cadDocument: cadDocument
-                )
-            )
-        }
-        staleFeatureIDs.formIntersection(ownedFeatureIDs.subtracting(reusedFeatureIDs))
-        try requireNoExternalFeatureDependents(
-            of: staleFeatureIDs,
-            cadDocument: cadDocument,
-            owner: "Independent-copy pattern array tail removal"
-        )
-        builder.removeOutputs(
-            rootedAt: staleOutputSceneNodeIDs,
-            featureIDs: staleFeatureIDs,
-            metadata: &metadata,
-            cadDocument: &cadDocument
-        )
-
-        let appendedTransforms = Array(transforms.dropFirst(reusedCount))
-        let appendedResult: PatternArrayIndependentCopyBuildResult
-        if appendedTransforms.isEmpty {
-            appendedResult = PatternArrayIndependentCopyBuildResult(
-                outputSceneNodeIDs: [],
-                outputFeatureIDs: []
-            )
-        } else {
-            appendedResult = try builder.createOutputs(
-                name: source.name,
-                definition: definition,
-                transforms: appendedTransforms,
-                startingOutputIndex: reusedCount,
-                metadata: &metadata,
-                cadDocument: &cadDocument
-            )
-        }
-
-        source.outputSceneNodeIDs = reusableOutputSceneNodeIDs + appendedResult.outputSceneNodeIDs
-        let nextFeatureIDs = reusedFeatureIDs.union(appendedResult.outputFeatureIDs)
-        source.outputFeatureIDs = builder.orderedFeatureIDs(
-            nextFeatureIDs,
-            cadDocument: cadDocument
-        )
-        rootNode.childIDs = source.outputSceneNodeIDs
-        metadata.sceneNodes[source.rootSceneNodeID] = rootNode
-    }
-
-    private func synchronizePatternArrayComponentInstanceOutputs(
-        source: inout PatternArraySource,
-        rootNode: inout SceneNode,
-        transforms: [Transform3D],
-        metadata: inout ProductMetadata
-    ) throws {
-        let previousOutputIDs = source.outputInstanceIDs
-        let reusableOutputIDs = Array(previousOutputIDs.prefix(transforms.count))
-        let reusableOutputIDSet = Set(reusableOutputIDs)
-        var usedInstanceNames = Set(
-            metadata.componentInstances.values.compactMap { instance in
-                previousOutputIDs.contains(instance.id)
-                    ? nil
-                    : instance.name.trimmingCharacters(in: .whitespacesAndNewlines)
-            }
-        )
-        let existingChildIDsByInstanceID = patternArrayChildSceneNodeIDsByInstanceID(
-            rootNode: rootNode,
-            metadata: metadata
-        )
-
-        var nextOutputIDs: [ComponentInstanceID] = []
-        var nextChildIDs: [SceneNodeID] = []
-        nextOutputIDs.reserveCapacity(transforms.count)
-        nextChildIDs.reserveCapacity(transforms.count)
-        for (index, transform) in transforms.enumerated() {
-            let instanceID = index < reusableOutputIDs.count
-                ? reusableOutputIDs[index]
-                : ComponentInstanceID()
-            let instanceName: String
-            if let existingInstance = metadata.componentInstances[instanceID] {
-                instanceName = existingInstance.name
-                usedInstanceNames.insert(existingInstance.name.trimmingCharacters(in: .whitespacesAndNewlines))
-            } else {
-                instanceName = nextAvailableMetadataName(
-                    prefix: "\(source.name) \(index + 1)",
-                    existingNames: &usedInstanceNames
-                )
-            }
-
-            var instance = metadata.componentInstances[instanceID] ?? ComponentInstance(
-                id: instanceID,
-                definitionID: source.definitionID,
-                name: instanceName
-            )
-            instance.definitionID = source.definitionID
-            instance.name = instanceName
-            instance.localTransform = transform
-            metadata.componentInstances[instanceID] = instance
-            nextOutputIDs.append(instanceID)
-
-            let sceneNodeID = existingChildIDsByInstanceID[instanceID] ?? SceneNodeID()
-            var sceneNode = metadata.sceneNodes[sceneNodeID] ?? SceneNode(id: sceneNodeID, name: instanceName)
-            sceneNode.name = instanceName
-            sceneNode.reference = .componentInstance(instanceID)
-            sceneNode.object = .componentInstance(instanceID)
-            sceneNode.localTransform = .identity
-            metadata.sceneNodes[sceneNodeID] = sceneNode
-            nextChildIDs.append(sceneNodeID)
-        }
-
-        let nextOutputIDSet = Set(nextOutputIDs)
-        for removedInstanceID in Set(previousOutputIDs).subtracting(nextOutputIDSet) {
-            metadata.componentInstances.removeValue(forKey: removedInstanceID)
-            if let removedSceneNodeID = existingChildIDsByInstanceID[removedInstanceID] {
-                metadata.sceneNodes.removeValue(forKey: removedSceneNodeID)
-            }
-        }
-        for removedChildID in Set(rootNode.childIDs).subtracting(Set(nextChildIDs)) {
-            if let componentInstanceID = metadata.sceneNodes[removedChildID]?.reference?.componentInstanceID,
-               !reusableOutputIDSet.contains(componentInstanceID) {
-                metadata.componentInstances.removeValue(forKey: componentInstanceID)
-            }
-            metadata.sceneNodes.removeValue(forKey: removedChildID)
-        }
-
-        source.outputInstanceIDs = nextOutputIDs
-        rootNode.childIDs = nextChildIDs
-        metadata.sceneNodes[source.rootSceneNodeID] = rootNode
-    }
-
-    private func removePatternArrayComponentInstanceOutputs(
-        source: PatternArraySource,
-        rootNode: SceneNode,
-        metadata: inout ProductMetadata
-    ) {
-        let ownedOutputInstanceIDs = Set(source.outputInstanceIDs)
-        for instanceID in source.outputInstanceIDs {
-            metadata.componentInstances.removeValue(forKey: instanceID)
-        }
-        for childID in rootNode.childIDs {
-            guard let componentInstanceID = metadata.sceneNodes[childID]?.reference?.componentInstanceID,
-                  ownedOutputInstanceIDs.contains(componentInstanceID) else {
-                continue
-            }
-            metadata.componentInstances.removeValue(forKey: componentInstanceID)
-            metadata.sceneNodes.removeValue(forKey: childID)
-        }
-    }
-
-    private func materializedPatternArrayOutputsForExplode(
-        source: PatternArraySource,
-        metadata: inout ProductMetadata,
-        cadDocument: inout CADDocument
-    ) throws -> PatternArrayExplodeResult {
-        guard var rootNode = metadata.sceneNodes[source.rootSceneNodeID] else {
-            throw EditorError(
-                code: .referenceUnresolved,
-                message: "Pattern array explode requires an existing output group scene node."
-            )
-        }
-        switch source.outputMode {
-        case .componentInstance:
-            let transforms = try source.outputInstanceIDs.map { instanceID -> Transform3D in
-                guard let instance = metadata.componentInstances[instanceID] else {
-                    throw EditorError(
-                        code: .referenceUnresolved,
-                        message: "Pattern array explode requires existing output component instances."
-                    )
-                }
-                return instance.localTransform
-            }
-            guard let definition = metadata.componentDefinitions[source.definitionID] else {
-                throw EditorError(
-                    code: .referenceUnresolved,
-                    message: "Pattern array explode requires an existing component definition."
-                )
-            }
-            removePatternArrayComponentInstanceOutputs(
-                source: source,
-                rootNode: rootNode,
-                metadata: &metadata
-            )
-            let result = try PatternArrayIndependentCopyBuilder().createOutputs(
-                name: source.name,
-                definition: definition,
-                transforms: transforms,
-                metadata: &metadata,
-                cadDocument: &cadDocument
-            )
-            rootNode.childIDs = result.outputSceneNodeIDs
-            metadata.sceneNodes[source.rootSceneNodeID] = rootNode
-            return PatternArrayExplodeResult(
-                componentInstanceIDs: source.outputInstanceIDs,
-                sceneNodeIDs: result.outputSceneNodeIDs,
-                featureIDs: result.outputFeatureIDs
-            )
-        case .independentCopy:
-            return PatternArrayExplodeResult(
-                sceneNodeIDs: source.outputSceneNodeIDs,
-                featureIDs: source.outputFeatureIDs
-            )
-        }
-    }
-
-    private func patternArrayChildSceneNodeIDsByInstanceID(
-        rootNode: SceneNode,
-        metadata: ProductMetadata
-    ) -> [ComponentInstanceID: SceneNodeID] {
-        var sceneNodeIDsByInstanceID: [ComponentInstanceID: SceneNodeID] = [:]
-        for childID in rootNode.childIDs {
-            guard let componentInstanceID = metadata.sceneNodes[childID]?.reference?.componentInstanceID else {
-                continue
-            }
-            sceneNodeIDsByInstanceID[componentInstanceID] = childID
-        }
-        return sceneNodeIDsByInstanceID
-    }
-
-    private func patternArraySourceID(
-        owningOutputInstance componentInstanceID: ComponentInstanceID
-    ) -> PatternArraySourceID? {
-        productMetadata.patternArrays.first { _, source in
-            source.outputInstanceIDs.contains(componentInstanceID)
-        }?.key
-    }
-
-    private func patternArraySourceID(
-        containingGeneratedOutputSceneNode sceneNodeID: SceneNodeID
-    ) -> PatternArraySourceID? {
-        productMetadata.patternArrays.first { _, source in
-            guard let rootNode = productMetadata.sceneNodes[source.rootSceneNodeID] else {
-                return false
-            }
-            return rootNode.childIDs.contains { outputSceneNodeID in
-                sceneSubtree(
-                    outputSceneNodeID,
-                    contains: sceneNodeID
-                )
-            }
-        }?.key
-    }
-
-    private func patternArraySourceID(
-        containingOutputSceneNode sceneNodeID: SceneNodeID
-    ) -> PatternArraySourceID? {
-        productMetadata.patternArrays.first { _, source in
-            guard let rootNode = productMetadata.sceneNodes[source.rootSceneNodeID] else {
-                return false
-            }
-            if source.rootSceneNodeID == sceneNodeID {
-                return true
-            }
-            return rootNode.childIDs.contains { outputSceneNodeID in
-                sceneSubtree(
-                    outputSceneNodeID,
-                    contains: sceneNodeID
-                )
-            }
-        }?.key
-    }
-
-    private func sceneSubtree(
-        _ rootSceneNodeID: SceneNodeID,
-        contains targetSceneNodeID: SceneNodeID
-    ) -> Bool {
-        var visitedSceneNodeIDs: Set<SceneNodeID> = []
-        return sceneSubtree(
-            rootSceneNodeID,
-            contains: targetSceneNodeID,
-            visitedSceneNodeIDs: &visitedSceneNodeIDs
-        )
-    }
-
-    private func sceneSubtree(
-        _ rootSceneNodeID: SceneNodeID,
-        contains targetSceneNodeID: SceneNodeID,
-        visitedSceneNodeIDs: inout Set<SceneNodeID>
-    ) -> Bool {
-        guard visitedSceneNodeIDs.insert(rootSceneNodeID).inserted else {
-            return false
-        }
-        if rootSceneNodeID == targetSceneNodeID {
-            return true
-        }
-        guard let sceneNode = productMetadata.sceneNodes[rootSceneNodeID] else {
-            return false
-        }
-        return sceneNode.childIDs.contains { childID in
-            sceneSubtree(
-                childID,
-                contains: targetSceneNodeID,
-                visitedSceneNodeIDs: &visitedSceneNodeIDs
-            )
-        }
     }
 
     private struct EditableBodyTargetResolution {

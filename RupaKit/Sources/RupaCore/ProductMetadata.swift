@@ -1134,63 +1134,15 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
                         "Component definition root scene node references a missing node."
                     )
                 }
-                guard patternArraySourceID(containingOutputSceneNode: rootSceneNodeID) == nil else {
+                guard PatternArrayOwnershipResolver().sourceID(
+                    containingOutputSceneNode: rootSceneNodeID,
+                    in: self
+                ) == nil else {
                     throw DocumentValidationError.invalidProductMetadata(
                         "Component definition root scene nodes must not reference source-owned pattern array outputs."
                     )
                 }
             }
-        }
-    }
-
-    private func patternArraySourceID(
-        containingOutputSceneNode sceneNodeID: SceneNodeID
-    ) -> PatternArraySourceID? {
-        patternArrays.first { _, source in
-            guard let rootNode = sceneNodes[source.rootSceneNodeID] else {
-                return false
-            }
-            if source.rootSceneNodeID == sceneNodeID {
-                return true
-            }
-            return rootNode.childIDs.contains { outputSceneNodeID in
-                sceneSubtree(outputSceneNodeID, contains: sceneNodeID)
-            }
-        }?.key
-    }
-
-    private func sceneSubtree(
-        _ rootSceneNodeID: SceneNodeID,
-        contains targetSceneNodeID: SceneNodeID
-    ) -> Bool {
-        var visitedSceneNodeIDs: Set<SceneNodeID> = []
-        return sceneSubtree(
-            rootSceneNodeID,
-            contains: targetSceneNodeID,
-            visitedSceneNodeIDs: &visitedSceneNodeIDs
-        )
-    }
-
-    private func sceneSubtree(
-        _ rootSceneNodeID: SceneNodeID,
-        contains targetSceneNodeID: SceneNodeID,
-        visitedSceneNodeIDs: inout Set<SceneNodeID>
-    ) -> Bool {
-        guard visitedSceneNodeIDs.insert(rootSceneNodeID).inserted else {
-            return false
-        }
-        if rootSceneNodeID == targetSceneNodeID {
-            return true
-        }
-        guard let sceneNode = sceneNodes[rootSceneNodeID] else {
-            return false
-        }
-        return sceneNode.childIDs.contains { childID in
-            sceneSubtree(
-                childID,
-                contains: targetSceneNodeID,
-                visitedSceneNodeIDs: &visitedSceneNodeIDs
-            )
         }
     }
 

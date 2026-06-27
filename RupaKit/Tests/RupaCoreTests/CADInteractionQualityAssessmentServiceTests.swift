@@ -116,6 +116,15 @@ import RupaCore
         evidence.sourceFiles.contains("RupaKit/Sources/RupaCore/PatternArrayIndependentCopyBuilder.swift")
     })
     #expect(arrays.evidence.contains { evidence in
+        evidence.sourceFiles.contains("RupaKit/Sources/RupaCore/DesignDocument+PatternArray.swift")
+    })
+    #expect(arrays.evidence.contains { evidence in
+        evidence.sourceFiles.contains("RupaKit/Sources/RupaCore/PatternArrayDocumentSynchronizer.swift")
+    })
+    #expect(arrays.evidence.contains { evidence in
+        evidence.sourceFiles.contains("RupaKit/Sources/RupaCore/PatternArrayOwnershipResolver.swift")
+    })
+    #expect(arrays.evidence.contains { evidence in
         evidence.sourceFiles.contains("RupaKit/Sources/RupaAutomation/AutomationCommand.swift")
     })
     #expect(arrays.evidence.contains { evidence in
@@ -212,6 +221,9 @@ import RupaCore
         evidence.tests.contains("RupaKit/Tests/RupaCoreTests/PatternArrayCurvePathGeometryServiceTests.swift")
     })
     #expect(arrays.evidence.contains { evidence in
+        evidence.tests.contains("RupaKit/Tests/RupaCoreTests/PatternArrayOwnershipResolverTests.swift")
+    })
+    #expect(arrays.evidence.contains { evidence in
         evidence.tests.contains("RupaKit/Tests/RupaRenderingTests/ViewportPatternArrayCurveExtentAffordanceServiceTests.swift")
     })
     #expect(arrays.evidence.contains { evidence in
@@ -237,6 +249,9 @@ import RupaCore
     })
     #expect(arrays.evidence.contains { evidence in
         evidence.notes.contains("Pattern Array summary diagnostics mirror source-owned output invariants for missing instances, mismatched transforms, duplicate ownership, root child mapping, independent-copy feature closure checks, stale independent-copy definition identity, and downstream feature dependents that block output removal.")
+    })
+    #expect(arrays.evidence.contains { evidence in
+        evidence.notes.contains("Pattern Array command mutation delegates output regeneration to a dedicated Core synchronizer and source-owned output lookup to a dedicated ownership resolver.")
     })
     #expect(arrays.evidence.contains { evidence in
         evidence.notes.contains("Independent-copy Pattern Array regeneration persists a SHA-256 ComponentDefinition identity over scene roots plus remapped feature operation payloads, reuses overlapping output scene roots only while that identity remains unchanged, and rebuilds output features when the source definition identity changes.")
