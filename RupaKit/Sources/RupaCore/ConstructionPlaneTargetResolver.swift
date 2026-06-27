@@ -136,33 +136,67 @@ public struct ConstructionPlaneTargetResolver: Sendable {
         )
     }
 
+    func planarGeneratedFacePlane(
+        alignedTo target: SelectionTarget,
+        topology: TopologySummaryResult,
+        operationName: String
+    ) throws -> SketchPlane {
+        let reference = try faceReference(
+            alignedTo: target,
+            topology: topology,
+            operationName: operationName,
+            requiresPlanarFace: true
+        )
+        return try plane(
+            origin: reference.origin,
+            normal: reference.normal,
+            operationName: operationName
+        )
+    }
+
     private func faceReference(
         alignedTo target: SelectionTarget,
-        topology: TopologySummaryResult
+        topology: TopologySummaryResult,
+        operationName: String = "Construction plane",
+        requiresPlanarFace: Bool = false
     ) throws -> PlaneReference {
         guard case .face = target.component else {
             throw EditorError(
                 code: .commandInvalid,
-                message: "Face-aligned construction plane requires a face target."
+                message: operationName == "Construction plane"
+                    ? "Face-aligned construction plane requires a face target."
+                    : "\(operationName) requires a generated face target."
             )
         }
         guard let entry = topology.entries.first(where: { $0.selectionTarget() == target }),
               entry.kind == .face else {
             throw EditorError(
                 code: .referenceUnresolved,
-                message: "Construction plane face target could not be resolved from generated topology."
+                message: operationName == "Construction plane"
+                    ? "Construction plane face target could not be resolved from generated topology."
+                    : "\(operationName) face target could not be resolved from generated topology."
+            )
+        }
+        if requiresPlanarFace, entry.surfaceKind != "plane" {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "\(operationName) currently supports generated planar face targets; curved face projection requires surface-trim output support."
             )
         }
         guard let center = entry.center else {
             throw EditorError(
                 code: .referenceUnresolved,
-                message: "Construction plane face target has no resolved center."
+                message: operationName == "Construction plane"
+                    ? "Construction plane face target has no resolved center."
+                    : "\(operationName) face target has no resolved center."
             )
         }
         guard let normal = entry.normal else {
             throw EditorError(
                 code: .referenceUnresolved,
-                message: "Construction plane face target has no resolved normal."
+                message: operationName == "Construction plane"
+                    ? "Construction plane face target has no resolved normal."
+                    : "\(operationName) face target has no resolved normal."
             )
         }
         let normalVector = Vector3D(x: normal.x, y: normal.y, z: normal.z)

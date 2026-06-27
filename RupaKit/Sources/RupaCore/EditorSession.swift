@@ -1596,6 +1596,21 @@ public final class EditorSession {
     }
 
     @discardableResult
+    public func projectCurvesToGeneratedFace(
+        targets: [SelectionTarget],
+        face: SelectionTarget,
+        name: String? = nil
+    ) -> CommandExecutionResult? {
+        perform(
+            .projectCurvesToGeneratedFace(
+                targets: targets,
+                face: face,
+                name: name
+            )
+        )
+    }
+
+    @discardableResult
     public func projectBodyOutlinesToConstructionPlane(
         targets: [SelectionTarget],
         plane: SketchPlane? = nil,

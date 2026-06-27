@@ -562,6 +562,16 @@ public final class AgentCommandController: AgentClientProtocol {
             failureMode: "Rejects empty target lists, duplicate targets, non-curve sketch entities, unresolved source sketches, unresolved generated edges, generated edge targets outside the selected body, generated edge kinds other than line or circle, collapsed projected lines, invalid target planes, nonparallel source or generated circular projections until exact conic projection sources exist, invalid output sketches, and stale generations before mutation."
         ),
         capability(
+            "projectCurvesToGeneratedFace",
+            category: .sketch,
+            summary: "Project Curve Body planar-face subset: project selected source sketch curves or generated line/circular edges onto a selected generated planar face along that face normal, creating a new source curve sketch on the face plane for downstream editing.",
+            access: .automationCommand,
+            mutatesDocument: true,
+            discovery: [.sketchEntitySummary, .topologySummary],
+            targets: [.sketchEntity, .edge, .face],
+            failureMode: "Rejects empty target lists, duplicate source targets, non-curve sketch entities, unresolved source sketches, unresolved generated edges or faces, non-planar generated faces, generated edge targets outside the selected body, generated edge kinds other than line or circle, collapsed projected lines, nonparallel source or generated circular projections until exact conic projection sources exist, invalid output sketches, and stale generations before mutation."
+        ),
+        capability(
             "projectBodyOutlinesToConstructionPlane",
             category: .sketch,
             summary: "Project Outline subset: project selected generated body outlines onto the active or supplied construction plane along that plane normal, creating a new source curve sketch for downstream editing.",

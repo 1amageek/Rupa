@@ -2342,6 +2342,78 @@ import SwiftCAD
 }
 
 @MainActor
+@Test func automationCanProjectCurvesToGeneratedFace() async throws {
+    let session = EditorSession()
+    let runner = AutomationRunner()
+    let lineID = SketchEntityID()
+    _ = try runner.execute(
+        .createSketch(
+            name: "Automation Face Projection Source",
+            sketch: Sketch(
+                plane: .xy,
+                entities: [
+                    lineID: .line(SketchLine(
+                        start: SketchPoint(x: .length(1.0, .millimeter), y: .length(2.0, .millimeter)),
+                        end: SketchPoint(x: .length(5.0, .millimeter), y: .length(4.0, .millimeter))
+                    )),
+                ]
+            ),
+            geometryRole: .curve
+        ),
+        in: session
+    )
+    _ = try runner.execute(
+        .createExtrudedRectangleFromCorners(
+            name: "Automation Face Projection Box",
+            plane: .xy,
+            firstCorner: SketchPoint(
+                x: .length(0.0, .millimeter),
+                y: .length(0.0, .millimeter)
+            ),
+            oppositeCorner: SketchPoint(
+                x: .length(20.0, .millimeter),
+                y: .length(12.0, .millimeter)
+            ),
+            depth: .length(5.0, .millimeter),
+            direction: .normal
+        ),
+        in: session
+    )
+    let summary = try SketchEntitySummaryService().summarize(document: session.document)
+    let sourceLine = try #require(summary.entries.first { $0.entityID == lineID.description })
+    let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let bodyNodeID = try #require(automationSceneNodeID(for: bodyFeatureID, in: session.document))
+    let topology = try TopologySummaryService().summarize(document: session.document)
+    let face = try #require(topology.entries.first {
+        $0.kind == .face &&
+            $0.sceneNodeID == bodyNodeID.description &&
+            $0.generatedRole == "endFace" &&
+            $0.selectionTarget() != nil
+    })
+
+    let result = try runner.execute(
+        .projectCurvesToGeneratedFace(
+            targets: [try #require(sourceLine.selectionTarget())],
+            face: try #require(face.selectionTarget()),
+            name: "Automation Face Projected Line"
+        ),
+        in: session
+    )
+
+    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let projected = try #require(after.entries.first {
+        $0.sourceFeatureName == "Automation Face Projected Line"
+    })
+
+    #expect(result.message == "Curves projected to generated face.")
+    #expect(result.commandName == "projectCurvesToGeneratedFace")
+    #expect(result.didMutate)
+    #expect(result.generation == DocumentGeneration(3))
+    #expect(projected.entityKind == "line")
+    #expect(session.evaluationStatus == .valid)
+}
+
+@MainActor
 @Test func automationCanProjectBodyOutlinesToConstructionPlane() async throws {
     let session = EditorSession()
     let runner = AutomationRunner()

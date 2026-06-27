@@ -44,6 +44,7 @@ struct SketchPointConstraintPropagator: Sendable {
         var endpoint: SketchSplineEndpointReference
         var endpointReference: SketchReference
         var handleReference: SketchReference
+        var curvatureReference: SketchReference
     }
 
     private struct TangentSplineEndpointPairReferences: Sendable {
@@ -608,7 +609,9 @@ struct SketchPointConstraintPropagator: Sendable {
                 in: sketch,
                 owner: owner
             )
-            if reference == pair.first.endpointReference || reference == pair.first.handleReference {
+            if reference == pair.first.endpointReference ||
+                reference == pair.first.handleReference ||
+                reference == pair.first.curvatureReference {
                 try propagateSmoothSplineEndpointUpdate(
                     source: pair.first,
                     target: pair.second,
@@ -618,7 +621,9 @@ struct SketchPointConstraintPropagator: Sendable {
                     pending: &pending,
                     affectedLineIDs: &affectedLineIDs
                 )
-            } else if reference == pair.second.endpointReference || reference == pair.second.handleReference {
+            } else if reference == pair.second.endpointReference ||
+                reference == pair.second.handleReference ||
+                reference == pair.second.curvatureReference {
                 try propagateSmoothSplineEndpointUpdate(
                     source: pair.second,
                     target: pair.first,
@@ -1222,7 +1227,7 @@ struct SketchPointConstraintPropagator: Sendable {
 
         var pending: [(reference: SketchReference, point: Point)] = []
         var affectedLineIDs = Set<SketchEntityID>()
-        if isAnchored(pair.second.endpointReference, in: sketch) == false {
+        if smoothSplineEndpointCanMove(pair.second, shouldAlignEndpoint: true, in: sketch) {
             try alignSmoothSplineEndpoint(
                 target: pair.second,
                 source: pair.first,
@@ -1232,11 +1237,33 @@ struct SketchPointConstraintPropagator: Sendable {
                 pending: &pending,
                 affectedLineIDs: &affectedLineIDs
             )
-        } else if isAnchored(pair.first.endpointReference, in: sketch) == false {
+        } else if smoothSplineEndpointCanMove(pair.first, shouldAlignEndpoint: true, in: sketch) {
             try alignSmoothSplineEndpoint(
                 target: pair.first,
                 source: pair.second,
                 shouldAlignEndpoint: true,
+                in: &sketch,
+                owner: owner,
+                pending: &pending,
+                affectedLineIDs: &affectedLineIDs
+            )
+        } else if try smoothSplineEndpointsShareEndpoint(pair, in: sketch, owner: owner),
+                  smoothSplineEndpointCanMove(pair.second, shouldAlignEndpoint: false, in: sketch) {
+            try alignSmoothSplineEndpoint(
+                target: pair.second,
+                source: pair.first,
+                shouldAlignEndpoint: false,
+                in: &sketch,
+                owner: owner,
+                pending: &pending,
+                affectedLineIDs: &affectedLineIDs
+            )
+        } else if try smoothSplineEndpointsShareEndpoint(pair, in: sketch, owner: owner),
+                  smoothSplineEndpointCanMove(pair.first, shouldAlignEndpoint: false, in: sketch) {
+            try alignSmoothSplineEndpoint(
+                target: pair.first,
+                source: pair.second,
+                shouldAlignEndpoint: false,
                 in: &sketch,
                 owner: owner,
                 pending: &pending,
@@ -2562,18 +2589,22 @@ struct SketchPointConstraintPropagator: Sendable {
         }
         let endpointReference: SketchReference
         let handleReference: SketchReference
+        let curvatureReference: SketchReference
         switch reference.endpoint {
         case .start:
             endpointReference = .splineControlPoint(entity: reference.splineID, index: 0)
             handleReference = .splineControlPoint(entity: reference.splineID, index: 1)
+            curvatureReference = .splineControlPoint(entity: reference.splineID, index: 2)
         case .end:
             endpointReference = .splineControlPoint(entity: reference.splineID, index: spline.controlPoints.count - 1)
             handleReference = .splineControlPoint(entity: reference.splineID, index: spline.controlPoints.count - 2)
+            curvatureReference = .splineControlPoint(entity: reference.splineID, index: spline.controlPoints.count - 3)
         }
         return TangentSplineEndpointReferences(
             endpoint: reference,
             endpointReference: endpointReference,
-            handleReference: handleReference
+            handleReference: handleReference,
+            curvatureReference: curvatureReference
         )
     }
 
@@ -2636,7 +2667,43 @@ struct SketchPointConstraintPropagator: Sendable {
         }
         let firstVector = try tangentSplineEndpointVector(pair.first, in: sketch, owner: owner)
         let secondVector = try tangentSplineEndpointVector(pair.second, in: sketch, owner: owner)
-        return pointsDiffer(firstVector, secondVector) == false
+        guard pointsDiffer(firstVector, secondVector) == false else {
+            return false
+        }
+        let firstSecondDerivative = try splineEndpointSecondDerivativeVector(
+            pair.first,
+            in: sketch,
+            owner: owner
+        )
+        let secondSecondDerivative = try splineEndpointSecondDerivativeVector(
+            pair.second,
+            in: sketch,
+            owner: owner
+        )
+        return pointsDiffer(firstSecondDerivative, secondSecondDerivative) == false
+    }
+
+    private func smoothSplineEndpointsShareEndpoint(
+        _ pair: TangentSplineEndpointPairReferences,
+        in sketch: Sketch,
+        owner: String
+    ) throws -> Bool {
+        let firstEndpoint = try point(for: pair.first.endpointReference, in: sketch, owner: owner)
+        let secondEndpoint = try point(for: pair.second.endpointReference, in: sketch, owner: owner)
+        return pointsDiffer(firstEndpoint, secondEndpoint) == false
+    }
+
+    private func smoothSplineEndpointCanMove(
+        _ references: TangentSplineEndpointReferences,
+        shouldAlignEndpoint: Bool,
+        in sketch: Sketch
+    ) -> Bool {
+        if shouldAlignEndpoint,
+           isAnchored(references.endpointReference, in: sketch) {
+            return false
+        }
+        return isAnchored(references.handleReference, in: sketch) == false &&
+            isAnchored(references.curvatureReference, in: sketch) == false
     }
 
     private func tangentSplineEndpointAngle(
@@ -2673,6 +2740,20 @@ struct SketchPointConstraintPropagator: Sendable {
             )
         }
         return Point(x: deltaX, y: deltaY)
+    }
+
+    private func splineEndpointSecondDerivativeVector(
+        _ references: TangentSplineEndpointReferences,
+        in sketch: Sketch,
+        owner: String
+    ) throws -> Point {
+        let endpointPoint = try point(for: references.endpointReference, in: sketch, owner: owner)
+        let handlePoint = try point(for: references.handleReference, in: sketch, owner: owner)
+        let curvaturePoint = try point(for: references.curvatureReference, in: sketch, owner: owner)
+        return Point(
+            x: endpointPoint.x - 2.0 * handlePoint.x + curvaturePoint.x,
+            y: endpointPoint.y - 2.0 * handlePoint.y + curvaturePoint.y
+        )
     }
 
     private func alignedSplineEndpointHandlePoint(
@@ -2799,8 +2880,87 @@ struct SketchPointConstraintPropagator: Sendable {
             return
         }
 
-        if isAnchored(target.handleReference, in: sketch) == false {
+        if changedReference == source.handleReference {
+            if isAnchored(target.handleReference, in: sketch) {
+                guard try tangentSplineEndpointsAreSatisfied(
+                    TangentSplineEndpointPairReferences(first: source, second: target),
+                    in: sketch,
+                    owner: owner
+                ) else {
+                    throw EditorError(
+                        code: .commandInvalid,
+                        message: "\(owner) cannot satisfy smooth spline endpoints with fixed spline handles."
+                    )
+                }
+            } else {
+                try alignSmoothSplineEndpointHandle(
+                    target: target,
+                    source: source,
+                    in: &sketch,
+                    owner: owner,
+                    pending: &pending,
+                    affectedLineIDs: &affectedLineIDs
+                )
+            }
+            if isAnchored(target.curvatureReference, in: sketch) {
+                guard try smoothSplineEndpointsAreSatisfied(
+                    TangentSplineEndpointPairReferences(first: source, second: target),
+                    in: sketch,
+                    owner: owner
+                ) else {
+                    throw EditorError(
+                        code: .commandInvalid,
+                        message: "\(owner) cannot satisfy smooth spline endpoints with fixed curvature handles."
+                    )
+                }
+            } else {
+                try alignSmoothSplineEndpointCurvatureHandle(
+                    target: target,
+                    source: source,
+                    in: &sketch,
+                    owner: owner,
+                    pending: &pending,
+                    affectedLineIDs: &affectedLineIDs
+                )
+            }
+            return
+        }
+
+        if changedReference == source.curvatureReference {
+            if isAnchored(target.curvatureReference, in: sketch) {
+                guard try smoothSplineEndpointsAreSatisfied(
+                    TangentSplineEndpointPairReferences(first: source, second: target),
+                    in: sketch,
+                    owner: owner
+                ) else {
+                    throw EditorError(
+                        code: .commandInvalid,
+                        message: "\(owner) cannot satisfy smooth spline endpoints with fixed curvature handles."
+                    )
+                }
+            } else {
+                try alignSmoothSplineEndpointCurvatureHandle(
+                    target: target,
+                    source: source,
+                    in: &sketch,
+                    owner: owner,
+                    pending: &pending,
+                    affectedLineIDs: &affectedLineIDs
+                )
+            }
+            return
+        }
+
+        if smoothSplineEndpointCanMove(target, shouldAlignEndpoint: false, in: sketch) {
             try alignSmoothSplineEndpointHandle(
+                target: target,
+                source: source,
+                in: &sketch,
+                owner: owner,
+                pending: &pending,
+                affectedLineIDs: &affectedLineIDs
+            )
+            try alignSmoothSplineEndpointCurvatureHandle(
                 target: target,
                 source: source,
                 in: &sketch,
@@ -2884,6 +3044,14 @@ struct SketchPointConstraintPropagator: Sendable {
             pending: &pending,
             affectedLineIDs: &affectedLineIDs
         )
+        try alignSmoothSplineEndpointCurvatureHandle(
+            target: target,
+            source: source,
+            in: &sketch,
+            owner: owner,
+            pending: &pending,
+            affectedLineIDs: &affectedLineIDs
+        )
     }
 
     private func alignSmoothSplineEndpointHandle(
@@ -2916,6 +3084,36 @@ struct SketchPointConstraintPropagator: Sendable {
         )
     }
 
+    private func alignSmoothSplineEndpointCurvatureHandle(
+        target: TangentSplineEndpointReferences,
+        source: TangentSplineEndpointReferences,
+        in sketch: inout Sketch,
+        owner: String,
+        pending: inout [(reference: SketchReference, point: Point)],
+        affectedLineIDs: inout Set<SketchEntityID>
+    ) throws {
+        guard isAnchored(target.curvatureReference, in: sketch) == false else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "\(owner) cannot move a fixed spline curvature handle."
+            )
+        }
+        let targetPoint = try alignedSmoothSplineEndpointCurvaturePoint(
+            target: target,
+            source: source,
+            in: sketch,
+            owner: owner
+        )
+        try assign(
+            targetPoint,
+            to: target.curvatureReference,
+            in: &sketch,
+            owner: owner,
+            pending: &pending,
+            affectedLineIDs: &affectedLineIDs
+        )
+    }
+
     private func alignedSmoothSplineEndpointHandlePoint(
         target: TangentSplineEndpointReferences,
         source: TangentSplineEndpointReferences,
@@ -2936,6 +3134,25 @@ struct SketchPointConstraintPropagator: Sendable {
                 y: targetEndpointPoint.y - sourceVector.y
             )
         }
+    }
+
+    private func alignedSmoothSplineEndpointCurvaturePoint(
+        target: TangentSplineEndpointReferences,
+        source: TangentSplineEndpointReferences,
+        in sketch: Sketch,
+        owner: String
+    ) throws -> Point {
+        let targetEndpointPoint = try point(for: target.endpointReference, in: sketch, owner: owner)
+        let targetHandlePoint = try point(for: target.handleReference, in: sketch, owner: owner)
+        let sourceSecondDerivative = try splineEndpointSecondDerivativeVector(
+            source,
+            in: sketch,
+            owner: owner
+        )
+        return Point(
+            x: sourceSecondDerivative.x - targetEndpointPoint.x + 2.0 * targetHandlePoint.x,
+            y: sourceSecondDerivative.y - targetEndpointPoint.y + 2.0 * targetHandlePoint.y
+        )
     }
 
     private func alignedTangentSplineEndpointHandlePoint(

@@ -1348,11 +1348,66 @@ public struct DesignDocument: Identifiable, Sendable {
         }
 
         let targetPlane = explicitPlane ?? activeConstructionPlane?.plane ?? .xy
+        var topology: TopologySummaryResult?
+        return try appendProjectedCurveSketch(
+            targets: targets,
+            targetPlane: targetPlane,
+            operationName: operationName,
+            name: name,
+            defaultName: projectedSketchName(from:),
+            objectRegistry: objectRegistry,
+            topology: &topology
+        )
+    }
+
+    @discardableResult
+    public mutating func projectCurvesToGeneratedFace(
+        targets: [SelectionTarget],
+        face: SelectionTarget,
+        name: String? = nil,
+        objectRegistry: ObjectTypeRegistry = .builtIn
+    ) throws -> FeatureID {
+        let operationName = "Project Curve Body"
+        let evaluatedTopology = try TopologySummaryService().summarize(
+            document: self,
+            objectRegistry: objectRegistry
+        )
+        var topology: TopologySummaryResult? = evaluatedTopology
+        let targetPlane = try ConstructionPlaneTargetResolver().planarGeneratedFacePlane(
+            alignedTo: face,
+            topology: evaluatedTopology,
+            operationName: operationName
+        )
+        return try appendProjectedCurveSketch(
+            targets: targets,
+            targetPlane: targetPlane,
+            operationName: operationName,
+            name: name,
+            defaultName: projectedFaceProjectionName(from:),
+            objectRegistry: objectRegistry,
+            topology: &topology
+        )
+    }
+
+    private mutating func appendProjectedCurveSketch(
+        targets: [SelectionTarget],
+        targetPlane: SketchPlane,
+        operationName: String,
+        name: String?,
+        defaultName: ([String]) -> String,
+        objectRegistry: ObjectTypeRegistry,
+        topology: inout TopologySummaryResult?
+    ) throws -> FeatureID {
+        guard targets.isEmpty == false else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "\(operationName) requires at least one source curve target."
+            )
+        }
         let targetSystem = try SketchPlaneCoordinateSystem(plane: targetPlane)
         var projectedEntities: [SketchEntityID: SketchEntity] = [:]
         var sourceNames: [String] = []
         var seenTargets = Set<String>()
-        var topology: TopologySummaryResult?
         for target in targets {
             let targetKey = "\(target.sceneNodeID.description):\(String(describing: target.component))"
             guard seenTargets.insert(targetKey).inserted else {
@@ -1380,7 +1435,7 @@ public struct DesignDocument: Identifiable, Sendable {
         try projectedSketch.validate()
         try projectedSketch.validateExpressions(using: cadDocument.parameters)
         let outputName = try normalizedMetadataName(
-            name ?? projectedSketchName(from: sourceNames),
+            name ?? defaultName(sourceNames),
             owner: operationName
         )
         return try appendSketchFeature(
@@ -1397,6 +1452,14 @@ public struct DesignDocument: Identifiable, Sendable {
             return "\(sourceName) Projection"
         }
         return "Projected Curves"
+    }
+
+    private func projectedFaceProjectionName(from sourceNames: [String]) -> String {
+        if sourceNames.count == 1,
+           let sourceName = sourceNames.first {
+            return "\(sourceName) Face Projection"
+        }
+        return "Projected Face Curves"
     }
 
     @discardableResult

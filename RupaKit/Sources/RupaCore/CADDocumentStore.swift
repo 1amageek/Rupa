@@ -506,6 +506,17 @@ public final class CADDocumentStore {
             document = updatedDocument
             try commitMutation()
             evaluateCurrentDocument()
+        case .projectCurvesToGeneratedFace(let targets, let face, let name):
+            var updatedDocument = document
+            try updatedDocument.projectCurvesToGeneratedFace(
+                targets: targets,
+                face: face,
+                name: name,
+                objectRegistry: objectRegistry
+            )
+            document = updatedDocument
+            try commitMutation()
+            evaluateCurrentDocument()
         case .projectBodyOutlinesToConstructionPlane(let targets, let plane, let name):
             var updatedDocument = document
             try updatedDocument.projectBodyOutlinesToConstructionPlane(

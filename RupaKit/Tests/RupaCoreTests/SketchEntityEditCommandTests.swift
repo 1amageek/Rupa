@@ -337,6 +337,155 @@ import Testing
 }
 
 @MainActor
+@Test func projectCurvesToGeneratedFaceCreatesFacePlaneSourceSketch() async throws {
+    let session = EditorSession()
+    let lineID = SketchEntityID()
+    _ = try session.execute(
+        .createSketch(
+            name: "Face Projection Source",
+            sketch: Sketch(
+                plane: .xy,
+                entities: [
+                    lineID: .line(SketchLine(
+                        start: SketchPoint(x: .length(1.0, .millimeter), y: .length(2.0, .millimeter)),
+                        end: SketchPoint(x: .length(5.0, .millimeter), y: .length(4.0, .millimeter))
+                    )),
+                ]
+            ),
+            geometryRole: .curve
+        )
+    )
+    _ = try session.execute(
+        .createExtrudedRectangleFromCorners(
+            name: "Face Projection Box",
+            plane: .xy,
+            firstCorner: SketchPoint(
+                x: .length(0.0, .millimeter),
+                y: .length(0.0, .millimeter)
+            ),
+            oppositeCorner: SketchPoint(
+                x: .length(20.0, .millimeter),
+                y: .length(12.0, .millimeter)
+            ),
+            depth: .length(5.0, .millimeter),
+            direction: .normal
+        )
+    )
+    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let sourceLine = try #require(before.entries.first { $0.entityID == lineID.description })
+    let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let bodyNodeID = try #require(bodySceneNodeID(for: bodyFeatureID, in: session.document))
+    let topology = try TopologySummaryService().summarize(document: session.document)
+    let face = try #require(topology.entries.first {
+        $0.kind == .face &&
+            $0.sceneNodeID == bodyNodeID.description &&
+            $0.generatedRole == "endFace" &&
+            $0.selectionTarget() != nil
+    })
+    let faceCenter = try #require(face.center)
+    let faceTarget = try #require(face.selectionTarget())
+
+    let result = try session.execute(
+        .projectCurvesToGeneratedFace(
+            targets: [try #require(sourceLine.selectionTarget())],
+            face: faceTarget,
+            name: "Face Projected Line"
+        )
+    )
+
+    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let projected = try #require(after.entries.first { $0.sourceFeatureName == "Face Projected Line" })
+    let projectedStart = try #require(projected.start)
+    let projectedEnd = try #require(projected.end)
+    let featureID = try #require(UUID(uuidString: projected.sourceFeatureID)).featureID
+    let feature = try #require(session.document.cadDocument.designGraph.nodes[featureID])
+    guard case .sketch(let projectedSketch) = feature.operation else {
+        Issue.record("Face projection must create a source sketch.")
+        return
+    }
+    let targetSystem = try SketchPlaneCoordinateSystem(plane: projectedSketch.plane)
+    let startWorld = targetSystem.point(from: Point2D(x: projectedStart.x, y: projectedStart.y))
+    let endWorld = targetSystem.point(from: Point2D(x: projectedEnd.x, y: projectedEnd.y))
+
+    #expect(result.commandName == "projectCurvesToGeneratedFace")
+    #expect(result.didMutate)
+    #expect(session.generation == DocumentGeneration(3))
+    #expect(projected.entityKind == "line")
+    #expect(abs(startWorld.x - 0.001) < 1.0e-12)
+    #expect(abs(startWorld.y - 0.002) < 1.0e-12)
+    #expect(abs(startWorld.z - faceCenter.z) < 1.0e-12)
+    #expect(abs(endWorld.x - 0.005) < 1.0e-12)
+    #expect(abs(endWorld.y - 0.004) < 1.0e-12)
+    #expect(abs(endWorld.z - faceCenter.z) < 1.0e-12)
+    #expect(after.counts.entityCount == before.counts.entityCount + 1)
+    #expect(session.evaluationStatus == .valid)
+}
+
+@MainActor
+@Test func projectCurvesToGeneratedFaceRejectsNonplanarFaceBeforeMutation() async throws {
+    let session = EditorSession()
+    let lineID = SketchEntityID()
+    _ = try session.execute(
+        .createSketch(
+            name: "Nonplanar Face Projection Source",
+            sketch: Sketch(
+                plane: .xy,
+                entities: [
+                    lineID: .line(SketchLine(
+                        start: SketchPoint(x: .length(0.0, .millimeter), y: .length(0.0, .millimeter)),
+                        end: SketchPoint(x: .length(5.0, .millimeter), y: .length(0.0, .millimeter))
+                    )),
+                ]
+            ),
+            geometryRole: .curve
+        )
+    )
+    _ = try session.execute(
+        .createExtrudedCircle(
+            name: "Nonplanar Face Projection Cylinder",
+            plane: .xy,
+            center: SketchPoint(
+                x: .length(0.0, .millimeter),
+                y: .length(0.0, .millimeter)
+            ),
+            radius: .length(10.0, .millimeter),
+            depth: .length(5.0, .millimeter),
+            direction: .normal
+        )
+    )
+    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let sourceLine = try #require(before.entries.first { $0.entityID == lineID.description })
+    let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let bodyNodeID = try #require(bodySceneNodeID(for: bodyFeatureID, in: session.document))
+    let topology = try TopologySummaryService().summarize(document: session.document)
+    let sideFace = try #require(topology.entries.first {
+        $0.kind == .face &&
+            $0.sceneNodeID == bodyNodeID.description &&
+            $0.surfaceKind == "cylinder" &&
+            $0.selectionTarget() != nil
+    })
+
+    do {
+        _ = try session.execute(
+            .projectCurvesToGeneratedFace(
+                targets: [try #require(sourceLine.selectionTarget())],
+                face: try #require(sideFace.selectionTarget()),
+                name: "Invalid Face Projection"
+            )
+        )
+        Issue.record("Non-planar generated face projection must fail before mutation.")
+    } catch let error as EditorError {
+        #expect(error.code == .commandInvalid)
+        #expect(error.message.contains("planar face"))
+    }
+
+    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    #expect(session.generation == DocumentGeneration(2))
+    #expect(after.counts.entityCount == before.counts.entityCount)
+    #expect(after.counts.constraintCount == before.counts.constraintCount)
+}
+
+@MainActor
 @Test func projectSketchCurvesToConstructionPlaneAcceptsGeneratedLineEdges() async throws {
     let session = EditorSession()
     _ = try session.execute(

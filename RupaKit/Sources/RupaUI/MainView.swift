@@ -6642,6 +6642,7 @@ public struct MainView: View {
         surfaceAnalysisSection(nodes)
         surfaceContinuitySection(nodes)
 
+        projectCurvesToFaceSection()
         projectOutlineSection(nodes)
         faceEditSection(nodes)
         edgeEditSection(nodes)
@@ -6977,6 +6978,52 @@ public struct MainView: View {
         }
         return node.object?.geometryRole == .surface
             || selectedGeneratedTopologyPersistentNames().isEmpty == false
+    }
+
+    @ViewBuilder
+    private func projectCurvesToFaceSection() -> some View {
+        if let faceTarget = selectedFaceTarget {
+            let targets = selectedCurveProjectionTargetsForGeneratedFace(excluding: faceTarget)
+            if targets.isEmpty == false {
+                inspectorSection("Project") {
+                    inspectorRow("Curve Targets", "\(targets.count)")
+                    inspectorActionRow {
+                        Button {
+                            projectSelectedCurvesToGeneratedFace(targets, face: faceTarget)
+                        } label: {
+                            Label("Project Curves", systemImage: "square.on.square")
+                        }
+                        .accessibilityIdentifier("InspectorFace.projectCurves")
+                    }
+                }
+            }
+        }
+    }
+
+    private func selectedCurveProjectionTargetsForGeneratedFace(
+        excluding faceTarget: SelectionTarget
+    ) -> [SelectionTarget] {
+        var projectedTargets: [SelectionTarget] = []
+        var seen = Set<String>()
+        for target in session.selection.selectedTargets where target != faceTarget {
+            let curveTarget: SelectionTarget?
+            if let sketchCurveTarget = wholeSketchCurveTarget(for: target) {
+                curveTarget = sketchCurveTarget
+            } else if case .edge(let componentID) = target.component,
+                      componentID.generatedTopologyPersistentName != nil {
+                curveTarget = target
+            } else {
+                curveTarget = nil
+            }
+            guard let curveTarget else {
+                continue
+            }
+            let key = "\(curveTarget.sceneNodeID.description):\(String(describing: curveTarget.component))"
+            if seen.insert(key).inserted {
+                projectedTargets.append(curveTarget)
+            }
+        }
+        return projectedTargets
     }
 
     @ViewBuilder
@@ -9565,6 +9612,23 @@ public struct MainView: View {
         let result = session.projectSketchCurvesToConstructionPlane(
             targets: targets,
             plane: nil,
+            name: nil
+        )
+        if result?.diagnostics.isEmpty == false {
+            isPreviewExpanded = true
+        }
+    }
+
+    private func projectSelectedCurvesToGeneratedFace(
+        _ targets: [SelectionTarget],
+        face: SelectionTarget
+    ) {
+        guard targets.isEmpty == false else {
+            return
+        }
+        let result = session.projectCurvesToGeneratedFace(
+            targets: targets,
+            face: face,
             name: nil
         )
         if result?.diagnostics.isEmpty == false {

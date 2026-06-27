@@ -498,6 +498,21 @@ public struct AutomationRunner {
                 didMutate: result.didMutate,
                 diagnostics: result.diagnostics
             )
+        case .projectCurvesToGeneratedFace(let targets, let face, let name):
+            let result = try session.execute(
+                .projectCurvesToGeneratedFace(
+                    targets: targets,
+                    face: face,
+                    name: name
+                )
+            )
+            return AutomationResult(
+                message: "Curves projected to generated face.",
+                commandName: result.commandName,
+                generation: result.generation,
+                didMutate: result.didMutate,
+                diagnostics: result.diagnostics
+            )
         case .projectBodyOutlinesToConstructionPlane(let targets, let plane, let name):
             let result = try session.execute(
                 .projectBodyOutlinesToConstructionPlane(

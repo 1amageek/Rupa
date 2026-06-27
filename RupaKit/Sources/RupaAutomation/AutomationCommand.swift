@@ -82,6 +82,11 @@ public enum AutomationCommand: Codable, Equatable, Sendable {
         plane: SketchPlane?,
         name: String?
     )
+    case projectCurvesToGeneratedFace(
+        targets: [SelectionTarget],
+        face: SelectionTarget,
+        name: String?
+    )
     case projectBodyOutlinesToConstructionPlane(
         targets: [SelectionTarget],
         plane: SketchPlane?,
@@ -446,6 +451,12 @@ public enum AutomationCommand: Codable, Equatable, Sendable {
             .projectSketchCurvesToConstructionPlane(
                 targets: targets,
                 plane: plane,
+                name: name
+            )
+        case .projectCurvesToGeneratedFace(let targets, let face, let name):
+            .projectCurvesToGeneratedFace(
+                targets: targets,
+                face: face,
                 name: name
             )
         case .projectBodyOutlinesToConstructionPlane(let targets, let plane, let name):
