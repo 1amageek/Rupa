@@ -102,3 +102,4 @@ flowchart LR
 | `RupaCore/DesignDocument.swift` | Sketch curve conversion commands for line-to-arc and line-to-spline split from shared curve editing helpers |
 | `RupaCore/DesignDocument.swift` | Sketch curve reversal command split from reference, dimension, and Bridge Curve metadata rewrite helpers |
 | `RupaCore/DesignDocument.swift` | Sketch curve extension command split from endpoint resolution, extension geometry, and validation helpers |
+| `RupaCore/DesignDocument.swift` | Sketch curve trim command split from segment-removal validation and reference filtering helpers |
