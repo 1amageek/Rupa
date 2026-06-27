@@ -5491,60 +5491,29 @@ public struct MainView: View {
         )
     }
 
+    private func workspaceObjectOverviewInspectorState(
+        for nodes: [SceneNode]
+    ) -> WorkspaceObjectOverviewInspectorState {
+        WorkspaceObjectOverviewInspectorStateBuilder(
+            document: session.document,
+            objectRegistry: objectRegistry,
+            selectedTargetSummary: selectedTargetSummary,
+            selectedTargetCount: selectedTargetCount
+        )
+        .state(for: nodes)
+    }
+
     @ViewBuilder
     private func objectInspectorSections(_ nodes: [SceneNode]) -> some View {
-        inspectorSection(nodes.count == 1 ? "Selection" : "Selection Group") {
-            if nodes.count == 1, let node = nodes.first {
-                inspectorRow("Name", node.name)
-                inspectorRow("Object", objectTitle(for: node))
-                inspectorRow("Target", selectedTargetSummary)
-                inspectorRow("Geometry", geometryTitle(for: node))
-                inspectorRow("Scene Node ID", shortID(node.id))
-                inspectorRow("Primary", "Yes")
-            } else {
-                inspectorRow("Objects", "\(nodes.count)")
-                inspectorRow("Targets", "\(selectedTargetCount)")
-                inspectorRow("Primary", nodes.last?.name ?? "None")
-                inspectorRow("Object Types", valueSummary(nodes.map { objectTitle(for: $0) }))
-                inspectorRow("Geometry", valueSummary(nodes.map { geometryTitle(for: $0) }))
-                inspectorRow("Visible Objects", "\(nodes.filter { $0.isVisible }.count)")
-                inspectorRow("Locked Objects", "\(nodes.filter { $0.isLocked }.count)")
-            }
-        }
+        let overviewState = workspaceObjectOverviewInspectorState(for: nodes)
+        WorkspaceInspectorTextSectionView(section: overviewState.selectionSection)
 
         if let patternArrayState = patternArrayInspectorState(for: nodes) {
             patternArrayInspectorSection(patternArrayState)
         }
 
-        inspectorSection("Reference") {
-            if nodes.count == 1, let node = nodes.first {
-                if let object = node.object {
-                    objectSourceInspectorRows(for: object)
-                }
-                inspectorRow("Reference", referenceTitle(for: node.reference))
-                if let reference = node.reference {
-                    referenceInspectorRows(for: reference)
-                } else {
-                    inspectorRow("Role", "Group")
-                }
-            } else {
-                inspectorRow("References", referenceSummary(for: nodes))
-                inspectorRow("Feature Links", "\(nodes.compactMap { $0.reference?.featureID }.count)")
-                inspectorRow("Component Links", "\(nodes.compactMap { $0.reference?.componentInstanceID }.count)")
-            }
-        }
-
-        inspectorSection("Hierarchy") {
-            if nodes.count == 1, let node = nodes.first {
-                inspectorRow("Parent", parentTitle(for: node.id))
-                inspectorRow("Children", "\(node.childIDs.count)")
-                inspectorRow("Descendants", "\(descendantCount(for: node.id))")
-            } else {
-                inspectorRow("Parents", parentSummary(for: nodes))
-                inspectorRow("Children", "\(nodes.reduce(0) { $0 + $1.childIDs.count })")
-                inspectorRow("Descendants", "\(nodes.reduce(0) { $0 + descendantCount(for: $1.id) })")
-            }
-        }
+        WorkspaceInspectorTextSectionView(section: overviewState.referenceSection)
+        WorkspaceInspectorTextSectionView(section: overviewState.hierarchySection)
 
         inspectorSection("State") {
             boolChoicePicker(
@@ -8813,143 +8782,6 @@ public struct MainView: View {
         return .material(first)
     }
 
-    @ViewBuilder
-    private func referenceInspectorRows(for reference: SceneNodeReference) -> some View {
-        switch reference.kind {
-        case .feature, .body, .sketch:
-            if let featureID = reference.featureID {
-                inspectorRow("Feature ID", shortID(featureID))
-                if let feature = session.document.cadDocument.designGraph.nodes[featureID] {
-                    inspectorRow("Feature Name", feature.name ?? "Unnamed Feature")
-                    switch feature.operation {
-                    case .sketch:
-                        inspectorRow("Operation", "Sketch")
-                    case .extrude(let extrude):
-                        inspectorRow("Operation", "Extrude")
-                        inspectorRow("Profile Source", shortID(extrude.profile.featureID))
-                    case .revolve(let revolve):
-                        inspectorRow("Operation", "Revolve")
-                        inspectorRow("Profile Source", shortID(revolve.profile.featureID))
-                        inspectorRow("Axis Origin", pointSummary(revolve.axis.origin))
-                        inspectorRow("Axis Direction", vectorSummary(revolve.axis.direction))
-                    case .sweep(let sweep):
-                        inspectorRow("Operation", "Sweep")
-                        inspectorRow("Sections", valueSummary(sweep.sections.map(sweepSectionSummary)))
-                        inspectorRow("Path Source", shortID(sweep.path.featureID))
-                        if sweep.guides.isEmpty == false {
-                            inspectorRow("Guides", valueSummary(sweep.guides.map { shortID($0.featureID) }))
-                        }
-                    case .polySpline(let polySpline):
-                        inspectorRow("Operation", "PolySpline")
-                        inspectorRow("Mesh Vertices", "\(polySpline.sourceMesh.positions.count)")
-                        inspectorRow("Mesh Triangles", "\(polySpline.sourceMesh.indices.count / 3)")
-                    case .faceLoopOffset(let faceLoopOffset):
-                        inspectorRow("Operation", "Offset Face Loop")
-                        inspectorRow("Target", shortID(faceLoopOffset.target.featureID))
-                        inspectorRow("Gap Fill", faceLoopOffset.gapFill.rawValue.capitalized)
-                    case .edgeOffset(let edgeOffset):
-                        inspectorRow("Operation", "Offset Edge")
-                        inspectorRow("Target", shortID(edgeOffset.target.featureID))
-                        inspectorRow("Support Face", "\(edgeOffset.supportFacePersistentName.components.count) components")
-                        inspectorRow("Gap Fill", edgeOffset.gapFill.rawValue.capitalized)
-                    case .faceKnife(let faceKnife):
-                        inspectorRow("Operation", "Face Knife")
-                        inspectorRow("Target", shortID(faceKnife.target.featureID))
-                        inspectorRow("Loop Points", "\(faceKnife.loop.count)")
-                    case .bridgeCurve(let bridgeCurve):
-                        inspectorRow("Operation", "Bridge Curve")
-                        inspectorRow("Start Continuity", String(describing: bridgeCurve.start.requiredLevel).capitalized)
-                        inspectorRow("End Continuity", String(describing: bridgeCurve.end.requiredLevel).capitalized)
-                        inspectorRow("Samples", "\(bridgeCurve.sampleCount)")
-                    case .curveEdit(let curveEdit):
-                        inspectorRow("Operation", "Curve Edit")
-                        inspectorRow("Source", shortID(curveEdit.source.featureID))
-                        inspectorRow("Curve Index", "\(curveEdit.source.curveIndex)")
-                        inspectorRow("Edits", "\(curveEdit.edits.count)")
-                    case .curveOffset(let curveOffset):
-                        inspectorRow("Operation", "Curve Offset")
-                        inspectorRow("Source", shortID(curveOffset.source.featureID))
-                        inspectorRow("Curve Index", "\(curveOffset.source.curveIndex)")
-                        inspectorRow("Side", curveOffset.side.rawValue.capitalized)
-                        inspectorRow("Samples", "\(curveOffset.sampleCount)")
-                    case .curveTrim(let curveTrim):
-                        inspectorRow("Operation", "Curve Trim")
-                        inspectorRow("Source", shortID(curveTrim.source.featureID))
-                        inspectorRow("Curve Index", "\(curveTrim.source.curveIndex)")
-                        inspectorRow("Samples", "\(curveTrim.sampleCount)")
-                    }
-                    inspectorRow("Inputs", valueSummary(feature.inputs.map { $0.role.rawValue }))
-                    inspectorRow("Outputs", valueSummary(feature.outputs.map { $0.role.rawValue }))
-                    inspectorRow("Suppressed", feature.isSuppressed ? "Yes" : "No")
-                } else {
-                    inspectorRow("Feature", "Missing")
-                }
-            }
-        case .componentInstance:
-            if let componentInstanceID = reference.componentInstanceID {
-                inspectorRow("Instance ID", shortID(componentInstanceID))
-                if let instance = session.document.productMetadata.componentInstances[componentInstanceID] {
-                    inspectorRow("Instance", instance.name)
-                    inspectorRow("Definition", componentDefinitionName(for: instance.definitionID))
-                    inspectorRow("Properties", "\(instance.properties.count)")
-                } else {
-                    inspectorRow("Instance", "Missing")
-                }
-            }
-        case .construction:
-            inspectorRow("Role", "Construction")
-        }
-    }
-
-    @ViewBuilder
-    private func objectSourceInspectorRows(for object: ObjectDescriptor) -> some View {
-        inspectorRow("Object Role", object.category.title)
-        if let geometryRole = object.geometryRole {
-            inspectorRow("Geometry Role", geometryRole.title)
-        }
-        if let typeID = object.typeID {
-            inspectorRow("Object Type ID", typeID.rawValue)
-            if let definition = objectDefinition(for: typeID) {
-                inspectorRow("Source", definition.sourceRepresentation.title)
-                inspectorRow("Generated", definition.generatedRepresentation(for: object.properties).title)
-            }
-            inspectorRow("Properties", "\(object.properties.values.count)")
-        }
-        if let sourceFeatureID = object.sourceFeatureID {
-            inspectorRow("Source Feature", shortID(sourceFeatureID))
-        }
-        if let sourceSection = object.sourceSection {
-            inspectorRow("Source Section", bodySourceSectionSummary(sourceSection))
-        }
-        if let componentInstanceID = object.componentInstanceID {
-            inspectorRow("Component Instance", shortID(componentInstanceID))
-        }
-    }
-
-    private func objectTitle(for node: SceneNode) -> String {
-        if let definition = objectDefinition(for: node.object?.typeID) {
-            return definition.title
-        }
-        if let category = node.object?.category {
-            return category.title
-        }
-        return sceneNodeKindTitle(for: node.reference)
-    }
-
-    private func geometryTitle(for node: SceneNode) -> String {
-        guard let object = node.object else {
-            return "None"
-        }
-        if let definition = objectDefinition(for: object.typeID),
-           let geometryRole = object.geometryRole {
-            return "\(geometryRole.title) / \(definition.title)"
-        }
-        if let geometryRole = object.geometryRole {
-            return geometryRole.title
-        }
-        return object.category.title
-    }
-
     private func objectShapeTitle(_ shape: InspectorObjectShape) -> String {
         if let definition = shape.definition {
             return definition.title
@@ -9527,43 +9359,6 @@ public struct MainView: View {
         return "Mixed"
     }
 
-    private func referenceTitle(for reference: SceneNodeReference?) -> String {
-        guard let reference else {
-            return "Group"
-        }
-        return sceneNodeKindTitle(for: reference)
-    }
-
-    private func referenceSummary(for nodes: [SceneNode]) -> String {
-        valueSummary(nodes.map { referenceTitle(for: $0.reference) })
-    }
-
-    private func parentTitle(for id: SceneNodeID) -> String {
-        guard let parent = parentSceneNode(for: id) else {
-            return "Root"
-        }
-        return parent.name
-    }
-
-    private func parentSummary(for nodes: [SceneNode]) -> String {
-        valueSummary(nodes.map { parentTitle(for: $0.id) })
-    }
-
-    private func parentSceneNode(for id: SceneNodeID) -> SceneNode? {
-        session.document.productMetadata.sceneNodes.values.first { node in
-            node.childIDs.contains(id)
-        }
-    }
-
-    private func descendantCount(for id: SceneNodeID) -> Int {
-        guard let node = session.document.productMetadata.sceneNodes[id] else {
-            return 0
-        }
-        return node.childIDs.reduce(node.childIDs.count) { count, childID in
-            count + descendantCount(for: childID)
-        }
-    }
-
     private func valueSummary(_ values: [String]) -> String {
         var uniqueValues: [String] = []
         var seenValues: Set<String> = []
@@ -9592,15 +9387,6 @@ public struct MainView: View {
             return "Profile \(shortID(profile.featureID))"
         case .curve(let curve):
             return "Curve \(shortID(curve.featureID))"
-        }
-    }
-
-    private func bodySourceSectionSummary(_ section: BodySourceSectionReference) -> String {
-        switch section {
-        case .profile(let profile):
-            return "Profile \(shortID(profile.featureID))"
-        case .curve(let featureID):
-            return "Curve \(shortID(featureID))"
         }
     }
 

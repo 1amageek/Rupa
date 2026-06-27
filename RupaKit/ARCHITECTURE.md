@@ -121,3 +121,4 @@ flowchart LR
 | `RupaUI/MainView.swift` | Workspace keyboard interpretation split into a pure action router with package tests; MainView now applies resolved actions |
 | `RupaUI/MainView.swift` | Inspector layout primitives and numeric controls split into reusable workspace inspector helpers |
 | `RupaUI/MainView.swift` | Document, scene, asset, unit, and ruler inspector sections split into a dedicated document inspector view |
+| `RupaUI/MainView.swift` | Object selection, reference, and hierarchy inspector sections split into overview state building and reusable text-section views |
