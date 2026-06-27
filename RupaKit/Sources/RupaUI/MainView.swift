@@ -6499,8 +6499,31 @@ public struct MainView: View {
                 inspectorRow("Edit", "Bridge Source")
             } else {
                 splineControlPointControls(entity)
-                splineEndpointTangencyControls(entity)
-                splineEndpointSmoothControls(entity)
+                WorkspaceSplineEndpointConstraintControlsView(
+                    entity: entity,
+                    displayUnit: session.document.displayUnit,
+                    onAddLineTangency: { entity, endpoint, lineID in
+                        addSplineEndpointTangentConstraint(
+                            entity,
+                            endpoint: endpoint,
+                            lineID: lineID
+                        )
+                    },
+                    onAddEndpointTangency: { entity, endpoint, target in
+                        addTangentSplineEndpointsConstraint(
+                            entity,
+                            endpoint: endpoint,
+                            target: target
+                        )
+                    },
+                    onAddEndpointSmoothness: { entity, endpoint, target in
+                        addSmoothSplineEndpointsConstraint(
+                            entity,
+                            endpoint: endpoint,
+                            target: target
+                        )
+                    }
+                )
             }
         default:
             inspectorRow("Edit", "Unsupported")
@@ -6596,193 +6619,6 @@ public struct MainView: View {
             }
         } else {
             inspectorRow("Smooth", "Unavailable")
-        }
-    }
-
-    @ViewBuilder
-    private func splineEndpointTangencyControls(_ entity: InspectorSketchEntity) -> some View {
-        if entity.tangentLineCandidates.isEmpty && entity.tangentSplineEndpointCandidates.isEmpty {
-            inspectorRow("Endpoint Tangency", "No Targets")
-        } else {
-            if hasSplineEndpointTangency(entity, endpoint: .start) {
-                inspectorRow(
-                    "Start Tangent",
-                    splineEndpointTangencySummary(
-                        lineIDs: entity.startTangentLineIDs,
-                        endpoints: entity.startTangentSplineEndpoints
-                    )
-                )
-            }
-            if hasSplineEndpointTangency(entity, endpoint: .end) {
-                inspectorRow(
-                    "End Tangent",
-                    splineEndpointTangencySummary(
-                        lineIDs: entity.endTangentLineIDs,
-                        endpoints: entity.endTangentSplineEndpoints
-                    )
-                )
-            }
-            inspectorActionRow {
-                if hasSplineEndpointTangency(entity, endpoint: .start) == false {
-                    splineEndpointTangencyMenu(
-                        "Start Tangent",
-                        entity: entity,
-                        endpoint: .start
-                    )
-                } else {
-                    Label("Start On", systemImage: "checkmark.circle")
-                        .foregroundStyle(.secondary)
-                        .accessibilityIdentifier("InspectorCurve.spline.startTangentOn")
-                }
-
-                if hasSplineEndpointTangency(entity, endpoint: .end) == false {
-                    splineEndpointTangencyMenu(
-                        "End Tangent",
-                        entity: entity,
-                        endpoint: .end
-                    )
-                } else {
-                    Label("End On", systemImage: "checkmark.circle")
-                        .foregroundStyle(.secondary)
-                        .accessibilityIdentifier("InspectorCurve.spline.endTangentOn")
-                }
-            }
-        }
-    }
-
-    private func splineEndpointTangencyMenu(
-        _ title: String,
-        entity: InspectorSketchEntity,
-        endpoint: SketchSplineEndpoint
-    ) -> some View {
-        Menu {
-            if entity.tangentLineCandidates.isEmpty == false {
-                Section("Lines") {
-                    ForEach(entity.tangentLineCandidates) { candidate in
-                        Button {
-                            addSplineEndpointTangentConstraint(
-                                entity,
-                                endpoint: endpoint,
-                                lineID: candidate.id
-                            )
-                        } label: {
-                            Label(sketchLineCandidateTitle(candidate), systemImage: "line.diagonal")
-                        }
-                    }
-                }
-            }
-            if entity.tangentSplineEndpointCandidates.isEmpty == false {
-                Section("Splines") {
-                    ForEach(entity.tangentSplineEndpointCandidates) { candidate in
-                        Button {
-                            addTangentSplineEndpointsConstraint(
-                                entity,
-                                endpoint: endpoint,
-                                target: candidate.reference
-                            )
-                        } label: {
-                            Label(sketchSplineEndpointCandidateTitle(candidate), systemImage: "point.3.connected.trianglepath.dotted")
-                        }
-                    }
-                }
-            }
-        } label: {
-            Label(title, systemImage: "point.topleft.down.curvedto.point.bottomright.up")
-        }
-        .accessibilityIdentifier("InspectorCurve.spline.\(endpoint.rawValue)Tangent")
-    }
-
-    private func hasSplineEndpointTangency(
-        _ entity: InspectorSketchEntity,
-        endpoint: SketchSplineEndpoint
-    ) -> Bool {
-        switch endpoint {
-        case .start:
-            return entity.startTangentLineIDs.isEmpty == false ||
-                entity.startTangentSplineEndpoints.isEmpty == false
-        case .end:
-            return entity.endTangentLineIDs.isEmpty == false ||
-                entity.endTangentSplineEndpoints.isEmpty == false
-        }
-    }
-
-    @ViewBuilder
-    private func splineEndpointSmoothControls(_ entity: InspectorSketchEntity) -> some View {
-        if entity.tangentSplineEndpointCandidates.isEmpty {
-            inspectorRow("Endpoint Smooth", "No Targets")
-        } else {
-            if hasSplineEndpointSmoothness(entity, endpoint: .start) {
-                inspectorRow(
-                    "Start Smooth",
-                    splineEndpointSmoothSummary(endpoints: entity.startSmoothSplineEndpoints)
-                )
-            }
-            if hasSplineEndpointSmoothness(entity, endpoint: .end) {
-                inspectorRow(
-                    "End Smooth",
-                    splineEndpointSmoothSummary(endpoints: entity.endSmoothSplineEndpoints)
-                )
-            }
-            inspectorActionRow {
-                if hasSplineEndpointSmoothness(entity, endpoint: .start) == false {
-                    splineEndpointSmoothMenu(
-                        "Start Smooth",
-                        entity: entity,
-                        endpoint: .start
-                    )
-                } else {
-                    Label("Start On", systemImage: "checkmark.circle")
-                        .foregroundStyle(.secondary)
-                        .accessibilityIdentifier("InspectorCurve.spline.startSmoothOn")
-                }
-
-                if hasSplineEndpointSmoothness(entity, endpoint: .end) == false {
-                    splineEndpointSmoothMenu(
-                        "End Smooth",
-                        entity: entity,
-                        endpoint: .end
-                    )
-                } else {
-                    Label("End On", systemImage: "checkmark.circle")
-                        .foregroundStyle(.secondary)
-                        .accessibilityIdentifier("InspectorCurve.spline.endSmoothOn")
-                }
-            }
-        }
-    }
-
-    private func splineEndpointSmoothMenu(
-        _ title: String,
-        entity: InspectorSketchEntity,
-        endpoint: SketchSplineEndpoint
-    ) -> some View {
-        Menu {
-            ForEach(entity.tangentSplineEndpointCandidates) { candidate in
-                Button {
-                    addSmoothSplineEndpointsConstraint(
-                        entity,
-                        endpoint: endpoint,
-                        target: candidate.reference
-                    )
-                } label: {
-                    Label(sketchSplineEndpointCandidateTitle(candidate), systemImage: "point.3.connected.trianglepath.dotted")
-                }
-            }
-        } label: {
-            Label(title, systemImage: "point.3.connected.trianglepath.dotted")
-        }
-        .accessibilityIdentifier("InspectorCurve.spline.\(endpoint.rawValue)Smooth")
-    }
-
-    private func hasSplineEndpointSmoothness(
-        _ entity: InspectorSketchEntity,
-        endpoint: SketchSplineEndpoint
-    ) -> Bool {
-        switch endpoint {
-        case .start:
-            return entity.startSmoothSplineEndpoints.isEmpty == false
-        case .end:
-            return entity.endSmoothSplineEndpoints.isEmpty == false
         }
     }
 
@@ -8404,36 +8240,6 @@ public struct MainView: View {
         let y = vector.y.formatted(.number.precision(.fractionLength(0...3)))
         let z = vector.z.formatted(.number.precision(.fractionLength(0...3)))
         return "x \(x), y \(y), z \(z)"
-    }
-
-    private func sketchLineCandidateTitle(_ candidate: InspectorSketchLineCandidate) -> String {
-        if let length = sketchLineLength(start: candidate.start, end: candidate.end) {
-            return "Line \(shortID(candidate.id))  \(formatted(length))"
-        }
-        return "Line \(shortID(candidate.id))"
-    }
-
-    private func sketchSplineEndpointCandidateTitle(_ candidate: InspectorSplineEndpointCandidate) -> String {
-        "Spline \(shortID(candidate.splineID)) \(candidate.endpoint.rawValue)"
-    }
-
-    private func splineEndpointTangencySummary(
-        lineIDs: Set<SketchEntityID>,
-        endpoints: Set<SketchSplineEndpointReference>
-    ) -> String {
-        let lineSummaries = lineIDs.map { "Line \(shortID($0))" }
-        let endpointSummaries = endpoints.map { "Spline \(shortID($0.splineID)) \($0.endpoint.rawValue)" }
-        return (lineSummaries + endpointSummaries)
-            .sorted()
-            .joined(separator: ", ")
-    }
-
-    private func splineEndpointSmoothSummary(
-        endpoints: Set<SketchSplineEndpointReference>
-    ) -> String {
-        endpoints.map { "Spline \(shortID($0.splineID)) \($0.endpoint.rawValue)" }
-            .sorted()
-            .joined(separator: ", ")
     }
 
     private func clampedSplineControlPointIndex(for entity: InspectorSketchEntity) -> Int {
