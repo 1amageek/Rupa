@@ -6069,44 +6069,23 @@ public struct MainView: View {
 
     @ViewBuilder
     private func sketchEntityInspectorErrorSections(_ error: Error) -> some View {
-        inspectorSection("Curve Selection") {
-            inspectorRow("Target", selectedTargetSummary)
-            inspectorRow("Status", "Unavailable")
-            inspectorRow("Reason", error.localizedDescription)
-        }
+        WorkspaceSketchCurveSelectionErrorView(
+            targetSummary: selectedTargetSummary,
+            reason: error.localizedDescription
+        )
     }
 
     @ViewBuilder
     private func sketchEntityInspectorSections(_ entity: InspectorSketchEntity) -> some View {
-        inspectorSection("Curve Selection") {
-            inspectorRow("Kind", sketchEntityKindTitle(entity.entityKind))
-            inspectorRow("Target", selectedTargetSummary)
-            inspectorRow("Source", entity.sourceFeatureName ?? shortID(entity.sourceFeatureID))
-            inspectorRow("Source ID", shortID(entity.sourceFeatureID))
-            inspectorRow("Entity ID", shortID(entity.entityID))
-            if let joinedCurveSourceID = entity.joinedCurveSourceID {
-                inspectorRow("Join Source", shortID(joinedCurveSourceID))
-            }
-            if let joinedCurveGroupSourceID = entity.joinedCurveGroupSourceID {
-                inspectorRow("Join Group", shortID(joinedCurveGroupSourceID))
-            }
-            if let continuity = entity.joinedCurveGroupContinuity {
-                inspectorRow("Join Continuity", sketchCurveJoinContinuityTitle(continuity))
-            }
-            if let center = entity.center {
-                inspectorRow("Center", sketchPointSummary(center))
-            }
-            if let start = entity.start {
-                inspectorRow("Start", sketchPointSummary(start))
-            }
-            if let end = entity.end {
-                inspectorRow("End", sketchPointSummary(end))
-            }
-        }
-
-        if let analysis = entity.analysis {
-            sketchEntityAnalysisSection(entity, analysis: analysis)
-        }
+        WorkspaceSketchCurveInspectorView(
+            entity: entity,
+            targetSummary: selectedTargetSummary,
+            displayUnit: session.document.displayUnit,
+            curvatureDisplay: curveCurvatureDisplay(for: entity),
+            pointDisplay: pointDisplay(for: entity),
+            onSetCurveCurvatureDisplay: setCurveCurvatureDisplay,
+            onSetPointDisplay: setPointDisplay
+        )
 
         if let bridgeCurve = entity.bridgeCurve {
             bridgeCurveInspectorSection(bridgeCurve)
@@ -6114,82 +6093,6 @@ public struct MainView: View {
 
         inspectorSection("Curve Edit") {
             sketchEntityEditControls(entity)
-        }
-    }
-
-    @ViewBuilder
-    private func sketchEntityAnalysisSection(
-        _ entity: InspectorSketchEntity,
-        analysis: InspectorCurveAnalysis
-    ) -> some View {
-        inspectorSection("Curve Analysis") {
-            inspectorRow("Samples", "\(analysis.sampleCount)")
-            inspectorRow("Length", analysis.approximateLength)
-            inspectorRow("Max Curvature", formattedCurvature(analysis.maxAbsCurvature))
-            let display = curveCurvatureDisplay(for: entity)
-            inspectorRow("Curvature Comb", display == nil ? "Off" : "On")
-            if analysis.maxAbsCurvature <= 1.0e-12 {
-                inspectorRow("Comb Output", "Flat curve")
-            }
-            inspectorActionRow {
-                Button {
-                    setCurveCurvatureDisplay(
-                        entity,
-                        isVisible: display == nil,
-                        combScale: display?.combScale ?? CurveCurvatureDisplay.defaultCombScale
-                    )
-                } label: {
-                    Label(
-                        display == nil ? "Show Comb" : "Hide Comb",
-                        systemImage: display == nil ? "waveform.path.ecg" : "eye.slash"
-                    )
-                }
-                .accessibilityIdentifier("InspectorCurve.curvatureComb.toggle")
-            }
-            if let display {
-                numericControl(
-                    "Comb Scale",
-                    values: [display.combScale],
-                    sliderRange: 0.01 ... max(1.0, display.combScale * 2.0)
-                ) { value in
-                    setCurveCurvatureDisplay(
-                        entity,
-                        isVisible: true,
-                        combScale: max(value, 1.0e-6)
-                    )
-                }
-            }
-            let pointDisplay = pointDisplay(for: entity)
-            inspectorRow("Points", pointDisplayTitle(pointDisplay))
-            inspectorActionRow {
-                Button {
-                    setPointDisplay(
-                        entity,
-                        isVisible: pointDisplay?.isVisible == false
-                    )
-                } label: {
-                    Label(
-                        pointDisplay?.isVisible == false ? "Show Points" : "Hide Points",
-                        systemImage: pointDisplay?.isVisible == false ? "smallcircle.filled.circle" : "eye.slash"
-                    )
-                }
-                .accessibilityIdentifier("InspectorCurve.points.toggle")
-            }
-            if analysis.continuityJoins.isEmpty {
-                inspectorRow("Continuity", "No joins")
-            } else {
-                inspectorRow("Continuity", "\(analysis.continuityJoins.count) joins")
-                ForEach(analysis.continuityJoins) { join in
-                    inspectorRow("Join", curveContinuityJoinSummary(join))
-                    inspectorRow("Gap", formatted(join.positionGap))
-                    if let tangentAngle = join.tangentAngle {
-                        inspectorRow("Tangent", formattedDegrees(degrees(fromRadians: tangentAngle)))
-                    }
-                    if let curvatureGap = join.curvatureGap {
-                        inspectorRow("Curvature", formattedCurvature(curvatureGap))
-                    }
-                }
-            }
         }
     }
 
@@ -7702,13 +7605,6 @@ public struct MainView: View {
         ]
     }
 
-    private func pointDisplayTitle(_ display: PointDisplay?) -> String {
-        guard let display else {
-            return "Default"
-        }
-        return display.isVisible ? "Visible" : "Hidden"
-    }
-
     private func setCurveCurvatureDisplay(
         _ entity: InspectorSketchEntity,
         isVisible: Bool,
@@ -8548,23 +8444,6 @@ public struct MainView: View {
         objectRegistry.definition(for: typeID)
     }
 
-    private func sketchEntityKindTitle(_ kind: String) -> String {
-        switch kind {
-        case "point":
-            return "Point"
-        case "line":
-            return "Line"
-        case "circle":
-            return "Circle"
-        case "arc":
-            return "Arc"
-        case "spline":
-            return "Spline"
-        default:
-            return kind
-        }
-    }
-
     private func regionOffsetGapFillTitle(_ gapFill: OffsetCurveGapFill) -> String {
         switch gapFill {
         case .round:
@@ -8573,43 +8452,6 @@ public struct MainView: View {
             return "Linear"
         case .natural:
             return "Natural"
-        }
-    }
-
-    private func curveContinuityJoinSummary(_ join: InspectorCurveContinuityJoin) -> String {
-        var parts = [
-            continuityJoinKindTitle(join.joinKind),
-            continuityTitle(join.actualContinuity),
-        ]
-        if let requiredContinuity = join.requiredContinuity {
-            parts.append("requires \(continuityTitle(requiredContinuity))")
-        }
-        let constraints = constraintKindsSummary(join.constraintKinds)
-        if constraints.isEmpty == false {
-            parts.append(constraints)
-        }
-        return parts.joined(separator: " / ")
-    }
-
-    private func continuityJoinKindTitle(_ kind: CurveAnalysisResult.ContinuityJoinKind) -> String {
-        switch kind {
-        case .internalSplineKnot:
-            return "Internal knot"
-        case .constrainedEndpoint:
-            return "Endpoint"
-        }
-    }
-
-    private func continuityTitle(_ level: CurveAnalysisResult.ContinuityLevel) -> String {
-        switch level {
-        case .disconnected:
-            return "Disconnected"
-        case .g0:
-            return "G0"
-        case .g1:
-            return "G1"
-        case .g2:
-            return "G2"
         }
     }
 
@@ -8693,24 +8535,6 @@ public struct MainView: View {
         let warnings = diagnostics.filter { $0.severity == .warning }.count
         let info = diagnostics.filter { $0.severity == .info }.count
         return "\(errors) errors, \(warnings) warnings, \(info) info"
-    }
-
-    private func constraintKindsSummary(_ kinds: [String]) -> String {
-        kinds.map { kind in
-            switch kind {
-            case "coincident":
-                return "Coincident"
-            case "tangentSplineEndpoints":
-                return "Tangent"
-            case "smoothSplineEndpoints":
-                return "Smooth"
-            case "splineKnot":
-                return "Spline knot"
-            default:
-                return kind
-            }
-        }
-        .joined(separator: ", ")
     }
 
     private func formattedCurvature(_ value: Double) -> String {
