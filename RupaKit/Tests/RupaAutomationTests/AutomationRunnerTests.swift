@@ -2342,6 +2342,53 @@ import SwiftCAD
 }
 
 @MainActor
+@Test func automationCanProjectBodyOutlinesToConstructionPlane() async throws {
+    let session = EditorSession()
+    let runner = AutomationRunner()
+    _ = try runner.execute(
+        .createExtrudedRectangleFromCorners(
+            name: "Automation Body Outline Box",
+            plane: .xy,
+            firstCorner: SketchPoint(
+                x: .length(0.0, .millimeter),
+                y: .length(0.0, .millimeter)
+            ),
+            oppositeCorner: SketchPoint(
+                x: .length(20.0, .millimeter),
+                y: .length(12.0, .millimeter)
+            ),
+            depth: .length(5.0, .millimeter),
+            direction: .normal
+        ),
+        in: session
+    )
+    let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let bodyNodeID = try #require(automationSceneNodeID(for: bodyFeatureID, in: session.document))
+
+    let result = try runner.execute(
+        .projectBodyOutlinesToConstructionPlane(
+            targets: [SelectionTarget(sceneNodeID: bodyNodeID)],
+            plane: .xy,
+            name: "Automation Projected Body Outline"
+        ),
+        in: session
+    )
+
+    let summary = try SketchEntitySummaryService().summarize(document: session.document)
+    let projectedEntries = summary.entries.filter {
+        $0.sourceFeatureName == "Automation Projected Body Outline"
+    }
+
+    #expect(result.message == "Body outlines projected.")
+    #expect(result.commandName == "projectBodyOutlinesToConstructionPlane")
+    #expect(result.didMutate)
+    #expect(result.generation == DocumentGeneration(2))
+    #expect(projectedEntries.count == 4)
+    #expect(projectedEntries.allSatisfy { $0.entityKind == "line" })
+    #expect(session.evaluationStatus == .valid)
+}
+
+@MainActor
 @Test func automationCanAddCoincidentSplineControlPointConstraint() async throws {
     let setup = try automationSplinePointConstraintDocument(name: "Automation Coincident Spline Point")
     let session = EditorSession(document: setup.document)

@@ -498,6 +498,21 @@ public struct AutomationRunner {
                 didMutate: result.didMutate,
                 diagnostics: result.diagnostics
             )
+        case .projectBodyOutlinesToConstructionPlane(let targets, let plane, let name):
+            let result = try session.execute(
+                .projectBodyOutlinesToConstructionPlane(
+                    targets: targets,
+                    plane: plane,
+                    name: name
+                )
+            )
+            return AutomationResult(
+                message: "Body outlines projected.",
+                commandName: result.commandName,
+                generation: result.generation,
+                didMutate: result.didMutate,
+                diagnostics: result.diagnostics
+            )
         case .setObjectDimension(let target, let kind, let value):
             let result = try session.execute(
                 .setObjectDimension(

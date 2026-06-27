@@ -562,6 +562,16 @@ public final class AgentCommandController: AgentClientProtocol {
             failureMode: "Rejects empty target lists, duplicate targets, non-curve sketch entities, unresolved source sketches, unresolved generated edges, generated edge targets outside the selected body, generated edge kinds other than line or circle, collapsed projected lines, invalid target planes, nonparallel source or generated circular projections until exact conic projection sources exist, invalid output sketches, and stale generations before mutation."
         ),
         capability(
+            "projectBodyOutlinesToConstructionPlane",
+            category: .sketch,
+            summary: "Project Outline subset: project selected generated body outlines onto the active or supplied construction plane along that plane normal, creating a new source curve sketch for downstream editing.",
+            access: .automationCommand,
+            mutatesDocument: true,
+            discovery: [.topologySummary, .constructionPlaneSummary],
+            targets: [.body, .constructionPlane],
+            failureMode: "Rejects empty target lists, duplicate body targets, subobject targets, non-body scene nodes, bodies without generated edge topology, generated outline edge kinds other than line or circle, invalid target planes, nonparallel circular outline projections until exact conic projection sources exist, empty non-collapsed projected outlines, invalid output sketches, and stale generations before mutation."
+        ),
+        capability(
             "addSketchConstraint",
             category: .sourceCurveEditing,
             summary: "Attach and immediately solve supported line, circular, and spline sketch constraints, including smooth spline knots, spline endpoint tangency to lines, tangent spline endpoints, and smooth spline endpoints, on an existing sketch feature.",

@@ -506,6 +506,17 @@ public final class CADDocumentStore {
             document = updatedDocument
             try commitMutation()
             evaluateCurrentDocument()
+        case .projectBodyOutlinesToConstructionPlane(let targets, let plane, let name):
+            var updatedDocument = document
+            try updatedDocument.projectBodyOutlinesToConstructionPlane(
+                targets: targets,
+                plane: plane,
+                name: name,
+                objectRegistry: objectRegistry
+            )
+            document = updatedDocument
+            try commitMutation()
+            evaluateCurrentDocument()
         case .addSketchConstraint(let featureID, let constraint):
             var updatedDocument = document
             try updatedDocument.addSketchConstraint(

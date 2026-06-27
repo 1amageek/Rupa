@@ -85,6 +85,11 @@ public enum EditorCommand: Codable, Equatable, Sendable {
         plane: SketchPlane?,
         name: String?
     )
+    case projectBodyOutlinesToConstructionPlane(
+        targets: [SelectionTarget],
+        plane: SketchPlane?,
+        name: String?
+    )
     case addSketchConstraint(featureID: FeatureID, constraint: SketchConstraint)
     case removeSketchConstraint(featureID: FeatureID, constraint: SketchConstraint)
     case createBridgeCurve(
@@ -364,6 +369,8 @@ public enum EditorCommand: Codable, Equatable, Sendable {
             "createFaceKnife"
         case .projectSketchCurvesToConstructionPlane:
             "projectSketchCurvesToConstructionPlane"
+        case .projectBodyOutlinesToConstructionPlane:
+            "projectBodyOutlinesToConstructionPlane"
         case .addSketchConstraint:
             "addSketchConstraint"
         case .removeSketchConstraint:
@@ -513,6 +520,7 @@ public enum EditorCommand: Codable, Equatable, Sendable {
              .createPolygonSketch,
              .createFaceKnife,
              .projectSketchCurvesToConstructionPlane,
+             .projectBodyOutlinesToConstructionPlane,
              .addSketchConstraint,
              .removeSketchConstraint,
              .createBridgeCurve,

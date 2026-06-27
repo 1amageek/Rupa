@@ -467,6 +467,101 @@ import Testing
 }
 
 @MainActor
+@Test func projectBodyOutlinesToConstructionPlaneCreatesDeduplicatedRectangleOutline() async throws {
+    let session = EditorSession()
+    _ = try session.execute(
+        .createExtrudedRectangleFromCorners(
+            name: "Body Outline Box",
+            plane: .xy,
+            firstCorner: SketchPoint(
+                x: .length(0.0, .millimeter),
+                y: .length(0.0, .millimeter)
+            ),
+            oppositeCorner: SketchPoint(
+                x: .length(20.0, .millimeter),
+                y: .length(12.0, .millimeter)
+            ),
+            depth: .length(5.0, .millimeter),
+            direction: .normal
+        )
+    )
+    let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let bodyNodeID = try #require(bodySceneNodeID(for: bodyFeatureID, in: session.document))
+
+    let result = try session.execute(
+        .projectBodyOutlinesToConstructionPlane(
+            targets: [SelectionTarget(sceneNodeID: bodyNodeID)],
+            plane: .xy,
+            name: "Projected Box Outline"
+        )
+    )
+
+    let summary = try SketchEntitySummaryService().summarize(document: session.document)
+    let projectedEntries = summary.entries.filter {
+        $0.sourceFeatureName == "Projected Box Outline"
+    }
+    let lineLengths = projectedEntries
+        .filter { $0.entityKind == "line" }
+        .map(lineEntryLength)
+        .sorted()
+
+    #expect(result.commandName == "projectBodyOutlinesToConstructionPlane")
+    #expect(result.didMutate)
+    #expect(session.generation == DocumentGeneration(2))
+    #expect(projectedEntries.count == 4)
+    #expect(lineLengths.count == 4)
+    #expect(abs(lineLengths[0] - 0.012) < 1.0e-12)
+    #expect(abs(lineLengths[1] - 0.012) < 1.0e-12)
+    #expect(abs(lineLengths[2] - 0.020) < 1.0e-12)
+    #expect(abs(lineLengths[3] - 0.020) < 1.0e-12)
+    #expect(session.evaluationStatus == .valid)
+}
+
+@MainActor
+@Test func projectBodyOutlinesToConstructionPlaneCreatesCircularOutlineArcs() async throws {
+    let session = EditorSession()
+    _ = try session.execute(
+        .createExtrudedCircle(
+            name: "Body Outline Cylinder",
+            plane: .xy,
+            center: SketchPoint(
+                x: .length(0.0, .millimeter),
+                y: .length(0.0, .millimeter)
+            ),
+            radius: .length(10.0, .millimeter),
+            depth: .length(5.0, .millimeter),
+            direction: .normal
+        )
+    )
+    let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let bodyNodeID = try #require(bodySceneNodeID(for: bodyFeatureID, in: session.document))
+
+    let result = try session.execute(
+        .projectBodyOutlinesToConstructionPlane(
+            targets: [SelectionTarget(sceneNodeID: bodyNodeID)],
+            plane: .xy,
+            name: "Projected Cylinder Outline"
+        )
+    )
+
+    let summary = try SketchEntitySummaryService().summarize(document: session.document)
+    let projectedEntries = summary.entries.filter {
+        $0.sourceFeatureName == "Projected Cylinder Outline"
+    }
+    let circularEntries = projectedEntries.filter {
+        $0.entityKind == "arc" || $0.entityKind == "circle"
+    }
+
+    #expect(result.commandName == "projectBodyOutlinesToConstructionPlane")
+    #expect(result.didMutate)
+    #expect(session.generation == DocumentGeneration(2))
+    #expect(projectedEntries.count == 4)
+    #expect(circularEntries.count == 4)
+    #expect(circularEntries.allSatisfy { abs(($0.radius ?? -1.0) - 0.010) < 1.0e-12 })
+    #expect(session.evaluationStatus == .valid)
+}
+
+@MainActor
 @Test func projectSketchCurvesRejectsNonparallelArcProjectionBeforeMutation() async throws {
     let session = EditorSession()
     let arcID = SketchEntityID()

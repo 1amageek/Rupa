@@ -1399,6 +1399,108 @@ public struct DesignDocument: Identifiable, Sendable {
         return "Projected Curves"
     }
 
+    @discardableResult
+    public mutating func projectBodyOutlinesToConstructionPlane(
+        targets: [SelectionTarget],
+        plane explicitPlane: SketchPlane? = nil,
+        name: String? = nil,
+        objectRegistry: ObjectTypeRegistry = .builtIn
+    ) throws -> FeatureID {
+        let operationName = "Project Outline"
+        guard targets.isEmpty == false else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "\(operationName) requires at least one body target."
+            )
+        }
+
+        let targetPlane = explicitPlane ?? activeConstructionPlane?.plane ?? .xy
+        let targetSystem = try SketchPlaneCoordinateSystem(plane: targetPlane)
+        let topology = try TopologySummaryService().summarize(
+            document: self,
+            objectRegistry: objectRegistry
+        )
+        var projectedEntities: [SketchEntityID: SketchEntity] = [:]
+        var seenEntities = Set<String>()
+        var sourceNames: [String] = []
+        var seenTargets = Set<SceneNodeID>()
+        for target in targets {
+            guard target.component == .object else {
+                throw EditorError(
+                    code: .commandInvalid,
+                    message: "\(operationName) requires body object targets, not subobject targets."
+                )
+            }
+            guard seenTargets.insert(target.sceneNodeID).inserted else {
+                throw EditorError(
+                    code: .commandInvalid,
+                    message: "\(operationName) received the same body target more than once."
+                )
+            }
+            guard let sceneNode = productMetadata.sceneNodes[target.sceneNodeID],
+                  sceneNode.reference?.kind == .body else {
+                throw EditorError(
+                    code: .commandInvalid,
+                    message: "\(operationName) target must reference a generated body scene node."
+                )
+            }
+            sourceNames.append(sceneNode.name)
+            let bodyEdges = topology.entries.filter {
+                $0.kind == .edge &&
+                    $0.sceneNodeID == target.sceneNodeID.description
+            }
+            guard bodyEdges.isEmpty == false else {
+                throw EditorError(
+                    code: .referenceUnresolved,
+                    message: "\(operationName) target body has no generated edge topology to outline."
+                )
+            }
+            for edge in bodyEdges {
+                guard let entity = try projectedOutlineSketchEntity(
+                    edge,
+                    to: targetSystem,
+                    owner: operationName
+                ) else {
+                    continue
+                }
+                let key = try projectedSketchEntityKey(entity)
+                if seenEntities.insert(key).inserted {
+                    projectedEntities[SketchEntityID()] = entity
+                }
+            }
+        }
+        guard projectedEntities.isEmpty == false else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "\(operationName) found no non-collapsed outline curves on the target construction plane."
+            )
+        }
+        let projectedSketch = Sketch(
+            plane: targetPlane,
+            entities: projectedEntities
+        )
+        try projectedSketch.validate()
+        try projectedSketch.validateExpressions(using: cadDocument.parameters)
+        let outputName = try normalizedMetadataName(
+            name ?? projectedOutlineName(from: sourceNames),
+            owner: operationName
+        )
+        return try appendSketchFeature(
+            name: outputName,
+            sketch: projectedSketch,
+            geometryRole: .curve,
+            objectRegistry: objectRegistry
+        )
+    }
+
+    private func projectedOutlineName(from sourceNames: [String]) -> String {
+        if sourceNames.count == 1,
+           let sourceName = sourceNames.first {
+            return "\(sourceName) Outline Projection"
+        }
+        return "Projected Outlines"
+    }
+
     private func projectedSketchEntity(
         for target: SelectionTarget,
         targetSystem: SketchPlaneCoordinateSystem,
@@ -1515,6 +1617,55 @@ public struct DesignDocument: Identifiable, Sendable {
                 }
             ))
         }
+    }
+
+    private func projectedOutlineSketchEntity(
+        _ entry: TopologySummaryResult.Entry,
+        to targetSystem: SketchPlaneCoordinateSystem,
+        owner: String
+    ) throws -> SketchEntity? {
+        switch entry.curveKind {
+        case "line":
+            return try projectedOutlineLineEdge(
+                entry,
+                to: targetSystem,
+                owner: owner
+            )
+        case "circle":
+            return try projectedGeneratedCircularEdge(
+                entry,
+                to: targetSystem,
+                owner: owner
+            )
+        default:
+            throw EditorError(
+                code: .commandInvalid,
+                message: "\(owner) currently supports outline projection for generated line and circular edges; B-spline or unknown edge outlines require exact trim-curve source support."
+            )
+        }
+    }
+
+    private func projectedOutlineLineEdge(
+        _ entry: TopologySummaryResult.Entry,
+        to targetSystem: SketchPlaneCoordinateSystem,
+        owner: String
+    ) throws -> SketchEntity? {
+        guard let start = entry.start,
+              let end = entry.end else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "\(owner) generated line edge has no resolved endpoints."
+            )
+        }
+        let projectedStart = targetSystem.project(point3D(start)).point
+        let projectedEnd = targetSystem.project(point3D(end)).point
+        guard hypot(projectedEnd.x - projectedStart.x, projectedEnd.y - projectedStart.y) > 1.0e-12 else {
+            return nil
+        }
+        return .line(SketchLine(
+            start: sketchPoint(from: projectedStart),
+            end: sketchPoint(from: projectedEnd)
+        ))
     }
 
     private func projectedGeneratedEdgeSketchEntity(
@@ -1845,6 +1996,56 @@ public struct DesignDocument: Identifiable, Sendable {
 
     private func vector3D(_ point: TopologySummaryResult.Entry.Point) -> Vector3D {
         Vector3D(x: point.x, y: point.y, z: point.z)
+    }
+
+    private func projectedSketchEntityKey(_ entity: SketchEntity) throws -> String {
+        switch entity {
+        case .line(let line):
+            let start = try resolvedPoint(line.start, owner: "Projected outline line start")
+            let end = try resolvedPoint(line.end, owner: "Projected outline line end")
+            let first = quantizedPointKey(Point2D(x: start.x, y: start.y))
+            let second = quantizedPointKey(Point2D(x: end.x, y: end.y))
+            let endpoints = [first, second].sorted()
+            return "line:\(endpoints[0]):\(endpoints[1])"
+        case .circle(let circle):
+            let center = try resolvedPoint(circle.center, owner: "Projected outline circle center")
+            let radius = try resolvedPositiveLengthValue(circle.radius, owner: "Projected outline circle radius")
+            return "circle:\(quantizedPointKey(Point2D(x: center.x, y: center.y))):\(quantizedValueKey(radius))"
+        case .arc(let arc):
+            let center = try resolvedPoint(arc.center, owner: "Projected outline arc center")
+            let radius = try resolvedPositiveLengthValue(arc.radius, owner: "Projected outline arc radius")
+            let startAngle = try resolvedAngleValue(arc.startAngle, owner: "Projected outline arc start angle")
+            let endAngle = try resolvedAngleValue(arc.endAngle, owner: "Projected outline arc end angle")
+            let start = Point2D(
+                x: center.x + cos(startAngle) * radius,
+                y: center.y + sin(startAngle) * radius
+            )
+            let end = Point2D(
+                x: center.x + cos(endAngle) * radius,
+                y: center.y + sin(endAngle) * radius
+            )
+            let endpoints = [quantizedPointKey(start), quantizedPointKey(end)].sorted()
+            return "arc:\(quantizedPointKey(Point2D(x: center.x, y: center.y))):\(quantizedValueKey(radius)):\(endpoints[0]):\(endpoints[1])"
+        case .spline:
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Project Outline cannot deduplicate spline outline curves yet."
+            )
+        case .point:
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Project Outline cannot deduplicate point outline geometry."
+            )
+        }
+    }
+
+    private func quantizedPointKey(_ point: Point2D) -> String {
+        "\(quantizedValueKey(point.x)):\(quantizedValueKey(point.y))"
+    }
+
+    private func quantizedValueKey(_ value: Double) -> String {
+        let scale = 1.0e10
+        return String(Int64((value * scale).rounded()))
     }
 
     @discardableResult

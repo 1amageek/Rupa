@@ -51,6 +51,7 @@ import SwiftCAD
     #expect(capabilities.contains("createPolygonSketch"))
     #expect(capabilities.contains("createFaceKnife"))
     #expect(capabilities.contains("projectSketchCurvesToConstructionPlane"))
+    #expect(capabilities.contains("projectBodyOutlinesToConstructionPlane"))
     #expect(capabilities.contains("addSketchConstraint"))
     #expect(capabilities.contains("removeSketchConstraint"))
     #expect(capabilities.contains("createBridgeCurve"))
@@ -135,6 +136,9 @@ import SwiftCAD
     let faceKnife = try #require(descriptors.first { $0.name == "createFaceKnife" })
     let projectCurves = try #require(
         descriptors.first { $0.name == "projectSketchCurvesToConstructionPlane" }
+    )
+    let projectOutlines = try #require(
+        descriptors.first { $0.name == "projectBodyOutlinesToConstructionPlane" }
     )
     let sketchConstraint = try #require(descriptors.first { $0.name == "addSketchConstraint" })
     let sketchConstraintRemoval = try #require(descriptors.first { $0.name == "removeSketchConstraint" })
@@ -266,6 +270,16 @@ import SwiftCAD
     #expect(projectCurves.summary.contains("source curve sketch"))
     #expect(projectCurves.failureMode.contains("generated edge"))
     #expect(projectCurves.failureMode.contains("nonparallel source or generated circular"))
+
+    #expect(projectOutlines.category == .sketch)
+    #expect(projectOutlines.mutatesDocument)
+    #expect(projectOutlines.access == .automationCommand)
+    #expect(projectOutlines.discovery.contains(.topologySummary))
+    #expect(projectOutlines.discovery.contains(.constructionPlaneSummary))
+    #expect(projectOutlines.targets == [.body, .constructionPlane])
+    #expect(projectOutlines.summary.contains("Project Outline"))
+    #expect(projectOutlines.summary.contains("source curve sketch"))
+    #expect(projectOutlines.failureMode.contains("non-body scene nodes"))
 
     #expect(sketchConstraint.category == .sourceCurveEditing)
     #expect(sketchConstraint.discovery.contains(.sketchEntitySummary))
@@ -2861,6 +2875,25 @@ private func rawAgentProtocolJSON(_ source: String) -> Data {
     #expect(decodedRequest == request)
 }
 
+@Test func agentMessageCodecRoundTripsProjectBodyOutlinesCommand() async throws {
+    let codec = AgentMessageCodec()
+    let sessionID = UUID()
+    let target = SelectionTarget(sceneNodeID: SceneNodeID())
+    let request = AgentRequest.execute(
+        sessionID: sessionID,
+        command: .projectBodyOutlinesToConstructionPlane(
+            targets: [target],
+            plane: .xy,
+            name: "Projected Body Outline"
+        ),
+        expectedGeneration: DocumentGeneration(7)
+    )
+
+    let decodedRequest = try codec.decodeRequest(from: try codec.encode(request))
+
+    #expect(decodedRequest == request)
+}
+
 @Test func agentMessageCodecRoundTripsCurveCurvatureDisplayCommand() async throws {
     let codec = AgentMessageCodec()
     let sessionID = UUID()
@@ -4044,6 +4077,60 @@ private func rawAgentProtocolJSON(_ source: String) -> Data {
     #expect(result.didMutate)
     #expect(result.generation == DocumentGeneration(2))
     #expect(projected.entityKind == "line")
+    #expect(session.evaluationStatus == .valid)
+}
+
+@MainActor
+@Test func agentProjectsBodyOutlineToConstructionPlaneThroughAutomation() async throws {
+    let server = AgentCommandController()
+    let sessionID = UUID()
+    let session = EditorSession()
+    _ = try session.execute(
+        .createExtrudedRectangleFromCorners(
+            name: "Agent Body Outline Box",
+            plane: .xy,
+            firstCorner: SketchPoint(
+                x: .length(0.0, .millimeter),
+                y: .length(0.0, .millimeter)
+            ),
+            oppositeCorner: SketchPoint(
+                x: .length(20.0, .millimeter),
+                y: .length(12.0, .millimeter)
+            ),
+            depth: .length(5.0, .millimeter),
+            direction: .normal
+        )
+    )
+    let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let bodyNodeID = try #require(agentSceneNodeID(for: bodyFeatureID, in: session.document))
+    server.register(session: session, id: sessionID)
+
+    let response = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .projectBodyOutlinesToConstructionPlane(
+                targets: [SelectionTarget(sceneNodeID: bodyNodeID)],
+                plane: .xy,
+                name: "Agent Projected Body Outline"
+            ),
+            expectedGeneration: DocumentGeneration(1)
+        )
+    )
+
+    guard case .command(let result) = response else {
+        Issue.record("Agent must return a command result.")
+        return
+    }
+    let summary = try SketchEntitySummaryService().summarize(document: session.document)
+    let projectedEntries = summary.entries.filter {
+        $0.sourceFeatureName == "Agent Projected Body Outline"
+    }
+
+    #expect(result.commandName == "projectBodyOutlinesToConstructionPlane")
+    #expect(result.didMutate)
+    #expect(result.generation == DocumentGeneration(2))
+    #expect(projectedEntries.count == 4)
+    #expect(projectedEntries.allSatisfy { $0.entityKind == "line" })
     #expect(session.evaluationStatus == .valid)
 }
 

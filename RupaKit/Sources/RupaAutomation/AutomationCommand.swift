@@ -82,6 +82,11 @@ public enum AutomationCommand: Codable, Equatable, Sendable {
         plane: SketchPlane?,
         name: String?
     )
+    case projectBodyOutlinesToConstructionPlane(
+        targets: [SelectionTarget],
+        plane: SketchPlane?,
+        name: String?
+    )
     case setObjectDimension(
         target: SelectionTarget,
         kind: ObjectDimensionKind,
@@ -439,6 +444,12 @@ public enum AutomationCommand: Codable, Equatable, Sendable {
             )
         case .projectSketchCurvesToConstructionPlane(let targets, let plane, let name):
             .projectSketchCurvesToConstructionPlane(
+                targets: targets,
+                plane: plane,
+                name: name
+            )
+        case .projectBodyOutlinesToConstructionPlane(let targets, let plane, let name):
+            .projectBodyOutlinesToConstructionPlane(
                 targets: targets,
                 plane: plane,
                 name: name

@@ -6642,6 +6642,7 @@ public struct MainView: View {
         surfaceAnalysisSection(nodes)
         surfaceContinuitySection(nodes)
 
+        projectOutlineSection(nodes)
         faceEditSection(nodes)
         edgeEditSection(nodes)
         vertexEditSection(nodes)
@@ -6976,6 +6977,38 @@ public struct MainView: View {
         }
         return node.object?.geometryRole == .surface
             || selectedGeneratedTopologyPersistentNames().isEmpty == false
+    }
+
+    @ViewBuilder
+    private func projectOutlineSection(_ nodes: [SceneNode]) -> some View {
+        let targets = bodyOutlineProjectionTargets(from: nodes)
+        if targets.isEmpty == false {
+            inspectorSection("Project") {
+                inspectorRow("Targets", "\(targets.count)")
+                inspectorActionRow {
+                    Button {
+                        projectSelectedBodyOutlinesToConstructionPlane(targets)
+                    } label: {
+                        Label("Project Outline", systemImage: "pencil.and.outline")
+                    }
+                    .accessibilityIdentifier("InspectorObject.projectOutline")
+                }
+            }
+        }
+    }
+
+    private func bodyOutlineProjectionTargets(
+        from nodes: [SceneNode]
+    ) -> [SelectionTarget] {
+        guard session.selection.selectedTargets.allSatisfy({ $0.component == .object }) else {
+            return []
+        }
+        return nodes.compactMap { node in
+            guard node.reference?.kind == .body else {
+                return nil
+            }
+            return SelectionTarget(sceneNodeID: node.id)
+        }
     }
 
     @ViewBuilder
@@ -9530,6 +9563,22 @@ public struct MainView: View {
             return
         }
         let result = session.projectSketchCurvesToConstructionPlane(
+            targets: targets,
+            plane: nil,
+            name: nil
+        )
+        if result?.diagnostics.isEmpty == false {
+            isPreviewExpanded = true
+        }
+    }
+
+    private func projectSelectedBodyOutlinesToConstructionPlane(
+        _ targets: [SelectionTarget]
+    ) {
+        guard targets.isEmpty == false else {
+            return
+        }
+        let result = session.projectBodyOutlinesToConstructionPlane(
             targets: targets,
             plane: nil,
             name: nil
