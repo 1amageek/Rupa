@@ -66,7 +66,7 @@ flowchart LR
 | File | Current issue | Preferred next split |
 |---|---|---|
 | `RupaRendering/Viewport.swift` | Drawing, hit testing, and interaction commit logic still share one SwiftUI type | Extract draw layers and drag controllers now that interaction/edit support types are separate |
-| `RupaUI/MainView.swift` | Keyboard handling and inspector sections still share one view | Extract inspector sections and keyboard router after context panels are separated |
+| `RupaUI/MainView.swift` | Inspector sections still share one view | Extract document, object, sketch, and surface inspector sections into focused views/services |
 
 ## Completed Organization Splits
 
@@ -118,3 +118,4 @@ flowchart LR
 | `RupaUI/MainView.swift` | Polygon and Sweep context panels split into standalone workspace panel views with command callbacks owned by MainView |
 | `RupaUI/MainView.swift` | Dimension, Slot, Edge Offset, and Region Offset context panels split into standalone workspace panel views with command callbacks owned by MainView |
 | `RupaUI/MainView.swift` | Curve and Surface CV slide context panels split into standalone workspace panel views with command callbacks owned by MainView |
+| `RupaUI/MainView.swift` | Workspace keyboard interpretation split into a pure action router with package tests; MainView now applies resolved actions |

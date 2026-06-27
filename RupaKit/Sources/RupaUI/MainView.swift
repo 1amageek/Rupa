@@ -2045,122 +2045,148 @@ public struct MainView: View {
     }
 
     private func handleWorkspaceKeyPress(_ keyPress: KeyPress) -> KeyPress.Result {
-        if let snapOverrideResult = handleSnapOverrideKeyPress(keyPress) {
-            return snapOverrideResult
-        }
-        guard keyPress.phase.contains(.down) || keyPress.phase.contains(.repeat) else {
+        guard let action = WorkspaceKeyboardRouter().action(
+            for: keyPress,
+            context: workspaceKeyboardContext
+        ) else {
             return .ignored
         }
-        if let constructionPlaneResult = handleConstructionPlaneKeyPress(keyPress) {
-            return constructionPlaneResult
-        }
+        return applyWorkspaceKeyboardAction(action)
+    }
 
-        guard !keyPress.modifiers.contains(.command),
-              !keyPress.modifiers.contains(.control),
-              !keyPress.modifiers.contains(.option) else {
-            return .ignored
-        }
+    private var workspaceKeyboardContext: WorkspaceKeyboardContext {
+        WorkspaceKeyboardContext(
+            isSelectToolActive: session.selectedTool == .select,
+            isPolygonToolActive: session.selectedTool == .polygon,
+            usesSketchAxisConstraint: usesSketchAxisConstraint,
+            isDimensionCommandActive: dimensionCommandState.isActive,
+            isSlotProfileCommandActive: slotProfileCommandState.isActive,
+            isEdgeOffsetCommandActive: edgeOffsetCommandState.isActive,
+            isRegionOffsetCommandActive: regionOffsetCommandState.isActive,
+            isCurveControlVertexSlideActive: slideCommandState.isCurveControlVerticesActive,
+            isSurfaceControlVertexSlideActive: slideCommandState.isSurfaceControlVerticesActive,
+            selectionScope: selectionScope,
+            hasCurveControlVertexSlideInput: selectedSplineControlPointSlideInput() != nil,
+            hasSurfaceControlVertexSlideTargets: selectedPolySplineSurfaceVertexTargets.isEmpty == false
+                || selectedSurfaceControlPointReferences.isEmpty == false,
+            hasConstructionPlaneTargets: selectedConstructionPlaneTargets != nil
+        )
+    }
 
-        if let dimensionResult = handleDimensionKeyPress(keyPress) {
-            return dimensionResult
-        }
-
-        if keyPress.key == .tab,
-           usesSketchAxisConstraint {
+    private func applyWorkspaceKeyboardAction(
+        _ action: WorkspaceKeyboardAction
+    ) -> KeyPress.Result {
+        switch action {
+        case .beginSnapCandidateKindBypass:
+            return snapOverrideState.beginCandidateKindBypass() ? .handled : .ignored
+        case .endSnapCandidateKindBypass:
+            snapOverrideState.endCandidateKindBypass()
+            return .handled
+        case .createConstructionPlane(let alignsView):
+            return createConstructionPlaneFromSelectedTargets(alignsView: alignsView)
+        case .createViewAlignedConstructionPlane(let pickOrigin):
+            return createViewAlignedConstructionPlaneFromKeyboard(pickOrigin: pickOrigin)
+        case .activateDimensionCommand:
+            activateDimensionCommand()
+            return .handled
+        case .advanceDimensionInputRoute:
+            dimensionCommandState.handleTab()
+            return .handled
+        case .commitDimensionCommand:
+            commitDimensionCommand()
+            return .handled
+        case .cancelDimensionCommand:
+            dimensionCommandState.deactivate()
+            return .handled
+        case .focusNextSketchDimensionInput:
             _ = session.focusNextSketchDimensionInput(
                 availableFocuses: activeSketchDimensionInputFocuses
             )
             return .handled
-        }
-
-        let key = keyPress.characters.lowercased()
-        if let offsetCurveResult = handleOffsetCurveKeyPress(key) {
-            return offsetCurveResult
-        }
-
-        if let slideCommandResult = handleSlideCommandKeyPress(keyPress) {
-            return slideCommandResult
-        }
-
-        if session.selectedTool == .polygon {
-            switch keyPress.key {
-            case .upArrow:
-                _ = session.adjustPolygonSideCount(by: 1)
-                return .handled
-            case .downArrow:
-                _ = session.adjustPolygonSideCount(by: -1)
-                return .handled
-            default:
-                break
+        case .activateOffsetCommand:
+            if selectedEdgeTargets.isEmpty == false {
+                activateEdgeOffsetCommand()
+            } else if selectedRegionTargets.isEmpty == false {
+                activateRegionOffsetCommand()
+            } else if selectedSlotSourceLineTarget != nil {
+                activateSlotProfileCommand()
+            } else {
+                activateRegionOffsetCommand()
             }
-        }
-
-        if usesSketchAxisConstraint,
-           let axisConstraint = SketchAxisConstraint(rawValue: key) {
+            return .handled
+        case .activateSlotWidthInput:
+            slotProfileCommandState.activateWidthInput()
+            return .handled
+        case .activateEdgeOffsetDistanceInput:
+            edgeOffsetCommandState.activateDistanceInput()
+            return .handled
+        case .activateRegionOffsetDistanceInput:
+            regionOffsetCommandState.activateDistanceInput()
+            return .handled
+        case .cycleEdgeOffsetGapFill:
+            edgeOffsetGapFill = edgeOffsetCommandState.gapFill(after: edgeOffsetGapFill)
+            return .handled
+        case .cycleRegionOffsetGapFill:
+            regionOffsetGapFill = regionOffsetCommandState.gapFill(after: regionOffsetGapFill)
+            return .handled
+        case .toggleEdgeOffsetLockedDistance:
+            edgeOffsetCommandState.toggleLockedDistance()
+            return .handled
+        case .toggleRegionOffsetLockedDistance:
+            regionOffsetCommandState.toggleLockedDistance()
+            return .handled
+        case .toggleCombinedRegions:
+            regionOffsetCommandState.toggleCombinedRegions()
+            if regionOffsetCommandState.usesCombinedRegions,
+               selectedRegionTargets.count < 2 {
+                session.reportToolStatus(
+                    "Combined Offset Region requires multiple selected regions.",
+                    severity: .warning
+                )
+                isPreviewExpanded = true
+            }
+            return .handled
+        case .activateSlideCommand:
+            activateSlideCommand()
+            return .handled
+        case .slideCurveControlVertices(let direction):
+            guard let input = selectedSplineControlPointSlideInput() else {
+                return .ignored
+            }
+            slideSelectedSplineControlPoints(
+                input.target,
+                controlPointIndexes: input.controlPointIndexes,
+                direction: direction
+            )
+            return .handled
+        case .slideSurfaceControlVertices(let direction):
+            let referenceTargets = selectedSurfaceControlPointReferences
+            if referenceTargets.isEmpty == false {
+                slideSelectedSurfaceControlPoints(referenceTargets, direction: direction)
+                return .handled
+            }
+            let vertexTargets = selectedPolySplineSurfaceVertexTargets
+            guard vertexTargets.isEmpty == false else {
+                return .ignored
+            }
+            slideSelectedPolySplineSurfaceVertices(vertexTargets, direction: direction)
+            return .handled
+        case .adjustPolygonSideCount(let offset):
+            _ = session.adjustPolygonSideCount(by: offset)
+            return .handled
+        case .toggleSketchAxisConstraint(let axisConstraint):
             _ = session.toggleSketchAxisConstraint(axisConstraint)
             return .handled
-        }
-
-        guard session.selectedTool == .polygon else {
-            return .ignored
-        }
-
-        switch key {
-        case "c":
+        case .togglePolygonSizingMode:
             _ = session.togglePolygonSizingMode()
             return .handled
-        case "v":
+        case .togglePolygonInclinationMode:
             _ = session.togglePolygonInclinationMode()
             return .handled
-        case "k":
+        case .togglePolygonCutsFaces:
             _ = session.togglePolygonCutsFaces()
             return .handled
-        default:
-            return .ignored
         }
-    }
-
-    private func handleSnapOverrideKeyPress(_ keyPress: KeyPress) -> KeyPress.Result? {
-        guard keyPress.characters.lowercased() == "x" else {
-            return nil
-        }
-        if keyPress.phase.contains(.up) {
-            snapOverrideState.endCandidateKindBypass()
-            return .handled
-        }
-        guard (keyPress.phase.contains(.down) || keyPress.phase.contains(.repeat)),
-              keyPress.modifiers.contains(.shift),
-              !keyPress.modifiers.contains(.command),
-              !keyPress.modifiers.contains(.control),
-              !keyPress.modifiers.contains(.option) else {
-            return nil
-        }
-        return snapOverrideState.beginCandidateKindBypass() ? .handled : .ignored
-    }
-
-    private func handleDimensionKeyPress(_ keyPress: KeyPress) -> KeyPress.Result? {
-        if dimensionCommandState.isActive {
-            switch keyPress.key {
-            case .tab:
-                dimensionCommandState.handleTab()
-                return .handled
-            case .return:
-                commitDimensionCommand()
-                return .handled
-            case .escape:
-                dimensionCommandState.deactivate()
-                return .handled
-            default:
-                break
-            }
-        }
-
-        guard session.selectedTool == .select,
-              keyPress.characters == "=" else {
-            return nil
-        }
-        activateDimensionCommand()
-        return .handled
     }
 
     private func activateDimensionCommand() {
@@ -2329,86 +2355,10 @@ public struct MainView: View {
         dimensionCommandState.deactivate()
     }
 
-    private func handleSlideCommandKeyPress(_ keyPress: KeyPress) -> KeyPress.Result? {
-        guard session.selectedTool == .select else {
-            return nil
-        }
-
-        let key = keyPress.characters.lowercased()
-        if key == "g", keyPress.modifiers.contains(.shift) {
-            activateSlideCommand()
-            return .handled
-        }
-
-        guard selectionScope == .sketchEntity,
-              slideCommandState.isCurveControlVerticesActive,
-              let input = selectedSplineControlPointSlideInput() else {
-            if selectionScope == .vertex,
-               slideCommandState.isSurfaceControlVerticesActive {
-                let vertexTargets = selectedPolySplineSurfaceVertexTargets
-                let referenceTargets = selectedSurfaceControlPointReferences
-                guard vertexTargets.isEmpty == false || referenceTargets.isEmpty == false else {
-                    return nil
-                }
-                let direction: PolySplineSurfaceVertexSlideDirection
-                switch key {
-                case "u":
-                    direction = keyPress.modifiers.contains(.shift) ? .negativeU : .positiveU
-                case "n":
-                    direction = .normal
-                case "v":
-                    direction = keyPress.modifiers.contains(.shift) ? .negativeV : .positiveV
-                default:
-                    return nil
-                }
-                if referenceTargets.isEmpty == false {
-                    slideSelectedSurfaceControlPoints(
-                        referenceTargets,
-                        direction: direction
-                    )
-                } else {
-                    slideSelectedPolySplineSurfaceVertices(
-                        vertexTargets,
-                        direction: direction
-                    )
-                }
-                return .handled
-            }
-            return nil
-        }
-
-        let direction: SplineControlPointSlideDirection
-        switch key {
-        case "u":
-            direction = keyPress.modifiers.contains(.shift) ? .negativeU : .positiveU
-        case "n":
-            direction = .normal
-        default:
-            return nil
-        }
-
-        slideSelectedSplineControlPoints(
-            input.target,
-            controlPointIndexes: input.controlPointIndexes,
-            direction: direction
-        )
-        return .handled
-    }
-
-    private func handleConstructionPlaneKeyPress(_ keyPress: KeyPress) -> KeyPress.Result? {
-        guard session.selectedTool == .select,
-              keyPress.key == .space,
-              !keyPress.modifiers.contains(.command),
-              !keyPress.modifiers.contains(.option) else {
-            return nil
-        }
-        if keyPress.modifiers.contains(.control) {
-            return handleViewAlignedConstructionPlaneKeyPress(keyPress)
-        }
+    private func createConstructionPlaneFromSelectedTargets(alignsView: Bool) -> KeyPress.Result {
         guard let targets = selectedConstructionPlaneTargets else {
-            return nil
+            return .ignored
         }
-        let alignsView = !keyPress.modifiers.contains(.shift)
         let result = session.createConstructionPlaneFromTargets(
             targets,
             viewNormal: viewportProjectionBasis.viewNormal
@@ -2567,7 +2517,7 @@ public struct MainView: View {
         }
     }
 
-    private func handleViewAlignedConstructionPlaneKeyPress(_ keyPress: KeyPress) -> KeyPress.Result {
+    private func createViewAlignedConstructionPlaneFromKeyboard(pickOrigin: Bool) -> KeyPress.Result {
         guard let viewNormal = viewportProjectionBasis.viewNormal else {
             session.reportToolStatus(
                 "View-aligned construction plane requires a resolved viewport normal.",
@@ -2577,7 +2527,7 @@ public struct MainView: View {
             return .handled
         }
 
-        if keyPress.modifiers.contains(.shift) {
+        if pickOrigin {
             viewAlignedConstructionPlaneRequest = ViewAlignedConstructionPlaneRequest(
                 viewNormal: viewNormal
             )
@@ -2631,76 +2581,6 @@ public struct MainView: View {
             isPreviewExpanded = true
         } else {
             session.reportToolStatus("View-aligned construction plane created.")
-        }
-    }
-
-    private func handleOffsetCurveKeyPress(_ key: String) -> KeyPress.Result? {
-        guard session.selectedTool == .select else {
-            return nil
-        }
-
-        switch key {
-        case "o":
-            if selectedEdgeTargets.isEmpty == false {
-                activateEdgeOffsetCommand()
-            } else if selectedRegionTargets.isEmpty == false {
-                activateRegionOffsetCommand()
-            } else if selectedSlotSourceLineTarget != nil {
-                activateSlotProfileCommand()
-            } else {
-                activateRegionOffsetCommand()
-            }
-            return .handled
-        case "d":
-            if slotProfileCommandState.isActive {
-                slotProfileCommandState.activateWidthInput()
-                return .handled
-            }
-            if edgeOffsetCommandState.isActive {
-                edgeOffsetCommandState.activateDistanceInput()
-                return .handled
-            }
-            guard regionOffsetCommandState.isActive else {
-                return nil
-            }
-            regionOffsetCommandState.activateDistanceInput()
-            return .handled
-        case "v":
-            if edgeOffsetCommandState.isActive {
-                edgeOffsetGapFill = edgeOffsetCommandState.gapFill(after: edgeOffsetGapFill)
-                return .handled
-            }
-            guard regionOffsetCommandState.isActive else {
-                return nil
-            }
-            regionOffsetGapFill = regionOffsetCommandState.gapFill(after: regionOffsetGapFill)
-            return .handled
-        case "s":
-            if edgeOffsetCommandState.isActive {
-                edgeOffsetCommandState.toggleLockedDistance()
-                return .handled
-            }
-            guard regionOffsetCommandState.isActive else {
-                return nil
-            }
-            regionOffsetCommandState.toggleLockedDistance()
-            return .handled
-        case "i":
-            guard regionOffsetCommandState.isActive else {
-                return nil
-            }
-            regionOffsetCommandState.toggleCombinedRegions()
-            if regionOffsetCommandState.usesCombinedRegions,
-               selectedRegionTargets.count < 2 {
-                session.reportToolStatus(
-                    "Combined Offset Region requires multiple selected regions.",
-                    severity: .warning
-                )
-                isPreviewExpanded = true
-            }
-            return .handled
-        default:
-            return nil
         }
     }
 
