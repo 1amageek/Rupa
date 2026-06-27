@@ -65,7 +65,7 @@ flowchart LR
 
 | File | Current issue | Preferred next split |
 |---|---|---|
-| `RupaCore/DesignDocument.swift` | Command facade still contains sketch, solid direct-editing, surface, and remaining shared helper implementations | Move high-cohesion command families into `DesignDocument+Sketch`, `DesignDocument+SolidDirectEditing`, `DesignDocument+Surface`, and shared internal command utilities |
+| `RupaCore/DesignDocument.swift` | Command facade still contains sketch, surface, and remaining shared helper implementations | Move high-cohesion command families into `DesignDocument+Sketch`, `DesignDocument+Surface`, and shared internal command utilities |
 | `RupaRendering/Viewport.swift` | Drawing, hit testing, drag state, and interaction commit logic share one SwiftUI type | Extract draw layers and drag controllers without changing the public `Viewport` API |
 | `RupaUI/MainView.swift` | Workspace layout, command panels, keyboard handling, and inspectors share one view | Extract command panels, workspace rail, and keyboard router |
 
@@ -82,3 +82,4 @@ flowchart LR
 | `RupaCore/DesignDocument.swift` | Focused display command extension plus display target component resolver |
 | `RupaCore/DesignDocument.swift` | Object property source writeback command and source synchronization helpers |
 | `RupaCore/DesignDocument.swift` | Solid creation commands for extrude, revolve, sweep, primitive extrusion, plus shared command value and feature mutation helpers |
+| `RupaCore/DesignDocument.swift` | Solid direct-editing commands for face offset, edge chamfer, edge fillet, vertex move, plus shared body target resolution |
