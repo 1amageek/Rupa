@@ -6498,7 +6498,25 @@ public struct MainView: View {
             if entity.bridgeCurve != nil {
                 inspectorRow("Edit", "Bridge Source")
             } else {
-                splineControlPointControls(entity)
+                WorkspaceSplineControlPointControlsView(
+                    entity: entity,
+                    displayUnit: session.document.displayUnit,
+                    selectedControlPointIndexes: selectedSplineControlPointIndexes(for: entity),
+                    selectedControlPointIndex: $selectedSplineControlPointIndex,
+                    slideDistanceMeters: $sketchSplineControlPointSlideDistanceMeters,
+                    slideCount: $sketchSplineControlPointSlideCount,
+                    moveStepMeters: defaultSketchEntityMoveStepMeters,
+                    slideDistanceSliderRange: lengthSliderRange(for: sketchSplineControlPointSlideDistanceMeters),
+                    onAddSmoothControlPoint: addSmoothSplineControlPointConstraint,
+                    onMoveControlPoint: moveSelectedSplineControlPoint,
+                    onSlideControlPoints: { target, controlPointIndexes, direction in
+                        slideSelectedSplineControlPoints(
+                            target,
+                            controlPointIndexes: controlPointIndexes,
+                            direction: direction
+                        )
+                    }
+                )
                 WorkspaceSplineEndpointConstraintControlsView(
                     entity: entity,
                     displayUnit: session.document.displayUnit,
@@ -6527,208 +6545,6 @@ public struct MainView: View {
             }
         default:
             inspectorRow("Edit", "Unsupported")
-        }
-    }
-
-    @ViewBuilder
-    private func splineControlPointControls(_ entity: InspectorSketchEntity) -> some View {
-        if entity.controlPoints.isEmpty {
-            inspectorRow("Control Point", "None")
-        } else {
-            let index = clampedSplineControlPointIndex(for: entity)
-            let selectedControlPointIndexes = selectedSplineControlPointIndexes(for: entity)
-            let indexBounds = 0 ... max(entity.controlPoints.count - 1, 0)
-            inspectorControlRow("Control Point") {
-                Stepper(
-                    value: Binding<Int>(
-                        get: { clampedSplineControlPointIndex(for: entity) },
-                        set: { selectedSplineControlPointIndex = clamped($0, in: entity.controlPoints.indices) }
-                    ),
-                    in: indexBounds
-                ) {
-                    Text("\(index + 1) / \(entity.controlPoints.count)")
-                        .monospacedDigit()
-                }
-                .accessibilityIdentifier("InspectorCurve.spline.controlPointIndex")
-            }
-            inspectorRow("Point", sketchPointSummary(entity.controlPoints[index]))
-            splineSmoothConstraintControls(entity, controlPointIndex: index)
-            splineControlPointMoveControls(
-                "Point \(index + 1)",
-                target: entity.target,
-                controlPointIndex: index,
-                accessibilityPrefix: "InspectorCurve.spline.controlPoint"
-            )
-            numericControl(
-                "Slide CV",
-                values: [sketchSplineControlPointSlideDistanceMeters],
-                sliderRange: lengthSliderRange(for: sketchSplineControlPointSlideDistanceMeters)
-            ) { distance in
-                sketchSplineControlPointSlideDistanceMeters = max(distance, 1.0e-9)
-            } unitLabel: {
-                "m"
-            }
-            if selectedControlPointIndexes.isEmpty {
-                let slideCountBounds = 1 ... max(entity.controlPoints.count - index, 1)
-                inspectorControlRow("Slide Count") {
-                    Stepper(
-                        value: Binding<Int>(
-                            get: { min(max(sketchSplineControlPointSlideCount, slideCountBounds.lowerBound), slideCountBounds.upperBound) },
-                            set: { sketchSplineControlPointSlideCount = min(max($0, slideCountBounds.lowerBound), slideCountBounds.upperBound) }
-                        ),
-                        in: slideCountBounds
-                    ) {
-                        Text("\(min(max(sketchSplineControlPointSlideCount, slideCountBounds.lowerBound), slideCountBounds.upperBound))")
-                            .monospacedDigit()
-                    }
-                    .accessibilityIdentifier("InspectorCurve.spline.slideCount")
-                }
-            } else {
-                inspectorRow("Selected CVs", splineControlPointSelectionSummary(selectedControlPointIndexes))
-            }
-            splineControlPointSlideControls(
-                target: entity.target,
-                controlPointIndexes: selectedControlPointIndexes.isEmpty
-                    ? selectedSplineControlPointSlideIndexes(
-                        startIndex: index,
-                        maximumControlPointCount: entity.controlPoints.count
-                    )
-                    : selectedControlPointIndexes,
-                accessibilityPrefix: "InspectorCurve.spline.controlPoint"
-            )
-        }
-    }
-
-    @ViewBuilder
-    private func splineSmoothConstraintControls(
-        _ entity: InspectorSketchEntity,
-        controlPointIndex index: Int
-    ) -> some View {
-        if isSmoothableSplineControlPoint(index, controlPointCount: entity.controlPoints.count) {
-            if entity.smoothSplineControlPointIndexes.contains(index) {
-                inspectorRow("Smooth", "On")
-            } else {
-                inspectorActionRow {
-                    Button {
-                        addSmoothSplineControlPointConstraint(entity, controlPointIndex: index)
-                    } label: {
-                        Label("Smooth", systemImage: "point.3.connected.trianglepath.dotted")
-                    }
-                    .accessibilityIdentifier("InspectorCurve.spline.smoothControlPoint")
-                }
-            }
-        } else {
-            inspectorRow("Smooth", "Unavailable")
-        }
-    }
-
-    @ViewBuilder
-    private func splineControlPointMoveControls(
-        _ title: String,
-        target: SelectionTarget,
-        controlPointIndex: Int,
-        accessibilityPrefix: String
-    ) -> some View {
-        inspectorControlRow("\(title) X") {
-            HStack(spacing: 6) {
-                sketchEntityMoveButton(
-                    systemImage: "arrow.left",
-                    help: "Move \(title.lowercased()) negative X",
-                    accessibilityIdentifier: "\(accessibilityPrefix).moveXNegative"
-                ) {
-                    moveSelectedSplineControlPoint(
-                        target,
-                        controlPointIndex: controlPointIndex,
-                        deltaX: -defaultSketchEntityMoveStepMeters,
-                        deltaY: 0.0
-                    )
-                }
-                sketchEntityMoveButton(
-                    systemImage: "arrow.right",
-                    help: "Move \(title.lowercased()) positive X",
-                    accessibilityIdentifier: "\(accessibilityPrefix).moveXPositive"
-                ) {
-                    moveSelectedSplineControlPoint(
-                        target,
-                        controlPointIndex: controlPointIndex,
-                        deltaX: defaultSketchEntityMoveStepMeters,
-                        deltaY: 0.0
-                    )
-                }
-            }
-        }
-        inspectorControlRow("\(title) Y") {
-            HStack(spacing: 6) {
-                sketchEntityMoveButton(
-                    systemImage: "arrow.down",
-                    help: "Move \(title.lowercased()) negative Y",
-                    accessibilityIdentifier: "\(accessibilityPrefix).moveYNegative"
-                ) {
-                    moveSelectedSplineControlPoint(
-                        target,
-                        controlPointIndex: controlPointIndex,
-                        deltaX: 0.0,
-                        deltaY: -defaultSketchEntityMoveStepMeters
-                    )
-                }
-                sketchEntityMoveButton(
-                    systemImage: "arrow.up",
-                    help: "Move \(title.lowercased()) positive Y",
-                    accessibilityIdentifier: "\(accessibilityPrefix).moveYPositive"
-                ) {
-                    moveSelectedSplineControlPoint(
-                        target,
-                        controlPointIndex: controlPointIndex,
-                        deltaX: 0.0,
-                        deltaY: defaultSketchEntityMoveStepMeters
-                    )
-                }
-            }
-        }
-    }
-
-    @ViewBuilder
-    private func splineControlPointSlideControls(
-        target: SelectionTarget,
-        controlPointIndexes: [Int],
-        accessibilityPrefix: String
-    ) -> some View {
-        inspectorControlRow("Slide") {
-            HStack(spacing: 6) {
-                sketchEntityMoveButton(
-                    systemImage: "arrow.right",
-                    help: "Slide control point positive U",
-                    accessibilityIdentifier: "\(accessibilityPrefix).slidePositiveU"
-                ) {
-                    slideSelectedSplineControlPoints(
-                        target,
-                        controlPointIndexes: controlPointIndexes,
-                        direction: .positiveU
-                    )
-                }
-                sketchEntityMoveButton(
-                    systemImage: "arrow.left",
-                    help: "Slide control point negative U",
-                    accessibilityIdentifier: "\(accessibilityPrefix).slideNegativeU"
-                ) {
-                    slideSelectedSplineControlPoints(
-                        target,
-                        controlPointIndexes: controlPointIndexes,
-                        direction: .negativeU
-                    )
-                }
-                sketchEntityMoveButton(
-                    systemImage: "arrow.up.right",
-                    help: "Slide control point normal",
-                    accessibilityIdentifier: "\(accessibilityPrefix).slideNormal"
-                ) {
-                    slideSelectedSplineControlPoints(
-                        target,
-                        controlPointIndexes: controlPointIndexes,
-                        direction: .normal
-                    )
-                }
-            }
         }
     }
 
@@ -7096,19 +6912,6 @@ public struct MainView: View {
         }
     }
 
-    private func selectedSplineControlPointSlideIndexes(
-        startIndex: Int,
-        maximumControlPointCount: Int
-    ) -> [Int] {
-        guard maximumControlPointCount > 0 else {
-            return []
-        }
-        let clampedStartIndex = min(max(startIndex, 0), maximumControlPointCount - 1)
-        let requestedCount = max(sketchSplineControlPointSlideCount, 1)
-        let upperBound = min(maximumControlPointCount, clampedStartIndex + requestedCount)
-        return Array(clampedStartIndex..<upperBound)
-    }
-
     private func selectedSplineControlPointIndexes(for entity: InspectorSketchEntity) -> [Int] {
         var indexes: [Int] = []
         var seenIndexes: Set<Int> = []
@@ -7139,17 +6942,6 @@ public struct MainView: View {
             entity.target,
             selectedIndexes
         )
-    }
-
-    private func splineControlPointSelectionSummary(_ indexes: [Int]) -> String {
-        guard indexes.isEmpty == false else {
-            return "None"
-        }
-        let labels = indexes.sorted().map { String($0 + 1) }.joined(separator: ", ")
-        if indexes.count == 1 {
-            return "1 CV: \(labels)"
-        }
-        return "\(indexes.count) CVs: \(labels)"
     }
 
     private func slideSelectedSplineControlPoints(
@@ -8240,22 +8032,6 @@ public struct MainView: View {
         let y = vector.y.formatted(.number.precision(.fractionLength(0...3)))
         let z = vector.z.formatted(.number.precision(.fractionLength(0...3)))
         return "x \(x), y \(y), z \(z)"
-    }
-
-    private func clampedSplineControlPointIndex(for entity: InspectorSketchEntity) -> Int {
-        clamped(selectedSplineControlPointIndex, in: entity.controlPoints.indices)
-    }
-
-    private func isSmoothableSplineControlPoint(_ index: Int, controlPointCount: Int) -> Bool {
-        index > 0 && index < controlPointCount - 1 && index.isMultiple(of: 3)
-    }
-
-    private func clamped(_ value: Int, in range: Range<Int>) -> Int {
-        guard let lowerBound = range.first,
-              let upperBound = range.last else {
-            return 0
-        }
-        return min(max(value, lowerBound), upperBound)
     }
 
     private func sketchLineLength(for entity: InspectorSketchEntity) -> Double? {

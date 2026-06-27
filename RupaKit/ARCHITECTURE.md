@@ -127,3 +127,4 @@ flowchart LR
 | `RupaUI/MainView.swift` | Sketch curve selection and analysis display split into a dedicated curve inspector view with display toggles injected by MainView |
 | `RupaUI/MainView.swift` | Bridge Curve source, continuity, parameter, and tension controls split into a dedicated bridge curve inspector view with mutation callbacks owned by MainView |
 | `RupaUI/MainView.swift` | Spline endpoint tangency and smoothness constraint controls split into a dedicated endpoint constraint view with mutation callbacks owned by MainView |
+| `RupaUI/MainView.swift` | Spline control point index, move, slide, and smooth control-point constraint controls split into a dedicated control point view with mutation callbacks owned by MainView |
