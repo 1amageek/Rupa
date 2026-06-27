@@ -1,4 +1,5 @@
 import SwiftUI
+import RupaCore
 
 let inspectorLabelWidth: CGFloat = 124
 let inspectorControlWidth: CGFloat = 104
@@ -132,4 +133,23 @@ func commonWorkspaceInspectorValue(_ values: [Double]) -> Double? {
         }
     }
     return first
+}
+
+@MainActor
+func workspaceLengthControl(
+    _ title: String,
+    values: [Double],
+    displayUnit: LengthDisplayUnit,
+    sliderRange: ClosedRange<Double>,
+    onChange: @escaping (Double) -> Void
+) -> some View {
+    numericControl(
+        title,
+        values: values.map { displayUnit.value(fromMeters: $0) },
+        sliderRange: sliderRange
+    ) { value in
+        onChange(displayUnit.meters(from: value))
+    } unitLabel: {
+        displayUnit.symbol
+    }
 }

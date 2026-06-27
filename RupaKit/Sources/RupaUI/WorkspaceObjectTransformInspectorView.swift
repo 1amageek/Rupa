@@ -40,23 +40,26 @@ struct WorkspaceObjectTransformInspectorView: View {
 
     private var positionSection: some View {
         inspectorSection("Position") {
-            transformLengthControl(
+            workspaceLengthControl(
                 "X",
                 values: nodes.map { WorkspaceTransformMatrix.translation(for: $0).x },
+                displayUnit: displayUnit,
                 sliderRange: positionSliderRange
             ) { meters in
                 onSetTransformComponent(.translationX, meters)
             }
-            transformLengthControl(
+            workspaceLengthControl(
                 "Y",
                 values: nodes.map { WorkspaceTransformMatrix.translation(for: $0).y },
+                displayUnit: displayUnit,
                 sliderRange: positionSliderRange
             ) { meters in
                 onSetTransformComponent(.translationY, meters)
             }
-            transformLengthControl(
+            workspaceLengthControl(
                 "Z",
                 values: nodes.map { WorkspaceTransformMatrix.translation(for: $0).z },
+                displayUnit: displayUnit,
                 sliderRange: positionSliderRange
             ) { meters in
                 onSetTransformComponent(.translationZ, meters)
@@ -226,20 +229,4 @@ struct WorkspaceObjectTransformInspectorView: View {
         return .material(first)
     }
 
-    private func transformLengthControl(
-        _ title: String,
-        values: [Double],
-        sliderRange: ClosedRange<Double>,
-        onChange: @escaping (Double) -> Void
-    ) -> some View {
-        numericControl(
-            title,
-            values: values.map { displayUnit.value(fromMeters: $0) },
-            sliderRange: sliderRange
-        ) { value in
-            onChange(displayUnit.meters(from: value))
-        } unitLabel: {
-            displayUnit.symbol
-        }
-    }
 }

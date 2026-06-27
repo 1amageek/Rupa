@@ -7239,81 +7239,17 @@ public struct MainView: View {
             documentGeneration: session.generation
         )
         let shapes = nodes.map { objectShape(for: $0, in: scene) }
-        if shapes.allSatisfy({ $0 != nil }) {
-            let resolvedShapes = shapes.compactMap { $0 }
-            inspectorSection("Shape") {
-                inspectorRow("Object", valueSummary(resolvedShapes.map(objectShapeTitle)))
-                inspectorRow(
-                    "Source",
-                    valueSummary(resolvedShapes.map { $0.definition?.sourceRepresentation.title ?? "Unknown" })
-                )
-                inspectorRow(
-                    "Generated",
-                    valueSummary(resolvedShapes.map {
-                        $0.definition?.generatedRepresentation(for: $0.properties).title ?? "Unknown"
-                    })
-                )
-                objectCenterControls(resolvedShapes)
-                if resolvedShapes.allSatisfy({ $0.typeID == .cube || $0.typeID == .cylinder }) {
-                    objectSizeControls(resolvedShapes)
-                }
-                objectSchemaPropertyRows(resolvedShapes)
-            }
-        } else {
-            inspectorSection("Shape") {
-                inspectorRow("Object", "Mixed or Unsupported")
-            }
-        }
-    }
-
-    @ViewBuilder
-    private func objectCenterControls(_ shapes: [InspectorObjectShape]) -> some View {
-        transformLengthControl(
-            "Center X",
-            values: shapes.map { $0.center.x },
-            sliderRange: transformPositionSliderRange
-        ) { meters in
-            setObjectCenter(.x, to: meters, for: shapes)
-        }
-        transformLengthControl(
-            "Center Y",
-            values: shapes.map { $0.center.y },
-            sliderRange: transformPositionSliderRange
-        ) { meters in
-            setObjectCenter(.y, to: meters, for: shapes)
-        }
-        transformLengthControl(
-            "Center Z",
-            values: shapes.map { $0.center.z },
-            sliderRange: transformPositionSliderRange
-        ) { meters in
-            setObjectCenter(.z, to: meters, for: shapes)
-        }
-    }
-
-    @ViewBuilder
-    private func objectSizeControls(_ shapes: [InspectorObjectShape]) -> some View {
-        transformLengthControl(
-            "Size X",
-            values: shapes.map { $0.size.x },
-            sliderRange: sizeSliderRange
-        ) { meters in
-            setObjectSize(.x, to: meters, for: shapes)
-        }
-        transformLengthControl(
-            "Size Y",
-            values: shapes.map { $0.size.y },
-            sliderRange: sizeSliderRange
-        ) { meters in
-            setObjectSize(.y, to: meters, for: shapes)
-        }
-        transformLengthControl(
-            "Size Z",
-            values: shapes.map { $0.size.z },
-            sliderRange: sizeSliderRange
-        ) { meters in
-            setObjectSize(.z, to: meters, for: shapes)
-        }
+        let resolvedShapes = shapes.allSatisfy({ $0 != nil }) ? shapes.compactMap { $0 } : nil
+        WorkspaceObjectShapeInspectorView(
+            shapes: resolvedShapes,
+            displayUnit: session.document.displayUnit,
+            positionSliderRange: transformPositionSliderRange,
+            sizeSliderRange: sizeSliderRange,
+            fallbackLengthSliderRange: 0.0 ... max(session.document.ruler.visibleSpanMeters, 1.0),
+            onSetCenter: setObjectCenter,
+            onSetSize: setObjectSize,
+            onSetProperty: setObjectProperty
+        )
     }
 
     private func objectShape(
@@ -8508,24 +8444,6 @@ public struct MainView: View {
         }
     }
 
-    private func transformLengthControl(
-        _ title: String,
-        values: [Double],
-        sliderRange: ClosedRange<Double>,
-        onChange: @escaping (Double) -> Void
-    ) -> some View {
-        let unit = session.document.displayUnit
-        return numericControl(
-            title,
-            values: values.map { unit.value(fromMeters: $0) },
-            sliderRange: sliderRange
-        ) { value in
-            onChange(unit.meters(from: value))
-        } unitLabel: {
-            unit.symbol
-        }
-    }
-
     private var transformPositionSliderRange: ClosedRange<Double> {
         let unit = session.document.displayUnit
         let span = max(unit.value(fromMeters: session.document.ruler.visibleSpanMeters), 1.0)
@@ -8593,137 +8511,6 @@ public struct MainView: View {
             }
     }
 
-    private func objectShapeTitle(_ shape: InspectorObjectShape) -> String {
-        if let definition = shape.definition {
-            return definition.title
-        }
-        return shape.typeID?.rawValue ?? "Object"
-    }
-
-    @ViewBuilder
-    private func objectSchemaPropertyRows(_ shapes: [InspectorObjectShape]) -> some View {
-        let definitions = sharedObjectPropertyDefinitions(for: shapes)
-        if !definitions.isEmpty {
-            ForEach(definitions) { property in
-                objectPropertyControl(property, shapes: shapes)
-            }
-        }
-    }
-
-    @ViewBuilder
-    private func objectPropertyControl(
-        _ property: ObjectPropertyDefinition,
-        shapes: [InspectorObjectShape]
-    ) -> some View {
-        let values = shapes.map { $0.properties.value(for: property.id, default: property.defaultValue) }
-        if !property.isEditable || property.inspectorControl == .readOnly {
-            inspectorRow(property.title, valueSummary(values.map(formattedObjectProperty)))
-        } else {
-            switch property.valueKind {
-            case .length:
-                let unit = session.document.displayUnit
-                let meters = values.compactMap { value -> Double? in
-                    if case .length(let meters) = value {
-                        return meters
-                    }
-                    return nil
-                }
-                if meters.count == values.count {
-                    let range = lengthRange(for: property)
-                    numericControl(
-                        property.title,
-                        values: meters.map { unit.value(fromMeters: $0) },
-                        sliderRange: unit.value(fromMeters: range.lowerBound) ... unit.value(fromMeters: range.upperBound)
-                    ) { value in
-                        setObjectProperty(property, value: .length(unit.meters(from: value)), for: shapes)
-                    } unitLabel: {
-                        unit.symbol
-                    }
-                } else {
-                    inspectorRow(property.title, "Mixed")
-                }
-            case .number:
-                numericObjectPropertyControl(property, values: values, shapes: shapes) { .number($0) }
-            case .integer:
-                numericObjectPropertyControl(property, values: values, shapes: shapes) { .integer(Int($0.rounded())) }
-            case .angle:
-                numericObjectPropertyControl(property, values: values, shapes: shapes) { .angle($0) }
-            case .boolean:
-                booleanObjectPropertyControl(property, values: values, shapes: shapes)
-            case .text, .material:
-                inspectorRow(property.title, valueSummary(values.map(formattedObjectProperty)))
-            }
-        }
-    }
-
-    @ViewBuilder
-    private func numericObjectPropertyControl(
-        _ property: ObjectPropertyDefinition,
-        values: [ObjectPropertyValue],
-        shapes: [InspectorObjectShape],
-        makeValue: @escaping (Double) -> ObjectPropertyValue
-    ) -> some View {
-        let numbers = values.compactMap { value -> Double? in
-            switch value {
-            case .number(let number), .angle(let number):
-                return number
-            case .integer(let integer):
-                return Double(integer)
-            default:
-                return nil
-            }
-        }
-        if numbers.count == values.count {
-            let range = property.numericRange.map { $0.lowerBound ... $0.upperBound } ?? 0.0 ... 100.0
-            numericControl(
-                property.title,
-                values: numbers,
-                sliderRange: range
-            ) { value in
-                setObjectProperty(property, value: makeValue(value), for: shapes)
-            }
-        } else {
-            inspectorRow(property.title, "Mixed")
-        }
-    }
-
-    private func booleanObjectPropertyControl(
-        _ property: ObjectPropertyDefinition,
-        values: [ObjectPropertyValue],
-        shapes: [InspectorObjectShape]
-    ) -> some View {
-        let commonValue = commonObjectBoolean(values)
-        let binding = Binding<InspectorBoolChoice>(
-            get: {
-                guard let commonValue else {
-                    return .mixed
-                }
-                return commonValue ? .on : .off
-            },
-            set: { choice in
-                switch choice {
-                case .mixed:
-                    return
-                case .on:
-                    setObjectProperty(property, value: .boolean(true), for: shapes)
-                case .off:
-                    setObjectProperty(property, value: .boolean(false), for: shapes)
-                }
-            }
-        )
-        return inspectorControlRow(property.title) {
-            Picker(property.title, selection: binding) {
-                ForEach(InspectorBoolChoice.allCases) { choice in
-                    Text(choice.rawValue)
-                        .tag(choice)
-                }
-            }
-            .labelsHidden()
-            .controlSize(.small)
-            .frame(width: inspectorControlWidth)
-        }
-    }
-
     private func setObjectProperty(
         _ property: ObjectPropertyDefinition,
         value: ObjectPropertyValue,
@@ -8741,13 +8528,6 @@ public struct MainView: View {
         }
     }
 
-    private func lengthRange(for property: ObjectPropertyDefinition) -> ClosedRange<Double> {
-        if let numericRange = property.numericRange {
-            return numericRange.lowerBound ... numericRange.upperBound
-        }
-        return 0.0 ... max(session.document.ruler.visibleSpanMeters, 1.0)
-    }
-
     private func lengthSliderRange(for meters: Double) -> ClosedRange<Double> {
         let unit = session.document.displayUnit
         let upperMeters = max(meters * 4.0, session.document.ruler.visibleSpanMeters, 0.001)
@@ -8762,58 +8542,10 @@ public struct MainView: View {
         lengthSliderRange(for: regionOffsetDistanceMeters)
     }
 
-    private func commonObjectBoolean(_ values: [ObjectPropertyValue]) -> Bool? {
-        guard let first = values.first,
-              case .boolean(let firstValue) = first else {
-            return nil
-        }
-        for value in values {
-            guard case .boolean(let boolValue) = value,
-                  boolValue == firstValue else {
-                return nil
-            }
-        }
-        return firstValue
-    }
-
-    private func sharedObjectPropertyDefinitions(
-        for shapes: [InspectorObjectShape]
-    ) -> [ObjectPropertyDefinition] {
-        guard let firstTypeID = shapes.first?.typeID,
-              shapes.allSatisfy({ $0.typeID == firstTypeID }),
-              let definition = objectDefinition(for: firstTypeID) else {
-            return []
-        }
-        var existingPropertyIDs: Set<ObjectPropertyID> = []
-        if shapes.allSatisfy({ $0.typeID == .cube || $0.typeID == .cylinder }) {
-            existingPropertyIDs.formUnion(["size.x", "size.y", "size.z"])
-        }
-        return definition.properties.filter { !existingPropertyIDs.contains($0.id) }
-    }
-
     private func objectDefinition(
         for typeID: ObjectTypeID?
     ) -> ObjectTypeDefinition? {
         objectRegistry.definition(for: typeID)
-    }
-
-    private func formattedObjectProperty(_ value: ObjectPropertyValue) -> String {
-        switch value {
-        case .length(let meters):
-            formatted(meters)
-        case .number(let number):
-            number.formatted(.number.precision(.fractionLength(0...4)))
-        case .integer(let integer):
-            "\(integer)"
-        case .boolean(let boolean):
-            boolean ? "Yes" : "No"
-        case .angle(let degrees):
-            formattedDegrees(degrees)
-        case .text(let text):
-            text
-        case .material(let materialID):
-            materialID.map { shortID($0) } ?? "None"
-        }
     }
 
     private func sketchEntityKindTitle(_ kind: String) -> String {
