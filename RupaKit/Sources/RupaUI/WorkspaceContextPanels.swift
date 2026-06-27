@@ -393,3 +393,133 @@ struct WorkspaceRegionOffsetContextPanel: View {
         )
     }
 }
+
+@MainActor
+struct WorkspaceCurveControlPointSlideContextPanel: View {
+    var controlPointCount: Int
+    var distanceTitle: String
+    var routeTitle: String
+    var slidePositiveU: () -> Void
+    var slideNegativeU: () -> Void
+    var slideNormal: () -> Void
+    var confirm: () -> Void
+
+    var body: some View {
+        workspaceStatusChip(
+            "Slide CV",
+            systemImage: "arrow.left.and.right",
+            tint: .accentColor
+        )
+        workspaceValuePill(
+            "CVs",
+            "\(controlPointCount)",
+            accessibilityIdentifier: "WorkspaceSlideCV.count"
+        )
+        workspaceValuePill(
+            "Distance",
+            distanceTitle,
+            accessibilityIdentifier: "WorkspaceSlideCV.distance"
+        )
+        workspaceValuePill(
+            "Route",
+            routeTitle,
+            accessibilityIdentifier: "WorkspaceSlideCV.inputMode"
+        )
+        workspaceIconButton(
+            systemImage: "arrow.right",
+            help: "Slide CV Positive U",
+            accessibilityIdentifier: "WorkspaceSlideCV.positiveU",
+            action: slidePositiveU
+        )
+        workspaceIconButton(
+            systemImage: "arrow.left",
+            help: "Slide CV Negative U",
+            accessibilityIdentifier: "WorkspaceSlideCV.negativeU",
+            action: slideNegativeU
+        )
+        workspaceIconButton(
+            systemImage: "arrow.up.right",
+            help: "Slide CV Normal",
+            accessibilityIdentifier: "WorkspaceSlideCV.normal",
+            action: slideNormal
+        )
+        workspaceIconButton(
+            systemImage: "checkmark",
+            help: "Confirm Slide CV",
+            accessibilityIdentifier: "WorkspaceSlideCV.confirm",
+            action: confirm
+        )
+    }
+}
+
+@MainActor
+struct WorkspaceSurfaceControlPointSlideContextPanel: View {
+    var controlPointCount: Int
+    var distanceTitle: String
+    var routeTitle: String
+    var slidePositiveU: () -> Void
+    var slideNegativeU: () -> Void
+    var slideNormal: () -> Void
+    var slidePositiveV: () -> Void
+    var slideNegativeV: () -> Void
+    var confirm: () -> Void
+
+    var body: some View {
+        workspaceStatusChip(
+            "Slide Surface CV",
+            systemImage: "arrow.triangle.2.circlepath",
+            tint: .accentColor
+        )
+        workspaceValuePill(
+            "CVs",
+            "\(controlPointCount)",
+            accessibilityIdentifier: "WorkspaceSlideSurfaceCV.count"
+        )
+        workspaceValuePill(
+            "Distance",
+            distanceTitle,
+            accessibilityIdentifier: "WorkspaceSlideSurfaceCV.distance"
+        )
+        workspaceValuePill(
+            "Route",
+            routeTitle,
+            accessibilityIdentifier: "WorkspaceSlideSurfaceCV.inputMode"
+        )
+        workspaceIconButton(
+            systemImage: "arrow.right",
+            help: "Slide Surface CV Positive U",
+            accessibilityIdentifier: "WorkspaceSlideSurfaceCV.positiveU",
+            action: slidePositiveU
+        )
+        workspaceIconButton(
+            systemImage: "arrow.left",
+            help: "Slide Surface CV Negative U",
+            accessibilityIdentifier: "WorkspaceSlideSurfaceCV.negativeU",
+            action: slideNegativeU
+        )
+        workspaceIconButton(
+            systemImage: "arrow.up.right",
+            help: "Slide Surface CV Normal",
+            accessibilityIdentifier: "WorkspaceSlideSurfaceCV.normal",
+            action: slideNormal
+        )
+        workspaceIconButton(
+            systemImage: "arrow.up",
+            help: "Slide Surface CV Positive V",
+            accessibilityIdentifier: "WorkspaceSlideSurfaceCV.positiveV",
+            action: slidePositiveV
+        )
+        workspaceIconButton(
+            systemImage: "arrow.down",
+            help: "Slide Surface CV Negative V",
+            accessibilityIdentifier: "WorkspaceSlideSurfaceCV.negativeV",
+            action: slideNegativeV
+        )
+        workspaceIconButton(
+            systemImage: "checkmark",
+            help: "Confirm Slide Surface CV",
+            accessibilityIdentifier: "WorkspaceSlideSurfaceCV.confirm",
+            action: confirm
+        )
+    }
+}

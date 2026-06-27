@@ -1484,232 +1484,87 @@ public struct MainView: View {
     private func splineControlPointSlideContextPanelContent(
         _ input: (target: SelectionTarget, controlPointIndexes: [Int])
     ) -> some View {
-        workspaceStatusChip(
-            "Slide CV",
-            systemImage: "arrow.left.and.right",
-            tint: .accentColor
+        WorkspaceCurveControlPointSlideContextPanel(
+            controlPointCount: input.controlPointIndexes.count,
+            distanceTitle: formatted(sketchSplineControlPointSlideDistanceMeters),
+            routeTitle: slideCommandState.routeTitle,
+            slidePositiveU: {
+                slideSelectedSplineControlPoints(
+                    input.target,
+                    controlPointIndexes: input.controlPointIndexes,
+                    direction: .positiveU
+                )
+            },
+            slideNegativeU: {
+                slideSelectedSplineControlPoints(
+                    input.target,
+                    controlPointIndexes: input.controlPointIndexes,
+                    direction: .negativeU
+                )
+            },
+            slideNormal: {
+                slideSelectedSplineControlPoints(
+                    input.target,
+                    controlPointIndexes: input.controlPointIndexes,
+                    direction: .normal
+                )
+            },
+            confirm: { _ = confirmActiveWorkspaceCommand() }
         )
-        workspaceValuePill(
-            "CVs",
-            "\(input.controlPointIndexes.count)",
-            accessibilityIdentifier: "WorkspaceSlideCV.count"
-        )
-        workspaceValuePill(
-            "Distance",
-            formatted(sketchSplineControlPointSlideDistanceMeters),
-            accessibilityIdentifier: "WorkspaceSlideCV.distance"
-        )
-        workspaceValuePill(
-            "Route",
-            slideCommandState.routeTitle,
-            accessibilityIdentifier: "WorkspaceSlideCV.inputMode"
-        )
-        workspaceIconButton(
-            systemImage: "arrow.right",
-            help: "Slide CV Positive U",
-            accessibilityIdentifier: "WorkspaceSlideCV.positiveU"
-        ) {
-            slideSelectedSplineControlPoints(
-                input.target,
-                controlPointIndexes: input.controlPointIndexes,
-                direction: .positiveU
-            )
-        }
-        workspaceIconButton(
-            systemImage: "arrow.left",
-            help: "Slide CV Negative U",
-            accessibilityIdentifier: "WorkspaceSlideCV.negativeU"
-        ) {
-            slideSelectedSplineControlPoints(
-                input.target,
-                controlPointIndexes: input.controlPointIndexes,
-                direction: .negativeU
-            )
-        }
-        workspaceIconButton(
-            systemImage: "arrow.up.right",
-            help: "Slide CV Normal",
-            accessibilityIdentifier: "WorkspaceSlideCV.normal"
-        ) {
-            slideSelectedSplineControlPoints(
-                input.target,
-                controlPointIndexes: input.controlPointIndexes,
-                direction: .normal
-            )
-        }
-        workspaceIconButton(
-            systemImage: "checkmark",
-            help: "Confirm Slide CV",
-            accessibilityIdentifier: "WorkspaceSlideCV.confirm"
-        ) {
-            _ = confirmActiveWorkspaceCommand()
-        }
     }
 
     @ViewBuilder
     private func polySplineSurfaceVertexSlideContextPanelContent(
         _ targets: [SelectionTarget]
     ) -> some View {
-        workspaceStatusChip(
-            "Slide Surface CV",
-            systemImage: "arrow.triangle.2.circlepath",
-            tint: .accentColor
+        WorkspaceSurfaceControlPointSlideContextPanel(
+            controlPointCount: targets.count,
+            distanceTitle: formatted(polySplineSurfaceVertexSlideDistanceMeters),
+            routeTitle: slideCommandState.routeTitle,
+            slidePositiveU: {
+                slideSelectedPolySplineSurfaceVertices(targets, direction: .positiveU)
+            },
+            slideNegativeU: {
+                slideSelectedPolySplineSurfaceVertices(targets, direction: .negativeU)
+            },
+            slideNormal: {
+                slideSelectedPolySplineSurfaceVertices(targets, direction: .normal)
+            },
+            slidePositiveV: {
+                slideSelectedPolySplineSurfaceVertices(targets, direction: .positiveV)
+            },
+            slideNegativeV: {
+                slideSelectedPolySplineSurfaceVertices(targets, direction: .negativeV)
+            },
+            confirm: { _ = confirmActiveWorkspaceCommand() }
         )
-        workspaceValuePill(
-            "CVs",
-            "\(targets.count)",
-            accessibilityIdentifier: "WorkspaceSlideSurfaceCV.count"
-        )
-        workspaceValuePill(
-            "Distance",
-            formatted(polySplineSurfaceVertexSlideDistanceMeters),
-            accessibilityIdentifier: "WorkspaceSlideSurfaceCV.distance"
-        )
-        workspaceValuePill(
-            "Route",
-            slideCommandState.routeTitle,
-            accessibilityIdentifier: "WorkspaceSlideSurfaceCV.inputMode"
-        )
-        workspaceIconButton(
-            systemImage: "arrow.right",
-            help: "Slide Surface CV Positive U",
-            accessibilityIdentifier: "WorkspaceSlideSurfaceCV.positiveU"
-        ) {
-            slideSelectedPolySplineSurfaceVertices(
-                targets,
-                direction: .positiveU
-            )
-        }
-        workspaceIconButton(
-            systemImage: "arrow.left",
-            help: "Slide Surface CV Negative U",
-            accessibilityIdentifier: "WorkspaceSlideSurfaceCV.negativeU"
-        ) {
-            slideSelectedPolySplineSurfaceVertices(
-                targets,
-                direction: .negativeU
-            )
-        }
-        workspaceIconButton(
-            systemImage: "arrow.up.right",
-            help: "Slide Surface CV Normal",
-            accessibilityIdentifier: "WorkspaceSlideSurfaceCV.normal"
-        ) {
-            slideSelectedPolySplineSurfaceVertices(
-                targets,
-                direction: .normal
-            )
-        }
-        workspaceIconButton(
-            systemImage: "arrow.up",
-            help: "Slide Surface CV Positive V",
-            accessibilityIdentifier: "WorkspaceSlideSurfaceCV.positiveV"
-        ) {
-            slideSelectedPolySplineSurfaceVertices(
-                targets,
-                direction: .positiveV
-            )
-        }
-        workspaceIconButton(
-            systemImage: "arrow.down",
-            help: "Slide Surface CV Negative V",
-            accessibilityIdentifier: "WorkspaceSlideSurfaceCV.negativeV"
-        ) {
-            slideSelectedPolySplineSurfaceVertices(
-                targets,
-                direction: .negativeV
-            )
-        }
-        workspaceIconButton(
-            systemImage: "checkmark",
-            help: "Confirm Slide Surface CV",
-            accessibilityIdentifier: "WorkspaceSlideSurfaceCV.confirm"
-        ) {
-            _ = confirmActiveWorkspaceCommand()
-        }
     }
 
     @ViewBuilder
     private func surfaceControlPointSlideContextPanelContent(
         _ targets: [SelectionReference]
     ) -> some View {
-        workspaceStatusChip(
-            "Slide Surface CV",
-            systemImage: "arrow.triangle.2.circlepath",
-            tint: .accentColor
+        WorkspaceSurfaceControlPointSlideContextPanel(
+            controlPointCount: targets.count,
+            distanceTitle: formatted(polySplineSurfaceVertexSlideDistanceMeters),
+            routeTitle: slideCommandState.routeTitle,
+            slidePositiveU: {
+                slideSelectedSurfaceControlPoints(targets, direction: .positiveU)
+            },
+            slideNegativeU: {
+                slideSelectedSurfaceControlPoints(targets, direction: .negativeU)
+            },
+            slideNormal: {
+                slideSelectedSurfaceControlPoints(targets, direction: .normal)
+            },
+            slidePositiveV: {
+                slideSelectedSurfaceControlPoints(targets, direction: .positiveV)
+            },
+            slideNegativeV: {
+                slideSelectedSurfaceControlPoints(targets, direction: .negativeV)
+            },
+            confirm: { _ = confirmActiveWorkspaceCommand() }
         )
-        workspaceValuePill(
-            "CVs",
-            "\(targets.count)",
-            accessibilityIdentifier: "WorkspaceSlideSurfaceCV.count"
-        )
-        workspaceValuePill(
-            "Distance",
-            formatted(polySplineSurfaceVertexSlideDistanceMeters),
-            accessibilityIdentifier: "WorkspaceSlideSurfaceCV.distance"
-        )
-        workspaceValuePill(
-            "Route",
-            slideCommandState.routeTitle,
-            accessibilityIdentifier: "WorkspaceSlideSurfaceCV.inputMode"
-        )
-        workspaceIconButton(
-            systemImage: "arrow.right",
-            help: "Slide Surface CV Positive U",
-            accessibilityIdentifier: "WorkspaceSlideSurfaceCV.positiveU"
-        ) {
-            slideSelectedSurfaceControlPoints(
-                targets,
-                direction: .positiveU
-            )
-        }
-        workspaceIconButton(
-            systemImage: "arrow.left",
-            help: "Slide Surface CV Negative U",
-            accessibilityIdentifier: "WorkspaceSlideSurfaceCV.negativeU"
-        ) {
-            slideSelectedSurfaceControlPoints(
-                targets,
-                direction: .negativeU
-            )
-        }
-        workspaceIconButton(
-            systemImage: "arrow.up.right",
-            help: "Slide Surface CV Normal",
-            accessibilityIdentifier: "WorkspaceSlideSurfaceCV.normal"
-        ) {
-            slideSelectedSurfaceControlPoints(
-                targets,
-                direction: .normal
-            )
-        }
-        workspaceIconButton(
-            systemImage: "arrow.up",
-            help: "Slide Surface CV Positive V",
-            accessibilityIdentifier: "WorkspaceSlideSurfaceCV.positiveV"
-        ) {
-            slideSelectedSurfaceControlPoints(
-                targets,
-                direction: .positiveV
-            )
-        }
-        workspaceIconButton(
-            systemImage: "arrow.down",
-            help: "Slide Surface CV Negative V",
-            accessibilityIdentifier: "WorkspaceSlideSurfaceCV.negativeV"
-        ) {
-            slideSelectedSurfaceControlPoints(
-                targets,
-                direction: .negativeV
-            )
-        }
-        workspaceIconButton(
-            systemImage: "checkmark",
-            help: "Confirm Slide Surface CV",
-            accessibilityIdentifier: "WorkspaceSlideSurfaceCV.confirm"
-        ) {
-            _ = confirmActiveWorkspaceCommand()
-        }
     }
 
     @ViewBuilder
