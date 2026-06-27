@@ -6102,78 +6102,20 @@ public struct MainView: View {
         handle: SketchEntityPointHandle,
         accessibilityPrefix: String
     ) -> some View {
-        inspectorControlRow("\(title) X") {
-            HStack(spacing: 6) {
-                sketchEntityMoveButton(
-                    systemImage: "arrow.left",
-                    help: "Move \(title.lowercased()) negative X",
-                    accessibilityIdentifier: "\(accessibilityPrefix).moveXNegative"
-                ) {
-                    moveSelectedSketchEntityPoint(
-                        target,
-                        handle: handle,
-                        deltaX: -defaultSketchEntityMoveStepMeters,
-                        deltaY: 0.0
-                    )
-                }
-                sketchEntityMoveButton(
-                    systemImage: "arrow.right",
-                    help: "Move \(title.lowercased()) positive X",
-                    accessibilityIdentifier: "\(accessibilityPrefix).moveXPositive"
-                ) {
-                    moveSelectedSketchEntityPoint(
-                        target,
-                        handle: handle,
-                        deltaX: defaultSketchEntityMoveStepMeters,
-                        deltaY: 0.0
-                    )
-                }
-            }
+        WorkspaceSketchEntityPointMoveControlsView(
+            title: title,
+            target: target,
+            handle: handle,
+            moveStepMeters: defaultSketchEntityMoveStepMeters,
+            accessibilityPrefix: accessibilityPrefix
+        ) { target, handle, deltaX, deltaY in
+            moveSelectedSketchEntityPoint(
+                target,
+                handle: handle,
+                deltaX: deltaX,
+                deltaY: deltaY
+            )
         }
-        inspectorControlRow("\(title) Y") {
-            HStack(spacing: 6) {
-                sketchEntityMoveButton(
-                    systemImage: "arrow.down",
-                    help: "Move \(title.lowercased()) negative Y",
-                    accessibilityIdentifier: "\(accessibilityPrefix).moveYNegative"
-                ) {
-                    moveSelectedSketchEntityPoint(
-                        target,
-                        handle: handle,
-                        deltaX: 0.0,
-                        deltaY: -defaultSketchEntityMoveStepMeters
-                    )
-                }
-                sketchEntityMoveButton(
-                    systemImage: "arrow.up",
-                    help: "Move \(title.lowercased()) positive Y",
-                    accessibilityIdentifier: "\(accessibilityPrefix).moveYPositive"
-                ) {
-                    moveSelectedSketchEntityPoint(
-                        target,
-                        handle: handle,
-                        deltaX: 0.0,
-                        deltaY: defaultSketchEntityMoveStepMeters
-                    )
-                }
-            }
-        }
-    }
-
-    private func sketchEntityMoveButton(
-        systemImage: String,
-        help: String,
-        accessibilityIdentifier: String,
-        action: @escaping () -> Void
-    ) -> some View {
-        Button(action: action) {
-            Image(systemName: systemImage)
-                .frame(width: 18, height: 18)
-        }
-        .buttonStyle(.bordered)
-        .controlSize(.small)
-        .help(help)
-        .accessibilityIdentifier(accessibilityIdentifier)
     }
 
     @ViewBuilder
