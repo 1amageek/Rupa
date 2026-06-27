@@ -5515,8 +5515,12 @@ public struct MainView: View {
         WorkspaceInspectorTextSectionView(section: overviewState.referenceSection)
         WorkspaceInspectorTextSectionView(section: overviewState.hierarchySection)
 
-        surfaceAnalysisSection(nodes)
-        surfaceContinuitySection(nodes)
+        WorkspaceSurfaceInspectorView(
+            analysisResult: selectedSurfaceAnalysisResult(for: nodes),
+            continuityResult: selectedSurfaceContinuityResult(for: nodes),
+            showsUnavailableSections: shouldShowSurfaceContinuitySection(for: nodes),
+            displayUnit: session.document.displayUnit
+        )
 
         projectCurvesToFaceSection()
         projectOutlineSection(nodes)
@@ -5657,150 +5661,6 @@ public struct MainView: View {
         patternArrayCurvePathPreviewCandidate = nil
         patternArrayCurvePathPickState.cancel()
         session.reportToolStatus("Curve Array path pick canceled.")
-    }
-
-    @ViewBuilder
-    private func surfaceAnalysisSection(_ nodes: [SceneNode]) -> some View {
-        switch selectedSurfaceAnalysisResult(for: nodes) {
-        case .success(let analysis):
-            if let analysis {
-                inspectorSection("Surface Analysis") {
-                    inspectorRow("B-spline Faces", "\(analysis.bSplineFaceCount)")
-                    inspectorRow("UV Samples", "\(analysis.sampleCount)")
-                    inspectorRow(
-                        "Comb Samples",
-                        "\(analysis.uCurvatureCombCount) U, \(analysis.vCurvatureCombCount) V"
-                    )
-                    inspectorRow(
-                        "Trim Boundaries",
-                        surfaceTrimBoundarySummary(
-                            boundaryCount: analysis.trimBoundaryCount,
-                            innerCount: analysis.innerTrimBoundaryCount,
-                            openCount: analysis.openTrimBoundaryCount
-                        )
-                    )
-                    inspectorRow("Trim Edges", "\(analysis.trimBoundaryEdgeCount)")
-                    if analysis.faces.isEmpty {
-                        inspectorRow("Target", "No B-spline face")
-                    } else {
-                        ForEach(analysis.faces) { face in
-                            inspectorRow("Face", surfaceAnalysisFaceSummary(face))
-                            inspectorRow("Degree", "\(face.uDegree) U, \(face.vDegree) V")
-                            inspectorRow(
-                                "Control Net",
-                                "\(face.uControlPointCount) U x \(face.vControlPointCount) V"
-                            )
-                            inspectorRow("Samples", "\(face.sampleCount)")
-                            inspectorRow(
-                                "Trim Boundary",
-                                surfaceTrimBoundarySummary(
-                                    boundaryCount: face.trimBoundaryCount,
-                                    innerCount: face.innerTrimBoundaryCount,
-                                    openCount: face.openTrimBoundaryCount
-                                )
-                            )
-                            inspectorRow("Trim Edges", "\(face.trimBoundaryEdgeCount)")
-                            inspectorRow("Trim Length", formatted(face.trimBoundaryLength))
-                            inspectorRow(
-                                "U Curvature",
-                                formattedCurvature(face.maxAbsUNormalCurvature)
-                            )
-                            inspectorRow(
-                                "V Curvature",
-                                formattedCurvature(face.maxAbsVNormalCurvature)
-                            )
-                            inspectorRow(
-                                "Principal Curvature",
-                                formattedCurvature(face.maxAbsPrincipalCurvature)
-                            )
-                            if let direction = face.minimumPrincipalDirection {
-                                inspectorRow(
-                                    "Min Direction",
-                                    formattedSurfaceDirection(direction)
-                                )
-                            }
-                            if let direction = face.maximumPrincipalDirection {
-                                inspectorRow(
-                                    "Max Direction",
-                                    formattedSurfaceDirection(direction)
-                                )
-                            }
-                            inspectorRow(
-                                "Gaussian Curvature",
-                                formattedGaussianCurvature(face.maxAbsGaussianCurvature)
-                            )
-                            inspectorRow(
-                                "U Normal Change",
-                                formattedCurvature(face.maxUNormalChangePerLength)
-                            )
-                            inspectorRow(
-                                "V Normal Change",
-                                formattedCurvature(face.maxVNormalChangePerLength)
-                            )
-                            inspectorRow(
-                                "Max Normal Angle",
-                                formattedDegrees(degrees(fromRadians: face.maxNormalAngle))
-                            )
-                        }
-                    }
-                    if analysis.diagnostics.isEmpty == false {
-                        inspectorRow("Diagnostics", surfaceDiagnosticsSummary(analysis.diagnostics))
-                    }
-                }
-            }
-        case .failure(let error):
-            if shouldShowSurfaceContinuitySection(for: nodes) {
-                inspectorSection("Surface Analysis") {
-                    inspectorRow("Status", "Unavailable")
-                    inspectorRow("Reason", error.localizedDescription)
-                }
-            }
-        }
-    }
-
-    @ViewBuilder
-    private func surfaceContinuitySection(_ nodes: [SceneNode]) -> some View {
-        switch selectedSurfaceContinuityResult(for: nodes) {
-        case .success(let continuity):
-            if let continuity {
-                inspectorSection("Surface Continuity") {
-                    inspectorRow("B-spline Faces", "\(continuity.bSplineFaceCount)")
-                    inspectorRow("Shared Edges", "\(continuity.sharedEdgeCount)")
-                    inspectorRow("Continuity", surfaceContinuityCountsSummary(continuity))
-                    inspectorRow("G2 Solve", surfaceContinuitySolveSummary(continuity))
-                    if continuity.adjacencies.isEmpty {
-                        inspectorRow("Adjacency", "None for target")
-                    } else {
-                        ForEach(continuity.adjacencies) { adjacency in
-                            inspectorRow("Edge", surfaceAdjacencyEdgeSummary(adjacency))
-                            inspectorRow("Faces", surfaceAdjacencyFaceSummary(adjacency))
-                            inspectorRow("Status", surfaceAdjacencyContinuitySummary(adjacency))
-                            if let normalAngle = adjacency.normalAngle {
-                                inspectorRow("Normal Angle", formattedDegrees(degrees(fromRadians: normalAngle)))
-                            }
-                            inspectorRow("Position Gap", formatted(adjacency.positionGap))
-                            if let curvatureGap = adjacency.curvatureGap {
-                                inspectorRow("Curvature Gap", formattedCurvature(curvatureGap))
-                            }
-                            inspectorRow(
-                                "G2 Required",
-                                adjacency.requiresCurvatureContinuitySolve ? "Yes" : "No"
-                            )
-                        }
-                    }
-                    if continuity.diagnostics.isEmpty == false {
-                        inspectorRow("Diagnostics", surfaceDiagnosticsSummary(continuity.diagnostics))
-                    }
-                }
-            }
-        case .failure(let error):
-            if shouldShowSurfaceContinuitySection(for: nodes) {
-                inspectorSection("Surface Continuity") {
-                    inspectorRow("Status", "Unavailable")
-                    inspectorRow("Reason", error.localizedDescription)
-                }
-            }
-        }
     }
 
     private func shouldShowSurfaceContinuitySection(for nodes: [SceneNode]) -> Bool {
@@ -7760,103 +7620,6 @@ public struct MainView: View {
         case .natural:
             return "Natural"
         }
-    }
-
-    private func surfaceContinuityTitle(_ level: RupaCore.SurfaceContinuityResult.ContinuityLevel) -> String {
-        switch level {
-        case .disconnected:
-            return "Disconnected"
-        case .g0:
-            return "G0"
-        case .g1:
-            return "G1"
-        case .g2:
-            return "G2"
-        }
-    }
-
-    private func surfaceContinuityCountsSummary(_ continuity: InspectorSurfaceContinuity) -> String {
-        [
-            "\(continuity.g0AdjacencyCount) G0",
-            "\(continuity.g1AdjacencyCount) G1",
-            "\(continuity.g2AdjacencyCount) G2",
-        ]
-        .joined(separator: ", ")
-    }
-
-    private func surfaceContinuitySolveSummary(_ continuity: InspectorSurfaceContinuity) -> String {
-        continuity.unresolvedG2AdjacencyCount == 0
-            ? "Not required"
-            : "\(continuity.unresolvedG2AdjacencyCount) required"
-    }
-
-    private func surfaceAdjacencyEdgeSummary(_ adjacency: InspectorSurfaceAdjacency) -> String {
-        let names = adjacency.edgePersistentNames.map(surfacePersistentNameTail)
-        return valueSummary(names.isEmpty ? [shortID(adjacency.id)] : names)
-    }
-
-    private func surfaceAdjacencyFaceSummary(_ adjacency: InspectorSurfaceAdjacency) -> String {
-        valueSummary([
-            surfacePersistentNameTail(adjacency.firstFacePersistentName),
-            surfacePersistentNameTail(adjacency.secondFacePersistentName),
-        ])
-    }
-
-    private func surfaceAdjacencyContinuitySummary(_ adjacency: InspectorSurfaceAdjacency) -> String {
-        var parts = [surfaceContinuityTitle(adjacency.continuity)]
-        if adjacency.requiresCurvatureContinuitySolve {
-            parts.append("G2 solve required")
-        }
-        return parts.joined(separator: " / ")
-    }
-
-    private func surfaceAnalysisFaceSummary(_ face: InspectorSurfaceFaceAnalysis) -> String {
-        let names = face.facePersistentNames.map(surfacePersistentNameTail)
-        return valueSummary(names.isEmpty ? [shortID(face.id)] : names)
-    }
-
-    private func surfaceTrimBoundarySummary(
-        boundaryCount: Int,
-        innerCount: Int,
-        openCount: Int
-    ) -> String {
-        var parts = ["\(boundaryCount) total"]
-        if innerCount > 0 {
-            parts.append("\(innerCount) inner")
-        }
-        if openCount > 0 {
-            parts.append("\(openCount) open")
-        }
-        return parts.joined(separator: ", ")
-    }
-
-    private func surfacePersistentNameTail(_ name: String?) -> String {
-        guard let name, name.isEmpty == false else {
-            return "Unknown"
-        }
-        return name.split(separator: "/").last.map(String.init) ?? name
-    }
-
-    private func surfaceDiagnosticsSummary(_ diagnostics: [EditorDiagnostic]) -> String {
-        let errors = diagnostics.filter { $0.severity == .error }.count
-        let warnings = diagnostics.filter { $0.severity == .warning }.count
-        let info = diagnostics.filter { $0.severity == .info }.count
-        return "\(errors) errors, \(warnings) warnings, \(info) info"
-    }
-
-    private func formattedCurvature(_ value: Double) -> String {
-        "\(value.formatted(.number.precision(.fractionLength(0...4)))) 1/m"
-    }
-
-    private func formattedGaussianCurvature(_ value: Double) -> String {
-        "\(value.formatted(.number.precision(.fractionLength(0...4)))) 1/m^2"
-    }
-
-    private func formattedSurfaceDirection(_ vector: SurfaceAnalysisResult.Vector) -> String {
-        let x = vector.x.formatted(.number.precision(.fractionLength(0...3)))
-        let y = vector.y.formatted(.number.precision(.fractionLength(0...3)))
-        let z = vector.z.formatted(.number.precision(.fractionLength(0...3)))
-        return "x \(x), y \(y), z \(z)"
     }
 
     private func sketchPointSummary(_ point: SketchEntitySummaryResult.Point) -> String {
