@@ -5939,109 +5939,22 @@ public struct MainView: View {
                 "t"
             }
             sketchCurveOperationControls(entity, controls: [.projection, .extend])
-            inspectorControlRow("Rebuild CVs") {
-                Stepper(
-                    value: $sketchRebuildControlPointCount,
-                    in: 4 ... 31,
-                    step: 3
-                ) {
-                    Text("\(sketchRebuildControlPointCount)")
-                        .monospacedDigit()
-                }
-                .accessibilityIdentifier("InspectorCurve.spline.rebuildControlPointCount")
-            }
-            numericControl(
-                "Refit Tol",
-                values: [sketchRebuildToleranceMeters],
-                sliderRange: 0.00001 ... 0.01
-            ) { tolerance in
-                sketchRebuildToleranceMeters = min(max(tolerance, 0.00001), 0.01)
-            } unitLabel: {
-                "m"
-            }
-            inspectorControlRow("Keep Corners") {
-                Toggle("", isOn: $sketchRebuildKeepsCorners)
-                    .labelsHidden()
-                    .accessibilityIdentifier("InspectorCurve.spline.refitKeepCorners")
-            }
-            inspectorControlRow("Degree") {
-                Stepper(
-                    value: $sketchRebuildExplicitDegree,
-                    in: 1 ... 7
-                ) {
-                    Text("\(sketchRebuildExplicitDegree)")
-                        .monospacedDigit()
-                }
-                .accessibilityIdentifier("InspectorCurve.spline.explicitDegree")
-            }
-            inspectorControlRow("Spans") {
-                Stepper(
-                    value: $sketchRebuildExplicitSpanCount,
-                    in: 1 ... 64
-                ) {
-                    Text("\(sketchRebuildExplicitSpanCount)")
-                        .monospacedDigit()
-                }
-                .accessibilityIdentifier("InspectorCurve.spline.explicitSpans")
-            }
-            numericControl(
-                "Weight",
-                values: [sketchRebuildExplicitWeight],
-                sliderRange: 0.0 ... 1.0
-            ) { weight in
-                sketchRebuildExplicitWeight = min(max(weight, 0.0), 1.0)
-            }
-            .accessibilityIdentifier("InspectorCurve.spline.explicitWeight")
-            inspectorActionRow {
-                Button {
-                    reverseSelectedSketchCurve(entity.target)
-                } label: {
-                    Label("Reverse", systemImage: "arrow.left.arrow.right")
-                }
-                .accessibilityIdentifier("InspectorCurve.spline.reverse")
-
-                Button {
-                    splitSelectedSketchCurve(entity.target)
-                } label: {
-                    Label("Split", systemImage: "scissors")
-                }
-                .accessibilityIdentifier("InspectorCurve.spline.split")
-
-                Button {
-                    insertSelectedSketchSplineControlPoint(entity.target)
-                } label: {
-                    Label("Insert CV", systemImage: "plus")
-                }
-                .accessibilityIdentifier("InspectorCurve.spline.insertControlPoint")
-
-                Button {
-                    rebuildSelectedSketchCurve(entity.target)
-                } label: {
-                    Label("Rebuild", systemImage: "point.3.filled.connected.trianglepath.dotted")
-                }
-                .accessibilityIdentifier("InspectorCurve.spline.rebuild")
-
-                Button {
-                    refitSelectedSketchCurve(entity.target)
-                } label: {
-                    Label("Refit", systemImage: "arrow.triangle.2.circlepath")
-                }
-                .accessibilityIdentifier("InspectorCurve.spline.refit")
-
-                Button {
-                    explicitControlSelectedSketchCurve(entity.target)
-                } label: {
-                    Label("Explicit", systemImage: "slider.horizontal.3")
-                }
-                .accessibilityIdentifier("InspectorCurve.spline.explicit")
-
-                Button {
-                    trimSelectedSketchCurveSegment(entity.target)
-                } label: {
-                    Label("Trim", systemImage: "delete.left")
-                }
-                .accessibilityIdentifier("InspectorCurve.spline.trim")
-            }
+            WorkspaceSplineEditOperationsView(
+                target: entity.target,
+                rebuildControlPointCount: $sketchRebuildControlPointCount,
+                rebuildToleranceMeters: $sketchRebuildToleranceMeters,
+                rebuildKeepsCorners: $sketchRebuildKeepsCorners,
+                explicitDegree: $sketchRebuildExplicitDegree,
+                explicitSpanCount: $sketchRebuildExplicitSpanCount,
+                explicitWeight: $sketchRebuildExplicitWeight,
+                onReverse: reverseSelectedSketchCurve,
+                onSplit: splitSelectedSketchCurve,
+                onInsertControlPoint: insertSelectedSketchSplineControlPoint,
+                onRebuild: rebuildSelectedSketchCurve,
+                onRefit: refitSelectedSketchCurve,
+                onExplicit: explicitControlSelectedSketchCurve,
+                onTrim: trimSelectedSketchCurveSegment
+            )
             if entity.bridgeCurve != nil {
                 inspectorRow("Edit", "Bridge Source")
             } else {
