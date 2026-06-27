@@ -134,3 +134,4 @@ flowchart LR
 | `RupaUI/MainView.swift` | Sketch entity point, endpoint, and center move controls split into a dedicated point move controls view with mutation callback owned by MainView |
 | `RupaUI/MainView.swift` | Spline rebuild, refit, explicit-control, and core spline action controls split into a dedicated spline edit operations view |
 | `RupaUI/MainView.swift` | Object shape inspector DTO construction split into a dedicated shape inspector state builder with scene projection owned outside MainView |
+| `RupaUI/MainView.swift` | Sketch entity inspector resolution, curve analysis readback, Bridge Curve readback, and sketch operation availability split into a dedicated state builder |
