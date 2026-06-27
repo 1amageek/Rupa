@@ -1262,9 +1262,29 @@ public struct MainView: View {
     private var viewportContextPanel: some View {
         HStack(spacing: 10) {
             if session.selectedTool == .sweep {
-                sweepContextPanelContent(session.sweepSelectionPreview())
+                let preview = session.sweepSelectionPreview()
+                WorkspaceSweepContextPanel(
+                    preview: preview,
+                    sectionLabel: sweepPreviewSectionLabel(preview.section),
+                    pathLabel: sweepPreviewFeatureLabel(preview.pathFeatureID)
+                )
             } else if session.selectedTool == .polygon {
-                polygonContextPanelContent(session.polygonToolState)
+                WorkspacePolygonContextPanel(
+                    tool: session.selectedTool,
+                    state: session.polygonToolState,
+                    planeTitle: workspacePlaneMode.title,
+                    axisTitle: activeSketchAxisTitle,
+                    referenceLineAnchorCount: session.sketchInputState.referenceLineAnchors.count,
+                    dimensionInputTitle: activeSketchDimensionInputTitle,
+                    isGridSnapEnabled: isGridSnapEnabled,
+                    decreaseSideCount: { _ = session.adjustPolygonSideCount(by: -1) },
+                    increaseSideCount: { _ = session.adjustPolygonSideCount(by: 1) },
+                    toggleSizingMode: { _ = session.togglePolygonSizingMode() },
+                    toggleInclinationMode: { _ = session.togglePolygonInclinationMode() },
+                    toggleKnifeMode: { _ = session.togglePolygonCutsFaces() }
+                ) {
+                    workspaceSketchDimensionInputField
+                }
             } else if dimensionCommandState.isActive {
                 dimensionContextPanelContent()
             } else if selectedSceneNodes.isEmpty {
@@ -1328,141 +1348,6 @@ public struct MainView: View {
         .workspaceGlassContainer()
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("ViewportContextPanel")
-    }
-
-    @ViewBuilder
-    private func polygonContextPanelContent(_ state: PolygonToolState) -> some View {
-        workspaceStatusChip(
-            session.selectedTool.title,
-            systemImage: session.selectedTool.systemImage,
-            tint: .accentColor
-        )
-
-        workspaceContextDivider
-
-        workspaceValuePill(
-            "Sides",
-            "\(state.sideCount)",
-            accessibilityIdentifier: "WorkspacePolygon.sides"
-        )
-
-        workspaceIconButton(
-            systemImage: "minus",
-            help: "Decrease Polygon Sides",
-            accessibilityIdentifier: "WorkspacePolygon.decreaseSides"
-        ) {
-            _ = session.adjustPolygonSideCount(by: -1)
-        }
-        .disabled(!state.canDecreaseSideCount)
-
-        workspaceIconButton(
-            systemImage: "plus",
-            help: "Increase Polygon Sides",
-            accessibilityIdentifier: "WorkspacePolygon.increaseSides"
-        ) {
-            _ = session.adjustPolygonSideCount(by: 1)
-        }
-        .disabled(!state.canIncreaseSideCount)
-
-        workspaceContextDivider
-
-        workspaceValuePill(
-            "Mode",
-            state.sizingMode.statusTitle,
-            accessibilityIdentifier: "WorkspacePolygon.sizingMode"
-        )
-
-        workspaceIconButton(
-            systemImage: "circle.dashed",
-            help: "Toggle Inscribed Circumscribed",
-            accessibilityIdentifier: "WorkspacePolygon.toggleSizingMode"
-        ) {
-            _ = session.togglePolygonSizingMode()
-        }
-
-        workspaceValuePill(
-            "Incline",
-            state.inclinationMode.statusTitle,
-            accessibilityIdentifier: "WorkspacePolygon.inclinationMode"
-        )
-
-        workspaceIconButton(
-            systemImage: "arrow.up.and.down",
-            help: "Toggle Polygon Inclination",
-            accessibilityIdentifier: "WorkspacePolygon.toggleInclinationMode"
-        ) {
-            _ = session.togglePolygonInclinationMode()
-        }
-
-        workspaceContextDivider
-
-        workspaceValuePill(
-            "Knife",
-            state.cutsFaces ? "On" : "Off",
-            accessibilityIdentifier: "WorkspacePolygon.knifeMode"
-        )
-
-        workspaceIconButton(
-            systemImage: "scissors",
-            help: "Toggle Polygon Knife",
-            accessibilityIdentifier: "WorkspacePolygon.toggleKnifeMode"
-        ) {
-            _ = session.togglePolygonCutsFaces()
-        }
-
-        workspaceValuePill("Plane", workspacePlaneMode.title)
-        workspaceValuePill(
-            "Axis",
-            activeSketchAxisTitle,
-            accessibilityIdentifier: "WorkspaceSketch.axisConstraint"
-        )
-        workspaceValuePill(
-            "Refs",
-            "\(session.sketchInputState.referenceLineAnchors.count)",
-            accessibilityIdentifier: "WorkspaceSketch.referenceLines"
-        )
-        workspaceValuePill(
-            "Input",
-            activeSketchDimensionInputTitle,
-            accessibilityIdentifier: "WorkspaceSketch.dimensionInputFocus"
-        )
-        workspaceSketchDimensionInputField
-        workspaceValuePill("Grid", isGridSnapEnabled ? "On" : "Off")
-    }
-
-    @ViewBuilder
-    private func sweepContextPanelContent(_ preview: SweepSelectionPreview) -> some View {
-        workspaceStatusChip(
-            preview.isReady ? "Sweep Source" : "Sweep Setup",
-            systemImage: ModelingTool.sweep.systemImage,
-            tint: preview.isReady ? .accentColor : .secondary
-        )
-
-        workspaceContextDivider
-
-        workspaceValuePill(
-            "Section",
-            sweepPreviewSectionLabel(preview.section),
-            accessibilityIdentifier: "WorkspaceSweep.section"
-        )
-        workspaceValuePill(
-            "Path",
-            sweepPreviewFeatureLabel(preview.pathFeatureID),
-            accessibilityIdentifier: "WorkspaceSweep.path"
-        )
-        workspaceValuePill(
-            "Guides",
-            "\(preview.guideFeatureIDs.count)",
-            accessibilityIdentifier: "WorkspaceSweep.guides"
-        )
-
-        workspaceContextDivider
-
-        workspaceValuePill(
-            "Status",
-            preview.statusTitle,
-            accessibilityIdentifier: "WorkspaceSweep.status"
-        )
     }
 
     @ViewBuilder
