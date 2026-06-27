@@ -673,656 +673,6 @@ public struct DesignDocument: Identifiable, Sendable {
         )
     }
 
-    public mutating func setSketchEntityDimension(
-        target: SelectionTarget,
-        kind: SketchEntityDimensionKind,
-        value: CADExpression,
-        objectRegistry: ObjectTypeRegistry = .builtIn
-    ) throws {
-        let resolvedValue = try resolvedSketchEntityDimensionValue(
-            value,
-            kind: kind,
-            owner: "Sketch entity dimension"
-        )
-        let editTarget = try sketchEntityDimensionEditTarget(
-            for: target,
-            kind: kind,
-            objectRegistry: objectRegistry
-        )
-        let selection = try editableSketchEntity(for: editTarget, operationName: "Sketch entity dimension update")
-        try validateResolvedSketchEntityDimensionValue(
-            resolvedValue,
-            kind: kind,
-            entity: selection.entity
-        )
-        var feature = selection.feature
-        var sketch = selection.sketch
-        let pointPropagator = SketchPointConstraintPropagator(parameters: cadDocument.parameters)
-        switch selection.entity {
-        case .line(let line):
-            guard kind == .length || kind == .angle else {
-                throw incompatibleSketchDimension(kind, entityKind: "line")
-            }
-            if kind == .length,
-               let axis = try rectangleSideDimensionAxis(
-                in: sketch,
-                entityID: selection.entityID
-            ) {
-                try updateRectangleSketchForSideDimension(
-                    &sketch,
-                    axis: axis,
-                    length: value,
-                    resolvedLength: resolvedValue
-                )
-            } else {
-                let startReference = SketchReference.lineStart(selection.entityID)
-                let endReference = SketchReference.lineEnd(selection.entityID)
-                let startAnchored = pointPropagator.isAnchored(startReference, in: sketch)
-                let endAnchored = pointPropagator.isAnchored(endReference, in: sketch)
-                let metrics = try resolvedLineMetrics(line, owner: "Sketch line dimension update")
-                if kind == .angle {
-                    try validateLineAngleDimensionAgainstDirectOrientationConstraints(
-                        resolvedValue,
-                        lineID: selection.entityID,
-                        sketch: sketch,
-                        owner: "Sketch line dimension update"
-                    )
-                }
-                let isConflictingFixedDimension: Bool
-                switch kind {
-                case .length:
-                    isConflictingFixedDimension = abs(metrics.length - resolvedValue) > 1.0e-12
-                case .angle:
-                    isConflictingFixedDimension = angularDistance(metrics.angleRadians, resolvedValue) > 1.0e-12
-                case .radius, .diameter:
-                    isConflictingFixedDimension = true
-                }
-                guard startAnchored == false || endAnchored == false || isConflictingFixedDimension == false else {
-                    throw EditorError(
-                        code: .commandInvalid,
-                        message: "Sketch line dimension update cannot change a line with both endpoints fixed."
-                    )
-                }
-                let movedReference: SketchReference?
-                if startAnchored && endAnchored {
-                    movedReference = nil
-                } else if endAnchored && startAnchored == false {
-                    let nextLine: SketchLine
-                    switch kind {
-                    case .length:
-                        nextLine = try resizedLinePreservingEnd(
-                            line,
-                            length: resolvedValue,
-                            owner: "Sketch line dimension update"
-                        )
-                    case .angle:
-                        nextLine = try angledLinePreservingEnd(
-                            line,
-                            angleRadians: resolvedValue,
-                            owner: "Sketch line dimension update"
-                        )
-                    case .radius, .diameter:
-                        throw incompatibleSketchDimension(kind, entityKind: "line")
-                    }
-                    sketch.entities[selection.entityID] = .line(nextLine)
-                    movedReference = startReference
-                } else {
-                    let nextLine: SketchLine
-                    switch kind {
-                    case .length:
-                        nextLine = try resizedLine(
-                            line,
-                            length: resolvedValue,
-                            owner: "Sketch line dimension update"
-                        )
-                    case .angle:
-                        nextLine = try angledLinePreservingStart(
-                            line,
-                            angleRadians: resolvedValue,
-                            owner: "Sketch line dimension update"
-                        )
-                    case .radius, .diameter:
-                        throw incompatibleSketchDimension(kind, entityKind: "line")
-                    }
-                    sketch.entities[selection.entityID] = .line(nextLine)
-                    movedReference = endReference
-                }
-                if let movedReference {
-                    try pointPropagator.propagate(
-                        from: movedReference,
-                        in: &sketch,
-                        owner: "Sketch line dimension update"
-                    )
-                }
-            }
-        case .circle(var circle):
-            guard kind == .radius || kind == .diameter else {
-                throw incompatibleSketchDimension(kind, entityKind: "circle")
-            }
-            try pointPropagator.validateCanResizeCircularEntity(
-                selection.entityID,
-                in: sketch,
-                owner: "Sketch entity dimension update"
-            )
-            circle.radius = try radiusExpression(for: kind, value: value)
-            sketch.entities[selection.entityID] = .circle(circle)
-            try pointPropagator.propagateCircularRadius(
-                from: selection.entityID,
-                in: &sketch,
-                owner: "Sketch entity dimension update"
-            )
-        case .arc(var arc):
-            guard kind == .radius || kind == .diameter || kind == .angle else {
-                throw incompatibleSketchDimension(kind, entityKind: "arc")
-            }
-            if kind == .angle {
-                let startReference = SketchReference.arcStart(selection.entityID)
-                let endReference = SketchReference.arcEnd(selection.entityID)
-                let startAnchored = pointPropagator.isAnchored(startReference, in: sketch)
-                let endAnchored = pointPropagator.isAnchored(endReference, in: sketch)
-                let startAngle = try resolvedAngleValue(
-                    arc.startAngle,
-                    owner: "Sketch entity dimension update start angle"
-                )
-                let endAngle = try resolvedAngleValue(
-                    arc.endAngle,
-                    owner: "Sketch entity dimension update end angle"
-                )
-                let currentSpan = try normalizedPartialArcSpan(
-                    startAngle: startAngle,
-                    endAngle: endAngle
-                )
-                guard startAnchored == false || endAnchored == false || abs(currentSpan - resolvedValue) <= 1.0e-12 else {
-                    throw EditorError(
-                        code: .commandInvalid,
-                        message: "Sketch arc span dimension update cannot change an arc with both endpoints fixed."
-                    )
-                }
-                let movedReference: SketchReference?
-                if startAnchored && endAnchored {
-                    movedReference = nil
-                } else if endAnchored && startAnchored == false {
-                    arc.startAngle = .angle(endAngle - resolvedValue, .radian)
-                    movedReference = startReference
-                } else {
-                    arc.endAngle = .angle(startAngle + resolvedValue, .radian)
-                    movedReference = endReference
-                }
-                try validateArc(arc, owner: "Sketch entity dimension update")
-                sketch.entities[selection.entityID] = .arc(arc)
-                if let movedReference {
-                    try pointPropagator.propagate(
-                        from: movedReference,
-                        in: &sketch,
-                        owner: "Sketch entity dimension update"
-                    )
-                }
-            } else {
-                if let profileSketch = try profileArcRadiusDimensionSketch(
-                    featureID: selection.featureID,
-                    entityID: selection.entityID,
-                    sketch: sketch,
-                    kind: kind,
-                    value: value
-                ) {
-                    sketch = profileSketch
-                    break
-                }
-                try pointPropagator.validateCanResizeCircularEntity(
-                    selection.entityID,
-                    in: sketch,
-                    owner: "Sketch entity dimension update"
-                )
-                arc.radius = try radiusExpression(for: kind, value: value)
-                sketch.entities[selection.entityID] = .arc(arc)
-            }
-            if kind != .angle {
-                try pointPropagator.propagateCircularRadius(
-                    from: selection.entityID,
-                    in: &sketch,
-                    owner: "Sketch entity dimension update"
-                )
-            }
-        case .point:
-            throw incompatibleSketchDimension(kind, entityKind: "point")
-        case .spline:
-            throw incompatibleSketchDimension(kind, entityKind: "spline")
-        }
-        sketch.dimensions = dimensionsAfterSettingEntityDimension(
-            sketch.dimensions,
-            entityID: selection.entityID,
-            entity: selection.entity,
-            kind: kind,
-            value: value
-        )
-
-        try commitSketchEntityEdit(
-            featureID: selection.featureID,
-            feature: &feature,
-            sketch: sketch,
-            objectRegistry: objectRegistry,
-            errorOwner: "Sketch entity dimension update"
-        )
-    }
-
-    private func sketchEntityDimensionEditTarget(
-        for target: SelectionTarget,
-        kind: SketchEntityDimensionKind,
-        objectRegistry: ObjectTypeRegistry
-    ) throws -> SelectionTarget {
-        if case .sketchEntity = target.component {
-            return target
-        }
-        guard case .edge = target.component else {
-            throw EditorError(
-                code: .commandInvalid,
-                message: "Sketch entity dimension update requires a sketch entity or editable generated edge target."
-            )
-        }
-        let summary = try SketchDimensionSummaryService().summarize(
-            document: self,
-            targets: [target],
-            objectRegistry: objectRegistry
-        )
-        guard let entry = summary.entries.first(where: { $0.kind == kind }) else {
-            throw EditorError(
-                code: .commandInvalid,
-                message: "Sketch entity dimension update found no editable \(kind.rawValue) dimension for the generated edge target."
-            )
-        }
-        return entry.target
-    }
-
-    private func profileArcRadiusDimensionSketch(
-        featureID: FeatureID,
-        entityID: SketchEntityID,
-        sketch: Sketch,
-        kind: SketchEntityDimensionKind,
-        value: CADExpression
-    ) throws -> Sketch? {
-        guard kind == .radius || kind == .diameter else {
-            return nil
-        }
-        guard featureIsProfileOfNormalExtrude(featureID) else {
-            return nil
-        }
-
-        let radiusExpression = try radiusExpression(for: kind, value: value)
-        let radiusMeters = try resolvedPositiveLengthValue(
-            radiusExpression,
-            owner: "Sketch profile arc radius dimension"
-        )
-        let startAdjacent = try adjacentProfileLineEndpoint(
-            to: .arcStart(entityID),
-            in: sketch,
-            owner: "Sketch profile arc radius dimension"
-        )
-        let endAdjacent = try adjacentProfileLineEndpoint(
-            to: .arcEnd(entityID),
-            in: sketch,
-            owner: "Sketch profile arc radius dimension"
-        )
-        guard startAdjacent.endpoint.entityID != endAdjacent.endpoint.entityID else {
-            throw EditorError(
-                code: .commandInvalid,
-                message: "Sketch profile arc radius dimension requires a line-arc-line profile corner."
-            )
-        }
-        try validateProfileArcRadiusDimensionRewrite(
-            sketch: sketch,
-            arcID: entityID,
-            startLineEndpoint: startAdjacent.endpoint,
-            endLineEndpoint: endAdjacent.endpoint
-        )
-
-        let startConnected = try sketchCornerPoint(
-            startAdjacent.endpoint.reference,
-            in: sketch,
-            owner: "Sketch profile arc radius dimension"
-        )
-        let startFar = try sketchCornerPoint(
-            startAdjacent.endpoint.oppositeReference,
-            in: sketch,
-            owner: "Sketch profile arc radius dimension"
-        )
-        let endConnected = try sketchCornerPoint(
-            endAdjacent.endpoint.reference,
-            in: sketch,
-            owner: "Sketch profile arc radius dimension"
-        )
-        let endFar = try sketchCornerPoint(
-            endAdjacent.endpoint.oppositeReference,
-            in: sketch,
-            owner: "Sketch profile arc radius dimension"
-        )
-        let corner = try lineIntersection(
-            firstStart: startConnected,
-            firstEnd: startFar,
-            secondStart: endConnected,
-            secondEnd: endFar,
-            owner: "Sketch profile arc radius dimension"
-        )
-        let selectedGeometry = try profileLineEndpointGeometry(
-            endpoint: startAdjacent.endpoint,
-            entity: startAdjacent.entity,
-            corner: corner,
-            farPoint: startFar,
-            owner: "Sketch profile arc radius dimension"
-        )
-        let adjacentGeometry = try profileLineEndpointGeometry(
-            endpoint: endAdjacent.endpoint,
-            entity: endAdjacent.entity,
-            corner: corner,
-            farPoint: endFar,
-            owner: "Sketch profile arc radius dimension"
-        )
-        let candidate = try sketchLineLineCornerFilletCandidate(
-            selectedGeometry: selectedGeometry,
-            adjacentGeometry: adjacentGeometry,
-            radius: radiusMeters
-        )
-        let fillet = try sketchCornerFilletEntity(
-            center: candidate.center,
-            selectedPoint: candidate.selectedPoint,
-            adjacentPoint: candidate.adjacentPoint,
-            radius: radiusMeters,
-            insertedEntityID: entityID
-        )
-        guard case var .arc(updatedArc) = fillet.entity,
-              case let .line(startLine) = startAdjacent.entity,
-              case let .line(endLine) = endAdjacent.entity else {
-            throw EditorError(
-                code: .commandInvalid,
-                message: "Sketch profile arc radius dimension requires a line-arc-line profile corner."
-            )
-        }
-        updatedArc.radius = radiusExpression
-        try validateArc(updatedArc, owner: "Sketch profile arc radius dimension")
-
-        var updatedSketch = sketch
-        updatedSketch.entities[startAdjacent.endpoint.entityID] = .line(
-            lineBySettingEndpoint(
-                startLine,
-                endpoint: startAdjacent.endpoint,
-                point: literalSketchPoint(candidate.selectedPoint)
-            )
-        )
-        updatedSketch.entities[endAdjacent.endpoint.entityID] = .line(
-            lineBySettingEndpoint(
-                endLine,
-                endpoint: endAdjacent.endpoint,
-                point: literalSketchPoint(candidate.adjacentPoint)
-            )
-        )
-        updatedSketch.entities[entityID] = .arc(updatedArc)
-        updatedSketch.constraints = constraintsAfterProfileArcRadiusDimension(
-            sketch.constraints,
-            arcID: entityID,
-            startLineEndpoint: startAdjacent.endpoint,
-            endLineEndpoint: endAdjacent.endpoint,
-            startArcReference: fillet.selectedReference,
-            endArcReference: fillet.adjacentReference
-        )
-        return updatedSketch
-    }
-
-    private func featureIsProfileOfNormalExtrude(_ featureID: FeatureID) -> Bool {
-        cadDocument.designGraph.nodes.values.contains { feature in
-            guard case let .extrude(extrude) = feature.operation,
-                  extrude.profile.featureID == featureID,
-                  case .normal = extrude.direction else {
-                return false
-            }
-            return true
-        }
-    }
-
-    private func adjacentProfileLineEndpoint(
-        to reference: SketchReference,
-        in sketch: Sketch,
-        owner: String
-    ) throws -> (endpoint: LineEndpoint, entity: SketchEntity) {
-        let adjacent = try adjacentSketchCurveEndpoint(
-            to: reference,
-            in: sketch,
-            owner: owner
-        )
-        guard case let .line(endpoint) = adjacent.endpoint,
-              case .line = adjacent.entity else {
-            throw EditorError(
-                code: .commandInvalid,
-                message: "\(owner) requires a line-arc-line profile corner."
-            )
-        }
-        return (endpoint, adjacent.entity)
-    }
-
-    private func validateProfileArcRadiusDimensionRewrite(
-        sketch: Sketch,
-        arcID: SketchEntityID,
-        startLineEndpoint: LineEndpoint,
-        endLineEndpoint: LineEndpoint
-    ) throws {
-        let affectedEntityIDs: Set<SketchEntityID> = [
-            arcID,
-            startLineEndpoint.entityID,
-            endLineEndpoint.entityID,
-        ]
-        for dimension in sketch.dimensions where dimensionReferencesAny(
-            dimension,
-            entityIDs: affectedEntityIDs
-        ) {
-            guard isCircularSizeDimension(dimension, entityID: arcID) else {
-                throw EditorError(
-                    code: .commandInvalid,
-                    message: "Sketch profile arc radius dimension cannot preserve other dimensions attached to the re-trimmed profile corner."
-                )
-            }
-        }
-        for constraint in sketch.constraints where profileArcRadiusDimensionBlocksConstraint(
-            constraint,
-            affectedEntityIDs: affectedEntityIDs,
-            arcID: arcID,
-            startLineEndpoint: startLineEndpoint,
-            endLineEndpoint: endLineEndpoint
-        ) {
-            throw EditorError(
-                code: .commandInvalid,
-                message: "Sketch profile arc radius dimension cannot preserve unsupported constraints attached to the re-trimmed profile corner."
-            )
-        }
-    }
-
-    private func profileArcRadiusDimensionBlocksConstraint(
-        _ constraint: SketchConstraint,
-        affectedEntityIDs: Set<SketchEntityID>,
-        arcID: SketchEntityID,
-        startLineEndpoint: LineEndpoint,
-        endLineEndpoint: LineEndpoint
-    ) -> Bool {
-        switch constraint {
-        case .horizontal,
-             .vertical,
-             .parallel,
-             .perpendicular:
-            return false
-        case .coincident(let first, let second):
-            if referencesAreCoincident(first, second, startLineEndpoint.reference, .arcStart(arcID)) ||
-                referencesAreCoincident(first, second, endLineEndpoint.reference, .arcEnd(arcID)) {
-                return false
-            }
-            return profileArcRadiusDimensionReferenceIsMoved(
-                first,
-                arcID: arcID,
-                startLineEndpoint: startLineEndpoint,
-                endLineEndpoint: endLineEndpoint
-            ) || profileArcRadiusDimensionReferenceIsMoved(
-                second,
-                arcID: arcID,
-                startLineEndpoint: startLineEndpoint,
-                endLineEndpoint: endLineEndpoint
-            )
-        case .fixed(let reference):
-            return profileArcRadiusDimensionReferenceIsMoved(
-                reference,
-                arcID: arcID,
-                startLineEndpoint: startLineEndpoint,
-                endLineEndpoint: endLineEndpoint
-            )
-        case .equalLength(let first, let second),
-             .tangent(let first, let second),
-             .concentric(let first, let second),
-             .equalRadius(let first, let second):
-            return affectedEntityIDs.contains(first) || affectedEntityIDs.contains(second)
-        case .smoothSplineControlPoint(let entityID, _):
-            return affectedEntityIDs.contains(entityID)
-        case .splineEndpointTangent(let splineID, _, let lineID):
-            return affectedEntityIDs.contains(splineID) || affectedEntityIDs.contains(lineID)
-        case .tangentSplineEndpoints(let first, let second),
-             .smoothSplineEndpoints(let first, let second):
-            return affectedEntityIDs.contains(first.splineID) ||
-                affectedEntityIDs.contains(second.splineID)
-        }
-    }
-
-    private func profileArcRadiusDimensionReferenceIsMoved(
-        _ reference: SketchReference,
-        arcID: SketchEntityID,
-        startLineEndpoint: LineEndpoint,
-        endLineEndpoint: LineEndpoint
-    ) -> Bool {
-        if reference == startLineEndpoint.reference ||
-            reference == endLineEndpoint.reference ||
-            reference == .arcStart(arcID) ||
-            reference == .arcEnd(arcID) ||
-            reference == .arcCenter(arcID) ||
-            reference == .arcRadius(arcID) {
-            return true
-        }
-        switch reference {
-        case .entity(let entityID):
-            return entityID == arcID ||
-                entityID == startLineEndpoint.entityID ||
-                entityID == endLineEndpoint.entityID
-        case .circleCenter,
-             .circleRadius,
-             .splineControlPoint:
-            return false
-        case .lineStart,
-             .lineEnd,
-             .arcStart,
-             .arcEnd,
-             .arcCenter,
-             .arcRadius:
-            return false
-        }
-    }
-
-    private func constraintsAfterProfileArcRadiusDimension(
-        _ constraints: [SketchConstraint],
-        arcID: SketchEntityID,
-        startLineEndpoint: LineEndpoint,
-        endLineEndpoint: LineEndpoint,
-        startArcReference: SketchReference,
-        endArcReference: SketchReference
-    ) -> [SketchConstraint] {
-        var updated = constraints.filter { constraint in
-            guard case let .coincident(first, second) = constraint else {
-                return true
-            }
-            if referencesAreCoincident(first, second, startLineEndpoint.reference, .arcStart(arcID)) {
-                return false
-            }
-            if referencesAreCoincident(first, second, endLineEndpoint.reference, .arcEnd(arcID)) {
-                return false
-            }
-            return true
-        }
-        updated.append(.coincident(startLineEndpoint.reference, startArcReference))
-        updated.append(.coincident(endArcReference, endLineEndpoint.reference))
-        return updated
-    }
-
-    private func profileLineEndpointGeometry(
-        endpoint: LineEndpoint,
-        entity: SketchEntity,
-        corner: SketchCornerPoint,
-        farPoint: SketchCornerPoint,
-        owner: String
-    ) throws -> SketchCornerEndpointGeometry {
-        let delta = farPoint.subtracting(corner)
-        let length = corner.distance(to: farPoint)
-        guard length > ModelingTolerance.standard.distance else {
-            throw EditorError(
-                code: .commandInvalid,
-                message: "\(owner) requires adjacent line segments with non-zero length."
-            )
-        }
-        return SketchCornerEndpointGeometry(
-            endpoint: .line(endpoint),
-            entity: entity,
-            vertex: corner,
-            length: length,
-            unit: delta.scaled(by: 1.0 / length),
-            arc: nil
-        )
-    }
-
-    private func lineIntersection(
-        firstStart: SketchCornerPoint,
-        firstEnd: SketchCornerPoint,
-        secondStart: SketchCornerPoint,
-        secondEnd: SketchCornerPoint,
-        owner: String
-    ) throws -> SketchCornerPoint {
-        let firstDirection = firstEnd.subtracting(firstStart)
-        let secondDirection = secondEnd.subtracting(secondStart)
-        let firstLength = hypot(firstDirection.x, firstDirection.y)
-        let secondLength = hypot(secondDirection.x, secondDirection.y)
-        guard firstLength > ModelingTolerance.standard.distance,
-              secondLength > ModelingTolerance.standard.distance else {
-            throw EditorError(
-                code: .commandInvalid,
-                message: "\(owner) requires adjacent line segments with non-zero length."
-            )
-        }
-        let denominator = firstDirection.cross(secondDirection)
-        let normalizedCross = abs(denominator) / (firstLength * secondLength)
-        guard normalizedCross > ModelingTolerance.standard.angle else {
-            throw EditorError(
-                code: .commandInvalid,
-                message: "\(owner) requires non-parallel adjacent line segments."
-            )
-        }
-        let delta = secondStart.subtracting(firstStart)
-        let distance = delta.cross(secondDirection) / denominator
-        return firstStart.adding(firstDirection.scaled(by: distance))
-    }
-
-    private func sketchCornerPoint(
-        _ reference: SketchReference,
-        in sketch: Sketch,
-        owner: String
-    ) throws -> SketchCornerPoint {
-        guard let point = try resolvedPoint(reference, in: sketch, owner: owner) else {
-            throw EditorError(
-                code: .commandInvalid,
-                message: "\(owner) requires endpoint references."
-            )
-        }
-        return SketchCornerPoint(x: point.x, y: point.y)
-    }
-
-    private func referencesAreCoincident(
-        _ first: SketchReference,
-        _ second: SketchReference,
-        _ expectedFirst: SketchReference,
-        _ expectedSecond: SketchReference
-    ) -> Bool {
-        (first == expectedFirst && second == expectedSecond) ||
-            (first == expectedSecond && second == expectedFirst)
-    }
-
     public mutating func convertSketchLineToArc(
         target: SelectionTarget,
         sagitta: CADExpression,
@@ -2124,7 +1474,7 @@ public struct DesignDocument: Identifiable, Sendable {
     }
 
 
-    private struct LineEndpoint {
+    struct LineEndpoint {
         var entityID: SketchEntityID
         var isStart: Bool
 
@@ -2137,7 +1487,7 @@ public struct DesignDocument: Identifiable, Sendable {
         }
     }
 
-    private struct ArcEndpoint {
+    struct ArcEndpoint {
         var entityID: SketchEntityID
         var isStart: Bool
 
@@ -2150,7 +1500,7 @@ public struct DesignDocument: Identifiable, Sendable {
         }
     }
 
-    private enum SketchCurveEndpoint {
+    enum SketchCurveEndpoint {
         case line(LineEndpoint)
         case arc(ArcEndpoint)
 
@@ -2505,7 +1855,7 @@ public struct DesignDocument: Identifiable, Sendable {
         )
     }
 
-    private func adjacentSketchCurveEndpoint(
+    func adjacentSketchCurveEndpoint(
         to reference: SketchReference,
         in sketch: Sketch,
         owner: String
@@ -2555,7 +1905,7 @@ public struct DesignDocument: Identifiable, Sendable {
         var adjacentInsertedReference: SketchReference
     }
 
-    private struct SketchCornerEndpointGeometry {
+    struct SketchCornerEndpointGeometry {
         var endpoint: SketchCurveEndpoint
         var entity: SketchEntity
         var vertex: SketchCornerPoint
@@ -2564,7 +1914,7 @@ public struct DesignDocument: Identifiable, Sendable {
         var arc: SketchCornerArcGeometry?
     }
 
-    private struct SketchCornerArcGeometry {
+    struct SketchCornerArcGeometry {
         var center: SketchCornerPoint
         var radius: Double
         var startAngle: Double
@@ -2648,7 +1998,7 @@ public struct DesignDocument: Identifiable, Sendable {
         }
     }
 
-    private struct SketchCornerFilletCandidate {
+    struct SketchCornerFilletCandidate {
         var center: SketchCornerPoint
         var selectedPoint: SketchCornerPoint
         var adjacentPoint: SketchCornerPoint
@@ -2660,7 +2010,7 @@ public struct DesignDocument: Identifiable, Sendable {
         case circle(center: SketchCornerPoint, radius: Double)
     }
 
-    private struct SketchCornerPoint: Equatable, Sendable {
+    struct SketchCornerPoint: Equatable, Sendable {
         var x: Double
         var y: Double
 
@@ -3066,7 +2416,7 @@ public struct DesignDocument: Identifiable, Sendable {
         )
     }
 
-    private func sketchLineLineCornerFilletCandidate(
+    func sketchLineLineCornerFilletCandidate(
         selectedGeometry: SketchCornerEndpointGeometry,
         adjacentGeometry: SketchCornerEndpointGeometry,
         radius: Double
@@ -3385,7 +2735,7 @@ public struct DesignDocument: Identifiable, Sendable {
         return [point]
     }
 
-    private func sketchCornerFilletEntity(
+    func sketchCornerFilletEntity(
         center: SketchCornerPoint,
         selectedPoint: SketchCornerPoint,
         adjacentPoint: SketchCornerPoint,
@@ -4123,7 +3473,7 @@ public struct DesignDocument: Identifiable, Sendable {
         }
     }
 
-    private func lineBySettingEndpoint(
+    func lineBySettingEndpoint(
         _ line: SketchLine,
         endpoint: LineEndpoint,
         point: SketchPoint
@@ -4134,11 +3484,11 @@ public struct DesignDocument: Identifiable, Sendable {
         return SketchLine(start: line.start, end: point)
     }
 
-    private func literalSketchPoint(_ point: SketchCornerPoint) -> SketchPoint {
+    func literalSketchPoint(_ point: SketchCornerPoint) -> SketchPoint {
         literalSketchPoint(x: point.x, y: point.y)
     }
 
-    private func literalSketchPoint(x: Double, y: Double) -> SketchPoint {
+    func literalSketchPoint(x: Double, y: Double) -> SketchPoint {
         SketchPoint(
             x: .length(x, .meter),
             y: .length(y, .meter)
@@ -5056,7 +4406,7 @@ public struct DesignDocument: Identifiable, Sendable {
         }
     }
 
-    private func dimensionReferencesAny(
+    func dimensionReferencesAny(
         _ dimension: SketchDimension,
         entityIDs: Set<SketchEntityID>
     ) -> Bool {
@@ -5238,7 +4588,7 @@ public struct DesignDocument: Identifiable, Sendable {
         )
     }
 
-    private func resizedLine(
+    func resizedLine(
         _ line: SketchLine,
         length: Double,
         owner: String
@@ -5265,7 +4615,7 @@ public struct DesignDocument: Identifiable, Sendable {
         )
     }
 
-    private func resizedLinePreservingEnd(
+    func resizedLinePreservingEnd(
         _ line: SketchLine,
         length: Double,
         owner: String
@@ -5292,7 +4642,7 @@ public struct DesignDocument: Identifiable, Sendable {
         )
     }
 
-    private func angledLinePreservingStart(
+    func angledLinePreservingStart(
         _ line: SketchLine,
         angleRadians: Double,
         owner: String
@@ -5309,7 +4659,7 @@ public struct DesignDocument: Identifiable, Sendable {
         )
     }
 
-    private func angledLinePreservingEnd(
+    func angledLinePreservingEnd(
         _ line: SketchLine,
         angleRadians: Double,
         owner: String
@@ -5326,7 +4676,7 @@ public struct DesignDocument: Identifiable, Sendable {
         )
     }
 
-    private func angularDistance(_ first: Double, _ second: Double) -> Double {
+    func angularDistance(_ first: Double, _ second: Double) -> Double {
         let fullCircle = Double.pi * 2.0
         var delta = (first - second).truncatingRemainder(dividingBy: fullCircle)
         if delta > Double.pi {
@@ -5350,7 +4700,7 @@ public struct DesignDocument: Identifiable, Sendable {
         return abs(delta)
     }
 
-    private func validateLineAngleDimensionAgainstDirectOrientationConstraints(
+    func validateLineAngleDimensionAgainstDirectOrientationConstraints(
         _ angleRadians: Double,
         lineID: SketchEntityID,
         sketch: Sketch,
@@ -5376,80 +4726,6 @@ public struct DesignDocument: Identifiable, Sendable {
                 continue
             }
         }
-    }
-
-    private func radiusExpression(
-        for kind: SketchEntityDimensionKind,
-        value: CADExpression
-    ) throws -> CADExpression {
-        switch kind {
-        case .radius:
-            return value
-        case .diameter:
-            return .divide(value, .scalar(2.0))
-        case .length, .angle:
-            throw incompatibleSketchDimension(kind, entityKind: "circular")
-        }
-    }
-
-    private func resolvedSketchEntityDimensionValue(
-        _ expression: CADExpression,
-        kind: SketchEntityDimensionKind,
-        owner: String
-    ) throws -> Double {
-        switch kind {
-        case .length, .radius, .diameter:
-            return try resolvedLengthValue(expression, owner: owner)
-        case .angle:
-            return try resolvedAngleValue(expression, owner: owner)
-        }
-    }
-
-    private func validateResolvedSketchEntityDimensionValue(
-        _ value: Double,
-        kind: SketchEntityDimensionKind,
-        entity: SketchEntity
-    ) throws {
-        switch kind {
-        case .length, .radius, .diameter:
-            guard value > 0.0 else {
-                throw EditorError(
-                    code: .commandInvalid,
-                    message: "Sketch entity dimension must be greater than zero."
-                )
-            }
-        case .angle:
-            guard value.isFinite else {
-                throw EditorError(
-                    code: .commandInvalid,
-                    message: "Sketch entity angle dimension must be finite."
-                )
-            }
-            if case .arc = entity {
-                guard value > 0.0 else {
-                    throw EditorError(
-                        code: .commandInvalid,
-                        message: "Sketch arc span angle dimension must be greater than zero."
-                    )
-                }
-                guard value < Double.pi * 2.0 - ModelingTolerance.standard.angle else {
-                    throw EditorError(
-                        code: .commandInvalid,
-                        message: "Sketch arc span angle dimension must be less than a full circle."
-                    )
-                }
-            }
-        }
-    }
-
-    private func incompatibleSketchDimension(
-        _ kind: SketchEntityDimensionKind,
-        entityKind: String
-    ) -> EditorError {
-        EditorError(
-            code: .commandInvalid,
-            message: "Sketch \(entityKind) does not support \(kind.rawValue) dimensions."
-        )
     }
 
     private func convertedArc(
@@ -10659,120 +9935,6 @@ public struct DesignDocument: Identifiable, Sendable {
         }
     }
 
-    private func dimensionsAfterSettingEntityDimension(
-        _ dimensions: [SketchDimension],
-        entityID: SketchEntityID,
-        entity: SketchEntity,
-        kind: SketchEntityDimensionKind,
-        value: CADExpression
-    ) -> [SketchDimension] {
-        var next = dimensions.filter { dimension in
-            switch kind {
-            case .length:
-                return isLineLengthDimension(dimension, entityID: entityID) == false
-            case .radius, .diameter:
-                return isCircularSizeDimension(dimension, entityID: entityID) == false
-            case .angle:
-                switch entity {
-                case .line:
-                    return isLineAngleDimension(dimension, entityID: entityID) == false
-                case .arc:
-                    return isArcAngleDimension(dimension, entityID: entityID) == false
-                case .point, .circle, .spline:
-                    return true
-                }
-            }
-        }
-        switch kind {
-        case .length:
-            next.append(.distance(from: .lineStart(entityID), to: .lineEnd(entityID), value: value))
-        case .radius:
-            next.append(.radius(entity: entityID, value: value))
-        case .diameter:
-            next.append(.diameter(entity: entityID, value: value))
-        case .angle:
-            switch entity {
-            case .line:
-                next.append(.angle(from: .lineStart(entityID), to: .lineEnd(entityID), value: value))
-            case .arc:
-                next.append(.angle(from: .arcStart(entityID), to: .arcEnd(entityID), value: value))
-            case .point, .circle, .spline:
-                return next
-            }
-        }
-        return next
-    }
-
-    private func isLineLengthDimension(
-        _ dimension: SketchDimension,
-        entityID: SketchEntityID
-    ) -> Bool {
-        guard case let .distance(first, second, _) = dimension else {
-            return false
-        }
-        return referencesLineEndpoints(first, second, entityID: entityID)
-    }
-
-    private func referencesLineEndpoints(
-        _ first: SketchReference,
-        _ second: SketchReference,
-        entityID: SketchEntityID
-    ) -> Bool {
-        switch (first, second) {
-        case (.lineStart(let firstID), .lineEnd(let secondID)),
-             (.lineEnd(let firstID), .lineStart(let secondID)):
-            return firstID == entityID && secondID == entityID
-        default:
-            return false
-        }
-    }
-
-    private func isLineAngleDimension(
-        _ dimension: SketchDimension,
-        entityID: SketchEntityID
-    ) -> Bool {
-        guard case let .angle(first, second, _) = dimension else {
-            return false
-        }
-        return referencesLineEndpoints(first, second, entityID: entityID)
-    }
-
-    private func isCircularSizeDimension(
-        _ dimension: SketchDimension,
-        entityID: SketchEntityID
-    ) -> Bool {
-        switch dimension {
-        case .radius(let id, _), .diameter(let id, _):
-            return id == entityID
-        case .distance, .angle:
-            return false
-        }
-    }
-
-    private func isArcAngleDimension(
-        _ dimension: SketchDimension,
-        entityID: SketchEntityID
-    ) -> Bool {
-        guard case let .angle(first, second, _) = dimension else {
-            return false
-        }
-        return referencesArcEndpoints(first, second, entityID: entityID)
-    }
-
-    private func referencesArcEndpoints(
-        _ first: SketchReference,
-        _ second: SketchReference,
-        entityID: SketchEntityID
-    ) -> Bool {
-        switch (first, second) {
-        case (.arcStart(let firstID), .arcEnd(let secondID)),
-             (.arcEnd(let firstID), .arcStart(let secondID)):
-            return firstID == entityID && secondID == entityID
-        default:
-            return false
-        }
-    }
-
     private func rewriteLineEndpointReference(
         _ reference: SketchReference,
         entityID: SketchEntityID
@@ -11156,173 +10318,6 @@ public struct DesignDocument: Identifiable, Sendable {
         sketch.entities[lineIDs.left] = .line(SketchLine(start: topLeft, end: bottomLeft))
     }
 
-    private func rectangleSideDimensionAxis(
-        in sketch: Sketch,
-        entityID: SketchEntityID
-    ) throws -> RectangleSideDimensionAxis? {
-        guard let lineIDs = try rectangleLineIDs(in: sketch) else {
-            return nil
-        }
-        if entityID == lineIDs.bottom || entityID == lineIDs.top {
-            return .width
-        }
-        if entityID == lineIDs.left || entityID == lineIDs.right {
-            return .height
-        }
-        return nil
-    }
-
-    private func updateRectangleSketchForSideDimension(
-        _ sketch: inout Sketch,
-        axis: RectangleSideDimensionAxis,
-        length: CADExpression,
-        resolvedLength: Double
-    ) throws {
-        guard let bounds = try resolvedSketchBounds2D(sketch) else {
-            throw EditorError(
-                code: .referenceUnresolved,
-                message: "Sketch line dimension update requires a finite rectangle profile."
-            )
-        }
-        guard resolvedLength > 1.0e-9 else {
-            throw EditorError(
-                code: .commandInvalid,
-                message: "Sketch line dimension would collapse the rectangle profile."
-            )
-        }
-        let fixedSnapshot = try fixedPointSnapshot(in: sketch, owner: "Sketch line dimension update")
-        let fixedSides = try fixedRectangleSides(
-            in: sketch,
-            bounds: bounds,
-            owner: "Sketch line dimension update"
-        )
-        let currentWidth = bounds.maxX - bounds.minX
-        let currentHeight = bounds.maxY - bounds.minY
-        if axis == .width,
-           fixedSides.left,
-           fixedSides.right,
-           abs(currentWidth - resolvedLength) > 1.0e-12 {
-            throw EditorError(
-                code: .commandInvalid,
-                message: "Sketch line dimension update cannot resize a rectangle with both horizontal sides fixed."
-            )
-        }
-        if axis == .height,
-           fixedSides.bottom,
-           fixedSides.top,
-           abs(currentHeight - resolvedLength) > 1.0e-12 {
-            throw EditorError(
-                code: .commandInvalid,
-                message: "Sketch line dimension update cannot resize a rectangle with both vertical sides fixed."
-            )
-        }
-        let minX: CADExpression
-        let maxX: CADExpression
-        let minY: CADExpression
-        let maxY: CADExpression
-        switch axis {
-        case .width:
-            if fixedSides.right && fixedSides.left == false {
-                minX = .subtract(.length(bounds.maxX, .meter), length)
-                maxX = .length(bounds.maxX, .meter)
-            } else {
-                minX = .length(bounds.minX, .meter)
-                maxX = .add(minX, length)
-            }
-            minY = .length(bounds.minY, .meter)
-            maxY = .length(bounds.maxY, .meter)
-        case .height:
-            minX = .length(bounds.minX, .meter)
-            maxX = .length(bounds.maxX, .meter)
-            if fixedSides.top && fixedSides.bottom == false {
-                minY = .subtract(.length(bounds.maxY, .meter), length)
-                maxY = .length(bounds.maxY, .meter)
-            } else {
-                minY = .length(bounds.minY, .meter)
-                maxY = .add(minY, length)
-            }
-        }
-        let firstCorner = SketchPoint(
-            x: minX,
-            y: minY
-        )
-        let oppositeCorner = SketchPoint(
-            x: maxX,
-            y: maxY
-        )
-        try updateRectangleSketch(
-            &sketch,
-            firstCorner: firstCorner,
-            oppositeCorner: oppositeCorner
-        )
-        try validateFixedPointSnapshot(
-            fixedSnapshot,
-            in: sketch,
-            owner: "Sketch line dimension update"
-        )
-    }
-
-    private func fixedRectangleSides(
-        in sketch: Sketch,
-        bounds: (minX: Double, minY: Double, maxX: Double, maxY: Double),
-        owner: String
-    ) throws -> RectangleFixedSides {
-        var sides = RectangleFixedSides()
-        for snapshot in try fixedPointSnapshot(in: sketch, owner: owner) {
-            if nearlyEqual(snapshot.x, bounds.minX, tolerance: 1.0e-9) {
-                sides.left = true
-            }
-            if nearlyEqual(snapshot.x, bounds.maxX, tolerance: 1.0e-9) {
-                sides.right = true
-            }
-            if nearlyEqual(snapshot.y, bounds.minY, tolerance: 1.0e-9) {
-                sides.bottom = true
-            }
-            if nearlyEqual(snapshot.y, bounds.maxY, tolerance: 1.0e-9) {
-                sides.top = true
-            }
-        }
-        return sides
-    }
-
-    private func fixedPointSnapshot(
-        in sketch: Sketch,
-        owner: String
-    ) throws -> [FixedSketchPointSnapshot] {
-        var snapshots: [FixedSketchPointSnapshot] = []
-        for constraint in sketch.constraints {
-            guard case let .fixed(reference) = constraint,
-                  let point = try resolvedPoint(reference, in: sketch, owner: owner) else {
-                continue
-            }
-            snapshots.append(FixedSketchPointSnapshot(
-                reference: reference,
-                x: point.x,
-                y: point.y
-            ))
-        }
-        return snapshots
-    }
-
-    private func validateFixedPointSnapshot(
-        _ snapshots: [FixedSketchPointSnapshot],
-        in sketch: Sketch,
-        owner: String
-    ) throws {
-        for snapshot in snapshots {
-            guard let point = try resolvedPoint(snapshot.reference, in: sketch, owner: owner) else {
-                continue
-            }
-            guard nearlyEqual(point.x, snapshot.x, tolerance: 1.0e-9),
-                  nearlyEqual(point.y, snapshot.y, tolerance: 1.0e-9) else {
-                throw EditorError(
-                    code: .commandInvalid,
-                    message: "\(owner) cannot move a fixed sketch point."
-                )
-            }
-        }
-    }
-
     func resolvedPoint(
         _ reference: SketchReference,
         in sketch: Sketch,
@@ -11547,24 +10542,6 @@ public struct DesignDocument: Identifiable, Sendable {
         try productMetadata.validate(against: cadDocument, objectRegistry: objectRegistry)
     }
 
-}
-
-private enum RectangleSideDimensionAxis: Equatable {
-    case width
-    case height
-}
-
-private struct RectangleFixedSides: Equatable {
-    var left = false
-    var right = false
-    var bottom = false
-    var top = false
-}
-
-private struct FixedSketchPointSnapshot: Equatable {
-    var reference: SketchReference
-    var x: Double
-    var y: Double
 }
 
 private extension SketchEntity {
