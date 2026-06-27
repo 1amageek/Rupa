@@ -119,3 +119,4 @@ flowchart LR
 | `RupaUI/MainView.swift` | Dimension, Slot, Edge Offset, and Region Offset context panels split into standalone workspace panel views with command callbacks owned by MainView |
 | `RupaUI/MainView.swift` | Curve and Surface CV slide context panels split into standalone workspace panel views with command callbacks owned by MainView |
 | `RupaUI/MainView.swift` | Workspace keyboard interpretation split into a pure action router with package tests; MainView now applies resolved actions |
+| `RupaUI/MainView.swift` | Inspector layout primitives and numeric controls split into reusable workspace inspector helpers |

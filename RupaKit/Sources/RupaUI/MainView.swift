@@ -5417,14 +5417,6 @@ public struct MainView: View {
         vertex.rawValue
     }
 
-    private var inspectorLabelWidth: CGFloat { 124 }
-    private var inspectorControlWidth: CGFloat { 104 }
-    private var inspectorUnitWidth: CGFloat { 36 }
-    private var inspectorRowSpacing: CGFloat { 10 }
-    private var inspectorSliderLeadingPadding: CGFloat {
-        inspectorLabelWidth + inspectorRowSpacing
-    }
-
     private var inspectorContent: some View {
         ScrollView(.vertical) {
             VStack(alignment: .leading, spacing: 18) {
@@ -5462,53 +5454,6 @@ public struct MainView: View {
         case .failure(let error):
             surfaceControlPointInspectorErrorSections(error)
         }
-    }
-
-    private func inspectorSection<Content: View>(
-        _ title: String,
-        @ViewBuilder content: () -> Content
-    ) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(title)
-                .font(.caption)
-                .fontWeight(.semibold)
-                .foregroundStyle(.secondary)
-                .textCase(.uppercase)
-                .frame(maxWidth: .infinity, alignment: .leading)
-
-            VStack(alignment: .leading, spacing: 8) {
-                content()
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    private func inspectorControlRow<Content: View>(
-        _ title: String,
-        @ViewBuilder content: () -> Content
-    ) -> some View {
-        HStack(alignment: .center, spacing: inspectorRowSpacing) {
-            Text(title)
-                .foregroundStyle(.secondary)
-                .frame(width: inspectorLabelWidth, alignment: .leading)
-            content()
-                .frame(maxWidth: .infinity, alignment: .trailing)
-        }
-        .font(.callout)
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    private func inspectorActionRow<Content: View>(
-        @ViewBuilder content: () -> Content
-    ) -> some View {
-        HStack(spacing: inspectorRowSpacing) {
-            Spacer()
-                .frame(width: inspectorLabelWidth)
-            content()
-            Spacer(minLength: 0)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     @ViewBuilder
@@ -8752,58 +8697,6 @@ public struct MainView: View {
         }
     }
 
-    private func numericControl(
-        _ title: String,
-        values: [Double],
-        sliderRange: ClosedRange<Double>,
-        onChange: @escaping (Double) -> Void,
-        unitLabel: () -> String = { "" }
-    ) -> some View {
-        let commonValue = commonInspectorValue(values)
-        let textBinding = Binding<String>(
-            get: {
-                if let commonValue {
-                    return commonValue.formatted(.number.precision(.fractionLength(0...6)))
-                }
-                return "Mixed"
-            },
-            set: { text in
-                let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
-                guard let value = Double(trimmedText), value.isFinite else {
-                    return
-                }
-                onChange(value)
-            }
-        )
-        let sliderBinding = Binding<Double>(
-            get: {
-                min(max(commonValue ?? 0.0, sliderRange.lowerBound), sliderRange.upperBound)
-            },
-            set: { value in
-                onChange(value)
-            }
-        )
-        let unit = unitLabel()
-
-        return VStack(alignment: .leading, spacing: 5) {
-            inspectorControlRow(title) {
-                HStack(spacing: 6) {
-                    TextField(title, text: textBinding)
-                        .multilineTextAlignment(.trailing)
-                        .frame(width: inspectorControlWidth)
-                    if !unit.isEmpty {
-                        Text(unit)
-                            .foregroundStyle(.secondary)
-                            .frame(width: inspectorUnitWidth, alignment: .leading)
-                    }
-                }
-            }
-            Slider(value: sliderBinding, in: sliderRange)
-                .padding(.leading, inspectorSliderLeadingPadding)
-        }
-        .padding(.vertical, 1)
-    }
-
     private var transformPositionSliderRange: ClosedRange<Double> {
         let unit = session.document.displayUnit
         let span = max(unit.value(fromMeters: session.document.ruler.visibleSpanMeters), 1.0)
@@ -8814,20 +8707,6 @@ public struct MainView: View {
         let unit = session.document.displayUnit
         let visibleSpan = max(unit.value(fromMeters: session.document.ruler.visibleSpanMeters), 1.0)
         return 0.0 ... visibleSpan
-    }
-
-    private func commonInspectorValue(_ values: [Double]) -> Double? {
-        guard let first = values.first,
-              first.isFinite else {
-            return nil
-        }
-        for value in values {
-            guard value.isFinite,
-                  abs(value - first) <= 1.0e-9 else {
-                return nil
-            }
-        }
-        return first
     }
 
     private func translation(for node: SceneNode) -> InspectorVector3D {
@@ -9889,13 +9768,7 @@ public struct MainView: View {
     }
 
     private func inspectorRow(_ title: String, _ value: String) -> some View {
-        inspectorControlRow(title) {
-            Text(value)
-                .lineLimit(1)
-                .truncationMode(.middle)
-                .monospacedDigit()
-                .textSelection(.enabled)
-        }
+        workspaceInspectorValueRow(title, value)
     }
 
     private func sceneNodeKindTitle(for reference: SceneNodeReference?) -> String {
