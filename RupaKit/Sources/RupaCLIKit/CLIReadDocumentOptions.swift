@@ -1,6 +1,6 @@
 import ArgumentParser
 import Foundation
-import RupaAgent
+import RupaAgentTransport
 import RupaCore
 
 public struct CLIReadDocumentOptions: ParsableArguments {

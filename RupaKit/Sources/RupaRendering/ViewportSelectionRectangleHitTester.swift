@@ -1,5 +1,6 @@
 import CoreGraphics
 import RupaCore
+import RupaViewportScene
 
 public struct ViewportSelectionRectangleHitTester: Sendable {
     public var sketchPadding: CGFloat

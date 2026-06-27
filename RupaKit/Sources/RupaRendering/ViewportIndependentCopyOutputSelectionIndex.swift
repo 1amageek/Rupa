@@ -1,4 +1,5 @@
 import RupaCore
+import RupaViewportScene
 
 struct ViewportSelectedIndependentCopyOutput: Equatable {
     var source: PatternArraySource

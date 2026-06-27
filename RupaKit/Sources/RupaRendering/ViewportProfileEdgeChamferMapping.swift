@@ -1,3 +1,4 @@
+import RupaViewportScene
 struct ViewportProfileEdgeChamferMapping: Equatable, Sendable {
     static func distance(
         for edge: ViewportBodyEdge,

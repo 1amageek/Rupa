@@ -1,5 +1,6 @@
 import Foundation
 import SwiftCAD
+import RupaCoreTypes
 
 public struct SelectionMeasurementService: Sendable {
     private let pipelineOverride: CADPipeline?

@@ -1,4 +1,5 @@
 import RupaCore
+import RupaViewportScene
 
 public struct ViewportSurfaceContinuityOverlay: Equatable {
     public struct Item: Equatable, Identifiable {

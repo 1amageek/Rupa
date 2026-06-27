@@ -1,4 +1,5 @@
 import SwiftCAD
+import RupaCoreTypes
 
 public extension LengthDisplayUnit {
     var swiftCADLengthUnit: LengthUnit {

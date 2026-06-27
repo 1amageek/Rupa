@@ -1,5 +1,6 @@
 import Foundation
 import SwiftCAD
+import RupaCoreTypes
 
 public struct ParameterExpressionDefaults: Codable, Equatable, Sendable {
     public var lengthUnit: LengthDisplayUnit

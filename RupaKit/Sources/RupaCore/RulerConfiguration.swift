@@ -1,4 +1,5 @@
 import Foundation
+import RupaCoreTypes
 
 public struct RulerConfiguration: Codable, Hashable, Sendable {
     public var displayUnit: LengthDisplayUnit

@@ -1,5 +1,6 @@
 import Foundation
 import SwiftCAD
+import RupaCoreTypes
 
 public struct ValidationRule: Codable, Hashable, Identifiable, Sendable {
     public enum Category: String, Codable, CaseIterable, Sendable {

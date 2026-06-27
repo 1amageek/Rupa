@@ -1,9 +1,9 @@
 import RupaCore
 
-struct ViewportSceneTransformIndex {
+package struct ViewportSceneTransformIndex {
     private var transformsBySceneNodeID: [SceneNodeID: Transform3D]
 
-    init(metadata: ProductMetadata) {
+    package init(metadata: ProductMetadata) {
         var transformsBySceneNodeID: [SceneNodeID: Transform3D] = [:]
         var visitedIDs: Set<SceneNodeID> = []
         for rootSceneNodeID in metadata.rootSceneNodeIDs {
@@ -18,7 +18,7 @@ struct ViewportSceneTransformIndex {
         self.transformsBySceneNodeID = transformsBySceneNodeID
     }
 
-    func transform(for sceneNodeID: SceneNodeID) -> Transform3D {
+    package func transform(for sceneNodeID: SceneNodeID) -> Transform3D {
         transformsBySceneNodeID[sceneNodeID] ?? .identity
     }
 

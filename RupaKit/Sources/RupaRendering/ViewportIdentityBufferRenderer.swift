@@ -2,6 +2,7 @@ import CoreGraphics
 import Foundation
 import Metal
 import RupaCore
+import RupaViewportScene
 
 public enum ViewportIdentityBufferRendererError: Error, Equatable, Sendable {
     case invalidViewportSize

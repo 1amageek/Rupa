@@ -1,4 +1,5 @@
 import Foundation
+import RupaCoreTypes
 
 public struct EvaluationSnapshot: Codable, Equatable, Sendable {
     public var status: EvaluationStatus

@@ -1,5 +1,6 @@
 import Foundation
 import SwiftCAD
+import RupaCoreTypes
 
 public struct CommandExecutionResult: Equatable, Sendable {
     public var commandName: String

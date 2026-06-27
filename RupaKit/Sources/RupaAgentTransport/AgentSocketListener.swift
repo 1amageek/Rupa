@@ -1,5 +1,7 @@
 import Darwin
 import Foundation
+import RupaAgentProtocol
+import RupaAgentRuntime
 import RupaCore
 
 public actor AgentSocketListener {

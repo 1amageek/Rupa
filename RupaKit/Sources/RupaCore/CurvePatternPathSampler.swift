@@ -1,5 +1,6 @@
 import Foundation
 import SwiftCAD
+import RupaCoreTypes
 
 struct CurvePatternPathSampler: Sendable {
     private let tolerance: ModelingTolerance

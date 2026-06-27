@@ -4,6 +4,7 @@ import Testing
 import RupaCore
 import SwiftCAD
 @testable import RupaAgent
+@testable import RupaAgentTransport
 
 func withRunningListener<T>(
     controller: sending AgentCommandController,

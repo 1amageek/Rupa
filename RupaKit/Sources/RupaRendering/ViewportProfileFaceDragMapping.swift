@@ -1,3 +1,4 @@
+import RupaViewportScene
 struct ViewportProfileFaceDragMapping: Equatable, Sendable {
     static func supports(_ face: ViewportBodyFace) -> Bool {
         distance(for: face, xDelta: 1.0, yDelta: 1.0, zDelta: 1.0) != nil

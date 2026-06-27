@@ -1,4 +1,5 @@
 import SwiftUI
+import RupaViewportScene
 
 struct ViewportAxisTriad: View {
     var selectedAxis: ViewportCoordinateAxis?

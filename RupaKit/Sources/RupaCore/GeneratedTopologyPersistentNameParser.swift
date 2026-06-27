@@ -1,5 +1,6 @@
 import Foundation
 import SwiftCAD
+import RupaCoreTypes
 
 struct GeneratedTopologyPersistentNameParser: Sendable {
     func parse(_ value: String, operationName: String) throws -> PersistentName {

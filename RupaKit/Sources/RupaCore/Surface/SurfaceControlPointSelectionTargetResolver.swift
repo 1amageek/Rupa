@@ -1,4 +1,5 @@
 import SwiftCAD
+import RupaCoreTypes
 
 public struct SurfaceControlPointSelectionTargetResolver: Sendable {
     private struct PolySplinePatchFace: Sendable {

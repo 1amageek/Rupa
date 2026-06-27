@@ -1,6 +1,7 @@
 import CoreGraphics
 import Foundation
 import RupaCore
+import RupaViewportScene
 
 enum ViewportPatternArrayCopyCountAffordanceGeometry: Equatable {
     case linear(ViewportPatternArrayCopyCountLinearGeometry)

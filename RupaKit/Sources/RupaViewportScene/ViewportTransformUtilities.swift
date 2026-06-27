@@ -1,7 +1,7 @@
 import RupaCore
 
 extension Transform3D {
-    func concatenating(_ rhs: Transform3D) -> Transform3D {
+    package func concatenating(_ rhs: Transform3D) -> Transform3D {
         let left = matrix.values
         let right = rhs.matrix.values
         guard left.count == 16,
@@ -25,7 +25,7 @@ extension Transform3D {
         }
     }
 
-    func viewportTransformedPoint(_ point: Point3D) -> Point3D {
+    package func viewportTransformedPoint(_ point: Point3D) -> Point3D {
         let values = matrix.values
         guard values.count == 16 else {
             return point
@@ -42,7 +42,7 @@ extension Transform3D {
         )
     }
 
-    func viewportTransformedVector(_ vector: Vector3D) -> Vector3D {
+    package func viewportTransformedVector(_ vector: Vector3D) -> Vector3D {
         let values = matrix.values
         guard values.count == 16 else {
             return vector
@@ -54,7 +54,7 @@ extension Transform3D {
         )
     }
 
-    func viewportInverseTransformedVector(_ vector: Vector3D) -> Vector3D? {
+    package func viewportInverseTransformedVector(_ vector: Vector3D) -> Vector3D? {
         let values = matrix.values
         guard values.count == 16 else {
             return vector

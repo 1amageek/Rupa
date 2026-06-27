@@ -1,5 +1,6 @@
 import CoreGraphics
 import RupaCore
+import RupaViewportScene
 
 public enum ViewportIdentityPickPrimitive: Equatable, Sendable {
     case polygon(points: [CGPoint])

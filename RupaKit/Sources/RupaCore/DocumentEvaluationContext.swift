@@ -1,4 +1,5 @@
 import SwiftCAD
+import RupaCoreTypes
 
 public struct DocumentEvaluationContext: Sendable {
     public let generation: DocumentGeneration

@@ -1,4 +1,5 @@
 import Foundation
+import RupaCoreTypes
 
 public struct MeasurementResult: Codable, Equatable, Sendable {
     public var scope: Scope

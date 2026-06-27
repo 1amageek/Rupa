@@ -1,5 +1,6 @@
 import Foundation
 import SwiftCAD
+import RupaCoreTypes
 
 public struct PolySplineSurfaceVertexTarget: Equatable, Hashable, Sendable {
     public enum BoundaryRole: String, Equatable, Hashable, Sendable {

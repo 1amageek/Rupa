@@ -1,3 +1,4 @@
+import RupaCoreTypes
 public struct SurfaceFrameResult: Codable, Equatable, Sendable {
     public struct Frame: Codable, Equatable, Sendable {
         public var faceID: String

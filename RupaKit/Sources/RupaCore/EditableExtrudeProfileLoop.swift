@@ -1,5 +1,6 @@
 import Foundation
 import SwiftCAD
+import RupaCoreTypes
 
 struct EditableExtrudeProfileLoop: Equatable, Sendable {
     struct Point: Equatable, Sendable {

@@ -1,5 +1,5 @@
 import Foundation
-import RupaAgent
+import RupaAgentProtocol
 import RupaCore
 
 public struct CLIResponse: Codable, Equatable, Sendable {

@@ -1,4 +1,5 @@
 import SwiftCAD
+import RupaCoreTypes
 
 public struct EvaluatedDocumentCache: Sendable {
     public var generation: DocumentGeneration

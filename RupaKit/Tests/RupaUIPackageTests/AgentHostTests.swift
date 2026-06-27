@@ -1,5 +1,7 @@
 import Foundation
-import RupaAgent
+import RupaAgentProtocol
+import RupaAgentTransport
+import RupaAgentUI
 import RupaCore
 import RupaUI
 import Testing

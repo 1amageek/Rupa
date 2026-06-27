@@ -1,4 +1,5 @@
 import SwiftCAD
+import RupaCoreTypes
 
 public struct DesignDisplaySnapshotService: Sendable {
     private let sketchService: SketchDisplaySnapshotService

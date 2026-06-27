@@ -1,5 +1,6 @@
 import Foundation
 import SwiftCAD
+import RupaCoreTypes
 
 public struct SketchDimensionSummaryResult: Codable, Equatable, Sendable {
     public struct Counts: Codable, Equatable, Sendable {

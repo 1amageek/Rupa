@@ -1,4 +1,5 @@
 import SwiftUI
+import RupaViewportScene
 
 extension ViewportCoordinateAxis {
     var label: String {

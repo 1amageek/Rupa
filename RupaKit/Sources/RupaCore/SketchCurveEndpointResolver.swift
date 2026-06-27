@@ -1,5 +1,6 @@
 import Foundation
 import SwiftCAD
+import RupaCoreTypes
 
 struct SketchCurveEndpointResolver: Sendable {
     private let sampler: SketchCurveSampler

@@ -1,6 +1,8 @@
 import ArgumentParser
 import Foundation
-import RupaAgent
+import RupaAgentProtocol
+import RupaAgentRuntime
+import RupaAgentTransport
 import RupaAutomation
 import RupaCore
 

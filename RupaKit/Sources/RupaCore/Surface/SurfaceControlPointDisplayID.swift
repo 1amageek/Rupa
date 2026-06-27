@@ -1,4 +1,5 @@
 import SwiftCAD
+import RupaCoreTypes
 
 public struct SurfaceControlPointDisplayID: Codable, Hashable, RawRepresentable, Sendable {
     public let rawValue: String

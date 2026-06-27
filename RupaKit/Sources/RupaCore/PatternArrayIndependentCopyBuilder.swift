@@ -1,4 +1,5 @@
 import SwiftCAD
+import RupaCoreTypes
 
 struct PatternArrayIndependentCopyBuilder: Sendable {
     func createOutputs(

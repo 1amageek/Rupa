@@ -1,6 +1,8 @@
 import Foundation
-import RupaAgent
+import RupaAgentRuntime
+import RupaAgentTransport
 import RupaCore
+import RupaUI
 
 public enum AgentHostState: Equatable, Sendable {
     case stopped
@@ -10,7 +12,7 @@ public enum AgentHostState: Equatable, Sendable {
 }
 
 @MainActor
-public final class AgentHost {
+public final class AgentHost: WorkspaceAgentHost {
     public private(set) var state: AgentHostState
 
     private let bridge: MainActorAgentBridge

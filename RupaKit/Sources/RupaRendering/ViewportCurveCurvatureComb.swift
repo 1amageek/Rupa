@@ -1,5 +1,6 @@
 import CoreGraphics
 import RupaCore
+import RupaViewportScene
 
 public struct ViewportCurveCurvatureComb: Equatable {
     public var samples: [CurveEvaluationSample]

@@ -1,5 +1,6 @@
 import Foundation
 import SwiftCAD
+import RupaCoreTypes
 
 public struct TemplateDefaults: Codable, Hashable, Sendable {
     public var displayUnit: LengthDisplayUnit

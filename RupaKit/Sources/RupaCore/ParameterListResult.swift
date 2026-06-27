@@ -1,5 +1,6 @@
 import Foundation
 import SwiftCAD
+import RupaCoreTypes
 
 public struct ParameterListResult: Codable, Equatable, Sendable {
     public var message: String

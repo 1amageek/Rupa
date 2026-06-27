@@ -1,5 +1,6 @@
 import CoreGraphics
 import RupaCore
+import RupaViewportScene
 
 @MainActor
 public final class ViewportIdentityHitResolver {

@@ -1,4 +1,5 @@
 import SwiftCAD
+import RupaCoreTypes
 
 public struct CurveAnalysisResult: Codable, Equatable, Sendable {
     public struct Counts: Codable, Equatable, Sendable {

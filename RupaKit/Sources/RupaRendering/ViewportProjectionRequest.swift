@@ -1,4 +1,5 @@
 import Foundation
+import RupaViewportScene
 
 public struct ViewportProjectionRequest: Equatable, Sendable {
     public var id: UUID

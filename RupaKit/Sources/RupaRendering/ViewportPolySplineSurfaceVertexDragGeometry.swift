@@ -1,5 +1,6 @@
 import CoreGraphics
 import RupaCore
+import RupaViewportScene
 
 struct ViewportPolySplineSurfaceVertexDragGeometry: Equatable {
     var localPoint: Point3D

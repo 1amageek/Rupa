@@ -1,5 +1,6 @@
 import Foundation
 import SwiftCAD
+import RupaCoreTypes
 
 public struct SketchDimensionTargetResolver: Sendable {
     public struct ResolvedTarget: Sendable {

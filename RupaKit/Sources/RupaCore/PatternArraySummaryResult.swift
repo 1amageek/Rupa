@@ -1,3 +1,4 @@
+import RupaCoreTypes
 public struct PatternArraySummaryResult: Codable, Equatable, Sendable {
     public var generation: DocumentGeneration
     public var dirty: Bool

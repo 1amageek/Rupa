@@ -1,3 +1,4 @@
+import RupaViewportScene
 struct ViewportProfileEdgeFilletMapping: Equatable, Sendable {
     static func radius(
         for edge: ViewportBodyEdge,

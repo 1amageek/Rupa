@@ -1,5 +1,6 @@
 import Foundation
 import SwiftCAD
+import RupaCoreTypes
 
 public struct GeneratedTopologySelectionResolver: Sendable {
     private let topologyService: TopologySummaryService

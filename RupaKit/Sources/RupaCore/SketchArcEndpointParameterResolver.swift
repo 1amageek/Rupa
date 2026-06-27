@@ -1,5 +1,6 @@
 import Foundation
 import SwiftCAD
+import RupaCoreTypes
 
 struct SketchArcEndpointParameterResolver: Sendable {
     struct EndpointParameters: Equatable, Sendable {

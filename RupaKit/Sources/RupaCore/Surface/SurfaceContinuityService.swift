@@ -1,5 +1,6 @@
 import Foundation
 import SwiftCAD
+import RupaCoreTypes
 
 public struct SurfaceContinuityService: Sendable {
     private let pipelineOverride: CADPipeline?

@@ -1,4 +1,5 @@
 import Foundation
+import RupaCoreTypes
 
 public enum RenderInvalidationReason: String, Codable, Equatable, Hashable, Sendable {
     case none

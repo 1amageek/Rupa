@@ -1,7 +1,9 @@
 import ArgumentParser
 import Foundation
 import Testing
-import RupaAgent
+import RupaAgentProtocol
+import RupaAgentRuntime
+import RupaAgentTransport
 import RupaAutomation
 import RupaCore
 import SwiftCAD
@@ -1089,6 +1091,7 @@ func cliExecutableSelectionReferencesSelectsLiveSurfaceControlPointAsJSON() asyn
         options: PolySplineOptions(mergePatches: false)
     ))
     let generation = session.generation
+    let wasDirty = session.isDirty
     let summary = try SurfaceSourceSummaryService().summarize(document: session.document)
     let patch = try #require(summary.sources.first?.patches.first)
     let controlPoint = try #require(patch.controlPoints.first { $0.uIndex == 1 && $0.vIndex == 1 })
@@ -1123,7 +1126,7 @@ func cliExecutableSelectionReferencesSelectsLiveSurfaceControlPointAsJSON() asyn
         #expect(result.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: result.standardError))
         #expect(response.message == "0 target(s), 1 reference(s) selected.")
         #expect(response.generation == generation.value)
-        #expect(!response.dirty)
+        #expect(response.dirty == wasDirty)
         #expect(response.selectedTargetCount == 0)
         #expect(response.selectedReferenceCount == 1)
         #expect(response.selectedReferences == [controlPoint.selectionReference])
@@ -6787,110 +6790,4 @@ private func encodedSurfaceFrameQuery(_ query: SurfaceFrameQuery) throws -> Stri
 private func encodedSelectionMeasurementQuery(_ query: CADAgentMeasurementQuery) throws -> String {
     let data = try JSONEncoder().encode(query)
     return String(decoding: data, as: UTF8.self)
-}
-
-private struct CLIProcessResult {
-    var terminationStatus: Int32
-    var standardOutputData: Data
-    var standardErrorData: Data
-
-    var standardOutput: String {
-        String(decoding: standardOutputData, as: UTF8.self)
-    }
-
-    var standardError: String {
-        String(decoding: standardErrorData, as: UTF8.self)
-    }
-}
-
-private actor CLIProcessGate {
-    static let shared = CLIProcessGate()
-
-    func run(_ arguments: [String]) throws -> CLIProcessResult {
-        try runCLIProcess(arguments)
-    }
-}
-
-private func runCLI(_ arguments: [String]) async throws -> CLIProcessResult {
-    try await CLIProcessGate.shared.run(arguments)
-}
-
-private func runCLIProcess(_ arguments: [String]) throws -> CLIProcessResult {
-    let executableURL = try rupaExecutableURL()
-    let process = Process()
-    process.executableURL = executableURL
-    process.arguments = arguments
-    let standardOutput = Pipe()
-    let standardError = Pipe()
-    process.standardOutput = standardOutput
-    process.standardError = standardError
-
-    try process.run()
-    process.waitUntilExit()
-
-    let outputData = try standardOutput.fileHandleForReading.readToEnd() ?? Data()
-    let errorData = try standardError.fileHandleForReading.readToEnd() ?? Data()
-
-    return CLIProcessResult(
-        terminationStatus: process.terminationStatus,
-        standardOutputData: outputData,
-        standardErrorData: errorData
-    )
-}
-
-private func rupaExecutableURL() throws -> URL {
-    let fileManager = FileManager.default
-    var candidates: [URL] = []
-    let environment = ProcessInfo.processInfo.environment
-    for key in ["BUILT_PRODUCTS_DIR", "TARGET_BUILD_DIR"] {
-        guard let buildProductsDirectory = environment[key] else {
-            continue
-        }
-        candidates.append(
-            URL(fileURLWithPath: buildProductsDirectory)
-                .appendingPathComponent("rupa")
-        )
-    }
-    if let buildProductPaths = environment["__XCODE_BUILT_PRODUCTS_DIR_PATHS"] {
-        for path in buildProductPaths.split(separator: ":") {
-            candidates.append(
-                URL(fileURLWithPath: String(path))
-                    .appendingPathComponent("rupa")
-            )
-        }
-    }
-    candidates.append(
-        Bundle.main.bundleURL
-            .deletingLastPathComponent()
-            .appendingPathComponent("rupa")
-    )
-    if let mainExecutableURL = Bundle.main.executableURL {
-        let macOSDirectory = mainExecutableURL.deletingLastPathComponent()
-        let contentsDirectory = macOSDirectory.deletingLastPathComponent()
-        let bundleDirectory = contentsDirectory.deletingLastPathComponent()
-        candidates.append(
-            bundleDirectory
-                .deletingLastPathComponent()
-                .appendingPathComponent("rupa")
-        )
-    }
-    if let testExecutablePath = CommandLine.arguments.first {
-        let testExecutableURL = URL(fileURLWithPath: testExecutablePath)
-        let macOSDirectory = testExecutableURL.deletingLastPathComponent()
-        let contentsDirectory = macOSDirectory.deletingLastPathComponent()
-        let testBundleDirectory = contentsDirectory.deletingLastPathComponent()
-        let productsDirectory = testBundleDirectory.deletingLastPathComponent()
-        candidates.append(productsDirectory.appendingPathComponent("rupa"))
-    }
-
-    for candidate in candidates {
-        if fileManager.isExecutableFile(atPath: candidate.path) {
-            return candidate
-        }
-    }
-
-    throw EditorError(
-        code: .commandFailed,
-        message: "Could not locate the rupa executable in test build products. Checked: \(candidates.map(\.path).joined(separator: ", "))"
-    )
 }

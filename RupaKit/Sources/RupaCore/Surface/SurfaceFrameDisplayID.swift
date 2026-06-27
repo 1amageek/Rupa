@@ -1,5 +1,6 @@
 import Foundation
 import SwiftCAD
+import RupaCoreTypes
 
 public struct SurfaceFrameDisplayID: Codable, Hashable, RawRepresentable, Sendable {
     public let rawValue: String

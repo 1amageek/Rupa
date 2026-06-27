@@ -1,5 +1,6 @@
 import Foundation
 import SwiftCAD
+import RupaCoreTypes
 
 public struct ExportPreset: Codable, Hashable, Identifiable, Sendable {
     public enum DestinationPolicy: String, Codable, CaseIterable, Sendable {

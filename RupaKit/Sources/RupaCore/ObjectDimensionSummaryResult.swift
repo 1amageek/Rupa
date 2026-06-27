@@ -1,5 +1,6 @@
 import Foundation
 import SwiftCAD
+import RupaCoreTypes
 
 public struct ObjectDimensionSummaryResult: Codable, Equatable, Sendable {
     public enum SourceKind: String, Codable, Equatable, Sendable {

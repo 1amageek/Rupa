@@ -1,3 +1,4 @@
+import RupaCoreTypes
 public struct SurfaceAnalysisResult: Codable, Equatable, Sendable {
     public struct Counts: Codable, Equatable, Sendable {
         public var bSplineFaceCount: Int

@@ -1,4 +1,5 @@
 import Foundation
+import RupaCoreTypes
 
 public struct SelectionStateResult: Codable, Equatable, Sendable {
     public var message: String

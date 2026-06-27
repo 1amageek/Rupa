@@ -1,4 +1,5 @@
 import Foundation
+import RupaCoreTypes
 
 public struct DocumentSnapshot: Sendable {
     public var document: DesignDocument

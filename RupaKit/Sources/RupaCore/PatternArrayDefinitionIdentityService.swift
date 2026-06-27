@@ -1,5 +1,6 @@
 import Foundation
 import SwiftCAD
+import RupaCoreTypes
 
 public struct PatternArrayDefinitionIdentityService: Sendable {
     private static let algorithm = "sha256-pattern-definition-identity-v2"

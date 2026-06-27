@@ -1,5 +1,6 @@
 import CoreGraphics
 import RupaCore
+import RupaViewportScene
 
 struct ViewportPatternArrayLinearAxisAffordanceGeometry: Equatable {
     var baseProjectedPoint: CGPoint

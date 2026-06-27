@@ -1,5 +1,6 @@
 import Foundation
 import SwiftCAD
+import RupaCoreTypes
 
 struct SketchPointConstraintPropagator: Sendable {
     private struct Point: Equatable, Sendable {

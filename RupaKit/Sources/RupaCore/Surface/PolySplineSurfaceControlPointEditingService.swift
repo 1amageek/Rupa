@@ -1,4 +1,5 @@
 import SwiftCAD
+import RupaCoreTypes
 
 struct PolySplineSurfaceControlPointEditingService: Sendable {
     func updatedPolySpline(

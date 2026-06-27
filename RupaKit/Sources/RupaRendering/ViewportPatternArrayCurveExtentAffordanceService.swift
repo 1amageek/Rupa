@@ -1,4 +1,5 @@
 import RupaCore
+import RupaViewportScene
 
 struct ViewportPatternArrayCurveExtentAffordanceService: Sendable {
     func candidates(

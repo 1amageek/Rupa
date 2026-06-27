@@ -1,4 +1,5 @@
 import Foundation
+import RupaAgentProtocol
 import RupaCore
 
 @MainActor

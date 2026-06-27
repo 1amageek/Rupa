@@ -1,4 +1,5 @@
 import SwiftCAD
+import RupaCoreTypes
 
 public struct DocumentEvaluationContextResolver: Sendable {
     private let pipelineOverride: CADPipeline?

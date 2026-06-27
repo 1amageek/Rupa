@@ -1,5 +1,6 @@
 import CoreGraphics
 import RupaCore
+import RupaViewportScene
 
 struct ViewportSurfaceVertexAxisDragMapping {
     static func modelAmount(

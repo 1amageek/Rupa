@@ -1,5 +1,6 @@
 import Foundation
 import SwiftCAD
+import RupaCoreTypes
 
 public enum EditorCommand: Codable, Equatable, Sendable {
     case setDisplayUnit(LengthDisplayUnit)

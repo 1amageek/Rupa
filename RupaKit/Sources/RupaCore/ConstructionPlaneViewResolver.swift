@@ -1,5 +1,6 @@
 import Foundation
 import SwiftCAD
+import RupaCoreTypes
 
 public struct ConstructionPlaneViewResolver: Sendable {
     public init() {}

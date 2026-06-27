@@ -1,5 +1,6 @@
 import CoreGraphics
 import RupaCore
+import RupaViewportScene
 
 struct ViewportPatternArraySourceSelectionIndex {
     var metadata: ProductMetadata

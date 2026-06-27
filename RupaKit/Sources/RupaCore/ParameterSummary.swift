@@ -1,5 +1,6 @@
 import Foundation
 import SwiftCAD
+import RupaCoreTypes
 
 public struct ParameterSummary: Codable, Equatable, Sendable, Identifiable {
     public var id: String

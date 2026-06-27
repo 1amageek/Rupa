@@ -1,4 +1,5 @@
 import Foundation
+import RupaCoreTypes
 
 public struct TopologySummaryResult: Codable, Equatable, Sendable {
     public struct Counts: Codable, Equatable, Sendable {

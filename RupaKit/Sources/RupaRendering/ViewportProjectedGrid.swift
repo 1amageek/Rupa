@@ -1,5 +1,6 @@
 import CoreGraphics
 import RupaCore
+import RupaViewportScene
 
 public struct ViewportProjectedGrid: Equatable {
     public typealias Axis = ViewportCoordinateAxis

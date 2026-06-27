@@ -1,4 +1,5 @@
 import RupaCore
+import RupaViewportScene
 
 public struct ViewportPatternArrayPreviewService: Sendable {
     public init() {}

@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import RupaCoreTypes
 
 public struct CommandHistoryEntry: Sendable {
     public var commandName: String

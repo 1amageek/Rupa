@@ -1,5 +1,6 @@
 import Darwin
 import Foundation
+import RupaAgentProtocol
 import RupaCore
 
 public final class AgentClient: AgentClientProtocol {

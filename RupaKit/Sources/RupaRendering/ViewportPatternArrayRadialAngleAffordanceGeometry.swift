@@ -1,6 +1,7 @@
 import CoreGraphics
 import Foundation
 import RupaCore
+import RupaViewportScene
 
 struct ViewportPatternArrayRadialAngleAffordanceGeometry: Equatable {
     var centerModelPoint: Point3D

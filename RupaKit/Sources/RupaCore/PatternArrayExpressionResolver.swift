@@ -1,4 +1,5 @@
 import SwiftCAD
+import RupaCoreTypes
 
 public struct PatternArrayExpressionResolver: Sendable {
     public let parameters: ParameterTable

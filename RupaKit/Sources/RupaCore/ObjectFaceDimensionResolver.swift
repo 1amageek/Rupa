@@ -1,4 +1,5 @@
 import Foundation
+import RupaCoreTypes
 
 struct ObjectFaceDimension: Sendable {
     var target: SelectionTarget

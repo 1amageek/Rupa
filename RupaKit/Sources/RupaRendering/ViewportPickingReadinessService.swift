@@ -1,3 +1,4 @@
+import RupaViewportScene
 public struct ViewportPickingReadinessService: Sendable {
     public init() {}
 

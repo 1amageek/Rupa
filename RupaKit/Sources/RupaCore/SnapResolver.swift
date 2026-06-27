@@ -1,5 +1,6 @@
 import Foundation
 import SwiftCAD
+import RupaCoreTypes
 
 public enum SnapCandidateKind: String, Codable, Equatable, Hashable, Sendable {
     case grid

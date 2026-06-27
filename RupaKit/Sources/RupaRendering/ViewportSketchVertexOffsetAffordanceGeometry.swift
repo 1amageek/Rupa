@@ -1,4 +1,5 @@
 import CoreGraphics
+import RupaViewportScene
 
 struct ViewportSketchVertexOffsetAffordanceGeometry: Equatable {
     var baseModelPoint: CGPoint

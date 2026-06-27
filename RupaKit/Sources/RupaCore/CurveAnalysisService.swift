@@ -1,5 +1,6 @@
 import Foundation
 import SwiftCAD
+import RupaCoreTypes
 
 public struct CurveAnalysisService: Sendable {
     private struct EndpointPairKey: Hashable {

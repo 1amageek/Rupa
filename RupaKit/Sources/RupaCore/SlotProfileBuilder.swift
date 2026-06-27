@@ -1,5 +1,6 @@
 import Foundation
 import SwiftCAD
+import RupaCoreTypes
 
 public struct SlotProfileBuilder: Sendable {
     public static let defaultSplineSamplesPerSegment = 32

@@ -1,5 +1,6 @@
 import Foundation
-import RupaAgent
+import RupaAgentProtocol
+import RupaAgentRuntime
 import RupaAutomation
 import RupaCore
 

@@ -1,4 +1,5 @@
 import SwiftCAD
+import RupaCoreTypes
 
 struct PatternArrayFeatureIDRemapper: Sendable {
     private let featureIDMap: [FeatureID: FeatureID]

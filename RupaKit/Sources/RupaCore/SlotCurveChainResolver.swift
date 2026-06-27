@@ -1,4 +1,5 @@
 import SwiftCAD
+import RupaCoreTypes
 
 struct SlotCurveChainResolver: Sendable {
     struct PathSegment: Equatable, Sendable {

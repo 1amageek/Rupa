@@ -75,7 +75,7 @@ public struct MainView: View {
     @FocusState private var isWorkspaceFocused: Bool
 
     private let objectRegistry: ObjectTypeRegistry
-    private let agentHost: AgentHost?
+    private let agentHost: (any WorkspaceAgentHost)?
     private let documentURL: URL?
 
     public init(
@@ -84,7 +84,7 @@ public struct MainView: View {
         columnVisibility: NavigationSplitViewVisibility = .all,
         isInspectorPresented: Bool = false,
         objectRegistry: ObjectTypeRegistry = .builtIn,
-        agentHost: AgentHost? = nil,
+        agentHost: (any WorkspaceAgentHost)? = nil,
         documentURL: URL? = nil
     ) {
         self._session = State(initialValue: session)

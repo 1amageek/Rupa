@@ -1,5 +1,6 @@
 import Foundation
 import SwiftCAD
+import RupaCoreTypes
 
 public struct SelectionModel: Codable, Equatable, Sendable {
     public private(set) var selectedTargets: [SelectionTarget]

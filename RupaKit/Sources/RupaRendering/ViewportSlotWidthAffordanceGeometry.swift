@@ -1,4 +1,5 @@
 import CoreGraphics
+import RupaViewportScene
 
 struct ViewportSlotWidthAffordanceGeometry: Equatable {
     var baseModelPoint: CGPoint

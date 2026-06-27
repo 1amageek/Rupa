@@ -1,4 +1,5 @@
 import CoreGraphics
+import RupaViewportScene
 
 struct ViewportEdgeOffsetAffordanceGeometry: Equatable {
     var edgeStart: CGPoint

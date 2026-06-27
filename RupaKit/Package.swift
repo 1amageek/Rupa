@@ -17,8 +17,20 @@ let package = Package(
             targets: ["RupaCore"]
         ),
         .library(
+            name: "RupaCoreTypes",
+            targets: ["RupaCoreTypes"]
+        ),
+        .library(
             name: "RupaUI",
             targets: ["RupaUI"]
+        ),
+        .library(
+            name: "RupaAgentUI",
+            targets: ["RupaAgentUI"]
+        ),
+        .library(
+            name: "RupaViewportScene",
+            targets: ["RupaViewportScene"]
         ),
         .library(
             name: "RupaRendering",
@@ -31,6 +43,18 @@ let package = Package(
         .library(
             name: "RupaAutomation",
             targets: ["RupaAutomation"]
+        ),
+        .library(
+            name: "RupaAgentProtocol",
+            targets: ["RupaAgentProtocol"]
+        ),
+        .library(
+            name: "RupaAgentRuntime",
+            targets: ["RupaAgentRuntime"]
+        ),
+        .library(
+            name: "RupaAgentTransport",
+            targets: ["RupaAgentTransport"]
         ),
         .library(
             name: "RupaAgent",
@@ -62,24 +86,45 @@ let package = Package(
         .target(
             name: "RupaCore",
             dependencies: [
+                "RupaCoreTypes",
                 .product(name: "SwiftCAD", package: "swift-CAD"),
                 .product(name: "Collections", package: "swift-collections"),
             ]
         ),
         .target(
+            name: "RupaCoreTypes",
+            dependencies: []
+        ),
+        .target(
             name: "RupaUI",
             dependencies: [
                 "RupaCore",
-                "RupaAgent",
                 "RupaRendering",
                 "RupaPreview",
                 .product(name: "MacComponent", package: "mac-component"),
             ]
         ),
         .target(
+            name: "RupaAgentUI",
+            dependencies: [
+                "RupaAgentRuntime",
+                "RupaAgentTransport",
+                "RupaCore",
+                "RupaUI",
+            ]
+        ),
+        .target(
             name: "RupaRendering",
             dependencies: [
                 "RupaCore",
+                "RupaViewportScene",
+            ]
+        ),
+        .target(
+            name: "RupaViewportScene",
+            dependencies: [
+                "RupaCore",
+                .product(name: "SwiftCAD", package: "swift-CAD"),
             ]
         ),
         .target(
@@ -97,8 +142,32 @@ let package = Package(
         .target(
             name: "RupaAgent",
             dependencies: [
+                "RupaAgentProtocol",
+                "RupaAgentRuntime",
+                "RupaAgentTransport",
+            ]
+        ),
+        .target(
+            name: "RupaAgentProtocol",
+            dependencies: [
                 "RupaCore",
                 "RupaAutomation",
+            ]
+        ),
+        .target(
+            name: "RupaAgentRuntime",
+            dependencies: [
+                "RupaCore",
+                "RupaAutomation",
+                "RupaAgentProtocol",
+            ]
+        ),
+        .target(
+            name: "RupaAgentTransport",
+            dependencies: [
+                "RupaCore",
+                "RupaAgentProtocol",
+                "RupaAgentRuntime",
             ]
         ),
         .target(
@@ -106,7 +175,9 @@ let package = Package(
             dependencies: [
                 "RupaCore",
                 "RupaAutomation",
-                "RupaAgent",
+                "RupaAgentProtocol",
+                "RupaAgentRuntime",
+                "RupaAgentTransport",
                 .product(name: "ArgumentParser", package: "swift-argument-parser"),
             ]
         ),
@@ -130,12 +201,19 @@ let package = Package(
         ),
         .testTarget(
             name: "RupaAgentTests",
-            dependencies: ["RupaAgent"]
+            dependencies: [
+                "RupaAgent",
+                "RupaAgentProtocol",
+                "RupaAgentRuntime",
+                "RupaAgentTransport",
+            ]
         ),
         .testTarget(
             name: "RupaUIPackageTests",
             dependencies: [
-                "RupaAgent",
+                "RupaAgentProtocol",
+                "RupaAgentTransport",
+                "RupaAgentUI",
                 "RupaUI",
             ]
         ),
@@ -144,11 +222,17 @@ let package = Package(
             dependencies: [
                 "RupaCore",
                 "RupaRendering",
+                "RupaViewportScene",
             ]
         ),
         .testTarget(
             name: "RupaCLITests",
-            dependencies: ["RupaCLIKit"]
+            dependencies: [
+                "RupaAgentProtocol",
+                "RupaAgentRuntime",
+                "RupaAgentTransport",
+                "RupaCLIKit",
+            ]
         ),
     ],
     swiftLanguageModes: [.v6]

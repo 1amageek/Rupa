@@ -1,5 +1,6 @@
 import Foundation
 import SwiftCAD
+import RupaCoreTypes
 
 struct ObjectDimensionSourceResolver: Sendable {
     func resolve(

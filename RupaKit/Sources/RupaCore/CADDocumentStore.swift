@@ -1,6 +1,7 @@
 import Foundation
 import Observation
 import SwiftCAD
+import RupaCoreTypes
 
 @Observable
 public final class CADDocumentStore {

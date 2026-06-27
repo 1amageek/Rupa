@@ -1,3 +1,4 @@
+import RupaViewportScene
 public struct ViewportPickingReadinessSummary: Codable, Equatable, Sendable {
     public var activeBackend: ViewportPickingBackend
     public var requiredBackend: ViewportPickingBackend

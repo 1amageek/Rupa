@@ -1,6 +1,7 @@
 import Foundation
 import RupaCore
 import SwiftUI
+import RupaViewportScene
 
 public struct Viewport: View {
     private static let projectionAnimationDuration: TimeInterval = 0.34

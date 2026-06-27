@@ -1,5 +1,6 @@
 import Foundation
 import SwiftCAD
+import RupaCoreTypes
 
 struct PatternArrayFeatureStructureFingerprint: Hashable, Sendable {
     var algorithm: String

@@ -1,4 +1,5 @@
 import Foundation
+import RupaCoreTypes
 
 public struct MeshSummaryResult: Codable, Equatable, Sendable {
     public var displayUnit: LengthDisplayUnit
