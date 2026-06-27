@@ -99,3 +99,4 @@ flowchart LR
 | `RupaCore/DesignDocument.swift` | Sketch vertex offset command split from generated-topology vertex target resolution and source sketch endpoint splitting helpers |
 | `RupaCore/DesignDocument.swift` | Sketch point, line, and spline control-point movement commands with handle resolution and spline slide direction helpers |
 | `RupaCore/DesignDocument.swift` | Sketch corner treatment command split from shared corner endpoint geometry and fillet construction helpers |
+| `RupaCore/DesignDocument.swift` | Sketch curve conversion commands for line-to-arc and line-to-spline split from shared curve editing helpers |
