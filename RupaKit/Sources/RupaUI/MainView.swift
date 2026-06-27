@@ -5520,10 +5520,40 @@ public struct MainView: View {
 
         projectCurvesToFaceSection()
         projectOutlineSection(nodes)
-        faceEditSection(nodes)
-        edgeEditSection(nodes)
-        vertexEditSection(nodes)
-        regionEditSection()
+        WorkspaceTopologyEditInspectorView(
+            state: topologyEditInspectorState(for: nodes),
+            displayUnit: session.document.displayUnit,
+            edgeOffsetDistanceMeters: $edgeOffsetDistanceMeters,
+            edgeOffsetGapFill: $edgeOffsetGapFill,
+            regionOffsetDistanceMeters: $regionOffsetDistanceMeters,
+            regionOffsetGapFill: $regionOffsetGapFill,
+            offsetSliderRange: regionOffsetSliderRange,
+            onOffsetFace: { target, meters in
+                offsetSelectedFace(target, by: meters)
+            },
+            onOffsetEdges: { targets, meters, gapFill in
+                offsetSelectedEdges(targets, by: meters, gapFill: gapFill)
+            },
+            onProjectEdges: projectSelectedGeneratedEdgesToConstructionPlane,
+            onFilletEdges: { targets, meters in
+                filletSelectedEdges(targets, radius: meters)
+            },
+            onChamferEdges: { targets, meters in
+                chamferSelectedEdges(targets, by: meters)
+            },
+            onMoveVertex: { target, deltaX, deltaY in
+                moveSelectedVertex(target, deltaX: deltaX, deltaY: deltaY)
+            },
+            onOffsetRegions: { targets, meters, gapFill, isSymmetric, combinesRegions in
+                offsetSelectedRegions(
+                    targets,
+                    by: meters,
+                    gapFill: gapFill,
+                    isSymmetric: isSymmetric,
+                    combinesRegions: combinesRegions
+                )
+            }
+        )
 
         objectShapeSection(nodes)
 
@@ -5549,6 +5579,27 @@ public struct MainView: View {
                     session.setSceneNodeTransform(node.id, localTransform: .identity)
                 }
             }
+        )
+    }
+
+    private func topologyEditInspectorState(
+        for nodes: [SceneNode]
+    ) -> WorkspaceTopologyEditInspectorState {
+        let edgeTargets = selectedEdgeTargets
+        return WorkspaceTopologyEditInspectorState(
+            isSingleNodeSelection: nodes.count == 1,
+            selectedTargetSummary: selectedTargetSummary,
+            faceTarget: selectedFaceTarget,
+            edgeTargets: edgeTargets,
+            projectableEdgeTargets: generatedEdgeProjectionTargets(from: edgeTargets),
+            vertexTarget: selectedVertexTarget,
+            regionTargets: selectedRegionTargets,
+            faceOffsetStepMeters: defaultFaceOffsetStepMeters,
+            edgeChamferStepMeters: defaultEdgeChamferStepMeters,
+            edgeFilletRadiusMeters: defaultEdgeFilletRadiusMeters,
+            vertexMoveStepMeters: defaultVertexMoveStepMeters,
+            usesLockedRegionDistance: regionOffsetCommandState.usesLockedDistance,
+            combinesRegions: regionOffsetCommandState.usesCombinedRegions
         )
     }
 
@@ -5838,81 +5889,6 @@ public struct MainView: View {
         }
     }
 
-    @ViewBuilder
-    private func faceEditSection(_ nodes: [SceneNode]) -> some View {
-        if nodes.count == 1, let faceTarget = selectedFaceTarget {
-            inspectorSection("Face Edit") {
-                inspectorRow("Target", selectedTargetSummary)
-                inspectorActionRow {
-                    Button {
-                        offsetSelectedFace(faceTarget, by: -defaultFaceOffsetStepMeters)
-                    } label: {
-                        Label("Offset -\(formatted(defaultFaceOffsetStepMeters))", systemImage: "minus")
-                    }
-                    .accessibilityIdentifier("InspectorFace.offsetNegative")
-
-                    Button {
-                        offsetSelectedFace(faceTarget, by: defaultFaceOffsetStepMeters)
-                    } label: {
-                        Label("Offset +\(formatted(defaultFaceOffsetStepMeters))", systemImage: "plus")
-                    }
-                    .accessibilityIdentifier("InspectorFace.offsetPositive")
-                }
-            }
-        }
-    }
-
-    @ViewBuilder
-    private func edgeEditSection(_ nodes: [SceneNode]) -> some View {
-        let edgeTargets = selectedEdgeTargets
-        let projectableEdgeTargets = generatedEdgeProjectionTargets(from: edgeTargets)
-        if nodes.count == 1, edgeTargets.isEmpty == false {
-            inspectorSection("Edge Edit") {
-                inspectorRow("Targets", "\(edgeTargets.count)")
-                edgeOffsetDistanceControl
-                edgeOffsetGapFillPicker
-                inspectorActionRow {
-                    Button {
-                        offsetSelectedEdges(
-                            edgeTargets,
-                            by: edgeOffsetDistanceMeters,
-                            gapFill: edgeOffsetGapFill
-                        )
-                    } label: {
-                        Label("Offset \(formatted(edgeOffsetDistanceMeters))", systemImage: "arrow.up.left.and.arrow.down.right")
-                    }
-                    .accessibilityIdentifier("InspectorEdge.offset")
-                }
-
-                inspectorActionRow {
-                    Button {
-                        projectSelectedGeneratedEdgesToConstructionPlane(projectableEdgeTargets)
-                    } label: {
-                        Label("Project", systemImage: "square.on.square")
-                    }
-                    .disabled(projectableEdgeTargets.isEmpty)
-                    .accessibilityIdentifier("InspectorEdge.project")
-                }
-
-                inspectorActionRow {
-                    Button {
-                        filletSelectedEdges(edgeTargets, radius: defaultEdgeFilletRadiusMeters)
-                    } label: {
-                        Label("Fillet \(formatted(defaultEdgeFilletRadiusMeters))", systemImage: "circle.dashed")
-                    }
-                    .accessibilityIdentifier("InspectorEdge.fillet")
-
-                    Button {
-                        chamferSelectedEdges(edgeTargets, by: defaultEdgeChamferStepMeters)
-                    } label: {
-                        Label("Chamfer \(formatted(defaultEdgeChamferStepMeters))", systemImage: "line.diagonal")
-                    }
-                    .accessibilityIdentifier("InspectorEdge.chamfer")
-                }
-            }
-        }
-    }
-
     private func generatedEdgeProjectionTargets(
         from targets: [SelectionTarget]
     ) -> [SelectionTarget] {
@@ -5929,142 +5905,6 @@ public struct MainView: View {
             }
         }
         return projectedTargets
-    }
-
-    private var edgeOffsetDistanceControl: some View {
-        lengthControl(
-            "Offset",
-            meters: edgeOffsetDistanceMeters,
-            sliderRange: regionOffsetSliderRange
-        ) { meters in
-            edgeOffsetDistanceMeters = max(meters, 1.0e-9)
-        }
-        .accessibilityIdentifier("InspectorEdge.offsetDistance")
-    }
-
-    private var edgeOffsetGapFillPicker: some View {
-        inspectorControlRow("Gap Fill") {
-            Picker(
-                "",
-                selection: $edgeOffsetGapFill
-            ) {
-                ForEach(OffsetCurveGapFill.allCases, id: \.self) { gapFill in
-                    Text(regionOffsetGapFillTitle(gapFill))
-                        .tag(gapFill)
-                }
-            }
-            .labelsHidden()
-            .controlSize(.small)
-            .frame(width: inspectorControlWidth)
-        }
-        .accessibilityIdentifier("InspectorEdge.gapFill")
-    }
-
-    @ViewBuilder
-    private func vertexEditSection(_ nodes: [SceneNode]) -> some View {
-        if nodes.count == 1, let vertexTarget = selectedVertexTarget {
-            inspectorSection("Vertex Edit") {
-                inspectorRow("Target", selectedTargetSummary)
-                inspectorActionRow {
-                    Button {
-                        moveSelectedVertex(vertexTarget, deltaX: -defaultVertexMoveStepMeters, deltaY: 0.0)
-                    } label: {
-                        Label("X -\(formatted(defaultVertexMoveStepMeters))", systemImage: "arrow.left")
-                    }
-                    .accessibilityIdentifier("InspectorVertex.moveXNegative")
-
-                    Button {
-                        moveSelectedVertex(vertexTarget, deltaX: defaultVertexMoveStepMeters, deltaY: 0.0)
-                    } label: {
-                        Label("X +\(formatted(defaultVertexMoveStepMeters))", systemImage: "arrow.right")
-                    }
-                    .accessibilityIdentifier("InspectorVertex.moveXPositive")
-                }
-                inspectorActionRow {
-                    Button {
-                        moveSelectedVertex(vertexTarget, deltaX: 0.0, deltaY: -defaultVertexMoveStepMeters)
-                    } label: {
-                        Label("Y -\(formatted(defaultVertexMoveStepMeters))", systemImage: "arrow.down")
-                    }
-                    .accessibilityIdentifier("InspectorVertex.moveYNegative")
-
-                    Button {
-                        moveSelectedVertex(vertexTarget, deltaX: 0.0, deltaY: defaultVertexMoveStepMeters)
-                    } label: {
-                        Label("Y +\(formatted(defaultVertexMoveStepMeters))", systemImage: "arrow.up")
-                    }
-                    .accessibilityIdentifier("InspectorVertex.moveYPositive")
-                }
-            }
-        }
-    }
-
-    @ViewBuilder
-    private func regionEditSection() -> some View {
-        let regionTargets = selectedRegionTargets
-        if regionTargets.isEmpty == false {
-            inspectorSection("Region Edit") {
-                inspectorRow("Targets", regionTargets.count == 1 ? selectedTargetSummary : "\(regionTargets.count)")
-                regionOffsetDistanceControl
-                regionOffsetGapFillPicker
-                inspectorActionRow {
-                    Button {
-                        offsetSelectedRegions(
-                            regionTargets,
-                            by: -regionOffsetDistanceMeters,
-                            gapFill: regionOffsetGapFill,
-                            isSymmetric: regionOffsetCommandState.usesLockedDistance,
-                            combinesRegions: regionOffsetCommandState.usesCombinedRegions
-                        )
-                    } label: {
-                        Label("Inward", systemImage: "minus.circle")
-                    }
-                    .accessibilityIdentifier("InspectorRegion.offsetInward")
-
-                    Button {
-                        offsetSelectedRegions(
-                            regionTargets,
-                            by: regionOffsetDistanceMeters,
-                            gapFill: regionOffsetGapFill,
-                            isSymmetric: regionOffsetCommandState.usesLockedDistance,
-                            combinesRegions: regionOffsetCommandState.usesCombinedRegions
-                        )
-                    } label: {
-                        Label("Outward", systemImage: "plus.circle")
-                    }
-                    .accessibilityIdentifier("InspectorRegion.offsetOutward")
-                }
-            }
-        }
-    }
-
-    private var regionOffsetDistanceControl: some View {
-        lengthControl(
-            "Distance",
-            meters: regionOffsetDistanceMeters,
-            sliderRange: regionOffsetSliderRange
-        ) { meters in
-            regionOffsetDistanceMeters = max(meters, 1.0e-9)
-        }
-        .accessibilityIdentifier("InspectorRegion.distance")
-    }
-
-    private var regionOffsetGapFillPicker: some View {
-        inspectorControlRow("Gap Fill") {
-            Picker(
-                "",
-                selection: $regionOffsetGapFill
-            ) {
-                ForEach(OffsetCurveGapFill.allCases, id: \.self) { gapFill in
-                    Text(regionOffsetGapFillTitle(gapFill))
-                        .tag(gapFill)
-                }
-            }
-            .labelsHidden()
-            .controlSize(.small)
-            .frame(width: inspectorControlWidth)
-        }
-        .accessibilityIdentifier("InspectorRegion.gapFill")
     }
 
     @ViewBuilder
