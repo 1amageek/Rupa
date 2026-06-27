@@ -65,7 +65,7 @@ flowchart LR
 
 | File | Current issue | Preferred next split |
 |---|---|---|
-| `RupaCore/DesignDocument.swift` | Command facade still contains sketch and remaining shared helper implementations | Move high-cohesion sketch command families into `DesignDocument+Sketch` and shared internal command utilities |
+| `RupaCore/DesignDocument.swift` | Command facade still contains sketch projection, curve editing, dimensions, and remaining shared helper implementations | Move high-cohesion sketch command families into focused `DesignDocument+Sketch*` extensions and shared internal command utilities |
 | `RupaRendering/Viewport.swift` | Drawing, hit testing, drag state, and interaction commit logic share one SwiftUI type | Extract draw layers and drag controllers without changing the public `Viewport` API |
 | `RupaUI/MainView.swift` | Workspace layout, command panels, keyboard handling, and inspectors share one view | Extract command panels, workspace rail, and keyboard router |
 
@@ -84,3 +84,4 @@ flowchart LR
 | `RupaCore/DesignDocument.swift` | Solid creation commands for extrude, revolve, sweep, primitive extrusion, plus shared command value and feature mutation helpers |
 | `RupaCore/DesignDocument.swift` | Solid direct-editing commands for face offset, edge chamfer, edge fillet, vertex move, plus shared body target resolution |
 | `RupaCore/DesignDocument.swift` | Surface and PolySpline source commands for surface creation, vertex/control-point moves, and surface slides |
+| `RupaCore/DesignDocument.swift` | Basic sketch creation commands for line, circle, arc, spline, rectangle, polygon, plus shared sketch feature mutation |
