@@ -1139,6 +1139,14 @@ public final class EditorSession {
     }
 
     @discardableResult
+    public func setSurfaceFrameDisplay(
+        query: SurfaceFrameQuery,
+        isVisible: Bool? = nil
+    ) -> CommandExecutionResult? {
+        perform(.setSurfaceFrameDisplay(query: query, isVisible: isVisible))
+    }
+
+    @discardableResult
     public func createDefaultRectangleSketch() -> CommandExecutionResult? {
         perform(
             .createRectangleSketch(

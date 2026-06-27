@@ -139,6 +139,7 @@ public struct ViewportBodyComponent: Equatable {
     public var mesh: ViewportBodyMesh?
     public var topology: ViewportBodyTopology?
     public var surfaceControlPointDisplays: [ViewportSurfaceControlPointDisplay]
+    public var surfaceFrameDisplays: [ViewportSurfaceFrameDisplay]
 
     public init(
         typeID: ObjectTypeID? = nil,
@@ -151,7 +152,8 @@ public struct ViewportBodyComponent: Equatable {
         cylinder: ViewportCylinderComponent? = nil,
         mesh: ViewportBodyMesh? = nil,
         topology: ViewportBodyTopology? = nil,
-        surfaceControlPointDisplays: [ViewportSurfaceControlPointDisplay] = []
+        surfaceControlPointDisplays: [ViewportSurfaceControlPointDisplay] = [],
+        surfaceFrameDisplays: [ViewportSurfaceFrameDisplay] = []
     ) {
         self.typeID = typeID
         self.properties = properties
@@ -164,6 +166,7 @@ public struct ViewportBodyComponent: Equatable {
         self.mesh = mesh
         self.topology = topology
         self.surfaceControlPointDisplays = surfaceControlPointDisplays
+        self.surfaceFrameDisplays = surfaceFrameDisplays
     }
 }
 
@@ -188,6 +191,40 @@ public struct ViewportSurfaceControlPointDisplay: Equatable, Sendable {
         self.uIndex = uIndex
         self.vIndex = vIndex
         self.isBoundary = isBoundary
+    }
+}
+
+public struct ViewportSurfaceFrameDisplay: Equatable, Sendable {
+    public var id: SurfaceFrameDisplayID
+    public var query: SurfaceFrameQuery
+    public var position: Point3D
+    public var uAxis: Vector3D
+    public var vAxis: Vector3D
+    public var normal: Vector3D
+    public var u: Double
+    public var v: Double
+    public var facePersistentNames: [String]
+
+    public init(
+        id: SurfaceFrameDisplayID,
+        query: SurfaceFrameQuery,
+        position: Point3D,
+        uAxis: Vector3D,
+        vAxis: Vector3D,
+        normal: Vector3D,
+        u: Double,
+        v: Double,
+        facePersistentNames: [String]
+    ) {
+        self.id = id
+        self.query = query
+        self.position = position
+        self.uAxis = uAxis
+        self.vAxis = vAxis
+        self.normal = normal
+        self.u = u
+        self.v = v
+        self.facePersistentNames = facePersistentNames
     }
 }
 
@@ -2716,6 +2753,11 @@ public struct ViewportSceneBuilder {
         let surfaceControlPointDisplaysByFeatureID = visibleSurfaceControlPointDisplaysByFeatureID(
             in: document
         )
+        let surfaceFrameDisplaysByFeatureID = visibleSurfaceFrameDisplaysByFeatureID(
+            in: document,
+            currentEvaluation: currentEvaluation,
+            currentGeneration: documentGeneration
+        )
         let effectivelyVisibleSceneNodeIDs = effectivelyVisibleSceneNodeIDs(in: document.productMetadata)
         let baseItems = graph.order.compactMap { featureID -> ViewportSceneItem? in
             guard let feature = graph.nodes[featureID] else {
@@ -2769,6 +2811,7 @@ public struct ViewportSceneBuilder {
                     sourceFeatureID: revolve.profile.featureID,
                     document: document,
                     surfaceControlPointDisplaysByFeatureID: surfaceControlPointDisplaysByFeatureID,
+                    surfaceFrameDisplaysByFeatureID: surfaceFrameDisplaysByFeatureID,
                     bodyDisplaySnapshots: bodyDisplaySnapshots
                 )
             case .sweep(let sweep):
@@ -2805,6 +2848,7 @@ public struct ViewportSceneBuilder {
                     sourceFeatureID: section.featureID,
                     document: document,
                     surfaceControlPointDisplaysByFeatureID: surfaceControlPointDisplaysByFeatureID,
+                    surfaceFrameDisplaysByFeatureID: surfaceFrameDisplaysByFeatureID,
                     bodyDisplaySnapshots: bodyDisplaySnapshots
                 )
             case .polySpline:
@@ -2813,6 +2857,7 @@ public struct ViewportSceneBuilder {
                     sourceFeatureID: nil,
                     document: document,
                     surfaceControlPointDisplaysByFeatureID: surfaceControlPointDisplaysByFeatureID,
+                    surfaceFrameDisplaysByFeatureID: surfaceFrameDisplaysByFeatureID,
                     bodyDisplaySnapshots: bodyDisplaySnapshots
                 )
             case .faceLoopOffset:
@@ -2825,6 +2870,7 @@ public struct ViewportSceneBuilder {
                     )?.sourceSection?.featureID,
                     document: document,
                     surfaceControlPointDisplaysByFeatureID: surfaceControlPointDisplaysByFeatureID,
+                    surfaceFrameDisplaysByFeatureID: surfaceFrameDisplaysByFeatureID,
                     bodyDisplaySnapshots: bodyDisplaySnapshots
                 )
             case .edgeOffset:
@@ -2837,6 +2883,7 @@ public struct ViewportSceneBuilder {
                     )?.sourceSection?.featureID,
                     document: document,
                     surfaceControlPointDisplaysByFeatureID: surfaceControlPointDisplaysByFeatureID,
+                    surfaceFrameDisplaysByFeatureID: surfaceFrameDisplaysByFeatureID,
                     bodyDisplaySnapshots: bodyDisplaySnapshots
                 )
             case .faceKnife:
@@ -3443,6 +3490,63 @@ public struct ViewportSceneBuilder {
         }
     }
 
+    private func visibleSurfaceFrameDisplaysByFeatureID(
+        in document: DesignDocument,
+        currentEvaluation: DocumentEvaluationContext?,
+        currentGeneration: DocumentGeneration?
+    ) -> [FeatureID: [ViewportSurfaceFrameDisplay]] {
+        let displays = document.productMetadata.surfaceFrameDisplays.values
+            .filter(\.isVisible)
+            .sorted { $0.id.rawValue < $1.id.rawValue }
+        guard displays.isEmpty == false else {
+            return [:]
+        }
+        do {
+            let result = try SurfaceFrameService().resolve(
+                document: document,
+                queries: displays.map(\.query),
+                currentEvaluation: currentEvaluation,
+                currentGeneration: currentGeneration
+            )
+            let featureIDsByDescription = Dictionary(
+                uniqueKeysWithValues: document.cadDocument.designGraph.order.map { featureID in
+                    (featureID.description, featureID)
+                }
+            )
+            var displaysByFeatureID: [FeatureID: [ViewportSurfaceFrameDisplay]] = [:]
+            for (display, frame) in zip(displays, result.frames) {
+                guard let sourceFeatureID = frame.sourceFeatureID,
+                      let featureID = featureIDsByDescription[sourceFeatureID] else {
+                    continue
+                }
+                displaysByFeatureID[featureID, default: []].append(
+                    ViewportSurfaceFrameDisplay(
+                        id: display.id,
+                        query: display.query,
+                        position: point3D(frame.position),
+                        uAxis: vector3D(frame.uAxis),
+                        vAxis: vector3D(frame.vAxis),
+                        normal: vector3D(frame.normal),
+                        u: frame.u,
+                        v: frame.v,
+                        facePersistentNames: frame.facePersistentNames
+                    )
+                )
+            }
+            return displaysByFeatureID
+        } catch {
+            return [:]
+        }
+    }
+
+    private func point3D(_ point: SurfaceAnalysisResult.Point) -> Point3D {
+        Point3D(x: point.x, y: point.y, z: point.z)
+    }
+
+    private func vector3D(_ vector: SurfaceAnalysisResult.Vector) -> Vector3D {
+        Vector3D(x: vector.x, y: vector.y, z: vector.z)
+    }
+
     private func currentEvaluatedDocument(
         for document: DesignDocument,
         currentEvaluation: DocumentEvaluationContext?,
@@ -3485,6 +3589,7 @@ public struct ViewportSceneBuilder {
         sourceFeatureID: FeatureID?,
         document: DesignDocument,
         surfaceControlPointDisplaysByFeatureID: [FeatureID: [ViewportSurfaceControlPointDisplay]] = [:],
+        surfaceFrameDisplaysByFeatureID: [FeatureID: [ViewportSurfaceFrameDisplay]] = [:],
         bodyDisplaySnapshots: [FeatureID: BodyDisplaySnapshot]
     ) -> ViewportSceneItem? {
         guard let snapshot = bodyDisplaySnapshots[featureID] else {
@@ -3510,7 +3615,8 @@ public struct ViewportSceneBuilder {
             yMaxMeters: snapshot.bounds.maxY,
             mesh: snapshot.mesh,
             topology: ViewportBodyTopology(snapshot.topology),
-            surfaceControlPointDisplays: surfaceControlPointDisplaysByFeatureID[featureID] ?? []
+            surfaceControlPointDisplays: surfaceControlPointDisplaysByFeatureID[featureID] ?? [],
+            surfaceFrameDisplays: surfaceFrameDisplaysByFeatureID[featureID] ?? []
         )
         return ViewportSceneItem(
             id: featureID.description,

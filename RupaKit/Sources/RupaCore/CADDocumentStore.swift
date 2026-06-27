@@ -1021,6 +1021,16 @@ public final class CADDocumentStore {
             document = updatedDocument
             try commitMutation()
             evaluateCurrentDocument()
+        case .setSurfaceFrameDisplay(let query, let isVisible):
+            var updatedDocument = document
+            try updatedDocument.setSurfaceFrameDisplay(
+                query: query,
+                isVisible: isVisible,
+                objectRegistry: objectRegistry
+            )
+            document = updatedDocument
+            try commitMutation()
+            evaluateCurrentDocument()
         case .movePolySplineSurfaceVertex(let target, let deltaX, let deltaY, let deltaZ):
             var updatedDocument = document
             try updatedDocument.movePolySplineSurfaceVertex(

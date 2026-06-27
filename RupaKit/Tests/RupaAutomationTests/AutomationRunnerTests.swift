@@ -481,6 +481,36 @@ import SwiftCAD
 }
 
 @MainActor
+@Test func automationCanToggleSurfaceFrameDisplay() async throws {
+    let session = EditorSession()
+    let runner = AutomationRunner()
+    _ = try runner.execute(
+        .createPolySplineSurface(
+            name: "Automation Surface Frame Display",
+            sourceMesh: automationPolySplineQuadMesh(),
+            options: PolySplineOptions()
+        ),
+        in: session
+    )
+    let summary = try SurfaceSourceSummaryService().summarize(document: session.document)
+    let patch = try #require(summary.sources.first?.patches.first)
+    let controlPoint = try #require(patch.controlPoints.first { $0.uIndex == 2 && $0.vIndex == 1 })
+    let query = SurfaceFrameQuery(selectionReference: controlPoint.selectionReference)
+    let displayID = try SurfaceFrameDisplayID(query: query)
+
+    let showResult = try runner.execute(
+        .setSurfaceFrameDisplay(query: query, isVisible: true),
+        in: session
+    )
+
+    #expect(showResult.message == "Surface frame display visible.")
+    #expect(showResult.commandName == "setSurfaceFrameDisplay")
+    #expect(showResult.didMutate)
+    #expect(showResult.generation == DocumentGeneration(2))
+    #expect(session.document.productMetadata.surfaceFrameDisplays[displayID]?.isVisible == true)
+}
+
+@MainActor
 @Test func automationCanCreateSweepSourceFeature() async throws {
     var document = DesignDocument.empty()
     let profileID = try document.createRectangleSketch(

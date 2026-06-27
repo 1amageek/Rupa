@@ -18,6 +18,7 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
     public var curveCurvatureDisplays: [SelectionComponentID: CurveCurvatureDisplay]
     public var pointDisplays: [SelectionComponentID: PointDisplay]
     public var surfaceControlPointDisplays: [SurfaceControlPointDisplayID: SurfaceControlPointDisplay]
+    public var surfaceFrameDisplays: [SurfaceFrameDisplayID: SurfaceFrameDisplay]
     public var measurements: [MeasurementAnnotationID: MeasurementAnnotation]
     public var templateDefaults: TemplateDefaults
 
@@ -38,6 +39,7 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
         curveCurvatureDisplays: [SelectionComponentID: CurveCurvatureDisplay] = [:],
         pointDisplays: [SelectionComponentID: PointDisplay] = [:],
         surfaceControlPointDisplays: [SurfaceControlPointDisplayID: SurfaceControlPointDisplay] = [:],
+        surfaceFrameDisplays: [SurfaceFrameDisplayID: SurfaceFrameDisplay] = [:],
         measurements: [MeasurementAnnotationID: MeasurementAnnotation] = [:],
         templateDefaults: TemplateDefaults = TemplateDefaults()
     ) {
@@ -57,6 +59,7 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
         self.curveCurvatureDisplays = curveCurvatureDisplays
         self.pointDisplays = pointDisplays
         self.surfaceControlPointDisplays = surfaceControlPointDisplays
+        self.surfaceFrameDisplays = surfaceFrameDisplays
         self.measurements = measurements
         self.templateDefaults = templateDefaults
     }
@@ -78,6 +81,7 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
         case curveCurvatureDisplays
         case pointDisplays
         case surfaceControlPointDisplays
+        case surfaceFrameDisplays
         case measurements
         case templateDefaults
     }
@@ -143,6 +147,10 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
                 [SurfaceControlPointDisplayID: SurfaceControlPointDisplay].self,
                 forKey: .surfaceControlPointDisplays
             ) ?? [:],
+            surfaceFrameDisplays: try container.decodeIfPresent(
+                [SurfaceFrameDisplayID: SurfaceFrameDisplay].self,
+                forKey: .surfaceFrameDisplays
+            ) ?? [:],
             measurements: try container.decodeIfPresent(
                 [MeasurementAnnotationID: MeasurementAnnotation].self,
                 forKey: .measurements
@@ -172,6 +180,7 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
         try container.encode(curveCurvatureDisplays, forKey: .curveCurvatureDisplays)
         try container.encode(pointDisplays, forKey: .pointDisplays)
         try container.encode(surfaceControlPointDisplays, forKey: .surfaceControlPointDisplays)
+        try container.encode(surfaceFrameDisplays, forKey: .surfaceFrameDisplays)
         try container.encode(measurements, forKey: .measurements)
         try container.encode(templateDefaults, forKey: .templateDefaults)
     }
@@ -203,6 +212,7 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
         try validateCurveCurvatureDisplays(against: cadDocument)
         try validatePointDisplays(against: cadDocument)
         try validateSurfaceControlPointDisplays(against: cadDocument)
+        try validateSurfaceFrameDisplays()
         try validateMeasurements()
         try validateTemplateDefaults()
     }
@@ -849,6 +859,17 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
                 )
             }
             try display.validate(against: cadDocument)
+        }
+    }
+
+    private func validateSurfaceFrameDisplays() throws {
+        for (id, display) in surfaceFrameDisplays {
+            guard id == display.id else {
+                throw DocumentValidationError.invalidProductMetadata(
+                    "Surface frame display keys must match display IDs."
+                )
+            }
+            try display.validate()
         }
     }
 

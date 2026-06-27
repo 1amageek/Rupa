@@ -682,6 +682,66 @@ import Testing
 }
 
 @MainActor
+@Test func viewportSceneBuilderExposesVisibleSurfaceFrameDisplays() async throws {
+    var document = DesignDocument.empty()
+    let featureID = try document.createPolySplineSurface(
+        name: "Viewport Surface Frame Display",
+        sourceMesh: viewportSurfaceAnalysisSingleQuadMesh(topRightZ: 0.0),
+        options: PolySplineOptions()
+    )
+    let initialScene = ViewportSceneBuilder().build(document: document)
+    let initialBody = try #require(initialScene.items.first { $0.featureID == featureID })
+    guard case .body(let initialComponent) = initialBody.kind else {
+        Issue.record("Expected a PolySpline body scene item.")
+        return
+    }
+    #expect(initialComponent.surfaceFrameDisplays.isEmpty)
+
+    let summary = try SurfaceSourceSummaryService().summarize(document: document)
+    let patch = try #require(summary.sources.first?.patches.first)
+    let controlPoint = try #require(patch.controlPoints.first { $0.uIndex == 2 && $0.vIndex == 1 })
+    let query = SurfaceFrameQuery(selectionReference: controlPoint.selectionReference)
+    try document.setSurfaceFrameDisplay(
+        query: query,
+        isVisible: true
+    )
+
+    let expectedFrame = try #require(SurfaceFrameService().resolve(
+        document: document,
+        queries: [query]
+    ).frames.first)
+    let visibleScene = ViewportSceneBuilder().build(document: document)
+    let visibleBody = try #require(visibleScene.items.first { $0.featureID == featureID })
+    guard case .body(let visibleComponent) = visibleBody.kind else {
+        Issue.record("Expected a PolySpline body scene item.")
+        return
+    }
+    let display = try #require(visibleComponent.surfaceFrameDisplays.first)
+    #expect(visibleComponent.surfaceFrameDisplays.count == 1)
+    #expect(display.query == query)
+    #expect(abs(display.u - (2.0 / 3.0)) <= 1.0e-12)
+    #expect(abs(display.v - (1.0 / 3.0)) <= 1.0e-12)
+    #expect(abs(display.position.x - expectedFrame.position.x) <= 1.0e-12)
+    #expect(abs(display.position.y - expectedFrame.position.y) <= 1.0e-12)
+    #expect(abs(display.position.z - expectedFrame.position.z) <= 1.0e-12)
+    #expect(abs(display.uAxis.length - 1.0) <= 1.0e-8)
+    #expect(abs(display.vAxis.length - 1.0) <= 1.0e-8)
+    #expect(abs(display.normal.length - 1.0) <= 1.0e-8)
+
+    try document.setSurfaceFrameDisplay(
+        query: query,
+        isVisible: false
+    )
+    let hiddenScene = ViewportSceneBuilder().build(document: document)
+    let hiddenBody = try #require(hiddenScene.items.first { $0.featureID == featureID })
+    guard case .body(let hiddenComponent) = hiddenBody.kind else {
+        Issue.record("Expected a PolySpline body scene item.")
+        return
+    }
+    #expect(hiddenComponent.surfaceFrameDisplays.isEmpty)
+}
+
+@MainActor
 @Test func viewportSceneBuilderCreatesBodyItemForSupportedStraightPathSweep() async throws {
     var document = DesignDocument.empty()
     let profileID = try document.createRectangleSketch(

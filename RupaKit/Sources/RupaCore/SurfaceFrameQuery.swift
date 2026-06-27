@@ -1,4 +1,4 @@
-public struct SurfaceFrameQuery: Codable, Equatable, Sendable {
+public struct SurfaceFrameQuery: Codable, Hashable, Sendable {
     public var faceID: String?
     public var facePersistentName: String?
     public var selectionReference: SelectionReference?

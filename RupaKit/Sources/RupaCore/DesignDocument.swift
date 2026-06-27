@@ -907,6 +907,36 @@ public struct DesignDocument: Identifiable, Sendable {
         try productMetadata.validate(against: cadDocument, objectRegistry: objectRegistry)
     }
 
+    public mutating func setSurfaceFrameDisplay(
+        query: SurfaceFrameQuery,
+        isVisible: Bool? = nil,
+        objectRegistry: ObjectTypeRegistry = .builtIn
+    ) throws {
+        let displayID = try SurfaceFrameDisplayID(query: query)
+        let existing = productMetadata.surfaceFrameDisplays[displayID]
+        let nextVisibility: Bool
+        if let isVisible {
+            nextVisibility = isVisible
+        } else if let existing {
+            nextVisibility = !existing.isVisible
+        } else {
+            nextVisibility = true
+        }
+        guard nextVisibility else {
+            productMetadata.surfaceFrameDisplays.removeValue(forKey: displayID)
+            try productMetadata.validate(against: cadDocument, objectRegistry: objectRegistry)
+            return
+        }
+        _ = try SurfaceFrameService().resolve(
+            document: self,
+            queries: [query]
+        )
+        let display = try SurfaceFrameDisplay(query: query, isVisible: nextVisibility)
+        try display.validate()
+        productMetadata.surfaceFrameDisplays[displayID] = display
+        try productMetadata.validate(against: cadDocument, objectRegistry: objectRegistry)
+    }
+
     @discardableResult
     public mutating func createSketch(
         name: String,

@@ -1326,6 +1326,16 @@ public final class AgentCommandController: AgentClientProtocol {
             failureMode: "Accepts cubic PolySpline surface control point selection references discovered from surfaceSourceSummary; rejects non-control-point references, unsupported PolySpline source meshes, missing patches, out-of-range indexes, stale generations, or missing source features before mutation."
         ),
         capability(
+            "setSurfaceFrameDisplay",
+            category: .solid,
+            summary: "Toggle persistent Agent-visible UVN surface frame display state for generated face UV queries, surface parameter references, or Surface CV references.",
+            access: .automationCommand,
+            mutatesDocument: true,
+            discovery: [.surfaceSourceSummary, .surfaceFrames, .surfaceAnalysis],
+            targets: [.face, .surfaceControlPoint],
+            failureMode: "Accepts generated B-spline face UV queries, surface parameter references, or Surface CV references resolvable by surfaceFrames; rejects unresolved references, ambiguous UV input, non-B-spline faces, stale generations, and unsupported surface trim, span, knot, edge, curve, or sketch point references before mutation."
+        ),
+        capability(
             "topologySummary",
             category: .read,
             summary: "Discover generated faces, edges, vertices, persistent topology names, and selection targets without mutation.",

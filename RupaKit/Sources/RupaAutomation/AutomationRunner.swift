@@ -1164,6 +1164,18 @@ public struct AutomationRunner {
                 didMutate: result.didMutate,
                 diagnostics: result.diagnostics
             )
+        case .setSurfaceFrameDisplay(let query, let isVisible):
+            let result = try session.execute(
+                .setSurfaceFrameDisplay(query: query, isVisible: isVisible)
+            )
+            let visibility = isVisible.map { $0 ? "visible" : "hidden" } ?? "toggled"
+            return AutomationResult(
+                message: "Surface frame display \(visibility).",
+                commandName: result.commandName,
+                generation: result.generation,
+                didMutate: result.didMutate,
+                diagnostics: result.diagnostics
+            )
         case .movePolySplineSurfaceVertex(let target, let deltaX, let deltaY, let deltaZ):
             let result = try session.execute(
                 .movePolySplineSurfaceVertex(

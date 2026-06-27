@@ -151,6 +151,62 @@ import SwiftCAD
     #expect(hiddenControlPoint.isPointDisplayVisible == false)
 }
 
+@MainActor
+@Test func surfaceFrameDisplayStateRoundTripsThroughDocumentMetadata() async throws {
+    let session = EditorSession()
+    let createResult = try #require(session.createPolySplineSurface(
+        name: "Surface Frame Display State",
+        sourceMesh: surfaceSourceSummaryPatchNetworkMesh(centerZ: 0.0),
+        options: PolySplineOptions(mergePatches: false)
+    ))
+    #expect(createResult.commandName == "createPolySplineSurface")
+
+    let summary = try SurfaceSourceSummaryService().summarize(document: session.document)
+    let patch = try #require(summary.sources.first?.patches.first)
+    let controlPoint = try #require(patch.controlPoints.first { $0.uIndex == 2 && $0.vIndex == 1 })
+    let query = SurfaceFrameQuery(selectionReference: controlPoint.selectionReference)
+
+    let displayResult = try #require(session.setSurfaceFrameDisplay(
+        query: query,
+        isVisible: true
+    ))
+    #expect(displayResult.commandName == "setSurfaceFrameDisplay")
+    #expect(displayResult.didMutate)
+
+    let displayID = try SurfaceFrameDisplayID(query: query)
+    #expect(session.document.productMetadata.surfaceFrameDisplays[displayID]?.isVisible == true)
+    let frameResult = try SurfaceFrameService().resolve(
+        document: session.document,
+        queries: [query]
+    )
+    let frame = try #require(frameResult.frames.first)
+    #expect(abs(frame.u - (2.0 / 3.0)) <= 1.0e-12)
+    #expect(abs(frame.v - (1.0 / 3.0)) <= 1.0e-12)
+
+    _ = try session.undo()
+    #expect(session.document.productMetadata.surfaceFrameDisplays[displayID] == nil)
+
+    _ = try session.redo()
+    #expect(session.document.productMetadata.surfaceFrameDisplays[displayID]?.isVisible == true)
+
+    let hiddenResult = try #require(session.setSurfaceFrameDisplay(
+        query: query,
+        isVisible: false
+    ))
+    #expect(hiddenResult.commandName == "setSurfaceFrameDisplay")
+    #expect(session.document.productMetadata.surfaceFrameDisplays[displayID] == nil)
+
+    let staleQuery = SurfaceFrameQuery(
+        faceID: "00000000-0000-0000-0000-000000000001",
+        u: 0.5,
+        v: 0.5
+    )
+    var staleDocument = DesignDocument.empty()
+    try staleDocument.setSurfaceFrameDisplay(query: staleQuery, isVisible: false)
+    let staleDisplayID = try SurfaceFrameDisplayID(query: staleQuery)
+    #expect(staleDocument.productMetadata.surfaceFrameDisplays[staleDisplayID] == nil)
+}
+
 private func surfaceSourceSummaryPatchNetworkMesh(centerZ: Double) -> Mesh {
     Mesh(
         positions: [

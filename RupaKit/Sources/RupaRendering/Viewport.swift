@@ -1155,6 +1155,11 @@ public struct Viewport: View {
             layout: layout,
             in: &context
         )
+        drawSurfaceFrameDisplays(
+            scene: scene,
+            layout: layout,
+            in: &context
+        )
 
         drawSurfaceAnalysisOverlay(
             in: &context,
@@ -4061,6 +4066,141 @@ public struct Viewport: View {
                 lineWidth: isSelected ? 1.4 : 1.0
             )
         }
+    }
+
+    private func drawSurfaceFrameDisplays(
+        scene: ViewportScene,
+        layout: ViewportLayout,
+        in context: inout GraphicsContext
+    ) {
+        for item in scene.items {
+            guard case .body(let component) = item.kind else {
+                continue
+            }
+            for display in component.surfaceFrameDisplays {
+                drawSurfaceFrameDisplay(
+                    display,
+                    item: item,
+                    layout: layout,
+                    in: &context
+                )
+            }
+        }
+    }
+
+    private func drawSurfaceFrameDisplay(
+        _ display: ViewportSurfaceFrameDisplay,
+        item: ViewportSceneItem,
+        layout: ViewportLayout,
+        in context: inout GraphicsContext
+    ) {
+        let origin = layout.project(display.position, in: item)
+        drawSurfaceFrameAxis(
+            origin: origin,
+            direction: display.uAxis,
+            item: item,
+            display: display,
+            layout: layout,
+            color: ViewportCoordinateAxis.x.color,
+            in: &context
+        )
+        drawSurfaceFrameAxis(
+            origin: origin,
+            direction: display.vAxis,
+            item: item,
+            display: display,
+            layout: layout,
+            color: ViewportCoordinateAxis.y.color,
+            in: &context
+        )
+        drawSurfaceFrameAxis(
+            origin: origin,
+            direction: display.normal,
+            item: item,
+            display: display,
+            layout: layout,
+            color: ViewportCoordinateAxis.z.color,
+            in: &context
+        )
+        let radius: CGFloat = 3.4
+        let rect = CGRect(
+            x: origin.x - radius,
+            y: origin.y - radius,
+            width: radius * 2.0,
+            height: radius * 2.0
+        )
+        context.fill(
+            Path(ellipseIn: rect),
+            with: .color(ViewportTheme.surfaceEdit.opacity(0.82))
+        )
+        context.stroke(
+            Path(ellipseIn: rect.insetBy(dx: -1.7, dy: -1.7)),
+            with: .color(Color.black.opacity(0.42)),
+            lineWidth: 0.9
+        )
+    }
+
+    private func drawSurfaceFrameAxis(
+        origin: CGPoint,
+        direction: Vector3D,
+        item: ViewportSceneItem,
+        display: ViewportSurfaceFrameDisplay,
+        layout: ViewportLayout,
+        color: Color,
+        in context: inout GraphicsContext
+    ) {
+        guard let end = surfaceFrameAxisEnd(
+            origin: origin,
+            direction: direction,
+            item: item,
+            display: display,
+            layout: layout
+        ) else {
+            return
+        }
+        var path = Path()
+        path.move(to: origin)
+        path.addLine(to: end)
+        context.stroke(
+            path,
+            with: .color(color.opacity(0.82)),
+            style: StrokeStyle(lineWidth: 2.0, lineCap: .round)
+        )
+        let headRadius: CGFloat = 2.4
+        let headRect = CGRect(
+            x: end.x - headRadius,
+            y: end.y - headRadius,
+            width: headRadius * 2.0,
+            height: headRadius * 2.0
+        )
+        context.fill(Path(ellipseIn: headRect), with: .color(color.opacity(0.88)))
+    }
+
+    private func surfaceFrameAxisEnd(
+        origin: CGPoint,
+        direction: Vector3D,
+        item: ViewportSceneItem,
+        display: ViewportSurfaceFrameDisplay,
+        layout: ViewportLayout
+    ) -> CGPoint? {
+        let modelScale = Double(max(max(item.modelBounds.width, item.modelBounds.height), 1.0e-6)) * 0.08
+        let axisPoint = Point3D(
+            x: display.position.x + direction.x * modelScale,
+            y: display.position.y + direction.y * modelScale,
+            z: display.position.z + direction.z * modelScale
+        )
+        let projected = layout.project(axisPoint, in: item)
+        let dx = projected.x - origin.x
+        let dy = projected.y - origin.y
+        let length = hypot(dx, dy)
+        guard length >= 1.0 else {
+            return nil
+        }
+        let viewportLength: CGFloat = 36.0
+        return CGPoint(
+            x: origin.x + dx / length * viewportLength,
+            y: origin.y + dy / length * viewportLength
+        )
     }
 
     private func drawActiveSurfaceControlPointDrag(

@@ -248,6 +248,10 @@ public enum EditorCommand: Codable, Equatable, Sendable {
         target: SelectionReference,
         isVisible: Bool?
     )
+    case setSurfaceFrameDisplay(
+        query: SurfaceFrameQuery,
+        isVisible: Bool?
+    )
     case movePolySplineSurfaceVertex(
         target: SelectionTarget,
         deltaX: CADExpression,
@@ -468,6 +472,8 @@ public enum EditorCommand: Codable, Equatable, Sendable {
             "createPolySplineSurface"
         case .setSurfaceControlPointDisplay:
             "setSurfaceControlPointDisplay"
+        case .setSurfaceFrameDisplay:
+            "setSurfaceFrameDisplay"
         case .movePolySplineSurfaceVertex:
             "movePolySplineSurfaceVertex"
         case .moveSurfaceControlPoint:
@@ -574,6 +580,7 @@ public enum EditorCommand: Codable, Equatable, Sendable {
              .createSweep,
              .createPolySplineSurface,
              .setSurfaceControlPointDisplay,
+             .setSurfaceFrameDisplay,
              .movePolySplineSurfaceVertex,
              .moveSurfaceControlPoint,
              .slidePolySplineSurfaceVertices,
