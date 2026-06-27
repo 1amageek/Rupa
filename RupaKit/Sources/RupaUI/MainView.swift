@@ -5458,63 +5458,37 @@ public struct MainView: View {
 
     @ViewBuilder
     private var canvasInspectorSections: some View {
-        inspectorSection("Document") {
-            inspectorRow("Name", documentTitle)
-            inspectorRow("Document ID", shortID(session.document.id))
-            inspectorRow("Source Unit", "m")
-            inspectorRow("Display Unit", session.document.displayUnit.symbol)
-        }
+        WorkspaceDocumentInspectorView(
+            state: workspaceDocumentInspectorState,
+            setDisplayUnit: { session.setDisplayUnit($0) },
+            setMinorTickMeters: { setRulerConfiguration(minorTickMeters: $0) },
+            setMajorTickMeters: { setRulerConfiguration(majorTickMeters: $0) },
+            setVisibleSpanMeters: { setRulerConfiguration(visibleSpanMeters: $0) }
+        )
+    }
 
-        inspectorSection("Scene") {
-            inspectorRow("Source Features", "\(session.document.cadDocument.designGraph.order.count)")
-            inspectorRow("Scene Nodes", "\(session.document.productMetadata.sceneNodes.count)")
-            inspectorRow("Selected", "\(session.selection.selectedSceneNodeIDs.count)")
-            inspectorRow("Generated Bodies", "\(session.evaluatedBodyCount)")
-            inspectorRow("Components", "\(session.document.productMetadata.componentDefinitions.count)")
-            inspectorRow("Instances", "\(session.document.productMetadata.componentInstances.count)")
-        }
-
-        inspectorSection("Evaluation") {
-            inspectorRow("Evaluation", evaluationStatusTitle)
-            inspectorRow("Diagnostics", diagnosticSummary)
-            inspectorRow("Render Reason", renderInvalidationReasonTitle)
-            inspectorRow("Render Generation", renderInvalidationGenerationTitle)
-        }
-
-        inspectorSection("Assets") {
-            inspectorRow("Materials", "\(session.document.productMetadata.materialLibrary.materials.count)")
-            inspectorRow("Default Material", defaultMaterialTitle)
-            inspectorRow("Validation Rules", "\(session.document.productMetadata.validationRules.count)")
-            inspectorRow("Export Presets", "\(session.document.productMetadata.exportPresets.count)")
-        }
-
-        inspectorSection("Units") {
-            displayUnitPicker
-        }
-
-        inspectorSection("Ruler") {
-            lengthControl(
-                "Minor",
-                meters: session.document.ruler.minorTickMeters,
-                sliderRange: 0.01 ... 100.0
-            ) { meters in
-                setRulerConfiguration(minorTickMeters: meters)
-            }
-            lengthControl(
-                "Major",
-                meters: session.document.ruler.majorTickMeters,
-                sliderRange: 0.1 ... 1_000.0
-            ) { meters in
-                setRulerConfiguration(majorTickMeters: meters)
-            }
-            lengthControl(
-                "Visible",
-                meters: session.document.ruler.visibleSpanMeters,
-                sliderRange: 1.0 ... 100_000.0
-            ) { meters in
-                setRulerConfiguration(visibleSpanMeters: meters)
-            }
-        }
+    private var workspaceDocumentInspectorState: WorkspaceDocumentInspectorState {
+        WorkspaceDocumentInspectorState(
+            documentName: documentTitle,
+            documentID: shortID(session.document.id),
+            sourceUnitTitle: "m",
+            displayUnit: session.document.displayUnit,
+            sourceFeatureCount: session.document.cadDocument.designGraph.order.count,
+            sceneNodeCount: session.document.productMetadata.sceneNodes.count,
+            selectedCount: session.selection.selectedSceneNodeIDs.count,
+            generatedBodyCount: session.evaluatedBodyCount,
+            componentCount: session.document.productMetadata.componentDefinitions.count,
+            instanceCount: session.document.productMetadata.componentInstances.count,
+            evaluationTitle: evaluationStatusTitle,
+            diagnosticSummary: diagnosticSummary,
+            renderReasonTitle: renderInvalidationReasonTitle,
+            renderGenerationTitle: renderInvalidationGenerationTitle,
+            materialCount: session.document.productMetadata.materialLibrary.materials.count,
+            defaultMaterialTitle: defaultMaterialTitle,
+            validationRuleCount: session.document.productMetadata.validationRules.count,
+            exportPresetCount: session.document.productMetadata.exportPresets.count,
+            ruler: session.document.ruler
+        )
     }
 
     @ViewBuilder
@@ -9669,26 +9643,6 @@ public struct MainView: View {
 
     private func shortID<T: CustomStringConvertible>(_ id: T) -> String {
         String(id.description.prefix(8))
-    }
-
-    private var displayUnitPicker: some View {
-        inspectorControlRow("Display Unit") {
-            Picker(
-                "",
-                selection: Binding(
-                    get: { session.document.displayUnit },
-                    set: { session.setDisplayUnit($0) }
-                )
-            ) {
-                ForEach(LengthDisplayUnit.allCases) { unit in
-                    Text(unit.symbol)
-                        .tag(unit)
-                }
-            }
-            .labelsHidden()
-            .controlSize(.small)
-            .frame(width: inspectorControlWidth)
-        }
     }
 
     private func lengthControl(
