@@ -65,7 +65,7 @@ flowchart LR
 
 | File | Current issue | Preferred next split |
 |---|---|---|
-| `RupaCore/DesignDocument.swift` | Command facade still contains sketch vertex offset, sketch point/spline movement, corner treatment, sketch curve editing, and remaining shared geometry helpers | Move high-cohesion sketch command families into focused `DesignDocument+Sketch*` extensions and shared internal command utilities |
+| `RupaCore/DesignDocument.swift` | Command facade still contains sketch point/spline movement, corner treatment, sketch curve editing, and remaining shared geometry helpers | Move high-cohesion sketch command families into focused `DesignDocument+Sketch*` extensions and shared internal command utilities |
 | `RupaRendering/Viewport.swift` | Drawing, hit testing, drag state, and interaction commit logic share one SwiftUI type | Extract draw layers and drag controllers without changing the public `Viewport` API |
 | `RupaUI/MainView.swift` | Workspace layout, command panels, keyboard handling, and inspectors share one view | Extract command panels, workspace rail, and keyboard router |
 
@@ -96,3 +96,4 @@ flowchart LR
 | `RupaCore/DesignDocument.swift` | Sketch spline control-point insertion command with Bezier span splitting and constraint/dimension reference migration helpers |
 | `RupaCore/DesignDocument.swift` | Sketch circle and arc parameter update commands with constraint-aware center/radius propagation |
 | `RupaCore/DesignDocument.swift` | Sketch entity dimension command, rectangle side dimension resizing, and profile arc radius rewrite split into focused sketch dimension extensions |
+| `RupaCore/DesignDocument.swift` | Sketch vertex offset command split from generated-topology vertex target resolution and source sketch endpoint splitting helpers |
