@@ -104,3 +104,4 @@ flowchart LR
 | `RupaCore/DesignDocument.swift` | Sketch curve extension command split from endpoint resolution, extension geometry, and validation helpers |
 | `RupaCore/DesignDocument.swift` | Sketch curve trim command split from segment-removal validation and reference filtering helpers |
 | `RupaCore/DesignDocument.swift` | Sketch curve split command split from shared split geometry primitives and reference migration helpers |
+| `RupaCore/DesignDocument.swift` | Sketch curve cut command split from source curve mutation and sampled curve intersection geometry helpers |
