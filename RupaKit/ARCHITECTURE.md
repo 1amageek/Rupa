@@ -65,7 +65,6 @@ flowchart LR
 
 | File | Current issue | Preferred next split |
 |---|---|---|
-| `RupaCore/DesignDocument+SolidDirectEditing.swift` | Face offset, edge treatment, and vertex movement helpers still share direct-modeling source rewrite logic | Split direct-edit target rewrite services by face, edge, and vertex workflows |
 | `RupaCore/DesignDocument+SketchProjection.swift` | Face, construction-plane, and generated-topology projection helpers share one extension | Split projection source resolvers from sketch entity construction helpers |
 | `RupaRendering/Viewport.swift` | Drawing, hit testing, drag state, and interaction commit logic share one SwiftUI type | Extract draw layers and drag controllers without changing the public `Viewport` API |
 | `RupaUI/MainView.swift` | Workspace layout, command panels, keyboard handling, and inspectors share one view | Extract command panels, workspace rail, and keyboard router |
@@ -112,3 +111,4 @@ flowchart LR
 | `RupaCore/DesignDocument.swift` | Sketch selection types, reference utilities, dimension measurement, sketch geometry helpers, and sketch object synchronization split into focused document extensions |
 | `RupaCore/DesignDocument+SelectionDimension.swift` | Selection dimension commands split into application routing, target application, point context resolution, curve context resolution, geometry helpers, and shared selection-dimension types |
 | `RupaCore/DesignDocument+SketchCurveCutGeometry.swift` | Cut Curve geometry split into target planning, analytic intersections, sampled spline intersections, resolution helpers, shared cut types, and shared cut utilities |
+| `RupaCore/DesignDocument+SolidDirectEditing.swift` | Solid direct editing split into face offset, edge treatment, vertex move, target resolution, profile-loop mapping, and shared direct-editing types |
