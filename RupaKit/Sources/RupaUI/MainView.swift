@@ -6098,171 +6098,14 @@ public struct MainView: View {
 
     @ViewBuilder
     private func bridgeCurveInspectorSection(_ bridgeCurve: InspectorBridgeCurve) -> some View {
-        inspectorSection("Bridge Source") {
-            inspectorRow("Source ID", shortID(bridgeCurve.sourceID))
-            inspectorRow("Continuity", bridgeContinuityTitle(bridgeCurve.continuity))
-            inspectorRow("Trim", bridgeCurve.trimsSourceCurves ? "Source curves trimmed" : "Off")
-            inspectorRow("Start Continuity", bridgeEndpointContinuityTitle(bridgeCurve.continuity.first))
-            inspectorRow("End Continuity", bridgeEndpointContinuityTitle(bridgeCurve.continuity.second))
-            inspectorRow("First", sketchReferenceTitle(bridgeCurve.firstEndpoint.reference))
-            inspectorRow("Second", sketchReferenceTitle(bridgeCurve.secondEndpoint.reference))
-            bridgeCurveParameterControl(
-                "Start Value",
-                value: bridgeCurve.firstParameter
-            ) { value in
-                setBridgeCurveParameter(bridgeCurve, endpoint: .first, value: value)
-            }
-            bridgeCurveParameterControl(
-                "End Value",
-                value: bridgeCurve.secondParameter
-            ) { value in
-                setBridgeCurveParameter(bridgeCurve, endpoint: .second, value: value)
-            }
-            inspectorActionRow {
-                Button {
-                    setBridgeCurveSense(bridgeCurve, endpoint: .first)
-                } label: {
-                    Label(
-                        bridgeCurve.firstEndpoint.reversesSense ? "Start Sense Reversed" : "Start Sense",
-                        systemImage: "arrow.left.and.right"
-                    )
-                }
-                .accessibilityIdentifier("InspectorCurve.bridge.startSense")
-
-                Button {
-                    setBridgeCurveSense(bridgeCurve, endpoint: .second)
-                } label: {
-                    Label(
-                        bridgeCurve.secondEndpoint.reversesSense ? "End Sense Reversed" : "End Sense",
-                        systemImage: "arrow.left.and.right"
-                    )
-                }
-                .accessibilityIdentifier("InspectorCurve.bridge.endSense")
-            }
-            inspectorActionRow {
-                Button {
-                    trimBridgeCurveSources(bridgeCurve)
-                } label: {
-                    Label("Trim Sources", systemImage: "scissors")
-                }
-                .disabled(bridgeCurve.trimsSourceCurves)
-                .accessibilityIdentifier("InspectorCurve.bridge.trimSources")
-            }
-            bridgeCurveTensionControl(
-                "Start Tension 1",
-                value: bridgeCurve.firstTension.first
-            ) { value in
-                setBridgeCurveTension(bridgeCurve, endpoint: .first, level: .first, value: value)
-            }
-            bridgeCurveTensionControl(
-                "Start Tension 2",
-                value: bridgeCurve.firstTension.second
-            ) { value in
-                setBridgeCurveTension(bridgeCurve, endpoint: .first, level: .second, value: value)
-            }
-            bridgeCurveTensionControl(
-                "Start Tension 3",
-                value: bridgeCurve.firstTension.third
-            ) { value in
-                setBridgeCurveTension(bridgeCurve, endpoint: .first, level: .third, value: value)
-            }
-            bridgeCurveTensionControl(
-                "End Tension 1",
-                value: bridgeCurve.secondTension.first
-            ) { value in
-                setBridgeCurveTension(bridgeCurve, endpoint: .second, level: .first, value: value)
-            }
-            bridgeCurveTensionControl(
-                "End Tension 2",
-                value: bridgeCurve.secondTension.second
-            ) { value in
-                setBridgeCurveTension(bridgeCurve, endpoint: .second, level: .second, value: value)
-            }
-            bridgeCurveTensionControl(
-                "End Tension 3",
-                value: bridgeCurve.secondTension.third
-            ) { value in
-                setBridgeCurveTension(bridgeCurve, endpoint: .second, level: .third, value: value)
-            }
-            inspectorActionRow {
-                Button {
-                    setBridgeCurveContinuity(bridgeCurve, endpoint: .first, continuity: .g0)
-                } label: {
-                    Label("Start G0", systemImage: "smallcircle.filled.circle")
-                }
-                .disabled(bridgeCurve.continuity.first == .g0)
-                .accessibilityIdentifier("InspectorCurve.bridge.startContinuityG0")
-
-                Button {
-                    setBridgeCurveContinuity(bridgeCurve, endpoint: .first, continuity: .g1)
-                } label: {
-                    Label("Start G1", systemImage: "point.topleft.down.curvedto.point.bottomright.up")
-                }
-                .disabled(bridgeCurve.continuity.first == .g1)
-                .accessibilityIdentifier("InspectorCurve.bridge.startContinuityG1")
-
-                Button {
-                    setBridgeCurveContinuity(bridgeCurve, endpoint: .first, continuity: .g2)
-                } label: {
-                    Label("Start G2", systemImage: "point.3.connected.trianglepath.dotted")
-                }
-                .disabled(bridgeCurve.continuity.first == .g2)
-                .accessibilityIdentifier("InspectorCurve.bridge.startContinuityG2")
-            }
-            inspectorActionRow {
-                Button {
-                    setBridgeCurveContinuity(bridgeCurve, endpoint: .second, continuity: .g0)
-                } label: {
-                    Label("End G0", systemImage: "smallcircle.filled.circle")
-                }
-                .disabled(bridgeCurve.continuity.second == .g0)
-                .accessibilityIdentifier("InspectorCurve.bridge.endContinuityG0")
-
-                Button {
-                    setBridgeCurveContinuity(bridgeCurve, endpoint: .second, continuity: .g1)
-                } label: {
-                    Label("End G1", systemImage: "point.topleft.down.curvedto.point.bottomright.up")
-                }
-                .disabled(bridgeCurve.continuity.second == .g1)
-                .accessibilityIdentifier("InspectorCurve.bridge.endContinuityG1")
-
-                Button {
-                    setBridgeCurveContinuity(bridgeCurve, endpoint: .second, continuity: .g2)
-                } label: {
-                    Label("End G2", systemImage: "point.3.connected.trianglepath.dotted")
-                }
-                .disabled(bridgeCurve.continuity.second == .g2)
-                .accessibilityIdentifier("InspectorCurve.bridge.endContinuityG2")
-            }
-        }
-    }
-
-    private func bridgeCurveTensionControl(
-        _ title: String,
-        value: Double,
-        onChange: @escaping (Double) -> Void
-    ) -> some View {
-        numericControl(
-            title,
-            values: [value],
-            sliderRange: bridgeTensionSliderRange(for: value)
-        ) { nextValue in
-            onChange(max(nextValue, 1.0e-6))
-        }
-    }
-
-    private func bridgeCurveParameterControl(
-        _ title: String,
-        value: Double,
-        onChange: @escaping (Double) -> Void
-    ) -> some View {
-        numericControl(
-            title,
-            values: [value],
-            sliderRange: 0.0 ... 1.0
-        ) { nextValue in
-            onChange(min(max(nextValue, 0.0), 1.0))
-        }
+        WorkspaceBridgeCurveInspectorView(
+            bridgeCurve: bridgeCurve,
+            onSetParameter: setBridgeCurveParameter,
+            onSetSense: setBridgeCurveSense,
+            onTrimSources: trimBridgeCurveSources,
+            onSetTension: setBridgeCurveTension,
+            onSetContinuity: setBridgeCurveContinuity
+        )
     }
 
     @ViewBuilder
@@ -8430,10 +8273,6 @@ public struct MainView: View {
         return 0.0 ... max(unit.value(fromMeters: upperMeters), 0.0001)
     }
 
-    private func bridgeTensionSliderRange(for value: Double) -> ClosedRange<Double> {
-        0.05 ... max(3.0, value * 2.0)
-    }
-
     private var regionOffsetSliderRange: ClosedRange<Double> {
         lengthSliderRange(for: regionOffsetDistanceMeters)
     }
@@ -8572,48 +8411,6 @@ public struct MainView: View {
             return "Line \(shortID(candidate.id))  \(formatted(length))"
         }
         return "Line \(shortID(candidate.id))"
-    }
-
-    private func bridgeContinuityTitle(_ continuity: BridgeCurveContinuity) -> String {
-        "\(bridgeEndpointContinuityTitle(continuity.first)) / \(bridgeEndpointContinuityTitle(continuity.second))"
-    }
-
-    private func bridgeEndpointContinuityTitle(_ continuity: BridgeCurveEndpointContinuity) -> String {
-        switch continuity {
-        case .g0:
-            return "G0 Position"
-        case .g1:
-            return "G1 Tangent"
-        case .g2:
-            return "G2 Curvature"
-        case .g3:
-            return "G3 Curvature"
-        }
-    }
-
-    private func sketchReferenceTitle(_ reference: SketchReference) -> String {
-        switch reference {
-        case .entity(let entityID):
-            return "Entity \(shortID(entityID))"
-        case .lineStart(let entityID):
-            return "Line \(shortID(entityID)) Start"
-        case .lineEnd(let entityID):
-            return "Line \(shortID(entityID)) End"
-        case .circleCenter(let entityID):
-            return "Circle \(shortID(entityID)) Center"
-        case .circleRadius(let entityID):
-            return "Circle \(shortID(entityID)) Radius"
-        case .arcCenter(let entityID):
-            return "Arc \(shortID(entityID)) Center"
-        case .arcStart(let entityID):
-            return "Arc \(shortID(entityID)) Start"
-        case .arcEnd(let entityID):
-            return "Arc \(shortID(entityID)) End"
-        case .arcRadius(let entityID):
-            return "Arc \(shortID(entityID)) Radius"
-        case .splineControlPoint(let entityID, let index):
-            return "Spline \(shortID(entityID)) Point \(index + 1)"
-        }
     }
 
     private func sketchSplineEndpointCandidateTitle(_ candidate: InspectorSplineEndpointCandidate) -> String {

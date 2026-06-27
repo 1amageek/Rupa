@@ -125,3 +125,4 @@ flowchart LR
 | `RupaUI/MainView.swift` | Object visibility, lock, transform, matrix, and material inspector editing split into a dedicated transform inspector view with session mutations injected by MainView |
 | `RupaUI/MainView.swift` | Object shape dimensions and schema-property editing split into a dedicated shape inspector view with mutation callbacks owned by MainView |
 | `RupaUI/MainView.swift` | Sketch curve selection and analysis display split into a dedicated curve inspector view with display toggles injected by MainView |
+| `RupaUI/MainView.swift` | Bridge Curve source, continuity, parameter, and tension controls split into a dedicated bridge curve inspector view with mutation callbacks owned by MainView |
