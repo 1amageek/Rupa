@@ -65,7 +65,7 @@ flowchart LR
 
 | File | Current issue | Preferred next split |
 |---|---|---|
-| `RupaCore/DesignDocument.swift` | Command facade still contains sketch, solid, surface, display, object-property source sync, and shared helper implementations | Move high-cohesion command families into `DesignDocument+Sketch`, `DesignDocument+Solid`, `DesignDocument+Surface`, and shared internal command utilities |
+| `RupaCore/DesignDocument.swift` | Command facade still contains sketch, solid, surface, object-property source sync, and shared helper implementations | Move high-cohesion command families into `DesignDocument+Sketch`, `DesignDocument+Solid`, `DesignDocument+Surface`, and shared internal command utilities |
 | `RupaRendering/Viewport.swift` | Drawing, hit testing, drag state, and interaction commit logic share one SwiftUI type | Extract draw layers and drag controllers without changing the public `Viewport` API |
 | `RupaUI/MainView.swift` | Workspace layout, command panels, keyboard handling, and inspectors share one view | Extract command panels, workspace rail, and keyboard router |
 
@@ -79,3 +79,4 @@ flowchart LR
 | `RupaCore/DesignDocument.swift` | Focused document command extensions for construction planes, section planes, and measurement annotations |
 | `RupaCore/DesignDocument.swift` | Pattern array command extension plus dedicated output synchronizer and ownership resolver services |
 | `RupaCore/DesignDocument.swift` | Focused document command extensions for document settings, parameters, components, and simple scene-node edits |
+| `RupaCore/DesignDocument.swift` | Focused display command extension plus display target component resolver |
