@@ -163,9 +163,3 @@ struct ViewportPatternArrayCurveExtentAffordanceGeometry: Equatable {
         var projectedPoint: CGPoint
     }
 }
-
-private extension CGPoint {
-    func distance(to other: CGPoint) -> CGFloat {
-        hypot(x - other.x, y - other.y)
-    }
-}
