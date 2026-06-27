@@ -446,6 +446,14 @@ import Testing
     let source = try #require(summary.sources.first)
     let patch = try #require(source.patches.first)
     let controlPoint = try #require(patch.controlPoints.first { $0.uIndex == 1 && $0.vIndex == 1 })
+    let lowerUControlPoint = try #require(patch.controlPoints.first { $0.uIndex == 0 && $0.vIndex == 1 })
+    let upperUControlPoint = try #require(patch.controlPoints.first { $0.uIndex == 2 && $0.vIndex == 1 })
+    let hullDirection = Vector3D(
+        x: upperUControlPoint.point.x - lowerUControlPoint.point.x,
+        y: upperUControlPoint.point.y - lowerUControlPoint.point.y,
+        z: upperUControlPoint.point.z - lowerUControlPoint.point.z
+    )
+    let unitU = try hullDirection.normalized(tolerance: ModelingTolerance.standard.distance)
 
     try document.slideSurfaceControlPoints(
         targets: [controlPoint.selectionReference],
@@ -459,10 +467,68 @@ import Testing
         return
     }
     let override = try #require(polySpline.controlPointOverrides.first)
-    let length = sqrt((0.02 * 0.02) + (0.002 * 0.002))
-    #expect(abs(override.point.x - (controlPoint.point.x + (0.02 / length * 0.001))) <= 1.0e-12)
-    #expect(abs(override.point.y - controlPoint.point.y) <= 1.0e-12)
-    #expect(abs(override.point.z - (controlPoint.point.z + (0.002 / length * 0.001))) <= 1.0e-12)
+    #expect(abs(override.point.x - (controlPoint.point.x + unitU.x * 0.001)) <= 1.0e-12)
+    #expect(abs(override.point.y - (controlPoint.point.y + unitU.y * 0.001)) <= 1.0e-12)
+    #expect(abs(override.point.z - (controlPoint.point.z + unitU.z * 0.001)) <= 1.0e-12)
+}
+
+@Test func surfaceControlPointReferenceSlideUsesOverrideAwareControlHullForInteriorControlPoint() async throws {
+    var document = DesignDocument.empty()
+
+    let featureID = try document.createPolySplineSurface(
+        name: "Surface Reference Interior Slide Control Hull Surface",
+        sourceMesh: designDocumentPolySplineQuadMesh()
+    )
+    let initialSummary = try SurfaceSourceSummaryService().summarize(document: document)
+    let initialSource = try #require(initialSummary.sources.first)
+    let initialPatch = try #require(initialSource.patches.first)
+    let raisedControlPoint = try #require(initialPatch.controlPoints.first {
+        $0.uIndex == 1 && $0.vIndex == 1
+    })
+
+    try document.moveSurfaceControlPoint(
+        target: raisedControlPoint.selectionReference,
+        deltaX: .length(0.0, .millimeter),
+        deltaY: .length(0.0, .millimeter),
+        deltaZ: .length(6.0, .millimeter)
+    )
+
+    let raisedSummary = try SurfaceSourceSummaryService().summarize(document: document)
+    let raisedSource = try #require(raisedSummary.sources.first)
+    let raisedPatch = try #require(raisedSource.patches.first)
+    let slideControlPoint = try #require(raisedPatch.controlPoints.first {
+        $0.uIndex == 2 && $0.vIndex == 1
+    })
+    let lowerUControlPoint = try #require(raisedPatch.controlPoints.first {
+        $0.uIndex == 1 && $0.vIndex == 1
+    })
+    let upperUControlPoint = try #require(raisedPatch.controlPoints.first {
+        $0.uIndex == 3 && $0.vIndex == 1
+    })
+    let hullDirection = Vector3D(
+        x: upperUControlPoint.point.x - lowerUControlPoint.point.x,
+        y: upperUControlPoint.point.y - lowerUControlPoint.point.y,
+        z: upperUControlPoint.point.z - lowerUControlPoint.point.z
+    )
+    let unitU = try hullDirection.normalized(tolerance: ModelingTolerance.standard.distance)
+
+    try document.slideSurfaceControlPoints(
+        targets: [slideControlPoint.selectionReference],
+        direction: .positiveU,
+        distance: .length(1.0, .millimeter)
+    )
+
+    let feature = try #require(document.cadDocument.designGraph.nodes[featureID])
+    guard case let .polySpline(polySpline) = feature.operation else {
+        Issue.record("Expected a PolySpline feature.")
+        return
+    }
+    let override = try #require(polySpline.controlPointOverrides.first {
+        $0.uIndex == 2 && $0.vIndex == 1
+    })
+    #expect(abs(override.point.x - (slideControlPoint.point.x + unitU.x * 0.001)) <= 1.0e-12)
+    #expect(abs(override.point.y - (slideControlPoint.point.y + unitU.y * 0.001)) <= 1.0e-12)
+    #expect(abs(override.point.z - (slideControlPoint.point.z + unitU.z * 0.001)) <= 1.0e-12)
 }
 
 @Test func polySplineSurfaceVertexSlideMovesBoundaryVertexAlongNormal() async throws {

@@ -46,21 +46,27 @@ struct PolySplineSurfaceControlPointEditingService: Sendable {
         in polySpline: PolySplineFeature,
         direction: PolySplineSurfaceVertexSlideDirection
     ) throws -> Vector3D {
-        let patch = try supportedPatch(
+        let controlPoints = try controlPoints(
             for: target,
             in: polySpline,
             owner: "PolySpline surface control point slide"
         )
-        let bottomU = patch.boundaryPoints[1] - patch.boundaryPoints[0]
-        let topU = patch.boundaryPoints[2] - patch.boundaryPoints[3]
-        let leftV = patch.boundaryPoints[3] - patch.boundaryPoints[0]
-        let rightV = patch.boundaryPoints[2] - patch.boundaryPoints[1]
         let positiveU = try normalizedSlideVector(
-            (bottomU + topU) / 2.0,
+            hullDirection(
+                at: target,
+                in: controlPoints,
+                axis: .u,
+                owner: "Positive U"
+            ),
             owner: "Positive U"
         )
         let positiveV = try normalizedSlideVector(
-            (leftV + rightV) / 2.0,
+            hullDirection(
+                at: target,
+                in: controlPoints,
+                axis: .v,
+                owner: "Positive V"
+            ),
             owner: "Positive V"
         )
         let normal = try normalizedSlideVector(
@@ -82,20 +88,67 @@ struct PolySplineSurfaceControlPointEditingService: Sendable {
         }
     }
 
-    private func controlPoints(
+    private enum ControlPointDirectionAxis {
+        case u
+        case v
+    }
+
+    private func hullDirection(
+        at target: PolySplineSurfaceControlPointEditTarget,
+        in controlPoints: [[Point3D]],
+        axis: ControlPointDirectionAxis,
+        owner: String
+    ) throws -> Vector3D {
+        guard controlPoints.indices.contains(target.vIndex),
+              controlPoints[target.vIndex].indices.contains(target.uIndex) else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "\(owner) references a missing surface control point."
+            )
+        }
+
+        let count = axis == .u ? controlPoints[target.vIndex].count : controlPoints.count
+        let index = axis == .u ? target.uIndex : target.vIndex
+        guard count >= 2, (0 ..< count).contains(index) else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "\(owner) cannot resolve a surface control hull direction."
+            )
+        }
+
+        let lowerIndex = max(index - 1, 0)
+        let upperIndex = min(index + 1, count - 1)
+        guard lowerIndex != upperIndex else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "\(owner) control hull direction is collapsed for PolySpline surface control point slide."
+            )
+        }
+
+        switch axis {
+        case .u:
+            return controlPoints[target.vIndex][upperIndex] - controlPoints[target.vIndex][lowerIndex]
+        case .v:
+            return controlPoints[upperIndex][target.uIndex] - controlPoints[lowerIndex][target.uIndex]
+        }
+    }
+
+    private func surface(
         for target: PolySplineSurfaceControlPointEditTarget,
         in polySpline: PolySplineFeature,
         owner: String
-    ) throws -> [[Point3D]] {
-        try target.address.validate()
-        let patch = try supportedPatch(for: target, in: polySpline, owner: owner)
-        let surface = BSplineSurface3D.cubicBezierPatch(
+    ) throws -> BSplineSurface3D {
+        let patch = try supportedPatch(
+            for: target,
+            in: polySpline,
+            owner: owner
+        )
+        var surface = BSplineSurface3D.cubicBezierPatch(
             bottomLeft: patch.boundaryPoints[0],
             bottomRight: patch.boundaryPoints[1],
             topRight: patch.boundaryPoints[2],
             topLeft: patch.boundaryPoints[3]
         )
-        var controlPoints = surface.controlPoints
         for override in polySpline.controlPointOverrides where override.patchID == target.patchID {
             do {
                 try override.validate()
@@ -105,16 +158,24 @@ struct PolySplineSurfaceControlPointEditingService: Sendable {
                     message: "\(owner) contains an invalid PolySpline surface control point override: \(String(describing: error))."
                 )
             }
-            guard controlPoints.indices.contains(override.vIndex),
-                  controlPoints[override.vIndex].indices.contains(override.uIndex) else {
+            guard surface.controlPoints.indices.contains(override.vIndex),
+                  surface.controlPoints[override.vIndex].indices.contains(override.uIndex) else {
                 throw EditorError(
                     code: .referenceUnresolved,
                     message: "\(owner) references a missing PolySpline surface control point override target."
                 )
             }
-            controlPoints[override.vIndex][override.uIndex] = override.point
+            surface.controlPoints[override.vIndex][override.uIndex] = override.point
         }
-        return controlPoints
+        return surface
+    }
+
+    private func controlPoints(
+        for target: PolySplineSurfaceControlPointEditTarget,
+        in polySpline: PolySplineFeature,
+        owner: String
+    ) throws -> [[Point3D]] {
+        try surface(for: target, in: polySpline, owner: owner).controlPoints
     }
 
     private func supportedPatch(

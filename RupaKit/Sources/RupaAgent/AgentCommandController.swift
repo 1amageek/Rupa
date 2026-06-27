@@ -1152,12 +1152,12 @@ public final class AgentCommandController: AgentClientProtocol {
         capability(
             "slideSurfaceControlPoints",
             category: .solid,
-            summary: "Slide source-owned surface control points from Swift-CAD SelectionReference values along local surface hull U, V, or normal directions.",
+            summary: "Slide source-owned surface control points from Swift-CAD SelectionReference values along local U, V, or normal directions; strict interior PolySpline CVs use the override-aware B-spline control-hull frame.",
             access: .automationCommand,
             mutatesDocument: true,
             discovery: [.surfaceSourceSummary, .selectionMeasurement, .surfaceAnalysis, .surfaceContinuitySummary],
             targets: [.surfaceControlPoint],
-            failureMode: "Accepts PolySpline patch corner control point references and strict interior B-spline control point references discovered from surfaceSourceSummary; rejects non-control-point references, non-PolySpline surfaces, boundary edge-only CV indexes, stale generations, empty or duplicate targets, zero or invalid distances, collapsed local U/V/normal directions, slides that change selected corner boundary roles, and invalid rebuilt B-spline sheet topology."
+            failureMode: "Accepts PolySpline patch corner control point references and strict interior B-spline control point references discovered from surfaceSourceSummary; boundary corner slides route through generated source-mesh patch hull directions, while strict interior CV slides resolve override-aware B-spline control-hull U/V/N directions; rejects non-control-point references, non-PolySpline surfaces, boundary edge-only CV indexes, stale generations, empty or duplicate targets, zero or invalid distances, collapsed local U/V/normal directions, slides that change selected corner boundary roles, and invalid rebuilt B-spline sheet topology."
         ),
         capability(
             "createExtrudedRectangle",
