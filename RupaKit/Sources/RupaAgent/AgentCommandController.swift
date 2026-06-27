@@ -554,12 +554,12 @@ public final class AgentCommandController: AgentClientProtocol {
         capability(
             "projectSketchCurvesToConstructionPlane",
             category: .sketch,
-            summary: "Alternative Duplicate subset: project selected source sketch curves onto the active or supplied construction plane along that plane normal, creating a new source curve sketch for downstream editing.",
+            summary: "Alternative Duplicate and Duplicate Curve and Project subset: project selected source sketch curves or generated line/circular edges onto the active or supplied construction plane along that plane normal, creating a new source curve sketch for downstream editing.",
             access: .automationCommand,
             mutatesDocument: true,
-            discovery: [.sketchEntitySummary, .constructionPlaneSummary],
-            targets: [.sketchEntity, .constructionPlane],
-            failureMode: "Rejects empty target lists, duplicate targets, non-curve sketch entities, unresolved source sketches, collapsed projected lines, invalid target planes, nonparallel circle or arc projections until exact conic projection sources exist, invalid output sketches, and stale generations before mutation."
+            discovery: [.sketchEntitySummary, .topologySummary, .constructionPlaneSummary],
+            targets: [.sketchEntity, .edge, .constructionPlane],
+            failureMode: "Rejects empty target lists, duplicate targets, non-curve sketch entities, unresolved source sketches, unresolved generated edges, generated edge targets outside the selected body, generated edge kinds other than line or circle, collapsed projected lines, invalid target planes, nonparallel source or generated circular projections until exact conic projection sources exist, invalid output sketches, and stale generations before mutation."
         ),
         capability(
             "addSketchConstraint",

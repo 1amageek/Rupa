@@ -2280,6 +2280,68 @@ import SwiftCAD
 }
 
 @MainActor
+@Test func automationCanProjectGeneratedEdgesToConstructionPlane() async throws {
+    let session = EditorSession()
+    let runner = AutomationRunner()
+    _ = try runner.execute(
+        .createExtrudedRectangleFromCorners(
+            name: "Automation Generated Edge Projection Box",
+            plane: .xy,
+            firstCorner: SketchPoint(
+                x: .length(0.0, .millimeter),
+                y: .length(0.0, .millimeter)
+            ),
+            oppositeCorner: SketchPoint(
+                x: .length(20.0, .millimeter),
+                y: .length(12.0, .millimeter)
+            ),
+            depth: .length(5.0, .millimeter),
+            direction: .normal
+        ),
+        in: session
+    )
+    let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let bodyNodeID = try #require(automationSceneNodeID(for: bodyFeatureID, in: session.document))
+    let topology = try TopologySummaryService().summarize(document: session.document)
+    let supportFace = try #require(topology.entries.first {
+        $0.kind == .face &&
+            $0.sceneNodeID == bodyNodeID.description &&
+            $0.generatedRole == "startFace"
+    })
+    let supportDepth = try #require(supportFace.center?.z)
+    let edge = try #require(topology.entries.first {
+        $0.kind == .edge &&
+            $0.sceneNodeID == bodyNodeID.description &&
+            $0.curveKind == "line" &&
+            automationTopologyPoint($0.start, isOnDepth: supportDepth) &&
+            automationTopologyPoint($0.end, isOnDepth: supportDepth) &&
+            $0.selectionTarget() != nil
+    })
+    let target = try #require(edge.selectionTarget())
+
+    let result = try runner.execute(
+        .projectSketchCurvesToConstructionPlane(
+            targets: [target],
+            plane: .xy,
+            name: "Automation Projected Generated Edge"
+        ),
+        in: session
+    )
+
+    let summary = try SketchEntitySummaryService().summarize(document: session.document)
+    let projected = try #require(summary.entries.first {
+        $0.sourceFeatureName == "Automation Projected Generated Edge"
+    })
+
+    #expect(result.message == "Sketch curves projected.")
+    #expect(result.commandName == "projectSketchCurvesToConstructionPlane")
+    #expect(result.didMutate)
+    #expect(result.generation == DocumentGeneration(2))
+    #expect(projected.entityKind == "line")
+    #expect(session.evaluationStatus == .valid)
+}
+
+@MainActor
 @Test func automationCanAddCoincidentSplineControlPointConstraint() async throws {
     let setup = try automationSplinePointConstraintDocument(name: "Automation Coincident Spline Point")
     let session = EditorSession(document: setup.document)
@@ -4600,6 +4662,16 @@ private func isAutomationVerticalGeneratedEdge(
     let tolerance = 1.0e-9
     return abs(((start.x + end.x) / 2.0) - x) <= tolerance
         && abs(((start.y + end.y) / 2.0) - y) <= tolerance
+}
+
+private func automationTopologyPoint(
+    _ point: TopologySummaryResult.Entry.Point?,
+    isOnDepth depth: Double
+) -> Bool {
+    guard let point else {
+        return false
+    }
+    return abs(point.z - depth) < 1.0e-10
 }
 
 private func isAutomationGeneratedVertex(

@@ -7005,6 +7005,7 @@ public struct MainView: View {
     @ViewBuilder
     private func edgeEditSection(_ nodes: [SceneNode]) -> some View {
         let edgeTargets = selectedEdgeTargets
+        let projectableEdgeTargets = generatedEdgeProjectionTargets(from: edgeTargets)
         if nodes.count == 1, edgeTargets.isEmpty == false {
             inspectorSection("Edge Edit") {
                 inspectorRow("Targets", "\(edgeTargets.count)")
@@ -7025,6 +7026,16 @@ public struct MainView: View {
 
                 inspectorActionRow {
                     Button {
+                        projectSelectedGeneratedEdgesToConstructionPlane(projectableEdgeTargets)
+                    } label: {
+                        Label("Project", systemImage: "square.on.square")
+                    }
+                    .disabled(projectableEdgeTargets.isEmpty)
+                    .accessibilityIdentifier("InspectorEdge.project")
+                }
+
+                inspectorActionRow {
+                    Button {
                         filletSelectedEdges(edgeTargets, radius: defaultEdgeFilletRadiusMeters)
                     } label: {
                         Label("Fillet \(formatted(defaultEdgeFilletRadiusMeters))", systemImage: "circle.dashed")
@@ -7040,6 +7051,24 @@ public struct MainView: View {
                 }
             }
         }
+    }
+
+    private func generatedEdgeProjectionTargets(
+        from targets: [SelectionTarget]
+    ) -> [SelectionTarget] {
+        var projectedTargets: [SelectionTarget] = []
+        var seen = Set<String>()
+        for target in targets {
+            guard case .edge(let componentID) = target.component,
+                  componentID.generatedTopologyPersistentName != nil else {
+                continue
+            }
+            let key = "\(target.sceneNodeID.description):\(String(describing: target.component))"
+            if seen.insert(key).inserted {
+                projectedTargets.append(target)
+            }
+        }
+        return projectedTargets
     }
 
     private var edgeOffsetDistanceControl: some View {
@@ -9481,6 +9510,22 @@ public struct MainView: View {
         _ entity: InspectorSketchEntity
     ) {
         let targets = selectedSketchCurveProjectionTargets(for: entity)
+        guard targets.isEmpty == false else {
+            return
+        }
+        let result = session.projectSketchCurvesToConstructionPlane(
+            targets: targets,
+            plane: nil,
+            name: nil
+        )
+        if result?.diagnostics.isEmpty == false {
+            isPreviewExpanded = true
+        }
+    }
+
+    private func projectSelectedGeneratedEdgesToConstructionPlane(
+        _ targets: [SelectionTarget]
+    ) {
         guard targets.isEmpty == false else {
             return
         }

@@ -337,6 +337,136 @@ import Testing
 }
 
 @MainActor
+@Test func projectSketchCurvesToConstructionPlaneAcceptsGeneratedLineEdges() async throws {
+    let session = EditorSession()
+    _ = try session.execute(
+        .createExtrudedRectangleFromCorners(
+            name: "Generated Edge Projection Box",
+            plane: .xy,
+            firstCorner: SketchPoint(
+                x: .length(0.0, .millimeter),
+                y: .length(0.0, .millimeter)
+            ),
+            oppositeCorner: SketchPoint(
+                x: .length(20.0, .millimeter),
+                y: .length(12.0, .millimeter)
+            ),
+            depth: .length(5.0, .millimeter),
+            direction: .normal
+        )
+    )
+    let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let bodyNodeID = try #require(bodySceneNodeID(for: bodyFeatureID, in: session.document))
+    let topology = try TopologySummaryService().summarize(document: session.document)
+    let supportFace = try #require(topology.entries.first {
+        $0.kind == .face &&
+            $0.sceneNodeID == bodyNodeID.description &&
+            $0.generatedRole == "startFace"
+    })
+    let supportDepth = try #require(supportFace.center?.z)
+    let generatedEdge = try #require(topology.entries.first {
+        $0.kind == .edge &&
+            $0.sceneNodeID == bodyNodeID.description &&
+            $0.curveKind == "line" &&
+            topologyPoint($0.start, isOnDepth: supportDepth) &&
+            topologyPoint($0.end, isOnDepth: supportDepth) &&
+            $0.selectionTarget() != nil
+    })
+    let target = try #require(generatedEdge.selectionTarget())
+
+    let result = try session.execute(
+        .projectSketchCurvesToConstructionPlane(
+            targets: [target],
+            plane: .xy,
+            name: "Projected Generated Edge"
+        )
+    )
+
+    let summary = try SketchEntitySummaryService().summarize(document: session.document)
+    let projected = try #require(summary.entries.first { $0.sourceFeatureName == "Projected Generated Edge" })
+    let featureID = try #require(UUID(uuidString: projected.sourceFeatureID)).featureID
+    let feature = try #require(session.document.cadDocument.designGraph.nodes[featureID])
+    guard case .sketch(let projectedSketch) = feature.operation else {
+        Issue.record("Generated edge projection must create a source sketch.")
+        return
+    }
+    let edgeStart = try #require(generatedEdge.start)
+    let edgeEnd = try #require(generatedEdge.end)
+
+    #expect(result.commandName == "projectSketchCurvesToConstructionPlane")
+    #expect(result.didMutate)
+    #expect(session.generation == DocumentGeneration(2))
+    #expect(projectedSketch.plane == .xy)
+    #expect(projected.entityKind == "line")
+    #expect(lineEntryMatchesEndpoints(
+        projected,
+        first: Point2D(x: edgeStart.x, y: edgeStart.y),
+        second: Point2D(x: edgeEnd.x, y: edgeEnd.y)
+    ))
+    #expect(session.evaluationStatus == .valid)
+}
+
+@MainActor
+@Test func projectSketchCurvesToConstructionPlaneAcceptsParallelGeneratedCircularEdges() async throws {
+    let session = EditorSession()
+    _ = try session.execute(
+        .createExtrudedCircle(
+            name: "Generated Circular Edge Projection Cylinder",
+            plane: .xy,
+            center: SketchPoint(
+                x: .length(0.0, .millimeter),
+                y: .length(0.0, .millimeter)
+            ),
+            radius: .length(10.0, .millimeter),
+            depth: .length(5.0, .millimeter),
+            direction: .normal
+        )
+    )
+    let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let bodyNodeID = try #require(bodySceneNodeID(for: bodyFeatureID, in: session.document))
+    let topology = try TopologySummaryService().summarize(document: session.document)
+    let supportFace = try #require(topology.entries.first {
+        $0.kind == .face &&
+            $0.sceneNodeID == bodyNodeID.description &&
+            $0.generatedRole == "startFace"
+    })
+    let supportDepth = try #require(supportFace.center?.z)
+    let generatedEdge = try #require(topology.entries.first {
+        $0.kind == .edge &&
+            $0.sceneNodeID == bodyNodeID.description &&
+            $0.curveKind == "circle" &&
+            topologyPoint($0.start, isOnDepth: supportDepth) &&
+            topologyPoint($0.end, isOnDepth: supportDepth) &&
+            $0.selectionTarget() != nil
+    })
+    let target = try #require(generatedEdge.selectionTarget())
+
+    let result = try session.execute(
+        .projectSketchCurvesToConstructionPlane(
+            targets: [target],
+            plane: .xy,
+            name: "Projected Generated Circular Edge"
+        )
+    )
+
+    let summary = try SketchEntitySummaryService().summarize(document: session.document)
+    let projected = try #require(summary.entries.first {
+        $0.sourceFeatureName == "Projected Generated Circular Edge"
+    })
+    let center = try #require(projected.center)
+    let radius = try #require(projected.radius)
+
+    #expect(result.commandName == "projectSketchCurvesToConstructionPlane")
+    #expect(result.didMutate)
+    #expect(session.generation == DocumentGeneration(2))
+    #expect(projected.entityKind == "arc" || projected.entityKind == "circle")
+    #expect(abs(center.x) < 1.0e-12)
+    #expect(abs(center.y) < 1.0e-12)
+    #expect(abs(radius - 0.010) < 1.0e-12)
+    #expect(session.evaluationStatus == .valid)
+}
+
+@MainActor
 @Test func projectSketchCurvesRejectsNonparallelArcProjectionBeforeMutation() async throws {
     let session = EditorSession()
     let arcID = SketchEntityID()
@@ -9141,6 +9271,28 @@ private func lineEntryLength(_ entry: SketchEntitySummaryResult.EntityEntry) -> 
     let deltaX = end.x - start.x
     let deltaY = end.y - start.y
     return sqrt(deltaX * deltaX + deltaY * deltaY)
+}
+
+private func lineEntryMatchesEndpoints(
+    _ entry: SketchEntitySummaryResult.EntityEntry,
+    first: Point2D,
+    second: Point2D
+) -> Bool {
+    guard let start = entry.start,
+          let end = entry.end else {
+        return false
+    }
+    let actualStart = Point2D(x: start.x, y: start.y)
+    let actualEnd = Point2D(x: end.x, y: end.y)
+    return pointsMatch(actualStart, first) &&
+        pointsMatch(actualEnd, second) ||
+        pointsMatch(actualStart, second) &&
+        pointsMatch(actualEnd, first)
+}
+
+private func pointsMatch(_ lhs: Point2D, _ rhs: Point2D) -> Bool {
+    abs(lhs.x - rhs.x) < 1.0e-10 &&
+        abs(lhs.y - rhs.y) < 1.0e-10
 }
 
 private func lineCircleDistance(

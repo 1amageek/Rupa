@@ -258,11 +258,14 @@ import SwiftCAD
     #expect(projectCurves.mutatesDocument)
     #expect(projectCurves.access == .automationCommand)
     #expect(projectCurves.discovery.contains(.sketchEntitySummary))
+    #expect(projectCurves.discovery.contains(.topologySummary))
     #expect(projectCurves.discovery.contains(.constructionPlaneSummary))
-    #expect(projectCurves.targets == [.sketchEntity, .constructionPlane])
+    #expect(projectCurves.targets == [.sketchEntity, .edge, .constructionPlane])
     #expect(projectCurves.summary.contains("Alternative Duplicate"))
+    #expect(projectCurves.summary.contains("Duplicate Curve and Project"))
     #expect(projectCurves.summary.contains("source curve sketch"))
-    #expect(projectCurves.failureMode.contains("nonparallel circle or arc"))
+    #expect(projectCurves.failureMode.contains("generated edge"))
+    #expect(projectCurves.failureMode.contains("nonparallel source or generated circular"))
 
     #expect(sketchConstraint.category == .sourceCurveEditing)
     #expect(sketchConstraint.discovery.contains(.sketchEntitySummary))
@@ -3973,6 +3976,75 @@ private func rawAgentProtocolJSON(_ source: String) -> Data {
     #expect(result.didMutate)
     #expect(result.generation == DocumentGeneration(1))
     #expect(session.document.cadDocument.metadata.name == "Live")
+}
+
+@MainActor
+@Test func agentProjectsGeneratedEdgeToConstructionPlaneThroughAutomation() async throws {
+    let server = AgentCommandController()
+    let sessionID = UUID()
+    let session = EditorSession()
+    _ = try session.execute(
+        .createExtrudedRectangleFromCorners(
+            name: "Agent Generated Edge Projection Box",
+            plane: .xy,
+            firstCorner: SketchPoint(
+                x: .length(0.0, .millimeter),
+                y: .length(0.0, .millimeter)
+            ),
+            oppositeCorner: SketchPoint(
+                x: .length(20.0, .millimeter),
+                y: .length(12.0, .millimeter)
+            ),
+            depth: .length(5.0, .millimeter),
+            direction: .normal
+        )
+    )
+    let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let bodyNodeID = try #require(agentSceneNodeID(for: bodyFeatureID, in: session.document))
+    let topology = try TopologySummaryService().summarize(document: session.document)
+    let supportFace = try #require(topology.entries.first {
+        $0.kind == .face &&
+            $0.sceneNodeID == bodyNodeID.description &&
+            $0.generatedRole == "startFace"
+    })
+    let supportDepth = try #require(supportFace.center?.z)
+    let edge = try #require(topology.entries.first {
+        $0.kind == .edge &&
+            $0.sceneNodeID == bodyNodeID.description &&
+            $0.curveKind == "line" &&
+            agentTopologyPoint($0.start, isOnDepth: supportDepth) &&
+            agentTopologyPoint($0.end, isOnDepth: supportDepth) &&
+            $0.selectionTarget() != nil
+    })
+    let target = try #require(edge.selectionTarget())
+    server.register(session: session, id: sessionID)
+
+    let response = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .projectSketchCurvesToConstructionPlane(
+                targets: [target],
+                plane: .xy,
+                name: "Agent Projected Generated Edge"
+            ),
+            expectedGeneration: DocumentGeneration(1)
+        )
+    )
+
+    guard case .command(let result) = response else {
+        Issue.record("Agent must return a command result.")
+        return
+    }
+    let summary = try SketchEntitySummaryService().summarize(document: session.document)
+    let projected = try #require(summary.entries.first {
+        $0.sourceFeatureName == "Agent Projected Generated Edge"
+    })
+
+    #expect(result.commandName == "projectSketchCurvesToConstructionPlane")
+    #expect(result.didMutate)
+    #expect(result.generation == DocumentGeneration(2))
+    #expect(projected.entityKind == "line")
+    #expect(session.evaluationStatus == .valid)
 }
 
 @MainActor
