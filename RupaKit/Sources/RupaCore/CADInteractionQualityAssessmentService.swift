@@ -765,9 +765,13 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                     ],
                     tests: [
                         "RupaKit/Tests/RupaCoreTests/SurfaceAnalysisServiceTests.swift",
+                        "RupaKit/Tests/RupaCoreTests/SurfaceSourceSummaryServiceTests.swift",
                         "RupaKit/Tests/RupaCoreTests/SurfaceContinuityServiceTests.swift",
                         "RupaKit/Tests/RupaRenderingTests/ViewportPolySplineSurfaceVertexSlideAffordanceGeometryTests.swift",
                         "RupaKit/Tests/RupaAgentTests/AgentCommandControllerTests.swift",
+                    ],
+                    notes: [
+                        "Surface source summaries expose Agent-readable B-spline degree, order, knot vectors, stable knot and span IDs, CV weights, control-point selection references, trim-loop ownership, and generated topology links for supported PolySpline patches.",
                     ]
                 ),
             ],

@@ -985,6 +985,58 @@ import SwiftCAD
                                 vOrder: 4,
                                 uKnots: [0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0],
                                 vKnots: [0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0],
+                                uKnotVector: [
+                                    SurfaceSourceSummaryResult.Basis.Knot(
+                                        id: "uKnot:0",
+                                        index: 0,
+                                        value: 0.0,
+                                        multiplicity: 4,
+                                        isBoundary: true
+                                    ),
+                                    SurfaceSourceSummaryResult.Basis.Knot(
+                                        id: "uKnot:4",
+                                        index: 4,
+                                        value: 1.0,
+                                        multiplicity: 4,
+                                        isBoundary: true
+                                    ),
+                                ],
+                                vKnotVector: [
+                                    SurfaceSourceSummaryResult.Basis.Knot(
+                                        id: "vKnot:0",
+                                        index: 0,
+                                        value: 0.0,
+                                        multiplicity: 4,
+                                        isBoundary: true
+                                    ),
+                                    SurfaceSourceSummaryResult.Basis.Knot(
+                                        id: "vKnot:4",
+                                        index: 4,
+                                        value: 1.0,
+                                        multiplicity: 4,
+                                        isBoundary: true
+                                    ),
+                                ],
+                                uSpans: [
+                                    SurfaceSourceSummaryResult.Basis.Span(
+                                        id: "uSpan:0",
+                                        index: 0,
+                                        lowerBound: 0.0,
+                                        upperBound: 1.0,
+                                        startKnotIndex: 3,
+                                        endKnotIndex: 4
+                                    ),
+                                ],
+                                vSpans: [
+                                    SurfaceSourceSummaryResult.Basis.Span(
+                                        id: "vSpan:0",
+                                        index: 0,
+                                        lowerBound: 0.0,
+                                        upperBound: 1.0,
+                                        startKnotIndex: 3,
+                                        endKnotIndex: 4
+                                    ),
+                                ],
                                 uSpanCount: 1,
                                 vSpanCount: 1,
                                 isRational: false
@@ -1010,6 +1062,7 @@ import SwiftCAD
                                     uIndex: 1,
                                     vIndex: 1,
                                     point: SurfaceSourceSummaryResult.Point(x: 0.25, y: 0.25, z: 0.0),
+                                    weight: 1.0,
                                     isBoundary: false,
                                     isEditable: true,
                                     selectionReference: .surface(.controlPoint(SurfaceControlPointReference(

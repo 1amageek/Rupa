@@ -52,6 +52,35 @@ import SwiftCAD
     #expect(patch.basis.vDegree == 3)
     #expect(patch.basis.uKnots == [0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0])
     #expect(patch.basis.vKnots == [0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0])
+    #expect(patch.basis.uKnotVector.map(\.id) == [
+        "uKnot:0",
+        "uKnot:1",
+        "uKnot:2",
+        "uKnot:3",
+        "uKnot:4",
+        "uKnot:5",
+        "uKnot:6",
+        "uKnot:7",
+    ])
+    #expect(patch.basis.uKnotVector.map(\.multiplicity) == [4, 4, 4, 4, 4, 4, 4, 4])
+    #expect(patch.basis.vKnotVector.map(\.id) == [
+        "vKnot:0",
+        "vKnot:1",
+        "vKnot:2",
+        "vKnot:3",
+        "vKnot:4",
+        "vKnot:5",
+        "vKnot:6",
+        "vKnot:7",
+    ])
+    #expect(patch.basis.uSpans.count == 1)
+    #expect(patch.basis.uSpans.first?.id == "uSpan:0")
+    #expect(patch.basis.uSpans.first?.startKnotIndex == 3)
+    #expect(patch.basis.uSpans.first?.endKnotIndex == 4)
+    #expect(patch.basis.vSpans.count == 1)
+    #expect(patch.basis.vSpans.first?.id == "vSpan:0")
+    #expect(patch.basis.vSpans.first?.startKnotIndex == 3)
+    #expect(patch.basis.vSpans.first?.endKnotIndex == 4)
     #expect(patch.basis.isRational == false)
     #expect(patch.uDomain.lowerBound == 0.0)
     #expect(patch.uDomain.upperBound == 1.0)
@@ -83,6 +112,7 @@ import SwiftCAD
     let interiorControlPoint = try #require(patch.controlPoints.first { $0.uIndex == 1 && $0.vIndex == 1 })
     #expect(interiorControlPoint.isBoundary == false)
     #expect(interiorControlPoint.isEditable)
+    #expect(interiorControlPoint.weight == 1.0)
     guard case .surface(.controlPoint(let interiorReference)) = interiorControlPoint.selectionReference else {
         Issue.record("Surface source control point must expose a kernel surface control-point reference.")
         return

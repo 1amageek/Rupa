@@ -855,6 +855,8 @@ import SwiftCAD
     #expect(surfaceSourceSummary.discovery.contains(.topologySummary))
     #expect(surfaceSourceSummary.targets == [.document, .body, .face, .edge, .vertex])
     #expect(surfaceSourceSummary.summary.contains("source-owned surface contracts"))
+    #expect(surfaceSourceSummary.summary.contains("knot and span addresses"))
+    #expect(surfaceSourceSummary.summary.contains("weighted CV targets"))
     #expect(surfaceSourceSummary.summary.contains("boundary CV targets"))
 
     #expect(surfaceAnalysis.category == .read)

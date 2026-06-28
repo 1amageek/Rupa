@@ -261,6 +261,10 @@ public struct SurfaceSourceSummaryService: Sendable {
         for vIndex in 0..<controlPoints.count {
             for uIndex in 0..<controlPoints[vIndex].count {
                 let point = controlPoints[vIndex][uIndex]
+                let weight = surface.weights.indices.contains(vIndex)
+                    && surface.weights[vIndex].indices.contains(uIndex)
+                    ? surface.weights[vIndex][uIndex]
+                    : 1.0
                 let isBoundary = uIndex == 0 || uIndex == 3 || vIndex == 0 || vIndex == 3
                 let isCorner = (uIndex == 0 || uIndex == 3) && (vIndex == 0 || vIndex == 3)
                 let selectionReference = SelectionReference.surface(.controlPoint(SurfaceControlPointReference(
@@ -273,6 +277,7 @@ public struct SurfaceSourceSummaryService: Sendable {
                     uIndex: uIndex,
                     vIndex: vIndex,
                     point: SurfaceSourceSummaryResult.Point(x: point.x, y: point.y, z: point.z),
+                    weight: weight,
                     isBoundary: isBoundary,
                     isEditable: isBoundary == false || isCorner,
                     selectionReference: selectionReference,
@@ -582,18 +587,69 @@ public struct SurfaceSourceSummaryService: Sendable {
     }
 
     private func cubicBezierBasis() -> SurfaceSourceSummaryResult.Basis {
-        SurfaceSourceSummaryResult.Basis(
+        let uKnots = [0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0]
+        let vKnots = [0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0]
+        return SurfaceSourceSummaryResult.Basis(
             kind: "cubicBezierBSpline",
             uDegree: 3,
             vDegree: 3,
             uOrder: 4,
             vOrder: 4,
-            uKnots: [0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0],
-            vKnots: [0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0],
+            uKnots: uKnots,
+            vKnots: vKnots,
+            uKnotVector: knotVector(axis: "u", knots: uKnots),
+            vKnotVector: knotVector(axis: "v", knots: vKnots),
+            uSpans: spans(axis: "u", knots: uKnots),
+            vSpans: spans(axis: "v", knots: vKnots),
             uSpanCount: 1,
             vSpanCount: 1,
             isRational: false
         )
+    }
+
+    private func knotVector(
+        axis: String,
+        knots: [Double]
+    ) -> [SurfaceSourceSummaryResult.Basis.Knot] {
+        let lowerBound = knots.first
+        let upperBound = knots.last
+        let multiplicities = Dictionary(grouping: knots, by: { $0 }).mapValues(\.count)
+        return knots.indices.map { index in
+            let value = knots[index]
+            return SurfaceSourceSummaryResult.Basis.Knot(
+                id: "\(axis)Knot:\(index)",
+                index: index,
+                value: value,
+                multiplicity: multiplicities[value] ?? 1,
+                isBoundary: value == lowerBound || value == upperBound
+            )
+        }
+    }
+
+    private func spans(
+        axis: String,
+        knots: [Double]
+    ) -> [SurfaceSourceSummaryResult.Basis.Span] {
+        guard knots.count >= 2 else {
+            return []
+        }
+        var result: [SurfaceSourceSummaryResult.Basis.Span] = []
+        for index in 0..<(knots.count - 1) {
+            let lowerBound = knots[index]
+            let upperBound = knots[index + 1]
+            guard upperBound > lowerBound else {
+                continue
+            }
+            result.append(SurfaceSourceSummaryResult.Basis.Span(
+                id: "\(axis)Span:\(result.count)",
+                index: result.count,
+                lowerBound: lowerBound,
+                upperBound: upperBound,
+                startKnotIndex: index,
+                endKnotIndex: index + 1
+            ))
+        }
+        return result
     }
 
     private func patchParameterAddresses(

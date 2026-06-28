@@ -103,6 +103,53 @@ public struct SurfaceSourceSummaryResult: Codable, Equatable, Sendable {
     }
 
     public struct Basis: Codable, Equatable, Sendable {
+        public struct Knot: Codable, Equatable, Sendable {
+            public var id: String
+            public var index: Int
+            public var value: Double
+            public var multiplicity: Int
+            public var isBoundary: Bool
+
+            public init(
+                id: String,
+                index: Int,
+                value: Double,
+                multiplicity: Int,
+                isBoundary: Bool
+            ) {
+                self.id = id
+                self.index = index
+                self.value = value
+                self.multiplicity = multiplicity
+                self.isBoundary = isBoundary
+            }
+        }
+
+        public struct Span: Codable, Equatable, Sendable {
+            public var id: String
+            public var index: Int
+            public var lowerBound: Double
+            public var upperBound: Double
+            public var startKnotIndex: Int
+            public var endKnotIndex: Int
+
+            public init(
+                id: String,
+                index: Int,
+                lowerBound: Double,
+                upperBound: Double,
+                startKnotIndex: Int,
+                endKnotIndex: Int
+            ) {
+                self.id = id
+                self.index = index
+                self.lowerBound = lowerBound
+                self.upperBound = upperBound
+                self.startKnotIndex = startKnotIndex
+                self.endKnotIndex = endKnotIndex
+            }
+        }
+
         public var kind: String
         public var uDegree: Int
         public var vDegree: Int
@@ -110,6 +157,10 @@ public struct SurfaceSourceSummaryResult: Codable, Equatable, Sendable {
         public var vOrder: Int
         public var uKnots: [Double]
         public var vKnots: [Double]
+        public var uKnotVector: [Knot]
+        public var vKnotVector: [Knot]
+        public var uSpans: [Span]
+        public var vSpans: [Span]
         public var uSpanCount: Int
         public var vSpanCount: Int
         public var isRational: Bool
@@ -122,6 +173,10 @@ public struct SurfaceSourceSummaryResult: Codable, Equatable, Sendable {
             vOrder: Int,
             uKnots: [Double],
             vKnots: [Double],
+            uKnotVector: [Knot],
+            vKnotVector: [Knot],
+            uSpans: [Span],
+            vSpans: [Span],
             uSpanCount: Int,
             vSpanCount: Int,
             isRational: Bool
@@ -133,6 +188,10 @@ public struct SurfaceSourceSummaryResult: Codable, Equatable, Sendable {
             self.vOrder = vOrder
             self.uKnots = uKnots
             self.vKnots = vKnots
+            self.uKnotVector = uKnotVector
+            self.vKnotVector = vKnotVector
+            self.uSpans = uSpans
+            self.vSpans = vSpans
             self.uSpanCount = uSpanCount
             self.vSpanCount = vSpanCount
             self.isRational = isRational
@@ -204,6 +263,7 @@ public struct SurfaceSourceSummaryResult: Codable, Equatable, Sendable {
         public var uIndex: Int
         public var vIndex: Int
         public var point: Point
+        public var weight: Double
         public var isBoundary: Bool
         public var isEditable: Bool
         public var selectionReference: SelectionReference
@@ -214,6 +274,7 @@ public struct SurfaceSourceSummaryResult: Codable, Equatable, Sendable {
             uIndex: Int,
             vIndex: Int,
             point: Point,
+            weight: Double,
             isBoundary: Bool,
             isEditable: Bool,
             selectionReference: SelectionReference,
@@ -223,6 +284,7 @@ public struct SurfaceSourceSummaryResult: Codable, Equatable, Sendable {
             self.uIndex = uIndex
             self.vIndex = vIndex
             self.point = point
+            self.weight = weight
             self.isBoundary = isBoundary
             self.isEditable = isEditable
             self.selectionReference = selectionReference
