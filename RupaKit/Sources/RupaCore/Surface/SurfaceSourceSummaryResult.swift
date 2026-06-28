@@ -7,6 +7,7 @@ public struct SurfaceSourceSummaryResult: Codable, Equatable, Sendable {
         public var patchCount: Int
         public var controlVertexCount: Int
         public var controlPointCount: Int
+        public var frameSampleCount: Int
         public var trimLoopCount: Int
         public var adjacencyCount: Int
 
@@ -15,6 +16,7 @@ public struct SurfaceSourceSummaryResult: Codable, Equatable, Sendable {
             patchCount: Int = 0,
             controlVertexCount: Int = 0,
             controlPointCount: Int = 0,
+            frameSampleCount: Int = 0,
             trimLoopCount: Int = 0,
             adjacencyCount: Int = 0
         ) {
@@ -22,12 +24,25 @@ public struct SurfaceSourceSummaryResult: Codable, Equatable, Sendable {
             self.patchCount = patchCount
             self.controlVertexCount = controlVertexCount
             self.controlPointCount = controlPointCount
+            self.frameSampleCount = frameSampleCount
             self.trimLoopCount = trimLoopCount
             self.adjacencyCount = adjacencyCount
         }
     }
 
     public struct Point: Codable, Equatable, Sendable {
+        public var x: Double
+        public var y: Double
+        public var z: Double
+
+        public init(x: Double, y: Double, z: Double) {
+            self.x = x
+            self.y = y
+            self.z = z
+        }
+    }
+
+    public struct Vector: Codable, Equatable, Sendable {
         public var x: Double
         public var y: Double
         public var z: Double
@@ -239,6 +254,73 @@ public struct SurfaceSourceSummaryResult: Codable, Equatable, Sendable {
         }
     }
 
+    public struct FrameSample: Codable, Equatable, Sendable {
+        public var id: String
+        public var uSpanID: String?
+        public var vSpanID: String?
+        public var u: Double
+        public var v: Double
+        public var position: Point
+        public var uAxis: Vector
+        public var vAxis: Vector
+        public var normal: Vector
+        public var handedness: Double
+        public var normalCurvatureU: Double
+        public var normalCurvatureV: Double
+        public var meanCurvature: Double
+        public var gaussianCurvature: Double
+        public var minimumPrincipalCurvature: Double
+        public var maximumPrincipalCurvature: Double
+        public var minimumPrincipalDirection: Vector
+        public var maximumPrincipalDirection: Vector
+        public var selectionReference: SelectionReference
+        public var isFrameDisplayVisible: Bool
+
+        public init(
+            id: String,
+            uSpanID: String?,
+            vSpanID: String?,
+            u: Double,
+            v: Double,
+            position: Point,
+            uAxis: Vector,
+            vAxis: Vector,
+            normal: Vector,
+            handedness: Double,
+            normalCurvatureU: Double,
+            normalCurvatureV: Double,
+            meanCurvature: Double,
+            gaussianCurvature: Double,
+            minimumPrincipalCurvature: Double,
+            maximumPrincipalCurvature: Double,
+            minimumPrincipalDirection: Vector,
+            maximumPrincipalDirection: Vector,
+            selectionReference: SelectionReference,
+            isFrameDisplayVisible: Bool = false
+        ) {
+            self.id = id
+            self.uSpanID = uSpanID
+            self.vSpanID = vSpanID
+            self.u = u
+            self.v = v
+            self.position = position
+            self.uAxis = uAxis
+            self.vAxis = vAxis
+            self.normal = normal
+            self.handedness = handedness
+            self.normalCurvatureU = normalCurvatureU
+            self.normalCurvatureV = normalCurvatureV
+            self.meanCurvature = meanCurvature
+            self.gaussianCurvature = gaussianCurvature
+            self.minimumPrincipalCurvature = minimumPrincipalCurvature
+            self.maximumPrincipalCurvature = maximumPrincipalCurvature
+            self.minimumPrincipalDirection = minimumPrincipalDirection
+            self.maximumPrincipalDirection = maximumPrincipalDirection
+            self.selectionReference = selectionReference
+            self.isFrameDisplayVisible = isFrameDisplayVisible
+        }
+    }
+
     public struct ControlVertex: Codable, Equatable, Sendable {
         public var id: String
         public var role: String
@@ -337,6 +419,7 @@ public struct SurfaceSourceSummaryResult: Codable, Equatable, Sendable {
         public var controlVertices: [ControlVertex]
         public var controlPoints: [ControlPoint]
         public var trimLoops: [TrimLoop]
+        public var frameSamples: [FrameSample]
         public var parameterAddresses: [ParameterAddress]
 
         public init(
@@ -350,6 +433,7 @@ public struct SurfaceSourceSummaryResult: Codable, Equatable, Sendable {
             controlVertices: [ControlVertex],
             controlPoints: [ControlPoint] = [],
             trimLoops: [TrimLoop],
+            frameSamples: [FrameSample] = [],
             parameterAddresses: [ParameterAddress]
         ) {
             self.patchID = patchID
@@ -362,6 +446,7 @@ public struct SurfaceSourceSummaryResult: Codable, Equatable, Sendable {
             self.controlVertices = controlVertices
             self.controlPoints = controlPoints
             self.trimLoops = trimLoops
+            self.frameSamples = frameSamples
             self.parameterAddresses = parameterAddresses
         }
     }

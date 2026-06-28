@@ -1389,7 +1389,7 @@ public final class AgentCommandController: AgentClientProtocol {
         capability(
             "surfaceSourceSummary",
             category: .read,
-            summary: "Discover source-owned surface contracts for editable PolySpline and direct B-spline surfaces, including patch IDs, degree and knot-vector basis, knot and span addresses, weighted CV targets, boundary CV targets, trim loops, support diagnostics, and generated topology links.",
+            summary: "Discover source-owned surface contracts for editable PolySpline and direct B-spline surfaces, including patch IDs, degree and knot-vector basis, knot and span addresses, weighted CV targets, boundary CV targets, span-center UVN frame samples, trim loops, support diagnostics, and generated topology links.",
             access: .agentRequest,
             mutatesDocument: false,
             discovery: [.surfaceSourceSummary, .polySplineMeshAnalysis, .topologySummary],

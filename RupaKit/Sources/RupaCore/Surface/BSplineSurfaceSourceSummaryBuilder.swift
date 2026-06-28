@@ -5,6 +5,11 @@ struct BSplineSurfaceSourceSummaryBuilder: Sendable {
         var subshape: String
     }
 
+    private struct PatchBuildResult {
+        var patch: SurfaceSourceSummaryResult.Patch
+        var diagnostics: [SurfaceSourceSummaryResult.Diagnostic]
+    }
+
     private let edgeRoles: [SurfaceEdgeRole] = [
         SurfaceEdgeRole(subshape: "edge:vMin"),
         SurfaceEdgeRole(subshape: "edge:uMax"),
@@ -18,6 +23,7 @@ struct BSplineSurfaceSourceSummaryBuilder: Sendable {
         surfaceFeature: BSplineSurfaceFeature,
         sceneNodeID: SceneNodeID?,
         surfaceControlPointDisplays: [SurfaceControlPointDisplayID: SurfaceControlPointDisplay],
+        surfaceFrameDisplays: [SurfaceFrameDisplayID: SurfaceFrameDisplay],
         topologyEntriesByPersistentName: [String: TopologySummaryResult.Entry]
     ) -> SurfaceSourceSummaryResult.Source? {
         let surface = surfaceFeature.surface
@@ -25,12 +31,13 @@ struct BSplineSurfaceSourceSummaryBuilder: Sendable {
               case let .closed(vLower, vUpper) = surface.vDomain else {
             return nil
         }
-        let patch = bSplinePatch(
+        let patchBuildResult = bSplinePatch(
             featureID: featureID,
             surface: surface,
             uBounds: (uLower, uUpper),
             vBounds: (vLower, vUpper),
             surfaceControlPointDisplays: surfaceControlPointDisplays,
+            surfaceFrameDisplays: surfaceFrameDisplays,
             topologyEntriesByPersistentName: topologyEntriesByPersistentName
         )
         return SurfaceSourceSummaryResult.Source(
@@ -58,7 +65,7 @@ struct BSplineSurfaceSourceSummaryBuilder: Sendable {
                 candidatePatchCount: 1,
                 failureMessage: nil
             ),
-            patches: [patch],
+            patches: [patchBuildResult.patch],
             adjacencies: [],
             diagnostics: [
                 SurfaceSourceSummaryResult.Diagnostic(
@@ -66,7 +73,7 @@ struct BSplineSurfaceSourceSummaryBuilder: Sendable {
                     code: "directBSplineSurface",
                     message: "Direct B-spline surface source is represented by its stored degree, knot vectors, weights, control net, and rectangular trim loop."
                 ),
-            ]
+            ] + patchBuildResult.diagnostics
         )
     }
 
@@ -76,8 +83,9 @@ struct BSplineSurfaceSourceSummaryBuilder: Sendable {
         uBounds: (lower: Double, upper: Double),
         vBounds: (lower: Double, upper: Double),
         surfaceControlPointDisplays: [SurfaceControlPointDisplayID: SurfaceControlPointDisplay],
+        surfaceFrameDisplays: [SurfaceFrameDisplayID: SurfaceFrameDisplay],
         topologyEntriesByPersistentName: [String: TopologySummaryResult.Entry]
-    ) -> SurfaceSourceSummaryResult.Patch {
+    ) -> PatchBuildResult {
         let faceName = persistentName(featureID: featureID, subshape: "patch:0:face")
         let facePersistentName = persistentNameString(faceName)
         let surfaceReference = SurfaceReference(faceName: faceName)
@@ -101,14 +109,25 @@ struct BSplineSurfaceSourceSummaryBuilder: Sendable {
                 edgeIndex: index
             )))
         }
-        return SurfaceSourceSummaryResult.Patch(
+        let basis = basis(surface: surface, surfaceReference: surfaceReference)
+        let frameSampleResult = SurfaceSourceFrameSampleBuilder().buildSamples(
+            featureID: featureID,
+            patchID: 0,
+            surface: surface,
+            surfaceReference: surfaceReference,
+            uSpans: basis.uSpans,
+            vSpans: basis.vSpans,
+            surfaceFrameDisplays: surfaceFrameDisplays
+        )
+
+        return PatchBuildResult(patch: SurfaceSourceSummaryResult.Patch(
             patchID: 0,
             facePersistentName: topologyEntriesByPersistentName[facePersistentName]?.persistentName,
             faceSelectionComponentID: topologyEntriesByPersistentName[facePersistentName]?.selectionComponentID,
             faceSelectionReference: faceSelectionReference,
             uDomain: SurfaceSourceSummaryResult.ParameterRange(lowerBound: uBounds.lower, upperBound: uBounds.upper),
             vDomain: SurfaceSourceSummaryResult.ParameterRange(lowerBound: vBounds.lower, upperBound: vBounds.upper),
-            basis: basis(surface: surface, surfaceReference: surfaceReference),
+            basis: basis,
             controlVertices: [],
             controlPoints: bSplineControlPoints(
                 featureID: featureID,
@@ -129,12 +148,13 @@ struct BSplineSurfaceSourceSummaryBuilder: Sendable {
                     selectionReferences: trimSelectionReferences
                 ),
             ],
+            frameSamples: frameSampleResult.samples,
             parameterAddresses: patchParameterAddresses(
                 surfaceReference: surfaceReference,
                 uBounds: uBounds,
                 vBounds: vBounds
             )
-        )
+        ), diagnostics: frameSampleResult.diagnostics)
     }
 
     private func bSplineControlPoints(

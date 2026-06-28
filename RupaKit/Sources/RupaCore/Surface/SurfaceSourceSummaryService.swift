@@ -14,6 +14,11 @@ public struct SurfaceSourceSummaryService: Sendable {
         var boundaryVertexIndices: [Int]
     }
 
+    private struct PatchSummaryBuildResult {
+        var patch: SurfaceSourceSummaryResult.Patch
+        var diagnostics: [SurfaceSourceSummaryResult.Diagnostic]
+    }
+
     private struct SurfaceVertexRole {
         var id: String
         var subshape: String
@@ -56,6 +61,7 @@ public struct SurfaceSourceSummaryService: Sendable {
                     polySpline: polySpline,
                     sceneNodeID: sceneNodeIDsByFeatureID[featureID],
                     surfaceControlPointDisplays: document.productMetadata.surfaceControlPointDisplays,
+                    surfaceFrameDisplays: document.productMetadata.surfaceFrameDisplays,
                     topologyEntriesByPersistentName: topologyEntriesByPersistentName
                 )
             case let .bSplineSurface(surfaceFeature):
@@ -65,6 +71,7 @@ public struct SurfaceSourceSummaryService: Sendable {
                     surfaceFeature: surfaceFeature,
                     sceneNodeID: sceneNodeIDsByFeatureID[featureID],
                     surfaceControlPointDisplays: document.productMetadata.surfaceControlPointDisplays,
+                    surfaceFrameDisplays: document.productMetadata.surfaceFrameDisplays,
                     topologyEntriesByPersistentName: topologyEntriesByPersistentName
                 )
             default:
@@ -91,6 +98,7 @@ public struct SurfaceSourceSummaryService: Sendable {
         polySpline: PolySplineFeature,
         sceneNodeID: SceneNodeID?,
         surfaceControlPointDisplays: [SurfaceControlPointDisplayID: SurfaceControlPointDisplay],
+        surfaceFrameDisplays: [SurfaceFrameDisplayID: SurfaceFrameDisplay],
         topologyEntriesByPersistentName: [String: TopologySummaryResult.Entry]
     ) -> SurfaceSourceSummaryResult.Source {
         let analysis = PolySplineMeshAnalysisService().analyze(
@@ -101,15 +109,17 @@ public struct SurfaceSourceSummaryService: Sendable {
             from: analysis,
             sourceMesh: polySpline.sourceMesh
         )
-        let patches = patchCandidates.map { patchCandidate in
+        let patchResults = patchCandidates.map { patchCandidate in
             patch(
                 featureID: featureID,
                 patchCandidate: patchCandidate,
                 polySpline: polySpline,
                 surfaceControlPointDisplays: surfaceControlPointDisplays,
+                surfaceFrameDisplays: surfaceFrameDisplays,
                 topologyEntriesByPersistentName: topologyEntriesByPersistentName
             )
         }
+        let patches = patchResults.map(\.patch)
         return SurfaceSourceSummaryResult.Source(
             featureID: featureID.description,
             name: feature.name ?? "PolySpline Surface",
@@ -149,7 +159,7 @@ public struct SurfaceSourceSummaryService: Sendable {
                     vertexIndices: diagnostic.vertexIndices,
                     triangleIndices: diagnostic.triangleIndices
                 )
-            }
+            } + patchResults.flatMap(\.diagnostics)
         )
     }
 
@@ -158,8 +168,9 @@ public struct SurfaceSourceSummaryService: Sendable {
         patchCandidate: PatchCandidate,
         polySpline: PolySplineFeature,
         surfaceControlPointDisplays: [SurfaceControlPointDisplayID: SurfaceControlPointDisplay],
+        surfaceFrameDisplays: [SurfaceFrameDisplayID: SurfaceFrameDisplay],
         topologyEntriesByPersistentName: [String: TopologySummaryResult.Entry]
-    ) -> SurfaceSourceSummaryResult.Patch {
+    ) -> PatchSummaryBuildResult {
         let patchID = patchCandidate.patchID
         let sourceMesh = polySpline.sourceMesh
         let faceName = persistentName(
@@ -200,22 +211,41 @@ public struct SurfaceSourceSummaryService: Sendable {
                 surfaceControlPointDisplays: surfaceControlPointDisplays
             )
         }
+        let patchSurface = polySplinePatchSurface(
+            patchCandidate: patchCandidate,
+            polySpline: polySpline
+        )
         let controlPoints = surfaceControlPoints(
             featureID: featureID,
             patchID: patchID,
             surfaceReference: surfaceReference,
-            patchCandidate: patchCandidate,
-            polySpline: polySpline,
+            surface: patchSurface,
             surfaceControlPointDisplays: surfaceControlPointDisplays
         )
-        return SurfaceSourceSummaryResult.Patch(
+        let basis = cubicBezierBasis(isRational: isRationalPatch(polySpline: polySpline, patchID: patchID))
+        let frameSampleResult: SurfaceSourceFrameSampleBuilder.Result
+        if let patchSurface {
+            frameSampleResult = SurfaceSourceFrameSampleBuilder().buildSamples(
+                featureID: featureID,
+                patchID: patchID,
+                surface: patchSurface,
+                surfaceReference: surfaceReference,
+                uSpans: basis.uSpans,
+                vSpans: basis.vSpans,
+                surfaceFrameDisplays: surfaceFrameDisplays
+            )
+        } else {
+            frameSampleResult = SurfaceSourceFrameSampleBuilder.Result()
+        }
+
+        return PatchSummaryBuildResult(patch: SurfaceSourceSummaryResult.Patch(
             patchID: patchID,
             facePersistentName: topologyEntriesByPersistentName[facePersistentName]?.persistentName,
             faceSelectionComponentID: faceSelectionComponentID,
             faceSelectionReference: faceSelectionReference,
             uDomain: SurfaceSourceSummaryResult.ParameterRange(lowerBound: 0.0, upperBound: 1.0),
             vDomain: SurfaceSourceSummaryResult.ParameterRange(lowerBound: 0.0, upperBound: 1.0),
-            basis: cubicBezierBasis(isRational: isRationalPatch(polySpline: polySpline, patchID: patchID)),
+            basis: basis,
             controlVertices: controlVertices,
             controlPoints: controlPoints,
             trimLoops: [
@@ -227,50 +257,22 @@ public struct SurfaceSourceSummaryService: Sendable {
                     selectionReferences: trimSelectionReferences
                 ),
             ],
+            frameSamples: frameSampleResult.samples,
             parameterAddresses: patchParameterAddresses(surfaceReference: surfaceReference)
-        )
+        ), diagnostics: frameSampleResult.diagnostics)
     }
 
     private func surfaceControlPoints(
         featureID: FeatureID,
         patchID: Int,
         surfaceReference: SurfaceReference,
-        patchCandidate: PatchCandidate,
-        polySpline: PolySplineFeature,
+        surface: BSplineSurface3D?,
         surfaceControlPointDisplays: [SurfaceControlPointDisplayID: SurfaceControlPointDisplay]
     ) -> [SurfaceSourceSummaryResult.ControlPoint] {
-        guard patchCandidate.boundaryVertexIndices.count == 4 else {
+        guard let surface else {
             return []
         }
-        let points = patchCandidate.boundaryVertexIndices.compactMap { sourceVertexIndex -> Point3D? in
-            guard polySpline.sourceMesh.positions.indices.contains(sourceVertexIndex) else {
-                return nil
-            }
-            return polySpline.sourceMesh.positions[sourceVertexIndex]
-        }
-        guard points.count == 4 else {
-            return []
-        }
-        var surface = BSplineSurface3D.cubicBezierPatch(
-            bottomLeft: points[0],
-            bottomRight: points[1],
-            topRight: points[2],
-            topLeft: points[3]
-        )
-        var controlPoints = surface.controlPoints
-        for override in polySpline.controlPointOverrides where override.patchID == patchID {
-            let address = override.address
-            guard address.isStrictInterior,
-                  controlPoints.indices.contains(address.vIndex),
-                  controlPoints[address.vIndex].indices.contains(address.uIndex),
-                  surface.weights.indices.contains(address.vIndex),
-                  surface.weights[address.vIndex].indices.contains(address.uIndex),
-                  override.point.isFinite else {
-                continue
-            }
-            controlPoints[address.vIndex][address.uIndex] = override.point
-            surface.weights[address.vIndex][address.uIndex] = override.weight
-        }
+        let controlPoints = surface.controlPoints
 
         var result: [SurfaceSourceSummaryResult.ControlPoint] = []
         result.reserveCapacity(16)
@@ -305,6 +307,44 @@ public struct SurfaceSourceSummaryService: Sendable {
             }
         }
         return result
+    }
+
+    private func polySplinePatchSurface(
+        patchCandidate: PatchCandidate,
+        polySpline: PolySplineFeature
+    ) -> BSplineSurface3D? {
+        guard patchCandidate.boundaryVertexIndices.count == 4 else {
+            return nil
+        }
+        let points = patchCandidate.boundaryVertexIndices.compactMap { sourceVertexIndex -> Point3D? in
+            guard polySpline.sourceMesh.positions.indices.contains(sourceVertexIndex) else {
+                return nil
+            }
+            return polySpline.sourceMesh.positions[sourceVertexIndex]
+        }
+        guard points.count == 4 else {
+            return nil
+        }
+        var surface = BSplineSurface3D.cubicBezierPatch(
+            bottomLeft: points[0],
+            bottomRight: points[1],
+            topRight: points[2],
+            topLeft: points[3]
+        )
+        for override in polySpline.controlPointOverrides where override.patchID == patchCandidate.patchID {
+            let address = override.address
+            guard address.isStrictInterior,
+                  surface.controlPoints.indices.contains(address.vIndex),
+                  surface.controlPoints[address.vIndex].indices.contains(address.uIndex),
+                  surface.weights.indices.contains(address.vIndex),
+                  surface.weights[address.vIndex].indices.contains(address.uIndex),
+                  override.point.isFinite else {
+                continue
+            }
+            surface.controlPoints[address.vIndex][address.uIndex] = override.point
+            surface.weights[address.vIndex][address.uIndex] = override.weight
+        }
+        return surface
     }
 
     private func controlVertex(
@@ -570,6 +610,9 @@ public struct SurfaceSourceSummaryService: Sendable {
             },
             controlPointCount: sources.reduce(0) { partial, source in
                 partial + source.patches.reduce(0) { $0 + $1.controlPoints.count }
+            },
+            frameSampleCount: sources.reduce(0) { partial, source in
+                partial + source.patches.reduce(0) { $0 + $1.frameSamples.count }
             },
             trimLoopCount: sources.reduce(0) { partial, source in
                 partial + source.patches.reduce(0) { $0 + $1.trimLoops.count }

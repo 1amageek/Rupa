@@ -920,6 +920,7 @@ import SwiftCAD
     #expect(surfaceSourceSummary.summary.contains("knot and span addresses"))
     #expect(surfaceSourceSummary.summary.contains("weighted CV targets"))
     #expect(surfaceSourceSummary.summary.contains("boundary CV targets"))
+    #expect(surfaceSourceSummary.summary.contains("UVN frame samples"))
 
     #expect(surfaceAnalysis.category == .read)
     #expect(!surfaceAnalysis.mutatesDocument)

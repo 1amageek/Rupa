@@ -1087,6 +1087,7 @@ import SwiftCAD
     #expect(summary.counts.sourceCount == 1)
     #expect(summary.counts.patchCount == 2)
     #expect(summary.counts.controlVertexCount == 8)
+    #expect(summary.counts.frameSampleCount == 2)
     #expect(summary.counts.trimLoopCount == 2)
     #expect(summary.counts.adjacencyCount == 1)
     let source = try #require(summary.sources.first)
@@ -1117,6 +1118,21 @@ import SwiftCAD
     #expect(abs(measuredPoint.point.x - firstControlVertex.point.x) <= 1.0e-12)
     #expect(abs(measuredPoint.point.y - firstControlVertex.point.y) <= 1.0e-12)
     #expect(abs(measuredPoint.point.z - firstControlVertex.point.z) <= 1.0e-12)
+    let frameSample = try #require(patch.frameSamples.first)
+    let frameResponse = server.handle(
+        .surfaceFrames(
+            sessionID: sessionID,
+            queries: [SurfaceFrameQuery(selectionReference: frameSample.selectionReference)],
+            expectedGeneration: generation
+        )
+    )
+    guard case .surfaceFrames(let frames) = frameResponse,
+          let resolvedFrame = frames.frames.first else {
+        Issue.record("Agent must resolve a discovered surface frame sample selection reference.")
+        return
+    }
+    #expect(abs(resolvedFrame.u - frameSample.u) <= 1.0e-12)
+    #expect(abs(resolvedFrame.v - frameSample.v) <= 1.0e-12)
     #expect(patch.trimLoops.first?.edgePersistentNames.count == 4)
     #expect(patch.trimLoops.first?.selectionReferences.count == 4)
     let adjacency = try #require(source.adjacencies.first)

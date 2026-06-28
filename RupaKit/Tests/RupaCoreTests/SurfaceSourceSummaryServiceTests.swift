@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 import RupaCore
 import SwiftCAD
@@ -16,6 +17,7 @@ import SwiftCAD
     #expect(result.counts.patchCount == 2)
     #expect(result.counts.controlVertexCount == 8)
     #expect(result.counts.controlPointCount == 32)
+    #expect(result.counts.frameSampleCount == 2)
     #expect(result.counts.trimLoopCount == 2)
     #expect(result.counts.adjacencyCount == 1)
     let source = try #require(result.sources.first)
@@ -88,6 +90,32 @@ import SwiftCAD
     #expect(patch.vDomain.upperBound == 1.0)
     #expect(patch.parameterAddresses.map(\.id) == ["uMin:vMin", "uMax:vMin", "uMax:vMax", "uMin:vMax", "center"])
     #expect(patch.parameterAddresses.allSatisfy { $0.selectionReference != nil })
+    #expect(patch.frameSamples.count == 1)
+    let frameSample = try #require(patch.frameSamples.first)
+    #expect(frameSample.id == "feature:\(featureID.description)/patch:0/frame:uSpan0:vSpan0")
+    #expect(frameSample.uSpanID == "uSpan:0")
+    #expect(frameSample.vSpanID == "vSpan:0")
+    #expect(abs(frameSample.u - 0.5) <= 1.0e-12)
+    #expect(abs(frameSample.v - 0.5) <= 1.0e-12)
+    #expect(frameSample.isFrameDisplayVisible == false)
+    expectSurfaceSourceVector(frameSample.uAxis, x: 1.0, y: 0.0, z: 0.0)
+    expectSurfaceSourceVector(frameSample.vAxis, x: 0.0, y: 1.0, z: 0.0)
+    expectSurfaceSourceVector(frameSample.normal, x: 0.0, y: 0.0, z: 1.0)
+    #expect(abs(frameSample.handedness - 1.0) <= 1.0e-12)
+    guard case .surface(.parameter(let frameParameterReference)) = frameSample.selectionReference else {
+        Issue.record("Surface source frame sample must expose a surface parameter reference.")
+        return
+    }
+    #expect(abs(frameParameterReference.u - 0.5) <= 1.0e-12)
+    #expect(abs(frameParameterReference.v - 0.5) <= 1.0e-12)
+    let resolvedFrame = try SurfaceFrameService().resolve(
+        document: document,
+        queries: [SurfaceFrameQuery(selectionReference: frameSample.selectionReference)]
+    )
+    let resolvedFrameSample = try #require(resolvedFrame.frames.first)
+    #expect(abs(resolvedFrameSample.u - frameSample.u) <= 1.0e-12)
+    #expect(abs(resolvedFrameSample.v - frameSample.v) <= 1.0e-12)
+    #expect(abs(resolvedFrameSample.normal.z - frameSample.normal.z) <= 1.0e-12)
     #expect(patch.trimLoops.count == 1)
     let trimLoop = try #require(patch.trimLoops.first)
     #expect(trimLoop.role == "outer")
@@ -146,6 +174,7 @@ import SwiftCAD
     #expect(result.counts.patchCount == 1)
     #expect(result.counts.controlVertexCount == 0)
     #expect(result.counts.controlPointCount == 16)
+    #expect(result.counts.frameSampleCount == 1)
     #expect(result.counts.trimLoopCount == 1)
     let source = try #require(result.sources.first)
     #expect(source.featureID == featureID.description)
@@ -174,6 +203,18 @@ import SwiftCAD
     #expect(spanReference.spanIndex == firstUSpan.index)
     #expect(patch.trimLoops.first?.edgePersistentNames.count == 4)
     #expect(patch.trimLoops.first?.selectionReferences.count == 4)
+    let frameSample = try #require(patch.frameSamples.first)
+    #expect(frameSample.uSpanID == firstUSpan.id)
+    #expect(frameSample.vSpanID == patch.basis.vSpans.first?.id)
+    #expect(abs(frameSample.u - 0.5) <= 1.0e-12)
+    #expect(abs(frameSample.v - 0.5) <= 1.0e-12)
+    expectUnitSurfaceSourceVector(frameSample.uAxis)
+    expectUnitSurfaceSourceVector(frameSample.vAxis)
+    expectSurfaceSourceVector(frameSample.normal, x: 0.0, y: 0.0, z: 1.0)
+    #expect(abs(surfaceSourceDot(frameSample.uAxis, frameSample.vAxis)) <= 1.0e-12)
+    #expect(abs(surfaceSourceDot(frameSample.uAxis, frameSample.normal)) <= 1.0e-12)
+    #expect(abs(surfaceSourceDot(frameSample.vAxis, frameSample.normal)) <= 1.0e-12)
+    #expect(abs(frameSample.handedness - 1.0) <= 1.0e-12)
     let weightedControlPoint = try #require(patch.controlPoints.first { $0.uIndex == 1 && $0.vIndex == 1 })
     #expect(weightedControlPoint.weight == 2.0)
     #expect(weightedControlPoint.isEditable)
@@ -290,6 +331,17 @@ import SwiftCAD
     #expect(hiddenResult.commandName == "setSurfaceFrameDisplay")
     #expect(session.document.productMetadata.surfaceFrameDisplays[displayID] == nil)
 
+    let sourceFrameSample = try #require(patch.frameSamples.first)
+    let sampleQuery = SurfaceFrameQuery(selectionReference: sourceFrameSample.selectionReference)
+    let sampleDisplayResult = try #require(session.setSurfaceFrameDisplay(
+        query: sampleQuery,
+        isVisible: true
+    ))
+    #expect(sampleDisplayResult.commandName == "setSurfaceFrameDisplay")
+    let sampleSummary = try SurfaceSourceSummaryService().summarize(document: session.document)
+    let visibleSample = try #require(sampleSummary.sources.first?.patches.first?.frameSamples.first)
+    #expect(visibleSample.isFrameDisplayVisible)
+
     let staleQuery = SurfaceFrameQuery(
         faceID: "00000000-0000-0000-0000-000000000001",
         u: 0.5,
@@ -299,6 +351,36 @@ import SwiftCAD
     try staleDocument.setSurfaceFrameDisplay(query: staleQuery, isVisible: false)
     let staleDisplayID = try SurfaceFrameDisplayID(query: staleQuery)
     #expect(staleDocument.productMetadata.surfaceFrameDisplays[staleDisplayID] == nil)
+}
+
+private func expectSurfaceSourceVector(
+    _ vector: SurfaceSourceSummaryResult.Vector,
+    x: Double,
+    y: Double,
+    z: Double,
+    tolerance: Double = 1.0e-12
+) {
+    #expect(abs(vector.x - x) <= tolerance)
+    #expect(abs(vector.y - y) <= tolerance)
+    #expect(abs(vector.z - z) <= tolerance)
+}
+
+private func expectUnitSurfaceSourceVector(
+    _ vector: SurfaceSourceSummaryResult.Vector,
+    tolerance: Double = 1.0e-12
+) {
+    #expect(abs(surfaceSourceLength(vector) - 1.0) <= tolerance)
+}
+
+private func surfaceSourceDot(
+    _ lhs: SurfaceSourceSummaryResult.Vector,
+    _ rhs: SurfaceSourceSummaryResult.Vector
+) -> Double {
+    lhs.x * rhs.x + lhs.y * rhs.y + lhs.z * rhs.z
+}
+
+private func surfaceSourceLength(_ vector: SurfaceSourceSummaryResult.Vector) -> Double {
+    sqrt(surfaceSourceDot(vector, vector))
 }
 
 private func surfaceSourceSummaryDirectBSplineSurface() -> BSplineSurface3D {
