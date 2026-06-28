@@ -6906,7 +6906,7 @@ public struct Viewport: View {
 
     private func slotWidthSourceTarget(for target: SelectionTarget) -> ViewportSlotWidthSourceTarget? {
         guard case .sketchEntity(let componentID) = target.component,
-              let sketchReference = componentID.sketchEntityReference,
+              let sketchReference = componentID.sketchEntityBaseReference,
               let reference = document.productMetadata.sceneNodes[target.sceneNodeID]?.reference,
               reference.kind == .sketch,
               reference.featureID == sketchReference.featureID else {
@@ -7095,45 +7095,83 @@ public struct Viewport: View {
         layout: ViewportLayout
     ) -> ViewportSlotWidthAffordanceCandidate? {
         guard let item = scene.items.first(where: { $0.featureID == target.featureID }),
-              case .sketch(let primitives) = item.kind,
-              let line = primitives.firstLine(with: target.entityID) else {
+              case .sketch(let primitives) = item.kind else {
             return nil
         }
-        let displayedStart = displayedSketchPointHandlePoint(
-            featureID: item.featureID,
-            entityID: target.entityID,
-            handle: .lineStart,
-            point: line.start
-        )
-        let displayedEnd = displayedSketchPointHandlePoint(
-            featureID: item.featureID,
-            entityID: target.entityID,
-            handle: .lineEnd,
-            point: line.end
-        )
-        let displayedLine = displayedSketchDimensionLine(
-            featureID: item.featureID,
-            entityID: target.entityID,
-            start: displayedStart,
-            end: displayedEnd
-        )
-        guard let geometry = ViewportSlotWidthAffordanceGeometry(
-            lineStart: displayedLine.start,
-            lineEnd: displayedLine.end,
-            widthMeters: slotWidthMeters,
-            layout: layout
+        guard let primitive = displayedSlotWidthPrimitive(
+            target: target,
+            primitives: primitives,
+            featureID: item.featureID
         ) else {
             return nil
         }
-        return ViewportSlotWidthAffordanceCandidate(
-            target: ViewportSlotWidthHandleTarget(
-                featureID: target.featureID,
-                entityID: target.entityID,
-                target: target.target,
-                geometry: geometry
-            ),
-            geometry: geometry
+
+        return ViewportSlotWidthAffordanceService().candidate(
+            for: target,
+            primitives: [primitive],
+            widthMeters: slotWidthMeters,
+            layout: layout
         )
+    }
+
+    private func displayedSlotWidthPrimitive(
+        target: ViewportSlotWidthSourceTarget,
+        primitives: [ViewportSketchPrimitive],
+        featureID: FeatureID
+    ) -> ViewportSketchPrimitive? {
+        if let line = primitives.firstLine(with: target.entityID) {
+            let displayedStart = displayedSketchPointHandlePoint(
+                featureID: featureID,
+                entityID: target.entityID,
+                handle: .lineStart,
+                point: line.start
+            )
+            let displayedEnd = displayedSketchPointHandlePoint(
+                featureID: featureID,
+                entityID: target.entityID,
+                handle: .lineEnd,
+                point: line.end
+            )
+            let displayedLine = displayedSketchDimensionLine(
+                featureID: featureID,
+                entityID: target.entityID,
+                start: displayedStart,
+                end: displayedEnd
+            )
+            return .line(
+                entityID: target.entityID,
+                start: displayedLine.start,
+                end: displayedLine.end
+            )
+        }
+
+        if let arc = primitives.firstArc(with: target.entityID) {
+            let displayedArc = displayedSketchArcParameters(
+                featureID: featureID,
+                entityID: target.entityID,
+                radiusMeters: arc.radiusMeters,
+                startAngleRadians: arc.startAngleRadians,
+                endAngleRadians: arc.endAngleRadians
+            )
+            return .arc(
+                entityID: target.entityID,
+                center: arc.center,
+                radiusMeters: displayedArc.radiusMeters,
+                startAngleRadians: displayedArc.startAngleRadians,
+                endAngleRadians: displayedArc.endAngleRadians
+            )
+        }
+
+        if let spline = primitives.firstSpline(with: target.entityID) {
+            return .spline(
+                entityID: target.entityID,
+                points: spline.points,
+                controlPoints: spline.controlPoints,
+                sketchPlane: spline.sketchPlane
+            )
+        }
+
+        return nil
     }
 
     private func patternArrayLinearAxisAffordanceCandidates(

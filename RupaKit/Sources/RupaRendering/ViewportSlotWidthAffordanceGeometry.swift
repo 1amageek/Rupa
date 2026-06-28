@@ -8,8 +8,8 @@ struct ViewportSlotWidthAffordanceGeometry: Equatable {
     var baseWidthMeters: Double
 
     init?(
-        lineStart: CGPoint,
-        lineEnd: CGPoint,
+        baseModelPoint: CGPoint,
+        modelDirection: CGPoint,
         widthMeters: Double,
         layout: ViewportLayout,
         viewportLength: CGFloat = 64.0
@@ -17,6 +17,41 @@ struct ViewportSlotWidthAffordanceGeometry: Equatable {
         guard widthMeters.isFinite, widthMeters > 0.0 else {
             return nil
         }
+        let directionLength = hypot(modelDirection.x, modelDirection.y)
+        guard directionLength > 1.0e-12 else {
+            return nil
+        }
+
+        var direction = CGPoint(
+            x: modelDirection.x / directionLength,
+            y: modelDirection.y / directionLength
+        )
+        if Self.shouldFlipDirection(from: baseModelPoint, direction: direction, layout: layout) {
+            direction = CGPoint(x: -direction.x, y: -direction.y)
+        }
+        let projectedUnitLength = Self.projectedLength(
+            from: baseModelPoint,
+            direction: direction,
+            distance: 1.0,
+            layout: layout
+        )
+        guard projectedUnitLength > 1.0e-9 else {
+            return nil
+        }
+
+        self.baseModelPoint = baseModelPoint
+        self.modelDirection = direction
+        self.minimumLengthMeters = viewportLength / projectedUnitLength
+        self.baseWidthMeters = widthMeters
+    }
+
+    init?(
+        lineStart: CGPoint,
+        lineEnd: CGPoint,
+        widthMeters: Double,
+        layout: ViewportLayout,
+        viewportLength: CGFloat = 64.0
+    ) {
         let dx = lineEnd.x - lineStart.x
         let dy = lineEnd.y - lineStart.y
         let length = hypot(dx, dy)
@@ -27,24 +62,13 @@ struct ViewportSlotWidthAffordanceGeometry: Equatable {
             x: (lineStart.x + lineEnd.x) * 0.5,
             y: (lineStart.y + lineEnd.y) * 0.5
         )
-        var direction = CGPoint(x: -dy / length, y: dx / length)
-        if Self.shouldFlipDirection(from: midpoint, direction: direction, layout: layout) {
-            direction = CGPoint(x: -direction.x, y: -direction.y)
-        }
-        let projectedUnitLength = Self.projectedLength(
-            from: midpoint,
-            direction: direction,
-            distance: 1.0,
-            layout: layout
+        self.init(
+            baseModelPoint: midpoint,
+            modelDirection: CGPoint(x: -dy / length, y: dx / length),
+            widthMeters: widthMeters,
+            layout: layout,
+            viewportLength: viewportLength
         )
-        guard projectedUnitLength > 1.0e-9 else {
-            return nil
-        }
-
-        self.baseModelPoint = midpoint
-        self.modelDirection = direction
-        self.minimumLengthMeters = viewportLength / projectedUnitLength
-        self.baseWidthMeters = widthMeters
     }
 
     func projectedTip(

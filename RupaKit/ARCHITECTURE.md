@@ -113,6 +113,7 @@ flowchart LR
 | `RupaCore/DesignDocument+SolidDirectEditing.swift` | Solid direct editing split into face offset, edge treatment, vertex move, target resolution, profile-loop mapping, and shared direct-editing types |
 | `RupaCore/DesignDocument+SketchProjection.swift` | Sketch projection commands split into command entry points, source-curve projection, generated-edge projection, outline projection, and shared projection geometry helpers |
 | `RupaRendering/Viewport.swift` | Viewport interaction state, object edit state, sketch geometry support, and selection/theme support split from the main SwiftUI viewport surface |
+| `RupaRendering/Viewport.swift` | Slot width affordance geometry for line, arc, and spline source curves split into a rendering service |
 | `RupaUI/MainView.swift` | MainView support DTOs, inspector state value types, and shared workspace glass modifier split from the main SwiftUI workspace surface |
 | `RupaUI/MainView.swift` | Workspace chrome controls and tool palette split from the main SwiftUI workspace surface |
 | `RupaUI/MainView.swift` | Polygon and Sweep context panels split into standalone workspace panel views with command callbacks owned by MainView |
