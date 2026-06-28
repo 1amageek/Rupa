@@ -511,6 +511,70 @@ import SwiftCAD
 }
 
 @MainActor
+@Test func automationCanMoveSurfaceControlPointsInFrame() async throws {
+    let session = EditorSession()
+    let runner = AutomationRunner()
+    _ = try runner.execute(
+        .createPolySplineSurface(
+            name: "Automation Surface Frame Move",
+            sourceMesh: automationPolySplineQuadMesh(),
+            options: PolySplineOptions()
+        ),
+        in: session
+    )
+    let summary = try SurfaceSourceSummaryService().summarize(document: session.document)
+    let patch = try #require(summary.sources.first?.patches.first)
+    let controlPoint = try #require(patch.controlPoints.first { $0.uIndex == 1 && $0.vIndex == 1 })
+    let frameQuery = SurfaceFrameQuery(selectionReference: controlPoint.selectionReference)
+    let frameResult = try SurfaceFrameService().resolve(
+        document: session.document,
+        queries: [frameQuery],
+        objectRegistry: session.objectRegistry,
+        currentEvaluation: session.currentEvaluation,
+        currentGeneration: session.generation
+    )
+    let frame = try #require(frameResult.frames.first)
+    let uDistance = 0.001
+    let vDistance = 0.002
+    let normalDistance = 0.003
+
+    let moveResult = try runner.execute(
+        .moveSurfaceControlPointsInFrame(
+            targets: [controlPoint.selectionReference],
+            frame: frameQuery,
+            uDistance: .length(uDistance, .meter),
+            vDistance: .length(vDistance, .meter),
+            normalDistance: .length(normalDistance, .meter)
+        ),
+        in: session
+    )
+
+    let movedSummary = try SurfaceSourceSummaryService().summarize(document: session.document)
+    let movedPatch = try #require(movedSummary.sources.first?.patches.first)
+    let movedControlPoint = try #require(movedPatch.controlPoints.first { $0.uIndex == 1 && $0.vIndex == 1 })
+    let expectedX = controlPoint.point.x
+        + frame.uAxis.x * uDistance
+        + frame.vAxis.x * vDistance
+        + frame.normal.x * normalDistance
+    let expectedY = controlPoint.point.y
+        + frame.uAxis.y * uDistance
+        + frame.vAxis.y * vDistance
+        + frame.normal.y * normalDistance
+    let expectedZ = controlPoint.point.z
+        + frame.uAxis.z * uDistance
+        + frame.vAxis.z * vDistance
+        + frame.normal.z * normalDistance
+
+    #expect(moveResult.message == "Surface control points moved in frame.")
+    #expect(moveResult.commandName == "moveSurfaceControlPointsInFrame")
+    #expect(moveResult.didMutate)
+    #expect(moveResult.generation == DocumentGeneration(2))
+    #expect(abs(movedControlPoint.point.x - expectedX) <= 1.0e-12)
+    #expect(abs(movedControlPoint.point.y - expectedY) <= 1.0e-12)
+    #expect(abs(movedControlPoint.point.z - expectedZ) <= 1.0e-12)
+}
+
+@MainActor
 @Test func automationCanCreateSweepSourceFeature() async throws {
     var document = DesignDocument.empty()
     let profileID = try document.createRectangleSketch(

@@ -1755,6 +1755,36 @@ public struct CLIService {
         )
     }
 
+    public func moveSurfaceControlPointsInFrame(
+        target: CLIDocumentTarget,
+        references: [SelectionReference],
+        frame: SurfaceFrameQuery,
+        uDistance: CADExpression,
+        vDistance: CADExpression,
+        normalDistance: CADExpression,
+        mode: CLIEditMode = .auto,
+        expectedGeneration: DocumentGeneration? = nil,
+        dryRun: Bool = false,
+        forceFileEdit: Bool = false,
+        client: AgentClientProtocol? = nil
+    ) throws -> CLIResponse {
+        try executeModelingCommand(
+            .moveSurfaceControlPointsInFrame(
+                targets: references,
+                frame: frame,
+                uDistance: uDistance,
+                vDistance: vDistance,
+                normalDistance: normalDistance
+            ),
+            target: target,
+            mode: mode,
+            expectedGeneration: expectedGeneration,
+            dryRun: dryRun,
+            forceFileEdit: forceFileEdit,
+            client: client
+        )
+    }
+
     public func slideSurfaceControlPoints(
         target: CLIDocumentTarget,
         references: [SelectionReference],

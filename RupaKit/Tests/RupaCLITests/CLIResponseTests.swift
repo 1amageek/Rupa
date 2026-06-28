@@ -3434,6 +3434,92 @@ func cliExecutableSurfaceMoveControlPointMutatesClosedDocumentAsJSON() async thr
 }
 
 @Test(.timeLimit(.minutes(1)))
+func cliExecutableSurfaceMoveControlPointsInFrameMutatesClosedDocumentAsJSON() async throws {
+    let temporaryDirectory = try makeTemporaryDirectory()
+    defer {
+        removeTemporaryDirectory(temporaryDirectory)
+    }
+    let documentURL = temporaryDirectory.appendingPathComponent("process-surface-frame-move.swcad")
+    var document = DesignDocument.empty(named: "Process Surface Frame Move")
+    _ = try document.createPolySplineSurface(
+        name: "CLI Frame Move Surface",
+        sourceMesh: cliPolySplinePatchNetworkMesh(centerZ: 0.0),
+        options: PolySplineOptions(mergePatches: false)
+    )
+    let summary = try SurfaceSourceSummaryService().summarize(document: document)
+    let patch = try #require(summary.sources.first?.patches.first)
+    let controlPoint = try #require(patch.controlPoints.first { $0.uIndex == 1 && $0.vIndex == 1 })
+    let referenceJSON = try encodedSelectionReference(controlPoint.selectionReference)
+    let frameQuery = SurfaceFrameQuery(selectionReference: controlPoint.selectionReference)
+    let frameQueryJSON = try encodedSurfaceFrameQuery(frameQuery)
+    try DocumentFileService().save(document, to: documentURL)
+
+    let frameResult = try await runCLI([
+        "inspect",
+        "surface-frames",
+        documentURL.path,
+        "--query",
+        frameQueryJSON,
+        "--mode",
+        "file",
+        "--json",
+    ])
+    let frameResponse = try JSONDecoder().decode(
+        CLISurfaceFramesResponse.self,
+        from: frameResult.standardOutputData
+    )
+    let frame = try #require(frameResponse.surfaceFrames.frames.first)
+    let result = try await runCLI([
+        "surface",
+        "move-control-points-in-frame",
+        documentURL.path,
+        "--reference",
+        referenceJSON,
+        "--frame-query",
+        frameQueryJSON,
+        "--u-distance",
+        "1",
+        "--v-distance",
+        "2",
+        "--normal-distance",
+        "3",
+        "--unit",
+        "millimeter",
+        "--mode",
+        "file",
+        "--json",
+    ])
+    let response = try JSONDecoder().decode(
+        CLIResponse.self,
+        from: result.standardOutputData
+    )
+    let loaded = try DocumentFileService().load(from: documentURL)
+    let movedSummary = try SurfaceSourceSummaryService().summarize(document: loaded)
+    let movedPatch = try #require(movedSummary.sources.first?.patches.first)
+    let movedControlPoint = try #require(movedPatch.controlPoints.first { $0.uIndex == 1 && $0.vIndex == 1 })
+    let expectedX = controlPoint.point.x
+        + frame.uAxis.x * 0.001
+        + frame.vAxis.x * 0.002
+        + frame.normal.x * 0.003
+    let expectedY = controlPoint.point.y
+        + frame.uAxis.y * 0.001
+        + frame.vAxis.y * 0.002
+        + frame.normal.y * 0.003
+    let expectedZ = controlPoint.point.z
+        + frame.uAxis.z * 0.001
+        + frame.vAxis.z * 0.002
+        + frame.normal.z * 0.003
+
+    #expect(frameResult.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: frameResult.standardError))
+    #expect(result.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: result.standardError))
+    #expect(response.message == "Surface control points moved in frame.")
+    #expect(response.saved)
+    #expect(abs(movedControlPoint.point.x - expectedX) < 0.000_000_000_001)
+    #expect(abs(movedControlPoint.point.y - expectedY) < 0.000_000_000_001)
+    #expect(abs(movedControlPoint.point.z - expectedZ) < 0.000_000_000_001)
+}
+
+@Test(.timeLimit(.minutes(1)))
 func cliExecutableSketchDimensionSummaryAndSetMutateClosedDocumentAsJSON() async throws {
     let temporaryDirectory = try makeTemporaryDirectory()
     defer {
