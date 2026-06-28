@@ -10,18 +10,36 @@ struct PolySplineSurfaceControlPointEditingService: Sendable {
     ) throws -> PolySplineFeature {
         let currentPoint = try controlPoint(for: target, in: polySpline, owner: owner)
         let updatedPoint = currentPoint + delta
+        let currentWeight = try controlPointWeight(for: target, in: polySpline, owner: owner)
         var updatedPolySpline = polySpline
         let override = PolySplineSurfaceControlPointOverride(
             patchID: target.patchID,
             uIndex: target.uIndex,
             vIndex: target.vIndex,
-            point: updatedPoint
+            point: updatedPoint,
+            weight: currentWeight
         )
-        if let existingIndex = updatedPolySpline.controlPointOverrides.firstIndex(where: { $0.address == target.address }) {
-            updatedPolySpline.controlPointOverrides[existingIndex] = override
-        } else {
-            updatedPolySpline.controlPointOverrides.append(override)
-        }
+        upsert(override, in: &updatedPolySpline)
+        try updatedPolySpline.validate()
+        return updatedPolySpline
+    }
+
+    func updatedPolySpline(
+        settingWeight weight: Double,
+        for target: PolySplineSurfaceControlPointEditTarget,
+        in polySpline: PolySplineFeature,
+        owner: String
+    ) throws -> PolySplineFeature {
+        let currentPoint = try controlPoint(for: target, in: polySpline, owner: owner)
+        var updatedPolySpline = polySpline
+        let override = PolySplineSurfaceControlPointOverride(
+            patchID: target.patchID,
+            uIndex: target.uIndex,
+            vIndex: target.vIndex,
+            point: currentPoint,
+            weight: weight
+        )
+        upsert(override, in: &updatedPolySpline)
         try updatedPolySpline.validate()
         return updatedPolySpline
     }
@@ -40,6 +58,22 @@ struct PolySplineSurfaceControlPointEditingService: Sendable {
             )
         }
         return controlPoints[target.vIndex][target.uIndex]
+    }
+
+    func controlPointWeight(
+        for target: PolySplineSurfaceControlPointEditTarget,
+        in polySpline: PolySplineFeature,
+        owner: String
+    ) throws -> Double {
+        let surface = try surface(for: target, in: polySpline, owner: owner)
+        guard surface.weights.indices.contains(target.vIndex),
+              surface.weights[target.vIndex].indices.contains(target.uIndex) else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "\(owner) references a missing surface control point weight."
+            )
+        }
+        return surface.weights[target.vIndex][target.uIndex]
     }
 
     func slideUnitVector(
@@ -160,15 +194,29 @@ struct PolySplineSurfaceControlPointEditingService: Sendable {
                 )
             }
             guard surface.controlPoints.indices.contains(override.vIndex),
-                  surface.controlPoints[override.vIndex].indices.contains(override.uIndex) else {
+                  surface.controlPoints[override.vIndex].indices.contains(override.uIndex),
+                  surface.weights.indices.contains(override.vIndex),
+                  surface.weights[override.vIndex].indices.contains(override.uIndex) else {
                 throw EditorError(
                     code: .referenceUnresolved,
                     message: "\(owner) references a missing PolySpline surface control point override target."
                 )
             }
             surface.controlPoints[override.vIndex][override.uIndex] = override.point
+            surface.weights[override.vIndex][override.uIndex] = override.weight
         }
         return surface
+    }
+
+    private func upsert(
+        _ override: PolySplineSurfaceControlPointOverride,
+        in polySpline: inout PolySplineFeature
+    ) {
+        if let existingIndex = polySpline.controlPointOverrides.firstIndex(where: { $0.address == override.address }) {
+            polySpline.controlPointOverrides[existingIndex] = override
+        } else {
+            polySpline.controlPointOverrides.append(override)
+        }
     }
 
     private func controlPoints(

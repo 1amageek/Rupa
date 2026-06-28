@@ -772,11 +772,12 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                     ],
                     notes: [
                         "Surface source summaries expose Agent-readable B-spline degree, order, knot vectors, stable knot and span IDs, CV weights, control-point selection references, trim-loop ownership, and generated topology links for supported PolySpline patches.",
+                        "Strict interior PolySpline CV weights are editable through the shared Core, Automation, and Agent command path while preserving CV position overrides.",
                     ]
                 ),
             ],
             openWork: [
-                "First-class NURBS and B-spline source entities with degree, order, knot vectors, weights, spans, stable CV/knot/span IDs, and trim-loop ownership.",
+                "First-class NURBS and B-spline source entities beyond the current PolySpline cubic patch subset, including general degree, order, knot insertion, span editing, boundary CV weights, stable CV/knot/span IDs, and trim-loop ownership.",
                 "Interactive viewport surface-frame handles, snap consumption, trim editing, offset, and sweep or loft section placement that consume the Agent-readable UVN frame contract.",
                 "Persistent continuity editing contracts for target G0/G1/G2 surface boundaries and G0/G1/G2/G3 curve matching.",
                 "Non-planar G2 multi-patch reconstruction.",

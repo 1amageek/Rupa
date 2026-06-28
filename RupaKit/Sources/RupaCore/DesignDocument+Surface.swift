@@ -213,6 +213,56 @@ extension DesignDocument {
         }
     }
 
+    public mutating func setSurfaceControlPointWeight(
+        target: SelectionReference,
+        weight: CADExpression,
+        objectRegistry: ObjectTypeRegistry = .builtIn
+    ) throws {
+        let resolvedWeight = try resolvedPositiveScalarValue(
+            weight,
+            owner: "PolySpline surface control point weight"
+        )
+        let resolvedTarget = try SurfaceControlPointSelectionTargetResolver().editTarget(
+            for: target,
+            in: self
+        )
+        guard case .interiorControlPoint(let controlPointTarget) = resolvedTarget else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "PolySpline surface control point weight currently requires a strict interior B-spline control point."
+            )
+        }
+        guard var feature = cadDocument.designGraph.nodes[controlPointTarget.featureID],
+              case let .polySpline(polySpline) = feature.operation else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "PolySpline surface control point weight requires an existing PolySpline source feature."
+            )
+        }
+
+        let controlPointEditor = PolySplineSurfaceControlPointEditingService()
+        feature.operation = .polySpline(try controlPointEditor.updatedPolySpline(
+            settingWeight: resolvedWeight,
+            for: controlPointTarget,
+            in: polySpline,
+            owner: "PolySpline surface control point weight"
+        ))
+
+        var updatedCADDocument = cadDocument
+        let previousCADDocument = cadDocument
+        do {
+            try updatedCADDocument.replaceFeature(feature)
+            cadDocument = updatedCADDocument
+            try validate(objectRegistry: objectRegistry)
+        } catch {
+            cadDocument = previousCADDocument
+            throw EditorError(
+                code: .commandInvalid,
+                message: "PolySpline surface control point weight produced invalid source geometry: \(error)."
+            )
+        }
+    }
+
     public mutating func slidePolySplineSurfaceVertices(
         targets: [SelectionTarget],
         direction: PolySplineSurfaceVertexSlideDirection,

@@ -1208,6 +1208,17 @@ public struct AutomationRunner {
                 didMutate: result.didMutate,
                 diagnostics: result.diagnostics
             )
+        case .setSurfaceControlPointWeight(let target, let weight):
+            let result = try session.execute(
+                .setSurfaceControlPointWeight(target: target, weight: weight)
+            )
+            return AutomationResult(
+                message: "Surface control point weight updated.",
+                commandName: result.commandName,
+                generation: result.generation,
+                didMutate: result.didMutate,
+                diagnostics: result.diagnostics
+            )
         case .slidePolySplineSurfaceVertices(let targets, let direction, let distance):
             let result = try session.execute(
                 .slidePolySplineSurfaceVertices(

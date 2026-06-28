@@ -202,7 +202,7 @@ public struct SurfaceSourceSummaryService: Sendable {
             faceSelectionReference: faceSelectionReference,
             uDomain: SurfaceSourceSummaryResult.ParameterRange(lowerBound: 0.0, upperBound: 1.0),
             vDomain: SurfaceSourceSummaryResult.ParameterRange(lowerBound: 0.0, upperBound: 1.0),
-            basis: cubicBezierBasis(),
+            basis: cubicBezierBasis(isRational: isRationalPatch(polySpline: polySpline, patchID: patchID)),
             controlVertices: controlVertices,
             controlPoints: controlPoints,
             trimLoops: [
@@ -238,7 +238,7 @@ public struct SurfaceSourceSummaryService: Sendable {
         guard points.count == 4 else {
             return []
         }
-        let surface = BSplineSurface3D.cubicBezierPatch(
+        var surface = BSplineSurface3D.cubicBezierPatch(
             bottomLeft: points[0],
             bottomRight: points[1],
             topRight: points[2],
@@ -250,10 +250,13 @@ public struct SurfaceSourceSummaryService: Sendable {
             guard address.isStrictInterior,
                   controlPoints.indices.contains(address.vIndex),
                   controlPoints[address.vIndex].indices.contains(address.uIndex),
+                  surface.weights.indices.contains(address.vIndex),
+                  surface.weights[address.vIndex].indices.contains(address.uIndex),
                   override.point.isFinite else {
                 continue
             }
             controlPoints[address.vIndex][address.uIndex] = override.point
+            surface.weights[address.vIndex][address.uIndex] = override.weight
         }
 
         var result: [SurfaceSourceSummaryResult.ControlPoint] = []
@@ -586,7 +589,16 @@ public struct SurfaceSourceSummaryService: Sendable {
         .joined(separator: "/")
     }
 
-    private func cubicBezierBasis() -> SurfaceSourceSummaryResult.Basis {
+    private func isRationalPatch(
+        polySpline: PolySplineFeature,
+        patchID: Int
+    ) -> Bool {
+        polySpline.controlPointOverrides.contains { override in
+            override.patchID == patchID && abs(override.weight - 1.0) > 1.0e-12
+        }
+    }
+
+    private func cubicBezierBasis(isRational: Bool = false) -> SurfaceSourceSummaryResult.Basis {
         let uKnots = [0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0]
         let vKnots = [0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0]
         return SurfaceSourceSummaryResult.Basis(
@@ -603,7 +615,7 @@ public struct SurfaceSourceSummaryService: Sendable {
             vSpans: spans(axis: "v", knots: vKnots),
             uSpanCount: 1,
             vSpanCount: 1,
-            isRational: false
+            isRational: isRational
         )
     }
 

@@ -265,6 +265,10 @@ public enum EditorCommand: Codable, Equatable, Sendable {
         deltaY: CADExpression,
         deltaZ: CADExpression
     )
+    case setSurfaceControlPointWeight(
+        target: SelectionReference,
+        weight: CADExpression
+    )
     case slidePolySplineSurfaceVertices(
         targets: [SelectionTarget],
         direction: PolySplineSurfaceVertexSlideDirection,
@@ -479,6 +483,8 @@ public enum EditorCommand: Codable, Equatable, Sendable {
             "movePolySplineSurfaceVertex"
         case .moveSurfaceControlPoint:
             "moveSurfaceControlPoint"
+        case .setSurfaceControlPointWeight:
+            "setSurfaceControlPointWeight"
         case .slidePolySplineSurfaceVertices:
             "slidePolySplineSurfaceVertices"
         case .slideSurfaceControlPoints:
@@ -584,6 +590,7 @@ public enum EditorCommand: Codable, Equatable, Sendable {
              .setSurfaceFrameDisplay,
              .movePolySplineSurfaceVertex,
              .moveSurfaceControlPoint,
+             .setSurfaceControlPointWeight,
              .slidePolySplineSurfaceVertices,
              .slideSurfaceControlPoints,
              .createExtrudedRectangle,

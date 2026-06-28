@@ -279,6 +279,92 @@ import SwiftCAD
 }
 
 @MainActor
+@Test func agentSetsInteriorSurfaceControlPointWeightThroughSurfaceSourceReference() async throws {
+    let server = AgentCommandController()
+    let sessionID = UUID()
+    let session = EditorSession()
+    server.register(session: session, id: sessionID)
+
+    let createResponse = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .createPolySplineSurface(
+                name: "Agent Weighted Interior Surface Reference",
+                sourceMesh: agentPolySplineQuadMesh(),
+                options: PolySplineOptions()
+            ),
+            expectedGeneration: DocumentGeneration(0)
+        )
+    )
+    guard case .command(let createResult) = createResponse else {
+        Issue.record("Agent must create a PolySpline surface.")
+        return
+    }
+    #expect(createResult.didMutate)
+
+    let summaryResponse = server.handle(
+        .surfaceSourceSummary(
+            sessionID: sessionID,
+            expectedGeneration: DocumentGeneration(1)
+        )
+    )
+    guard case .surfaceSourceSummary(let summary) = summaryResponse else {
+        Issue.record("Agent must return a surface source summary.")
+        return
+    }
+    let controlPoint = try #require(
+        summary.sources.first?.patches.first?.controlPoints.first { $0.uIndex == 1 && $0.vIndex == 1 }
+    )
+
+    let weightResponse = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .setSurfaceControlPointWeight(
+                target: controlPoint.selectionReference,
+                weight: .scalar(2.5)
+            ),
+            expectedGeneration: DocumentGeneration(1)
+        )
+    )
+
+    guard case .command(let weightResult) = weightResponse else {
+        Issue.record("Agent must set an interior surface control point weight from a surface source reference.")
+        return
+    }
+    let featureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let feature = try #require(session.document.cadDocument.designGraph.nodes[featureID])
+    guard case let .polySpline(polySpline) = feature.operation else {
+        Issue.record("Agent must keep a PolySpline feature.")
+        return
+    }
+    let override = try #require(polySpline.controlPointOverrides.first)
+    #expect(weightResult.commandName == "setSurfaceControlPointWeight")
+    #expect(weightResult.didMutate)
+    #expect(weightResult.generation == DocumentGeneration(2))
+    #expect(override.uIndex == 1)
+    #expect(override.vIndex == 1)
+    #expect(override.weight == 2.5)
+    #expect(session.evaluationStatus == .valid)
+
+    let updatedSummaryResponse = server.handle(
+        .surfaceSourceSummary(
+            sessionID: sessionID,
+            expectedGeneration: DocumentGeneration(2)
+        )
+    )
+    guard case .surfaceSourceSummary(let updatedSummary) = updatedSummaryResponse else {
+        Issue.record("Agent must return an updated weighted surface source summary.")
+        return
+    }
+    let updatedPatch = try #require(updatedSummary.sources.first?.patches.first)
+    let updatedControlPoint = try #require(
+        updatedPatch.controlPoints.first { $0.uIndex == 1 && $0.vIndex == 1 }
+    )
+    #expect(updatedPatch.basis.isRational)
+    #expect(updatedControlPoint.weight == 2.5)
+}
+
+@MainActor
 @Test func agentSlidesPolySplineSurfaceVerticesThroughGeneratedTargets() async throws {
     let server = AgentCommandController()
     let sessionID = UUID()

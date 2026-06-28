@@ -594,6 +594,14 @@ import SwiftCAD
         ),
         expectedGeneration: DocumentGeneration(5)
     )
+    let surfaceControlPointWeightRequest = AgentRequest.execute(
+        sessionID: sessionID,
+        command: .setSurfaceControlPointWeight(
+            target: surfaceControlPointReference,
+            weight: .scalar(2.5)
+        ),
+        expectedGeneration: DocumentGeneration(5)
+    )
     let surfaceControlPointDisplayRequest = AgentRequest.execute(
         sessionID: sessionID,
         command: .setSurfaceControlPointDisplay(
@@ -625,6 +633,9 @@ import SwiftCAD
     let decodedSurfaceControlPointMoveRequest = try codec.decodeRequest(
         from: try codec.encode(surfaceControlPointMoveRequest)
     )
+    let decodedSurfaceControlPointWeightRequest = try codec.decodeRequest(
+        from: try codec.encode(surfaceControlPointWeightRequest)
+    )
     let decodedSurfaceControlPointDisplayRequest = try codec.decodeRequest(
         from: try codec.encode(surfaceControlPointDisplayRequest)
     )
@@ -638,6 +649,7 @@ import SwiftCAD
     #expect(decodedRequest == request)
     #expect(decodedSlideRequest == slideRequest)
     #expect(decodedSurfaceControlPointMoveRequest == surfaceControlPointMoveRequest)
+    #expect(decodedSurfaceControlPointWeightRequest == surfaceControlPointWeightRequest)
     #expect(decodedSurfaceControlPointDisplayRequest == surfaceControlPointDisplayRequest)
     #expect(decodedSurfaceFrameDisplayRequest == surfaceFrameDisplayRequest)
     #expect(decodedSurfaceControlPointSlideRequest == surfaceControlPointSlideRequest)

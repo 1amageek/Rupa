@@ -1056,6 +1056,16 @@ public final class CADDocumentStore {
             document = updatedDocument
             try commitMutation()
             evaluateCurrentDocument()
+        case .setSurfaceControlPointWeight(let target, let weight):
+            var updatedDocument = document
+            try updatedDocument.setSurfaceControlPointWeight(
+                target: target,
+                weight: weight,
+                objectRegistry: objectRegistry
+            )
+            document = updatedDocument
+            try commitMutation()
+            evaluateCurrentDocument()
         case .slidePolySplineSurfaceVertices(let targets, let direction, let distance):
             var updatedDocument = document
             try updatedDocument.slidePolySplineSurfaceVertices(

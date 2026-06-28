@@ -2106,6 +2106,19 @@ public final class EditorSession {
     }
 
     @discardableResult
+    public func setSurfaceControlPointWeight(
+        target: SelectionReference,
+        weight: CADExpression
+    ) -> CommandExecutionResult? {
+        perform(
+            .setSurfaceControlPointWeight(
+                target: target,
+                weight: weight
+            )
+        )
+    }
+
+    @discardableResult
     public func slidePolySplineSurfaceVertices(
         targets: [SelectionTarget],
         direction: PolySplineSurfaceVertexSlideDirection,

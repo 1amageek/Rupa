@@ -1141,6 +1141,16 @@ public final class AgentCommandController: AgentClientProtocol {
             failureMode: "Accepts PolySpline patch corner control point references and strict interior B-spline control point references discovered from surfaceSourceSummary; rejects non-control-point references, non-PolySpline surfaces, boundary edge-only CV indexes, stale generations, zero or invalid deltas, unsupported source meshes, moves that change selected corner boundary roles, and invalid rebuilt B-spline sheet topology."
         ),
         capability(
+            "setSurfaceControlPointWeight",
+            category: .solid,
+            summary: "Set a source-owned B-spline surface control-point weight from a Swift-CAD SelectionReference, preserving the control point position while making the evaluated surface rational.",
+            access: .automationCommand,
+            mutatesDocument: true,
+            discovery: [.surfaceSourceSummary, .surfaceAnalysis, .surfaceContinuitySummary],
+            targets: [.surfaceControlPoint],
+            failureMode: "Accepts strict interior PolySpline B-spline control point references discovered from surfaceSourceSummary; rejects boundary CVs, non-control-point references, non-scalar or non-positive weights, non-PolySpline surfaces, stale generations, unsupported source meshes, and invalid rebuilt rational B-spline sheet topology."
+        ),
+        capability(
             "slidePolySplineSurfaceVertices",
             category: .solid,
             summary: "Slide generated PolySpline patch boundary CVs along local surface hull U, V, or normal directions with an explicit distance.",

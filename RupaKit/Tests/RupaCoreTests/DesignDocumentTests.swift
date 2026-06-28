@@ -319,6 +319,62 @@ import Testing
     #expect(abs(measuredPoint.point.z - override.point.z) <= 1.0e-12)
 }
 
+@Test func surfaceControlPointReferenceWeightMutatesInteriorControlPointOverride() async throws {
+    var document = DesignDocument.empty()
+
+    let featureID = try document.createPolySplineSurface(
+        name: "Weighted Interior Surface Reference Quad Surface",
+        sourceMesh: designDocumentPolySplineQuadMesh()
+    )
+    let summary = try SurfaceSourceSummaryService().summarize(document: document)
+    let controlPoint = try #require(
+        summary.sources.first?.patches.first?.controlPoints.first { $0.uIndex == 1 && $0.vIndex == 1 }
+    )
+
+    try document.setSurfaceControlPointWeight(
+        target: controlPoint.selectionReference,
+        weight: .scalar(2.5)
+    )
+
+    let feature = try #require(document.cadDocument.designGraph.nodes[featureID])
+    guard case let .polySpline(polySpline) = feature.operation else {
+        Issue.record("Expected a PolySpline feature.")
+        return
+    }
+    let override = try #require(polySpline.controlPointOverrides.first)
+    #expect(polySpline.controlPointOverrides.count == 1)
+    #expect(override.patchID == 0)
+    #expect(override.uIndex == 1)
+    #expect(override.vIndex == 1)
+    #expect(override.weight == 2.5)
+    #expect(abs(override.point.x - controlPoint.point.x) <= 1.0e-12)
+    #expect(abs(override.point.y - controlPoint.point.y) <= 1.0e-12)
+    #expect(abs(override.point.z - controlPoint.point.z) <= 1.0e-12)
+
+    let updatedSummary = try SurfaceSourceSummaryService().summarize(document: document)
+    let updatedPatch = try #require(updatedSummary.sources.first?.patches.first)
+    let updatedControlPoint = try #require(
+        updatedPatch.controlPoints.first { $0.uIndex == 1 && $0.vIndex == 1 }
+    )
+    #expect(updatedPatch.basis.isRational)
+    #expect(updatedControlPoint.weight == 2.5)
+
+    try document.moveSurfaceControlPoint(
+        target: controlPoint.selectionReference,
+        deltaX: .length(0.0, .millimeter),
+        deltaY: .length(0.0, .millimeter),
+        deltaZ: .length(1.0, .millimeter)
+    )
+    let movedFeature = try #require(document.cadDocument.designGraph.nodes[featureID])
+    guard case let .polySpline(movedPolySpline) = movedFeature.operation else {
+        Issue.record("Expected a moved PolySpline feature.")
+        return
+    }
+    let movedOverride = try #require(movedPolySpline.controlPointOverrides.first)
+    #expect(movedOverride.weight == 2.5)
+    #expect(abs(movedOverride.point.z - (controlPoint.point.z + 0.001)) <= 1.0e-12)
+}
+
 @Test func polySplineSurfaceVertexMoveRejectsNonVertexTargets() async throws {
     var document = DesignDocument.empty()
 
