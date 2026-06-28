@@ -6905,18 +6905,8 @@ public struct Viewport: View {
     }
 
     private func slotWidthSourceTarget(for target: SelectionTarget) -> ViewportSlotWidthSourceTarget? {
-        guard case .sketchEntity(let componentID) = target.component,
-              let sketchReference = componentID.sketchEntityBaseReference,
-              let reference = document.productMetadata.sceneNodes[target.sceneNodeID]?.reference,
-              reference.kind == .sketch,
-              reference.featureID == sketchReference.featureID else {
-            return nil
-        }
-        return ViewportSlotWidthSourceTarget(
-            featureID: sketchReference.featureID,
-            entityID: sketchReference.entityID,
-            target: target
-        )
+        ViewportSlotWidthSourceTargetResolver(document: document)
+            .sourceTarget(for: target)
     }
 
     private func sketchVertexOffsetSourceTarget(for target: SelectionTarget) -> ViewportSketchVertexOffsetSourceTarget? {
