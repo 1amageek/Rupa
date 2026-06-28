@@ -7,6 +7,7 @@ struct SurfaceParameterInspectorView: View {
     @Binding var knotInsertionValue: Double
     let onSetKnotValue: (SelectionReference, Double) -> Void
     let onInsertKnot: (SelectionReference, Double) -> Void
+    let onSetFrameDisplay: ([SurfaceFrameQuery], Bool) -> Void
 
     var body: some View {
         inspectorSection("Surface Parameter") {
@@ -21,8 +22,17 @@ struct SurfaceParameterInspectorView: View {
             inspectorRow("Multiplicity", state.multiplicityTitle)
             inspectorRow("Boundary", state.boundaryTitle)
             inspectorRow("Edit", state.editabilityTitle)
+            frameDisplayStatus
             knotValueControl
             insertionControl
+            frameDisplayControls
+        }
+    }
+
+    @ViewBuilder
+    private var frameDisplayStatus: some View {
+        if state.canToggleFrameDisplay {
+            inspectorRow("Frame Display", state.frameDisplayTitle)
         }
     }
 
@@ -51,6 +61,8 @@ struct SurfaceParameterInspectorView: View {
         if state.canInsertKnot,
            let entry = state.entries.first {
             switch entry.kind {
+            case .address:
+                EmptyView()
             case .knot:
                 insertionActionRow(entry: entry, value: entry.value ?? 0.0)
             case .span:
@@ -66,6 +78,31 @@ struct SurfaceParameterInspectorView: View {
                         value: insertionDraftValue(range: range)
                     )
                 }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var frameDisplayControls: some View {
+        if state.canToggleFrameDisplay {
+            inspectorActionRow {
+                inspectorIconButton(
+                    systemImage: "scope",
+                    help: "Show Surface UVN Frame",
+                    accessibilityIdentifier: "InspectorSurfaceParameter.frameDisplay.show"
+                ) {
+                    onSetFrameDisplay(state.selectedFrameQueries, true)
+                }
+                .disabled(state.entries.allSatisfy(\.isFrameDisplayVisible))
+
+                inspectorIconButton(
+                    systemImage: "scope",
+                    help: "Hide Surface UVN Frame",
+                    accessibilityIdentifier: "InspectorSurfaceParameter.frameDisplay.hide"
+                ) {
+                    onSetFrameDisplay(state.selectedFrameQueries, false)
+                }
+                .disabled(state.entries.allSatisfy { !$0.isFrameDisplayVisible })
             }
         }
     }

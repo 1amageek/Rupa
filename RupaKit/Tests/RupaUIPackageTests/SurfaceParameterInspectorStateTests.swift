@@ -38,6 +38,36 @@ import Testing
     #expect(state.clampedInsertionValue(0.25) == 0.5)
 }
 
+@Test func surfaceParameterInspectorStateReportsSurfaceParameterAddressSelection() throws {
+    var document = DesignDocument.empty()
+    _ = try document.createBSplineSurface(
+        name: "Inspector Direct Surface",
+        surface: surfaceParameterInspectorDirectBSplineSurface()
+    )
+
+    let summary = try SurfaceSourceSummaryService().summarize(document: document)
+    let patch = try #require(summary.sources.first?.patches.first)
+    let address = try #require(patch.parameterAddresses.first { $0.id == "center" })
+    let reference = try #require(address.selectionReference)
+    let state = try #require(SurfaceParameterInspectorState(
+        selectedReferences: [reference],
+        summaryResult: summary
+    ))
+
+    #expect(state.selectionCount == 1)
+    #expect(state.kindTitle == "Address")
+    #expect(state.directionTitle == "UV")
+    #expect(state.indexTitle == "center")
+    #expect(state.valueTitle == "(0.5, 0.5)")
+    #expect(state.boundaryTitle == "Interior")
+    #expect(state.editabilityTitle == "Frame Query")
+    #expect(state.frameDisplayTitle == "Hidden")
+    #expect(state.canSetKnotValue == false)
+    #expect(state.canInsertKnot == false)
+    #expect(state.canToggleFrameDisplay)
+    #expect(state.selectedFrameQueries == [SurfaceFrameQuery(selectionReference: reference)])
+}
+
 @Test func surfaceParameterInspectorStateReportsEditableSpanSelection() throws {
     var document = DesignDocument.empty()
     _ = try document.createBSplineSurface(
@@ -67,6 +97,38 @@ import Testing
     #expect(state.defaultInsertionValue(fallback: 0.1) == 0.25)
     #expect(state.clampedInsertionValue(0.0) ?? 0.0 > 0.0)
     #expect(state.clampedInsertionValue(0.5) ?? 0.0 < 0.5)
+}
+
+@MainActor
+@Test func surfaceParameterInspectorStateReportsSurfaceParameterFrameDisplayVisibility() throws {
+    let session = EditorSession()
+    _ = try #require(session.createBSplineSurface(
+        name: "Inspector Direct Surface",
+        surface: surfaceParameterInspectorDirectBSplineSurface()
+    ))
+
+    let initialSummary = try SurfaceSourceSummaryService().summarize(document: session.document)
+    let patch = try #require(initialSummary.sources.first?.patches.first)
+    let frameSample = try #require(patch.frameSamples.first)
+    let query = SurfaceFrameQuery(selectionReference: frameSample.selectionReference)
+    _ = try #require(session.setSurfaceFrameDisplay(
+        query: query,
+        isVisible: true
+    ))
+
+    let visibleSummary = try SurfaceSourceSummaryService().summarize(document: session.document)
+    let state = try #require(SurfaceParameterInspectorState(
+        selectedReferences: [frameSample.selectionReference],
+        summaryResult: visibleSummary,
+        surfaceFrameDisplays: session.document.productMetadata.surfaceFrameDisplays
+    ))
+
+    #expect(state.kindTitle == "Address")
+    #expect(state.indexTitle.hasPrefix("frame:"))
+    #expect(state.frameDisplayTitle == "Visible")
+    #expect(state.canToggleFrameDisplay)
+    #expect(state.entries.first?.isFrameDisplayVisible == true)
+    #expect(state.selectedFrameQueries == [query])
 }
 
 @Test func surfaceParameterInspectorStateReportsBoundaryKnotAsReadOnly() throws {
@@ -138,6 +200,41 @@ import Testing
     #expect(state.directionTitle == "V")
     #expect(state.indexTitle == "s1")
     #expect(state.canInsertKnot)
+}
+
+@MainActor
+@Test func workspaceSurfaceInspectorStateBuilderResolvesSurfaceParameterAddressSelection() throws {
+    let session = EditorSession()
+    _ = try #require(session.createBSplineSurface(
+        name: "Inspector Direct Surface",
+        surface: surfaceParameterInspectorDirectBSplineSurface()
+    ))
+
+    let summary = try SurfaceSourceSummaryService().summarize(document: session.document)
+    let patch = try #require(summary.sources.first?.patches.first)
+    let address = try #require(patch.parameterAddresses.first { $0.id == "center" })
+    let reference = try #require(address.selectionReference)
+    let query = SurfaceFrameQuery(selectionReference: reference)
+    _ = try #require(session.setSurfaceFrameDisplay(
+        query: query,
+        isVisible: true
+    ))
+
+    let builder = WorkspaceSurfaceInspectorStateBuilder(
+        document: session.document,
+        selection: SelectionModel(selectedReferences: [reference]),
+        currentEvaluation: nil,
+        documentGeneration: DocumentGeneration(),
+        objectRegistry: .builtIn,
+        surfaceAnalysisOptions: SurfaceAnalysisOptions(sampleDensity: .standard)
+    )
+
+    let state = try #require(try builder.surfaceParameterStateResult().get())
+
+    #expect(builder.surfaceParameterReferences == [reference])
+    #expect(state.kindTitle == "Address")
+    #expect(state.frameDisplayTitle == "Visible")
+    #expect(state.selectedFrameQueries == [query])
 }
 
 private func surfaceParameterInspectorDirectBSplineSurface() -> BSplineSurface3D {

@@ -20,7 +20,7 @@ struct WorkspaceSurfaceInspectorStateBuilder {
     var surfaceParameterReferences: [SelectionReference] {
         selection.selectedReferences.filter { reference in
             switch reference {
-            case .surface(.knot), .surface(.span):
+            case .surface(.parameter), .surface(.knot), .surface(.span):
                 return true
             default:
                 return false
@@ -58,7 +58,8 @@ struct WorkspaceSurfaceInspectorStateBuilder {
             let summary = try SurfaceSourceSummaryService().summarize(document: document)
             guard let state = SurfaceParameterInspectorState(
                 selectedReferences: surfaceParameterReferences,
-                summaryResult: summary
+                summaryResult: summary,
+                surfaceFrameDisplays: document.productMetadata.surfaceFrameDisplays
             ) else {
                 throw EditorError(
                     code: .referenceUnresolved,

@@ -3,11 +3,14 @@ import SwiftCAD
 
 struct SurfaceParameterInspectorState: Equatable, Sendable {
     enum ParameterKind: Equatable, Sendable {
+        case address
         case knot
         case span
 
         var title: String {
             switch self {
+            case .address:
+                return "Address"
             case .knot:
                 return "Knot"
             case .span:
@@ -27,6 +30,8 @@ struct SurfaceParameterInspectorState: Equatable, Sendable {
         var direction: SurfaceParameterDirection
         var kind: ParameterKind
         var index: Int
+        var u: Double?
+        var v: Double?
         var value: Double?
         var lowerBound: Double?
         var upperBound: Double?
@@ -36,9 +41,16 @@ struct SurfaceParameterInspectorState: Equatable, Sendable {
         var isBoundary: Bool
         var isEditable: Bool
         var selectionReference: SelectionReference
+        var frameQuery: SurfaceFrameQuery?
+        var isFrameDisplayVisible: Bool
 
         var directionTitle: String {
-            direction.rawValue.uppercased()
+            switch kind {
+            case .address:
+                return "UV"
+            case .knot, .span:
+                return direction.rawValue.uppercased()
+            }
         }
 
         var kindTitle: String {
@@ -47,6 +59,8 @@ struct SurfaceParameterInspectorState: Equatable, Sendable {
 
         var indexTitle: String {
             switch kind {
+            case .address:
+                return id.split(separator: "/").last.map(String.init) ?? id
             case .knot:
                 return "k\(index)"
             case .span:
@@ -63,6 +77,11 @@ struct SurfaceParameterInspectorState: Equatable, Sendable {
 
         var valueTitle: String {
             switch kind {
+            case .address:
+                guard let u, let v else {
+                    return "-"
+                }
+                return "(\(shortNumber(u)), \(shortNumber(v)))"
             case .knot:
                 guard let value else {
                     return "-"
@@ -81,7 +100,10 @@ struct SurfaceParameterInspectorState: Equatable, Sendable {
         }
 
         var editabilityTitle: String {
-            isEditable ? "Editable" : "Read Only"
+            if kind == .address {
+                return frameQuery == nil ? "Reference" : "Frame Query"
+            }
+            return isEditable ? "Editable" : "Read Only"
         }
 
         var canSetKnotValue: Bool {
@@ -98,6 +120,8 @@ struct SurfaceParameterInspectorState: Equatable, Sendable {
                 return false
             }
             switch kind {
+            case .address:
+                return false
             case .knot:
                 return value?.isFinite == true
             case .span:
@@ -128,6 +152,8 @@ struct SurfaceParameterInspectorState: Equatable, Sendable {
 
         var insertionRange: ClosedRange<Double>? {
             switch kind {
+            case .address:
+                return nil
             case .knot:
                 guard let value, value.isFinite else {
                     return nil
@@ -153,6 +179,8 @@ struct SurfaceParameterInspectorState: Equatable, Sendable {
 
         var recommendedInsertionValue: Double? {
             switch kind {
+            case .address:
+                return nil
             case .knot:
                 return value
             case .span:
@@ -168,13 +196,17 @@ struct SurfaceParameterInspectorState: Equatable, Sendable {
 
     init?(
         selectedReferences: [SelectionReference],
-        summaryResult: SurfaceSourceSummaryResult
+        summaryResult: SurfaceSourceSummaryResult,
+        surfaceFrameDisplays: [SurfaceFrameDisplayID: SurfaceFrameDisplay] = [:]
     ) {
         guard !selectedReferences.isEmpty else {
             return nil
         }
 
-        let entriesByReference = Self.entriesByReference(from: summaryResult)
+        let entriesByReference = Self.entriesByReference(
+            from: summaryResult,
+            surfaceFrameDisplays: surfaceFrameDisplays
+        )
         var selectedEntries: [Entry] = []
         var seenReferences: Set<SelectionReference> = []
         selectedEntries.reserveCapacity(selectedReferences.count)
@@ -212,6 +244,14 @@ struct SurfaceParameterInspectorState: Equatable, Sendable {
 
     var canInsertKnot: Bool {
         entries.count == 1 && entries.allSatisfy(\.canInsertKnot)
+    }
+
+    var canToggleFrameDisplay: Bool {
+        !entries.isEmpty && entries.allSatisfy { $0.frameQuery != nil }
+    }
+
+    var selectedFrameQueries: [SurfaceFrameQuery] {
+        entries.compactMap(\.frameQuery)
     }
 
     var sourceTitle: String {
@@ -257,6 +297,10 @@ struct SurfaceParameterInspectorState: Equatable, Sendable {
         commonTitle(entries.map(\.editabilityTitle)) ?? "Mixed"
     }
 
+    var frameDisplayTitle: String {
+        commonBoolTitle(entries.map(\.isFrameDisplayVisible), trueTitle: "Visible", falseTitle: "Hidden")
+    }
+
     func clampedKnotValue(_ value: Double) -> Double? {
         guard canSetKnotValue,
               let range = entries.first?.knotValueRange,
@@ -272,6 +316,8 @@ struct SurfaceParameterInspectorState: Equatable, Sendable {
             return nil
         }
         switch entry.kind {
+        case .address:
+            return nil
         case .knot:
             return entry.value
         case .span:
@@ -292,12 +338,26 @@ struct SurfaceParameterInspectorState: Equatable, Sendable {
     }
 
     private static func entriesByReference(
-        from summary: SurfaceSourceSummaryResult
+        from summary: SurfaceSourceSummaryResult,
+        surfaceFrameDisplays: [SurfaceFrameDisplayID: SurfaceFrameDisplay]
     ) -> [SelectionReference: Entry] {
         var entries: [SelectionReference: Entry] = [:]
 
         for source in summary.sources {
             for patch in source.patches {
+                addParameterAddresses(
+                    patch.parameterAddresses,
+                    source: source,
+                    patch: patch,
+                    surfaceFrameDisplays: surfaceFrameDisplays,
+                    to: &entries
+                )
+                addFrameSamples(
+                    patch.frameSamples,
+                    source: source,
+                    patch: patch,
+                    to: &entries
+                )
                 addKnots(
                     patch.basis.uKnotVector,
                     knotValues: patch.basis.uKnots,
@@ -336,10 +396,89 @@ struct SurfaceParameterInspectorState: Equatable, Sendable {
 
     private static func isSurfaceParameterReference(_ reference: SelectionReference) -> Bool {
         switch reference {
-        case .surface(.knot), .surface(.span):
+        case .surface(.parameter), .surface(.knot), .surface(.span):
             return true
         default:
             return false
+        }
+    }
+
+    private static func addParameterAddresses(
+        _ addresses: [SurfaceSourceSummaryResult.ParameterAddress],
+        source: SurfaceSourceSummaryResult.Source,
+        patch: SurfaceSourceSummaryResult.Patch,
+        surfaceFrameDisplays: [SurfaceFrameDisplayID: SurfaceFrameDisplay],
+        to entries: inout [SelectionReference: Entry]
+    ) {
+        for address in addresses {
+            guard let selectionReference = address.selectionReference else {
+                continue
+            }
+            let frameQuery = SurfaceFrameQuery(selectionReference: selectionReference)
+            entries[selectionReference] = Entry(
+                id: address.id,
+                sourceFeatureID: source.featureID,
+                sourceName: source.name,
+                sourceKind: source.kind,
+                patchID: patch.patchID,
+                facePersistentName: patch.facePersistentName,
+                basisKind: patch.basis.kind,
+                direction: .u,
+                kind: .address,
+                index: 0,
+                u: address.u,
+                v: address.v,
+                value: nil,
+                lowerBound: nil,
+                upperBound: nil,
+                startKnotIndex: nil,
+                endKnotIndex: nil,
+                multiplicity: nil,
+                isBoundary: isBoundaryAddress(address, patch: patch),
+                isEditable: false,
+                selectionReference: selectionReference,
+                frameQuery: frameQuery,
+                isFrameDisplayVisible: frameDisplayVisible(
+                    for: frameQuery,
+                    surfaceFrameDisplays: surfaceFrameDisplays
+                )
+            )
+        }
+    }
+
+    private static func addFrameSamples(
+        _ samples: [SurfaceSourceSummaryResult.FrameSample],
+        source: SurfaceSourceSummaryResult.Source,
+        patch: SurfaceSourceSummaryResult.Patch,
+        to entries: inout [SelectionReference: Entry]
+    ) {
+        for sample in samples {
+            let frameQuery = SurfaceFrameQuery(selectionReference: sample.selectionReference)
+            entries[sample.selectionReference] = Entry(
+                id: sample.id,
+                sourceFeatureID: source.featureID,
+                sourceName: source.name,
+                sourceKind: source.kind,
+                patchID: patch.patchID,
+                facePersistentName: patch.facePersistentName,
+                basisKind: patch.basis.kind,
+                direction: .u,
+                kind: .address,
+                index: 0,
+                u: sample.u,
+                v: sample.v,
+                value: nil,
+                lowerBound: nil,
+                upperBound: nil,
+                startKnotIndex: nil,
+                endKnotIndex: nil,
+                multiplicity: nil,
+                isBoundary: isBoundaryUV(u: sample.u, v: sample.v, patch: patch),
+                isEditable: false,
+                selectionReference: sample.selectionReference,
+                frameQuery: frameQuery,
+                isFrameDisplayVisible: sample.isFrameDisplayVisible
+            )
         }
     }
 
@@ -368,6 +507,8 @@ struct SurfaceParameterInspectorState: Equatable, Sendable {
                 direction: direction,
                 kind: .knot,
                 index: knot.index,
+                u: nil,
+                v: nil,
                 value: knot.value,
                 lowerBound: lowerBound,
                 upperBound: upperBound,
@@ -376,7 +517,9 @@ struct SurfaceParameterInspectorState: Equatable, Sendable {
                 multiplicity: knot.multiplicity,
                 isBoundary: knot.isBoundary,
                 isEditable: knot.isEditable,
-                selectionReference: selectionReference
+                selectionReference: selectionReference,
+                frameQuery: nil,
+                isFrameDisplayVisible: false
             )
         }
     }
@@ -403,6 +546,8 @@ struct SurfaceParameterInspectorState: Equatable, Sendable {
                 direction: direction,
                 kind: .span,
                 index: span.index,
+                u: nil,
+                v: nil,
                 value: nil,
                 lowerBound: span.lowerBound,
                 upperBound: span.upperBound,
@@ -411,8 +556,47 @@ struct SurfaceParameterInspectorState: Equatable, Sendable {
                 multiplicity: nil,
                 isBoundary: false,
                 isEditable: span.isEditable,
-                selectionReference: selectionReference
+                selectionReference: selectionReference,
+                frameQuery: nil,
+                isFrameDisplayVisible: false
             )
+        }
+    }
+
+    private static func isBoundaryAddress(
+        _ address: SurfaceSourceSummaryResult.ParameterAddress,
+        patch: SurfaceSourceSummaryResult.Patch
+    ) -> Bool {
+        isBoundaryUV(u: address.u, v: address.v, patch: patch)
+    }
+
+    private static func isBoundaryUV(
+        u: Double,
+        v: Double,
+        patch: SurfaceSourceSummaryResult.Patch
+    ) -> Bool {
+        isBoundaryValue(u, range: patch.uDomain)
+            || isBoundaryValue(v, range: patch.vDomain)
+    }
+
+    private static func isBoundaryValue(
+        _ value: Double,
+        range: SurfaceSourceSummaryResult.ParameterRange
+    ) -> Bool {
+        let tolerance = max(abs(range.upperBound - range.lowerBound), 1.0) * 1.0e-9
+        return abs(value - range.lowerBound) <= tolerance
+            || abs(value - range.upperBound) <= tolerance
+    }
+
+    private static func frameDisplayVisible(
+        for query: SurfaceFrameQuery,
+        surfaceFrameDisplays: [SurfaceFrameDisplayID: SurfaceFrameDisplay]
+    ) -> Bool {
+        do {
+            let displayID = try SurfaceFrameDisplayID(query: query)
+            return surfaceFrameDisplays[displayID]?.isVisible == true
+        } catch {
+            return false
         }
     }
 
@@ -444,6 +628,17 @@ struct SurfaceParameterInspectorState: Equatable, Sendable {
 
     private func commonTitle(_ values: [String]) -> String? {
         commonValue(values)
+    }
+
+    private func commonBoolTitle(
+        _ values: [Bool],
+        trueTitle: String,
+        falseTitle: String
+    ) -> String {
+        guard let value = commonValue(values) else {
+            return "Mixed"
+        }
+        return value ? trueTitle : falseTitle
     }
 }
 

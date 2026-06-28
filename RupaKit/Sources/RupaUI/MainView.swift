@@ -4211,7 +4211,8 @@ public struct MainView: View {
             state: state,
             knotInsertionValue: $surfaceKnotInsertionValue,
             onSetKnotValue: setSurfaceKnotValue,
-            onInsertKnot: insertSurfaceKnot
+            onInsertKnot: insertSurfaceKnot,
+            onSetFrameDisplay: setSurfaceFrameDisplay
         )
     }
 
