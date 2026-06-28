@@ -111,6 +111,36 @@ import Testing
     #expect(state.entries.first?.isPointDisplayVisible == true)
 }
 
+@MainActor
+@Test func surfaceControlPointInspectorStateReportsFrameDisplayVisibility() async throws {
+    let session = EditorSession()
+    _ = try #require(session.createPolySplineSurface(
+        name: "Inspector Frame Display Surface",
+        sourceMesh: surfaceControlPointInspectorPatchNetworkMesh(centerZ: 0.0),
+        options: PolySplineOptions(mergePatches: false)
+    ))
+
+    let initialSummary = try SurfaceSourceSummaryService().summarize(document: session.document)
+    let initialPatch = try #require(initialSummary.sources.first?.patches.first)
+    let controlPoint = try #require(initialPatch.controlPoints.first { $0.uIndex == 1 && $0.vIndex == 1 })
+    let query = SurfaceFrameQuery(selectionReference: controlPoint.selectionReference)
+    _ = try #require(session.setSurfaceFrameDisplay(
+        query: query,
+        isVisible: true
+    ))
+
+    let visibleSummary = try SurfaceSourceSummaryService().summarize(document: session.document)
+    let state = try #require(SurfaceControlPointInspectorState(
+        selectedReferences: [controlPoint.selectionReference],
+        summaryResult: visibleSummary,
+        surfaceFrameDisplays: session.document.productMetadata.surfaceFrameDisplays
+    ))
+
+    #expect(state.frameDisplayTitle == "Visible")
+    #expect(state.selectedFrameQueries == [query])
+    #expect(state.entries.first?.isFrameDisplayVisible == true)
+}
+
 @Test func surfaceControlPointInspectorStateRejectsUnresolvedOrNonControlPointReferences() async throws {
     var document = DesignDocument.empty()
     _ = try document.createPolySplineSurface(

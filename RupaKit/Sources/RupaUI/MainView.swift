@@ -4155,6 +4155,7 @@ public struct MainView: View {
             isSlideActive: slideCommandState.isSurfaceControlVerticesActive,
             slideRouteTitle: slideCommandState.routeTitle,
             onSetPointDisplay: setSurfaceControlPointDisplay,
+            onSetFrameDisplay: setSurfaceFrameDisplay,
             onSetCoordinate: { axis, meters in
                 setSurfaceControlPointCoordinate(axis, meters: meters, state: state)
             },
@@ -4976,6 +4977,25 @@ public struct MainView: View {
         for target in targets {
             let result = session.setSurfaceControlPointDisplay(
                 target: target,
+                isVisible: isVisible
+            )
+            if result?.diagnostics.isEmpty == false || result == nil {
+                shouldExpandPreview = true
+            }
+        }
+        if shouldExpandPreview {
+            isPreviewExpanded = true
+        }
+    }
+
+    private func setSurfaceFrameDisplay(
+        _ queries: [SurfaceFrameQuery],
+        isVisible: Bool
+    ) {
+        var shouldExpandPreview = false
+        for query in queries {
+            let result = session.setSurfaceFrameDisplay(
+                query: query,
                 isVisible: isVisible
             )
             if result?.diagnostics.isEmpty == false || result == nil {

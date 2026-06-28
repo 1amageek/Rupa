@@ -25,7 +25,8 @@ struct WorkspaceSurfaceInspectorStateBuilder {
             let summary = try SurfaceSourceSummaryService().summarize(document: document)
             guard let state = SurfaceControlPointInspectorState(
                 selectedReferences: surfaceControlPointReferences,
-                summaryResult: summary
+                summaryResult: summary,
+                surfaceFrameDisplays: document.productMetadata.surfaceFrameDisplays
             ) else {
                 throw EditorError(
                     code: .referenceUnresolved,

@@ -23,6 +23,7 @@ struct SurfaceControlPointInspectorState: Equatable, Sendable {
         var isEditable: Bool
         var selectionReference: SelectionReference
         var isPointDisplayVisible: Bool
+        var isFrameDisplayVisible: Bool
 
         var indexTitle: String {
             "u\(uIndex) / v\(vIndex)"
@@ -40,13 +41,17 @@ struct SurfaceControlPointInspectorState: Equatable, Sendable {
 
     init?(
         selectedReferences: [SelectionReference],
-        summaryResult: SurfaceSourceSummaryResult
+        summaryResult: SurfaceSourceSummaryResult,
+        surfaceFrameDisplays: [SurfaceFrameDisplayID: SurfaceFrameDisplay] = [:]
     ) {
         guard !selectedReferences.isEmpty else {
             return nil
         }
 
-        let entriesByReference = Self.entriesByReference(from: summaryResult)
+        let entriesByReference = Self.entriesByReference(
+            from: summaryResult,
+            surfaceFrameDisplays: surfaceFrameDisplays
+        )
         var selectedEntries: [Entry] = []
         var seenReferences: Set<SelectionReference> = []
         selectedEntries.reserveCapacity(selectedReferences.count)
@@ -72,6 +77,12 @@ struct SurfaceControlPointInspectorState: Equatable, Sendable {
 
     var selectedReferences: [SelectionReference] {
         entries.map(\.selectionReference)
+    }
+
+    var selectedFrameQueries: [SurfaceFrameQuery] {
+        entries.map { entry in
+            SurfaceFrameQuery(selectionReference: entry.selectionReference)
+        }
     }
 
     var selectionCount: Int {
@@ -105,6 +116,10 @@ struct SurfaceControlPointInspectorState: Equatable, Sendable {
             return entry.indexTitle
         }
         return "\(entry.indexTitle) + \(entries.count - 1)"
+    }
+
+    var frameDisplayTitle: String {
+        commonBoolTitle(entries.map(\.isFrameDisplayVisible), trueTitle: "Visible", falseTitle: "Hidden")
     }
 
     var sourceTitle: String {
@@ -151,7 +166,8 @@ struct SurfaceControlPointInspectorState: Equatable, Sendable {
     }
 
     private static func entriesByReference(
-        from summary: SurfaceSourceSummaryResult
+        from summary: SurfaceSourceSummaryResult,
+        surfaceFrameDisplays: [SurfaceFrameDisplayID: SurfaceFrameDisplay]
     ) -> [SelectionReference: Entry] {
         var entries: [SelectionReference: Entry] = [:]
 
@@ -178,13 +194,31 @@ struct SurfaceControlPointInspectorState: Equatable, Sendable {
                         isBoundary: controlPoint.isBoundary,
                         isEditable: controlPoint.isEditable,
                         selectionReference: controlPoint.selectionReference,
-                        isPointDisplayVisible: controlPoint.isPointDisplayVisible
+                        isPointDisplayVisible: controlPoint.isPointDisplayVisible,
+                        isFrameDisplayVisible: frameDisplayVisible(
+                            for: controlPoint.selectionReference,
+                            surfaceFrameDisplays: surfaceFrameDisplays
+                        )
                     )
                 }
             }
         }
 
         return entries
+    }
+
+    private static func frameDisplayVisible(
+        for selectionReference: SelectionReference,
+        surfaceFrameDisplays: [SurfaceFrameDisplayID: SurfaceFrameDisplay]
+    ) -> Bool {
+        do {
+            let displayID = try SurfaceFrameDisplayID(
+                query: SurfaceFrameQuery(selectionReference: selectionReference)
+            )
+            return surfaceFrameDisplays[displayID]?.isVisible == true
+        } catch {
+            return false
+        }
     }
 
     private func commonValue<T: Equatable>(_ values: [T]) -> T? {

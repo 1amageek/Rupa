@@ -13,6 +13,7 @@ struct SurfaceControlPointInspectorView: View {
     let isSlideActive: Bool
     let slideRouteTitle: String
     let onSetPointDisplay: ([SelectionReference], Bool) -> Void
+    let onSetFrameDisplay: ([SurfaceFrameQuery], Bool) -> Void
     let onSetCoordinate: (SurfaceControlPointInspectorState.CoordinateAxis, Double) -> Void
     let onMoveInFrame: (SurfaceFrameQuery, Double, Double, Double) -> Void
     let onActivateSlide: () -> Void
@@ -28,9 +29,11 @@ struct SurfaceControlPointInspectorView: View {
             inspectorRow("Role", state.roleTitle)
             inspectorRow("Boundary", state.boundaryTitle)
             inspectorRow("Edit", state.editabilityTitle)
-            inspectorRow("Display", state.displayTitle)
+            inspectorRow("Point Display", state.displayTitle)
+            inspectorRow("Frame Display", state.frameDisplayTitle)
             coordinateControls
             pointDisplayControls
+            frameDisplayControls
             frameMoveControls
             slideControls
         }
@@ -104,6 +107,28 @@ struct SurfaceControlPointInspectorView: View {
                 )
             }
             .disabled(!state.canMoveInFrame || !hasFrameMoveOffset)
+        }
+    }
+
+    private var frameDisplayControls: some View {
+        inspectorActionRow {
+            inspectorIconButton(
+                systemImage: "scope",
+                help: "Show Surface CV Frame",
+                accessibilityIdentifier: "InspectorSurfaceCV.frameDisplay.show"
+            ) {
+                onSetFrameDisplay(state.selectedFrameQueries, true)
+            }
+            .disabled(state.entries.allSatisfy(\.isFrameDisplayVisible))
+
+            inspectorIconButton(
+                systemImage: "scope",
+                help: "Hide Surface CV Frame",
+                accessibilityIdentifier: "InspectorSurfaceCV.frameDisplay.hide"
+            ) {
+                onSetFrameDisplay(state.selectedFrameQueries, false)
+            }
+            .disabled(state.entries.allSatisfy { !$0.isFrameDisplayVisible })
         }
     }
 
