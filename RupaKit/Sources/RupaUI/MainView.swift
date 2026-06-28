@@ -1579,14 +1579,14 @@ public struct MainView: View {
 
     @ViewBuilder
     private func edgeOffsetContextPanelContent(_ targets: [SelectionTarget]) -> some View {
-        let supportResolution = edgeOffsetSupportResolution(for: targets)
+        let supportResolution = edgeOffsetSupportStateResolver.resolution(for: targets)
         WorkspaceEdgeOffsetContextPanel(
             isSupported: supportResolution.isSupported,
             distanceTitle: formatted(edgeOffsetDistanceMeters),
             gapFillTitle: regionOffsetGapFillTitle(edgeOffsetGapFill),
             inputModeTitle: edgeOffsetCommandState.inputModeTitle,
             lockedDistanceTitle: edgeOffsetCommandState.usesLockedDistance ? "On" : "Off",
-            supportTitle: edgeOffsetSupportTitle(supportResolution),
+            supportTitle: edgeOffsetSupportStateResolver.supportTitle(for: supportResolution),
             offset: {
                 offsetSelectedEdges(
                     targets,
@@ -2620,7 +2620,7 @@ public struct MainView: View {
         slotProfileCommandState.deactivate()
         slideCommandState.deactivate()
         edgeOffsetCommandState.activateDistanceInput()
-        let supportResolution = edgeOffsetSupportResolution(for: selectedEdgeTargets)
+        let supportResolution = edgeOffsetSupportStateResolver.resolution(for: selectedEdgeTargets)
         if supportResolution.isSupported == false,
            let message = supportResolution.diagnosticMessage {
             session.reportToolStatus(message, severity: .warning)
@@ -3658,6 +3658,14 @@ public struct MainView: View {
         WorkspaceSplineControlPointSelectionResolver(selection: session.selection)
     }
 
+    private var edgeOffsetSupportStateResolver: WorkspaceEdgeOffsetSupportStateResolver {
+        WorkspaceEdgeOffsetSupportStateResolver(
+            document: session.document,
+            selection: session.selection,
+            objectRegistry: objectRegistry
+        )
+    }
+
     private func patternArrayInspectorState(for nodes: [SceneNode]) -> PatternArrayInspectorState? {
         PatternArrayInspectorState(
             selectedNodes: nodes,
@@ -3707,47 +3715,7 @@ public struct MainView: View {
     }
 
     private var selectedEdgeOffsetSupportResolution: EdgeOffsetSupportFaceResolution {
-        edgeOffsetSupportResolution(for: selectedEdgeTargets)
-    }
-
-    private func edgeOffsetSupportResolution(
-        for targets: [SelectionTarget]
-    ) -> EdgeOffsetSupportFaceResolution {
-        guard targets.count == 1,
-              let target = targets.first else {
-            return .unavailable("Offset Edge currently supports one selected edge.")
-        }
-        do {
-            return try EdgeOffsetSupportFaceResolver().resolve(
-                edgeTarget: target,
-                selection: session.selection,
-                document: session.document,
-                objectRegistry: objectRegistry
-            )
-        } catch let error as EditorError {
-            return .unavailable(error.message)
-        } catch {
-            return .unavailable(String(describing: error))
-        }
-    }
-
-    private func edgeOffsetSupportTitle(
-        _ resolution: EdgeOffsetSupportFaceResolution
-    ) -> String {
-        switch (resolution.status, resolution.source) {
-        case (.supported, .selectedFace):
-            return "Selected Face"
-        case (.supported, .inferredCapFace):
-            return "Cap Face"
-        case (.ambiguous, _):
-            return "Ambiguous"
-        case (.unavailable, _):
-            return "Missing"
-        case (.notApplicable, _):
-            return "Unsupported"
-        case (.supported, nil):
-            return "Ready"
-        }
+        edgeOffsetSupportStateResolver.resolution(for: selectedEdgeTargets)
     }
 
     private var selectedVertexTarget: SelectionTarget? {

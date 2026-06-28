@@ -142,3 +142,4 @@ flowchart LR
 | `RupaUI/MainView.swift` | Viewport hit to SelectionTarget resolution, scene-node fallback, and rectangle-selection dedupe split into a workspace target resolver |
 | `RupaUI/MainView.swift` | Projection target normalization for sketch curves, generated edges, and body outlines split into a workspace projection resolver |
 | `RupaUI/MainView.swift` | Spline control-point selection indexing and slide-input resolution split into a workspace spline control-point resolver |
+| `RupaUI/MainView.swift` | Offset Edge support-face readiness and support-title mapping split into a workspace resolver |
