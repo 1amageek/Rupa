@@ -6,6 +6,8 @@ enum CADInteractionDesignProcessPerformanceBenchmarkService {
     private static let agentPayloadMetric = "encodedDesignProcessPacketPayloadBytes"
     private static let agentPayloadUnit = "bytes"
     private static let agentPayloadSource = "CADInteractionDesignProcessPerformanceBenchmarkService.agentPayloadBudgetBytes"
+    private static let geometryFixtureMetric = "denseGeometryFixtureOperationUnits"
+    private static let geometryFixtureUnit = "weightedOperationUnits"
     private static let maximumPayloadMeasurementPasses = 8
 
     static func recordBenchmarks(
@@ -14,6 +16,8 @@ enum CADInteractionDesignProcessPerformanceBenchmarkService {
     ) -> DesignProcessPacket {
         var measuredPacket = packet
         removeAgentPayloadMeasurement(from: &measuredPacket)
+        removeGeometryFixtureMeasurement(from: &measuredPacket)
+        appendGeometryFixtureMeasurement(to: &measuredPacket)
         replaceAgentPayloadMeasurement(
             in: &measuredPacket,
             measuredBytes: nil,
@@ -69,6 +73,25 @@ enum CADInteractionDesignProcessPerformanceBenchmarkService {
         }
     }
 
+    private static func removeGeometryFixtureMeasurement(
+        from packet: inout DesignProcessPacket
+    ) {
+        packet.confidence.performanceMeasurements.removeAll { measurement in
+            measurement.metric == geometryFixtureMetric
+        }
+    }
+
+    private static func appendGeometryFixtureMeasurement(
+        to packet: inout DesignProcessPacket
+    ) {
+        let fixture = CADInteractionDesignProcessGeometryBenchmarkFixture.fixture(
+            for: packet.intent.area
+        )
+        packet.confidence.performanceMeasurements.append(
+            geometryFixtureMeasurement(fixture: fixture)
+        )
+    }
+
     private static func replaceAgentPayloadMeasurement(
         in packet: inout DesignProcessPacket,
         measuredBytes: Double?,
@@ -109,6 +132,28 @@ enum CADInteractionDesignProcessPerformanceBenchmarkService {
         )
     }
 
+    private static func geometryFixtureMeasurement(
+        fixture: CADInteractionDesignProcessGeometryBenchmarkFixture
+    ) -> DesignProcessPerformanceMeasurement {
+        let measuredUnits = fixture.operationUnits
+        return DesignProcessPerformanceMeasurement(
+            id: "\(fixture.area.rawValue)-dense-geometry-fixture",
+            title: fixture.title,
+            metric: geometryFixtureMetric,
+            unit: geometryFixtureUnit,
+            measuredValue: measuredUnits,
+            budgetValue: fixture.operationBudgetUnits,
+            status: measuredUnits <= fixture.operationBudgetUnits ? .withinBudget : .exceedsBudget,
+            source: "CADInteractionDesignProcessGeometryBenchmarkFixture.\(fixture.area.rawValue)",
+            notes: [
+                "Deterministic dense-scene geometry fixture for \(fixture.area.rawValue).",
+                "sourceEntities=\(fixture.sourceEntityCount), topologyElements=\(fixture.topologyElementCount).",
+                "constraintsOrRelations=\(fixture.constraintOrRelationCount), samples=\(fixture.sampleCount), variants=\(fixture.variantCount).",
+                "This is a regression-gating complexity metric; wall-clock latency must be benchmarked separately before verified performance claims.",
+            ]
+        )
+    }
+
     private static func agentPayloadStatus(
         measuredBytes: Double?,
         errorDescription: String?
@@ -127,7 +172,7 @@ enum CADInteractionDesignProcessPerformanceBenchmarkService {
     ) -> [String] {
         var notes = [
             "Measures the final sorted-key JSON Agent design packet including this payload-size record.",
-            "Budget keeps Agent-readable CAD design packets bounded before dense-scene geometry benchmarks are attached.",
+            "Budget keeps Agent-readable CAD design packets bounded alongside dense geometry fixture measurements.",
         ]
         if let errorDescription {
             notes.append(errorDescription)

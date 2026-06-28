@@ -99,8 +99,17 @@ import RupaCore
         let observationIDs = packet.observations.map(\.id)
         let channels = Set(packet.observations.map { $0.channel.rawValue })
         let encodedPacket = try encoder.encode(packet)
+        let payloadMeasurements = packet.confidence.performanceMeasurements.filter { measurement in
+            measurement.metric == "encodedDesignProcessPacketPayloadBytes"
+        }
+        let geometryMeasurements = packet.confidence.performanceMeasurements.filter { measurement in
+            measurement.metric == "denseGeometryFixtureOperationUnits"
+        }
         let payloadMeasurement = try #require(packet.confidence.performanceMeasurements.first { measurement in
             measurement.metric == "encodedDesignProcessPacketPayloadBytes"
+        })
+        let geometryMeasurement = try #require(packet.confidence.performanceMeasurements.first { measurement in
+            measurement.metric == "denseGeometryFixtureOperationUnits"
         })
         let measuredPerformanceCount = packet.confidence.performanceMeasurements.filter { measurement in
             measurement.status == .withinBudget || measurement.status == .exceedsBudget
@@ -134,10 +143,20 @@ import RupaCore
         #expect(packet.confidence.performanceMeasurements.allSatisfy { measurement in
             measurement.status != .withinBudget || measurement.measuredValue != nil
         })
+        #expect(payloadMeasurements.count == 1)
+        #expect(geometryMeasurements.count == 1)
         #expect(payloadMeasurement.status == .withinBudget)
         #expect(payloadMeasurement.measuredValue == Double(encodedPacket.count))
         #expect((payloadMeasurement.budgetValue ?? 0) >= Double(encodedPacket.count))
         #expect(payloadMeasurement.source == "CADInteractionDesignProcessPerformanceBenchmarkService.agentPayloadBudgetBytes")
+        #expect(geometryMeasurement.status == .withinBudget)
+        #expect((geometryMeasurement.measuredValue ?? 0) > 0)
+        #expect((geometryMeasurement.budgetValue ?? 0) >= (geometryMeasurement.measuredValue ?? 0))
+        #expect(geometryMeasurement.unit == "weightedOperationUnits")
+        #expect(geometryMeasurement.source == "CADInteractionDesignProcessGeometryBenchmarkFixture.\(packet.intent.area.rawValue)")
+        #expect(geometryMeasurement.notes.contains { note in
+            note.contains("Deterministic dense-scene geometry fixture")
+        })
         #expect(packet.confidence.notes.contains(
             "Calibration uses \(packet.confidence.calibrationAnchors.count) anchors and \(measuredPerformanceCount)/\(packet.confidence.performanceMeasurements.count) measured performance records."
         ))
