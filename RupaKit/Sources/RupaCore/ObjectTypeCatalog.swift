@@ -96,6 +96,15 @@ public enum ObjectTypeCatalog {
             geometryRole: .surface,
             properties: polySplineProperties
         ),
+        definition(
+            id: .bSplineSurface,
+            title: "B-spline Surface",
+            systemImage: "rectangle.grid.3x2",
+            representation: .threeDimensional,
+            category: .body,
+            geometryRole: .surface,
+            properties: bSplineSurfaceProperties
+        ),
     ]
 
     public static func definition(for id: ObjectTypeID?) -> ObjectTypeDefinition? {
@@ -236,6 +245,14 @@ public enum ObjectTypeCatalog {
         .integer(id: "control.point.v", title: "V Control Points", binding: nil, defaultValue: 4),
         .boolean(id: "merge.patches", title: "Merge Patches", binding: nil, defaultValue: true),
         .boolean(id: "interpolate.boundary", title: "Boundary Exact", binding: nil, defaultValue: true),
+    ]
+
+    private static let bSplineSurfaceProperties: [ObjectPropertyDefinition] = [
+        .integer(id: "surface.degree.u", title: "U Degree", binding: nil, defaultValue: 3),
+        .integer(id: "surface.degree.v", title: "V Degree", binding: nil, defaultValue: 3),
+        .integer(id: "control.point.u", title: "U Control Points", binding: nil, defaultValue: 4),
+        .integer(id: "control.point.v", title: "V Control Points", binding: nil, defaultValue: 4),
+        .boolean(id: "surface.rational", title: "Rational", binding: nil, defaultValue: false),
     ]
 }
 

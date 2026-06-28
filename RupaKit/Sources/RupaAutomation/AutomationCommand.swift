@@ -221,6 +221,10 @@ public enum AutomationCommand: Codable, Equatable, Sendable {
         targets: [SweepTargetReference],
         options: SweepOptions
     )
+    case createBSplineSurface(
+        name: String,
+        surface: BSplineSurface3D
+    )
     case createPolySplineSurface(
         name: String,
         sourceMesh: Mesh,
@@ -693,6 +697,11 @@ public enum AutomationCommand: Codable, Equatable, Sendable {
                 guides: guides,
                 targets: targets,
                 options: options
+            )
+        case .createBSplineSurface(let name, let surface):
+            .createBSplineSurface(
+                name: name,
+                surface: surface
             )
         case .createPolySplineSurface(let name, let sourceMesh, let options):
             .createPolySplineSurface(

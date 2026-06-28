@@ -148,6 +148,15 @@ public struct ViewportSceneBuilder {
                     surfaceFrameDisplaysByFeatureID: surfaceFrameDisplaysByFeatureID,
                     bodyDisplaySnapshots: bodyDisplaySnapshots
                 )
+            case .bSplineSurface:
+                return evaluatedMeshBodyItem(
+                    featureID: featureID,
+                    sourceFeatureID: nil,
+                    document: document,
+                    surfaceControlPointDisplaysByFeatureID: surfaceControlPointDisplaysByFeatureID,
+                    surfaceFrameDisplaysByFeatureID: surfaceFrameDisplaysByFeatureID,
+                    bodyDisplaySnapshots: bodyDisplaySnapshots
+                )
             case .faceLoopOffset:
                 return evaluatedMeshBodyItem(
                     featureID: featureID,

@@ -34,4 +34,5 @@ public extension ObjectTypeID {
     static let dodecahedron: ObjectTypeID = "dodecahedron"
     static let torusKnot: ObjectTypeID = "torusKnot"
     static let polySpline: ObjectTypeID = "polySpline"
+    static let bSplineSurface: ObjectTypeID = "bSplineSurface"
 }

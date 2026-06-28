@@ -1111,6 +1111,16 @@ public final class AgentCommandController: AgentClientProtocol {
             ]
         ),
         capability(
+            "createBSplineSurface",
+            category: .solid,
+            summary: "Create a direct source-owned B-spline or NURBS sheet surface from stored degree, knot vectors, control net, and weights.",
+            access: .automationCommand,
+            mutatesDocument: true,
+            discovery: [.surfaceSourceSummary, .surfaceFrames, .surfaceAnalysis, .topologySummary],
+            targets: [.document],
+            failureMode: "Accepts finite validated B-spline surface source data with positive weights and matching U/V degree, knot-vector, and control-net dimensions; rejects invalid knots, non-positive weights, degenerate domains, stale generations, and invalid evaluated sheet topology before mutation."
+        ),
+        capability(
             "createPolySplineSurface",
             category: .solid,
             summary: "Create a PolySpline source surface from a supported source mesh and emit a B-spline sheet body.",

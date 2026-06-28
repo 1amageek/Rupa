@@ -1164,6 +1164,20 @@ public struct AutomationRunner {
                 didMutate: result.didMutate,
                 diagnostics: result.diagnostics
             )
+        case .createBSplineSurface(let name, let surface):
+            let result = try session.execute(
+                .createBSplineSurface(
+                    name: name,
+                    surface: surface
+                )
+            )
+            return AutomationResult(
+                message: "B-spline surface \(name) created.",
+                commandName: result.commandName,
+                generation: result.generation,
+                didMutate: result.didMutate,
+                diagnostics: result.diagnostics
+            )
         case .setSurfaceFrameDisplay(let query, let isVisible):
             let result = try session.execute(
                 .setSurfaceFrameDisplay(query: query, isVisible: isVisible)

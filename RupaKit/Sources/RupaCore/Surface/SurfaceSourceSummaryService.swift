@@ -45,18 +45,31 @@ public struct SurfaceSourceSummaryService: Sendable {
         )
         let sources = document.cadDocument.designGraph.order.compactMap { featureID -> SurfaceSourceSummaryResult.Source? in
             guard let feature = document.cadDocument.designGraph.nodes[featureID],
-                  feature.isSuppressed == false,
-                  case let .polySpline(polySpline) = feature.operation else {
+                  feature.isSuppressed == false else {
                 return nil
             }
-            return source(
-                featureID: featureID,
-                feature: feature,
-                polySpline: polySpline,
-                sceneNodeID: sceneNodeIDsByFeatureID[featureID],
-                surfaceControlPointDisplays: document.productMetadata.surfaceControlPointDisplays,
-                topologyEntriesByPersistentName: topologyEntriesByPersistentName
-            )
+            switch feature.operation {
+            case let .polySpline(polySpline):
+                return source(
+                    featureID: featureID,
+                    feature: feature,
+                    polySpline: polySpline,
+                    sceneNodeID: sceneNodeIDsByFeatureID[featureID],
+                    surfaceControlPointDisplays: document.productMetadata.surfaceControlPointDisplays,
+                    topologyEntriesByPersistentName: topologyEntriesByPersistentName
+                )
+            case let .bSplineSurface(surfaceFeature):
+                return BSplineSurfaceSourceSummaryBuilder().source(
+                    featureID: featureID,
+                    feature: feature,
+                    surfaceFeature: surfaceFeature,
+                    sceneNodeID: sceneNodeIDsByFeatureID[featureID],
+                    surfaceControlPointDisplays: document.productMetadata.surfaceControlPointDisplays,
+                    topologyEntriesByPersistentName: topologyEntriesByPersistentName
+                )
+            default:
+                return nil
+            }
         }
 
         return SurfaceSourceSummaryResult(
@@ -565,10 +578,14 @@ public struct SurfaceSourceSummaryService: Sendable {
         )
     }
 
-    private func persistentName(featureID: FeatureID, subshape: String) -> PersistentName {
+    private func persistentName(
+        featureID: FeatureID,
+        generatedRole: String = "polySpline",
+        subshape: String
+    ) -> PersistentName {
         PersistentName(components: [
             .feature(featureID),
-            .generated("polySpline"),
+            .generated(generatedRole),
             .subshape(subshape),
         ])
     }

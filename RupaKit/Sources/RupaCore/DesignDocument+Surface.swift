@@ -4,6 +4,59 @@ import RupaCoreTypes
 
 extension DesignDocument {
     @discardableResult
+    public mutating func createBSplineSurface(
+        name: String,
+        surface: BSplineSurface3D,
+        objectRegistry: ObjectTypeRegistry = .builtIn
+    ) throws -> FeatureID {
+        let trimmedName = try normalizedMetadataName(name, owner: "B-spline surface")
+        let surfaceFeature = BSplineSurfaceFeature(surface: surface)
+        try surfaceFeature.validate()
+
+        let featureID = FeatureID()
+        let feature = FeatureNode(
+            id: featureID,
+            name: trimmedName,
+            operation: .bSplineSurface(surfaceFeature),
+            outputs: [FeatureOutput(role: .sheet)]
+        )
+
+        let previousCADDocument = cadDocument
+        let previousProductMetadata = productMetadata
+        var didCommitSurface = false
+        defer {
+            if didCommitSurface == false {
+                cadDocument = previousCADDocument
+                productMetadata = previousProductMetadata
+            }
+        }
+
+        try appendFeature(feature)
+        _ = try productMetadata.appendSceneNodeToFirstRoot(
+            name: trimmedName,
+            reference: .body(featureID),
+            object: .body(
+                featureID: featureID,
+                sourceSection: nil,
+                typeID: .bSplineSurface,
+                geometryRole: .surface,
+                properties: ObjectPropertySet(values: [
+                    "surface.degree.u": .integer(surface.uDegree),
+                    "surface.degree.v": .integer(surface.vDegree),
+                    "control.point.u": .integer(surface.uControlPointCount),
+                    "control.point.v": .integer(surface.vControlPointCount),
+                    "surface.rational": .boolean(surface.isRational),
+                ]),
+                objectRegistry: objectRegistry
+            )
+        )
+        try cadDocument.validate()
+        try productMetadata.validate(against: cadDocument, objectRegistry: objectRegistry)
+        didCommitSurface = true
+        return featureID
+    }
+
+    @discardableResult
     public mutating func createPolySplineSurface(
         name: String,
         sourceMesh: Mesh,

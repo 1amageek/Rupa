@@ -13,6 +13,8 @@ extension FeatureOperation {
             return true
         case .polySpline:
             return true
+        case .bSplineSurface:
+            return true
         case .faceLoopOffset:
             return true
         case .edgeOffset:
@@ -41,6 +43,8 @@ extension FeatureOperation {
         case .sweep:
             return nil
         case .polySpline:
+            return nil
+        case .bSplineSurface:
             return nil
         case .faceLoopOffset(let feature):
             return feature.target.featureID

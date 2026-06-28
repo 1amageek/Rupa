@@ -231,6 +231,26 @@ struct WorkspaceObjectOverviewInspectorStateBuilder {
                     value: "\(polySpline.sourceMesh.indices.count / 3)"
                 ),
             ]
+        case .bSplineSurface(let surfaceFeature):
+            return [
+                WorkspaceInspectorTextRow(title: "Operation", value: "B-spline Surface"),
+                WorkspaceInspectorTextRow(
+                    title: "U Degree",
+                    value: "\(surfaceFeature.surface.uDegree)"
+                ),
+                WorkspaceInspectorTextRow(
+                    title: "V Degree",
+                    value: "\(surfaceFeature.surface.vDegree)"
+                ),
+                WorkspaceInspectorTextRow(
+                    title: "Control Points",
+                    value: "\(surfaceFeature.surface.uControlPointCount) x \(surfaceFeature.surface.vControlPointCount)"
+                ),
+                WorkspaceInspectorTextRow(
+                    title: "Rational",
+                    value: surfaceFeature.surface.isRational ? "Yes" : "No"
+                ),
+            ]
         case .faceLoopOffset(let faceLoopOffset):
             return [
                 WorkspaceInspectorTextRow(title: "Operation", value: "Offset Face Loop"),

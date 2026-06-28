@@ -2057,6 +2057,19 @@ public final class EditorSession {
     }
 
     @discardableResult
+    public func createBSplineSurface(
+        name: String,
+        surface: BSplineSurface3D
+    ) -> CommandExecutionResult? {
+        perform(
+            .createBSplineSurface(
+                name: name,
+                surface: surface
+            )
+        )
+    }
+
+    @discardableResult
     public func createPolySplineSurface(
         name: String,
         sourceMesh: Mesh,

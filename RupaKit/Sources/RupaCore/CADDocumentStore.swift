@@ -1001,6 +1001,16 @@ public final class CADDocumentStore {
             document = updatedDocument
             try commitMutation()
             evaluateCurrentDocument()
+        case .createBSplineSurface(let name, let surface):
+            var updatedDocument = document
+            try updatedDocument.createBSplineSurface(
+                name: name,
+                surface: surface,
+                objectRegistry: objectRegistry
+            )
+            document = updatedDocument
+            try commitMutation()
+            evaluateCurrentDocument()
         case .createPolySplineSurface(let name, let sourceMesh, let options):
             var updatedDocument = document
             try updatedDocument.createPolySplineSurface(

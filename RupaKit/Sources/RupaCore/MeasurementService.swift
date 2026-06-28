@@ -520,6 +520,25 @@ public struct MeasurementService {
                         message: "Measurement included PolySpline source bounds; B-spline sheet area and curvature measurement remain unsupported."
                     )
                 )
+            case .bSplineSurface(let surfaceFeature):
+                guard !isSupersededInDocumentScope(featureID) else {
+                    continue
+                }
+                guard shouldMeasure(featureID) else {
+                    continue
+                }
+                includedSourceFeatureIDs.insert(featureID)
+                for row in surfaceFeature.surface.controlPoints {
+                    for point in row {
+                        bounds.include(point)
+                    }
+                }
+                diagnostics.append(
+                    EditorDiagnostic(
+                        severity: .info,
+                        message: "Measurement included B-spline surface control-net bounds; exact sheet area and curvature measurement remain unsupported."
+                    )
+                )
             case .faceLoopOffset:
                 guard !isSupersededInDocumentScope(featureID) else {
                     continue

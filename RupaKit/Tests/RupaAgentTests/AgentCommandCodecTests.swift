@@ -539,6 +539,23 @@ import SwiftCAD
     #expect(decodedRequest == request)
 }
 
+@Test func agentMessageCodecRoundTripsDirectBSplineSurfaceCommand() async throws {
+    let codec = AgentMessageCodec()
+    let sessionID = UUID()
+    let request = AgentRequest.execute(
+        sessionID: sessionID,
+        command: .createBSplineSurface(
+            name: "Encoded B-spline Surface",
+            surface: agentDirectBSplineSurface()
+        ),
+        expectedGeneration: DocumentGeneration(5)
+    )
+
+    let decodedRequest = try codec.decodeRequest(from: try codec.encode(request))
+
+    #expect(decodedRequest == request)
+}
+
 @Test func agentMessageCodecRoundTripsPolySplineSurfaceVertexMoveCommand() async throws {
     let codec = AgentMessageCodec()
     let sessionID = UUID()

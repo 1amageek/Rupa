@@ -773,11 +773,12 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                     notes: [
                         "Surface source summaries expose Agent-readable B-spline degree, order, knot vectors, stable knot and span IDs, CV weights, control-point selection references, trim-loop ownership, and generated topology links for supported PolySpline patches.",
                         "Strict interior PolySpline CV weights are editable through the shared Core, Automation, and Agent command path while preserving CV position overrides.",
+                        "Direct B-spline surface sources can be created through Core, Automation, and Agent, evaluate to selectable sheet topology, and appear in surface source summaries with stored degree, knot vectors, weights, control-net references, and rectangular trim-loop identity.",
                     ]
                 ),
             ],
             openWork: [
-                "First-class NURBS and B-spline source entities beyond the current PolySpline cubic patch subset, including general degree, order, knot insertion, span editing, boundary CV weights, stable CV/knot/span IDs, and trim-loop ownership.",
+                "Direct B-spline surface source editing beyond creation and readback, including CV position and weight mutation, knot insertion, span editing, boundary CV policy, stable editable knot/span IDs, and authored trim-loop mutation.",
                 "Interactive viewport surface-frame handles, snap consumption, trim editing, offset, and sweep or loft section placement that consume the Agent-readable UVN frame contract.",
                 "Persistent continuity editing contracts for target G0/G1/G2 surface boundaries and G0/G1/G2/G3 curve matching.",
                 "Non-planar G2 multi-patch reconstruction.",
@@ -785,7 +786,7 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                 "General trim-curve and surface CV source editing.",
                 "Viewport creation controls.",
             ],
-            next: "Promote PolySpline from generated-boundary editing to a shared parametric surface foundation with NURBS/B-spline source ownership, UI-consumable UVN frame affordances, and explicit continuity diagnostics before broadening surface tools."
+            next: "Continue from direct B-spline source creation and readback into editable CV/knot/span/trim commands, UI-consumable UVN frame affordances, and explicit continuity diagnostics before broadening surface tools."
         ),
         entry(
             area: .curveContinuity,

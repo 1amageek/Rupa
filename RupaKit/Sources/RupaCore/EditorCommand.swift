@@ -240,6 +240,10 @@ public enum EditorCommand: Codable, Equatable, Sendable {
         targets: [SweepTargetReference],
         options: SweepOptions
     )
+    case createBSplineSurface(
+        name: String,
+        surface: BSplineSurface3D
+    )
     case createPolySplineSurface(
         name: String,
         sourceMesh: Mesh,
@@ -473,6 +477,8 @@ public enum EditorCommand: Codable, Equatable, Sendable {
             "createRevolve"
         case .createSweep:
             "createSweep"
+        case .createBSplineSurface:
+            "createBSplineSurface"
         case .createPolySplineSurface:
             "createPolySplineSurface"
         case .setSurfaceControlPointDisplay:
@@ -585,6 +591,7 @@ public enum EditorCommand: Codable, Equatable, Sendable {
              .extrudeProfile,
              .createRevolve,
              .createSweep,
+             .createBSplineSurface,
              .createPolySplineSurface,
              .setSurfaceControlPointDisplay,
              .setSurfaceFrameDisplay,

@@ -34,6 +34,25 @@ func agentPolySplinePatchNetworkMesh(centerZ: Double = 0.001) -> Mesh {
     )
 }
 
+func agentDirectBSplineSurface() -> BSplineSurface3D {
+    let base = BSplineSurface3D.cubicBezierPatch(
+        bottomLeft: Point3D(x: 0.0, y: 0.0, z: 0.0),
+        bottomRight: Point3D(x: 0.02, y: 0.0, z: 0.0),
+        topRight: Point3D(x: 0.02, y: 0.02, z: 0.0),
+        topLeft: Point3D(x: 0.0, y: 0.02, z: 0.0)
+    )
+    var weights = base.weights
+    weights[1][1] = 2.0
+    return BSplineSurface3D(
+        uDegree: base.uDegree,
+        vDegree: base.vDegree,
+        uKnots: base.uKnots,
+        vKnots: base.vKnots,
+        controlPoints: base.controlPoints,
+        weights: weights
+    )
+}
+
 func surfaceVectorLength(_ vector: SurfaceAnalysisResult.Vector) -> Double {
     hypot(hypot(vector.x, vector.y), vector.z)
 }

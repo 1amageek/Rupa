@@ -132,6 +132,59 @@ import SwiftCAD
     #expect(abs(measuredPoint.point.z - controlVertex.point.z) <= 1.0e-12)
 }
 
+@Test func surfaceSourceSummaryReportsDirectBSplineSurfaceSourceContract() async throws {
+    var document = DesignDocument.empty()
+    let surface = surfaceSourceSummaryDirectBSplineSurface()
+    let featureID = try document.createBSplineSurface(
+        name: "Direct Surface Source",
+        surface: surface
+    )
+
+    let result = try SurfaceSourceSummaryService().summarize(document: document)
+
+    #expect(result.counts.sourceCount == 1)
+    #expect(result.counts.patchCount == 1)
+    #expect(result.counts.controlVertexCount == 0)
+    #expect(result.counts.controlPointCount == 16)
+    #expect(result.counts.trimLoopCount == 1)
+    let source = try #require(result.sources.first)
+    #expect(source.featureID == featureID.description)
+    #expect(source.kind == "bSplineSurface")
+    #expect(source.support.isSupported)
+    #expect(source.support.candidateKind == "directBSplineSurface")
+    let patch = try #require(source.patches.first)
+    #expect(patch.facePersistentName?.contains("generated:bSplineSurface/subshape:patch:0:face") == true)
+    #expect(patch.faceSelectionComponentID?.hasPrefix(SelectionComponentID.generatedTopologyPrefix) == true)
+    #expect(patch.basis.kind == "bSplineSurface")
+    #expect(patch.basis.uDegree == 3)
+    #expect(patch.basis.vDegree == 3)
+    #expect(patch.basis.uKnots == surface.uKnots)
+    #expect(patch.basis.vKnots == surface.vKnots)
+    #expect(patch.basis.isRational)
+    #expect(patch.trimLoops.first?.edgePersistentNames.count == 4)
+    #expect(patch.trimLoops.first?.selectionReferences.count == 4)
+    let weightedControlPoint = try #require(patch.controlPoints.first { $0.uIndex == 1 && $0.vIndex == 1 })
+    #expect(weightedControlPoint.weight == 2.0)
+    #expect(weightedControlPoint.isEditable == false)
+    guard case .surface(.controlPoint(let controlPointReference)) = weightedControlPoint.selectionReference else {
+        Issue.record("Direct B-spline control point must expose a surface control-point reference.")
+        return
+    }
+    #expect(controlPointReference.uIndex == 1)
+    #expect(controlPointReference.vIndex == 1)
+    let measurement = try SelectionMeasurementService().measure(
+        query: CADAgentMeasurementQuery(kind: .point, first: weightedControlPoint.selectionReference),
+        document: document
+    )
+    guard case .point(let measuredPoint) = measurement else {
+        Issue.record("Direct B-spline control point measurement must return a point result.")
+        return
+    }
+    #expect(abs(measuredPoint.point.x - weightedControlPoint.point.x) <= 1.0e-12)
+    #expect(abs(measuredPoint.point.y - weightedControlPoint.point.y) <= 1.0e-12)
+    #expect(abs(measuredPoint.point.z - weightedControlPoint.point.z) <= 1.0e-12)
+}
+
 @MainActor
 @Test func surfaceControlPointDisplayStateRoundTripsThroughSurfaceSourceSummary() async throws {
     let session = EditorSession()
@@ -235,6 +288,25 @@ import SwiftCAD
     try staleDocument.setSurfaceFrameDisplay(query: staleQuery, isVisible: false)
     let staleDisplayID = try SurfaceFrameDisplayID(query: staleQuery)
     #expect(staleDocument.productMetadata.surfaceFrameDisplays[staleDisplayID] == nil)
+}
+
+private func surfaceSourceSummaryDirectBSplineSurface() -> BSplineSurface3D {
+    let base = BSplineSurface3D.cubicBezierPatch(
+        bottomLeft: Point3D(x: 0.0, y: 0.0, z: 0.0),
+        bottomRight: Point3D(x: 0.02, y: 0.0, z: 0.0),
+        topRight: Point3D(x: 0.02, y: 0.015, z: 0.0),
+        topLeft: Point3D(x: 0.0, y: 0.015, z: 0.0)
+    )
+    var weights = base.weights
+    weights[1][1] = 2.0
+    return BSplineSurface3D(
+        uDegree: base.uDegree,
+        vDegree: base.vDegree,
+        uKnots: base.uKnots,
+        vKnots: base.vKnots,
+        controlPoints: base.controlPoints,
+        weights: weights
+    )
 }
 
 private func surfaceSourceSummaryPatchNetworkMesh(centerZ: Double) -> Mesh {

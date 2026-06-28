@@ -58,6 +58,8 @@ struct PatternArrayFeatureIDRemapper: Sendable {
             return .sweep(sweep)
         case .polySpline:
             return operation
+        case .bSplineSurface:
+            return operation
         case .faceLoopOffset(var faceLoopOffset):
             faceLoopOffset.target = FaceLoopOffsetTargetReference(
                 featureID: try remappedFeatureID(faceLoopOffset.target.featureID)

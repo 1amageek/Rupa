@@ -5,6 +5,75 @@ import SwiftCAD
 @testable import RupaAgent
 
 @MainActor
+@Test func agentDispatchesDirectBSplineSurfaceCommandAndExposesSourceSummary() async throws {
+    let server = AgentCommandController()
+    let sessionID = UUID()
+    let session = EditorSession()
+    server.register(session: session, id: sessionID)
+
+    let response = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .createBSplineSurface(
+                name: "Agent B-spline Surface",
+                surface: agentDirectBSplineSurface()
+            ),
+            expectedGeneration: DocumentGeneration(0)
+        )
+    )
+
+    guard case .command(let result) = response else {
+        Issue.record("Agent must create a direct B-spline surface.")
+        return
+    }
+    #expect(result.commandName == "createBSplineSurface")
+    #expect(result.didMutate)
+    #expect(result.generation == DocumentGeneration(1))
+    #expect(session.evaluationStatus == .valid)
+    #expect(session.evaluatedBodyCount == 1)
+
+    let topologyResponse = server.handle(
+        .topologySummary(
+            sessionID: sessionID,
+            expectedGeneration: DocumentGeneration(1)
+        )
+    )
+    guard case .topologySummary(let topology) = topologyResponse else {
+        Issue.record("Agent must return topology for a direct B-spline surface.")
+        return
+    }
+    let face = try #require(topology.entries.first {
+        $0.kind == .face
+            && $0.surfaceKind == "bSpline"
+            && $0.generatedRole == "bSplineSurface"
+            && $0.subshapeRole == "patch:0:face"
+    })
+    #expect(face.surfaceUDegree == 3)
+    #expect(face.surfaceVDegree == 3)
+    #expect(face.surfaceUControlPointCount == 4)
+    #expect(face.surfaceVControlPointCount == 4)
+
+    let sourceResponse = server.handle(
+        .surfaceSourceSummary(
+            sessionID: sessionID,
+            expectedGeneration: DocumentGeneration(1)
+        )
+    )
+    guard case .surfaceSourceSummary(let summary) = sourceResponse else {
+        Issue.record("Agent must return direct B-spline surface source summary.")
+        return
+    }
+    let source = try #require(summary.sources.first)
+    #expect(source.kind == "bSplineSurface")
+    let patch = try #require(source.patches.first)
+    #expect(patch.basis.kind == "bSplineSurface")
+    #expect(patch.basis.isRational)
+    let weightedControlPoint = try #require(patch.controlPoints.first { $0.uIndex == 1 && $0.vIndex == 1 })
+    #expect(weightedControlPoint.weight == 2.0)
+    #expect(weightedControlPoint.isEditable == false)
+}
+
+@MainActor
 @Test func agentDispatchesPolySplineCommandAndExposesBSplineTopology() async throws {
     let server = AgentCommandController()
     let sessionID = UUID()
