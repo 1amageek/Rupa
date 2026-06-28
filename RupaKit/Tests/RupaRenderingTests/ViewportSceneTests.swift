@@ -422,7 +422,7 @@ import Testing
 
     let item = try #require(overlay.items.first)
     #expect(overlay.items.count == 1)
-    #expect(item.continuity == .g1)
+    #expect(item.continuity == .g2)
     #expect(item.requiresCurvatureContinuitySolve == false)
     #expect(item.edgePersistentName.contains("subshape:patch:0:edge:uMax")
         || item.edgePersistentName.contains("subshape:patch:2:edge:uMin"))
@@ -460,7 +460,7 @@ import Testing
     )
 
     #expect(overlay.items.count == 1)
-    #expect(overlay.items.first?.continuity == .g1)
+    #expect(overlay.items.first?.continuity == .g2)
 }
 
 @MainActor

@@ -18,6 +18,9 @@ public struct SurfaceContinuityService: Sendable {
         var faceID: FaceID
         var normal: Vector3D
         var isPlanar: Bool
+        var surface: Surface3D
+        var faceOrientation: Orientation
+        var orientedEdge: OrientedEdge
     }
 
     private struct PersistentTopologyNames {
@@ -73,18 +76,20 @@ public struct SurfaceContinuityService: Sendable {
             }
         )
         let edgeUses = try bSplineFaceUsesByEdge(in: evaluatedDocument.brep)
-        let adjacencies = edgeUses.compactMap { edgeID, uses -> SurfaceContinuityResult.Adjacency? in
+        var adjacencies: [SurfaceContinuityResult.Adjacency] = []
+        adjacencies.reserveCapacity(edgeUses.count)
+        for (edgeID, uses) in edgeUses {
             guard uses.count == 2 else {
-                return nil
+                continue
             }
-            return surfaceAdjacency(
+            adjacencies.append(try surfaceAdjacency(
                 edgeID: edgeID,
                 firstUse: uses[0],
                 secondUse: uses[1],
                 persistentNames: persistentNames
-            )
+            ))
         }
-        .sorted {
+        adjacencies.sort {
             if $0.edgePersistentNames == $1.edgePersistentNames {
                 return $0.edgeID < $1.edgeID
             }
@@ -119,17 +124,19 @@ public struct SurfaceContinuityService: Sendable {
                         continue
                     }
                     let normal = try faceNormal(face, surface: surface)
-                    let faceUse = FaceUse(
-                        faceID: faceID,
-                        normal: normal,
-                        isPlanar: isPlanar(surface)
-                    )
                     for loopID in face.loops {
                         guard let loop = model.loops[loopID] else {
                             continue
                         }
                         for orientedEdge in loop.edges {
-                            usesByEdge[orientedEdge.edgeID, default: []].append(faceUse)
+                            usesByEdge[orientedEdge.edgeID, default: []].append(FaceUse(
+                                faceID: faceID,
+                                normal: normal,
+                                isPlanar: isPlanar(surface),
+                                surface: storedSurface,
+                                faceOrientation: face.orientation,
+                                orientedEdge: orientedEdge
+                            ))
                         }
                     }
                 }
@@ -143,11 +150,26 @@ public struct SurfaceContinuityService: Sendable {
         firstUse: FaceUse,
         secondUse: FaceUse,
         persistentNames: PersistentTopologyNames
-    ) -> SurfaceContinuityResult.Adjacency {
+    ) throws -> SurfaceContinuityResult.Adjacency {
+        if let sampledAdjacency = try sampledSurfaceAdjacency(
+            edgeID: edgeID,
+            firstUse: firstUse,
+            secondUse: secondUse,
+            persistentNames: persistentNames
+        ) {
+            return sampledAdjacency
+        }
+
         let normalDot = min(1.0, max(-1.0, abs(firstUse.normal.dot(secondUse.normal))))
         let normalAngle = acos(normalDot)
         let hasTangentPlaneContinuity = normalAngle <= max(tolerance.angle, tolerance.distance)
-        let continuity: SurfaceContinuityResult.ContinuityLevel = hasTangentPlaneContinuity ? .g1 : .g0
+        let hasPlanarCurvatureContinuity = hasTangentPlaneContinuity && firstUse.isPlanar && secondUse.isPlanar
+        let continuity: SurfaceContinuityResult.ContinuityLevel
+        if hasPlanarCurvatureContinuity {
+            continuity = .g2
+        } else {
+            continuity = hasTangentPlaneContinuity ? .g1 : .g0
+        }
         let requiresCurvatureContinuitySolve = continuity == .g1 && !(firstUse.isPlanar && secondUse.isPlanar)
         return SurfaceContinuityResult.Adjacency(
             edgeID: edgeID.description,
@@ -159,9 +181,79 @@ public struct SurfaceContinuityService: Sendable {
             continuity: continuity,
             positionGap: 0.0,
             normalAngle: normalAngle,
-            curvatureGap: nil,
+            curvatureGap: hasPlanarCurvatureContinuity ? 0.0 : nil,
             requiresCurvatureContinuitySolve: requiresCurvatureContinuitySolve
         )
+    }
+
+    private func sampledSurfaceAdjacency(
+        edgeID: EdgeID,
+        firstUse: FaceUse,
+        secondUse: FaceUse,
+        persistentNames: PersistentTopologyNames
+    ) throws -> SurfaceContinuityResult.Adjacency? {
+        guard let firstParameterCurve = firstUse.orientedEdge.surfaceParameterCurve,
+              let secondParameterCurve = secondUse.orientedEdge.surfaceParameterCurve else {
+            return nil
+        }
+        let secondParameterDirection: SurfaceParameterCurveDirection =
+            firstUse.orientedEdge.orientation == secondUse.orientedEdge.orientation ? .forward : .reversed
+        let sampler = SurfaceContinuitySampler(modelingTolerance: tolerance)
+        let request = try sampler.request(
+            first: SurfaceContinuitySamplingSide(
+                surface: firstUse.surface,
+                parameterCurve: firstParameterCurve,
+                parameterDirection: .forward,
+                frameOrientation: frameOrientation(for: firstUse)
+            ),
+            second: SurfaceContinuitySamplingSide(
+                surface: secondUse.surface,
+                parameterCurve: secondParameterCurve,
+                parameterDirection: secondParameterDirection,
+                frameOrientation: frameOrientation(for: secondUse)
+            ),
+            requiredLevel: .curvature,
+            tolerances: SurfaceContinuityTolerances.standard(modelingTolerance: tolerance),
+            options: SurfaceContinuitySamplingOptions(sampleCount: 5)
+        )
+        let result = try SurfaceContinuityEvaluator(modelingTolerance: tolerance).evaluate(request)
+        return SurfaceContinuityResult.Adjacency(
+            edgeID: edgeID.description,
+            edgePersistentNames: persistentNames.edgeNamesByID[edgeID] ?? [],
+            firstFaceID: firstUse.faceID.description,
+            secondFaceID: secondUse.faceID.description,
+            firstFacePersistentName: persistentNames.faceNamesByID[firstUse.faceID],
+            secondFacePersistentName: persistentNames.faceNamesByID[secondUse.faceID],
+            continuity: continuityLevel(from: result.achievedLevel),
+            positionGap: result.deviation.maximumPositionDistance,
+            normalAngle: result.deviation.maximumNormalAngle,
+            curvatureGap: result.deviation.maximumPrincipalCurvatureDistance,
+            requiresCurvatureContinuitySolve: false
+        )
+    }
+
+    private func frameOrientation(for use: FaceUse) -> SurfaceFrameOrientation {
+        switch use.faceOrientation {
+        case .forward:
+            return .forward
+        case .reversed:
+            return .reversed
+        }
+    }
+
+    private func continuityLevel(
+        from achievedLevel: SurfaceContinuityLevel?
+    ) -> SurfaceContinuityResult.ContinuityLevel {
+        switch achievedLevel {
+        case .curvature:
+            return .g2
+        case .tangentPlane:
+            return .g1
+        case .positional:
+            return .g0
+        case nil:
+            return .disconnected
+        }
     }
 
     private func faceNormal(
@@ -247,7 +339,7 @@ public struct SurfaceContinuityService: Sendable {
             result.append(
                 EditorDiagnostic(
                     severity: .warning,
-                    message: "\(unresolvedCount) surface adjacency record(s) require curvature-continuity solving before G2 can be claimed."
+                    message: "\(unresolvedCount) surface adjacency record(s) need sampled boundary curves before G2 continuity can be classified."
                 )
             )
         }

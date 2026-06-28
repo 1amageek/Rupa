@@ -15,15 +15,17 @@ import SwiftCAD
     #expect(summary.counts.bSplineFaceCount == 2)
     #expect(summary.counts.sharedEdgeCount == 1)
     #expect(summary.counts.g0AdjacencyCount == 0)
-    #expect(summary.counts.g1AdjacencyCount == 1)
-    #expect(summary.counts.g2AdjacencyCount == 0)
+    #expect(summary.counts.g1AdjacencyCount == 0)
+    #expect(summary.counts.g2AdjacencyCount == 1)
     #expect(summary.counts.unresolvedG2AdjacencyCount == 0)
     let adjacency = try #require(summary.adjacencies.first)
-    #expect(adjacency.continuity == .g1)
+    #expect(adjacency.continuity == .g2)
     #expect(adjacency.positionGap == 0.0)
     #expect(adjacency.requiresCurvatureContinuitySolve == false)
     let normalAngle = try #require(adjacency.normalAngle)
     #expect(normalAngle <= ModelingTolerance.standard.angle)
+    let curvatureGap = try #require(adjacency.curvatureGap)
+    #expect(curvatureGap <= 1.0e-6)
     let faceNames = [
         adjacency.firstFacePersistentName,
         adjacency.secondFacePersistentName,

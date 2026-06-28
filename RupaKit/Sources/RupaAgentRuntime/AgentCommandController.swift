@@ -1384,7 +1384,7 @@ public final class AgentCommandController: AgentClientProtocol {
             mutatesDocument: false,
             discovery: [.topologySummary, .surfaceContinuitySummary],
             targets: [.face, .edge],
-            failureMode: "Rejects stale generations or evaluation failures before returning surface continuity data; reports unresolved curvature continuity instead of claiming G2."
+            failureMode: "Rejects stale generations or evaluation failures before returning surface continuity data; reports sampled curvature gaps for G2-capable UV trim curves and flags unresolved curvature continuity when a sampled boundary contract is unavailable."
         ),
         capability(
             "selectTargets",

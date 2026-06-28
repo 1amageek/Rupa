@@ -884,6 +884,7 @@ import SwiftCAD
     #expect(surfaceContinuity.discovery.contains(.topologySummary))
     #expect(surfaceContinuity.discovery.contains(.surfaceContinuitySummary))
     #expect(surfaceContinuity.targets == [.face, .edge])
+    #expect(surfaceContinuity.failureMode.contains("sampled curvature gaps"))
     #expect(surfaceContinuity.failureMode.contains("unresolved curvature continuity"))
 
     #expect(snapResolution.category == .read)
