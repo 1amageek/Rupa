@@ -3956,6 +3956,17 @@ public struct MainView: View {
         )
     }
 
+    private var surfaceInspectorStateBuilder: WorkspaceSurfaceInspectorStateBuilder {
+        WorkspaceSurfaceInspectorStateBuilder(
+            document: session.document,
+            selection: session.selection,
+            currentEvaluation: session.currentEvaluation,
+            documentGeneration: session.generation,
+            objectRegistry: objectRegistry,
+            surfaceAnalysisOptions: surfaceAnalysisOptions.analysisOptions
+        )
+    }
+
     private func patternArrayInspectorState(for nodes: [SceneNode]) -> PatternArrayInspectorState? {
         PatternArrayInspectorState(
             selectedNodes: nodes,
@@ -4101,12 +4112,7 @@ public struct MainView: View {
     }
 
     private var selectedSurfaceControlPointReferences: [SelectionReference] {
-        session.selection.selectedReferences.filter { reference in
-            if case .surface(.controlPoint) = reference {
-                return true
-            }
-            return false
-        }
+        surfaceInspectorStateBuilder.surfaceControlPointReferences
     }
 
     private var selectedSketchPointTargets: [SelectionTarget] {
@@ -4231,82 +4237,39 @@ public struct MainView: View {
 
     private var selectedSurfaceControlPointInspectorStateResult:
         Result<SurfaceControlPointInspectorState?, Error> {
-        guard !selectedSurfaceControlPointReferences.isEmpty else {
-            return .success(nil)
-        }
-        do {
-            let summary = try SurfaceSourceSummaryService().summarize(document: session.document)
-            guard let state = SurfaceControlPointInspectorState(
-                selectedReferences: selectedSurfaceControlPointReferences,
-                summaryResult: summary
-            ) else {
-                throw EditorError(
-                    code: .referenceUnresolved,
-                    message: "Selected surface control point references could not be resolved in the current surface source summary."
-                )
-            }
-            return .success(state)
-        } catch {
-            return .failure(error)
-        }
+        surfaceInspectorStateBuilder.surfaceControlPointStateResult()
     }
 
     private var selectedSurfaceContinuitySummary: RupaCore.SurfaceContinuityResult? {
-        switch selectedSurfaceContinuitySummaryResult(for: selectedSceneNodes) {
-        case .success(let summary):
-            return summary
-        case .failure:
-            return nil
-        }
+        surfaceInspectorStateBuilder.continuitySummary(for: selectedSceneNodes)
     }
 
     private var selectedSurfaceAnalysisSummary: SurfaceAnalysisResult? {
-        switch selectedSurfaceAnalysisSummaryResult(for: selectedSceneNodes) {
-        case .success(let summary):
-            return summary
-        case .failure:
-            return nil
-        }
+        surfaceInspectorStateBuilder.analysisSummary(for: selectedSceneNodes)
     }
 
     private func selectedSurfaceAnalysisSummaryResult(
         for nodes: [SceneNode]
     ) -> Result<SurfaceAnalysisResult?, Error> {
-        do {
-            return .success(try resolveSelectedSurfaceAnalysisSummary(for: nodes))
-        } catch {
-            return .failure(error)
-        }
+        surfaceInspectorStateBuilder.analysisSummaryResult(for: nodes)
     }
 
     private func selectedSurfaceAnalysisResult(
         for nodes: [SceneNode]
     ) -> Result<InspectorSurfaceAnalysis?, Error> {
-        do {
-            return .success(try resolveSelectedSurfaceAnalysis(for: nodes))
-        } catch {
-            return .failure(error)
-        }
+        surfaceInspectorStateBuilder.analysisResult(for: nodes)
     }
 
     private func selectedSurfaceContinuitySummaryResult(
         for nodes: [SceneNode]
     ) -> Result<RupaCore.SurfaceContinuityResult?, Error> {
-        do {
-            return .success(try resolveSelectedSurfaceContinuitySummary(for: nodes))
-        } catch {
-            return .failure(error)
-        }
+        surfaceInspectorStateBuilder.continuitySummaryResult(for: nodes)
     }
 
     private func selectedSurfaceContinuityResult(
         for nodes: [SceneNode]
     ) -> Result<InspectorSurfaceContinuity?, Error> {
-        do {
-            return .success(try resolveSelectedSurfaceContinuity(for: nodes))
-        } catch {
-            return .failure(error)
-        }
+        surfaceInspectorStateBuilder.continuityResult(for: nodes)
     }
 
     private var defaultFaceOffsetStepMeters: Double {
@@ -4382,228 +4345,6 @@ public struct MainView: View {
 
     private func wholeSketchCurveTarget(for target: SelectionTarget) -> SelectionTarget? {
         sketchEntityInspectorStateBuilder.wholeCurveTarget(for: target)
-    }
-
-    private func resolveSelectedSurfaceAnalysis(
-        for nodes: [SceneNode]
-    ) throws -> InspectorSurfaceAnalysis? {
-        guard let result = try resolveSelectedSurfaceAnalysisSummary(for: nodes) else {
-            return nil
-        }
-        let faces = selectedSurfaceAnalysisFaces(result.faces, nodes: nodes)
-        return InspectorSurfaceAnalysis(
-            bSplineFaceCount: faces.count,
-            sampleCount: faces.reduce(0) { $0 + $1.samples.count },
-            uCurvatureCombCount: faces.reduce(0) { partial, face in
-                partial + face.curvatureCombs.filter { $0.direction == .u }.count
-            },
-            vCurvatureCombCount: faces.reduce(0) { partial, face in
-                partial + face.curvatureCombs.filter { $0.direction == .v }.count
-            },
-            trimBoundaryCount: faces.reduce(0) { partial, face in
-                partial + face.trimBoundaries.count
-            },
-            innerTrimBoundaryCount: faces.reduce(0) { partial, face in
-                partial + face.trimBoundaries.filter { $0.role == .inner }.count
-            },
-            openTrimBoundaryCount: faces.reduce(0) { partial, face in
-                partial + face.trimBoundaries.filter { !$0.isClosed }.count
-            },
-            trimBoundaryEdgeCount: faces.reduce(0) { partial, face in
-                partial + face.trimBoundaries.reduce(0) { boundaryPartial, boundary in
-                    boundaryPartial + boundary.edgeCount
-                }
-            },
-            faces: faces.map { face in
-                InspectorSurfaceFaceAnalysis(
-                    id: face.faceID,
-                    facePersistentNames: face.facePersistentNames,
-                    uDegree: face.uDegree,
-                    vDegree: face.vDegree,
-                    uControlPointCount: face.uControlPointCount,
-                    vControlPointCount: face.vControlPointCount,
-                    sampleCount: face.samples.count,
-                    trimBoundaryCount: face.trimBoundaries.count,
-                    innerTrimBoundaryCount: face.trimBoundaries.filter { $0.role == .inner }.count,
-                    openTrimBoundaryCount: face.trimBoundaries.filter { !$0.isClosed }.count,
-                    trimBoundaryEdgeCount: face.trimBoundaries.reduce(0) { partial, boundary in
-                        partial + boundary.edgeCount
-                    },
-                    trimBoundaryLength: face.trimBoundaries.reduce(0.0) { partial, boundary in
-                        partial + boundary.estimatedLength
-                    },
-                    maxUNormalChangePerLength: face.maxUNormalChangePerLength,
-                    maxVNormalChangePerLength: face.maxVNormalChangePerLength,
-                    maxNormalAngle: face.maxNormalAngle,
-                    maxAbsUNormalCurvature: face.maxAbsUNormalCurvature,
-                    maxAbsVNormalCurvature: face.maxAbsVNormalCurvature,
-                    maxAbsPrincipalCurvature: face.maxAbsPrincipalCurvature,
-                    maxAbsGaussianCurvature: face.maxAbsGaussianCurvature,
-                    minimumPrincipalDirection: face.samples.first?.minimumPrincipalDirection,
-                    maximumPrincipalDirection: face.samples.first?.maximumPrincipalDirection
-                )
-            },
-            diagnostics: result.diagnostics
-        )
-    }
-
-    private func resolveSelectedSurfaceAnalysisSummary(
-        for nodes: [SceneNode]
-    ) throws -> SurfaceAnalysisResult? {
-        guard nodes.count == 1, let node = nodes.first else {
-            return nil
-        }
-        let selectedPersistentNames = selectedGeneratedTopologyPersistentNames()
-        guard selectedPersistentNames.isEmpty == false || node.object?.geometryRole == .surface else {
-            return nil
-        }
-
-        let result = try SurfaceAnalysisService(
-            options: surfaceAnalysisOptions.analysisOptions
-        ).analyze(
-            document: session.document,
-            objectRegistry: objectRegistry,
-            currentEvaluation: session.currentEvaluation,
-            currentGeneration: session.generation
-        )
-        guard result.counts.bSplineFaceCount > 0 else {
-            return nil
-        }
-        return result
-    }
-
-    private func selectedSurfaceAnalysisFaces(
-        _ faces: [SurfaceAnalysisResult.FaceAnalysis],
-        nodes: [SceneNode]
-    ) -> [SurfaceAnalysisResult.FaceAnalysis] {
-        let selectedPersistentNames = selectedGeneratedTopologyPersistentNames()
-        if selectedPersistentNames.isEmpty == false {
-            return faces.filter { face in
-                surfaceAnalysisFace(face, containsAny: selectedPersistentNames)
-            }
-        }
-        let selectedFeatureIDs = Set(
-            nodes.compactMap { node -> String? in
-                guard node.reference?.kind == .body else {
-                    return nil
-                }
-                return node.reference?.featureID?.description
-            }
-        )
-        guard selectedFeatureIDs.isEmpty == false else {
-            return []
-        }
-        return faces.filter { face in
-            guard let sourceFeatureID = face.sourceFeatureID else {
-                return false
-            }
-            return selectedFeatureIDs.contains(sourceFeatureID)
-        }
-    }
-
-    private func resolveSelectedSurfaceContinuity(
-        for nodes: [SceneNode]
-    ) throws -> InspectorSurfaceContinuity? {
-        guard let result = try resolveSelectedSurfaceContinuitySummary(for: nodes) else {
-            return nil
-        }
-        let selectedPersistentNames = selectedGeneratedTopologyPersistentNames()
-        let adjacencies: [RupaCore.SurfaceContinuityResult.Adjacency]
-        if selectedPersistentNames.isEmpty {
-            adjacencies = result.adjacencies
-        } else {
-            adjacencies = result.adjacencies.filter { adjacency in
-                surfaceAdjacency(adjacency, containsAny: selectedPersistentNames)
-            }
-        }
-        return InspectorSurfaceContinuity(
-            bSplineFaceCount: result.counts.bSplineFaceCount,
-            sharedEdgeCount: result.counts.sharedEdgeCount,
-            g0AdjacencyCount: result.counts.g0AdjacencyCount,
-            g1AdjacencyCount: result.counts.g1AdjacencyCount,
-            g2AdjacencyCount: result.counts.g2AdjacencyCount,
-            unresolvedG2AdjacencyCount: result.counts.unresolvedG2AdjacencyCount,
-            adjacencies: adjacencies.map { adjacency in
-                InspectorSurfaceAdjacency(
-                    id: adjacency.edgeID,
-                    edgePersistentNames: adjacency.edgePersistentNames,
-                    firstFacePersistentName: adjacency.firstFacePersistentName,
-                    secondFacePersistentName: adjacency.secondFacePersistentName,
-                    continuity: adjacency.continuity,
-                    positionGap: adjacency.positionGap,
-                    normalAngle: adjacency.normalAngle,
-                    curvatureGap: adjacency.curvatureGap,
-                    requiresCurvatureContinuitySolve: adjacency.requiresCurvatureContinuitySolve
-                )
-            },
-            diagnostics: result.diagnostics
-        )
-    }
-
-    private func resolveSelectedSurfaceContinuitySummary(
-        for nodes: [SceneNode]
-    ) throws -> RupaCore.SurfaceContinuityResult? {
-        guard nodes.count == 1, let node = nodes.first else {
-            return nil
-        }
-        let selectedPersistentNames = selectedGeneratedTopologyPersistentNames()
-        guard selectedPersistentNames.isEmpty == false || node.object?.geometryRole == .surface else {
-            return nil
-        }
-
-        let result = try SurfaceContinuityService().summarize(
-            document: session.document,
-            objectRegistry: objectRegistry,
-            currentEvaluation: session.currentEvaluation,
-            currentGeneration: session.generation
-        )
-        guard result.counts.bSplineFaceCount > 0 else {
-            return nil
-        }
-        return result
-    }
-
-    private func selectedGeneratedTopologyPersistentNames() -> Set<String> {
-        var names = Set<String>()
-        for target in session.selection.selectedTargets {
-            let componentID: SelectionComponentID?
-            switch target.component {
-            case .object, .sketchEntity, .region, .vertex:
-                componentID = nil
-            case .face(let id), .edge(let id):
-                componentID = id
-            }
-            guard let name = componentID?.generatedTopologyPersistentName else {
-                continue
-            }
-            names.insert(name)
-        }
-        return names
-    }
-
-    private func surfaceAdjacency(
-        _ adjacency: RupaCore.SurfaceContinuityResult.Adjacency,
-        containsAny persistentNames: Set<String>
-    ) -> Bool {
-        if let firstFacePersistentName = adjacency.firstFacePersistentName,
-           persistentNames.contains(firstFacePersistentName) {
-            return true
-        }
-        if let secondFacePersistentName = adjacency.secondFacePersistentName,
-           persistentNames.contains(secondFacePersistentName) {
-            return true
-        }
-        return adjacency.edgePersistentNames.contains { persistentNames.contains($0) }
-    }
-
-    private func surfaceAnalysisFace(
-        _ face: SurfaceAnalysisResult.FaceAnalysis,
-        containsAny persistentNames: Set<String>
-    ) -> Bool {
-        if face.facePersistentNames.contains(where: { persistentNames.contains($0) }) {
-            return true
-        }
-        return face.edgePersistentNames.contains { persistentNames.contains($0) }
     }
 
     private func selectionComponentTitle(_ component: SelectionComponent) -> String {
@@ -4910,11 +4651,7 @@ public struct MainView: View {
     }
 
     private func shouldShowSurfaceContinuitySection(for nodes: [SceneNode]) -> Bool {
-        guard nodes.count == 1, let node = nodes.first else {
-            return false
-        }
-        return node.object?.geometryRole == .surface
-            || selectedGeneratedTopologyPersistentNames().isEmpty == false
+        surfaceInspectorStateBuilder.showsContinuitySection(for: nodes)
     }
 
     @ViewBuilder
