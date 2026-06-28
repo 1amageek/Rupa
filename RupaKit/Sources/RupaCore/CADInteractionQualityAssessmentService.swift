@@ -970,8 +970,514 @@ public struct CADInteractionQualityAssessmentService: Sendable {
             },
             evidence: evidence,
             openWork: openWork,
-            nextRequiredResult: next
+            nextRequiredResult: next,
+            designProcessPacket: designProcessPacket(
+                area: area,
+                workflow: workflow,
+                references: references,
+                rating: rating,
+                gates: gates,
+                evidence: evidence,
+                openWork: openWork,
+                next: next
+            )
         )
+    }
+
+    private static func designProcessPacket(
+        area: CADInteractionQualityArea,
+        workflow: String,
+        references: [String],
+        rating: CADInteractionQualityRating,
+        gates: [CADInteractionQualityGate: CADInteractionQualityRating],
+        evidence: [CADInteractionQualityEvidence],
+        openWork: [String],
+        next: String
+    ) -> DesignProcessPacket {
+        let sourceFiles = unique(evidence.flatMap(\.sourceFiles))
+        let testReferences = designProcessTestReferences(from: evidence)
+        let gateAssessments = CADInteractionQualityGate.allCases.map { gate in
+            CADInteractionQualityGateAssessment(
+                gate: gate,
+                rating: gates[gate] ?? .missing,
+                evidence: evidence.map(\.label),
+                openWork: gates[gate] == .verified ? [] : openWork
+            )
+        }
+
+        return DesignProcessPacket(
+            id: "\(area.rawValue)-design-process",
+            intent: DesignProcessIntent(
+                capabilityID: area.rawValue,
+                title: workflow,
+                outcome: next,
+                area: area,
+                sourceOfTruth: .core,
+                referenceSources: references
+            ),
+            evaluation: DesignProcessEvaluationSpec(
+                successCriteria: [
+                    next,
+                    "All required CAD quality gates must be represented by evidence, missing cases, and route coverage.",
+                ],
+                diagnosticRequirements: unique(evidence.flatMap(\.notes)),
+                performanceBudget: "performanceBudget gate is \((gates[.performanceBudget] ?? .missing).rawValue).",
+                requiredEvidence: evidence.map(\.label)
+            ),
+            domain: DesignProcessDomainModel(
+                sourceEntities: sourceFiles.isEmpty ? [workflow] : sourceFiles,
+                targetEntities: ["\(area.rawValue) capability"],
+                generatedTopology: generatedTopologyDescriptions(from: evidence),
+                units: "document units",
+                tolerances: ["Core command tolerance", "SwiftCAD kernel tolerance"],
+                ownershipBoundaries: [
+                    "RupaCore owns the command and assessment contract.",
+                    "Rupa UI, Automation, Agent, CLI, Kernel, Evaluation, Measurement, and Diagnostics routes must stay visible in the route matrix.",
+                ]
+            ),
+            caseMatrix: caseMatrix(
+                area: area,
+                gateAssessments: gateAssessments,
+                openWork: openWork,
+                testReferences: testReferences
+            ),
+            routeMatrix: routeMatrix(
+                area: area,
+                gates: gates,
+                evidence: evidence
+            ),
+            constraintBinding: DesignProcessConstraintBinding(
+                validationRules: CADInteractionQualityGate.allCases.map(\.rawValue),
+                invariants: [
+                    DesignProcessInvariant(
+                        id: "\(area.rawValue)-route-coverage",
+                        title: "Required route coverage stays explicit",
+                        requiredLayer: .evaluation,
+                        verification: "DesignProcessPacket route matrix and FlowGraph validation"
+                    ),
+                ],
+                sourceRewriteLimits: openWork,
+                topologyIdentityRules: [
+                    "Selection and generated topology routes must use stable IDs for shipped subsets.",
+                    "Stale-generation mutations must be rejected or refreshed before commit.",
+                ]
+            ),
+            resolution: DesignProcessResolution(
+                selectedRouteIDs: selectedRouteIDs(for: area),
+                decisions: [
+                    DesignProcessDecisionRecord(
+                        id: "\(area.rawValue)-assessment-source",
+                        conflictArea: "Assessment source ownership",
+                        selectedRouteID: "\(area.rawValue)-core-evaluation",
+                        rejectedRouteIDs: [],
+                        rationale: "The assessment surface already reaches Core and Agent callers, so attaching design packets there makes process coverage inspectable.",
+                        followUpOwner: .evaluation
+                    ),
+                ],
+                openQuestions: openWork
+            ),
+            validatedArtifact: DesignProcessValidatedArtifact(
+                sourceFiles: sourceFiles,
+                tests: testReferences,
+                buildCommands: ["xcodebuild test -scheme RupaKit-Package -destination platform=macOS -only-testing:RupaCoreTests"],
+                diagnostics: diagnosticRecords(from: gateAssessments).map(\.message),
+                supportedClaims: gateAssessments
+                    .filter { $0.rating.score >= CADInteractionQualityRating.implemented.score }
+                    .map { "\($0.gate.rawValue): \($0.rating.rawValue)" }
+            ),
+            observations: observations(area: area, openWork: openWork),
+            flowGraph: flowGraph(for: area),
+            confidence: confidence(
+                rating: rating,
+                gates: gates,
+                evidence: evidence,
+                openWork: openWork
+            )
+        )
+    }
+
+    private static func designProcessTestReferences(
+        from evidence: [CADInteractionQualityEvidence]
+    ) -> [DesignProcessTestReference] {
+        unique(evidence.flatMap(\.tests)).map { test in
+            DesignProcessTestReference(
+                target: "RupaKit",
+                name: test,
+                file: test
+            )
+        }
+    }
+
+    private static func generatedTopologyDescriptions(
+        from evidence: [CADInteractionQualityEvidence]
+    ) -> [String] {
+        let descriptions = unique(evidence.flatMap(\.notes)).filter { note in
+            let lowered = note.lowercased()
+            return lowered.contains("topology")
+                || lowered.contains("generated")
+                || lowered.contains("selection")
+        }
+        return descriptions.isEmpty ? ["No generated topology claim is verified by this packet yet."] : descriptions
+    }
+
+    private static func caseMatrix(
+        area: CADInteractionQualityArea,
+        gateAssessments: [CADInteractionQualityGateAssessment],
+        openWork: [String],
+        testReferences: [DesignProcessTestReference]
+    ) -> DesignProcessCaseMatrix {
+        let supported = gateAssessments
+            .filter { $0.rating.score >= CADInteractionQualityRating.implemented.score }
+            .map { assessment in
+                DesignProcessCase(
+                    id: "\(area.rawValue)-\(assessment.gate.rawValue)-supported",
+                    title: "\(assessment.gate.rawValue) is \(assessment.rating.rawValue)",
+                    status: assessment.rating == .verified ? .verified : .supported,
+                    testReferences: testReferences,
+                    evidence: assessment.evidence
+                )
+            }
+        let boundary = gateAssessments
+            .filter { $0.rating == .partial || $0.rating == .planned }
+            .map { assessment in
+                DesignProcessCase(
+                    id: "\(area.rawValue)-\(assessment.gate.rawValue)-boundary",
+                    title: "\(assessment.gate.rawValue) needs expansion",
+                    status: .planned,
+                    diagnostic: DesignProcessDiagnostic(
+                        id: "\(area.rawValue)-\(assessment.gate.rawValue)-boundary",
+                        severity: .warning,
+                        message: "Gate is \(assessment.rating.rawValue) and must remain visible as a boundary case.",
+                        affectedLayer: layer(for: assessment.gate)
+                    ),
+                    evidence: assessment.evidence,
+                    notes: assessment.openWork
+                )
+            }
+        let rejected = gateAssessments
+            .filter { $0.rating.score < CADInteractionQualityRating.implemented.score }
+            .map { assessment in
+                DesignProcessCase(
+                    id: "\(area.rawValue)-\(assessment.gate.rawValue)-rejected",
+                    title: "\(assessment.gate.rawValue) is not ready for a verified claim",
+                    status: assessment.rating == .missing ? .missing : .blocked,
+                    diagnostic: DesignProcessDiagnostic(
+                        id: "\(area.rawValue)-\(assessment.gate.rawValue)-not-implemented",
+                        severity: assessment.rating == .missing ? .error : .warning,
+                        message: "This gate has not reached implemented status.",
+                        affectedLayer: layer(for: assessment.gate)
+                    ),
+                    notes: assessment.openWork
+                )
+            }
+        let missing = openWork.enumerated().map { index, item in
+            DesignProcessCase(
+                id: "\(area.rawValue)-missing-\(index + 1)",
+                title: item,
+                status: .missing,
+                diagnostic: DesignProcessDiagnostic(
+                    id: "\(area.rawValue)-missing-\(index + 1)",
+                    severity: .warning,
+                    message: item,
+                    affectedLayer: .evaluation
+                )
+            )
+        }
+        let performance = gateAssessments
+            .filter { $0.gate == .performanceBudget }
+            .map { assessment in
+                DesignProcessCase(
+                    id: "\(area.rawValue)-performance-budget",
+                    title: "Performance budget is \(assessment.rating.rawValue)",
+                    status: assessment.rating.score >= CADInteractionQualityRating.implemented.score ? .measured : .planned,
+                    evidence: assessment.evidence,
+                    notes: assessment.openWork
+                )
+            }
+
+        return DesignProcessCaseMatrix(
+            supported: DesignProcessCaseGroup(kind: .supported, cases: supported),
+            boundary: DesignProcessCaseGroup(kind: .boundary, cases: boundary),
+            rejected: DesignProcessCaseGroup(kind: .rejected, cases: rejected),
+            missing: DesignProcessCaseGroup(kind: .missing, cases: missing),
+            performance: DesignProcessCaseGroup(kind: .performance, cases: performance)
+        )
+    }
+
+    private static func routeMatrix(
+        area: CADInteractionQualityArea,
+        gates: [CADInteractionQualityGate: CADInteractionQualityRating],
+        evidence: [CADInteractionQualityEvidence]
+    ) -> DesignProcessRouteMatrix {
+        let routeEvidence = DesignProcessRouteEvidence(
+            sourceFiles: unique(evidence.flatMap(\.sourceFiles)),
+            tests: designProcessTestReferences(from: evidence),
+            diagnostics: unique(evidence.flatMap(\.notes)),
+            notes: evidence.map(\.label)
+        )
+        return DesignProcessRouteMatrix(
+            requiredPorts: [.product, .ui, .core, .automation, .agent, .cli, .kernel, .evaluation, .measurement, .diagnostics],
+            routes: [
+                route(area, "product-ui", "Product intent to UI affordance", .product, .ui, routeStatus(for: gates[.referenceContract] ?? .missing), routeEvidence),
+                route(area, "ui-core", "UI command to Core contract", .ui, .core, routeStatus(for: gates[.commandContract] ?? .missing), routeEvidence),
+                route(area, "core-automation", "Core command to Automation route", .core, .automation, routeStatus(for: gates[.commandContract] ?? .missing), routeEvidence),
+                route(area, "automation-agent", "Automation readback to Agent route", .automation, .agent, routeStatus(for: gates[.agentParity] ?? .missing), routeEvidence),
+                route(area, "core-cli", "Core command to CLI route", .core, .cli, routeStatus(for: gates[.commandContract] ?? .missing), routeEvidence),
+                route(area, "core-kernel", "Core command to kernel evaluation", .core, .kernel, routeStatus(for: lowestRating(gates[.sourceOwnership], gates[.commandContract])), routeEvidence),
+                route(area, "kernel-evaluation", "Kernel result to evaluation", .kernel, .evaluation, routeStatus(for: gates[.verification] ?? .missing), routeEvidence),
+                route(area, "evaluation-measurement", "Evaluation to measurement readback", .evaluation, .measurement, routeStatus(for: gates[.measurementDiagnostics] ?? .missing), routeEvidence),
+                route(area, "core-diagnostics", "Core diagnostics to user and Agent readback", .core, .diagnostics, routeStatus(for: gates[.measurementDiagnostics] ?? .missing), routeEvidence),
+            ]
+        )
+    }
+
+    private static func route(
+        _ area: CADInteractionQualityArea,
+        _ name: String,
+        _ title: String,
+        _ source: DesignProcessRoutePortKind,
+        _ target: DesignProcessRoutePortKind,
+        _ status: DesignProcessRouteStatus,
+        _ evidence: DesignProcessRouteEvidence
+    ) -> DesignProcessRoute {
+        DesignProcessRoute(
+            id: "\(area.rawValue)-\(name)",
+            title: title,
+            source: DesignProcessRoutePort(
+                kind: source,
+                identifier: source.rawValue,
+                title: source.rawValue
+            ),
+            target: DesignProcessRoutePort(
+                kind: target,
+                identifier: target.rawValue,
+                title: target.rawValue
+            ),
+            status: status,
+            evidence: evidence
+        )
+    }
+
+    private static func routeStatus(
+        for rating: CADInteractionQualityRating
+    ) -> DesignProcessRouteStatus {
+        switch rating {
+        case .missing:
+            .missing
+        case .planned:
+            .planned
+        case .partial:
+            .partial
+        case .implemented:
+            .connected
+        case .verified:
+            .verified
+        }
+    }
+
+    private static func lowestRating(
+        _ lhs: CADInteractionQualityRating?,
+        _ rhs: CADInteractionQualityRating?
+    ) -> CADInteractionQualityRating {
+        [lhs ?? .missing, rhs ?? .missing].min { left, right in
+            left.score < right.score
+        } ?? .missing
+    }
+
+    private static func selectedRouteIDs(for area: CADInteractionQualityArea) -> [String] {
+        [
+            "\(area.rawValue)-product-ui",
+            "\(area.rawValue)-ui-core",
+            "\(area.rawValue)-core-automation",
+            "\(area.rawValue)-automation-agent",
+            "\(area.rawValue)-core-cli",
+            "\(area.rawValue)-core-kernel",
+            "\(area.rawValue)-kernel-evaluation",
+            "\(area.rawValue)-evaluation-measurement",
+            "\(area.rawValue)-core-diagnostics",
+        ]
+    }
+
+    private static func diagnosticRecords(
+        from assessments: [CADInteractionQualityGateAssessment]
+    ) -> [DesignProcessDiagnostic] {
+        assessments
+            .filter { $0.rating.score < CADInteractionQualityRating.implemented.score }
+            .map { assessment in
+                DesignProcessDiagnostic(
+                    id: "\(assessment.gate.rawValue)-\(assessment.rating.rawValue)",
+                    severity: assessment.rating == .missing ? .error : .warning,
+                    message: "\(assessment.gate.rawValue) is \(assessment.rating.rawValue).",
+                    affectedLayer: layer(for: assessment.gate)
+                )
+            }
+    }
+
+    private static func observations(
+        area: CADInteractionQualityArea,
+        openWork: [String]
+    ) -> [DesignProcessObservation] {
+        openWork.enumerated().map { index, item in
+            DesignProcessObservation(
+                id: "\(area.rawValue)-open-work-\(index + 1)",
+                channel: .humanReview,
+                severity: index == 0 ? .blocking : .warning,
+                affectedLayer: .evaluation,
+                summary: item,
+                requiredNextAction: "Update the design packet and implementation route before claiming verified support."
+            )
+        }
+    }
+
+    private static func confidence(
+        rating: CADInteractionQualityRating,
+        gates: [CADInteractionQualityGate: CADInteractionQualityRating],
+        evidence: [CADInteractionQualityEvidence],
+        openWork: [String]
+    ) -> DesignProcessConfidence {
+        let evidenceFreshness = evidence.isEmpty ? 0.0 : 1.0
+        let testCount = evidence.flatMap(\.tests).count
+        let testCoverage = min(1.0, Double(testCount) / 3.0)
+        let performanceCoverage = Double((gates[.performanceBudget] ?? .missing).score)
+            / Double(CADInteractionQualityRating.verified.score)
+        let missingChannelPenalty = min(0.8, Double(openWork.count) * 0.05)
+
+        return DesignProcessConfidence(
+            evidenceFreshness: evidenceFreshness,
+            testCoverage: testCoverage,
+            performanceCoverage: performanceCoverage,
+            missingChannelPenalty: missingChannelPenalty,
+            calibrationState: .humanAnchored,
+            notes: [
+                "Confidence is derived from static CAD quality ratings until evaluator calibration is implemented.",
+            ]
+        )
+    }
+
+    private static func flowGraph(for area: CADInteractionQualityArea) -> DesignProcessFlowGraph {
+        DesignProcessFlowGraph(
+            nodes: [
+                flowNode(.product, ports: [("intent", .output)]),
+                flowNode(.ui, ports: [("intent", .input), ("command", .output)]),
+                flowNode(.core, ports: [
+                    ("command", .input),
+                    ("automation", .output),
+                    ("cli", .output),
+                    ("kernel", .output),
+                    ("diagnostic", .output),
+                ]),
+                flowNode(.automation, ports: [("command", .input), ("agent", .output)]),
+                flowNode(.agent, ports: [("readback", .input)]),
+                flowNode(.cli, ports: [("command", .input)]),
+                flowNode(.kernel, ports: [("request", .input), ("result", .output)]),
+                flowNode(.evaluation, ports: [("result", .input), ("measurement", .output)]),
+                flowNode(.measurement, ports: [("readback", .input)]),
+                flowNode(.diagnostics, ports: [("message", .input)]),
+            ],
+            edges: [
+                flowEdge(area, "product-ui", .product, "intent", .ui, "intent"),
+                flowEdge(area, "ui-core", .ui, "command", .core, "command"),
+                flowEdge(area, "core-automation", .core, "automation", .automation, "command"),
+                flowEdge(area, "automation-agent", .automation, "agent", .agent, "readback"),
+                flowEdge(area, "core-cli", .core, "cli", .cli, "command"),
+                flowEdge(area, "core-kernel", .core, "kernel", .kernel, "request"),
+                flowEdge(area, "kernel-evaluation", .kernel, "result", .evaluation, "result"),
+                flowEdge(area, "evaluation-measurement", .evaluation, "measurement", .measurement, "readback"),
+                flowEdge(area, "core-diagnostics", .core, "diagnostic", .diagnostics, "message"),
+            ],
+            requiredPorts: [
+                requirement(.product, "intent", .outgoing),
+                requirement(.ui, "intent", .incoming),
+                requirement(.ui, "command", .outgoing),
+                requirement(.core, "command", .incoming),
+                requirement(.core, "automation", .outgoing),
+                requirement(.automation, "command", .incoming),
+                requirement(.automation, "agent", .outgoing),
+                requirement(.agent, "readback", .incoming),
+                requirement(.core, "cli", .outgoing),
+                requirement(.cli, "command", .incoming),
+                requirement(.core, "kernel", .outgoing),
+                requirement(.kernel, "request", .incoming),
+                requirement(.kernel, "result", .outgoing),
+                requirement(.evaluation, "result", .incoming),
+                requirement(.evaluation, "measurement", .outgoing),
+                requirement(.measurement, "readback", .incoming),
+                requirement(.core, "diagnostic", .outgoing),
+                requirement(.diagnostics, "message", .incoming),
+            ],
+        )
+    }
+
+    private static func flowNode(
+        _ layer: DesignProcessLayer,
+        ports: [(String, DesignProcessFlowPortDirection)]
+    ) -> DesignProcessFlowNode {
+        DesignProcessFlowNode(
+            id: layer.rawValue,
+            title: layer.rawValue,
+            layer: layer,
+            ports: ports.map { id, direction in
+                DesignProcessFlowPort(id: id, title: id, direction: direction)
+            }
+        )
+    }
+
+    private static func flowEdge(
+        _ area: CADInteractionQualityArea,
+        _ name: String,
+        _ source: DesignProcessLayer,
+        _ sourcePort: String,
+        _ target: DesignProcessLayer,
+        _ targetPort: String
+    ) -> DesignProcessFlowEdge {
+        DesignProcessFlowEdge(
+            id: "\(area.rawValue)-\(name)",
+            sourceNodeID: source.rawValue,
+            sourcePortID: sourcePort,
+            targetNodeID: target.rawValue,
+            targetPortID: targetPort
+        )
+    }
+
+    private static func requirement(
+        _ layer: DesignProcessLayer,
+        _ port: String,
+        _ connection: DesignProcessFlowPortConnection
+    ) -> DesignProcessFlowPortRequirement {
+        DesignProcessFlowPortRequirement(
+            nodeID: layer.rawValue,
+            portID: port,
+            connection: connection,
+            reason: "\(layer.rawValue).\(port) is required for assessment route coverage."
+        )
+    }
+
+    private static func layer(for gate: CADInteractionQualityGate) -> DesignProcessLayer {
+        switch gate {
+        case .referenceContract:
+            .product
+        case .sourceOwnership, .commandContract, .selectionTopology:
+            .core
+        case .viewportAffordance, .inspectorAffordance:
+            .ui
+        case .agentParity:
+            .agent
+        case .measurementDiagnostics:
+            .diagnostics
+        case .verification:
+            .evaluation
+        case .performanceBudget:
+            .measurement
+        }
+    }
+
+    private static func unique(_ values: [String]) -> [String] {
+        var seen: Set<String> = []
+        var result: [String] = []
+        for value in values where seen.insert(value).inserted {
+            result.append(value)
+        }
+        return result
     }
 
     private static func counts(

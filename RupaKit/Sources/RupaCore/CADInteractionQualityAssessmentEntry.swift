@@ -7,6 +7,7 @@ public struct CADInteractionQualityAssessmentEntry: Codable, Equatable, Sendable
     public var evidence: [CADInteractionQualityEvidence]
     public var openWork: [String]
     public var nextRequiredResult: String
+    public var designProcessPacket: DesignProcessPacket
 
     public init(
         area: CADInteractionQualityArea,
@@ -16,7 +17,8 @@ public struct CADInteractionQualityAssessmentEntry: Codable, Equatable, Sendable
         gateAssessments: [CADInteractionQualityGateAssessment],
         evidence: [CADInteractionQualityEvidence] = [],
         openWork: [String] = [],
-        nextRequiredResult: String
+        nextRequiredResult: String,
+        designProcessPacket: DesignProcessPacket
     ) {
         self.area = area
         self.workflow = workflow
@@ -26,6 +28,7 @@ public struct CADInteractionQualityAssessmentEntry: Codable, Equatable, Sendable
         self.evidence = evidence
         self.openWork = openWork
         self.nextRequiredResult = nextRequiredResult
+        self.designProcessPacket = designProcessPacket
     }
 
     public var weakestRating: CADInteractionQualityRating {
