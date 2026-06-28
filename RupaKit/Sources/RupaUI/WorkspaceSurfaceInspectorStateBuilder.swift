@@ -17,6 +17,17 @@ struct WorkspaceSurfaceInspectorStateBuilder {
         }
     }
 
+    var surfaceParameterReferences: [SelectionReference] {
+        selection.selectedReferences.filter { reference in
+            switch reference {
+            case .surface(.knot), .surface(.span):
+                return true
+            default:
+                return false
+            }
+        }
+    }
+
     func surfaceControlPointStateResult() -> Result<SurfaceControlPointInspectorState?, Error> {
         guard !surfaceControlPointReferences.isEmpty else {
             return .success(nil)
@@ -31,6 +42,27 @@ struct WorkspaceSurfaceInspectorStateBuilder {
                 throw EditorError(
                     code: .referenceUnresolved,
                     message: "Selected surface control point references could not be resolved in the current surface source summary."
+                )
+            }
+            return .success(state)
+        } catch {
+            return .failure(error)
+        }
+    }
+
+    func surfaceParameterStateResult() -> Result<SurfaceParameterInspectorState?, Error> {
+        guard !surfaceParameterReferences.isEmpty else {
+            return .success(nil)
+        }
+        do {
+            let summary = try SurfaceSourceSummaryService().summarize(document: document)
+            guard let state = SurfaceParameterInspectorState(
+                selectedReferences: surfaceParameterReferences,
+                summaryResult: summary
+            ) else {
+                throw EditorError(
+                    code: .referenceUnresolved,
+                    message: "Selected surface parameter references could not be resolved in the current surface source summary."
                 )
             }
             return .success(state)

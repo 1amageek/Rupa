@@ -29,6 +29,7 @@ public struct MainView: View {
     @State private var surfaceControlPointFrameUMoveMeters: Double
     @State private var surfaceControlPointFrameVMoveMeters: Double
     @State private var surfaceControlPointFrameNormalMoveMeters: Double
+    @State private var surfaceKnotInsertionValue: Double
     @State private var sketchSplineControlPointSlideCount: Int
     @State private var slideCommandState: SlideCommandState
     @State private var sketchSplitFraction: Double
@@ -98,6 +99,7 @@ public struct MainView: View {
         self._surfaceControlPointFrameUMoveMeters = State(initialValue: 0.0)
         self._surfaceControlPointFrameVMoveMeters = State(initialValue: 0.0)
         self._surfaceControlPointFrameNormalMoveMeters = State(initialValue: 0.001)
+        self._surfaceKnotInsertionValue = State(initialValue: 0.5)
         self._sketchSplineControlPointSlideCount = State(initialValue: 1)
         self._slideCommandState = State(initialValue: .inactive)
         self._sketchSplitFraction = State(initialValue: 0.5)
@@ -3744,6 +3746,10 @@ public struct MainView: View {
         surfaceInspectorStateBuilder.surfaceControlPointReferences
     }
 
+    private var selectedSurfaceParameterReferences: [SelectionReference] {
+        surfaceInspectorStateBuilder.surfaceParameterReferences
+    }
+
     private var selectedSketchPointTargets: [SelectionTarget] {
         constructionPlaneTargetSelectionBuilder.sketchPointTargets
     }
@@ -3793,6 +3799,11 @@ public struct MainView: View {
     private var selectedSurfaceControlPointInspectorStateResult:
         Result<SurfaceControlPointInspectorState?, Error> {
         surfaceInspectorStateBuilder.surfaceControlPointStateResult()
+    }
+
+    private var selectedSurfaceParameterInspectorStateResult:
+        Result<SurfaceParameterInspectorState?, Error> {
+        surfaceInspectorStateBuilder.surfaceParameterStateResult()
     }
 
     private var selectedSurfaceContinuitySummary: RupaCore.SurfaceContinuityResult? {
@@ -3984,13 +3995,27 @@ public struct MainView: View {
         case .success(let state):
             if let state {
                 surfaceControlPointInspectorSection(state)
+            } else {
+                surfaceParameterOrObjectInspectorSections
+            }
+        case .failure(let error):
+            surfaceControlPointInspectorErrorSections(error)
+        }
+    }
+
+    @ViewBuilder
+    private var surfaceParameterOrObjectInspectorSections: some View {
+        switch selectedSurfaceParameterInspectorStateResult {
+        case .success(let state):
+            if let state {
+                surfaceParameterInspectorSection(state)
             } else if selectedSceneNodes.isEmpty {
                 canvasInspectorSections
             } else {
                 objectInspectorSections(selectedSceneNodes)
             }
         case .failure(let error):
-            surfaceControlPointInspectorErrorSections(error)
+            surfaceParameterInspectorErrorSections(error)
         }
     }
 
@@ -4179,10 +4204,31 @@ public struct MainView: View {
         )
     }
 
+    private func surfaceParameterInspectorSection(
+        _ state: SurfaceParameterInspectorState
+    ) -> some View {
+        SurfaceParameterInspectorView(
+            state: state,
+            knotInsertionValue: $surfaceKnotInsertionValue,
+            onSetKnotValue: setSurfaceKnotValue,
+            onInsertKnot: insertSurfaceKnot
+        )
+    }
+
     @ViewBuilder
     private func surfaceControlPointInspectorErrorSections(_ error: Error) -> some View {
         inspectorSection("Surface CV") {
             inspectorRow("Target", selectedTargetSummary)
+            inspectorRow("Status", "Unavailable")
+            inspectorRow("Reason", error.localizedDescription)
+        }
+    }
+
+    @ViewBuilder
+    private func surfaceParameterInspectorErrorSections(_ error: Error) -> some View {
+        inspectorSection("Surface Parameter") {
+            inspectorRow("Target", selectedTargetSummary)
+            inspectorRow("References", "\(selectedSurfaceParameterReferences.count)")
             inspectorRow("Status", "Unavailable")
             inspectorRow("Reason", error.localizedDescription)
         }
@@ -5064,6 +5110,32 @@ public struct MainView: View {
             }
         }
         if shouldExpandPreview {
+            isPreviewExpanded = true
+        }
+    }
+
+    private func setSurfaceKnotValue(
+        _ target: SelectionReference,
+        value: Double
+    ) {
+        let result = session.setSurfaceKnotValue(
+            target: target,
+            value: .scalar(value)
+        )
+        if result?.diagnostics.isEmpty == false || result == nil {
+            isPreviewExpanded = true
+        }
+    }
+
+    private func insertSurfaceKnot(
+        _ target: SelectionReference,
+        value: Double
+    ) {
+        let result = session.insertSurfaceKnot(
+            target: target,
+            value: .scalar(value)
+        )
+        if result?.diagnostics.isEmpty == false || result == nil {
             isPreviewExpanded = true
         }
     }
