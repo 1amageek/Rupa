@@ -1066,6 +1066,25 @@ public final class CADDocumentStore {
             document = updatedDocument
             try commitMutation()
             evaluateCurrentDocument()
+        case .moveSurfaceControlPointsInFrame(
+            let targets,
+            let frame,
+            let uDistance,
+            let vDistance,
+            let normalDistance
+        ):
+            var updatedDocument = document
+            try updatedDocument.moveSurfaceControlPointsInFrame(
+                targets: targets,
+                frame: frame,
+                uDistance: uDistance,
+                vDistance: vDistance,
+                normalDistance: normalDistance,
+                objectRegistry: objectRegistry
+            )
+            document = updatedDocument
+            try commitMutation()
+            evaluateCurrentDocument()
         case .setSurfaceControlPointWeight(let target, let weight):
             var updatedDocument = document
             try updatedDocument.setSurfaceControlPointWeight(

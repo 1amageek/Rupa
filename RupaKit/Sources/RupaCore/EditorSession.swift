@@ -2119,6 +2119,25 @@ public final class EditorSession {
     }
 
     @discardableResult
+    public func moveSurfaceControlPointsInFrame(
+        targets: [SelectionReference],
+        frame: SurfaceFrameQuery,
+        uDistance: CADExpression,
+        vDistance: CADExpression,
+        normalDistance: CADExpression
+    ) -> CommandExecutionResult? {
+        perform(
+            .moveSurfaceControlPointsInFrame(
+                targets: targets,
+                frame: frame,
+                uDistance: uDistance,
+                vDistance: vDistance,
+                normalDistance: normalDistance
+            )
+        )
+    }
+
+    @discardableResult
     public func setSurfaceControlPointWeight(
         target: SelectionReference,
         weight: CADExpression

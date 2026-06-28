@@ -202,6 +202,104 @@ import SwiftCAD
 }
 
 @MainActor
+@Test func agentMovesDirectBSplineSurfaceControlPointThroughResolvedFrameSample() async throws {
+    let server = AgentCommandController()
+    let sessionID = UUID()
+    let session = EditorSession()
+    server.register(session: session, id: sessionID)
+
+    let createResponse = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .createBSplineSurface(
+                name: "Agent Frame Editable Surface",
+                surface: agentDirectBSplineSurface()
+            ),
+            expectedGeneration: DocumentGeneration(0)
+        )
+    )
+    guard case .command(let createResult) = createResponse else {
+        Issue.record("Agent must create a direct B-spline surface.")
+        return
+    }
+    #expect(createResult.didMutate)
+
+    let summaryResponse = server.handle(
+        .surfaceSourceSummary(
+            sessionID: sessionID,
+            expectedGeneration: DocumentGeneration(1)
+        )
+    )
+    guard case .surfaceSourceSummary(let summary) = summaryResponse else {
+        Issue.record("Agent must return direct B-spline surface source summary.")
+        return
+    }
+    let patch = try #require(summary.sources.first?.patches.first)
+    let controlPoint = try #require(
+        patch.controlPoints.first { $0.uIndex == 1 && $0.vIndex == 1 }
+    )
+    let frameSample = try #require(patch.frameSamples.first)
+    let frameQuery = SurfaceFrameQuery(selectionReference: frameSample.selectionReference)
+    let frameResponse = server.handle(
+        .surfaceFrames(
+            sessionID: sessionID,
+            queries: [frameQuery],
+            expectedGeneration: DocumentGeneration(1)
+        )
+    )
+    guard case .surfaceFrames(let frames) = frameResponse,
+          let frame = frames.frames.first else {
+        Issue.record("Agent must resolve the discovered surface frame sample.")
+        return
+    }
+
+    let moveResponse = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .moveSurfaceControlPointsInFrame(
+                targets: [controlPoint.selectionReference],
+                frame: frameQuery,
+                uDistance: .length(1.0, .millimeter),
+                vDistance: .length(2.0, .millimeter),
+                normalDistance: .length(3.0, .millimeter)
+            ),
+            expectedGeneration: DocumentGeneration(1)
+        )
+    )
+    guard case .command(let moveResult) = moveResponse else {
+        Issue.record("Agent must move a direct B-spline surface control point in a resolved frame.")
+        return
+    }
+    #expect(moveResult.commandName == "moveSurfaceControlPointsInFrame")
+    #expect(moveResult.didMutate)
+    #expect(moveResult.generation == DocumentGeneration(2))
+
+    let featureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let feature = try #require(session.document.cadDocument.designGraph.nodes[featureID])
+    guard case let .bSplineSurface(surfaceFeature) = feature.operation else {
+        Issue.record("Agent must keep a direct B-spline surface feature.")
+        return
+    }
+    let movedPoint = surfaceFeature.surface.controlPoints[1][1]
+    let expectedX = controlPoint.point.x
+        + frame.uAxis.x * 0.001
+        + frame.vAxis.x * 0.002
+        + frame.normal.x * 0.003
+    let expectedY = controlPoint.point.y
+        + frame.uAxis.y * 0.001
+        + frame.vAxis.y * 0.002
+        + frame.normal.y * 0.003
+    let expectedZ = controlPoint.point.z
+        + frame.uAxis.z * 0.001
+        + frame.vAxis.z * 0.002
+        + frame.normal.z * 0.003
+    #expect(abs(movedPoint.x - expectedX) <= 1.0e-12)
+    #expect(abs(movedPoint.y - expectedY) <= 1.0e-12)
+    #expect(abs(movedPoint.z - expectedZ) <= 1.0e-12)
+    #expect(session.evaluationStatus == .valid)
+}
+
+@MainActor
 @Test func agentEditsDirectBSplineSurfaceKnotThroughSurfaceSourceReference() async throws {
     let server = AgentCommandController()
     let sessionID = UUID()

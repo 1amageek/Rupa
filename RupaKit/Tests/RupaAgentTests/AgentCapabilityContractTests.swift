@@ -67,6 +67,7 @@ import SwiftCAD
     #expect(capabilities.contains("createPolySplineSurface"))
     #expect(capabilities.contains("movePolySplineSurfaceVertex"))
     #expect(capabilities.contains("moveSurfaceControlPoint"))
+    #expect(capabilities.contains("moveSurfaceControlPointsInFrame"))
     #expect(capabilities.contains("setSurfaceControlPointWeight"))
     #expect(capabilities.contains("setSurfaceKnotValue"))
     #expect(capabilities.contains("insertSurfaceKnot"))
@@ -164,6 +165,9 @@ import SwiftCAD
     let polySpline = try #require(descriptors.first { $0.name == "createPolySplineSurface" })
     let polySplineVertexMove = try #require(descriptors.first { $0.name == "movePolySplineSurfaceVertex" })
     let surfaceControlPointMove = try #require(descriptors.first { $0.name == "moveSurfaceControlPoint" })
+    let surfaceControlPointFrameMove = try #require(
+        descriptors.first { $0.name == "moveSurfaceControlPointsInFrame" }
+    )
     let surfaceControlPointWeight = try #require(descriptors.first { $0.name == "setSurfaceControlPointWeight" })
     let surfaceKnotValue = try #require(descriptors.first { $0.name == "setSurfaceKnotValue" })
     let surfaceKnotInsertion = try #require(descriptors.first { $0.name == "insertSurfaceKnot" })
@@ -530,6 +534,19 @@ import SwiftCAD
     #expect(surfaceControlPointMove.summary.contains("stored control net"))
     #expect(surfaceControlPointMove.failureMode.contains("direct B-spline surface control-net"))
     #expect(surfaceControlPointMove.failureMode.contains("strict interior PolySpline B-spline control point"))
+
+    #expect(surfaceControlPointFrameMove.category == .solid)
+    #expect(surfaceControlPointFrameMove.mutatesDocument)
+    #expect(surfaceControlPointFrameMove.access == .automationCommand)
+    #expect(surfaceControlPointFrameMove.discovery.contains(.surfaceSourceSummary))
+    #expect(surfaceControlPointFrameMove.discovery.contains(.surfaceFrames))
+    #expect(surfaceControlPointFrameMove.discovery.contains(.surfaceAnalysis))
+    #expect(surfaceControlPointFrameMove.discovery.contains(.surfaceContinuitySummary))
+    #expect(surfaceControlPointFrameMove.targets == [.surfaceControlPoint, .face])
+    #expect(surfaceControlPointFrameMove.summary.contains("UVN frame"))
+    #expect(surfaceControlPointFrameMove.summary.contains("frame samples"))
+    #expect(surfaceControlPointFrameMove.failureMode.contains("duplicate targets"))
+    #expect(surfaceControlPointFrameMove.failureMode.contains("unresolved frames"))
 
     #expect(surfaceControlPointWeight.category == .solid)
     #expect(surfaceControlPointWeight.mutatesDocument)

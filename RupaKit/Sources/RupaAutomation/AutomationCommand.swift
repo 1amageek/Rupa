@@ -244,6 +244,13 @@ public enum AutomationCommand: Codable, Equatable, Sendable {
         deltaY: CADExpression,
         deltaZ: CADExpression
     )
+    case moveSurfaceControlPointsInFrame(
+        targets: [SelectionReference],
+        frame: SurfaceFrameQuery,
+        uDistance: CADExpression,
+        vDistance: CADExpression,
+        normalDistance: CADExpression
+    )
     case setSurfaceControlPointWeight(target: SelectionReference, weight: CADExpression)
     case setSurfaceKnotValue(target: SelectionReference, value: CADExpression)
     case insertSurfaceKnot(target: SelectionReference, value: CADExpression)
@@ -728,6 +735,20 @@ public enum AutomationCommand: Codable, Equatable, Sendable {
                 deltaX: deltaX,
                 deltaY: deltaY,
                 deltaZ: deltaZ
+            )
+        case .moveSurfaceControlPointsInFrame(
+            let targets,
+            let frame,
+            let uDistance,
+            let vDistance,
+            let normalDistance
+        ):
+            .moveSurfaceControlPointsInFrame(
+                targets: targets,
+                frame: frame,
+                uDistance: uDistance,
+                vDistance: vDistance,
+                normalDistance: normalDistance
             )
         case .setSurfaceControlPointWeight(let target, let weight):
             .setSurfaceControlPointWeight(target: target, weight: weight)

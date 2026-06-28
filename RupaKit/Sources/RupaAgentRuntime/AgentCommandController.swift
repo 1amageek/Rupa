@@ -1151,6 +1151,16 @@ public final class AgentCommandController: AgentClientProtocol {
             failureMode: "Accepts direct B-spline surface control-net references, PolySpline patch corner control point references, and strict interior PolySpline B-spline control point references discovered from surfaceSourceSummary; rejects non-control-point references, non-editable surface sources, boundary edge-only CV indexes, stale generations, zero or invalid deltas, unsupported source meshes, moves that change selected PolySpline corner boundary roles, and invalid rebuilt B-spline sheet topology."
         ),
         capability(
+            "moveSurfaceControlPointsInFrame",
+            category: .solid,
+            summary: "Move source-owned surface control points by distances along a resolved surface UVN frame from surfaceSourceSummary frame samples or surfaceFrames queries.",
+            access: .automationCommand,
+            mutatesDocument: true,
+            discovery: [.surfaceSourceSummary, .surfaceFrames, .surfaceAnalysis, .surfaceContinuitySummary],
+            targets: [.surfaceControlPoint, .face],
+            failureMode: "Accepts editable surface control-point references discovered from surfaceSourceSummary and a resolvable face, surface parameter, or control-point frame query discovered from surfaceSourceSummary frameSamples or surfaceFrames; rejects empty or duplicate targets, unresolved frames, stale generations, non-control-point references, zero UVN offsets, non-editable surface sources, invalid unit axes, and invalid rebuilt B-spline sheet topology."
+        ),
+        capability(
             "setSurfaceControlPointWeight",
             category: .solid,
             summary: "Set a source-owned B-spline surface control-point weight from a Swift-CAD SelectionReference, preserving the control point position while making the evaluated surface rational; direct B-spline surfaces mutate their stored weight net.",

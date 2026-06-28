@@ -448,6 +448,57 @@ import Testing
     #expect(abs(updatedControlPoint.point.z - slidPoint.z) <= 1.0e-12)
 }
 
+@Test func directBSplineSurfaceControlPointFrameMoveUsesResolvedUVNFrame() async throws {
+    var document = DesignDocument.empty()
+
+    let featureID = try document.createBSplineSurface(
+        name: "Frame Editable Surface",
+        surface: designDocumentDirectBSplineSurface()
+    )
+    let summary = try SurfaceSourceSummaryService().summarize(document: document)
+    let patch = try #require(summary.sources.first?.patches.first)
+    let controlPoint = try #require(
+        patch.controlPoints.first { $0.uIndex == 1 && $0.vIndex == 1 }
+    )
+    let frameSample = try #require(patch.frameSamples.first)
+    let frameQuery = SurfaceFrameQuery(selectionReference: frameSample.selectionReference)
+    let frameResult = try SurfaceFrameService().resolve(document: document, queries: [frameQuery])
+    let frame = try #require(frameResult.frames.first)
+    let uDistance = 0.001
+    let vDistance = 0.002
+    let normalDistance = 0.003
+
+    try document.moveSurfaceControlPointsInFrame(
+        targets: [controlPoint.selectionReference],
+        frame: frameQuery,
+        uDistance: .length(uDistance, .meter),
+        vDistance: .length(vDistance, .meter),
+        normalDistance: .length(normalDistance, .meter)
+    )
+
+    let movedFeature = try #require(document.cadDocument.designGraph.nodes[featureID])
+    guard case let .bSplineSurface(movedSurfaceFeature) = movedFeature.operation else {
+        Issue.record("Expected a direct B-spline surface feature.")
+        return
+    }
+    let movedPoint = movedSurfaceFeature.surface.controlPoints[1][1]
+    let expectedX = controlPoint.point.x
+        + frame.uAxis.x * uDistance
+        + frame.vAxis.x * vDistance
+        + frame.normal.x * normalDistance
+    let expectedY = controlPoint.point.y
+        + frame.uAxis.y * uDistance
+        + frame.vAxis.y * vDistance
+        + frame.normal.y * normalDistance
+    let expectedZ = controlPoint.point.z
+        + frame.uAxis.z * uDistance
+        + frame.vAxis.z * vDistance
+        + frame.normal.z * normalDistance
+    #expect(abs(movedPoint.x - expectedX) <= 1.0e-12)
+    #expect(abs(movedPoint.y - expectedY) <= 1.0e-12)
+    #expect(abs(movedPoint.z - expectedZ) <= 1.0e-12)
+}
+
 @Test func directBSplineSurfaceKnotReferenceMutatesStoredKnotVector() async throws {
     var document = DesignDocument.empty()
 

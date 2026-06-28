@@ -225,6 +225,73 @@ extension DesignDocument {
         }
     }
 
+    public mutating func moveSurfaceControlPointsInFrame(
+        targets: [SelectionReference],
+        frame: SurfaceFrameQuery,
+        uDistance: CADExpression,
+        vDistance: CADExpression,
+        normalDistance: CADExpression,
+        objectRegistry: ObjectTypeRegistry = .builtIn
+    ) throws {
+        guard targets.isEmpty == false else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Surface control point frame move requires at least one surface control point selection reference."
+            )
+        }
+        var seenTargets: Set<SelectionReference> = []
+        for target in targets {
+            guard seenTargets.insert(target).inserted else {
+                throw EditorError(
+                    code: .commandInvalid,
+                    message: "Surface control point frame move cannot receive duplicate targets."
+                )
+            }
+        }
+
+        let resolvedFrame = try resolvedSurfaceFrame(
+            frame,
+            objectRegistry: objectRegistry,
+            owner: "Surface control point frame move"
+        )
+        let delta = try surfaceFrameDelta(
+            resolvedFrame,
+            uDistance: uDistance,
+            vDistance: vDistance,
+            normalDistance: normalDistance
+        )
+        guard delta.length > ModelingTolerance.standard.distance else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Surface control point frame move requires a non-zero UVN offset."
+            )
+        }
+
+        let previousCADDocument = cadDocument
+        do {
+            for target in targets {
+                try moveSurfaceControlPoint(target: target, delta: delta, objectRegistry: objectRegistry)
+            }
+        } catch {
+            cadDocument = previousCADDocument
+            throw error
+        }
+    }
+
+    private mutating func moveSurfaceControlPoint(
+        target: SelectionReference,
+        delta: Vector3D,
+        objectRegistry: ObjectTypeRegistry
+    ) throws {
+        try moveSurfaceControlPoint(
+            target: target,
+            deltaX: .length(delta.x, .meter),
+            deltaY: .length(delta.y, .meter),
+            deltaZ: .length(delta.z, .meter),
+            objectRegistry: objectRegistry
+        )
+    }
+
     private mutating func movePolySplineInteriorSurfaceControlPoint(
         target: PolySplineSurfaceControlPointEditTarget,
         deltaX: CADExpression,
@@ -321,6 +388,69 @@ extension DesignDocument {
                 message: "B-spline surface control point move produced invalid source geometry: \(error)."
             )
         }
+    }
+
+    private func resolvedSurfaceFrame(
+        _ query: SurfaceFrameQuery,
+        objectRegistry: ObjectTypeRegistry,
+        owner: String
+    ) throws -> SurfaceFrameResult.Frame {
+        let result = try SurfaceFrameService().resolve(
+            document: self,
+            queries: [query],
+            objectRegistry: objectRegistry
+        )
+        guard let frame = result.frames.first else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "\(owner) requires a resolvable surface frame."
+            )
+        }
+        return frame
+    }
+
+    private func surfaceFrameDelta(
+        _ frame: SurfaceFrameResult.Frame,
+        uDistance: CADExpression,
+        vDistance: CADExpression,
+        normalDistance: CADExpression
+    ) throws -> Vector3D {
+        let resolvedU = try resolvedLengthValue(
+            uDistance,
+            owner: "Surface control point frame move U distance"
+        )
+        let resolvedV = try resolvedLengthValue(
+            vDistance,
+            owner: "Surface control point frame move V distance"
+        )
+        let resolvedNormal = try resolvedLengthValue(
+            normalDistance,
+            owner: "Surface control point frame move normal distance"
+        )
+        let uAxis = try vector(frame.uAxis, owner: "Surface control point frame move U axis")
+        let vAxis = try vector(frame.vAxis, owner: "Surface control point frame move V axis")
+        let normal = try vector(frame.normal, owner: "Surface control point frame move normal axis")
+        return uAxis * resolvedU + vAxis * resolvedV + normal * resolvedNormal
+    }
+
+    private func vector(
+        _ vector: SurfaceAnalysisResult.Vector,
+        owner: String
+    ) throws -> Vector3D {
+        let result = Vector3D(
+            x: vector.x,
+            y: vector.y,
+            z: vector.z
+        )
+        do {
+            try result.validateUnitLength()
+        } catch {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "\(owner) must be a finite unit vector."
+            )
+        }
+        return result
     }
 
     public mutating func setSurfaceControlPointWeight(

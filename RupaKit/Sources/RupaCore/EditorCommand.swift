@@ -269,6 +269,13 @@ public enum EditorCommand: Codable, Equatable, Sendable {
         deltaY: CADExpression,
         deltaZ: CADExpression
     )
+    case moveSurfaceControlPointsInFrame(
+        targets: [SelectionReference],
+        frame: SurfaceFrameQuery,
+        uDistance: CADExpression,
+        vDistance: CADExpression,
+        normalDistance: CADExpression
+    )
     case setSurfaceControlPointWeight(
         target: SelectionReference,
         weight: CADExpression
@@ -497,6 +504,8 @@ public enum EditorCommand: Codable, Equatable, Sendable {
             "movePolySplineSurfaceVertex"
         case .moveSurfaceControlPoint:
             "moveSurfaceControlPoint"
+        case .moveSurfaceControlPointsInFrame:
+            "moveSurfaceControlPointsInFrame"
         case .setSurfaceControlPointWeight:
             "setSurfaceControlPointWeight"
         case .setSurfaceKnotValue:
@@ -609,6 +618,7 @@ public enum EditorCommand: Codable, Equatable, Sendable {
              .setSurfaceFrameDisplay,
              .movePolySplineSurfaceVertex,
              .moveSurfaceControlPoint,
+             .moveSurfaceControlPointsInFrame,
              .setSurfaceControlPointWeight,
              .setSurfaceKnotValue,
              .insertSurfaceKnot,

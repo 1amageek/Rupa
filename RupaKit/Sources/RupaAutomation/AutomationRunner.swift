@@ -1222,6 +1222,29 @@ public struct AutomationRunner {
                 didMutate: result.didMutate,
                 diagnostics: result.diagnostics
             )
+        case .moveSurfaceControlPointsInFrame(
+            let targets,
+            let frame,
+            let uDistance,
+            let vDistance,
+            let normalDistance
+        ):
+            let result = try session.execute(
+                .moveSurfaceControlPointsInFrame(
+                    targets: targets,
+                    frame: frame,
+                    uDistance: uDistance,
+                    vDistance: vDistance,
+                    normalDistance: normalDistance
+                )
+            )
+            return AutomationResult(
+                message: "Surface control points moved in frame.",
+                commandName: result.commandName,
+                generation: result.generation,
+                didMutate: result.didMutate,
+                diagnostics: result.diagnostics
+            )
         case .setSurfaceControlPointWeight(let target, let weight):
             let result = try session.execute(
                 .setSurfaceControlPointWeight(target: target, weight: weight)
