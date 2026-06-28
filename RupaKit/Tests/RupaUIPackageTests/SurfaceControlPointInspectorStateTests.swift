@@ -34,6 +34,7 @@ import Testing
     #expect(state.canEditWeight)
     #expect(state.weightTitle == "1")
     #expect(state.frameTitle == "u1 / v1")
+    #expect(state.hasResolvedFrames == false)
     #expect(state.frameMoveQuery == SurfaceFrameQuery(selectionReference: controlPoint.selectionReference))
     #expect(state.selectedReferences == [controlPoint.selectionReference])
 }
@@ -110,6 +111,37 @@ import Testing
     #expect(state.canEditCoordinates)
     #expect(state.canEditWeight)
     #expect(state.weightTitle == "1")
+}
+
+@Test func surfaceControlPointInspectorStateBuilderResolvesFrameDetails() throws {
+    var document = DesignDocument.empty()
+    _ = try document.createBSplineSurface(
+        name: "Inspector Direct Surface",
+        surface: surfaceControlPointInspectorDirectBSplineSurface()
+    )
+
+    let summary = try SurfaceSourceSummaryService().summarize(document: document)
+    let patch = try #require(summary.sources.first?.patches.first)
+    let controlPoint = try #require(patch.controlPoints.first { $0.uIndex == 1 && $0.vIndex == 1 })
+    let builder = WorkspaceSurfaceInspectorStateBuilder(
+        document: document,
+        selection: SelectionModel(selectedReferences: [controlPoint.selectionReference]),
+        currentEvaluation: nil,
+        documentGeneration: DocumentGeneration(),
+        objectRegistry: .builtIn,
+        surfaceAnalysisOptions: SurfaceAnalysisOptions(sampleDensity: .standard)
+    )
+
+    let state = try #require(try builder.surfaceControlPointStateResult().get())
+
+    #expect(state.hasResolvedFrames)
+    #expect(state.frameUAxisTitle == "(1, 0, 0)")
+    #expect(state.frameVAxisTitle == "(0, 1, 0)")
+    #expect(state.frameNormalTitle == "(0, 0, 1)")
+    #expect(state.frameHandednessTitle == "1")
+    #expect(state.frameNormalCurvatureTitle == "U 0 1/m, V 0 1/m")
+    #expect(state.framePrincipalCurvatureTitle == "Min 0 1/m, Max 0 1/m")
+    #expect(state.frameGaussianCurvatureTitle == "0 1/m2")
 }
 
 @MainActor

@@ -43,7 +43,7 @@ struct SurfaceParameterInspectorState: Equatable, Sendable {
         var selectionReference: SelectionReference
         var frameQuery: SurfaceFrameQuery?
         var isFrameDisplayVisible: Bool
-        var resolvedFrame: SurfaceFrameResult.Frame?
+        var frameDetail: SurfaceFrameInspectorState?
 
         var directionTitle: String {
             switch kind {
@@ -193,59 +193,59 @@ struct SurfaceParameterInspectorState: Equatable, Sendable {
         }
 
         var framePositionTitle: String {
-            guard let resolvedFrame else {
+            guard let frameDetail else {
                 return "-"
             }
-            return formattedPoint(resolvedFrame.position)
+            return frameDetail.positionTitle
         }
 
         var frameUAxisTitle: String {
-            guard let resolvedFrame else {
+            guard let frameDetail else {
                 return "-"
             }
-            return formattedVector(resolvedFrame.uAxis)
+            return frameDetail.uAxisTitle
         }
 
         var frameVAxisTitle: String {
-            guard let resolvedFrame else {
+            guard let frameDetail else {
                 return "-"
             }
-            return formattedVector(resolvedFrame.vAxis)
+            return frameDetail.vAxisTitle
         }
 
         var frameNormalTitle: String {
-            guard let resolvedFrame else {
+            guard let frameDetail else {
                 return "-"
             }
-            return formattedVector(resolvedFrame.normal)
+            return frameDetail.normalTitle
         }
 
         var frameHandednessTitle: String {
-            guard let resolvedFrame else {
+            guard let frameDetail else {
                 return "-"
             }
-            return shortNumber(resolvedFrame.handedness)
+            return frameDetail.handednessTitle
         }
 
         var frameNormalCurvatureTitle: String {
-            guard let resolvedFrame else {
+            guard let frameDetail else {
                 return "-"
             }
-            return "U \(formattedCurvature(resolvedFrame.normalCurvatureU)), V \(formattedCurvature(resolvedFrame.normalCurvatureV))"
+            return frameDetail.normalCurvatureTitle
         }
 
         var framePrincipalCurvatureTitle: String {
-            guard let resolvedFrame else {
+            guard let frameDetail else {
                 return "-"
             }
-            return "Min \(formattedCurvature(resolvedFrame.minimumPrincipalCurvature)), Max \(formattedCurvature(resolvedFrame.maximumPrincipalCurvature))"
+            return frameDetail.principalCurvatureTitle
         }
 
         var frameGaussianCurvatureTitle: String {
-            guard let resolvedFrame else {
+            guard let frameDetail else {
                 return "-"
             }
-            return formattedGaussianCurvature(resolvedFrame.gaussianCurvature)
+            return frameDetail.gaussianCurvatureTitle
         }
     }
 
@@ -359,7 +359,7 @@ struct SurfaceParameterInspectorState: Equatable, Sendable {
     }
 
     var hasResolvedFrames: Bool {
-        !entries.isEmpty && entries.allSatisfy { $0.resolvedFrame != nil }
+        !entries.isEmpty && entries.allSatisfy { $0.frameDetail != nil }
     }
 
     var framePositionTitle: String {
@@ -400,7 +400,9 @@ struct SurfaceParameterInspectorState: Equatable, Sendable {
         var nextState = self
         nextState.entries = entries.map { entry in
             var nextEntry = entry
-            nextEntry.resolvedFrame = framesByReference[entry.selectionReference]
+            nextEntry.frameDetail = framesByReference[entry.selectionReference].map {
+                SurfaceFrameInspectorState(frame: $0)
+            }
             return nextEntry
         }
         return nextState
@@ -547,7 +549,7 @@ struct SurfaceParameterInspectorState: Equatable, Sendable {
                     for: frameQuery,
                     surfaceFrameDisplays: surfaceFrameDisplays
                 ),
-                resolvedFrame: nil
+                frameDetail: nil
             )
         }
     }
@@ -584,7 +586,7 @@ struct SurfaceParameterInspectorState: Equatable, Sendable {
                 selectionReference: sample.selectionReference,
                 frameQuery: frameQuery,
                 isFrameDisplayVisible: sample.isFrameDisplayVisible,
-                resolvedFrame: nil
+                frameDetail: nil
             )
         }
     }
@@ -627,7 +629,7 @@ struct SurfaceParameterInspectorState: Equatable, Sendable {
                 selectionReference: selectionReference,
                 frameQuery: nil,
                 isFrameDisplayVisible: false,
-                resolvedFrame: nil
+                frameDetail: nil
             )
         }
     }
@@ -667,7 +669,7 @@ struct SurfaceParameterInspectorState: Equatable, Sendable {
                 selectionReference: selectionReference,
                 frameQuery: nil,
                 isFrameDisplayVisible: false,
-                resolvedFrame: nil
+                frameDetail: nil
             )
         }
     }
@@ -754,22 +756,6 @@ struct SurfaceParameterInspectorState: Equatable, Sendable {
 private func shortNumber(_ value: Double) -> String {
     let normalizedValue = abs(value) < 1.0e-12 ? 0.0 : value
     return normalizedValue.formatted(.number.precision(.fractionLength(0...6)))
-}
-
-private func formattedPoint(_ point: SurfaceAnalysisResult.Point) -> String {
-    "(\(shortNumber(point.x)), \(shortNumber(point.y)), \(shortNumber(point.z)))"
-}
-
-private func formattedVector(_ vector: SurfaceAnalysisResult.Vector) -> String {
-    "(\(shortNumber(vector.x)), \(shortNumber(vector.y)), \(shortNumber(vector.z)))"
-}
-
-private func formattedCurvature(_ value: Double) -> String {
-    "\(shortNumber(value)) 1/m"
-}
-
-private func formattedGaussianCurvature(_ value: Double) -> String {
-    "\(shortNumber(value)) 1/m2"
 }
 
 private func editMargin(lowerBound: Double, upperBound: Double) -> Double {

@@ -36,6 +36,7 @@ struct SurfaceControlPointInspectorView: View {
             weightControls
             pointDisplayControls
             frameDisplayControls
+            frameDetailRows
             frameMoveControls
             slideControls
         }
@@ -169,6 +170,20 @@ struct SurfaceControlPointInspectorView: View {
                 onSetPointDisplay(state.selectedReferences, false)
             }
             .disabled(state.entries.allSatisfy { !$0.isPointDisplayVisible })
+        }
+    }
+
+    @ViewBuilder
+    private var frameDetailRows: some View {
+        if state.hasResolvedFrames {
+            inspectorRow("Position", state.framePositionTitle)
+            inspectorRow("U Axis", state.frameUAxisTitle)
+            inspectorRow("V Axis", state.frameVAxisTitle)
+            inspectorRow("Normal", state.frameNormalTitle)
+            inspectorRow("Handedness", state.frameHandednessTitle)
+            inspectorRow("Normal Curvature", state.frameNormalCurvatureTitle)
+            inspectorRow("Principal Curvature", state.framePrincipalCurvatureTitle)
+            inspectorRow("Gaussian Curvature", state.frameGaussianCurvatureTitle)
         }
     }
 

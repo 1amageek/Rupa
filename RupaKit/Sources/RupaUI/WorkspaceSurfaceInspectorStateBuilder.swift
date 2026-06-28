@@ -44,7 +44,7 @@ struct WorkspaceSurfaceInspectorStateBuilder {
                     message: "Selected surface control point references could not be resolved in the current surface source summary."
                 )
             }
-            return .success(state)
+            return .success(try resolveFrames(for: state))
         } catch {
             return .failure(error)
         }
@@ -218,8 +218,23 @@ struct WorkspaceSurfaceInspectorStateBuilder {
             }
             return (entry.selectionReference, frameQuery)
         }
+        return state.resolvingFrames(try resolvedFrameMap(for: referenceQueries))
+    }
+
+    private func resolveFrames(
+        for state: SurfaceControlPointInspectorState
+    ) throws -> SurfaceControlPointInspectorState {
+        let referenceQueries = state.selectedReferences.map { reference in
+            (reference, SurfaceFrameQuery(selectionReference: reference))
+        }
+        return state.resolvingFrames(try resolvedFrameMap(for: referenceQueries))
+    }
+
+    private func resolvedFrameMap(
+        for referenceQueries: [(SelectionReference, SurfaceFrameQuery)]
+    ) throws -> [SelectionReference: SurfaceFrameResult.Frame] {
         guard !referenceQueries.isEmpty else {
-            return state
+            return [:]
         }
         let frameResult = try SurfaceFrameService().resolve(
             document: document,
@@ -232,7 +247,7 @@ struct WorkspaceSurfaceInspectorStateBuilder {
         for (index, frame) in frameResult.frames.enumerated() where referenceQueries.indices.contains(index) {
             framesByReference[referenceQueries[index].0] = frame
         }
-        return state.resolvingFrames(framesByReference)
+        return framesByReference
     }
 
     private func resolveAnalysisSummary(for nodes: [SceneNode]) throws -> SurfaceAnalysisResult? {

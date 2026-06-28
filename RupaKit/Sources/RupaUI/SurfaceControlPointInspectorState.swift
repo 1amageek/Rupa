@@ -26,6 +26,7 @@ struct SurfaceControlPointInspectorState: Equatable, Sendable {
         var selectionReference: SelectionReference
         var isPointDisplayVisible: Bool
         var isFrameDisplayVisible: Bool
+        var frameDetail: SurfaceFrameInspectorState?
 
         var indexTitle: String {
             "u\(uIndex) / v\(vIndex)"
@@ -36,6 +37,62 @@ struct SurfaceControlPointInspectorState: Equatable, Sendable {
                 return role
             }
             return isBoundary ? "Boundary" : "Interior"
+        }
+
+        var framePositionTitle: String {
+            guard let frameDetail else {
+                return "-"
+            }
+            return frameDetail.positionTitle
+        }
+
+        var frameUAxisTitle: String {
+            guard let frameDetail else {
+                return "-"
+            }
+            return frameDetail.uAxisTitle
+        }
+
+        var frameVAxisTitle: String {
+            guard let frameDetail else {
+                return "-"
+            }
+            return frameDetail.vAxisTitle
+        }
+
+        var frameNormalTitle: String {
+            guard let frameDetail else {
+                return "-"
+            }
+            return frameDetail.normalTitle
+        }
+
+        var frameHandednessTitle: String {
+            guard let frameDetail else {
+                return "-"
+            }
+            return frameDetail.handednessTitle
+        }
+
+        var frameNormalCurvatureTitle: String {
+            guard let frameDetail else {
+                return "-"
+            }
+            return frameDetail.normalCurvatureTitle
+        }
+
+        var framePrincipalCurvatureTitle: String {
+            guard let frameDetail else {
+                return "-"
+            }
+            return frameDetail.principalCurvatureTitle
+        }
+
+        var frameGaussianCurvatureTitle: String {
+            guard let frameDetail else {
+                return "-"
+            }
+            return frameDetail.gaussianCurvatureTitle
         }
     }
 
@@ -178,6 +235,56 @@ struct SurfaceControlPointInspectorState: Equatable, Sendable {
         return shortNumber(weight)
     }
 
+    var hasResolvedFrames: Bool {
+        !entries.isEmpty && entries.allSatisfy { $0.frameDetail != nil }
+    }
+
+    var framePositionTitle: String {
+        commonTitle(entries.map(\.framePositionTitle)) ?? "Mixed"
+    }
+
+    var frameUAxisTitle: String {
+        commonTitle(entries.map(\.frameUAxisTitle)) ?? "Mixed"
+    }
+
+    var frameVAxisTitle: String {
+        commonTitle(entries.map(\.frameVAxisTitle)) ?? "Mixed"
+    }
+
+    var frameNormalTitle: String {
+        commonTitle(entries.map(\.frameNormalTitle)) ?? "Mixed"
+    }
+
+    var frameHandednessTitle: String {
+        commonTitle(entries.map(\.frameHandednessTitle)) ?? "Mixed"
+    }
+
+    var frameNormalCurvatureTitle: String {
+        commonTitle(entries.map(\.frameNormalCurvatureTitle)) ?? "Mixed"
+    }
+
+    var framePrincipalCurvatureTitle: String {
+        commonTitle(entries.map(\.framePrincipalCurvatureTitle)) ?? "Mixed"
+    }
+
+    var frameGaussianCurvatureTitle: String {
+        commonTitle(entries.map(\.frameGaussianCurvatureTitle)) ?? "Mixed"
+    }
+
+    func resolvingFrames(
+        _ framesByReference: [SelectionReference: SurfaceFrameResult.Frame]
+    ) -> SurfaceControlPointInspectorState {
+        var nextState = self
+        nextState.entries = entries.map { entry in
+            var nextEntry = entry
+            nextEntry.frameDetail = framesByReference[entry.selectionReference].map {
+                SurfaceFrameInspectorState(frame: $0)
+            }
+            return nextEntry
+        }
+        return nextState
+    }
+
     private static func entriesByReference(
         from summary: SurfaceSourceSummaryResult,
         surfaceFrameDisplays: [SurfaceFrameDisplayID: SurfaceFrameDisplay]
@@ -216,7 +323,8 @@ struct SurfaceControlPointInspectorState: Equatable, Sendable {
                         isFrameDisplayVisible: frameDisplayVisible(
                             for: controlPoint.selectionReference,
                             surfaceFrameDisplays: surfaceFrameDisplays
-                        )
+                        ),
+                        frameDetail: nil
                     )
                 }
             }
