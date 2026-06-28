@@ -4159,6 +4159,7 @@ public struct MainView: View {
             onSetCoordinate: { axis, meters in
                 setSurfaceControlPointCoordinate(axis, meters: meters, state: state)
             },
+            onSetWeight: setSurfaceControlPointWeight,
             onMoveInFrame: { frame, uDistance, vDistance, normalDistance in
                 moveSelectedSurfaceControlPointsInFrame(
                     state.selectedReferences,
@@ -5038,6 +5039,25 @@ public struct MainView: View {
                 deltaX: .length(axis == .x ? delta : 0.0, .meter),
                 deltaY: .length(axis == .y ? delta : 0.0, .meter),
                 deltaZ: .length(axis == .z ? delta : 0.0, .meter)
+            )
+            if result?.diagnostics.isEmpty == false || result == nil {
+                shouldExpandPreview = true
+            }
+        }
+        if shouldExpandPreview {
+            isPreviewExpanded = true
+        }
+    }
+
+    private func setSurfaceControlPointWeight(
+        _ targets: [SelectionReference],
+        weight: Double
+    ) {
+        var shouldExpandPreview = false
+        for target in targets {
+            let result = session.setSurfaceControlPointWeight(
+                target: target,
+                weight: .scalar(max(weight, 1.0e-9))
             )
             if result?.diagnostics.isEmpty == false || result == nil {
                 shouldExpandPreview = true

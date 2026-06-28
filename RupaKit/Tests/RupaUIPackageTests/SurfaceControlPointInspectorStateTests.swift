@@ -31,6 +31,8 @@ import Testing
     #expect(state.canEditCoordinates)
     #expect(state.canSlide)
     #expect(state.canMoveInFrame)
+    #expect(state.canEditWeight)
+    #expect(state.weightTitle == "1")
     #expect(state.frameTitle == "u1 / v1")
     #expect(state.frameMoveQuery == SurfaceFrameQuery(selectionReference: controlPoint.selectionReference))
     #expect(state.selectedReferences == [controlPoint.selectionReference])
@@ -57,6 +59,8 @@ import Testing
     #expect(state.editabilityTitle == "Editable")
     #expect(state.canEditCoordinates)
     #expect(state.canSlide)
+    #expect(state.canEditWeight == false)
+    #expect(state.weightTitle == "1")
 }
 
 @Test func surfaceControlPointInspectorStateReportsReadOnlyBoundaryControlPoint() async throws {
@@ -81,7 +85,31 @@ import Testing
     #expect(state.canEditCoordinates == false)
     #expect(state.canSlide == false)
     #expect(state.canMoveInFrame == false)
+    #expect(state.canEditWeight == false)
     #expect(state.frameMoveQuery == SurfaceFrameQuery(selectionReference: boundary.selectionReference))
+}
+
+@Test func surfaceControlPointInspectorStateAllowsDirectBSplineBoundaryWeightEditing() async throws {
+    var document = DesignDocument.empty()
+    _ = try document.createBSplineSurface(
+        name: "Inspector Direct Surface",
+        surface: surfaceControlPointInspectorDirectBSplineSurface()
+    )
+
+    let summary = try SurfaceSourceSummaryService().summarize(document: document)
+    let patch = try #require(summary.sources.first?.patches.first)
+    let boundary = try #require(patch.controlPoints.first { $0.uIndex == 0 && $0.vIndex == 0 })
+    let state = try #require(SurfaceControlPointInspectorState(
+        selectedReferences: [boundary.selectionReference],
+        summaryResult: summary
+    ))
+
+    #expect(state.sourceTitle == "Inspector Direct Surface")
+    #expect(state.basisTitle == "bSplineSurface")
+    #expect(state.boundaryTitle == "Boundary")
+    #expect(state.canEditCoordinates)
+    #expect(state.canEditWeight)
+    #expect(state.weightTitle == "1")
 }
 
 @MainActor
@@ -157,6 +185,15 @@ import Testing
         selectedReferences: [faceReference],
         summaryResult: summary
     ) == nil)
+}
+
+private func surfaceControlPointInspectorDirectBSplineSurface() -> BSplineSurface3D {
+    BSplineSurface3D.cubicBezierPatch(
+        bottomLeft: Point3D(x: 0.0, y: 0.0, z: 0.0),
+        bottomRight: Point3D(x: 0.02, y: 0.0, z: 0.0),
+        topRight: Point3D(x: 0.02, y: 0.02, z: 0.0),
+        topLeft: Point3D(x: 0.0, y: 0.02, z: 0.0)
+    )
 }
 
 private func surfaceControlPointInspectorPatchNetworkMesh(centerZ: Double) -> Mesh {

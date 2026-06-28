@@ -19,8 +19,10 @@ struct SurfaceControlPointInspectorState: Equatable, Sendable {
         var vIndex: Int
         var role: String?
         var point: SurfaceSourceSummaryResult.Point
+        var weight: Double
         var isBoundary: Bool
         var isEditable: Bool
+        var isWeightEditable: Bool
         var selectionReference: SelectionReference
         var isPointDisplayVisible: Bool
         var isFrameDisplayVisible: Bool
@@ -101,6 +103,10 @@ struct SurfaceControlPointInspectorState: Equatable, Sendable {
         entries.allSatisfy(\.isEditable) && frameMoveQuery != nil
     }
 
+    var canEditWeight: Bool {
+        entries.allSatisfy(\.isWeightEditable)
+    }
+
     var frameMoveQuery: SurfaceFrameQuery? {
         guard let reference = entries.first?.selectionReference else {
             return nil
@@ -165,6 +171,13 @@ struct SurfaceControlPointInspectorState: Equatable, Sendable {
         return "(\(shortNumber(point.x)), \(shortNumber(point.y)), \(shortNumber(point.z)))"
     }
 
+    var weightTitle: String {
+        guard let weight = commonValue(entries.map(\.weight)) else {
+            return "Mixed"
+        }
+        return shortNumber(weight)
+    }
+
     private static func entriesByReference(
         from summary: SurfaceSourceSummaryResult,
         surfaceFrameDisplays: [SurfaceFrameDisplayID: SurfaceFrameDisplay]
@@ -191,8 +204,13 @@ struct SurfaceControlPointInspectorState: Equatable, Sendable {
                         vIndex: controlPoint.vIndex,
                         role: rolesByReference[controlPoint.selectionReference],
                         point: controlPoint.point,
+                        weight: controlPoint.weight,
                         isBoundary: controlPoint.isBoundary,
                         isEditable: controlPoint.isEditable,
+                        isWeightEditable: isWeightEditable(
+                            sourceKind: source.kind,
+                            controlPoint: controlPoint
+                        ),
                         selectionReference: controlPoint.selectionReference,
                         isPointDisplayVisible: controlPoint.isPointDisplayVisible,
                         isFrameDisplayVisible: frameDisplayVisible(
@@ -205,6 +223,18 @@ struct SurfaceControlPointInspectorState: Equatable, Sendable {
         }
 
         return entries
+    }
+
+    private static func isWeightEditable(
+        sourceKind: String,
+        controlPoint: SurfaceSourceSummaryResult.ControlPoint
+    ) -> Bool {
+        switch sourceKind {
+        case "bSplineSurface":
+            return controlPoint.isEditable
+        default:
+            return controlPoint.isEditable && controlPoint.isBoundary == false
+        }
     }
 
     private static func frameDisplayVisible(

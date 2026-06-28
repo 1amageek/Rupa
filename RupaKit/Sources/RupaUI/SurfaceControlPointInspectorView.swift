@@ -15,6 +15,7 @@ struct SurfaceControlPointInspectorView: View {
     let onSetPointDisplay: ([SelectionReference], Bool) -> Void
     let onSetFrameDisplay: ([SurfaceFrameQuery], Bool) -> Void
     let onSetCoordinate: (SurfaceControlPointInspectorState.CoordinateAxis, Double) -> Void
+    let onSetWeight: ([SelectionReference], Double) -> Void
     let onMoveInFrame: (SurfaceFrameQuery, Double, Double, Double) -> Void
     let onActivateSlide: () -> Void
     let onSlide: (PolySplineSurfaceVertexSlideDirection) -> Void
@@ -32,6 +33,7 @@ struct SurfaceControlPointInspectorView: View {
             inspectorRow("Point Display", state.displayTitle)
             inspectorRow("Frame Display", state.frameDisplayTitle)
             coordinateControls
+            weightControls
             pointDisplayControls
             frameDisplayControls
             frameMoveControls
@@ -57,6 +59,22 @@ struct SurfaceControlPointInspectorView: View {
             .accessibilityIdentifier("InspectorSurfaceCV.point.z")
         } else {
             inspectorRow("Point", state.pointTitle)
+        }
+    }
+
+    @ViewBuilder
+    private var weightControls: some View {
+        if state.canEditWeight {
+            numericControl(
+                "Weight",
+                values: state.entries.map(\.weight),
+                sliderRange: weightSliderRange
+            ) { value in
+                onSetWeight(state.selectedReferences, max(value, 1.0e-9))
+            }
+            .accessibilityIdentifier("InspectorSurfaceCV.weight")
+        } else {
+            inspectorRow("Weight", state.weightTitle)
         }
     }
 
@@ -465,6 +483,12 @@ struct SurfaceControlPointInspectorView: View {
         let currentValue = abs(unit.value(fromMeters: meters))
         let extent = max(currentValue * 2.0, 1.0)
         return -extent ... extent
+    }
+
+    private var weightSliderRange: ClosedRange<Double> {
+        let weights = state.entries.map(\.weight).filter { $0.isFinite }
+        let currentMaximum = weights.max() ?? 1.0
+        return 0.001 ... max(currentMaximum * 2.0, 4.0)
     }
 
     private var hasFrameMoveOffset: Bool {
