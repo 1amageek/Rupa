@@ -126,4 +126,3 @@ flowchart TD
     Packet --> Implement["Implement"]
     Implement --> Validate["Validate and record observations"]
 ```
-
