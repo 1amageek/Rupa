@@ -286,6 +286,157 @@ import SwiftCAD
 }
 
 @MainActor
+@Test func agentInsertsDirectBSplineSurfaceKnotThroughSurfaceSourceSpanReference() async throws {
+    let server = AgentCommandController()
+    let sessionID = UUID()
+    let session = EditorSession()
+    server.register(session: session, id: sessionID)
+
+    let createResponse = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .createBSplineSurface(
+                name: "Agent Insertable B-spline Knot Surface",
+                surface: agentDirectBSplineSurfaceWithInteriorKnots()
+            ),
+            expectedGeneration: DocumentGeneration(0)
+        )
+    )
+    guard case .command(let createResult) = createResponse else {
+        Issue.record("Agent must create a direct B-spline surface.")
+        return
+    }
+    #expect(createResult.didMutate)
+
+    let summaryResponse = server.handle(
+        .surfaceSourceSummary(
+            sessionID: sessionID,
+            expectedGeneration: DocumentGeneration(1)
+        )
+    )
+    guard case .surfaceSourceSummary(let summary) = summaryResponse else {
+        Issue.record("Agent must return direct B-spline surface source summary.")
+        return
+    }
+    let span = try #require(
+        summary.sources.first?.patches.first?.basis.uSpans.first { $0.index == 0 }
+    )
+    #expect(span.isEditable)
+    let spanReference = try #require(span.selectionReference)
+
+    let insertionResponse = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .insertSurfaceKnot(
+                target: spanReference,
+                value: .scalar(0.25)
+            ),
+            expectedGeneration: DocumentGeneration(1)
+        )
+    )
+    guard case .command(let insertionResult) = insertionResponse else {
+        Issue.record("Agent must insert a direct B-spline surface knot.")
+        return
+    }
+    #expect(insertionResult.commandName == "insertSurfaceKnot")
+    #expect(insertionResult.didMutate)
+    #expect(insertionResult.generation == DocumentGeneration(2))
+    #expect(session.evaluationStatus == .valid)
+
+    let featureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let feature = try #require(session.document.cadDocument.designGraph.nodes[featureID])
+    guard case let .bSplineSurface(surfaceFeature) = feature.operation else {
+        Issue.record("Agent must keep a direct B-spline surface feature.")
+        return
+    }
+    #expect(surfaceFeature.surface.uKnots == [0.0, 0.0, 0.0, 0.25, 0.5, 1.0, 1.0, 1.0])
+    #expect(surfaceFeature.surface.uControlPointCount == 5)
+    #expect(surfaceFeature.surface.vControlPointCount == 4)
+
+    let updatedSummaryResponse = server.handle(
+        .surfaceSourceSummary(
+            sessionID: sessionID,
+            expectedGeneration: DocumentGeneration(2)
+        )
+    )
+    guard case .surfaceSourceSummary(let updatedSummary) = updatedSummaryResponse else {
+        Issue.record("Agent must return updated direct B-spline surface source summary.")
+        return
+    }
+    let updatedPatch = try #require(updatedSummary.sources.first?.patches.first)
+    #expect(updatedPatch.basis.uSpans.count == 3)
+    #expect(updatedPatch.controlPoints.count == 20)
+}
+
+@MainActor
+@Test func agentInsertsDuplicateDirectBSplineSurfaceKnotThroughSurfaceSourceKnotReference() async throws {
+    let server = AgentCommandController()
+    let sessionID = UUID()
+    let session = EditorSession()
+    server.register(session: session, id: sessionID)
+
+    let createResponse = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .createBSplineSurface(
+                name: "Agent Multiplicity B-spline Knot Surface",
+                surface: agentDirectBSplineSurfaceWithInteriorKnots()
+            ),
+            expectedGeneration: DocumentGeneration(0)
+        )
+    )
+    guard case .command(let createResult) = createResponse else {
+        Issue.record("Agent must create a direct B-spline surface.")
+        return
+    }
+    #expect(createResult.didMutate)
+
+    let summaryResponse = server.handle(
+        .surfaceSourceSummary(
+            sessionID: sessionID,
+            expectedGeneration: DocumentGeneration(1)
+        )
+    )
+    guard case .surfaceSourceSummary(let summary) = summaryResponse else {
+        Issue.record("Agent must return direct B-spline surface source summary.")
+        return
+    }
+    let knot = try #require(
+        summary.sources.first?.patches.first?.basis.uKnotVector.first { $0.index == 3 }
+    )
+    #expect(knot.isEditable)
+    let knotReference = try #require(knot.selectionReference)
+
+    let insertionResponse = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .insertSurfaceKnot(
+                target: knotReference,
+                value: .scalar(0.5)
+            ),
+            expectedGeneration: DocumentGeneration(1)
+        )
+    )
+    guard case .command(let insertionResult) = insertionResponse else {
+        Issue.record("Agent must insert a duplicate direct B-spline surface knot.")
+        return
+    }
+    #expect(insertionResult.commandName == "insertSurfaceKnot")
+    #expect(insertionResult.didMutate)
+    #expect(insertionResult.generation == DocumentGeneration(2))
+
+    let featureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let feature = try #require(session.document.cadDocument.designGraph.nodes[featureID])
+    guard case let .bSplineSurface(surfaceFeature) = feature.operation else {
+        Issue.record("Agent must keep a direct B-spline surface feature.")
+        return
+    }
+    #expect(surfaceFeature.surface.uKnots == [0.0, 0.0, 0.0, 0.5, 0.5, 1.0, 1.0, 1.0])
+    #expect(surfaceFeature.surface.uControlPointCount == 5)
+    #expect(session.evaluationStatus == .valid)
+}
+
+@MainActor
 @Test func agentDispatchesPolySplineCommandAndExposesBSplineTopology() async throws {
     let server = AgentCommandController()
     let sessionID = UUID()

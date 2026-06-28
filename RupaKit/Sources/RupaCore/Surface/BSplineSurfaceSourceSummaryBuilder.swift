@@ -197,8 +197,18 @@ struct BSplineSurfaceSourceSummaryBuilder: Sendable {
         surface: BSplineSurface3D,
         surfaceReference: SurfaceReference
     ) -> SurfaceSourceSummaryResult.Basis {
-        let uSpans = spans(axis: "u", knots: surface.uKnots)
-        let vSpans = spans(axis: "v", knots: surface.vKnots)
+        let uSpans = spans(
+            direction: .u,
+            knots: surface.uKnots,
+            degree: surface.uDegree,
+            surfaceReference: surfaceReference
+        )
+        let vSpans = spans(
+            direction: .v,
+            knots: surface.vKnots,
+            degree: surface.vDegree,
+            surfaceReference: surfaceReference
+        )
         return SurfaceSourceSummaryResult.Basis(
             kind: "bSplineSurface",
             uDegree: surface.uDegree,
@@ -261,26 +271,37 @@ struct BSplineSurfaceSourceSummaryBuilder: Sendable {
     }
 
     private func spans(
-        axis: String,
-        knots: [Double]
+        direction: SurfaceParameterDirection,
+        knots: [Double],
+        degree: Int,
+        surfaceReference: SurfaceReference
     ) -> [SurfaceSourceSummaryResult.Basis.Span] {
-        guard knots.count >= 2 else {
+        let lowerIndex = degree
+        let upperIndex = knots.count - degree - 1
+        guard lowerIndex < upperIndex else {
             return []
         }
         var result: [SurfaceSourceSummaryResult.Basis.Span] = []
-        for index in 0..<(knots.count - 1) {
+        for index in lowerIndex..<upperIndex {
             let lowerBound = knots[index]
             let upperBound = knots[index + 1]
             guard upperBound > lowerBound else {
                 continue
             }
+            let spanIndex = result.count
             result.append(SurfaceSourceSummaryResult.Basis.Span(
-                id: "\(axis)Span:\(result.count)",
-                index: result.count,
+                id: "\(direction.rawValue)Span:\(spanIndex)",
+                index: spanIndex,
                 lowerBound: lowerBound,
                 upperBound: upperBound,
                 startKnotIndex: index,
-                endKnotIndex: index + 1
+                endKnotIndex: index + 1,
+                isEditable: true,
+                selectionReference: .surface(.span(SurfaceSpanReference(
+                    surface: surfaceReference,
+                    direction: direction,
+                    spanIndex: spanIndex
+                )))
             ))
         }
         return result

@@ -473,9 +473,87 @@ extension DesignDocument {
         }
     }
 
+    public mutating func insertSurfaceKnot(
+        target: SelectionReference,
+        value: CADExpression,
+        objectRegistry: ObjectTypeRegistry = .builtIn
+    ) throws {
+        let resolvedValue = try resolvedScalarValue(
+            value,
+            owner: "B-spline surface knot insertion"
+        )
+        let insertionResolution = try resolvedBSplineSurfaceKnotInsertionTarget(
+            target,
+            owner: "B-spline surface knot insertion"
+        )
+        guard var feature = cadDocument.designGraph.nodes[insertionResolution.featureID],
+              case let .bSplineSurface(surfaceFeature) = feature.operation else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "B-spline surface knot insertion requires an existing direct B-spline surface source feature."
+            )
+        }
+        let insertionValue = try resolvedBSplineSurfaceKnotInsertionValue(
+            resolvedValue,
+            target: insertionResolution,
+            surface: surfaceFeature.surface,
+            owner: "B-spline surface knot insertion"
+        )
+
+        let knotEditor = BSplineSurfaceKnotEditingService()
+        feature.operation = .bSplineSurface(try knotEditor.updatedFeature(
+            insertingKnot: insertionResolution.direction,
+            value: insertionValue,
+            in: surfaceFeature,
+            owner: "B-spline surface knot insertion"
+        ))
+
+        var updatedCADDocument = cadDocument
+        let previousCADDocument = cadDocument
+        do {
+            try updatedCADDocument.replaceFeature(feature)
+            cadDocument = updatedCADDocument
+            try validate(objectRegistry: objectRegistry)
+        } catch {
+            cadDocument = previousCADDocument
+            throw EditorError(
+                code: .commandInvalid,
+                message: "B-spline surface knot insertion produced invalid source geometry: \(error)."
+            )
+        }
+    }
+
     private struct BSplineSurfaceKnotResolution {
         var featureID: FeatureID
         var reference: SurfaceKnotReference
+    }
+
+    private struct BSplineSurfaceSpanResolution {
+        var featureID: FeatureID
+        var reference: SurfaceSpanReference
+    }
+
+    private enum BSplineSurfaceKnotInsertionResolution {
+        case span(BSplineSurfaceSpanResolution)
+        case knot(BSplineSurfaceKnotResolution)
+
+        var featureID: FeatureID {
+            switch self {
+            case .span(let resolution):
+                resolution.featureID
+            case .knot(let resolution):
+                resolution.featureID
+            }
+        }
+
+        var direction: SurfaceParameterDirection {
+            switch self {
+            case .span(let resolution):
+                resolution.reference.direction
+            case .knot(let resolution):
+                resolution.reference.direction
+            }
+        }
     }
 
     private func resolvedBSplineSurfaceKnotReference(
@@ -510,6 +588,170 @@ extension DesignDocument {
         return BSplineSurfaceKnotResolution(
             featureID: patchFace.featureID,
             reference: reference
+        )
+    }
+
+    private func resolvedBSplineSurfaceSpanReference(
+        _ selection: SelectionReference,
+        owner: String
+    ) throws -> BSplineSurfaceSpanResolution {
+        guard case .surface(.span(let reference)) = selection else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "\(owner) requires a surface span selection reference."
+            )
+        }
+        do {
+            try reference.validate()
+        } catch {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "\(owner) requires a valid surface span selection reference: \(error)."
+            )
+        }
+        let patchFace = try resolvedSurfacePatchFace(
+            from: reference.surface.faceName,
+            owner: owner
+        )
+        guard patchFace.generatedRole == "bSplineSurface",
+              patchFace.patchID == 0 else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "\(owner) requires a direct B-spline surface patch face selection reference."
+            )
+        }
+        return BSplineSurfaceSpanResolution(
+            featureID: patchFace.featureID,
+            reference: reference
+        )
+    }
+
+    private func resolvedBSplineSurfaceKnotInsertionTarget(
+        _ selection: SelectionReference,
+        owner: String
+    ) throws -> BSplineSurfaceKnotInsertionResolution {
+        switch selection {
+        case .surface(.span):
+            return .span(try resolvedBSplineSurfaceSpanReference(selection, owner: owner))
+        case .surface(.knot):
+            return .knot(try resolvedBSplineSurfaceKnotReference(selection, owner: owner))
+        default:
+            throw EditorError(
+                code: .commandInvalid,
+                message: "\(owner) requires a surface span or surface knot selection reference."
+            )
+        }
+    }
+
+    private func resolvedBSplineSurfaceKnotInsertionValue(
+        _ value: Double,
+        target: BSplineSurfaceKnotInsertionResolution,
+        surface: BSplineSurface3D,
+        owner: String
+    ) throws -> Double {
+        switch target {
+        case .span(let resolution):
+            let spanBounds = try bSplineSurfaceSpanBounds(
+                for: resolution.reference,
+                in: surface,
+                owner: owner
+            )
+            guard value > spanBounds.lower,
+                  value < spanBounds.upper else {
+                throw EditorError(
+                    code: .commandInvalid,
+                    message: "\(owner) value must be strictly inside the selected surface span."
+                )
+            }
+            return value
+        case .knot(let resolution):
+            let knotValue = try bSplineSurfaceKnotValue(
+                for: resolution.reference,
+                in: surface,
+                owner: owner
+            )
+            let equalityTolerance = max(abs(knotValue), 1.0) * 1.0e-9
+            guard abs(value - knotValue) <= equalityTolerance else {
+                throw EditorError(
+                    code: .commandInvalid,
+                    message: "\(owner) value must match the selected existing surface knot value."
+                )
+            }
+            return knotValue
+        }
+    }
+
+    private func bSplineSurfaceKnotValue(
+        for reference: SurfaceKnotReference,
+        in surface: BSplineSurface3D,
+        owner: String
+    ) throws -> Double {
+        let knots: [Double]
+        let degree: Int
+        switch reference.direction {
+        case .u:
+            knots = surface.uKnots
+            degree = surface.uDegree
+        case .v:
+            knots = surface.vKnots
+            degree = surface.vDegree
+        }
+        guard knots.indices.contains(reference.knotIndex) else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "\(owner) references a missing B-spline surface knot."
+            )
+        }
+        let firstInteriorKnotIndex = degree + 1
+        let lastInteriorKnotIndex = knots.count - degree - 2
+        guard firstInteriorKnotIndex <= lastInteriorKnotIndex,
+              (firstInteriorKnotIndex ... lastInteriorKnotIndex).contains(reference.knotIndex) else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "\(owner) can insert duplicate knots only at interior B-spline surface knots."
+            )
+        }
+        return knots[reference.knotIndex]
+    }
+
+    private func bSplineSurfaceSpanBounds(
+        for reference: SurfaceSpanReference,
+        in surface: BSplineSurface3D,
+        owner: String
+    ) throws -> (lower: Double, upper: Double) {
+        let knots: [Double]
+        let degree: Int
+        switch reference.direction {
+        case .u:
+            knots = surface.uKnots
+            degree = surface.uDegree
+        case .v:
+            knots = surface.vKnots
+            degree = surface.vDegree
+        }
+        let lowerIndex = degree
+        let upperIndex = knots.count - degree - 1
+        var ordinal = 0
+        guard lowerIndex < upperIndex else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "\(owner) could not resolve a queryable B-spline surface span."
+            )
+        }
+        for index in lowerIndex..<upperIndex {
+            let lowerBound = knots[index]
+            let upperBound = knots[index + 1]
+            guard upperBound > lowerBound else {
+                continue
+            }
+            if ordinal == reference.spanIndex {
+                return (lowerBound, upperBound)
+            }
+            ordinal += 1
+        }
+        throw EditorError(
+            code: .referenceUnresolved,
+            message: "\(owner) references a missing B-spline surface span."
         )
     }
 

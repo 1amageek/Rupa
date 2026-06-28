@@ -138,6 +138,8 @@ public struct SurfaceSourceSummaryResult: Codable, Equatable, Sendable {
             public var upperBound: Double
             public var startKnotIndex: Int
             public var endKnotIndex: Int
+            public var isEditable: Bool
+            public var selectionReference: SelectionReference?
 
             public init(
                 id: String,
@@ -145,7 +147,9 @@ public struct SurfaceSourceSummaryResult: Codable, Equatable, Sendable {
                 lowerBound: Double,
                 upperBound: Double,
                 startKnotIndex: Int,
-                endKnotIndex: Int
+                endKnotIndex: Int,
+                isEditable: Bool = false,
+                selectionReference: SelectionReference? = nil
             ) {
                 self.id = id
                 self.index = index
@@ -153,6 +157,8 @@ public struct SurfaceSourceSummaryResult: Codable, Equatable, Sendable {
                 self.upperBound = upperBound
                 self.startKnotIndex = startKnotIndex
                 self.endKnotIndex = endKnotIndex
+                self.isEditable = isEditable
+                self.selectionReference = selectionReference
             }
         }
 

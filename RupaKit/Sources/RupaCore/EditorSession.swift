@@ -2145,6 +2145,19 @@ public final class EditorSession {
     }
 
     @discardableResult
+    public func insertSurfaceKnot(
+        target: SelectionReference,
+        value: CADExpression
+    ) -> CommandExecutionResult? {
+        perform(
+            .insertSurfaceKnot(
+                target: target,
+                value: value
+            )
+        )
+    }
+
+    @discardableResult
     public func slidePolySplineSurfaceVertices(
         targets: [SelectionTarget],
         direction: PolySplineSurfaceVertexSlideDirection,

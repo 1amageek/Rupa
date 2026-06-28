@@ -164,6 +164,14 @@ import SwiftCAD
     let firstUKnot = try #require(patch.basis.uKnotVector.first)
     #expect(firstUKnot.selectionReference != nil)
     #expect(firstUKnot.isEditable == false)
+    let firstUSpan = try #require(patch.basis.uSpans.first)
+    #expect(firstUSpan.isEditable)
+    guard case .surface(.span(let spanReference)) = firstUSpan.selectionReference else {
+        Issue.record("Direct B-spline span must expose a surface span reference.")
+        return
+    }
+    #expect(spanReference.direction == .u)
+    #expect(spanReference.spanIndex == firstUSpan.index)
     #expect(patch.trimLoops.first?.edgePersistentNames.count == 4)
     #expect(patch.trimLoops.first?.selectionReferences.count == 4)
     let weightedControlPoint = try #require(patch.controlPoints.first { $0.uIndex == 1 && $0.vIndex == 1 })

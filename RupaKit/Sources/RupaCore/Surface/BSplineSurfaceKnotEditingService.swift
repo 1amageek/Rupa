@@ -3,6 +3,34 @@ import RupaCoreTypes
 
 struct BSplineSurfaceKnotEditingService: Sendable {
     func updatedFeature(
+        insertingKnot direction: SurfaceParameterDirection,
+        value: Double,
+        in feature: BSplineSurfaceFeature,
+        owner: String
+    ) throws -> BSplineSurfaceFeature {
+        guard value.isFinite else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "\(owner) requires a finite knot value."
+            )
+        }
+        var updatedFeature = feature
+        do {
+            updatedFeature.surface = try feature.surface.insertingKnot(
+                direction: direction,
+                value: value
+            )
+        } catch {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "\(owner) could not insert the B-spline surface knot: \(error)."
+            )
+        }
+        try updatedFeature.validate()
+        return updatedFeature
+    }
+
+    func updatedFeature(
         settingValue value: Double,
         for reference: SurfaceKnotReference,
         in feature: BSplineSurfaceFeature,

@@ -493,6 +493,95 @@ import Testing
     }
 }
 
+@Test func directBSplineSurfaceSpanReferenceInsertsShapePreservingKnot() async throws {
+    var document = DesignDocument.empty()
+    let surface = designDocumentDirectBSplineSurfaceWithInteriorKnots()
+
+    let featureID = try document.createBSplineSurface(
+        name: "Direct Insertable Knot Surface",
+        surface: surface
+    )
+    let summary = try SurfaceSourceSummaryService().summarize(document: document)
+    let patch = try #require(summary.sources.first?.patches.first)
+    let editableSpan = try #require(patch.basis.uSpans.first { $0.index == 0 })
+    #expect(editableSpan.isEditable)
+    let spanReference = try #require(editableSpan.selectionReference)
+
+    try document.insertSurfaceKnot(
+        target: spanReference,
+        value: .scalar(0.25)
+    )
+
+    let feature = try #require(document.cadDocument.designGraph.nodes[featureID])
+    guard case let .bSplineSurface(surfaceFeature) = feature.operation else {
+        Issue.record("Expected a direct B-spline surface feature.")
+        return
+    }
+    #expect(surfaceFeature.surface.uKnots == [0.0, 0.0, 0.0, 0.25, 0.5, 1.0, 1.0, 1.0])
+    #expect(surfaceFeature.surface.vKnots == surface.vKnots)
+    #expect(surfaceFeature.surface.uControlPointCount == surface.uControlPointCount + 1)
+    #expect(surfaceFeature.surface.vControlPointCount == surface.vControlPointCount)
+    for u in [0.0, 0.2, 0.45, 0.8, 1.0] {
+        for v in [0.0, 0.3, 0.6, 1.0] {
+            let before = try surface.point(u: u, v: v)
+            let after = try surfaceFeature.surface.point(u: u, v: v)
+            #expect(abs(before.x - after.x) <= 1.0e-10)
+            #expect(abs(before.y - after.y) <= 1.0e-10)
+            #expect(abs(before.z - after.z) <= 1.0e-10)
+        }
+    }
+    #expect(throws: EditorError.self) {
+        try document.insertSurfaceKnot(
+            target: spanReference,
+            value: .scalar(0.75)
+        )
+    }
+}
+
+@Test func directBSplineSurfaceKnotReferenceInsertsDuplicateKnotMultiplicity() async throws {
+    var document = DesignDocument.empty()
+    let surface = designDocumentDirectBSplineSurfaceWithInteriorKnots()
+
+    let featureID = try document.createBSplineSurface(
+        name: "Direct Multiplicity Knot Surface",
+        surface: surface
+    )
+    let summary = try SurfaceSourceSummaryService().summarize(document: document)
+    let patch = try #require(summary.sources.first?.patches.first)
+    let editableKnot = try #require(patch.basis.uKnotVector.first { $0.index == 3 })
+    #expect(editableKnot.value == 0.5)
+    #expect(editableKnot.isEditable)
+    let knotReference = try #require(editableKnot.selectionReference)
+
+    try document.insertSurfaceKnot(
+        target: knotReference,
+        value: .scalar(0.5)
+    )
+
+    let feature = try #require(document.cadDocument.designGraph.nodes[featureID])
+    guard case let .bSplineSurface(surfaceFeature) = feature.operation else {
+        Issue.record("Expected a direct B-spline surface feature.")
+        return
+    }
+    #expect(surfaceFeature.surface.uKnots == [0.0, 0.0, 0.0, 0.5, 0.5, 1.0, 1.0, 1.0])
+    #expect(surfaceFeature.surface.uControlPointCount == surface.uControlPointCount + 1)
+    for u in [0.0, 0.2, 0.5, 0.8, 1.0] {
+        for v in [0.0, 0.3, 0.6, 1.0] {
+            let before = try surface.point(u: u, v: v)
+            let after = try surfaceFeature.surface.point(u: u, v: v)
+            #expect(abs(before.x - after.x) <= 1.0e-10)
+            #expect(abs(before.y - after.y) <= 1.0e-10)
+            #expect(abs(before.z - after.z) <= 1.0e-10)
+        }
+    }
+    #expect(throws: EditorError.self) {
+        try document.insertSurfaceKnot(
+            target: knotReference,
+            value: .scalar(0.45)
+        )
+    }
+}
+
 @Test func polySplineSurfaceVertexMoveRejectsNonVertexTargets() async throws {
     var document = DesignDocument.empty()
 

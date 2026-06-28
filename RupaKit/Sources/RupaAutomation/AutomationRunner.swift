@@ -1244,6 +1244,17 @@ public struct AutomationRunner {
                 didMutate: result.didMutate,
                 diagnostics: result.diagnostics
             )
+        case .insertSurfaceKnot(let target, let value):
+            let result = try session.execute(
+                .insertSurfaceKnot(target: target, value: value)
+            )
+            return AutomationResult(
+                message: "Surface knot inserted.",
+                commandName: result.commandName,
+                generation: result.generation,
+                didMutate: result.didMutate,
+                diagnostics: result.diagnostics
+            )
         case .slidePolySplineSurfaceVertices(let targets, let direction, let distance):
             let result = try session.execute(
                 .slidePolySplineSurfaceVertices(
