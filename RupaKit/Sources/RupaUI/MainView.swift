@@ -3967,6 +3967,19 @@ public struct MainView: View {
         )
     }
 
+    private var topologyEditInspectorStateBuilder: WorkspaceTopologyEditInspectorStateBuilder {
+        WorkspaceTopologyEditInspectorStateBuilder(
+            selection: session.selection,
+            selectedTargetSummary: selectedTargetSummary,
+            faceOffsetStepMeters: defaultFaceOffsetStepMeters,
+            edgeChamferStepMeters: defaultEdgeChamferStepMeters,
+            edgeFilletRadiusMeters: defaultEdgeFilletRadiusMeters,
+            vertexMoveStepMeters: defaultVertexMoveStepMeters,
+            usesLockedRegionDistance: regionOffsetCommandState.usesLockedDistance,
+            combinesRegions: regionOffsetCommandState.usesCombinedRegions
+        )
+    }
+
     private func patternArrayInspectorState(for nodes: [SceneNode]) -> PatternArrayInspectorState? {
         PatternArrayInspectorState(
             selectedNodes: nodes,
@@ -3996,21 +4009,11 @@ public struct MainView: View {
     }
 
     private var selectedFaceTarget: SelectionTarget? {
-        let targets = selectedFaceTargets
-        guard targets.count == 1 else {
-            return nil
-        }
-        return targets.first
+        topologyEditInspectorStateBuilder.faceTarget
     }
 
     private var selectedFaceTargets: [SelectionTarget] {
-        let targets = session.selection.selectedTargets
-        return targets.filter { target in
-            if case .face = target.component {
-                return true
-            }
-            return false
-        }
+        topologyEditInspectorStateBuilder.faceTargets
     }
 
     private var selectedObjectDimensionTargets: [SelectionTarget] {
@@ -4038,12 +4041,7 @@ public struct MainView: View {
     }
 
     private var selectedEdgeTargets: [SelectionTarget] {
-        session.selection.selectedTargets.filter { target in
-            if case .edge = target.component {
-                return true
-            }
-            return false
-        }
+        topologyEditInspectorStateBuilder.edgeTargets
     }
 
     private var selectedEdgeOffsetSupportResolution: EdgeOffsetSupportFaceResolution {
@@ -4091,20 +4089,11 @@ public struct MainView: View {
     }
 
     private var selectedVertexTarget: SelectionTarget? {
-        let targets = selectedVertexTargets
-        guard targets.count == 1, let target = targets.first else {
-            return nil
-        }
-        return target
+        topologyEditInspectorStateBuilder.vertexTarget
     }
 
     private var selectedVertexTargets: [SelectionTarget] {
-        session.selection.selectedTargets.filter { target in
-            if case .vertex = target.component {
-                return true
-            }
-            return false
-        }
+        topologyEditInspectorStateBuilder.vertexTargets
     }
 
     private var selectedPolySplineSurfaceVertexTargets: [SelectionTarget] {
@@ -4150,12 +4139,7 @@ public struct MainView: View {
     }
 
     private var selectedRegionTargets: [SelectionTarget] {
-        session.selection.selectedTargets.filter { target in
-            if case .region = target.component {
-                return true
-            }
-            return false
-        }
+        topologyEditInspectorStateBuilder.regionTargets
     }
 
     private var selectedConstructionPlaneTargets: [SelectionTarget]? {
@@ -4576,22 +4560,7 @@ public struct MainView: View {
     private func topologyEditInspectorState(
         for nodes: [SceneNode]
     ) -> WorkspaceTopologyEditInspectorState {
-        let edgeTargets = selectedEdgeTargets
-        return WorkspaceTopologyEditInspectorState(
-            isSingleNodeSelection: nodes.count == 1,
-            selectedTargetSummary: selectedTargetSummary,
-            faceTarget: selectedFaceTarget,
-            edgeTargets: edgeTargets,
-            projectableEdgeTargets: generatedEdgeProjectionTargets(from: edgeTargets),
-            vertexTarget: selectedVertexTarget,
-            regionTargets: selectedRegionTargets,
-            faceOffsetStepMeters: defaultFaceOffsetStepMeters,
-            edgeChamferStepMeters: defaultEdgeChamferStepMeters,
-            edgeFilletRadiusMeters: defaultEdgeFilletRadiusMeters,
-            vertexMoveStepMeters: defaultVertexMoveStepMeters,
-            usesLockedRegionDistance: regionOffsetCommandState.usesLockedDistance,
-            combinesRegions: regionOffsetCommandState.usesCombinedRegions
-        )
+        topologyEditInspectorStateBuilder.state(for: nodes)
     }
 
     private func patternArrayInspectorSection(_ state: PatternArrayInspectorState) -> some View {
@@ -4735,19 +4704,7 @@ public struct MainView: View {
     private func generatedEdgeProjectionTargets(
         from targets: [SelectionTarget]
     ) -> [SelectionTarget] {
-        var projectedTargets: [SelectionTarget] = []
-        var seen = Set<String>()
-        for target in targets {
-            guard case .edge(let componentID) = target.component,
-                  componentID.generatedTopologyPersistentName != nil else {
-                continue
-            }
-            let key = "\(target.sceneNodeID.description):\(String(describing: target.component))"
-            if seen.insert(key).inserted {
-                projectedTargets.append(target)
-            }
-        }
-        return projectedTargets
+        topologyEditInspectorStateBuilder.generatedEdgeProjectionTargets(from: targets)
     }
 
     @ViewBuilder
