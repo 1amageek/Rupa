@@ -62,6 +62,7 @@ import Testing
     #expect(state.boundaryTitle == "Interior")
     #expect(state.editabilityTitle == "Frame Query")
     #expect(state.frameDisplayTitle == "Hidden")
+    #expect(state.hasResolvedFrames == false)
     #expect(state.canSetKnotValue == false)
     #expect(state.canInsertKnot == false)
     #expect(state.canToggleFrameDisplay)
@@ -234,6 +235,15 @@ import Testing
     #expect(builder.surfaceParameterReferences == [reference])
     #expect(state.kindTitle == "Address")
     #expect(state.frameDisplayTitle == "Visible")
+    #expect(state.hasResolvedFrames)
+    #expect(state.framePositionTitle == "(0.01, 0.01, 0)")
+    #expect(state.frameUAxisTitle == "(1, 0, 0)")
+    #expect(state.frameVAxisTitle == "(0, 1, 0)")
+    #expect(state.frameNormalTitle == "(0, 0, 1)")
+    #expect(state.frameHandednessTitle == "1")
+    #expect(state.frameNormalCurvatureTitle == "U 0 1/m, V 0 1/m")
+    #expect(state.framePrincipalCurvatureTitle == "Min 0 1/m, Max 0 1/m")
+    #expect(state.frameGaussianCurvatureTitle == "0 1/m2")
     #expect(state.selectedFrameQueries == [query])
 }
 

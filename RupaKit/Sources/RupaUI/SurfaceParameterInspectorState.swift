@@ -43,6 +43,7 @@ struct SurfaceParameterInspectorState: Equatable, Sendable {
         var selectionReference: SelectionReference
         var frameQuery: SurfaceFrameQuery?
         var isFrameDisplayVisible: Bool
+        var resolvedFrame: SurfaceFrameResult.Frame?
 
         var directionTitle: String {
             switch kind {
@@ -190,6 +191,62 @@ struct SurfaceParameterInspectorState: Equatable, Sendable {
                 return (lowerBound + upperBound) * 0.5
             }
         }
+
+        var framePositionTitle: String {
+            guard let resolvedFrame else {
+                return "-"
+            }
+            return formattedPoint(resolvedFrame.position)
+        }
+
+        var frameUAxisTitle: String {
+            guard let resolvedFrame else {
+                return "-"
+            }
+            return formattedVector(resolvedFrame.uAxis)
+        }
+
+        var frameVAxisTitle: String {
+            guard let resolvedFrame else {
+                return "-"
+            }
+            return formattedVector(resolvedFrame.vAxis)
+        }
+
+        var frameNormalTitle: String {
+            guard let resolvedFrame else {
+                return "-"
+            }
+            return formattedVector(resolvedFrame.normal)
+        }
+
+        var frameHandednessTitle: String {
+            guard let resolvedFrame else {
+                return "-"
+            }
+            return shortNumber(resolvedFrame.handedness)
+        }
+
+        var frameNormalCurvatureTitle: String {
+            guard let resolvedFrame else {
+                return "-"
+            }
+            return "U \(formattedCurvature(resolvedFrame.normalCurvatureU)), V \(formattedCurvature(resolvedFrame.normalCurvatureV))"
+        }
+
+        var framePrincipalCurvatureTitle: String {
+            guard let resolvedFrame else {
+                return "-"
+            }
+            return "Min \(formattedCurvature(resolvedFrame.minimumPrincipalCurvature)), Max \(formattedCurvature(resolvedFrame.maximumPrincipalCurvature))"
+        }
+
+        var frameGaussianCurvatureTitle: String {
+            guard let resolvedFrame else {
+                return "-"
+            }
+            return formattedGaussianCurvature(resolvedFrame.gaussianCurvature)
+        }
     }
 
     var entries: [Entry]
@@ -299,6 +356,54 @@ struct SurfaceParameterInspectorState: Equatable, Sendable {
 
     var frameDisplayTitle: String {
         commonBoolTitle(entries.map(\.isFrameDisplayVisible), trueTitle: "Visible", falseTitle: "Hidden")
+    }
+
+    var hasResolvedFrames: Bool {
+        !entries.isEmpty && entries.allSatisfy { $0.resolvedFrame != nil }
+    }
+
+    var framePositionTitle: String {
+        commonTitle(entries.map(\.framePositionTitle)) ?? "Mixed"
+    }
+
+    var frameUAxisTitle: String {
+        commonTitle(entries.map(\.frameUAxisTitle)) ?? "Mixed"
+    }
+
+    var frameVAxisTitle: String {
+        commonTitle(entries.map(\.frameVAxisTitle)) ?? "Mixed"
+    }
+
+    var frameNormalTitle: String {
+        commonTitle(entries.map(\.frameNormalTitle)) ?? "Mixed"
+    }
+
+    var frameHandednessTitle: String {
+        commonTitle(entries.map(\.frameHandednessTitle)) ?? "Mixed"
+    }
+
+    var frameNormalCurvatureTitle: String {
+        commonTitle(entries.map(\.frameNormalCurvatureTitle)) ?? "Mixed"
+    }
+
+    var framePrincipalCurvatureTitle: String {
+        commonTitle(entries.map(\.framePrincipalCurvatureTitle)) ?? "Mixed"
+    }
+
+    var frameGaussianCurvatureTitle: String {
+        commonTitle(entries.map(\.frameGaussianCurvatureTitle)) ?? "Mixed"
+    }
+
+    func resolvingFrames(
+        _ framesByReference: [SelectionReference: SurfaceFrameResult.Frame]
+    ) -> SurfaceParameterInspectorState {
+        var nextState = self
+        nextState.entries = entries.map { entry in
+            var nextEntry = entry
+            nextEntry.resolvedFrame = framesByReference[entry.selectionReference]
+            return nextEntry
+        }
+        return nextState
     }
 
     func clampedKnotValue(_ value: Double) -> Double? {
@@ -441,7 +546,8 @@ struct SurfaceParameterInspectorState: Equatable, Sendable {
                 isFrameDisplayVisible: frameDisplayVisible(
                     for: frameQuery,
                     surfaceFrameDisplays: surfaceFrameDisplays
-                )
+                ),
+                resolvedFrame: nil
             )
         }
     }
@@ -477,7 +583,8 @@ struct SurfaceParameterInspectorState: Equatable, Sendable {
                 isEditable: false,
                 selectionReference: sample.selectionReference,
                 frameQuery: frameQuery,
-                isFrameDisplayVisible: sample.isFrameDisplayVisible
+                isFrameDisplayVisible: sample.isFrameDisplayVisible,
+                resolvedFrame: nil
             )
         }
     }
@@ -519,7 +626,8 @@ struct SurfaceParameterInspectorState: Equatable, Sendable {
                 isEditable: knot.isEditable,
                 selectionReference: selectionReference,
                 frameQuery: nil,
-                isFrameDisplayVisible: false
+                isFrameDisplayVisible: false,
+                resolvedFrame: nil
             )
         }
     }
@@ -558,7 +666,8 @@ struct SurfaceParameterInspectorState: Equatable, Sendable {
                 isEditable: span.isEditable,
                 selectionReference: selectionReference,
                 frameQuery: nil,
-                isFrameDisplayVisible: false
+                isFrameDisplayVisible: false,
+                resolvedFrame: nil
             )
         }
     }
@@ -643,7 +752,24 @@ struct SurfaceParameterInspectorState: Equatable, Sendable {
 }
 
 private func shortNumber(_ value: Double) -> String {
-    value.formatted(.number.precision(.fractionLength(0...6)))
+    let normalizedValue = abs(value) < 1.0e-12 ? 0.0 : value
+    return normalizedValue.formatted(.number.precision(.fractionLength(0...6)))
+}
+
+private func formattedPoint(_ point: SurfaceAnalysisResult.Point) -> String {
+    "(\(shortNumber(point.x)), \(shortNumber(point.y)), \(shortNumber(point.z)))"
+}
+
+private func formattedVector(_ vector: SurfaceAnalysisResult.Vector) -> String {
+    "(\(shortNumber(vector.x)), \(shortNumber(vector.y)), \(shortNumber(vector.z)))"
+}
+
+private func formattedCurvature(_ value: Double) -> String {
+    "\(shortNumber(value)) 1/m"
+}
+
+private func formattedGaussianCurvature(_ value: Double) -> String {
+    "\(shortNumber(value)) 1/m2"
 }
 
 private func editMargin(lowerBound: Double, upperBound: Double) -> Double {

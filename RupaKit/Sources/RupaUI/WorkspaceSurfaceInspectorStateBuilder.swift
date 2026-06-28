@@ -66,7 +66,7 @@ struct WorkspaceSurfaceInspectorStateBuilder {
                     message: "Selected surface parameter references could not be resolved in the current surface source summary."
                 )
             }
-            return .success(state)
+            return .success(try resolveFrames(for: state))
         } catch {
             return .failure(error)
         }
@@ -207,6 +207,32 @@ struct WorkspaceSurfaceInspectorStateBuilder {
             },
             diagnostics: result.diagnostics
         )
+    }
+
+    private func resolveFrames(
+        for state: SurfaceParameterInspectorState
+    ) throws -> SurfaceParameterInspectorState {
+        let referenceQueries = state.entries.compactMap { entry -> (SelectionReference, SurfaceFrameQuery)? in
+            guard let frameQuery = entry.frameQuery else {
+                return nil
+            }
+            return (entry.selectionReference, frameQuery)
+        }
+        guard !referenceQueries.isEmpty else {
+            return state
+        }
+        let frameResult = try SurfaceFrameService().resolve(
+            document: document,
+            queries: referenceQueries.map(\.1),
+            objectRegistry: objectRegistry,
+            currentEvaluation: currentEvaluation,
+            currentGeneration: documentGeneration
+        )
+        var framesByReference: [SelectionReference: SurfaceFrameResult.Frame] = [:]
+        for (index, frame) in frameResult.frames.enumerated() where referenceQueries.indices.contains(index) {
+            framesByReference[referenceQueries[index].0] = frame
+        }
+        return state.resolvingFrames(framesByReference)
     }
 
     private func resolveAnalysisSummary(for nodes: [SceneNode]) throws -> SurfaceAnalysisResult? {

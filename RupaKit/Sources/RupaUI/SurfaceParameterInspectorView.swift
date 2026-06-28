@@ -25,6 +25,7 @@ struct SurfaceParameterInspectorView: View {
             frameDisplayStatus
             knotValueControl
             insertionControl
+            frameDetailRows
             frameDisplayControls
         }
     }
@@ -79,6 +80,20 @@ struct SurfaceParameterInspectorView: View {
                     )
                 }
             }
+        }
+    }
+
+    @ViewBuilder
+    private var frameDetailRows: some View {
+        if state.hasResolvedFrames {
+            inspectorRow("Position", state.framePositionTitle)
+            inspectorRow("U Axis", state.frameUAxisTitle)
+            inspectorRow("V Axis", state.frameVAxisTitle)
+            inspectorRow("Normal", state.frameNormalTitle)
+            inspectorRow("Handedness", state.frameHandednessTitle)
+            inspectorRow("Normal Curvature", state.frameNormalCurvatureTitle)
+            inspectorRow("Principal Curvature", state.framePrincipalCurvatureTitle)
+            inspectorRow("Gaussian Curvature", state.frameGaussianCurvatureTitle)
         }
     }
 
