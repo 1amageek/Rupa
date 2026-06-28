@@ -86,6 +86,27 @@ struct SurfaceControlPointInspectorState: Equatable, Sendable {
         entries.allSatisfy(\.isEditable)
     }
 
+    var canMoveInFrame: Bool {
+        entries.allSatisfy(\.isEditable) && frameMoveQuery != nil
+    }
+
+    var frameMoveQuery: SurfaceFrameQuery? {
+        guard let reference = entries.first?.selectionReference else {
+            return nil
+        }
+        return SurfaceFrameQuery(selectionReference: reference)
+    }
+
+    var frameTitle: String {
+        guard let entry = entries.first else {
+            return "None"
+        }
+        if entries.count == 1 {
+            return entry.indexTitle
+        }
+        return "\(entry.indexTitle) + \(entries.count - 1)"
+    }
+
     var sourceTitle: String {
         commonTitle(entries.map(\.sourceName)) ?? "Mixed"
     }

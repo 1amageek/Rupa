@@ -30,6 +30,9 @@ import Testing
     #expect(state.displayTitle == "Hidden")
     #expect(state.canEditCoordinates)
     #expect(state.canSlide)
+    #expect(state.canMoveInFrame)
+    #expect(state.frameTitle == "u1 / v1")
+    #expect(state.frameMoveQuery == SurfaceFrameQuery(selectionReference: controlPoint.selectionReference))
     #expect(state.selectedReferences == [controlPoint.selectionReference])
 }
 
@@ -77,6 +80,8 @@ import Testing
     #expect(state.editabilityTitle == "Read Only")
     #expect(state.canEditCoordinates == false)
     #expect(state.canSlide == false)
+    #expect(state.canMoveInFrame == false)
+    #expect(state.frameMoveQuery == SurfaceFrameQuery(selectionReference: boundary.selectionReference))
 }
 
 @MainActor

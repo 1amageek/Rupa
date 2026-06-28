@@ -26,6 +26,9 @@ public struct MainView: View {
     @State private var selectedSplineControlPointIndex: Int
     @State private var sketchSplineControlPointSlideDistanceMeters: Double
     @State private var polySplineSurfaceVertexSlideDistanceMeters: Double
+    @State private var surfaceControlPointFrameUMoveMeters: Double
+    @State private var surfaceControlPointFrameVMoveMeters: Double
+    @State private var surfaceControlPointFrameNormalMoveMeters: Double
     @State private var sketchSplineControlPointSlideCount: Int
     @State private var slideCommandState: SlideCommandState
     @State private var sketchSplitFraction: Double
@@ -92,6 +95,9 @@ public struct MainView: View {
         self._selectedSplineControlPointIndex = State(initialValue: 0)
         self._sketchSplineControlPointSlideDistanceMeters = State(initialValue: 0.001)
         self._polySplineSurfaceVertexSlideDistanceMeters = State(initialValue: 0.001)
+        self._surfaceControlPointFrameUMoveMeters = State(initialValue: 0.0)
+        self._surfaceControlPointFrameVMoveMeters = State(initialValue: 0.0)
+        self._surfaceControlPointFrameNormalMoveMeters = State(initialValue: 0.001)
         self._sketchSplineControlPointSlideCount = State(initialValue: 1)
         self._slideCommandState = State(initialValue: .inactive)
         self._sketchSplitFraction = State(initialValue: 0.5)
@@ -4143,11 +4149,23 @@ public struct MainView: View {
             session: session,
             positionSliderRange: transformPositionSliderRange,
             slideDistanceMeters: $polySplineSurfaceVertexSlideDistanceMeters,
+            frameMoveUMeters: $surfaceControlPointFrameUMoveMeters,
+            frameMoveVMeters: $surfaceControlPointFrameVMoveMeters,
+            frameMoveNormalMeters: $surfaceControlPointFrameNormalMoveMeters,
             isSlideActive: slideCommandState.isSurfaceControlVerticesActive,
             slideRouteTitle: slideCommandState.routeTitle,
             onSetPointDisplay: setSurfaceControlPointDisplay,
             onSetCoordinate: { axis, meters in
                 setSurfaceControlPointCoordinate(axis, meters: meters, state: state)
+            },
+            onMoveInFrame: { frame, uDistance, vDistance, normalDistance in
+                moveSelectedSurfaceControlPointsInFrame(
+                    state.selectedReferences,
+                    frame: frame,
+                    uDistanceMeters: uDistance,
+                    vDistanceMeters: vDistance,
+                    normalDistanceMeters: normalDistance
+                )
             },
             onActivateSlide: activateSlideSurfaceControlVerticesCommand,
             onSlide: { direction in
@@ -5020,6 +5038,25 @@ public struct MainView: View {
             targets: targets,
             direction: direction,
             distance: .length(resolvedDistanceMeters, .meter)
+        )
+        if result?.diagnostics.isEmpty == false || result == nil {
+            isPreviewExpanded = true
+        }
+    }
+
+    private func moveSelectedSurfaceControlPointsInFrame(
+        _ targets: [SelectionReference],
+        frame: SurfaceFrameQuery,
+        uDistanceMeters: Double,
+        vDistanceMeters: Double,
+        normalDistanceMeters: Double
+    ) {
+        let result = session.moveSurfaceControlPointsInFrame(
+            targets: targets,
+            frame: frame,
+            uDistance: .length(uDistanceMeters, .meter),
+            vDistance: .length(vDistanceMeters, .meter),
+            normalDistance: .length(normalDistanceMeters, .meter)
         )
         if result?.diagnostics.isEmpty == false || result == nil {
             isPreviewExpanded = true

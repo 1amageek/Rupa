@@ -7,10 +7,14 @@ struct SurfaceControlPointInspectorView: View {
     let session: EditorSession
     let positionSliderRange: ClosedRange<Double>
     @Binding var slideDistanceMeters: Double
+    @Binding var frameMoveUMeters: Double
+    @Binding var frameMoveVMeters: Double
+    @Binding var frameMoveNormalMeters: Double
     let isSlideActive: Bool
     let slideRouteTitle: String
     let onSetPointDisplay: ([SelectionReference], Bool) -> Void
     let onSetCoordinate: (SurfaceControlPointInspectorState.CoordinateAxis, Double) -> Void
+    let onMoveInFrame: (SurfaceFrameQuery, Double, Double, Double) -> Void
     let onActivateSlide: () -> Void
     let onSlide: (PolySplineSurfaceVertexSlideDirection) -> Void
 
@@ -27,6 +31,7 @@ struct SurfaceControlPointInspectorView: View {
             inspectorRow("Display", state.displayTitle)
             coordinateControls
             pointDisplayControls
+            frameMoveControls
             slideControls
         }
     }
@@ -49,6 +54,56 @@ struct SurfaceControlPointInspectorView: View {
             .accessibilityIdentifier("InspectorSurfaceCV.point.z")
         } else {
             inspectorRow("Point", state.pointTitle)
+        }
+    }
+
+    @ViewBuilder
+    private var frameMoveControls: some View {
+        inspectorRow("Frame", state.frameTitle)
+        signedLengthControl(
+            "U",
+            meters: frameMoveUMeters,
+            sliderRange: frameMoveSliderRange(for: frameMoveUMeters)
+        ) { meters in
+            frameMoveUMeters = meters
+        }
+        .accessibilityIdentifier("InspectorSurfaceCV.frame.u")
+
+        signedLengthControl(
+            "V",
+            meters: frameMoveVMeters,
+            sliderRange: frameMoveSliderRange(for: frameMoveVMeters)
+        ) { meters in
+            frameMoveVMeters = meters
+        }
+        .accessibilityIdentifier("InspectorSurfaceCV.frame.v")
+
+        signedLengthControl(
+            "N",
+            meters: frameMoveNormalMeters,
+            sliderRange: frameMoveSliderRange(for: frameMoveNormalMeters)
+        ) { meters in
+            frameMoveNormalMeters = meters
+        }
+        .accessibilityIdentifier("InspectorSurfaceCV.frame.normal")
+
+        inspectorActionRow {
+            inspectorIconButton(
+                systemImage: "arrow.up.and.down.and.arrow.left.and.right",
+                help: "Move Surface CV In Frame",
+                accessibilityIdentifier: "InspectorSurfaceCV.frame.apply"
+            ) {
+                guard let frame = state.frameMoveQuery else {
+                    return
+                }
+                onMoveInFrame(
+                    frame,
+                    frameMoveUMeters,
+                    frameMoveVMeters,
+                    frameMoveNormalMeters
+                )
+            }
+            .disabled(!state.canMoveInFrame || !hasFrameMoveOffset)
         }
     }
 
@@ -281,6 +336,47 @@ struct SurfaceControlPointInspectorView: View {
         .padding(.vertical, 1)
     }
 
+    private func signedLengthControl(
+        _ title: String,
+        meters: Double,
+        sliderRange: ClosedRange<Double>,
+        onChange: @escaping (Double) -> Void
+    ) -> some View {
+        let unit = session.document.displayUnit
+        let value = unit.value(fromMeters: meters)
+        let fieldBinding = Binding<Double>(
+            get: { value },
+            set: { newValue in
+                guard newValue.isFinite else {
+                    return
+                }
+                onChange(unit.meters(from: newValue))
+            }
+        )
+        let sliderBinding = Binding<Double>(
+            get: { min(max(value, sliderRange.lowerBound), sliderRange.upperBound) },
+            set: { newValue in
+                onChange(unit.meters(from: newValue))
+            }
+        )
+
+        return VStack(alignment: .leading, spacing: 5) {
+            inspectorControlRow(title) {
+                HStack(spacing: 6) {
+                    TextField(title, value: fieldBinding, formatter: numberFormatter)
+                        .multilineTextAlignment(.trailing)
+                        .frame(width: inspectorControlWidth)
+                    Text(unit.symbol)
+                        .foregroundStyle(.secondary)
+                        .frame(width: inspectorUnitWidth, alignment: .leading)
+                }
+            }
+            Slider(value: sliderBinding, in: sliderRange)
+                .padding(.leading, inspectorSliderLeadingPadding)
+        }
+        .padding(.vertical, 1)
+    }
+
     private func numericControl(
         _ title: String,
         values: [Double],
@@ -337,6 +433,19 @@ struct SurfaceControlPointInspectorView: View {
         let unit = session.document.displayUnit
         let currentValue = max(unit.value(fromMeters: meters), 0.001)
         return 0.0 ... max(currentValue * 2.0, 1.0)
+    }
+
+    private func frameMoveSliderRange(for meters: Double) -> ClosedRange<Double> {
+        let unit = session.document.displayUnit
+        let currentValue = abs(unit.value(fromMeters: meters))
+        let extent = max(currentValue * 2.0, 1.0)
+        return -extent ... extent
+    }
+
+    private var hasFrameMoveOffset: Bool {
+        abs(frameMoveUMeters) > 1.0e-12
+            || abs(frameMoveVMeters) > 1.0e-12
+            || abs(frameMoveNormalMeters) > 1.0e-12
     }
 
     private func commonValue(_ values: [Double]) -> Double? {
