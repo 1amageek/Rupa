@@ -46,9 +46,9 @@ struct ViewportSlotWidthAffordanceService {
                 widthMeters: widthMeters,
                 layout: layout
             )
-        case .spline(_, let points, _, _):
+        case .spline(_, let points, let controlPoints, _):
             return polylineGeometry(
-                points: points,
+                points: splineDisplayPoints(points: points, controlPoints: controlPoints),
                 widthMeters: widthMeters,
                 layout: layout
             )
@@ -164,5 +164,54 @@ struct ViewportSlotWidthAffordanceService {
 
     private func normal(to tangent: CGPoint) -> CGPoint {
         CGPoint(x: -tangent.y, y: tangent.x)
+    }
+
+    private func splineDisplayPoints(points: [CGPoint], controlPoints: [CGPoint]) -> [CGPoint] {
+        if points.count >= 2 {
+            return points
+        }
+        return cubicBezierSamplePoints(controlPoints: controlPoints)
+    }
+
+    private func cubicBezierSamplePoints(controlPoints: [CGPoint]) -> [CGPoint] {
+        guard controlPoints.count >= 4,
+              (controlPoints.count - 1).isMultiple(of: 3) else {
+            return []
+        }
+
+        var samples: [CGPoint] = []
+        let samplesPerSegment = 32
+        for segmentStart in stride(from: 0, to: controlPoints.count - 1, by: 3) {
+            let p0 = controlPoints[segmentStart]
+            let p1 = controlPoints[segmentStart + 1]
+            let p2 = controlPoints[segmentStart + 2]
+            let p3 = controlPoints[segmentStart + 3]
+            for index in 0 ... samplesPerSegment {
+                if segmentStart > 0, index == 0 {
+                    continue
+                }
+                let t = CGFloat(index) / CGFloat(samplesPerSegment)
+                samples.append(cubicBezierPoint(p0, p1, p2, p3, t: t))
+            }
+        }
+        return samples
+    }
+
+    private func cubicBezierPoint(
+        _ p0: CGPoint,
+        _ p1: CGPoint,
+        _ p2: CGPoint,
+        _ p3: CGPoint,
+        t: CGFloat
+    ) -> CGPoint {
+        let oneMinusT = 1.0 - t
+        let b0 = oneMinusT * oneMinusT * oneMinusT
+        let b1 = 3.0 * oneMinusT * oneMinusT * t
+        let b2 = 3.0 * oneMinusT * t * t
+        let b3 = t * t * t
+        return CGPoint(
+            x: p0.x * b0 + p1.x * b1 + p2.x * b2 + p3.x * b3,
+            y: p0.y * b0 + p1.y * b1 + p2.y * b2 + p3.y * b3
+        )
     }
 }

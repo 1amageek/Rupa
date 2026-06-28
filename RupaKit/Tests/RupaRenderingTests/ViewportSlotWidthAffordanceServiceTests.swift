@@ -82,6 +82,31 @@ import Testing
     #expect(abs(geometry.baseModelPoint.y) < 1.0e-12)
 }
 
+@Test func viewportSlotWidthAffordanceServiceSamplesSplineControlPointsWhenDisplayPointsAreEmpty() throws {
+    let layout = slotWidthTestLayout()
+    let entityID = SketchEntityID()
+    let geometry = try #require(
+        ViewportSlotWidthAffordanceService().geometry(
+            for: .spline(
+                entityID: entityID,
+                points: [],
+                controlPoints: [
+                    CGPoint(x: 0.0, y: 0.0),
+                    CGPoint(x: 0.33, y: 0.0),
+                    CGPoint(x: 0.66, y: 0.0),
+                    CGPoint(x: 1.0, y: 0.0),
+                ],
+                sketchPlane: .xy
+            ),
+            widthMeters: 0.2,
+            layout: layout
+        )
+    )
+
+    #expect(abs(geometry.baseModelPoint.x - 0.5) < 1.0e-2)
+    #expect(abs(geometry.baseModelPoint.y) < 1.0e-12)
+}
+
 @Test func viewportSlotWidthAffordanceServiceRejectsClosedOrDegenerateSources() {
     let layout = slotWidthTestLayout()
     let service = ViewportSlotWidthAffordanceService()
