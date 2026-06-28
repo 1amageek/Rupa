@@ -1482,7 +1482,7 @@ public struct MainView: View {
 
     @ViewBuilder
     private func splineControlPointSlideContextPanelContent(
-        _ input: (target: SelectionTarget, controlPointIndexes: [Int])
+        _ input: WorkspaceSplineControlPointSlideInput
     ) -> some View {
         WorkspaceCurveControlPointSlideContextPanel(
             controlPointCount: input.controlPointIndexes.count,
@@ -3654,6 +3654,10 @@ public struct MainView: View {
         )
     }
 
+    private var splineControlPointSelectionResolver: WorkspaceSplineControlPointSelectionResolver {
+        WorkspaceSplineControlPointSelectionResolver(selection: session.selection)
+    }
+
     private func patternArrayInspectorState(for nodes: [SceneNode]) -> PatternArrayInspectorState? {
         PatternArrayInspectorState(
             selectedNodes: nodes,
@@ -4899,35 +4903,14 @@ public struct MainView: View {
     }
 
     private func selectedSplineControlPointIndexes(for entity: InspectorSketchEntity) -> [Int] {
-        var indexes: [Int] = []
-        var seenIndexes: Set<Int> = []
-        for target in session.selection.selectedTargets {
-            guard case .sketchEntity(let componentID) = target.component,
-                  let reference = componentID.sketchControlPointReference,
-                  reference.featureID == entity.sourceFeatureID,
-                  reference.entityID == entity.entityID,
-                  entity.controlPoints.indices.contains(reference.index),
-                  seenIndexes.insert(reference.index).inserted else {
-                continue
-            }
-            indexes.append(reference.index)
-        }
-        return indexes
+        splineControlPointSelectionResolver.selectedControlPointIndexes(for: entity)
     }
 
-    private func selectedSplineControlPointSlideInput() -> (target: SelectionTarget, controlPointIndexes: [Int])? {
-        guard case .success(let entity?) = selectedSketchEntityResult,
-              entity.entityKind == "spline" else {
+    private func selectedSplineControlPointSlideInput() -> WorkspaceSplineControlPointSlideInput? {
+        guard case .success(let entity) = selectedSketchEntityResult else {
             return nil
         }
-        let selectedIndexes = selectedSplineControlPointIndexes(for: entity)
-        guard selectedIndexes.isEmpty == false else {
-            return nil
-        }
-        return (
-            entity.target,
-            selectedIndexes
-        )
+        return splineControlPointSelectionResolver.slideInput(for: entity)
     }
 
     private func slideSelectedSplineControlPoints(
