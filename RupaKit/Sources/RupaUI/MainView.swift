@@ -3980,6 +3980,13 @@ public struct MainView: View {
         )
     }
 
+    private var constructionPlaneTargetSelectionBuilder: WorkspaceConstructionPlaneTargetSelectionBuilder {
+        WorkspaceConstructionPlaneTargetSelectionBuilder(
+            document: session.document,
+            selection: session.selection
+        )
+    }
+
     private func patternArrayInspectorState(for nodes: [SceneNode]) -> PatternArrayInspectorState? {
         PatternArrayInspectorState(
             selectedNodes: nodes,
@@ -4105,37 +4112,7 @@ public struct MainView: View {
     }
 
     private var selectedSketchPointTargets: [SelectionTarget] {
-        let sketchEntityTargets = session.selection.selectedTargets.filter { target in
-            if case .sketchEntity = target.component {
-                return true
-            }
-            return false
-        }
-        guard sketchEntityTargets.isEmpty == false else {
-            return []
-        }
-        let explicitPointTargets = sketchEntityTargets.filter { target in
-            guard case .sketchEntity(let componentID) = target.component else {
-                return false
-            }
-            return componentID.sketchPointReference != nil
-        }
-        do {
-            let pointTargets = try SketchEntitySummaryService()
-                .summarize(document: session.document)
-                .entries
-                .filter { $0.entityKind == "point" }
-                .compactMap { $0.selectionTarget() }
-            let pointTargetSet = Set(pointTargets)
-            return sketchEntityTargets.filter { target in
-                if explicitPointTargets.contains(target) {
-                    return true
-                }
-                return pointTargetSet.contains(target)
-            }
-        } catch {
-            return explicitPointTargets
-        }
+        constructionPlaneTargetSelectionBuilder.sketchPointTargets
     }
 
     private var selectedRegionTargets: [SelectionTarget] {
@@ -4143,33 +4120,7 @@ public struct MainView: View {
     }
 
     private var selectedConstructionPlaneTargets: [SelectionTarget]? {
-        let targets = session.selection.selectedTargets
-        guard targets.isEmpty == false else {
-            return nil
-        }
-        let faceTargets = selectedFaceTargets
-        let edgeTargets = selectedEdgeTargets
-        let regionTargets = selectedRegionTargets
-        let pointTargets = selectedVertexTargets + selectedSketchPointTargets
-        if targets.count == 1,
-           faceTargets.count == 1 || regionTargets.count == 1 {
-            return targets
-        }
-        if targets.count == 2,
-           faceTargets.count == 1,
-           edgeTargets.count == 1 {
-            return targets
-        }
-        if targets.count >= 2,
-           edgeTargets.isEmpty,
-           targets.count == faceTargets.count + regionTargets.count {
-            return targets
-        }
-        if targets.count >= 2,
-           targets.count == pointTargets.count {
-            return targets
-        }
-        return nil
+        constructionPlaneTargetSelectionBuilder.constructionPlaneTargets
     }
 
     private var selectedSlotSourceLineTarget: SelectionTarget? {

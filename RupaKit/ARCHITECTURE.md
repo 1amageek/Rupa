@@ -137,3 +137,4 @@ flowchart LR
 | `RupaUI/MainView.swift` | Sketch entity inspector resolution, curve analysis readback, Bridge Curve readback, and sketch operation availability split into a dedicated state builder |
 | `RupaUI/MainView.swift` | Surface CV inspector state, surface analysis, surface continuity, and generated-topology filtering split into a dedicated surface inspector state builder |
 | `RupaUI/MainView.swift` | Topology direct-edit selection classification and generated-edge projection target filtering split into a dedicated topology inspector state builder |
+| `RupaUI/MainView.swift` | Construction Plane target eligibility and sketch-point target discovery split into a dedicated target selection builder |
