@@ -651,7 +651,7 @@ public struct MainView: View {
         guard session.selectedTool == .select,
               selectionScope == .sketchEntity,
               slotProfileCommandState.isActive,
-              selectedSlotSourceLineTarget != nil else {
+              selectedSlotSourceCurveTarget != nil else {
             return nil
         }
         return { target in
@@ -1392,7 +1392,7 @@ public struct MainView: View {
             edgeOffsetContextPanelContent(selectedEdgeTargets)
         }
 
-        if let slotTarget = selectedSlotSourceLineTarget {
+        if let slotTarget = selectedSlotSourceCurveTarget {
             workspaceContextDivider
             slotProfileContextPanelContent(slotTarget)
         }
@@ -2108,7 +2108,7 @@ public struct MainView: View {
                 activateEdgeOffsetCommand()
             } else if selectedRegionTargets.isEmpty == false {
                 activateRegionOffsetCommand()
-            } else if selectedSlotSourceLineTarget != nil {
+            } else if selectedSlotSourceCurveTarget != nil {
                 activateSlotProfileCommand()
             } else {
                 activateRegionOffsetCommand()
@@ -2629,12 +2629,12 @@ public struct MainView: View {
     }
 
     private func activateSlotProfileCommand() {
-        guard selectedSlotSourceLineTarget != nil else {
+        guard selectedSlotSourceCurveTarget != nil else {
             if selectionScope != .sketchEntity {
                 selectionScope = .sketchEntity
             }
             session.reportToolStatus(
-                "Slot requires a selected source line.",
+                "Slot requires a selected open source curve.",
                 severity: .warning
             )
             isPreviewExpanded = true
@@ -3666,6 +3666,10 @@ public struct MainView: View {
         )
     }
 
+    private var sketchCommandTargetResolver: WorkspaceSketchCommandTargetResolver {
+        WorkspaceSketchCommandTargetResolver()
+    }
+
     private func patternArrayInspectorState(for nodes: [SceneNode]) -> PatternArrayInspectorState? {
         PatternArrayInspectorState(
             selectedNodes: nodes,
@@ -3746,29 +3750,16 @@ public struct MainView: View {
         constructionPlaneTargetSelectionBuilder.constructionPlaneTargets
     }
 
-    private var selectedSlotSourceLineTarget: SelectionTarget? {
-        switch selectedSketchEntityResult {
-        case .success(let entity):
-            guard entity?.entityKind == "line" else {
-                return nil
-            }
-            return entity?.target
-        case .failure:
-            return nil
-        }
+    private var selectedSlotSourceCurveTarget: SelectionTarget? {
+        sketchCommandTargetResolver.slotSourceCurveTarget(
+            for: sketchCommandTargetResolver.entity(from: selectedSketchEntityResult)
+        )
     }
 
     private var selectedSketchVertexOffsetTarget: SelectionTarget? {
-        switch selectedSketchEntityResult {
-        case .success(let entity):
-            guard let entity,
-                  selectedSketchVertexOffsetHandle(entity) != nil else {
-                return nil
-            }
-            return entity.target
-        case .failure:
-            return nil
-        }
+        sketchCommandTargetResolver.vertexOffsetTarget(
+            for: sketchCommandTargetResolver.entity(from: selectedSketchEntityResult)
+        )
     }
 
     private func selectedSketchEntityCutterTarget(
@@ -3886,7 +3877,7 @@ public struct MainView: View {
     }
 
     private func selectedSketchVertexOffsetHandle(_ entity: InspectorSketchEntity) -> SketchEntityPointHandle? {
-        sketchEntityInspectorStateBuilder.vertexOffsetHandle(for: entity)
+        sketchCommandTargetResolver.vertexOffsetHandle(for: entity)
     }
 
     private func selectedSketchVertexAlignmentReferenceTarget(
@@ -4336,12 +4327,15 @@ public struct MainView: View {
                 entity,
                 controls: [.alignment, .projection, .vertexOffset]
             )
-            lengthControl(
-                "Slot Width",
-                meters: slotProfileWidthMeters,
-                sliderRange: lengthSliderRange(for: slotProfileWidthMeters)
-            ) { meters in
-                slotProfileWidthMeters = max(meters, 1.0e-9)
+            let slotTarget = sketchCommandTargetResolver.slotSourceCurveTarget(for: entity)
+            if slotTarget != nil {
+                lengthControl(
+                    "Slot Width",
+                    meters: slotProfileWidthMeters,
+                    sliderRange: lengthSliderRange(for: slotProfileWidthMeters)
+                ) { meters in
+                    slotProfileWidthMeters = max(meters, 1.0e-9)
+                }
             }
             numericControl(
                 "Split",
@@ -4357,12 +4351,14 @@ public struct MainView: View {
                 controls: [.extend, .cornerTreatment, .join]
             )
             inspectorActionRow {
-                Button {
-                    createSlotFromOffsetCurve(entity.target, width: slotProfileWidthMeters)
-                } label: {
-                    Label("Slot", systemImage: "capsule")
+                if let slotTarget {
+                    Button {
+                        createSlotFromOffsetCurve(slotTarget, width: slotProfileWidthMeters)
+                    } label: {
+                        Label("Slot", systemImage: "capsule")
+                    }
+                    .accessibilityIdentifier("InspectorCurve.line.createSlot")
                 }
-                .accessibilityIdentifier("InspectorCurve.line.createSlot")
 
                 Button {
                     reverseSelectedSketchCurve(entity.target)
@@ -4515,6 +4511,16 @@ public struct MainView: View {
                 entity,
                 controls: [.alignment, .projection, .vertexOffset]
             )
+            let slotTarget = sketchCommandTargetResolver.slotSourceCurveTarget(for: entity)
+            if slotTarget != nil {
+                lengthControl(
+                    "Slot Width",
+                    meters: slotProfileWidthMeters,
+                    sliderRange: lengthSliderRange(for: slotProfileWidthMeters)
+                ) { meters in
+                    slotProfileWidthMeters = max(meters, 1.0e-9)
+                }
+            }
             numericControl(
                 "Split",
                 values: [sketchSplitFraction],
@@ -4526,6 +4532,15 @@ public struct MainView: View {
             }
             sketchCurveOperationControls(entity, controls: [.extend, .join])
             inspectorActionRow {
+                if let slotTarget {
+                    Button {
+                        createSlotFromOffsetCurve(slotTarget, width: slotProfileWidthMeters)
+                    } label: {
+                        Label("Slot", systemImage: "capsule")
+                    }
+                    .accessibilityIdentifier("InspectorCurve.arc.createSlot")
+                }
+
                 Button {
                     splitSelectedSketchCurve(entity.target)
                 } label: {
@@ -4566,6 +4581,26 @@ public struct MainView: View {
                 sketchSplitFraction = min(max(fraction, 0.01), 0.99)
             } unitLabel: {
                 "t"
+            }
+            let slotTarget = sketchCommandTargetResolver.slotSourceCurveTarget(for: entity)
+            if slotTarget != nil {
+                lengthControl(
+                    "Slot Width",
+                    meters: slotProfileWidthMeters,
+                    sliderRange: lengthSliderRange(for: slotProfileWidthMeters)
+                ) { meters in
+                    slotProfileWidthMeters = max(meters, 1.0e-9)
+                }
+                inspectorActionRow {
+                    if let slotTarget {
+                        Button {
+                            createSlotFromOffsetCurve(slotTarget, width: slotProfileWidthMeters)
+                        } label: {
+                            Label("Slot", systemImage: "capsule")
+                        }
+                        .accessibilityIdentifier("InspectorCurve.spline.createSlot")
+                    }
+                }
             }
             sketchCurveOperationControls(entity, controls: [.projection, .extend])
             WorkspaceSplineEditOperationsView(
