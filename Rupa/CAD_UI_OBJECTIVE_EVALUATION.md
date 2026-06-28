@@ -4,9 +4,11 @@ This document defines how Rupa evaluates CAD UI quality without relying on subje
 
 This evaluation model is an implementation surface for `DESIGN_PROCESS.md`.
 Assessment entries now carry Agent-readable design process packets with case
-sets, route mappings, observations, confidence, and connection graph checks. The
-next upgrade is to make those packet contents capability-specific instead of
-deriving the first pass from existing gate ratings, evidence, and open work.
+sets, route mappings, observations, confidence, and connection graph checks.
+Case sets, route surfaces, invariants, and decision records are now
+capability-specific. The remaining upgrade is direct observation ingestion from
+review, test, performance, and missing-channel evidence plus confidence
+calibration against measured results.
 
 ## Evaluation Flow
 
@@ -74,9 +76,9 @@ flowchart LR
 
 | Assessment field | DBN role | Current state |
 |---|---|---|
-| Case matrix | `CaseSet` | Present on every assessment entry; D2 must author feature-specific supported, rejected, missing, boundary, degenerate, and performance cases. |
-| Route matrix | `MappingSpec` | Present on every assessment entry; D2 must replace generated route defaults with feature-specific routes. |
-| Decision records | `ResolvedMapping` and `DecisionLog` | Present as packet resolution records; D2 must record feature-specific conflicts and selected routes. |
-| Observation records | `ObservationSet` and `FeedbackSignal` | Present from open work; D2 must ingest review, test, performance, and missing-channel observations directly. |
-| Connection checks | `FlowGraph` | Present and validated in Core tests; D2 must make route requirements capability-specific. |
-| Confidence | Posterior confidence proxy | Present as static evidence/test/performance/calibration fields; later calibration work must connect human anchors. |
+| Case matrix | `CaseSet` | Present on every assessment entry; supported, boundary, degenerate, rejected, and performance cases are authored per capability and augmented by gate evidence/open work. |
+| Route matrix | `MappingSpec` | Present on every assessment entry; routes now use capability-specific documentation, UI, Core, Automation, Agent, CLI, kernel, evaluation, measurement, and diagnostics surfaces instead of layer-name defaults. |
+| Decision records | `ResolvedMapping` and `DecisionLog` | Present as packet resolution records; selected route IDs are derived from the actual route matrix and feature-specific conflicts/rationales are recorded. |
+| Observation records | `ObservationSet` and `FeedbackSignal` | Present from open work; D3 must ingest review, test, performance, and missing-channel observations directly. |
+| Connection checks | `FlowGraph` | Present and validated in Core tests; documentation-to-product and capability-specific route requirements are part of the graph. |
+| Confidence | Posterior confidence proxy | Present as static evidence/test/performance/calibration fields; D3/D4 calibration work must connect human anchors and measured performance. |

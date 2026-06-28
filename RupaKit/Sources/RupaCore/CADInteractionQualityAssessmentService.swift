@@ -973,7 +973,6 @@ public struct CADInteractionQualityAssessmentService: Sendable {
             nextRequiredResult: next,
             designProcessPacket: designProcessPacket(
                 area: area,
-                workflow: workflow,
                 references: references,
                 rating: rating,
                 gates: gates,
@@ -986,7 +985,6 @@ public struct CADInteractionQualityAssessmentService: Sendable {
 
     private static func designProcessPacket(
         area: CADInteractionQualityArea,
-        workflow: String,
         references: [String],
         rating: CADInteractionQualityRating,
         gates: [CADInteractionQualityGate: CADInteractionQualityRating],
@@ -1004,51 +1002,55 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                 openWork: gates[gate] == .verified ? [] : openWork
             )
         }
+        let spec = CADInteractionDesignProcessSpec.spec(for: area)
+        let routeMatrix = routeMatrix(
+            area: area,
+            spec: spec,
+            gates: gates,
+            evidence: evidence
+        )
 
         return DesignProcessPacket(
             id: "\(area.rawValue)-design-process",
             intent: DesignProcessIntent(
                 capabilityID: area.rawValue,
-                title: workflow,
+                title: spec.capabilityTitle,
                 outcome: next,
                 area: area,
                 sourceOfTruth: .core,
                 referenceSources: references
             ),
             evaluation: DesignProcessEvaluationSpec(
-                successCriteria: [
+                successCriteria: unique([
                     next,
                     "All required CAD quality gates must be represented by evidence, missing cases, and route coverage.",
-                ],
+                ] + spec.supportedCases.map(\.title)),
                 diagnosticRequirements: unique(evidence.flatMap(\.notes)),
                 performanceBudget: "performanceBudget gate is \((gates[.performanceBudget] ?? .missing).rawValue).",
                 requiredEvidence: evidence.map(\.label)
             ),
             domain: DesignProcessDomainModel(
-                sourceEntities: sourceFiles.isEmpty ? [workflow] : sourceFiles,
-                targetEntities: ["\(area.rawValue) capability"],
-                generatedTopology: generatedTopologyDescriptions(from: evidence),
+                sourceEntities: unique(spec.sourceEntities + sourceFiles),
+                targetEntities: spec.targetEntities,
+                generatedTopology: unique(spec.generatedTopology + generatedTopologyDescriptions(from: evidence)),
                 units: "document units",
-                tolerances: ["Core command tolerance", "SwiftCAD kernel tolerance"],
-                ownershipBoundaries: [
+                tolerances: spec.tolerances,
+                ownershipBoundaries: spec.ownershipBoundaries + [
                     "RupaCore owns the command and assessment contract.",
                     "Rupa UI, Automation, Agent, CLI, Kernel, Evaluation, Measurement, and Diagnostics routes must stay visible in the route matrix.",
                 ]
             ),
             caseMatrix: caseMatrix(
                 area: area,
+                spec: spec,
                 gateAssessments: gateAssessments,
                 openWork: openWork,
                 testReferences: testReferences
             ),
-            routeMatrix: routeMatrix(
-                area: area,
-                gates: gates,
-                evidence: evidence
-            ),
+            routeMatrix: routeMatrix,
             constraintBinding: DesignProcessConstraintBinding(
                 validationRules: CADInteractionQualityGate.allCases.map(\.rawValue),
-                invariants: [
+                invariants: spec.invariants + [
                     DesignProcessInvariant(
                         id: "\(area.rawValue)-route-coverage",
                         title: "Required route coverage stays explicit",
@@ -1057,20 +1059,20 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                     ),
                 ],
                 sourceRewriteLimits: openWork,
-                topologyIdentityRules: [
+                topologyIdentityRules: spec.generatedTopology + [
                     "Selection and generated topology routes must use stable IDs for shipped subsets.",
                     "Stale-generation mutations must be rejected or refreshed before commit.",
                 ]
             ),
             resolution: DesignProcessResolution(
-                selectedRouteIDs: selectedRouteIDs(for: area),
+                selectedRouteIDs: selectedRouteIDs(from: routeMatrix),
                 decisions: [
                     DesignProcessDecisionRecord(
                         id: "\(area.rawValue)-assessment-source",
-                        conflictArea: "Assessment source ownership",
-                        selectedRouteID: "\(area.rawValue)-core-evaluation",
+                        conflictArea: spec.decisionConflictArea,
+                        selectedRouteID: "\(area.rawValue)-core-kernel",
                         rejectedRouteIDs: [],
-                        rationale: "The assessment surface already reaches Core and Agent callers, so attaching design packets there makes process coverage inspectable.",
+                        rationale: spec.decisionRationale,
                         followUpOwner: .evaluation
                     ),
                 ],
@@ -1086,7 +1088,7 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                     .map { "\($0.gate.rawValue): \($0.rating.rawValue)" }
             ),
             observations: observations(area: area, openWork: openWork),
-            flowGraph: flowGraph(for: area),
+            flowGraph: flowGraph(for: area, spec: spec),
             confidence: confidence(
                 rating: rating,
                 gates: gates,
@@ -1122,11 +1124,18 @@ public struct CADInteractionQualityAssessmentService: Sendable {
 
     private static func caseMatrix(
         area: CADInteractionQualityArea,
+        spec: CADInteractionDesignProcessSpec,
         gateAssessments: [CADInteractionQualityGateAssessment],
         openWork: [String],
         testReferences: [DesignProcessTestReference]
     ) -> DesignProcessCaseMatrix {
-        let supported = gateAssessments
+        let gateEvidence = unique(gateAssessments.flatMap(\.evidence))
+        let supported = scopedCases(
+            spec.supportedCases,
+            area: area,
+            testReferences: testReferences,
+            evidence: gateEvidence
+        ) + gateAssessments
             .filter { $0.rating.score >= CADInteractionQualityRating.implemented.score }
             .map { assessment in
                 DesignProcessCase(
@@ -1137,7 +1146,12 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                     evidence: assessment.evidence
                 )
             }
-        let boundary = gateAssessments
+        let boundary = scopedCases(
+            spec.boundaryCases,
+            area: area,
+            testReferences: testReferences,
+            evidence: gateEvidence
+        ) + gateAssessments
             .filter { $0.rating == .partial || $0.rating == .planned }
             .map { assessment in
                 DesignProcessCase(
@@ -1154,7 +1168,12 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                     notes: assessment.openWork
                 )
             }
-        let rejected = gateAssessments
+        let rejected = scopedCases(
+            spec.rejectedCases,
+            area: area,
+            testReferences: testReferences,
+            evidence: gateEvidence
+        ) + gateAssessments
             .filter { $0.rating.score < CADInteractionQualityRating.implemented.score }
             .map { assessment in
                 DesignProcessCase(
@@ -1183,7 +1202,12 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                 )
             )
         }
-        let performance = gateAssessments
+        let performance = scopedCases(
+            spec.performanceCases,
+            area: area,
+            testReferences: testReferences,
+            evidence: gateEvidence
+        ) + gateAssessments
             .filter { $0.gate == .performanceBudget }
             .map { assessment in
                 DesignProcessCase(
@@ -1198,14 +1222,59 @@ public struct CADInteractionQualityAssessmentService: Sendable {
         return DesignProcessCaseMatrix(
             supported: DesignProcessCaseGroup(kind: .supported, cases: supported),
             boundary: DesignProcessCaseGroup(kind: .boundary, cases: boundary),
+            degenerate: DesignProcessCaseGroup(
+                kind: .degenerate,
+                cases: scopedCases(
+                    spec.degenerateCases,
+                    area: area,
+                    testReferences: testReferences,
+                    evidence: gateEvidence
+                )
+            ),
             rejected: DesignProcessCaseGroup(kind: .rejected, cases: rejected),
             missing: DesignProcessCaseGroup(kind: .missing, cases: missing),
             performance: DesignProcessCaseGroup(kind: .performance, cases: performance)
         )
     }
 
+    private static func scopedCases(
+        _ cases: [DesignProcessCase],
+        area: CADInteractionQualityArea,
+        testReferences: [DesignProcessTestReference],
+        evidence: [String]
+    ) -> [DesignProcessCase] {
+        cases.map { item in
+            DesignProcessCase(
+                id: "\(area.rawValue)-\(item.id)",
+                title: item.title,
+                status: item.status,
+                diagnostic: scopedDiagnostic(item.diagnostic, area: area),
+                testReferences: item.testReferences + testReferences,
+                evidence: unique(item.evidence + evidence),
+                notes: item.notes
+            )
+        }
+    }
+
+    private static func scopedDiagnostic(
+        _ diagnostic: DesignProcessDiagnostic?,
+        area: CADInteractionQualityArea
+    ) -> DesignProcessDiagnostic? {
+        guard let diagnostic else {
+            return nil
+        }
+        return DesignProcessDiagnostic(
+            id: "\(area.rawValue)-\(diagnostic.id)",
+            severity: diagnostic.severity,
+            message: diagnostic.message,
+            affectedLayer: diagnostic.affectedLayer,
+            source: diagnostic.source ?? area.rawValue
+        )
+    }
+
     private static func routeMatrix(
         area: CADInteractionQualityArea,
+        spec: CADInteractionDesignProcessSpec,
         gates: [CADInteractionQualityGate: CADInteractionQualityRating],
         evidence: [CADInteractionQualityEvidence]
     ) -> DesignProcessRouteMatrix {
@@ -1216,17 +1285,130 @@ public struct CADInteractionQualityAssessmentService: Sendable {
             notes: evidence.map(\.label)
         )
         return DesignProcessRouteMatrix(
-            requiredPorts: [.product, .ui, .core, .automation, .agent, .cli, .kernel, .evaluation, .measurement, .diagnostics],
+            requiredPorts: [
+                .documentation,
+                .product,
+                .ui,
+                .core,
+                .automation,
+                .agent,
+                .cli,
+                .kernel,
+                .evaluation,
+                .measurement,
+                .diagnostics,
+            ],
             routes: [
-                route(area, "product-ui", "Product intent to UI affordance", .product, .ui, routeStatus(for: gates[.referenceContract] ?? .missing), routeEvidence),
-                route(area, "ui-core", "UI command to Core contract", .ui, .core, routeStatus(for: gates[.commandContract] ?? .missing), routeEvidence),
-                route(area, "core-automation", "Core command to Automation route", .core, .automation, routeStatus(for: gates[.commandContract] ?? .missing), routeEvidence),
-                route(area, "automation-agent", "Automation readback to Agent route", .automation, .agent, routeStatus(for: gates[.agentParity] ?? .missing), routeEvidence),
-                route(area, "core-cli", "Core command to CLI route", .core, .cli, routeStatus(for: gates[.commandContract] ?? .missing), routeEvidence),
-                route(area, "core-kernel", "Core command to kernel evaluation", .core, .kernel, routeStatus(for: lowestRating(gates[.sourceOwnership], gates[.commandContract])), routeEvidence),
-                route(area, "kernel-evaluation", "Kernel result to evaluation", .kernel, .evaluation, routeStatus(for: gates[.verification] ?? .missing), routeEvidence),
-                route(area, "evaluation-measurement", "Evaluation to measurement readback", .evaluation, .measurement, routeStatus(for: gates[.measurementDiagnostics] ?? .missing), routeEvidence),
-                route(area, "core-diagnostics", "Core diagnostics to user and Agent readback", .core, .diagnostics, routeStatus(for: gates[.measurementDiagnostics] ?? .missing), routeEvidence),
+                route(
+                    area,
+                    "documentation-product",
+                    "Reference material to product capability contract",
+                    .documentation,
+                    spec.surfaces.documentation,
+                    .product,
+                    spec.capabilityTitle,
+                    routeStatus(for: gates[.referenceContract] ?? .missing),
+                    routeEvidence
+                ),
+                route(
+                    area,
+                    "product-ui",
+                    "Product capability to UI affordance",
+                    .product,
+                    spec.capabilityTitle,
+                    .ui,
+                    spec.surfaces.ui,
+                    routeStatus(for: gates[.viewportAffordance] ?? .missing),
+                    routeEvidence
+                ),
+                route(
+                    area,
+                    "ui-core",
+                    "UI affordance to Core command contract",
+                    .ui,
+                    spec.surfaces.ui,
+                    .core,
+                    spec.surfaces.core,
+                    routeStatus(for: gates[.commandContract] ?? .missing),
+                    routeEvidence
+                ),
+                route(
+                    area,
+                    "core-automation",
+                    "Core command to Automation route",
+                    .core,
+                    spec.surfaces.core,
+                    .automation,
+                    spec.surfaces.automation,
+                    routeStatus(for: gates[.commandContract] ?? .missing),
+                    routeEvidence
+                ),
+                route(
+                    area,
+                    "automation-agent",
+                    "Automation readback to Agent route",
+                    .automation,
+                    spec.surfaces.automation,
+                    .agent,
+                    spec.surfaces.agent,
+                    routeStatus(for: gates[.agentParity] ?? .missing),
+                    routeEvidence
+                ),
+                route(
+                    area,
+                    "core-cli",
+                    "Core command to CLI route",
+                    .core,
+                    spec.surfaces.core,
+                    .cli,
+                    spec.surfaces.cli,
+                    routeStatus(for: gates[.commandContract] ?? .missing),
+                    routeEvidence
+                ),
+                route(
+                    area,
+                    "core-kernel",
+                    "Core command to kernel evaluation",
+                    .core,
+                    spec.surfaces.core,
+                    .kernel,
+                    spec.surfaces.kernel,
+                    routeStatus(for: lowestRating(gates[.sourceOwnership], gates[.commandContract])),
+                    routeEvidence
+                ),
+                route(
+                    area,
+                    "kernel-evaluation",
+                    "Kernel result to evaluation",
+                    .kernel,
+                    spec.surfaces.kernel,
+                    .evaluation,
+                    spec.surfaces.evaluation,
+                    routeStatus(for: gates[.verification] ?? .missing),
+                    routeEvidence
+                ),
+                route(
+                    area,
+                    "evaluation-measurement",
+                    "Evaluation to measurement readback",
+                    .evaluation,
+                    spec.surfaces.evaluation,
+                    .measurement,
+                    spec.surfaces.measurement,
+                    routeStatus(for: gates[.measurementDiagnostics] ?? .missing),
+                    routeEvidence
+                ),
+                route(
+                    area,
+                    "core-diagnostics",
+                    "Core diagnostics to user and Agent readback",
+                    .core,
+                    spec.surfaces.core,
+                    .diagnostics,
+                    spec.surfaces.diagnostics,
+                    routeStatus(for: gates[.measurementDiagnostics] ?? .missing),
+                    routeEvidence
+                ),
             ]
         )
     }
@@ -1236,25 +1418,30 @@ public struct CADInteractionQualityAssessmentService: Sendable {
         _ name: String,
         _ title: String,
         _ source: DesignProcessRoutePortKind,
+        _ sourceTitle: String,
         _ target: DesignProcessRoutePortKind,
+        _ targetTitle: String,
         _ status: DesignProcessRouteStatus,
         _ evidence: DesignProcessRouteEvidence
     ) -> DesignProcessRoute {
         DesignProcessRoute(
             id: "\(area.rawValue)-\(name)",
             title: title,
-            source: DesignProcessRoutePort(
-                kind: source,
-                identifier: source.rawValue,
-                title: source.rawValue
-            ),
-            target: DesignProcessRoutePort(
-                kind: target,
-                identifier: target.rawValue,
-                title: target.rawValue
-            ),
+            source: routePort(kind: source, title: sourceTitle),
+            target: routePort(kind: target, title: targetTitle),
             status: status,
             evidence: evidence
+        )
+    }
+
+    private static func routePort(
+        kind: DesignProcessRoutePortKind,
+        title: String
+    ) -> DesignProcessRoutePort {
+        DesignProcessRoutePort(
+            kind: kind,
+            identifier: "\(kind.rawValue)-\(stableIdentifier(for: title))",
+            title: title
         )
     }
 
@@ -1284,18 +1471,10 @@ public struct CADInteractionQualityAssessmentService: Sendable {
         } ?? .missing
     }
 
-    private static func selectedRouteIDs(for area: CADInteractionQualityArea) -> [String] {
-        [
-            "\(area.rawValue)-product-ui",
-            "\(area.rawValue)-ui-core",
-            "\(area.rawValue)-core-automation",
-            "\(area.rawValue)-automation-agent",
-            "\(area.rawValue)-core-cli",
-            "\(area.rawValue)-core-kernel",
-            "\(area.rawValue)-kernel-evaluation",
-            "\(area.rawValue)-evaluation-measurement",
-            "\(area.rawValue)-core-diagnostics",
-        ]
+    private static func selectedRouteIDs(
+        from routeMatrix: DesignProcessRouteMatrix
+    ) -> [String] {
+        routeMatrix.routes.map(\.id)
     }
 
     private static func diagnosticRecords(
@@ -1354,27 +1533,32 @@ public struct CADInteractionQualityAssessmentService: Sendable {
         )
     }
 
-    private static func flowGraph(for area: CADInteractionQualityArea) -> DesignProcessFlowGraph {
+    private static func flowGraph(
+        for area: CADInteractionQualityArea,
+        spec: CADInteractionDesignProcessSpec
+    ) -> DesignProcessFlowGraph {
         DesignProcessFlowGraph(
             nodes: [
-                flowNode(.product, ports: [("intent", .output)]),
-                flowNode(.ui, ports: [("intent", .input), ("command", .output)]),
-                flowNode(.core, ports: [
+                flowNode(.documentation, title: spec.surfaces.documentation, ports: [("reference", .output)]),
+                flowNode(.product, title: spec.capabilityTitle, ports: [("reference", .input), ("intent", .output)]),
+                flowNode(.ui, title: spec.surfaces.ui, ports: [("intent", .input), ("command", .output)]),
+                flowNode(.core, title: spec.surfaces.core, ports: [
                     ("command", .input),
                     ("automation", .output),
                     ("cli", .output),
                     ("kernel", .output),
                     ("diagnostic", .output),
                 ]),
-                flowNode(.automation, ports: [("command", .input), ("agent", .output)]),
-                flowNode(.agent, ports: [("readback", .input)]),
-                flowNode(.cli, ports: [("command", .input)]),
-                flowNode(.kernel, ports: [("request", .input), ("result", .output)]),
-                flowNode(.evaluation, ports: [("result", .input), ("measurement", .output)]),
-                flowNode(.measurement, ports: [("readback", .input)]),
-                flowNode(.diagnostics, ports: [("message", .input)]),
+                flowNode(.automation, title: spec.surfaces.automation, ports: [("command", .input), ("agent", .output)]),
+                flowNode(.agent, title: spec.surfaces.agent, ports: [("readback", .input)]),
+                flowNode(.cli, title: spec.surfaces.cli, ports: [("command", .input)]),
+                flowNode(.kernel, title: spec.surfaces.kernel, ports: [("request", .input), ("result", .output)]),
+                flowNode(.evaluation, title: spec.surfaces.evaluation, ports: [("result", .input), ("measurement", .output)]),
+                flowNode(.measurement, title: spec.surfaces.measurement, ports: [("readback", .input)]),
+                flowNode(.diagnostics, title: spec.surfaces.diagnostics, ports: [("message", .input)]),
             ],
             edges: [
+                flowEdge(area, "documentation-product", .documentation, "reference", .product, "reference"),
                 flowEdge(area, "product-ui", .product, "intent", .ui, "intent"),
                 flowEdge(area, "ui-core", .ui, "command", .core, "command"),
                 flowEdge(area, "core-automation", .core, "automation", .automation, "command"),
@@ -1386,6 +1570,8 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                 flowEdge(area, "core-diagnostics", .core, "diagnostic", .diagnostics, "message"),
             ],
             requiredPorts: [
+                requirement(.documentation, "reference", .outgoing),
+                requirement(.product, "reference", .incoming),
                 requirement(.product, "intent", .outgoing),
                 requirement(.ui, "intent", .incoming),
                 requirement(.ui, "command", .outgoing),
@@ -1410,11 +1596,12 @@ public struct CADInteractionQualityAssessmentService: Sendable {
 
     private static func flowNode(
         _ layer: DesignProcessLayer,
+        title: String,
         ports: [(String, DesignProcessFlowPortDirection)]
     ) -> DesignProcessFlowNode {
         DesignProcessFlowNode(
             id: layer.rawValue,
-            title: layer.rawValue,
+            title: title,
             layer: layer,
             ports: ports.map { id, direction in
                 DesignProcessFlowPort(id: id, title: id, direction: direction)
@@ -1478,6 +1665,14 @@ public struct CADInteractionQualityAssessmentService: Sendable {
             result.append(value)
         }
         return result
+    }
+
+    private static func stableIdentifier(for value: String) -> String {
+        let normalized = value.lowercased().map { character in
+            character.isLetter || character.isNumber ? character : "-"
+        }
+        let components = String(normalized).split(separator: "-")
+        return components.joined(separator: "-")
     }
 
     private static func counts(

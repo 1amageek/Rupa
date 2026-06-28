@@ -63,6 +63,32 @@ import RupaCore
     }
 }
 
+@Test func cadInteractionQualityAssessmentDesignPacketsUseCapabilitySpecificSpecs() throws {
+    let result = CADInteractionQualityAssessmentService().assess()
+    let packets = try encodedDesignProcessPackets(from: result)
+
+    for packet in packets {
+        let routeIDs = Set(packet.routeMatrix.routes.map(\.id))
+        let decisionRouteIDs = Set(packet.resolution.decisions.map(\.selectedRouteID))
+
+        #expect(packet.routeMatrix.missingRequiredPortKinds().isEmpty)
+        #expect(!packet.caseMatrix.supported.cases.isEmpty)
+        #expect(!packet.caseMatrix.boundary.cases.isEmpty)
+        #expect(!packet.caseMatrix.degenerate.cases.isEmpty)
+        #expect(!packet.caseMatrix.rejected.cases.isEmpty)
+        #expect(!packet.caseMatrix.performance.cases.isEmpty)
+        #expect(packet.constraintBinding.invariants.count >= 2)
+        #expect(!packet.resolution.selectedRouteIDs.isEmpty)
+        #expect(packet.resolution.selectedRouteIDs.allSatisfy { routeIDs.contains($0) })
+        #expect(decisionRouteIDs.allSatisfy { routeIDs.contains($0) })
+        #expect(packet.routeMatrix.routes.allSatisfy { route in
+            route.source.identifier != route.source.kind.rawValue
+                && route.target.identifier != route.target.kind.rawValue
+        })
+        #expect(packet.flowGraph.nodes.contains { $0.layer == .documentation })
+    }
+}
+
 @Test func cadInteractionQualityAssessmentDesignPacketsSurviveCodableRoundTrip() throws {
     let result = CADInteractionQualityAssessmentService().assess()
     let packets = try encodedDesignProcessPackets(from: result)
