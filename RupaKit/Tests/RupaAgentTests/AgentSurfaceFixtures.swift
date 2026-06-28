@@ -53,6 +53,23 @@ func agentDirectBSplineSurface() -> BSplineSurface3D {
     )
 }
 
+func agentDirectBSplineSurfaceWithInteriorKnots() -> BSplineSurface3D {
+    let base = BSplineSurface3D.cubicBezierPatch(
+        bottomLeft: Point3D(x: 0.0, y: 0.0, z: 0.0),
+        bottomRight: Point3D(x: 0.02, y: 0.0, z: 0.0),
+        topRight: Point3D(x: 0.02, y: 0.02, z: 0.0),
+        topLeft: Point3D(x: 0.0, y: 0.02, z: 0.0)
+    )
+    return BSplineSurface3D(
+        uDegree: 2,
+        vDegree: 2,
+        uKnots: [0.0, 0.0, 0.0, 0.5, 1.0, 1.0, 1.0],
+        vKnots: [0.0, 0.0, 0.0, 0.5, 1.0, 1.0, 1.0],
+        controlPoints: base.controlPoints,
+        weights: base.weights
+    )
+}
+
 func surfaceVectorLength(_ vector: SurfaceAnalysisResult.Vector) -> Double {
     hypot(hypot(vector.x, vector.y), vector.z)
 }

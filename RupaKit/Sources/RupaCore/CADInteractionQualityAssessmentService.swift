@@ -767,18 +767,19 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                         "RupaKit/Tests/RupaCoreTests/SurfaceAnalysisServiceTests.swift",
                         "RupaKit/Tests/RupaCoreTests/SurfaceSourceSummaryServiceTests.swift",
                         "RupaKit/Tests/RupaCoreTests/SurfaceContinuityServiceTests.swift",
+                        "RupaKit/Tests/RupaCoreTests/DesignDocumentTests.swift",
                         "RupaKit/Tests/RupaRenderingTests/ViewportPolySplineSurfaceVertexSlideAffordanceGeometryTests.swift",
-                        "RupaKit/Tests/RupaAgentTests/AgentCommandControllerTests.swift",
+                        "RupaKit/Tests/RupaAgentTests/AgentSurfaceModelingTests.swift",
                     ],
                     notes: [
-                        "Surface source summaries expose Agent-readable B-spline degree, order, knot vectors, stable knot and span IDs, CV weights, control-point selection references, trim-loop ownership, and generated topology links for supported PolySpline patches.",
+                        "Surface source summaries expose Agent-readable B-spline degree, order, knot vectors, stable knot IDs, span IDs, CV weights, control-point selection references, trim-loop ownership, and generated topology links for supported PolySpline patches and direct B-spline surface sources.",
                         "Strict interior PolySpline CV weights are editable through the shared Core, Automation, and Agent command path while preserving CV position overrides.",
-                        "Direct B-spline surface sources can be created through Core, Automation, and Agent, evaluate to selectable sheet topology, and appear in surface source summaries with stored degree, knot vectors, weights, control-net references, and rectangular trim-loop identity.",
+                        "Direct B-spline surface sources can be created through Core, Automation, and Agent, evaluate to selectable sheet topology, appear in surface source summaries with stored degree, knot vectors, weights, control-net references, and rectangular trim-loop identity, and support direct CV position, CV weight, CV slide, and internal knot-value mutation.",
                     ]
                 ),
             ],
             openWork: [
-                "Direct B-spline surface source editing beyond creation and readback, including CV position and weight mutation, knot insertion, span editing, boundary CV policy, stable editable knot/span IDs, and authored trim-loop mutation.",
+                "Direct B-spline surface source editing beyond existing CV, weight, slide, and internal knot-value mutation, including knot insertion, span editing, explicit knot multiplicity editing, stable editable span selection references, and authored trim-loop mutation.",
                 "Interactive viewport surface-frame handles, snap consumption, trim editing, offset, and sweep or loft section placement that consume the Agent-readable UVN frame contract.",
                 "Persistent continuity editing contracts for target G0/G1/G2 surface boundaries and G0/G1/G2/G3 curve matching.",
                 "Non-planar G2 multi-patch reconstruction.",

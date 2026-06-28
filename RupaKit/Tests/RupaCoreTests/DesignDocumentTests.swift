@@ -448,6 +448,51 @@ import Testing
     #expect(abs(updatedControlPoint.point.z - slidPoint.z) <= 1.0e-12)
 }
 
+@Test func directBSplineSurfaceKnotReferenceMutatesStoredKnotVector() async throws {
+    var document = DesignDocument.empty()
+
+    let featureID = try document.createBSplineSurface(
+        name: "Direct Editable Knot Surface",
+        surface: designDocumentDirectBSplineSurfaceWithInteriorKnots()
+    )
+    let summary = try SurfaceSourceSummaryService().summarize(document: document)
+    let patch = try #require(summary.sources.first?.patches.first)
+    let editableKnot = try #require(patch.basis.uKnotVector.first { $0.index == 3 })
+    #expect(editableKnot.value == 0.5)
+    #expect(editableKnot.isEditable)
+    let knotReference = try #require(editableKnot.selectionReference)
+
+    try document.setSurfaceKnotValue(
+        target: knotReference,
+        value: .scalar(0.4)
+    )
+
+    let feature = try #require(document.cadDocument.designGraph.nodes[featureID])
+    guard case let .bSplineSurface(surfaceFeature) = feature.operation else {
+        Issue.record("Expected a direct B-spline surface feature.")
+        return
+    }
+    #expect(surfaceFeature.surface.uKnots[3] == 0.4)
+    #expect(surfaceFeature.surface.vKnots[3] == 0.5)
+
+    let updatedSummary = try SurfaceSourceSummaryService().summarize(document: document)
+    let updatedKnot = try #require(
+        updatedSummary.sources.first?.patches.first?.basis.uKnotVector.first { $0.index == 3 }
+    )
+    #expect(updatedKnot.value == 0.4)
+    #expect(updatedKnot.isEditable)
+
+    let boundaryKnot = try #require(patch.basis.uKnotVector.first { $0.index == 0 })
+    let boundaryReference = try #require(boundaryKnot.selectionReference)
+    #expect(boundaryKnot.isEditable == false)
+    #expect(throws: EditorError.self) {
+        try document.setSurfaceKnotValue(
+            target: boundaryReference,
+            value: .scalar(0.1)
+        )
+    }
+}
+
 @Test func polySplineSurfaceVertexMoveRejectsNonVertexTargets() async throws {
     var document = DesignDocument.empty()
 
@@ -2012,6 +2057,23 @@ private func designDocumentDirectBSplineSurface() -> BSplineSurface3D {
         vKnots: base.vKnots,
         controlPoints: base.controlPoints,
         weights: weights
+    )
+}
+
+private func designDocumentDirectBSplineSurfaceWithInteriorKnots() -> BSplineSurface3D {
+    let base = BSplineSurface3D.cubicBezierPatch(
+        bottomLeft: Point3D(x: 0.0, y: 0.0, z: 0.0),
+        bottomRight: Point3D(x: 0.02, y: 0.0, z: 0.0),
+        topRight: Point3D(x: 0.02, y: 0.02, z: 0.0),
+        topLeft: Point3D(x: 0.0, y: 0.02, z: 0.0)
+    )
+    return BSplineSurface3D(
+        uDegree: 2,
+        vDegree: 2,
+        uKnots: [0.0, 0.0, 0.0, 0.5, 1.0, 1.0, 1.0],
+        vKnots: [0.0, 0.0, 0.0, 0.5, 1.0, 1.0, 1.0],
+        controlPoints: base.controlPoints,
+        weights: base.weights
     )
 }
 

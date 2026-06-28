@@ -108,7 +108,7 @@ struct BSplineSurfaceSourceSummaryBuilder: Sendable {
             faceSelectionReference: faceSelectionReference,
             uDomain: SurfaceSourceSummaryResult.ParameterRange(lowerBound: uBounds.lower, upperBound: uBounds.upper),
             vDomain: SurfaceSourceSummaryResult.ParameterRange(lowerBound: vBounds.lower, upperBound: vBounds.upper),
-            basis: basis(surface: surface),
+            basis: basis(surface: surface, surfaceReference: surfaceReference),
             controlVertices: [],
             controlPoints: bSplineControlPoints(
                 featureID: featureID,
@@ -193,7 +193,10 @@ struct BSplineSurfaceSourceSummaryBuilder: Sendable {
         return displays[id]?.isVisible == true
     }
 
-    private func basis(surface: BSplineSurface3D) -> SurfaceSourceSummaryResult.Basis {
+    private func basis(
+        surface: BSplineSurface3D,
+        surfaceReference: SurfaceReference
+    ) -> SurfaceSourceSummaryResult.Basis {
         let uSpans = spans(axis: "u", knots: surface.uKnots)
         let vSpans = spans(axis: "v", knots: surface.vKnots)
         return SurfaceSourceSummaryResult.Basis(
@@ -204,8 +207,18 @@ struct BSplineSurfaceSourceSummaryBuilder: Sendable {
             vOrder: surface.vOrder,
             uKnots: surface.uKnots,
             vKnots: surface.vKnots,
-            uKnotVector: knotVector(axis: "u", knots: surface.uKnots),
-            vKnotVector: knotVector(axis: "v", knots: surface.vKnots),
+            uKnotVector: knotVector(
+                direction: .u,
+                knots: surface.uKnots,
+                degree: surface.uDegree,
+                surfaceReference: surfaceReference
+            ),
+            vKnotVector: knotVector(
+                direction: .v,
+                knots: surface.vKnots,
+                degree: surface.vDegree,
+                surfaceReference: surfaceReference
+            ),
             uSpans: uSpans,
             vSpans: vSpans,
             uSpanCount: uSpans.count,
@@ -215,20 +228,34 @@ struct BSplineSurfaceSourceSummaryBuilder: Sendable {
     }
 
     private func knotVector(
-        axis: String,
-        knots: [Double]
+        direction: SurfaceParameterDirection,
+        knots: [Double],
+        degree: Int,
+        surfaceReference: SurfaceReference
     ) -> [SurfaceSourceSummaryResult.Basis.Knot] {
         let lowerBound = knots.first
         let upperBound = knots.last
         let multiplicities = Dictionary(grouping: knots, by: { $0 }).mapValues(\.count)
+        let firstInteriorKnotIndex = degree + 1
+        let lastInteriorKnotIndex = knots.count - degree - 2
         return knots.indices.map { index in
             let value = knots[index]
+            let isBoundary = value == lowerBound || value == upperBound
+            let isEditable = firstInteriorKnotIndex <= lastInteriorKnotIndex
+                && (firstInteriorKnotIndex ... lastInteriorKnotIndex).contains(index)
+                && isBoundary == false
             return SurfaceSourceSummaryResult.Basis.Knot(
-                id: "\(axis)Knot:\(index)",
+                id: "\(direction.rawValue)Knot:\(index)",
                 index: index,
                 value: value,
                 multiplicity: multiplicities[value] ?? 1,
-                isBoundary: value == lowerBound || value == upperBound
+                isBoundary: isBoundary,
+                isEditable: isEditable,
+                selectionReference: .surface(.knot(SurfaceKnotReference(
+                    surface: surfaceReference,
+                    direction: direction,
+                    knotIndex: index
+                )))
             )
         }
     }

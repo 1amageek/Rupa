@@ -109,19 +109,25 @@ public struct SurfaceSourceSummaryResult: Codable, Equatable, Sendable {
             public var value: Double
             public var multiplicity: Int
             public var isBoundary: Bool
+            public var isEditable: Bool
+            public var selectionReference: SelectionReference?
 
             public init(
                 id: String,
                 index: Int,
                 value: Double,
                 multiplicity: Int,
-                isBoundary: Bool
+                isBoundary: Bool,
+                isEditable: Bool = false,
+                selectionReference: SelectionReference? = nil
             ) {
                 self.id = id
                 self.index = index
                 self.value = value
                 self.multiplicity = multiplicity
                 self.isBoundary = isBoundary
+                self.isEditable = isEditable
+                self.selectionReference = selectionReference
             }
         }
 

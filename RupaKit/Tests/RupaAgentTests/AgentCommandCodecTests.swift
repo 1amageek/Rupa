@@ -644,6 +644,29 @@ import SwiftCAD
         ),
         expectedGeneration: DocumentGeneration(5)
     )
+    let surfaceKnotReference = SelectionReference.surface(
+        .knot(
+            SurfaceKnotReference(
+                surface: SurfaceReference(
+                    faceName: PersistentName(components: [
+                        .feature(FeatureID()),
+                        .generated("bSplineSurface"),
+                        .subshape("patch:0:face"),
+                    ])
+                ),
+                direction: .u,
+                knotIndex: 3
+            )
+        )
+    )
+    let surfaceKnotValueRequest = AgentRequest.execute(
+        sessionID: sessionID,
+        command: .setSurfaceKnotValue(
+            target: surfaceKnotReference,
+            value: .scalar(0.4)
+        ),
+        expectedGeneration: DocumentGeneration(5)
+    )
 
     let decodedRequest = try codec.decodeRequest(from: try codec.encode(request))
     let decodedSlideRequest = try codec.decodeRequest(from: try codec.encode(slideRequest))
@@ -662,6 +685,9 @@ import SwiftCAD
     let decodedSurfaceControlPointSlideRequest = try codec.decodeRequest(
         from: try codec.encode(surfaceControlPointSlideRequest)
     )
+    let decodedSurfaceKnotValueRequest = try codec.decodeRequest(
+        from: try codec.encode(surfaceKnotValueRequest)
+    )
 
     #expect(decodedRequest == request)
     #expect(decodedSlideRequest == slideRequest)
@@ -670,6 +696,7 @@ import SwiftCAD
     #expect(decodedSurfaceControlPointDisplayRequest == surfaceControlPointDisplayRequest)
     #expect(decodedSurfaceFrameDisplayRequest == surfaceFrameDisplayRequest)
     #expect(decodedSurfaceControlPointSlideRequest == surfaceControlPointSlideRequest)
+    #expect(decodedSurfaceKnotValueRequest == surfaceKnotValueRequest)
 }
 
 @Test func agentMessageCodecRoundTripsPolySplineMeshAnalysis() async throws {

@@ -1161,6 +1161,16 @@ public final class AgentCommandController: AgentClientProtocol {
             failureMode: "Accepts direct B-spline surface control-net references and strict interior PolySpline B-spline control point references discovered from surfaceSourceSummary; rejects PolySpline boundary CV weights, non-control-point references, non-scalar or non-positive weights, non-editable surface sources, stale generations, unsupported source meshes, and invalid rebuilt rational B-spline sheet topology."
         ),
         capability(
+            "setSurfaceKnotValue",
+            category: .solid,
+            summary: "Set an existing direct B-spline surface internal knot value from a Swift-CAD SelectionReference discovered in surfaceSourceSummary.",
+            access: .automationCommand,
+            mutatesDocument: true,
+            discovery: [.surfaceSourceSummary, .surfaceFrames, .surfaceAnalysis, .surfaceContinuitySummary],
+            targets: [.surfaceKnot],
+            failureMode: "Accepts editable direct B-spline surface internal knot references discovered from surfaceSourceSummary; rejects boundary knots, PolySpline generated knots, non-knot references, non-scalar values, values outside strict neighboring knot bounds, stale generations, non-editable surface sources, and invalid rebuilt B-spline sheet topology."
+        ),
+        capability(
             "slidePolySplineSurfaceVertices",
             category: .solid,
             summary: "Slide generated PolySpline patch boundary CVs along local surface hull U, V, or normal directions with an explicit distance.",

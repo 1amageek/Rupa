@@ -429,6 +429,143 @@ extension DesignDocument {
         }
     }
 
+    public mutating func setSurfaceKnotValue(
+        target: SelectionReference,
+        value: CADExpression,
+        objectRegistry: ObjectTypeRegistry = .builtIn
+    ) throws {
+        let resolvedValue = try resolvedScalarValue(
+            value,
+            owner: "B-spline surface knot value"
+        )
+        let knotReference = try resolvedBSplineSurfaceKnotReference(
+            target,
+            owner: "B-spline surface knot value"
+        )
+        guard var feature = cadDocument.designGraph.nodes[knotReference.featureID],
+              case let .bSplineSurface(surfaceFeature) = feature.operation else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "B-spline surface knot value requires an existing direct B-spline surface source feature."
+            )
+        }
+
+        let knotEditor = BSplineSurfaceKnotEditingService()
+        feature.operation = .bSplineSurface(try knotEditor.updatedFeature(
+            settingValue: resolvedValue,
+            for: knotReference.reference,
+            in: surfaceFeature,
+            owner: "B-spline surface knot value"
+        ))
+
+        var updatedCADDocument = cadDocument
+        let previousCADDocument = cadDocument
+        do {
+            try updatedCADDocument.replaceFeature(feature)
+            cadDocument = updatedCADDocument
+            try validate(objectRegistry: objectRegistry)
+        } catch {
+            cadDocument = previousCADDocument
+            throw EditorError(
+                code: .commandInvalid,
+                message: "B-spline surface knot value produced invalid source geometry: \(error)."
+            )
+        }
+    }
+
+    private struct BSplineSurfaceKnotResolution {
+        var featureID: FeatureID
+        var reference: SurfaceKnotReference
+    }
+
+    private func resolvedBSplineSurfaceKnotReference(
+        _ selection: SelectionReference,
+        owner: String
+    ) throws -> BSplineSurfaceKnotResolution {
+        guard case .surface(.knot(let reference)) = selection else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "\(owner) requires a surface knot selection reference."
+            )
+        }
+        do {
+            try reference.validate()
+        } catch {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "\(owner) requires a valid surface knot selection reference: \(error)."
+            )
+        }
+        let patchFace = try resolvedSurfacePatchFace(
+            from: reference.surface.faceName,
+            owner: owner
+        )
+        guard patchFace.generatedRole == "bSplineSurface",
+              patchFace.patchID == 0 else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "\(owner) requires a direct B-spline surface patch face selection reference."
+            )
+        }
+        return BSplineSurfaceKnotResolution(
+            featureID: patchFace.featureID,
+            reference: reference
+        )
+    }
+
+    private struct SurfacePatchFaceResolution {
+        var featureID: FeatureID
+        var generatedRole: String
+        var patchID: Int
+    }
+
+    private func resolvedSurfacePatchFace(
+        from name: PersistentName,
+        owner: String
+    ) throws -> SurfacePatchFaceResolution {
+        var featureID: FeatureID?
+        var generatedRole: String?
+        var subshape: String?
+        for component in name.components {
+            switch component {
+            case .feature(let id):
+                featureID = id
+            case .generated(let value):
+                generatedRole = value
+            case .subshape(let value):
+                subshape = value
+            case .index:
+                throw EditorError(
+                    code: .commandInvalid,
+                    message: "\(owner) requires a source-owned surface patch face selection reference."
+                )
+            }
+        }
+        guard let featureID,
+              let generatedRole,
+              let subshape else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "\(owner) requires a source-owned surface patch face selection reference."
+            )
+        }
+        let parts = subshape.split(separator: ":", omittingEmptySubsequences: false).map(String.init)
+        guard parts.count == 3,
+              parts[0] == "patch",
+              let patchID = Int(parts[1]),
+              parts[2] == "face" else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "\(owner) requires a source-owned surface patch face selection reference."
+            )
+        }
+        return SurfacePatchFaceResolution(
+            featureID: featureID,
+            generatedRole: generatedRole,
+            patchID: patchID
+        )
+    }
+
     public mutating func slidePolySplineSurfaceVertices(
         targets: [SelectionTarget],
         direction: PolySplineSurfaceVertexSlideDirection,

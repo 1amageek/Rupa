@@ -245,6 +245,7 @@ public enum AutomationCommand: Codable, Equatable, Sendable {
         deltaZ: CADExpression
     )
     case setSurfaceControlPointWeight(target: SelectionReference, weight: CADExpression)
+    case setSurfaceKnotValue(target: SelectionReference, value: CADExpression)
     case slidePolySplineSurfaceVertices(
         targets: [SelectionTarget],
         direction: PolySplineSurfaceVertexSlideDirection,
@@ -729,6 +730,8 @@ public enum AutomationCommand: Codable, Equatable, Sendable {
             )
         case .setSurfaceControlPointWeight(let target, let weight):
             .setSurfaceControlPointWeight(target: target, weight: weight)
+        case .setSurfaceKnotValue(let target, let value):
+            .setSurfaceKnotValue(target: target, value: value)
         case .slidePolySplineSurfaceVertices(let targets, let direction, let distance):
             .slidePolySplineSurfaceVertices(
                 targets: targets,

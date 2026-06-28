@@ -1076,6 +1076,16 @@ public final class CADDocumentStore {
             document = updatedDocument
             try commitMutation()
             evaluateCurrentDocument()
+        case .setSurfaceKnotValue(let target, let value):
+            var updatedDocument = document
+            try updatedDocument.setSurfaceKnotValue(
+                target: target,
+                value: value,
+                objectRegistry: objectRegistry
+            )
+            document = updatedDocument
+            try commitMutation()
+            evaluateCurrentDocument()
         case .slidePolySplineSurfaceVertices(let targets, let direction, let distance):
             var updatedDocument = document
             try updatedDocument.slidePolySplineSurfaceVertices(
