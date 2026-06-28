@@ -1143,22 +1143,22 @@ public final class AgentCommandController: AgentClientProtocol {
         capability(
             "moveSurfaceControlPoint",
             category: .solid,
-            summary: "Move a source-owned surface control point from a Swift-CAD SelectionReference without requiring UI scene-node targeting.",
+            summary: "Move a source-owned surface control point from a Swift-CAD SelectionReference without requiring UI scene-node targeting; direct B-spline surfaces mutate their stored control net.",
             access: .automationCommand,
             mutatesDocument: true,
             discovery: [.surfaceSourceSummary, .selectionMeasurement, .surfaceAnalysis, .surfaceContinuitySummary],
             targets: [.surfaceControlPoint],
-            failureMode: "Accepts PolySpline patch corner control point references and strict interior B-spline control point references discovered from surfaceSourceSummary; rejects non-control-point references, non-PolySpline surfaces, boundary edge-only CV indexes, stale generations, zero or invalid deltas, unsupported source meshes, moves that change selected corner boundary roles, and invalid rebuilt B-spline sheet topology."
+            failureMode: "Accepts direct B-spline surface control-net references, PolySpline patch corner control point references, and strict interior PolySpline B-spline control point references discovered from surfaceSourceSummary; rejects non-control-point references, non-editable surface sources, boundary edge-only CV indexes, stale generations, zero or invalid deltas, unsupported source meshes, moves that change selected PolySpline corner boundary roles, and invalid rebuilt B-spline sheet topology."
         ),
         capability(
             "setSurfaceControlPointWeight",
             category: .solid,
-            summary: "Set a source-owned B-spline surface control-point weight from a Swift-CAD SelectionReference, preserving the control point position while making the evaluated surface rational.",
+            summary: "Set a source-owned B-spline surface control-point weight from a Swift-CAD SelectionReference, preserving the control point position while making the evaluated surface rational; direct B-spline surfaces mutate their stored weight net.",
             access: .automationCommand,
             mutatesDocument: true,
             discovery: [.surfaceSourceSummary, .surfaceAnalysis, .surfaceContinuitySummary],
             targets: [.surfaceControlPoint],
-            failureMode: "Accepts strict interior PolySpline B-spline control point references discovered from surfaceSourceSummary; rejects boundary CVs, non-control-point references, non-scalar or non-positive weights, non-PolySpline surfaces, stale generations, unsupported source meshes, and invalid rebuilt rational B-spline sheet topology."
+            failureMode: "Accepts direct B-spline surface control-net references and strict interior PolySpline B-spline control point references discovered from surfaceSourceSummary; rejects PolySpline boundary CV weights, non-control-point references, non-scalar or non-positive weights, non-editable surface sources, stale generations, unsupported source meshes, and invalid rebuilt rational B-spline sheet topology."
         ),
         capability(
             "slidePolySplineSurfaceVertices",
@@ -1173,12 +1173,12 @@ public final class AgentCommandController: AgentClientProtocol {
         capability(
             "slideSurfaceControlPoints",
             category: .solid,
-            summary: "Slide source-owned surface control points from Swift-CAD SelectionReference values along local U, V, or normal directions; strict interior PolySpline CVs use the override-aware B-spline control-hull frame.",
+            summary: "Slide source-owned surface control points from Swift-CAD SelectionReference values along local U, V, or normal directions; direct B-spline CVs use their stored control net and strict interior PolySpline CVs use the override-aware B-spline control-hull frame.",
             access: .automationCommand,
             mutatesDocument: true,
             discovery: [.surfaceSourceSummary, .selectionMeasurement, .surfaceAnalysis, .surfaceContinuitySummary],
             targets: [.surfaceControlPoint],
-            failureMode: "Accepts PolySpline patch corner control point references and strict interior B-spline control point references discovered from surfaceSourceSummary; boundary corner slides route through generated source-mesh patch hull directions, while strict interior CV slides resolve override-aware B-spline control-hull U/V/N directions; rejects non-control-point references, non-PolySpline surfaces, boundary edge-only CV indexes, stale generations, empty or duplicate targets, zero or invalid distances, collapsed local U/V/normal directions, slides that change selected corner boundary roles, and invalid rebuilt B-spline sheet topology."
+            failureMode: "Accepts direct B-spline surface control-net references, PolySpline patch corner control point references, and strict interior PolySpline B-spline control point references discovered from surfaceSourceSummary; boundary corner slides route through generated source-mesh patch hull directions, direct B-spline CVs and strict interior PolySpline CVs resolve local control-hull U/V/N directions; rejects non-control-point references, non-editable surface sources, boundary edge-only CV indexes, stale generations, empty or duplicate targets, zero or invalid distances, collapsed local U/V/normal directions, slides that change selected PolySpline corner boundary roles, and invalid rebuilt B-spline sheet topology."
         ),
         capability(
             "createExtrudedRectangle",
@@ -1339,12 +1339,12 @@ public final class AgentCommandController: AgentClientProtocol {
         capability(
             "setSurfaceControlPointDisplay",
             category: .solid,
-            summary: "Toggle persistent Agent-visible Surface CV point display state for PolySpline surface control points discovered from surfaceSourceSummary.",
+            summary: "Toggle persistent Agent-visible Surface CV point display state for PolySpline and direct B-spline surface control points discovered from surfaceSourceSummary.",
             access: .automationCommand,
             mutatesDocument: true,
             discovery: [.surfaceSourceSummary, .selectionMeasurement, .surfaceAnalysis],
             targets: [.surfaceControlPoint],
-            failureMode: "Accepts cubic PolySpline surface control point selection references discovered from surfaceSourceSummary; rejects non-control-point references, unsupported PolySpline source meshes, missing patches, out-of-range indexes, stale generations, or missing source features before mutation."
+            failureMode: "Accepts PolySpline and direct B-spline surface control point selection references discovered from surfaceSourceSummary; rejects non-control-point references, unsupported PolySpline source meshes, missing patches, out-of-range indexes, stale generations, invalid direct B-spline control-net indexes, or missing source features before mutation."
         ),
         capability(
             "setSurfaceFrameDisplay",
@@ -1369,12 +1369,12 @@ public final class AgentCommandController: AgentClientProtocol {
         capability(
             "surfaceSourceSummary",
             category: .read,
-            summary: "Discover source-owned surface contracts for editable PolySpline surfaces, including patch IDs, cubic B-spline basis, knot and span addresses, weighted CV targets, trim loops, support diagnostics, and generated topology links.",
+            summary: "Discover source-owned surface contracts for editable PolySpline and direct B-spline surfaces, including patch IDs, degree and knot-vector basis, knot and span addresses, weighted CV targets, boundary CV targets, trim loops, support diagnostics, and generated topology links.",
             access: .agentRequest,
             mutatesDocument: false,
             discovery: [.surfaceSourceSummary, .polySplineMeshAnalysis, .topologySummary],
             targets: [.document, .body, .face, .edge, .vertex],
-            failureMode: "Rejects stale generations or invalid documents before returning source-owned surface contracts; reports unsupported PolySpline reconstruction options as structured diagnostics instead of exposing silent surface edit targets."
+            failureMode: "Rejects stale generations or invalid documents before returning source-owned surface contracts; reports unsupported PolySpline reconstruction options and invalid direct B-spline source data as structured diagnostics instead of exposing silent surface edit targets."
         ),
         capability(
             "surfaceAnalysis",

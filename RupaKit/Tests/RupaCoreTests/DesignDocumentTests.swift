@@ -375,6 +375,79 @@ import Testing
     #expect(abs(movedOverride.point.z - (controlPoint.point.z + 0.001)) <= 1.0e-12)
 }
 
+@Test func directBSplineSurfaceControlPointReferenceMutatesStoredControlNet() async throws {
+    var document = DesignDocument.empty()
+
+    let surface = designDocumentDirectBSplineSurface()
+    let featureID = try document.createBSplineSurface(
+        name: "Direct Editable Surface",
+        surface: surface
+    )
+    let summary = try SurfaceSourceSummaryService().summarize(document: document)
+    let controlPoint = try #require(
+        summary.sources.first?.patches.first?.controlPoints.first { $0.uIndex == 1 && $0.vIndex == 1 }
+    )
+    #expect(controlPoint.isEditable)
+
+    try document.moveSurfaceControlPoint(
+        target: controlPoint.selectionReference,
+        deltaX: .length(0.0, .millimeter),
+        deltaY: .length(0.0, .millimeter),
+        deltaZ: .length(1.0, .millimeter)
+    )
+
+    let movedFeature = try #require(document.cadDocument.designGraph.nodes[featureID])
+    guard case let .bSplineSurface(movedSurfaceFeature) = movedFeature.operation else {
+        Issue.record("Expected a direct B-spline surface feature.")
+        return
+    }
+    let movedPoint = movedSurfaceFeature.surface.controlPoints[1][1]
+    #expect(abs(movedPoint.x - controlPoint.point.x) <= 1.0e-12)
+    #expect(abs(movedPoint.y - controlPoint.point.y) <= 1.0e-12)
+    #expect(abs(movedPoint.z - (controlPoint.point.z + 0.001)) <= 1.0e-12)
+    #expect(movedSurfaceFeature.surface.weights[1][1] == 2.0)
+
+    try document.setSurfaceControlPointWeight(
+        target: controlPoint.selectionReference,
+        weight: .scalar(2.5)
+    )
+
+    let weightedFeature = try #require(document.cadDocument.designGraph.nodes[featureID])
+    guard case let .bSplineSurface(weightedSurfaceFeature) = weightedFeature.operation else {
+        Issue.record("Expected a weighted direct B-spline surface feature.")
+        return
+    }
+    #expect(weightedSurfaceFeature.surface.weights[1][1] == 2.5)
+    #expect(weightedSurfaceFeature.surface.isRational)
+
+    try document.slideSurfaceControlPoints(
+        targets: [controlPoint.selectionReference],
+        direction: .positiveU,
+        distance: .length(1.0, .millimeter)
+    )
+
+    let slidFeature = try #require(document.cadDocument.designGraph.nodes[featureID])
+    guard case let .bSplineSurface(slidSurfaceFeature) = slidFeature.operation else {
+        Issue.record("Expected a slid direct B-spline surface feature.")
+        return
+    }
+    let slidPoint = slidSurfaceFeature.surface.controlPoints[1][1]
+    #expect(abs(slidPoint.x - (controlPoint.point.x + 0.001)) <= 1.0e-12)
+    #expect(abs(slidPoint.y - controlPoint.point.y) <= 1.0e-12)
+    #expect(abs(slidPoint.z - (controlPoint.point.z + 0.001)) <= 1.0e-12)
+    #expect(slidSurfaceFeature.surface.weights[1][1] == 2.5)
+
+    let updatedSummary = try SurfaceSourceSummaryService().summarize(document: document)
+    let updatedPatch = try #require(updatedSummary.sources.first?.patches.first)
+    let updatedControlPoint = try #require(
+        updatedPatch.controlPoints.first { $0.uIndex == 1 && $0.vIndex == 1 }
+    )
+    #expect(updatedPatch.basis.isRational)
+    #expect(updatedControlPoint.weight == 2.5)
+    #expect(abs(updatedControlPoint.point.x - slidPoint.x) <= 1.0e-12)
+    #expect(abs(updatedControlPoint.point.z - slidPoint.z) <= 1.0e-12)
+}
+
 @Test func polySplineSurfaceVertexMoveRejectsNonVertexTargets() async throws {
     var document = DesignDocument.empty()
 
@@ -1920,6 +1993,25 @@ private func designDocumentPolySplineQuadMesh() -> Mesh {
             Point3D(x: 0.0, y: 0.02, z: 0.0),
         ],
         indices: [0, 1, 2, 0, 2, 3]
+    )
+}
+
+private func designDocumentDirectBSplineSurface() -> BSplineSurface3D {
+    let base = BSplineSurface3D.cubicBezierPatch(
+        bottomLeft: Point3D(x: 0.0, y: 0.0, z: 0.0),
+        bottomRight: Point3D(x: 0.02, y: 0.0, z: 0.0),
+        topRight: Point3D(x: 0.02, y: 0.02, z: 0.0),
+        topLeft: Point3D(x: 0.0, y: 0.02, z: 0.0)
+    )
+    var weights = base.weights
+    weights[1][1] = 2.0
+    return BSplineSurface3D(
+        uDegree: base.uDegree,
+        vDegree: base.vDegree,
+        uKnots: base.uKnots,
+        vKnots: base.vKnots,
+        controlPoints: base.controlPoints,
+        weights: weights
     )
 }
 

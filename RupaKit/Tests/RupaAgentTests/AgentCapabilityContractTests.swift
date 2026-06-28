@@ -523,7 +523,9 @@ import SwiftCAD
     #expect(surfaceControlPointMove.discovery.contains(.surfaceContinuitySummary))
     #expect(surfaceControlPointMove.targets == [.surfaceControlPoint])
     #expect(surfaceControlPointMove.summary.contains("SelectionReference"))
-    #expect(surfaceControlPointMove.failureMode.contains("strict interior B-spline control point"))
+    #expect(surfaceControlPointMove.summary.contains("stored control net"))
+    #expect(surfaceControlPointMove.failureMode.contains("direct B-spline surface control-net"))
+    #expect(surfaceControlPointMove.failureMode.contains("strict interior PolySpline B-spline control point"))
 
     #expect(surfaceControlPointWeight.category == .solid)
     #expect(surfaceControlPointWeight.mutatesDocument)
@@ -533,6 +535,8 @@ import SwiftCAD
     #expect(surfaceControlPointWeight.discovery.contains(.surfaceContinuitySummary))
     #expect(surfaceControlPointWeight.targets == [.surfaceControlPoint])
     #expect(surfaceControlPointWeight.summary.contains("control-point weight"))
+    #expect(surfaceControlPointWeight.summary.contains("stored weight net"))
+    #expect(surfaceControlPointWeight.failureMode.contains("direct B-spline surface control-net"))
     #expect(surfaceControlPointWeight.failureMode.contains("non-positive weights"))
 
     #expect(surfaceControlPointDisplay.category == .solid)
@@ -543,6 +547,7 @@ import SwiftCAD
     #expect(surfaceControlPointDisplay.discovery.contains(.surfaceAnalysis))
     #expect(surfaceControlPointDisplay.targets == [.surfaceControlPoint])
     #expect(surfaceControlPointDisplay.summary.contains("Surface CV point display"))
+    #expect(surfaceControlPointDisplay.summary.contains("direct B-spline"))
     #expect(surfaceControlPointDisplay.failureMode.contains("out-of-range indexes"))
 
     #expect(surfaceFrameDisplay.category == .solid)
@@ -574,6 +579,7 @@ import SwiftCAD
     #expect(surfaceControlPointSlide.discovery.contains(.surfaceContinuitySummary))
     #expect(surfaceControlPointSlide.targets == [.surfaceControlPoint])
     #expect(surfaceControlPointSlide.summary.contains("SelectionReference"))
+    #expect(surfaceControlPointSlide.summary.contains("stored control net"))
     #expect(surfaceControlPointSlide.failureMode.contains("duplicate targets"))
 
     #expect(polySplineAnalysis.category == .read)

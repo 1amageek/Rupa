@@ -70,7 +70,135 @@ import SwiftCAD
     #expect(patch.basis.isRational)
     let weightedControlPoint = try #require(patch.controlPoints.first { $0.uIndex == 1 && $0.vIndex == 1 })
     #expect(weightedControlPoint.weight == 2.0)
-    #expect(weightedControlPoint.isEditable == false)
+    #expect(weightedControlPoint.isEditable)
+}
+
+@MainActor
+@Test func agentEditsDirectBSplineSurfaceControlPointThroughSurfaceSourceReference() async throws {
+    let server = AgentCommandController()
+    let sessionID = UUID()
+    let session = EditorSession()
+    server.register(session: session, id: sessionID)
+
+    let createResponse = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .createBSplineSurface(
+                name: "Agent Editable B-spline Surface",
+                surface: agentDirectBSplineSurface()
+            ),
+            expectedGeneration: DocumentGeneration(0)
+        )
+    )
+    guard case .command(let createResult) = createResponse else {
+        Issue.record("Agent must create a direct B-spline surface.")
+        return
+    }
+    #expect(createResult.didMutate)
+
+    let summaryResponse = server.handle(
+        .surfaceSourceSummary(
+            sessionID: sessionID,
+            expectedGeneration: DocumentGeneration(1)
+        )
+    )
+    guard case .surfaceSourceSummary(let summary) = summaryResponse else {
+        Issue.record("Agent must return direct B-spline surface source summary.")
+        return
+    }
+    let controlPoint = try #require(
+        summary.sources.first?.patches.first?.controlPoints.first { $0.uIndex == 1 && $0.vIndex == 1 }
+    )
+    #expect(controlPoint.isEditable)
+
+    let moveResponse = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .moveSurfaceControlPoint(
+                target: controlPoint.selectionReference,
+                deltaX: .length(0.0, .millimeter),
+                deltaY: .length(0.0, .millimeter),
+                deltaZ: .length(1.0, .millimeter)
+            ),
+            expectedGeneration: DocumentGeneration(1)
+        )
+    )
+    guard case .command(let moveResult) = moveResponse else {
+        Issue.record("Agent must move a direct B-spline surface control point.")
+        return
+    }
+    #expect(moveResult.commandName == "moveSurfaceControlPoint")
+    #expect(moveResult.didMutate)
+    #expect(moveResult.generation == DocumentGeneration(2))
+
+    let weightResponse = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .setSurfaceControlPointWeight(
+                target: controlPoint.selectionReference,
+                weight: .scalar(2.5)
+            ),
+            expectedGeneration: DocumentGeneration(2)
+        )
+    )
+    guard case .command(let weightResult) = weightResponse else {
+        Issue.record("Agent must set a direct B-spline surface control point weight.")
+        return
+    }
+    #expect(weightResult.commandName == "setSurfaceControlPointWeight")
+    #expect(weightResult.didMutate)
+    #expect(weightResult.generation == DocumentGeneration(3))
+
+    let slideResponse = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .slideSurfaceControlPoints(
+                targets: [controlPoint.selectionReference],
+                direction: .positiveU,
+                distance: .length(1.0, .millimeter)
+            ),
+            expectedGeneration: DocumentGeneration(3)
+        )
+    )
+    guard case .command(let slideResult) = slideResponse else {
+        Issue.record("Agent must slide a direct B-spline surface control point.")
+        return
+    }
+    #expect(slideResult.commandName == "slideSurfaceControlPoints")
+    #expect(slideResult.didMutate)
+    #expect(slideResult.generation == DocumentGeneration(4))
+
+    let featureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let feature = try #require(session.document.cadDocument.designGraph.nodes[featureID])
+    guard case let .bSplineSurface(surfaceFeature) = feature.operation else {
+        Issue.record("Agent must keep a direct B-spline surface feature.")
+        return
+    }
+    let storedPoint = surfaceFeature.surface.controlPoints[1][1]
+    #expect(abs(storedPoint.x - (controlPoint.point.x + 0.001)) <= 1.0e-12)
+    #expect(abs(storedPoint.y - controlPoint.point.y) <= 1.0e-12)
+    #expect(abs(storedPoint.z - (controlPoint.point.z + 0.001)) <= 1.0e-12)
+    #expect(surfaceFeature.surface.weights[1][1] == 2.5)
+    #expect(session.evaluationStatus == .valid)
+
+    let updatedSummaryResponse = server.handle(
+        .surfaceSourceSummary(
+            sessionID: sessionID,
+            expectedGeneration: DocumentGeneration(4)
+        )
+    )
+    guard case .surfaceSourceSummary(let updatedSummary) = updatedSummaryResponse else {
+        Issue.record("Agent must return updated direct B-spline surface source summary.")
+        return
+    }
+    let updatedPatch = try #require(updatedSummary.sources.first?.patches.first)
+    let updatedControlPoint = try #require(
+        updatedPatch.controlPoints.first { $0.uIndex == 1 && $0.vIndex == 1 }
+    )
+    #expect(updatedPatch.basis.isRational)
+    #expect(updatedControlPoint.weight == 2.5)
+    #expect(abs(updatedControlPoint.point.x - storedPoint.x) <= 1.0e-12)
+    #expect(abs(updatedControlPoint.point.z - storedPoint.z) <= 1.0e-12)
 }
 
 @MainActor

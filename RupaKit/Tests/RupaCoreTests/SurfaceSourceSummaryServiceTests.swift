@@ -165,7 +165,7 @@ import SwiftCAD
     #expect(patch.trimLoops.first?.selectionReferences.count == 4)
     let weightedControlPoint = try #require(patch.controlPoints.first { $0.uIndex == 1 && $0.vIndex == 1 })
     #expect(weightedControlPoint.weight == 2.0)
-    #expect(weightedControlPoint.isEditable == false)
+    #expect(weightedControlPoint.isEditable)
     guard case .surface(.controlPoint(let controlPointReference)) = weightedControlPoint.selectionReference else {
         Issue.record("Direct B-spline control point must expose a surface control-point reference.")
         return

@@ -214,6 +214,14 @@ extension DesignDocument {
                 deltaZ: deltaZ,
                 objectRegistry: objectRegistry
             )
+        case .bSplineSurfaceControlPoint(let target):
+            try moveBSplineSurfaceControlPoint(
+                target: target,
+                deltaX: deltaX,
+                deltaY: deltaY,
+                deltaZ: deltaZ,
+                objectRegistry: objectRegistry
+            )
         }
     }
 
@@ -266,6 +274,55 @@ extension DesignDocument {
         }
     }
 
+    private mutating func moveBSplineSurfaceControlPoint(
+        target: BSplineSurfaceControlPointEditTarget,
+        deltaX: CADExpression,
+        deltaY: CADExpression,
+        deltaZ: CADExpression,
+        objectRegistry: ObjectTypeRegistry
+    ) throws {
+        let delta = Vector3D(
+            x: try resolvedLengthValue(deltaX, owner: "B-spline surface control point delta x"),
+            y: try resolvedLengthValue(deltaY, owner: "B-spline surface control point delta y"),
+            z: try resolvedLengthValue(deltaZ, owner: "B-spline surface control point delta z")
+        )
+        guard delta.length > ModelingTolerance.standard.distance else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "B-spline surface control point move requires a non-zero delta."
+            )
+        }
+        guard var feature = cadDocument.designGraph.nodes[target.featureID],
+              case let .bSplineSurface(surfaceFeature) = feature.operation else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "B-spline surface control point move requires an existing direct B-spline surface source feature."
+            )
+        }
+
+        let controlPointEditor = BSplineSurfaceControlPointEditingService()
+        feature.operation = .bSplineSurface(try controlPointEditor.updatedFeature(
+            moving: target,
+            by: delta,
+            in: surfaceFeature,
+            owner: "B-spline surface control point move"
+        ))
+
+        var updatedCADDocument = cadDocument
+        let previousCADDocument = cadDocument
+        do {
+            try updatedCADDocument.replaceFeature(feature)
+            cadDocument = updatedCADDocument
+            try validate(objectRegistry: objectRegistry)
+        } catch {
+            cadDocument = previousCADDocument
+            throw EditorError(
+                code: .commandInvalid,
+                message: "B-spline surface control point move produced invalid source geometry: \(error)."
+            )
+        }
+    }
+
     public mutating func setSurfaceControlPointWeight(
         target: SelectionReference,
         weight: CADExpression,
@@ -273,18 +330,38 @@ extension DesignDocument {
     ) throws {
         let resolvedWeight = try resolvedPositiveScalarValue(
             weight,
-            owner: "PolySpline surface control point weight"
+            owner: "Surface control point weight"
         )
         let resolvedTarget = try SurfaceControlPointSelectionTargetResolver().editTarget(
             for: target,
             in: self
         )
-        guard case .interiorControlPoint(let controlPointTarget) = resolvedTarget else {
+        switch resolvedTarget {
+        case .interiorControlPoint(let controlPointTarget):
+            try setPolySplineInteriorSurfaceControlPointWeight(
+                target: controlPointTarget,
+                weight: resolvedWeight,
+                objectRegistry: objectRegistry
+            )
+        case .bSplineSurfaceControlPoint(let controlPointTarget):
+            try setBSplineSurfaceControlPointWeight(
+                target: controlPointTarget,
+                weight: resolvedWeight,
+                objectRegistry: objectRegistry
+            )
+        case .boundaryVertex:
             throw EditorError(
                 code: .commandInvalid,
-                message: "PolySpline surface control point weight currently requires a strict interior B-spline control point."
+                message: "Surface control point weight requires a direct B-spline control point or a strict interior PolySpline B-spline control point."
             )
         }
+    }
+
+    private mutating func setPolySplineInteriorSurfaceControlPointWeight(
+        target controlPointTarget: PolySplineSurfaceControlPointEditTarget,
+        weight resolvedWeight: Double,
+        objectRegistry: ObjectTypeRegistry
+    ) throws {
         guard var feature = cadDocument.designGraph.nodes[controlPointTarget.featureID],
               case let .polySpline(polySpline) = feature.operation else {
             throw EditorError(
@@ -312,6 +389,42 @@ extension DesignDocument {
             throw EditorError(
                 code: .commandInvalid,
                 message: "PolySpline surface control point weight produced invalid source geometry: \(error)."
+            )
+        }
+    }
+
+    private mutating func setBSplineSurfaceControlPointWeight(
+        target controlPointTarget: BSplineSurfaceControlPointEditTarget,
+        weight resolvedWeight: Double,
+        objectRegistry: ObjectTypeRegistry
+    ) throws {
+        guard var feature = cadDocument.designGraph.nodes[controlPointTarget.featureID],
+              case let .bSplineSurface(surfaceFeature) = feature.operation else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "B-spline surface control point weight requires an existing direct B-spline surface source feature."
+            )
+        }
+
+        let controlPointEditor = BSplineSurfaceControlPointEditingService()
+        feature.operation = .bSplineSurface(try controlPointEditor.updatedFeature(
+            settingWeight: resolvedWeight,
+            for: controlPointTarget,
+            in: surfaceFeature,
+            owner: "B-spline surface control point weight"
+        ))
+
+        var updatedCADDocument = cadDocument
+        let previousCADDocument = cadDocument
+        do {
+            try updatedCADDocument.replaceFeature(feature)
+            cadDocument = updatedCADDocument
+            try validate(objectRegistry: objectRegistry)
+        } catch {
+            cadDocument = previousCADDocument
+            throw EditorError(
+                code: .commandInvalid,
+                message: "B-spline surface control point weight produced invalid source geometry: \(error)."
             )
         }
     }
@@ -483,14 +596,18 @@ extension DesignDocument {
         let resolver = SurfaceControlPointSelectionTargetResolver()
         var boundaryTargets: [SelectionTarget] = []
         var interiorTargets: [PolySplineSurfaceControlPointEditTarget] = []
+        var bSplineSurfaceTargets: [BSplineSurfaceControlPointEditTarget] = []
         boundaryTargets.reserveCapacity(targets.count)
         interiorTargets.reserveCapacity(targets.count)
+        bSplineSurfaceTargets.reserveCapacity(targets.count)
         for target in targets {
             switch try resolver.editTarget(for: target, in: self) {
             case .boundaryVertex(let target):
                 boundaryTargets.append(target)
             case .interiorControlPoint(let target):
                 interiorTargets.append(target)
+            case .bSplineSurfaceControlPoint(let target):
+                bSplineSurfaceTargets.append(target)
             }
         }
         let previousCADDocument = cadDocument
@@ -506,6 +623,14 @@ extension DesignDocument {
             if interiorTargets.isEmpty == false {
                 try slidePolySplineInteriorSurfaceControlPoints(
                     targets: interiorTargets,
+                    direction: direction,
+                    distance: distance,
+                    objectRegistry: objectRegistry
+                )
+            }
+            if bSplineSurfaceTargets.isEmpty == false {
+                try slideBSplineSurfaceControlPoints(
+                    targets: bSplineSurfaceTargets,
                     direction: direction,
                     distance: distance,
                     objectRegistry: objectRegistry
@@ -622,6 +747,113 @@ extension DesignDocument {
             throw EditorError(
                 code: .commandInvalid,
                 message: "PolySpline surface control point slide produced invalid source geometry: \(error)."
+            )
+        }
+    }
+
+    private mutating func slideBSplineSurfaceControlPoints(
+        targets: [BSplineSurfaceControlPointEditTarget],
+        direction: PolySplineSurfaceVertexSlideDirection,
+        distance: CADExpression,
+        objectRegistry: ObjectTypeRegistry
+    ) throws {
+        guard targets.isEmpty == false else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "B-spline surface control point slide requires at least one control point target."
+            )
+        }
+        let resolvedDistance = try resolvedLengthValue(
+            distance,
+            owner: "B-spline surface control point slide distance"
+        )
+        guard abs(resolvedDistance) > ModelingTolerance.standard.distance else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "B-spline surface control point slide requires a non-zero distance."
+            )
+        }
+
+        struct ControlPointKey: Hashable {
+            var featureID: FeatureID
+            var uIndex: Int
+            var vIndex: Int
+        }
+
+        var featuresByID: [FeatureID: FeatureNode] = [:]
+        var surfaceFeaturesByID: [FeatureID: BSplineSurfaceFeature] = [:]
+        var seenTargets: Set<ControlPointKey> = []
+        let controlPointEditor = BSplineSurfaceControlPointEditingService()
+
+        for target in targets {
+            let duplicateKey = ControlPointKey(
+                featureID: target.featureID,
+                uIndex: target.uIndex,
+                vIndex: target.vIndex
+            )
+            guard seenTargets.insert(duplicateKey).inserted else {
+                throw EditorError(
+                    code: .commandInvalid,
+                    message: "B-spline surface control point slide cannot receive duplicate targets."
+                )
+            }
+            let surfaceFeature: BSplineSurfaceFeature
+            if let cachedSurfaceFeature = surfaceFeaturesByID[target.featureID] {
+                surfaceFeature = cachedSurfaceFeature
+            } else {
+                guard let sourceFeature = cadDocument.designGraph.nodes[target.featureID],
+                      case let .bSplineSurface(sourceSurfaceFeature) = sourceFeature.operation else {
+                    throw EditorError(
+                        code: .referenceUnresolved,
+                        message: "B-spline surface control point slide requires an existing direct B-spline surface source feature."
+                    )
+                }
+                featuresByID[target.featureID] = sourceFeature
+                surfaceFeature = sourceSurfaceFeature
+            }
+
+            let unitDirection = try controlPointEditor.slideUnitVector(
+                for: target,
+                in: surfaceFeature,
+                direction: direction
+            )
+            let delta = Vector3D(
+                x: unitDirection.x * resolvedDistance,
+                y: unitDirection.y * resolvedDistance,
+                z: unitDirection.z * resolvedDistance
+            )
+            surfaceFeaturesByID[target.featureID] = try controlPointEditor.updatedFeature(
+                moving: target,
+                by: delta,
+                in: surfaceFeature,
+                owner: "B-spline surface control point slide"
+            )
+        }
+
+        var replacementFeatures: [FeatureNode] = []
+        for (featureID, feature) in featuresByID {
+            guard let surfaceFeature = surfaceFeaturesByID[featureID] else {
+                throw EditorError(
+                    code: .referenceUnresolved,
+                    message: "B-spline surface control point slide lost a resolved source update."
+                )
+            }
+            var updatedFeature = feature
+            updatedFeature.operation = .bSplineSurface(surfaceFeature)
+            replacementFeatures.append(updatedFeature)
+        }
+
+        var updatedCADDocument = cadDocument
+        let previousCADDocument = cadDocument
+        do {
+            try updatedCADDocument.replaceFeatures(replacementFeatures)
+            cadDocument = updatedCADDocument
+            try validate(objectRegistry: objectRegistry)
+        } catch {
+            cadDocument = previousCADDocument
+            throw EditorError(
+                code: .commandInvalid,
+                message: "B-spline surface control point slide produced invalid source geometry: \(error)."
             )
         }
     }

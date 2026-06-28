@@ -168,7 +168,7 @@ struct BSplineSurfaceSourceSummaryBuilder: Sendable {
                     point: SurfaceSourceSummaryResult.Point(x: point.x, y: point.y, z: point.z),
                     weight: weight,
                     isBoundary: isBoundary,
-                    isEditable: false,
+                    isEditable: true,
                     selectionReference: selectionReference,
                     isPointDisplayVisible: isSurfaceControlPointDisplayVisible(
                         selectionReference,
