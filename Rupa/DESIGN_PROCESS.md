@@ -54,9 +54,9 @@ tracked assessment entry, but the fields must be explicit.
 
 The current Rupa documents already cover many pieces of the process, and the
 CAD interaction assessment now emits first-class design packets. The remaining
-work is to keep packet maturity visible and to replace gate-derived performance
-records with real dense-scene benchmark fixtures where capabilities still lack
-measurements.
+work is to keep packet maturity visible and to replace remaining gate-derived
+geometry performance records with dense-scene benchmark fixtures where
+capabilities still lack measurements.
 
 | Current document or service | Current role | Required upgrade |
 |---|---|---|
@@ -78,7 +78,7 @@ These are the process foundations that gate broad feature work.
 | `MappingSpec` | UI, Core, Automation, Agent, CLI, and kernel routes can drift apart. | Implemented with capability-specific route matrices and selected route IDs. |
 | `DecisionLog` | Tradeoffs and rejected routes can disappear, making future refactors repeat old mistakes. | Implemented with packet decision records tied to actual route IDs. |
 | `ObservationSet` | Reviews, test coverage, route drift, and performance gaps must become structured feedback. | Implemented for CAD interaction packets from open work, gate ratings, test evidence, route status, performance status, and FlowGraph validation. |
-| Confidence | `implemented` and `verified` ratings must distinguish missing channels and stale evidence. | Implemented from ObservationSet, evidence completeness, tests, calibration anchors, performance measurement records, and calibration state. Current measurement records remain gate-derived or unmeasured until each capability supplies dense-scene benchmarks. |
+| Confidence | `implemented` and `verified` ratings must distinguish missing channels and stale evidence. | Implemented from ObservationSet, evidence completeness, tests, calibration anchors, performance measurement records, and calibration state. CAD interaction packets measure Agent JSON payload size; geometry-specific records remain gate-derived or unmeasured until each capability supplies dense-scene benchmarks. |
 | `FlowGraph` | A feature can exist in Core but remain unreachable from UI, Agent, CLI, or diagnostics. | Implemented with static connection checks for required capability routes. |
 | Evaluation calibration | Subjective UI or modeling-quality judgments cannot be delegated safely. | Implemented at the packet level with calibration anchors. Production calibration still depends on feeding measured benchmark fixtures and review anchors into those records. |
 
@@ -105,7 +105,7 @@ flowchart TD
 | D2 | Make missing cases visible | Implemented | Assessment entries expose supported, rejected, missing, and performance case groups. |
 | D3 | Make route drift visible | Implemented | Static checks detect missing UI, Core, Automation, Agent, CLI, kernel, evaluation, or diagnostics routes where a capability claims support. |
 | D4 | Make reviews actionable | Implemented | Review findings, test evidence, route drift, performance status, and FlowGraph validation are recorded as observations routed to the right design layer. |
-| D5 | Make confidence meaningful | Implemented at packet level | Agent-readable confidence reflects ObservationSet severity, evidence, missing channels, calibration anchors, performance measurement records, and calibration state; capability teams must replace gate-derived/unmeasured performance records with dense-scene benchmark fixtures. |
+| D5 | Make confidence meaningful | Implemented at packet level | Agent-readable confidence reflects ObservationSet severity, evidence, missing channels, calibration anchors, performance measurement records, and calibration state. CAD interaction packets measure Agent JSON payload size; capability teams must replace gate-derived/unmeasured geometry records with dense-scene benchmark fixtures. |
 
 ## Feature Implementation Rule
 

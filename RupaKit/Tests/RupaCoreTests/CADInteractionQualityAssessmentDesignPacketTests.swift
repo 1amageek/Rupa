@@ -92,10 +92,19 @@ import RupaCore
 @Test func cadInteractionQualityAssessmentDesignPacketsIngestObservationChannelsIntoConfidence() throws {
     let result = CADInteractionQualityAssessmentService().assess()
     let packets = try encodedDesignProcessPackets(from: result)
+    let encoder = JSONEncoder()
+    encoder.outputFormatting = [.sortedKeys]
 
     for packet in packets {
         let observationIDs = packet.observations.map(\.id)
         let channels = Set(packet.observations.map { $0.channel.rawValue })
+        let encodedPacket = try encoder.encode(packet)
+        let payloadMeasurement = try #require(packet.confidence.performanceMeasurements.first { measurement in
+            measurement.metric == "encodedDesignProcessPacketPayloadBytes"
+        })
+        let measuredPerformanceCount = packet.confidence.performanceMeasurements.filter { measurement in
+            measurement.status == .withinBudget || measurement.status == .exceedsBudget
+        }.count
         let hasPenaltyObservation = packet.observations.contains { observation in
             observation.severity == .warning
                 || observation.severity == .error
@@ -125,6 +134,13 @@ import RupaCore
         #expect(packet.confidence.performanceMeasurements.allSatisfy { measurement in
             measurement.status != .withinBudget || measurement.measuredValue != nil
         })
+        #expect(payloadMeasurement.status == .withinBudget)
+        #expect(payloadMeasurement.measuredValue == Double(encodedPacket.count))
+        #expect((payloadMeasurement.budgetValue ?? 0) >= Double(encodedPacket.count))
+        #expect(payloadMeasurement.source == "CADInteractionDesignProcessPerformanceBenchmarkService.agentPayloadBudgetBytes")
+        #expect(packet.confidence.notes.contains(
+            "Calibration uses \(packet.confidence.calibrationAnchors.count) anchors and \(measuredPerformanceCount)/\(packet.confidence.performanceMeasurements.count) measured performance records."
+        ))
         #expect(packet.confidence.calibrationState != .uncalibrated)
         if hasPenaltyObservation {
             #expect(packet.confidence.missingChannelPenalty > 0)

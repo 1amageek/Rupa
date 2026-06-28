@@ -125,7 +125,7 @@ struct CADInteractionDesignProcessObservationSet: Sendable {
         return .uncalibrated
     }
 
-    private func confidenceNotes(
+    func confidenceNotes(
         rating: CADInteractionQualityRating,
         calibrationAnchors: [DesignProcessCalibrationAnchor],
         performanceMeasurements: [DesignProcessPerformanceMeasurement]

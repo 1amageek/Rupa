@@ -9,9 +9,10 @@ Case sets, route surfaces, invariants, and decision records are now
 capability-specific. Observations now ingest open work, gate state, test
 evidence, route state, performance state, and FlowGraph validation directly.
 Confidence now carries calibration anchors and performance measurement records,
-including explicit unmeasured or missing-budget states. The remaining upgrade is
-to feed those records with real dense-scene benchmark fixtures instead of only
-gate-derived performance state.
+including explicit unmeasured or missing-budget states. CAD interaction packets
+also include a measured Agent JSON payload-size benchmark. The remaining
+upgrade is to feed geometry-specific records with dense-scene benchmark
+fixtures wherever those records are still gate-derived.
 
 ## Evaluation Flow
 
@@ -84,4 +85,4 @@ flowchart LR
 | Decision records | `ResolvedMapping` and `DecisionLog` | Present as packet resolution records; selected route IDs are derived from the actual route matrix and feature-specific conflicts/rationales are recorded. |
 | Observation records | `ObservationSet` and `FeedbackSignal` | Structured from open work, gate ratings, test evidence, route status, performance status, and FlowGraph validation with channel, severity, affected layer, and required next action. |
 | Connection checks | `FlowGraph` | Present and validated in Core tests; documentation-to-product and capability-specific route requirements are part of the graph. |
-| Confidence | Posterior confidence proxy | Derived from ObservationSet severity, evidence completeness, test coverage, calibration anchors, performance measurement records, and calibration state; real dense-scene benchmark fixtures remain open where current records are gate-derived or unmeasured. |
+| Confidence | Posterior confidence proxy | Derived from ObservationSet severity, evidence completeness, test coverage, calibration anchors, performance measurement records, and calibration state; Agent packet payload size is measured, while geometry-specific dense-scene benchmark fixtures remain open where current records are gate-derived or unmeasured. |

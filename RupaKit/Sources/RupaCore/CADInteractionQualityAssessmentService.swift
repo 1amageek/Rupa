@@ -1019,7 +1019,7 @@ public struct CADInteractionQualityAssessmentService: Sendable {
             flowGraphValidation: flowGraph.validate()
         )
 
-        return DesignProcessPacket(
+        let packet = DesignProcessPacket(
             id: "\(area.rawValue)-design-process",
             intent: DesignProcessIntent(
                 capabilityID: area.rawValue,
@@ -1104,6 +1104,15 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                 evidence: evidence
             )
         )
+        return CADInteractionDesignProcessPerformanceBenchmarkService.recordBenchmarks(
+            in: packet
+        ) { packet in
+            packet.confidence.notes = observationSet.confidenceNotes(
+                rating: rating,
+                calibrationAnchors: packet.confidence.calibrationAnchors,
+                performanceMeasurements: packet.confidence.performanceMeasurements
+            )
+        }
     }
 
     private static func designProcessTestReferences(
