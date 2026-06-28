@@ -3646,6 +3646,14 @@ public struct MainView: View {
         )
     }
 
+    private var projectionTargetResolver: WorkspaceProjectionTargetResolver {
+        WorkspaceProjectionTargetResolver(
+            document: session.document,
+            selection: session.selection,
+            objectRegistry: objectRegistry
+        )
+    }
+
     private func patternArrayInspectorState(for nodes: [SceneNode]) -> PatternArrayInspectorState? {
         PatternArrayInspectorState(
             selectedNodes: nodes,
@@ -3918,11 +3926,7 @@ public struct MainView: View {
     private func selectedSketchCurveProjectionTargets(
         for entity: InspectorSketchEntity
     ) -> [SelectionTarget] {
-        sketchEntityInspectorStateBuilder.curveProjectionTargets(for: entity)
-    }
-
-    private func wholeSketchCurveTarget(for target: SelectionTarget) -> SelectionTarget? {
-        sketchEntityInspectorStateBuilder.wholeCurveTarget(for: target)
+        projectionTargetResolver.sketchCurveProjectionTargets(for: entity)
     }
 
     private func selectionComponentTitle(_ component: SelectionComponent) -> String {
@@ -4240,27 +4244,7 @@ public struct MainView: View {
     private func selectedCurveProjectionTargetsForGeneratedFace(
         excluding faceTarget: SelectionTarget
     ) -> [SelectionTarget] {
-        var projectedTargets: [SelectionTarget] = []
-        var seen = Set<String>()
-        for target in session.selection.selectedTargets where target != faceTarget {
-            let curveTarget: SelectionTarget?
-            if let sketchCurveTarget = wholeSketchCurveTarget(for: target) {
-                curveTarget = sketchCurveTarget
-            } else if case .edge(let componentID) = target.component,
-                      componentID.generatedTopologyPersistentName != nil {
-                curveTarget = target
-            } else {
-                curveTarget = nil
-            }
-            guard let curveTarget else {
-                continue
-            }
-            let key = "\(curveTarget.sceneNodeID.description):\(String(describing: curveTarget.component))"
-            if seen.insert(key).inserted {
-                projectedTargets.append(curveTarget)
-            }
-        }
-        return projectedTargets
+        projectionTargetResolver.curveProjectionTargetsForGeneratedFace(excluding: faceTarget)
     }
 
     @ViewBuilder
@@ -4284,21 +4268,7 @@ public struct MainView: View {
     private func bodyOutlineProjectionTargets(
         from nodes: [SceneNode]
     ) -> [SelectionTarget] {
-        guard session.selection.selectedTargets.allSatisfy({ $0.component == .object }) else {
-            return []
-        }
-        return nodes.compactMap { node in
-            guard node.reference?.kind == .body else {
-                return nil
-            }
-            return SelectionTarget(sceneNodeID: node.id)
-        }
-    }
-
-    private func generatedEdgeProjectionTargets(
-        from targets: [SelectionTarget]
-    ) -> [SelectionTarget] {
-        topologyEditInspectorStateBuilder.generatedEdgeProjectionTargets(from: targets)
+        projectionTargetResolver.bodyOutlineProjectionTargets(from: nodes)
     }
 
     @ViewBuilder
