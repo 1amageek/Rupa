@@ -30,19 +30,35 @@ struct CADInteractionDesignProcessObservationSet: Sendable {
         let performanceRating = gates[.performanceBudget] ?? .missing
         let verificationRating = gates[.verification] ?? .missing
         let agentRating = gates[.agentParity] ?? .missing
+        let state = calibrationState(
+            verification: verificationRating,
+            performance: performanceRating,
+            agent: agentRating,
+            evidence: evidence
+        )
+        let anchors = calibrationAnchors(
+            state: state,
+            gates: gates,
+            evidence: evidence
+        )
+        let measurements = performanceMeasurements(
+            performanceRating: performanceRating,
+            evidence: evidence
+        )
 
         return DesignProcessConfidence(
             evidenceFreshness: evidenceFreshness(from: evidence),
             testCoverage: testCoverage(from: evidence),
             performanceCoverage: performanceCoverage(from: performanceRating),
             missingChannelPenalty: missingChannelPenalty,
-            calibrationState: calibrationState(
-                verification: verificationRating,
-                performance: performanceRating,
-                agent: agentRating,
-                evidence: evidence
-            ),
-            notes: confidenceNotes(rating: rating)
+            calibrationState: state,
+            calibrationAnchors: anchors,
+            performanceMeasurements: measurements,
+            notes: confidenceNotes(
+                rating: rating,
+                calibrationAnchors: anchors,
+                performanceMeasurements: measurements
+            )
         )
     }
 
@@ -110,17 +126,127 @@ struct CADInteractionDesignProcessObservationSet: Sendable {
     }
 
     private func confidenceNotes(
-        rating: CADInteractionQualityRating
+        rating: CADInteractionQualityRating,
+        calibrationAnchors: [DesignProcessCalibrationAnchor],
+        performanceMeasurements: [DesignProcessPerformanceMeasurement]
     ) -> [String] {
         let warningCount = observations.filter { $0.severity == .warning }.count
         let errorCount = observations.filter { $0.severity == .error }.count
         let blockingCount = observations.filter { $0.severity == .blocking }.count
         let channels = Self.unique(observations.map { $0.channel.rawValue })
+        let measuredPerformanceCount = performanceMeasurements.filter { measurement in
+            measurement.status == .withinBudget || measurement.status == .exceedsBudget
+        }.count
 
         return [
-            "Confidence is derived from the ObservationSet, test evidence, performance gate, and calibration state.",
+            "Confidence is derived from the ObservationSet, calibration anchors, test evidence, performance measurements, and calibration state.",
             "ObservationSet contains \(observations.count) observations across \(channels.count) channels.",
+            "Calibration uses \(calibrationAnchors.count) anchors and \(measuredPerformanceCount)/\(performanceMeasurements.count) measured performance records.",
             "Current CAD quality rating is \(rating.rawValue); warning/error/blocking observations are \(warningCount)/\(errorCount)/\(blockingCount).",
+        ]
+    }
+
+    private func calibrationAnchors(
+        state: DesignProcessCalibrationState,
+        gates: [CADInteractionQualityGate: CADInteractionQualityRating],
+        evidence: [CADInteractionQualityEvidence]
+    ) -> [DesignProcessCalibrationAnchor] {
+        var anchors: [DesignProcessCalibrationAnchor] = []
+        let tests = Self.unique(evidence.flatMap(\.tests))
+        if !tests.isEmpty {
+            anchors.append(
+                DesignProcessCalibrationAnchor(
+                    id: "automated-test-evidence",
+                    title: "Automated test evidence",
+                    channel: .automatedTest,
+                    affectedLayer: .evaluation,
+                    state: (gates[.verification] ?? .missing).score >= CADInteractionQualityRating.implemented.score
+                        ? .agentReadable
+                        : .humanAnchored,
+                    summary: "\(tests.count) focused test references are attached to this packet.",
+                    evidence: tests
+                )
+            )
+        }
+
+        let humanReviewObservations = observations.filter { $0.channel == .humanReview }
+        if !humanReviewObservations.isEmpty {
+            anchors.append(
+                DesignProcessCalibrationAnchor(
+                    id: "human-review-observations",
+                    title: "Human review observations",
+                    channel: .humanReview,
+                    affectedLayer: .evaluation,
+                    state: .humanAnchored,
+                    summary: "\(humanReviewObservations.count) open review observations constrain the confidence score.",
+                    evidence: humanReviewObservations.map(\.summary)
+                )
+            )
+        }
+
+        let agentRating = gates[.agentParity] ?? .missing
+        if agentRating.score >= CADInteractionQualityRating.implemented.score {
+            anchors.append(
+                DesignProcessCalibrationAnchor(
+                    id: "agent-readback-route",
+                    title: "Agent readback route",
+                    channel: .agentReadback,
+                    affectedLayer: .agent,
+                    state: .agentReadable,
+                    summary: "Agent parity is \(agentRating.rawValue), so Agent-readable confidence can cite this route.",
+                    evidence: observations
+                        .filter { $0.channel == .agentReadback }
+                        .map(\.summary)
+                )
+            )
+        }
+
+        let performanceRating = gates[.performanceBudget] ?? .missing
+        if performanceRating.score > CADInteractionQualityRating.missing.score {
+            anchors.append(
+                DesignProcessCalibrationAnchor(
+                    id: "performance-budget-gate",
+                    title: "Performance budget gate",
+                    channel: .performanceMeasurement,
+                    affectedLayer: .measurement,
+                    state: state == .measurementCalibrated ? .measurementCalibrated : .humanAnchored,
+                    summary: "Performance budget gate is \(performanceRating.rawValue).",
+                    evidence: observations
+                        .filter { $0.channel == .performanceMeasurement }
+                        .map(\.summary)
+                )
+            )
+        }
+
+        return anchors
+    }
+
+    private func performanceMeasurements(
+        performanceRating: CADInteractionQualityRating,
+        evidence: [CADInteractionQualityEvidence]
+    ) -> [DesignProcessPerformanceMeasurement] {
+        [
+            DesignProcessPerformanceMeasurement(
+                id: "performance-budget-gate",
+                title: "Performance budget gate",
+                metric: "performanceBudgetGate",
+                unit: "ratingScore",
+                measuredValue: Double(performanceRating.score),
+                budgetValue: Double(CADInteractionQualityRating.verified.score),
+                status: performanceMeasurementStatus(for: performanceRating),
+                source: "CADInteractionQualityGate.performanceBudget",
+                notes: [
+                    "This record is a gate-derived calibration fixture, not an elapsed-time benchmark.",
+                    "Attach measured dense-scene timings before treating the performance budget as fully calibrated.",
+                ] + Self.unique(evidence.flatMap(\.notes)).filter { note in
+                    let lowered = note.lowercased()
+                    return lowered.contains("performance")
+                        || lowered.contains("budget")
+                        || lowered.contains("metric")
+                        || lowered.contains("timing")
+                        || lowered.contains("readback")
+                }
+            ),
         ]
     }
 
@@ -287,6 +413,19 @@ private func observationSeverity(
         .warning
     case .implemented, .verified:
         .info
+    }
+}
+
+private func performanceMeasurementStatus(
+    for rating: CADInteractionQualityRating
+) -> DesignProcessPerformanceMeasurementStatus {
+    switch rating {
+    case .verified:
+        .withinBudget
+    case .implemented, .partial:
+        .missingBudget
+    case .planned, .missing:
+        .unmeasured
     }
 }
 

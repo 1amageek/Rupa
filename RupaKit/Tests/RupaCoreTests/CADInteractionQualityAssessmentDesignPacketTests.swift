@@ -109,6 +109,22 @@ import RupaCore
         #expect(channels.contains(DesignProcessObservationChannel.runtimeDiagnostic.rawValue))
         #expect(packet.observations.allSatisfy { !$0.summary.isEmpty && !$0.requiredNextAction.isEmpty })
         #expect(packet.confidence.notes.contains { $0.contains("ObservationSet") })
+        #expect(packet.confidence.notes.contains { $0.contains("Calibration uses") })
+        #expect(!packet.confidence.calibrationAnchors.isEmpty)
+        #expect(!packet.confidence.performanceMeasurements.isEmpty)
+        #expect(packet.confidence.calibrationAnchors.allSatisfy { anchor in
+            !anchor.id.isEmpty && !anchor.title.isEmpty && !anchor.summary.isEmpty
+        })
+        #expect(packet.confidence.performanceMeasurements.allSatisfy { measurement in
+            !measurement.id.isEmpty
+                && !measurement.title.isEmpty
+                && !measurement.metric.isEmpty
+                && !measurement.unit.isEmpty
+                && !measurement.source.isEmpty
+        })
+        #expect(packet.confidence.performanceMeasurements.allSatisfy { measurement in
+            measurement.status != .withinBudget || measurement.measuredValue != nil
+        })
         #expect(packet.confidence.calibrationState != .uncalibrated)
         if hasPenaltyObservation {
             #expect(packet.confidence.missingChannelPenalty > 0)

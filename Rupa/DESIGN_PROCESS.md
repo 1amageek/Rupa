@@ -54,15 +54,16 @@ tracked assessment entry, but the fields must be explicit.
 
 The current Rupa documents already cover many pieces of the process, and the
 CAD interaction assessment now emits first-class design packets. The remaining
-work is to keep the packet maturity visible and to calibrate confidence against
-external review and measured performance anchors.
+work is to keep packet maturity visible and to replace gate-derived performance
+records with real dense-scene benchmark fixtures where capabilities still lack
+measurements.
 
 | Current document or service | Current role | Required upgrade |
 |---|---|---|
 | `GOAL_STATEMENT.md` | Release completion loop | Reference this process as the required design gate before implementation. |
 | `CAD_QUALITY_MILESTONES.md` | CAD completion gates and roadmap | Attach each milestone slice to explicit `CaseSet`, `MappingSpec`, and `FlowGraph` requirements. |
-| `CAD_UI_OBJECTIVE_EVALUATION.md` | Objective rating model | Treat assessment entries as `ValidatedArtifact`, `ObservationSet`, and confidence records, then calibrate external review/performance anchors. |
-| `CADInteractionQualityAssessmentService` | Agent-readable assessment | Emit machine-readable design packets with evidence, open work, route observations, performance observations, and confidence. |
+| `CAD_UI_OBJECTIVE_EVALUATION.md` | Objective rating model | Treat assessment entries as `ValidatedArtifact`, `ObservationSet`, confidence, calibration-anchor, and performance-measurement records. |
+| `CADInteractionQualityAssessmentService` | Agent-readable assessment | Emit machine-readable design packets with evidence, open work, route observations, performance observations, calibration anchors, performance measurement records, and confidence. |
 | `CAD_INTERACTION_ARCHITECTURE.md` | Interaction layer contract | Use `FlowGraph` checks to prove UI, command, source, evaluation, and Agent routes are connected. |
 | `IMPLEMENTATION_STATUS.md` | Status ledger | Report progress by design packet maturity, not only feature count. |
 
@@ -77,9 +78,9 @@ These are the process foundations that gate broad feature work.
 | `MappingSpec` | UI, Core, Automation, Agent, CLI, and kernel routes can drift apart. | Implemented with capability-specific route matrices and selected route IDs. |
 | `DecisionLog` | Tradeoffs and rejected routes can disappear, making future refactors repeat old mistakes. | Implemented with packet decision records tied to actual route IDs. |
 | `ObservationSet` | Reviews, test coverage, route drift, and performance gaps must become structured feedback. | Implemented for CAD interaction packets from open work, gate ratings, test evidence, route status, performance status, and FlowGraph validation. |
-| Confidence | `implemented` and `verified` ratings must distinguish missing channels and stale evidence. | Partially implemented from ObservationSet, evidence completeness, tests, performance gate, and calibration state; external calibration anchors remain open. |
+| Confidence | `implemented` and `verified` ratings must distinguish missing channels and stale evidence. | Implemented from ObservationSet, evidence completeness, tests, calibration anchors, performance measurement records, and calibration state. Current measurement records remain gate-derived or unmeasured until each capability supplies dense-scene benchmarks. |
 | `FlowGraph` | A feature can exist in Core but remain unreachable from UI, Agent, CLI, or diagnostics. | Implemented with static connection checks for required capability routes. |
-| Evaluation calibration | Subjective UI or modeling-quality judgments cannot be delegated safely. | Open: add evaluator calibration with human anchors and measured evidence before raising confidence beyond packet-derived signals. |
+| Evaluation calibration | Subjective UI or modeling-quality judgments cannot be delegated safely. | Implemented at the packet level with calibration anchors. Production calibration still depends on feeding measured benchmark fixtures and review anchors into those records. |
 
 ## Implementation Order From Missing Foundations
 
@@ -104,7 +105,7 @@ flowchart TD
 | D2 | Make missing cases visible | Implemented | Assessment entries expose supported, rejected, missing, and performance case groups. |
 | D3 | Make route drift visible | Implemented | Static checks detect missing UI, Core, Automation, Agent, CLI, kernel, evaluation, or diagnostics routes where a capability claims support. |
 | D4 | Make reviews actionable | Implemented | Review findings, test evidence, route drift, performance status, and FlowGraph validation are recorded as observations routed to the right design layer. |
-| D5 | Make confidence meaningful | Partial | Agent-readable confidence reflects ObservationSet severity, evidence, missing channels, performance data, and calibration state; external calibration anchors remain open. |
+| D5 | Make confidence meaningful | Implemented at packet level | Agent-readable confidence reflects ObservationSet severity, evidence, missing channels, calibration anchors, performance measurement records, and calibration state; capability teams must replace gate-derived/unmeasured performance records with dense-scene benchmark fixtures. |
 
 ## Feature Implementation Rule
 
