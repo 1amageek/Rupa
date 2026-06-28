@@ -1857,6 +1857,30 @@ public struct CLIService {
         )
     }
 
+    public func setSurfaceKnotMultiplicity(
+        target: CLIDocumentTarget,
+        reference: SelectionReference,
+        multiplicity: Int,
+        mode: CLIEditMode = .auto,
+        expectedGeneration: DocumentGeneration? = nil,
+        dryRun: Bool = false,
+        forceFileEdit: Bool = false,
+        client: AgentClientProtocol? = nil
+    ) throws -> CLIResponse {
+        try executeModelingCommand(
+            .setSurfaceKnotMultiplicity(
+                target: reference,
+                multiplicity: multiplicity
+            ),
+            target: target,
+            mode: mode,
+            expectedGeneration: expectedGeneration,
+            dryRun: dryRun,
+            forceFileEdit: forceFileEdit,
+            client: client
+        )
+    }
+
     public func slideSurfaceControlPoints(
         target: CLIDocumentTarget,
         references: [SelectionReference],

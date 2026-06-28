@@ -72,6 +72,7 @@ import SwiftCAD
     #expect(capabilities.contains("setSurfaceControlPointWeight"))
     #expect(capabilities.contains("setSurfaceKnotValue"))
     #expect(capabilities.contains("insertSurfaceKnot"))
+    #expect(capabilities.contains("setSurfaceKnotMultiplicity"))
     #expect(capabilities.contains("setSurfaceControlPointDisplay"))
     #expect(capabilities.contains("setSurfaceFrameDisplay"))
     #expect(capabilities.contains("slidePolySplineSurfaceVertices"))
@@ -173,6 +174,9 @@ import SwiftCAD
     let surfaceControlPointWeight = try #require(descriptors.first { $0.name == "setSurfaceControlPointWeight" })
     let surfaceKnotValue = try #require(descriptors.first { $0.name == "setSurfaceKnotValue" })
     let surfaceKnotInsertion = try #require(descriptors.first { $0.name == "insertSurfaceKnot" })
+    let surfaceKnotMultiplicity = try #require(
+        descriptors.first { $0.name == "setSurfaceKnotMultiplicity" }
+    )
     let surfaceControlPointDisplay = try #require(descriptors.first { $0.name == "setSurfaceControlPointDisplay" })
     let surfaceFrameDisplay = try #require(descriptors.first { $0.name == "setSurfaceFrameDisplay" })
     let polySplineVertexSlide = try #require(descriptors.first { $0.name == "slidePolySplineSurfaceVertices" })
@@ -611,6 +615,19 @@ import SwiftCAD
     #expect(surfaceKnotInsertion.summary.contains("increase multiplicity"))
     #expect(surfaceKnotInsertion.failureMode.contains("selected span"))
     #expect(surfaceKnotInsertion.failureMode.contains("saturated knot multiplicity"))
+
+    #expect(surfaceKnotMultiplicity.category == .solid)
+    #expect(surfaceKnotMultiplicity.mutatesDocument)
+    #expect(surfaceKnotMultiplicity.access == .automationCommand)
+    #expect(surfaceKnotMultiplicity.discovery.contains(.surfaceSourceSummary))
+    #expect(surfaceKnotMultiplicity.discovery.contains(.surfaceFrames))
+    #expect(surfaceKnotMultiplicity.discovery.contains(.surfaceAnalysis))
+    #expect(surfaceKnotMultiplicity.discovery.contains(.surfaceContinuitySummary))
+    #expect(surfaceKnotMultiplicity.targets == [.surfaceKnot])
+    #expect(surfaceKnotMultiplicity.summary.contains("explicit higher multiplicity"))
+    #expect(surfaceKnotMultiplicity.summary.contains("shape-preserving knot insertion"))
+    #expect(surfaceKnotMultiplicity.failureMode.contains("lower or equal multiplicities"))
+    #expect(surfaceKnotMultiplicity.failureMode.contains("surface degree"))
 
     #expect(surfaceControlPointDisplay.category == .solid)
     #expect(surfaceControlPointDisplay.mutatesDocument)

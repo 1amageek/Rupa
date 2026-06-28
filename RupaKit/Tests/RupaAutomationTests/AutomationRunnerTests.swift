@@ -575,6 +575,47 @@ import SwiftCAD
 }
 
 @MainActor
+@Test func automationCanSetSurfaceKnotMultiplicity() async throws {
+    let session = EditorSession()
+    let runner = AutomationRunner()
+    let sourceSurface = automationDirectBSplineSurfaceWithInteriorKnots()
+    _ = try runner.execute(
+        .createBSplineSurface(
+            name: "Automation Explicit Multiplicity Surface",
+            surface: sourceSurface
+        ),
+        in: session
+    )
+    let summary = try SurfaceSourceSummaryService().summarize(document: session.document)
+    let knot = try #require(
+        summary.sources.first?.patches.first?.basis.uKnotVector.first { $0.index == 3 }
+    )
+    let knotReference = try #require(knot.selectionReference)
+
+    let result = try runner.execute(
+        .setSurfaceKnotMultiplicity(
+            target: knotReference,
+            multiplicity: 2
+        ),
+        in: session
+    )
+
+    let featureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let feature = try #require(session.document.cadDocument.designGraph.nodes[featureID])
+    guard case let .bSplineSurface(surfaceFeature) = feature.operation else {
+        Issue.record("Automation must keep a direct B-spline surface feature.")
+        return
+    }
+    #expect(result.message == "Surface knot multiplicity updated.")
+    #expect(result.commandName == "setSurfaceKnotMultiplicity")
+    #expect(result.didMutate)
+    #expect(result.generation == DocumentGeneration(2))
+    #expect(surfaceFeature.surface.uKnots == [0.0, 0.0, 0.0, 0.5, 0.5, 1.0, 1.0, 1.0])
+    #expect(surfaceFeature.surface.vKnots == sourceSurface.vKnots)
+    #expect(surfaceFeature.surface.uControlPointCount == sourceSurface.uControlPointCount + 1)
+}
+
+@MainActor
 @Test func automationCanCreateSweepSourceFeature() async throws {
     var document = DesignDocument.empty()
     let profileID = try document.createRectangleSketch(
@@ -4814,6 +4855,23 @@ private func automationPolySplineQuadMesh() -> Mesh {
             Point3D(x: 0.0, y: 0.02, z: 0.0),
         ],
         indices: [0, 1, 2, 0, 2, 3]
+    )
+}
+
+private func automationDirectBSplineSurfaceWithInteriorKnots() -> BSplineSurface3D {
+    let base = BSplineSurface3D.cubicBezierPatch(
+        bottomLeft: Point3D(x: 0.0, y: 0.0, z: 0.0),
+        bottomRight: Point3D(x: 0.02, y: 0.0, z: 0.0),
+        topRight: Point3D(x: 0.02, y: 0.02, z: 0.0),
+        topLeft: Point3D(x: 0.0, y: 0.02, z: 0.0)
+    )
+    return BSplineSurface3D(
+        uDegree: 2,
+        vDegree: 2,
+        uKnots: [0.0, 0.0, 0.0, 0.5, 1.0, 1.0, 1.0],
+        vKnots: [0.0, 0.0, 0.0, 0.5, 1.0, 1.0, 1.0],
+        controlPoints: base.controlPoints,
+        weights: base.weights
     )
 }
 

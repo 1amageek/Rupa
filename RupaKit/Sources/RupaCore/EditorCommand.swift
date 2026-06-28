@@ -288,6 +288,10 @@ public enum EditorCommand: Codable, Equatable, Sendable {
         target: SelectionReference,
         value: CADExpression
     )
+    case setSurfaceKnotMultiplicity(
+        target: SelectionReference,
+        multiplicity: Int
+    )
     case slidePolySplineSurfaceVertices(
         targets: [SelectionTarget],
         direction: PolySplineSurfaceVertexSlideDirection,
@@ -512,6 +516,8 @@ public enum EditorCommand: Codable, Equatable, Sendable {
             "setSurfaceKnotValue"
         case .insertSurfaceKnot:
             "insertSurfaceKnot"
+        case .setSurfaceKnotMultiplicity:
+            "setSurfaceKnotMultiplicity"
         case .slidePolySplineSurfaceVertices:
             "slidePolySplineSurfaceVertices"
         case .slideSurfaceControlPoints:
@@ -622,6 +628,7 @@ public enum EditorCommand: Codable, Equatable, Sendable {
              .setSurfaceControlPointWeight,
              .setSurfaceKnotValue,
              .insertSurfaceKnot,
+             .setSurfaceKnotMultiplicity,
              .slidePolySplineSurfaceVertices,
              .slideSurfaceControlPoints,
              .createExtrudedRectangle,

@@ -32,10 +32,14 @@ import Testing
     #expect(state.editabilityTitle == "Editable")
     #expect(state.canSetKnotValue)
     #expect(state.canInsertKnot)
+    #expect(state.canSetKnotMultiplicity)
     #expect(state.selectedReferences == [reference])
     #expect(state.clampedKnotValue(0.0) ?? 0.0 > 0.0)
     #expect(state.clampedKnotValue(1.0) ?? 0.0 < 1.0)
     #expect(state.clampedInsertionValue(0.25) == 0.5)
+    #expect(state.defaultKnotMultiplicity(fallback: 3) == 2)
+    #expect(state.clampedKnotMultiplicity(1) == 2)
+    #expect(state.clampedKnotMultiplicity(3) == 2)
 }
 
 @Test func surfaceParameterInspectorStateReportsSurfaceParameterAddressSelection() throws {
@@ -65,6 +69,7 @@ import Testing
     #expect(state.hasResolvedFrames == false)
     #expect(state.canSetKnotValue == false)
     #expect(state.canInsertKnot == false)
+    #expect(state.canSetKnotMultiplicity == false)
     #expect(state.canToggleFrameDisplay)
     #expect(state.selectedFrameQueries == [SurfaceFrameQuery(selectionReference: reference)])
 }
@@ -95,6 +100,7 @@ import Testing
     #expect(state.editabilityTitle == "Editable")
     #expect(state.canSetKnotValue == false)
     #expect(state.canInsertKnot)
+    #expect(state.canSetKnotMultiplicity == false)
     #expect(state.defaultInsertionValue(fallback: 0.1) == 0.25)
     #expect(state.clampedInsertionValue(0.0) ?? 0.0 > 0.0)
     #expect(state.clampedInsertionValue(0.5) ?? 0.0 < 0.5)
@@ -153,6 +159,38 @@ import Testing
     #expect(state.editabilityTitle == "Read Only")
     #expect(state.canSetKnotValue == false)
     #expect(state.canInsertKnot == false)
+    #expect(state.canSetKnotMultiplicity == false)
+}
+
+@Test func surfaceParameterInspectorStateHidesMultiplicityControlForSaturatedKnot() throws {
+    var document = DesignDocument.empty()
+    _ = try document.createBSplineSurface(
+        name: "Inspector Saturated Knot Surface",
+        surface: surfaceParameterInspectorDirectBSplineSurface()
+    )
+
+    let summary = try SurfaceSourceSummaryService().summarize(document: document)
+    let patch = try #require(summary.sources.first?.patches.first)
+    let knot = try #require(patch.basis.uKnotVector.first { $0.index == 3 })
+    let reference = try #require(knot.selectionReference)
+    try document.setSurfaceKnotMultiplicity(
+        target: reference,
+        multiplicity: 2
+    )
+
+    let updatedSummary = try SurfaceSourceSummaryService().summarize(document: document)
+    let updatedPatch = try #require(updatedSummary.sources.first?.patches.first)
+    let saturatedKnot = try #require(updatedPatch.basis.uKnotVector.first { $0.index == 3 })
+    let saturatedReference = try #require(saturatedKnot.selectionReference)
+    let state = try #require(SurfaceParameterInspectorState(
+        selectedReferences: [saturatedReference],
+        summaryResult: updatedSummary
+    ))
+
+    #expect(state.multiplicityTitle == "2")
+    #expect(state.canInsertKnot == false)
+    #expect(state.canSetKnotMultiplicity == false)
+    #expect(state.clampedKnotMultiplicity(2) == nil)
 }
 
 @Test func surfaceParameterInspectorStateRejectsNonParameterReferences() throws {

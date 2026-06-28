@@ -633,6 +633,76 @@ import Testing
     }
 }
 
+@Test func directBSplineSurfaceKnotReferenceSetsExplicitKnotMultiplicity() async throws {
+    var document = DesignDocument.empty()
+    let surface = designDocumentDirectBSplineSurfaceWithInteriorKnots()
+
+    let featureID = try document.createBSplineSurface(
+        name: "Direct Explicit Multiplicity Surface",
+        surface: surface
+    )
+    let summary = try SurfaceSourceSummaryService().summarize(document: document)
+    let patch = try #require(summary.sources.first?.patches.first)
+    let editableKnot = try #require(patch.basis.uKnotVector.first { $0.index == 3 })
+    #expect(editableKnot.value == 0.5)
+    #expect(editableKnot.multiplicity == 1)
+    #expect(editableKnot.isEditable)
+    let knotReference = try #require(editableKnot.selectionReference)
+
+    try document.setSurfaceKnotMultiplicity(
+        target: knotReference,
+        multiplicity: 2
+    )
+
+    let feature = try #require(document.cadDocument.designGraph.nodes[featureID])
+    guard case let .bSplineSurface(surfaceFeature) = feature.operation else {
+        Issue.record("Expected a direct B-spline surface feature.")
+        return
+    }
+    #expect(surfaceFeature.surface.uKnots == [0.0, 0.0, 0.0, 0.5, 0.5, 1.0, 1.0, 1.0])
+    #expect(surfaceFeature.surface.vKnots == surface.vKnots)
+    #expect(surfaceFeature.surface.uControlPointCount == surface.uControlPointCount + 1)
+    #expect(surfaceFeature.surface.vControlPointCount == surface.vControlPointCount)
+    for u in [0.0, 0.2, 0.5, 0.8, 1.0] {
+        for v in [0.0, 0.3, 0.6, 1.0] {
+            let before = try surface.point(u: u, v: v)
+            let after = try surfaceFeature.surface.point(u: u, v: v)
+            #expect(abs(before.x - after.x) <= 1.0e-10)
+            #expect(abs(before.y - after.y) <= 1.0e-10)
+            #expect(abs(before.z - after.z) <= 1.0e-10)
+        }
+    }
+
+    let updatedSummary = try SurfaceSourceSummaryService().summarize(document: document)
+    let repeatedKnots = try #require(
+        updatedSummary.sources.first?.patches.first?.basis.uKnotVector.filter { $0.value == 0.5 }
+    )
+    #expect(repeatedKnots.count == 2)
+    #expect(repeatedKnots.allSatisfy { $0.multiplicity == 2 })
+    #expect(repeatedKnots.allSatisfy { $0.isEditable })
+
+    let boundaryKnot = try #require(patch.basis.uKnotVector.first { $0.index == 0 })
+    let boundaryReference = try #require(boundaryKnot.selectionReference)
+    #expect(throws: EditorError.self) {
+        try document.setSurfaceKnotMultiplicity(
+            target: boundaryReference,
+            multiplicity: 2
+        )
+    }
+    #expect(throws: EditorError.self) {
+        try document.setSurfaceKnotMultiplicity(
+            target: knotReference,
+            multiplicity: 2
+        )
+    }
+    #expect(throws: EditorError.self) {
+        try document.setSurfaceKnotMultiplicity(
+            target: knotReference,
+            multiplicity: 3
+        )
+    }
+}
+
 @Test func polySplineSurfaceVertexMoveRejectsNonVertexTargets() async throws {
     var document = DesignDocument.empty()
 

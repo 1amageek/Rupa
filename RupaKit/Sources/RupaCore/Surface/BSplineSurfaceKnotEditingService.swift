@@ -66,6 +66,48 @@ struct BSplineSurfaceKnotEditingService: Sendable {
         return updatedFeature
     }
 
+    func updatedFeature(
+        settingMultiplicity multiplicity: Int,
+        for reference: SurfaceKnotReference,
+        in feature: BSplineSurfaceFeature,
+        owner: String
+    ) throws -> BSplineSurfaceFeature {
+        let knot = try editableKnot(
+            for: reference,
+            in: feature.surface,
+            owner: owner
+        )
+        guard multiplicity > knot.multiplicity else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "\(owner) can only increase an interior B-spline surface knot multiplicity."
+            )
+        }
+        guard multiplicity <= knot.degree else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "\(owner) requested a saturated B-spline surface knot multiplicity."
+            )
+        }
+
+        var updatedFeature = feature
+        do {
+            for _ in knot.multiplicity..<multiplicity {
+                updatedFeature.surface = try updatedFeature.surface.insertingKnot(
+                    direction: reference.direction,
+                    value: knot.value
+                )
+            }
+        } catch {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "\(owner) could not set the B-spline surface knot multiplicity: \(error)."
+            )
+        }
+        try updatedFeature.validate()
+        return updatedFeature
+    }
+
     private func updatedKnots(
         _ knots: [Double],
         degree: Int,
@@ -99,5 +141,50 @@ struct BSplineSurfaceKnotEditingService: Sendable {
         var updatedKnots = knots
         updatedKnots[index] = value
         return updatedKnots
+    }
+
+    private struct EditableKnot {
+        var value: Double
+        var multiplicity: Int
+        var degree: Int
+    }
+
+    private func editableKnot(
+        for reference: SurfaceKnotReference,
+        in surface: BSplineSurface3D,
+        owner: String
+    ) throws -> EditableKnot {
+        let knots: [Double]
+        let degree: Int
+        switch reference.direction {
+        case .u:
+            knots = surface.uKnots
+            degree = surface.uDegree
+        case .v:
+            knots = surface.vKnots
+            degree = surface.vDegree
+        }
+        guard knots.indices.contains(reference.knotIndex) else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "\(owner) references a missing B-spline surface knot."
+            )
+        }
+        let firstInteriorKnotIndex = degree + 1
+        let lastInteriorKnotIndex = knots.count - degree - 2
+        guard firstInteriorKnotIndex <= lastInteriorKnotIndex,
+              (firstInteriorKnotIndex ... lastInteriorKnotIndex).contains(reference.knotIndex) else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "\(owner) can edit only interior B-spline surface knots."
+            )
+        }
+        let value = knots[reference.knotIndex]
+        let tolerance = ModelingTolerance.standard.distance
+        return EditableKnot(
+            value: value,
+            multiplicity: knots.filter { abs($0 - value) <= tolerance }.count,
+            degree: degree
+        )
     }
 }

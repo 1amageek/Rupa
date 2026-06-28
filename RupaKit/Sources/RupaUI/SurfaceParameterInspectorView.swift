@@ -5,8 +5,10 @@ import SwiftUI
 struct SurfaceParameterInspectorView: View {
     let state: SurfaceParameterInspectorState
     @Binding var knotInsertionValue: Double
+    @Binding var knotMultiplicityValue: Int
     let onSetKnotValue: (SelectionReference, Double) -> Void
     let onInsertKnot: (SelectionReference, Double) -> Void
+    let onSetKnotMultiplicity: (SelectionReference, Int) -> Void
     let onSetFrameDisplay: ([SurfaceFrameQuery], Bool) -> Void
 
     var body: some View {
@@ -24,6 +26,7 @@ struct SurfaceParameterInspectorView: View {
             inspectorRow("Edit", state.editabilityTitle)
             frameDisplayStatus
             knotValueControl
+            multiplicityControl
             insertionControl
             frameDetailRows
             frameDisplayControls
@@ -54,6 +57,44 @@ struct SurfaceParameterInspectorView: View {
                 onSetKnotValue(entry.selectionReference, clampedValue)
             }
             .accessibilityIdentifier("InspectorSurfaceParameter.knot.value")
+        }
+    }
+
+    @ViewBuilder
+    private var multiplicityControl: some View {
+        if state.canSetKnotMultiplicity,
+           let entry = state.entries.first,
+           let range = entry.knotMultiplicityRange {
+            inspectorControlRow("Set Mult.") {
+                HStack(spacing: 8) {
+                    Text("\(multiplicityDraftValue(range: range))")
+                        .monospacedDigit()
+                        .frame(width: 28, alignment: .trailing)
+                    Stepper(
+                        "",
+                        value: multiplicityBinding(range: range),
+                        in: range
+                    )
+                    .labelsHidden()
+                }
+            }
+            .accessibilityIdentifier("InspectorSurfaceParameter.knot.multiplicityValue")
+
+            inspectorActionRow {
+                inspectorIconButton(
+                    systemImage: "checkmark",
+                    help: "Set Surface Knot Multiplicity",
+                    accessibilityIdentifier: "InspectorSurfaceParameter.knot.multiplicity"
+                ) {
+                    guard let clampedValue = state.clampedKnotMultiplicity(
+                        multiplicityDraftValue(range: range)
+                    ) else {
+                        return
+                    }
+                    knotMultiplicityValue = clampedValue
+                    onSetKnotMultiplicity(entry.selectionReference, clampedValue)
+                }
+            }
         }
     }
 
@@ -139,6 +180,24 @@ struct SurfaceParameterInspectorView: View {
                 onInsertKnot(entry.selectionReference, clampedValue)
             }
         }
+    }
+
+    private func multiplicityDraftValue(range: ClosedRange<Int>) -> Int {
+        if range.contains(knotMultiplicityValue) {
+            return knotMultiplicityValue
+        }
+        return state.defaultKnotMultiplicity(fallback: range.lowerBound)
+    }
+
+    private func multiplicityBinding(range: ClosedRange<Int>) -> Binding<Int> {
+        Binding<Int>(
+            get: {
+                multiplicityDraftValue(range: range)
+            },
+            set: { newValue in
+                knotMultiplicityValue = min(max(newValue, range.lowerBound), range.upperBound)
+            }
+        )
     }
 
     private func insertionDraftValue(range: ClosedRange<Double>) -> Double {

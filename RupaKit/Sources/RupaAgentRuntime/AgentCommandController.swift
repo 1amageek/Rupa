@@ -1231,6 +1231,16 @@ public final class AgentCommandController: AgentClientProtocol {
             failureMode: "Accepts editable direct B-spline surface span references and editable internal knot references discovered from surfaceSourceSummary; rejects boundary-only or missing spans, boundary knots, PolySpline generated spans or knots, non-span and non-knot references, non-scalar values, values outside the selected span, values that do not match a selected existing knot, saturated knot multiplicity, stale generations, non-editable surface sources, and invalid rebuilt B-spline sheet topology."
         ),
         capability(
+            "setSurfaceKnotMultiplicity",
+            category: .solid,
+            summary: "Set an editable direct B-spline surface internal knot to an explicit higher multiplicity by shape-preserving knot insertion, allowing agents to control local continuity without changing the represented surface shape.",
+            access: .automationCommand,
+            mutatesDocument: true,
+            discovery: [.surfaceSourceSummary, .surfaceFrames, .surfaceAnalysis, .surfaceContinuitySummary],
+            targets: [.surfaceKnot],
+            failureMode: "Accepts editable direct B-spline surface internal knot references discovered from surfaceSourceSummary and a requested multiplicity greater than the current multiplicity and no greater than the surface degree in that direction; rejects boundary knots, PolySpline generated knots, non-knot references, lower or equal multiplicities, saturated knot multiplicity, stale generations, non-editable surface sources, and invalid rebuilt B-spline sheet topology."
+        ),
+        capability(
             "slidePolySplineSurfaceVertices",
             category: .solid,
             summary: "Slide generated PolySpline patch boundary CVs along local surface hull U, V, or normal directions with an explicit distance.",

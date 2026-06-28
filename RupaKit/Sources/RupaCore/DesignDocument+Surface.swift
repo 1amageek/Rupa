@@ -653,6 +653,46 @@ extension DesignDocument {
         }
     }
 
+    public mutating func setSurfaceKnotMultiplicity(
+        target: SelectionReference,
+        multiplicity: Int,
+        objectRegistry: ObjectTypeRegistry = .builtIn
+    ) throws {
+        let knotReference = try resolvedBSplineSurfaceKnotReference(
+            target,
+            owner: "B-spline surface knot multiplicity"
+        )
+        guard var feature = cadDocument.designGraph.nodes[knotReference.featureID],
+              case let .bSplineSurface(surfaceFeature) = feature.operation else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "B-spline surface knot multiplicity requires an existing direct B-spline surface source feature."
+            )
+        }
+
+        let knotEditor = BSplineSurfaceKnotEditingService()
+        feature.operation = .bSplineSurface(try knotEditor.updatedFeature(
+            settingMultiplicity: multiplicity,
+            for: knotReference.reference,
+            in: surfaceFeature,
+            owner: "B-spline surface knot multiplicity"
+        ))
+
+        var updatedCADDocument = cadDocument
+        let previousCADDocument = cadDocument
+        do {
+            try updatedCADDocument.replaceFeature(feature)
+            cadDocument = updatedCADDocument
+            try validate(objectRegistry: objectRegistry)
+        } catch {
+            cadDocument = previousCADDocument
+            throw EditorError(
+                code: .commandInvalid,
+                message: "B-spline surface knot multiplicity produced invalid source geometry: \(error)."
+            )
+        }
+    }
+
     private struct BSplineSurfaceKnotResolution {
         var featureID: FeatureID
         var reference: SurfaceKnotReference

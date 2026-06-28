@@ -1278,6 +1278,17 @@ public struct AutomationRunner {
                 didMutate: result.didMutate,
                 diagnostics: result.diagnostics
             )
+        case .setSurfaceKnotMultiplicity(let target, let multiplicity):
+            let result = try session.execute(
+                .setSurfaceKnotMultiplicity(target: target, multiplicity: multiplicity)
+            )
+            return AutomationResult(
+                message: "Surface knot multiplicity updated.",
+                commandName: result.commandName,
+                generation: result.generation,
+                didMutate: result.didMutate,
+                diagnostics: result.diagnostics
+            )
         case .slidePolySplineSurfaceVertices(let targets, let direction, let distance):
             let result = try session.execute(
                 .slidePolySplineSurfaceVertices(

@@ -30,6 +30,7 @@ public struct MainView: View {
     @State private var surfaceControlPointFrameVMoveMeters: Double
     @State private var surfaceControlPointFrameNormalMoveMeters: Double
     @State private var surfaceKnotInsertionValue: Double
+    @State private var surfaceKnotMultiplicityValue: Int
     @State private var sketchSplineControlPointSlideCount: Int
     @State private var slideCommandState: SlideCommandState
     @State private var sketchSplitFraction: Double
@@ -100,6 +101,7 @@ public struct MainView: View {
         self._surfaceControlPointFrameVMoveMeters = State(initialValue: 0.0)
         self._surfaceControlPointFrameNormalMoveMeters = State(initialValue: 0.001)
         self._surfaceKnotInsertionValue = State(initialValue: 0.5)
+        self._surfaceKnotMultiplicityValue = State(initialValue: 2)
         self._sketchSplineControlPointSlideCount = State(initialValue: 1)
         self._slideCommandState = State(initialValue: .inactive)
         self._sketchSplitFraction = State(initialValue: 0.5)
@@ -4210,8 +4212,10 @@ public struct MainView: View {
         SurfaceParameterInspectorView(
             state: state,
             knotInsertionValue: $surfaceKnotInsertionValue,
+            knotMultiplicityValue: $surfaceKnotMultiplicityValue,
             onSetKnotValue: setSurfaceKnotValue,
             onInsertKnot: insertSurfaceKnot,
+            onSetKnotMultiplicity: setSurfaceKnotMultiplicity,
             onSetFrameDisplay: setSurfaceFrameDisplay
         )
     }
@@ -5135,6 +5139,19 @@ public struct MainView: View {
         let result = session.insertSurfaceKnot(
             target: target,
             value: .scalar(value)
+        )
+        if result?.diagnostics.isEmpty == false || result == nil {
+            isPreviewExpanded = true
+        }
+    }
+
+    private func setSurfaceKnotMultiplicity(
+        _ target: SelectionReference,
+        multiplicity: Int
+    ) {
+        let result = session.setSurfaceKnotMultiplicity(
+            target: target,
+            multiplicity: multiplicity
         )
         if result?.diagnostics.isEmpty == false || result == nil {
             isPreviewExpanded = true

@@ -28,6 +28,7 @@ struct SurfaceParameterInspectorState: Equatable, Sendable {
         var facePersistentName: String?
         var basisKind: String
         var direction: SurfaceParameterDirection
+        var directionDegree: Int?
         var kind: ParameterKind
         var index: Int
         var u: Double?
@@ -124,13 +125,37 @@ struct SurfaceParameterInspectorState: Equatable, Sendable {
             case .address:
                 return false
             case .knot:
-                return value?.isFinite == true
+                guard value?.isFinite == true,
+                      let multiplicity,
+                      let directionDegree else {
+                    return false
+                }
+                return multiplicity < directionDegree
             case .span:
                 guard let range = insertionRange else {
                     return false
                 }
                 return range.lowerBound < range.upperBound
             }
+        }
+
+        var canSetKnotMultiplicity: Bool {
+            guard kind == .knot,
+                  isEditable,
+                  let multiplicity,
+                  let directionDegree else {
+                return false
+            }
+            return multiplicity < directionDegree
+        }
+
+        var knotMultiplicityRange: ClosedRange<Int>? {
+            guard canSetKnotMultiplicity,
+                  let multiplicity,
+                  let directionDegree else {
+                return nil
+            }
+            return (multiplicity + 1) ... directionDegree
         }
 
         var knotValueRange: ClosedRange<Double>? {
@@ -303,6 +328,10 @@ struct SurfaceParameterInspectorState: Equatable, Sendable {
         entries.count == 1 && entries.allSatisfy(\.canInsertKnot)
     }
 
+    var canSetKnotMultiplicity: Bool {
+        entries.count == 1 && entries.allSatisfy(\.canSetKnotMultiplicity)
+    }
+
     var canToggleFrameDisplay: Bool {
         !entries.isEmpty && entries.allSatisfy { $0.frameQuery != nil }
     }
@@ -436,12 +465,27 @@ struct SurfaceParameterInspectorState: Equatable, Sendable {
         }
     }
 
+    func clampedKnotMultiplicity(_ value: Int) -> Int? {
+        guard canSetKnotMultiplicity,
+              let range = entries.first?.knotMultiplicityRange else {
+            return nil
+        }
+        return min(max(value, range.lowerBound), range.upperBound)
+    }
+
     func defaultInsertionValue(fallback: Double) -> Double {
         guard let entry = entries.first else {
             return fallback
         }
         let candidate = entry.recommendedInsertionValue ?? fallback
         return clampedInsertionValue(candidate) ?? fallback
+    }
+
+    func defaultKnotMultiplicity(fallback: Int) -> Int {
+        guard let range = entries.first?.knotMultiplicityRange else {
+            return fallback
+        }
+        return range.lowerBound
     }
 
     private static func entriesByReference(
@@ -531,6 +575,7 @@ struct SurfaceParameterInspectorState: Equatable, Sendable {
                 facePersistentName: patch.facePersistentName,
                 basisKind: patch.basis.kind,
                 direction: .u,
+                directionDegree: nil,
                 kind: .address,
                 index: 0,
                 u: address.u,
@@ -571,6 +616,7 @@ struct SurfaceParameterInspectorState: Equatable, Sendable {
                 facePersistentName: patch.facePersistentName,
                 basisKind: patch.basis.kind,
                 direction: .u,
+                directionDegree: nil,
                 kind: .address,
                 index: 0,
                 u: sample.u,
@@ -605,6 +651,7 @@ struct SurfaceParameterInspectorState: Equatable, Sendable {
             }
             let lowerBound = previousKnotValue(before: knot.index, in: knotValues)
             let upperBound = nextKnotValue(after: knot.index, in: knotValues)
+            let degree = directionDegree(direction, basis: patch.basis)
             entries[selectionReference] = Entry(
                 id: "feature:\(source.featureID)/patch:\(patch.patchID)/\(knot.id)",
                 sourceFeatureID: source.featureID,
@@ -614,6 +661,7 @@ struct SurfaceParameterInspectorState: Equatable, Sendable {
                 facePersistentName: patch.facePersistentName,
                 basisKind: patch.basis.kind,
                 direction: direction,
+                directionDegree: degree,
                 kind: .knot,
                 index: knot.index,
                 u: nil,
@@ -645,6 +693,7 @@ struct SurfaceParameterInspectorState: Equatable, Sendable {
             guard let selectionReference = span.selectionReference else {
                 continue
             }
+            let degree = directionDegree(direction, basis: patch.basis)
             entries[selectionReference] = Entry(
                 id: "feature:\(source.featureID)/patch:\(patch.patchID)/\(span.id)",
                 sourceFeatureID: source.featureID,
@@ -654,6 +703,7 @@ struct SurfaceParameterInspectorState: Equatable, Sendable {
                 facePersistentName: patch.facePersistentName,
                 basisKind: patch.basis.kind,
                 direction: direction,
+                directionDegree: degree,
                 kind: .span,
                 index: span.index,
                 u: nil,
@@ -725,6 +775,18 @@ struct SurfaceParameterInspectorState: Equatable, Sendable {
             return nil
         }
         return knots[nextIndex]
+    }
+
+    private static func directionDegree(
+        _ direction: SurfaceParameterDirection,
+        basis: SurfaceSourceSummaryResult.Basis
+    ) -> Int {
+        switch direction {
+        case .u:
+            return basis.uDegree
+        case .v:
+            return basis.vDegree
+        }
     }
 
     private func commonValue<T: Equatable>(_ values: [T]) -> T? {

@@ -131,7 +131,7 @@ import RupaCore
         evidence.sourceFiles.contains("RupaKit/Sources/RupaAutomation/AutomationRunner.swift")
     })
     #expect(arrays.evidence.contains { evidence in
-        evidence.sourceFiles.contains("RupaKit/Sources/RupaAgent/AgentCommandController.swift")
+        evidence.sourceFiles.contains("RupaKit/Sources/RupaAgentRuntime/AgentCommandController.swift")
     })
     #expect(arrays.evidence.contains { evidence in
         evidence.sourceFiles.contains("RupaKit/Sources/RupaUI/PatternArrayInspectorState.swift")

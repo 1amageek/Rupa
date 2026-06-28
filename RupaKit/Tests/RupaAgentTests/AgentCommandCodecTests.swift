@@ -747,6 +747,14 @@ import SwiftCAD
         ),
         expectedGeneration: DocumentGeneration(5)
     )
+    let surfaceKnotMultiplicityRequest = AgentRequest.execute(
+        sessionID: sessionID,
+        command: .setSurfaceKnotMultiplicity(
+            target: surfaceKnotReference,
+            multiplicity: 2
+        ),
+        expectedGeneration: DocumentGeneration(5)
+    )
 
     let decodedRequest = try codec.decodeRequest(from: try codec.encode(request))
     let decodedSlideRequest = try codec.decodeRequest(from: try codec.encode(slideRequest))
@@ -774,6 +782,9 @@ import SwiftCAD
     let decodedSurfaceKnotInsertionRequest = try codec.decodeRequest(
         from: try codec.encode(surfaceKnotInsertionRequest)
     )
+    let decodedSurfaceKnotMultiplicityRequest = try codec.decodeRequest(
+        from: try codec.encode(surfaceKnotMultiplicityRequest)
+    )
 
     #expect(decodedRequest == request)
     #expect(decodedSlideRequest == slideRequest)
@@ -785,6 +796,7 @@ import SwiftCAD
     #expect(decodedSurfaceControlPointSlideRequest == surfaceControlPointSlideRequest)
     #expect(decodedSurfaceKnotValueRequest == surfaceKnotValueRequest)
     #expect(decodedSurfaceKnotInsertionRequest == surfaceKnotInsertionRequest)
+    #expect(decodedSurfaceKnotMultiplicityRequest == surfaceKnotMultiplicityRequest)
 }
 
 @Test func agentMessageCodecRoundTripsPolySplineMeshAnalysis() async throws {

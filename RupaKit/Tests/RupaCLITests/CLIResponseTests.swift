@@ -3621,6 +3621,57 @@ func cliExecutableSurfaceWeightAndKnotCommandsMutateClosedDocumentAsJSON() async
 }
 
 @Test(.timeLimit(.minutes(1)))
+func cliExecutableSurfaceKnotMultiplicityCommandMutatesClosedDocumentAsJSON() async throws {
+    let temporaryDirectory = try makeTemporaryDirectory()
+    defer {
+        removeTemporaryDirectory(temporaryDirectory)
+    }
+    let documentURL = temporaryDirectory.appendingPathComponent("process-surface-knot-multiplicity.swcad")
+    var document = DesignDocument.empty(named: "Process Surface Knot Multiplicity")
+    let sourceSurface = cliDirectBSplineSurfaceWithInteriorKnots()
+    let featureID = try document.createBSplineSurface(
+        name: "CLI Explicit Multiplicity B-spline Surface",
+        surface: sourceSurface
+    )
+    let summary = try SurfaceSourceSummaryService().summarize(document: document)
+    let patch = try #require(summary.sources.first?.patches.first)
+    let editableKnot = try #require(patch.basis.uKnotVector.first { $0.index == 3 })
+    let knotJSON = try encodedSelectionReference(try #require(editableKnot.selectionReference))
+    try DocumentFileService().save(document, to: documentURL)
+
+    let result = try await runCLI([
+        "surface",
+        "set-knot-multiplicity",
+        documentURL.path,
+        "--reference",
+        knotJSON,
+        "--multiplicity",
+        "2",
+        "--mode",
+        "file",
+        "--json",
+    ])
+    let response = try JSONDecoder().decode(
+        CLIResponse.self,
+        from: result.standardOutputData
+    )
+    let loaded = try DocumentFileService().load(from: documentURL)
+    let feature = try #require(loaded.cadDocument.designGraph.nodes[featureID])
+    guard case let .bSplineSurface(surfaceFeature) = feature.operation else {
+        Issue.record("Expected a direct B-spline surface feature.")
+        return
+    }
+
+    #expect(result.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: result.standardError))
+    #expect(response.message == "Surface knot multiplicity updated.")
+    #expect(response.saved)
+    #expect(surfaceFeature.surface.uKnots == [0.0, 0.0, 0.0, 0.5, 0.5, 1.0, 1.0, 1.0])
+    #expect(surfaceFeature.surface.vKnots == sourceSurface.vKnots)
+    #expect(surfaceFeature.surface.uControlPointCount == sourceSurface.uControlPointCount + 1)
+    #expect(surfaceFeature.surface.vControlPointCount == sourceSurface.vControlPointCount)
+}
+
+@Test(.timeLimit(.minutes(1)))
 func cliExecutableSketchDimensionSummaryAndSetMutateClosedDocumentAsJSON() async throws {
     let temporaryDirectory = try makeTemporaryDirectory()
     defer {

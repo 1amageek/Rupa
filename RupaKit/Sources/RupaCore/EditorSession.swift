@@ -2177,6 +2177,19 @@ public final class EditorSession {
     }
 
     @discardableResult
+    public func setSurfaceKnotMultiplicity(
+        target: SelectionReference,
+        multiplicity: Int
+    ) -> CommandExecutionResult? {
+        perform(
+            .setSurfaceKnotMultiplicity(
+                target: target,
+                multiplicity: multiplicity
+            )
+        )
+    }
+
+    @discardableResult
     public func slidePolySplineSurfaceVertices(
         targets: [SelectionTarget],
         direction: PolySplineSurfaceVertexSlideDirection,
