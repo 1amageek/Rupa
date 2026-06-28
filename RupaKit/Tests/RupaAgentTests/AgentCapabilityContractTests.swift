@@ -500,6 +500,7 @@ import SwiftCAD
     #expect(sweepEvaluationPlan.summary.contains("Preflight"))
     #expect(sweepEvaluationPlan.summary.contains("guide strategies"))
     #expect(sweepEvaluationPlan.failureMode.contains("structured unsupported results"))
+    #expect(sweepEvaluationPlan.failureMode.contains("guide constraints that do not solve"))
     #expect(sweepEvaluationPlan.optionMatrix.map(\.name) == ["evaluationKind", "guideStrategies"])
     let sweepPlanKindAxis = try #require(
         sweepEvaluationPlan.optionMatrix.first { $0.name == "evaluationKind" }

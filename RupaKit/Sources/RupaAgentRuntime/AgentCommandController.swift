@@ -1118,7 +1118,7 @@ public final class AgentCommandController: AgentClientProtocol {
             mutatesDocument: false,
             discovery: [.sketchEntitySummary, .topologySummary, .sweepEvaluationPlan],
             targets: [.profile, .sketchEntity, .body],
-            failureMode: "Rejects stale generations, missing references, invalid option quantities, disconnected or branched path chains, unresolved target bodies, and invalid guide curves; returns structured unsupported results for current kernel capability gaps such as simplify output, sheet target booleans, profile-plane degenerate parallel alignment, and round multi-curve corner-transition topology.",
+            failureMode: "Rejects stale generations, missing references, invalid option quantities, disconnected or branched path chains, and unresolved target bodies; returns structured unsupported results for current kernel capability gaps and geometry contracts such as simplify output, sheet target booleans, profile-plane degenerate parallel alignment, round multi-curve corner-transition topology, and guide constraints that do not solve against the section and path frames before mutation.",
             optionMatrix: [
                 AgentCapabilityDescriptor.OptionAxis(
                     name: "evaluationKind",
