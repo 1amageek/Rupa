@@ -16,10 +16,32 @@ flowchart LR
 
 The goal is not only to write code. The goal is to reach an accepted release state through implementation, test execution, review, correction, and re-verification.
 
+## Design Process Gate
+
+Feature work must follow `DESIGN_PROCESS.md` before implementation begins. The
+process turns ambiguous requests into a design packet: `DesignIntent`,
+`EvaluationSpec`, `DomainModel`, `CaseSet`, `MappingSpec`,
+`ConstraintBoundMapping`, `ResolvedMapping`, `ValidatedArtifact`,
+`ObservationSet`, `FeedbackSignal`, and `FlowGraph`.
+
+```mermaid
+flowchart LR
+    Request["Request"] --> Packet["Design packet"]
+    Packet --> Implement["Implementation"]
+    Implement --> Evidence["Evidence and tests"]
+    Evidence --> Feedback["Observation and feedback"]
+    Feedback --> Packet
+```
+
+If a requested capability has no explicit case set, route mapping, or connection
+graph, that missing process artifact is the next implementation target before
+the capability is broadened.
+
 ## Completion Contract
 
 | Phase | Required result |
 |---|---|
+| Design packet | Intent, evaluation, cases, mapping, constraints, decisions, validation evidence, observations, and connection graph are explicit enough to drive implementation. |
 | Implementation | The requested behavior is implemented in the correct module boundary and follows the universal CAD model rather than domain-specific branches. |
 | Tests | Automated tests cover the new behavior, regression risk, and relevant edge cases, and are run with explicit timeout control. |
 | Review | The change is reviewed for correctness, architecture fit, command/data ownership, error handling, performance risk, and missing tests. |
@@ -35,6 +57,7 @@ A task is done only when all of these statements are true.
 | Scope | The implementation satisfies the stated requirement without adding unrelated product behavior. |
 | Architecture | The app host remains thin, RupaKit owns product behavior, and Swift-CAD remains the CAD foundation. |
 | Generality | The solution supports the universal CAD direction and does not encode video, printing, or architecture as separate product forks. |
+| Design process | The feature has an explicit design packet or an assessment entry that covers the same DBN artifacts. |
 | Units and precision | Length display and modeling behavior remain valid across micrometer-to-meter workflows. |
 | Errors | Failure paths are explicit, typed where applicable, and not silently discarded. |
 | Tests | Relevant unit, integration, UI, CLI, or automation tests exist and pass for the changed behavior. |

@@ -2,6 +2,11 @@
 
 This document defines how Rupa evaluates CAD UI quality without relying on subjective impressions. The canonical machine-readable form is `CADInteractionQualityAssessmentService` in RupaCore, and Agent callers can read it through `cadInteractionQualityAssessment`.
 
+This evaluation model is an implementation surface for `DESIGN_PROCESS.md`.
+Assessment entries currently act as `ValidatedArtifact` records. They must evolve
+to include the missing DBN process artifacts: case sets, route mappings,
+observations, confidence, and connection graph checks.
+
 ## Evaluation Flow
 
 ```mermaid
@@ -53,3 +58,24 @@ flowchart TD
 ## Rule
 
 No new CAD UI feature is complete until its assessment entry names the reference source, evidence files, tests, open work, and next required result. Screenshot comparison and UI tests are the final verification layer, not the definition of completion.
+
+## Required Upgrade
+
+```mermaid
+flowchart LR
+    Current["Current assessment entry"] --> Evidence["Evidence and open work"]
+    Evidence --> Packet["Design packet coverage"]
+    Packet --> Flow["FlowGraph check"]
+    Packet --> Confidence["Confidence"]
+    Flow --> Agent["Agent-readable result"]
+    Confidence --> Agent
+```
+
+| Missing assessment field | DBN role | Required result |
+|---|---|---|
+| Case matrix | `CaseSet` | Supported, rejected, missing, boundary, degenerate, and performance cases are visible to UI review and Agent callers. |
+| Route matrix | `MappingSpec` | UI, Core, Automation, Agent, CLI, kernel, evaluation, measurement, and diagnostics routes are explicit. |
+| Decision records | `ResolvedMapping` and `DecisionLog` | Route conflicts and source-ownership tradeoffs are recorded instead of being implicit in code. |
+| Observation records | `ObservationSet` and `FeedbackSignal` | Reviews, test failures, performance measurements, and missing channels route work back to the right layer. |
+| Connection checks | `FlowGraph` | A claimed capability cannot be unreachable from a required caller surface. |
+| Confidence | Posterior confidence proxy | Ratings account for evidence freshness, missing channels, performance data, and calibration state. |

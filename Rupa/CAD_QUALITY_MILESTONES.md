@@ -4,6 +4,11 @@
 
 This document defines the milestone gates for moving Rupa toward Plasticity-class CAD quality. A feature is not considered complete just because one UI control or one command path exists. It must satisfy the full CAD contract across source ownership, evaluation, selection, feedback, automation, and verification.
 
+This document now uses `DESIGN_PROCESS.md` as the process authority. The
+milestone gates below describe CAD completeness; the design process defines how
+an ambiguous capability request becomes the explicit cases, mappings, evidence,
+observations, and connection graph required to implement the next slice.
+
 ## Completion Model
 
 ```mermaid
@@ -30,6 +35,34 @@ flowchart LR
 | Automation and Agent | The capability is discoverable and executable through structured Automation or Agent APIs when it mutates or reads CAD state. |
 | Measurement and diagnostics | The result is measurable or explainable through structured summaries when the geometry type supports it. |
 | Verification | Unit, package, rendering, and app-build coverage exist at the same scope as the shipped behavior. |
+
+## DBN Artifact Coverage
+
+Each milestone slice must identify the DBN artifact that is currently weakest.
+The weakest artifact decides the next implementation step.
+
+```mermaid
+flowchart LR
+    Intent["Intent"] --> Cases["CaseSet"]
+    Cases --> Mapping["MappingSpec"]
+    Mapping --> Artifact["ValidatedArtifact"]
+    Artifact --> Flow["FlowGraph"]
+    Artifact --> Feedback["Observation"]
+    Feedback --> Intent
+```
+
+| DBN artifact | Milestone meaning | Completion signal |
+|---|---|---|
+| `DesignIntent` | The product-level capability and owner are clear. | The capability appears in the roadmap with a user-visible modeling outcome. |
+| `EvaluationSpec` | The reference behavior, diagnostics, and performance budget are clear. | The quality gate names reference sources, verification channels, and budget expectations. |
+| `DomainModel` | Editable source, generated topology, units, tolerances, and ownership are clear. | The source model and generated model are separated and command-addressable. |
+| `CaseSet` | Supported, boundary, degenerate, rejected, missing, and dense cases are known. | Tests and assessment entries cover the shipped and rejected subsets. |
+| `MappingSpec` | UI, Core, Automation, Agent, CLI, kernel, evaluation, and diagnostics routes are known. | Route coverage can be inspected without reading implementation details. |
+| `ConstraintBoundMapping` | Validation, stale-generation, undo/redo, topology identity, and source rewrite limits are bound. | Unsupported cases fail before mutation with typed diagnostics. |
+| `ResolvedMapping` | Conflicts across routes and ownership layers have a selected answer. | The decision is recorded with rejected alternatives and open work. |
+| `ValidatedArtifact` | Code, tests, diagnostics, and supported-subset claims exist. | The assessment can cite source files and tests for every implemented claim. |
+| `ObservationSet` | Reviews, failures, measurements, and missing channels are structured. | New evidence can route work back to coarse, mid, or fine layers. |
+| `FlowGraph` | Required ports across product, UI, Core, Automation, Agent, CLI, kernel, evaluation, and diagnostics connect. | A claimed route cannot be unreachable from the required caller surface. |
 
 ## Product Tour Parity Tracks
 
@@ -97,6 +130,7 @@ flowchart TD
 
 | Area | Current cursor | Next non-negotiable result |
 |---|---|---|
+| Design process | D0 complete, D1 open | `DESIGN_PROCESS.md` now defines the DBN-aligned process. Next: implement Core-owned Codable design packet types, case matrices, route matrices, observation records, confidence fields, and FlowGraph static checks so assessment entries cannot claim completeness without machine-readable process coverage. |
 | Selection | M0/M5 partial | Evaluated mesh bodies now carry generated topology hit targets for projected face/edge/vertex selection and highlights; viewport hits expose their picking backend; CPU topology picking uses view-depth tie-breaks for overlapping generated face/edge/vertex candidates; `ViewportSelectionHitPolicy` maps object/face/edge/vertex/region/sketch-entity scopes into the same GPU and CPU hit contract; `WorkspaceSelectionScope` now owns the matching viewport hit policy and allows drag-rectangle selection across object, face, edge, vertex, region, and sketch-entity scopes; drag-rectangle selection now publishes preview hits back through the same `SelectionTarget` conversion path and renders object, sketch entity, region, face, edge, vertex, and generated-topology preview highlights before commit; selected generated/body edge targets can enter an `O`-activated Offset Edge command state and expose a viewport distance-arrow handle plus exact-distance offset-edge preview segment that commits through the same `offsetCurve` edge dispatch used by Inspector, Automation, and Agent; `ViewportIdentityPickIndex` maps nonzero identity-buffer IDs back to exact body, generated face/edge/vertex, projected fallback body subobject, sketch entity, sketch region, and policy-gated sketch control-point hits; `ViewportIdentityPickRenderPlan` turns policy-filtered identities into projected polygon, polyline, segment, and point primitives with depth where available; `ViewportIdentityBufferRenderer` renders those primitives into a Metal offscreen `r32Uint` identity buffer, records encode/GPU/readback/total timing plus command/point/pixel counts, and reads back identity-backed point or rectangle hits; and viewport hover/click plus drag-rectangle selection now route through `ViewportIdentityHitResolver` with projected-CPU fallback when Metal is unavailable. The resolver now reuses the last identity buffer for matching scene/layout/sketch-control-point/selection-hit policy keys, shares that cache between point and rectangle hits, exposes typed resolution summaries for rendered identity buffers, cache reuse, budget fallback, renderer unavailability, invalid viewport size, invalid rendered buffers, and renderer failures, exposes the last render metrics and render cost, enforces pixel/draw-item/encoded-point budget thresholds before rendering, rejects mismatched rendered buffers before caching, and invalidates cache, metrics, cost, budget rejection, and resolution summaries explicitly. `ViewportPickingReadinessSummary` now reports identity render cost, budget rejection, and fallback status from the same render-plan policy so UI and Agent diagnostics can explain CPU fallback before rendering. Next: broaden the remaining selection-mode edit-handle affordances and calibrate identity-buffer budgets against larger production scenes before retiring the remaining CPU picking heuristics. |
 | Sketch precision | M1 partial | Same-plane source point-to-point distance application now chooses the first non-fixed source point, falls back to the second non-fixed point when the first is anchored, moves supported point handles, standalone source sketch point entities, and source spline control points, solves supported source arc endpoint distances through the shared command path, applies source point-to-whole-source-line closest finite-segment distance by moving the non-fixed source point or translating the whole source line when the point is fixed and both line endpoints are movable, and treats already-satisfied zero-distance fixed pairs as no-move reference refreshes; next generalize angular and linear dimensions between arbitrary sketch references with explicit solver contracts. |
 | Snapping | M1 partial | `SnapResolver` now owns shared grid, temporary reference-line, source-sketch point/line/circle/arc/spline, source profile region-center, generated topology vertex/edge/face-center candidate resolution, first-class source spline CV snap targets, generated PolySpline Surface CV snap targets, Measurement annotation world-point/source-sketch/source-curve-parameter/generated-topology/generated-edge-parameter anchor candidates for current line and circular BRep edges, closest curve points, supported line/circle/arc intersections, reference-point X/Y/Z source-curve axis candidates, reference-point XY/YZ/ZX source-curve coordinate-plane candidates, reference-point tangent/perpendicular source-curve candidates, construction-plane projection for source sketch/profile-region/generated-topology/measurement candidates, typed related-source, region, topology, axis, coordinate-plane, and measurement references, resolved coordinates, source/generated/measurement selection context, viewport snap tips, viewport sketch creation coordinates, Shift-tapped geometry-sourced reference-line guide anchors, Ctrl-held object-targeting force enable from viewport modifier flags, Shift+X hovered-candidate suppression, and Agent readback without mutating generation. Source-sketch, source-curve-parameter, generated-topology, and generated-edge-parameter measurement anchors re-resolve from the current document geometry; generated topology identity uses persistent names plus selection components, not transient evaluated reference IDs. Core/Agent source profile region targets are discoverable and selectable; viewport sketch-region interior hit testing now returns region targets while preserving sketch edge/entity hit priority, and selected/hovered region targets render viewport highlights. Next: broader CPlane workflow coverage and generated-edge parameter support for future non-line/non-circle curve kinds when the kernel adds them. |

@@ -6,6 +6,12 @@ This document defines the CAD interaction layers that must exist before growing 
 
 The milestone gates for deciding whether a feature is complete are defined in `CAD_QUALITY_MILESTONES.md`. This architecture document describes the interaction shape; the milestone document defines the acceptance bar.
 
+`DESIGN_PROCESS.md` defines the process gate that must be satisfied before
+broadening a CAD feature. In this architecture document, that process appears as
+a `FlowGraph`: every claimed route must connect user intent, input affordance,
+selection target, command contract, CAD source, evaluation result, feedback,
+Automation, Agent, and diagnostics.
+
 ## Interaction Map
 
 ```mermaid
