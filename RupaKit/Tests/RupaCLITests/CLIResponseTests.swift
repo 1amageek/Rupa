@@ -3520,6 +3520,107 @@ func cliExecutableSurfaceMoveControlPointsInFrameMutatesClosedDocumentAsJSON() a
 }
 
 @Test(.timeLimit(.minutes(1)))
+func cliExecutableSurfaceWeightAndKnotCommandsMutateClosedDocumentAsJSON() async throws {
+    let temporaryDirectory = try makeTemporaryDirectory()
+    defer {
+        removeTemporaryDirectory(temporaryDirectory)
+    }
+    let documentURL = temporaryDirectory.appendingPathComponent("process-surface-weight-knot.swcad")
+    var document = DesignDocument.empty(named: "Process Surface Weight Knot")
+    let sourceSurface = cliDirectBSplineSurfaceWithInteriorKnots()
+    let featureID = try document.createBSplineSurface(
+        name: "CLI Editable B-spline Surface",
+        surface: sourceSurface
+    )
+    let summary = try SurfaceSourceSummaryService().summarize(document: document)
+    let patch = try #require(summary.sources.first?.patches.first)
+    let controlPoint = try #require(patch.controlPoints.first { $0.uIndex == 1 && $0.vIndex == 1 })
+    let editableKnot = try #require(patch.basis.uKnotVector.first { $0.index == 3 })
+    let editableSpan = try #require(patch.basis.uSpans.first { $0.index == 0 })
+    let controlPointJSON = try encodedSelectionReference(controlPoint.selectionReference)
+    let knotJSON = try encodedSelectionReference(try #require(editableKnot.selectionReference))
+    let spanJSON = try encodedSelectionReference(try #require(editableSpan.selectionReference))
+    try DocumentFileService().save(document, to: documentURL)
+
+    let weightResult = try await runCLI([
+        "surface",
+        "set-control-point-weight",
+        documentURL.path,
+        "--reference",
+        controlPointJSON,
+        "--weight",
+        "2.5",
+        "--mode",
+        "file",
+        "--json",
+    ])
+    let weightResponse = try JSONDecoder().decode(
+        CLIResponse.self,
+        from: weightResult.standardOutputData
+    )
+    let weightLoaded = try DocumentFileService().load(from: documentURL)
+    let weightedFeature = try #require(weightLoaded.cadDocument.designGraph.nodes[featureID])
+    guard case let .bSplineSurface(weightedSurfaceFeature) = weightedFeature.operation else {
+        Issue.record("Expected a weighted direct B-spline surface feature.")
+        return
+    }
+    let knotResult = try await runCLI([
+        "surface",
+        "set-knot-value",
+        documentURL.path,
+        "--reference",
+        knotJSON,
+        "--value",
+        "0.4",
+        "--mode",
+        "file",
+        "--json",
+    ])
+    let knotResponse = try JSONDecoder().decode(
+        CLIResponse.self,
+        from: knotResult.standardOutputData
+    )
+    let insertionResult = try await runCLI([
+        "surface",
+        "insert-knot",
+        documentURL.path,
+        "--reference",
+        spanJSON,
+        "--value",
+        "0.25",
+        "--mode",
+        "file",
+        "--json",
+    ])
+    let insertionResponse = try JSONDecoder().decode(
+        CLIResponse.self,
+        from: insertionResult.standardOutputData
+    )
+    let loaded = try DocumentFileService().load(from: documentURL)
+    let feature = try #require(loaded.cadDocument.designGraph.nodes[featureID])
+    guard case let .bSplineSurface(surfaceFeature) = feature.operation else {
+        Issue.record("Expected a direct B-spline surface feature.")
+        return
+    }
+
+    #expect(weightResult.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: weightResult.standardError))
+    #expect(knotResult.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: knotResult.standardError))
+    #expect(insertionResult.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: insertionResult.standardError))
+    #expect(weightResponse.message == "Surface control point weight updated.")
+    #expect(knotResponse.message == "Surface knot value updated.")
+    #expect(insertionResponse.message == "Surface knot inserted.")
+    #expect(weightResponse.saved)
+    #expect(knotResponse.saved)
+    #expect(insertionResponse.saved)
+    #expect(weightedSurfaceFeature.surface.weights[1][1] == 2.5)
+    #expect(surfaceFeature.surface.uKnots == [0.0, 0.0, 0.0, 0.25, 0.4, 1.0, 1.0, 1.0])
+    #expect(surfaceFeature.surface.vKnots == sourceSurface.vKnots)
+    #expect(surfaceFeature.surface.uControlPointCount == sourceSurface.uControlPointCount + 1)
+    #expect(surfaceFeature.surface.vControlPointCount == sourceSurface.vControlPointCount)
+    #expect(surfaceFeature.surface.weights.flatMap { $0 }.contains { abs($0 - 1.0) > 1.0e-12 })
+}
+
+@Test(.timeLimit(.minutes(1)))
 func cliExecutableSketchDimensionSummaryAndSetMutateClosedDocumentAsJSON() async throws {
     let temporaryDirectory = try makeTemporaryDirectory()
     defer {
@@ -6555,6 +6656,23 @@ private func cliPolySplinePatchNetworkMesh(centerZ: Double) -> Mesh {
             1, 2, 5,
             1, 5, 4,
         ]
+    )
+}
+
+private func cliDirectBSplineSurfaceWithInteriorKnots() -> BSplineSurface3D {
+    let base = BSplineSurface3D.cubicBezierPatch(
+        bottomLeft: Point3D(x: 0.0, y: 0.0, z: 0.0),
+        bottomRight: Point3D(x: 0.02, y: 0.0, z: 0.0),
+        topRight: Point3D(x: 0.02, y: 0.02, z: 0.0),
+        topLeft: Point3D(x: 0.0, y: 0.02, z: 0.0)
+    )
+    return BSplineSurface3D(
+        uDegree: 2,
+        vDegree: 2,
+        uKnots: [0.0, 0.0, 0.0, 0.5, 1.0, 1.0, 1.0],
+        vKnots: [0.0, 0.0, 0.0, 0.5, 1.0, 1.0, 1.0],
+        controlPoints: base.controlPoints,
+        weights: base.weights
     )
 }
 

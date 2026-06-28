@@ -895,6 +895,9 @@ public struct SurfaceCommand: ParsableCommand {
             SurfaceSourcesCommand.self,
             SurfaceMoveControlPointCommand.self,
             SurfaceMoveControlPointsInFrameCommand.self,
+            SurfaceSetControlPointWeightCommand.self,
+            SurfaceSetKnotValueCommand.self,
+            SurfaceInsertKnotCommand.self,
             SurfaceSlideControlPointsCommand.self,
         ],
         defaultSubcommand: SurfaceSourcesCommand.self

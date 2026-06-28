@@ -1785,6 +1785,78 @@ public struct CLIService {
         )
     }
 
+    public func setSurfaceControlPointWeight(
+        target: CLIDocumentTarget,
+        reference: SelectionReference,
+        weight: CADExpression,
+        mode: CLIEditMode = .auto,
+        expectedGeneration: DocumentGeneration? = nil,
+        dryRun: Bool = false,
+        forceFileEdit: Bool = false,
+        client: AgentClientProtocol? = nil
+    ) throws -> CLIResponse {
+        try executeModelingCommand(
+            .setSurfaceControlPointWeight(
+                target: reference,
+                weight: weight
+            ),
+            target: target,
+            mode: mode,
+            expectedGeneration: expectedGeneration,
+            dryRun: dryRun,
+            forceFileEdit: forceFileEdit,
+            client: client
+        )
+    }
+
+    public func setSurfaceKnotValue(
+        target: CLIDocumentTarget,
+        reference: SelectionReference,
+        value: CADExpression,
+        mode: CLIEditMode = .auto,
+        expectedGeneration: DocumentGeneration? = nil,
+        dryRun: Bool = false,
+        forceFileEdit: Bool = false,
+        client: AgentClientProtocol? = nil
+    ) throws -> CLIResponse {
+        try executeModelingCommand(
+            .setSurfaceKnotValue(
+                target: reference,
+                value: value
+            ),
+            target: target,
+            mode: mode,
+            expectedGeneration: expectedGeneration,
+            dryRun: dryRun,
+            forceFileEdit: forceFileEdit,
+            client: client
+        )
+    }
+
+    public func insertSurfaceKnot(
+        target: CLIDocumentTarget,
+        reference: SelectionReference,
+        value: CADExpression,
+        mode: CLIEditMode = .auto,
+        expectedGeneration: DocumentGeneration? = nil,
+        dryRun: Bool = false,
+        forceFileEdit: Bool = false,
+        client: AgentClientProtocol? = nil
+    ) throws -> CLIResponse {
+        try executeModelingCommand(
+            .insertSurfaceKnot(
+                target: reference,
+                value: value
+            ),
+            target: target,
+            mode: mode,
+            expectedGeneration: expectedGeneration,
+            dryRun: dryRun,
+            forceFileEdit: forceFileEdit,
+            client: client
+        )
+    }
+
     public func slideSurfaceControlPoints(
         target: CLIDocumentTarget,
         references: [SelectionReference],
