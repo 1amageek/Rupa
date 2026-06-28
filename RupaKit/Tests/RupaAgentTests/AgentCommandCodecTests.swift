@@ -70,6 +70,52 @@ import SwiftCAD
     #expect(decodedRequest == request)
 }
 
+@Test func agentMessageCodecRoundTripsSweepEvaluationPlan() async throws {
+    let codec = AgentMessageCodec()
+    let sessionID = UUID()
+    let profileFeatureID = FeatureID()
+    let pathFeatureID = FeatureID()
+    let request = AgentRequest.sweepEvaluationPlan(
+        sessionID: sessionID,
+        sections: [.profile(ProfileReference(featureID: profileFeatureID))],
+        path: SweepPathReference(featureID: pathFeatureID),
+        guides: [],
+        targets: [],
+        options: SweepOptions(alignment: .parallel),
+        expectedGeneration: DocumentGeneration(5)
+    )
+    let response = AgentResponse.sweepEvaluationPlan(
+        SweepEvaluationPlanResult(
+            status: .supported,
+            sectionCount: 1,
+            pathSegmentCount: 1,
+            guideCount: 0,
+            targetCount: 0,
+            pathShape: .straight(profileNormalComponent: 1.0),
+            sectionState: .identity,
+            evaluationKind: .exactStraightExtrude,
+            outputTopologyKind: .exactStraightSolid,
+            booleanSupportKind: .newBody,
+            guideStrategies: [.none],
+            unsupportedCode: nil,
+            message: "Sweep can evaluate as a profile-plane-preserving exact straight extrusion.",
+            checks: [
+                SweepEvaluationPreflightCheck(
+                    kind: .capabilityDecision,
+                    status: .passed,
+                    message: "Sweep can evaluate as a profile-plane-preserving exact straight extrusion."
+                ),
+            ]
+        )
+    )
+
+    let decodedRequest = try codec.decodeRequest(from: try codec.encode(request))
+    let decodedResponse = try codec.decodeResponse(from: try codec.encode(response))
+
+    #expect(decodedRequest == request)
+    #expect(decodedResponse == response)
+}
+
 @Test func agentMessageCodecRoundTripsDirectBodyDimensionCommands() async throws {
     let codec = AgentMessageCodec()
     let sessionID = UUID()

@@ -1,0 +1,53 @@
+{
+  "jsonrpc": "2.0",
+  "id": "document.sweepEvaluationPlan-1",
+  "method": "document.sweepEvaluationPlan",
+  "params": {
+    "sessionID": "00000000-0000-0000-0000-000000000001",
+    "sections": [
+      {
+        "kind": "profile",
+        "featureID": "00000000-0000-0000-0000-000000000101",
+        "profileIndex": 0
+      }
+    ],
+    "path": {
+      "featureID": "00000000-0000-0000-0000-000000000102"
+    },
+    "guides": [],
+    "targets": [],
+    "options": {
+      "twistAngle": {
+        "kind": "constant",
+        "quantity": {
+          "value": 0.0,
+          "kind": "angle"
+        }
+      },
+      "endScale": {
+        "kind": "constant",
+        "quantity": {
+          "value": 1.0,
+          "kind": "scalar"
+        }
+      },
+      "alignment": "normal",
+      "distanceFraction": {
+        "kind": "constant",
+        "quantity": {
+          "value": 1.0,
+          "kind": "scalar"
+        }
+      },
+      "cornerStyle": "mitre",
+      "guideMethod": "point",
+      "booleanOperation": "newBody",
+      "keepTools": false,
+      "simplify": false,
+      "resultKind": "solid"
+    },
+    "expectedGeneration": {
+      "value": 7
+    }
+  }
+}

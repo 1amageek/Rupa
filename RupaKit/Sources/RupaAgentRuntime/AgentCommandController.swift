@@ -1111,6 +1111,46 @@ public final class AgentCommandController: AgentClientProtocol {
             ]
         ),
         capability(
+            "sweepEvaluationPlan",
+            category: .read,
+            summary: "Preflight a proposed Sweep without mutating the document, returning the resolved path shape, section state, evaluation kind, output topology, boolean support, guide strategies, unsupported code, and ordered checks used by the shared sweep evaluation contract.",
+            access: .agentRequest,
+            mutatesDocument: false,
+            discovery: [.sketchEntitySummary, .topologySummary, .sweepEvaluationPlan],
+            targets: [.profile, .sketchEntity, .body],
+            failureMode: "Rejects stale generations, missing references, invalid option quantities, disconnected or branched path chains, unresolved target bodies, and invalid guide curves; returns structured unsupported results for current kernel capability gaps such as simplify output, sheet target booleans, profile-plane degenerate parallel alignment, and round multi-curve corner-transition topology.",
+            optionMatrix: [
+                AgentCapabilityDescriptor.OptionAxis(
+                    name: "evaluationKind",
+                    supportedValues: [
+                        "exactStraightExtrude",
+                        "pathNormalSectionSweep",
+                        "profilePlaneParallelSweep",
+                    ],
+                    notes: [
+                        "Use the result before createSweep to choose an exact straight extrusion, path-normal sweep, or profile-plane parallel sweep strategy.",
+                    ]
+                ),
+                AgentCapabilityDescriptor.OptionAxis(
+                    name: "guideStrategies",
+                    supportedValues: [
+                        "none",
+                        "pointSimilarity",
+                        "pointNonUniformAffine",
+                        "pointSignedAxisRail",
+                        "pointBilinearQuadrilateralRail",
+                        "pointMeanValueCageRail",
+                        "pointRadialRail",
+                        "chordDirectional",
+                        "curveContact",
+                    ],
+                    notes: [
+                        "Guide strategies reflect the shared sweep capability matrix after source geometry and guide paths are resolved.",
+                    ]
+                ),
+            ]
+        ),
+        capability(
             "createBSplineSurface",
             category: .solid,
             summary: "Create a direct source-owned B-spline or NURBS sheet surface from stored degree, knot vectors, control net, and weights.",
@@ -1741,6 +1781,27 @@ public final class AgentCommandController: AgentClientProtocol {
                         objectRegistry: session.objectRegistry,
                         currentEvaluation: session.currentEvaluation,
                         currentGeneration: session.generation
+                    )
+                )
+            case let .sweepEvaluationPlan(
+                sessionID,
+                sections,
+                path,
+                guides,
+                targets,
+                options,
+                expectedGeneration
+            ):
+                let session = try registry.session(id: sessionID)
+                try session.store.requireGeneration(expectedGeneration)
+                return .sweepEvaluationPlan(
+                    try SweepEvaluationPlanService().plan(
+                        document: session.document.cadDocument,
+                        sections: sections,
+                        path: path,
+                        guides: guides,
+                        targets: targets,
+                        options: options
                     )
                 )
             case let .objectDimensionSummary(sessionID, targets, expectedGeneration):

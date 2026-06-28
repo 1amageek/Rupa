@@ -87,6 +87,15 @@ public enum AgentRequest: Codable, Equatable, Sendable {
         sessionID: UUID,
         expectedGeneration: DocumentGeneration?
     )
+    case sweepEvaluationPlan(
+        sessionID: UUID,
+        sections: [SweepSectionReference],
+        path: SweepPathReference,
+        guides: [SweepGuideReference],
+        targets: [SweepTargetReference],
+        options: SweepOptions,
+        expectedGeneration: DocumentGeneration?
+    )
     case objectDimensionSummary(
         sessionID: UUID,
         targets: [SelectionTarget],
@@ -154,6 +163,7 @@ public enum AgentResponse: Codable, Equatable, Sendable {
     case selectionDimensionEvaluation(SelectionDimensionEvaluation)
     case curveAnalysis(CurveAnalysisResult)
     case topologySummary(TopologySummaryResult)
+    case sweepEvaluationPlan(SweepEvaluationPlanResult)
     case objectDimensionSummary(ObjectDimensionSummaryResult)
     case surfaceSourceSummary(SurfaceSourceSummaryResult)
     case surfaceAnalysis(SurfaceAnalysisResult)
@@ -210,6 +220,8 @@ public extension AgentRequest {
             "document.curveAnalysis"
         case .topologySummary:
             "document.topologySummary"
+        case .sweepEvaluationPlan:
+            "document.sweepEvaluationPlan"
         case .objectDimensionSummary:
             "document.objectDimensionSummary"
         case .surfaceSourceSummary:

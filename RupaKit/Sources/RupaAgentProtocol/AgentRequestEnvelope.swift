@@ -146,6 +146,19 @@ public struct AgentRequestEnvelope: Codable, Equatable, Sendable {
                 ),
                 forKey: .params
             )
+        case let .sweepEvaluationPlan(sessionID, sections, path, guides, targets, options, expectedGeneration):
+            try container.encode(
+                SweepEvaluationPlanParams(
+                    sessionID: sessionID,
+                    sections: sections,
+                    path: path,
+                    guides: guides,
+                    targets: targets,
+                    options: options,
+                    expectedGeneration: expectedGeneration
+                ),
+                forKey: .params
+            )
         case let .sketchDimensionSummary(sessionID, targets, expectedGeneration),
              let .objectDimensionSummary(sessionID, targets, expectedGeneration),
              let .selectTargets(sessionID, targets, expectedGeneration):
@@ -323,6 +336,17 @@ public struct AgentRequestEnvelope: Codable, Equatable, Sendable {
         case "document.topologySummary":
             let payload = try decodeParams(SessionGenerationParams.self, from: container, method: method)
             return .topologySummary(sessionID: payload.sessionID, expectedGeneration: payload.expectedGeneration)
+        case "document.sweepEvaluationPlan":
+            let payload = try decodeParams(SweepEvaluationPlanParams.self, from: container, method: method)
+            return .sweepEvaluationPlan(
+                sessionID: payload.sessionID,
+                sections: payload.sections,
+                path: payload.path,
+                guides: payload.guides,
+                targets: payload.targets,
+                options: payload.options,
+                expectedGeneration: payload.expectedGeneration
+            )
         case "document.objectDimensionSummary":
             let payload = try decodeParams(SelectionTargetsParams.self, from: container, method: method)
             return .objectDimensionSummary(
@@ -537,6 +561,26 @@ private struct SurfaceFramesParams: AgentRequestParameterPayload, Equatable {
 
     var sessionID: UUID
     var queries: [SurfaceFrameQuery]
+    var expectedGeneration: DocumentGeneration?
+}
+
+private struct SweepEvaluationPlanParams: AgentRequestParameterPayload, Equatable {
+    static let allowedKeys: Set<String> = [
+        "sessionID",
+        "sections",
+        "path",
+        "guides",
+        "targets",
+        "options",
+        "expectedGeneration",
+    ]
+
+    var sessionID: UUID
+    var sections: [SweepSectionReference]
+    var path: SweepPathReference
+    var guides: [SweepGuideReference]
+    var targets: [SweepTargetReference]
+    var options: SweepOptions
     var expectedGeneration: DocumentGeneration?
 }
 

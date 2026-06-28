@@ -63,6 +63,7 @@ import SwiftCAD
     #expect(capabilities.contains("applySketchCornerTreatment"))
     #expect(capabilities.contains("createSlotSketch"))
     #expect(capabilities.contains("createSweep"))
+    #expect(capabilities.contains("sweepEvaluationPlan"))
     #expect(capabilities.contains("createBSplineSurface"))
     #expect(capabilities.contains("createPolySplineSurface"))
     #expect(capabilities.contains("movePolySplineSurfaceVertex"))
@@ -161,6 +162,7 @@ import SwiftCAD
     let slotSketch = try #require(descriptors.first { $0.name == "createSlotSketch" })
     let revolve = try #require(descriptors.first { $0.name == "createRevolve" })
     let sweep = try #require(descriptors.first { $0.name == "createSweep" })
+    let sweepEvaluationPlan = try #require(descriptors.first { $0.name == "sweepEvaluationPlan" })
     let bSplineSurface = try #require(descriptors.first { $0.name == "createBSplineSurface" })
     let polySpline = try #require(descriptors.first { $0.name == "createPolySplineSurface" })
     let polySplineVertexMove = try #require(descriptors.first { $0.name == "movePolySplineSurfaceVertex" })
@@ -485,6 +487,30 @@ import SwiftCAD
     #expect(sweepCornerAxis.notes.contains { $0.contains("multi-curve path chains") })
     #expect(sweepCornerAxis.notes.contains { $0.contains("single-curve paths only") })
     #expect(sweepSimplifyAxis.supportedValues == ["false"])
+
+    #expect(sweepEvaluationPlan.category == .read)
+    #expect(sweepEvaluationPlan.mutatesDocument == false)
+    #expect(sweepEvaluationPlan.access == .agentRequest)
+    #expect(sweepEvaluationPlan.discovery.contains(.sketchEntitySummary))
+    #expect(sweepEvaluationPlan.discovery.contains(.topologySummary))
+    #expect(sweepEvaluationPlan.discovery.contains(.sweepEvaluationPlan))
+    #expect(sweepEvaluationPlan.targets.contains(.profile))
+    #expect(sweepEvaluationPlan.targets.contains(.sketchEntity))
+    #expect(sweepEvaluationPlan.targets.contains(.body))
+    #expect(sweepEvaluationPlan.summary.contains("Preflight"))
+    #expect(sweepEvaluationPlan.summary.contains("guide strategies"))
+    #expect(sweepEvaluationPlan.failureMode.contains("structured unsupported results"))
+    #expect(sweepEvaluationPlan.optionMatrix.map(\.name) == ["evaluationKind", "guideStrategies"])
+    let sweepPlanKindAxis = try #require(
+        sweepEvaluationPlan.optionMatrix.first { $0.name == "evaluationKind" }
+    )
+    let sweepPlanGuideAxis = try #require(
+        sweepEvaluationPlan.optionMatrix.first { $0.name == "guideStrategies" }
+    )
+    #expect(sweepPlanKindAxis.supportedValues.contains("exactStraightExtrude"))
+    #expect(sweepPlanKindAxis.supportedValues.contains("profilePlaneParallelSweep"))
+    #expect(sweepPlanGuideAxis.supportedValues.contains("pointMeanValueCageRail"))
+    #expect(sweepPlanGuideAxis.supportedValues.contains("curveContact"))
 
     #expect(bSplineSurface.category == .solid)
     #expect(bSplineSurface.mutatesDocument)

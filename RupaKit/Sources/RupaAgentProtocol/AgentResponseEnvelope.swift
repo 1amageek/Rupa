@@ -194,6 +194,8 @@ public struct AgentResponseEnvelope: Codable, Equatable, Sendable {
             try container.encode(value, forKey: .result)
         case .topologySummary(let value):
             try container.encode(value, forKey: .result)
+        case .sweepEvaluationPlan(let value):
+            try container.encode(value, forKey: .result)
         case .objectDimensionSummary(let value):
             try container.encode(value, forKey: .result)
         case .surfaceSourceSummary(let value):
@@ -286,6 +288,10 @@ public struct AgentResponseEnvelope: Codable, Equatable, Sendable {
             return .curveAnalysis(try container.decode(CurveAnalysisResult.self, forKey: .result))
         case "document.topologySummary":
             return .topologySummary(try container.decode(TopologySummaryResult.self, forKey: .result))
+        case "document.sweepEvaluationPlan":
+            return .sweepEvaluationPlan(
+                try container.decode(SweepEvaluationPlanResult.self, forKey: .result)
+            )
         case "document.objectDimensionSummary":
             return .objectDimensionSummary(
                 try container.decode(ObjectDimensionSummaryResult.self, forKey: .result)
@@ -359,6 +365,8 @@ public struct AgentResponseEnvelope: Codable, Equatable, Sendable {
             "document.curveAnalysis"
         case .topologySummary:
             "document.topologySummary"
+        case .sweepEvaluationPlan:
+            "document.sweepEvaluationPlan"
         case .objectDimensionSummary:
             "document.objectDimensionSummary"
         case .surfaceSourceSummary:
@@ -403,6 +411,7 @@ public struct AgentResponseEnvelope: Codable, Equatable, Sendable {
              ("selection.dimensionEvaluation", .selectionDimensionEvaluation),
              ("document.curveAnalysis", .curveAnalysis),
              ("document.topologySummary", .topologySummary),
+             ("document.sweepEvaluationPlan", .sweepEvaluationPlan),
              ("document.objectDimensionSummary", .objectDimensionSummary),
              ("document.surfaceSourceSummary", .surfaceSourceSummary),
              ("document.surfaceAnalysis", .surfaceAnalysis),

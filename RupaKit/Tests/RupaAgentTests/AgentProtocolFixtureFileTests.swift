@@ -109,6 +109,7 @@ struct AgentProtocolFixtureFileTests {
         "selection.dimensionEvaluation",
         "document.curveAnalysis",
         "document.topologySummary",
+        "document.sweepEvaluationPlan",
         "document.objectDimensionSummary",
         "document.surfaceSourceSummary",
         "document.surfaceAnalysis",
@@ -151,4 +152,3 @@ private enum AgentProtocolFixtureFiles {
         }
     }
 }
-
