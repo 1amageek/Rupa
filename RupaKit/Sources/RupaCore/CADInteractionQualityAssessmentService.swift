@@ -1009,6 +1009,15 @@ public struct CADInteractionQualityAssessmentService: Sendable {
             gates: gates,
             evidence: evidence
         )
+        let flowGraph = flowGraph(for: area, spec: spec)
+        let observationSet = CADInteractionDesignProcessObservationSet.make(
+            area: area,
+            gateAssessments: gateAssessments,
+            evidence: evidence,
+            openWork: openWork,
+            routeMatrix: routeMatrix,
+            flowGraphValidation: flowGraph.validate()
+        )
 
         return DesignProcessPacket(
             id: "\(area.rawValue)-design-process",
@@ -1087,13 +1096,12 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                     .filter { $0.rating.score >= CADInteractionQualityRating.implemented.score }
                     .map { "\($0.gate.rawValue): \($0.rating.rawValue)" }
             ),
-            observations: observations(area: area, openWork: openWork),
-            flowGraph: flowGraph(for: area, spec: spec),
-            confidence: confidence(
+            observations: observationSet.observations,
+            flowGraph: flowGraph,
+            confidence: observationSet.confidence(
                 rating: rating,
                 gates: gates,
-                evidence: evidence,
-                openWork: openWork
+                evidence: evidence
             )
         )
     }
@@ -1490,47 +1498,6 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                     affectedLayer: layer(for: assessment.gate)
                 )
             }
-    }
-
-    private static func observations(
-        area: CADInteractionQualityArea,
-        openWork: [String]
-    ) -> [DesignProcessObservation] {
-        openWork.enumerated().map { index, item in
-            DesignProcessObservation(
-                id: "\(area.rawValue)-open-work-\(index + 1)",
-                channel: .humanReview,
-                severity: index == 0 ? .blocking : .warning,
-                affectedLayer: .evaluation,
-                summary: item,
-                requiredNextAction: "Update the design packet and implementation route before claiming verified support."
-            )
-        }
-    }
-
-    private static func confidence(
-        rating: CADInteractionQualityRating,
-        gates: [CADInteractionQualityGate: CADInteractionQualityRating],
-        evidence: [CADInteractionQualityEvidence],
-        openWork: [String]
-    ) -> DesignProcessConfidence {
-        let evidenceFreshness = evidence.isEmpty ? 0.0 : 1.0
-        let testCount = evidence.flatMap(\.tests).count
-        let testCoverage = min(1.0, Double(testCount) / 3.0)
-        let performanceCoverage = Double((gates[.performanceBudget] ?? .missing).score)
-            / Double(CADInteractionQualityRating.verified.score)
-        let missingChannelPenalty = min(0.8, Double(openWork.count) * 0.05)
-
-        return DesignProcessConfidence(
-            evidenceFreshness: evidenceFreshness,
-            testCoverage: testCoverage,
-            performanceCoverage: performanceCoverage,
-            missingChannelPenalty: missingChannelPenalty,
-            calibrationState: .humanAnchored,
-            notes: [
-                "Confidence is derived from static CAD quality ratings until evaluator calibration is implemented.",
-            ]
-        )
     }
 
     private static func flowGraph(

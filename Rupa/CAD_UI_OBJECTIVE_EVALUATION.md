@@ -6,9 +6,10 @@ This evaluation model is an implementation surface for `DESIGN_PROCESS.md`.
 Assessment entries now carry Agent-readable design process packets with case
 sets, route mappings, observations, confidence, and connection graph checks.
 Case sets, route surfaces, invariants, and decision records are now
-capability-specific. The remaining upgrade is direct observation ingestion from
-review, test, performance, and missing-channel evidence plus confidence
-calibration against measured results.
+capability-specific. Observations now ingest open work, gate state, test
+evidence, route state, performance state, and FlowGraph validation directly.
+The remaining upgrade is external confidence calibration against measured
+results and human anchors.
 
 ## Evaluation Flow
 
@@ -79,6 +80,6 @@ flowchart LR
 | Case matrix | `CaseSet` | Present on every assessment entry; supported, boundary, degenerate, rejected, and performance cases are authored per capability and augmented by gate evidence/open work. |
 | Route matrix | `MappingSpec` | Present on every assessment entry; routes now use capability-specific documentation, UI, Core, Automation, Agent, CLI, kernel, evaluation, measurement, and diagnostics surfaces instead of layer-name defaults. |
 | Decision records | `ResolvedMapping` and `DecisionLog` | Present as packet resolution records; selected route IDs are derived from the actual route matrix and feature-specific conflicts/rationales are recorded. |
-| Observation records | `ObservationSet` and `FeedbackSignal` | Present from open work; D3 must ingest review, test, performance, and missing-channel observations directly. |
+| Observation records | `ObservationSet` and `FeedbackSignal` | Structured from open work, gate ratings, test evidence, route status, performance status, and FlowGraph validation with channel, severity, affected layer, and required next action. |
 | Connection checks | `FlowGraph` | Present and validated in Core tests; documentation-to-product and capability-specific route requirements are part of the graph. |
-| Confidence | Posterior confidence proxy | Present as static evidence/test/performance/calibration fields; D3/D4 calibration work must connect human anchors and measured performance. |
+| Confidence | Posterior confidence proxy | Derived from ObservationSet severity, evidence completeness, test coverage, performance gate, and calibration state; external human anchors and measured performance fixtures remain open. |

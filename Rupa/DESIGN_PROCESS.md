@@ -52,33 +52,34 @@ tracked assessment entry, but the fields must be explicit.
 
 ## Relationship to Existing Documents
 
-The current Rupa documents already cover many pieces of the process, but they do
-not yet make the DBN packet a first-class artifact.
+The current Rupa documents already cover many pieces of the process, and the
+CAD interaction assessment now emits first-class design packets. The remaining
+work is to keep the packet maturity visible and to calibrate confidence against
+external review and measured performance anchors.
 
 | Current document or service | Current role | Required upgrade |
 |---|---|---|
 | `GOAL_STATEMENT.md` | Release completion loop | Reference this process as the required design gate before implementation. |
 | `CAD_QUALITY_MILESTONES.md` | CAD completion gates and roadmap | Attach each milestone slice to explicit `CaseSet`, `MappingSpec`, and `FlowGraph` requirements. |
-| `CAD_UI_OBJECTIVE_EVALUATION.md` | Objective rating model | Treat assessment entries as `ValidatedArtifact` records, then add missing channels and confidence. |
-| `CADInteractionQualityAssessmentService` | Agent-readable assessment | Evolve from static ratings into machine-readable design packets with evidence, open work, and missing channels. |
+| `CAD_UI_OBJECTIVE_EVALUATION.md` | Objective rating model | Treat assessment entries as `ValidatedArtifact`, `ObservationSet`, and confidence records, then calibrate external review/performance anchors. |
+| `CADInteractionQualityAssessmentService` | Agent-readable assessment | Emit machine-readable design packets with evidence, open work, route observations, performance observations, and confidence. |
 | `CAD_INTERACTION_ARCHITECTURE.md` | Interaction layer contract | Use `FlowGraph` checks to prove UI, command, source, evaluation, and Agent routes are connected. |
 | `IMPLEMENTATION_STATUS.md` | Status ledger | Report progress by design packet maturity, not only feature count. |
 
-## Current Process Gaps
+## Current Process State
 
-These are the process gaps that must be implemented before broad feature work can
-be considered systematic.
+These are the process foundations that gate broad feature work.
 
-| Gap | Impact | Required implementation |
+| Area | Impact | Current state |
 |---|---|---|
-| Design packets are not typed | Feature work can skip intent, case coverage, mapping, or feedback without being detected. | Add a Core-owned, Codable design-process model that can represent capability packets and be read by Agent callers. |
-| `CaseSet` is not canonical | Boundary, degenerate, unsupported, and performance cases are scattered across tests and prose. | Add a feature case matrix structure and require assessment entries to list supported, rejected, and missing cases. |
-| `MappingSpec` is implicit | UI, Core, Automation, Agent, CLI, and kernel routes can drift apart. | Add an explicit route matrix for each capability and validate that each shipped route has source, command, diagnostics, and tests. |
-| `DecisionLog` is informal | Tradeoffs and rejected routes can disappear, making future refactors repeat old mistakes. | Add decision records to capability packets with conflict area, selected route, rejected route, and follow-up owner. |
-| Observation is not modeled | Reviews and test failures update prose but do not become structured feedback. | Add observation records with channel, severity, affected DBN layer, and required next action. |
-| Confidence is static | `implemented` and `verified` ratings do not distinguish missing channels or stale evidence. | Add confidence fields derived from evidence freshness, test coverage, performance measurements, and missing channels. |
-| `FlowGraph` is not machine-checked | A feature can exist in Core but remain unreachable from UI, Agent, CLI, or diagnostics. | Add static connection checks for feature routes and fail assessment when required ports are disconnected. |
-| Evaluation calibration is absent | Subjective UI or modeling-quality judgments cannot be delegated safely. | Add an evaluator calibration path later, with human anchors and evidence before Agent-visible confidence is raised. |
+| Typed design packets | Feature work can skip intent, case coverage, mapping, or feedback without being detected. | Implemented in RupaCore as Codable packet types attached to every CAD interaction assessment entry. |
+| `CaseSet` | Boundary, degenerate, unsupported, and performance cases must be canonical. | Implemented with capability-specific supported, boundary, degenerate, rejected, missing, and performance groups. |
+| `MappingSpec` | UI, Core, Automation, Agent, CLI, and kernel routes can drift apart. | Implemented with capability-specific route matrices and selected route IDs. |
+| `DecisionLog` | Tradeoffs and rejected routes can disappear, making future refactors repeat old mistakes. | Implemented with packet decision records tied to actual route IDs. |
+| `ObservationSet` | Reviews, test coverage, route drift, and performance gaps must become structured feedback. | Implemented for CAD interaction packets from open work, gate ratings, test evidence, route status, performance status, and FlowGraph validation. |
+| Confidence | `implemented` and `verified` ratings must distinguish missing channels and stale evidence. | Partially implemented from ObservationSet, evidence completeness, tests, performance gate, and calibration state; external calibration anchors remain open. |
+| `FlowGraph` | A feature can exist in Core but remain unreachable from UI, Agent, CLI, or diagnostics. | Implemented with static connection checks for required capability routes. |
+| Evaluation calibration | Subjective UI or modeling-quality judgments cannot be delegated safely. | Open: add evaluator calibration with human anchors and measured evidence before raising confidence beyond packet-derived signals. |
 
 ## Implementation Order From Missing Foundations
 
@@ -96,14 +97,14 @@ flowchart TD
     D3 --> Feature
 ```
 
-| Step | Goal | Completion condition |
-|---|---|---|
-| D0 | Establish this process in documentation | Goal, milestone, quality, and architecture documents point to this process. |
-| D1 | Make design packets representable | RupaCore owns Codable packet types and tests their encoding. |
-| D2 | Make missing cases visible | Assessment entries expose supported, rejected, missing, and performance case groups. |
-| D3 | Make route drift visible | Static checks detect missing UI, Core, Automation, Agent, CLI, kernel, evaluation, or diagnostics routes where a capability claims support. |
-| D4 | Make reviews actionable | Review findings and test failures can be recorded as observations and routed to the right design layer. |
-| D5 | Make confidence meaningful | Agent-readable confidence reflects evidence, missing channels, performance data, and calibration state. |
+| Step | Goal | Current status | Completion condition |
+|---|---|---|---|
+| D0 | Establish this process in documentation | Implemented | Goal, milestone, quality, and architecture documents point to this process. |
+| D1 | Make design packets representable | Implemented | RupaCore owns Codable packet types and tests their encoding. |
+| D2 | Make missing cases visible | Implemented | Assessment entries expose supported, rejected, missing, and performance case groups. |
+| D3 | Make route drift visible | Implemented | Static checks detect missing UI, Core, Automation, Agent, CLI, kernel, evaluation, or diagnostics routes where a capability claims support. |
+| D4 | Make reviews actionable | Implemented | Review findings, test evidence, route drift, performance status, and FlowGraph validation are recorded as observations routed to the right design layer. |
+| D5 | Make confidence meaningful | Partial | Agent-readable confidence reflects ObservationSet severity, evidence, missing channels, performance data, and calibration state; external calibration anchors remain open. |
 
 ## Feature Implementation Rule
 

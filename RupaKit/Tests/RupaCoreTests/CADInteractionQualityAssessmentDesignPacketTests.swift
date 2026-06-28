@@ -89,6 +89,35 @@ import RupaCore
     }
 }
 
+@Test func cadInteractionQualityAssessmentDesignPacketsIngestObservationChannelsIntoConfidence() throws {
+    let result = CADInteractionQualityAssessmentService().assess()
+    let packets = try encodedDesignProcessPackets(from: result)
+
+    for packet in packets {
+        let observationIDs = packet.observations.map(\.id)
+        let channels = Set(packet.observations.map { $0.channel.rawValue })
+        let hasPenaltyObservation = packet.observations.contains { observation in
+            observation.severity == .warning
+                || observation.severity == .error
+                || observation.severity == .blocking
+        }
+
+        #expect(!packet.observations.isEmpty)
+        #expect(observationIDs.count == Set(observationIDs).count)
+        #expect(channels.contains(DesignProcessObservationChannel.automatedTest.rawValue))
+        #expect(channels.contains(DesignProcessObservationChannel.performanceMeasurement.rawValue))
+        #expect(channels.contains(DesignProcessObservationChannel.runtimeDiagnostic.rawValue))
+        #expect(packet.observations.allSatisfy { !$0.summary.isEmpty && !$0.requiredNextAction.isEmpty })
+        #expect(packet.confidence.notes.contains { $0.contains("ObservationSet") })
+        #expect(packet.confidence.calibrationState != .uncalibrated)
+        if hasPenaltyObservation {
+            #expect(packet.confidence.missingChannelPenalty > 0)
+        } else {
+            #expect(packet.confidence.missingChannelPenalty == 0)
+        }
+    }
+}
+
 @Test func cadInteractionQualityAssessmentDesignPacketsSurviveCodableRoundTrip() throws {
     let result = CADInteractionQualityAssessmentService().assess()
     let packets = try encodedDesignProcessPackets(from: result)
