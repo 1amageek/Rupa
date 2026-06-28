@@ -11,7 +11,11 @@ struct WorkspaceTopologyEditInspectorStateBuilder {
     var combinesRegions: Bool
 
     func state(for nodes: [SceneNode]) -> WorkspaceTopologyEditInspectorState {
-        let edgeTargets = edgeTargets
+        let classification = targetClassification
+        let faceTarget = singleTarget(in: classification.faceTargets)
+        let edgeTargets = classification.edgeTargets
+        let vertexTarget = singleTarget(in: classification.vertexTargets)
+        let regionTargets = classification.regionTargets
         return WorkspaceTopologyEditInspectorState(
             isSingleNodeSelection: nodes.count == 1,
             selectedTargetSummary: selectedTargetSummary,
@@ -30,70 +34,41 @@ struct WorkspaceTopologyEditInspectorStateBuilder {
     }
 
     var faceTarget: SelectionTarget? {
-        let targets = faceTargets
+        singleTarget(in: targetClassification.faceTargets)
+    }
+
+    var faceTargets: [SelectionTarget] {
+        targetClassification.faceTargets
+    }
+
+    var edgeTargets: [SelectionTarget] {
+        targetClassification.edgeTargets
+    }
+
+    var vertexTarget: SelectionTarget? {
+        singleTarget(in: targetClassification.vertexTargets)
+    }
+
+    var vertexTargets: [SelectionTarget] {
+        targetClassification.vertexTargets
+    }
+
+    var regionTargets: [SelectionTarget] {
+        targetClassification.regionTargets
+    }
+
+    func generatedEdgeProjectionTargets(from targets: [SelectionTarget]) -> [SelectionTarget] {
+        WorkspaceSelectionTargetClassification(targets: targets).generatedEdgeTargets
+    }
+
+    private var targetClassification: WorkspaceSelectionTargetClassification {
+        WorkspaceSelectionTargetClassification(selection: selection)
+    }
+
+    private func singleTarget(in targets: [SelectionTarget]) -> SelectionTarget? {
         guard targets.count == 1 else {
             return nil
         }
         return targets.first
-    }
-
-    var faceTargets: [SelectionTarget] {
-        selection.selectedTargets.filter { target in
-            if case .face = target.component {
-                return true
-            }
-            return false
-        }
-    }
-
-    var edgeTargets: [SelectionTarget] {
-        selection.selectedTargets.filter { target in
-            if case .edge = target.component {
-                return true
-            }
-            return false
-        }
-    }
-
-    var vertexTarget: SelectionTarget? {
-        let targets = vertexTargets
-        guard targets.count == 1, let target = targets.first else {
-            return nil
-        }
-        return target
-    }
-
-    var vertexTargets: [SelectionTarget] {
-        selection.selectedTargets.filter { target in
-            if case .vertex = target.component {
-                return true
-            }
-            return false
-        }
-    }
-
-    var regionTargets: [SelectionTarget] {
-        selection.selectedTargets.filter { target in
-            if case .region = target.component {
-                return true
-            }
-            return false
-        }
-    }
-
-    func generatedEdgeProjectionTargets(from targets: [SelectionTarget]) -> [SelectionTarget] {
-        var projectedTargets: [SelectionTarget] = []
-        var seen = Set<String>()
-        for target in targets {
-            guard case .edge(let componentID) = target.component,
-                  componentID.generatedTopologyPersistentName != nil else {
-                continue
-            }
-            let key = "\(target.sceneNodeID.description):\(String(describing: target.component))"
-            if seen.insert(key).inserted {
-                projectedTargets.append(target)
-            }
-        }
-        return projectedTargets
     }
 }

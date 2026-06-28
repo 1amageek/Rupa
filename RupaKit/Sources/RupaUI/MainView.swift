@@ -3987,6 +3987,10 @@ public struct MainView: View {
         )
     }
 
+    private var selectionTargetClassification: WorkspaceSelectionTargetClassification {
+        WorkspaceSelectionTargetClassification(selection: session.selection)
+    }
+
     private func patternArrayInspectorState(for nodes: [SceneNode]) -> PatternArrayInspectorState? {
         PatternArrayInspectorState(
             selectedNodes: nodes,
@@ -4024,27 +4028,11 @@ public struct MainView: View {
     }
 
     private var selectedObjectDimensionTargets: [SelectionTarget] {
-        session.selection.selectedTargets.filter { target in
-            switch target.component {
-            case .object, .face:
-                return true
-            case .edge, .vertex, .sketchEntity, .region:
-                return false
-            }
-        }
+        selectionTargetClassification.objectDimensionTargets
     }
 
     private var selectedSketchDimensionTargets: [SelectionTarget] {
-        session.selection.selectedTargets.filter { target in
-            switch target.component {
-            case .sketchEntity:
-                return true
-            case .edge(let componentID):
-                return componentID.generatedTopologyPersistentName != nil
-            case .object, .face, .vertex, .region:
-                return false
-            }
-        }
+        selectionTargetClassification.sketchDimensionTargets
     }
 
     private var selectedEdgeTargets: [SelectionTarget] {

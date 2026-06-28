@@ -14,10 +14,8 @@ struct WorkspaceConstructionPlaneTargetSelectionBuilder {
             return nil
         }
 
-        let classification = TargetClassification(
-            targets: targets,
-            sketchPointTargets: sketchPointTargets(from: targets)
-        )
+        let classification = WorkspaceSelectionTargetClassification(targets: targets)
+        let pointTargets = classification.vertexTargets + sketchPointTargets(from: targets)
         if targets.count == 1,
            classification.faceTargets.count == 1 || classification.regionTargets.count == 1 {
             return targets
@@ -33,7 +31,7 @@ struct WorkspaceConstructionPlaneTargetSelectionBuilder {
             return targets
         }
         if targets.count >= 2,
-           targets.count == classification.pointTargets.count {
+           targets.count == pointTargets.count {
             return targets
         }
         return nil
@@ -74,38 +72,5 @@ struct WorkspaceConstructionPlaneTargetSelectionBuilder {
         } catch {
             return explicitPointTargets
         }
-    }
-}
-
-private struct TargetClassification {
-    var faceTargets: [SelectionTarget] = []
-    var edgeTargets: [SelectionTarget] = []
-    var vertexTargets: [SelectionTarget] = []
-    var regionTargets: [SelectionTarget] = []
-    var sketchPointTargets: [SelectionTarget]
-
-    init(
-        targets: [SelectionTarget],
-        sketchPointTargets: [SelectionTarget]
-    ) {
-        self.sketchPointTargets = sketchPointTargets
-        for target in targets {
-            switch target.component {
-            case .face:
-                faceTargets.append(target)
-            case .edge:
-                edgeTargets.append(target)
-            case .vertex:
-                vertexTargets.append(target)
-            case .region:
-                regionTargets.append(target)
-            case .object, .sketchEntity:
-                break
-            }
-        }
-    }
-
-    var pointTargets: [SelectionTarget] {
-        vertexTargets + sketchPointTargets
     }
 }

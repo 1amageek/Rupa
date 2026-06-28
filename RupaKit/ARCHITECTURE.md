@@ -138,3 +138,4 @@ flowchart LR
 | `RupaUI/MainView.swift` | Surface CV inspector state, surface analysis, surface continuity, and generated-topology filtering split into a dedicated surface inspector state builder |
 | `RupaUI/MainView.swift` | Topology direct-edit selection classification and generated-edge projection target filtering split into a dedicated topology inspector state builder |
 | `RupaUI/MainView.swift` | Construction Plane target eligibility and sketch-point target discovery split into a dedicated target selection builder |
+| `RupaUI/MainView.swift` | Shared SelectionTarget component classification and Dimension target eligibility split into a reusable workspace selection classifier |
