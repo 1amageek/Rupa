@@ -180,37 +180,51 @@ struct WorkspaceSurfaceInspectorView: View {
                     if let referenceLevels = state.referenceSupportedLevelSummary {
                         workspaceInspectorValueRow("Reference Levels", referenceLevels)
                     }
-                    Picker("Level", selection: $boundaryContinuityLevel) {
-                        ForEach(SurfaceBoundaryContinuityLevel.allCases, id: \.self) { level in
-                            Text(surfaceBoundaryContinuityTitle(level)).tag(level)
-                        }
+                    if let pairLevels = state.pairSupportedLevelSummary {
+                        workspaceInspectorValueRow("Pair Levels", pairLevels)
                     }
-                    Picker("Side", selection: $boundaryMatchSide) {
-                        ForEach(SurfaceBoundaryMatchSide.allCases, id: \.self) { side in
-                            Text(surfaceBoundaryMatchSideTitle(side)).tag(side)
-                        }
+                    if let direction = state.recommendedReferenceDirectionSummary {
+                        workspaceInspectorValueRow("Reference Direction", direction)
                     }
-                    Picker("Reference", selection: $boundaryReferenceDirection) {
-                        ForEach(SurfaceBoundaryReferenceDirection.allCases, id: \.self) { direction in
-                            Text(surfaceBoundaryReferenceDirectionTitle(direction)).tag(direction)
-                        }
+                    if let side = state.recommendedMatchSideSummary {
+                        workspaceInspectorValueRow("Match Side", side)
                     }
-                    Button {
-                        if let target = state.targetReference,
-                           let reference = state.referenceReference {
-                            onMatchBoundaryContinuity(
-                                target,
-                                reference,
-                                boundaryContinuityLevel,
-                                boundaryMatchSide,
-                                boundaryReferenceDirection
-                            )
-                        }
-                    } label: {
-                        Label("Match Boundary", systemImage: "link")
+                    ForEach(Array(state.diagnosticMessages.prefix(2).enumerated()), id: \.offset) { _, message in
+                        workspaceInspectorValueRow("Diagnostic", message)
                     }
-                    .buttonStyle(.bordered)
-                    .disabled(!state.canMatch)
+                    if state.canMatch {
+                        Picker("Level", selection: boundaryContinuityLevelBinding(for: state)) {
+                            ForEach(state.supportedContinuityLevels, id: \.self) { level in
+                                Text(surfaceBoundaryContinuityTitle(level)).tag(level)
+                            }
+                        }
+                        Picker("Side", selection: $boundaryMatchSide) {
+                            ForEach(SurfaceBoundaryMatchSide.allCases, id: \.self) { side in
+                                Text(surfaceBoundaryMatchSideTitle(side)).tag(side)
+                            }
+                        }
+                        Picker("Reference", selection: $boundaryReferenceDirection) {
+                            ForEach(SurfaceBoundaryReferenceDirection.allCases, id: \.self) { direction in
+                                Text(surfaceBoundaryReferenceDirectionTitle(direction)).tag(direction)
+                            }
+                        }
+                        Button {
+                            if let target = state.targetReference,
+                               let reference = state.referenceReference,
+                               let level = state.resolvedContinuityLevel(preferred: boundaryContinuityLevel) {
+                                onMatchBoundaryContinuity(
+                                    target,
+                                    reference,
+                                    level,
+                                    boundaryMatchSide,
+                                    boundaryReferenceDirection
+                                )
+                            }
+                        } label: {
+                            Label("Match Boundary", systemImage: "link")
+                        }
+                        .buttonStyle(.bordered)
+                    }
                 }
             }
         case .failure(let error):
@@ -221,6 +235,19 @@ struct WorkspaceSurfaceInspectorView: View {
                 }
             }
         }
+    }
+
+    private func boundaryContinuityLevelBinding(
+        for state: SurfaceBoundaryContinuityInspectorState
+    ) -> Binding<SurfaceBoundaryContinuityLevel> {
+        Binding<SurfaceBoundaryContinuityLevel>(
+            get: {
+                state.resolvedContinuityLevel(preferred: boundaryContinuityLevel) ?? boundaryContinuityLevel
+            },
+            set: { level in
+                boundaryContinuityLevel = level
+            }
+        )
     }
 
     @ViewBuilder

@@ -118,6 +118,7 @@ Nested domain payloads use the Codable JSON shape of the public RupaCore, RupaAu
 | `SelectionDimensionEvaluationParams` | `sessionID`, `dimensionID?`, `expectedGeneration?` |
 | `SurfaceAnalysisParams` | `sessionID`, `options`, `expectedGeneration?` |
 | `SurfaceFramesParams` | `sessionID`, `queries`, `expectedGeneration?` |
+| `SurfaceBoundaryContinuityCompatibilityParams` | `sessionID`, `target`, `reference`, `expectedGeneration?` |
 | `ExportParams` | `sessionID`, `outputPath`, `expectedGeneration?`, `options`, `dryRun` |
 
 ## Methods
@@ -150,6 +151,7 @@ Nested domain payloads use the Codable JSON shape of the public RupaCore, RupaAu
 | `document.surfaceAnalysis` | `SurfaceAnalysisParams` | `SurfaceAnalysisResult` | No |
 | `document.surfaceFrames` | `SurfaceFramesParams` | `SurfaceFrameResult` | No |
 | `document.surfaceContinuitySummary` | `SessionGenerationParams` | `SurfaceContinuityResult` | No |
+| `document.surfaceBoundaryContinuityCompatibility` | `SurfaceBoundaryContinuityCompatibilityParams` | `SurfaceBoundaryContinuityCompatibilityResult` | No |
 | `selection.selectTargets` | `SelectionTargetsParams` | `SelectionStateResult` | No |
 | `selection.selectReferences` | `SelectionReferencesParams` | `SelectionStateResult` | No |
 | `document.save` | `SessionGenerationParams` | `SaveResult` | Persists file state |

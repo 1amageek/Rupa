@@ -1,6 +1,8 @@
 import SwiftCAD
 
 struct BSplineSurfaceSourceSummaryBuilder: Sendable {
+    private let boundaryProfileBuilder = BSplineSurfaceBoundaryProfileBuilder()
+
     private struct SurfaceEdgeRole {
         var subshape: String
     }
@@ -315,7 +317,7 @@ struct BSplineSurfaceSourceSummaryBuilder: Sendable {
         surface: BSplineSurface3D,
         surfaceReference: SurfaceReference
     ) -> [SelectionReference] {
-        guard inwardOffset < inwardControlPointCount(for: side, in: surface) else {
+        guard inwardOffset < boundaryProfileBuilder.inwardControlPointCount(for: side, in: surface) else {
             return []
         }
         return boundaryOrdinals(for: side, in: surface).map { ordinal in
@@ -363,20 +365,12 @@ struct BSplineSurfaceSourceSummaryBuilder: Sendable {
         surface: BSplineSurface3D,
         hasSelectionReference: Bool
     ) -> [SurfaceBoundaryContinuityLevel] {
-        guard hasSelectionReference,
-              boundaryControlPointCount(for: side, in: surface) >= 2,
-              isClampedBoundary(side, in: surface) else {
+        guard hasSelectionReference else {
             return []
         }
-        var levels: [SurfaceBoundaryContinuityLevel] = [.g0]
-        if inwardControlPointCount(for: side, in: surface) >= 2 {
-            levels.append(.g1)
-        }
-        if inwardControlPointCount(for: side, in: surface) >= 3,
-           inwardDegree(for: side, in: surface) >= 2 {
-            levels.append(.g2)
-        }
-        return levels
+        return boundaryProfileBuilder
+            .profile(side: side, surface: surface)
+            .supportedContinuityLevels
     }
 
     private func unsupportedBoundaryContinuityReason(
@@ -387,93 +381,14 @@ struct BSplineSurfaceSourceSummaryBuilder: Sendable {
         if hasSelectionReference == false {
             return "Trim edge is not present in the evaluated topology summary."
         }
-        if boundaryControlPointCount(for: side, in: surface) < 2 {
+        let profile = boundaryProfileBuilder.profile(side: side, surface: surface)
+        if profile.boundaryControlPointCount < 2 {
             return "Boundary has fewer than two control points."
         }
-        if isClampedBoundary(side, in: surface) == false {
+        if profile.isClamped == false {
             return "Boundary is not clamped, so the boundary control row does not map exactly to the surface edge."
         }
         return nil
-    }
-
-    private func isClampedBoundary(
-        _ side: BSplineSurfaceBoundarySide,
-        in surface: BSplineSurface3D
-    ) -> Bool {
-        let profile = inwardKnotProfile(for: side, in: surface)
-        guard profile.knots.indices.contains(profile.degree + 1) else {
-            return false
-        }
-        let boundaryValue = profile.knots[profile.degree]
-        let multiplicity = profile.knots.reduce(0) { count, knot in
-            abs(knot - boundaryValue) <= ModelingTolerance.standard.distance ? count + 1 : count
-        }
-        return multiplicity == profile.degree + 1
-            && profile.knots[profile.degree + 1] > boundaryValue + ModelingTolerance.standard.distance
-    }
-
-    private func inwardKnotProfile(
-        for side: BSplineSurfaceBoundarySide,
-        in surface: BSplineSurface3D
-    ) -> (degree: Int, knots: [Double]) {
-        let basis = inwardBasis(for: side, in: surface)
-        guard side.usesReversedInwardParameter else {
-            return basis
-        }
-        let lowerBound = basis.knots[basis.degree]
-        let upperBound = basis.knots[basis.knots.count - basis.degree - 1]
-        return (
-            basis.degree,
-            basis.knots.reversed().map { lowerBound + upperBound - $0 }
-        )
-    }
-
-    private func inwardBasis(
-        for side: BSplineSurfaceBoundarySide,
-        in surface: BSplineSurface3D
-    ) -> (degree: Int, knots: [Double]) {
-        switch side.inwardDirection {
-        case .u:
-            return (surface.uDegree, surface.uKnots)
-        case .v:
-            return (surface.vDegree, surface.vKnots)
-        }
-    }
-
-    private func boundaryControlPointCount(
-        for side: BSplineSurfaceBoundarySide,
-        in surface: BSplineSurface3D
-    ) -> Int {
-        switch side.boundaryDirection {
-        case .u:
-            return surface.uControlPointCount
-        case .v:
-            return surface.vControlPointCount
-        }
-    }
-
-    private func inwardControlPointCount(
-        for side: BSplineSurfaceBoundarySide,
-        in surface: BSplineSurface3D
-    ) -> Int {
-        switch side.inwardDirection {
-        case .u:
-            return surface.uControlPointCount
-        case .v:
-            return surface.vControlPointCount
-        }
-    }
-
-    private func inwardDegree(
-        for side: BSplineSurfaceBoundarySide,
-        in surface: BSplineSurface3D
-    ) -> Int {
-        switch side.inwardDirection {
-        case .u:
-            return surface.uDegree
-        case .v:
-            return surface.vDegree
-        }
     }
 
     private func isSurfaceControlPointDisplayVisible(

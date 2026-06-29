@@ -14,6 +14,7 @@ public struct InspectCommand: ParsableCommand {
             InspectSurfacesCommand.self,
             InspectSurfaceFramesCommand.self,
             InspectSurfaceContinuityCommand.self,
+            InspectSurfaceBoundaryContinuityCompatibilityCommand.self,
         ],
         defaultSubcommand: InspectTopologyCommand.self
     )

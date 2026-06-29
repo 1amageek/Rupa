@@ -119,6 +119,12 @@ public enum AgentRequest: Codable, Equatable, Sendable {
         sessionID: UUID,
         expectedGeneration: DocumentGeneration?
     )
+    case surfaceBoundaryContinuityCompatibility(
+        sessionID: UUID,
+        target: SelectionReference,
+        reference: SelectionReference,
+        expectedGeneration: DocumentGeneration?
+    )
     case selectTargets(
         sessionID: UUID,
         targets: [SelectionTarget],
@@ -169,6 +175,7 @@ public enum AgentResponse: Codable, Equatable, Sendable {
     case surfaceAnalysis(SurfaceAnalysisResult)
     case surfaceFrames(SurfaceFrameResult)
     case surfaceContinuitySummary(RupaCore.SurfaceContinuityResult)
+    case surfaceBoundaryContinuityCompatibility(SurfaceBoundaryContinuityCompatibilityResult)
     case selection(SelectionStateResult)
     case save(SaveResult)
     case export(ExportResult)
@@ -232,6 +239,8 @@ public extension AgentRequest {
             "document.surfaceFrames"
         case .surfaceContinuitySummary:
             "document.surfaceContinuitySummary"
+        case .surfaceBoundaryContinuityCompatibility:
+            "document.surfaceBoundaryContinuityCompatibility"
         case .selectTargets:
             "selection.selectTargets"
         case .selectReferences:

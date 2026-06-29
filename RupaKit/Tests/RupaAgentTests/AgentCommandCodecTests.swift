@@ -770,14 +770,29 @@ import SwiftCAD
             )
         )
     )
+    let referenceSurfaceTrimReference = SelectionReference.surface(
+        .trim(
+            SurfaceTrimReference(
+                surface: SurfaceReference(
+                    faceName: PersistentName(components: [
+                        .feature(FeatureID()),
+                        .generated("bSplineSurface"),
+                        .subshape("patch:0:face"),
+                    ])
+                ),
+                loopIndex: 0,
+                edgeIndex: 2
+            )
+        )
+    )
     let surfaceBoundaryContinuityRequest = AgentRequest.execute(
         sessionID: sessionID,
-        command: .matchSurfaceBoundaryContinuity(
-            target: surfaceTrimReference,
-            reference: surfaceTrimReference,
-            level: .g1,
-            matchSide: .opposite,
-            referenceDirection: .reversed
+            command: .matchSurfaceBoundaryContinuity(
+                target: surfaceTrimReference,
+                reference: referenceSurfaceTrimReference,
+                level: .g1,
+                matchSide: .opposite,
+                referenceDirection: .reversed
         ),
         expectedGeneration: DocumentGeneration(5)
     )
@@ -1481,6 +1496,85 @@ import SwiftCAD
             ]
         )
     )
+    let surfaceTrimReference = SelectionReference.surface(
+        .trim(
+            SurfaceTrimReference(
+                surface: SurfaceReference(
+                    faceName: PersistentName(components: [
+                        .feature(FeatureID()),
+                        .generated("bSplineSurface"),
+                        .subshape("patch:0:face"),
+                    ])
+                ),
+                loopIndex: 0,
+                edgeIndex: 0
+            )
+        )
+    )
+    let referenceSurfaceTrimReference = SelectionReference.surface(
+        .trim(
+            SurfaceTrimReference(
+                surface: SurfaceReference(
+                    faceName: PersistentName(components: [
+                        .feature(FeatureID()),
+                        .generated("bSplineSurface"),
+                        .subshape("patch:0:face"),
+                    ])
+                ),
+                loopIndex: 0,
+                edgeIndex: 2
+            )
+        )
+    )
+    let surfaceBoundaryCompatibilityRequest = AgentRequest.surfaceBoundaryContinuityCompatibility(
+        sessionID: sessionID,
+        target: surfaceTrimReference,
+        reference: referenceSurfaceTrimReference,
+        expectedGeneration: DocumentGeneration(4)
+    )
+    let surfaceBoundaryCompatibilityResult = SurfaceBoundaryContinuityCompatibilityResult(
+        status: .compatible,
+        target: SurfaceBoundaryContinuityCompatibilityResult.Boundary(
+            featureID: FeatureID(),
+            selectionReference: surfaceTrimReference,
+            role: "vMin",
+            boundaryDirection: .u,
+            inwardDirection: .v,
+            boundaryDegree: 3,
+            inwardDegree: 3,
+            boundaryControlPointCount: 4,
+            inwardControlPointCount: 4,
+            isClamped: true,
+            supportedContinuityLevels: [.g0, .g1, .g2]
+        ),
+        reference: SurfaceBoundaryContinuityCompatibilityResult.Boundary(
+            featureID: FeatureID(),
+            selectionReference: referenceSurfaceTrimReference,
+            role: "vMax",
+            boundaryDirection: .u,
+            inwardDirection: .v,
+            boundaryDegree: 3,
+            inwardDegree: 3,
+            boundaryControlPointCount: 4,
+            inwardControlPointCount: 4,
+            isClamped: true,
+            supportedContinuityLevels: [.g0, .g1, .g2]
+        ),
+        supportedContinuityLevels: [.g0, .g1, .g2],
+        maximumSupportedContinuityLevel: .g2,
+        recommendedReferenceDirection: .forward,
+        recommendedMatchSide: .opposite,
+        diagnostics: [
+            SurfaceBoundaryContinuityCompatibilityResult.Diagnostic(
+                severity: .info,
+                code: "compatibleBoundaryPair",
+                message: "Boundary pair supports G0/G1/G2 continuity matching."
+            ),
+        ]
+    )
+    let surfaceBoundaryCompatibilityResponse = AgentResponse.surfaceBoundaryContinuityCompatibility(
+        surfaceBoundaryCompatibilityResult
+    )
     let selectionTarget = SelectionTarget(
         sceneNodeID: SceneNodeID(UUID()),
         component: .vertex(.generatedTopology("feature:body/generated:vertex/index:0"))
@@ -1561,6 +1655,14 @@ import SwiftCAD
     #expect(try codec.decodeResponse(from: try codec.encode(surfaceFramesResponse)) == surfaceFramesResponse)
     #expect(try codec.decodeRequest(from: try codec.encode(surfaceContinuityRequest)) == surfaceContinuityRequest)
     #expect(try codec.decodeResponse(from: try codec.encode(surfaceContinuityResponse)) == surfaceContinuityResponse)
+    #expect(
+        try codec.decodeRequest(from: try codec.encode(surfaceBoundaryCompatibilityRequest))
+            == surfaceBoundaryCompatibilityRequest
+    )
+    #expect(
+        try codec.decodeResponse(from: try codec.encode(surfaceBoundaryCompatibilityResponse))
+            == surfaceBoundaryCompatibilityResponse
+    )
     #expect(try codec.decodeRequest(from: try codec.encode(selectRequest)) == selectRequest)
     #expect(try codec.decodeResponse(from: try codec.encode(selectResponse)) == selectResponse)
     #expect(try codec.decodeRequest(from: try codec.encode(selectReferenceRequest)) == selectReferenceRequest)

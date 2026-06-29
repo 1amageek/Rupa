@@ -3746,6 +3746,69 @@ func cliExecutableSurfaceBoundaryContinuityCommandMutatesClosedDocumentAsJSON() 
 }
 
 @Test(.timeLimit(.minutes(1)))
+func cliExecutableSurfaceBoundaryContinuityCompatibilityInspectsClosedDocumentAsJSON() async throws {
+    let temporaryDirectory = try makeTemporaryDirectory()
+    defer {
+        removeTemporaryDirectory(temporaryDirectory)
+    }
+    let documentURL = temporaryDirectory.appendingPathComponent("process-surface-boundary-compatibility.swcad")
+    var document = DesignDocument.empty(named: "Process Surface Boundary Compatibility")
+    let referenceFeatureID = try document.createBSplineSurface(
+        name: "CLI Reference Compatibility Surface",
+        surface: cliDirectBSplineSurface()
+    )
+    let targetFeatureID = try document.createBSplineSurface(
+        name: "CLI Target Compatibility Surface",
+        surface: cliOffsetDirectBSplineSurface()
+    )
+    let referenceTrim = try cliSurfaceTrimReference(
+        featureID: referenceFeatureID,
+        edgeIndex: 2,
+        in: document
+    )
+    let targetTrim = try cliSurfaceTrimReference(
+        featureID: targetFeatureID,
+        edgeIndex: 0,
+        in: document
+    )
+    try DocumentFileService().save(document, to: documentURL)
+
+    let result = try await runCLI([
+        "inspect",
+        "surface-boundary-continuity-compatibility",
+        documentURL.path,
+        "--target",
+        try encodedSelectionReference(targetTrim),
+        "--reference",
+        try encodedSelectionReference(referenceTrim),
+        "--mode",
+        "file",
+        "--json",
+    ])
+    let response = try JSONDecoder().decode(
+        CLISurfaceBoundaryContinuityCompatibilityResponse.self,
+        from: result.standardOutputData
+    )
+    let loaded = try DocumentFileService().load(from: documentURL)
+    let targetFeature = try #require(loaded.cadDocument.designGraph.nodes[targetFeatureID])
+    guard case let .bSplineSurface(targetSurfaceFeature) = targetFeature.operation else {
+        Issue.record("Expected a direct B-spline surface feature.")
+        return
+    }
+
+    #expect(result.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: result.standardError))
+    #expect(response.message == "Surface boundary continuity compatibility: compatible, maximum G2.")
+    #expect(response.dirty == false)
+    #expect(response.surfaceBoundaryContinuityCompatibility.status == .compatible)
+    #expect(response.surfaceBoundaryContinuityCompatibility.maximumSupportedContinuityLevel == .g2)
+    #expect(response.surfaceBoundaryContinuityCompatibility.recommendedMatchSide == .opposite)
+    #expect(targetSurfaceFeature.surface.controlPoints[0][1].isApproximatelyEqual(
+        to: cliOffsetDirectBSplineSurface().controlPoints[0][1],
+        tolerance: 1.0e-12
+    ))
+}
+
+@Test(.timeLimit(.minutes(1)))
 func cliExecutableSketchDimensionSummaryAndSetMutateClosedDocumentAsJSON() async throws {
     let temporaryDirectory = try makeTemporaryDirectory()
     defer {

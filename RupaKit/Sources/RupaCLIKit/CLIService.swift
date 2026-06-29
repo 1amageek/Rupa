@@ -1125,6 +1125,22 @@ public struct CLIService {
         )
     }
 
+    public func surfaceBoundaryContinuityCompatibilityFile(
+        at url: URL,
+        targetReference: SelectionReference,
+        reference: SelectionReference
+    ) throws -> CLISurfaceBoundaryContinuityCompatibilityResponse {
+        let session = EditorSession(document: try fileService.load(from: url))
+        return CLISurfaceBoundaryContinuityCompatibilityResponse(
+            surfaceBoundaryContinuityCompatibility: try session.document.surfaceBoundaryContinuityCompatibility(
+                target: targetReference,
+                reference: reference
+            ),
+            generation: session.generation,
+            dirty: session.isDirty
+        )
+    }
+
     public func surfaceFramesFile(
         at url: URL,
         queries: [SurfaceFrameQuery]
@@ -1656,6 +1672,47 @@ public struct CLIService {
             )
             return try surfaceContinuitySummaryLiveSession(
                 sessionID: sessionID,
+                expectedGeneration: expectedGeneration,
+                client: requiredClient(client)
+            )
+        }
+    }
+
+    public func surfaceBoundaryContinuityCompatibility(
+        target: CLIDocumentTarget,
+        targetReference: SelectionReference,
+        reference: SelectionReference,
+        mode: CLIEditMode = .auto,
+        expectedGeneration: DocumentGeneration? = nil,
+        client: AgentClientProtocol? = nil
+    ) throws -> CLISurfaceBoundaryContinuityCompatibilityResponse {
+        switch mode {
+        case .auto:
+            return try surfaceBoundaryContinuityCompatibilityAutomatically(
+                target: target,
+                targetReference: targetReference,
+                reference: reference,
+                expectedGeneration: expectedGeneration,
+                client: client
+            )
+        case .file:
+            guard let url = target.fileURL else {
+                throw invalidCommand("File mode requires a document file path.")
+            }
+            return try surfaceBoundaryContinuityCompatibilityFile(
+                at: url,
+                targetReference: targetReference,
+                reference: reference
+            )
+        case .live:
+            let sessionID = try resolvedLiveSessionID(
+                target: target,
+                client: client
+            )
+            return try surfaceBoundaryContinuityCompatibilityLiveSession(
+                sessionID: sessionID,
+                targetReference: targetReference,
+                reference: reference,
                 expectedGeneration: expectedGeneration,
                 client: requiredClient(client)
             )
@@ -2787,6 +2844,38 @@ public struct CLIService {
         }
     }
 
+    public func surfaceBoundaryContinuityCompatibilityLiveSession(
+        sessionID: UUID,
+        targetReference: SelectionReference,
+        reference: SelectionReference,
+        expectedGeneration: DocumentGeneration? = nil,
+        client: AgentClientProtocol
+    ) throws -> CLISurfaceBoundaryContinuityCompatibilityResponse {
+        let response = try client.send(
+            .surfaceBoundaryContinuityCompatibility(
+                sessionID: sessionID,
+                target: targetReference,
+                reference: reference,
+                expectedGeneration: expectedGeneration
+            )
+        )
+        switch response {
+        case .surfaceBoundaryContinuityCompatibility(let compatibility):
+            let summary = try sessions(client: client)
+                .sessions
+                .first { $0.id == sessionID }
+            return CLISurfaceBoundaryContinuityCompatibilityResponse(
+                surfaceBoundaryContinuityCompatibility: compatibility,
+                generation: DocumentGeneration(summary?.generation.value ?? 0),
+                dirty: summary?.dirty ?? false
+            )
+        case .failure(let error):
+            throw error
+        default:
+            throw unexpectedResponse("Surface boundary continuity compatibility request returned an unexpected response.")
+        }
+    }
+
     public func surfaceFramesLiveSession(
         sessionID: UUID,
         queries: [SurfaceFrameQuery],
@@ -3310,6 +3399,45 @@ public struct CLIService {
             throw invalidCommand("Surface continuity summary requires a document file path or live session ID.")
         }
         return try surfaceContinuitySummaryFile(at: url)
+    }
+
+    private func surfaceBoundaryContinuityCompatibilityAutomatically(
+        target: CLIDocumentTarget,
+        targetReference: SelectionReference,
+        reference: SelectionReference,
+        expectedGeneration: DocumentGeneration?,
+        client: AgentClientProtocol?
+    ) throws -> CLISurfaceBoundaryContinuityCompatibilityResponse {
+        if let sessionID = target.sessionID {
+            return try surfaceBoundaryContinuityCompatibilityLiveSession(
+                sessionID: sessionID,
+                targetReference: targetReference,
+                reference: reference,
+                expectedGeneration: expectedGeneration,
+                client: requiredClient(client)
+            )
+        }
+
+        if let url = target.fileURL,
+           let client,
+           let session = try openSession(for: url, client: client) {
+            return try surfaceBoundaryContinuityCompatibilityLiveSession(
+                sessionID: session.id,
+                targetReference: targetReference,
+                reference: reference,
+                expectedGeneration: expectedGeneration,
+                client: client
+            )
+        }
+
+        guard let url = target.fileURL else {
+            throw invalidCommand("Surface boundary continuity compatibility requires a document file path or live session ID.")
+        }
+        return try surfaceBoundaryContinuityCompatibilityFile(
+            at: url,
+            targetReference: targetReference,
+            reference: reference
+        )
     }
 
     private func surfaceFramesAutomatically(

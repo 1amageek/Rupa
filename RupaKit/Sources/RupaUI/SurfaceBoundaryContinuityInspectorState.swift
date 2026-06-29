@@ -6,16 +6,25 @@ struct SurfaceBoundaryContinuityInspectorState: Equatable {
     var referenceReference: SelectionReference?
     var targetSupportedLevelSummary: String?
     var referenceSupportedLevelSummary: String?
+    var pairSupportedLevelSummary: String?
+    var supportedContinuityLevels: [SurfaceBoundaryContinuityLevel]
+    var recommendedReferenceDirectionSummary: String?
+    var recommendedMatchSideSummary: String?
+    var diagnosticMessages: [String]
     var statusTitle: String
 
     var canMatch: Bool {
-        targetReference != nil && referenceReference != nil
+        targetReference != nil && referenceReference != nil && supportedContinuityLevels.isEmpty == false
     }
 
     init(
         selectedReferences: [SelectionReference],
-        summaryResult: SurfaceSourceSummaryResult
+        summaryResult: SurfaceSourceSummaryResult,
+        compatibilityResult: SurfaceBoundaryContinuityCompatibilityResult? = nil,
+        compatibilityErrorMessage: String? = nil
     ) {
+        supportedContinuityLevels = []
+        diagnosticMessages = []
         let trimReferences = selectedReferences.filter { reference in
             if case .surface(.trim) = reference {
                 return true
@@ -36,20 +45,66 @@ struct SurfaceBoundaryContinuityInspectorState: Equatable {
             referenceSupportedLevelSummary = Self.supportedLevelSummary(
                 editableEdgesByReference[selectedEditableReferences[1]]?.supportedBoundaryContinuityLevels ?? []
             )
-            statusTitle = "Ready"
+            if let compatibilityResult {
+                supportedContinuityLevels = compatibilityResult.supportedContinuityLevels
+                pairSupportedLevelSummary = Self.supportedLevelSummary(compatibilityResult.supportedContinuityLevels)
+                recommendedReferenceDirectionSummary = compatibilityResult
+                    .recommendedReferenceDirection?
+                    .rawValue
+                recommendedMatchSideSummary = compatibilityResult
+                    .recommendedMatchSide?
+                    .rawValue
+                diagnosticMessages = compatibilityResult.diagnostics.map(\.message)
+                switch compatibilityResult.status {
+                case .compatible:
+                    statusTitle = "Compatible"
+                case .incompatible:
+                    statusTitle = "Incompatible"
+                }
+            } else if let compatibilityErrorMessage {
+                pairSupportedLevelSummary = nil
+                recommendedReferenceDirectionSummary = nil
+                recommendedMatchSideSummary = nil
+                diagnosticMessages = [compatibilityErrorMessage]
+                statusTitle = "Unavailable"
+            } else {
+                pairSupportedLevelSummary = nil
+                recommendedReferenceDirectionSummary = nil
+                recommendedMatchSideSummary = nil
+                statusTitle = "Ready"
+            }
         } else if trimReferences.count == 2 {
             targetReference = nil
             referenceReference = nil
             targetSupportedLevelSummary = nil
             referenceSupportedLevelSummary = nil
+            pairSupportedLevelSummary = nil
+            recommendedReferenceDirectionSummary = nil
+            recommendedMatchSideSummary = nil
             statusTitle = "Supported direct B-spline trim edges required"
         } else {
             targetReference = nil
             referenceReference = nil
             targetSupportedLevelSummary = nil
             referenceSupportedLevelSummary = nil
+            pairSupportedLevelSummary = nil
+            recommendedReferenceDirectionSummary = nil
+            recommendedMatchSideSummary = nil
             statusTitle = "Select two surface trims"
         }
+    }
+
+    func supports(_ level: SurfaceBoundaryContinuityLevel) -> Bool {
+        supportedContinuityLevels.contains(level)
+    }
+
+    func resolvedContinuityLevel(
+        preferred level: SurfaceBoundaryContinuityLevel
+    ) -> SurfaceBoundaryContinuityLevel? {
+        if supports(level) {
+            return level
+        }
+        return supportedContinuityLevels.last
     }
 
     private static func editableDirectBSplineTrimEdgesByReference(
@@ -72,7 +127,10 @@ struct SurfaceBoundaryContinuityInspectorState: Equatable {
     }
 
     private static func supportedLevelSummary(_ levels: [SurfaceBoundaryContinuityLevel]) -> String {
-        levels.map { level in
+        guard levels.isEmpty == false else {
+            return "None"
+        }
+        return levels.map { level in
             switch level {
             case .g0:
                 return "G0"

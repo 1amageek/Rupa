@@ -758,6 +758,45 @@ extension DesignDocument {
         }
     }
 
+    public func surfaceBoundaryContinuityCompatibility(
+        target: SelectionReference,
+        reference: SelectionReference
+    ) throws -> SurfaceBoundaryContinuityCompatibilityResult {
+        let targetResolution = try resolvedBSplineSurfaceBoundaryReference(
+            target,
+            owner: "B-spline surface boundary continuity compatibility target"
+        )
+        let referenceResolution = try resolvedBSplineSurfaceBoundaryReference(
+            reference,
+            owner: "B-spline surface boundary continuity compatibility reference"
+        )
+        guard let targetFeature = cadDocument.designGraph.nodes[targetResolution.featureID],
+              case let .bSplineSurface(targetSurfaceFeature) = targetFeature.operation else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "B-spline surface boundary continuity compatibility requires an existing target B-spline surface source feature."
+            )
+        }
+        guard let referenceFeature = cadDocument.designGraph.nodes[referenceResolution.featureID],
+              case let .bSplineSurface(referenceSurfaceFeature) = referenceFeature.operation else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "B-spline surface boundary continuity compatibility requires an existing reference B-spline surface source feature."
+            )
+        }
+
+        return try SurfaceBoundaryContinuityCompatibilityService().compatibility(
+            targetFeatureID: targetResolution.featureID,
+            targetSelectionReference: target,
+            targetFeature: targetSurfaceFeature,
+            targetSide: targetResolution.side,
+            referenceFeatureID: referenceResolution.featureID,
+            referenceSelectionReference: reference,
+            referenceFeature: referenceSurfaceFeature,
+            referenceSide: referenceResolution.side
+        )
+    }
+
     private struct BSplineSurfaceKnotResolution {
         var featureID: FeatureID
         var reference: SurfaceKnotReference

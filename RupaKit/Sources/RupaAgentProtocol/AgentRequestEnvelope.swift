@@ -206,6 +206,16 @@ public struct AgentRequestEnvelope: Codable, Equatable, Sendable {
                 ),
                 forKey: .params
             )
+        case let .surfaceBoundaryContinuityCompatibility(sessionID, target, reference, expectedGeneration):
+            try container.encode(
+                SurfaceBoundaryContinuityCompatibilityParams(
+                    sessionID: sessionID,
+                    target: target,
+                    reference: reference,
+                    expectedGeneration: expectedGeneration
+                ),
+                forKey: .params
+            )
         case let .export(sessionID, outputPath, expectedGeneration, options, dryRun):
             try container.encode(
                 ExportParams(
@@ -378,6 +388,18 @@ public struct AgentRequestEnvelope: Codable, Equatable, Sendable {
             let payload = try decodeParams(SessionGenerationParams.self, from: container, method: method)
             return .surfaceContinuitySummary(
                 sessionID: payload.sessionID,
+                expectedGeneration: payload.expectedGeneration
+            )
+        case "document.surfaceBoundaryContinuityCompatibility":
+            let payload = try decodeParams(
+                SurfaceBoundaryContinuityCompatibilityParams.self,
+                from: container,
+                method: method
+            )
+            return .surfaceBoundaryContinuityCompatibility(
+                sessionID: payload.sessionID,
+                target: payload.target,
+                reference: payload.reference,
                 expectedGeneration: payload.expectedGeneration
             )
         case "selection.selectTargets":
@@ -561,6 +583,15 @@ private struct SurfaceFramesParams: AgentRequestParameterPayload, Equatable {
 
     var sessionID: UUID
     var queries: [SurfaceFrameQuery]
+    var expectedGeneration: DocumentGeneration?
+}
+
+private struct SurfaceBoundaryContinuityCompatibilityParams: AgentRequestParameterPayload, Equatable {
+    static let allowedKeys: Set<String> = ["sessionID", "target", "reference", "expectedGeneration"]
+
+    var sessionID: UUID
+    var target: SelectionReference
+    var reference: SelectionReference
     var expectedGeneration: DocumentGeneration?
 }
 

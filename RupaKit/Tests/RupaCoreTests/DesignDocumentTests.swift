@@ -860,6 +860,74 @@ import Testing
     }
 }
 
+@Test func directBSplineSurfaceBoundaryContinuityCompatibilityReportsPairContract() async throws {
+    var document = DesignDocument.empty()
+    let referenceFeatureID = try document.createBSplineSurface(
+        name: "Reference Compatibility Surface",
+        surface: designDocumentDirectBSplineSurface()
+    )
+    let targetFeatureID = try document.createBSplineSurface(
+        name: "Target Compatibility Surface",
+        surface: designDocumentOffsetDirectBSplineSurface()
+    )
+    let referenceTrim = try designDocumentSurfaceTrimReference(
+        featureID: referenceFeatureID,
+        edgeIndex: 2,
+        in: document
+    )
+    let targetTrim = try designDocumentSurfaceTrimReference(
+        featureID: targetFeatureID,
+        edgeIndex: 0,
+        in: document
+    )
+
+    let compatibility = try document.surfaceBoundaryContinuityCompatibility(
+        target: targetTrim,
+        reference: referenceTrim
+    )
+
+    #expect(compatibility.status == .compatible)
+    #expect(compatibility.supportedContinuityLevels == [.g0, .g1, .g2])
+    #expect(compatibility.maximumSupportedContinuityLevel == .g2)
+    #expect(compatibility.recommendedReferenceDirection == .forward)
+    #expect(compatibility.recommendedMatchSide == .opposite)
+    #expect(compatibility.target.featureID == targetFeatureID)
+    #expect(compatibility.reference.featureID == referenceFeatureID)
+    #expect(compatibility.target.role == "vMin")
+    #expect(compatibility.reference.role == "vMax")
+    #expect(compatibility.target.boundaryControlPointCount == 4)
+    #expect(compatibility.reference.boundaryControlPointCount == 4)
+    #expect(compatibility.diagnostics.contains { $0.code == "compatibleBoundaryPair" })
+
+    let sameBoundary = try document.surfaceBoundaryContinuityCompatibility(
+        target: targetTrim,
+        reference: targetTrim
+    )
+    #expect(sameBoundary.status == .incompatible)
+    #expect(sameBoundary.supportedContinuityLevels.isEmpty)
+    #expect(sameBoundary.recommendedReferenceDirection == nil)
+    #expect(sameBoundary.recommendedMatchSide == nil)
+    #expect(sameBoundary.diagnostics.contains { $0.code == "sameBoundary" })
+
+    let unclampedFeatureID = try document.createBSplineSurface(
+        name: "Unclamped Compatibility Surface",
+        surface: designDocumentUnclampedDirectBSplineSurface()
+    )
+    let unclampedTrim = try designDocumentSurfaceTrimReference(
+        featureID: unclampedFeatureID,
+        edgeIndex: 0,
+        in: document
+    )
+    let unclamped = try document.surfaceBoundaryContinuityCompatibility(
+        target: unclampedTrim,
+        reference: referenceTrim
+    )
+    #expect(unclamped.status == .incompatible)
+    #expect(unclamped.recommendedReferenceDirection == nil)
+    #expect(unclamped.recommendedMatchSide == nil)
+    #expect(unclamped.diagnostics.contains { $0.code == "unclampedBoundary" })
+}
+
 @Test func polySplineSurfaceVertexMoveRejectsNonVertexTargets() async throws {
     var document = DesignDocument.empty()
 

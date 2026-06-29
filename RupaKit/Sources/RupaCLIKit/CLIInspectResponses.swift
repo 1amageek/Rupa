@@ -118,6 +118,31 @@ public struct CLISurfaceContinuitySummaryResponse: Codable, Equatable, Sendable 
     }
 }
 
+public struct CLISurfaceBoundaryContinuityCompatibilityResponse: Codable, Equatable, Sendable {
+    public var message: String
+    public var generation: UInt64
+    public var dirty: Bool
+    public var surfaceBoundaryContinuityCompatibility: SurfaceBoundaryContinuityCompatibilityResult
+    public var diagnostics: [SurfaceBoundaryContinuityCompatibilityResult.Diagnostic]
+
+    public init(
+        surfaceBoundaryContinuityCompatibility: SurfaceBoundaryContinuityCompatibilityResult,
+        generation: DocumentGeneration,
+        dirty: Bool
+    ) {
+        let status = surfaceBoundaryContinuityCompatibility.status.rawValue
+        let maximumLevel = surfaceBoundaryContinuityCompatibility
+            .maximumSupportedContinuityLevel?
+            .rawValue
+            .uppercased() ?? "none"
+        self.message = "Surface boundary continuity compatibility: \(status), maximum \(maximumLevel)."
+        self.generation = generation.value
+        self.dirty = dirty
+        self.surfaceBoundaryContinuityCompatibility = surfaceBoundaryContinuityCompatibility
+        self.diagnostics = surfaceBoundaryContinuityCompatibility.diagnostics
+    }
+}
+
 public struct CLISurfaceFramesResponse: Codable, Equatable, Sendable {
     public var message: String
     public var generation: UInt64

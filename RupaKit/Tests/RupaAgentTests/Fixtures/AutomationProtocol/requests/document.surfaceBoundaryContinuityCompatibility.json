@@ -1,0 +1,67 @@
+{
+  "jsonrpc": "2.0",
+  "id": "document.surfaceBoundaryContinuityCompatibility-1",
+  "method": "document.surfaceBoundaryContinuityCompatibility",
+  "params": {
+    "sessionID": "00000000-0000-0000-0000-000000000001",
+    "target": {
+      "kind": "surface",
+      "surface": {
+        "kind": "trim",
+        "trim": {
+          "surface": {
+            "faceName": {
+              "components": [
+                {
+                  "kind": "feature",
+                  "featureID": "00000000-0000-0000-0000-000000000101"
+                },
+                {
+                  "kind": "generated",
+                  "value": "bSplineSurface"
+                },
+                {
+                  "kind": "subshape",
+                  "value": "patch:0:face"
+                }
+              ]
+            }
+          },
+          "loopIndex": 0,
+          "edgeIndex": 0
+        }
+      }
+    },
+    "reference": {
+      "kind": "surface",
+      "surface": {
+        "kind": "trim",
+        "trim": {
+          "surface": {
+            "faceName": {
+              "components": [
+                {
+                  "kind": "feature",
+                  "featureID": "00000000-0000-0000-0000-000000000102"
+                },
+                {
+                  "kind": "generated",
+                  "value": "bSplineSurface"
+                },
+                {
+                  "kind": "subshape",
+                  "value": "patch:0:face"
+                }
+              ]
+            }
+          },
+          "loopIndex": 0,
+          "edgeIndex": 2
+        }
+      }
+    },
+    "expectedGeneration": {
+      "value": 7
+    }
+  }
+}

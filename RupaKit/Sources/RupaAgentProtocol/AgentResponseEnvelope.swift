@@ -206,6 +206,8 @@ public struct AgentResponseEnvelope: Codable, Equatable, Sendable {
             try container.encode(value, forKey: .result)
         case .surfaceContinuitySummary(let value):
             try container.encode(value, forKey: .result)
+        case .surfaceBoundaryContinuityCompatibility(let value):
+            try container.encode(value, forKey: .result)
         case .selection(let value):
             try container.encode(value, forKey: .result)
         case .save(let value):
@@ -308,6 +310,10 @@ public struct AgentResponseEnvelope: Codable, Equatable, Sendable {
             return .surfaceContinuitySummary(
                 try container.decode(RupaCore.SurfaceContinuityResult.self, forKey: .result)
             )
+        case "document.surfaceBoundaryContinuityCompatibility":
+            return .surfaceBoundaryContinuityCompatibility(
+                try container.decode(SurfaceBoundaryContinuityCompatibilityResult.self, forKey: .result)
+            )
         case "selection.selectTargets",
              "selection.selectReferences":
             return .selection(try container.decode(SelectionStateResult.self, forKey: .result))
@@ -377,6 +383,8 @@ public struct AgentResponseEnvelope: Codable, Equatable, Sendable {
             "document.surfaceFrames"
         case .surfaceContinuitySummary:
             "document.surfaceContinuitySummary"
+        case .surfaceBoundaryContinuityCompatibility:
+            "document.surfaceBoundaryContinuityCompatibility"
         case .selection:
             "selection.selectTargets"
         case .save:
@@ -417,6 +425,7 @@ public struct AgentResponseEnvelope: Codable, Equatable, Sendable {
              ("document.surfaceAnalysis", .surfaceAnalysis),
              ("document.surfaceFrames", .surfaceFrames),
              ("document.surfaceContinuitySummary", .surfaceContinuitySummary),
+             ("document.surfaceBoundaryContinuityCompatibility", .surfaceBoundaryContinuityCompatibility),
              ("selection.selectTargets", .selection),
              ("selection.selectReferences", .selection),
              ("document.save", .save),

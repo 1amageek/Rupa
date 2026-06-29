@@ -86,9 +86,25 @@ struct WorkspaceSurfaceInspectorStateBuilder {
             return .success(nil)
         }
         do {
+            let summary = try SurfaceSourceSummaryService().summarize(document: document)
+            var compatibility: SurfaceBoundaryContinuityCompatibilityResult?
+            var compatibilityErrorMessage: String?
+            if surfaceTrimReferences.count == 2 {
+                switch boundaryContinuityCompatibility(
+                    target: surfaceTrimReferences[0],
+                    reference: surfaceTrimReferences[1]
+                ) {
+                case .success(let result):
+                    compatibility = result
+                case .failure(let error):
+                    compatibilityErrorMessage = error.localizedDescription
+                }
+            }
             return .success(SurfaceBoundaryContinuityInspectorState(
                 selectedReferences: surfaceTrimReferences,
-                summaryResult: try SurfaceSourceSummaryService().summarize(document: document)
+                summaryResult: summary,
+                compatibilityResult: compatibility,
+                compatibilityErrorMessage: compatibilityErrorMessage
             ))
         } catch {
             return .failure(error)
@@ -242,6 +258,20 @@ struct WorkspaceSurfaceInspectorStateBuilder {
             return (entry.selectionReference, frameQuery)
         }
         return state.resolvingFrames(try resolvedFrameMap(for: referenceQueries))
+    }
+
+    private func boundaryContinuityCompatibility(
+        target: SelectionReference,
+        reference: SelectionReference
+    ) -> Result<SurfaceBoundaryContinuityCompatibilityResult, Error> {
+        do {
+            return .success(try document.surfaceBoundaryContinuityCompatibility(
+                target: target,
+                reference: reference
+            ))
+        } catch {
+            return .failure(error)
+        }
     }
 
     private func resolveFrames(

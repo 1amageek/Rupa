@@ -733,6 +733,94 @@ import SwiftCAD
     #expect(session.evaluationStatus == .valid)
 }
 
+@Test func agentPreflightsDirectBSplineSurfaceBoundaryContinuityCompatibilityWithoutMutation() async throws {
+    let server = AgentCommandController()
+    let sessionID = UUID()
+    let session = EditorSession()
+    server.register(session: session, id: sessionID)
+
+    let referenceResponse = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .createBSplineSurface(
+                name: "Agent Reference Compatibility Surface",
+                surface: agentDirectBSplineSurface()
+            ),
+            expectedGeneration: DocumentGeneration(0)
+        )
+    )
+    guard case .command(let referenceResult) = referenceResponse else {
+        Issue.record("Agent must create a reference direct B-spline surface.")
+        return
+    }
+    #expect(referenceResult.didMutate)
+
+    let targetResponse = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .createBSplineSurface(
+                name: "Agent Target Compatibility Surface",
+                surface: agentOffsetDirectBSplineSurface()
+            ),
+            expectedGeneration: DocumentGeneration(1)
+        )
+    )
+    guard case .command(let targetResult) = targetResponse else {
+        Issue.record("Agent must create a target direct B-spline surface.")
+        return
+    }
+    #expect(targetResult.didMutate)
+
+    let featureIDs = session.document.cadDocument.designGraph.order
+    let referenceFeatureID = try #require(featureIDs.first)
+    let targetFeatureID = try #require(featureIDs.last)
+    let summaryResponse = server.handle(
+        .surfaceSourceSummary(
+            sessionID: sessionID,
+            expectedGeneration: DocumentGeneration(2)
+        )
+    )
+    guard case .surfaceSourceSummary(let summary) = summaryResponse else {
+        Issue.record("Agent must return surface source summary for boundary compatibility.")
+        return
+    }
+    let referenceSource = try #require(summary.sources.first { $0.featureID == referenceFeatureID.description })
+    let targetSource = try #require(summary.sources.first { $0.featureID == targetFeatureID.description })
+    let referenceTrim = try #require(referenceSource.patches.first?.trimLoops.first?.selectionReferences[2])
+    let targetTrim = try #require(targetSource.patches.first?.trimLoops.first?.selectionReferences[0])
+
+    let compatibilityResponse = server.handle(
+        .surfaceBoundaryContinuityCompatibility(
+            sessionID: sessionID,
+            target: targetTrim,
+            reference: referenceTrim,
+            expectedGeneration: DocumentGeneration(2)
+        )
+    )
+    guard case .surfaceBoundaryContinuityCompatibility(let compatibility) = compatibilityResponse else {
+        Issue.record("Agent must return boundary continuity compatibility.")
+        return
+    }
+    #expect(compatibility.status == .compatible)
+    #expect(compatibility.maximumSupportedContinuityLevel == .g2)
+    #expect(compatibility.recommendedMatchSide == .opposite)
+    #expect(session.generation == DocumentGeneration(2))
+
+    let staleResponse = server.handle(
+        .surfaceBoundaryContinuityCompatibility(
+            sessionID: sessionID,
+            target: targetTrim,
+            reference: referenceTrim,
+            expectedGeneration: DocumentGeneration(1)
+        )
+    )
+    guard case .failure(let error) = staleResponse else {
+        Issue.record("Agent must reject stale boundary compatibility preflight.")
+        return
+    }
+    #expect(error.code == .documentGenerationMismatch)
+}
+
 @MainActor
 @Test func agentDispatchesPolySplineCommandAndExposesBSplineTopology() async throws {
     let server = AgentCommandController()

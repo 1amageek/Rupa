@@ -74,6 +74,7 @@ import SwiftCAD
     #expect(capabilities.contains("insertSurfaceKnot"))
     #expect(capabilities.contains("setSurfaceKnotMultiplicity"))
     #expect(capabilities.contains("matchSurfaceBoundaryContinuity"))
+    #expect(capabilities.contains("surfaceBoundaryContinuityCompatibility"))
     #expect(capabilities.contains("setSurfaceControlPointDisplay"))
     #expect(capabilities.contains("setSurfaceFrameDisplay"))
     #expect(capabilities.contains("slidePolySplineSurfaceVertices"))
@@ -223,6 +224,9 @@ import SwiftCAD
     let surfaceAnalysis = try #require(descriptors.first { $0.name == "surfaceAnalysis" })
     let surfaceFrames = try #require(descriptors.first { $0.name == "surfaceFrames" })
     let surfaceContinuity = try #require(descriptors.first { $0.name == "surfaceContinuitySummary" })
+    let surfaceBoundaryCompatibility = try #require(
+        descriptors.first { $0.name == "surfaceBoundaryContinuityCompatibility" }
+    )
     let snapResolution = try #require(descriptors.first { $0.name == "resolveSnap" })
     let constructionPlaneCreate = try #require(descriptors.first { $0.name == "createConstructionPlane" })
     let constructionPlaneCreateFromTarget = try #require(descriptors.first { $0.name == "createConstructionPlaneFromTarget" })
@@ -1034,6 +1038,19 @@ import SwiftCAD
     #expect(surfaceContinuity.targets == [.face, .edge])
     #expect(surfaceContinuity.failureMode.contains("sampled curvature gaps"))
     #expect(surfaceContinuity.failureMode.contains("unresolved curvature continuity"))
+
+    #expect(surfaceBoundaryCompatibility.category == .read)
+    #expect(!surfaceBoundaryCompatibility.mutatesDocument)
+    #expect(surfaceBoundaryCompatibility.access == .agentRequest)
+    #expect(surfaceBoundaryCompatibility.discovery.contains(.surfaceSourceSummary))
+    #expect(surfaceBoundaryCompatibility.discovery.contains(.surfaceBoundaryContinuityCompatibility))
+    #expect(surfaceBoundaryCompatibility.targets == [.surfaceTrim])
+    #expect(surfaceBoundaryCompatibility.summary.contains("Preflight"))
+    #expect(surfaceBoundaryCompatibility.summary.contains("G0"))
+    #expect(surfaceBoundaryCompatibility.summary.contains("G1"))
+    #expect(surfaceBoundaryCompatibility.summary.contains("G2"))
+    #expect(surfaceBoundaryCompatibility.failureMode.contains("identical boundaries"))
+    #expect(surfaceBoundaryCompatibility.failureMode.contains("insufficient cross-boundary control rows"))
 
     #expect(snapResolution.category == .read)
     #expect(!snapResolution.mutatesDocument)

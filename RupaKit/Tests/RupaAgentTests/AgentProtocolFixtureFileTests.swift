@@ -115,6 +115,7 @@ struct AgentProtocolFixtureFileTests {
         "document.surfaceAnalysis",
         "document.surfaceFrames",
         "document.surfaceContinuitySummary",
+        "document.surfaceBoundaryContinuityCompatibility",
         "selection.selectTargets",
         "document.save",
         "document.export",

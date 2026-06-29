@@ -1497,6 +1497,16 @@ public final class AgentCommandController: AgentClientProtocol {
             failureMode: "Rejects stale generations or evaluation failures before returning surface continuity data; reports sampled curvature gaps for G2-capable UV trim curves and flags unresolved curvature continuity when a sampled boundary contract is unavailable."
         ),
         capability(
+            "surfaceBoundaryContinuityCompatibility",
+            category: .read,
+            summary: "Preflight whether two source-owned direct B-spline trim boundaries can be matched at G0, G1, or G2 before mutating the target boundary control rows.",
+            access: .agentRequest,
+            mutatesDocument: false,
+            discovery: [.surfaceSourceSummary, .surfaceBoundaryContinuityCompatibility],
+            targets: [.surfaceTrim],
+            failureMode: "Rejects stale generations, invalid selection references, non-direct B-spline trims, inner trims, and missing source features; returns structured diagnostics for identical boundaries, incompatible boundary bases, non-clamped boundaries, control-count mismatches, and insufficient cross-boundary control rows."
+        ),
+        capability(
             "selectTargets",
             category: .selection,
             summary: "Select Agent-discovered object, face, edge, vertex, region, or sketch-entity targets without mutating CAD source.",
@@ -1878,6 +1888,15 @@ public final class AgentCommandController: AgentClientProtocol {
                         objectRegistry: session.objectRegistry,
                         currentEvaluation: session.currentEvaluation,
                         currentGeneration: session.generation
+                    )
+                )
+            case let .surfaceBoundaryContinuityCompatibility(sessionID, target, reference, expectedGeneration):
+                let session = try registry.session(id: sessionID)
+                try session.store.requireGeneration(expectedGeneration)
+                return .surfaceBoundaryContinuityCompatibility(
+                    try session.document.surfaceBoundaryContinuityCompatibility(
+                        target: target,
+                        reference: reference
                     )
                 )
             case let .selectTargets(sessionID, targets, expectedGeneration):

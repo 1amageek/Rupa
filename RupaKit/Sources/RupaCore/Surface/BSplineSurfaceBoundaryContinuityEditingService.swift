@@ -2,6 +2,9 @@ import SwiftCAD
 import RupaCoreTypes
 
 struct BSplineSurfaceBoundaryContinuityEditingService: Sendable {
+    private let profileBuilder = BSplineSurfaceBoundaryProfileBuilder()
+    private let compatibilityEvaluator = BSplineSurfaceBoundaryContinuityCompatibilityEvaluator()
+
     func updatedFeature(
         matching target: BSplineSurfaceFeature,
         targetSide: BSplineSurfaceBoundarySide,
@@ -72,7 +75,7 @@ struct BSplineSurfaceBoundaryContinuityEditingService: Sendable {
             : nil
 
         var updatedFeature = target
-        let boundaryCount = boundaryControlPointCount(for: targetSide, in: target.surface)
+        let boundaryCount = profileBuilder.boundaryControlPointCount(for: targetSide, in: target.surface)
         for ordinal in 0..<boundaryCount {
             let referenceOrdinal = resolvedReferenceDirection == .reversed
                 ? boundaryCount - 1 - ordinal
@@ -188,64 +191,13 @@ struct BSplineSurfaceBoundaryContinuityEditingService: Sendable {
         level: SurfaceBoundaryContinuityLevel,
         owner: String
     ) throws {
-        let targetBoundaryCount = boundaryControlPointCount(for: targetSide, in: target)
-        let referenceBoundaryCount = boundaryControlPointCount(for: referenceSide, in: reference)
-        guard targetBoundaryCount == referenceBoundaryCount else {
-            throw EditorError(
-                code: .commandInvalid,
-                message: "\(owner) requires matching boundary control point counts."
-            )
-        }
-        guard targetBoundaryCount >= 2 else {
-            throw EditorError(
-                code: .commandInvalid,
-                message: "\(owner) requires non-collapsed surface boundaries."
-            )
-        }
-        guard isClampedBoundary(targetSide, in: target),
-              isClampedBoundary(referenceSide, in: reference) else {
-            throw EditorError(
-                code: .commandInvalid,
-                message: "\(owner) requires clamped outer boundaries so control rows map to surface boundaries."
-            )
-        }
-
-        let targetBasis = boundaryBasis(for: targetSide, in: target)
-        let referenceBasis = boundaryBasis(for: referenceSide, in: reference)
-        guard targetBasis.degree == referenceBasis.degree,
-              knotVectorsMatch(targetBasis.knots, referenceBasis.knots) else {
-            throw EditorError(
-                code: .commandInvalid,
-                message: "\(owner) requires matching boundary degree and knot vectors."
-            )
-        }
-
-        if level.requiresFirstDerivative {
-            guard inwardControlPointCount(for: targetSide, in: target) >= 2,
-                  inwardControlPointCount(for: referenceSide, in: reference) >= 2 else {
-                throw EditorError(
-                    code: .commandInvalid,
-                    message: "\(owner) G1 continuity requires at least two control rows across each boundary."
-                )
-            }
-        }
-
-        if level.requiresSecondDerivative {
-            guard inwardControlPointCount(for: targetSide, in: target) >= 3,
-                  inwardControlPointCount(for: referenceSide, in: reference) >= 3 else {
-                throw EditorError(
-                    code: .commandInvalid,
-                    message: "\(owner) G2 continuity requires at least three control rows across each boundary."
-                )
-            }
-            guard inwardDegree(for: targetSide, in: target) >= 2,
-                  inwardDegree(for: referenceSide, in: reference) >= 2 else {
-                throw EditorError(
-                    code: .commandInvalid,
-                    message: "\(owner) G2 continuity requires quadratic or higher degree across each boundary."
-                )
-            }
-        }
+        try compatibilityEvaluator.validate(
+            target: profileBuilder.profile(side: targetSide, surface: target),
+            reference: profileBuilder.profile(side: referenceSide, surface: reference),
+            isSameBoundary: false,
+            level: level,
+            owner: owner
+        )
     }
 
     private struct FirstDerivativeCoefficients {
@@ -273,14 +225,14 @@ struct BSplineSurfaceBoundaryContinuityEditingService: Sendable {
         case .automatic:
             let targetFirst = point(atBoundaryOrdinal: 0, inwardOffset: 0, side: targetSide, surface: target)
             let targetLast = point(
-                atBoundaryOrdinal: boundaryControlPointCount(for: targetSide, in: target) - 1,
+                    atBoundaryOrdinal: profileBuilder.boundaryControlPointCount(for: targetSide, in: target) - 1,
                 inwardOffset: 0,
                 side: targetSide,
                 surface: target
             )
             let referenceFirst = point(atBoundaryOrdinal: 0, inwardOffset: 0, side: referenceSide, surface: reference)
             let referenceLast = point(
-                atBoundaryOrdinal: boundaryControlPointCount(for: referenceSide, in: reference) - 1,
+                    atBoundaryOrdinal: profileBuilder.boundaryControlPointCount(for: referenceSide, in: reference) - 1,
                 inwardOffset: 0,
                 side: referenceSide,
                 surface: reference
@@ -311,9 +263,9 @@ struct BSplineSurfaceBoundaryContinuityEditingService: Sendable {
         case .opposite:
             return .opposite
         case .automatic:
-            let sampleOrdinal = boundaryControlPointCount(for: targetSide, in: target) / 2
+            let sampleOrdinal = profileBuilder.boundaryControlPointCount(for: targetSide, in: target) / 2
             let referenceOrdinal = referenceDirection == .reversed
-                ? boundaryControlPointCount(for: referenceSide, in: reference) - 1 - sampleOrdinal
+                ? profileBuilder.boundaryControlPointCount(for: referenceSide, in: reference) - 1 - sampleOrdinal
                 : sampleOrdinal
             let targetBoundary = point(
                 atBoundaryOrdinal: sampleOrdinal,
@@ -422,48 +374,12 @@ struct BSplineSurfaceBoundaryContinuityEditingService: Sendable {
         }
     }
 
-    private func boundaryBasis(
-        for side: BSplineSurfaceBoundarySide,
-        in surface: BSplineSurface3D
-    ) -> (degree: Int, knots: [Double]) {
-        switch side.boundaryDirection {
-        case .u:
-            return (surface.uDegree, surface.uKnots)
-        case .v:
-            return (surface.vDegree, surface.vKnots)
-        }
-    }
-
-    private func inwardBasis(
-        for side: BSplineSurfaceBoundarySide,
-        in surface: BSplineSurface3D
-    ) -> (degree: Int, knots: [Double]) {
-        switch side.inwardDirection {
-        case .u:
-            return (surface.uDegree, surface.uKnots)
-        case .v:
-            return (surface.vDegree, surface.vKnots)
-        }
-    }
-
-    private func inwardDegree(
-        for side: BSplineSurfaceBoundarySide,
-        in surface: BSplineSurface3D
-    ) -> Int {
-        switch side.inwardDirection {
-        case .u:
-            return surface.uDegree
-        case .v:
-            return surface.vDegree
-        }
-    }
-
     private func firstInwardDerivativeCoefficients(
         side: BSplineSurfaceBoundarySide,
         surface: BSplineSurface3D,
         owner: String
     ) throws -> FirstDerivativeCoefficients {
-        let profile = inwardKnotProfile(for: side, in: surface)
+        let profile = profileBuilder.inwardKnotProfile(for: side, in: surface)
         let denominator = try positiveDifference(
             profile.knots[profile.degree + 1],
             profile.knots[1],
@@ -481,7 +397,7 @@ struct BSplineSurfaceBoundaryContinuityEditingService: Sendable {
         surface: BSplineSurface3D,
         owner: String
     ) throws -> SecondDerivativeCoefficients {
-        let profile = inwardKnotProfile(for: side, in: surface)
+        let profile = profileBuilder.inwardKnotProfile(for: side, in: surface)
         guard profile.degree >= 2 else {
             throw EditorError(
                 code: .commandInvalid,
@@ -523,69 +439,6 @@ struct BSplineSurfaceBoundaryContinuityEditingService: Sendable {
             )
         }
         return value
-    }
-
-    private func inwardKnotProfile(
-        for side: BSplineSurfaceBoundarySide,
-        in surface: BSplineSurface3D
-    ) -> (degree: Int, knots: [Double]) {
-        let basis = inwardBasis(for: side, in: surface)
-        guard side.usesReversedInwardParameter else {
-            return basis
-        }
-        let lowerBound = basis.knots[basis.degree]
-        let upperBound = basis.knots[basis.knots.count - basis.degree - 1]
-        return (
-            basis.degree,
-            basis.knots.reversed().map { lowerBound + upperBound - $0 }
-        )
-    }
-
-    private func isClampedBoundary(
-        _ side: BSplineSurfaceBoundarySide,
-        in surface: BSplineSurface3D
-    ) -> Bool {
-        let profile = inwardKnotProfile(for: side, in: surface)
-        guard profile.knots.indices.contains(profile.degree + 1) else {
-            return false
-        }
-        let boundaryValue = profile.knots[profile.degree]
-        let multiplicity = profile.knots.reduce(0) { count, knot in
-            abs(knot - boundaryValue) <= ModelingTolerance.standard.distance ? count + 1 : count
-        }
-        return multiplicity == profile.degree + 1
-            && profile.knots[profile.degree + 1] > boundaryValue + ModelingTolerance.standard.distance
-    }
-
-    private func boundaryControlPointCount(
-        for side: BSplineSurfaceBoundarySide,
-        in surface: BSplineSurface3D
-    ) -> Int {
-        switch side.boundaryDirection {
-        case .u:
-            return surface.uControlPointCount
-        case .v:
-            return surface.vControlPointCount
-        }
-    }
-
-    private func inwardControlPointCount(
-        for side: BSplineSurfaceBoundarySide,
-        in surface: BSplineSurface3D
-    ) -> Int {
-        switch side.inwardDirection {
-        case .u:
-            return surface.uControlPointCount
-        case .v:
-            return surface.vControlPointCount
-        }
-    }
-
-    private func knotVectorsMatch(_ lhs: [Double], _ rhs: [Double]) -> Bool {
-        guard lhs.count == rhs.count else {
-            return false
-        }
-        return zip(lhs, rhs).allSatisfy { abs($0 - $1) <= ModelingTolerance.standard.distance }
     }
 
     private func homogeneousControlPoint(
@@ -695,25 +548,5 @@ struct BSplineSurfaceBoundaryContinuityEditingService: Sendable {
 
     private func distance(_ lhs: Point3D, _ rhs: Point3D) -> Double {
         (lhs - rhs).length
-    }
-}
-
-private extension SurfaceBoundaryContinuityLevel {
-    var requiresFirstDerivative: Bool {
-        switch self {
-        case .g0:
-            return false
-        case .g1, .g2:
-            return true
-        }
-    }
-
-    var requiresSecondDerivative: Bool {
-        switch self {
-        case .g0, .g1:
-            return false
-        case .g2:
-            return true
-        }
     }
 }

@@ -119,7 +119,65 @@ import Testing
     #expect(state.referenceReference == firstReference)
     #expect(state.targetSupportedLevelSummary == "G0 / G1 / G2")
     #expect(state.referenceSupportedLevelSummary == "G0 / G1 / G2")
-    #expect(state.statusTitle == "Ready")
+    #expect(state.pairSupportedLevelSummary == "G0 / G1 / G2")
+    #expect(state.supports(.g2))
+    #expect(state.recommendedReferenceDirectionSummary == "forward")
+    #expect(state.recommendedMatchSideSummary == "opposite")
+    #expect(state.diagnosticMessages.contains("Boundary pair supports G0/G1/G2 continuity matching."))
+    #expect(state.statusTitle == "Compatible")
+
+    let summary = try SurfaceSourceSummaryService().summarize(document: document)
+    let unavailableState = SurfaceBoundaryContinuityInspectorState(
+        selectedReferences: [secondReference, firstReference],
+        summaryResult: summary,
+        compatibilityErrorMessage: "Boundary preflight failed."
+    )
+    #expect(!unavailableState.canMatch)
+    #expect(unavailableState.statusTitle == "Unavailable")
+    #expect(unavailableState.diagnosticMessages == ["Boundary preflight failed."])
+
+    let g0OnlyCompatibility = SurfaceBoundaryContinuityCompatibilityResult(
+        status: .compatible,
+        target: SurfaceBoundaryContinuityCompatibilityResult.Boundary(
+            featureID: secondFeatureID,
+            selectionReference: secondReference,
+            role: "vMin",
+            boundaryDirection: .u,
+            inwardDirection: .v,
+            boundaryDegree: 3,
+            inwardDegree: 1,
+            boundaryControlPointCount: 4,
+            inwardControlPointCount: 1,
+            isClamped: true,
+            supportedContinuityLevels: [.g0]
+        ),
+        reference: SurfaceBoundaryContinuityCompatibilityResult.Boundary(
+            featureID: firstFeatureID,
+            selectionReference: firstReference,
+            role: "vMax",
+            boundaryDirection: .u,
+            inwardDirection: .v,
+            boundaryDegree: 3,
+            inwardDegree: 1,
+            boundaryControlPointCount: 4,
+            inwardControlPointCount: 1,
+            isClamped: true,
+            supportedContinuityLevels: [.g0]
+        ),
+        supportedContinuityLevels: [.g0],
+        maximumSupportedContinuityLevel: .g0,
+        recommendedReferenceDirection: .forward,
+        recommendedMatchSide: nil,
+        diagnostics: []
+    )
+    let g0OnlyState = SurfaceBoundaryContinuityInspectorState(
+        selectedReferences: [secondReference, firstReference],
+        summaryResult: summary,
+        compatibilityResult: g0OnlyCompatibility
+    )
+    #expect(g0OnlyState.canMatch)
+    #expect(g0OnlyState.pairSupportedLevelSummary == "G0")
+    #expect(g0OnlyState.resolvedContinuityLevel(preferred: .g2) == .g0)
 }
 
 @Test func workspaceSurfaceInspectorStateBuilderRejectsPolySplineBoundaryContinuitySelection() throws {

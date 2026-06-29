@@ -66,6 +66,17 @@ public extension CLIOutput {
     }
 
     static func write(
+        response: CLISurfaceBoundaryContinuityCompatibilityResponse,
+        asJSON: Bool
+    ) throws {
+        try write(
+            response,
+            fallback: response.message,
+            asJSON: asJSON
+        )
+    }
+
+    static func write(
         response: CLISurfaceFramesResponse,
         asJSON: Bool
     ) throws {
