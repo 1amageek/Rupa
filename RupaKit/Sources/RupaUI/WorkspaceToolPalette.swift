@@ -8,12 +8,12 @@ struct WorkspaceToolPalette: View {
     var accessibilityIdentifier: (ModelingTool) -> String
 
     var body: some View {
-        VStack(spacing: 6) {
+        VStack(spacing: 5) {
             ForEach(ModelingTool.allCases) { tool in
                 toolPaletteButton(tool)
             }
         }
-        .padding(6)
+        .padding(4)
         .glassEffect(.regular, in: Capsule())
         .shadow(color: .black.opacity(0.16), radius: 18, x: 0, y: 8)
         .accessibilityElement(children: .contain)

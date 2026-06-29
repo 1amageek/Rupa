@@ -510,21 +510,21 @@ public struct MainView: View {
             }
             .overlay(alignment: .top) {
                 workspaceTopBar
-                    .padding(.top, 12)
-                    .padding(.horizontal, 14)
+                    .padding(.top, 8)
+                    .padding(.horizontal, 8)
             }
             .overlay(alignment: .leading) {
                 floatingToolPalette
-                    .padding(.leading, 14)
+                    .padding(.leading, 8)
             }
             .overlay(alignment: .trailing) {
                 workspaceUtilityRail
-                    .padding(.trailing, 14)
+                    .padding(.trailing, 8)
             }
             .overlay(alignment: .bottom) {
                 viewportContextPanel
-                    .padding(.bottom, 14)
-                    .padding(.horizontal, 14)
+                    .padding(.bottom, 8)
+                    .padding(.horizontal, 8)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         } content: {
@@ -1192,8 +1192,8 @@ public struct MainView: View {
                 isInspectorPresented.toggle()
             }
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 6)
         .frame(maxWidth: 760)
         .workspaceGlassContainer()
         .accessibilityElement(children: .contain)
@@ -1237,7 +1237,7 @@ public struct MainView: View {
     }
 
     private var workspaceUtilityRail: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 8) {
             workspaceRailSection("Select") {
                 WorkspaceSelectionScopeControl(selection: $selectionScope)
             }
@@ -1302,7 +1302,7 @@ public struct MainView: View {
                 workspaceValueRow("Issues", diagnosticSummary)
             }
         }
-        .padding(10)
+        .padding(8)
         .frame(width: 178, alignment: .topLeading)
         .workspaceGlassContainer()
         .accessibilityElement(children: .contain)
@@ -1310,7 +1310,7 @@ public struct MainView: View {
     }
 
     private var viewportContextPanel: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 8) {
             if session.selectedTool == .sweep {
                 let preview = session.sweepSelectionPreview()
                 WorkspaceSweepContextPanel(
@@ -1393,8 +1393,8 @@ public struct MainView: View {
                 )
             }
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 6)
         .workspaceGlassContainer()
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("ViewportContextPanel")

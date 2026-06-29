@@ -93,8 +93,8 @@ func workspaceValuePill(
     }
     .font(.caption)
     .lineLimit(1)
-    .padding(.horizontal, 8)
-    .padding(.vertical, 5)
+    .padding(.horizontal, 6)
+    .padding(.vertical, 4)
     .background {
         RoundedRectangle(cornerRadius: 7, style: .continuous)
             .fill(Color.primary.opacity(0.06))
@@ -119,8 +119,8 @@ func workspaceStatusChip(
     }
     .font(.caption.weight(.medium))
     .foregroundStyle(tint)
-    .padding(.horizontal, 8)
-    .padding(.vertical, 5)
+    .padding(.horizontal, 6)
+    .padding(.vertical, 4)
     .background {
         RoundedRectangle(cornerRadius: 7, style: .continuous)
             .fill(tint.opacity(0.12))
