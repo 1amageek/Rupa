@@ -760,6 +760,17 @@ public final class CADDocumentStore {
             document = updatedDocument
             try commitMutation()
             evaluateCurrentDocument()
+        case .moveBodyEdge(let target, let deltaX, let deltaY):
+            var updatedDocument = document
+            try updatedDocument.moveBodyEdge(
+                target: target,
+                deltaX: deltaX,
+                deltaY: deltaY,
+                objectRegistry: objectRegistry
+            )
+            document = updatedDocument
+            try commitMutation()
+            evaluateCurrentDocument()
         case .moveBodyVertex(let target, let deltaX, let deltaY):
             var updatedDocument = document
             try updatedDocument.moveBodyVertex(

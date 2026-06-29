@@ -783,6 +783,21 @@ public struct AutomationRunner {
                 didMutate: result.didMutate,
                 diagnostics: result.diagnostics
             )
+        case .moveBodyEdge(let target, let deltaX, let deltaY):
+            let result = try session.execute(
+                .moveBodyEdge(
+                    target: target,
+                    deltaX: deltaX,
+                    deltaY: deltaY
+                )
+            )
+            return AutomationResult(
+                message: "Body edge moved.",
+                commandName: result.commandName,
+                generation: result.generation,
+                didMutate: result.didMutate,
+                diagnostics: result.diagnostics
+            )
         case .moveBodyVertex(let target, let deltaX, let deltaY):
             let result = try session.execute(
                 .moveBodyVertex(

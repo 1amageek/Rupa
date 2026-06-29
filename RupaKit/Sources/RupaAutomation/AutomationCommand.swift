@@ -149,6 +149,7 @@ public enum AutomationCommand: Codable, Equatable, Sendable {
     case offsetBodyFace(target: SelectionTarget, distance: CADExpression)
     case chamferBodyEdges(targets: [SelectionTarget], distance: CADExpression)
     case filletBodyEdges(targets: [SelectionTarget], radius: CADExpression, segmentCount: Int)
+    case moveBodyEdge(target: SelectionTarget, deltaX: CADExpression, deltaY: CADExpression)
     case moveBodyVertex(target: SelectionTarget, deltaX: CADExpression, deltaY: CADExpression)
     case moveSketchEntityPoint(
         target: SelectionTarget,
@@ -631,6 +632,12 @@ public enum AutomationCommand: Codable, Equatable, Sendable {
                 targets: targets,
                 radius: radius,
                 segmentCount: segmentCount
+            )
+        case .moveBodyEdge(let target, let deltaX, let deltaY):
+            .moveBodyEdge(
+                target: target,
+                deltaX: deltaX,
+                deltaY: deltaY
             )
         case .moveBodyVertex(let target, let deltaX, let deltaY):
             .moveBodyVertex(

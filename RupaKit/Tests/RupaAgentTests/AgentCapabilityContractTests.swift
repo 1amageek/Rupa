@@ -89,6 +89,7 @@ import SwiftCAD
     #expect(capabilities.contains("offsetBodyFace"))
     #expect(capabilities.contains("chamferBodyEdges"))
     #expect(capabilities.contains("filletBodyEdges"))
+    #expect(capabilities.contains("moveBodyEdge"))
     #expect(capabilities.contains("moveBodyVertex"))
     #expect(capabilities.contains("moveSketchEntityPoint"))
     #expect(capabilities.contains("moveSketchSplineControlPoint"))

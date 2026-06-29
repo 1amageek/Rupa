@@ -2936,6 +2936,38 @@ public final class EditorSession {
     }
 
     @discardableResult
+    public func moveBodyEdge(
+        target: SelectionTarget,
+        deltaX: CADExpression,
+        deltaY: CADExpression
+    ) -> CommandExecutionResult? {
+        perform(
+            .moveBodyEdge(
+                target: target,
+                deltaX: deltaX,
+                deltaY: deltaY
+            )
+        )
+    }
+
+    @discardableResult
+    public func moveSelectedBodyEdge(
+        deltaX: CADExpression,
+        deltaY: CADExpression
+    ) -> CommandExecutionResult? {
+        guard let selectedTarget,
+              case .edge = selectedTarget.component else {
+            reportToolStatus("Edge move requires an edge selection.", severity: .warning)
+            return nil
+        }
+        return moveBodyEdge(
+            target: selectedTarget,
+            deltaX: deltaX,
+            deltaY: deltaY
+        )
+    }
+
+    @discardableResult
     public func moveBodyVertex(
         target: SelectionTarget,
         deltaX: CADExpression,

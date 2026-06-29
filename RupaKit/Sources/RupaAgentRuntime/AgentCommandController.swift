@@ -703,6 +703,16 @@ public final class AgentCommandController: AgentClientProtocol {
             failureMode: "Rejects unsupported topology, constrained or parameterized profile loops, tangent-continuous targets, invalid radii, and stale generations before mutation."
         ),
         capability(
+            "moveBodyEdge",
+            category: .directEditing,
+            summary: "Move supported generated body line and circular profile edge targets through source-owned analytic sketch edits, preserving line and circle identity.",
+            access: .automationCommand,
+            mutatesDocument: true,
+            discovery: [.topologySummary, .sketchEntitySummary],
+            targets: [.edge],
+            failureMode: "Rejects unsupported edge mappings, zero deltas, source arcs that require connected trim healing, invalid profile rewrites, and stale generations before mutation."
+        ),
+        capability(
             "moveBodyVertex",
             category: .directEditing,
             summary: "Move supported body vertex targets through source profile edits.",

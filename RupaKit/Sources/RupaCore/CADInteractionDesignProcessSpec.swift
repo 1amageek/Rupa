@@ -239,6 +239,7 @@ struct CADInteractionDesignProcessSpec: Sendable {
                 ownershipBoundaries: ["RupaCore maps generated targets to source-owned edits", "SwiftCAD validates rewritten CAD source"],
                 supportedCases: [
                     caseItem("rectangle-face-offset", "Supported rectangle and cylinder face offsets rewrite source-owned bodies.", .supported, .core),
+                    caseItem("generated-profile-edge-move", "Generated line and circle profile edges rewrite their source sketch line or circle while preserving analytic identity.", .supported, .core),
                     caseItem("surface-cv-edit", "Supported PolySpline boundary/interior CV edits stay source-owned.", .supported, .core),
                 ],
                 boundaryCases: [
@@ -249,6 +250,7 @@ struct CADInteractionDesignProcessSpec: Sendable {
                 ],
                 rejectedCases: [
                     caseItem("transient-topology-edit", "Transient mesh IDs cannot be accepted as direct-edit sources.", .rejected, .evaluation),
+                    caseItem("generated-arc-edge-move", "Generated arc profile edge movement rejects until connected trim healing can preserve adjacent source curves.", .rejected, .core),
                 ],
                 performanceCases: [
                     caseItem("identity-picking-budget", "Identity picking and direct-edit previews need production-scene budgets.", .planned, .measurement),

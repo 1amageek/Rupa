@@ -267,6 +267,7 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                     label: "Direct edit commands for owned generated topology subsets",
                     sourceFiles: [
                         "RupaKit/Sources/RupaCore/DesignDocument.swift",
+                        "RupaKit/Sources/RupaCore/DesignDocument+SolidEdgeMove.swift",
                         "RupaKit/Sources/RupaCore/EditorCommand.swift",
                         "RupaKit/Sources/RupaCore/GeneratedTopologySelectionResolver.swift",
                         "RupaKit/Sources/RupaCore/PolySplineSurfaceVertexEditingService.swift",
@@ -275,19 +276,22 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                     tests: [
                         "RupaKit/Tests/RupaCoreTests/BodyFaceOffsetCommandTests.swift",
                         "RupaKit/Tests/RupaCoreTests/BodyEdgeChamferCommandTests.swift",
+                        "RupaKit/Tests/RupaCoreTests/BodyEdgeMoveCommandTests.swift",
                         "RupaKit/Tests/RupaCoreTests/BodyVertexMoveCommandTests.swift",
                         "RupaKit/Tests/RupaCoreTests/DesignDocumentTests.swift",
+                        "RupaKit/Tests/RupaAgentTests/AgentDirectModelingIntegrationTests.swift",
                         "RupaKit/Tests/RupaAgentTests/AgentCommandControllerTests.swift",
                     ],
                     notes: [
-                        "Face offset, edge chamfer/fillet, vertex move, and PolySpline surface vertex edits are routed through command contracts.",
-                        "General push/pull, move edge, delete face, match face, draft face, and proportional CV editing are not yet complete.",
+                        "Face offset, edge chamfer/fillet, generated source line/circle profile edge move, vertex move, and PolySpline surface vertex edits are routed through command contracts.",
+                        "Generated source line and circle profile edge moves rewrite the owning source sketch and preserve analytic line or circle identity.",
+                        "General push/pull, arbitrary edge move, delete face, match face, draft face, and proportional CV editing are not yet complete.",
                     ]
                 ),
             ],
             openWork: [
                 "General push/pull face edits with dependent offset, adjacent-angle, and grow policies.",
-                "Move planar and circular edges while preserving analytic geometry.",
+                "Broader edge movement beyond generated source line and circle profile edges, including arc edges that require connected trim healing, arbitrary B-rep edges, and surface-boundary edges.",
                 "Delete Face, Match Face, Draft Face, and broader surface-CV proportional editing.",
                 "Direct edit rollback diagnostics when topology cannot be healed exactly.",
             ],

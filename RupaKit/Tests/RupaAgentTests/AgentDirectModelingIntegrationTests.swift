@@ -79,6 +79,52 @@ import SwiftCAD
     #expect(session.evaluationStatus == .valid)
 }
 
+@Test func agentDispatchesGeneratedProfileEdgeMoveCommandThroughAutomationAndCore() async throws {
+    let server = AgentCommandController()
+    let sessionID = UUID()
+    let session = EditorSession()
+    _ = try #require(session.createDefaultExtrudedCircle())
+    server.register(session: session, id: sessionID)
+
+    let topologyResponse = server.handle(
+        .topologySummary(
+            sessionID: sessionID,
+            expectedGeneration: DocumentGeneration(1)
+        )
+    )
+    guard case .topologySummary(let topology) = topologyResponse else {
+        Issue.record("Agent must return a topology summary.")
+        return
+    }
+    let circularEdge = try #require(topology.entries.first {
+        $0.kind == .edge &&
+            $0.generatedRole == "edge" &&
+            $0.curveKind == "circle"
+    })
+    let target = try #require(circularEdge.selectionTarget())
+
+    let response = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .moveBodyEdge(
+                target: target,
+                deltaX: .length(1.0, .millimeter),
+                deltaY: .length(-1.0, .millimeter)
+            ),
+            expectedGeneration: DocumentGeneration(1)
+        )
+    )
+
+    guard case .command(let result) = response else {
+        Issue.record("Agent must return a command result.")
+        return
+    }
+    #expect(result.commandName == "moveBodyEdge")
+    #expect(result.didMutate)
+    #expect(result.generation == DocumentGeneration(2))
+    #expect(session.evaluationStatus == .valid)
+}
+
 @Test func agentDispatchesFaceKnifeCommandThroughAutomationAndCore() async throws {
     let server = AgentCommandController()
     let sessionID = UUID()

@@ -16,6 +16,7 @@ import SwiftCAD
         return
     }
     #expect(descriptors == server.capabilityDescriptors())
+    #expect(descriptors.contains { $0.name == "moveBodyEdge" && $0.targets == [.edge] })
     #expect(descriptors.contains { $0.name == "moveBodyVertex" && $0.targets == [.vertex] })
     #expect(descriptors.contains { $0.name == "cadInteractionQualityAssessment" && !$0.requiresSession })
     #expect(descriptors.contains { $0.name == "designDisplaySnapshot" && $0.discovery.contains(.designDisplaySnapshot) })
