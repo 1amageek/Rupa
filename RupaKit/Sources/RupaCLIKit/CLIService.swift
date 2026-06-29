@@ -768,6 +768,33 @@ public struct CLIService {
         )
     }
 
+    public func createLoft(
+        target: CLIDocumentTarget,
+        name: String,
+        sections: [LoftSectionReference],
+        options: LoftOptions,
+        mode: CLIEditMode = .auto,
+        expectedGeneration: DocumentGeneration? = nil,
+        dryRun: Bool = false,
+        forceFileEdit: Bool = false,
+        client: AgentClientProtocol? = nil
+    ) throws -> CLIResponse {
+        let command = AutomationCommand.createLoft(
+            name: name,
+            sections: sections,
+            options: options
+        )
+        return try executeModelingCommand(
+            command,
+            target: target,
+            mode: mode,
+            expectedGeneration: expectedGeneration,
+            dryRun: dryRun,
+            forceFileEdit: forceFileEdit,
+            client: client
+        )
+    }
+
     public func createLineSketch(
         target: CLIDocumentTarget,
         name: String,

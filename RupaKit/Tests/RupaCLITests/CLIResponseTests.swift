@@ -762,6 +762,82 @@ struct CLIModelCommandTests {
         ])
         #expect(loaded.productMetadata.sceneNodes.values.contains { $0.reference == .body(sweepFeatureID) })
     }
+
+    @Test(.timeLimit(.minutes(1)))
+    func executableModelLoftPersistsClosedDocumentAsJSON() async throws {
+        let temporaryDirectory = try makeTemporaryDirectory()
+        defer {
+            removeTemporaryDirectory(temporaryDirectory)
+        }
+        let documentURL = temporaryDirectory.appendingPathComponent("process-loft.swcad")
+        var document = DesignDocument.empty(named: "Process Loft")
+        let firstProfileID = try document.createRectangleSketch(
+            name: "Loft Bottom Profile",
+            plane: .xy,
+            width: .length(4.0, .millimeter),
+            height: .length(2.0, .millimeter)
+        )
+        let secondProfileID = try document.createRectangleSketch(
+            name: "Loft Top Profile",
+            plane: .plane(Plane3D(
+                origin: Point3D(x: 0.0, y: 0.0, z: 0.010),
+                normal: .unitZ
+            )),
+            width: .length(6.0, .millimeter),
+            height: .length(3.0, .millimeter)
+        )
+        try DocumentFileService().save(document, to: documentURL)
+
+        let result = try await runCLI([
+            "model",
+            "loft",
+            documentURL.path,
+            "--name",
+            "CLI Loft",
+            "--section-feature-id",
+            firstProfileID.description,
+            "--section-feature-id",
+            secondProfileID.description,
+            "--section-profile-index",
+            "0",
+            "--section-profile-index",
+            "0",
+            "--section-matching",
+            "byIndex",
+            "--result-kind",
+            "solid",
+            "--mode",
+            "file",
+            "--json",
+        ])
+        let response = try JSONDecoder().decode(
+            CLIResponse.self,
+            from: result.standardOutputData
+        )
+        let loaded = try DocumentFileService().load(from: documentURL)
+        let loftFeatureID = try #require(loaded.cadDocument.designGraph.order.last)
+        let feature = try #require(loaded.cadDocument.designGraph.nodes[loftFeatureID])
+        guard case let .loft(loft) = feature.operation else {
+            #expect(Bool(false))
+            return
+        }
+
+        #expect(result.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: result.standardError))
+        #expect(response.message == "Loft CLI Loft source created.")
+        #expect(response.saved)
+        #expect(!response.dirty)
+        #expect(loaded.cadDocument.designGraph.order.count == 3)
+        #expect(loft.sections == [
+            LoftSectionReference(profile: ProfileReference(featureID: firstProfileID)),
+            LoftSectionReference(profile: ProfileReference(featureID: secondProfileID)),
+        ])
+        #expect(loft.options.resultKind == .solid)
+        #expect(feature.inputs == [
+            FeatureInput(featureID: firstProfileID, role: .profile),
+            FeatureInput(featureID: secondProfileID, role: .profile),
+        ])
+        #expect(loaded.productMetadata.sceneNodes.values.contains { $0.reference == .body(loftFeatureID) })
+    }
 }
 
 @Test(.timeLimit(.minutes(1)))

@@ -751,6 +751,7 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                         "RupaKit/Sources/RupaCore/DesignDocument+Solid.swift",
                         "RupaKit/Sources/RupaAutomation/AutomationCommand.swift",
                         "RupaKit/Sources/RupaAgentRuntime/AgentCommandController.swift",
+                        "RupaKit/Sources/RupaCLIKit/LoftModelCommand.swift",
                         "RupaKit/Sources/RupaUI/MainView.swift",
                     ],
                     tests: [
@@ -761,9 +762,10 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                         "RupaKit/Tests/RupaAutomationTests/LoftAutomationTests.swift",
                         "RupaKit/Tests/RupaAgentTests/AgentLoftIntegrationTests.swift",
                         "RupaKit/Tests/RupaAgentTests/AgentCommandControllerTests.swift",
+                        "RupaKit/Tests/RupaCLITests/CLIResponseTests.swift",
                     ],
                     notes: [
-                        "Loft now has a source-owned Swift-CAD IR, same-boundary-count planar ruled B-rep evaluator, cyclic section matching independent of arbitrary closed-loop start vertices, solid and sheet output, RupaCore mutation, Automation, Agent command dispatch, measurement, viewport scene display, and Inspector operation summaries.",
+                        "Loft now has a source-owned Swift-CAD IR, same-boundary-count planar ruled B-rep evaluator, cyclic section matching independent of arbitrary closed-loop start vertices, solid and sheet output, RupaCore mutation, Automation, Agent command dispatch, CLI model loft creation, measurement, viewport scene display, and Inspector operation summaries.",
                     ]
                 ),
             ],
@@ -772,7 +774,7 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                 "Rail deformation beyond the current affine, signed-axis, convex quadrilateral bilinear, convex mean-value cage, and radial point-guide sections.",
                 "Non-box boolean operands.",
                 "Stable result topology beyond current exact subsets.",
-                "Full Sweep and Loft modal command-dialog parity, viewport section placement, and UVN/surfaceTrim-driven section placement.",
+                "Full Sweep and Loft modal command-dialog parity, viewport section placement, and UVN/surfaceTrim-driven section placement beyond the typed CLI/Automation/Agent command path.",
             ],
             next: "Broaden exact swept and lofted surface support while keeping section, guide, seam, and boolean overconstraint diagnostics explicit."
         ),

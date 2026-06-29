@@ -227,6 +227,7 @@ public struct ModelCommand: ParsableCommand {
             ExtrudeModelCommand.self,
             RevolveModelCommand.self,
             SweepModelCommand.self,
+            LoftModelCommand.self,
             ModelFaceOffsetCommand.self,
             ModelEdgeChamferCommand.self,
             ModelEdgeFilletCommand.self,
