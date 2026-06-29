@@ -40,6 +40,7 @@ import Testing
     #expect(state.draftFaceTarget == nil)
     #expect(state.draftNeutralFaceTarget == nil)
     #expect(!state.canDraftFace)
+    #expect(state.canDeleteFaces)
     #expect(state.edgeTargets == [edgeTarget])
     #expect(state.projectableEdgeTargets == [edgeTarget])
     #expect(state.vertexTarget == vertexTarget)
@@ -89,6 +90,7 @@ import Testing
     #expect(state.draftFaceTarget == nil)
     #expect(state.draftNeutralFaceTarget == nil)
     #expect(!state.canDraftFace)
+    #expect(!state.canDeleteFaces)
     #expect(!state.canEditVertex)
 }
 
@@ -123,6 +125,7 @@ import Testing
     #expect(state.draftFaceTarget == targetFace)
     #expect(state.draftNeutralFaceTarget == neutralFace)
     #expect(state.canDraftFace)
+    #expect(state.canDeleteFaces)
 }
 
 @Test func workspaceTopologyEditInspectorStateBuilderProjectsGeneratedEdgesOnce() {

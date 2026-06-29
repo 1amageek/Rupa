@@ -4222,6 +4222,7 @@ public struct MainView: View {
             onOffsetFace: { target, meters in
                 offsetSelectedFace(target, by: meters)
             },
+            onDeleteFaces: deleteSelectedFaces,
             onDraftFace: { target, neutralTarget, angleDegrees in
                 draftSelectedFace(
                     target,
@@ -4975,6 +4976,13 @@ public struct MainView: View {
             distance: .length(meters, .meter)
         )
         if result?.diagnostics.isEmpty == false {
+            isPreviewExpanded = true
+        }
+    }
+
+    private func deleteSelectedFaces(_ targets: [SelectionTarget]) {
+        let result = session.deleteBodyFaces(targets: targets)
+        if result?.diagnostics.isEmpty == false || result == nil {
             isPreviewExpanded = true
         }
     }

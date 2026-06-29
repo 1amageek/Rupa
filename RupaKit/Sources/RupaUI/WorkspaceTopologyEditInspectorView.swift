@@ -11,6 +11,7 @@ struct WorkspaceTopologyEditInspectorView: View {
     @Binding var regionOffsetGapFill: OffsetCurveGapFill
     var offsetSliderRange: ClosedRange<Double>
     var onOffsetFace: (SelectionTarget, Double) -> Void
+    var onDeleteFaces: ([SelectionTarget]) -> Void
     var onDraftFace: (SelectionTarget, SelectionTarget, Double) -> Void
     var onOffsetEdges: ([SelectionTarget], Double, OffsetCurveGapFill) -> Void
     var onProjectEdges: ([SelectionTarget]) -> Void
@@ -21,6 +22,7 @@ struct WorkspaceTopologyEditInspectorView: View {
 
     var body: some View {
         faceEditSection
+        faceDeleteSection
         faceDraftSection
         edgeEditSection
         vertexEditSection
@@ -52,6 +54,26 @@ struct WorkspaceTopologyEditInspectorView: View {
                         )
                     }
                     .accessibilityIdentifier("InspectorFace.offsetPositive")
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var faceDeleteSection: some View {
+        if state.canDeleteFaces {
+            inspectorSection("Delete Face") {
+                workspaceInspectorValueRow("Targets", faceTargetSummary)
+                inspectorActionRow {
+                    Button(role: .destructive) {
+                        onDeleteFaces(state.faceTargets)
+                    } label: {
+                        Label(
+                            state.faceTargets.count == 1 ? "Delete Face" : "Delete Faces",
+                            systemImage: "trash"
+                        )
+                    }
+                    .accessibilityIdentifier("InspectorFace.delete")
                 }
             }
         }
@@ -308,6 +330,10 @@ struct WorkspaceTopologyEditInspectorView: View {
     private func formatted(_ meters: Double) -> String {
         let value = displayUnit.value(fromMeters: meters)
         return "\(value.formatted(.number.precision(.fractionLength(0...4)))) \(displayUnit.symbol)"
+    }
+
+    private var faceTargetSummary: String {
+        state.faceTargets.count == 1 ? state.selectedTargetSummary : "\(state.faceTargets.count)"
     }
 
     private var draftAngleMagnitudeDegrees: Double {

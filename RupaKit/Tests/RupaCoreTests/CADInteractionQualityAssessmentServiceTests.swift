@@ -81,6 +81,9 @@ import RupaCore
     #expect(directModeling.evidence.contains { evidence in
         evidence.notes.contains("Healing Delete Face that refills, extends, or shrinks adjacent faces is not yet implemented; current Delete Face intentionally preserves an open sheet body result for the supported non-healing subset.")
     })
+    #expect(directModeling.evidence.contains { evidence in
+        evidence.notes.contains("Workspace Inspector exposes non-healing Delete Face for selected generated face targets and routes it through the same Core command used by Automation and Agent.")
+    })
 
     let exchange = try #require(result.entries.first { $0.area == .exchangeAndDrawings })
     #expect(exchange.currentRating == .partial)

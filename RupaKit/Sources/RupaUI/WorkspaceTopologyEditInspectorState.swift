@@ -26,6 +26,10 @@ struct WorkspaceTopologyEditInspectorState: Equatable {
         isSingleNodeSelection && draftFaceTarget != nil && draftNeutralFaceTarget != nil
     }
 
+    var canDeleteFaces: Bool {
+        isSingleNodeSelection && faceTargets.isEmpty == false
+    }
+
     var canEditEdges: Bool {
         isSingleNodeSelection && edgeTargets.isEmpty == false
     }

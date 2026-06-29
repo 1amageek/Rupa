@@ -294,6 +294,7 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                     ],
                     notes: [
                         "Face offset, non-healing generated face deletion to sheet bodies, edge chamfer/fillet, generated source line/circle/line-arc-line arc profile edge move, vertex move, and PolySpline surface vertex edits are routed through command contracts.",
+                        "Workspace Inspector exposes non-healing Delete Face for selected generated face targets and routes it through the same Core command used by Automation and Agent.",
                         "Draft Face is available for the current generated planar side-face plus same-body neutral-face subset through Core, Automation, Agent, and Workspace Inspector two-face selection affordance.",
                         "Generated source line, circle, and line-arc-line arc profile edge moves rewrite the owning source sketch, preserve analytic source identity, and keep arc moves tangent-continuous by re-trimming adjacent source lines.",
                         "Healing Delete Face that refills, extends, or shrinks adjacent faces is not yet implemented; current Delete Face intentionally preserves an open sheet body result for the supported non-healing subset.",
