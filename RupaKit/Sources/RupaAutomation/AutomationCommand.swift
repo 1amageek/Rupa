@@ -279,6 +279,11 @@ public enum AutomationCommand: Codable, Equatable, Sendable {
         u: CADExpression,
         v: CADExpression
     )
+    case setSurfaceTrimControlPointWeight(
+        target: SelectionReference,
+        controlPointIndex: Int,
+        weight: CADExpression
+    )
     case matchSurfaceBoundaryContinuity(
         target: SelectionReference,
         reference: SelectionReference,
@@ -824,6 +829,12 @@ public enum AutomationCommand: Codable, Equatable, Sendable {
                 controlPointIndex: controlPointIndex,
                 u: u,
                 v: v
+            )
+        case .setSurfaceTrimControlPointWeight(let target, let controlPointIndex, let weight):
+            .setSurfaceTrimControlPointWeight(
+                target: target,
+                controlPointIndex: controlPointIndex,
+                weight: weight
             )
         case .matchSurfaceBoundaryContinuity(
             let target,

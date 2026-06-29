@@ -3984,6 +3984,101 @@ func cliExecutableSurfaceTrimControlPointCommandMutatesClosedDocumentAsJSON() as
 }
 
 @Test(.timeLimit(.minutes(1)))
+func cliExecutableSurfaceTrimControlPointWeightCommandMutatesClosedDocumentAsJSON() async throws {
+    let temporaryDirectory = try makeTemporaryDirectory()
+    defer {
+        removeTemporaryDirectory(temporaryDirectory)
+    }
+    let documentURL = temporaryDirectory.appendingPathComponent("process-surface-trim-control-point-weight.swcad")
+    var document = DesignDocument.empty(named: "Process Surface Trim Control Point Weight")
+    let sourceSurface = cliDirectBSplineSurfaceWithInteriorKnots()
+    let featureID = try document.createBSplineSurface(
+        name: "CLI Trim Control Point Weight B-spline Surface",
+        surface: sourceSurface
+    )
+    let summary = try SurfaceSourceSummaryService().summarize(document: document)
+    let faceReference = try #require(summary.sources.first?.patches.first?.faceSelectionReference)
+    let trimLoop = BSplineSurfaceTrimLoop(
+        role: .outer,
+        edges: [
+            BSplineSurfaceTrimEdge(parameterCurve: .bSpline(BSplineCurve2D(
+                degree: 2,
+                knots: [0.0, 0.0, 0.0, 1.0, 1.0, 1.0],
+                controlPoints: [
+                    Point2D(x: 0.2, y: 0.2),
+                    Point2D(x: 0.52, y: 0.42),
+                    Point2D(x: 0.8, y: 0.25),
+                ],
+                weights: [1.0, 1.2, 1.0]
+            ))),
+            BSplineSurfaceTrimEdge(parameterCurve: .polyline([
+                SurfaceParameter(u: 0.8, v: 0.25),
+                SurfaceParameter(u: 0.45, v: 0.8),
+            ])),
+            BSplineSurfaceTrimEdge(parameterCurve: .polyline([
+                SurfaceParameter(u: 0.45, v: 0.8),
+                SurfaceParameter(u: 0.2, v: 0.2),
+            ])),
+        ]
+    )
+    try document.setSurfaceTrimLoops(
+        target: faceReference,
+        trimLoops: [trimLoop]
+    )
+    let trimReference = try cliSurfaceTrimReference(
+        featureID: featureID,
+        edgeIndex: 0,
+        in: document
+    )
+    let trimJSON = try encodedSelectionReference(trimReference)
+    try DocumentFileService().save(document, to: documentURL)
+
+    let result = try await runCLI([
+        "surface",
+        "set-trim-control-point-weight",
+        documentURL.path,
+        "--reference",
+        trimJSON,
+        "--control-point-index",
+        "1",
+        "--weight",
+        "2.4",
+        "--mode",
+        "file",
+        "--json",
+    ])
+    let response = try JSONDecoder().decode(
+        CLIResponse.self,
+        from: result.standardOutputData
+    )
+    let loaded = try DocumentFileService().load(from: documentURL)
+    let feature = try #require(loaded.cadDocument.designGraph.nodes[featureID])
+    guard case let .bSplineSurface(surfaceFeature) = feature.operation else {
+        Issue.record("Expected a direct B-spline surface feature.")
+        return
+    }
+    let updatedLoop = try #require(surfaceFeature.trimLoops.first)
+    guard case .bSpline(let weightedCurve) = updatedLoop.edges[0].parameterCurve else {
+        Issue.record("Expected a B-spline trim parameter curve.")
+        return
+    }
+    let updatedSummary = try SurfaceSourceSummaryService().summarize(document: loaded)
+    let updatedSummaryEdge = try #require(
+        updatedSummary.sources.first?.patches.first?.trimLoops.first?.edges.first
+    )
+    let updatedSummaryPoint = try #require(
+        updatedSummaryEdge.parameterCurveControlPoints.first { $0.index == 1 }
+    )
+
+    #expect(result.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: result.standardError))
+    #expect(response.message == "Surface trim control point weight updated.")
+    #expect(response.saved)
+    #expect(weightedCurve.weights == [1.0, 2.4, 1.0])
+    #expect(updatedSummaryPoint.weight == 2.4)
+    #expect(updatedSummaryPoint.isWeightEditable)
+}
+
+@Test(.timeLimit(.minutes(1)))
 func cliExecutableSurfaceSpanSplitMutatesClosedDocumentAsJSON() async throws {
     let temporaryDirectory = try makeTemporaryDirectory()
     defer {

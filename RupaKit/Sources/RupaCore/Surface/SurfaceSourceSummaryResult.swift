@@ -391,22 +391,31 @@ public struct SurfaceSourceSummaryResult: Codable, Equatable, Sendable {
             public struct ParameterCurveControlPoint: Codable, Equatable, Sendable {
                 public var index: Int
                 public var parameter: ParameterAddress
+                public var weight: Double?
                 public var isEndpoint: Bool
                 public var isEditable: Bool
                 public var unsupportedReason: String?
+                public var isWeightEditable: Bool
+                public var weightUnsupportedReason: String?
 
                 public init(
                     index: Int,
                     parameter: ParameterAddress,
+                    weight: Double? = nil,
                     isEndpoint: Bool,
                     isEditable: Bool,
-                    unsupportedReason: String? = nil
+                    unsupportedReason: String? = nil,
+                    isWeightEditable: Bool = false,
+                    weightUnsupportedReason: String? = nil
                 ) {
                     self.index = index
                     self.parameter = parameter
+                    self.weight = weight
                     self.isEndpoint = isEndpoint
                     self.isEditable = isEditable
                     self.unsupportedReason = unsupportedReason
+                    self.isWeightEditable = isWeightEditable
+                    self.weightUnsupportedReason = weightUnsupportedReason
                 }
             }
 

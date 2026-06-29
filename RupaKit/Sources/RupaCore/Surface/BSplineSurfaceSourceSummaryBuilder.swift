@@ -378,6 +378,7 @@ struct BSplineSurfaceSourceSummaryBuilder: Sendable {
         case .bSpline(let curve):
             return parameterCurveControlPoints(
                 controlPoints: curve.controlPoints,
+                weights: curve.weights,
                 loopIndex: loopIndex,
                 edgeIndex: edgeIndex,
                 surfaceReference: surfaceReference
@@ -397,6 +398,9 @@ struct BSplineSurfaceSourceSummaryBuilder: Sendable {
                 count: points.count,
                 u: point.u,
                 v: point.v,
+                weight: nil,
+                isWeightEditable: false,
+                weightUnsupportedReason: "Polyline trim p-curve control points do not have NURBS weights.",
                 loopIndex: loopIndex,
                 edgeIndex: edgeIndex,
                 surfaceReference: surfaceReference
@@ -406,16 +410,23 @@ struct BSplineSurfaceSourceSummaryBuilder: Sendable {
 
     private func parameterCurveControlPoints(
         controlPoints: [Point2D],
+        weights: [Double],
         loopIndex: Int,
         edgeIndex: Int,
         surfaceReference: SurfaceReference
     ) -> [SurfaceSourceSummaryResult.TrimLoop.Edge.ParameterCurveControlPoint] {
         controlPoints.enumerated().map { index, point in
-            parameterCurveControlPoint(
+            let weight = weights.indices.contains(index) ? weights[index] : nil
+            return parameterCurveControlPoint(
                 index: index,
                 count: controlPoints.count,
                 u: point.x,
                 v: point.y,
+                weight: weight,
+                isWeightEditable: weight != nil,
+                weightUnsupportedReason: weight == nil
+                    ? "B-spline trim p-curve weight vector does not contain this control point."
+                    : nil,
                 loopIndex: loopIndex,
                 edgeIndex: edgeIndex,
                 surfaceReference: surfaceReference
@@ -428,6 +439,9 @@ struct BSplineSurfaceSourceSummaryBuilder: Sendable {
         count: Int,
         u: Double,
         v: Double,
+        weight: Double?,
+        isWeightEditable: Bool,
+        weightUnsupportedReason: String?,
         loopIndex: Int,
         edgeIndex: Int,
         surfaceReference: SurfaceReference
@@ -441,11 +455,14 @@ struct BSplineSurfaceSourceSummaryBuilder: Sendable {
                 u: u,
                 v: v
             ),
+            weight: weight,
             isEndpoint: isEndpoint,
             isEditable: isEndpoint == false,
             unsupportedReason: isEndpoint
                 ? "Use moveSurfaceTrimEndpoint for trim endpoints."
-                : nil
+                : nil,
+            isWeightEditable: isWeightEditable,
+            weightUnsupportedReason: weightUnsupportedReason
         )
     }
 

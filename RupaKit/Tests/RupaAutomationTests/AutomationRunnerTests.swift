@@ -857,6 +857,27 @@ import SwiftCAD
     #expect(movedCurve.controlPoints[0] == Point2D(x: 0.2, y: 0.2))
     #expect(movedCurve.controlPoints[1] == Point2D(x: 0.58, y: 0.46))
     #expect(movedCurve.controlPoints[2] == Point2D(x: 0.8, y: 0.25))
+
+    let weightResult = try runner.execute(
+        .setSurfaceTrimControlPointWeight(
+            target: trimReference,
+            controlPointIndex: 1,
+            weight: .scalar(2.4)
+        ),
+        in: session
+    )
+    let weightedFeature = try #require(session.document.cadDocument.designGraph.nodes[featureID])
+    guard case let .bSplineSurface(weightedSurfaceFeature) = weightedFeature.operation,
+          let weightedLoop = weightedSurfaceFeature.trimLoops.first,
+          case .bSpline(let weightedCurve) = weightedLoop.edges[0].parameterCurve else {
+        Issue.record("Automation must keep the weighted authored B-spline trim curve.")
+        return
+    }
+    #expect(weightResult.message == "Surface trim control point weight updated.")
+    #expect(weightResult.commandName == "setSurfaceTrimControlPointWeight")
+    #expect(weightResult.didMutate)
+    #expect(weightResult.generation == DocumentGeneration(4))
+    #expect(weightedCurve.weights == [1.0, 2.4, 1.0])
 }
 
 @MainActor

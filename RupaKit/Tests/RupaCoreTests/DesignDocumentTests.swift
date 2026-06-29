@@ -966,6 +966,97 @@ import Testing
     try movedLoop.validate(on: surfaceFeature.surface)
 }
 
+@Test func directBSplineSurfaceTrimControlPointWeightUpdatesAuthoredBSplinePcurve() async throws {
+    var document = DesignDocument.empty()
+    let surface = designDocumentDirectBSplineSurfaceWithInteriorKnots()
+
+    let featureID = try document.createBSplineSurface(
+        name: "Direct Trim Control Point Weight Surface",
+        surface: surface
+    )
+    let summary = try SurfaceSourceSummaryService().summarize(document: document)
+    let faceReference = try #require(summary.sources.first?.patches.first?.faceSelectionReference)
+    let trimLoop = BSplineSurfaceTrimLoop(
+        role: .outer,
+        edges: [
+            BSplineSurfaceTrimEdge(parameterCurve: .bSpline(BSplineCurve2D(
+                degree: 2,
+                knots: [0.0, 0.0, 0.0, 1.0, 1.0, 1.0],
+                controlPoints: [
+                    Point2D(x: 0.2, y: 0.2),
+                    Point2D(x: 0.52, y: 0.42),
+                    Point2D(x: 0.8, y: 0.25),
+                ],
+                weights: [1.0, 1.2, 1.0]
+            ))),
+            BSplineSurfaceTrimEdge(parameterCurve: .polyline([
+                SurfaceParameter(u: 0.8, v: 0.25),
+                SurfaceParameter(u: 0.45, v: 0.8),
+            ])),
+            BSplineSurfaceTrimEdge(parameterCurve: .polyline([
+                SurfaceParameter(u: 0.45, v: 0.8),
+                SurfaceParameter(u: 0.2, v: 0.2),
+            ])),
+        ]
+    )
+    try document.setSurfaceTrimLoops(
+        target: faceReference,
+        trimLoops: [trimLoop]
+    )
+    let trimmedSummary = try SurfaceSourceSummaryService().summarize(document: document)
+    let trimEdge = try #require(trimmedSummary.sources.first?.patches.first?.trimLoops.first?.edges.first)
+    let trimReference = try #require(trimEdge.selectionReference)
+    let polylineTrimReference = try #require(
+        trimmedSummary.sources.first?.patches.first?.trimLoops.first?.edges.dropFirst().first?.selectionReference
+    )
+    let controlPoint = try #require(trimEdge.parameterCurveControlPoints.first { $0.index == 1 })
+    #expect(controlPoint.weight == 1.2)
+    #expect(controlPoint.isWeightEditable)
+
+    #expect(throws: EditorError.self) {
+        try document.setSurfaceTrimControlPointWeight(
+            target: polylineTrimReference,
+            controlPointIndex: 0,
+            weight: .scalar(2.0)
+        )
+    }
+
+    #expect(throws: EditorError.self) {
+        try document.setSurfaceTrimControlPointWeight(
+            target: trimReference,
+            controlPointIndex: 1,
+            weight: .scalar(0.0)
+        )
+    }
+
+    try document.setSurfaceTrimControlPointWeight(
+        target: trimReference,
+        controlPointIndex: 1,
+        weight: .scalar(2.4)
+    )
+
+    let feature = try #require(document.cadDocument.designGraph.nodes[featureID])
+    guard case let .bSplineSurface(surfaceFeature) = feature.operation else {
+        Issue.record("Expected a direct B-spline surface feature.")
+        return
+    }
+    let movedLoop = try #require(surfaceFeature.trimLoops.first)
+    guard case .bSpline(let movedCurve) = movedLoop.edges[0].parameterCurve else {
+        Issue.record("Expected a B-spline trim parameter curve.")
+        return
+    }
+    #expect(movedCurve.weights == [1.0, 2.4, 1.0])
+    try movedLoop.validate(on: surfaceFeature.surface)
+
+    let updatedSummary = try SurfaceSourceSummaryService().summarize(document: document)
+    let updatedEdge = try #require(updatedSummary.sources.first?.patches.first?.trimLoops.first?.edges.first)
+    let updatedControlPoint = try #require(
+        updatedEdge.parameterCurveControlPoints.first { $0.index == 1 }
+    )
+    #expect(updatedControlPoint.weight == 2.4)
+    #expect(updatedControlPoint.isWeightEditable)
+}
+
 @Test func surfaceSpanSplitRejectsGeneratedPolySplineSpanReference() async throws {
     var document = DesignDocument.empty()
     let featureID = try document.createPolySplineSurface(

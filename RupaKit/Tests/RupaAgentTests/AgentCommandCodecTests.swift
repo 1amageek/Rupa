@@ -860,6 +860,15 @@ import SwiftCAD
         ),
         expectedGeneration: DocumentGeneration(5)
     )
+    let surfaceTrimControlPointWeightRequest = AgentRequest.execute(
+        sessionID: sessionID,
+        command: .setSurfaceTrimControlPointWeight(
+            target: surfaceTrimReference,
+            controlPointIndex: 1,
+            weight: .scalar(2.4)
+        ),
+        expectedGeneration: DocumentGeneration(5)
+    )
 
     let decodedRequest = try codec.decodeRequest(from: try codec.encode(request))
     let decodedSlideRequest = try codec.decodeRequest(from: try codec.encode(slideRequest))
@@ -905,6 +914,9 @@ import SwiftCAD
     let decodedSurfaceTrimControlPointRequest = try codec.decodeRequest(
         from: try codec.encode(surfaceTrimControlPointRequest)
     )
+    let decodedSurfaceTrimControlPointWeightRequest = try codec.decodeRequest(
+        from: try codec.encode(surfaceTrimControlPointWeightRequest)
+    )
     let decodedSurfaceBoundaryContinuityRequest = try codec.decodeRequest(
         from: try codec.encode(surfaceBoundaryContinuityRequest)
     )
@@ -925,6 +937,7 @@ import SwiftCAD
     #expect(decodedSurfaceTrimLoopsRequest == surfaceTrimLoopsRequest)
     #expect(decodedSurfaceTrimEndpointRequest == surfaceTrimEndpointRequest)
     #expect(decodedSurfaceTrimControlPointRequest == surfaceTrimControlPointRequest)
+    #expect(decodedSurfaceTrimControlPointWeightRequest == surfaceTrimControlPointWeightRequest)
     #expect(decodedSurfaceBoundaryContinuityRequest == surfaceBoundaryContinuityRequest)
 }
 

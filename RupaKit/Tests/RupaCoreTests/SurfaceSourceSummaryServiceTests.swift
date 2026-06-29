@@ -301,7 +301,8 @@ import SwiftCAD
                             Point2D(x: 0.2, y: 0.2),
                             Point2D(x: 0.52, y: 0.42),
                             Point2D(x: 0.8, y: 0.25),
-                        ]
+                        ],
+                        weights: [1.0, 1.25, 1.0]
                     ))),
                     BSplineSurfaceTrimEdge(parameterCurve: .polyline([
                         SurfaceParameter(u: 0.8, v: 0.25),
@@ -321,8 +322,10 @@ import SwiftCAD
     let loop = try #require(result.sources.first?.patches.first?.trimLoops.first)
     let bSplineEdge = try #require(loop.edges.first)
     #expect(bSplineEdge.parameterCurveControlPoints.map(\.index) == [0, 1, 2])
+    #expect(bSplineEdge.parameterCurveControlPoints.map(\.weight) == [1.0, 1.25, 1.0])
     #expect(bSplineEdge.parameterCurveControlPoints.map(\.isEndpoint) == [true, false, true])
     #expect(bSplineEdge.parameterCurveControlPoints.map(\.isEditable) == [false, true, false])
+    #expect(bSplineEdge.parameterCurveControlPoints.allSatisfy { $0.isWeightEditable })
     let startPoint = try #require(bSplineEdge.parameterCurveControlPoints.first)
     #expect(startPoint.unsupportedReason?.contains("moveSurfaceTrimEndpoint") == true)
     let interiorPoint = try #require(bSplineEdge.parameterCurveControlPoints.first { $0.isEditable })
@@ -335,8 +338,10 @@ import SwiftCAD
     #expect(endPoint.unsupportedReason?.contains("moveSurfaceTrimEndpoint") == true)
     let polylineEdge = try #require(loop.edges.dropFirst().first)
     #expect(polylineEdge.parameterCurveControlPoints.map(\.index) == [0, 1])
+    #expect(polylineEdge.parameterCurveControlPoints.allSatisfy { $0.weight == nil })
     #expect(polylineEdge.parameterCurveControlPoints.allSatisfy { $0.isEndpoint })
     #expect(polylineEdge.parameterCurveControlPoints.allSatisfy { $0.isEditable == false })
+    #expect(polylineEdge.parameterCurveControlPoints.allSatisfy { $0.isWeightEditable == false })
 }
 
 @MainActor

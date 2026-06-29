@@ -1369,6 +1369,21 @@ public struct AutomationRunner {
                 didMutate: result.didMutate,
                 diagnostics: result.diagnostics
             )
+        case .setSurfaceTrimControlPointWeight(let target, let controlPointIndex, let weight):
+            let result = try session.execute(
+                .setSurfaceTrimControlPointWeight(
+                    target: target,
+                    controlPointIndex: controlPointIndex,
+                    weight: weight
+                )
+            )
+            return AutomationResult(
+                message: "Surface trim control point weight updated.",
+                commandName: result.commandName,
+                generation: result.generation,
+                didMutate: result.didMutate,
+                diagnostics: result.diagnostics
+            )
         case .matchSurfaceBoundaryContinuity(
             let target,
             let reference,

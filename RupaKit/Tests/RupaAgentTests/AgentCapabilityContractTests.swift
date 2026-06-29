@@ -78,6 +78,7 @@ import SwiftCAD
     #expect(capabilities.contains("setSurfaceTrimLoops"))
     #expect(capabilities.contains("moveSurfaceTrimEndpoint"))
     #expect(capabilities.contains("moveSurfaceTrimControlPoint"))
+    #expect(capabilities.contains("setSurfaceTrimControlPointWeight"))
     #expect(capabilities.contains("matchSurfaceBoundaryContinuity"))
     #expect(capabilities.contains("surfaceBoundaryContinuityCompatibility"))
     #expect(capabilities.contains("setSurfaceControlPointDisplay"))
@@ -189,6 +190,9 @@ import SwiftCAD
     let surfaceTrimLoops = try #require(descriptors.first { $0.name == "setSurfaceTrimLoops" })
     let surfaceTrimEndpoint = try #require(descriptors.first { $0.name == "moveSurfaceTrimEndpoint" })
     let surfaceTrimControlPoint = try #require(descriptors.first { $0.name == "moveSurfaceTrimControlPoint" })
+    let surfaceTrimControlPointWeight = try #require(
+        descriptors.first { $0.name == "setSurfaceTrimControlPointWeight" }
+    )
     let surfaceBoundaryContinuity = try #require(
         descriptors.first { $0.name == "matchSurfaceBoundaryContinuity" }
     )
@@ -710,6 +714,19 @@ import SwiftCAD
     #expect(surfaceTrimControlPoint.failureMode.contains("constant trim curves"))
     #expect(surfaceTrimControlPoint.failureMode.contains("moveSurfaceTrimEndpoint"))
 
+    #expect(surfaceTrimControlPointWeight.category == .solid)
+    #expect(surfaceTrimControlPointWeight.mutatesDocument)
+    #expect(surfaceTrimControlPointWeight.access == .automationCommand)
+    #expect(surfaceTrimControlPointWeight.discovery.contains(.surfaceSourceSummary))
+    #expect(surfaceTrimControlPointWeight.discovery.contains(.surfaceFrames))
+    #expect(surfaceTrimControlPointWeight.discovery.contains(.surfaceAnalysis))
+    #expect(surfaceTrimControlPointWeight.discovery.contains(.topologySummary))
+    #expect(surfaceTrimControlPointWeight.targets == [.surfaceTrim])
+    #expect(surfaceTrimControlPointWeight.summary.contains("positive NURBS weight"))
+    #expect(surfaceTrimControlPointWeight.summary.contains("surfaceSourceSummary"))
+    #expect(surfaceTrimControlPointWeight.failureMode.contains("isWeightEditable true"))
+    #expect(surfaceTrimControlPointWeight.failureMode.contains("constant and polyline trim curves"))
+
     #expect(surfaceBoundaryContinuity.category == .solid)
     #expect(surfaceBoundaryContinuity.mutatesDocument)
     #expect(surfaceBoundaryContinuity.access == .automationCommand)
@@ -1081,6 +1098,7 @@ import SwiftCAD
     #expect(surfaceSourceSummary.summary.contains("boundary CV targets"))
     #expect(surfaceSourceSummary.summary.contains("trim edge editability"))
     #expect(surfaceSourceSummary.summary.contains("p-curve control-point indices"))
+    #expect(surfaceSourceSummary.summary.contains("weights"))
     #expect(surfaceSourceSummary.summary.contains("G0/G1/G2 continuity levels"))
     #expect(surfaceSourceSummary.summary.contains("UVN frame samples"))
 

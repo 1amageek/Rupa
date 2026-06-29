@@ -2269,6 +2269,21 @@ public final class EditorSession {
     }
 
     @discardableResult
+    public func setSurfaceTrimControlPointWeight(
+        target: SelectionReference,
+        controlPointIndex: Int,
+        weight: CADExpression
+    ) -> CommandExecutionResult? {
+        perform(
+            .setSurfaceTrimControlPointWeight(
+                target: target,
+                controlPointIndex: controlPointIndex,
+                weight: weight
+            )
+        )
+    }
+
+    @discardableResult
     public func matchSurfaceBoundaryContinuity(
         target: SelectionReference,
         reference: SelectionReference,

@@ -965,6 +965,53 @@ import SwiftCAD
     #expect(movedCurve.controlPoints[0] == Point2D(x: 0.2, y: 0.2))
     #expect(movedCurve.controlPoints[1] == Point2D(x: 0.58, y: 0.46))
     #expect(movedCurve.controlPoints[2] == Point2D(x: 0.8, y: 0.25))
+
+    let weightResponse = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .setSurfaceTrimControlPointWeight(
+                target: trimReference,
+                controlPointIndex: editableControlPoint.index,
+                weight: .scalar(2.4)
+            ),
+            expectedGeneration: DocumentGeneration(3)
+        )
+    )
+    guard case .command(let weightResult) = weightResponse else {
+        Issue.record("Agent must set the authored surface trim control point weight.")
+        return
+    }
+    #expect(weightResult.commandName == "setSurfaceTrimControlPointWeight")
+    #expect(weightResult.didMutate)
+    #expect(weightResult.generation == DocumentGeneration(4))
+
+    let weightedFeature = try #require(session.document.cadDocument.designGraph.nodes[featureID])
+    guard case let .bSplineSurface(weightedSurfaceFeature) = weightedFeature.operation,
+          let weightedLoop = weightedSurfaceFeature.trimLoops.first,
+          case .bSpline(let weightedCurve) = weightedLoop.edges[0].parameterCurve else {
+        Issue.record("Agent trim weight edit must keep the authored B-spline trim p-curve.")
+        return
+    }
+    #expect(weightedCurve.weights == [1.0, 2.4, 1.0])
+
+    let weightedSummaryResponse = server.handle(
+        .surfaceSourceSummary(
+            sessionID: sessionID,
+            expectedGeneration: DocumentGeneration(4)
+        )
+    )
+    guard case .surfaceSourceSummary(let weightedSummary) = weightedSummaryResponse else {
+        Issue.record("Agent must return weighted authored trim p-curve source summary.")
+        return
+    }
+    let weightedSummaryEdge = try #require(
+        weightedSummary.sources.first?.patches.first?.trimLoops.first?.edges.first
+    )
+    let weightedSummaryPoint = try #require(
+        weightedSummaryEdge.parameterCurveControlPoints.first { $0.index == editableControlPoint.index }
+    )
+    #expect(weightedSummaryPoint.weight == 2.4)
+    #expect(weightedSummaryPoint.isWeightEditable)
 }
 
 @MainActor

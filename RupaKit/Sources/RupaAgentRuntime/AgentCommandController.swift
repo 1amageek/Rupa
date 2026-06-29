@@ -1291,6 +1291,16 @@ public final class AgentCommandController: AgentClientProtocol {
             failureMode: "Accepts authored direct B-spline surface trim edge references discovered from surfaceSourceSummary plus a strict interior p-curve control point index and finite scalar UV parameters; rejects rectangular trim domains, PolySpline trims, non-trim references, constant trim curves, trim endpoints that must use moveSurfaceTrimEndpoint, missing indices, invalid UV trim-loop validation, stale generations, and invalid rebuilt trimmed sheet topology."
         ),
         capability(
+            "setSurfaceTrimControlPointWeight",
+            category: .solid,
+            summary: "Set a positive NURBS weight on a B-spline trim p-curve control point discovered from surfaceSourceSummary for a direct B-spline surface.",
+            access: .automationCommand,
+            mutatesDocument: true,
+            discovery: [.surfaceSourceSummary, .surfaceFrames, .surfaceAnalysis, .topologySummary],
+            targets: [.surfaceTrim],
+            failureMode: "Accepts authored direct B-spline surface trim edge references discovered from surfaceSourceSummary plus a B-spline p-curve control point index with isWeightEditable true and a positive scalar weight; rejects rectangular trim domains, PolySpline trims, non-trim references, constant and polyline trim curves, missing weight indices, non-positive weights, invalid UV trim-loop validation, stale generations, and invalid rebuilt trimmed sheet topology."
+        ),
+        capability(
             "matchSurfaceBoundaryContinuity",
             category: .solid,
             summary: "Match a source-owned direct B-spline surface trim boundary to another direct B-spline trim boundary at G0, G1, or G2 by editing the target boundary control rows.",
@@ -1509,7 +1519,7 @@ public final class AgentCommandController: AgentClientProtocol {
         capability(
             "surfaceSourceSummary",
             category: .read,
-            summary: "Discover source-owned surface contracts for editable PolySpline and direct B-spline surfaces, including patch IDs, degree and knot-vector basis, knot and span addresses, weighted CV targets, boundary CV targets, trim edge editability, authored p-curve control-point indices, G0/G1/G2 continuity levels, span-center UVN frame samples, trim loops, support diagnostics, and generated topology links.",
+            summary: "Discover source-owned surface contracts for editable PolySpline and direct B-spline surfaces, including patch IDs, degree and knot-vector basis, knot and span addresses, weighted CV targets, boundary CV targets, trim edge editability, authored p-curve control-point indices and weights, G0/G1/G2 continuity levels, span-center UVN frame samples, trim loops, support diagnostics, and generated topology links.",
             access: .agentRequest,
             mutatesDocument: false,
             discovery: [.surfaceSourceSummary, .polySplineMeshAnalysis, .topologySummary],

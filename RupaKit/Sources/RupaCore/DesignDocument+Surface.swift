@@ -1023,38 +1023,6 @@ extension DesignDocument {
             v,
             owner: "B-spline surface trim control point V parameter"
         )
-        let trimResolution = try resolvedBSplineSurfaceTrimReference(
-            target,
-            owner: "B-spline surface trim control point move"
-        )
-        guard var feature = cadDocument.designGraph.nodes[trimResolution.featureID],
-              case let .bSplineSurface(surfaceFeature) = feature.operation else {
-            throw EditorError(
-                code: .referenceUnresolved,
-                message: "B-spline surface trim control point move requires an existing direct B-spline surface source feature."
-            )
-        }
-        guard surfaceFeature.trimLoops.isEmpty == false else {
-            throw EditorError(
-                code: .commandInvalid,
-                message: "B-spline surface trim control point move requires authored UV trim loops; rectangular trim domains must be edited with setSurfaceTrimDomain."
-            )
-        }
-        guard surfaceFeature.trimLoops.indices.contains(trimResolution.reference.loopIndex) else {
-            throw EditorError(
-                code: .referenceUnresolved,
-                message: "B-spline surface trim control point move references a missing trim loop."
-            )
-        }
-
-        var updatedTrimLoops = surfaceFeature.trimLoops
-        var trimLoop = updatedTrimLoops[trimResolution.reference.loopIndex]
-        guard trimLoop.edges.indices.contains(trimResolution.reference.edgeIndex) else {
-            throw EditorError(
-                code: .referenceUnresolved,
-                message: "B-spline surface trim control point move references a missing trim edge."
-            )
-        }
         let movedParameter = SurfaceParameter(u: resolvedU, v: resolvedV)
         do {
             try movedParameter.validate()
@@ -1065,48 +1033,47 @@ extension DesignDocument {
             )
         }
 
-        let edgeIndex = trimResolution.reference.edgeIndex
-        trimLoop.edges[edgeIndex].parameterCurve = try surfaceParameterCurve(
-            trimLoop.edges[edgeIndex].parameterCurve,
-            movingControlPointAt: controlPointIndex,
-            to: movedParameter,
-            owner: "B-spline surface trim control point move"
+        try updateBSplineSurfaceTrimParameterCurve(
+            target: target,
+            owner: "B-spline surface trim control point move",
+            objectRegistry: objectRegistry
+        ) { curve in
+            try Self.surfaceParameterCurve(
+                curve,
+                movingControlPointAt: controlPointIndex,
+                to: movedParameter,
+                owner: "B-spline surface trim control point move"
+            )
+        }
+    }
+
+    public mutating func setSurfaceTrimControlPointWeight(
+        target: SelectionReference,
+        controlPointIndex: Int,
+        weight: CADExpression,
+        objectRegistry: ObjectTypeRegistry = .builtIn
+    ) throws {
+        guard controlPointIndex >= 0 else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "B-spline surface trim control point weight requires a non-negative control point index."
+            )
+        }
+        let resolvedWeight = try resolvedPositiveScalarValue(
+            weight,
+            owner: "B-spline surface trim control point weight"
         )
 
-        do {
-            try trimLoop.validate(on: surfaceFeature.surface)
-        } catch {
-            throw EditorError(
-                code: .commandInvalid,
-                message: "B-spline surface trim control point move produced an invalid closed UV trim loop: \(error)."
-            )
-        }
-        updatedTrimLoops[trimResolution.reference.loopIndex] = trimLoop
-
-        var updatedSurfaceFeature = surfaceFeature
-        updatedSurfaceFeature.outerTrimDomain = nil
-        updatedSurfaceFeature.trimLoops = updatedTrimLoops
-        do {
-            try updatedSurfaceFeature.validate()
-        } catch {
-            throw EditorError(
-                code: .commandInvalid,
-                message: "B-spline surface trim control point move produced invalid source geometry: \(error)."
-            )
-        }
-        feature.operation = .bSplineSurface(updatedSurfaceFeature)
-
-        var updatedCADDocument = cadDocument
-        let previousCADDocument = cadDocument
-        do {
-            try updatedCADDocument.replaceFeature(feature)
-            cadDocument = updatedCADDocument
-            try validate(objectRegistry: objectRegistry)
-        } catch {
-            cadDocument = previousCADDocument
-            throw EditorError(
-                code: .commandInvalid,
-                message: "B-spline surface trim control point move produced invalid rebuilt sheet topology: \(error)."
+        try updateBSplineSurfaceTrimParameterCurve(
+            target: target,
+            owner: "B-spline surface trim control point weight",
+            objectRegistry: objectRegistry
+        ) { curve in
+            try Self.surfaceParameterCurve(
+                curve,
+                settingControlPointWeightAt: controlPointIndex,
+                to: resolvedWeight,
+                owner: "B-spline surface trim control point weight"
             )
         }
     }
@@ -1428,6 +1395,85 @@ extension DesignDocument {
         }
     }
 
+    private mutating func updateBSplineSurfaceTrimParameterCurve(
+        target: SelectionReference,
+        owner: String,
+        objectRegistry: ObjectTypeRegistry,
+        update: (SurfaceParameterCurve) throws -> SurfaceParameterCurve
+    ) throws {
+        let trimResolution = try resolvedBSplineSurfaceTrimReference(
+            target,
+            owner: owner
+        )
+        guard var feature = cadDocument.designGraph.nodes[trimResolution.featureID],
+              case let .bSplineSurface(surfaceFeature) = feature.operation else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "\(owner) requires an existing direct B-spline surface source feature."
+            )
+        }
+        guard surfaceFeature.trimLoops.isEmpty == false else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "\(owner) requires authored UV trim loops; rectangular trim domains must be edited with setSurfaceTrimDomain."
+            )
+        }
+        guard surfaceFeature.trimLoops.indices.contains(trimResolution.reference.loopIndex) else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "\(owner) references a missing trim loop."
+            )
+        }
+
+        var updatedTrimLoops = surfaceFeature.trimLoops
+        var trimLoop = updatedTrimLoops[trimResolution.reference.loopIndex]
+        guard trimLoop.edges.indices.contains(trimResolution.reference.edgeIndex) else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "\(owner) references a missing trim edge."
+            )
+        }
+
+        let edgeIndex = trimResolution.reference.edgeIndex
+        trimLoop.edges[edgeIndex].parameterCurve = try update(trimLoop.edges[edgeIndex].parameterCurve)
+        do {
+            try trimLoop.validate(on: surfaceFeature.surface)
+        } catch {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "\(owner) produced an invalid closed UV trim loop: \(error)."
+            )
+        }
+        updatedTrimLoops[trimResolution.reference.loopIndex] = trimLoop
+
+        var updatedSurfaceFeature = surfaceFeature
+        updatedSurfaceFeature.outerTrimDomain = nil
+        updatedSurfaceFeature.trimLoops = updatedTrimLoops
+        do {
+            try updatedSurfaceFeature.validate()
+        } catch {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "\(owner) produced invalid source geometry: \(error)."
+            )
+        }
+        feature.operation = .bSplineSurface(updatedSurfaceFeature)
+
+        var updatedCADDocument = cadDocument
+        let previousCADDocument = cadDocument
+        do {
+            try updatedCADDocument.replaceFeature(feature)
+            cadDocument = updatedCADDocument
+            try validate(objectRegistry: objectRegistry)
+        } catch {
+            cadDocument = previousCADDocument
+            throw EditorError(
+                code: .commandInvalid,
+                message: "\(owner) produced invalid rebuilt sheet topology: \(error)."
+            )
+        }
+    }
+
     private func surfaceParameterCurve(
         _ curve: SurfaceParameterCurve,
         moving endpoint: SurfaceTrimEndpoint,
@@ -1483,7 +1529,7 @@ extension DesignDocument {
         }
     }
 
-    private func surfaceParameterCurve(
+    private static func surfaceParameterCurve(
         _ curve: SurfaceParameterCurve,
         movingControlPointAt index: Int,
         to parameter: SurfaceParameter,
@@ -1528,6 +1574,45 @@ extension DesignDocument {
             }
             var updatedCurve = curve
             updatedCurve.controlPoints[index] = Point2D(x: parameter.u, y: parameter.v)
+            return .bSpline(updatedCurve)
+        }
+    }
+
+    private static func surfaceParameterCurve(
+        _ curve: SurfaceParameterCurve,
+        settingControlPointWeightAt index: Int,
+        to weight: Double,
+        owner: String
+    ) throws -> SurfaceParameterCurve {
+        switch curve {
+        case .constantU, .constantV, .polyline:
+            throw EditorError(
+                code: .commandInvalid,
+                message: "\(owner) requires a B-spline p-curve control point weight."
+            )
+        case let .bSpline(curve):
+            guard curve.controlPoints.indices.contains(index) else {
+                throw EditorError(
+                    code: .referenceUnresolved,
+                    message: "\(owner) references a missing trim B-spline control point."
+                )
+            }
+            guard curve.weights.indices.contains(index) else {
+                throw EditorError(
+                    code: .referenceUnresolved,
+                    message: "\(owner) references a missing trim B-spline control point weight."
+                )
+            }
+            var updatedCurve = curve
+            updatedCurve.weights[index] = weight
+            do {
+                try updatedCurve.validate()
+            } catch {
+                throw EditorError(
+                    code: .commandInvalid,
+                    message: "\(owner) produced invalid trim B-spline p-curve weights: \(error)."
+                )
+            }
             return .bSpline(updatedCurve)
         }
     }

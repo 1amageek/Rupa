@@ -577,12 +577,12 @@ struct CADInteractionDesignProcessSpec: Sendable {
                 targetEntities: ["surface body", "surface frame", "surface continuity diagnostic"],
                 generatedTopology: ["B-spline face", "trim edge", "control point", "UVN frame"],
                 tolerances: ["surface continuity tolerance", "UV parameter tolerance", "trim boundary tolerance"],
-                ownershipBoundaries: ["SwiftCAD owns surface representation and UV trim-loop p-curves", "RupaCore owns source-owned CV, knot, span, trim-domain, trim-loop, trim p-curve control-point, trim-continuity edits, and summaries"],
+                ownershipBoundaries: ["SwiftCAD owns surface representation and UV trim-loop p-curves", "RupaCore owns source-owned CV, knot, span, trim-domain, trim-loop, trim p-curve control-point position and weight, trim-continuity edits, and summaries"],
                 supportedCases: [
                     caseItem("polyspline-patch", "Supported single-quad and planar unmerged PolySpline patches become B-spline sheet B-reps.", .supported, .kernel),
                     caseItem("surface-cv-frame", "Surface source summaries expose CV references and UVN frame readback.", .supported, .core),
-                    caseItem("direct-bspline-source", "Direct B-spline surface sources expose stable CV, weight, knot, span, face, rectangular trim references, source-owned rectangular outer trim domains, authored UV p-curve trim loops, Agent-readable authored p-curve control-point summary indices, shared adaptive UV trim-loop validation, rational 2D B-spline p-curve trim preservation, authored trim endpoint and strict interior p-curve control-point handles, and p-curve-first mesh tessellation for current direct surface trims.", .supported, .core),
-                    caseItem("direct-bspline-parameter-edits", "Direct B-spline surface sources support CV moves/slides, CV weights, knot value edits, shape-preserving knot insertion, fraction-based span split, knot multiplicity edits, rectangular trim-domain edits, authored trim-loop edits, source-owned authored trim endpoint moves, source-owned strict interior polyline and 2D B-spline trim p-curve control-point moves, and compatible G0/G1/G2 boundary matching for full-domain rectangular surfaces.", .supported, .core),
+                    caseItem("direct-bspline-source", "Direct B-spline surface sources expose stable CV, weight, knot, span, face, rectangular trim references, source-owned rectangular outer trim domains, authored UV p-curve trim loops, Agent-readable authored p-curve control-point summary indices and weights, shared adaptive UV trim-loop validation, rational 2D B-spline p-curve trim preservation, authored trim endpoint and strict interior p-curve control-point handles, and p-curve-first mesh tessellation for current direct surface trims.", .supported, .core),
+                    caseItem("direct-bspline-parameter-edits", "Direct B-spline surface sources support CV moves/slides, CV weights, knot value edits, shape-preserving knot insertion, fraction-based span split, knot multiplicity edits, rectangular trim-domain edits, authored trim-loop edits, source-owned authored trim endpoint moves, source-owned strict interior polyline and 2D B-spline trim p-curve control-point moves, source-owned 2D B-spline trim p-curve control-point weight edits, and compatible G0/G1/G2 boundary matching for full-domain rectangular surfaces.", .supported, .core),
                 ],
                 boundaryCases: [
                     caseItem("arbitrary-nurbs-trim-foundation", "Arbitrary NURBS sources, exact arbitrary NURBS trim-edge reconstruction, watertight polysurfaces, remaining span policies, continuity solving on authored interior trims, and arbitrary adjacency solving remain next foundation work.", .planned, .kernel),
@@ -613,7 +613,7 @@ struct CADInteractionDesignProcessSpec: Sendable {
                     invariant("surface-continuity-diagnostic", "Continuity gaps must remain typed diagnostics before patch broadening.", .evaluation),
                 ],
                 decisionConflictArea: "Surface foundation before tool breadth",
-                decisionRationale: "General surface tools must build on the current direct B-spline source identity, frame, knot/span, rectangular trim-domain, authored UV trim-loop, trim p-curve control-point, and continuity contracts before broadening into exact arbitrary trim reconstruction, arbitrary adjacency, and full NURBS polysurfaces."
+                decisionRationale: "General surface tools must build on the current direct B-spline source identity, frame, knot/span, rectangular trim-domain, authored UV trim-loop, trim p-curve control-point position and weight, and continuity contracts before broadening into exact arbitrary trim reconstruction, arbitrary adjacency, and full NURBS polysurfaces."
             )
         case .curveContinuity:
             CADInteractionDesignProcessSpec(

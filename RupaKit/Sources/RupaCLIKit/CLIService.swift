@@ -2072,6 +2072,32 @@ public struct CLIService {
         )
     }
 
+    public func setSurfaceTrimControlPointWeight(
+        target: CLIDocumentTarget,
+        reference: SelectionReference,
+        controlPointIndex: Int,
+        weight: CADExpression,
+        mode: CLIEditMode = .auto,
+        expectedGeneration: DocumentGeneration? = nil,
+        dryRun: Bool = false,
+        forceFileEdit: Bool = false,
+        client: AgentClientProtocol? = nil
+    ) throws -> CLIResponse {
+        try executeModelingCommand(
+            .setSurfaceTrimControlPointWeight(
+                target: reference,
+                controlPointIndex: controlPointIndex,
+                weight: weight
+            ),
+            target: target,
+            mode: mode,
+            expectedGeneration: expectedGeneration,
+            dryRun: dryRun,
+            forceFileEdit: forceFileEdit,
+            client: client
+        )
+    }
+
     public func matchSurfaceBoundaryContinuity(
         target: CLIDocumentTarget,
         targetReference: SelectionReference,
