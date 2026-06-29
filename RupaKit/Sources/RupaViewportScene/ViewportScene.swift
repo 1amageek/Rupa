@@ -139,6 +139,7 @@ public struct ViewportBodyComponent: Equatable {
     public var mesh: ViewportBodyMesh?
     public var topology: ViewportBodyTopology?
     public var surfaceControlPointDisplays: [ViewportSurfaceControlPointDisplay]
+    public var surfaceTrimEndpointDisplays: [ViewportSurfaceTrimEndpointDisplay]
     public var surfaceFrameDisplays: [ViewportSurfaceFrameDisplay]
 
     public init(
@@ -153,6 +154,7 @@ public struct ViewportBodyComponent: Equatable {
         mesh: ViewportBodyMesh? = nil,
         topology: ViewportBodyTopology? = nil,
         surfaceControlPointDisplays: [ViewportSurfaceControlPointDisplay] = [],
+        surfaceTrimEndpointDisplays: [ViewportSurfaceTrimEndpointDisplay] = [],
         surfaceFrameDisplays: [ViewportSurfaceFrameDisplay] = []
     ) {
         self.typeID = typeID
@@ -166,6 +168,7 @@ public struct ViewportBodyComponent: Equatable {
         self.mesh = mesh
         self.topology = topology
         self.surfaceControlPointDisplays = surfaceControlPointDisplays
+        self.surfaceTrimEndpointDisplays = surfaceTrimEndpointDisplays
         self.surfaceFrameDisplays = surfaceFrameDisplays
     }
 }
@@ -191,6 +194,34 @@ public struct ViewportSurfaceControlPointDisplay: Equatable, Sendable {
         self.uIndex = uIndex
         self.vIndex = vIndex
         self.isBoundary = isBoundary
+    }
+}
+
+public struct ViewportSurfaceTrimEndpointDisplay: Equatable, Sendable {
+    public var selectionReference: SelectionReference
+    public var endpoint: SurfaceTrimEndpoint
+    public var point: Point3D
+    public var u: Double
+    public var v: Double
+    public var tangentU: Vector3D
+    public var tangentV: Vector3D
+
+    public init(
+        selectionReference: SelectionReference,
+        endpoint: SurfaceTrimEndpoint,
+        point: Point3D,
+        u: Double,
+        v: Double,
+        tangentU: Vector3D,
+        tangentV: Vector3D
+    ) {
+        self.selectionReference = selectionReference
+        self.endpoint = endpoint
+        self.point = point
+        self.u = u
+        self.v = v
+        self.tangentU = tangentU
+        self.tangentV = tangentV
     }
 }
 
@@ -1786,6 +1817,25 @@ public struct ViewportSurfaceControlPointDragTarget: Equatable, Sendable {
     }
 }
 
+public struct ViewportSurfaceTrimEndpointDragTarget: Equatable, Sendable {
+    public var target: SelectionReference
+    public var endpoint: SurfaceTrimEndpoint
+    public var u: Double
+    public var v: Double
+
+    public init(
+        target: SelectionReference,
+        endpoint: SurfaceTrimEndpoint,
+        u: Double,
+        v: Double
+    ) {
+        self.target = target
+        self.endpoint = endpoint
+        self.u = u
+        self.v = v
+    }
+}
+
 public struct ViewportSurfaceControlPointSlideDragTarget: Equatable, Sendable {
     public var targets: [SelectionReference]
     public var direction: PolySplineSurfaceVertexSlideDirection
@@ -2136,6 +2186,24 @@ public struct ViewportHitTester {
                     depth: surfaceControlPointHit.depth
                 )
             }
+            if selectionHitPolicy.allowsVertexHits,
+               let surfaceTrimEndpointHit = hitSurfaceTrimEndpointDisplay(
+                   for: item,
+                   component: component,
+                   point: point,
+                   layout: layout
+               ) {
+                return HitCandidate(
+                    hit: ViewportHit(
+                        featureID: item.featureID,
+                        sceneNodeID: item.sceneNodeID,
+                        kind: item.kind.selectableKind,
+                        selectionReference: surfaceTrimEndpointHit.reference
+                    ),
+                    score: surfaceTrimEndpointHit.score,
+                    depth: surfaceTrimEndpointHit.depth
+                )
+            }
             if let topologyHit = ViewportBodyTopologyHitTester(tolerance: tolerance).hitTest(
                 item: item,
                 component: component,
@@ -2203,6 +2271,33 @@ public struct ViewportHitTester {
         var bestHit: (reference: SelectionReference, score: CGFloat, depth: Double?)?
         let displayTolerance = max(tolerance, 10.0)
         for display in component.surfaceControlPointDisplays {
+            let projectedPoint = layout.project(display.point, in: item)
+            let distance = point.distance(to: projectedPoint)
+            guard distance <= displayTolerance else {
+                continue
+            }
+            let depth = layout.projectedDepth(display.point, in: item)
+            let candidate = (reference: display.selectionReference, score: distance, depth: depth)
+            if let current = bestHit {
+                if isReferenceHitCandidate(candidate, betterThan: current) {
+                    bestHit = candidate
+                }
+            } else {
+                bestHit = candidate
+            }
+        }
+        return bestHit
+    }
+
+    private func hitSurfaceTrimEndpointDisplay(
+        for item: ViewportSceneItem,
+        component: ViewportBodyComponent,
+        point: CGPoint,
+        layout: ViewportLayout
+    ) -> (reference: SelectionReference, score: CGFloat, depth: Double?)? {
+        var bestHit: (reference: SelectionReference, score: CGFloat, depth: Double?)?
+        let displayTolerance = max(tolerance, 10.0)
+        for display in component.surfaceTrimEndpointDisplays {
             let projectedPoint = layout.project(display.point, in: item)
             let distance = point.distance(to: projectedPoint)
             guard distance <= displayTolerance else {

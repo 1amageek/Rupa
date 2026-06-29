@@ -790,20 +790,20 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                     notes: [
                         "Surface source summaries expose Agent-readable B-spline degree, order, knot vectors, stable knot IDs, span IDs, CV weights, control-point selection references, trim-loop ownership, typed trim-edge roles, endpoint UVs, boundary/inward directions, control-row references, supported direct B-spline G0/G1/G2 boundary-continuity levels, and generated topology links for supported PolySpline patches and direct B-spline surface sources.",
                         "Strict interior PolySpline CV weights are editable through the shared Core, Automation, and Agent command path while preserving CV position overrides.",
-                        "Direct B-spline surface sources can be created through Core, Automation, Agent, and CLI, evaluate to selectable sheet topology, appear in surface source summaries with stored degree, knot vectors, weights, control-net references, editable knot and span references, rectangular trim-loop identity, and typed trim-edge continuity capability, and support direct CV position, CV weight, CV slide, internal knot-value mutation, shape-preserving knot insertion, fraction-based span splitting, explicit internal knot multiplicity editing, and compatible clamped trim-boundary G0/G1/G2 matching with homogeneous inward derivative-scale solving.",
+                        "Direct B-spline surface sources can be created through Core, Automation, Agent, and CLI, evaluate to selectable sheet topology, appear in surface source summaries with stored degree, knot vectors, weights, control-net references, editable knot and span references, rectangular trim-loop identity, authored trim-loop identity, selectable trim-edge references, and typed trim-edge continuity capability, and support direct CV position, CV weight, CV slide, internal knot-value mutation, shape-preserving knot insertion, fraction-based span splitting, explicit internal knot multiplicity editing, authored trim endpoint moves with loop-closure preservation, selected viewport trim endpoint handles, and compatible clamped trim-boundary G0/G1/G2 matching with homogeneous inward derivative-scale solving.",
                     ]
                 ),
             ],
             openWork: [
-                "Direct B-spline surface source editing beyond existing CV, weight, slide, internal knot-value mutation, shape-preserving knot insertion, fraction-based span splitting, explicit knot multiplicity editing, and compatible trim-boundary continuity matching, including remaining span editing beyond direct fraction splits and authored trim-loop mutation.",
-                "Interactive viewport surface-frame handles, snap consumption, trim editing, offset, and sweep or loft section placement that consume the Agent-readable UVN frame contract.",
+                "Direct B-spline surface source editing beyond existing CV, weight, slide, internal knot-value mutation, shape-preserving knot insertion, fraction-based span splitting, explicit knot multiplicity editing, authored trim endpoint moves, and compatible trim-boundary continuity matching, including remaining span editing beyond direct fraction splits and trim-curve interior control handles.",
+                "Interactive viewport surface-frame handles, snap consumption, trim dimensioning/snapping, offset, and sweep or loft section placement that consume the Agent-readable UVN frame contract.",
                 "Arbitrary B-rep adjacency solving, PolySpline continuity mutation, non-rectangular trim targets, and G0/G1/G2/G3 curve matching.",
                 "Non-planar G2 multi-patch reconstruction.",
                 "Patch merge and rounded-corner policy output.",
-                "General trim-curve editing and remaining surface CV source editing beyond the current direct B-spline and PolySpline subsets.",
+                "General trim-curve editing beyond endpoint moves and remaining surface CV source editing beyond the current direct B-spline and PolySpline subsets.",
                 "Viewport creation controls.",
             ],
-            next: "Continue from the current direct B-spline edit subset into authored trim-loop mutation, arbitrary adjacency continuity, viewport surface-frame handles, and broader NURBS/polysurface ownership before broadening surface tools."
+            next: "Continue from the current direct B-spline edit subset into trim-curve interior control handles, arbitrary adjacency continuity, viewport surface-frame handles, and broader NURBS/polysurface ownership before broadening surface tools."
         ),
         entry(
             area: .curveContinuity,

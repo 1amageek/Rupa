@@ -263,6 +263,8 @@ public struct SelectionModel: Codable, Equatable, Sendable {
         case .surface(.controlPoint):
             _ = try SurfaceControlPointSelectionTargetResolver()
                 .validateDisplayTarget(for: reference, in: document)
+        case .surface(.trim(let trimReference)):
+            try validateSurfaceTrimReference(trimReference, in: document)
         case .sketchPoint(let point):
             try validateSketchPointReference(point, in: document)
         case .topology, .edge, .curve, .surface(_):
@@ -427,6 +429,82 @@ public struct SelectionModel: Codable, Equatable, Sendable {
             }
         }
         return nil
+    }
+
+    private func validateSurfaceTrimReference(
+        _ reference: SurfaceTrimReference,
+        in document: DesignDocument
+    ) throws {
+        do {
+            try reference.validate()
+        } catch {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Selection surface trim reference is invalid: \(error)."
+            )
+        }
+        let featureID = try sourceOwnedDirectBSplineSurfaceFeatureID(
+            from: reference.surface.faceName,
+            owner: "Selection surface trim reference"
+        )
+        guard let feature = document.cadDocument.designGraph.nodes[featureID],
+              case let .bSplineSurface(surfaceFeature) = feature.operation else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "Selection surface trim reference could not resolve its direct B-spline surface feature."
+            )
+        }
+        let trimLoops = try surfaceFeature.resolvedTrimLoops()
+        guard trimLoops.indices.contains(reference.loopIndex),
+              trimLoops[reference.loopIndex].edges.indices.contains(reference.edgeIndex) else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "Selection surface trim reference points to a missing trim edge."
+            )
+        }
+    }
+
+    private func sourceOwnedDirectBSplineSurfaceFeatureID(
+        from name: PersistentName,
+        owner: String
+    ) throws -> FeatureID {
+        var featureID: FeatureID?
+        var generatedRole: String?
+        var subshape: String?
+        for component in name.components {
+            switch component {
+            case .feature(let id):
+                featureID = id
+            case .generated(let value):
+                generatedRole = value
+            case .subshape(let value):
+                subshape = value
+            case .index:
+                throw EditorError(
+                    code: .commandInvalid,
+                    message: "\(owner) requires a source-owned direct B-spline surface face reference."
+                )
+            }
+        }
+        guard let featureID,
+              generatedRole == "bSplineSurface",
+              let subshape else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "\(owner) requires a source-owned direct B-spline surface face reference."
+            )
+        }
+        let parts = subshape.split(separator: ":", omittingEmptySubsequences: false).map(String.init)
+        guard parts.count == 3,
+              parts[0] == "patch",
+              parts[1] == "0",
+              parts[2] == "face" else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "\(owner) requires a source-owned direct B-spline surface patch face reference."
+            )
+        }
+        return featureID
     }
 
     private func isSketchComponent(

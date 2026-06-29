@@ -267,6 +267,12 @@ public enum AutomationCommand: Codable, Equatable, Sendable {
         target: SelectionReference,
         trimLoops: [BSplineSurfaceTrimLoop]
     )
+    case moveSurfaceTrimEndpoint(
+        target: SelectionReference,
+        endpoint: SurfaceTrimEndpoint,
+        u: CADExpression,
+        v: CADExpression
+    )
     case matchSurfaceBoundaryContinuity(
         target: SelectionReference,
         reference: SelectionReference,
@@ -798,6 +804,13 @@ public enum AutomationCommand: Codable, Equatable, Sendable {
             .setSurfaceTrimLoops(
                 target: target,
                 trimLoops: trimLoops
+            )
+        case .moveSurfaceTrimEndpoint(let target, let endpoint, let u, let v):
+            .moveSurfaceTrimEndpoint(
+                target: target,
+                endpoint: endpoint,
+                u: u,
+                v: v
             )
         case .matchSurfaceBoundaryContinuity(
             let target,

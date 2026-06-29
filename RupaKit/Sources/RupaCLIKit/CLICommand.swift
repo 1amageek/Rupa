@@ -57,6 +57,7 @@ extension ExportPreset.DestinationPolicy: ExpressibleByArgument {}
 extension SurfaceBoundaryContinuityLevel: ExpressibleByArgument {}
 extension SurfaceBoundaryMatchSide: ExpressibleByArgument {}
 extension SurfaceBoundaryReferenceDirection: ExpressibleByArgument {}
+extension SurfaceTrimEndpoint: ExpressibleByArgument {}
 
 public enum CLIParameterKind: String, CaseIterable, ExpressibleByArgument, Sendable {
     case length
@@ -905,6 +906,7 @@ public struct SurfaceCommand: ParsableCommand {
             SurfaceSetKnotMultiplicityCommand.self,
             SurfaceSetTrimDomainCommand.self,
             SurfaceSetTrimLoopsCommand.self,
+            SurfaceMoveTrimEndpointCommand.self,
             SurfaceMatchBoundaryContinuityCommand.self,
             SurfaceSlideControlPointsCommand.self,
         ],

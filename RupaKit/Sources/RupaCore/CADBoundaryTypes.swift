@@ -9,6 +9,8 @@ public typealias CADBRepModel = SwiftCAD.BRepModel
 public typealias CADFace = SwiftCAD.Face
 public typealias CADProfile = SwiftCAD.Profile
 public typealias BSplineSurface3D = SwiftCAD.BSplineSurface3D
+public typealias BSplineCurve2D = SwiftCAD.BSplineCurve2D
+public typealias BSplineSurfaceTrimEdge = SwiftCAD.BSplineSurfaceTrimEdge
 public typealias BSplineSurfaceTrimLoop = SwiftCAD.BSplineSurfaceTrimLoop
 public typealias BodyID = SwiftCAD.BodyID
 public typealias CurveEvaluationSample = SwiftCAD.CurveEvaluationSample
@@ -72,6 +74,8 @@ public typealias SweepEvaluationPlanResult = SwiftCAD.SweepEvaluationPlanResult
 public typealias SweepEvaluationPlanService = SwiftCAD.SweepEvaluationPlanService
 public typealias SweepEvaluationPreflightCheck = SwiftCAD.SweepEvaluationPreflightCheck
 public typealias SurfaceControlPointReference = SwiftCAD.SurfaceControlPointReference
+public typealias SurfaceParameter = SwiftCAD.SurfaceParameter
+public typealias SurfaceParameterCurve = SwiftCAD.SurfaceParameterCurve
 public typealias SurfaceParameterReference = SwiftCAD.SurfaceParameterReference
 public typealias SurfaceReference = SwiftCAD.SurfaceReference
 public typealias SurfaceSubobjectReference = SwiftCAD.SurfaceSubobjectReference
@@ -80,6 +84,11 @@ public typealias TopologyReference = SwiftCAD.TopologyReference
 public typealias Transform3D = SwiftCAD.Transform3D
 public typealias Vector3D = SwiftCAD.Vector3D
 public typealias VertexID = SwiftCAD.VertexID
+
+public enum SurfaceTrimEndpoint: String, Codable, CaseIterable, Equatable, Sendable {
+    case start
+    case end
+}
 
 public extension SketchPlane {
     static var defaultWorkspacePlane: SketchPlane {

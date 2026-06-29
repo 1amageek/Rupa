@@ -3806,6 +3806,91 @@ func cliExecutableSurfaceTrimLoopsCommandMutatesClosedDocumentAsJSON() async thr
 }
 
 @Test(.timeLimit(.minutes(1)))
+func cliExecutableSurfaceTrimEndpointCommandMutatesClosedDocumentAsJSON() async throws {
+    let temporaryDirectory = try makeTemporaryDirectory()
+    defer {
+        removeTemporaryDirectory(temporaryDirectory)
+    }
+    let documentURL = temporaryDirectory.appendingPathComponent("process-surface-trim-endpoint.swcad")
+    var document = DesignDocument.empty(named: "Process Surface Trim Endpoint")
+    let sourceSurface = cliDirectBSplineSurfaceWithInteriorKnots()
+    let featureID = try document.createBSplineSurface(
+        name: "CLI Trim Endpoint B-spline Surface",
+        surface: sourceSurface
+    )
+    let summary = try SurfaceSourceSummaryService().summarize(document: document)
+    let faceReference = try #require(summary.sources.first?.patches.first?.faceSelectionReference)
+    let trimLoop = BSplineSurfaceTrimLoop(
+        role: .outer,
+        edges: [
+            BSplineSurfaceTrimEdge(parameterCurve: .polyline([
+                SurfaceParameter(u: 0.2, v: 0.2),
+                SurfaceParameter(u: 0.8, v: 0.25),
+            ])),
+            BSplineSurfaceTrimEdge(parameterCurve: .polyline([
+                SurfaceParameter(u: 0.8, v: 0.25),
+                SurfaceParameter(u: 0.45, v: 0.8),
+            ])),
+            BSplineSurfaceTrimEdge(parameterCurve: .polyline([
+                SurfaceParameter(u: 0.45, v: 0.8),
+                SurfaceParameter(u: 0.2, v: 0.2),
+            ])),
+        ]
+    )
+    try document.setSurfaceTrimLoops(
+        target: faceReference,
+        trimLoops: [trimLoop]
+    )
+    let trimReference = try cliSurfaceTrimReference(
+        featureID: featureID,
+        edgeIndex: 0,
+        in: document
+    )
+    let trimJSON = try encodedSelectionReference(trimReference)
+    try DocumentFileService().save(document, to: documentURL)
+
+    let result = try await runCLI([
+        "surface",
+        "move-trim-endpoint",
+        documentURL.path,
+        "--reference",
+        trimJSON,
+        "--endpoint",
+        "end",
+        "--u",
+        "0.7",
+        "--v",
+        "0.3",
+        "--mode",
+        "file",
+        "--json",
+    ])
+    let response = try JSONDecoder().decode(
+        CLIResponse.self,
+        from: result.standardOutputData
+    )
+    let loaded = try DocumentFileService().load(from: documentURL)
+    let feature = try #require(loaded.cadDocument.designGraph.nodes[featureID])
+    guard case let .bSplineSurface(surfaceFeature) = feature.operation else {
+        Issue.record("Expected a direct B-spline surface feature.")
+        return
+    }
+    let updatedLoop = try #require(surfaceFeature.trimLoops.first)
+    let updatedFirst = try #require(updatedLoop.edges.first).parameterCurve.endParameter()
+    let updatedSecond = try #require(updatedLoop.edges.dropFirst().first).parameterCurve.startParameter()
+    let updatedSummary = try SurfaceSourceSummaryService().summarize(document: loaded)
+    let updatedSummaryTrimLoop = try #require(updatedSummary.sources.first?.patches.first?.trimLoops.first)
+
+    #expect(result.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: result.standardError))
+    #expect(response.message == "Surface trim endpoint moved.")
+    #expect(response.saved)
+    #expect(updatedFirst == SurfaceParameter(u: 0.7, v: 0.3))
+    #expect(updatedSecond == SurfaceParameter(u: 0.7, v: 0.3))
+    #expect(updatedSummaryTrimLoop.edges.count == 3)
+    #expect(updatedSummaryTrimLoop.selectionReferences.count == 3)
+}
+
+@Test(.timeLimit(.minutes(1)))
 func cliExecutableSurfaceSpanSplitMutatesClosedDocumentAsJSON() async throws {
     let temporaryDirectory = try makeTemporaryDirectory()
     defer {

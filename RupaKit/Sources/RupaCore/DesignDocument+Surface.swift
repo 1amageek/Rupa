@@ -879,6 +879,129 @@ extension DesignDocument {
         }
     }
 
+    public mutating func moveSurfaceTrimEndpoint(
+        target: SelectionReference,
+        endpoint: SurfaceTrimEndpoint,
+        u: CADExpression,
+        v: CADExpression,
+        objectRegistry: ObjectTypeRegistry = .builtIn
+    ) throws {
+        let resolvedU = try resolvedScalarValue(
+            u,
+            owner: "B-spline surface trim endpoint U parameter"
+        )
+        let resolvedV = try resolvedScalarValue(
+            v,
+            owner: "B-spline surface trim endpoint V parameter"
+        )
+        let trimResolution = try resolvedBSplineSurfaceTrimReference(
+            target,
+            owner: "B-spline surface trim endpoint move"
+        )
+        guard var feature = cadDocument.designGraph.nodes[trimResolution.featureID],
+              case let .bSplineSurface(surfaceFeature) = feature.operation else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "B-spline surface trim endpoint move requires an existing direct B-spline surface source feature."
+            )
+        }
+        guard surfaceFeature.trimLoops.isEmpty == false else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "B-spline surface trim endpoint move requires authored UV trim loops; rectangular trim domains must be edited with setSurfaceTrimDomain."
+            )
+        }
+        guard surfaceFeature.trimLoops.indices.contains(trimResolution.reference.loopIndex) else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "B-spline surface trim endpoint move references a missing trim loop."
+            )
+        }
+
+        var updatedTrimLoops = surfaceFeature.trimLoops
+        var trimLoop = updatedTrimLoops[trimResolution.reference.loopIndex]
+        guard trimLoop.edges.indices.contains(trimResolution.reference.edgeIndex) else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "B-spline surface trim endpoint move references a missing trim edge."
+            )
+        }
+        let movedParameter = SurfaceParameter(u: resolvedU, v: resolvedV)
+        do {
+            try movedParameter.validate()
+        } catch {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "B-spline surface trim endpoint move requires finite UV parameters: \(error)."
+            )
+        }
+
+        let edgeIndex = trimResolution.reference.edgeIndex
+        let adjacentEdgeIndex: Int
+        let adjacentEndpoint: SurfaceTrimEndpoint
+        switch endpoint {
+        case .start:
+            adjacentEdgeIndex = edgeIndex == trimLoop.edges.startIndex
+                ? trimLoop.edges.index(before: trimLoop.edges.endIndex)
+                : trimLoop.edges.index(before: edgeIndex)
+            adjacentEndpoint = .end
+        case .end:
+            let nextIndex = trimLoop.edges.index(after: edgeIndex)
+            adjacentEdgeIndex = nextIndex == trimLoop.edges.endIndex ? trimLoop.edges.startIndex : nextIndex
+            adjacentEndpoint = .start
+        }
+
+        trimLoop.edges[edgeIndex].parameterCurve = try surfaceParameterCurve(
+            trimLoop.edges[edgeIndex].parameterCurve,
+            moving: endpoint,
+            to: movedParameter,
+            owner: "B-spline surface trim endpoint move"
+        )
+        trimLoop.edges[adjacentEdgeIndex].parameterCurve = try surfaceParameterCurve(
+            trimLoop.edges[adjacentEdgeIndex].parameterCurve,
+            moving: adjacentEndpoint,
+            to: movedParameter,
+            owner: "B-spline surface trim endpoint move"
+        )
+
+        do {
+            try trimLoop.validate(on: surfaceFeature.surface)
+        } catch {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "B-spline surface trim endpoint move produced an invalid closed UV trim loop: \(error)."
+            )
+        }
+        updatedTrimLoops[trimResolution.reference.loopIndex] = trimLoop
+
+        var updatedSurfaceFeature = surfaceFeature
+        updatedSurfaceFeature.outerTrimDomain = nil
+        updatedSurfaceFeature.trimLoops = updatedTrimLoops
+        do {
+            try updatedSurfaceFeature.validate()
+        } catch {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "B-spline surface trim endpoint move produced invalid source geometry: \(error)."
+            )
+        }
+        feature.operation = .bSplineSurface(updatedSurfaceFeature)
+
+        var updatedCADDocument = cadDocument
+        let previousCADDocument = cadDocument
+        do {
+            try updatedCADDocument.replaceFeature(feature)
+            cadDocument = updatedCADDocument
+            try validate(objectRegistry: objectRegistry)
+        } catch {
+            cadDocument = previousCADDocument
+            throw EditorError(
+                code: .commandInvalid,
+                message: "B-spline surface trim endpoint move produced invalid rebuilt sheet topology: \(error)."
+            )
+        }
+    }
+
     public mutating func matchSurfaceBoundaryContinuity(
         target: SelectionReference,
         reference: SelectionReference,
@@ -1015,6 +1138,11 @@ extension DesignDocument {
         var reference: SurfaceReference
     }
 
+    private struct BSplineSurfaceTrimResolution {
+        var featureID: FeatureID
+        var reference: SurfaceTrimReference
+    }
+
     private struct BSplineSurfaceSpanResolution {
         var featureID: FeatureID
         var reference: SurfaceSpanReference
@@ -1088,6 +1216,41 @@ extension DesignDocument {
         )
     }
 
+    private func resolvedBSplineSurfaceTrimReference(
+        _ selection: SelectionReference,
+        owner: String
+    ) throws -> BSplineSurfaceTrimResolution {
+        guard case .surface(.trim(let reference)) = selection else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "\(owner) requires a surface trim selection reference."
+            )
+        }
+        do {
+            try reference.validate()
+        } catch {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "\(owner) requires a valid surface trim selection reference: \(error)."
+            )
+        }
+        let patchFace = try resolvedSurfacePatchFace(
+            from: reference.surface.faceName,
+            owner: owner
+        )
+        guard patchFace.generatedRole == "bSplineSurface",
+              patchFace.patchID == 0 else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "\(owner) requires a direct B-spline surface patch face selection reference."
+            )
+        }
+        return BSplineSurfaceTrimResolution(
+            featureID: patchFace.featureID,
+            reference: reference
+        )
+    }
+
     private func resolvedBSplineSurfaceSourceReference(
         _ selection: SelectionReference,
         owner: String
@@ -1154,6 +1317,74 @@ extension DesignDocument {
                 message: "\(owner) requires a full-domain rectangular outer trim because interior trim domains do not expose boundary control rows for continuity matching."
             )
         }
+    }
+
+    private func surfaceParameterCurve(
+        _ curve: SurfaceParameterCurve,
+        moving endpoint: SurfaceTrimEndpoint,
+        to parameter: SurfaceParameter,
+        owner: String
+    ) throws -> SurfaceParameterCurve {
+        switch curve {
+        case .constantU:
+            let currentStart = try curve.startParameter()
+            let currentEnd = try curve.endParameter()
+            return linearSurfaceParameterCurve(
+                from: endpoint == .start ? parameter : currentStart,
+                to: endpoint == .end ? parameter : currentEnd
+            )
+        case .constantV:
+            let currentStart = try curve.startParameter()
+            let currentEnd = try curve.endParameter()
+            return linearSurfaceParameterCurve(
+                from: endpoint == .start ? parameter : currentStart,
+                to: endpoint == .end ? parameter : currentEnd
+            )
+        case let .polyline(points):
+            guard points.count >= 2 else {
+                throw EditorError(
+                    code: .commandInvalid,
+                    message: "\(owner) requires trim polyline p-curves with at least two points."
+                )
+            }
+            var updatedPoints = points
+            switch endpoint {
+            case .start:
+                updatedPoints[updatedPoints.startIndex] = parameter
+            case .end:
+                updatedPoints[updatedPoints.index(before: updatedPoints.endIndex)] = parameter
+            }
+            return .polyline(updatedPoints)
+        case let .bSpline(curve):
+            guard curve.controlPoints.isEmpty == false else {
+                throw EditorError(
+                    code: .commandInvalid,
+                    message: "\(owner) requires trim B-spline p-curves with at least one control point."
+                )
+            }
+            var updatedCurve = curve
+            let point = Point2D(x: parameter.u, y: parameter.v)
+            switch endpoint {
+            case .start:
+                updatedCurve.controlPoints[updatedCurve.controlPoints.startIndex] = point
+            case .end:
+                updatedCurve.controlPoints[updatedCurve.controlPoints.index(before: updatedCurve.controlPoints.endIndex)] = point
+            }
+            return .bSpline(updatedCurve)
+        }
+    }
+
+    private func linearSurfaceParameterCurve(
+        from start: SurfaceParameter,
+        to end: SurfaceParameter
+    ) -> SurfaceParameterCurve {
+        if abs(start.u - end.u) <= ModelingTolerance.standard.distance {
+            return .constantU(u: start.u, vStart: start.v, vEnd: end.v)
+        }
+        if abs(start.v - end.v) <= ModelingTolerance.standard.distance {
+            return .constantV(v: start.v, uStart: start.u, uEnd: end.u)
+        }
+        return .polyline([start, end])
     }
 
     private func resolvedBSplineSurfaceKnotReference(

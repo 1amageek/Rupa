@@ -731,6 +731,16 @@ import Testing
     )
     let summary = try SurfaceSourceSummaryService().summarize(document: document)
     let faceReference = try #require(summary.sources.first?.patches.first?.faceSelectionReference)
+    let rectangularTrimReference = try #require(summary.sources.first?.patches.first?.trimLoops.first?.selectionReferences.first)
+    #expect(throws: EditorError.self) {
+        try document.moveSurfaceTrimEndpoint(
+            target: rectangularTrimReference,
+            endpoint: .start,
+            u: .scalar(0.25),
+            v: .scalar(0.3)
+        )
+    }
+
     let trimLoop = BSplineSurfaceTrimLoop(
         role: .outer,
         edges: [
@@ -805,6 +815,74 @@ import Testing
     }
     #expect(resetSurfaceFeature.outerTrimDomain == nil)
     #expect(resetSurfaceFeature.trimLoops.isEmpty)
+}
+
+@Test func directBSplineSurfaceTrimEndpointMovePreservesAuthoredLoopClosure() async throws {
+    var document = DesignDocument.empty()
+    let surface = designDocumentDirectBSplineSurfaceWithInteriorKnots()
+
+    let featureID = try document.createBSplineSurface(
+        name: "Direct Trim Endpoint Surface",
+        surface: surface
+    )
+    let summary = try SurfaceSourceSummaryService().summarize(document: document)
+    let faceReference = try #require(summary.sources.first?.patches.first?.faceSelectionReference)
+    let trimLoop = BSplineSurfaceTrimLoop(
+        role: .outer,
+        edges: [
+            BSplineSurfaceTrimEdge(parameterCurve: .polyline([
+                SurfaceParameter(u: 0.2, v: 0.2),
+                SurfaceParameter(u: 0.8, v: 0.25),
+            ])),
+            BSplineSurfaceTrimEdge(parameterCurve: .polyline([
+                SurfaceParameter(u: 0.8, v: 0.25),
+                SurfaceParameter(u: 0.45, v: 0.8),
+            ])),
+            BSplineSurfaceTrimEdge(parameterCurve: .polyline([
+                SurfaceParameter(u: 0.45, v: 0.8),
+                SurfaceParameter(u: 0.2, v: 0.2),
+            ])),
+        ]
+    )
+    try document.setSurfaceTrimLoops(
+        target: faceReference,
+        trimLoops: [trimLoop]
+    )
+    let trimmedSummary = try SurfaceSourceSummaryService().summarize(document: document)
+    let trimReference = try #require(
+        trimmedSummary.sources.first?.patches.first?.trimLoops.first?.selectionReferences.first
+    )
+
+    try document.moveSurfaceTrimEndpoint(
+        target: trimReference,
+        endpoint: .start,
+        u: .scalar(0.25),
+        v: .scalar(0.3)
+    )
+
+    let feature = try #require(document.cadDocument.designGraph.nodes[featureID])
+    guard case let .bSplineSurface(surfaceFeature) = feature.operation else {
+        Issue.record("Expected a direct B-spline surface feature.")
+        return
+    }
+    let movedLoop = try #require(surfaceFeature.trimLoops.first)
+    let movedParameter = SurfaceParameter(u: 0.25, v: 0.3)
+    #expect(try movedLoop.edges[0].startParameter().isApproximatelyEqual(to: movedParameter, tolerance: 1.0e-12))
+    #expect(try movedLoop.edges[2].endParameter().isApproximatelyEqual(to: movedParameter, tolerance: 1.0e-12))
+    #expect(try movedLoop.edges[0].endParameter().isApproximatelyEqual(
+        to: SurfaceParameter(u: 0.8, v: 0.25),
+        tolerance: 1.0e-12
+    ))
+    #expect(try movedLoop.edges[2].startParameter().isApproximatelyEqual(
+        to: SurfaceParameter(u: 0.45, v: 0.8),
+        tolerance: 1.0e-12
+    ))
+    try movedLoop.validate(on: surfaceFeature.surface)
+
+    let movedSummary = try SurfaceSourceSummaryService().summarize(document: document)
+    let movedEdge = try #require(movedSummary.sources.first?.patches.first?.trimLoops.first?.edges.first)
+    #expect(abs(movedEdge.startParameter.u - 0.25) < 1.0e-12)
+    #expect(abs(movedEdge.startParameter.v - 0.3) < 1.0e-12)
 }
 
 @Test func surfaceSpanSplitRejectsGeneratedPolySplineSpanReference() async throws {

@@ -41,6 +41,9 @@ public struct ViewportSceneBuilder {
         let surfaceControlPointDisplaysByFeatureID = visibleSurfaceControlPointDisplaysByFeatureID(
             in: document
         )
+        let surfaceTrimEndpointDisplaysByFeatureID = surfaceTrimEndpointDisplaysByFeatureID(
+            in: document
+        )
         let surfaceFrameDisplaysByFeatureID = visibleSurfaceFrameDisplaysByFeatureID(
             in: document,
             currentEvaluation: currentEvaluation,
@@ -99,6 +102,7 @@ public struct ViewportSceneBuilder {
                     sourceFeatureID: revolve.profile.featureID,
                     document: document,
                     surfaceControlPointDisplaysByFeatureID: surfaceControlPointDisplaysByFeatureID,
+                    surfaceTrimEndpointDisplaysByFeatureID: surfaceTrimEndpointDisplaysByFeatureID,
                     surfaceFrameDisplaysByFeatureID: surfaceFrameDisplaysByFeatureID,
                     bodyDisplaySnapshots: bodyDisplaySnapshots
                 )
@@ -136,6 +140,7 @@ public struct ViewportSceneBuilder {
                     sourceFeatureID: section.featureID,
                     document: document,
                     surfaceControlPointDisplaysByFeatureID: surfaceControlPointDisplaysByFeatureID,
+                    surfaceTrimEndpointDisplaysByFeatureID: surfaceTrimEndpointDisplaysByFeatureID,
                     surfaceFrameDisplaysByFeatureID: surfaceFrameDisplaysByFeatureID,
                     bodyDisplaySnapshots: bodyDisplaySnapshots
                 )
@@ -145,6 +150,7 @@ public struct ViewportSceneBuilder {
                     sourceFeatureID: nil,
                     document: document,
                     surfaceControlPointDisplaysByFeatureID: surfaceControlPointDisplaysByFeatureID,
+                    surfaceTrimEndpointDisplaysByFeatureID: surfaceTrimEndpointDisplaysByFeatureID,
                     surfaceFrameDisplaysByFeatureID: surfaceFrameDisplaysByFeatureID,
                     bodyDisplaySnapshots: bodyDisplaySnapshots
                 )
@@ -154,6 +160,7 @@ public struct ViewportSceneBuilder {
                     sourceFeatureID: nil,
                     document: document,
                     surfaceControlPointDisplaysByFeatureID: surfaceControlPointDisplaysByFeatureID,
+                    surfaceTrimEndpointDisplaysByFeatureID: surfaceTrimEndpointDisplaysByFeatureID,
                     surfaceFrameDisplaysByFeatureID: surfaceFrameDisplaysByFeatureID,
                     bodyDisplaySnapshots: bodyDisplaySnapshots
                 )
@@ -167,6 +174,7 @@ public struct ViewportSceneBuilder {
                     )?.sourceSection?.featureID,
                     document: document,
                     surfaceControlPointDisplaysByFeatureID: surfaceControlPointDisplaysByFeatureID,
+                    surfaceTrimEndpointDisplaysByFeatureID: surfaceTrimEndpointDisplaysByFeatureID,
                     surfaceFrameDisplaysByFeatureID: surfaceFrameDisplaysByFeatureID,
                     bodyDisplaySnapshots: bodyDisplaySnapshots
                 )
@@ -180,6 +188,7 @@ public struct ViewportSceneBuilder {
                     )?.sourceSection?.featureID,
                     document: document,
                     surfaceControlPointDisplaysByFeatureID: surfaceControlPointDisplaysByFeatureID,
+                    surfaceTrimEndpointDisplaysByFeatureID: surfaceTrimEndpointDisplaysByFeatureID,
                     surfaceFrameDisplaysByFeatureID: surfaceFrameDisplaysByFeatureID,
                     bodyDisplaySnapshots: bodyDisplaySnapshots
                 )
@@ -193,6 +202,7 @@ public struct ViewportSceneBuilder {
                     )?.sourceSection?.featureID,
                     document: document,
                     surfaceControlPointDisplaysByFeatureID: surfaceControlPointDisplaysByFeatureID,
+                    surfaceTrimEndpointDisplaysByFeatureID: surfaceTrimEndpointDisplaysByFeatureID,
                     bodyDisplaySnapshots: bodyDisplaySnapshots
                 )
             case .bridgeCurve:
@@ -787,6 +797,64 @@ public struct ViewportSceneBuilder {
         }
     }
 
+    private func surfaceTrimEndpointDisplaysByFeatureID(
+        in document: DesignDocument
+    ) -> [FeatureID: [ViewportSurfaceTrimEndpointDisplay]] {
+        var displaysByFeatureID: [FeatureID: [ViewportSurfaceTrimEndpointDisplay]] = [:]
+        for featureID in document.cadDocument.designGraph.order {
+            guard let feature = document.cadDocument.designGraph.nodes[featureID],
+                  case let .bSplineSurface(surfaceFeature) = feature.operation,
+                  surfaceFeature.trimLoops.isEmpty == false else {
+                continue
+            }
+            do {
+                let surfaceReference = SurfaceReference(faceName: PersistentName(components: [
+                    .feature(featureID),
+                    .generated("bSplineSurface"),
+                    .subshape("patch:0:face"),
+                ]))
+                var displays: [ViewportSurfaceTrimEndpointDisplay] = []
+                for (loopIndex, trimLoop) in surfaceFeature.trimLoops.enumerated() {
+                    for (edgeIndex, edge) in trimLoop.edges.enumerated() {
+                        let selectionReference = SelectionReference.surface(.trim(SurfaceTrimReference(
+                            surface: surfaceReference,
+                            loopIndex: loopIndex,
+                            edgeIndex: edgeIndex
+                        )))
+                        let start = try edge.startParameter()
+                        let startGeometry = try surfaceFeature.surface.differentialGeometry(atU: start.u, v: start.v)
+                        displays.append(ViewportSurfaceTrimEndpointDisplay(
+                            selectionReference: selectionReference,
+                            endpoint: .start,
+                            point: startGeometry.position,
+                            u: start.u,
+                            v: start.v,
+                            tangentU: startGeometry.tangentU,
+                            tangentV: startGeometry.tangentV
+                        ))
+                        let end = try edge.endParameter()
+                        let endGeometry = try surfaceFeature.surface.differentialGeometry(atU: end.u, v: end.v)
+                        displays.append(ViewportSurfaceTrimEndpointDisplay(
+                            selectionReference: selectionReference,
+                            endpoint: .end,
+                            point: endGeometry.position,
+                            u: end.u,
+                            v: end.v,
+                            tangentU: endGeometry.tangentU,
+                            tangentV: endGeometry.tangentV
+                        ))
+                    }
+                }
+                if displays.isEmpty == false {
+                    displaysByFeatureID[featureID] = displays
+                }
+            } catch {
+                continue
+            }
+        }
+        return displaysByFeatureID
+    }
+
     private func visibleSurfaceFrameDisplaysByFeatureID(
         in document: DesignDocument,
         currentEvaluation: DocumentEvaluationContext?,
@@ -886,6 +954,7 @@ public struct ViewportSceneBuilder {
         sourceFeatureID: FeatureID?,
         document: DesignDocument,
         surfaceControlPointDisplaysByFeatureID: [FeatureID: [ViewportSurfaceControlPointDisplay]] = [:],
+        surfaceTrimEndpointDisplaysByFeatureID: [FeatureID: [ViewportSurfaceTrimEndpointDisplay]] = [:],
         surfaceFrameDisplaysByFeatureID: [FeatureID: [ViewportSurfaceFrameDisplay]] = [:],
         bodyDisplaySnapshots: [FeatureID: BodyDisplaySnapshot]
     ) -> ViewportSceneItem? {
@@ -913,6 +982,7 @@ public struct ViewportSceneBuilder {
             mesh: snapshot.mesh,
             topology: ViewportBodyTopology(snapshot.topology),
             surfaceControlPointDisplays: surfaceControlPointDisplaysByFeatureID[featureID] ?? [],
+            surfaceTrimEndpointDisplays: surfaceTrimEndpointDisplaysByFeatureID[featureID] ?? [],
             surfaceFrameDisplays: surfaceFrameDisplaysByFeatureID[featureID] ?? []
         )
         return ViewportSceneItem(

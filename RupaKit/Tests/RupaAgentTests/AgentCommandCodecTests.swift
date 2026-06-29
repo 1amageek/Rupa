@@ -840,6 +840,16 @@ import SwiftCAD
         ),
         expectedGeneration: DocumentGeneration(5)
     )
+    let surfaceTrimEndpointRequest = AgentRequest.execute(
+        sessionID: sessionID,
+        command: .moveSurfaceTrimEndpoint(
+            target: surfaceTrimReference,
+            endpoint: .start,
+            u: .scalar(0.25),
+            v: .scalar(0.3)
+        ),
+        expectedGeneration: DocumentGeneration(5)
+    )
 
     let decodedRequest = try codec.decodeRequest(from: try codec.encode(request))
     let decodedSlideRequest = try codec.decodeRequest(from: try codec.encode(slideRequest))
@@ -879,6 +889,9 @@ import SwiftCAD
     let decodedSurfaceTrimLoopsRequest = try codec.decodeRequest(
         from: try codec.encode(surfaceTrimLoopsRequest)
     )
+    let decodedSurfaceTrimEndpointRequest = try codec.decodeRequest(
+        from: try codec.encode(surfaceTrimEndpointRequest)
+    )
     let decodedSurfaceBoundaryContinuityRequest = try codec.decodeRequest(
         from: try codec.encode(surfaceBoundaryContinuityRequest)
     )
@@ -897,6 +910,7 @@ import SwiftCAD
     #expect(decodedSurfaceKnotMultiplicityRequest == surfaceKnotMultiplicityRequest)
     #expect(decodedSurfaceTrimDomainRequest == surfaceTrimDomainRequest)
     #expect(decodedSurfaceTrimLoopsRequest == surfaceTrimLoopsRequest)
+    #expect(decodedSurfaceTrimEndpointRequest == surfaceTrimEndpointRequest)
     #expect(decodedSurfaceBoundaryContinuityRequest == surfaceBoundaryContinuityRequest)
 }
 

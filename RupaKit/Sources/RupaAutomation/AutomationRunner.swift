@@ -1337,6 +1337,22 @@ public struct AutomationRunner {
                 didMutate: result.didMutate,
                 diagnostics: result.diagnostics
             )
+        case .moveSurfaceTrimEndpoint(let target, let endpoint, let u, let v):
+            let result = try session.execute(
+                .moveSurfaceTrimEndpoint(
+                    target: target,
+                    endpoint: endpoint,
+                    u: u,
+                    v: v
+                )
+            )
+            return AutomationResult(
+                message: "Surface trim endpoint moved.",
+                commandName: result.commandName,
+                generation: result.generation,
+                didMutate: result.didMutate,
+                diagnostics: result.diagnostics
+            )
         case .matchSurfaceBoundaryContinuity(
             let target,
             let reference,

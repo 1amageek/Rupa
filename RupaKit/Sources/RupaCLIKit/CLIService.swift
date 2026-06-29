@@ -2016,6 +2016,34 @@ public struct CLIService {
         )
     }
 
+    public func moveSurfaceTrimEndpoint(
+        target: CLIDocumentTarget,
+        reference: SelectionReference,
+        endpoint: SurfaceTrimEndpoint,
+        u: CADExpression,
+        v: CADExpression,
+        mode: CLIEditMode = .auto,
+        expectedGeneration: DocumentGeneration? = nil,
+        dryRun: Bool = false,
+        forceFileEdit: Bool = false,
+        client: AgentClientProtocol? = nil
+    ) throws -> CLIResponse {
+        try executeModelingCommand(
+            .moveSurfaceTrimEndpoint(
+                target: reference,
+                endpoint: endpoint,
+                u: u,
+                v: v
+            ),
+            target: target,
+            mode: mode,
+            expectedGeneration: expectedGeneration,
+            dryRun: dryRun,
+            forceFileEdit: forceFileEdit,
+            client: client
+        )
+    }
+
     public func matchSurfaceBoundaryContinuity(
         target: CLIDocumentTarget,
         targetReference: SelectionReference,

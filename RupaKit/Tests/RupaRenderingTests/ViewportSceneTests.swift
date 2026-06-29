@@ -681,6 +681,62 @@ import Testing
     #expect(hiddenComponent.surfaceControlPointDisplays.isEmpty)
 }
 
+@Test func viewportSceneBuilderExposesAuthoredSurfaceTrimEndpointDisplays() async throws {
+    var document = DesignDocument.empty()
+    let featureID = try document.createBSplineSurface(
+        name: "Viewport Surface Trim Endpoint",
+        surface: viewportDirectBSplineSurface()
+    )
+    let summary = try SurfaceSourceSummaryService().summarize(document: document)
+    let faceReference = try #require(summary.sources.first?.patches.first?.faceSelectionReference)
+    let trimLoop = BSplineSurfaceTrimLoop(
+        role: .outer,
+        edges: [
+            BSplineSurfaceTrimEdge(parameterCurve: .polyline([
+                SurfaceParameter(u: 0.2, v: 0.2),
+                SurfaceParameter(u: 0.8, v: 0.25),
+            ])),
+            BSplineSurfaceTrimEdge(parameterCurve: .polyline([
+                SurfaceParameter(u: 0.8, v: 0.25),
+                SurfaceParameter(u: 0.45, v: 0.8),
+            ])),
+            BSplineSurfaceTrimEdge(parameterCurve: .polyline([
+                SurfaceParameter(u: 0.45, v: 0.8),
+                SurfaceParameter(u: 0.2, v: 0.2),
+            ])),
+        ]
+    )
+    try document.setSurfaceTrimLoops(target: faceReference, trimLoops: [trimLoop])
+
+    let scene = ViewportSceneBuilder().build(document: document)
+    let body = try #require(scene.items.first { $0.featureID == featureID })
+    guard case .body(let component) = body.kind else {
+        Issue.record("Expected a B-spline surface body scene item.")
+        return
+    }
+    #expect(component.surfaceTrimEndpointDisplays.count == 6)
+    let startDisplay = try #require(component.surfaceTrimEndpointDisplays.first { display in
+        display.endpoint == .start
+    })
+    #expect(startDisplay.u == 0.2)
+    #expect(startDisplay.v == 0.2)
+    #expect(startDisplay.tangentU.length > 0.0)
+    #expect(startDisplay.tangentV.length > 0.0)
+
+    let layout = try #require(ViewportLayout(
+        scene: scene,
+        size: CGSize(width: 900.0, height: 700.0)
+    ))
+    let hit = try #require(ViewportHitTester().hitTest(
+        point: layout.project(startDisplay.point, in: body),
+        in: scene,
+        layout: layout,
+        selectionHitPolicy: .vertex
+    ))
+    #expect(hit.selectionReference == startDisplay.selectionReference)
+    #expect(hit.selectionComponent == nil)
+}
+
 @MainActor
 @Test func viewportSceneBuilderExposesVisibleSurfaceFrameDisplays() async throws {
     var document = DesignDocument.empty()
@@ -3203,5 +3259,14 @@ private func viewportSurfaceAnalysisSingleQuadMesh(topRightZ: Double) -> Mesh {
             Point3D(x: 0.0, y: 0.02, z: 0.0),
         ],
         indices: [0, 1, 2, 0, 2, 3]
+    )
+}
+
+private func viewportDirectBSplineSurface() -> BSplineSurface3D {
+    BSplineSurface3D.cubicBezierPatch(
+        bottomLeft: Point3D(x: 0.0, y: 0.0, z: 0.0),
+        bottomRight: Point3D(x: 0.02, y: 0.0, z: 0.0),
+        topRight: Point3D(x: 0.02, y: 0.02, z: 0.0),
+        topLeft: Point3D(x: 0.0, y: 0.02, z: 0.0)
     )
 }

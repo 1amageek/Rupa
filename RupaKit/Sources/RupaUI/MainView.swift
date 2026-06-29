@@ -493,6 +493,7 @@ public struct MainView: View {
                     onSplineControlPointSlideDrag: viewportSplineControlPointSlideDragHandler,
                     onPolySplineSurfaceVertexDrag: viewportPolySplineSurfaceVertexDragHandler,
                     onSurfaceControlPointDrag: viewportSurfaceControlPointDragHandler,
+                    onSurfaceTrimEndpointDrag: viewportSurfaceTrimEndpointDragHandler,
                     onPolySplineSurfaceVertexSlideDrag: viewportPolySplineSurfaceVertexSlideDragHandler,
                     onSurfaceControlPointSlideDrag: viewportSurfaceControlPointSlideDragHandler,
                     onCommandConfirm: viewportCommandConfirmHandler,
@@ -871,6 +872,17 @@ public struct MainView: View {
         }
         return { target in
             handleViewportSurfaceControlPointDrag(target)
+        }
+    }
+
+    private var viewportSurfaceTrimEndpointDragHandler: ((ViewportSurfaceTrimEndpointDragTarget) -> Void)? {
+        guard session.selectedTool == .select,
+              selectionScope == .vertex,
+              slideCommandState.isSurfaceControlVerticesActive == false else {
+            return nil
+        }
+        return { target in
+            handleViewportSurfaceTrimEndpointDrag(target)
         }
     }
 
@@ -2741,6 +2753,22 @@ public struct MainView: View {
             deltaX: .length(target.deltaX, .meter),
             deltaY: .length(target.deltaY, .meter),
             deltaZ: .length(target.deltaZ, .meter)
+        )
+        if result?.diagnostics.isEmpty == false {
+            isPreviewExpanded = true
+        }
+    }
+
+    private func handleViewportSurfaceTrimEndpointDrag(_ target: ViewportSurfaceTrimEndpointDragTarget) {
+        guard session.selectedTool == .select,
+              selectionScope == .vertex else {
+            return
+        }
+        let result = session.moveSurfaceTrimEndpoint(
+            target: target.target,
+            endpoint: target.endpoint,
+            u: .scalar(target.u),
+            v: .scalar(target.v)
         )
         if result?.diagnostics.isEmpty == false {
             isPreviewExpanded = true

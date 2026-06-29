@@ -15,6 +15,7 @@ public struct Viewport: View {
     @State private var activeSplineControlPointSlideDrag: ViewportSplineControlPointSlideDragState?
     @State private var activePolySplineSurfaceVertexDrag: ViewportPolySplineSurfaceVertexDragState?
     @State private var activeSurfaceControlPointDrag: ViewportSurfaceControlPointDragState?
+    @State private var activeSurfaceTrimEndpointDrag: ViewportSurfaceTrimEndpointDragState?
     @State private var activePolySplineSurfaceVertexSlideDrag: ViewportPolySplineSurfaceVertexSlideDragState?
     @State private var activeSurfaceControlPointSlideDrag: ViewportSurfaceControlPointSlideDragState?
     @State private var activeRegionOffsetDrag: ViewportRegionOffsetDragState?
@@ -38,6 +39,7 @@ public struct Viewport: View {
     @State private var hoveredSplineControlPointSlideHandle: ViewportSplineControlPointSlideHandleTarget?
     @State private var hoveredPolySplineSurfaceVertex: ViewportPolySplineSurfaceVertexHandleTarget?
     @State private var hoveredSurfaceControlPoint: ViewportSurfaceControlPointHandleTarget?
+    @State private var hoveredSurfaceTrimEndpoint: ViewportSurfaceTrimEndpointHandleTarget?
     @State private var hoveredPolySplineSurfaceVertexSlideHandle: ViewportPolySplineSurfaceVertexSlideHandleTarget?
     @State private var hoveredSurfaceControlPointSlideHandle: ViewportSurfaceControlPointSlideHandleTarget?
     @State private var hoveredRegionOffsetHandle: ViewportRegionOffsetHandleTarget?
@@ -60,6 +62,7 @@ public struct Viewport: View {
     @State private var pendingSplineControlPointSlideHandle: ViewportSplineControlPointSlideHandleTarget?
     @State private var pendingPolySplineSurfaceVertex: ViewportPolySplineSurfaceVertexHandleTarget?
     @State private var pendingSurfaceControlPoint: ViewportSurfaceControlPointHandleTarget?
+    @State private var pendingSurfaceTrimEndpoint: ViewportSurfaceTrimEndpointHandleTarget?
     @State private var pendingPolySplineSurfaceVertexSlideHandle: ViewportPolySplineSurfaceVertexSlideHandleTarget?
     @State private var pendingSurfaceControlPointSlideHandle: ViewportSurfaceControlPointSlideHandleTarget?
     @State private var pendingRegionOffsetHandle: ViewportRegionOffsetHandleTarget?
@@ -139,6 +142,7 @@ public struct Viewport: View {
     private let onSplineControlPointSlideDrag: ((ViewportSplineControlPointSlideDragTarget) -> Void)?
     private let onPolySplineSurfaceVertexDrag: ((ViewportPolySplineSurfaceVertexDragTarget) -> Void)?
     private let onSurfaceControlPointDrag: ((ViewportSurfaceControlPointDragTarget) -> Void)?
+    private let onSurfaceTrimEndpointDrag: ((ViewportSurfaceTrimEndpointDragTarget) -> Void)?
     private let onPolySplineSurfaceVertexSlideDrag: ((ViewportPolySplineSurfaceVertexSlideDragTarget) -> Void)?
     private let onSurfaceControlPointSlideDrag: ((ViewportSurfaceControlPointSlideDragTarget) -> Void)?
     private let onCommandConfirm: (() -> Void)?
@@ -203,6 +207,7 @@ public struct Viewport: View {
         onSplineControlPointSlideDrag: ((ViewportSplineControlPointSlideDragTarget) -> Void)? = nil,
         onPolySplineSurfaceVertexDrag: ((ViewportPolySplineSurfaceVertexDragTarget) -> Void)? = nil,
         onSurfaceControlPointDrag: ((ViewportSurfaceControlPointDragTarget) -> Void)? = nil,
+        onSurfaceTrimEndpointDrag: ((ViewportSurfaceTrimEndpointDragTarget) -> Void)? = nil,
         onPolySplineSurfaceVertexSlideDrag: ((ViewportPolySplineSurfaceVertexSlideDragTarget) -> Void)? = nil,
         onSurfaceControlPointSlideDrag: ((ViewportSurfaceControlPointSlideDragTarget) -> Void)? = nil,
         onCommandConfirm: (() -> Void)? = nil,
@@ -266,6 +271,7 @@ public struct Viewport: View {
         self.onSplineControlPointSlideDrag = onSplineControlPointSlideDrag
         self.onPolySplineSurfaceVertexDrag = onPolySplineSurfaceVertexDrag
         self.onSurfaceControlPointDrag = onSurfaceControlPointDrag
+        self.onSurfaceTrimEndpointDrag = onSurfaceTrimEndpointDrag
         self.onPolySplineSurfaceVertexSlideDrag = onPolySplineSurfaceVertexSlideDrag
         self.onSurfaceControlPointSlideDrag = onSurfaceControlPointSlideDrag
         self.onCommandConfirm = onCommandConfirm
@@ -1134,6 +1140,25 @@ public struct Viewport: View {
                 )
             }
         }
+        if onSurfaceTrimEndpointDrag != nil {
+            for target in surfaceTrimEndpointHandleTargets(in: scene) {
+                drawSurfaceTrimEndpointHandle(
+                    target,
+                    style: .selected,
+                    layout: layout,
+                    in: &context
+                )
+            }
+            drawActiveSurfaceTrimEndpointDrag(in: &context, layout: layout)
+            if let hoveredSurfaceTrimEndpoint {
+                drawSurfaceTrimEndpointHandle(
+                    hoveredSurfaceTrimEndpoint,
+                    style: .hovered,
+                    layout: layout,
+                    in: &context
+                )
+            }
+        }
 
         if let hoveredTarget = selection.hoveredTarget {
             drawGeneratedTopologyHighlights(
@@ -1152,6 +1177,11 @@ public struct Viewport: View {
             in: &context
         )
         drawSurfaceControlPointDisplays(
+            scene: scene,
+            layout: layout,
+            in: &context
+        )
+        drawSurfaceTrimEndpointDisplays(
             scene: scene,
             layout: layout,
             in: &context
@@ -4069,6 +4099,59 @@ public struct Viewport: View {
         }
     }
 
+    private func drawSurfaceTrimEndpointDisplays(
+        scene: ViewportScene,
+        layout: ViewportLayout,
+        in context: inout GraphicsContext
+    ) {
+        for item in scene.items {
+            guard case .body(let component) = item.kind else {
+                continue
+            }
+            for display in component.surfaceTrimEndpointDisplays {
+                drawSurfaceTrimEndpointDisplay(
+                    display,
+                    item: item,
+                    layout: layout,
+                    isSelected: selection.selectedReferences.contains(display.selectionReference),
+                    isHovered: selection.hoveredReference == display.selectionReference,
+                    in: &context
+                )
+            }
+        }
+    }
+
+    private func drawSurfaceTrimEndpointDisplay(
+        _ display: ViewportSurfaceTrimEndpointDisplay,
+        item: ViewportSceneItem,
+        layout: ViewportLayout,
+        isSelected: Bool,
+        isHovered: Bool,
+        in context: inout GraphicsContext
+    ) {
+        let point = layout.project(display.point, in: item)
+        let size: CGFloat = if isSelected {
+            10.0
+        } else if isHovered {
+            8.4
+        } else {
+            6.6
+        }
+        let color = isSelected ? ViewportTheme.selection : (isHovered ? ViewportTheme.hover : ViewportTheme.surfaceEdit)
+        var path = Path()
+        path.move(to: CGPoint(x: point.x, y: point.y - size / 2.0))
+        path.addLine(to: CGPoint(x: point.x + size / 2.0, y: point.y))
+        path.addLine(to: CGPoint(x: point.x, y: point.y + size / 2.0))
+        path.addLine(to: CGPoint(x: point.x - size / 2.0, y: point.y))
+        path.closeSubpath()
+        context.fill(path, with: .color(color.opacity(isSelected || isHovered ? 0.9 : 0.64)))
+        context.stroke(
+            path,
+            with: .color(Color.black.opacity(isSelected || isHovered ? 0.64 : 0.46)),
+            lineWidth: isSelected ? 1.3 : 0.85
+        )
+    }
+
     private func drawSurfaceFrameDisplays(
         scene: ViewportScene,
         layout: ViewportLayout,
@@ -4249,6 +4332,50 @@ public struct Viewport: View {
         )
         context.stroke(
             Path(ellipseIn: rect),
+            with: .color(ViewportTheme.surfaceEdit.opacity(style.strokeOpacity)),
+            lineWidth: style.lineWidth
+        )
+    }
+
+    private func drawActiveSurfaceTrimEndpointDrag(
+        in context: inout GraphicsContext,
+        layout: ViewportLayout
+    ) {
+        guard let activeSurfaceTrimEndpointDrag else {
+            return
+        }
+        let geometry = activeSurfaceTrimEndpointDrag.target.geometry
+        let start = geometry.projectedPoint(layout: layout)
+        let movedPoint = geometry.displayPoint(offsetByLocalDelta: activeSurfaceTrimEndpointDrag.delta)
+        let end = layout.project(movedPoint)
+        var path = Path()
+        path.move(to: start)
+        path.addLine(to: end)
+        context.stroke(
+            path,
+            with: .color(ViewportTheme.surfaceEdit.opacity(0.86)),
+            style: StrokeStyle(lineWidth: 2.2, lineCap: .round, dash: [5.0, 4.0])
+        )
+        drawTransformHandle(at: end, style: .vertex, isHighlighted: true, in: &context)
+    }
+
+    private func drawSurfaceTrimEndpointHandle(
+        _ target: ViewportSurfaceTrimEndpointHandleTarget,
+        style: ViewportFaceHighlightStyle,
+        layout: ViewportLayout,
+        in context: inout GraphicsContext
+    ) {
+        let point = target.geometry.projectedPoint(layout: layout)
+        drawTransformHandle(at: point, style: .vertex, isHighlighted: true, in: &context)
+        let radius: CGFloat = style == .selected ? 9.4 : 7.4
+        var path = Path()
+        path.move(to: CGPoint(x: point.x, y: point.y - radius))
+        path.addLine(to: CGPoint(x: point.x + radius, y: point.y))
+        path.addLine(to: CGPoint(x: point.x, y: point.y + radius))
+        path.addLine(to: CGPoint(x: point.x - radius, y: point.y))
+        path.closeSubpath()
+        context.stroke(
+            path,
             with: .color(ViewportTheme.surfaceEdit.opacity(style.strokeOpacity)),
             lineWidth: style.lineWidth
         )
@@ -8052,6 +8179,18 @@ public struct Viewport: View {
         if activeSurfaceControlPointDrag != nil {
             return
         }
+        if let start, let current, let pendingSurfaceTrimEndpoint {
+            updateSurfaceTrimEndpointDrag(
+                target: pendingSurfaceTrimEndpoint,
+                start: start,
+                current: current,
+                size: size
+            )
+            return
+        }
+        if activeSurfaceTrimEndpointDrag != nil {
+            return
+        }
         if let start, let current, let pendingEdgeOffsetHandle {
             updateEdgeOffsetDrag(
                 target: pendingEdgeOffsetHandle,
@@ -8331,6 +8470,11 @@ public struct Viewport: View {
         }
         if let surfaceControlPointTarget = selectedSurfaceControlPointTarget(at: point, size: size) {
             pendingSurfaceControlPoint = surfaceControlPointTarget
+            activeCanvasDrag = nil
+            return
+        }
+        if let surfaceTrimEndpointTarget = selectedSurfaceTrimEndpointTarget(at: point, size: size) {
+            pendingSurfaceTrimEndpoint = surfaceTrimEndpointTarget
             activeCanvasDrag = nil
             return
         }
@@ -8899,6 +9043,39 @@ public struct Viewport: View {
         return nil
     }
 
+    private func selectedSurfaceTrimEndpointTarget(
+        at point: CGPoint,
+        size: CGSize
+    ) -> ViewportSurfaceTrimEndpointHandleTarget? {
+        guard onSurfaceTrimEndpointDrag != nil else {
+            return nil
+        }
+        let sceneContext = makeSceneContext(
+            size: size,
+            camera: camera,
+            basis: currentProjectionBasis
+        )
+        let scene = sceneContext.scene
+        let layout = sceneContext.layout
+        let handleTolerance: CGFloat = 12.0
+        var nearest: (target: ViewportSurfaceTrimEndpointHandleTarget, distance: CGFloat)?
+        for target in surfaceTrimEndpointHandleTargets(in: scene) {
+            let projectedPoint = target.geometry.projectedPoint(layout: layout)
+            let distance = point.distance(to: projectedPoint)
+            guard distance <= handleTolerance else {
+                continue
+            }
+            if let current = nearest {
+                if distance < current.distance {
+                    nearest = (target, distance)
+                }
+            } else {
+                nearest = (target, distance)
+            }
+        }
+        return nearest?.target
+    }
+
     private func selectedPolySplineSurfaceVertexSlideAffordanceTarget(
         at point: CGPoint,
         size: CGSize
@@ -9071,6 +9248,41 @@ public struct Viewport: View {
                 )
             }
             return nil
+        }
+    }
+
+    private func surfaceTrimEndpointHandleTargets(
+        in scene: ViewportScene
+    ) -> [ViewportSurfaceTrimEndpointHandleTarget] {
+        selection.selectedReferences.reversed().flatMap { reference -> [ViewportSurfaceTrimEndpointHandleTarget] in
+            guard case .surface(.trim) = reference else {
+                return []
+            }
+            for item in scene.items {
+                guard case .body(let component) = item.kind else {
+                    continue
+                }
+                let displays = component.surfaceTrimEndpointDisplays.filter { display in
+                    display.selectionReference == reference
+                }
+                guard displays.isEmpty == false else {
+                    continue
+                }
+                return displays.map { display in
+                    ViewportSurfaceTrimEndpointHandleTarget(
+                        featureID: item.featureID,
+                        target: reference,
+                        endpoint: display.endpoint,
+                        point: display.point,
+                        u: display.u,
+                        v: display.v,
+                        tangentU: display.tangentU,
+                        tangentV: display.tangentV,
+                        modelTransform: item.modelTransform
+                    )
+                }
+            }
+            return []
         }
     }
 
@@ -10157,6 +10369,25 @@ public struct Viewport: View {
         )
     }
 
+    private func updateSurfaceTrimEndpointDrag(
+        target: ViewportSurfaceTrimEndpointHandleTarget,
+        start: CGPoint,
+        current: CGPoint,
+        size: CGSize
+    ) {
+        let layout = makeLayout(
+            size: size,
+            camera: camera,
+            basis: currentProjectionBasis
+        )
+        let delta = target.geometry.localPlanarDelta(start: start, current: current, layout: layout)
+        activeSurfaceTrimEndpointDrag = ViewportSurfaceTrimEndpointDragState(
+            target: target,
+            startPoint: start,
+            delta: delta
+        )
+    }
+
     private func updateRegionOffsetDrag(
         target: ViewportRegionOffsetHandleTarget,
         start: CGPoint,
@@ -10646,6 +10877,11 @@ public struct Viewport: View {
             activeSurfaceControlPointDrag = nil
             return
         }
+        if pendingSurfaceTrimEndpoint != nil {
+            pendingSurfaceTrimEndpoint = nil
+            activeSurfaceTrimEndpointDrag = nil
+            return
+        }
         if pendingEdgeOffsetHandle != nil {
             pendingEdgeOffsetHandle = nil
             activeEdgeOffsetDrag = nil
@@ -10835,6 +11071,16 @@ public struct Viewport: View {
             activeCanvasDrag = nil
             if let surfaceControlPointDragTarget {
                 onSurfaceControlPointDrag?(surfaceControlPointDragTarget)
+            }
+            return
+        }
+        if pendingSurfaceTrimEndpoint != nil || activeSurfaceTrimEndpointDrag != nil {
+            let surfaceTrimEndpointDragTarget = committedSurfaceTrimEndpointDragTarget()
+            pendingSurfaceTrimEndpoint = nil
+            activeSurfaceTrimEndpointDrag = nil
+            activeCanvasDrag = nil
+            if let surfaceTrimEndpointDragTarget {
+                onSurfaceTrimEndpointDrag?(surfaceTrimEndpointDragTarget)
             }
             return
         }
@@ -11199,6 +11445,57 @@ public struct Viewport: View {
             deltaY: delta.y,
             deltaZ: delta.z
         )
+    }
+
+    private func committedSurfaceTrimEndpointDragTarget() -> ViewportSurfaceTrimEndpointDragTarget? {
+        guard let activeSurfaceTrimEndpointDrag else {
+            return nil
+        }
+        let delta = activeSurfaceTrimEndpointDrag.delta
+        guard abs(delta.x) > 1.0e-12 || abs(delta.y) > 1.0e-12 || abs(delta.z) > 1.0e-12 else {
+            return nil
+        }
+        guard let movedUV = movedSurfaceTrimEndpointUV(
+            target: activeSurfaceTrimEndpointDrag.target,
+            delta: delta
+        ) else {
+            return nil
+        }
+        return ViewportSurfaceTrimEndpointDragTarget(
+            target: activeSurfaceTrimEndpointDrag.target.target,
+            endpoint: activeSurfaceTrimEndpointDrag.target.endpoint,
+            u: movedUV.u,
+            v: movedUV.v
+        )
+    }
+
+    private func movedSurfaceTrimEndpointUV(
+        target: ViewportSurfaceTrimEndpointHandleTarget,
+        delta: Point3D
+    ) -> (u: Double, v: Double)? {
+        let move = Vector3D(x: delta.x, y: delta.y, z: delta.z)
+        let tangentU = target.tangentU
+        let tangentV = target.tangentV
+        let uu = tangentU.dot(tangentU)
+        let uv = tangentU.dot(tangentV)
+        let vv = tangentV.dot(tangentV)
+        let determinant = uu * vv - uv * uv
+        guard determinant.isFinite,
+              abs(determinant) > 1.0e-18 else {
+            return nil
+        }
+        let moveU = move.dot(tangentU)
+        let moveV = move.dot(tangentV)
+        let deltaU = (moveU * vv - moveV * uv) / determinant
+        let deltaV = (uu * moveV - uv * moveU) / determinant
+        let movedU = target.u + deltaU
+        let movedV = target.v + deltaV
+        guard movedU.isFinite,
+              movedV.isFinite,
+              abs(movedU - target.u) > 1.0e-12 || abs(movedV - target.v) > 1.0e-12 else {
+            return nil
+        }
+        return (movedU, movedV)
     }
 
     private func committedRegionOffsetDragTarget() -> ViewportRegionOffsetDragTarget? {
@@ -11651,6 +11948,7 @@ public struct Viewport: View {
         hoveredPolySplineSurfaceVertexSlideHandle = nil
         hoveredSurfaceControlPointSlideHandle = nil
         hoveredSurfaceControlPoint = nil
+        hoveredSurfaceTrimEndpoint = nil
         if let sketchCurveHandleTarget = selectedSketchCurveHandleTarget(at: point, size: size) {
             hoveredSketchCurveHandle = sketchCurveHandleTarget
             hoveredSketchDimension = nil
@@ -11775,6 +12073,18 @@ public struct Viewport: View {
             return
         }
         hoveredSurfaceControlPoint = nil
+        if let surfaceTrimEndpointTarget = selectedSurfaceTrimEndpointTarget(at: point, size: size) {
+            hoveredSurfaceTrimEndpoint = surfaceTrimEndpointTarget
+            hoveredSurfaceControlPointSlideHandle = nil
+            hoveredSketchVertexOffsetHandle = nil
+            hoveredEdgeOffsetHandle = nil
+            hoveredAffordance = nil
+            hoveredCanvasHit = nil
+            hoveredModelPoint = nil
+            clearHoverCallbacks()
+            return
+        }
+        hoveredSurfaceTrimEndpoint = nil
         if let edgeOffsetTarget = selectedEdgeOffsetAffordanceTarget(at: point, size: size) {
             hoveredEdgeOffsetHandle = edgeOffsetTarget
             hoveredSlotWidthHandle = nil
@@ -11988,6 +12298,7 @@ public struct Viewport: View {
         hoveredSurfaceControlPointSlideHandle = nil
         hoveredPolySplineSurfaceVertex = nil
         hoveredSurfaceControlPoint = nil
+        hoveredSurfaceTrimEndpoint = nil
         hoveredRegionOffsetHandle = nil
         hoveredEdgeOffsetHandle = nil
         hoveredSlotWidthHandle = nil

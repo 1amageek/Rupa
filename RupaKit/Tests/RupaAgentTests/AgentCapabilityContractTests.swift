@@ -76,6 +76,7 @@ import SwiftCAD
     #expect(capabilities.contains("setSurfaceKnotMultiplicity"))
     #expect(capabilities.contains("setSurfaceTrimDomain"))
     #expect(capabilities.contains("setSurfaceTrimLoops"))
+    #expect(capabilities.contains("moveSurfaceTrimEndpoint"))
     #expect(capabilities.contains("matchSurfaceBoundaryContinuity"))
     #expect(capabilities.contains("surfaceBoundaryContinuityCompatibility"))
     #expect(capabilities.contains("setSurfaceControlPointDisplay"))
@@ -185,6 +186,7 @@ import SwiftCAD
     )
     let surfaceTrimDomain = try #require(descriptors.first { $0.name == "setSurfaceTrimDomain" })
     let surfaceTrimLoops = try #require(descriptors.first { $0.name == "setSurfaceTrimLoops" })
+    let surfaceTrimEndpoint = try #require(descriptors.first { $0.name == "moveSurfaceTrimEndpoint" })
     let surfaceBoundaryContinuity = try #require(
         descriptors.first { $0.name == "matchSurfaceBoundaryContinuity" }
     )
@@ -679,6 +681,19 @@ import SwiftCAD
     #expect(surfaceTrimLoops.failureMode.contains("exactly one outer loop"))
     #expect(surfaceTrimLoops.failureMode.contains("p-curves outside the stored surface domain"))
     #expect(surfaceTrimLoops.failureMode.contains("continuity matching on authored trim loops"))
+
+    #expect(surfaceTrimEndpoint.category == .solid)
+    #expect(surfaceTrimEndpoint.mutatesDocument)
+    #expect(surfaceTrimEndpoint.access == .automationCommand)
+    #expect(surfaceTrimEndpoint.discovery.contains(.surfaceSourceSummary))
+    #expect(surfaceTrimEndpoint.discovery.contains(.surfaceFrames))
+    #expect(surfaceTrimEndpoint.discovery.contains(.surfaceAnalysis))
+    #expect(surfaceTrimEndpoint.discovery.contains(.topologySummary))
+    #expect(surfaceTrimEndpoint.targets == [.surfaceTrim])
+    #expect(surfaceTrimEndpoint.summary.contains("authored UV trim endpoint"))
+    #expect(surfaceTrimEndpoint.summary.contains("preserving loop closure"))
+    #expect(surfaceTrimEndpoint.failureMode.contains("rectangular trim domains"))
+    #expect(surfaceTrimEndpoint.failureMode.contains("invalid closed-loop rebuilds"))
 
     #expect(surfaceBoundaryContinuity.category == .solid)
     #expect(surfaceBoundaryContinuity.mutatesDocument)

@@ -213,6 +213,31 @@ import Testing
     #expect(decodedSelection == selection)
 }
 
+@Test func selectionModelAcceptsSurfaceTrimReferences() throws {
+    var document = DesignDocument.empty()
+    _ = try document.createBSplineSurface(
+        name: "Selectable Surface Trim",
+        surface: selectionModelDirectBSplineSurface()
+    )
+    let summary = try SurfaceSourceSummaryService().summarize(document: document)
+    let reference = try #require(
+        summary.sources.first?.patches.first?.trimLoops.first?.selectionReferences.first
+    )
+    var selection = SelectionModel()
+
+    try selection.selectReference(reference, in: document)
+    try selection.hoverReference(reference, in: document)
+
+    #expect(selection.selectedTargets.isEmpty)
+    #expect(selection.selectedReferences == [reference])
+    #expect(selection.primaryReference == reference)
+    #expect(selection.hoveredReference == reference)
+
+    let data = try JSONEncoder().encode(selection)
+    let decodedSelection = try JSONDecoder().decode(SelectionModel.self, from: data)
+    #expect(decodedSelection == selection)
+}
+
 @Test func selectionModelPrunesMissingSubobjectTargets() throws {
     let missingID = SceneNodeID()
     var selection = SelectionModel(
@@ -239,6 +264,15 @@ private func selectionModelSurfaceQuadMesh() -> Mesh {
             Point3D(x: 0.0, y: 0.02, z: 0.0),
         ],
         indices: [0, 1, 2, 0, 2, 3]
+    )
+}
+
+private func selectionModelDirectBSplineSurface() -> BSplineSurface3D {
+    BSplineSurface3D.cubicBezierPatch(
+        bottomLeft: Point3D(x: 0.0, y: 0.0, z: 0.0),
+        bottomRight: Point3D(x: 0.02, y: 0.0, z: 0.0),
+        topRight: Point3D(x: 0.02, y: 0.02, z: 0.0),
+        topLeft: Point3D(x: 0.0, y: 0.02, z: 0.0)
     )
 }
 

@@ -90,6 +90,12 @@ struct ViewportSurfaceControlPointDragState: Equatable {
     var delta: Point3D
 }
 
+struct ViewportSurfaceTrimEndpointDragState: Equatable {
+    var target: ViewportSurfaceTrimEndpointHandleTarget
+    var startPoint: CGPoint
+    var delta: Point3D
+}
+
 struct ViewportPolySplineSurfaceVertexSlideDragState: Equatable {
     var target: ViewportPolySplineSurfaceVertexSlideHandleTarget
     var startPoint: CGPoint
@@ -433,6 +439,34 @@ struct ViewportSurfaceControlPointHandleTarget: Equatable {
 
 struct ViewportSurfaceControlPointHandleIdentity: Equatable {
     var target: SelectionReference
+}
+
+struct ViewportSurfaceTrimEndpointHandleTarget: Equatable {
+    var featureID: FeatureID
+    var target: SelectionReference
+    var endpoint: SurfaceTrimEndpoint
+    var point: Point3D
+    var u: Double
+    var v: Double
+    var tangentU: Vector3D
+    var tangentV: Vector3D
+    var modelTransform: Transform3D
+
+    var identity: ViewportSurfaceTrimEndpointHandleIdentity {
+        ViewportSurfaceTrimEndpointHandleIdentity(target: target, endpoint: endpoint)
+    }
+
+    var geometry: ViewportPolySplineSurfaceVertexDragGeometry {
+        ViewportPolySplineSurfaceVertexDragGeometry(
+            localPoint: point,
+            modelTransform: modelTransform
+        )
+    }
+}
+
+struct ViewportSurfaceTrimEndpointHandleIdentity: Equatable {
+    var target: SelectionReference
+    var endpoint: SurfaceTrimEndpoint
 }
 
 struct ViewportPolySplineSurfaceVertexLocalAxisHit: Equatable {
