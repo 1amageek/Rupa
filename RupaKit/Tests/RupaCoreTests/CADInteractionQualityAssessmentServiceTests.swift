@@ -73,7 +73,14 @@ import RupaCore
     let directModeling = try #require(result.entries.first { $0.area == .directModeling })
     #expect(directModeling.currentRating == .partial)
     #expect(directModeling.referenceSources.contains("https://doc.plasticity.xyz/solid/offset-face"))
-    #expect(directModeling.openWork.contains { $0.contains("Delete Face") && $0.contains("Draft Face") })
+    #expect(directModeling.openWork.contains { $0.contains("Healing Delete Face") && $0.contains("refill") })
+    #expect(directModeling.openWork.contains { $0.contains("Match Face") && $0.contains("Draft Face") })
+    #expect(directModeling.evidence.contains { evidence in
+        evidence.sourceFiles.contains("RupaKit/Sources/RupaCore/DesignDocument+SolidFaceDelete.swift")
+    })
+    #expect(directModeling.evidence.contains { evidence in
+        evidence.notes.contains("Healing Delete Face that refills, extends, or shrinks adjacent faces is not yet implemented; current Delete Face intentionally preserves an open sheet body result for the supported non-healing subset.")
+    })
 
     let exchange = try #require(result.entries.first { $0.area == .exchangeAndDrawings })
     #expect(exchange.currentRating == .partial)

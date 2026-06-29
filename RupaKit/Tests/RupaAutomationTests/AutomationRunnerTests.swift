@@ -1289,6 +1289,51 @@ import SwiftCAD
 }
 
 @MainActor
+@Test func automationCanDeleteGeneratedBodyFace() async throws {
+    let session = EditorSession()
+    let runner = AutomationRunner()
+    _ = try runner.execute(
+        .createExtrudedRectangle(
+            name: "Automation Delete Face Box",
+            plane: .xy,
+            width: .length(10.0, .millimeter),
+            height: .length(8.0, .millimeter),
+            depth: .length(6.0, .millimeter),
+            direction: .normal
+        ),
+        in: session
+    )
+    let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let bodyNodeID = try #require(automationSceneNodeID(for: bodyFeatureID, in: session.document))
+    let topology = try TopologySummaryService().summarize(document: session.document)
+    let startFaceEntry = try #require(
+        topology.entries.first {
+            $0.kind == .face &&
+                $0.sceneNodeID == bodyNodeID.description &&
+                $0.generatedRole == "startFace"
+        }
+    )
+    let target = try #require(startFaceEntry.selectionTarget())
+
+    let result = try runner.execute(
+        .deleteBodyFaces(targets: [target]),
+        in: session
+    )
+
+    let afterTopology = try TopologySummaryService().summarize(document: session.document)
+    let evaluation = try #require(session.currentEvaluationCache?.evaluatedDocument)
+    let body = try #require(evaluation.brep.bodies.values.first)
+    #expect(result.message == "Body face deletion applied.")
+    #expect(result.commandName == "deleteBodyFaces")
+    #expect(result.didMutate)
+    #expect(result.generation == DocumentGeneration(2))
+    #expect(body.kind == .sheet)
+    #expect(afterTopology.counts.faceCount == 5)
+    #expect(afterTopology.entries.contains { $0.persistentName == startFaceEntry.persistentName } == false)
+    #expect(session.evaluationStatus == .valid)
+}
+
+@MainActor
 @Test func automationCanOffsetSketchCurveSymmetrically() async throws {
     let session = EditorSession()
     let runner = AutomationRunner()

@@ -739,6 +739,15 @@ public final class CADDocumentStore {
             document = updatedDocument
             try commitMutation()
             evaluateCurrentDocument()
+        case .deleteBodyFaces(let targets):
+            var updatedDocument = document
+            try updatedDocument.deleteBodyFaces(
+                targets: targets,
+                objectRegistry: objectRegistry
+            )
+            document = updatedDocument
+            try commitMutation()
+            evaluateCurrentDocument()
         case .chamferBodyEdges(let targets, let distance):
             var updatedDocument = document
             try updatedDocument.chamferBodyEdges(

@@ -147,6 +147,7 @@ public enum AutomationCommand: Codable, Equatable, Sendable {
     )
     case createSlotSketch(target: SelectionTarget, width: CADExpression)
     case offsetBodyFace(target: SelectionTarget, distance: CADExpression)
+    case deleteBodyFaces(targets: [SelectionTarget])
     case chamferBodyEdges(targets: [SelectionTarget], distance: CADExpression)
     case filletBodyEdges(targets: [SelectionTarget], radius: CADExpression, segmentCount: Int)
     case moveBodyEdge(target: SelectionTarget, deltaX: CADExpression, deltaY: CADExpression)
@@ -622,6 +623,8 @@ public enum AutomationCommand: Codable, Equatable, Sendable {
                 target: target,
                 distance: distance
             )
+        case .deleteBodyFaces(let targets):
+            .deleteBodyFaces(targets: targets)
         case .chamferBodyEdges(let targets, let distance):
             .chamferBodyEdges(
                 targets: targets,

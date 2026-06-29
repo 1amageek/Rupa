@@ -674,6 +674,38 @@ public struct MeasurementService {
                 solids.append(solid)
                 totals.solidVolumeCubicMeters += solid.volumeCubicMeters
                 bounds.include(solid.bounds)
+            case .faceDelete(let faceDelete):
+                guard !isSupersededInDocumentScope(featureID) else {
+                    continue
+                }
+                guard shouldMeasure(featureID) else {
+                    continue
+                }
+                includedSourceFeatureIDs.insert(featureID)
+                let sourceNode = document.cadDocument.designGraph.nodes[faceDelete.target.featureID]
+                var evaluatedSkipReason: String?
+                let sheet = try measureEvaluatedSheet(
+                    featureID: featureID,
+                    featureName: node.name,
+                    sourceFeatureID: faceDelete.target.featureID,
+                    sourceFeatureName: sourceNode?.name,
+                    evaluatedDocument: evaluatedDocument(),
+                    unsupportedReason: &evaluatedSkipReason
+                )
+                guard let sheet else {
+                    let detail = evaluatedSkipReason.map { " \($0)" } ?? ""
+                    diagnostics.append(
+                        EditorDiagnostic(
+                            severity: .info,
+                            message: "Measurement skipped Face Delete direct-edit sheet.\(detail)"
+                        )
+                    )
+                    continue
+                }
+                counts.sheets += 1
+                sheets.append(sheet)
+                totals.sheetAreaSquareMeters += sheet.surfaceAreaSquareMeters
+                bounds.include(sheet.bounds)
             case .bridgeCurve:
                 continue
             case .curveEdit:
@@ -1054,6 +1086,47 @@ public struct MeasurementService {
                     meters: pathLength * distanceFraction
                 ),
             ],
+            surfaceAreaSquareMeters: meshMeasurement.surfaceAreaSquareMeters,
+            bounds: meshMeasurement.bounds
+        )
+    }
+
+    private func measureEvaluatedSheet(
+        featureID: FeatureID,
+        featureName: String?,
+        sourceFeatureID: FeatureID,
+        sourceFeatureName: String?,
+        evaluatedDocument: EvaluatedDocument?,
+        unsupportedReason: inout String?
+    ) throws -> MeasurementResult.Sheet? {
+        guard let evaluatedDocument else {
+            unsupportedReason = "Evaluated geometry is unavailable."
+            return nil
+        }
+        guard let bodyID = evaluatedBodyID(for: featureID, in: evaluatedDocument) else {
+            unsupportedReason = "The evaluated document is missing the generated body name."
+            return nil
+        }
+        guard let body = evaluatedDocument.brep.bodies[bodyID],
+              body.kind == .sheet else {
+            unsupportedReason = "The evaluated body is not a sheet."
+            return nil
+        }
+        guard let mesh = evaluatedDocument.meshes[bodyID] else {
+            unsupportedReason = "The evaluated document is missing the generated body mesh."
+            return nil
+        }
+        let meshMeasurement = try evaluatedMeshMeasurement(mesh)
+        guard meshMeasurement.surfaceAreaSquareMeters > tolerance.distance * tolerance.distance else {
+            unsupportedReason = "The evaluated sheet area is below tolerance."
+            return nil
+        }
+        return MeasurementResult.Sheet(
+            featureID: featureID.description,
+            featureName: featureName,
+            sourceFeatureID: sourceFeatureID.description,
+            sourceFeatureName: sourceFeatureName,
+            linearDimensions: [],
             surfaceAreaSquareMeters: meshMeasurement.surfaceAreaSquareMeters,
             bounds: meshMeasurement.bounds
         )

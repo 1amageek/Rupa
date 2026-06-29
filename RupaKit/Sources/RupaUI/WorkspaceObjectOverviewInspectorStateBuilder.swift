@@ -296,6 +296,15 @@ struct WorkspaceObjectOverviewInspectorStateBuilder {
                 WorkspaceInspectorTextRow(title: "Target", value: shortID(faceKnife.target.featureID)),
                 WorkspaceInspectorTextRow(title: "Loop Points", value: "\(faceKnife.loop.count)"),
             ]
+        case .faceDelete(let faceDelete):
+            return [
+                WorkspaceInspectorTextRow(title: "Operation", value: "Delete Face"),
+                WorkspaceInspectorTextRow(title: "Target", value: shortID(faceDelete.target.featureID)),
+                WorkspaceInspectorTextRow(
+                    title: "Faces",
+                    value: "\(faceDelete.facePersistentNames.count)"
+                ),
+            ]
         case .bridgeCurve(let bridgeCurve):
             return [
                 WorkspaceInspectorTextRow(title: "Operation", value: "Bridge Curve"),

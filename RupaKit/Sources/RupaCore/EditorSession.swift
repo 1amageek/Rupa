@@ -2871,6 +2871,30 @@ public final class EditorSession {
     }
 
     @discardableResult
+    public func deleteBodyFaces(
+        targets: [SelectionTarget]
+    ) -> CommandExecutionResult? {
+        perform(
+            .deleteBodyFaces(targets: targets)
+        )
+    }
+
+    @discardableResult
+    public func deleteSelectedBodyFaces() -> CommandExecutionResult? {
+        let selectedFaceTargets = selection.selectedTargets.filter { target in
+            if case .face = target.component {
+                return true
+            }
+            return false
+        }
+        guard selectedFaceTargets.isEmpty == false else {
+            reportToolStatus("Delete Face requires face selections.", severity: .warning)
+            return nil
+        }
+        return deleteBodyFaces(targets: selectedFaceTargets)
+    }
+
+    @discardableResult
     public func chamferBodyEdges(
         targets: [SelectionTarget],
         distance: CADExpression

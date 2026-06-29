@@ -239,10 +239,12 @@ struct CADInteractionDesignProcessSpec: Sendable {
                 ownershipBoundaries: ["RupaCore maps generated targets to source-owned edits", "SwiftCAD validates rewritten CAD source"],
                 supportedCases: [
                     caseItem("rectangle-face-offset", "Supported rectangle and cylinder face offsets rewrite source-owned bodies.", .supported, .core),
+                    caseItem("non-healing-face-delete", "Generated face deletion can remove selected evaluated faces and keep the result as a source-owned sheet body.", .supported, .kernel),
                     caseItem("generated-profile-edge-move", "Generated line, circle, and line-arc-line arc profile edges rewrite their source sketch while preserving analytic identity.", .supported, .core),
                     caseItem("surface-cv-edit", "Supported PolySpline boundary/interior CV edits stay source-owned.", .supported, .core),
                 ],
                 boundaryCases: [
+                    caseItem("healing-face-delete", "Solid-preserving Delete Face needs refill plus adjacent face extend/shrink policies before it can replace the non-healing sheet subset.", .planned, .kernel),
                     caseItem("arbitrary-topology-edit", "Arbitrary face/edge/vertex edits need stable rewrite policies.", .planned, .core),
                     caseItem("arbitrary-arc-edge-move", "Arc edge movement outside the tangent-preserving line-arc-line subset needs broader trim healing.", .planned, .core),
                 ],

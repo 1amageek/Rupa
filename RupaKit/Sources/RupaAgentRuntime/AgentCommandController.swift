@@ -683,6 +683,16 @@ public final class AgentCommandController: AgentClientProtocol {
             failureMode: "Rejects unsupported body types, unsupported face roles, invalid distances, and stale generations before mutation."
         ),
         capability(
+            "deleteBodyFaces",
+            category: .directEditing,
+            summary: "Delete one or more generated body face targets as a source-owned direct edit, producing a sheet body for the supported non-healing subset.",
+            access: .automationCommand,
+            mutatesDocument: true,
+            discovery: [.topologySummary],
+            targets: [.face],
+            failureMode: "Rejects non-generated face targets, duplicate targets, mixed bodies, missing evaluated topology, deletion of an entire shell, invalid sheet topology, and stale generations before mutation."
+        ),
+        capability(
             "chamferBodyEdges",
             category: .directEditing,
             summary: "Chamfer supported generated or fixed body edge targets by rewriting source profile loops.",

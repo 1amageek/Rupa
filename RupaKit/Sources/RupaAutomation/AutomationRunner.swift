@@ -754,6 +754,17 @@ public struct AutomationRunner {
                 didMutate: result.didMutate,
                 diagnostics: result.diagnostics
             )
+        case .deleteBodyFaces(let targets):
+            let result = try session.execute(
+                .deleteBodyFaces(targets: targets)
+            )
+            return AutomationResult(
+                message: "Body face deletion applied.",
+                commandName: result.commandName,
+                generation: result.generation,
+                didMutate: result.didMutate,
+                diagnostics: result.diagnostics
+            )
         case .chamferBodyEdges(let targets, let distance):
             let result = try session.execute(
                 .chamferBodyEdges(

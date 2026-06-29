@@ -275,6 +275,67 @@ import SwiftCAD
     #expect(session.evaluationStatus == .valid)
 }
 
+@Test func agentDispatchesGeneratedTopologyFaceDeleteCommandThroughAutomationAndCore() async throws {
+    let server = AgentCommandController()
+    let sessionID = UUID()
+    let session = EditorSession()
+    _ = try #require(session.createDefaultExtrudedRectangle())
+    server.register(session: session, id: sessionID)
+
+    let topologyResponse = server.handle(
+        .topologySummary(
+            sessionID: sessionID,
+            expectedGeneration: DocumentGeneration(1)
+        )
+    )
+    guard case .topologySummary(let topology) = topologyResponse else {
+        Issue.record("Agent must return a topology summary.")
+        return
+    }
+    let faceEntry = try #require(topology.entries.first { entry in
+        entry.kind == .face && entry.generatedRole == "startFace"
+    })
+    let target = try #require(faceEntry.selectionTarget())
+
+    let response = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .deleteBodyFaces(targets: [target]),
+            expectedGeneration: DocumentGeneration(1)
+        )
+    )
+
+    guard case .command(let result) = response else {
+        #expect(Bool(false))
+        return
+    }
+    let deleteFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let deleteSceneNodeID = try #require(agentSceneNodeID(for: deleteFeatureID, in: session.document))
+    let feature = try #require(session.document.cadDocument.designGraph.nodes[deleteFeatureID])
+    guard case .faceDelete = feature.operation else {
+        Issue.record("Agent Delete Face command must create a FaceDelete feature.")
+        return
+    }
+    let afterTopology = try TopologySummaryService().summarize(document: session.document)
+    let evaluation = try #require(session.currentEvaluationCache?.evaluatedDocument)
+    let body = try #require(evaluation.brep.bodies.values.first)
+    let carriedFaces = afterTopology.entries.filter {
+        $0.kind == .face &&
+            $0.sceneNodeID == deleteSceneNodeID.description &&
+            $0.generatedRole == "faceDelete" &&
+            $0.subshapeRole == "carriedFace"
+    }
+
+    #expect(result.commandName == "deleteBodyFaces")
+    #expect(result.didMutate)
+    #expect(result.generation == DocumentGeneration(2))
+    #expect(body.kind == .sheet)
+    #expect(afterTopology.counts.faceCount == 5)
+    #expect(afterTopology.entries.contains { $0.persistentName == faceEntry.persistentName } == false)
+    #expect(carriedFaces.count == 5)
+    #expect(session.evaluationStatus == .valid)
+}
+
 @Test func agentDispatchesGeneratedTopologyEdgeOffsetCommandThroughAutomationAndCore() async throws {
     let server = AgentCommandController()
     let sessionID = UUID()

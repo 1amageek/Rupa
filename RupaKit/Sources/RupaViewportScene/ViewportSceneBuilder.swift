@@ -248,6 +248,18 @@ public struct ViewportSceneBuilder {
                     surfaceTrimSpanDisplaysByFeatureID: surfaceTrimSpanDisplaysByFeatureID,
                     bodyDisplaySnapshots: bodyDisplaySnapshots
                 )
+            case .faceDelete(let faceDelete):
+                return evaluatedMeshBodyItem(
+                    featureID: featureID,
+                    sourceFeatureID: faceDelete.target.featureID,
+                    document: document,
+                    surfaceControlPointDisplaysByFeatureID: surfaceControlPointDisplaysByFeatureID,
+                    surfaceTrimEndpointDisplaysByFeatureID: surfaceTrimEndpointDisplaysByFeatureID,
+                    surfaceTrimControlPointDisplaysByFeatureID: surfaceTrimControlPointDisplaysByFeatureID,
+                    surfaceTrimKnotDisplaysByFeatureID: surfaceTrimKnotDisplaysByFeatureID,
+                    surfaceTrimSpanDisplaysByFeatureID: surfaceTrimSpanDisplaysByFeatureID,
+                    bodyDisplaySnapshots: bodyDisplaySnapshots
+                )
             case .bridgeCurve:
                 return nil
             case .curveEdit:

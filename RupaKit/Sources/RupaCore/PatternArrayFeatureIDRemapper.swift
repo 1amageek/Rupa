@@ -91,6 +91,12 @@ struct PatternArrayFeatureIDRemapper: Sendable {
             )
             faceKnife.facePersistentName = try remappedPersistentName(faceKnife.facePersistentName)
             return .faceKnife(faceKnife)
+        case .faceDelete(var faceDelete):
+            faceDelete.target = FaceDeleteTargetReference(
+                featureID: try remappedFeatureID(faceDelete.target.featureID)
+            )
+            faceDelete.facePersistentNames = try faceDelete.facePersistentNames.map(remappedPersistentName)
+            return .faceDelete(faceDelete)
         case .bridgeCurve:
             return operation
         case .curveEdit(var curveEdit):
