@@ -1216,6 +1216,16 @@ public struct Viewport: View {
             layout: layout,
             in: &context
         )
+        drawSurfaceTrimKnotDisplays(
+            scene: scene,
+            layout: layout,
+            in: &context
+        )
+        drawSurfaceTrimSpanDisplays(
+            scene: scene,
+            layout: layout,
+            in: &context
+        )
         drawSurfaceFrameDisplays(
             scene: scene,
             layout: layout,
@@ -4246,6 +4256,114 @@ public struct Viewport: View {
             tickPath,
             with: .color(Color.black.opacity(isSelected || isHovered ? 0.48 : 0.32)),
             lineWidth: isSelected ? 1.0 : 0.7
+        )
+    }
+
+    private func drawSurfaceTrimKnotDisplays(
+        scene: ViewportScene,
+        layout: ViewportLayout,
+        in context: inout GraphicsContext
+    ) {
+        for item in scene.items {
+            guard case .body(let component) = item.kind else {
+                continue
+            }
+            for display in component.surfaceTrimKnotDisplays {
+                drawSurfaceTrimKnotDisplay(
+                    display,
+                    item: item,
+                    layout: layout,
+                    isSelected: selection.selectedReferences.contains(display.selectionReference),
+                    isHovered: selection.hoveredReference == display.selectionReference,
+                    in: &context
+                )
+            }
+        }
+    }
+
+    private func drawSurfaceTrimKnotDisplay(
+        _ display: ViewportSurfaceTrimKnotDisplay,
+        item: ViewportSceneItem,
+        layout: ViewportLayout,
+        isSelected: Bool,
+        isHovered: Bool,
+        in context: inout GraphicsContext
+    ) {
+        let point = layout.project(display.point, in: item)
+        let size: CGFloat = if isSelected {
+            8.8
+        } else if isHovered {
+            7.4
+        } else {
+            5.4
+        }
+        let color = isSelected ? ViewportTheme.selection : (isHovered ? ViewportTheme.hover : ViewportTheme.surfaceEdit)
+        let rect = CGRect(
+            x: point.x - size * 0.5,
+            y: point.y - size * 0.5,
+            width: size,
+            height: size
+        )
+        context.fill(
+            Path(rect),
+            with: .color(color.opacity(isSelected || isHovered ? 0.86 : 0.5))
+        )
+        context.stroke(
+            Path(rect),
+            with: .color(Color.black.opacity(isSelected || isHovered ? 0.58 : 0.34)),
+            lineWidth: isSelected ? 1.2 : 0.8
+        )
+    }
+
+    private func drawSurfaceTrimSpanDisplays(
+        scene: ViewportScene,
+        layout: ViewportLayout,
+        in context: inout GraphicsContext
+    ) {
+        for item in scene.items {
+            guard case .body(let component) = item.kind else {
+                continue
+            }
+            for display in component.surfaceTrimSpanDisplays {
+                drawSurfaceTrimSpanDisplay(
+                    display,
+                    item: item,
+                    layout: layout,
+                    isSelected: selection.selectedReferences.contains(display.selectionReference),
+                    isHovered: selection.hoveredReference == display.selectionReference,
+                    in: &context
+                )
+            }
+        }
+    }
+
+    private func drawSurfaceTrimSpanDisplay(
+        _ display: ViewportSurfaceTrimSpanDisplay,
+        item: ViewportSceneItem,
+        layout: ViewportLayout,
+        isSelected: Bool,
+        isHovered: Bool,
+        in context: inout GraphicsContext
+    ) {
+        let point = layout.project(display.point, in: item)
+        let radius: CGFloat = if isSelected {
+            4.8
+        } else if isHovered {
+            4.0
+        } else {
+            2.9
+        }
+        let color = isSelected ? ViewportTheme.selection : (isHovered ? ViewportTheme.hover : ViewportTheme.surfaceEdit)
+        let rect = CGRect(
+            x: point.x - radius,
+            y: point.y - radius,
+            width: radius * 2.0,
+            height: radius * 2.0
+        )
+        context.stroke(
+            Path(ellipseIn: rect),
+            with: .color(color.opacity(isSelected || isHovered ? 0.86 : 0.54)),
+            lineWidth: isSelected ? 1.4 : 0.9
         )
     }
 

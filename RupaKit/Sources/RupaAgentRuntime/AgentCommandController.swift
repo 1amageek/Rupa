@@ -1307,7 +1307,7 @@ public final class AgentCommandController: AgentClientProtocol {
             access: .automationCommand,
             mutatesDocument: true,
             discovery: [.surfaceSourceSummary, .surfaceFrames, .surfaceAnalysis, .topologySummary],
-            targets: [.surfaceTrim],
+            targets: [.surfaceTrim, .surfaceTrimSpan, .surfaceTrimKnot],
             failureMode: "Accepts authored direct B-spline surface trim edge references discovered from surfaceSourceSummary plus a scalar value inside parameterCurve.spans or an unsaturated interior parameterCurve.knot value; rejects rectangular trim domains, PolySpline trims, non-trim references, constant and polyline trim curves, boundary or saturated knot values, values outside the p-curve domain, invalid UV trim-loop validation, stale generations, and invalid rebuilt trimmed sheet topology."
         ),
         capability(
@@ -1317,7 +1317,7 @@ public final class AgentCommandController: AgentClientProtocol {
             access: .automationCommand,
             mutatesDocument: true,
             discovery: [.surfaceSourceSummary, .surfaceFrames, .surfaceAnalysis, .topologySummary],
-            targets: [.surfaceTrim],
+            targets: [.surfaceTrim, .surfaceTrimKnot],
             failureMode: "Accepts authored direct B-spline surface trim edge references discovered from surfaceSourceSummary plus a parameterCurve.knotVector index and scalar value strictly between neighboring knot values; rejects rectangular trim domains, PolySpline trims, non-trim references, constant and polyline trim curves, boundary knots, missing knot indices, invalid UV trim-loop validation, stale generations, and invalid rebuilt trimmed sheet topology."
         ),
         capability(
@@ -1327,7 +1327,7 @@ public final class AgentCommandController: AgentClientProtocol {
             access: .automationCommand,
             mutatesDocument: true,
             discovery: [.surfaceSourceSummary, .surfaceFrames, .surfaceAnalysis, .topologySummary],
-            targets: [.surfaceTrim],
+            targets: [.surfaceTrim, .surfaceTrimKnot],
             failureMode: "Accepts authored direct B-spline surface trim edge references discovered from surfaceSourceSummary plus a parameterCurve.knotVector index and requested multiplicity greater than the current multiplicity and no greater than the p-curve degree; rejects rectangular trim domains, PolySpline trims, non-trim references, constant and polyline trim curves, boundary knots, lower or equal multiplicities, saturated knots, invalid UV trim-loop validation, stale generations, and invalid rebuilt trimmed sheet topology."
         ),
         capability(
@@ -1613,7 +1613,7 @@ public final class AgentCommandController: AgentClientProtocol {
             access: .agentRequest,
             mutatesDocument: false,
             discovery: [.surfaceSourceSummary, .topologySummary, .selectionMeasurement],
-            targets: [.surface, .surfaceControlPoint, .surfaceTrim],
+            targets: [.surface, .surfaceControlPoint, .surfaceTrim, .surfaceTrimSpan, .surfaceTrimKnot],
             failureMode: "Rejects stale generations and references incompatible with the current document."
         ),
         capability(

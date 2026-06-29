@@ -5212,10 +5212,20 @@ public struct MainView: View {
         _ target: SelectionReference,
         value: Double
     ) {
-        let result = session.setSurfaceKnotValue(
-            target: target,
-            value: .scalar(value)
-        )
+        let result: CommandExecutionResult?
+        switch target {
+        case .surface(.trimKnot(let reference)):
+            result = session.setSurfaceTrimKnotValue(
+                target: .surface(.trim(reference.trim)),
+                knotIndex: reference.knotIndex,
+                value: .scalar(value)
+            )
+        default:
+            result = session.setSurfaceKnotValue(
+                target: target,
+                value: .scalar(value)
+            )
+        }
         if result?.diagnostics.isEmpty == false || result == nil {
             isPreviewExpanded = true
         }
@@ -5225,10 +5235,19 @@ public struct MainView: View {
         _ target: SelectionReference,
         value: Double
     ) {
-        let result = session.insertSurfaceKnot(
-            target: target,
-            value: .scalar(value)
-        )
+        let result: CommandExecutionResult?
+        switch target {
+        case .surface(.trimKnot), .surface(.trimSpan):
+            result = session.insertSurfaceTrimKnot(
+                target: target,
+                value: .scalar(value)
+            )
+        default:
+            result = session.insertSurfaceKnot(
+                target: target,
+                value: .scalar(value)
+            )
+        }
         if result?.diagnostics.isEmpty == false || result == nil {
             isPreviewExpanded = true
         }
@@ -5251,10 +5270,20 @@ public struct MainView: View {
         _ target: SelectionReference,
         multiplicity: Int
     ) {
-        let result = session.setSurfaceKnotMultiplicity(
-            target: target,
-            multiplicity: multiplicity
-        )
+        let result: CommandExecutionResult?
+        switch target {
+        case .surface(.trimKnot(let reference)):
+            result = session.setSurfaceTrimKnotMultiplicity(
+                target: .surface(.trim(reference.trim)),
+                knotIndex: reference.knotIndex,
+                multiplicity: multiplicity
+            )
+        default:
+            result = session.setSurfaceKnotMultiplicity(
+                target: target,
+                multiplicity: multiplicity
+            )
+        }
         if result?.diagnostics.isEmpty == false || result == nil {
             isPreviewExpanded = true
         }

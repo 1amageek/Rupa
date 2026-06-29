@@ -29,6 +29,8 @@ public enum ViewportIdentityPickGeometry: Equatable, Sendable {
     case generatedFace(SelectionComponentID)
     case generatedEdge(SelectionComponentID)
     case generatedVertex(SelectionComponentID)
+    case surfaceTrimKnot(SelectionReference)
+    case surfaceTrimSpan(SelectionReference)
     case projectedBodyFace(ViewportBodyFace)
     case projectedBodyEdge(ViewportBodyEdge)
     case projectedBodyVertex(ViewportBodyVertex)
@@ -235,6 +237,50 @@ public struct ViewportIdentityPickIndexBuilder: Sendable {
         } else if includesProjectedBodySubobjects {
             appendProjectedBodySubobjectRecords(
                 item: item,
+                allocator: &allocator,
+                records: &records
+            )
+        }
+        appendSurfaceTrimParameterRecords(
+            item: item,
+            component: component,
+            allocator: &allocator,
+            records: &records
+        )
+    }
+
+    private func appendSurfaceTrimParameterRecords(
+        item: ViewportSceneItem,
+        component: ViewportBodyComponent,
+        allocator: inout ViewportPickIdentityAllocator,
+        records: inout [ViewportIdentityPickRecord]
+    ) {
+        for display in component.surfaceTrimKnotDisplays {
+            appendRecord(
+                featureID: item.featureID,
+                geometry: .surfaceTrimKnot(display.selectionReference),
+                hit: ViewportHit(
+                    featureID: item.featureID,
+                    sceneNodeID: item.sceneNodeID,
+                    kind: .body,
+                    pickingBackend: .identityBuffer,
+                    selectionReference: display.selectionReference
+                ),
+                allocator: &allocator,
+                records: &records
+            )
+        }
+        for display in component.surfaceTrimSpanDisplays {
+            appendRecord(
+                featureID: item.featureID,
+                geometry: .surfaceTrimSpan(display.selectionReference),
+                hit: ViewportHit(
+                    featureID: item.featureID,
+                    sceneNodeID: item.sceneNodeID,
+                    kind: .body,
+                    pickingBackend: .identityBuffer,
+                    selectionReference: display.selectionReference
+                ),
                 allocator: &allocator,
                 records: &records
             )

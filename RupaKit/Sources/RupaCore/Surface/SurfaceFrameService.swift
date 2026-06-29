@@ -228,7 +228,14 @@ public struct SurfaceFrameService: Sendable {
                     message: "Surface frame parameter and control-point selectionReference queries carry their own UV address and must not also provide u or v."
                 )
             }
-        case .surface(.span), .surface(.knot), .surface(.trim), .edge, .curve, .sketchPoint:
+        case .surface(.span),
+             .surface(.knot),
+             .surface(.trim),
+             .surface(.trimSpan),
+             .surface(.trimKnot),
+             .edge,
+             .curve,
+             .sketchPoint:
             throw EditorError(
                 code: .commandInvalid,
                 message: "Surface frame selectionReference must target a generated face, surface parameter, or surface control point."
@@ -321,7 +328,14 @@ public struct SurfaceFrameService: Sendable {
                     vIndex: reference.vIndex
                 )
             )
-        case .surface(.span), .surface(.knot), .surface(.trim), .edge, .curve, .sketchPoint:
+        case .surface(.span),
+             .surface(.knot),
+             .surface(.trim),
+             .surface(.trimSpan),
+             .surface(.trimKnot),
+             .edge,
+             .curve,
+             .sketchPoint:
             throw EditorError(
                 code: .commandInvalid,
                 message: "Surface frame selectionReference must target a generated face, surface parameter, or surface control point."

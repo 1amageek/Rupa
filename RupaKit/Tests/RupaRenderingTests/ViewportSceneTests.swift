@@ -786,6 +786,85 @@ import Testing
     #expect(controlPointDisplay.tangentV.length > 0.0)
 }
 
+@Test func viewportSceneBuilderExposesAuthoredSurfaceTrimParameterDisplays() async throws {
+    var document = DesignDocument.empty()
+    let featureID = try document.createBSplineSurface(
+        name: "Viewport Surface Trim Parameters",
+        surface: viewportDirectBSplineSurface()
+    )
+    let summary = try SurfaceSourceSummaryService().summarize(document: document)
+    let faceReference = try #require(summary.sources.first?.patches.first?.faceSelectionReference)
+    let trimLoop = BSplineSurfaceTrimLoop(
+        role: .outer,
+        edges: [
+            BSplineSurfaceTrimEdge(parameterCurve: .bSpline(BSplineCurve2D(
+                degree: 2,
+                knots: [0.0, 0.0, 0.0, 0.5, 1.0, 1.0, 1.0],
+                controlPoints: [
+                    Point2D(x: 0.2, y: 0.2),
+                    Point2D(x: 0.4, y: 0.42),
+                    Point2D(x: 0.62, y: 0.38),
+                    Point2D(x: 0.8, y: 0.25),
+                ]
+            ))),
+            BSplineSurfaceTrimEdge(parameterCurve: .polyline([
+                SurfaceParameter(u: 0.8, v: 0.25),
+                SurfaceParameter(u: 0.45, v: 0.8),
+            ])),
+            BSplineSurfaceTrimEdge(parameterCurve: .polyline([
+                SurfaceParameter(u: 0.45, v: 0.8),
+                SurfaceParameter(u: 0.2, v: 0.2),
+            ])),
+        ]
+    )
+    try document.setSurfaceTrimLoops(target: faceReference, trimLoops: [trimLoop])
+
+    let scene = ViewportSceneBuilder().build(document: document)
+    let body = try #require(scene.items.first { $0.featureID == featureID })
+    guard case .body(let component) = body.kind else {
+        Issue.record("Expected a B-spline surface body scene item.")
+        return
+    }
+    #expect(component.surfaceTrimKnotDisplays.count == 1)
+    #expect(component.surfaceTrimSpanDisplays.count == 2)
+    let knotDisplay = try #require(component.surfaceTrimKnotDisplays.first)
+    let spanDisplay = try #require(component.surfaceTrimSpanDisplays.first)
+    guard case .surface(.trimKnot(let knotReference)) = knotDisplay.selectionReference else {
+        Issue.record("Expected a trim p-curve knot selection reference.")
+        return
+    }
+    guard case .surface(.trimSpan(let spanReference)) = spanDisplay.selectionReference else {
+        Issue.record("Expected a trim p-curve span selection reference.")
+        return
+    }
+    #expect(knotReference.knotIndex == 3)
+    #expect(spanReference.spanIndex == 0)
+
+    let layout = try #require(ViewportLayout(
+        scene: scene,
+        size: CGSize(width: 900.0, height: 700.0)
+    ))
+    let hit = try #require(ViewportHitTester().hitTest(
+        point: layout.project(knotDisplay.point, in: body),
+        in: scene,
+        layout: layout,
+        selectionHitPolicy: .vertex
+    ))
+    #expect(hit.selectionReference == knotDisplay.selectionReference)
+
+    let index = ViewportIdentityPickIndexBuilder(selectionHitPolicy: .vertex).build(scene: scene)
+    #expect(index.records.contains { $0.geometry == .surfaceTrimKnot(knotDisplay.selectionReference) })
+    #expect(index.records.contains { $0.geometry == .surfaceTrimSpan(spanDisplay.selectionReference) })
+    let plan = ViewportIdentityPickRenderPlanBuilder().build(
+        scene: scene,
+        layout: layout,
+        index: index,
+        selectionHitPolicy: .vertex
+    )
+    #expect(plan.drawItems.contains { $0.hit.selectionReference == knotDisplay.selectionReference })
+    #expect(plan.drawItems.contains { $0.hit.selectionReference == spanDisplay.selectionReference })
+}
+
 @MainActor
 @Test func viewportSceneBuilderExposesVisibleSurfaceFrameDisplays() async throws {
     var document = DesignDocument.empty()

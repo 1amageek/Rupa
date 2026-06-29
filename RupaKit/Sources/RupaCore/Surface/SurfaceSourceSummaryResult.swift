@@ -399,6 +399,7 @@ public struct SurfaceSourceSummaryResult: Codable, Equatable, Sendable {
                     public var isMultiplicityEditable: Bool
                     public var isInsertionSupported: Bool
                     public var unsupportedReason: String?
+                    public var selectionReference: SelectionReference?
 
                     public init(
                         id: String,
@@ -409,7 +410,8 @@ public struct SurfaceSourceSummaryResult: Codable, Equatable, Sendable {
                         isValueEditable: Bool = false,
                         isMultiplicityEditable: Bool = false,
                         isInsertionSupported: Bool = false,
-                        unsupportedReason: String? = nil
+                        unsupportedReason: String? = nil,
+                        selectionReference: SelectionReference? = nil
                     ) {
                         self.id = id
                         self.index = index
@@ -420,6 +422,7 @@ public struct SurfaceSourceSummaryResult: Codable, Equatable, Sendable {
                         self.isMultiplicityEditable = isMultiplicityEditable
                         self.isInsertionSupported = isInsertionSupported
                         self.unsupportedReason = unsupportedReason
+                        self.selectionReference = selectionReference
                     }
                 }
 
@@ -432,6 +435,7 @@ public struct SurfaceSourceSummaryResult: Codable, Equatable, Sendable {
                     public var endKnotIndex: Int
                     public var isInsertionSupported: Bool
                     public var unsupportedReason: String?
+                    public var selectionReference: SelectionReference?
 
                     public init(
                         id: String,
@@ -441,7 +445,8 @@ public struct SurfaceSourceSummaryResult: Codable, Equatable, Sendable {
                         startKnotIndex: Int,
                         endKnotIndex: Int,
                         isInsertionSupported: Bool = false,
-                        unsupportedReason: String? = nil
+                        unsupportedReason: String? = nil,
+                        selectionReference: SelectionReference? = nil
                     ) {
                         self.id = id
                         self.index = index
@@ -451,6 +456,7 @@ public struct SurfaceSourceSummaryResult: Codable, Equatable, Sendable {
                         self.endKnotIndex = endKnotIndex
                         self.isInsertionSupported = isInsertionSupported
                         self.unsupportedReason = unsupportedReason
+                        self.selectionReference = selectionReference
                     }
                 }
 

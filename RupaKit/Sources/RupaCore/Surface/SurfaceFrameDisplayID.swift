@@ -83,7 +83,14 @@ public struct SurfaceFrameDisplayID: Codable, Hashable, RawRepresentable, Sendab
                 "uIndex:\(reference.uIndex)",
                 "vIndex:\(reference.vIndex)",
             ].joined(separator: "/")
-        case .surface(.span), .surface(.knot), .surface(.trim), .edge, .curve, .sketchPoint:
+        case .surface(.span),
+             .surface(.knot),
+             .surface(.trim),
+             .surface(.trimSpan),
+             .surface(.trimKnot),
+             .edge,
+             .curve,
+             .sketchPoint:
             throw EditorError(
                 code: .commandInvalid,
                 message: "Surface frame display requires a generated face, surface parameter, or surface control point reference."

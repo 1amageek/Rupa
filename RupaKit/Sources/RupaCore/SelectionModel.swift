@@ -265,6 +265,10 @@ public struct SelectionModel: Codable, Equatable, Sendable {
                 .validateDisplayTarget(for: reference, in: document)
         case .surface(.trim(let trimReference)):
             try validateSurfaceTrimReference(trimReference, in: document)
+        case .surface(.trimSpan(let trimSpanReference)):
+            try validateSurfaceTrimSpanReference(trimSpanReference, in: document)
+        case .surface(.trimKnot(let trimKnotReference)):
+            try validateSurfaceTrimKnotReference(trimKnotReference, in: document)
         case .sketchPoint(let point):
             try validateSketchPointReference(point, in: document)
         case .topology, .edge, .curve, .surface(_):
@@ -462,6 +466,103 @@ public struct SelectionModel: Codable, Equatable, Sendable {
                 message: "Selection surface trim reference points to a missing trim edge."
             )
         }
+    }
+
+    private func validateSurfaceTrimSpanReference(
+        _ reference: SurfaceTrimSpanReference,
+        in document: DesignDocument
+    ) throws {
+        do {
+            try reference.validate()
+        } catch {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Selection surface trim span reference is invalid: \(error)."
+            )
+        }
+        let curve = try surfaceTrimParameterCurve(
+            for: reference.trim,
+            in: document,
+            owner: "Selection surface trim span reference"
+        )
+        guard case let .bSpline(bSpline) = curve else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Selection surface trim span reference requires a B-spline trim p-curve."
+            )
+        }
+        let spanCount = bSplineNonDegenerateSpanCount(knots: bSpline.knots, degree: bSpline.degree)
+        guard reference.spanIndex < spanCount else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "Selection surface trim span reference points to a missing trim p-curve span."
+            )
+        }
+    }
+
+    private func validateSurfaceTrimKnotReference(
+        _ reference: SurfaceTrimKnotReference,
+        in document: DesignDocument
+    ) throws {
+        do {
+            try reference.validate()
+        } catch {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Selection surface trim knot reference is invalid: \(error)."
+            )
+        }
+        let curve = try surfaceTrimParameterCurve(
+            for: reference.trim,
+            in: document,
+            owner: "Selection surface trim knot reference"
+        )
+        guard case let .bSpline(bSpline) = curve else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Selection surface trim knot reference requires a B-spline trim p-curve."
+            )
+        }
+        guard bSpline.knots.indices.contains(reference.knotIndex) else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "Selection surface trim knot reference points to a missing trim p-curve knot."
+            )
+        }
+    }
+
+    private func surfaceTrimParameterCurve(
+        for reference: SurfaceTrimReference,
+        in document: DesignDocument,
+        owner: String
+    ) throws -> SurfaceParameterCurve {
+        try validateSurfaceTrimReference(reference, in: document)
+        let featureID = try sourceOwnedDirectBSplineSurfaceFeatureID(
+            from: reference.surface.faceName,
+            owner: owner
+        )
+        guard let feature = document.cadDocument.designGraph.nodes[featureID],
+              case let .bSplineSurface(surfaceFeature) = feature.operation else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "\(owner) could not resolve its direct B-spline surface feature."
+            )
+        }
+        let trimLoops = try surfaceFeature.resolvedTrimLoops()
+        return trimLoops[reference.loopIndex].edges[reference.edgeIndex].parameterCurve
+    }
+
+    private func bSplineNonDegenerateSpanCount(knots: [Double], degree: Int) -> Int {
+        let lowerIndex = degree
+        let upperIndex = knots.count - degree - 1
+        guard lowerIndex < upperIndex else {
+            return 0
+        }
+        var count = 0
+        for index in lowerIndex..<upperIndex where knots[index + 1] > knots[index] {
+            count += 1
+        }
+        return count
     }
 
     private func sourceOwnedDirectBSplineSurfaceFeatureID(

@@ -141,6 +141,8 @@ public struct ViewportBodyComponent: Equatable {
     public var surfaceControlPointDisplays: [ViewportSurfaceControlPointDisplay]
     public var surfaceTrimEndpointDisplays: [ViewportSurfaceTrimEndpointDisplay]
     public var surfaceTrimControlPointDisplays: [ViewportSurfaceTrimControlPointDisplay]
+    public var surfaceTrimKnotDisplays: [ViewportSurfaceTrimKnotDisplay]
+    public var surfaceTrimSpanDisplays: [ViewportSurfaceTrimSpanDisplay]
     public var surfaceFrameDisplays: [ViewportSurfaceFrameDisplay]
 
     public init(
@@ -157,6 +159,8 @@ public struct ViewportBodyComponent: Equatable {
         surfaceControlPointDisplays: [ViewportSurfaceControlPointDisplay] = [],
         surfaceTrimEndpointDisplays: [ViewportSurfaceTrimEndpointDisplay] = [],
         surfaceTrimControlPointDisplays: [ViewportSurfaceTrimControlPointDisplay] = [],
+        surfaceTrimKnotDisplays: [ViewportSurfaceTrimKnotDisplay] = [],
+        surfaceTrimSpanDisplays: [ViewportSurfaceTrimSpanDisplay] = [],
         surfaceFrameDisplays: [ViewportSurfaceFrameDisplay] = []
     ) {
         self.typeID = typeID
@@ -172,6 +176,8 @@ public struct ViewportBodyComponent: Equatable {
         self.surfaceControlPointDisplays = surfaceControlPointDisplays
         self.surfaceTrimEndpointDisplays = surfaceTrimEndpointDisplays
         self.surfaceTrimControlPointDisplays = surfaceTrimControlPointDisplays
+        self.surfaceTrimKnotDisplays = surfaceTrimKnotDisplays
+        self.surfaceTrimSpanDisplays = surfaceTrimSpanDisplays
         self.surfaceFrameDisplays = surfaceFrameDisplays
     }
 }
@@ -253,6 +259,59 @@ public struct ViewportSurfaceTrimControlPointDisplay: Equatable, Sendable {
         self.v = v
         self.tangentU = tangentU
         self.tangentV = tangentV
+    }
+}
+
+public struct ViewportSurfaceTrimKnotDisplay: Equatable, Sendable {
+    public var selectionReference: SelectionReference
+    public var knotIndex: Int
+    public var value: Double
+    public var point: Point3D
+    public var u: Double
+    public var v: Double
+
+    public init(
+        selectionReference: SelectionReference,
+        knotIndex: Int,
+        value: Double,
+        point: Point3D,
+        u: Double,
+        v: Double
+    ) {
+        self.selectionReference = selectionReference
+        self.knotIndex = knotIndex
+        self.value = value
+        self.point = point
+        self.u = u
+        self.v = v
+    }
+}
+
+public struct ViewportSurfaceTrimSpanDisplay: Equatable, Sendable {
+    public var selectionReference: SelectionReference
+    public var spanIndex: Int
+    public var lowerBound: Double
+    public var upperBound: Double
+    public var point: Point3D
+    public var u: Double
+    public var v: Double
+
+    public init(
+        selectionReference: SelectionReference,
+        spanIndex: Int,
+        lowerBound: Double,
+        upperBound: Double,
+        point: Point3D,
+        u: Double,
+        v: Double
+    ) {
+        self.selectionReference = selectionReference
+        self.spanIndex = spanIndex
+        self.lowerBound = lowerBound
+        self.upperBound = upperBound
+        self.point = point
+        self.u = u
+        self.v = v
     }
 }
 
@@ -2254,6 +2313,42 @@ public struct ViewportHitTester {
                     depth: surfaceTrimEndpointHit.depth
                 )
             }
+            if selectionHitPolicy.allowsVertexHits,
+               let surfaceTrimKnotHit = hitSurfaceTrimKnotDisplay(
+                   for: item,
+                   component: component,
+                   point: point,
+                   layout: layout
+               ) {
+                return HitCandidate(
+                    hit: ViewportHit(
+                        featureID: item.featureID,
+                        sceneNodeID: item.sceneNodeID,
+                        kind: item.kind.selectableKind,
+                        selectionReference: surfaceTrimKnotHit.reference
+                    ),
+                    score: surfaceTrimKnotHit.score,
+                    depth: surfaceTrimKnotHit.depth
+                )
+            }
+            if selectionHitPolicy.allowsVertexHits,
+               let surfaceTrimSpanHit = hitSurfaceTrimSpanDisplay(
+                   for: item,
+                   component: component,
+                   point: point,
+                   layout: layout
+               ) {
+                return HitCandidate(
+                    hit: ViewportHit(
+                        featureID: item.featureID,
+                        sceneNodeID: item.sceneNodeID,
+                        kind: item.kind.selectableKind,
+                        selectionReference: surfaceTrimSpanHit.reference
+                    ),
+                    score: surfaceTrimSpanHit.score,
+                    depth: surfaceTrimSpanHit.depth
+                )
+            }
             if let topologyHit = ViewportBodyTopologyHitTester(tolerance: tolerance).hitTest(
                 item: item,
                 component: component,
@@ -2348,6 +2443,60 @@ public struct ViewportHitTester {
         var bestHit: (reference: SelectionReference, score: CGFloat, depth: Double?)?
         let displayTolerance = max(tolerance, 10.0)
         for display in component.surfaceTrimEndpointDisplays {
+            let projectedPoint = layout.project(display.point, in: item)
+            let distance = point.distance(to: projectedPoint)
+            guard distance <= displayTolerance else {
+                continue
+            }
+            let depth = layout.projectedDepth(display.point, in: item)
+            let candidate = (reference: display.selectionReference, score: distance, depth: depth)
+            if let current = bestHit {
+                if isReferenceHitCandidate(candidate, betterThan: current) {
+                    bestHit = candidate
+                }
+            } else {
+                bestHit = candidate
+            }
+        }
+        return bestHit
+    }
+
+    private func hitSurfaceTrimKnotDisplay(
+        for item: ViewportSceneItem,
+        component: ViewportBodyComponent,
+        point: CGPoint,
+        layout: ViewportLayout
+    ) -> (reference: SelectionReference, score: CGFloat, depth: Double?)? {
+        var bestHit: (reference: SelectionReference, score: CGFloat, depth: Double?)?
+        let displayTolerance = max(tolerance, 8.0)
+        for display in component.surfaceTrimKnotDisplays {
+            let projectedPoint = layout.project(display.point, in: item)
+            let distance = point.distance(to: projectedPoint)
+            guard distance <= displayTolerance else {
+                continue
+            }
+            let depth = layout.projectedDepth(display.point, in: item)
+            let candidate = (reference: display.selectionReference, score: distance, depth: depth)
+            if let current = bestHit {
+                if isReferenceHitCandidate(candidate, betterThan: current) {
+                    bestHit = candidate
+                }
+            } else {
+                bestHit = candidate
+            }
+        }
+        return bestHit
+    }
+
+    private func hitSurfaceTrimSpanDisplay(
+        for item: ViewportSceneItem,
+        component: ViewportBodyComponent,
+        point: CGPoint,
+        layout: ViewportLayout
+    ) -> (reference: SelectionReference, score: CGFloat, depth: Double?)? {
+        var bestHit: (reference: SelectionReference, score: CGFloat, depth: Double?)?
+        let displayTolerance = max(tolerance, 8.0)
+        for display in component.surfaceTrimSpanDisplays {
             let projectedPoint = layout.project(display.point, in: item)
             let distance = point.distance(to: projectedPoint)
             guard distance <= displayTolerance else {

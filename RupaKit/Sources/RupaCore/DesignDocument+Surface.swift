@@ -1087,15 +1087,25 @@ extension DesignDocument {
             value,
             owner: "B-spline surface trim p-curve knot insertion"
         )
+        let insertionTarget = try resolvedBSplineSurfaceTrimKnotInsertionTarget(
+            target,
+            owner: "B-spline surface trim p-curve knot insertion"
+        )
 
         try updateBSplineSurfaceTrimParameterCurve(
-            target: target,
+            target: .surface(.trim(insertionTarget.trimReference)),
             owner: "B-spline surface trim p-curve knot insertion",
             objectRegistry: objectRegistry
         ) { curve in
-            try Self.surfaceParameterCurve(
+            let insertionValue = try Self.resolvedSurfaceTrimKnotInsertionValue(
+                resolvedValue,
+                target: insertionTarget,
+                curve: curve,
+                owner: "B-spline surface trim p-curve knot insertion"
+            )
+            return try Self.surfaceParameterCurve(
                 curve,
-                insertingKnot: resolvedValue,
+                insertingKnot: insertionValue,
                 owner: "B-spline surface trim p-curve knot insertion"
             )
         }
@@ -1117,15 +1127,20 @@ extension DesignDocument {
             value,
             owner: "B-spline surface trim p-curve knot value"
         )
+        let knotResolution = try resolvedBSplineSurfaceTrimKnotReference(
+            target,
+            fallbackKnotIndex: knotIndex,
+            owner: "B-spline surface trim p-curve knot value"
+        )
 
         try updateBSplineSurfaceTrimParameterCurve(
-            target: target,
+            target: .surface(.trim(knotResolution.reference.trim)),
             owner: "B-spline surface trim p-curve knot value",
             objectRegistry: objectRegistry
         ) { curve in
             try Self.surfaceParameterCurve(
                 curve,
-                settingKnotValueAt: knotIndex,
+                settingKnotValueAt: knotResolution.reference.knotIndex,
                 to: resolvedValue,
                 owner: "B-spline surface trim p-curve knot value"
             )
@@ -1150,15 +1165,20 @@ extension DesignDocument {
                 message: "B-spline surface trim p-curve knot multiplicity requires a positive multiplicity."
             )
         }
+        let knotResolution = try resolvedBSplineSurfaceTrimKnotReference(
+            target,
+            fallbackKnotIndex: knotIndex,
+            owner: "B-spline surface trim p-curve knot multiplicity"
+        )
 
         try updateBSplineSurfaceTrimParameterCurve(
-            target: target,
+            target: .surface(.trim(knotResolution.reference.trim)),
             owner: "B-spline surface trim p-curve knot multiplicity",
             objectRegistry: objectRegistry
         ) { curve in
             try Self.surfaceParameterCurve(
                 curve,
-                settingKnotMultiplicityAt: knotIndex,
+                settingKnotMultiplicityAt: knotResolution.reference.knotIndex,
                 to: multiplicity,
                 owner: "B-spline surface trim p-curve knot multiplicity"
             )
@@ -1306,6 +1326,16 @@ extension DesignDocument {
         var reference: SurfaceTrimReference
     }
 
+    private struct BSplineSurfaceTrimSpanResolution {
+        var featureID: FeatureID
+        var reference: SurfaceTrimSpanReference
+    }
+
+    private struct BSplineSurfaceTrimKnotResolution {
+        var featureID: FeatureID
+        var reference: SurfaceTrimKnotReference
+    }
+
     private struct BSplineSurfaceSpanResolution {
         var featureID: FeatureID
         var reference: SurfaceSpanReference
@@ -1330,6 +1360,34 @@ extension DesignDocument {
                 resolution.reference.direction
             case .knot(let resolution):
                 resolution.reference.direction
+            }
+        }
+    }
+
+    private enum BSplineSurfaceTrimKnotInsertionResolution {
+        case trim(BSplineSurfaceTrimResolution)
+        case span(BSplineSurfaceTrimSpanResolution)
+        case knot(BSplineSurfaceTrimKnotResolution)
+
+        var featureID: FeatureID {
+            switch self {
+            case .trim(let resolution):
+                resolution.featureID
+            case .span(let resolution):
+                resolution.featureID
+            case .knot(let resolution):
+                resolution.featureID
+            }
+        }
+
+        var trimReference: SurfaceTrimReference {
+            switch self {
+            case .trim(let resolution):
+                resolution.reference
+            case .span(let resolution):
+                resolution.reference.trim
+            case .knot(let resolution):
+                resolution.reference.trim
             }
         }
     }
@@ -1389,6 +1447,16 @@ extension DesignDocument {
                 message: "\(owner) requires a surface trim selection reference."
             )
         }
+        return try resolvedBSplineSurfaceTrimReference(
+            reference,
+            owner: owner
+        )
+    }
+
+    private func resolvedBSplineSurfaceTrimReference(
+        _ reference: SurfaceTrimReference,
+        owner: String
+    ) throws -> BSplineSurfaceTrimResolution {
         do {
             try reference.validate()
         } catch {
@@ -1414,6 +1482,112 @@ extension DesignDocument {
         )
     }
 
+    private func resolvedBSplineSurfaceTrimSpanReference(
+        _ selection: SelectionReference,
+        owner: String
+    ) throws -> BSplineSurfaceTrimSpanResolution {
+        guard case .surface(.trimSpan(let reference)) = selection else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "\(owner) requires a surface trim span selection reference."
+            )
+        }
+        do {
+            try reference.validate()
+        } catch {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "\(owner) requires a valid surface trim span selection reference: \(error)."
+            )
+        }
+        let trimResolution = try resolvedBSplineSurfaceTrimReference(
+            reference.trim,
+            owner: owner
+        )
+        return BSplineSurfaceTrimSpanResolution(
+            featureID: trimResolution.featureID,
+            reference: reference
+        )
+    }
+
+    private func resolvedBSplineSurfaceTrimKnotReference(
+        _ selection: SelectionReference,
+        fallbackKnotIndex: Int,
+        owner: String
+    ) throws -> BSplineSurfaceTrimKnotResolution {
+        let reference: SurfaceTrimKnotReference
+        switch selection {
+        case .surface(.trimKnot(let trimKnotReference)):
+            guard fallbackKnotIndex == trimKnotReference.knotIndex else {
+                throw EditorError(
+                    code: .commandInvalid,
+                    message: "\(owner) knot index must match the selected trim p-curve knot."
+                )
+            }
+            reference = trimKnotReference
+        case .surface(.trim(let trimReference)):
+            reference = SurfaceTrimKnotReference(
+                trim: trimReference,
+                knotIndex: fallbackKnotIndex
+            )
+        default:
+            throw EditorError(
+                code: .commandInvalid,
+                message: "\(owner) requires a surface trim knot or surface trim selection reference."
+            )
+        }
+        do {
+            try reference.validate()
+        } catch {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "\(owner) requires a valid surface trim knot selection reference: \(error)."
+            )
+        }
+        let trimResolution = try resolvedBSplineSurfaceTrimReference(
+            reference.trim,
+            owner: owner
+        )
+        return BSplineSurfaceTrimKnotResolution(
+            featureID: trimResolution.featureID,
+            reference: reference
+        )
+    }
+
+    private func resolvedBSplineSurfaceTrimKnotInsertionTarget(
+        _ selection: SelectionReference,
+        owner: String
+    ) throws -> BSplineSurfaceTrimKnotInsertionResolution {
+        switch selection {
+        case .surface(.trim):
+            return .trim(try resolvedBSplineSurfaceTrimReference(selection, owner: owner))
+        case .surface(.trimSpan):
+            return .span(try resolvedBSplineSurfaceTrimSpanReference(selection, owner: owner))
+        case .surface(.trimKnot(let reference)):
+            do {
+                try reference.validate()
+            } catch {
+                throw EditorError(
+                    code: .commandInvalid,
+                    message: "\(owner) requires a valid surface trim knot selection reference: \(error)."
+                )
+            }
+            let trimResolution = try resolvedBSplineSurfaceTrimReference(
+                reference.trim,
+                owner: owner
+            )
+            return .knot(BSplineSurfaceTrimKnotResolution(
+                featureID: trimResolution.featureID,
+                reference: reference
+            ))
+        default:
+            throw EditorError(
+                code: .commandInvalid,
+                message: "\(owner) requires a surface trim, trim span, or trim knot selection reference."
+            )
+        }
+    }
+
     private func resolvedBSplineSurfaceSourceReference(
         _ selection: SelectionReference,
         owner: String
@@ -1432,6 +1606,10 @@ extension DesignDocument {
             reference = knotReference.surface
         case .surface(.trim(let trimReference)):
             reference = trimReference.surface
+        case .surface(.trimSpan(let trimSpanReference)):
+            reference = trimSpanReference.trim.surface
+        case .surface(.trimKnot(let trimKnotReference)):
+            reference = trimKnotReference.trim.surface
         default:
             throw EditorError(
                 code: .commandInvalid,
@@ -1725,6 +1903,112 @@ extension DesignDocument {
                 )
             }
         }
+    }
+
+    private static func resolvedSurfaceTrimKnotInsertionValue(
+        _ value: Double,
+        target: BSplineSurfaceTrimKnotInsertionResolution,
+        curve: SurfaceParameterCurve,
+        owner: String
+    ) throws -> Double {
+        switch target {
+        case .trim:
+            return value
+        case .span(let resolution):
+            let spanBounds = try surfaceTrimParameterCurveSpanBounds(
+                for: resolution.reference,
+                in: curve,
+                owner: owner
+            )
+            guard value > spanBounds.lower,
+                  value < spanBounds.upper else {
+                throw EditorError(
+                    code: .commandInvalid,
+                    message: "\(owner) value must be strictly inside the selected trim p-curve span."
+                )
+            }
+            return value
+        case .knot(let resolution):
+            let knotValue = try surfaceTrimParameterCurveKnotValue(
+                for: resolution.reference,
+                in: curve,
+                owner: owner
+            )
+            let equalityTolerance = max(abs(knotValue), 1.0) * 1.0e-9
+            guard abs(value - knotValue) <= equalityTolerance else {
+                throw EditorError(
+                    code: .commandInvalid,
+                    message: "\(owner) value must match the selected trim p-curve knot value."
+                )
+            }
+            return knotValue
+        }
+    }
+
+    private static func surfaceTrimParameterCurveKnotValue(
+        for reference: SurfaceTrimKnotReference,
+        in curve: SurfaceParameterCurve,
+        owner: String
+    ) throws -> Double {
+        guard case let .bSpline(bSpline) = curve else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "\(owner) requires a B-spline trim p-curve."
+            )
+        }
+        guard bSpline.knots.indices.contains(reference.knotIndex) else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "\(owner) references a missing B-spline trim p-curve knot."
+            )
+        }
+        let firstInteriorKnotIndex = bSpline.degree + 1
+        let lastInteriorKnotIndex = bSpline.knots.count - bSpline.degree - 2
+        guard firstInteriorKnotIndex <= lastInteriorKnotIndex,
+              (firstInteriorKnotIndex ... lastInteriorKnotIndex).contains(reference.knotIndex) else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "\(owner) can insert duplicate knots only at interior trim p-curve knots."
+            )
+        }
+        return bSpline.knots[reference.knotIndex]
+    }
+
+    private static func surfaceTrimParameterCurveSpanBounds(
+        for reference: SurfaceTrimSpanReference,
+        in curve: SurfaceParameterCurve,
+        owner: String
+    ) throws -> (lower: Double, upper: Double) {
+        guard case let .bSpline(bSpline) = curve else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "\(owner) requires a B-spline trim p-curve."
+            )
+        }
+        let lowerIndex = bSpline.degree
+        let upperIndex = bSpline.knots.count - bSpline.degree - 1
+        var ordinal = 0
+        guard lowerIndex < upperIndex else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "\(owner) could not resolve a queryable B-spline trim p-curve span."
+            )
+        }
+        for index in lowerIndex..<upperIndex {
+            let lowerBound = bSpline.knots[index]
+            let upperBound = bSpline.knots[index + 1]
+            guard upperBound > lowerBound else {
+                continue
+            }
+            if ordinal == reference.spanIndex {
+                return (lowerBound, upperBound)
+            }
+            ordinal += 1
+        }
+        throw EditorError(
+            code: .referenceUnresolved,
+            message: "\(owner) references a missing B-spline trim p-curve span."
+        )
     }
 
     private static func surfaceParameterCurve(

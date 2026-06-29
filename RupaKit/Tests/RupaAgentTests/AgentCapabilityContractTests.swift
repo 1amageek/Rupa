@@ -297,7 +297,13 @@ import SwiftCAD
     #expect(referenceSelection.mutatesDocument == false)
     #expect(referenceSelection.discovery.contains(.surfaceSourceSummary))
     #expect(referenceSelection.discovery.contains(.selectionMeasurement))
-    #expect(referenceSelection.targets == [.surface, .surfaceControlPoint, .surfaceTrim])
+    #expect(referenceSelection.targets == [
+        .surface,
+        .surfaceControlPoint,
+        .surfaceTrim,
+        .surfaceTrimSpan,
+        .surfaceTrimKnot
+    ])
     #expect(referenceSelection.summary.contains("SelectionReference"))
     #expect(referenceSelection.failureMode.contains("references incompatible"))
 
@@ -739,7 +745,7 @@ import SwiftCAD
     #expect(surfaceTrimKnotInsertion.discovery.contains(.surfaceFrames))
     #expect(surfaceTrimKnotInsertion.discovery.contains(.surfaceAnalysis))
     #expect(surfaceTrimKnotInsertion.discovery.contains(.topologySummary))
-    #expect(surfaceTrimKnotInsertion.targets == [.surfaceTrim])
+    #expect(surfaceTrimKnotInsertion.targets == [.surfaceTrim, .surfaceTrimSpan, .surfaceTrimKnot])
     #expect(surfaceTrimKnotInsertion.summary.contains("shape-preserving knot"))
     #expect(surfaceTrimKnotInsertion.summary.contains("trim p-curve"))
     #expect(surfaceTrimKnotInsertion.failureMode.contains("parameterCurve.spans"))
@@ -752,7 +758,7 @@ import SwiftCAD
     #expect(surfaceTrimKnotValue.discovery.contains(.surfaceFrames))
     #expect(surfaceTrimKnotValue.discovery.contains(.surfaceAnalysis))
     #expect(surfaceTrimKnotValue.discovery.contains(.topologySummary))
-    #expect(surfaceTrimKnotValue.targets == [.surfaceTrim])
+    #expect(surfaceTrimKnotValue.targets == [.surfaceTrim, .surfaceTrimKnot])
     #expect(surfaceTrimKnotValue.summary.contains("existing editable B-spline trim p-curve knot value"))
     #expect(surfaceTrimKnotValue.failureMode.contains("parameterCurve.knotVector index"))
     #expect(surfaceTrimKnotValue.failureMode.contains("strictly between neighboring knot values"))
@@ -764,7 +770,7 @@ import SwiftCAD
     #expect(surfaceTrimKnotMultiplicity.discovery.contains(.surfaceFrames))
     #expect(surfaceTrimKnotMultiplicity.discovery.contains(.surfaceAnalysis))
     #expect(surfaceTrimKnotMultiplicity.discovery.contains(.topologySummary))
-    #expect(surfaceTrimKnotMultiplicity.targets == [.surfaceTrim])
+    #expect(surfaceTrimKnotMultiplicity.targets == [.surfaceTrim, .surfaceTrimKnot])
     #expect(surfaceTrimKnotMultiplicity.summary.contains("shape-preserving insertion"))
     #expect(surfaceTrimKnotMultiplicity.failureMode.contains("parameterCurve.knotVector index"))
     #expect(surfaceTrimKnotMultiplicity.failureMode.contains("no greater than the p-curve degree"))

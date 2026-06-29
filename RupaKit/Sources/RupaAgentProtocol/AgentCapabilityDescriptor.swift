@@ -59,6 +59,8 @@ public struct AgentCapabilityDescriptor: Codable, Equatable, Sendable {
         case surfaceKnot
         case surfaceSpan
         case surfaceTrim
+        case surfaceTrimKnot
+        case surfaceTrimSpan
         case region
         case sketchEntity
         case sketchPointHandle

@@ -268,6 +268,52 @@ public struct ViewportIdentityPickRenderPlanBuilder: Sendable {
                 drawItems: &drawItems
             )
         }
+        appendSurfaceTrimParameterDrawItems(
+            item: item,
+            component: component,
+            layout: layout,
+            index: index,
+            drawItems: &drawItems
+        )
+    }
+
+    private func appendSurfaceTrimParameterDrawItems(
+        item: ViewportSceneItem,
+        component: ViewportBodyComponent,
+        layout: ViewportLayout,
+        index: ViewportIdentityPickIndex,
+        drawItems: inout [ViewportIdentityPickDrawItem]
+    ) {
+        for display in component.surfaceTrimKnotDisplays {
+            let geometry = ViewportIdentityPickGeometry.surfaceTrimKnot(display.selectionReference)
+            guard let record = record(for: item, geometry: geometry, in: index) else {
+                continue
+            }
+            appendDrawItem(
+                record: record,
+                primitive: .point(
+                    center: layout.project(display.point, in: item),
+                    radius: controlPointRadius
+                ),
+                depth: layout.projectedDepth(display.point, in: item),
+                drawItems: &drawItems
+            )
+        }
+        for display in component.surfaceTrimSpanDisplays {
+            let geometry = ViewportIdentityPickGeometry.surfaceTrimSpan(display.selectionReference)
+            guard let record = record(for: item, geometry: geometry, in: index) else {
+                continue
+            }
+            appendDrawItem(
+                record: record,
+                primitive: .point(
+                    center: layout.project(display.point, in: item),
+                    radius: pointRadius
+                ),
+                depth: layout.projectedDepth(display.point, in: item),
+                drawItems: &drawItems
+            )
+        }
     }
 
     private func appendBodyObjectDrawItems(

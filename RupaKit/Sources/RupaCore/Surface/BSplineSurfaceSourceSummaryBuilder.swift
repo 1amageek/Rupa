@@ -272,6 +272,11 @@ struct BSplineSurfaceSourceSummaryBuilder: Sendable {
                     loopIndex: loopIndex,
                     edgeIndex: index
                 )))
+            let trimReference = SurfaceTrimReference(
+                surface: surfaceReference,
+                loopIndex: loopIndex,
+                edgeIndex: index
+            )
             let side = boundarySide(role: sourceEdge.role)
             let parameters = if let side, sourceLoop.isRectangularBoundaryLoop {
                 trimEdgeParameters(
@@ -333,7 +338,10 @@ struct BSplineSurfaceSourceSummaryBuilder: Sendable {
                 selectionReference: selectionReference,
                 startParameter: parameters.start,
                 endParameter: parameters.end,
-                parameterCurve: parameterCurveSummary(for: sourceEdge.parameterCurve),
+                parameterCurve: parameterCurveSummary(
+                    for: sourceEdge.parameterCurve,
+                    trimReference: trimReference
+                ),
                 parameterCurveControlPoints: parameterCurveControlPoints(
                     for: sourceEdge.parameterCurve,
                     loopIndex: loopIndex,
@@ -361,7 +369,8 @@ struct BSplineSurfaceSourceSummaryBuilder: Sendable {
     }
 
     private func parameterCurveSummary(
-        for curve: SurfaceParameterCurve
+        for curve: SurfaceParameterCurve,
+        trimReference: SurfaceTrimReference
     ) -> SurfaceSourceSummaryResult.TrimLoop.Edge.ParameterCurve {
         switch curve {
         case .constantU:
@@ -382,7 +391,8 @@ struct BSplineSurfaceSourceSummaryBuilder: Sendable {
         case let .bSpline(curve):
             let spans = parameterCurveSpans(
                 knots: curve.knots,
-                degree: curve.degree
+                degree: curve.degree,
+                trimReference: trimReference
             )
             let bounds: (lower: Double, upper: Double)?
             if case let .closed(lowerBound, upperBound) = curve.domain {
@@ -399,7 +409,8 @@ struct BSplineSurfaceSourceSummaryBuilder: Sendable {
                 knots: curve.knots,
                 knotVector: parameterCurveKnotVector(
                     knots: curve.knots,
-                    degree: curve.degree
+                    degree: curve.degree,
+                    trimReference: trimReference
                 ),
                 spans: spans,
                 spanCount: spans.count,
@@ -414,7 +425,8 @@ struct BSplineSurfaceSourceSummaryBuilder: Sendable {
 
     private func parameterCurveKnotVector(
         knots: [Double],
-        degree: Int
+        degree: Int,
+        trimReference: SurfaceTrimReference
     ) -> [SurfaceSourceSummaryResult.TrimLoop.Edge.ParameterCurve.Knot] {
         let lowerBound = knots.indices.contains(degree) ? knots[degree] : knots.first
         let upperBoundIndex = knots.count - degree - 1
@@ -448,7 +460,11 @@ struct BSplineSurfaceSourceSummaryBuilder: Sendable {
                     isBoundary: isBoundary,
                     multiplicity: multiplicity,
                     degree: degree
-                )
+                ),
+                selectionReference: .surface(.trimKnot(SurfaceTrimKnotReference(
+                    trim: trimReference,
+                    knotIndex: index
+                )))
             )
         }
     }
@@ -473,7 +489,8 @@ struct BSplineSurfaceSourceSummaryBuilder: Sendable {
 
     private func parameterCurveSpans(
         knots: [Double],
-        degree: Int
+        degree: Int,
+        trimReference: SurfaceTrimReference
     ) -> [SurfaceSourceSummaryResult.TrimLoop.Edge.ParameterCurve.Span] {
         let lowerIndex = degree
         let upperIndex = knots.count - degree - 1
@@ -495,7 +512,11 @@ struct BSplineSurfaceSourceSummaryBuilder: Sendable {
                 upperBound: upperBound,
                 startKnotIndex: index,
                 endKnotIndex: index + 1,
-                isInsertionSupported: true
+                isInsertionSupported: true,
+                selectionReference: .surface(.trimSpan(SurfaceTrimSpanReference(
+                    trim: trimReference,
+                    spanIndex: spanIndex
+                )))
             ))
         }
         return result

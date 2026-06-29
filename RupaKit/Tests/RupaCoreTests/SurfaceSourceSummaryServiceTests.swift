@@ -329,6 +329,22 @@ import SwiftCAD
     #expect(bSplineEdge.parameterCurve.knots == [0.0, 0.0, 0.0, 1.0, 1.0, 1.0])
     #expect(bSplineEdge.parameterCurve.spans.count == 1)
     #expect(bSplineEdge.parameterCurve.spans.first?.isInsertionSupported == true)
+    let parameterCurveSpan = try #require(bSplineEdge.parameterCurve.spans.first)
+    guard case .surface(.trimSpan(let spanReference)) = try #require(parameterCurveSpan.selectionReference) else {
+        Issue.record("Expected a trim p-curve span selection reference.")
+        return
+    }
+    #expect(spanReference.trim.loopIndex == 0)
+    #expect(spanReference.trim.edgeIndex == 0)
+    #expect(spanReference.spanIndex == 0)
+    let parameterCurveKnot = try #require(bSplineEdge.parameterCurve.knotVector.first)
+    guard case .surface(.trimKnot(let knotReference)) = try #require(parameterCurveKnot.selectionReference) else {
+        Issue.record("Expected a trim p-curve knot selection reference.")
+        return
+    }
+    #expect(knotReference.trim.loopIndex == 0)
+    #expect(knotReference.trim.edgeIndex == 0)
+    #expect(knotReference.knotIndex == parameterCurveKnot.index)
     #expect(bSplineEdge.parameterCurve.supportsKnotInsertion)
     #expect(bSplineEdge.parameterCurve.isRational)
     #expect(bSplineEdge.parameterCurveControlPoints.map(\.index) == [0, 1, 2])

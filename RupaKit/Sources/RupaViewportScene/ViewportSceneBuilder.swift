@@ -47,6 +47,12 @@ public struct ViewportSceneBuilder {
         let surfaceTrimControlPointDisplaysByFeatureID = surfaceTrimControlPointDisplaysByFeatureID(
             in: document
         )
+        let surfaceTrimKnotDisplaysByFeatureID = surfaceTrimKnotDisplaysByFeatureID(
+            in: document
+        )
+        let surfaceTrimSpanDisplaysByFeatureID = surfaceTrimSpanDisplaysByFeatureID(
+            in: document
+        )
         let surfaceFrameDisplaysByFeatureID = visibleSurfaceFrameDisplaysByFeatureID(
             in: document,
             currentEvaluation: currentEvaluation,
@@ -107,6 +113,8 @@ public struct ViewportSceneBuilder {
                     surfaceControlPointDisplaysByFeatureID: surfaceControlPointDisplaysByFeatureID,
                     surfaceTrimEndpointDisplaysByFeatureID: surfaceTrimEndpointDisplaysByFeatureID,
                     surfaceTrimControlPointDisplaysByFeatureID: surfaceTrimControlPointDisplaysByFeatureID,
+                    surfaceTrimKnotDisplaysByFeatureID: surfaceTrimKnotDisplaysByFeatureID,
+                    surfaceTrimSpanDisplaysByFeatureID: surfaceTrimSpanDisplaysByFeatureID,
                     surfaceFrameDisplaysByFeatureID: surfaceFrameDisplaysByFeatureID,
                     bodyDisplaySnapshots: bodyDisplaySnapshots
                 )
@@ -146,6 +154,8 @@ public struct ViewportSceneBuilder {
                     surfaceControlPointDisplaysByFeatureID: surfaceControlPointDisplaysByFeatureID,
                     surfaceTrimEndpointDisplaysByFeatureID: surfaceTrimEndpointDisplaysByFeatureID,
                     surfaceTrimControlPointDisplaysByFeatureID: surfaceTrimControlPointDisplaysByFeatureID,
+                    surfaceTrimKnotDisplaysByFeatureID: surfaceTrimKnotDisplaysByFeatureID,
+                    surfaceTrimSpanDisplaysByFeatureID: surfaceTrimSpanDisplaysByFeatureID,
                     surfaceFrameDisplaysByFeatureID: surfaceFrameDisplaysByFeatureID,
                     bodyDisplaySnapshots: bodyDisplaySnapshots
                 )
@@ -157,6 +167,8 @@ public struct ViewportSceneBuilder {
                     surfaceControlPointDisplaysByFeatureID: surfaceControlPointDisplaysByFeatureID,
                     surfaceTrimEndpointDisplaysByFeatureID: surfaceTrimEndpointDisplaysByFeatureID,
                     surfaceTrimControlPointDisplaysByFeatureID: surfaceTrimControlPointDisplaysByFeatureID,
+                    surfaceTrimKnotDisplaysByFeatureID: surfaceTrimKnotDisplaysByFeatureID,
+                    surfaceTrimSpanDisplaysByFeatureID: surfaceTrimSpanDisplaysByFeatureID,
                     surfaceFrameDisplaysByFeatureID: surfaceFrameDisplaysByFeatureID,
                     bodyDisplaySnapshots: bodyDisplaySnapshots
                 )
@@ -168,6 +180,8 @@ public struct ViewportSceneBuilder {
                     surfaceControlPointDisplaysByFeatureID: surfaceControlPointDisplaysByFeatureID,
                     surfaceTrimEndpointDisplaysByFeatureID: surfaceTrimEndpointDisplaysByFeatureID,
                     surfaceTrimControlPointDisplaysByFeatureID: surfaceTrimControlPointDisplaysByFeatureID,
+                    surfaceTrimKnotDisplaysByFeatureID: surfaceTrimKnotDisplaysByFeatureID,
+                    surfaceTrimSpanDisplaysByFeatureID: surfaceTrimSpanDisplaysByFeatureID,
                     surfaceFrameDisplaysByFeatureID: surfaceFrameDisplaysByFeatureID,
                     bodyDisplaySnapshots: bodyDisplaySnapshots
                 )
@@ -183,6 +197,8 @@ public struct ViewportSceneBuilder {
                     surfaceControlPointDisplaysByFeatureID: surfaceControlPointDisplaysByFeatureID,
                     surfaceTrimEndpointDisplaysByFeatureID: surfaceTrimEndpointDisplaysByFeatureID,
                     surfaceTrimControlPointDisplaysByFeatureID: surfaceTrimControlPointDisplaysByFeatureID,
+                    surfaceTrimKnotDisplaysByFeatureID: surfaceTrimKnotDisplaysByFeatureID,
+                    surfaceTrimSpanDisplaysByFeatureID: surfaceTrimSpanDisplaysByFeatureID,
                     surfaceFrameDisplaysByFeatureID: surfaceFrameDisplaysByFeatureID,
                     bodyDisplaySnapshots: bodyDisplaySnapshots
                 )
@@ -198,6 +214,8 @@ public struct ViewportSceneBuilder {
                     surfaceControlPointDisplaysByFeatureID: surfaceControlPointDisplaysByFeatureID,
                     surfaceTrimEndpointDisplaysByFeatureID: surfaceTrimEndpointDisplaysByFeatureID,
                     surfaceTrimControlPointDisplaysByFeatureID: surfaceTrimControlPointDisplaysByFeatureID,
+                    surfaceTrimKnotDisplaysByFeatureID: surfaceTrimKnotDisplaysByFeatureID,
+                    surfaceTrimSpanDisplaysByFeatureID: surfaceTrimSpanDisplaysByFeatureID,
                     surfaceFrameDisplaysByFeatureID: surfaceFrameDisplaysByFeatureID,
                     bodyDisplaySnapshots: bodyDisplaySnapshots
                 )
@@ -213,6 +231,8 @@ public struct ViewportSceneBuilder {
                     surfaceControlPointDisplaysByFeatureID: surfaceControlPointDisplaysByFeatureID,
                     surfaceTrimEndpointDisplaysByFeatureID: surfaceTrimEndpointDisplaysByFeatureID,
                     surfaceTrimControlPointDisplaysByFeatureID: surfaceTrimControlPointDisplaysByFeatureID,
+                    surfaceTrimKnotDisplaysByFeatureID: surfaceTrimKnotDisplaysByFeatureID,
+                    surfaceTrimSpanDisplaysByFeatureID: surfaceTrimSpanDisplaysByFeatureID,
                     bodyDisplaySnapshots: bodyDisplaySnapshots
                 )
             case .bridgeCurve:
@@ -940,6 +960,183 @@ public struct ViewportSceneBuilder {
         }
     }
 
+    private func surfaceTrimKnotDisplaysByFeatureID(
+        in document: DesignDocument
+    ) -> [FeatureID: [ViewportSurfaceTrimKnotDisplay]] {
+        var displaysByFeatureID: [FeatureID: [ViewportSurfaceTrimKnotDisplay]] = [:]
+        for featureID in document.cadDocument.designGraph.order {
+            guard let feature = document.cadDocument.designGraph.nodes[featureID],
+                  case let .bSplineSurface(surfaceFeature) = feature.operation,
+                  surfaceFeature.trimLoops.isEmpty == false else {
+                continue
+            }
+            do {
+                let surfaceReference = SurfaceReference(faceName: PersistentName(components: [
+                    .feature(featureID),
+                    .generated("bSplineSurface"),
+                    .subshape("patch:0:face"),
+                ]))
+                var displays: [ViewportSurfaceTrimKnotDisplay] = []
+                for (loopIndex, trimLoop) in surfaceFeature.trimLoops.enumerated() {
+                    for (edgeIndex, edge) in trimLoop.edges.enumerated() {
+                        let trimReference = SurfaceTrimReference(
+                            surface: surfaceReference,
+                            loopIndex: loopIndex,
+                            edgeIndex: edgeIndex
+                        )
+                        for knot in surfaceTrimKnotParameters(edge.parameterCurve) {
+                            let geometry = try surfaceFeature.surface.differentialGeometry(
+                                atU: knot.parameter.u,
+                                v: knot.parameter.v
+                            )
+                            displays.append(ViewportSurfaceTrimKnotDisplay(
+                                selectionReference: .surface(.trimKnot(SurfaceTrimKnotReference(
+                                    trim: trimReference,
+                                    knotIndex: knot.index
+                                ))),
+                                knotIndex: knot.index,
+                                value: knot.value,
+                                point: geometry.position,
+                                u: knot.parameter.u,
+                                v: knot.parameter.v
+                            ))
+                        }
+                    }
+                }
+                if displays.isEmpty == false {
+                    displaysByFeatureID[featureID] = displays
+                }
+            } catch {
+                continue
+            }
+        }
+        return displaysByFeatureID
+    }
+
+    private func surfaceTrimSpanDisplaysByFeatureID(
+        in document: DesignDocument
+    ) -> [FeatureID: [ViewportSurfaceTrimSpanDisplay]] {
+        var displaysByFeatureID: [FeatureID: [ViewportSurfaceTrimSpanDisplay]] = [:]
+        for featureID in document.cadDocument.designGraph.order {
+            guard let feature = document.cadDocument.designGraph.nodes[featureID],
+                  case let .bSplineSurface(surfaceFeature) = feature.operation,
+                  surfaceFeature.trimLoops.isEmpty == false else {
+                continue
+            }
+            do {
+                let surfaceReference = SurfaceReference(faceName: PersistentName(components: [
+                    .feature(featureID),
+                    .generated("bSplineSurface"),
+                    .subshape("patch:0:face"),
+                ]))
+                var displays: [ViewportSurfaceTrimSpanDisplay] = []
+                for (loopIndex, trimLoop) in surfaceFeature.trimLoops.enumerated() {
+                    for (edgeIndex, edge) in trimLoop.edges.enumerated() {
+                        let trimReference = SurfaceTrimReference(
+                            surface: surfaceReference,
+                            loopIndex: loopIndex,
+                            edgeIndex: edgeIndex
+                        )
+                        for span in surfaceTrimSpanParameters(edge.parameterCurve) {
+                            let geometry = try surfaceFeature.surface.differentialGeometry(
+                                atU: span.parameter.u,
+                                v: span.parameter.v
+                            )
+                            displays.append(ViewportSurfaceTrimSpanDisplay(
+                                selectionReference: .surface(.trimSpan(SurfaceTrimSpanReference(
+                                    trim: trimReference,
+                                    spanIndex: span.index
+                                ))),
+                                spanIndex: span.index,
+                                lowerBound: span.lowerBound,
+                                upperBound: span.upperBound,
+                                point: geometry.position,
+                                u: span.parameter.u,
+                                v: span.parameter.v
+                            ))
+                        }
+                    }
+                }
+                if displays.isEmpty == false {
+                    displaysByFeatureID[featureID] = displays
+                }
+            } catch {
+                continue
+            }
+        }
+        return displaysByFeatureID
+    }
+
+    private func surfaceTrimKnotParameters(
+        _ curve: SurfaceParameterCurve
+    ) -> [(index: Int, value: Double, parameter: SurfaceParameter)] {
+        guard case let .bSpline(bSpline) = curve else {
+            return []
+        }
+        let lowerIndex = bSpline.degree
+        let upperIndex = bSpline.knots.count - bSpline.degree - 1
+        guard bSpline.knots.indices.contains(lowerIndex),
+              bSpline.knots.indices.contains(upperIndex) else {
+            return []
+        }
+        let lowerBound = bSpline.knots[lowerIndex]
+        let upperBound = bSpline.knots[upperIndex]
+        var parameters: [(index: Int, value: Double, parameter: SurfaceParameter)] = []
+        for index in bSpline.knots.indices {
+            let value = bSpline.knots[index]
+            guard value > lowerBound,
+                  value < upperBound,
+                  let point = surfaceTrimPoint(bSpline, at: value) else {
+                continue
+            }
+            parameters.append((index, value, SurfaceParameter(u: point.x, v: point.y)))
+        }
+        return parameters
+    }
+
+    private func surfaceTrimSpanParameters(
+        _ curve: SurfaceParameterCurve
+    ) -> [(index: Int, lowerBound: Double, upperBound: Double, parameter: SurfaceParameter)] {
+        guard case let .bSpline(bSpline) = curve else {
+            return []
+        }
+        let lowerIndex = bSpline.degree
+        let upperIndex = bSpline.knots.count - bSpline.degree - 1
+        guard lowerIndex < upperIndex else {
+            return []
+        }
+        var result: [(index: Int, lowerBound: Double, upperBound: Double, parameter: SurfaceParameter)] = []
+        for knotIndex in lowerIndex..<upperIndex {
+            let lowerBound = bSpline.knots[knotIndex]
+            let upperBound = bSpline.knots[knotIndex + 1]
+            guard upperBound > lowerBound else {
+                continue
+            }
+            let parameterValue = (lowerBound + upperBound) * 0.5
+            guard let point = surfaceTrimPoint(bSpline, at: parameterValue) else {
+                continue
+            }
+            result.append((
+                index: result.count,
+                lowerBound: lowerBound,
+                upperBound: upperBound,
+                parameter: SurfaceParameter(u: point.x, v: point.y)
+            ))
+        }
+        return result
+    }
+
+    private func surfaceTrimPoint(
+        _ bSpline: BSplineCurve2D,
+        at parameter: Double
+    ) -> Point2D? {
+        do {
+            return try bSpline.point(at: parameter)
+        } catch {
+            return nil
+        }
+    }
+
     private func visibleSurfaceFrameDisplaysByFeatureID(
         in document: DesignDocument,
         currentEvaluation: DocumentEvaluationContext?,
@@ -1041,6 +1238,8 @@ public struct ViewportSceneBuilder {
         surfaceControlPointDisplaysByFeatureID: [FeatureID: [ViewportSurfaceControlPointDisplay]] = [:],
         surfaceTrimEndpointDisplaysByFeatureID: [FeatureID: [ViewportSurfaceTrimEndpointDisplay]] = [:],
         surfaceTrimControlPointDisplaysByFeatureID: [FeatureID: [ViewportSurfaceTrimControlPointDisplay]] = [:],
+        surfaceTrimKnotDisplaysByFeatureID: [FeatureID: [ViewportSurfaceTrimKnotDisplay]] = [:],
+        surfaceTrimSpanDisplaysByFeatureID: [FeatureID: [ViewportSurfaceTrimSpanDisplay]] = [:],
         surfaceFrameDisplaysByFeatureID: [FeatureID: [ViewportSurfaceFrameDisplay]] = [:],
         bodyDisplaySnapshots: [FeatureID: BodyDisplaySnapshot]
     ) -> ViewportSceneItem? {
@@ -1070,6 +1269,8 @@ public struct ViewportSceneBuilder {
             surfaceControlPointDisplays: surfaceControlPointDisplaysByFeatureID[featureID] ?? [],
             surfaceTrimEndpointDisplays: surfaceTrimEndpointDisplaysByFeatureID[featureID] ?? [],
             surfaceTrimControlPointDisplays: surfaceTrimControlPointDisplaysByFeatureID[featureID] ?? [],
+            surfaceTrimKnotDisplays: surfaceTrimKnotDisplaysByFeatureID[featureID] ?? [],
+            surfaceTrimSpanDisplays: surfaceTrimSpanDisplaysByFeatureID[featureID] ?? [],
             surfaceFrameDisplays: surfaceFrameDisplaysByFeatureID[featureID] ?? []
         )
         return ViewportSceneItem(

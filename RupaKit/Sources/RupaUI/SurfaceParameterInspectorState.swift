@@ -47,11 +47,23 @@ struct SurfaceParameterInspectorState: Equatable, Sendable {
         var frameDetail: SurfaceFrameInspectorState?
 
         var directionTitle: String {
+            if isTrimParameterCurveReference {
+                return "P"
+            }
             switch kind {
             case .address:
                 return "UV"
             case .knot, .span:
                 return direction.rawValue.uppercased()
+            }
+        }
+
+        var isTrimParameterCurveReference: Bool {
+            switch selectionReference {
+            case .surface(.trimKnot), .surface(.trimSpan):
+                return true
+            default:
+                return false
             }
         }
 
@@ -142,6 +154,7 @@ struct SurfaceParameterInspectorState: Equatable, Sendable {
         var canSplitSpan: Bool {
             guard kind == .span,
                   isEditable,
+                  isTrimParameterCurveReference == false,
                   let lowerBound,
                   let upperBound,
                   lowerBound.isFinite,
@@ -567,6 +580,12 @@ struct SurfaceParameterInspectorState: Equatable, Sendable {
                     patch: patch,
                     to: &entries
                 )
+                addTrimParameterCurveEntries(
+                    patch.trimLoops,
+                    source: source,
+                    patch: patch,
+                    to: &entries
+                )
             }
         }
 
@@ -575,10 +594,128 @@ struct SurfaceParameterInspectorState: Equatable, Sendable {
 
     private static func isSurfaceParameterReference(_ reference: SelectionReference) -> Bool {
         switch reference {
-        case .surface(.parameter), .surface(.knot), .surface(.span):
+        case .surface(.parameter), .surface(.knot), .surface(.span), .surface(.trimKnot), .surface(.trimSpan):
             return true
         default:
             return false
+        }
+    }
+
+    private static func addTrimParameterCurveEntries(
+        _ trimLoops: [SurfaceSourceSummaryResult.TrimLoop],
+        source: SurfaceSourceSummaryResult.Source,
+        patch: SurfaceSourceSummaryResult.Patch,
+        to entries: inout [SelectionReference: Entry]
+    ) {
+        for (loopIndex, loop) in trimLoops.enumerated() {
+            for edge in loop.edges {
+                addTrimParameterCurveKnots(
+                    edge.parameterCurve.knotVector,
+                    knotValues: edge.parameterCurve.knots,
+                    source: source,
+                    patch: patch,
+                    loopIndex: loopIndex,
+                    edgeIndex: edge.index,
+                    degree: edge.parameterCurve.degree,
+                    to: &entries
+                )
+                addTrimParameterCurveSpans(
+                    edge.parameterCurve.spans,
+                    source: source,
+                    patch: patch,
+                    loopIndex: loopIndex,
+                    edgeIndex: edge.index,
+                    degree: edge.parameterCurve.degree,
+                    to: &entries
+                )
+            }
+        }
+    }
+
+    private static func addTrimParameterCurveKnots(
+        _ knots: [SurfaceSourceSummaryResult.TrimLoop.Edge.ParameterCurve.Knot],
+        knotValues: [Double],
+        source: SurfaceSourceSummaryResult.Source,
+        patch: SurfaceSourceSummaryResult.Patch,
+        loopIndex: Int,
+        edgeIndex: Int,
+        degree: Int?,
+        to entries: inout [SelectionReference: Entry]
+    ) {
+        for knot in knots {
+            guard let selectionReference = knot.selectionReference else {
+                continue
+            }
+            entries[selectionReference] = Entry(
+                id: "feature:\(source.featureID)/patch:\(patch.patchID)/trimLoop:\(loopIndex)/edge:\(edgeIndex)/\(knot.id)",
+                sourceFeatureID: source.featureID,
+                sourceName: source.name,
+                sourceKind: source.kind,
+                patchID: patch.patchID,
+                facePersistentName: patch.facePersistentName,
+                basisKind: "trim p-curve",
+                direction: .u,
+                directionDegree: degree,
+                kind: .knot,
+                index: knot.index,
+                u: nil,
+                v: nil,
+                value: knot.value,
+                lowerBound: previousKnotValue(before: knot.index, in: knotValues),
+                upperBound: nextKnotValue(after: knot.index, in: knotValues),
+                startKnotIndex: nil,
+                endKnotIndex: nil,
+                multiplicity: knot.multiplicity,
+                isBoundary: knot.isBoundary,
+                isEditable: knot.isValueEditable || knot.isMultiplicityEditable || knot.isInsertionSupported,
+                selectionReference: selectionReference,
+                frameQuery: nil,
+                isFrameDisplayVisible: false,
+                frameDetail: nil
+            )
+        }
+    }
+
+    private static func addTrimParameterCurveSpans(
+        _ spans: [SurfaceSourceSummaryResult.TrimLoop.Edge.ParameterCurve.Span],
+        source: SurfaceSourceSummaryResult.Source,
+        patch: SurfaceSourceSummaryResult.Patch,
+        loopIndex: Int,
+        edgeIndex: Int,
+        degree: Int?,
+        to entries: inout [SelectionReference: Entry]
+    ) {
+        for span in spans {
+            guard let selectionReference = span.selectionReference else {
+                continue
+            }
+            entries[selectionReference] = Entry(
+                id: "feature:\(source.featureID)/patch:\(patch.patchID)/trimLoop:\(loopIndex)/edge:\(edgeIndex)/\(span.id)",
+                sourceFeatureID: source.featureID,
+                sourceName: source.name,
+                sourceKind: source.kind,
+                patchID: patch.patchID,
+                facePersistentName: patch.facePersistentName,
+                basisKind: "trim p-curve",
+                direction: .u,
+                directionDegree: degree,
+                kind: .span,
+                index: span.index,
+                u: nil,
+                v: nil,
+                value: nil,
+                lowerBound: span.lowerBound,
+                upperBound: span.upperBound,
+                startKnotIndex: span.startKnotIndex,
+                endKnotIndex: span.endKnotIndex,
+                multiplicity: nil,
+                isBoundary: false,
+                isEditable: span.isInsertionSupported,
+                selectionReference: selectionReference,
+                frameQuery: nil,
+                isFrameDisplayVisible: false,
+                frameDetail: nil
+            )
         }
     }
 
