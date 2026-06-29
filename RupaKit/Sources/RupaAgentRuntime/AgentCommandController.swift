@@ -693,6 +693,16 @@ public final class AgentCommandController: AgentClientProtocol {
             failureMode: "Rejects non-generated face targets, duplicate targets, mixed bodies, missing evaluated topology, deletion of an entire shell, invalid sheet topology, and stale generations before mutation."
         ),
         capability(
+            "draftBodyFaces",
+            category: .directEditing,
+            summary: "Draft one generated planar side face relative to a generated neutral face on the same body, producing a source-owned direct-edit solid body for the supported line-only planar topology subset.",
+            access: .automationCommand,
+            mutatesDocument: true,
+            discovery: [.topologySummary],
+            targets: [.face],
+            failureMode: "Rejects non-generated face targets, more than one target face, neutral faces on another body or scene node, zero or near-right angles, non-planar faces, curved topology, target faces that do not share an edge with the neutral face, invalid draft topology, and stale generations before mutation."
+        ),
+        capability(
             "chamferBodyEdges",
             category: .directEditing,
             summary: "Chamfer supported generated or fixed body edge targets by rewriting source profile loops.",

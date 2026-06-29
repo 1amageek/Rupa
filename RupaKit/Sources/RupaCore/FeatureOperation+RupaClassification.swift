@@ -25,6 +25,8 @@ extension FeatureOperation {
             return true
         case .faceDelete:
             return true
+        case .faceDraft:
+            return true
         case .bridgeCurve:
             return false
         case .curveEdit:
@@ -62,6 +64,8 @@ extension FeatureOperation {
         case .faceKnife(let feature):
             return [feature.target.featureID]
         case .faceDelete(let feature):
+            return [feature.target.featureID]
+        case .faceDraft(let feature):
             return [feature.target.featureID]
         case .bridgeCurve:
             return []

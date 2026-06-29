@@ -2880,6 +2880,21 @@ public final class EditorSession {
     }
 
     @discardableResult
+    public func draftBodyFaces(
+        targets: [SelectionTarget],
+        neutralTarget: SelectionTarget,
+        angle: CADExpression
+    ) -> CommandExecutionResult? {
+        perform(
+            .draftBodyFaces(
+                targets: targets,
+                neutralTarget: neutralTarget,
+                angle: angle
+            )
+        )
+    }
+
+    @discardableResult
     public func deleteSelectedBodyFaces() -> CommandExecutionResult? {
         let selectedFaceTargets = selection.selectedTargets.filter { target in
             if case .face = target.component {

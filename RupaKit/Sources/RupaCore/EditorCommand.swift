@@ -170,6 +170,7 @@ public enum EditorCommand: Codable, Equatable, Sendable {
     case createSlotSketch(target: SelectionTarget, width: CADExpression)
     case offsetBodyFace(target: SelectionTarget, distance: CADExpression)
     case deleteBodyFaces(targets: [SelectionTarget])
+    case draftBodyFaces(targets: [SelectionTarget], neutralTarget: SelectionTarget, angle: CADExpression)
     case chamferBodyEdges(targets: [SelectionTarget], distance: CADExpression)
     case filletBodyEdges(targets: [SelectionTarget], radius: CADExpression, segmentCount: Int)
     case moveBodyEdge(target: SelectionTarget, deltaX: CADExpression, deltaY: CADExpression)
@@ -512,6 +513,8 @@ public enum EditorCommand: Codable, Equatable, Sendable {
             "offsetBodyFace"
         case .deleteBodyFaces:
             "deleteBodyFaces"
+        case .draftBodyFaces:
+            "draftBodyFaces"
         case .chamferBodyEdges:
             "chamferBodyEdges"
         case .filletBodyEdges:
@@ -683,6 +686,7 @@ public enum EditorCommand: Codable, Equatable, Sendable {
              .createSlotSketch,
              .offsetBodyFace,
              .deleteBodyFaces,
+             .draftBodyFaces,
              .chamferBodyEdges,
              .filletBodyEdges,
              .moveBodyEdge,

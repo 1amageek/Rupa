@@ -305,6 +305,20 @@ struct WorkspaceObjectOverviewInspectorStateBuilder {
                     value: "\(faceDelete.facePersistentNames.count)"
                 ),
             ]
+        case .faceDraft(let faceDraft):
+            return [
+                WorkspaceInspectorTextRow(title: "Operation", value: "Draft Face"),
+                WorkspaceInspectorTextRow(title: "Target", value: shortID(faceDraft.target.featureID)),
+                WorkspaceInspectorTextRow(
+                    title: "Faces",
+                    value: "\(faceDraft.facePersistentNames.count)"
+                ),
+                WorkspaceInspectorTextRow(
+                    title: "Neutral Face",
+                    value: "\(faceDraft.neutralFacePersistentName.components.count) components"
+                ),
+                WorkspaceInspectorTextRow(title: "Angle", value: String(describing: faceDraft.angle)),
+            ]
         case .bridgeCurve(let bridgeCurve):
             return [
                 WorkspaceInspectorTextRow(title: "Operation", value: "Bridge Curve"),

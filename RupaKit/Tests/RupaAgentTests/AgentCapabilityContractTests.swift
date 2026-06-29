@@ -87,6 +87,7 @@ import SwiftCAD
     #expect(capabilities.contains("slideSurfaceControlPoints"))
     #expect(capabilities.contains("polySplineMeshAnalysis"))
     #expect(capabilities.contains("offsetBodyFace"))
+    #expect(capabilities.contains("draftBodyFaces"))
     #expect(capabilities.contains("chamferBodyEdges"))
     #expect(capabilities.contains("filletBodyEdges"))
     #expect(capabilities.contains("moveBodyEdge"))
@@ -152,6 +153,7 @@ import SwiftCAD
     let descriptors = AgentCommandController().capabilityDescriptors()
     let fillet = try #require(descriptors.first { $0.name == "filletBodyEdges" })
     let faceOffset = try #require(descriptors.first { $0.name == "offsetBodyFace" })
+    let faceDraft = try #require(descriptors.first { $0.name == "draftBodyFaces" })
     let faceKnife = try #require(descriptors.first { $0.name == "createFaceKnife" })
     let projectCurves = try #require(
         descriptors.first { $0.name == "projectSketchCurvesToConstructionPlane" }
@@ -287,6 +289,15 @@ import SwiftCAD
     #expect(faceOffset.category == .directEditing)
     #expect(faceOffset.discovery.contains(.topologySummary))
     #expect(faceOffset.targets == [.face])
+
+    #expect(faceDraft.category == .directEditing)
+    #expect(faceDraft.mutatesDocument)
+    #expect(faceDraft.access == .automationCommand)
+    #expect(faceDraft.discovery.contains(.topologySummary))
+    #expect(faceDraft.targets == [.face])
+    #expect(faceDraft.summary.contains("source-owned direct-edit solid body"))
+    #expect(faceDraft.summary.contains("line-only planar topology"))
+    #expect(faceDraft.failureMode.contains("neutral faces on another body"))
 
     #expect(selection.category == .selection)
     #expect(selection.access == .agentRequest)

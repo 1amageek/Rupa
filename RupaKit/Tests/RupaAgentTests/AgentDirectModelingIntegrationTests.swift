@@ -336,6 +336,73 @@ import SwiftCAD
     #expect(session.evaluationStatus == .valid)
 }
 
+@Test func agentDispatchesGeneratedTopologyFaceDraftCommandThroughAutomationAndCore() async throws {
+    let server = AgentCommandController()
+    let sessionID = UUID()
+    let session = EditorSession()
+    _ = try #require(session.createDefaultExtrudedRectangle())
+    server.register(session: session, id: sessionID)
+
+    let topologyResponse = server.handle(
+        .topologySummary(
+            sessionID: sessionID,
+            expectedGeneration: DocumentGeneration(1)
+        )
+    )
+    guard case .topologySummary(let topology) = topologyResponse else {
+        Issue.record("Agent must return a topology summary.")
+        return
+    }
+    let targetEntry = try #require(topology.entries.first { entry in
+        entry.kind == .face && entry.generatedRole == "sideFace"
+    })
+    let neutralEntry = try #require(topology.entries.first { entry in
+        entry.kind == .face && entry.generatedRole == "startFace"
+    })
+    let target = try #require(targetEntry.selectionTarget())
+    let neutralTarget = try #require(neutralEntry.selectionTarget())
+
+    let response = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .draftBodyFaces(
+                targets: [target],
+                neutralTarget: neutralTarget,
+                angle: .angle(8.0, .degree)
+            ),
+            expectedGeneration: DocumentGeneration(1)
+        )
+    )
+
+    guard case .command(let result) = response else {
+        #expect(Bool(false))
+        return
+    }
+    let draftFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let draftSceneNodeID = try #require(agentSceneNodeID(for: draftFeatureID, in: session.document))
+    let feature = try #require(session.document.cadDocument.designGraph.nodes[draftFeatureID])
+    guard case .faceDraft = feature.operation else {
+        Issue.record("Agent Draft Face command must create a FaceDraft feature.")
+        return
+    }
+    let afterTopology = try TopologySummaryService().summarize(document: session.document)
+    let evaluation = try #require(session.currentEvaluationCache?.evaluatedDocument)
+    let body = try #require(evaluation.brep.bodies.values.first)
+    let draftFaces = afterTopology.entries.filter {
+        $0.kind == .face &&
+            $0.sceneNodeID == draftSceneNodeID.description &&
+            $0.generatedRole == "faceDraft"
+    }
+
+    #expect(result.commandName == "draftBodyFaces")
+    #expect(result.didMutate)
+    #expect(result.generation == DocumentGeneration(2))
+    #expect(body.kind == .solid)
+    #expect(afterTopology.counts.faceCount == 6)
+    #expect(draftFaces.count == 6)
+    #expect(session.evaluationStatus == .valid)
+}
+
 @Test func agentDispatchesGeneratedTopologyEdgeOffsetCommandThroughAutomationAndCore() async throws {
     let server = AgentCommandController()
     let sessionID = UUID()

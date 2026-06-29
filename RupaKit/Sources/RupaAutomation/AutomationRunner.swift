@@ -765,6 +765,21 @@ public struct AutomationRunner {
                 didMutate: result.didMutate,
                 diagnostics: result.diagnostics
             )
+        case .draftBodyFaces(let targets, let neutralTarget, let angle):
+            let result = try session.execute(
+                .draftBodyFaces(
+                    targets: targets,
+                    neutralTarget: neutralTarget,
+                    angle: angle
+                )
+            )
+            return AutomationResult(
+                message: "Body face draft applied.",
+                commandName: result.commandName,
+                generation: result.generation,
+                didMutate: result.didMutate,
+                diagnostics: result.diagnostics
+            )
         case .chamferBodyEdges(let targets, let distance):
             let result = try session.execute(
                 .chamferBodyEdges(

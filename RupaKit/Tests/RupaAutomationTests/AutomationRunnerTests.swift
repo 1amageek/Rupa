@@ -1334,6 +1334,71 @@ import SwiftCAD
 }
 
 @MainActor
+@Test func automationCanDraftGeneratedBodyFace() async throws {
+    let session = EditorSession()
+    let runner = AutomationRunner()
+    _ = try runner.execute(
+        .createExtrudedRectangle(
+            name: "Automation Draft Face Box",
+            plane: .xy,
+            width: .length(10.0, .millimeter),
+            height: .length(8.0, .millimeter),
+            depth: .length(6.0, .millimeter),
+            direction: .normal
+        ),
+        in: session
+    )
+    let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let bodyNodeID = try #require(automationSceneNodeID(for: bodyFeatureID, in: session.document))
+    let topology = try TopologySummaryService().summarize(document: session.document)
+    let targetEntry = try #require(
+        topology.entries.first {
+            $0.kind == .face &&
+                $0.sceneNodeID == bodyNodeID.description &&
+                $0.generatedRole == "sideFace"
+        }
+    )
+    let neutralEntry = try #require(
+        topology.entries.first {
+            $0.kind == .face &&
+                $0.sceneNodeID == bodyNodeID.description &&
+                $0.generatedRole == "startFace"
+        }
+    )
+    let target = try #require(targetEntry.selectionTarget())
+    let neutralTarget = try #require(neutralEntry.selectionTarget())
+
+    let result = try runner.execute(
+        .draftBodyFaces(
+            targets: [target],
+            neutralTarget: neutralTarget,
+            angle: .angle(12.0, .degree)
+        ),
+        in: session
+    )
+
+    let draftFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let draftSceneNodeID = try #require(automationSceneNodeID(for: draftFeatureID, in: session.document))
+    let afterTopology = try TopologySummaryService().summarize(document: session.document)
+    let evaluation = try #require(session.currentEvaluationCache?.evaluatedDocument)
+    let body = try #require(evaluation.brep.bodies.values.first)
+    let draftFaces = afterTopology.entries.filter {
+        $0.kind == .face &&
+            $0.sceneNodeID == draftSceneNodeID.description &&
+            $0.generatedRole == "faceDraft"
+    }
+
+    #expect(result.message == "Body face draft applied.")
+    #expect(result.commandName == "draftBodyFaces")
+    #expect(result.didMutate)
+    #expect(result.generation == DocumentGeneration(2))
+    #expect(body.kind == .solid)
+    #expect(afterTopology.counts.faceCount == 6)
+    #expect(draftFaces.count == 6)
+    #expect(session.evaluationStatus == .valid)
+}
+
+@MainActor
 @Test func automationCanOffsetSketchCurveSymmetrically() async throws {
     let session = EditorSession()
     let runner = AutomationRunner()
