@@ -100,7 +100,11 @@ public struct SurfaceFrameService: Sendable {
         sceneNodeIDsByFeatureID: [FeatureID: SceneNodeID]
     ) throws -> SurfaceFrameResult.Frame {
         try validate(query)
-        let target = try resolvedTarget(for: query, persistentNames: persistentNames)
+        let target = try resolvedTarget(
+            for: query,
+            evaluatedDocument: evaluatedDocument,
+            persistentNames: persistentNames
+        )
         guard let face = evaluatedDocument.brep.faces[target.faceID],
               let storedSurface = evaluatedDocument.brep.geometry.surfaces[face.surfaceID],
               case let .bSpline(surface) = storedSurface else {
@@ -220,31 +224,33 @@ public struct SurfaceFrameService: Sendable {
             try validateExplicitUV(query)
         case .surface(.whole):
             try validateExplicitUV(query)
-        case .surface(.parameter), .surface(.controlPoint):
+        case .surface(.parameter),
+             .surface(.controlPoint),
+             .surface(.trimSpan),
+             .surface(.trimKnot):
             guard query.u == nil,
                   query.v == nil else {
                 throw EditorError(
                     code: .commandInvalid,
-                    message: "Surface frame parameter and control-point selectionReference queries carry their own UV address and must not also provide u or v."
+                    message: "Surface frame parameter, control-point, and trim p-curve selectionReference queries carry their own UV address and must not also provide u or v."
                 )
             }
         case .surface(.span),
              .surface(.knot),
              .surface(.trim),
-             .surface(.trimSpan),
-             .surface(.trimKnot),
              .edge,
              .curve,
              .sketchPoint:
             throw EditorError(
                 code: .commandInvalid,
-                message: "Surface frame selectionReference must target a generated face, surface parameter, or surface control point."
+                message: "Surface frame selectionReference must target a generated face, surface parameter, surface control point, or trim p-curve parameter."
             )
         }
     }
 
     private func resolvedTarget(
         for query: SurfaceFrameQuery,
+        evaluatedDocument: EvaluatedDocument,
         persistentNames: PersistentTopologyNames
     ) throws -> ResolvedFrameTarget {
         if let faceID = query.faceID {
@@ -280,6 +286,7 @@ public struct SurfaceFrameService: Sendable {
         return try resolvedTarget(
             forSelectionReference: selectionReference,
             query: query,
+            evaluatedDocument: evaluatedDocument,
             persistentNames: persistentNames
         )
     }
@@ -287,6 +294,7 @@ public struct SurfaceFrameService: Sendable {
     private func resolvedTarget(
         forSelectionReference selectionReference: SelectionReference,
         query: SurfaceFrameQuery,
+        evaluatedDocument: EvaluatedDocument,
         persistentNames: PersistentTopologyNames
     ) throws -> ResolvedFrameTarget {
         switch selectionReference {
@@ -328,19 +336,115 @@ public struct SurfaceFrameService: Sendable {
                     vIndex: reference.vIndex
                 )
             )
+        case .surface(.trimSpan(let reference)):
+            let parameter = try resolvedTrimSpanParameter(
+                reference,
+                evaluatedDocument: evaluatedDocument
+            )
+            return ResolvedFrameTarget(
+                faceID: try resolvedFaceID(
+                    forPersistentName: persistentNameString(reference.trim.surface.faceName),
+                    persistentNames: persistentNames
+                ),
+                explicitU: parameter.u,
+                explicitV: parameter.v
+            )
+        case .surface(.trimKnot(let reference)):
+            let parameter = try resolvedTrimKnotParameter(
+                reference,
+                evaluatedDocument: evaluatedDocument
+            )
+            return ResolvedFrameTarget(
+                faceID: try resolvedFaceID(
+                    forPersistentName: persistentNameString(reference.trim.surface.faceName),
+                    persistentNames: persistentNames
+                ),
+                explicitU: parameter.u,
+                explicitV: parameter.v
+            )
         case .surface(.span),
              .surface(.knot),
              .surface(.trim),
-             .surface(.trimSpan),
-             .surface(.trimKnot),
              .edge,
              .curve,
              .sketchPoint:
             throw EditorError(
                 code: .commandInvalid,
-                message: "Surface frame selectionReference must target a generated face, surface parameter, or surface control point."
+                message: "Surface frame selectionReference must target a generated face, surface parameter, surface control point, or trim p-curve parameter."
             )
         }
+    }
+
+    private func resolvedTrimSpanParameter(
+        _ reference: SurfaceTrimSpanReference,
+        evaluatedDocument: EvaluatedDocument
+    ) throws -> SurfaceParameter {
+        let trim = try SurfaceQueryEvaluator(tolerance: tolerance).trimCurve(reference.trim, in: evaluatedDocument)
+        guard case let .bSpline(curve) = trim.parameterCurve else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Surface frame trim span selection requires a B-spline p-curve."
+            )
+        }
+        let curveParameter = try trimSpanParameter(reference.spanIndex, on: curve)
+        let point = try curve.point(at: curveParameter, tolerance: tolerance)
+        return SurfaceParameter(u: point.x, v: point.y)
+    }
+
+    private func resolvedTrimKnotParameter(
+        _ reference: SurfaceTrimKnotReference,
+        evaluatedDocument: EvaluatedDocument
+    ) throws -> SurfaceParameter {
+        let trim = try SurfaceQueryEvaluator(tolerance: tolerance).trimCurve(reference.trim, in: evaluatedDocument)
+        guard case let .bSpline(curve) = trim.parameterCurve else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Surface frame trim knot selection requires a B-spline p-curve."
+            )
+        }
+        guard curve.knots.indices.contains(reference.knotIndex) else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "Surface frame trim knot selection references a missing p-curve knot."
+            )
+        }
+        let curveParameter = curve.knots[reference.knotIndex]
+        guard try curve.domain.contains(curveParameter, tolerance: tolerance) else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "Surface frame trim knot selection is outside the p-curve domain."
+            )
+        }
+        let point = try curve.point(at: curveParameter, tolerance: tolerance)
+        return SurfaceParameter(u: point.x, v: point.y)
+    }
+
+    private func trimSpanParameter(_ spanIndex: Int, on curve: BSplineCurve2D) throws -> Double {
+        try curve.validate(tolerance: tolerance)
+        let lowerIndex = curve.degree
+        let upperIndex = curve.knots.count - curve.degree - 1
+        guard lowerIndex < upperIndex else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "Surface frame trim span selection found no queryable p-curve spans."
+            )
+        }
+        var ordinal = 0
+        for knotIndex in lowerIndex..<upperIndex {
+            let lower = curve.knots[knotIndex]
+            let upper = curve.knots[knotIndex + 1]
+            guard upper - lower > tolerance.distance else {
+                continue
+            }
+            if ordinal == spanIndex {
+                return (lower + upper) * 0.5
+            }
+            ordinal += 1
+        }
+        throw EditorError(
+            code: .referenceUnresolved,
+            message: "Surface frame trim span selection references a missing p-curve span."
+        )
     }
 
     private func resolvedFaceID(

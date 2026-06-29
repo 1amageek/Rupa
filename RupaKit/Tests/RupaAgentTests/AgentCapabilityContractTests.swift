@@ -809,7 +809,7 @@ import SwiftCAD
     #expect(surfaceFrameDisplay.discovery.contains(.surfaceSourceSummary))
     #expect(surfaceFrameDisplay.discovery.contains(.surfaceFrames))
     #expect(surfaceFrameDisplay.discovery.contains(.surfaceAnalysis))
-    #expect(surfaceFrameDisplay.targets == [.face, .surfaceControlPoint])
+    #expect(surfaceFrameDisplay.targets == [.face, .surfaceControlPoint, .surfaceTrim])
     #expect(surfaceFrameDisplay.summary.contains("UVN surface frame display"))
     #expect(surfaceFrameDisplay.failureMode.contains("ambiguous UV input"))
 
@@ -1167,7 +1167,7 @@ import SwiftCAD
     #expect(surfaceFrames.discovery.contains(.topologySummary))
     #expect(surfaceFrames.discovery.contains(.surfaceSourceSummary))
     #expect(surfaceFrames.discovery.contains(.surfaceFrames))
-    #expect(surfaceFrames.targets == [.face, .surfaceControlPoint])
+    #expect(surfaceFrames.targets == [.face, .surfaceControlPoint, .surfaceTrim])
     #expect(surfaceFrames.summary.contains("UVN local frames"))
     #expect(surfaceFrames.failureMode.contains("surface selection references"))
 

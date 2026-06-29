@@ -83,17 +83,35 @@ public struct SurfaceFrameDisplayID: Codable, Hashable, RawRepresentable, Sendab
                 "uIndex:\(reference.uIndex)",
                 "vIndex:\(reference.vIndex)",
             ].joined(separator: "/")
+        case .surface(.trimSpan(let reference)):
+            try rejectExplicitUV(query)
+            return [
+                "surfaceFrame",
+                "surfaceTrimSpan",
+                persistentNameString(reference.trim.surface.faceName),
+                "loop:\(reference.trim.loopIndex)",
+                "edge:\(reference.trim.edgeIndex)",
+                "span:\(reference.spanIndex)",
+            ].joined(separator: "/")
+        case .surface(.trimKnot(let reference)):
+            try rejectExplicitUV(query)
+            return [
+                "surfaceFrame",
+                "surfaceTrimKnot",
+                persistentNameString(reference.trim.surface.faceName),
+                "loop:\(reference.trim.loopIndex)",
+                "edge:\(reference.trim.edgeIndex)",
+                "knot:\(reference.knotIndex)",
+            ].joined(separator: "/")
         case .surface(.span),
              .surface(.knot),
              .surface(.trim),
-             .surface(.trimSpan),
-             .surface(.trimKnot),
              .edge,
              .curve,
              .sketchPoint:
             throw EditorError(
                 code: .commandInvalid,
-                message: "Surface frame display requires a generated face, surface parameter, or surface control point reference."
+                message: "Surface frame display requires a generated face, surface parameter, surface control point, or trim p-curve parameter reference."
             )
         }
     }
@@ -121,7 +139,7 @@ public struct SurfaceFrameDisplayID: Codable, Hashable, RawRepresentable, Sendab
               query.v == nil else {
             throw EditorError(
                 code: .commandInvalid,
-                message: "Surface frame display parameter and control-point references carry their own UV address and must not also provide u or v."
+                message: "Surface frame display parameter, control-point, and trim p-curve references carry their own UV address and must not also provide u or v."
             )
         }
     }

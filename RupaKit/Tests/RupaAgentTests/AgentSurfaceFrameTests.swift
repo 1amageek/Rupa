@@ -153,6 +153,113 @@ import SwiftCAD
 }
 
 @MainActor
+@Test func agentResolvesTrimParameterCurveSurfaceFramesWithoutMutation() async throws {
+    let server = AgentCommandController()
+    let sessionID = UUID()
+    let session = EditorSession()
+    server.register(session: session, id: sessionID)
+
+    let createResponse = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .createBSplineSurface(
+                name: "Agent Trim Frame Surface",
+                surface: agentDirectBSplineSurfaceWithInteriorKnots()
+            ),
+            expectedGeneration: DocumentGeneration(0)
+        )
+    )
+    guard case .command(let createResult) = createResponse else {
+        Issue.record("Agent must create a direct B-spline surface.")
+        return
+    }
+    #expect(createResult.didMutate)
+
+    let initialSummaryResponse = server.handle(
+        .surfaceSourceSummary(
+            sessionID: sessionID,
+            expectedGeneration: DocumentGeneration(1)
+        )
+    )
+    guard case .surfaceSourceSummary(let initialSummary) = initialSummaryResponse else {
+        Issue.record("Agent must discover direct B-spline surface references.")
+        return
+    }
+    let faceReference = try #require(initialSummary.sources.first?.patches.first?.faceSelectionReference)
+    let trimResponse = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .setSurfaceTrimLoops(
+                target: faceReference,
+                trimLoops: [agentAuthoredBSplineSurfaceTrimLoop()]
+            ),
+            expectedGeneration: DocumentGeneration(1)
+        )
+    )
+    guard case .command(let trimResult) = trimResponse else {
+        Issue.record("Agent must set authored trim loops.")
+        return
+    }
+    #expect(trimResult.didMutate)
+
+    let generation = session.generation
+    let dirty = session.isDirty
+    let summaryResponse = server.handle(
+        .surfaceSourceSummary(
+            sessionID: sessionID,
+            expectedGeneration: generation
+        )
+    )
+    guard case .surfaceSourceSummary(let summary) = summaryResponse else {
+        Issue.record("Agent must discover authored trim p-curve references.")
+        return
+    }
+    let trimEdge = try #require(summary.sources.first?.patches.first?.trimLoops.first?.edges.first)
+    let spanSelection = try #require(trimEdge.parameterCurve.spans.first?.selectionReference)
+    let knotSelection = try #require(trimEdge.parameterCurve.knotVector.first?.selectionReference)
+    let spanQuery = SurfaceFrameQuery(selectionReference: spanSelection)
+    let knotQuery = SurfaceFrameQuery(selectionReference: knotSelection)
+    let frameResponse = server.handle(
+        .surfaceFrames(
+            sessionID: sessionID,
+            queries: [spanQuery, knotQuery],
+            expectedGeneration: generation
+        )
+    )
+    guard case .surfaceFrames(let frames) = frameResponse else {
+        Issue.record("Agent must resolve trim p-curve UVN frames.")
+        return
+    }
+
+    #expect(frames.frames.count == 2)
+    let spanFrame = try #require(frames.frames.first)
+    let knotFrame = try #require(frames.frames.dropFirst().first)
+    #expect(abs(spanFrame.u - 0.51) <= 1.0e-12)
+    #expect(abs(spanFrame.v - 0.3225) <= 1.0e-12)
+    #expect(abs(knotFrame.u - 0.2) <= 1.0e-12)
+    #expect(abs(knotFrame.v - 0.2) <= 1.0e-12)
+    #expect(abs(surfaceVectorLength(spanFrame.normal) - 1.0) <= 1.0e-8)
+    #expect(session.generation == generation)
+    #expect(session.isDirty == dirty)
+
+    let displayResponse = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .setSurfaceFrameDisplay(query: spanQuery, isVisible: true),
+            expectedGeneration: generation
+        )
+    )
+    guard case .command(let displayResult) = displayResponse else {
+        Issue.record("Agent must persist a trim p-curve frame display.")
+        return
+    }
+    #expect(displayResult.commandName == "setSurfaceFrameDisplay")
+    #expect(displayResult.didMutate)
+    let displayID = try SurfaceFrameDisplayID(query: spanQuery)
+    #expect(session.document.productMetadata.surfaceFrameDisplays[displayID]?.isVisible == true)
+}
+
+@MainActor
 @Test func agentResolvesPlanarPolySplineSurfaceFramesWithoutMutation() async throws {
     let server = AgentCommandController()
     let sessionID = UUID()

@@ -234,6 +234,45 @@ import SwiftCAD
     #expect(abs(dot(cross(frame.uAxis, frame.vAxis), frame.normal) - 1.0) <= 1.0e-8)
 }
 
+@Test func surfaceFrameServiceResolvesFrameFromTrimParameterCurveReferences() async throws {
+    var document = DesignDocument.empty()
+    _ = try document.createBSplineSurface(
+        name: "Frame Trim Parameter Surface",
+        surface: surfaceAnalysisDirectBSplineSurface()
+    )
+    let initialSummary = try SurfaceSourceSummaryService().summarize(document: document)
+    let faceReference = try #require(initialSummary.sources.first?.patches.first?.faceSelectionReference)
+    try document.setSurfaceTrimLoops(
+        target: faceReference,
+        trimLoops: [surfaceAnalysisAuthoredTrimLoop()]
+    )
+
+    let summary = try SurfaceSourceSummaryService().summarize(document: document)
+    let trimEdge = try #require(summary.sources.first?.patches.first?.trimLoops.first?.edges.first)
+    let spanSelection = try #require(trimEdge.parameterCurve.spans.first?.selectionReference)
+    let knotSelection = try #require(trimEdge.parameterCurve.knotVector.first?.selectionReference)
+    let result = try SurfaceFrameService().resolve(
+        document: document,
+        queries: [
+            SurfaceFrameQuery(selectionReference: spanSelection),
+            SurfaceFrameQuery(selectionReference: knotSelection),
+        ]
+    )
+
+    #expect(result.frames.count == 2)
+    let spanFrame = try #require(result.frames.first)
+    let knotFrame = try #require(result.frames.dropFirst().first)
+    #expect(abs(spanFrame.u - 0.51) <= 1.0e-12)
+    #expect(abs(spanFrame.v - 0.3225) <= 1.0e-12)
+    #expect(abs(knotFrame.u - 0.2) <= 1.0e-12)
+    #expect(abs(knotFrame.v - 0.2) <= 1.0e-12)
+    #expect(abs(vectorLength(spanFrame.uAxis) - 1.0) <= 1.0e-8)
+    #expect(abs(vectorLength(spanFrame.vAxis) - 1.0) <= 1.0e-8)
+    #expect(abs(dot(cross(spanFrame.uAxis, spanFrame.vAxis), spanFrame.normal) - 1.0) <= 1.0e-8)
+    _ = try SurfaceFrameDisplayID(query: SurfaceFrameQuery(selectionReference: spanSelection))
+    _ = try SurfaceFrameDisplayID(query: SurfaceFrameQuery(selectionReference: knotSelection))
+}
+
 @Test func surfaceFrameServiceRejectsAmbiguousSurfaceParameterInput() async throws {
     var document = DesignDocument.empty()
     _ = try document.createPolySplineSurface(
@@ -328,6 +367,40 @@ private func surfaceAnalysisPolySplinePatchNetworkMesh(centerZ: Double) -> Mesh 
             0, 4, 3,
             1, 2, 5,
             1, 5, 4,
+        ]
+    )
+}
+
+private func surfaceAnalysisDirectBSplineSurface() -> BSplineSurface3D {
+    BSplineSurface3D.cubicBezierPatch(
+        bottomLeft: Point3D(x: 0.0, y: 0.0, z: 0.0),
+        bottomRight: Point3D(x: 1.0, y: 0.0, z: 0.0),
+        topRight: Point3D(x: 1.0, y: 1.0, z: 0.0),
+        topLeft: Point3D(x: 0.0, y: 1.0, z: 0.0)
+    )
+}
+
+private func surfaceAnalysisAuthoredTrimLoop() -> BSplineSurfaceTrimLoop {
+    BSplineSurfaceTrimLoop(
+        role: .outer,
+        edges: [
+            BSplineSurfaceTrimEdge(parameterCurve: .bSpline(BSplineCurve2D(
+                degree: 2,
+                knots: [0.0, 0.0, 0.0, 1.0, 1.0, 1.0],
+                controlPoints: [
+                    Point2D(x: 0.2, y: 0.2),
+                    Point2D(x: 0.52, y: 0.42),
+                    Point2D(x: 0.8, y: 0.25),
+                ]
+            ))),
+            BSplineSurfaceTrimEdge(parameterCurve: .polyline([
+                SurfaceParameter(u: 0.8, v: 0.25),
+                SurfaceParameter(u: 0.45, v: 0.8),
+            ])),
+            BSplineSurfaceTrimEdge(parameterCurve: .polyline([
+                SurfaceParameter(u: 0.45, v: 0.8),
+                SurfaceParameter(u: 0.2, v: 0.2),
+            ])),
         ]
     )
 }

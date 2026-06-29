@@ -4,7 +4,7 @@ import RupaCore
 public struct InspectSurfaceFramesCommand: ParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "surface-frames",
-        abstract: "Return UVN local frames for generated B-spline surface face parameters."
+        abstract: "Return UVN local frames for generated B-spline surface face parameters and surface selection references."
     )
 
     @OptionGroup

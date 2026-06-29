@@ -1529,12 +1529,12 @@ public final class AgentCommandController: AgentClientProtocol {
         capability(
             "setSurfaceFrameDisplay",
             category: .solid,
-            summary: "Toggle persistent Agent-visible UVN surface frame display state for generated face UV queries, surface parameter references, or Surface CV references.",
+            summary: "Toggle persistent Agent-visible UVN surface frame display state for generated face UV queries, surface parameter references, Surface CV references, or trim p-curve parameter references.",
             access: .automationCommand,
             mutatesDocument: true,
             discovery: [.surfaceSourceSummary, .surfaceFrames, .surfaceAnalysis],
-            targets: [.face, .surfaceControlPoint],
-            failureMode: "Accepts generated B-spline face UV queries, surface parameter references, or Surface CV references resolvable by surfaceFrames; rejects unresolved references, ambiguous UV input, non-B-spline faces, stale generations, and unsupported surface trim, span, knot, edge, curve, or sketch point references before mutation."
+            targets: [.face, .surfaceControlPoint, .surfaceTrim],
+            failureMode: "Accepts generated B-spline face UV queries, surface parameter references, Surface CV references, or B-spline trim p-curve span/knot references resolvable by surfaceFrames; rejects unresolved references, ambiguous UV input, non-B-spline faces, stale generations, whole trim edges, unsupported surface span/knot, edge, curve, or sketch point references before mutation."
         ),
         capability(
             "topologySummary",
@@ -1569,12 +1569,12 @@ public final class AgentCommandController: AgentClientProtocol {
         capability(
             "surfaceFrames",
             category: .read,
-            summary: "Resolve generated B-spline face UV addresses or surface selection references into oriented UVN local frames, derivative tangents, principal directions, and curvature values without mutation.",
+            summary: "Resolve generated B-spline face UV addresses, surface selection references, or B-spline trim p-curve parameter references into oriented UVN local frames, derivative tangents, principal directions, and curvature values without mutation.",
             access: .agentRequest,
             mutatesDocument: false,
             discovery: [.topologySummary, .surfaceSourceSummary, .surfaceFrames],
-            targets: [.face, .surfaceControlPoint],
-            failureMode: "Rejects stale generations, unresolved face persistent names, face IDs, or surface selection references, non-B-spline faces, unbounded domains, ambiguous UV input, and UV parameters outside the face surface domain."
+            targets: [.face, .surfaceControlPoint, .surfaceTrim],
+            failureMode: "Rejects stale generations, unresolved face persistent names, face IDs, or surface selection references, non-B-spline faces, unbounded domains, ambiguous UV input, whole trim edges, non-B-spline trim p-curves, and UV parameters outside the face surface domain."
         ),
         capability(
             "surfaceContinuitySummary",
