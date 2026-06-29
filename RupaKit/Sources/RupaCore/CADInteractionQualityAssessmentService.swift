@@ -199,6 +199,7 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                         "swift-CAD/Sources/CADIR/BooleanFeature.swift",
                         "swift-CAD/Sources/CADKernel/BooleanFeatureEvaluator.swift",
                         "swift-CAD/Sources/CADKernel/BoxBRepBooleanEvaluator.swift",
+                        "swift-CAD/Sources/CADKernel/OrthogonalSolidOperand.swift",
                         "swift-CAD/Sources/CADIR/DesignGraph.swift",
                         "swift-CAD/Sources/CADKernel/PlanarSweepFeatureEvaluator.swift",
                         "swift-CAD/Sources/CADKernel/PlanarRevolveFeatureEvaluator.swift",
@@ -222,18 +223,19 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                     ],
                     notes: [
                         "Standalone Boolean features now own target body references, one tool body reference, operation, and keep-tools policy in source data.",
-                        "Core, Automation, and Agent can create exact axis-aligned box B-rep Boolean union, difference, intersect, and slice results through the shared command path.",
+                        "Core, Automation, and Agent can create exact axis-aligned box and orthogonal cell-union B-rep Boolean union, difference, intersect, and slice results through the shared command path.",
+                        "SwiftCAD can extract occupied cells from supported orthogonal solid operands, so previous connected orthogonal cell-union Boolean results can become follow-on Boolean targets.",
                         "Boolean evaluation removes superseded target and tool generated names when keepTools is false, remaps kept tool names when keepTools is true, and returns typed failures for unsupported operands before invalid geometry is committed.",
                     ]
                 ),
             ],
             openWork: [
-                "Union, difference, intersect, and slice support across general Solid and Sheet topology beyond the exact axis-aligned box and orthogonal cell-union subset.",
-                "Non-box operands and broader connected result topology outside current exact rectangular-frame and cell-union cases.",
+                "Union, difference, intersect, and slice support across general non-orthogonal Solid and Sheet topology beyond the current orthogonal cell-union subset.",
+                "Curved, non-planar, and non-axis-aligned operands with exact topology rather than cell decomposition.",
                 "Targetless creation policies where the product workflow needs Boolean-style creation without replacing existing targets.",
                 "Exact post-boolean topology naming for arbitrary follow-on selection, dimensions, and direct edits.",
             ],
-            next: "Broaden standalone Boolean from the exact box subset into general Solid and Sheet operands while preserving typed source ownership, generated-name removal, keep-tools semantics, Agent execution, and explicit unsupported diagnostics."
+            next: "Broaden standalone Boolean from orthogonal Solid operands into general Solid and Sheet operands while preserving typed source ownership, generated-name removal, keep-tools semantics, Agent execution, and explicit unsupported diagnostics."
         ),
         entry(
             area: .directModeling,

@@ -194,11 +194,12 @@ struct CADInteractionDesignProcessSpec: Sendable {
                 supportedCases: [
                     caseItem("sweep-integrated-box-boolean", "Sweep-integrated axis-aligned box-prism boolean subsets evaluate exactly.", .supported, .kernel),
                     caseItem("standalone-target-tool-box-boolean", "Standalone target/tool body references evaluate exact axis-aligned box Boolean subsets through Core, Automation, and Agent.", .supported, .core),
+                    caseItem("chained-orthogonal-cell-union-boolean", "Previous orthogonal cell-union Boolean results can become target operands for follow-on Boolean operations.", .supported, .kernel),
                     caseItem("keep-tools-generated-name-policy", "Standalone Boolean removes superseded target/tool generated names or remaps kept tool names according to keep-tools policy.", .supported, .evaluation),
                     caseItem("targetless-rejection", "Invalid targetless/new-body boolean option combinations reject before mutation.", .verified, .core),
                 ],
                 boundaryCases: [
-                    caseItem("general-solid-sheet-target-tool", "General Solid and Sheet target/tool operands must preserve exact topology and diagnostics beyond the current box subset.", .planned, .kernel),
+                    caseItem("general-solid-sheet-target-tool", "General non-orthogonal Solid and Sheet target/tool operands must preserve exact topology and diagnostics beyond the current orthogonal subset.", .planned, .kernel),
                 ],
                 degenerateCases: [
                     caseItem("empty-result", "Empty or separated-fragment results require typed result diagnostics.", .planned, .evaluation),

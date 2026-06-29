@@ -59,9 +59,12 @@ import RupaCore
     #expect(booleans.currentRating == .partial)
     #expect(booleans.referenceSources.contains("https://doc.plasticity.xyz/solid/boolean"))
     #expect(!booleans.openWork.contains("Standalone Boolean command with target/tool selection contracts."))
-    #expect(booleans.openWork.contains { $0.contains("general Solid and Sheet topology") })
+    #expect(booleans.openWork.contains { $0.contains("general non-orthogonal Solid and Sheet topology") })
     #expect(booleans.evidence.contains { evidence in
         evidence.notes.contains("Standalone Boolean features now own target body references, one tool body reference, operation, and keep-tools policy in source data.")
+    })
+    #expect(booleans.evidence.contains { evidence in
+        evidence.notes.contains("SwiftCAD can extract occupied cells from supported orthogonal solid operands, so previous connected orthogonal cell-union Boolean results can become follow-on Boolean targets.")
     })
     #expect(booleans.evidence.contains { evidence in
         evidence.tests.contains("RupaKit/Tests/RupaCoreTests/BooleanCommandTests.swift")

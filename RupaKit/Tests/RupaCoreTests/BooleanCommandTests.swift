@@ -112,6 +112,65 @@ import SwiftCAD
     })
 }
 
+@Test func createBooleanCanUsePreviousCellUnionBooleanAsTarget() throws {
+    var document = DesignDocument.empty()
+    let targetID = try createBooleanBox(
+        in: &document,
+        name: "Chained Target",
+        minX: -20.0,
+        minY: -20.0,
+        maxX: 20.0,
+        maxY: 20.0
+    )
+    let firstToolID = try createBooleanBox(
+        in: &document,
+        name: "Chained First Tool",
+        minX: -5.0,
+        minY: -5.0,
+        maxX: 25.0,
+        maxY: 25.0
+    )
+    let firstBooleanID = try document.createBoolean(
+        name: "First Chained Boolean",
+        targets: [BooleanTargetReference(featureID: targetID)],
+        tool: BooleanToolReference(featureID: firstToolID),
+        operation: .difference
+    )
+    let secondToolID = try createBooleanBox(
+        in: &document,
+        name: "Chained Second Tool",
+        minX: -20.0,
+        minY: -20.0,
+        maxX: -10.0,
+        maxY: 0.0
+    )
+
+    let secondBooleanID = try document.createBoolean(
+        name: "Second Chained Boolean",
+        targets: [BooleanTargetReference(featureID: firstBooleanID)],
+        tool: BooleanToolReference(featureID: secondToolID),
+        operation: .difference
+    )
+    let evaluated = try CADPipeline.modelingDefault(for: document).evaluate(document.cadDocument)
+
+    #expect(evaluated.brep.bodies.count == 1)
+    #expect(evaluated.brep.faces.count > 6)
+    #expect(evaluated.generatedNames.keys.contains {
+        $0.components.contains(.feature(firstBooleanID))
+    } == false)
+    #expect(evaluated.generatedNames.keys.contains {
+        $0.components == [
+            .feature(secondBooleanID),
+            .generated(GeneratedSubshapeRole.body.rawValue),
+        ]
+    })
+    #expect(evaluated.generatedNames.values.filter { $0.isBody }.count == 1)
+    #expect(evaluated.generatedNames.values.filter { $0.isFace }.count == evaluated.brep.faces.count)
+    #expect(evaluated.generatedNames.values.filter { $0.isEdge }.count == evaluated.brep.edges.count)
+    #expect(evaluated.generatedNames.values.filter { $0.isVertex }.count == evaluated.brep.vertices.count)
+    try document.validate()
+}
+
 @Test func createBooleanRejectsToolUsedAsTargetBeforeMutation() throws {
     var document = DesignDocument.empty()
     let boxID = try createBooleanBox(
@@ -164,4 +223,34 @@ private func booleanSketchPoint(x: Double, y: Double) -> SketchPoint {
         x: .length(x, .millimeter),
         y: .length(y, .millimeter)
     )
+}
+
+private extension TopologyReference {
+    var isBody: Bool {
+        if case .body = self {
+            return true
+        }
+        return false
+    }
+
+    var isFace: Bool {
+        if case .face = self {
+            return true
+        }
+        return false
+    }
+
+    var isEdge: Bool {
+        if case .edge = self {
+            return true
+        }
+        return false
+    }
+
+    var isVertex: Bool {
+        if case .vertex = self {
+            return true
+        }
+        return false
+    }
 }
