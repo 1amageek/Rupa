@@ -19,6 +19,7 @@ public struct Viewport: View {
     @State private var activeSurfaceTrimControlPointDrag: ViewportSurfaceTrimControlPointDragState?
     @State private var activePolySplineSurfaceVertexSlideDrag: ViewportPolySplineSurfaceVertexSlideDragState?
     @State private var activeSurfaceControlPointSlideDrag: ViewportSurfaceControlPointSlideDragState?
+    @State private var activeSurfaceFrameDrag: ViewportSurfaceFrameDragState?
     @State private var activeRegionOffsetDrag: ViewportRegionOffsetDragState?
     @State private var activeEdgeOffsetDrag: ViewportEdgeOffsetDragState?
     @State private var activeSlotWidthDrag: ViewportSlotWidthDragState?
@@ -44,6 +45,7 @@ public struct Viewport: View {
     @State private var hoveredSurfaceTrimControlPoint: ViewportSurfaceTrimControlPointHandleTarget?
     @State private var hoveredPolySplineSurfaceVertexSlideHandle: ViewportPolySplineSurfaceVertexSlideHandleTarget?
     @State private var hoveredSurfaceControlPointSlideHandle: ViewportSurfaceControlPointSlideHandleTarget?
+    @State private var hoveredSurfaceFrameHandle: ViewportSurfaceFrameHandleTarget?
     @State private var hoveredRegionOffsetHandle: ViewportRegionOffsetHandleTarget?
     @State private var hoveredEdgeOffsetHandle: ViewportEdgeOffsetHandleTarget?
     @State private var hoveredSlotWidthHandle: ViewportSlotWidthHandleTarget?
@@ -68,6 +70,7 @@ public struct Viewport: View {
     @State private var pendingSurfaceTrimControlPoint: ViewportSurfaceTrimControlPointHandleTarget?
     @State private var pendingPolySplineSurfaceVertexSlideHandle: ViewportPolySplineSurfaceVertexSlideHandleTarget?
     @State private var pendingSurfaceControlPointSlideHandle: ViewportSurfaceControlPointSlideHandleTarget?
+    @State private var pendingSurfaceFrameHandle: ViewportSurfaceFrameHandleTarget?
     @State private var pendingRegionOffsetHandle: ViewportRegionOffsetHandleTarget?
     @State private var pendingEdgeOffsetHandle: ViewportEdgeOffsetHandleTarget?
     @State private var pendingSlotWidthHandle: ViewportSlotWidthHandleTarget?
@@ -149,6 +152,7 @@ public struct Viewport: View {
     private let onSurfaceTrimControlPointDrag: ((ViewportSurfaceTrimControlPointDragTarget) -> Void)?
     private let onPolySplineSurfaceVertexSlideDrag: ((ViewportPolySplineSurfaceVertexSlideDragTarget) -> Void)?
     private let onSurfaceControlPointSlideDrag: ((ViewportSurfaceControlPointSlideDragTarget) -> Void)?
+    private let onSurfaceFrameDrag: ((ViewportSurfaceFrameDragTarget) -> Void)?
     private let onCommandConfirm: (() -> Void)?
     private let onHover: ((ViewportHit?) -> Void)?
     private let onSnapCandidateKindChange: ((RupaCore.SnapCandidateKind?) -> Void)?
@@ -215,6 +219,7 @@ public struct Viewport: View {
         onSurfaceTrimControlPointDrag: ((ViewportSurfaceTrimControlPointDragTarget) -> Void)? = nil,
         onPolySplineSurfaceVertexSlideDrag: ((ViewportPolySplineSurfaceVertexSlideDragTarget) -> Void)? = nil,
         onSurfaceControlPointSlideDrag: ((ViewportSurfaceControlPointSlideDragTarget) -> Void)? = nil,
+        onSurfaceFrameDrag: ((ViewportSurfaceFrameDragTarget) -> Void)? = nil,
         onCommandConfirm: (() -> Void)? = nil,
         onHover: ((ViewportHit?) -> Void)? = nil,
         onSnapCandidateKindChange: ((RupaCore.SnapCandidateKind?) -> Void)? = nil,
@@ -280,6 +285,7 @@ public struct Viewport: View {
         self.onSurfaceTrimControlPointDrag = onSurfaceTrimControlPointDrag
         self.onPolySplineSurfaceVertexSlideDrag = onPolySplineSurfaceVertexSlideDrag
         self.onSurfaceControlPointSlideDrag = onSurfaceControlPointSlideDrag
+        self.onSurfaceFrameDrag = onSurfaceFrameDrag
         self.onCommandConfirm = onCommandConfirm
         self.onHover = onHover
         self.onSnapCandidateKindChange = onSnapCandidateKindChange
@@ -2582,6 +2588,17 @@ public struct Viewport: View {
         }
     }
 
+    private func surfaceFrameAxisTitle(_ axis: ViewportSurfaceFrameAxis) -> String {
+        switch axis {
+        case .u:
+            return "U"
+        case .v:
+            return "V"
+        case .normal:
+            return "N"
+        }
+    }
+
     private func drawSketch(
         _ item: ViewportSceneItem,
         in context: inout GraphicsContext,
@@ -4372,6 +4389,7 @@ public struct Viewport: View {
         layout: ViewportLayout,
         in context: inout GraphicsContext
     ) {
+        let dragTargets = selectedSurfaceFrameControlPointReferences()
         for item in scene.items {
             guard case .body(let component) = item.kind else {
                 continue
@@ -4380,6 +4398,7 @@ public struct Viewport: View {
                 drawSurfaceFrameDisplay(
                     display,
                     item: item,
+                    dragTargets: dragTargets,
                     layout: layout,
                     in: &context
                 )
@@ -4390,6 +4409,7 @@ public struct Viewport: View {
     private func drawSurfaceFrameDisplay(
         _ display: ViewportSurfaceFrameDisplay,
         item: ViewportSceneItem,
+        dragTargets: [SelectionReference],
         layout: ViewportLayout,
         in context: inout GraphicsContext
     ) {
@@ -4399,6 +4419,8 @@ public struct Viewport: View {
             direction: display.uAxis,
             item: item,
             display: display,
+            axis: .u,
+            dragTargets: dragTargets,
             layout: layout,
             color: ViewportCoordinateAxis.x.color,
             in: &context
@@ -4408,6 +4430,8 @@ public struct Viewport: View {
             direction: display.vAxis,
             item: item,
             display: display,
+            axis: .v,
+            dragTargets: dragTargets,
             layout: layout,
             color: ViewportCoordinateAxis.y.color,
             in: &context
@@ -4417,6 +4441,8 @@ public struct Viewport: View {
             direction: display.normal,
             item: item,
             display: display,
+            axis: .normal,
+            dragTargets: dragTargets,
             layout: layout,
             color: ViewportCoordinateAxis.z.color,
             in: &context
@@ -4444,15 +4470,29 @@ public struct Viewport: View {
         direction: Vector3D,
         item: ViewportSceneItem,
         display: ViewportSurfaceFrameDisplay,
+        axis: ViewportSurfaceFrameAxis,
+        dragTargets: [SelectionReference],
         layout: ViewportLayout,
         color: Color,
         in context: inout GraphicsContext
     ) {
+        let identity = ViewportSurfaceFrameHandleIdentity(
+            targets: dragTargets,
+            displayID: display.id,
+            axis: axis
+        )
+        let dragDistance = activeSurfaceFrameDrag?.target.identity == identity
+            ? activeSurfaceFrameDrag?.distanceMeters
+            : nil
+        let isHighlighted = hoveredSurfaceFrameHandle?.identity == identity
+            || pendingSurfaceFrameHandle?.identity == identity
+            || activeSurfaceFrameDrag?.target.identity == identity
         guard let end = surfaceFrameAxisEnd(
             origin: origin,
             direction: direction,
             item: item,
             display: display,
+            distanceMeters: dragDistance,
             layout: layout
         ) else {
             return
@@ -4462,10 +4502,10 @@ public struct Viewport: View {
         path.addLine(to: end)
         context.stroke(
             path,
-            with: .color(color.opacity(0.82)),
-            style: StrokeStyle(lineWidth: 2.0, lineCap: .round)
+            with: .color(color.opacity(isHighlighted ? 0.96 : 0.82)),
+            style: StrokeStyle(lineWidth: isHighlighted ? 3.0 : 2.0, lineCap: .round)
         )
-        let headRadius: CGFloat = 2.4
+        let headRadius: CGFloat = isHighlighted ? 3.6 : 2.4
         let headRect = CGRect(
             x: end.x - headRadius,
             y: end.y - headRadius,
@@ -4473,6 +4513,23 @@ public struct Viewport: View {
             height: headRadius * 2.0
         )
         context.fill(Path(ellipseIn: headRect), with: .color(color.opacity(0.88)))
+
+        guard let dragDistance else {
+            return
+        }
+        let vector = CGVector(dx: end.x - origin.x, dy: end.y - origin.y)
+        let direction2D = vector.length > 1.0e-9 ? vector.normalized : CGVector(dx: 1.0, dy: 0.0)
+        let normal2D = CGVector(dx: -direction2D.dy, dy: direction2D.dx)
+        drawDimensionLabel(
+            "\(surfaceFrameAxisTitle(axis)) \(formattedViewportLength(abs(dragDistance)))",
+            at: CGPoint(
+                x: end.x + normal2D.dx * 18.0 + direction2D.dx * 8.0,
+                y: end.y + normal2D.dy * 18.0 + direction2D.dy * 8.0
+            ),
+            color: color,
+            isHighlighted: true,
+            in: &context
+        )
     }
 
     private func surfaceFrameAxisEnd(
@@ -4480,8 +4537,19 @@ public struct Viewport: View {
         direction: Vector3D,
         item: ViewportSceneItem,
         display: ViewportSurfaceFrameDisplay,
+        distanceMeters: Double? = nil,
         layout: ViewportLayout
     ) -> CGPoint? {
+        if let distanceMeters {
+            let basePoint = item.modelTransform.viewportTransformedPoint(display.position)
+            let modelDirection = item.modelTransform.viewportTransformedVector(direction)
+            let projected = layout.project(Point3D(
+                x: basePoint.x + modelDirection.x * distanceMeters,
+                y: basePoint.y + modelDirection.y * distanceMeters,
+                z: basePoint.z + modelDirection.z * distanceMeters
+            ))
+            return projected
+        }
         let modelScale = Double(max(max(item.modelBounds.width, item.modelBounds.height), 1.0e-6)) * 0.08
         let axisPoint = Point3D(
             x: display.position.x + direction.x * modelScale,
@@ -7933,6 +8001,56 @@ public struct Viewport: View {
         }
     }
 
+    private func surfaceFrameAffordanceCandidates(
+        scene: ViewportScene,
+        layout: ViewportLayout
+    ) -> [ViewportSurfaceFrameAffordanceCandidate] {
+        guard onSurfaceFrameDrag != nil else {
+            return []
+        }
+        let targets = selectedSurfaceFrameControlPointReferences()
+        guard targets.isEmpty == false else {
+            return []
+        }
+        return scene.items.flatMap { item -> [ViewportSurfaceFrameAffordanceCandidate] in
+            guard case .body(let component) = item.kind else {
+                return []
+            }
+            return component.surfaceFrameDisplays.flatMap { display -> [ViewportSurfaceFrameAffordanceCandidate] in
+                ViewportSurfaceFrameAxis.allCases.compactMap { axis in
+                    guard let geometry = ViewportSurfaceFrameAxisAffordanceGeometry(
+                        display: display,
+                        axis: axis,
+                        modelTransform: item.modelTransform,
+                        layout: layout
+                    ) else {
+                        return nil
+                    }
+                    let target = ViewportSurfaceFrameHandleTarget(
+                        targets: targets,
+                        query: display.query,
+                        displayID: display.id,
+                        axis: axis,
+                        geometry: geometry
+                    )
+                    return ViewportSurfaceFrameAffordanceCandidate(
+                        target: target,
+                        geometry: geometry
+                    )
+                }
+            }
+        }
+    }
+
+    private func selectedSurfaceFrameControlPointReferences() -> [SelectionReference] {
+        selection.selectedReferences.reversed().filter { reference in
+            guard case .surface(.controlPoint) = reference else {
+                return false
+            }
+            return true
+        }
+    }
+
     private func polySplineSurfaceTopologyVertices(
         in scene: ViewportScene
     ) -> [ViewportBodyTopology.Vertex] {
@@ -8412,6 +8530,18 @@ public struct Viewport: View {
         if activeSurfaceControlPointSlideDrag != nil {
             return
         }
+        if let start, let current, let pendingSurfaceFrameHandle {
+            updateSurfaceFrameDrag(
+                target: pendingSurfaceFrameHandle,
+                start: start,
+                current: current,
+                size: size
+            )
+            return
+        }
+        if activeSurfaceFrameDrag != nil {
+            return
+        }
         if let start, let current, let pendingSplineControlPoint {
             updateSplineControlPointDrag(
                 target: pendingSplineControlPoint,
@@ -8676,6 +8806,11 @@ public struct Viewport: View {
         }
         if let surfaceControlPointSlideTarget = selectedSurfaceControlPointSlideAffordanceTarget(at: point, size: size) {
             pendingSurfaceControlPointSlideHandle = surfaceControlPointSlideTarget
+            activeCanvasDrag = nil
+            return
+        }
+        if let surfaceFrameTarget = selectedSurfaceFrameAffordanceTarget(at: point, size: size) {
+            pendingSurfaceFrameHandle = surfaceFrameTarget
             activeCanvasDrag = nil
             return
         }
@@ -9461,6 +9596,39 @@ public struct Viewport: View {
         return nearest?.target
     }
 
+    private func selectedSurfaceFrameAffordanceTarget(
+        at point: CGPoint,
+        size: CGSize
+    ) -> ViewportSurfaceFrameHandleTarget? {
+        guard onSurfaceFrameDrag != nil else {
+            return nil
+        }
+        let sceneContext = makeSceneContext(
+            size: size,
+            camera: camera,
+            basis: currentProjectionBasis
+        )
+        let scene = sceneContext.scene
+        let layout = sceneContext.layout
+        var nearest: (target: ViewportSurfaceFrameHandleTarget, distance: CGFloat)?
+        for candidate in surfaceFrameAffordanceCandidates(
+            scene: scene,
+            layout: layout
+        ) {
+            guard let distance = surfaceFrameAffordanceHitDistance(
+                at: point,
+                candidate: candidate,
+                layout: layout
+            ) else {
+                continue
+            }
+            if nearest == nil || distance < nearest!.distance {
+                nearest = (candidate.target, distance)
+            }
+        }
+        return nearest?.target
+    }
+
     private func polySplineSurfaceVertexSlideAffordanceHitDistance(
         at point: CGPoint,
         candidate: ViewportPolySplineSurfaceVertexSlideAffordanceCandidate,
@@ -9498,6 +9666,35 @@ public struct Viewport: View {
         let center = layout.project(candidate.geometry.baseModelPoint)
         let endpoint = candidate.geometry.projectedTip(layout: layout)
         let handleGap: CGFloat = 16.0
+        let handleTolerance: CGFloat = 8.0
+        let vector = CGVector(dx: endpoint.x - center.x, dy: endpoint.y - center.y)
+        let length = vector.length
+        guard length > handleGap + 1.0 else {
+            return nil
+        }
+        let direction = vector.normalized
+        let segmentStart = CGPoint(
+            x: center.x + direction.dx * handleGap,
+            y: center.y + direction.dy * handleGap
+        )
+        let distance = min(
+            point.distance(to: endpoint),
+            point.distanceToSegment(start: segmentStart, end: endpoint)
+        )
+        guard distance <= handleTolerance else {
+            return nil
+        }
+        return distance
+    }
+
+    private func surfaceFrameAffordanceHitDistance(
+        at point: CGPoint,
+        candidate: ViewportSurfaceFrameAffordanceCandidate,
+        layout: ViewportLayout
+    ) -> CGFloat? {
+        let center = layout.project(candidate.geometry.baseModelPoint)
+        let endpoint = candidate.geometry.projectedTip(layout: layout)
+        let handleGap: CGFloat = 10.0
         let handleTolerance: CGFloat = 8.0
         let vector = CGVector(dx: endpoint.x - center.x, dy: endpoint.y - center.y)
         let length = vector.length
@@ -10649,6 +10846,28 @@ public struct Viewport: View {
         )
     }
 
+    private func updateSurfaceFrameDrag(
+        target: ViewportSurfaceFrameHandleTarget,
+        start: CGPoint,
+        current: CGPoint,
+        size: CGSize
+    ) {
+        let layout = makeLayout(
+            size: size,
+            camera: camera,
+            basis: currentProjectionBasis
+        )
+        activeSurfaceFrameDrag = ViewportSurfaceFrameDragState(
+            target: target,
+            startPoint: start,
+            distanceMeters: target.geometry.dragDistance(
+                start: start,
+                current: current,
+                layout: layout
+            )
+        )
+    }
+
     private func updatePolySplineSurfaceVertexDrag(
         target: ViewportPolySplineSurfaceVertexHandleTarget,
         start: CGPoint,
@@ -11235,6 +11454,11 @@ public struct Viewport: View {
             activeSurfaceControlPointSlideDrag = nil
             return
         }
+        if pendingSurfaceFrameHandle != nil {
+            pendingSurfaceFrameHandle = nil
+            activeSurfaceFrameDrag = nil
+            return
+        }
         if pendingSplineControlPoint != nil {
             pendingSplineControlPoint = nil
             activeSplineControlPointDrag = nil
@@ -11419,6 +11643,16 @@ public struct Viewport: View {
             activeCanvasDrag = nil
             if let surfaceControlPointSlideDragTarget {
                 onSurfaceControlPointSlideDrag?(surfaceControlPointSlideDragTarget)
+            }
+            return
+        }
+        if pendingSurfaceFrameHandle != nil || activeSurfaceFrameDrag != nil {
+            let surfaceFrameDragTarget = committedSurfaceFrameDragTarget()
+            pendingSurfaceFrameHandle = nil
+            activeSurfaceFrameDrag = nil
+            activeCanvasDrag = nil
+            if let surfaceFrameDragTarget {
+                onSurfaceFrameDrag?(surfaceFrameDragTarget)
             }
             return
         }
@@ -11799,6 +12033,22 @@ public struct Viewport: View {
         return ViewportSurfaceControlPointSlideDragTarget(
             targets: activeSurfaceControlPointSlideDrag.target.targets,
             direction: activeSurfaceControlPointSlideDrag.target.direction,
+            distance: distance
+        )
+    }
+
+    private func committedSurfaceFrameDragTarget() -> ViewportSurfaceFrameDragTarget? {
+        guard let activeSurfaceFrameDrag else {
+            return nil
+        }
+        let distance = activeSurfaceFrameDrag.distanceMeters
+        guard abs(distance) > 1.0e-12 else {
+            return nil
+        }
+        return ViewportSurfaceFrameDragTarget(
+            targets: activeSurfaceFrameDrag.target.targets,
+            query: activeSurfaceFrameDrag.target.query,
+            axis: activeSurfaceFrameDrag.target.axis,
             distance: distance
         )
     }
@@ -12384,6 +12634,7 @@ public struct Viewport: View {
         hoveredSplineControlPointSlideHandle = nil
         hoveredPolySplineSurfaceVertexSlideHandle = nil
         hoveredSurfaceControlPointSlideHandle = nil
+        hoveredSurfaceFrameHandle = nil
         hoveredSurfaceControlPoint = nil
         hoveredSurfaceTrimEndpoint = nil
         hoveredSurfaceTrimControlPoint = nil
@@ -12472,6 +12723,19 @@ public struct Viewport: View {
             return
         }
         hoveredSurfaceControlPointSlideHandle = nil
+        if let surfaceFrameTarget = selectedSurfaceFrameAffordanceTarget(at: point, size: size) {
+            hoveredSurfaceFrameHandle = surfaceFrameTarget
+            hoveredSplineControlPoint = nil
+            hoveredPolySplineSurfaceVertex = nil
+            hoveredSurfaceControlPoint = nil
+            hoveredSketchVertexOffsetHandle = nil
+            hoveredAffordance = nil
+            hoveredCanvasHit = nil
+            hoveredModelPoint = nil
+            clearHoverCallbacks()
+            return
+        }
+        hoveredSurfaceFrameHandle = nil
         if let splineControlPointTarget = selectedSplineControlPointTarget(at: point, size: size) {
             hoveredSplineControlPoint = splineControlPointTarget
             hoveredPolySplineSurfaceVertexSlideHandle = nil
@@ -12747,6 +13011,7 @@ public struct Viewport: View {
         hoveredSplineControlPointSlideHandle = nil
         hoveredPolySplineSurfaceVertexSlideHandle = nil
         hoveredSurfaceControlPointSlideHandle = nil
+        hoveredSurfaceFrameHandle = nil
         hoveredPolySplineSurfaceVertex = nil
         hoveredSurfaceControlPoint = nil
         hoveredSurfaceTrimEndpoint = nil

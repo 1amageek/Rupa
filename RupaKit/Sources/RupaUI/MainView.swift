@@ -497,6 +497,7 @@ public struct MainView: View {
                     onSurfaceTrimControlPointDrag: viewportSurfaceTrimControlPointDragHandler,
                     onPolySplineSurfaceVertexSlideDrag: viewportPolySplineSurfaceVertexSlideDragHandler,
                     onSurfaceControlPointSlideDrag: viewportSurfaceControlPointSlideDragHandler,
+                    onSurfaceFrameDrag: viewportSurfaceFrameDragHandler,
                     onCommandConfirm: viewportCommandConfirmHandler,
                     onHover: viewportHoverHandler,
                     onSnapCandidateKindChange: { kind in
@@ -917,6 +918,17 @@ public struct MainView: View {
         }
         return { target in
             handleViewportSurfaceControlPointSlideDrag(target)
+        }
+    }
+
+    private var viewportSurfaceFrameDragHandler: ((ViewportSurfaceFrameDragTarget) -> Void)? {
+        guard session.selectedTool == .select,
+              selectionScope == .vertex,
+              slideCommandState.isSurfaceControlVerticesActive == false else {
+            return nil
+        }
+        return { target in
+            handleViewportSurfaceFrameDrag(target)
         }
     }
 
@@ -2832,6 +2844,26 @@ public struct MainView: View {
             target.targets,
             direction: target.direction,
             distanceMeters: target.distance
+        )
+    }
+
+    private func handleViewportSurfaceFrameDrag(
+        _ target: ViewportSurfaceFrameDragTarget
+    ) {
+        guard session.selectedTool == .select,
+              selectionScope == .vertex,
+              slideCommandState.isSurfaceControlVerticesActive == false else {
+            return
+        }
+        let uDistance = target.axis == .u ? target.distance : 0.0
+        let vDistance = target.axis == .v ? target.distance : 0.0
+        let normalDistance = target.axis == .normal ? target.distance : 0.0
+        moveSelectedSurfaceControlPointsInFrame(
+            target.targets,
+            frame: target.query,
+            uDistanceMeters: uDistance,
+            vDistanceMeters: vDistance,
+            normalDistanceMeters: normalDistance
         )
     }
 

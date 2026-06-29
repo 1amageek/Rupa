@@ -778,6 +778,9 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                         "RupaKit/Sources/RupaUI/SurfaceBoundaryContinuityInspectorState.swift",
                         "RupaKit/Sources/RupaRendering/ViewportSurfaceAnalysisOverlay.swift",
                         "RupaKit/Sources/RupaRendering/ViewportSurfaceContinuityOverlay.swift",
+                        "RupaKit/Sources/RupaRendering/ViewportSurfaceFrameAxisAffordanceGeometry.swift",
+                        "RupaKit/Sources/RupaRendering/Viewport.swift",
+                        "RupaKit/Sources/RupaUI/MainView.swift",
                     ],
                     tests: [
                         "RupaKit/Tests/RupaCoreTests/SurfaceAnalysisServiceTests.swift",
@@ -785,6 +788,7 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                         "RupaKit/Tests/RupaCoreTests/SurfaceContinuityServiceTests.swift",
                         "RupaKit/Tests/RupaCoreTests/DesignDocumentTests.swift",
                         "RupaKit/Tests/RupaRenderingTests/ViewportPolySplineSurfaceVertexSlideAffordanceGeometryTests.swift",
+                        "RupaKit/Tests/RupaRenderingTests/ViewportSurfaceFrameAxisAffordanceGeometryTests.swift",
                         "RupaKit/Tests/RupaAgentTests/AgentSurfaceModelingTests.swift",
                         "RupaKit/Tests/RupaAutomationTests/AutomationRunnerTests.swift",
                         "RupaKit/Tests/RupaCLITests/CLIResponseTests.swift",
@@ -796,19 +800,20 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                         "Strict interior PolySpline CV weights are editable through the shared Core, Automation, and Agent command path while preserving CV position overrides.",
                         "Direct B-spline surface sources can be created through Core, Automation, Agent, and CLI, evaluate to selectable sheet topology, appear in surface source summaries with stored degree, knot vectors, weights, control-net references, editable knot and span references, rectangular trim-loop identity, authored trim-loop identity, selectable trim-edge references, Agent-readable authored p-curve control-point summary indices and weights, shared adaptive UV trim-loop validation, rational 2D B-spline p-curve trim preservation, and typed trim-edge continuity capability, and support direct CV position, CV weight, CV slide, internal knot-value mutation, shape-preserving knot insertion, fraction-based span splitting, explicit internal knot multiplicity editing, authored trim endpoint moves with loop-closure preservation, strict interior polyline and 2D B-spline trim p-curve control-point moves, 2D B-spline trim p-curve control-point weight edits, selected viewport trim endpoint handles, selected viewport trim interior control-point handles, authored B-spline trim p-curve span/knot UVN frame resolution and display persistence, and compatible clamped trim-boundary G0/G1/G2 matching with homogeneous inward derivative-scale solving.",
                         "Visible surface frame displays now feed SnapResolver surfaceFrame candidates so UI and Agent workflows can consume the UVN frame query, world point, UV address, and local U/V/N axes as a shared snap target.",
+                        "Selected Surface CVs can now use visible viewport surface-frame U/V/N axes as drag handles that commit through the existing Core moveSurfaceControlPointsInFrame contract.",
                     ]
                 ),
             ],
             openWork: [
                 "Direct B-spline surface source editing beyond existing CV, weight, slide, internal knot-value mutation, shape-preserving knot insertion, fraction-based span splitting, explicit knot multiplicity editing, authored trim endpoint moves, authored trim p-curve interior control-point moves, and compatible trim-boundary continuity matching, including remaining span editing beyond direct fraction splits and broader trim-curve handle workflows.",
-                "Interactive viewport surface-frame drag handles, trim dimensioning/snapping, offset, and sweep or loft section placement that consume the Agent-readable UVN frame contract beyond visible-frame snap anchors.",
+                "Trim dimensioning/snapping, surface offset, and sweep or loft section placement still need to consume the Agent-readable UVN frame contract beyond visible-frame snap anchors and viewport frame drag.",
                 "Arbitrary B-rep adjacency solving, PolySpline continuity mutation, non-rectangular trim targets, and G0/G1/G2/G3 curve matching.",
                 "Non-planar G2 multi-patch reconstruction.",
                 "Patch merge and rounded-corner policy output.",
                 "General trim-curve editing beyond endpoint and strict interior control-point moves, and remaining surface CV source editing beyond the current direct B-spline and PolySpline subsets.",
                 "Viewport creation controls.",
             ],
-            next: "Continue from the current direct B-spline edit subset into arbitrary adjacency continuity, viewport surface-frame handles, broader trim-curve workflows, and broader NURBS/polysurface ownership before broadening surface tools."
+            next: "Continue from the current direct B-spline edit subset into arbitrary adjacency continuity, trim dimensioning/snapping, surface offset, sweep or loft section placement, broader trim-curve workflows, and broader NURBS/polysurface ownership before broadening surface tools."
         ),
         entry(
             area: .curveContinuity,

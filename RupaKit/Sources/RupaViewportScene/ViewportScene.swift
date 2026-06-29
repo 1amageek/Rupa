@@ -1961,6 +1961,31 @@ public struct ViewportSurfaceControlPointSlideDragTarget: Equatable, Sendable {
     }
 }
 
+public enum ViewportSurfaceFrameAxis: String, CaseIterable, Equatable, Sendable {
+    case u
+    case v
+    case normal
+}
+
+public struct ViewportSurfaceFrameDragTarget: Equatable, Sendable {
+    public var targets: [SelectionReference]
+    public var query: SurfaceFrameQuery
+    public var axis: ViewportSurfaceFrameAxis
+    public var distance: Double
+
+    public init(
+        targets: [SelectionReference],
+        query: SurfaceFrameQuery,
+        axis: ViewportSurfaceFrameAxis,
+        distance: Double
+    ) {
+        self.targets = targets
+        self.query = query
+        self.axis = axis
+        self.distance = distance
+    }
+}
+
 public struct ViewportPolySplineSurfaceVertexSlideDragTarget: Equatable, Sendable {
     public var targets: [SelectionTarget]
     public var direction: PolySplineSurfaceVertexSlideDirection

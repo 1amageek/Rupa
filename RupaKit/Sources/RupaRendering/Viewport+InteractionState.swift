@@ -114,6 +114,12 @@ struct ViewportSurfaceControlPointSlideDragState: Equatable {
     var distanceMeters: Double
 }
 
+struct ViewportSurfaceFrameDragState: Equatable {
+    var target: ViewportSurfaceFrameHandleTarget
+    var startPoint: CGPoint
+    var distanceMeters: Double
+}
+
 struct ViewportRegionOffsetDragState: Equatable {
     var target: ViewportRegionOffsetHandleTarget
     var startPoint: CGPoint
@@ -372,6 +378,11 @@ struct ViewportSurfaceControlPointSlideAffordanceCandidate: Equatable {
     var geometry: ViewportPolySplineSurfaceVertexSlideAffordanceGeometry
 }
 
+struct ViewportSurfaceFrameAffordanceCandidate: Equatable {
+    var target: ViewportSurfaceFrameHandleTarget
+    var geometry: ViewportSurfaceFrameAxisAffordanceGeometry
+}
+
 struct ViewportPolySplineSurfaceVertexSlideHandleTarget: Equatable {
     var targets: [SelectionTarget]
     var direction: PolySplineSurfaceVertexSlideDirection
@@ -406,6 +417,28 @@ struct ViewportSurfaceControlPointSlideHandleTarget: Equatable {
 struct ViewportSurfaceControlPointSlideHandleIdentity: Equatable {
     var targets: [SelectionReference]
     var direction: PolySplineSurfaceVertexSlideDirection
+}
+
+struct ViewportSurfaceFrameHandleTarget: Equatable {
+    var targets: [SelectionReference]
+    var query: SurfaceFrameQuery
+    var displayID: SurfaceFrameDisplayID
+    var axis: ViewportSurfaceFrameAxis
+    var geometry: ViewportSurfaceFrameAxisAffordanceGeometry
+
+    var identity: ViewportSurfaceFrameHandleIdentity {
+        ViewportSurfaceFrameHandleIdentity(
+            targets: targets,
+            displayID: displayID,
+            axis: axis
+        )
+    }
+}
+
+struct ViewportSurfaceFrameHandleIdentity: Equatable {
+    var targets: [SelectionReference]
+    var displayID: SurfaceFrameDisplayID
+    var axis: ViewportSurfaceFrameAxis
 }
 
 struct ViewportPolySplineSurfaceVertexHandleTarget: Equatable {
