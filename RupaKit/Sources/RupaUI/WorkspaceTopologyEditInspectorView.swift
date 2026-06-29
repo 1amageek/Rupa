@@ -4,12 +4,14 @@ import RupaCore
 struct WorkspaceTopologyEditInspectorView: View {
     var state: WorkspaceTopologyEditInspectorState
     var displayUnit: LengthDisplayUnit
+    @Binding var faceDraftAngleDegrees: Double
     @Binding var edgeOffsetDistanceMeters: Double
     @Binding var edgeOffsetGapFill: OffsetCurveGapFill
     @Binding var regionOffsetDistanceMeters: Double
     @Binding var regionOffsetGapFill: OffsetCurveGapFill
     var offsetSliderRange: ClosedRange<Double>
     var onOffsetFace: (SelectionTarget, Double) -> Void
+    var onDraftFace: (SelectionTarget, SelectionTarget, Double) -> Void
     var onOffsetEdges: ([SelectionTarget], Double, OffsetCurveGapFill) -> Void
     var onProjectEdges: ([SelectionTarget]) -> Void
     var onFilletEdges: ([SelectionTarget], Double) -> Void
@@ -19,6 +21,7 @@ struct WorkspaceTopologyEditInspectorView: View {
 
     var body: some View {
         faceEditSection
+        faceDraftSection
         edgeEditSection
         vertexEditSection
         regionEditSection
@@ -52,6 +55,61 @@ struct WorkspaceTopologyEditInspectorView: View {
                 }
             }
         }
+    }
+
+    @ViewBuilder
+    private var faceDraftSection: some View {
+        if state.canDraftFace,
+           let draftFaceTarget = state.draftFaceTarget,
+           let draftNeutralFaceTarget = state.draftNeutralFaceTarget {
+            inspectorSection("Draft Face") {
+                workspaceInspectorValueRow("Target", "First selected face")
+                workspaceInspectorValueRow("Neutral", "Second selected face")
+                faceDraftAngleControl
+                inspectorActionRow {
+                    Button {
+                        onDraftFace(
+                            draftFaceTarget,
+                            draftNeutralFaceTarget,
+                            -draftAngleMagnitudeDegrees
+                        )
+                    } label: {
+                        Label(
+                            "Draft -\(formattedDegrees(draftAngleMagnitudeDegrees))",
+                            systemImage: "minus"
+                        )
+                    }
+                    .accessibilityIdentifier("InspectorFaceDraft.negative")
+
+                    Button {
+                        onDraftFace(
+                            draftFaceTarget,
+                            draftNeutralFaceTarget,
+                            draftAngleMagnitudeDegrees
+                        )
+                    } label: {
+                        Label(
+                            "Draft +\(formattedDegrees(draftAngleMagnitudeDegrees))",
+                            systemImage: "plus"
+                        )
+                    }
+                    .accessibilityIdentifier("InspectorFaceDraft.positive")
+                }
+            }
+        }
+    }
+
+    private var faceDraftAngleControl: some View {
+        numericControl(
+            "Angle",
+            values: [draftAngleMagnitudeDegrees],
+            sliderRange: 0.1...89.0
+        ) { degrees in
+            faceDraftAngleDegrees = clampedDraftAngleMagnitude(degrees)
+        } unitLabel: {
+            "deg"
+        }
+        .accessibilityIdentifier("InspectorFaceDraft.angle")
     }
 
     @ViewBuilder
@@ -250,6 +308,21 @@ struct WorkspaceTopologyEditInspectorView: View {
     private func formatted(_ meters: Double) -> String {
         let value = displayUnit.value(fromMeters: meters)
         return "\(value.formatted(.number.precision(.fractionLength(0...4)))) \(displayUnit.symbol)"
+    }
+
+    private var draftAngleMagnitudeDegrees: Double {
+        clampedDraftAngleMagnitude(faceDraftAngleDegrees)
+    }
+
+    private func clampedDraftAngleMagnitude(_ degrees: Double) -> Double {
+        guard degrees.isFinite else {
+            return 5.0
+        }
+        return min(max(abs(degrees), 0.1), 89.0)
+    }
+
+    private func formattedDegrees(_ degrees: Double) -> String {
+        "\(degrees.formatted(.number.precision(.fractionLength(0...2)))) deg"
     }
 
     private func gapFillTitle(_ gapFill: OffsetCurveGapFill) -> String {

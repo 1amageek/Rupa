@@ -36,6 +36,10 @@ import Testing
 
     #expect(state.isSingleNodeSelection)
     #expect(state.faceTarget == faceTarget)
+    #expect(state.faceTargets == [faceTarget])
+    #expect(state.draftFaceTarget == nil)
+    #expect(state.draftNeutralFaceTarget == nil)
+    #expect(!state.canDraftFace)
     #expect(state.edgeTargets == [edgeTarget])
     #expect(state.projectableEdgeTargets == [edgeTarget])
     #expect(state.vertexTarget == vertexTarget)
@@ -82,7 +86,43 @@ import Testing
     #expect(builder.vertexTarget == nil)
     #expect(!state.isSingleNodeSelection)
     #expect(!state.canEditFace)
+    #expect(state.draftFaceTarget == nil)
+    #expect(state.draftNeutralFaceTarget == nil)
+    #expect(!state.canDraftFace)
     #expect(!state.canEditVertex)
+}
+
+@Test func workspaceTopologyEditInspectorStateBuilderCreatesDraftFacePairForTwoOrderedFaces() {
+    let sceneNodeID = SceneNodeID()
+    let targetFace = SelectionTarget(
+        sceneNodeID: sceneNodeID,
+        component: .face(.generatedTopology("body:face:side"))
+    )
+    let neutralFace = SelectionTarget(
+        sceneNodeID: sceneNodeID,
+        component: .face(.generatedTopology("body:face:bottom"))
+    )
+    let builder = WorkspaceTopologyEditInspectorStateBuilder(
+        selection: SelectionModel(selectedTargets: [targetFace, neutralFace]),
+        selectedTargetSummary: "2 targets",
+        faceOffsetStepMeters: 0.001,
+        edgeChamferStepMeters: 0.001,
+        edgeFilletRadiusMeters: 0.001,
+        vertexMoveStepMeters: 0.001,
+        usesLockedRegionDistance: false,
+        combinesRegions: false
+    )
+
+    let state = builder.state(for: [
+        SceneNode(id: sceneNodeID, name: "Body"),
+    ])
+
+    #expect(state.faceTarget == nil)
+    #expect(state.faceTargets == [targetFace, neutralFace])
+    #expect(!state.canEditFace)
+    #expect(state.draftFaceTarget == targetFace)
+    #expect(state.draftNeutralFaceTarget == neutralFace)
+    #expect(state.canDraftFace)
 }
 
 @Test func workspaceTopologyEditInspectorStateBuilderProjectsGeneratedEdgesOnce() {

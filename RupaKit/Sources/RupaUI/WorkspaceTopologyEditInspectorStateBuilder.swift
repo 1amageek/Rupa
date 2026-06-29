@@ -13,6 +13,8 @@ struct WorkspaceTopologyEditInspectorStateBuilder {
     func state(for nodes: [SceneNode]) -> WorkspaceTopologyEditInspectorState {
         let classification = targetClassification
         let faceTarget = singleTarget(in: classification.faceTargets)
+        let faceTargets = classification.faceTargets
+        let draftPair = draftFacePair(in: faceTargets)
         let edgeTargets = classification.edgeTargets
         let vertexTarget = singleTarget(in: classification.vertexTargets)
         let regionTargets = classification.regionTargets
@@ -20,6 +22,9 @@ struct WorkspaceTopologyEditInspectorStateBuilder {
             isSingleNodeSelection: nodes.count == 1,
             selectedTargetSummary: selectedTargetSummary,
             faceTarget: faceTarget,
+            faceTargets: faceTargets,
+            draftFaceTarget: draftPair?.target,
+            draftNeutralFaceTarget: draftPair?.neutral,
             edgeTargets: edgeTargets,
             projectableEdgeTargets: generatedEdgeProjectionTargets(from: edgeTargets),
             vertexTarget: vertexTarget,
@@ -70,5 +75,15 @@ struct WorkspaceTopologyEditInspectorStateBuilder {
             return nil
         }
         return targets.first
+    }
+
+    private func draftFacePair(
+        in targets: [SelectionTarget]
+    ) -> (target: SelectionTarget, neutral: SelectionTarget)? {
+        guard selection.selectedTargets.count == 2,
+              targets.count == 2 else {
+            return nil
+        }
+        return (targets[0], targets[1])
     }
 }

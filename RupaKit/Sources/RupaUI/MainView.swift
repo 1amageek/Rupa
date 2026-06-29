@@ -58,6 +58,7 @@ public struct MainView: View {
     @State private var regionOffsetDistanceMeters: Double
     @State private var regionOffsetGapFill: OffsetCurveGapFill
     @State private var regionOffsetCommandState: RegionOffsetCommandState
+    @State private var faceDraftAngleDegrees: Double
     @State private var edgeOffsetDistanceMeters: Double
     @State private var edgeOffsetGapFill: OffsetCurveGapFill
     @State private var edgeOffsetCommandState: EdgeOffsetCommandState
@@ -137,6 +138,7 @@ public struct MainView: View {
         self._regionOffsetDistanceMeters = State(initialValue: 0.001)
         self._regionOffsetGapFill = State(initialValue: .round)
         self._regionOffsetCommandState = State(initialValue: .inactive)
+        self._faceDraftAngleDegrees = State(initialValue: 5.0)
         self._edgeOffsetDistanceMeters = State(initialValue: 0.001)
         self._edgeOffsetGapFill = State(initialValue: .round)
         self._edgeOffsetCommandState = State(initialValue: .inactive)
@@ -4211,6 +4213,7 @@ public struct MainView: View {
         WorkspaceTopologyEditInspectorView(
             state: topologyEditInspectorState(for: nodes),
             displayUnit: session.document.displayUnit,
+            faceDraftAngleDegrees: $faceDraftAngleDegrees,
             edgeOffsetDistanceMeters: $edgeOffsetDistanceMeters,
             edgeOffsetGapFill: $edgeOffsetGapFill,
             regionOffsetDistanceMeters: $regionOffsetDistanceMeters,
@@ -4218,6 +4221,13 @@ public struct MainView: View {
             offsetSliderRange: regionOffsetSliderRange,
             onOffsetFace: { target, meters in
                 offsetSelectedFace(target, by: meters)
+            },
+            onDraftFace: { target, neutralTarget, angleDegrees in
+                draftSelectedFace(
+                    target,
+                    neutralTarget: neutralTarget,
+                    angleDegrees: angleDegrees
+                )
             },
             onOffsetEdges: { targets, meters, gapFill in
                 offsetSelectedEdges(targets, by: meters, gapFill: gapFill)
@@ -4965,6 +4975,26 @@ public struct MainView: View {
             distance: .length(meters, .meter)
         )
         if result?.diagnostics.isEmpty == false {
+            isPreviewExpanded = true
+        }
+    }
+
+    private func draftSelectedFace(
+        _ target: SelectionTarget,
+        neutralTarget: SelectionTarget,
+        angleDegrees: Double
+    ) {
+        guard angleDegrees.isFinite else {
+            session.reportToolStatus("Draft Face requires a finite angle.", severity: .warning)
+            isPreviewExpanded = true
+            return
+        }
+        let result = session.draftBodyFaces(
+            targets: [target],
+            neutralTarget: neutralTarget,
+            angle: .angle(angleDegrees, .degree)
+        )
+        if result?.diagnostics.isEmpty == false || result == nil {
             isPreviewExpanded = true
         }
     }

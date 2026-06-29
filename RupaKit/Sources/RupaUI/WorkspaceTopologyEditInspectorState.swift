@@ -4,6 +4,9 @@ struct WorkspaceTopologyEditInspectorState: Equatable {
     var isSingleNodeSelection: Bool
     var selectedTargetSummary: String
     var faceTarget: SelectionTarget?
+    var faceTargets: [SelectionTarget]
+    var draftFaceTarget: SelectionTarget?
+    var draftNeutralFaceTarget: SelectionTarget?
     var edgeTargets: [SelectionTarget]
     var projectableEdgeTargets: [SelectionTarget]
     var vertexTarget: SelectionTarget?
@@ -17,6 +20,10 @@ struct WorkspaceTopologyEditInspectorState: Equatable {
 
     var canEditFace: Bool {
         isSingleNodeSelection && faceTarget != nil
+    }
+
+    var canDraftFace: Bool {
+        isSingleNodeSelection && draftFaceTarget != nil && draftNeutralFaceTarget != nil
     }
 
     var canEditEdges: Bool {
