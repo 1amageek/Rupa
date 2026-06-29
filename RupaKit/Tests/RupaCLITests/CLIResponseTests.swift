@@ -780,11 +780,20 @@ struct CLIModelCommandTests {
         let secondProfileID = try document.createRectangleSketch(
             name: "Loft Top Profile",
             plane: .plane(Plane3D(
-                origin: Point3D(x: 0.0, y: 0.0, z: 0.010),
+                origin: Point3D(x: 0.006, y: 0.0, z: 0.004),
                 normal: .unitZ
             )),
-            width: .length(6.0, .millimeter),
-            height: .length(3.0, .millimeter)
+            width: .length(4.0, .millimeter),
+            height: .length(2.0, .millimeter)
+        )
+        let thirdProfileID = try document.createRectangleSketch(
+            name: "Loft Closing Profile",
+            plane: .plane(Plane3D(
+                origin: Point3D(x: 0.0, y: 0.0, z: 0.008),
+                normal: .unitZ
+            )),
+            width: .length(4.0, .millimeter),
+            height: .length(2.0, .millimeter)
         )
         try DocumentFileService().save(document, to: documentURL)
 
@@ -798,10 +807,16 @@ struct CLIModelCommandTests {
             firstProfileID.description,
             "--section-feature-id",
             secondProfileID.description,
+            "--section-feature-id",
+            thirdProfileID.description,
             "--section-profile-index",
             "0",
             "--section-profile-index",
             "0",
+            "--section-profile-index",
+            "0",
+            "--section-start-sample-index",
+            "1",
             "--section-start-sample-index",
             "1",
             "--section-start-sample-index",
@@ -809,7 +824,8 @@ struct CLIModelCommandTests {
             "--section-matching",
             "byIndex",
             "--result-kind",
-            "solid",
+            "sheet",
+            "--close-section-loop",
             "--mode",
             "file",
             "--json",
@@ -830,7 +846,7 @@ struct CLIModelCommandTests {
         #expect(response.message == "Loft CLI Loft source created.")
         #expect(response.saved)
         #expect(!response.dirty)
-        #expect(loaded.cadDocument.designGraph.order.count == 3)
+        #expect(loaded.cadDocument.designGraph.order.count == 4)
         #expect(loft.sections == [
             LoftSectionReference(
                 profile: ProfileReference(featureID: firstProfileID),
@@ -840,11 +856,18 @@ struct CLIModelCommandTests {
                 profile: ProfileReference(featureID: secondProfileID),
                 startSampleIndex: 1
             ),
+            LoftSectionReference(
+                profile: ProfileReference(featureID: thirdProfileID),
+                startSampleIndex: 1
+            ),
         ])
-        #expect(loft.options.resultKind == .solid)
+        #expect(loft.options.resultKind == .sheet)
+        #expect(loft.options.closesSectionLoop)
+        #expect(feature.outputs == [FeatureOutput(role: .sheet)])
         #expect(feature.inputs == [
             FeatureInput(featureID: firstProfileID, role: .profile),
             FeatureInput(featureID: secondProfileID, role: .profile),
+            FeatureInput(featureID: thirdProfileID, role: .profile),
         ])
         #expect(loaded.productMetadata.sceneNodes.values.contains { $0.reference == .body(loftFeatureID) })
     }

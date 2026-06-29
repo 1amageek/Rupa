@@ -1171,19 +1171,19 @@ public final class AgentCommandController: AgentClientProtocol {
         capability(
             "createLoft",
             category: .solid,
-            summary: "Create a Loft source feature from two or more supported closed profile sections with explicit solid or sheet result-kind options.",
+            summary: "Create a Loft source feature from two or more supported closed profile sections with explicit solid, open sheet, or closed section-loop sheet result-kind options.",
             access: .automationCommand,
             mutatesDocument: true,
             discovery: [.sketchEntitySummary],
             targets: [.profile],
-            failureMode: "Rejects missing, duplicate, open, unsupported, differently sampled closed profile sections, invalid-start-index sections, non-planar matched side quads, invalid generated topology, and stale generations before mutation; current evaluation creates ruled planar side faces between matched profile vertices and planar start/end caps for solid output.",
+            failureMode: "Rejects missing, duplicate, open, unsupported, differently sampled closed profile sections, invalid-start-index sections, closed section loops with solid output, closed section loops with fewer than three sections, non-planar matched side quads, invalid generated topology, and stale generations before mutation; current evaluation creates ruled planar side faces between matched profile vertices, planar start/end caps for solid output, or a last-to-first ruled sheet loop for closed sheet output.",
             optionMatrix: [
                 AgentCapabilityDescriptor.OptionAxis(
                     name: "resultKind",
                     supportedValues: ["solid", "sheet"],
                     notes: [
                         "solid closes the first and last profile sections with planar caps",
-                        "sheet creates the ruled side surface without start or end caps"
+                        "sheet creates the ruled side surface without start or end caps and may close the section loop when closesSectionLoop is true"
                     ]
                 ),
                 AgentCapabilityDescriptor.OptionAxis(
@@ -1200,6 +1200,14 @@ public final class AgentCommandController: AgentClientProtocol {
                     notes: [
                         "automatic preserves the current cyclic matching behavior",
                         "a zero-based boundary sample index locks the seam start for that section before direction matching"
+                    ]
+                ),
+                AgentCapabilityDescriptor.OptionAxis(
+                    name: "closesSectionLoop",
+                    supportedValues: ["false", "true"],
+                    notes: [
+                        "false keeps the loft open between the first and last section",
+                        "true connects the last section back to the first section, requires sheet resultKind, and requires at least three sections"
                     ]
                 ),
             ]

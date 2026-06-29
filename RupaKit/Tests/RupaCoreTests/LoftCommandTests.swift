@@ -128,6 +128,146 @@ import SwiftCAD
     try document.validate()
 }
 
+@Test func createLoftCanCreateClosedSectionLoopSheetResult() throws {
+    var document = DesignDocument.empty()
+    let firstProfileID = try createLoftProfile(
+        in: &document,
+        name: "Loft Loop First",
+        width: 4.0,
+        height: 2.0,
+        x: 0.0,
+        z: 0.0
+    )
+    let secondProfileID = try createLoftProfile(
+        in: &document,
+        name: "Loft Loop Second",
+        width: 4.0,
+        height: 2.0,
+        x: 6.0,
+        z: 4.0
+    )
+    let thirdProfileID = try createLoftProfile(
+        in: &document,
+        name: "Loft Loop Third",
+        width: 4.0,
+        height: 2.0,
+        x: 0.0,
+        z: 8.0
+    )
+
+    let loftID = try document.createLoft(
+        name: "Closed Loop Loft Sheet",
+        sections: [
+            LoftSectionReference(profile: ProfileReference(featureID: firstProfileID)),
+            LoftSectionReference(profile: ProfileReference(featureID: secondProfileID)),
+            LoftSectionReference(profile: ProfileReference(featureID: thirdProfileID)),
+        ],
+        options: LoftOptions(resultKind: .sheet, closesSectionLoop: true)
+    )
+    let feature = try #require(document.cadDocument.designGraph.nodes[loftID])
+    let sceneNode = try #require(document.productMetadata.sceneNodes.values.first {
+        $0.reference == .body(loftID)
+    })
+    let evaluated = try CADPipeline.modelingDefault(for: document).evaluate(document.cadDocument)
+    let body = try #require(evaluated.brep.bodies.values.first)
+    let measurement = try MeasurementService().measure(document: document)
+    let sheet = try #require(measurement.sheets.first)
+
+    guard case .loft(let loft) = feature.operation else {
+        Issue.record("Closed loop Loft sheet command must create a loft feature.")
+        return
+    }
+
+    #expect(feature.inputs == [
+        FeatureInput(featureID: firstProfileID, role: .profile),
+        FeatureInput(featureID: secondProfileID, role: .profile),
+        FeatureInput(featureID: thirdProfileID, role: .profile),
+    ])
+    #expect(feature.outputs == [FeatureOutput(role: .sheet)])
+    #expect(loft.options.resultKind == .sheet)
+    #expect(loft.options.closesSectionLoop)
+    #expect(sceneNode.object?.geometryRole == .surface)
+    #expect(body.kind == .sheet)
+    #expect(measurement.counts.solids == 0)
+    #expect(measurement.counts.sheets == 1)
+    #expect(measurement.diagnostics.isEmpty)
+    #expect(sheet.featureID == loftID.description)
+    #expect(sheet.sourceFeatureID == firstProfileID.description)
+    #expect(sheet.surfaceAreaSquareMeters > 0.0)
+    try document.validate()
+}
+
+@Test func createLoftRejectsClosedSectionLoopSolidWithoutMutation() throws {
+    var document = DesignDocument.empty()
+    let firstProfileID = try createLoftProfile(
+        in: &document,
+        name: "Invalid Loop Solid First",
+        width: 4.0,
+        height: 2.0,
+        z: 0.0
+    )
+    let secondProfileID = try createLoftProfile(
+        in: &document,
+        name: "Invalid Loop Solid Second",
+        width: 4.0,
+        height: 2.0,
+        x: 6.0,
+        z: 4.0
+    )
+    let thirdProfileID = try createLoftProfile(
+        in: &document,
+        name: "Invalid Loop Solid Third",
+        width: 4.0,
+        height: 2.0,
+        z: 8.0
+    )
+    let orderBeforeLoft = document.cadDocument.designGraph.order
+
+    #expect(throws: EditorError.self) {
+        _ = try document.createLoft(
+            name: "Invalid Closed Loop Solid Loft",
+            sections: [
+                LoftSectionReference(profile: ProfileReference(featureID: firstProfileID)),
+                LoftSectionReference(profile: ProfileReference(featureID: secondProfileID)),
+                LoftSectionReference(profile: ProfileReference(featureID: thirdProfileID)),
+            ],
+            options: LoftOptions(resultKind: .solid, closesSectionLoop: true)
+        )
+    }
+    #expect(document.cadDocument.designGraph.order == orderBeforeLoft)
+}
+
+@Test func createLoftRejectsClosedSectionLoopWithTwoSectionsWithoutMutation() throws {
+    var document = DesignDocument.empty()
+    let firstProfileID = try createLoftProfile(
+        in: &document,
+        name: "Invalid Loop First",
+        width: 4.0,
+        height: 2.0,
+        z: 0.0
+    )
+    let secondProfileID = try createLoftProfile(
+        in: &document,
+        name: "Invalid Loop Second",
+        width: 4.0,
+        height: 2.0,
+        z: 10.0
+    )
+    let orderBeforeLoft = document.cadDocument.designGraph.order
+
+    #expect(throws: EditorError.self) {
+        _ = try document.createLoft(
+            name: "Invalid Two Section Loop Loft",
+            sections: [
+                LoftSectionReference(profile: ProfileReference(featureID: firstProfileID)),
+                LoftSectionReference(profile: ProfileReference(featureID: secondProfileID)),
+            ],
+            options: LoftOptions(resultKind: .sheet, closesSectionLoop: true)
+        )
+    }
+    #expect(document.cadDocument.designGraph.order == orderBeforeLoft)
+}
+
 @Test func createLoftRejectsUnsupportedMismatchedProfileSampleCountsWithoutMutation() throws {
     var document = DesignDocument.empty()
     let originalOrder = document.cadDocument.designGraph.order
@@ -163,22 +303,23 @@ private func createLoftProfile(
     name: String,
     width: Double,
     height: Double,
+    x: Double = 0.0,
     z: Double
 ) throws -> FeatureID {
     try document.createRectangleSketch(
         name: name,
-        plane: loftPlane(z: z),
+        plane: loftPlane(x: x, z: z),
         width: .length(width, .millimeter),
         height: .length(height, .millimeter)
     )
 }
 
-private func loftPlane(z: Double) -> SketchPlane {
-    if z == 0.0 {
+private func loftPlane(x: Double = 0.0, z: Double) -> SketchPlane {
+    if x == 0.0 && z == 0.0 {
         return .xy
     }
     return .plane(Plane3D(
-        origin: Point3D(x: 0.0, y: 0.0, z: z / 1000.0),
+        origin: Point3D(x: x / 1000.0, y: 0.0, z: z / 1000.0),
         normal: .unitZ
     ))
 }

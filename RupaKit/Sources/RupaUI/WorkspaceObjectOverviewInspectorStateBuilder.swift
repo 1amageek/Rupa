@@ -234,6 +234,10 @@ struct WorkspaceObjectOverviewInspectorStateBuilder {
                     title: "Matching",
                     value: loft.options.sectionMatching.rawValue.capitalized
                 ),
+                WorkspaceInspectorTextRow(
+                    title: "Section Loop",
+                    value: loft.options.closesSectionLoop ? "Closed" : "Open"
+                ),
             ]
         case .boolean(let boolean):
             return [

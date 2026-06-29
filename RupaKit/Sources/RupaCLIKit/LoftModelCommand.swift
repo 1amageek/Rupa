@@ -53,6 +53,9 @@ public struct LoftModelCommand: ParsableCommand {
     @Option(help: "Loft result kind: solid or sheet.")
     public var resultKind: ResultKind = .solid
 
+    @Flag(help: "Close the last section back to the first section. Requires sheet result kind and at least three sections.")
+    public var closeSectionLoop = false
+
     public init() {}
 
     public func run() throws {
@@ -124,7 +127,8 @@ public struct LoftModelCommand: ParsableCommand {
             sections: sections,
             options: LoftOptions(
                 resultKind: resultKind.loftValue,
-                sectionMatching: sectionMatching.loftValue
+                sectionMatching: sectionMatching.loftValue,
+                closesSectionLoop: closeSectionLoop
             )
         )
     }

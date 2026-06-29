@@ -548,17 +548,27 @@ import SwiftCAD
     #expect(loft.targets == [.profile])
     #expect(loft.summary.contains("Loft source feature"))
     #expect(loft.failureMode.contains("differently sampled closed profile sections"))
+    #expect(loft.failureMode.contains("closed section loops with solid output"))
     #expect(loft.failureMode.contains("ruled planar side faces"))
-    #expect(loft.optionMatrix.map(\.name) == ["resultKind", "sectionMatching", "sectionStartSampleIndex"])
+    #expect(loft.optionMatrix.map(\.name) == [
+        "resultKind",
+        "sectionMatching",
+        "sectionStartSampleIndex",
+        "closesSectionLoop",
+    ])
     let loftResultAxis = try #require(loft.optionMatrix.first { $0.name == "resultKind" })
     let loftMatchingAxis = try #require(loft.optionMatrix.first { $0.name == "sectionMatching" })
     let loftStartAxis = try #require(loft.optionMatrix.first { $0.name == "sectionStartSampleIndex" })
+    let loftLoopAxis = try #require(loft.optionMatrix.first { $0.name == "closesSectionLoop" })
     #expect(loftResultAxis.supportedValues == ["solid", "sheet"])
     #expect(loftResultAxis.notes.contains { $0.contains("planar caps") })
+    #expect(loftResultAxis.notes.contains { $0.contains("closesSectionLoop") })
     #expect(loftMatchingAxis.supportedValues == ["byIndex"])
     #expect(loftMatchingAxis.notes.contains { $0.contains("ordered boundary sample count") })
     #expect(loftStartAxis.supportedValues == ["automatic", "zeroBasedBoundarySampleIndex"])
     #expect(loftStartAxis.notes.contains { $0.contains("locks the seam start") })
+    #expect(loftLoopAxis.supportedValues == ["false", "true"])
+    #expect(loftLoopAxis.notes.contains { $0.contains("requires sheet resultKind") })
 
     #expect(boolean.category == .solid)
     #expect(boolean.mutatesDocument)
