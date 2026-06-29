@@ -885,6 +885,87 @@ import Testing
     #expect(abs(movedEdge.startParameter.v - 0.3) < 1.0e-12)
 }
 
+@Test func directBSplineSurfaceTrimControlPointMovePreservesAuthoredLoopEndpoints() async throws {
+    var document = DesignDocument.empty()
+    let surface = designDocumentDirectBSplineSurfaceWithInteriorKnots()
+
+    let featureID = try document.createBSplineSurface(
+        name: "Direct Trim Control Point Surface",
+        surface: surface
+    )
+    let summary = try SurfaceSourceSummaryService().summarize(document: document)
+    let faceReference = try #require(summary.sources.first?.patches.first?.faceSelectionReference)
+    let trimLoop = BSplineSurfaceTrimLoop(
+        role: .outer,
+        edges: [
+            BSplineSurfaceTrimEdge(parameterCurve: .bSpline(BSplineCurve2D(
+                degree: 2,
+                knots: [0.0, 0.0, 0.0, 1.0, 1.0, 1.0],
+                controlPoints: [
+                    Point2D(x: 0.2, y: 0.2),
+                    Point2D(x: 0.52, y: 0.42),
+                    Point2D(x: 0.8, y: 0.25),
+                ]
+            ))),
+            BSplineSurfaceTrimEdge(parameterCurve: .polyline([
+                SurfaceParameter(u: 0.8, v: 0.25),
+                SurfaceParameter(u: 0.45, v: 0.8),
+            ])),
+            BSplineSurfaceTrimEdge(parameterCurve: .polyline([
+                SurfaceParameter(u: 0.45, v: 0.8),
+                SurfaceParameter(u: 0.2, v: 0.2),
+            ])),
+        ]
+    )
+    try document.setSurfaceTrimLoops(
+        target: faceReference,
+        trimLoops: [trimLoop]
+    )
+    let trimmedSummary = try SurfaceSourceSummaryService().summarize(document: document)
+    let trimReference = try #require(
+        trimmedSummary.sources.first?.patches.first?.trimLoops.first?.selectionReferences.first
+    )
+
+    #expect(throws: EditorError.self) {
+        try document.moveSurfaceTrimControlPoint(
+            target: trimReference,
+            controlPointIndex: 0,
+            u: .scalar(0.25),
+            v: .scalar(0.3)
+        )
+    }
+
+    try document.moveSurfaceTrimControlPoint(
+        target: trimReference,
+        controlPointIndex: 1,
+        u: .scalar(0.58),
+        v: .scalar(0.46)
+    )
+
+    let feature = try #require(document.cadDocument.designGraph.nodes[featureID])
+    guard case let .bSplineSurface(surfaceFeature) = feature.operation else {
+        Issue.record("Expected a direct B-spline surface feature.")
+        return
+    }
+    let movedLoop = try #require(surfaceFeature.trimLoops.first)
+    guard case .bSpline(let movedCurve) = movedLoop.edges[0].parameterCurve else {
+        Issue.record("Expected a B-spline trim parameter curve.")
+        return
+    }
+    #expect(movedCurve.controlPoints[0] == Point2D(x: 0.2, y: 0.2))
+    #expect(movedCurve.controlPoints[1] == Point2D(x: 0.58, y: 0.46))
+    #expect(movedCurve.controlPoints[2] == Point2D(x: 0.8, y: 0.25))
+    #expect(try movedLoop.edges[0].startParameter().isApproximatelyEqual(
+        to: SurfaceParameter(u: 0.2, v: 0.2),
+        tolerance: 1.0e-12
+    ))
+    #expect(try movedLoop.edges[0].endParameter().isApproximatelyEqual(
+        to: SurfaceParameter(u: 0.8, v: 0.25),
+        tolerance: 1.0e-12
+    ))
+    try movedLoop.validate(on: surfaceFeature.surface)
+}
+
 @Test func surfaceSpanSplitRejectsGeneratedPolySplineSpanReference() async throws {
     var document = DesignDocument.empty()
     let featureID = try document.createPolySplineSurface(

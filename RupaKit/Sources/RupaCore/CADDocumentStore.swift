@@ -1176,6 +1176,18 @@ public final class CADDocumentStore {
             document = updatedDocument
             try commitMutation()
             evaluateCurrentDocument()
+        case .moveSurfaceTrimControlPoint(let target, let controlPointIndex, let u, let v):
+            var updatedDocument = document
+            try updatedDocument.moveSurfaceTrimControlPoint(
+                target: target,
+                controlPointIndex: controlPointIndex,
+                u: u,
+                v: v,
+                objectRegistry: objectRegistry
+            )
+            document = updatedDocument
+            try commitMutation()
+            evaluateCurrentDocument()
         case .matchSurfaceBoundaryContinuity(
             let target,
             let reference,

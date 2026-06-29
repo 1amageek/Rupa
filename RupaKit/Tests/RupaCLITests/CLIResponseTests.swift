@@ -3891,6 +3891,99 @@ func cliExecutableSurfaceTrimEndpointCommandMutatesClosedDocumentAsJSON() async 
 }
 
 @Test(.timeLimit(.minutes(1)))
+func cliExecutableSurfaceTrimControlPointCommandMutatesClosedDocumentAsJSON() async throws {
+    let temporaryDirectory = try makeTemporaryDirectory()
+    defer {
+        removeTemporaryDirectory(temporaryDirectory)
+    }
+    let documentURL = temporaryDirectory.appendingPathComponent("process-surface-trim-control-point.swcad")
+    var document = DesignDocument.empty(named: "Process Surface Trim Control Point")
+    let sourceSurface = cliDirectBSplineSurfaceWithInteriorKnots()
+    let featureID = try document.createBSplineSurface(
+        name: "CLI Trim Control Point B-spline Surface",
+        surface: sourceSurface
+    )
+    let summary = try SurfaceSourceSummaryService().summarize(document: document)
+    let faceReference = try #require(summary.sources.first?.patches.first?.faceSelectionReference)
+    let trimLoop = BSplineSurfaceTrimLoop(
+        role: .outer,
+        edges: [
+            BSplineSurfaceTrimEdge(parameterCurve: .bSpline(BSplineCurve2D(
+                degree: 2,
+                knots: [0.0, 0.0, 0.0, 1.0, 1.0, 1.0],
+                controlPoints: [
+                    Point2D(x: 0.2, y: 0.2),
+                    Point2D(x: 0.52, y: 0.42),
+                    Point2D(x: 0.8, y: 0.25),
+                ]
+            ))),
+            BSplineSurfaceTrimEdge(parameterCurve: .polyline([
+                SurfaceParameter(u: 0.8, v: 0.25),
+                SurfaceParameter(u: 0.45, v: 0.8),
+            ])),
+            BSplineSurfaceTrimEdge(parameterCurve: .polyline([
+                SurfaceParameter(u: 0.45, v: 0.8),
+                SurfaceParameter(u: 0.2, v: 0.2),
+            ])),
+        ]
+    )
+    try document.setSurfaceTrimLoops(
+        target: faceReference,
+        trimLoops: [trimLoop]
+    )
+    let trimReference = try cliSurfaceTrimReference(
+        featureID: featureID,
+        edgeIndex: 0,
+        in: document
+    )
+    let trimJSON = try encodedSelectionReference(trimReference)
+    try DocumentFileService().save(document, to: documentURL)
+
+    let result = try await runCLI([
+        "surface",
+        "move-trim-control-point",
+        documentURL.path,
+        "--reference",
+        trimJSON,
+        "--control-point-index",
+        "1",
+        "--u",
+        "0.58",
+        "--v",
+        "0.46",
+        "--mode",
+        "file",
+        "--json",
+    ])
+    let response = try JSONDecoder().decode(
+        CLIResponse.self,
+        from: result.standardOutputData
+    )
+    let loaded = try DocumentFileService().load(from: documentURL)
+    let feature = try #require(loaded.cadDocument.designGraph.nodes[featureID])
+    guard case let .bSplineSurface(surfaceFeature) = feature.operation else {
+        Issue.record("Expected a direct B-spline surface feature.")
+        return
+    }
+    let updatedLoop = try #require(surfaceFeature.trimLoops.first)
+    guard case .bSpline(let movedCurve) = updatedLoop.edges[0].parameterCurve else {
+        Issue.record("Expected a B-spline trim parameter curve.")
+        return
+    }
+    let updatedSummary = try SurfaceSourceSummaryService().summarize(document: loaded)
+    let updatedSummaryTrimLoop = try #require(updatedSummary.sources.first?.patches.first?.trimLoops.first)
+
+    #expect(result.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: result.standardError))
+    #expect(response.message == "Surface trim control point moved.")
+    #expect(response.saved)
+    #expect(movedCurve.controlPoints[0] == Point2D(x: 0.2, y: 0.2))
+    #expect(movedCurve.controlPoints[1] == Point2D(x: 0.58, y: 0.46))
+    #expect(movedCurve.controlPoints[2] == Point2D(x: 0.8, y: 0.25))
+    #expect(updatedSummaryTrimLoop.edges.count == 3)
+    #expect(updatedSummaryTrimLoop.selectionReferences.count == 3)
+}
+
+@Test(.timeLimit(.minutes(1)))
 func cliExecutableSurfaceSpanSplitMutatesClosedDocumentAsJSON() async throws {
     let temporaryDirectory = try makeTemporaryDirectory()
     defer {

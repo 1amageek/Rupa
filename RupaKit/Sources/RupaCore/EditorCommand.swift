@@ -313,6 +313,12 @@ public enum EditorCommand: Codable, Equatable, Sendable {
         u: CADExpression,
         v: CADExpression
     )
+    case moveSurfaceTrimControlPoint(
+        target: SelectionReference,
+        controlPointIndex: Int,
+        u: CADExpression,
+        v: CADExpression
+    )
     case matchSurfaceBoundaryContinuity(
         target: SelectionReference,
         reference: SelectionReference,
@@ -554,6 +560,8 @@ public enum EditorCommand: Codable, Equatable, Sendable {
             "setSurfaceTrimLoops"
         case .moveSurfaceTrimEndpoint:
             "moveSurfaceTrimEndpoint"
+        case .moveSurfaceTrimControlPoint:
+            "moveSurfaceTrimControlPoint"
         case .matchSurfaceBoundaryContinuity:
             "matchSurfaceBoundaryContinuity"
         case .slidePolySplineSurfaceVertices:
@@ -671,6 +679,7 @@ public enum EditorCommand: Codable, Equatable, Sendable {
              .setSurfaceTrimDomain,
              .setSurfaceTrimLoops,
              .moveSurfaceTrimEndpoint,
+             .moveSurfaceTrimControlPoint,
              .matchSurfaceBoundaryContinuity,
              .slidePolySplineSurfaceVertices,
              .slideSurfaceControlPoints,

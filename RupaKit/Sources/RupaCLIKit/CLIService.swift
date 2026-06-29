@@ -2044,6 +2044,34 @@ public struct CLIService {
         )
     }
 
+    public func moveSurfaceTrimControlPoint(
+        target: CLIDocumentTarget,
+        reference: SelectionReference,
+        controlPointIndex: Int,
+        u: CADExpression,
+        v: CADExpression,
+        mode: CLIEditMode = .auto,
+        expectedGeneration: DocumentGeneration? = nil,
+        dryRun: Bool = false,
+        forceFileEdit: Bool = false,
+        client: AgentClientProtocol? = nil
+    ) throws -> CLIResponse {
+        try executeModelingCommand(
+            .moveSurfaceTrimControlPoint(
+                target: reference,
+                controlPointIndex: controlPointIndex,
+                u: u,
+                v: v
+            ),
+            target: target,
+            mode: mode,
+            expectedGeneration: expectedGeneration,
+            dryRun: dryRun,
+            forceFileEdit: forceFileEdit,
+            client: client
+        )
+    }
+
     public func matchSurfaceBoundaryContinuity(
         target: CLIDocumentTarget,
         targetReference: SelectionReference,

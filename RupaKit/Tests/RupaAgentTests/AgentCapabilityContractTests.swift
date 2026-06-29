@@ -77,6 +77,7 @@ import SwiftCAD
     #expect(capabilities.contains("setSurfaceTrimDomain"))
     #expect(capabilities.contains("setSurfaceTrimLoops"))
     #expect(capabilities.contains("moveSurfaceTrimEndpoint"))
+    #expect(capabilities.contains("moveSurfaceTrimControlPoint"))
     #expect(capabilities.contains("matchSurfaceBoundaryContinuity"))
     #expect(capabilities.contains("surfaceBoundaryContinuityCompatibility"))
     #expect(capabilities.contains("setSurfaceControlPointDisplay"))
@@ -187,6 +188,7 @@ import SwiftCAD
     let surfaceTrimDomain = try #require(descriptors.first { $0.name == "setSurfaceTrimDomain" })
     let surfaceTrimLoops = try #require(descriptors.first { $0.name == "setSurfaceTrimLoops" })
     let surfaceTrimEndpoint = try #require(descriptors.first { $0.name == "moveSurfaceTrimEndpoint" })
+    let surfaceTrimControlPoint = try #require(descriptors.first { $0.name == "moveSurfaceTrimControlPoint" })
     let surfaceBoundaryContinuity = try #require(
         descriptors.first { $0.name == "matchSurfaceBoundaryContinuity" }
     )
@@ -694,6 +696,19 @@ import SwiftCAD
     #expect(surfaceTrimEndpoint.summary.contains("preserving loop closure"))
     #expect(surfaceTrimEndpoint.failureMode.contains("rectangular trim domains"))
     #expect(surfaceTrimEndpoint.failureMode.contains("invalid closed-loop rebuilds"))
+
+    #expect(surfaceTrimControlPoint.category == .solid)
+    #expect(surfaceTrimControlPoint.mutatesDocument)
+    #expect(surfaceTrimControlPoint.access == .automationCommand)
+    #expect(surfaceTrimControlPoint.discovery.contains(.surfaceSourceSummary))
+    #expect(surfaceTrimControlPoint.discovery.contains(.surfaceFrames))
+    #expect(surfaceTrimControlPoint.discovery.contains(.surfaceAnalysis))
+    #expect(surfaceTrimControlPoint.discovery.contains(.topologySummary))
+    #expect(surfaceTrimControlPoint.targets == [.surfaceTrim])
+    #expect(surfaceTrimControlPoint.summary.contains("strict interior control point"))
+    #expect(surfaceTrimControlPoint.summary.contains("trim p-curve"))
+    #expect(surfaceTrimControlPoint.failureMode.contains("constant trim curves"))
+    #expect(surfaceTrimControlPoint.failureMode.contains("moveSurfaceTrimEndpoint"))
 
     #expect(surfaceBoundaryContinuity.category == .solid)
     #expect(surfaceBoundaryContinuity.mutatesDocument)

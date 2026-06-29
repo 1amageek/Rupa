@@ -2252,6 +2252,23 @@ public final class EditorSession {
     }
 
     @discardableResult
+    public func moveSurfaceTrimControlPoint(
+        target: SelectionReference,
+        controlPointIndex: Int,
+        u: CADExpression,
+        v: CADExpression
+    ) -> CommandExecutionResult? {
+        perform(
+            .moveSurfaceTrimControlPoint(
+                target: target,
+                controlPointIndex: controlPointIndex,
+                u: u,
+                v: v
+            )
+        )
+    }
+
+    @discardableResult
     public func matchSurfaceBoundaryContinuity(
         target: SelectionReference,
         reference: SelectionReference,

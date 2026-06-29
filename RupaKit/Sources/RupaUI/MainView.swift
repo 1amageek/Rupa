@@ -494,6 +494,7 @@ public struct MainView: View {
                     onPolySplineSurfaceVertexDrag: viewportPolySplineSurfaceVertexDragHandler,
                     onSurfaceControlPointDrag: viewportSurfaceControlPointDragHandler,
                     onSurfaceTrimEndpointDrag: viewportSurfaceTrimEndpointDragHandler,
+                    onSurfaceTrimControlPointDrag: viewportSurfaceTrimControlPointDragHandler,
                     onPolySplineSurfaceVertexSlideDrag: viewportPolySplineSurfaceVertexSlideDragHandler,
                     onSurfaceControlPointSlideDrag: viewportSurfaceControlPointSlideDragHandler,
                     onCommandConfirm: viewportCommandConfirmHandler,
@@ -883,6 +884,17 @@ public struct MainView: View {
         }
         return { target in
             handleViewportSurfaceTrimEndpointDrag(target)
+        }
+    }
+
+    private var viewportSurfaceTrimControlPointDragHandler: ((ViewportSurfaceTrimControlPointDragTarget) -> Void)? {
+        guard session.selectedTool == .select,
+              selectionScope == .vertex,
+              slideCommandState.isSurfaceControlVerticesActive == false else {
+            return nil
+        }
+        return { target in
+            handleViewportSurfaceTrimControlPointDrag(target)
         }
     }
 
@@ -2767,6 +2779,22 @@ public struct MainView: View {
         let result = session.moveSurfaceTrimEndpoint(
             target: target.target,
             endpoint: target.endpoint,
+            u: .scalar(target.u),
+            v: .scalar(target.v)
+        )
+        if result?.diagnostics.isEmpty == false {
+            isPreviewExpanded = true
+        }
+    }
+
+    private func handleViewportSurfaceTrimControlPointDrag(_ target: ViewportSurfaceTrimControlPointDragTarget) {
+        guard session.selectedTool == .select,
+              selectionScope == .vertex else {
+            return
+        }
+        let result = session.moveSurfaceTrimControlPoint(
+            target: target.target,
+            controlPointIndex: target.controlPointIndex,
             u: .scalar(target.u),
             v: .scalar(target.v)
         )

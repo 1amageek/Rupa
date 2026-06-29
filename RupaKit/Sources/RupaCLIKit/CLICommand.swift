@@ -907,6 +907,7 @@ public struct SurfaceCommand: ParsableCommand {
             SurfaceSetTrimDomainCommand.self,
             SurfaceSetTrimLoopsCommand.self,
             SurfaceMoveTrimEndpointCommand.self,
+            SurfaceMoveTrimControlPointCommand.self,
             SurfaceMatchBoundaryContinuityCommand.self,
             SurfaceSlideControlPointsCommand.self,
         ],

@@ -273,6 +273,12 @@ public enum AutomationCommand: Codable, Equatable, Sendable {
         u: CADExpression,
         v: CADExpression
     )
+    case moveSurfaceTrimControlPoint(
+        target: SelectionReference,
+        controlPointIndex: Int,
+        u: CADExpression,
+        v: CADExpression
+    )
     case matchSurfaceBoundaryContinuity(
         target: SelectionReference,
         reference: SelectionReference,
@@ -809,6 +815,13 @@ public enum AutomationCommand: Codable, Equatable, Sendable {
             .moveSurfaceTrimEndpoint(
                 target: target,
                 endpoint: endpoint,
+                u: u,
+                v: v
+            )
+        case .moveSurfaceTrimControlPoint(let target, let controlPointIndex, let u, let v):
+            .moveSurfaceTrimControlPoint(
+                target: target,
+                controlPointIndex: controlPointIndex,
                 u: u,
                 v: v
             )

@@ -785,6 +785,80 @@ import SwiftCAD
     ))
 }
 
+@Test func automationCanMoveSurfaceTrimControlPoint() async throws {
+    let session = EditorSession()
+    let runner = AutomationRunner()
+    let sourceSurface = automationDirectBSplineSurfaceWithInteriorKnots()
+    _ = try runner.execute(
+        .createBSplineSurface(
+            name: "Automation Trim Control Point Surface",
+            surface: sourceSurface
+        ),
+        in: session
+    )
+    let summary = try SurfaceSourceSummaryService().summarize(document: session.document)
+    let faceReference = try #require(summary.sources.first?.patches.first?.faceSelectionReference)
+    let trimLoop = BSplineSurfaceTrimLoop(
+        role: .outer,
+        edges: [
+            BSplineSurfaceTrimEdge(parameterCurve: .bSpline(BSplineCurve2D(
+                degree: 2,
+                knots: [0.0, 0.0, 0.0, 1.0, 1.0, 1.0],
+                controlPoints: [
+                    Point2D(x: 0.2, y: 0.2),
+                    Point2D(x: 0.52, y: 0.42),
+                    Point2D(x: 0.8, y: 0.25),
+                ]
+            ))),
+            BSplineSurfaceTrimEdge(parameterCurve: .polyline([
+                SurfaceParameter(u: 0.8, v: 0.25),
+                SurfaceParameter(u: 0.45, v: 0.8),
+            ])),
+            BSplineSurfaceTrimEdge(parameterCurve: .polyline([
+                SurfaceParameter(u: 0.45, v: 0.8),
+                SurfaceParameter(u: 0.2, v: 0.2),
+            ])),
+        ]
+    )
+    _ = try runner.execute(
+        .setSurfaceTrimLoops(target: faceReference, trimLoops: [trimLoop]),
+        in: session
+    )
+    let trimmedSummary = try SurfaceSourceSummaryService().summarize(document: session.document)
+    let trimReference = try #require(
+        trimmedSummary.sources.first?.patches.first?.trimLoops.first?.selectionReferences.first
+    )
+
+    let result = try runner.execute(
+        .moveSurfaceTrimControlPoint(
+            target: trimReference,
+            controlPointIndex: 1,
+            u: .scalar(0.58),
+            v: .scalar(0.46)
+        ),
+        in: session
+    )
+
+    let featureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let feature = try #require(session.document.cadDocument.designGraph.nodes[featureID])
+    guard case let .bSplineSurface(surfaceFeature) = feature.operation else {
+        Issue.record("Automation must keep a direct B-spline surface feature.")
+        return
+    }
+    let movedLoop = try #require(surfaceFeature.trimLoops.first)
+    guard case .bSpline(let movedCurve) = movedLoop.edges[0].parameterCurve else {
+        Issue.record("Automation must keep the authored B-spline trim curve.")
+        return
+    }
+    #expect(result.message == "Surface trim control point moved.")
+    #expect(result.commandName == "moveSurfaceTrimControlPoint")
+    #expect(result.didMutate)
+    #expect(result.generation == DocumentGeneration(3))
+    #expect(movedCurve.controlPoints[0] == Point2D(x: 0.2, y: 0.2))
+    #expect(movedCurve.controlPoints[1] == Point2D(x: 0.58, y: 0.46))
+    #expect(movedCurve.controlPoints[2] == Point2D(x: 0.8, y: 0.25))
+}
+
 @MainActor
 @Test func automationCanSplitSurfaceSpan() async throws {
     let session = EditorSession()

@@ -737,6 +737,55 @@ import Testing
     #expect(hit.selectionComponent == nil)
 }
 
+@Test func viewportSceneBuilderExposesAuthoredSurfaceTrimControlPointDisplays() async throws {
+    var document = DesignDocument.empty()
+    let featureID = try document.createBSplineSurface(
+        name: "Viewport Surface Trim Control Point",
+        surface: viewportDirectBSplineSurface()
+    )
+    let summary = try SurfaceSourceSummaryService().summarize(document: document)
+    let faceReference = try #require(summary.sources.first?.patches.first?.faceSelectionReference)
+    let trimLoop = BSplineSurfaceTrimLoop(
+        role: .outer,
+        edges: [
+            BSplineSurfaceTrimEdge(parameterCurve: .bSpline(BSplineCurve2D(
+                degree: 2,
+                knots: [0.0, 0.0, 0.0, 1.0, 1.0, 1.0],
+                controlPoints: [
+                    Point2D(x: 0.2, y: 0.2),
+                    Point2D(x: 0.52, y: 0.42),
+                    Point2D(x: 0.8, y: 0.25),
+                ]
+            ))),
+            BSplineSurfaceTrimEdge(parameterCurve: .polyline([
+                SurfaceParameter(u: 0.8, v: 0.25),
+                SurfaceParameter(u: 0.45, v: 0.8),
+            ])),
+            BSplineSurfaceTrimEdge(parameterCurve: .polyline([
+                SurfaceParameter(u: 0.45, v: 0.8),
+                SurfaceParameter(u: 0.2, v: 0.2),
+            ])),
+        ]
+    )
+    try document.setSurfaceTrimLoops(target: faceReference, trimLoops: [trimLoop])
+
+    let scene = ViewportSceneBuilder().build(document: document)
+    let body = try #require(scene.items.first { $0.featureID == featureID })
+    guard case .body(let component) = body.kind else {
+        Issue.record("Expected a B-spline surface body scene item.")
+        return
+    }
+    #expect(component.surfaceTrimControlPointDisplays.count == 1)
+    let controlPointDisplay = try #require(component.surfaceTrimControlPointDisplays.first)
+    let firstEndpointDisplay = try #require(component.surfaceTrimEndpointDisplays.first)
+    #expect(controlPointDisplay.selectionReference == firstEndpointDisplay.selectionReference)
+    #expect(controlPointDisplay.controlPointIndex == 1)
+    #expect(controlPointDisplay.u == 0.52)
+    #expect(controlPointDisplay.v == 0.42)
+    #expect(controlPointDisplay.tangentU.length > 0.0)
+    #expect(controlPointDisplay.tangentV.length > 0.0)
+}
+
 @MainActor
 @Test func viewportSceneBuilderExposesVisibleSurfaceFrameDisplays() async throws {
     var document = DesignDocument.empty()

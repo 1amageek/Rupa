@@ -140,6 +140,7 @@ public struct ViewportBodyComponent: Equatable {
     public var topology: ViewportBodyTopology?
     public var surfaceControlPointDisplays: [ViewportSurfaceControlPointDisplay]
     public var surfaceTrimEndpointDisplays: [ViewportSurfaceTrimEndpointDisplay]
+    public var surfaceTrimControlPointDisplays: [ViewportSurfaceTrimControlPointDisplay]
     public var surfaceFrameDisplays: [ViewportSurfaceFrameDisplay]
 
     public init(
@@ -155,6 +156,7 @@ public struct ViewportBodyComponent: Equatable {
         topology: ViewportBodyTopology? = nil,
         surfaceControlPointDisplays: [ViewportSurfaceControlPointDisplay] = [],
         surfaceTrimEndpointDisplays: [ViewportSurfaceTrimEndpointDisplay] = [],
+        surfaceTrimControlPointDisplays: [ViewportSurfaceTrimControlPointDisplay] = [],
         surfaceFrameDisplays: [ViewportSurfaceFrameDisplay] = []
     ) {
         self.typeID = typeID
@@ -169,6 +171,7 @@ public struct ViewportBodyComponent: Equatable {
         self.topology = topology
         self.surfaceControlPointDisplays = surfaceControlPointDisplays
         self.surfaceTrimEndpointDisplays = surfaceTrimEndpointDisplays
+        self.surfaceTrimControlPointDisplays = surfaceTrimControlPointDisplays
         self.surfaceFrameDisplays = surfaceFrameDisplays
     }
 }
@@ -217,6 +220,34 @@ public struct ViewportSurfaceTrimEndpointDisplay: Equatable, Sendable {
     ) {
         self.selectionReference = selectionReference
         self.endpoint = endpoint
+        self.point = point
+        self.u = u
+        self.v = v
+        self.tangentU = tangentU
+        self.tangentV = tangentV
+    }
+}
+
+public struct ViewportSurfaceTrimControlPointDisplay: Equatable, Sendable {
+    public var selectionReference: SelectionReference
+    public var controlPointIndex: Int
+    public var point: Point3D
+    public var u: Double
+    public var v: Double
+    public var tangentU: Vector3D
+    public var tangentV: Vector3D
+
+    public init(
+        selectionReference: SelectionReference,
+        controlPointIndex: Int,
+        point: Point3D,
+        u: Double,
+        v: Double,
+        tangentU: Vector3D,
+        tangentV: Vector3D
+    ) {
+        self.selectionReference = selectionReference
+        self.controlPointIndex = controlPointIndex
         self.point = point
         self.u = u
         self.v = v
@@ -1831,6 +1862,25 @@ public struct ViewportSurfaceTrimEndpointDragTarget: Equatable, Sendable {
     ) {
         self.target = target
         self.endpoint = endpoint
+        self.u = u
+        self.v = v
+    }
+}
+
+public struct ViewportSurfaceTrimControlPointDragTarget: Equatable, Sendable {
+    public var target: SelectionReference
+    public var controlPointIndex: Int
+    public var u: Double
+    public var v: Double
+
+    public init(
+        target: SelectionReference,
+        controlPointIndex: Int,
+        u: Double,
+        v: Double
+    ) {
+        self.target = target
+        self.controlPointIndex = controlPointIndex
         self.u = u
         self.v = v
     }

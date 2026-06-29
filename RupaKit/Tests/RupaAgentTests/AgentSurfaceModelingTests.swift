@@ -836,6 +836,131 @@ import SwiftCAD
 }
 
 @MainActor
+@Test func agentMovesDirectBSplineSurfaceTrimControlPointThroughAuthoredTrimReference() async throws {
+    let server = AgentCommandController()
+    let sessionID = UUID()
+    let session = EditorSession()
+    server.register(session: session, id: sessionID)
+
+    let createResponse = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .createBSplineSurface(
+                name: "Agent Trim Control Point Surface",
+                surface: agentDirectBSplineSurfaceWithInteriorKnots()
+            ),
+            expectedGeneration: DocumentGeneration(0)
+        )
+    )
+    guard case .command(let createResult) = createResponse else {
+        Issue.record("Agent must create a direct B-spline surface for trim control point editing.")
+        return
+    }
+    #expect(createResult.commandName == "createBSplineSurface")
+
+    let initialSummaryResponse = server.handle(
+        .surfaceSourceSummary(
+            sessionID: sessionID,
+            expectedGeneration: DocumentGeneration(1)
+        )
+    )
+    guard case .surfaceSourceSummary(let initialSummary) = initialSummaryResponse else {
+        Issue.record("Agent must return a surface source summary before trim control point editing.")
+        return
+    }
+    let faceReference = try #require(initialSummary.sources.first?.patches.first?.faceSelectionReference)
+    let trimLoop = BSplineSurfaceTrimLoop(
+        role: .outer,
+        edges: [
+            BSplineSurfaceTrimEdge(parameterCurve: .bSpline(BSplineCurve2D(
+                degree: 2,
+                knots: [0.0, 0.0, 0.0, 1.0, 1.0, 1.0],
+                controlPoints: [
+                    Point2D(x: 0.2, y: 0.2),
+                    Point2D(x: 0.52, y: 0.42),
+                    Point2D(x: 0.8, y: 0.25),
+                ]
+            ))),
+            BSplineSurfaceTrimEdge(parameterCurve: .polyline([
+                SurfaceParameter(u: 0.8, v: 0.25),
+                SurfaceParameter(u: 0.45, v: 0.8),
+            ])),
+            BSplineSurfaceTrimEdge(parameterCurve: .polyline([
+                SurfaceParameter(u: 0.45, v: 0.8),
+                SurfaceParameter(u: 0.2, v: 0.2),
+            ])),
+        ]
+    )
+
+    let setLoopsResponse = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .setSurfaceTrimLoops(
+                target: faceReference,
+                trimLoops: [trimLoop]
+            ),
+            expectedGeneration: DocumentGeneration(1)
+        )
+    )
+    guard case .command(let setLoopsResult) = setLoopsResponse else {
+        Issue.record("Agent must set authored trim loops before control point editing.")
+        return
+    }
+    #expect(setLoopsResult.commandName == "setSurfaceTrimLoops")
+    #expect(setLoopsResult.didMutate)
+
+    let trimmedSummaryResponse = server.handle(
+        .surfaceSourceSummary(
+            sessionID: sessionID,
+            expectedGeneration: DocumentGeneration(2)
+        )
+    )
+    guard case .surfaceSourceSummary(let trimmedSummary) = trimmedSummaryResponse else {
+        Issue.record("Agent must return authored trim loop references.")
+        return
+    }
+    let trimReference = try #require(
+        trimmedSummary.sources.first?.patches.first?.trimLoops.first?.selectionReferences.first
+    )
+
+    let moveResponse = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .moveSurfaceTrimControlPoint(
+                target: trimReference,
+                controlPointIndex: 1,
+                u: .scalar(0.58),
+                v: .scalar(0.46)
+            ),
+            expectedGeneration: DocumentGeneration(2)
+        )
+    )
+    guard case .command(let moveResult) = moveResponse else {
+        Issue.record("Agent must move the authored surface trim control point.")
+        return
+    }
+    #expect(moveResult.commandName == "moveSurfaceTrimControlPoint")
+    #expect(moveResult.didMutate)
+    #expect(moveResult.generation == DocumentGeneration(3))
+    #expect(session.evaluationStatus == .valid)
+
+    let featureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let feature = try #require(session.document.cadDocument.designGraph.nodes[featureID])
+    guard case let .bSplineSurface(surfaceFeature) = feature.operation else {
+        Issue.record("Agent trim control point edit must keep a direct B-spline surface feature.")
+        return
+    }
+    let movedLoop = try #require(surfaceFeature.trimLoops.first)
+    guard case .bSpline(let movedCurve) = movedLoop.edges[0].parameterCurve else {
+        Issue.record("Agent must keep the authored B-spline trim p-curve.")
+        return
+    }
+    #expect(movedCurve.controlPoints[0] == Point2D(x: 0.2, y: 0.2))
+    #expect(movedCurve.controlPoints[1] == Point2D(x: 0.58, y: 0.46))
+    #expect(movedCurve.controlPoints[2] == Point2D(x: 0.8, y: 0.25))
+}
+
+@MainActor
 @Test func agentMatchesDirectBSplineSurfaceBoundaryContinuityThroughTrimReferences() async throws {
     let server = AgentCommandController()
     let sessionID = UUID()
