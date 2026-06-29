@@ -388,12 +388,35 @@ public struct SurfaceSourceSummaryResult: Codable, Equatable, Sendable {
 
     public struct TrimLoop: Codable, Equatable, Sendable {
         public struct Edge: Codable, Equatable, Sendable {
+            public struct ParameterCurveControlPoint: Codable, Equatable, Sendable {
+                public var index: Int
+                public var parameter: ParameterAddress
+                public var isEndpoint: Bool
+                public var isEditable: Bool
+                public var unsupportedReason: String?
+
+                public init(
+                    index: Int,
+                    parameter: ParameterAddress,
+                    isEndpoint: Bool,
+                    isEditable: Bool,
+                    unsupportedReason: String? = nil
+                ) {
+                    self.index = index
+                    self.parameter = parameter
+                    self.isEndpoint = isEndpoint
+                    self.isEditable = isEditable
+                    self.unsupportedReason = unsupportedReason
+                }
+            }
+
             public var index: Int
             public var role: String
             public var persistentName: String?
             public var selectionReference: SelectionReference?
             public var startParameter: ParameterAddress
             public var endParameter: ParameterAddress
+            public var parameterCurveControlPoints: [ParameterCurveControlPoint]
             public var boundaryDirection: SurfaceParameterDirection
             public var inwardDirection: SurfaceParameterDirection
             public var boundaryControlPointReferences: [SelectionReference]
@@ -410,6 +433,7 @@ public struct SurfaceSourceSummaryResult: Codable, Equatable, Sendable {
                 selectionReference: SelectionReference?,
                 startParameter: ParameterAddress,
                 endParameter: ParameterAddress,
+                parameterCurveControlPoints: [ParameterCurveControlPoint] = [],
                 boundaryDirection: SurfaceParameterDirection,
                 inwardDirection: SurfaceParameterDirection,
                 boundaryControlPointReferences: [SelectionReference],
@@ -425,6 +449,7 @@ public struct SurfaceSourceSummaryResult: Codable, Equatable, Sendable {
                 self.selectionReference = selectionReference
                 self.startParameter = startParameter
                 self.endParameter = endParameter
+                self.parameterCurveControlPoints = parameterCurveControlPoints
                 self.boundaryDirection = boundaryDirection
                 self.inwardDirection = inwardDirection
                 self.boundaryControlPointReferences = boundaryControlPointReferences

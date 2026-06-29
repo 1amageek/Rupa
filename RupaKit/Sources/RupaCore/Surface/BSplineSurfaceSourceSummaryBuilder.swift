@@ -333,6 +333,12 @@ struct BSplineSurfaceSourceSummaryBuilder: Sendable {
                 selectionReference: selectionReference,
                 startParameter: parameters.start,
                 endParameter: parameters.end,
+                parameterCurveControlPoints: parameterCurveControlPoints(
+                    for: sourceEdge.parameterCurve,
+                    loopIndex: loopIndex,
+                    edgeIndex: index,
+                    surfaceReference: surfaceReference
+                ),
                 boundaryDirection: boundaryDirection,
                 inwardDirection: inwardDirection,
                 boundaryControlPointReferences: boundaryControlPointReferences,
@@ -351,6 +357,96 @@ struct BSplineSurfaceSourceSummaryBuilder: Sendable {
                     : nil
             )
         }
+    }
+
+    private func parameterCurveControlPoints(
+        for curve: SurfaceParameterCurve,
+        loopIndex: Int,
+        edgeIndex: Int,
+        surfaceReference: SurfaceReference
+    ) -> [SurfaceSourceSummaryResult.TrimLoop.Edge.ParameterCurveControlPoint] {
+        switch curve {
+        case .constantU, .constantV:
+            return []
+        case .polyline(let points):
+            return parameterCurveControlPoints(
+                points: points,
+                loopIndex: loopIndex,
+                edgeIndex: edgeIndex,
+                surfaceReference: surfaceReference
+            )
+        case .bSpline(let curve):
+            return parameterCurveControlPoints(
+                controlPoints: curve.controlPoints,
+                loopIndex: loopIndex,
+                edgeIndex: edgeIndex,
+                surfaceReference: surfaceReference
+            )
+        }
+    }
+
+    private func parameterCurveControlPoints(
+        points: [SurfaceParameter],
+        loopIndex: Int,
+        edgeIndex: Int,
+        surfaceReference: SurfaceReference
+    ) -> [SurfaceSourceSummaryResult.TrimLoop.Edge.ParameterCurveControlPoint] {
+        points.enumerated().map { index, point in
+            parameterCurveControlPoint(
+                index: index,
+                count: points.count,
+                u: point.u,
+                v: point.v,
+                loopIndex: loopIndex,
+                edgeIndex: edgeIndex,
+                surfaceReference: surfaceReference
+            )
+        }
+    }
+
+    private func parameterCurveControlPoints(
+        controlPoints: [Point2D],
+        loopIndex: Int,
+        edgeIndex: Int,
+        surfaceReference: SurfaceReference
+    ) -> [SurfaceSourceSummaryResult.TrimLoop.Edge.ParameterCurveControlPoint] {
+        controlPoints.enumerated().map { index, point in
+            parameterCurveControlPoint(
+                index: index,
+                count: controlPoints.count,
+                u: point.x,
+                v: point.y,
+                loopIndex: loopIndex,
+                edgeIndex: edgeIndex,
+                surfaceReference: surfaceReference
+            )
+        }
+    }
+
+    private func parameterCurveControlPoint(
+        index: Int,
+        count: Int,
+        u: Double,
+        v: Double,
+        loopIndex: Int,
+        edgeIndex: Int,
+        surfaceReference: SurfaceReference
+    ) -> SurfaceSourceSummaryResult.TrimLoop.Edge.ParameterCurveControlPoint {
+        let isEndpoint = index == 0 || index == count - 1
+        return SurfaceSourceSummaryResult.TrimLoop.Edge.ParameterCurveControlPoint(
+            index: index,
+            parameter: parameterAddress(
+                id: "loop:\(loopIndex):edge:\(edgeIndex):parameterCurveControlPoint:\(index)",
+                surfaceReference: surfaceReference,
+                u: u,
+                v: v
+            ),
+            isEndpoint: isEndpoint,
+            isEditable: isEndpoint == false,
+            unsupportedReason: isEndpoint
+                ? "Use moveSurfaceTrimEndpoint for trim endpoints."
+                : nil
+        )
     }
 
     private func trimEdgeSubshape(

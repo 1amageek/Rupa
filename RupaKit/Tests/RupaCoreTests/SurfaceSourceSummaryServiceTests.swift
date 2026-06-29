@@ -224,6 +224,7 @@ import SwiftCAD
     #expect(vMinEdge.endParameter.id == "uMax:vMin")
     #expect(vMinEdge.boundaryDirection == .u)
     #expect(vMinEdge.inwardDirection == .v)
+    #expect(vMinEdge.parameterCurveControlPoints.isEmpty)
     #expect(vMinEdge.boundaryControlPointReferences.count == surface.uControlPointCount)
     #expect(vMinEdge.firstInwardControlPointReferences.count == surface.uControlPointCount)
     #expect(vMinEdge.secondInwardControlPointReferences.count == surface.uControlPointCount)
@@ -277,6 +278,65 @@ import SwiftCAD
     #expect(abs(measuredPoint.point.x - weightedControlPoint.point.x) <= 1.0e-12)
     #expect(abs(measuredPoint.point.y - weightedControlPoint.point.y) <= 1.0e-12)
     #expect(abs(measuredPoint.point.z - weightedControlPoint.point.z) <= 1.0e-12)
+}
+
+@Test func surfaceSourceSummaryReportsAuthoredTrimParameterCurveControlPoints() async throws {
+    var document = DesignDocument.empty()
+    _ = try document.createBSplineSurface(
+        name: "Direct Authored Trim Surface",
+        surface: surfaceSourceSummaryDirectBSplineSurface()
+    )
+    let initialSummary = try SurfaceSourceSummaryService().summarize(document: document)
+    let faceReference = try #require(initialSummary.sources.first?.patches.first?.faceSelectionReference)
+    try document.setSurfaceTrimLoops(
+        target: faceReference,
+        trimLoops: [
+            BSplineSurfaceTrimLoop(
+                role: .outer,
+                edges: [
+                    BSplineSurfaceTrimEdge(parameterCurve: .bSpline(BSplineCurve2D(
+                        degree: 2,
+                        knots: [0.0, 0.0, 0.0, 1.0, 1.0, 1.0],
+                        controlPoints: [
+                            Point2D(x: 0.2, y: 0.2),
+                            Point2D(x: 0.52, y: 0.42),
+                            Point2D(x: 0.8, y: 0.25),
+                        ]
+                    ))),
+                    BSplineSurfaceTrimEdge(parameterCurve: .polyline([
+                        SurfaceParameter(u: 0.8, v: 0.25),
+                        SurfaceParameter(u: 0.45, v: 0.8),
+                    ])),
+                    BSplineSurfaceTrimEdge(parameterCurve: .polyline([
+                        SurfaceParameter(u: 0.45, v: 0.8),
+                        SurfaceParameter(u: 0.2, v: 0.2),
+                    ])),
+                ]
+            ),
+        ]
+    )
+
+    let result = try SurfaceSourceSummaryService().summarize(document: document)
+
+    let loop = try #require(result.sources.first?.patches.first?.trimLoops.first)
+    let bSplineEdge = try #require(loop.edges.first)
+    #expect(bSplineEdge.parameterCurveControlPoints.map(\.index) == [0, 1, 2])
+    #expect(bSplineEdge.parameterCurveControlPoints.map(\.isEndpoint) == [true, false, true])
+    #expect(bSplineEdge.parameterCurveControlPoints.map(\.isEditable) == [false, true, false])
+    let startPoint = try #require(bSplineEdge.parameterCurveControlPoints.first)
+    #expect(startPoint.unsupportedReason?.contains("moveSurfaceTrimEndpoint") == true)
+    let interiorPoint = try #require(bSplineEdge.parameterCurveControlPoints.first { $0.isEditable })
+    #expect(interiorPoint.index == 1)
+    #expect(interiorPoint.parameter.id == "loop:0:edge:0:parameterCurveControlPoint:1")
+    #expect(abs(interiorPoint.parameter.u - 0.52) <= 1.0e-12)
+    #expect(abs(interiorPoint.parameter.v - 0.42) <= 1.0e-12)
+    #expect(interiorPoint.parameter.selectionReference != nil)
+    let endPoint = try #require(bSplineEdge.parameterCurveControlPoints.last)
+    #expect(endPoint.unsupportedReason?.contains("moveSurfaceTrimEndpoint") == true)
+    let polylineEdge = try #require(loop.edges.dropFirst().first)
+    #expect(polylineEdge.parameterCurveControlPoints.map(\.index) == [0, 1])
+    #expect(polylineEdge.parameterCurveControlPoints.allSatisfy { $0.isEndpoint })
+    #expect(polylineEdge.parameterCurveControlPoints.allSatisfy { $0.isEditable == false })
 }
 
 @MainActor

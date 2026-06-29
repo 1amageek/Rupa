@@ -1283,7 +1283,7 @@ public final class AgentCommandController: AgentClientProtocol {
         capability(
             "moveSurfaceTrimControlPoint",
             category: .solid,
-            summary: "Move a strict interior control point on a source-owned authored UV polyline or B-spline trim p-curve for a direct B-spline surface.",
+            summary: "Move a strict interior control point discovered from surfaceSourceSummary on a source-owned authored UV polyline or B-spline trim p-curve for a direct B-spline surface.",
             access: .automationCommand,
             mutatesDocument: true,
             discovery: [.surfaceSourceSummary, .surfaceFrames, .surfaceAnalysis, .topologySummary],
@@ -1509,7 +1509,7 @@ public final class AgentCommandController: AgentClientProtocol {
         capability(
             "surfaceSourceSummary",
             category: .read,
-            summary: "Discover source-owned surface contracts for editable PolySpline and direct B-spline surfaces, including patch IDs, degree and knot-vector basis, knot and span addresses, weighted CV targets, boundary CV targets, trim edge editability and G0/G1/G2 continuity levels, span-center UVN frame samples, trim loops, support diagnostics, and generated topology links.",
+            summary: "Discover source-owned surface contracts for editable PolySpline and direct B-spline surfaces, including patch IDs, degree and knot-vector basis, knot and span addresses, weighted CV targets, boundary CV targets, trim edge editability, authored p-curve control-point indices, G0/G1/G2 continuity levels, span-center UVN frame samples, trim loops, support diagnostics, and generated topology links.",
             access: .agentRequest,
             mutatesDocument: false,
             discovery: [.surfaceSourceSummary, .polySplineMeshAnalysis, .topologySummary],

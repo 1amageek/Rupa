@@ -919,16 +919,23 @@ import SwiftCAD
         Issue.record("Agent must return authored trim loop references.")
         return
     }
-    let trimReference = try #require(
-        trimmedSummary.sources.first?.patches.first?.trimLoops.first?.selectionReferences.first
+    let authoredTrimEdge = try #require(
+        trimmedSummary.sources.first?.patches.first?.trimLoops.first?.edges.first
     )
+    let trimReference = try #require(authoredTrimEdge.selectionReference)
+    let editableControlPoint = try #require(
+        authoredTrimEdge.parameterCurveControlPoints.first { $0.isEditable }
+    )
+    #expect(editableControlPoint.index == 1)
+    #expect(abs(editableControlPoint.parameter.u - 0.52) <= 1.0e-12)
+    #expect(abs(editableControlPoint.parameter.v - 0.42) <= 1.0e-12)
 
     let moveResponse = server.handle(
         .execute(
             sessionID: sessionID,
             command: .moveSurfaceTrimControlPoint(
                 target: trimReference,
-                controlPointIndex: 1,
+                controlPointIndex: editableControlPoint.index,
                 u: .scalar(0.58),
                 v: .scalar(0.46)
             ),

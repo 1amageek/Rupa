@@ -1080,6 +1080,7 @@ import SwiftCAD
     #expect(surfaceSourceSummary.summary.contains("weighted CV targets"))
     #expect(surfaceSourceSummary.summary.contains("boundary CV targets"))
     #expect(surfaceSourceSummary.summary.contains("trim edge editability"))
+    #expect(surfaceSourceSummary.summary.contains("p-curve control-point indices"))
     #expect(surfaceSourceSummary.summary.contains("G0/G1/G2 continuity levels"))
     #expect(surfaceSourceSummary.summary.contains("UVN frame samples"))
 
