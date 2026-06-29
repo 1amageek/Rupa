@@ -248,6 +248,76 @@ extension DesignDocument {
     }
 
     @discardableResult
+    public mutating func createLoft(
+        name: String,
+        sections: [LoftSectionReference],
+        options: LoftOptions = LoftOptions(),
+        objectRegistry: ObjectTypeRegistry = .builtIn
+    ) throws -> FeatureID {
+        let trimmedName = try normalizedMetadataName(name, owner: "Loft")
+        let loft = LoftFeature(sections: sections, options: options)
+        do {
+            try loft.validate()
+        } catch {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Loft command is invalid: \(error)."
+            )
+        }
+        for section in sections {
+            try requireLoftSourceProfileFeature(section.featureID, owner: "Loft profile")
+        }
+
+        let featureID = FeatureID()
+        let feature = FeatureNode(
+            id: featureID,
+            name: trimmedName,
+            operation: .loft(loft),
+            inputs: sections.map { section in
+                FeatureInput(featureID: section.featureID, role: .profile)
+            },
+            outputs: [FeatureOutput(role: options.resultKind.featureOutputRole)]
+        )
+
+        let previousCADDocument = cadDocument
+        let previousProductMetadata = productMetadata
+        var didCommitLoft = false
+        defer {
+            if didCommitLoft == false {
+                cadDocument = previousCADDocument
+                productMetadata = previousProductMetadata
+            }
+        }
+
+        try appendFeature(feature)
+        _ = try productMetadata.appendSceneNodeToFirstRoot(
+            name: trimmedName,
+            reference: .body(featureID),
+            object: .body(
+                featureID: featureID,
+                sourceSection: sections.first.map { .profile($0.profile) },
+                typeID: nil,
+                geometryRole: options.resultKind.objectGeometryRole,
+                objectRegistry: objectRegistry
+            )
+        )
+        try cadDocument.validate()
+        try productMetadata.validate(against: cadDocument, objectRegistry: objectRegistry)
+        do {
+            _ = try CADPipeline
+                .modelingDefault(for: self, objectRegistry: objectRegistry)
+                .evaluate(cadDocument)
+        } catch {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Loft produced unsupported or invalid geometry: \(error)."
+            )
+        }
+        didCommitLoft = true
+        return featureID
+    }
+
+    @discardableResult
     public mutating func createBoolean(
         name: String,
         targets: [BooleanTargetReference],
@@ -369,6 +439,13 @@ extension DesignDocument {
         }
     }
 
+    private func requireLoftSourceProfileFeature(
+        _ featureID: FeatureID,
+        owner: String
+    ) throws {
+        try requireSweepSourceProfileFeature(featureID, owner: owner)
+    }
+
     private func requireSweepSourceCurveFeature(
         _ featureID: FeatureID,
         owner: String
@@ -482,6 +559,26 @@ extension DesignDocument {
 }
 
 private extension SweepResultKind {
+    var featureOutputRole: FeaturePort {
+        switch self {
+        case .solid:
+            .body
+        case .sheet:
+            .sheet
+        }
+    }
+
+    var objectGeometryRole: ObjectDescriptor.GeometryRole {
+        switch self {
+        case .solid:
+            .solid
+        case .sheet:
+            .surface
+        }
+    }
+}
+
+private extension LoftResultKind {
     var featureOutputRole: FeaturePort {
         switch self {
         case .solid:

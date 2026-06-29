@@ -563,6 +563,29 @@ import SwiftCAD
     #expect(decodedRequest == request)
 }
 
+@Test func agentMessageCodecRoundTripsLoftCommand() async throws {
+    let codec = AgentMessageCodec()
+    let sessionID = UUID()
+    let firstProfileID = FeatureID()
+    let secondProfileID = FeatureID()
+    let request = AgentRequest.execute(
+        sessionID: sessionID,
+        command: .createLoft(
+            name: "Encoded Loft",
+            sections: [
+                LoftSectionReference(profile: ProfileReference(featureID: firstProfileID)),
+                LoftSectionReference(profile: ProfileReference(featureID: secondProfileID)),
+            ],
+            options: LoftOptions(resultKind: .sheet)
+        ),
+        expectedGeneration: DocumentGeneration(5)
+    )
+
+    let decodedRequest = try codec.decodeRequest(from: try codec.encode(request))
+
+    #expect(decodedRequest == request)
+}
+
 @Test func agentMessageCodecRoundTripsPolySplineCommand() async throws {
     let codec = AgentMessageCodec()
     let sessionID = UUID()

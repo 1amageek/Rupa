@@ -722,7 +722,7 @@ public struct CADInteractionQualityAssessmentService: Sendable {
         ),
         entry(
             area: .sweep,
-            workflow: "Sweep profile, path, guide, and boolean workflow",
+            workflow: "Sweep and Loft profile-section workflows",
             references: [
                 "https://doc.plasticity.xyz/solid/sweep",
             ],
@@ -741,28 +741,40 @@ public struct CADInteractionQualityAssessmentService: Sendable {
             ],
             evidence: [
                 CADInteractionQualityEvidence(
-                    label: "Sweep source feature and guided evaluation subset",
+                    label: "Sweep and Loft source feature evaluation subsets",
                     sourceFiles: [
+                        "swift-CAD/Sources/CADIR/LoftFeature.swift",
+                        "swift-CAD/Sources/CADKernel/PlanarLoftFeatureEvaluator.swift",
                         "swift-CAD/Sources/CADKernel/SweepEvaluationCapabilities.swift",
                         "swift-CAD/Sources/CADKernel/PlanarSweepFeatureEvaluator.swift",
                         "RupaKit/Sources/RupaCore/DesignDocument.swift",
+                        "RupaKit/Sources/RupaCore/DesignDocument+Solid.swift",
+                        "RupaKit/Sources/RupaAutomation/AutomationCommand.swift",
                         "RupaKit/Sources/RupaAgentRuntime/AgentCommandController.swift",
                         "RupaKit/Sources/RupaUI/MainView.swift",
                     ],
                     tests: [
+                        "swift-CAD/Tests/CADKernelTests/LoftFeatureTests.swift",
                         "swift-CAD/Tests/CADKernelTests/CADKernelTests.swift",
+                        "RupaKit/Tests/RupaCoreTests/LoftCommandTests.swift",
                         "RupaKit/Tests/RupaCoreTests/SweepCommandTests.swift",
+                        "RupaKit/Tests/RupaAutomationTests/LoftAutomationTests.swift",
+                        "RupaKit/Tests/RupaAgentTests/AgentLoftIntegrationTests.swift",
                         "RupaKit/Tests/RupaAgentTests/AgentCommandControllerTests.swift",
+                    ],
+                    notes: [
+                        "Loft now has a source-owned Swift-CAD IR, same-boundary-count planar ruled B-rep evaluator, cyclic section matching independent of arbitrary closed-loop start vertices, solid and sheet output, RupaCore mutation, Automation, Agent command dispatch, measurement, viewport scene display, and Inspector operation summaries.",
                     ]
                 ),
             ],
             openWork: [
+                "Loft guide curves, rails, explicit seam selection, non-planar section matching, NURBS surface output, and G0/G1/G2/G3 section-continuity controls.",
                 "Rail deformation beyond the current affine, signed-axis, convex quadrilateral bilinear, convex mean-value cage, and radial point-guide sections.",
                 "Non-box boolean operands.",
                 "Stable result topology beyond current exact subsets.",
-                "Full modal command-dialog parity.",
+                "Full Sweep and Loft modal command-dialog parity, viewport section placement, and UVN/surfaceTrim-driven section placement.",
             ],
-            next: "Broaden exact swept-surface and boolean topology support while keeping guide overconstraint diagnostics explicit."
+            next: "Broaden exact swept and lofted surface support while keeping section, guide, seam, and boolean overconstraint diagnostics explicit."
         ),
         entry(
             area: .surfaceModeling,
@@ -841,14 +853,14 @@ public struct CADInteractionQualityAssessmentService: Sendable {
             ],
             openWork: [
                 "Direct B-spline surface source editing beyond existing CV, weight, slide, internal knot-value mutation, shape-preserving knot insertion, fraction-based span splitting, explicit knot multiplicity editing, authored trim endpoint moves, authored trim p-curve interior control-point moves, and compatible trim-boundary continuity matching, including remaining span editing beyond direct fraction splits and broader trim-curve handle workflows.",
-                "Trim dimensioning, surface offset, and sweep or loft section placement still need to consume the Agent-readable UVN frame and surfaceTrim snap contracts beyond visible-frame snap anchors, authored endpoint/control-point snap anchors, and viewport frame drag.",
+                "Trim dimensioning, surface offset, and advanced sweep or loft section placement still need to consume the Agent-readable UVN frame and surfaceTrim snap contracts beyond visible-frame snap anchors, authored endpoint/control-point snap anchors, and viewport frame drag.",
                 "Arbitrary B-rep adjacency solving, PolySpline continuity mutation, non-rectangular trim targets, and G0/G1/G2/G3 curve matching.",
                 "Non-planar G2 multi-patch reconstruction.",
                 "Patch merge and rounded-corner policy output.",
                 "General trim-curve editing beyond endpoint and strict interior control-point moves, and remaining surface CV source editing beyond the current direct B-spline and PolySpline subsets.",
                 "Viewport creation controls.",
             ],
-            next: "Continue from the current direct B-spline edit subset into arbitrary adjacency continuity, trim dimensioning/snapping, surface offset, sweep or loft section placement, broader trim-curve workflows, and broader NURBS/polysurface ownership before broadening surface tools."
+            next: "Continue from the current direct B-spline edit subset into arbitrary adjacency continuity, trim dimensioning/snapping, surface offset, advanced sweep or loft section placement, broader trim-curve workflows, and broader NURBS/polysurface ownership before broadening surface tools."
         ),
         entry(
             area: .curveContinuity,

@@ -219,6 +219,22 @@ struct WorkspaceObjectOverviewInspectorStateBuilder {
                 )
             }
             return rows
+        case .loft(let loft):
+            return [
+                WorkspaceInspectorTextRow(title: "Operation", value: "Loft"),
+                WorkspaceInspectorTextRow(
+                    title: "Sections",
+                    value: valueSummary(loft.sections.map(loftSectionSummary))
+                ),
+                WorkspaceInspectorTextRow(
+                    title: "Result",
+                    value: loft.options.resultKind.rawValue.capitalized
+                ),
+                WorkspaceInspectorTextRow(
+                    title: "Matching",
+                    value: loft.options.sectionMatching.rawValue.capitalized
+                ),
+            ]
         case .boolean(let boolean):
             return [
                 WorkspaceInspectorTextRow(title: "Operation", value: "Boolean"),
@@ -488,6 +504,10 @@ struct WorkspaceObjectOverviewInspectorStateBuilder {
         case .curve(let curve):
             return "Curve \(shortID(curve.featureID))"
         }
+    }
+
+    private func loftSectionSummary(_ section: LoftSectionReference) -> String {
+        "Profile \(shortID(section.featureID))"
     }
 
     private func bodySourceSectionSummary(_ section: BodySourceSectionReference) -> String {

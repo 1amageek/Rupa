@@ -243,6 +243,11 @@ public enum EditorCommand: Codable, Equatable, Sendable {
         targets: [SweepTargetReference],
         options: SweepOptions
     )
+    case createLoft(
+        name: String,
+        sections: [LoftSectionReference],
+        options: LoftOptions
+    )
     case createBoolean(
         name: String,
         targets: [BooleanTargetReference],
@@ -565,6 +570,8 @@ public enum EditorCommand: Codable, Equatable, Sendable {
             "createRevolve"
         case .createSweep:
             "createSweep"
+        case .createLoft:
+            "createLoft"
         case .createBoolean:
             "createBoolean"
         case .createBSplineSurface:
@@ -712,6 +719,7 @@ public enum EditorCommand: Codable, Equatable, Sendable {
              .extrudeProfile,
              .createRevolve,
              .createSweep,
+             .createLoft,
              .createBoolean,
              .createBSplineSurface,
              .createPolySplineSurface,

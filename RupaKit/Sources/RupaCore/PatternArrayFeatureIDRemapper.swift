@@ -56,6 +56,11 @@ struct PatternArrayFeatureIDRemapper: Sendable {
                 SweepTargetReference(featureID: try remappedFeatureID($0.featureID))
             }
             return .sweep(sweep)
+        case .loft(var loft):
+            loft.sections = try loft.sections.map { section in
+                LoftSectionReference(profile: try remappedProfileReference(section.profile))
+            }
+            return .loft(loft)
         case .boolean(var boolean):
             boolean.targets = try boolean.targets.map {
                 BooleanTargetReference(featureID: try remappedFeatureID($0.featureID))

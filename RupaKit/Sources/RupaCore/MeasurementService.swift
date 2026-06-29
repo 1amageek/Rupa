@@ -503,6 +503,93 @@ public struct MeasurementService {
                 solids.append(solid)
                 totals.solidVolumeCubicMeters += solid.volumeCubicMeters
                 bounds.include(solid.bounds)
+            case .loft(let loft):
+                guard !isSupersededInDocumentScope(featureID) else {
+                    continue
+                }
+                guard shouldMeasure(featureID) else {
+                    continue
+                }
+                includedSourceFeatureIDs.insert(featureID)
+                for section in loft.sections {
+                    guard let sourceNode = document.cadDocument.designGraph.nodes[section.featureID],
+                          case .sketch(let sourceSketch) = sourceNode.operation else {
+                        diagnostics.append(
+                            EditorDiagnostic(
+                                severity: .warning,
+                                message: "Measurement skipped a loft section with an unresolved profile reference."
+                            )
+                        )
+                        continue
+                    }
+                    let profile = try profileCache[section.featureID] ?? measureProfile(
+                        featureID: section.featureID,
+                        featureName: sourceNode.name,
+                        sketch: sourceSketch,
+                        parameters: document.cadDocument.parameters
+                    )
+                    profileCache[section.featureID] = profile
+                    includeSketch(
+                        featureID: section.featureID,
+                        sketch: sourceSketch,
+                        sketchBounds: try boundsForSketch(
+                            sourceSketch,
+                            parameters: document.cadDocument.parameters
+                        ),
+                        profile: profile
+                    )
+                }
+                let sourceFeatureID = loft.sections.first?.featureID ?? featureID
+                let sourceNode = document.cadDocument.designGraph.nodes[sourceFeatureID]
+                if loft.options.resultKind == .sheet {
+                    var evaluatedSkipReason: String?
+                    let sheet = try measureEvaluatedSheet(
+                        featureID: featureID,
+                        featureName: node.name,
+                        sourceFeatureID: sourceFeatureID,
+                        sourceFeatureName: sourceNode?.name,
+                        evaluatedDocument: evaluatedDocument(),
+                        unsupportedReason: &evaluatedSkipReason
+                    )
+                    guard let sheet else {
+                        let detail = evaluatedSkipReason.map { " \($0)" } ?? ""
+                        diagnostics.append(
+                            EditorDiagnostic(
+                                severity: .info,
+                                message: "Measurement skipped a loft sheet outside the supported evaluation subset.\(detail)"
+                            )
+                        )
+                        continue
+                    }
+                    counts.sheets += 1
+                    sheets.append(sheet)
+                    totals.sheetAreaSquareMeters += sheet.surfaceAreaSquareMeters
+                    bounds.include(sheet.bounds)
+                    continue
+                }
+                var evaluatedSkipReason: String?
+                let solid = try measureEvaluatedSolid(
+                    featureID: featureID,
+                    featureName: node.name,
+                    sourceFeatureID: sourceFeatureID,
+                    sourceFeatureName: sourceNode?.name,
+                    evaluatedDocument: evaluatedDocument(),
+                    unsupportedReason: &evaluatedSkipReason
+                )
+                guard let solid else {
+                    let detail = evaluatedSkipReason.map { " \($0)" } ?? ""
+                    diagnostics.append(
+                        EditorDiagnostic(
+                            severity: .info,
+                            message: "Measurement skipped a loft solid outside the supported evaluation subset.\(detail)"
+                        )
+                    )
+                    continue
+                }
+                counts.solids += 1
+                solids.append(solid)
+                totals.solidVolumeCubicMeters += solid.volumeCubicMeters
+                bounds.include(solid.bounds)
             case .boolean(let boolean):
                 guard !isSupersededInDocumentScope(featureID) else {
                     continue

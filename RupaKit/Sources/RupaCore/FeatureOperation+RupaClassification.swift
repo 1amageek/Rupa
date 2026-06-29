@@ -11,6 +11,8 @@ extension FeatureOperation {
             return true
         case .sweep:
             return true
+        case .loft:
+            return true
         case .boolean:
             return true
         case .polySpline:
@@ -47,6 +49,8 @@ extension FeatureOperation {
         case .revolve:
             return []
         case .sweep:
+            return []
+        case .loft:
             return []
         case .boolean(let feature):
             guard feature.keepTools == false else {

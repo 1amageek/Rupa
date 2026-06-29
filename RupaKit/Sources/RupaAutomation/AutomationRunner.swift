@@ -1190,6 +1190,21 @@ public struct AutomationRunner {
                 didMutate: result.didMutate,
                 diagnostics: result.diagnostics
             )
+        case .createLoft(let name, let sections, let options):
+            let result = try session.execute(
+                .createLoft(
+                    name: name,
+                    sections: sections,
+                    options: options
+                )
+            )
+            return AutomationResult(
+                message: "Loft \(name) source created.",
+                commandName: result.commandName,
+                generation: result.generation,
+                didMutate: result.didMutate,
+                diagnostics: result.diagnostics
+            )
         case .createBoolean(let name, let targets, let tool, let operation, let keepTools):
             let result = try session.execute(
                 .createBoolean(

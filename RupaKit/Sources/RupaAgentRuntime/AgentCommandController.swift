@@ -1169,6 +1169,34 @@ public final class AgentCommandController: AgentClientProtocol {
             ]
         ),
         capability(
+            "createLoft",
+            category: .solid,
+            summary: "Create a Loft source feature from two or more supported closed profile sections with explicit solid or sheet result-kind options.",
+            access: .automationCommand,
+            mutatesDocument: true,
+            discovery: [.sketchEntitySummary],
+            targets: [.profile],
+            failureMode: "Rejects missing, duplicate, open, unsupported, or differently sampled closed profile sections, non-planar matched side quads, invalid generated topology, and stale generations before mutation; current evaluation creates ruled planar side faces between matched profile vertices and planar start/end caps for solid output.",
+            optionMatrix: [
+                AgentCapabilityDescriptor.OptionAxis(
+                    name: "resultKind",
+                    supportedValues: ["solid", "sheet"],
+                    notes: [
+                        "solid closes the first and last profile sections with planar caps",
+                        "sheet creates the ruled side surface without start or end caps"
+                    ]
+                ),
+                AgentCapabilityDescriptor.OptionAxis(
+                    name: "sectionMatching",
+                    supportedValues: ["byIndex"],
+                    notes: [
+                        "profile sections must currently have the same ordered boundary sample count",
+                        "future NURBS loft work can add richer section correspondence without changing the command surface"
+                    ]
+                ),
+            ]
+        ),
+        capability(
             "sweepEvaluationPlan",
             category: .read,
             summary: "Preflight a proposed Sweep without mutating the document, returning the resolved path shape, section state, evaluation kind, output topology, boolean support, guide strategies, unsupported code, and ordered checks used by the shared sweep evaluation contract.",
