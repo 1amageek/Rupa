@@ -72,6 +72,7 @@ import SwiftCAD
     #expect(capabilities.contains("setSurfaceControlPointWeight"))
     #expect(capabilities.contains("setSurfaceKnotValue"))
     #expect(capabilities.contains("insertSurfaceKnot"))
+    #expect(capabilities.contains("splitSurfaceSpan"))
     #expect(capabilities.contains("setSurfaceKnotMultiplicity"))
     #expect(capabilities.contains("matchSurfaceBoundaryContinuity"))
     #expect(capabilities.contains("surfaceBoundaryContinuityCompatibility"))
@@ -176,6 +177,7 @@ import SwiftCAD
     let surfaceControlPointWeight = try #require(descriptors.first { $0.name == "setSurfaceControlPointWeight" })
     let surfaceKnotValue = try #require(descriptors.first { $0.name == "setSurfaceKnotValue" })
     let surfaceKnotInsertion = try #require(descriptors.first { $0.name == "insertSurfaceKnot" })
+    let surfaceSpanSplit = try #require(descriptors.first { $0.name == "splitSurfaceSpan" })
     let surfaceKnotMultiplicity = try #require(
         descriptors.first { $0.name == "setSurfaceKnotMultiplicity" }
     )
@@ -623,6 +625,17 @@ import SwiftCAD
     #expect(surfaceKnotInsertion.summary.contains("increase multiplicity"))
     #expect(surfaceKnotInsertion.failureMode.contains("selected span"))
     #expect(surfaceKnotInsertion.failureMode.contains("saturated knot multiplicity"))
+
+    #expect(surfaceSpanSplit.category == .solid)
+    #expect(surfaceSpanSplit.mutatesDocument)
+    #expect(surfaceSpanSplit.access == .automationCommand)
+    #expect(surfaceSpanSplit.discovery.contains(.surfaceSourceSummary))
+    #expect(surfaceSpanSplit.discovery.contains(.surfaceFrames))
+    #expect(surfaceSpanSplit.discovery.contains(.surfaceAnalysis))
+    #expect(surfaceSpanSplit.discovery.contains(.surfaceContinuitySummary))
+    #expect(surfaceSpanSplit.targets == [.surfaceSpan])
+    #expect(surfaceSpanSplit.summary.contains("normalized fraction"))
+    #expect(surfaceSpanSplit.failureMode.contains("strictly between 0 and 1"))
 
     #expect(surfaceKnotMultiplicity.category == .solid)
     #expect(surfaceKnotMultiplicity.mutatesDocument)

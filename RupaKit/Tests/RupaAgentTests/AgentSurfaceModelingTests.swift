@@ -543,6 +543,92 @@ import SwiftCAD
 }
 
 @MainActor
+@Test func agentSplitsDirectBSplineSurfaceSpanThroughSurfaceSourceSpanReference() async throws {
+    let server = AgentCommandController()
+    let sessionID = UUID()
+    let session = EditorSession()
+    server.register(session: session, id: sessionID)
+
+    let createResponse = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .createBSplineSurface(
+                name: "Agent Split Span B-spline Surface",
+                surface: agentDirectBSplineSurfaceWithInteriorKnots()
+            ),
+            expectedGeneration: DocumentGeneration(0)
+        )
+    )
+    guard case .command(let createResult) = createResponse else {
+        Issue.record("Agent must create a direct B-spline surface.")
+        return
+    }
+    #expect(createResult.didMutate)
+
+    let summaryResponse = server.handle(
+        .surfaceSourceSummary(
+            sessionID: sessionID,
+            expectedGeneration: DocumentGeneration(1)
+        )
+    )
+    guard case .surfaceSourceSummary(let summary) = summaryResponse else {
+        Issue.record("Agent must return direct B-spline surface source summary.")
+        return
+    }
+    let span = try #require(
+        summary.sources.first?.patches.first?.basis.vSpans.first { $0.index == 1 }
+    )
+    #expect(span.lowerBound == 0.5)
+    #expect(span.upperBound == 1.0)
+    let spanReference = try #require(span.selectionReference)
+
+    let splitResponse = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .splitSurfaceSpan(
+                target: spanReference,
+                fraction: .scalar(0.25)
+            ),
+            expectedGeneration: DocumentGeneration(1)
+        )
+    )
+    guard case .command(let splitResult) = splitResponse else {
+        Issue.record("Agent must split a direct B-spline surface span.")
+        return
+    }
+    #expect(splitResult.commandName == "splitSurfaceSpan")
+    #expect(splitResult.didMutate)
+    #expect(splitResult.generation == DocumentGeneration(2))
+
+    let featureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let feature = try #require(session.document.cadDocument.designGraph.nodes[featureID])
+    guard case let .bSplineSurface(surfaceFeature) = feature.operation else {
+        Issue.record("Agent must keep a direct B-spline surface feature.")
+        return
+    }
+    #expect(surfaceFeature.surface.vKnots == [0.0, 0.0, 0.0, 0.5, 0.625, 1.0, 1.0, 1.0])
+    #expect(surfaceFeature.surface.uControlPointCount == 4)
+    #expect(surfaceFeature.surface.vControlPointCount == 5)
+    #expect(session.evaluationStatus == .valid)
+
+    let staleResponse = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .splitSurfaceSpan(
+                target: spanReference,
+                fraction: .scalar(0.5)
+            ),
+            expectedGeneration: DocumentGeneration(1)
+        )
+    )
+    guard case .failure(let staleError) = staleResponse else {
+        Issue.record("Agent must reject stale span split generations.")
+        return
+    }
+    #expect(staleError.code == .documentGenerationMismatch)
+}
+
+@MainActor
 @Test func agentSetsDirectBSplineSurfaceKnotMultiplicityThroughSurfaceSourceKnotReference() async throws {
     let server = AgentCommandController()
     let sessionID = UUID()

@@ -5,9 +5,11 @@ import SwiftUI
 struct SurfaceParameterInspectorView: View {
     let state: SurfaceParameterInspectorState
     @Binding var knotInsertionValue: Double
+    @Binding var spanSplitFraction: Double
     @Binding var knotMultiplicityValue: Int
     let onSetKnotValue: (SelectionReference, Double) -> Void
     let onInsertKnot: (SelectionReference, Double) -> Void
+    let onSplitSpan: (SelectionReference, Double) -> Void
     let onSetKnotMultiplicity: (SelectionReference, Int) -> Void
     let onSetFrameDisplay: ([SurfaceFrameQuery], Bool) -> Void
 
@@ -27,6 +29,7 @@ struct SurfaceParameterInspectorView: View {
             frameDisplayStatus
             knotValueControl
             multiplicityControl
+            spanSplitControl
             insertionControl
             frameDetailRows
             frameDisplayControls
@@ -99,6 +102,33 @@ struct SurfaceParameterInspectorView: View {
     }
 
     @ViewBuilder
+    private var spanSplitControl: some View {
+        if state.canSplitSpan,
+           let entry = state.entries.first {
+            draftScalarControl(
+                "Split",
+                value: spanSplitFractionBinding,
+                sliderRange: 0.01 ... 0.99
+            )
+            .accessibilityIdentifier("InspectorSurfaceParameter.span.splitFraction")
+
+            inspectorActionRow {
+                inspectorIconButton(
+                    systemImage: "square.split.2x1",
+                    help: "Split Surface Span",
+                    accessibilityIdentifier: "InspectorSurfaceParameter.span.split"
+                ) {
+                    guard let fraction = state.clampedSpanSplitFraction(spanSplitFraction) else {
+                        return
+                    }
+                    spanSplitFraction = fraction
+                    onSplitSpan(entry.selectionReference, fraction)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
     private var insertionControl: some View {
         if state.canInsertKnot,
            let entry = state.entries.first {
@@ -161,6 +191,21 @@ struct SurfaceParameterInspectorView: View {
                 .disabled(state.entries.allSatisfy { !$0.isFrameDisplayVisible })
             }
         }
+    }
+
+    private var spanSplitFractionBinding: Binding<Double> {
+        Binding<Double>(
+            get: {
+                state.clampedSpanSplitFraction(spanSplitFraction)
+                    ?? state.defaultSpanSplitFraction()
+            },
+            set: { newValue in
+                guard let fraction = state.clampedSpanSplitFraction(newValue) else {
+                    return
+                }
+                spanSplitFraction = fraction
+            }
+        )
     }
 
     private func insertionActionRow(

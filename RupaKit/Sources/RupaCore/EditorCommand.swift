@@ -288,6 +288,10 @@ public enum EditorCommand: Codable, Equatable, Sendable {
         target: SelectionReference,
         value: CADExpression
     )
+    case splitSurfaceSpan(
+        target: SelectionReference,
+        fraction: CADExpression
+    )
     case setSurfaceKnotMultiplicity(
         target: SelectionReference,
         multiplicity: Int
@@ -523,6 +527,8 @@ public enum EditorCommand: Codable, Equatable, Sendable {
             "setSurfaceKnotValue"
         case .insertSurfaceKnot:
             "insertSurfaceKnot"
+        case .splitSurfaceSpan:
+            "splitSurfaceSpan"
         case .setSurfaceKnotMultiplicity:
             "setSurfaceKnotMultiplicity"
         case .matchSurfaceBoundaryContinuity:
@@ -637,6 +643,7 @@ public enum EditorCommand: Codable, Equatable, Sendable {
              .setSurfaceControlPointWeight,
              .setSurfaceKnotValue,
              .insertSurfaceKnot,
+             .splitSurfaceSpan,
              .setSurfaceKnotMultiplicity,
              .matchSurfaceBoundaryContinuity,
              .slidePolySplineSurfaceVertices,

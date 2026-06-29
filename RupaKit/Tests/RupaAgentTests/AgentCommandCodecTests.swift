@@ -747,6 +747,14 @@ import SwiftCAD
         ),
         expectedGeneration: DocumentGeneration(5)
     )
+    let surfaceSpanSplitRequest = AgentRequest.execute(
+        sessionID: sessionID,
+        command: .splitSurfaceSpan(
+            target: surfaceSpanReference,
+            fraction: .scalar(0.5)
+        ),
+        expectedGeneration: DocumentGeneration(5)
+    )
     let surfaceKnotMultiplicityRequest = AgentRequest.execute(
         sessionID: sessionID,
         command: .setSurfaceKnotMultiplicity(
@@ -823,6 +831,9 @@ import SwiftCAD
     let decodedSurfaceKnotInsertionRequest = try codec.decodeRequest(
         from: try codec.encode(surfaceKnotInsertionRequest)
     )
+    let decodedSurfaceSpanSplitRequest = try codec.decodeRequest(
+        from: try codec.encode(surfaceSpanSplitRequest)
+    )
     let decodedSurfaceKnotMultiplicityRequest = try codec.decodeRequest(
         from: try codec.encode(surfaceKnotMultiplicityRequest)
     )
@@ -840,6 +851,7 @@ import SwiftCAD
     #expect(decodedSurfaceControlPointSlideRequest == surfaceControlPointSlideRequest)
     #expect(decodedSurfaceKnotValueRequest == surfaceKnotValueRequest)
     #expect(decodedSurfaceKnotInsertionRequest == surfaceKnotInsertionRequest)
+    #expect(decodedSurfaceSpanSplitRequest == surfaceSpanSplitRequest)
     #expect(decodedSurfaceKnotMultiplicityRequest == surfaceKnotMultiplicityRequest)
     #expect(decodedSurfaceBoundaryContinuityRequest == surfaceBoundaryContinuityRequest)
 }

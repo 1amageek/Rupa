@@ -100,8 +100,12 @@ import Testing
     #expect(state.editabilityTitle == "Editable")
     #expect(state.canSetKnotValue == false)
     #expect(state.canInsertKnot)
+    #expect(state.canSplitSpan)
     #expect(state.canSetKnotMultiplicity == false)
     #expect(state.defaultInsertionValue(fallback: 0.1) == 0.25)
+    #expect(state.defaultSpanSplitFraction() == 0.5)
+    #expect(state.clampedSpanSplitFraction(-1.0) == 1.0e-6)
+    #expect(state.clampedSpanSplitFraction(2.0) == 1.0 - 1.0e-6)
     #expect(state.clampedInsertionValue(0.0) ?? 0.0 > 0.0)
     #expect(state.clampedInsertionValue(0.5) ?? 0.0 < 0.5)
 }

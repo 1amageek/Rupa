@@ -589,6 +589,95 @@ import Testing
     }
 }
 
+@Test func directBSplineSurfaceSpanReferenceSplitsSpanByFraction() async throws {
+    var document = DesignDocument.empty()
+    let surface = designDocumentDirectBSplineSurfaceWithInteriorKnots()
+
+    let featureID = try document.createBSplineSurface(
+        name: "Direct Split Span Surface",
+        surface: surface
+    )
+    let summary = try SurfaceSourceSummaryService().summarize(document: document)
+    let patch = try #require(summary.sources.first?.patches.first)
+    let editableSpan = try #require(patch.basis.vSpans.first { $0.index == 1 })
+    #expect(editableSpan.lowerBound == 0.5)
+    #expect(editableSpan.upperBound == 1.0)
+    let spanReference = try #require(editableSpan.selectionReference)
+
+    try document.splitSurfaceSpan(
+        target: spanReference,
+        fraction: .scalar(0.25)
+    )
+
+    let feature = try #require(document.cadDocument.designGraph.nodes[featureID])
+    guard case let .bSplineSurface(surfaceFeature) = feature.operation else {
+        Issue.record("Expected a direct B-spline surface feature.")
+        return
+    }
+    #expect(surfaceFeature.surface.uKnots == surface.uKnots)
+    #expect(surfaceFeature.surface.vKnots == [0.0, 0.0, 0.0, 0.5, 0.625, 1.0, 1.0, 1.0])
+    #expect(surfaceFeature.surface.uControlPointCount == surface.uControlPointCount)
+    #expect(surfaceFeature.surface.vControlPointCount == surface.vControlPointCount + 1)
+    for u in [0.0, 0.2, 0.45, 0.8, 1.0] {
+        for v in [0.0, 0.3, 0.625, 0.9, 1.0] {
+            let before = try surface.point(u: u, v: v)
+            let after = try surfaceFeature.surface.point(u: u, v: v)
+            #expect(abs(before.x - after.x) <= 1.0e-10)
+            #expect(abs(before.y - after.y) <= 1.0e-10)
+            #expect(abs(before.z - after.z) <= 1.0e-10)
+        }
+    }
+    #expect(throws: EditorError.self) {
+        try document.splitSurfaceSpan(
+            target: spanReference,
+            fraction: .scalar(0.0)
+        )
+    }
+    let knotReference = try #require(patch.basis.uKnotVector.first?.selectionReference)
+    #expect(throws: EditorError.self) {
+        try document.splitSurfaceSpan(
+            target: knotReference,
+            fraction: .scalar(0.5)
+        )
+    }
+}
+
+@Test func surfaceSpanSplitRejectsGeneratedPolySplineSpanReference() async throws {
+    var document = DesignDocument.empty()
+    let featureID = try document.createPolySplineSurface(
+        name: "Unsupported PolySpline Span Split Surface",
+        sourceMesh: designDocumentPolySplineQuadMesh()
+    )
+    let summary = try SurfaceSourceSummaryService().summarize(document: document)
+    let patch = try #require(summary.sources.first?.patches.first)
+    let summarySpan = try #require(patch.basis.uSpans.first)
+    #expect(summarySpan.isEditable == false)
+    #expect(summarySpan.selectionReference == nil)
+    let spanReference = SelectionReference.surface(.span(SurfaceSpanReference(
+        surface: SurfaceReference(
+            faceName: PersistentName(components: [
+                .feature(featureID),
+                .generated("polySpline"),
+                .subshape("patch:\(patch.patchID):face"),
+            ])
+        ),
+        direction: .u,
+        spanIndex: summarySpan.index
+    )))
+
+    #expect(throws: EditorError.self) {
+        try document.splitSurfaceSpan(
+            target: spanReference,
+            fraction: .scalar(0.5)
+        )
+    }
+    let feature = try #require(document.cadDocument.designGraph.nodes[featureID])
+    guard case .polySpline = feature.operation else {
+        Issue.record("Rejected PolySpline span split must not mutate the source feature.")
+        return
+    }
+}
+
 @Test func directBSplineSurfaceKnotReferenceInsertsDuplicateKnotMultiplicity() async throws {
     var document = DesignDocument.empty()
     let surface = designDocumentDirectBSplineSurfaceWithInteriorKnots()

@@ -250,8 +250,42 @@ import SwiftCAD
               "params": {
                 "sessionID": "00000000-0000-0000-0000-000000000001",
                 "command": {
-                  "renameDocument": {
-                    "name": "Fixture Project"
+                  "splitSurfaceSpan": {
+                    "target": {
+                      "kind": "surface",
+                      "surface": {
+                        "kind": "span",
+                        "span": {
+                          "surface": {
+                            "faceName": {
+                              "components": [
+                                {
+                                  "kind": "feature",
+                                  "featureID": "00000000-0000-0000-0000-000000000101"
+                                },
+                                {
+                                  "kind": "generated",
+                                  "value": "bSplineSurface"
+                                },
+                                {
+                                  "kind": "subshape",
+                                  "value": "patch:0:face"
+                                }
+                              ]
+                            }
+                          },
+                          "direction": "u",
+                          "spanIndex": 0
+                        }
+                      }
+                    },
+                    "fraction": {
+                      "kind": "constant",
+                      "quantity": {
+                        "value": 0.5,
+                        "kind": "scalar"
+                      }
+                    }
                   }
                 },
                 "expectedGeneration": {
@@ -265,8 +299,22 @@ import SwiftCAD
                     #expect(Bool(false))
                     return
                 }
+                let expectedFeatureID = try #require(UUID(
+                    uuidString: "00000000-0000-0000-0000-000000000101"
+                ))
+                let expectedTarget = SelectionReference.surface(.span(SurfaceSpanReference(
+                    surface: SurfaceReference(
+                        faceName: PersistentName(components: [
+                            .feature(FeatureID(expectedFeatureID)),
+                            .generated("bSplineSurface"),
+                            .subshape("patch:0:face"),
+                        ])
+                    ),
+                    direction: .u,
+                    spanIndex: 0
+                )))
                 #expect(decodedSessionID == sessionID)
-                #expect(command == .renameDocument(name: "Fixture Project"))
+                #expect(command == .splitSurfaceSpan(target: expectedTarget, fraction: .constant(.scalar(0.5))))
                 #expect(expectedGeneration == DocumentGeneration(3))
             }
         ),

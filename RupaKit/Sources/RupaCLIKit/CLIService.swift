@@ -1914,6 +1914,30 @@ public struct CLIService {
         )
     }
 
+    public func splitSurfaceSpan(
+        target: CLIDocumentTarget,
+        reference: SelectionReference,
+        fraction: CADExpression,
+        mode: CLIEditMode = .auto,
+        expectedGeneration: DocumentGeneration? = nil,
+        dryRun: Bool = false,
+        forceFileEdit: Bool = false,
+        client: AgentClientProtocol? = nil
+    ) throws -> CLIResponse {
+        try executeModelingCommand(
+            .splitSurfaceSpan(
+                target: reference,
+                fraction: fraction
+            ),
+            target: target,
+            mode: mode,
+            expectedGeneration: expectedGeneration,
+            dryRun: dryRun,
+            forceFileEdit: forceFileEdit,
+            client: client
+        )
+    }
+
     public func setSurfaceKnotMultiplicity(
         target: CLIDocumentTarget,
         reference: SelectionReference,

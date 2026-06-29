@@ -1231,6 +1231,16 @@ public final class AgentCommandController: AgentClientProtocol {
             failureMode: "Accepts editable direct B-spline surface span references and editable internal knot references discovered from surfaceSourceSummary; rejects boundary-only or missing spans, boundary knots, PolySpline generated spans or knots, non-span and non-knot references, non-scalar values, values outside the selected span, values that do not match a selected existing knot, saturated knot multiplicity, stale generations, non-editable surface sources, and invalid rebuilt B-spline sheet topology."
         ),
         capability(
+            "splitSurfaceSpan",
+            category: .solid,
+            summary: "Split a selected editable direct B-spline surface span at a normalized fraction by inserting a shape-preserving knot inside that span.",
+            access: .automationCommand,
+            mutatesDocument: true,
+            discovery: [.surfaceSourceSummary, .surfaceFrames, .surfaceAnalysis, .surfaceContinuitySummary],
+            targets: [.surfaceSpan],
+            failureMode: "Accepts editable direct B-spline surface span references discovered from surfaceSourceSummary and a scalar fraction strictly between 0 and 1; rejects knot, trim, control-point, PolySpline generated span, missing span, stale generation, non-editable surface sources, and invalid rebuilt B-spline sheet topology."
+        ),
+        capability(
             "setSurfaceKnotMultiplicity",
             category: .solid,
             summary: "Set an editable direct B-spline surface internal knot to an explicit higher multiplicity by shape-preserving knot insertion, allowing agents to control local continuity without changing the represented surface shape.",

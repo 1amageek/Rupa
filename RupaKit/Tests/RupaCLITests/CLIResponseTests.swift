@@ -3672,6 +3672,56 @@ func cliExecutableSurfaceKnotMultiplicityCommandMutatesClosedDocumentAsJSON() as
 }
 
 @Test(.timeLimit(.minutes(1)))
+func cliExecutableSurfaceSpanSplitMutatesClosedDocumentAsJSON() async throws {
+    let temporaryDirectory = try makeTemporaryDirectory()
+    defer {
+        removeTemporaryDirectory(temporaryDirectory)
+    }
+    let documentURL = temporaryDirectory.appendingPathComponent("process-surface-span-split.swcad")
+    var document = DesignDocument.empty(named: "Process Surface Span Split")
+    let sourceSurface = cliDirectBSplineSurfaceWithInteriorKnots()
+    let featureID = try document.createBSplineSurface(
+        name: "CLI Split Span B-spline Surface",
+        surface: sourceSurface
+    )
+    let summary = try SurfaceSourceSummaryService().summarize(document: document)
+    let patch = try #require(summary.sources.first?.patches.first)
+    let editableSpan = try #require(patch.basis.vSpans.first { $0.index == 1 })
+    let spanJSON = try encodedSelectionReference(try #require(editableSpan.selectionReference))
+    try DocumentFileService().save(document, to: documentURL)
+
+    let splitResult = try await runCLI([
+        "surface",
+        "split-span",
+        documentURL.path,
+        "--reference",
+        spanJSON,
+        "--fraction",
+        "0.25",
+        "--mode",
+        "file",
+        "--json",
+    ])
+    let splitResponse = try JSONDecoder().decode(
+        CLIResponse.self,
+        from: splitResult.standardOutputData
+    )
+    let loaded = try DocumentFileService().load(from: documentURL)
+    let feature = try #require(loaded.cadDocument.designGraph.nodes[featureID])
+    guard case let .bSplineSurface(surfaceFeature) = feature.operation else {
+        Issue.record("Expected a direct B-spline surface feature.")
+        return
+    }
+
+    #expect(splitResult.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: splitResult.standardError))
+    #expect(splitResponse.message == "Surface span split.")
+    #expect(splitResponse.saved)
+    #expect(surfaceFeature.surface.uKnots == sourceSurface.uKnots)
+    #expect(surfaceFeature.surface.vKnots == [0.0, 0.0, 0.0, 0.5, 0.625, 1.0, 1.0, 1.0])
+    #expect(surfaceFeature.surface.vControlPointCount == sourceSurface.vControlPointCount + 1)
+}
+
+@Test(.timeLimit(.minutes(1)))
 func cliExecutableSurfaceBoundaryContinuityCommandMutatesClosedDocumentAsJSON() async throws {
     let temporaryDirectory = try makeTemporaryDirectory()
     defer {

@@ -901,6 +901,7 @@ public struct SurfaceCommand: ParsableCommand {
             SurfaceSetControlPointWeightCommand.self,
             SurfaceSetKnotValueCommand.self,
             SurfaceInsertKnotCommand.self,
+            SurfaceSplitSpanCommand.self,
             SurfaceSetKnotMultiplicityCommand.self,
             SurfaceMatchBoundaryContinuityCommand.self,
             SurfaceSlideControlPointsCommand.self,

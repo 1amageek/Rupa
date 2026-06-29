@@ -653,6 +653,63 @@ extension DesignDocument {
         }
     }
 
+    public mutating func splitSurfaceSpan(
+        target: SelectionReference,
+        fraction: CADExpression,
+        objectRegistry: ObjectTypeRegistry = .builtIn
+    ) throws {
+        let resolvedFraction = try resolvedScalarValue(
+            fraction,
+            owner: "B-spline surface span split"
+        )
+        guard resolvedFraction > 0.0, resolvedFraction < 1.0 else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "B-spline surface span split fraction must be strictly between 0 and 1."
+            )
+        }
+        let spanResolution = try resolvedBSplineSurfaceSpanReference(
+            target,
+            owner: "B-spline surface span split"
+        )
+        guard var feature = cadDocument.designGraph.nodes[spanResolution.featureID],
+              case let .bSplineSurface(surfaceFeature) = feature.operation else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "B-spline surface span split requires an existing direct B-spline surface source feature."
+            )
+        }
+        let spanBounds = try bSplineSurfaceSpanBounds(
+            for: spanResolution.reference,
+            in: surfaceFeature.surface,
+            owner: "B-spline surface span split"
+        )
+        let insertionValue = spanBounds.lower
+            + (spanBounds.upper - spanBounds.lower) * resolvedFraction
+
+        let knotEditor = BSplineSurfaceKnotEditingService()
+        feature.operation = .bSplineSurface(try knotEditor.updatedFeature(
+            insertingKnot: spanResolution.reference.direction,
+            value: insertionValue,
+            in: surfaceFeature,
+            owner: "B-spline surface span split"
+        ))
+
+        var updatedCADDocument = cadDocument
+        let previousCADDocument = cadDocument
+        do {
+            try updatedCADDocument.replaceFeature(feature)
+            cadDocument = updatedCADDocument
+            try validate(objectRegistry: objectRegistry)
+        } catch {
+            cadDocument = previousCADDocument
+            throw EditorError(
+                code: .commandInvalid,
+                message: "B-spline surface span split produced invalid source geometry: \(error)."
+            )
+        }
+    }
+
     public mutating func setSurfaceKnotMultiplicity(
         target: SelectionReference,
         multiplicity: Int,

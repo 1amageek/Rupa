@@ -616,6 +616,47 @@ import SwiftCAD
 }
 
 @MainActor
+@Test func automationCanSplitSurfaceSpan() async throws {
+    let session = EditorSession()
+    let runner = AutomationRunner()
+    let sourceSurface = automationDirectBSplineSurfaceWithInteriorKnots()
+    _ = try runner.execute(
+        .createBSplineSurface(
+            name: "Automation Split Span Surface",
+            surface: sourceSurface
+        ),
+        in: session
+    )
+    let summary = try SurfaceSourceSummaryService().summarize(document: session.document)
+    let span = try #require(
+        summary.sources.first?.patches.first?.basis.vSpans.first { $0.index == 1 }
+    )
+    let spanReference = try #require(span.selectionReference)
+
+    let result = try runner.execute(
+        .splitSurfaceSpan(
+            target: spanReference,
+            fraction: .scalar(0.25)
+        ),
+        in: session
+    )
+
+    let featureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let feature = try #require(session.document.cadDocument.designGraph.nodes[featureID])
+    guard case let .bSplineSurface(surfaceFeature) = feature.operation else {
+        Issue.record("Automation must keep a direct B-spline surface feature.")
+        return
+    }
+    #expect(result.message == "Surface span split.")
+    #expect(result.commandName == "splitSurfaceSpan")
+    #expect(result.didMutate)
+    #expect(result.generation == DocumentGeneration(2))
+    #expect(surfaceFeature.surface.uKnots == sourceSurface.uKnots)
+    #expect(surfaceFeature.surface.vKnots == [0.0, 0.0, 0.0, 0.5, 0.625, 1.0, 1.0, 1.0])
+    #expect(surfaceFeature.surface.vControlPointCount == sourceSurface.vControlPointCount + 1)
+}
+
+@MainActor
 @Test func automationCanMatchSurfaceBoundaryContinuity() async throws {
     let session = EditorSession()
     let runner = AutomationRunner()

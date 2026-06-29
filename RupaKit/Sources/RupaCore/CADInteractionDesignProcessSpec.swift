@@ -572,18 +572,20 @@ struct CADInteractionDesignProcessSpec: Sendable {
             )
         case .surfaceModeling:
             CADInteractionDesignProcessSpec(
-                capabilityTitle: "PolySpline surface reconstruction and surface CV editing",
+                capabilityTitle: "Direct B-spline and PolySpline surface modeling foundation",
                 sourceEntities: ["mesh patch graph", "B-spline surface source", "surface CV", "trim boundary"],
                 targetEntities: ["surface body", "surface frame", "surface continuity diagnostic"],
                 generatedTopology: ["B-spline face", "trim edge", "control point", "UVN frame"],
                 tolerances: ["surface continuity tolerance", "UV parameter tolerance", "trim boundary tolerance"],
-                ownershipBoundaries: ["SwiftCAD owns surface representation", "RupaCore owns source-owned CV edits and summaries"],
+                ownershipBoundaries: ["SwiftCAD owns surface representation", "RupaCore owns source-owned CV, knot, span, trim-continuity edits, and summaries"],
                 supportedCases: [
                     caseItem("polyspline-patch", "Supported single-quad and planar unmerged PolySpline patches become B-spline sheet B-reps.", .supported, .kernel),
                     caseItem("surface-cv-frame", "Surface source summaries expose CV references and UVN frame readback.", .supported, .core),
+                    caseItem("direct-bspline-source", "Direct B-spline surface sources expose stable CV, weight, knot, span, face, and rectangular trim references.", .supported, .core),
+                    caseItem("direct-bspline-parameter-edits", "Direct B-spline surface sources support CV moves/slides, CV weights, knot value edits, shape-preserving knot insertion, fraction-based span split, knot multiplicity edits, and compatible G0/G1/G2 boundary matching.", .supported, .core),
                 ],
                 boundaryCases: [
-                    caseItem("nurbs-source-foundation", "Direct B-spline/NURBS source creation, knots, spans, and trims remain next foundation work.", .planned, .kernel),
+                    caseItem("arbitrary-nurbs-trim-foundation", "Arbitrary NURBS sources, authored trim-loop mutation, watertight polysurfaces, remaining span policies, and arbitrary adjacency solving remain next foundation work.", .planned, .kernel),
                 ],
                 degenerateCases: [
                     caseItem("nonplanar-g2-network", "Unsupported non-planar G2 patch networks report unresolved continuity constraints.", .rejected, .kernel),
@@ -607,11 +609,11 @@ struct CADInteractionDesignProcessSpec: Sendable {
                     diagnostics: "Surface reconstruction diagnostics"
                 ),
                 invariants: [
-                    invariant("surface-source-owned", "Surface CV edits must be source-owned and frame-addressable.", .core),
+                    invariant("surface-source-owned", "Surface CV, knot, span, and trim-continuity edits must be source-owned and frame-addressable.", .core),
                     invariant("surface-continuity-diagnostic", "Continuity gaps must remain typed diagnostics before patch broadening.", .evaluation),
                 ],
                 decisionConflictArea: "Surface foundation before tool breadth",
-                decisionRationale: "General surface tools must wait for first-class B-spline/NURBS source identity, trims, frames, and continuity diagnostics."
+                decisionRationale: "General surface tools must build on the current direct B-spline source identity, frame, knot/span, and continuity contracts before broadening into authored trims, arbitrary adjacency, and full NURBS polysurfaces."
             )
         case .curveContinuity:
             CADInteractionDesignProcessSpec(

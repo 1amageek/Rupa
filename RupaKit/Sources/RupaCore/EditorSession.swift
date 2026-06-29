@@ -2177,6 +2177,19 @@ public final class EditorSession {
     }
 
     @discardableResult
+    public func splitSurfaceSpan(
+        target: SelectionReference,
+        fraction: CADExpression
+    ) -> CommandExecutionResult? {
+        perform(
+            .splitSurfaceSpan(
+                target: target,
+                fraction: fraction
+            )
+        )
+    }
+
+    @discardableResult
     public func setSurfaceKnotMultiplicity(
         target: SelectionReference,
         multiplicity: Int

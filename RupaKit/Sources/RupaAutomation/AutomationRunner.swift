@@ -1278,6 +1278,17 @@ public struct AutomationRunner {
                 didMutate: result.didMutate,
                 diagnostics: result.diagnostics
             )
+        case .splitSurfaceSpan(let target, let fraction):
+            let result = try session.execute(
+                .splitSurfaceSpan(target: target, fraction: fraction)
+            )
+            return AutomationResult(
+                message: "Surface span split.",
+                commandName: result.commandName,
+                generation: result.generation,
+                didMutate: result.didMutate,
+                diagnostics: result.diagnostics
+            )
         case .setSurfaceKnotMultiplicity(let target, let multiplicity):
             let result = try session.execute(
                 .setSurfaceKnotMultiplicity(target: target, multiplicity: multiplicity)

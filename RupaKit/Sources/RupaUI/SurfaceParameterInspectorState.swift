@@ -139,6 +139,18 @@ struct SurfaceParameterInspectorState: Equatable, Sendable {
             }
         }
 
+        var canSplitSpan: Bool {
+            guard kind == .span,
+                  isEditable,
+                  let lowerBound,
+                  let upperBound,
+                  lowerBound.isFinite,
+                  upperBound.isFinite else {
+                return false
+            }
+            return lowerBound < upperBound
+        }
+
         var canSetKnotMultiplicity: Bool {
             guard kind == .knot,
                   isEditable,
@@ -328,6 +340,10 @@ struct SurfaceParameterInspectorState: Equatable, Sendable {
         entries.count == 1 && entries.allSatisfy(\.canInsertKnot)
     }
 
+    var canSplitSpan: Bool {
+        entries.count == 1 && entries.allSatisfy(\.canSplitSpan)
+    }
+
     var canSetKnotMultiplicity: Bool {
         entries.count == 1 && entries.allSatisfy(\.canSetKnotMultiplicity)
     }
@@ -465,6 +481,14 @@ struct SurfaceParameterInspectorState: Equatable, Sendable {
         }
     }
 
+    func clampedSpanSplitFraction(_ value: Double) -> Double? {
+        guard canSplitSpan, value.isFinite else {
+            return nil
+        }
+        let margin = 1.0e-6
+        return min(max(value, margin), 1.0 - margin)
+    }
+
     func clampedKnotMultiplicity(_ value: Int) -> Int? {
         guard canSetKnotMultiplicity,
               let range = entries.first?.knotMultiplicityRange else {
@@ -479,6 +503,10 @@ struct SurfaceParameterInspectorState: Equatable, Sendable {
         }
         let candidate = entry.recommendedInsertionValue ?? fallback
         return clampedInsertionValue(candidate) ?? fallback
+    }
+
+    func defaultSpanSplitFraction(fallback: Double = 0.5) -> Double {
+        clampedSpanSplitFraction(fallback) ?? 0.5
     }
 
     func defaultKnotMultiplicity(fallback: Int) -> Int {

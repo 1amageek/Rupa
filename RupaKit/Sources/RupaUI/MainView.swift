@@ -30,6 +30,7 @@ public struct MainView: View {
     @State private var surfaceControlPointFrameVMoveMeters: Double
     @State private var surfaceControlPointFrameNormalMoveMeters: Double
     @State private var surfaceKnotInsertionValue: Double
+    @State private var surfaceSpanSplitFraction: Double
     @State private var surfaceKnotMultiplicityValue: Int
     @State private var surfaceBoundaryContinuityLevel: SurfaceBoundaryContinuityLevel
     @State private var surfaceBoundaryMatchSide: SurfaceBoundaryMatchSide
@@ -104,6 +105,7 @@ public struct MainView: View {
         self._surfaceControlPointFrameVMoveMeters = State(initialValue: 0.0)
         self._surfaceControlPointFrameNormalMoveMeters = State(initialValue: 0.001)
         self._surfaceKnotInsertionValue = State(initialValue: 0.5)
+        self._surfaceSpanSplitFraction = State(initialValue: 0.5)
         self._surfaceKnotMultiplicityValue = State(initialValue: 2)
         self._surfaceBoundaryContinuityLevel = State(initialValue: .g1)
         self._surfaceBoundaryMatchSide = State(initialValue: .automatic)
@@ -4228,9 +4230,11 @@ public struct MainView: View {
         SurfaceParameterInspectorView(
             state: state,
             knotInsertionValue: $surfaceKnotInsertionValue,
+            spanSplitFraction: $surfaceSpanSplitFraction,
             knotMultiplicityValue: $surfaceKnotMultiplicityValue,
             onSetKnotValue: setSurfaceKnotValue,
             onInsertKnot: insertSurfaceKnot,
+            onSplitSpan: splitSurfaceSpan,
             onSetKnotMultiplicity: setSurfaceKnotMultiplicity,
             onSetFrameDisplay: setSurfaceFrameDisplay
         )
@@ -5155,6 +5159,19 @@ public struct MainView: View {
         let result = session.insertSurfaceKnot(
             target: target,
             value: .scalar(value)
+        )
+        if result?.diagnostics.isEmpty == false || result == nil {
+            isPreviewExpanded = true
+        }
+    }
+
+    private func splitSurfaceSpan(
+        _ target: SelectionReference,
+        fraction: Double
+    ) {
+        let result = session.splitSurfaceSpan(
+            target: target,
+            fraction: .scalar(fraction)
         )
         if result?.diagnostics.isEmpty == false || result == nil {
             isPreviewExpanded = true

@@ -1115,6 +1115,16 @@ public final class CADDocumentStore {
             document = updatedDocument
             try commitMutation()
             evaluateCurrentDocument()
+        case .splitSurfaceSpan(let target, let fraction):
+            var updatedDocument = document
+            try updatedDocument.splitSurfaceSpan(
+                target: target,
+                fraction: fraction,
+                objectRegistry: objectRegistry
+            )
+            document = updatedDocument
+            try commitMutation()
+            evaluateCurrentDocument()
         case .setSurfaceKnotMultiplicity(let target, let multiplicity):
             var updatedDocument = document
             try updatedDocument.setSurfaceKnotMultiplicity(
