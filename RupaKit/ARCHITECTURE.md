@@ -2,6 +2,8 @@
 
 RupaKit is organized by execution boundary. Keep new code close to the layer that owns the state it mutates or the view it renders.
 
+UI layout, canvas overlay, and affordance rules live in [DESIGN_GUIDE.md](DESIGN_GUIDE.md). Keep architectural ownership rules here and visual interaction rules in the design guide.
+
 ```mermaid
 flowchart LR
     Core[RupaCore] --> CoreTypes[RupaCoreTypes]
