@@ -581,7 +581,7 @@ struct CADInteractionDesignProcessSpec: Sendable {
                 supportedCases: [
                     caseItem("polyspline-patch", "Supported single-quad and planar unmerged PolySpline patches become B-spline sheet B-reps.", .supported, .kernel),
                     caseItem("surface-cv-frame", "Surface source summaries expose CV references and UVN frame readback.", .supported, .core),
-                    caseItem("direct-bspline-source", "Direct B-spline surface sources expose stable CV, weight, knot, span, face, rectangular trim references, source-owned rectangular outer trim domains, authored UV p-curve trim loops, authored trim endpoint handles, and p-curve-first mesh tessellation for current direct surface trims.", .supported, .core),
+                    caseItem("direct-bspline-source", "Direct B-spline surface sources expose stable CV, weight, knot, span, face, rectangular trim references, source-owned rectangular outer trim domains, authored UV p-curve trim loops, shared adaptive UV trim-loop validation, rational 2D B-spline p-curve trim preservation, authored trim endpoint handles, and p-curve-first mesh tessellation for current direct surface trims.", .supported, .core),
                     caseItem("direct-bspline-parameter-edits", "Direct B-spline surface sources support CV moves/slides, CV weights, knot value edits, shape-preserving knot insertion, fraction-based span split, knot multiplicity edits, rectangular trim-domain edits, authored trim-loop edits, source-owned authored trim endpoint moves, and compatible G0/G1/G2 boundary matching for full-domain rectangular surfaces.", .supported, .core),
                 ],
                 boundaryCases: [
