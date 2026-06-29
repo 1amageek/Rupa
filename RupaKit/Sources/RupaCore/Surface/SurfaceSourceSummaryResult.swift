@@ -388,6 +388,114 @@ public struct SurfaceSourceSummaryResult: Codable, Equatable, Sendable {
 
     public struct TrimLoop: Codable, Equatable, Sendable {
         public struct Edge: Codable, Equatable, Sendable {
+            public struct ParameterCurve: Codable, Equatable, Sendable {
+                public struct Knot: Codable, Equatable, Sendable {
+                    public var id: String
+                    public var index: Int
+                    public var value: Double
+                    public var multiplicity: Int
+                    public var isBoundary: Bool
+                    public var isValueEditable: Bool
+                    public var isMultiplicityEditable: Bool
+                    public var isInsertionSupported: Bool
+                    public var unsupportedReason: String?
+
+                    public init(
+                        id: String,
+                        index: Int,
+                        value: Double,
+                        multiplicity: Int,
+                        isBoundary: Bool,
+                        isValueEditable: Bool = false,
+                        isMultiplicityEditable: Bool = false,
+                        isInsertionSupported: Bool = false,
+                        unsupportedReason: String? = nil
+                    ) {
+                        self.id = id
+                        self.index = index
+                        self.value = value
+                        self.multiplicity = multiplicity
+                        self.isBoundary = isBoundary
+                        self.isValueEditable = isValueEditable
+                        self.isMultiplicityEditable = isMultiplicityEditable
+                        self.isInsertionSupported = isInsertionSupported
+                        self.unsupportedReason = unsupportedReason
+                    }
+                }
+
+                public struct Span: Codable, Equatable, Sendable {
+                    public var id: String
+                    public var index: Int
+                    public var lowerBound: Double
+                    public var upperBound: Double
+                    public var startKnotIndex: Int
+                    public var endKnotIndex: Int
+                    public var isInsertionSupported: Bool
+                    public var unsupportedReason: String?
+
+                    public init(
+                        id: String,
+                        index: Int,
+                        lowerBound: Double,
+                        upperBound: Double,
+                        startKnotIndex: Int,
+                        endKnotIndex: Int,
+                        isInsertionSupported: Bool = false,
+                        unsupportedReason: String? = nil
+                    ) {
+                        self.id = id
+                        self.index = index
+                        self.lowerBound = lowerBound
+                        self.upperBound = upperBound
+                        self.startKnotIndex = startKnotIndex
+                        self.endKnotIndex = endKnotIndex
+                        self.isInsertionSupported = isInsertionSupported
+                        self.unsupportedReason = unsupportedReason
+                    }
+                }
+
+                public var kind: String
+                public var degree: Int?
+                public var order: Int?
+                public var domainLowerBound: Double?
+                public var domainUpperBound: Double?
+                public var knots: [Double]
+                public var knotVector: [Knot]
+                public var spans: [Span]
+                public var spanCount: Int
+                public var isRational: Bool
+                public var supportsKnotInsertion: Bool
+                public var unsupportedReason: String?
+
+                public init(
+                    kind: String,
+                    degree: Int? = nil,
+                    order: Int? = nil,
+                    domainLowerBound: Double? = nil,
+                    domainUpperBound: Double? = nil,
+                    knots: [Double] = [],
+                    knotVector: [Knot] = [],
+                    spans: [Span] = [],
+                    spanCount: Int = 0,
+                    isRational: Bool = false,
+                    supportsKnotInsertion: Bool = false,
+                    unsupportedReason: String? = nil
+                ) {
+                    self.kind = kind
+                    self.degree = degree
+                    self.order = order
+                    self.domainLowerBound = domainLowerBound
+                    self.domainUpperBound = domainUpperBound
+                    self.knots = knots
+                    self.knotVector = knotVector
+                    self.spans = spans
+                    self.spanCount = spanCount
+                    self.isRational = isRational
+                    self.supportsKnotInsertion = supportsKnotInsertion
+                    self.unsupportedReason = unsupportedReason
+                }
+            }
+
             public struct ParameterCurveControlPoint: Codable, Equatable, Sendable {
                 public var index: Int
                 public var parameter: ParameterAddress
@@ -425,6 +533,7 @@ public struct SurfaceSourceSummaryResult: Codable, Equatable, Sendable {
             public var selectionReference: SelectionReference?
             public var startParameter: ParameterAddress
             public var endParameter: ParameterAddress
+            public var parameterCurve: ParameterCurve
             public var parameterCurveControlPoints: [ParameterCurveControlPoint]
             public var boundaryDirection: SurfaceParameterDirection
             public var inwardDirection: SurfaceParameterDirection
@@ -442,6 +551,10 @@ public struct SurfaceSourceSummaryResult: Codable, Equatable, Sendable {
                 selectionReference: SelectionReference?,
                 startParameter: ParameterAddress,
                 endParameter: ParameterAddress,
+                parameterCurve: ParameterCurve = ParameterCurve(
+                    kind: "unknown",
+                    unsupportedReason: "Trim p-curve metadata was not provided."
+                ),
                 parameterCurveControlPoints: [ParameterCurveControlPoint] = [],
                 boundaryDirection: SurfaceParameterDirection,
                 inwardDirection: SurfaceParameterDirection,
@@ -458,6 +571,7 @@ public struct SurfaceSourceSummaryResult: Codable, Equatable, Sendable {
                 self.selectionReference = selectionReference
                 self.startParameter = startParameter
                 self.endParameter = endParameter
+                self.parameterCurve = parameterCurve
                 self.parameterCurveControlPoints = parameterCurveControlPoints
                 self.boundaryDirection = boundaryDirection
                 self.inwardDirection = inwardDirection

@@ -193,6 +193,11 @@ import SwiftCAD
     let surfaceTrimControlPointWeight = try #require(
         descriptors.first { $0.name == "setSurfaceTrimControlPointWeight" }
     )
+    let surfaceTrimKnotInsertion = try #require(descriptors.first { $0.name == "insertSurfaceTrimKnot" })
+    let surfaceTrimKnotValue = try #require(descriptors.first { $0.name == "setSurfaceTrimKnotValue" })
+    let surfaceTrimKnotMultiplicity = try #require(
+        descriptors.first { $0.name == "setSurfaceTrimKnotMultiplicity" }
+    )
     let surfaceBoundaryContinuity = try #require(
         descriptors.first { $0.name == "matchSurfaceBoundaryContinuity" }
     )
@@ -726,6 +731,43 @@ import SwiftCAD
     #expect(surfaceTrimControlPointWeight.summary.contains("surfaceSourceSummary"))
     #expect(surfaceTrimControlPointWeight.failureMode.contains("isWeightEditable true"))
     #expect(surfaceTrimControlPointWeight.failureMode.contains("constant and polyline trim curves"))
+
+    #expect(surfaceTrimKnotInsertion.category == .solid)
+    #expect(surfaceTrimKnotInsertion.mutatesDocument)
+    #expect(surfaceTrimKnotInsertion.access == .automationCommand)
+    #expect(surfaceTrimKnotInsertion.discovery.contains(.surfaceSourceSummary))
+    #expect(surfaceTrimKnotInsertion.discovery.contains(.surfaceFrames))
+    #expect(surfaceTrimKnotInsertion.discovery.contains(.surfaceAnalysis))
+    #expect(surfaceTrimKnotInsertion.discovery.contains(.topologySummary))
+    #expect(surfaceTrimKnotInsertion.targets == [.surfaceTrim])
+    #expect(surfaceTrimKnotInsertion.summary.contains("shape-preserving knot"))
+    #expect(surfaceTrimKnotInsertion.summary.contains("trim p-curve"))
+    #expect(surfaceTrimKnotInsertion.failureMode.contains("parameterCurve.spans"))
+    #expect(surfaceTrimKnotInsertion.failureMode.contains("constant and polyline trim curves"))
+
+    #expect(surfaceTrimKnotValue.category == .solid)
+    #expect(surfaceTrimKnotValue.mutatesDocument)
+    #expect(surfaceTrimKnotValue.access == .automationCommand)
+    #expect(surfaceTrimKnotValue.discovery.contains(.surfaceSourceSummary))
+    #expect(surfaceTrimKnotValue.discovery.contains(.surfaceFrames))
+    #expect(surfaceTrimKnotValue.discovery.contains(.surfaceAnalysis))
+    #expect(surfaceTrimKnotValue.discovery.contains(.topologySummary))
+    #expect(surfaceTrimKnotValue.targets == [.surfaceTrim])
+    #expect(surfaceTrimKnotValue.summary.contains("existing editable B-spline trim p-curve knot value"))
+    #expect(surfaceTrimKnotValue.failureMode.contains("parameterCurve.knotVector index"))
+    #expect(surfaceTrimKnotValue.failureMode.contains("strictly between neighboring knot values"))
+
+    #expect(surfaceTrimKnotMultiplicity.category == .solid)
+    #expect(surfaceTrimKnotMultiplicity.mutatesDocument)
+    #expect(surfaceTrimKnotMultiplicity.access == .automationCommand)
+    #expect(surfaceTrimKnotMultiplicity.discovery.contains(.surfaceSourceSummary))
+    #expect(surfaceTrimKnotMultiplicity.discovery.contains(.surfaceFrames))
+    #expect(surfaceTrimKnotMultiplicity.discovery.contains(.surfaceAnalysis))
+    #expect(surfaceTrimKnotMultiplicity.discovery.contains(.topologySummary))
+    #expect(surfaceTrimKnotMultiplicity.targets == [.surfaceTrim])
+    #expect(surfaceTrimKnotMultiplicity.summary.contains("shape-preserving insertion"))
+    #expect(surfaceTrimKnotMultiplicity.failureMode.contains("parameterCurve.knotVector index"))
+    #expect(surfaceTrimKnotMultiplicity.failureMode.contains("no greater than the p-curve degree"))
 
     #expect(surfaceBoundaryContinuity.category == .solid)
     #expect(surfaceBoundaryContinuity.mutatesDocument)

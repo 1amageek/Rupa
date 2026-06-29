@@ -869,6 +869,32 @@ import SwiftCAD
         ),
         expectedGeneration: DocumentGeneration(5)
     )
+    let surfaceTrimKnotInsertionRequest = AgentRequest.execute(
+        sessionID: sessionID,
+        command: .insertSurfaceTrimKnot(
+            target: surfaceTrimReference,
+            value: .scalar(0.5)
+        ),
+        expectedGeneration: DocumentGeneration(5)
+    )
+    let surfaceTrimKnotValueRequest = AgentRequest.execute(
+        sessionID: sessionID,
+        command: .setSurfaceTrimKnotValue(
+            target: surfaceTrimReference,
+            knotIndex: 3,
+            value: .scalar(0.4)
+        ),
+        expectedGeneration: DocumentGeneration(5)
+    )
+    let surfaceTrimKnotMultiplicityRequest = AgentRequest.execute(
+        sessionID: sessionID,
+        command: .setSurfaceTrimKnotMultiplicity(
+            target: surfaceTrimReference,
+            knotIndex: 3,
+            multiplicity: 2
+        ),
+        expectedGeneration: DocumentGeneration(5)
+    )
 
     let decodedRequest = try codec.decodeRequest(from: try codec.encode(request))
     let decodedSlideRequest = try codec.decodeRequest(from: try codec.encode(slideRequest))
@@ -917,6 +943,15 @@ import SwiftCAD
     let decodedSurfaceTrimControlPointWeightRequest = try codec.decodeRequest(
         from: try codec.encode(surfaceTrimControlPointWeightRequest)
     )
+    let decodedSurfaceTrimKnotInsertionRequest = try codec.decodeRequest(
+        from: try codec.encode(surfaceTrimKnotInsertionRequest)
+    )
+    let decodedSurfaceTrimKnotValueRequest = try codec.decodeRequest(
+        from: try codec.encode(surfaceTrimKnotValueRequest)
+    )
+    let decodedSurfaceTrimKnotMultiplicityRequest = try codec.decodeRequest(
+        from: try codec.encode(surfaceTrimKnotMultiplicityRequest)
+    )
     let decodedSurfaceBoundaryContinuityRequest = try codec.decodeRequest(
         from: try codec.encode(surfaceBoundaryContinuityRequest)
     )
@@ -938,6 +973,9 @@ import SwiftCAD
     #expect(decodedSurfaceTrimEndpointRequest == surfaceTrimEndpointRequest)
     #expect(decodedSurfaceTrimControlPointRequest == surfaceTrimControlPointRequest)
     #expect(decodedSurfaceTrimControlPointWeightRequest == surfaceTrimControlPointWeightRequest)
+    #expect(decodedSurfaceTrimKnotInsertionRequest == surfaceTrimKnotInsertionRequest)
+    #expect(decodedSurfaceTrimKnotValueRequest == surfaceTrimKnotValueRequest)
+    #expect(decodedSurfaceTrimKnotMultiplicityRequest == surfaceTrimKnotMultiplicityRequest)
     #expect(decodedSurfaceBoundaryContinuityRequest == surfaceBoundaryContinuityRequest)
 }
 

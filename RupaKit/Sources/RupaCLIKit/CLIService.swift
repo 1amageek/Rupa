@@ -2098,6 +2098,82 @@ public struct CLIService {
         )
     }
 
+    public func insertSurfaceTrimKnot(
+        target: CLIDocumentTarget,
+        reference: SelectionReference,
+        value: CADExpression,
+        mode: CLIEditMode = .auto,
+        expectedGeneration: DocumentGeneration? = nil,
+        dryRun: Bool = false,
+        forceFileEdit: Bool = false,
+        client: AgentClientProtocol? = nil
+    ) throws -> CLIResponse {
+        try executeModelingCommand(
+            .insertSurfaceTrimKnot(
+                target: reference,
+                value: value
+            ),
+            target: target,
+            mode: mode,
+            expectedGeneration: expectedGeneration,
+            dryRun: dryRun,
+            forceFileEdit: forceFileEdit,
+            client: client
+        )
+    }
+
+    public func setSurfaceTrimKnotValue(
+        target: CLIDocumentTarget,
+        reference: SelectionReference,
+        knotIndex: Int,
+        value: CADExpression,
+        mode: CLIEditMode = .auto,
+        expectedGeneration: DocumentGeneration? = nil,
+        dryRun: Bool = false,
+        forceFileEdit: Bool = false,
+        client: AgentClientProtocol? = nil
+    ) throws -> CLIResponse {
+        try executeModelingCommand(
+            .setSurfaceTrimKnotValue(
+                target: reference,
+                knotIndex: knotIndex,
+                value: value
+            ),
+            target: target,
+            mode: mode,
+            expectedGeneration: expectedGeneration,
+            dryRun: dryRun,
+            forceFileEdit: forceFileEdit,
+            client: client
+        )
+    }
+
+    public func setSurfaceTrimKnotMultiplicity(
+        target: CLIDocumentTarget,
+        reference: SelectionReference,
+        knotIndex: Int,
+        multiplicity: Int,
+        mode: CLIEditMode = .auto,
+        expectedGeneration: DocumentGeneration? = nil,
+        dryRun: Bool = false,
+        forceFileEdit: Bool = false,
+        client: AgentClientProtocol? = nil
+    ) throws -> CLIResponse {
+        try executeModelingCommand(
+            .setSurfaceTrimKnotMultiplicity(
+                target: reference,
+                knotIndex: knotIndex,
+                multiplicity: multiplicity
+            ),
+            target: target,
+            mode: mode,
+            expectedGeneration: expectedGeneration,
+            dryRun: dryRun,
+            forceFileEdit: forceFileEdit,
+            client: client
+        )
+    }
+
     public func matchSurfaceBoundaryContinuity(
         target: CLIDocumentTarget,
         targetReference: SelectionReference,

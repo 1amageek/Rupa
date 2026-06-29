@@ -4079,6 +4079,162 @@ func cliExecutableSurfaceTrimControlPointWeightCommandMutatesClosedDocumentAsJSO
 }
 
 @Test(.timeLimit(.minutes(1)))
+func cliExecutableSurfaceTrimKnotCommandMutatesClosedDocumentAsJSON() async throws {
+    let temporaryDirectory = try makeTemporaryDirectory()
+    defer {
+        removeTemporaryDirectory(temporaryDirectory)
+    }
+    let documentURL = temporaryDirectory.appendingPathComponent("process-surface-trim-knot.swcad")
+    var document = DesignDocument.empty(named: "Process Surface Trim Knot")
+    let sourceSurface = cliDirectBSplineSurfaceWithInteriorKnots()
+    let featureID = try document.createBSplineSurface(
+        name: "CLI Trim Knot B-spline Surface",
+        surface: sourceSurface
+    )
+    let summary = try SurfaceSourceSummaryService().summarize(document: document)
+    let faceReference = try #require(summary.sources.first?.patches.first?.faceSelectionReference)
+    let trimLoop = BSplineSurfaceTrimLoop(
+        role: .outer,
+        edges: [
+            BSplineSurfaceTrimEdge(parameterCurve: .bSpline(BSplineCurve2D(
+                degree: 2,
+                knots: [0.0, 0.0, 0.0, 1.0, 1.0, 1.0],
+                controlPoints: [
+                    Point2D(x: 0.2, y: 0.2),
+                    Point2D(x: 0.52, y: 0.42),
+                    Point2D(x: 0.8, y: 0.25),
+                ],
+                weights: [1.0, 1.2, 1.0]
+            ))),
+            BSplineSurfaceTrimEdge(parameterCurve: .polyline([
+                SurfaceParameter(u: 0.8, v: 0.25),
+                SurfaceParameter(u: 0.45, v: 0.8),
+            ])),
+            BSplineSurfaceTrimEdge(parameterCurve: .polyline([
+                SurfaceParameter(u: 0.45, v: 0.8),
+                SurfaceParameter(u: 0.2, v: 0.2),
+            ])),
+        ]
+    )
+    try document.setSurfaceTrimLoops(
+        target: faceReference,
+        trimLoops: [trimLoop]
+    )
+    let trimReference = try cliSurfaceTrimReference(
+        featureID: featureID,
+        edgeIndex: 0,
+        in: document
+    )
+    let trimJSON = try encodedSelectionReference(trimReference)
+    try DocumentFileService().save(document, to: documentURL)
+
+    let result = try await runCLI([
+        "surface",
+        "insert-trim-knot",
+        documentURL.path,
+        "--reference",
+        trimJSON,
+        "--value",
+        "0.5",
+        "--mode",
+        "file",
+        "--json",
+    ])
+    let response = try JSONDecoder().decode(
+        CLIResponse.self,
+        from: result.standardOutputData
+    )
+    let loaded = try DocumentFileService().load(from: documentURL)
+    let feature = try #require(loaded.cadDocument.designGraph.nodes[featureID])
+    guard case let .bSplineSurface(surfaceFeature) = feature.operation else {
+        Issue.record("Expected a direct B-spline surface feature.")
+        return
+    }
+    let updatedLoop = try #require(surfaceFeature.trimLoops.first)
+    guard case .bSpline(let refinedCurve) = updatedLoop.edges[0].parameterCurve else {
+        Issue.record("Expected a B-spline trim parameter curve.")
+        return
+    }
+    let updatedSummary = try SurfaceSourceSummaryService().summarize(document: loaded)
+    let updatedSummaryEdge = try #require(
+        updatedSummary.sources.first?.patches.first?.trimLoops.first?.edges.first
+    )
+
+    #expect(result.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: result.standardError))
+    #expect(response.message == "Surface trim p-curve knot inserted.")
+    #expect(response.saved)
+    #expect(refinedCurve.knots == [0.0, 0.0, 0.0, 0.5, 1.0, 1.0, 1.0])
+    #expect(refinedCurve.controlPoints.count == 4)
+    #expect(updatedSummaryEdge.parameterCurve.knots == refinedCurve.knots)
+    #expect(updatedSummaryEdge.parameterCurve.spans.count == 2)
+
+    let valueResult = try await runCLI([
+        "surface",
+        "set-trim-knot-value",
+        documentURL.path,
+        "--reference",
+        trimJSON,
+        "--knot-index",
+        "3",
+        "--value",
+        "0.4",
+        "--mode",
+        "file",
+        "--json",
+    ])
+    let valueResponse = try JSONDecoder().decode(
+        CLIResponse.self,
+        from: valueResult.standardOutputData
+    )
+    let retimed = try DocumentFileService().load(from: documentURL)
+    let retimedFeature = try #require(retimed.cadDocument.designGraph.nodes[featureID])
+    guard case let .bSplineSurface(retimedSurfaceFeature) = retimedFeature.operation,
+          let retimedLoop = retimedSurfaceFeature.trimLoops.first,
+          case .bSpline(let retimedCurve) = retimedLoop.edges[0].parameterCurve else {
+        Issue.record("Expected a retimed B-spline trim parameter curve.")
+        return
+    }
+    #expect(valueResult.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: valueResult.standardError))
+    #expect(valueResponse.message == "Surface trim p-curve knot value updated.")
+    #expect(valueResponse.saved)
+    #expect(retimedCurve.knots == [0.0, 0.0, 0.0, 0.4, 1.0, 1.0, 1.0])
+
+    let multiplicityResult = try await runCLI([
+        "surface",
+        "set-trim-knot-multiplicity",
+        documentURL.path,
+        "--reference",
+        trimJSON,
+        "--knot-index",
+        "3",
+        "--multiplicity",
+        "2",
+        "--mode",
+        "file",
+        "--json",
+    ])
+    let multiplicityResponse = try JSONDecoder().decode(
+        CLIResponse.self,
+        from: multiplicityResult.standardOutputData
+    )
+    let saturated = try DocumentFileService().load(from: documentURL)
+    let saturatedFeature = try #require(saturated.cadDocument.designGraph.nodes[featureID])
+    guard case let .bSplineSurface(saturatedSurfaceFeature) = saturatedFeature.operation,
+          let saturatedLoop = saturatedSurfaceFeature.trimLoops.first,
+          case .bSpline(let saturatedCurve) = saturatedLoop.edges[0].parameterCurve else {
+        Issue.record("Expected a saturated B-spline trim parameter curve.")
+        return
+    }
+    #expect(
+        multiplicityResult.terminationStatus == CLIExitCode.success.rawValue,
+        Comment(rawValue: multiplicityResult.standardError)
+    )
+    #expect(multiplicityResponse.message == "Surface trim p-curve knot multiplicity updated.")
+    #expect(multiplicityResponse.saved)
+    #expect(saturatedCurve.knots == [0.0, 0.0, 0.0, 0.4, 0.4, 1.0, 1.0, 1.0])
+}
+
+@Test(.timeLimit(.minutes(1)))
 func cliExecutableSurfaceSpanSplitMutatesClosedDocumentAsJSON() async throws {
     let temporaryDirectory = try makeTemporaryDirectory()
     defer {

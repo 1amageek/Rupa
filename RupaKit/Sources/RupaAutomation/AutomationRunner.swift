@@ -1384,6 +1384,50 @@ public struct AutomationRunner {
                 didMutate: result.didMutate,
                 diagnostics: result.diagnostics
             )
+        case .insertSurfaceTrimKnot(let target, let value):
+            let result = try session.execute(
+                .insertSurfaceTrimKnot(
+                    target: target,
+                    value: value
+                )
+            )
+            return AutomationResult(
+                message: "Surface trim p-curve knot inserted.",
+                commandName: result.commandName,
+                generation: result.generation,
+                didMutate: result.didMutate,
+                diagnostics: result.diagnostics
+            )
+        case .setSurfaceTrimKnotValue(let target, let knotIndex, let value):
+            let result = try session.execute(
+                .setSurfaceTrimKnotValue(
+                    target: target,
+                    knotIndex: knotIndex,
+                    value: value
+                )
+            )
+            return AutomationResult(
+                message: "Surface trim p-curve knot value updated.",
+                commandName: result.commandName,
+                generation: result.generation,
+                didMutate: result.didMutate,
+                diagnostics: result.diagnostics
+            )
+        case .setSurfaceTrimKnotMultiplicity(let target, let knotIndex, let multiplicity):
+            let result = try session.execute(
+                .setSurfaceTrimKnotMultiplicity(
+                    target: target,
+                    knotIndex: knotIndex,
+                    multiplicity: multiplicity
+                )
+            )
+            return AutomationResult(
+                message: "Surface trim p-curve knot multiplicity updated.",
+                commandName: result.commandName,
+                generation: result.generation,
+                didMutate: result.didMutate,
+                diagnostics: result.diagnostics
+            )
         case .matchSurfaceBoundaryContinuity(
             let target,
             let reference,

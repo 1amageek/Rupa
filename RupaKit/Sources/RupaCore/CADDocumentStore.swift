@@ -1199,6 +1199,38 @@ public final class CADDocumentStore {
             document = updatedDocument
             try commitMutation()
             evaluateCurrentDocument()
+        case .insertSurfaceTrimKnot(let target, let value):
+            var updatedDocument = document
+            try updatedDocument.insertSurfaceTrimKnot(
+                target: target,
+                value: value,
+                objectRegistry: objectRegistry
+            )
+            document = updatedDocument
+            try commitMutation()
+            evaluateCurrentDocument()
+        case .setSurfaceTrimKnotValue(let target, let knotIndex, let value):
+            var updatedDocument = document
+            try updatedDocument.setSurfaceTrimKnotValue(
+                target: target,
+                knotIndex: knotIndex,
+                value: value,
+                objectRegistry: objectRegistry
+            )
+            document = updatedDocument
+            try commitMutation()
+            evaluateCurrentDocument()
+        case .setSurfaceTrimKnotMultiplicity(let target, let knotIndex, let multiplicity):
+            var updatedDocument = document
+            try updatedDocument.setSurfaceTrimKnotMultiplicity(
+                target: target,
+                knotIndex: knotIndex,
+                multiplicity: multiplicity,
+                objectRegistry: objectRegistry
+            )
+            document = updatedDocument
+            try commitMutation()
+            evaluateCurrentDocument()
         case .matchSurfaceBoundaryContinuity(
             let target,
             let reference,

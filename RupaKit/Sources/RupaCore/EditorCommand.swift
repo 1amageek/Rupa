@@ -324,6 +324,20 @@ public enum EditorCommand: Codable, Equatable, Sendable {
         controlPointIndex: Int,
         weight: CADExpression
     )
+    case insertSurfaceTrimKnot(
+        target: SelectionReference,
+        value: CADExpression
+    )
+    case setSurfaceTrimKnotValue(
+        target: SelectionReference,
+        knotIndex: Int,
+        value: CADExpression
+    )
+    case setSurfaceTrimKnotMultiplicity(
+        target: SelectionReference,
+        knotIndex: Int,
+        multiplicity: Int
+    )
     case matchSurfaceBoundaryContinuity(
         target: SelectionReference,
         reference: SelectionReference,
@@ -569,6 +583,12 @@ public enum EditorCommand: Codable, Equatable, Sendable {
             "moveSurfaceTrimControlPoint"
         case .setSurfaceTrimControlPointWeight:
             "setSurfaceTrimControlPointWeight"
+        case .insertSurfaceTrimKnot:
+            "insertSurfaceTrimKnot"
+        case .setSurfaceTrimKnotValue:
+            "setSurfaceTrimKnotValue"
+        case .setSurfaceTrimKnotMultiplicity:
+            "setSurfaceTrimKnotMultiplicity"
         case .matchSurfaceBoundaryContinuity:
             "matchSurfaceBoundaryContinuity"
         case .slidePolySplineSurfaceVertices:
@@ -688,6 +708,9 @@ public enum EditorCommand: Codable, Equatable, Sendable {
              .moveSurfaceTrimEndpoint,
              .moveSurfaceTrimControlPoint,
              .setSurfaceTrimControlPointWeight,
+             .insertSurfaceTrimKnot,
+             .setSurfaceTrimKnotValue,
+             .setSurfaceTrimKnotMultiplicity,
              .matchSurfaceBoundaryContinuity,
              .slidePolySplineSurfaceVertices,
              .slideSurfaceControlPoints,

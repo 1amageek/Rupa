@@ -1301,6 +1301,36 @@ public final class AgentCommandController: AgentClientProtocol {
             failureMode: "Accepts authored direct B-spline surface trim edge references discovered from surfaceSourceSummary plus a B-spline p-curve control point index with isWeightEditable true and a positive scalar weight; rejects rectangular trim domains, PolySpline trims, non-trim references, constant and polyline trim curves, missing weight indices, non-positive weights, invalid UV trim-loop validation, stale generations, and invalid rebuilt trimmed sheet topology."
         ),
         capability(
+            "insertSurfaceTrimKnot",
+            category: .solid,
+            summary: "Insert a shape-preserving knot into a source-owned B-spline trim p-curve discovered from surfaceSourceSummary, increasing local edit freedom without changing the represented UV trim curve.",
+            access: .automationCommand,
+            mutatesDocument: true,
+            discovery: [.surfaceSourceSummary, .surfaceFrames, .surfaceAnalysis, .topologySummary],
+            targets: [.surfaceTrim],
+            failureMode: "Accepts authored direct B-spline surface trim edge references discovered from surfaceSourceSummary plus a scalar value inside parameterCurve.spans or an unsaturated interior parameterCurve.knot value; rejects rectangular trim domains, PolySpline trims, non-trim references, constant and polyline trim curves, boundary or saturated knot values, values outside the p-curve domain, invalid UV trim-loop validation, stale generations, and invalid rebuilt trimmed sheet topology."
+        ),
+        capability(
+            "setSurfaceTrimKnotValue",
+            category: .solid,
+            summary: "Set an existing editable B-spline trim p-curve knot value discovered from surfaceSourceSummary for a direct B-spline surface.",
+            access: .automationCommand,
+            mutatesDocument: true,
+            discovery: [.surfaceSourceSummary, .surfaceFrames, .surfaceAnalysis, .topologySummary],
+            targets: [.surfaceTrim],
+            failureMode: "Accepts authored direct B-spline surface trim edge references discovered from surfaceSourceSummary plus a parameterCurve.knotVector index and scalar value strictly between neighboring knot values; rejects rectangular trim domains, PolySpline trims, non-trim references, constant and polyline trim curves, boundary knots, missing knot indices, invalid UV trim-loop validation, stale generations, and invalid rebuilt trimmed sheet topology."
+        ),
+        capability(
+            "setSurfaceTrimKnotMultiplicity",
+            category: .solid,
+            summary: "Increase an existing editable B-spline trim p-curve knot multiplicity discovered from surfaceSourceSummary by shape-preserving insertion to control local continuity.",
+            access: .automationCommand,
+            mutatesDocument: true,
+            discovery: [.surfaceSourceSummary, .surfaceFrames, .surfaceAnalysis, .topologySummary],
+            targets: [.surfaceTrim],
+            failureMode: "Accepts authored direct B-spline surface trim edge references discovered from surfaceSourceSummary plus a parameterCurve.knotVector index and requested multiplicity greater than the current multiplicity and no greater than the p-curve degree; rejects rectangular trim domains, PolySpline trims, non-trim references, constant and polyline trim curves, boundary knots, lower or equal multiplicities, saturated knots, invalid UV trim-loop validation, stale generations, and invalid rebuilt trimmed sheet topology."
+        ),
+        capability(
             "matchSurfaceBoundaryContinuity",
             category: .solid,
             summary: "Match a source-owned direct B-spline surface trim boundary to another direct B-spline trim boundary at G0, G1, or G2 by editing the target boundary control rows.",

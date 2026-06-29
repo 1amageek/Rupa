@@ -284,6 +284,17 @@ public enum AutomationCommand: Codable, Equatable, Sendable {
         controlPointIndex: Int,
         weight: CADExpression
     )
+    case insertSurfaceTrimKnot(target: SelectionReference, value: CADExpression)
+    case setSurfaceTrimKnotValue(
+        target: SelectionReference,
+        knotIndex: Int,
+        value: CADExpression
+    )
+    case setSurfaceTrimKnotMultiplicity(
+        target: SelectionReference,
+        knotIndex: Int,
+        multiplicity: Int
+    )
     case matchSurfaceBoundaryContinuity(
         target: SelectionReference,
         reference: SelectionReference,
@@ -835,6 +846,20 @@ public enum AutomationCommand: Codable, Equatable, Sendable {
                 target: target,
                 controlPointIndex: controlPointIndex,
                 weight: weight
+            )
+        case .insertSurfaceTrimKnot(let target, let value):
+            .insertSurfaceTrimKnot(target: target, value: value)
+        case .setSurfaceTrimKnotValue(let target, let knotIndex, let value):
+            .setSurfaceTrimKnotValue(
+                target: target,
+                knotIndex: knotIndex,
+                value: value
+            )
+        case .setSurfaceTrimKnotMultiplicity(let target, let knotIndex, let multiplicity):
+            .setSurfaceTrimKnotMultiplicity(
+                target: target,
+                knotIndex: knotIndex,
+                multiplicity: multiplicity
             )
         case .matchSurfaceBoundaryContinuity(
             let target,

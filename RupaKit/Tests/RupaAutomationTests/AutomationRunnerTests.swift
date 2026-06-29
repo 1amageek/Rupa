@@ -878,6 +878,69 @@ import SwiftCAD
     #expect(weightResult.didMutate)
     #expect(weightResult.generation == DocumentGeneration(4))
     #expect(weightedCurve.weights == [1.0, 2.4, 1.0])
+
+    let knotResult = try runner.execute(
+        .insertSurfaceTrimKnot(
+            target: trimReference,
+            value: .scalar(0.5)
+        ),
+        in: session
+    )
+    let refinedFeature = try #require(session.document.cadDocument.designGraph.nodes[featureID])
+    guard case let .bSplineSurface(refinedSurfaceFeature) = refinedFeature.operation,
+          let refinedLoop = refinedSurfaceFeature.trimLoops.first,
+          case .bSpline(let refinedCurve) = refinedLoop.edges[0].parameterCurve else {
+        Issue.record("Automation must keep the refined authored B-spline trim curve.")
+        return
+    }
+    #expect(knotResult.message == "Surface trim p-curve knot inserted.")
+    #expect(knotResult.commandName == "insertSurfaceTrimKnot")
+    #expect(knotResult.didMutate)
+    #expect(knotResult.generation == DocumentGeneration(5))
+    #expect(refinedCurve.knots == [0.0, 0.0, 0.0, 0.5, 1.0, 1.0, 1.0])
+    #expect(refinedCurve.controlPoints.count == 4)
+
+    let knotValueResult = try runner.execute(
+        .setSurfaceTrimKnotValue(
+            target: trimReference,
+            knotIndex: 3,
+            value: .scalar(0.4)
+        ),
+        in: session
+    )
+    let retimedFeature = try #require(session.document.cadDocument.designGraph.nodes[featureID])
+    guard case let .bSplineSurface(retimedSurfaceFeature) = retimedFeature.operation,
+          let retimedLoop = retimedSurfaceFeature.trimLoops.first,
+          case .bSpline(let retimedCurve) = retimedLoop.edges[0].parameterCurve else {
+        Issue.record("Automation must keep the retimed authored B-spline trim curve.")
+        return
+    }
+    #expect(knotValueResult.message == "Surface trim p-curve knot value updated.")
+    #expect(knotValueResult.commandName == "setSurfaceTrimKnotValue")
+    #expect(knotValueResult.didMutate)
+    #expect(knotValueResult.generation == DocumentGeneration(6))
+    #expect(retimedCurve.knots == [0.0, 0.0, 0.0, 0.4, 1.0, 1.0, 1.0])
+
+    let knotMultiplicityResult = try runner.execute(
+        .setSurfaceTrimKnotMultiplicity(
+            target: trimReference,
+            knotIndex: 3,
+            multiplicity: 2
+        ),
+        in: session
+    )
+    let saturatedFeature = try #require(session.document.cadDocument.designGraph.nodes[featureID])
+    guard case let .bSplineSurface(saturatedSurfaceFeature) = saturatedFeature.operation,
+          let saturatedLoop = saturatedSurfaceFeature.trimLoops.first,
+          case .bSpline(let saturatedCurve) = saturatedLoop.edges[0].parameterCurve else {
+        Issue.record("Automation must keep the saturated authored B-spline trim curve.")
+        return
+    }
+    #expect(knotMultiplicityResult.message == "Surface trim p-curve knot multiplicity updated.")
+    #expect(knotMultiplicityResult.commandName == "setSurfaceTrimKnotMultiplicity")
+    #expect(knotMultiplicityResult.didMutate)
+    #expect(knotMultiplicityResult.generation == DocumentGeneration(7))
+    #expect(saturatedCurve.knots == [0.0, 0.0, 0.0, 0.4, 0.4, 1.0, 1.0, 1.0])
 }
 
 @MainActor

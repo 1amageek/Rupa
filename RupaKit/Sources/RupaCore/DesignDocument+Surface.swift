@@ -1078,6 +1078,93 @@ extension DesignDocument {
         }
     }
 
+    public mutating func insertSurfaceTrimKnot(
+        target: SelectionReference,
+        value: CADExpression,
+        objectRegistry: ObjectTypeRegistry = .builtIn
+    ) throws {
+        let resolvedValue = try resolvedScalarValue(
+            value,
+            owner: "B-spline surface trim p-curve knot insertion"
+        )
+
+        try updateBSplineSurfaceTrimParameterCurve(
+            target: target,
+            owner: "B-spline surface trim p-curve knot insertion",
+            objectRegistry: objectRegistry
+        ) { curve in
+            try Self.surfaceParameterCurve(
+                curve,
+                insertingKnot: resolvedValue,
+                owner: "B-spline surface trim p-curve knot insertion"
+            )
+        }
+    }
+
+    public mutating func setSurfaceTrimKnotValue(
+        target: SelectionReference,
+        knotIndex: Int,
+        value: CADExpression,
+        objectRegistry: ObjectTypeRegistry = .builtIn
+    ) throws {
+        guard knotIndex >= 0 else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "B-spline surface trim p-curve knot value requires a non-negative knot index."
+            )
+        }
+        let resolvedValue = try resolvedScalarValue(
+            value,
+            owner: "B-spline surface trim p-curve knot value"
+        )
+
+        try updateBSplineSurfaceTrimParameterCurve(
+            target: target,
+            owner: "B-spline surface trim p-curve knot value",
+            objectRegistry: objectRegistry
+        ) { curve in
+            try Self.surfaceParameterCurve(
+                curve,
+                settingKnotValueAt: knotIndex,
+                to: resolvedValue,
+                owner: "B-spline surface trim p-curve knot value"
+            )
+        }
+    }
+
+    public mutating func setSurfaceTrimKnotMultiplicity(
+        target: SelectionReference,
+        knotIndex: Int,
+        multiplicity: Int,
+        objectRegistry: ObjectTypeRegistry = .builtIn
+    ) throws {
+        guard knotIndex >= 0 else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "B-spline surface trim p-curve knot multiplicity requires a non-negative knot index."
+            )
+        }
+        guard multiplicity > 0 else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "B-spline surface trim p-curve knot multiplicity requires a positive multiplicity."
+            )
+        }
+
+        try updateBSplineSurfaceTrimParameterCurve(
+            target: target,
+            owner: "B-spline surface trim p-curve knot multiplicity",
+            objectRegistry: objectRegistry
+        ) { curve in
+            try Self.surfaceParameterCurve(
+                curve,
+                settingKnotMultiplicityAt: knotIndex,
+                to: multiplicity,
+                owner: "B-spline surface trim p-curve knot multiplicity"
+            )
+        }
+    }
+
     public mutating func matchSurfaceBoundaryContinuity(
         target: SelectionReference,
         reference: SelectionReference,
@@ -1614,6 +1701,77 @@ extension DesignDocument {
                 )
             }
             return .bSpline(updatedCurve)
+        }
+    }
+
+    private static func surfaceParameterCurve(
+        _ curve: SurfaceParameterCurve,
+        insertingKnot value: Double,
+        owner: String
+    ) throws -> SurfaceParameterCurve {
+        switch curve {
+        case .constantU, .constantV, .polyline:
+            throw EditorError(
+                code: .commandInvalid,
+                message: "\(owner) requires a B-spline trim p-curve."
+            )
+        case let .bSpline(curve):
+            do {
+                return .bSpline(try curve.insertingKnot(value))
+            } catch {
+                throw EditorError(
+                    code: .commandInvalid,
+                    message: "\(owner) could not insert the B-spline trim p-curve knot: \(error)."
+                )
+            }
+        }
+    }
+
+    private static func surfaceParameterCurve(
+        _ curve: SurfaceParameterCurve,
+        settingKnotValueAt index: Int,
+        to value: Double,
+        owner: String
+    ) throws -> SurfaceParameterCurve {
+        switch curve {
+        case .constantU, .constantV, .polyline:
+            throw EditorError(
+                code: .commandInvalid,
+                message: "\(owner) requires a B-spline trim p-curve."
+            )
+        case let .bSpline(curve):
+            do {
+                return .bSpline(try curve.settingKnotValue(at: index, to: value))
+            } catch {
+                throw EditorError(
+                    code: .commandInvalid,
+                    message: "\(owner) could not set the B-spline trim p-curve knot value: \(error)."
+                )
+            }
+        }
+    }
+
+    private static func surfaceParameterCurve(
+        _ curve: SurfaceParameterCurve,
+        settingKnotMultiplicityAt index: Int,
+        to multiplicity: Int,
+        owner: String
+    ) throws -> SurfaceParameterCurve {
+        switch curve {
+        case .constantU, .constantV, .polyline:
+            throw EditorError(
+                code: .commandInvalid,
+                message: "\(owner) requires a B-spline trim p-curve."
+            )
+        case let .bSpline(curve):
+            do {
+                return .bSpline(try curve.settingKnotMultiplicity(at: index, to: multiplicity))
+            } catch {
+                throw EditorError(
+                    code: .commandInvalid,
+                    message: "\(owner) could not set the B-spline trim p-curve knot multiplicity: \(error)."
+                )
+            }
         }
     }
 

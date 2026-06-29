@@ -333,6 +333,7 @@ struct BSplineSurfaceSourceSummaryBuilder: Sendable {
                 selectionReference: selectionReference,
                 startParameter: parameters.start,
                 endParameter: parameters.end,
+                parameterCurve: parameterCurveSummary(for: sourceEdge.parameterCurve),
                 parameterCurveControlPoints: parameterCurveControlPoints(
                     for: sourceEdge.parameterCurve,
                     loopIndex: loopIndex,
@@ -357,6 +358,147 @@ struct BSplineSurfaceSourceSummaryBuilder: Sendable {
                     : nil
             )
         }
+    }
+
+    private func parameterCurveSummary(
+        for curve: SurfaceParameterCurve
+    ) -> SurfaceSourceSummaryResult.TrimLoop.Edge.ParameterCurve {
+        switch curve {
+        case .constantU:
+            return SurfaceSourceSummaryResult.TrimLoop.Edge.ParameterCurve(
+                kind: "constantU",
+                unsupportedReason: "Constant trim p-curves do not have knot vectors."
+            )
+        case .constantV:
+            return SurfaceSourceSummaryResult.TrimLoop.Edge.ParameterCurve(
+                kind: "constantV",
+                unsupportedReason: "Constant trim p-curves do not have knot vectors."
+            )
+        case .polyline:
+            return SurfaceSourceSummaryResult.TrimLoop.Edge.ParameterCurve(
+                kind: "polyline",
+                unsupportedReason: "Polyline trim p-curves must be rebuilt as B-splines before knot insertion."
+            )
+        case let .bSpline(curve):
+            let spans = parameterCurveSpans(
+                knots: curve.knots,
+                degree: curve.degree
+            )
+            let bounds: (lower: Double, upper: Double)?
+            if case let .closed(lowerBound, upperBound) = curve.domain {
+                bounds = (lowerBound, upperBound)
+            } else {
+                bounds = nil
+            }
+            return SurfaceSourceSummaryResult.TrimLoop.Edge.ParameterCurve(
+                kind: "bSpline",
+                degree: curve.degree,
+                order: curve.order,
+                domainLowerBound: bounds?.lower,
+                domainUpperBound: bounds?.upper,
+                knots: curve.knots,
+                knotVector: parameterCurveKnotVector(
+                    knots: curve.knots,
+                    degree: curve.degree
+                ),
+                spans: spans,
+                spanCount: spans.count,
+                isRational: curve.isRational,
+                supportsKnotInsertion: spans.isEmpty == false,
+                unsupportedReason: spans.isEmpty
+                    ? "B-spline trim p-curve has no non-degenerate span for knot insertion."
+                    : nil
+            )
+        }
+    }
+
+    private func parameterCurveKnotVector(
+        knots: [Double],
+        degree: Int
+    ) -> [SurfaceSourceSummaryResult.TrimLoop.Edge.ParameterCurve.Knot] {
+        let lowerBound = knots.indices.contains(degree) ? knots[degree] : knots.first
+        let upperBoundIndex = knots.count - degree - 1
+        let upperBound = knots.indices.contains(upperBoundIndex) ? knots[upperBoundIndex] : knots.last
+        let multiplicities = Dictionary(grouping: knots, by: { $0 }).mapValues(\.count)
+        let firstInteriorKnotIndex = degree + 1
+        let lastInteriorKnotIndex = knots.count - degree - 2
+        return knots.indices.map { index in
+            let value = knots[index]
+            let isBoundary = value == lowerBound || value == upperBound
+            let multiplicity = multiplicities[value] ?? 1
+            let isInterior = firstInteriorKnotIndex <= lastInteriorKnotIndex
+                && (firstInteriorKnotIndex ... lastInteriorKnotIndex).contains(index)
+                && isBoundary == false
+            let isValueEditable = isInterior
+                && index > knots.startIndex
+                && index < knots.index(before: knots.endIndex)
+                && knots[index - 1] < knots[index + 1]
+            let isInsertionSupported = isInterior && multiplicity < degree
+            return SurfaceSourceSummaryResult.TrimLoop.Edge.ParameterCurve.Knot(
+                id: "parameterCurveKnot:\(index)",
+                index: index,
+                value: value,
+                multiplicity: multiplicity,
+                isBoundary: isBoundary,
+                isValueEditable: isValueEditable,
+                isMultiplicityEditable: isInsertionSupported,
+                isInsertionSupported: isInsertionSupported,
+                unsupportedReason: parameterCurveKnotUnsupportedReason(
+                    isInterior: isInterior,
+                    isBoundary: isBoundary,
+                    multiplicity: multiplicity,
+                    degree: degree
+                )
+            )
+        }
+    }
+
+    private func parameterCurveKnotUnsupportedReason(
+        isInterior: Bool,
+        isBoundary: Bool,
+        multiplicity: Int,
+        degree: Int
+    ) -> String? {
+        if isInterior && multiplicity < degree {
+            return nil
+        }
+        if isBoundary {
+            return "Boundary trim p-curve knots cannot be duplicated."
+        }
+        if multiplicity >= degree {
+            return "B-spline trim p-curve knot multiplicity is already saturated."
+        }
+        return "Only interior trim p-curve knots can be duplicated."
+    }
+
+    private func parameterCurveSpans(
+        knots: [Double],
+        degree: Int
+    ) -> [SurfaceSourceSummaryResult.TrimLoop.Edge.ParameterCurve.Span] {
+        let lowerIndex = degree
+        let upperIndex = knots.count - degree - 1
+        guard lowerIndex < upperIndex else {
+            return []
+        }
+        var result: [SurfaceSourceSummaryResult.TrimLoop.Edge.ParameterCurve.Span] = []
+        for index in lowerIndex..<upperIndex {
+            let lowerBound = knots[index]
+            let upperBound = knots[index + 1]
+            guard upperBound > lowerBound else {
+                continue
+            }
+            let spanIndex = result.count
+            result.append(SurfaceSourceSummaryResult.TrimLoop.Edge.ParameterCurve.Span(
+                id: "parameterCurveSpan:\(spanIndex)",
+                index: spanIndex,
+                lowerBound: lowerBound,
+                upperBound: upperBound,
+                startKnotIndex: index,
+                endKnotIndex: index + 1,
+                isInsertionSupported: true
+            ))
+        }
+        return result
     }
 
     private func parameterCurveControlPoints(

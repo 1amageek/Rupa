@@ -52,6 +52,17 @@ flowchart LR
 | `RupaUI` depends on `WorkspaceAgentHost`, not concrete `AgentHost`. | The CAD workspace can be understood and reused without Agent server lifecycle details. |
 | `RupaRendering` consumes `RupaViewportScene`; scene construction must remain SwiftUI-free. | Viewport scene, projection, and hit policy can be tested without UI composition. |
 
+## Surface M3 Status
+
+| Capability | Owner | Agent-facing path |
+|---|---|---|
+| Direct B-spline surface control net, weights, knot values, knot insertion, span splitting, and knot multiplicity | `SwiftCAD` geometry types plus `RupaCore/Surface` mutation services | `surfaceSourceSummary`, `surfaceFrames`, and Automation commands |
+| Authored direct B-spline surface UV trim loops | `SwiftCAD` trim-loop and parameter-curve types; `RupaCore` owns document replacement and validation | `setSurfaceTrimLoops`, `moveSurfaceTrimEndpoint`, and `moveSurfaceTrimControlPoint` |
+| Authored B-spline trim p-curve weights | `SwiftCAD.BSplineCurve2D` stores weights; `RupaCore` mutates selected trim edges | `surfaceSourceSummary.trimLoops.edges.parameterCurveControlPoints` and `setSurfaceTrimControlPointWeight` |
+| Authored B-spline trim p-curve knot basis editing | `SwiftCAD.BSplineCurve2D` owns shape-preserving rational knot insertion, knot value edits, and multiplicity increases; `RupaCore` validates trim loops and rebuilt topology | `surfaceSourceSummary.trimLoops.edges.parameterCurve`, `insertSurfaceTrimKnot`, `setSurfaceTrimKnotValue`, and `setSurfaceTrimKnotMultiplicity` |
+
+M3 is complete for source-owned authored trim p-curve control points, weights, and knot basis editing across Core, Automation, Agent, and CLI. UI affordances for visual span picking and higher-level degree/rebuild workflows belong to the next surface-editing milestone.
+
 ## File Size Targets
 
 | File kind | Target | Required action when exceeded |

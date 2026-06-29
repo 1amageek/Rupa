@@ -2284,6 +2284,49 @@ public final class EditorSession {
     }
 
     @discardableResult
+    public func insertSurfaceTrimKnot(
+        target: SelectionReference,
+        value: CADExpression
+    ) -> CommandExecutionResult? {
+        perform(
+            .insertSurfaceTrimKnot(
+                target: target,
+                value: value
+            )
+        )
+    }
+
+    @discardableResult
+    public func setSurfaceTrimKnotValue(
+        target: SelectionReference,
+        knotIndex: Int,
+        value: CADExpression
+    ) -> CommandExecutionResult? {
+        perform(
+            .setSurfaceTrimKnotValue(
+                target: target,
+                knotIndex: knotIndex,
+                value: value
+            )
+        )
+    }
+
+    @discardableResult
+    public func setSurfaceTrimKnotMultiplicity(
+        target: SelectionReference,
+        knotIndex: Int,
+        multiplicity: Int
+    ) -> CommandExecutionResult? {
+        perform(
+            .setSurfaceTrimKnotMultiplicity(
+                target: target,
+                knotIndex: knotIndex,
+                multiplicity: multiplicity
+            )
+        )
+    }
+
+    @discardableResult
     public func matchSurfaceBoundaryContinuity(
         target: SelectionReference,
         reference: SelectionReference,

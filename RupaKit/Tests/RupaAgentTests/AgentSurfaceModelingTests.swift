@@ -1012,6 +1012,83 @@ import SwiftCAD
     )
     #expect(weightedSummaryPoint.weight == 2.4)
     #expect(weightedSummaryPoint.isWeightEditable)
+    #expect(weightedSummaryEdge.parameterCurve.kind == "bSpline")
+    #expect(weightedSummaryEdge.parameterCurve.supportsKnotInsertion)
+
+    let knotResponse = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .insertSurfaceTrimKnot(
+                target: trimReference,
+                value: .scalar(0.5)
+            ),
+            expectedGeneration: DocumentGeneration(4)
+        )
+    )
+    guard case .command(let knotResult) = knotResponse else {
+        Issue.record("Agent must insert the authored surface trim p-curve knot.")
+        return
+    }
+    #expect(knotResult.commandName == "insertSurfaceTrimKnot")
+    #expect(knotResult.didMutate)
+    #expect(knotResult.generation == DocumentGeneration(5))
+
+    let refinedFeature = try #require(session.document.cadDocument.designGraph.nodes[featureID])
+    guard case let .bSplineSurface(refinedSurfaceFeature) = refinedFeature.operation,
+          let refinedLoop = refinedSurfaceFeature.trimLoops.first,
+          case .bSpline(let refinedCurve) = refinedLoop.edges[0].parameterCurve else {
+        Issue.record("Agent trim knot insertion must keep the authored B-spline trim p-curve.")
+        return
+    }
+    #expect(refinedCurve.knots == [0.0, 0.0, 0.0, 0.5, 1.0, 1.0, 1.0])
+    #expect(refinedCurve.controlPoints.count == 4)
+
+    let knotValueResponse = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .setSurfaceTrimKnotValue(
+                target: trimReference,
+                knotIndex: 3,
+                value: .scalar(0.4)
+            ),
+            expectedGeneration: DocumentGeneration(5)
+        )
+    )
+    guard case .command(let knotValueResult) = knotValueResponse else {
+        Issue.record("Agent must set the authored surface trim p-curve knot value.")
+        return
+    }
+    #expect(knotValueResult.commandName == "setSurfaceTrimKnotValue")
+    #expect(knotValueResult.didMutate)
+    #expect(knotValueResult.generation == DocumentGeneration(6))
+
+    let knotMultiplicityResponse = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .setSurfaceTrimKnotMultiplicity(
+                target: trimReference,
+                knotIndex: 3,
+                multiplicity: 2
+            ),
+            expectedGeneration: DocumentGeneration(6)
+        )
+    )
+    guard case .command(let knotMultiplicityResult) = knotMultiplicityResponse else {
+        Issue.record("Agent must set the authored surface trim p-curve knot multiplicity.")
+        return
+    }
+    #expect(knotMultiplicityResult.commandName == "setSurfaceTrimKnotMultiplicity")
+    #expect(knotMultiplicityResult.didMutate)
+    #expect(knotMultiplicityResult.generation == DocumentGeneration(7))
+
+    let saturatedFeature = try #require(session.document.cadDocument.designGraph.nodes[featureID])
+    guard case let .bSplineSurface(saturatedSurfaceFeature) = saturatedFeature.operation,
+          let saturatedLoop = saturatedSurfaceFeature.trimLoops.first,
+          case .bSpline(let saturatedCurve) = saturatedLoop.edges[0].parameterCurve else {
+        Issue.record("Agent trim knot multiplicity must keep the authored B-spline trim p-curve.")
+        return
+    }
+    #expect(saturatedCurve.knots == [0.0, 0.0, 0.0, 0.4, 0.4, 1.0, 1.0, 1.0])
 }
 
 @MainActor

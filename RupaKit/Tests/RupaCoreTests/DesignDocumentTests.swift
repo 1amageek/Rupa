@@ -1057,6 +1057,135 @@ import Testing
     #expect(updatedControlPoint.isWeightEditable)
 }
 
+@Test func directBSplineSurfaceTrimKnotInsertionRefinesAuthoredBSplinePcurveWithoutChangingShape() async throws {
+    var document = DesignDocument.empty()
+    let surface = designDocumentDirectBSplineSurfaceWithInteriorKnots()
+
+    let featureID = try document.createBSplineSurface(
+        name: "Direct Trim Knot Insertion Surface",
+        surface: surface
+    )
+    let summary = try SurfaceSourceSummaryService().summarize(document: document)
+    let faceReference = try #require(summary.sources.first?.patches.first?.faceSelectionReference)
+    let originalCurve = BSplineCurve2D(
+        degree: 2,
+        knots: [0.0, 0.0, 0.0, 1.0, 1.0, 1.0],
+        controlPoints: [
+            Point2D(x: 0.2, y: 0.2),
+            Point2D(x: 0.52, y: 0.42),
+            Point2D(x: 0.8, y: 0.25),
+        ],
+        weights: [1.0, 1.2, 1.0]
+    )
+    let trimLoop = BSplineSurfaceTrimLoop(
+        role: .outer,
+        edges: [
+            BSplineSurfaceTrimEdge(parameterCurve: .bSpline(originalCurve)),
+            BSplineSurfaceTrimEdge(parameterCurve: .polyline([
+                SurfaceParameter(u: 0.8, v: 0.25),
+                SurfaceParameter(u: 0.45, v: 0.8),
+            ])),
+            BSplineSurfaceTrimEdge(parameterCurve: .polyline([
+                SurfaceParameter(u: 0.45, v: 0.8),
+                SurfaceParameter(u: 0.2, v: 0.2),
+            ])),
+        ]
+    )
+    try document.setSurfaceTrimLoops(
+        target: faceReference,
+        trimLoops: [trimLoop]
+    )
+    let trimmedSummary = try SurfaceSourceSummaryService().summarize(document: document)
+    let trimEdge = try #require(trimmedSummary.sources.first?.patches.first?.trimLoops.first?.edges.first)
+    let trimReference = try #require(trimEdge.selectionReference)
+    let polylineTrimReference = try #require(
+        trimmedSummary.sources.first?.patches.first?.trimLoops.first?.edges.dropFirst().first?.selectionReference
+    )
+    let sampleParameters = [0.0, 0.2, 0.5, 0.8, 1.0]
+    let expectedPoints = try sampleParameters.map { try originalCurve.point(at: $0) }
+
+    #expect(trimEdge.parameterCurve.kind == "bSpline")
+    #expect(trimEdge.parameterCurve.degree == 2)
+    #expect(trimEdge.parameterCurve.spans.map(\.lowerBound) == [0.0])
+    #expect(trimEdge.parameterCurve.spans.map(\.upperBound) == [1.0])
+    #expect(trimEdge.parameterCurve.supportsKnotInsertion)
+
+    #expect(throws: EditorError.self) {
+        try document.insertSurfaceTrimKnot(
+            target: polylineTrimReference,
+            value: .scalar(0.5)
+        )
+    }
+
+    try document.insertSurfaceTrimKnot(
+        target: trimReference,
+        value: .scalar(0.5)
+    )
+
+    let feature = try #require(document.cadDocument.designGraph.nodes[featureID])
+    guard case let .bSplineSurface(surfaceFeature) = feature.operation else {
+        Issue.record("Expected a direct B-spline surface feature.")
+        return
+    }
+    let updatedLoop = try #require(surfaceFeature.trimLoops.first)
+    guard case .bSpline(let updatedCurve) = updatedLoop.edges[0].parameterCurve else {
+        Issue.record("Expected a B-spline trim parameter curve.")
+        return
+    }
+    let actualPoints = try sampleParameters.map { try updatedCurve.point(at: $0) }
+    #expect(updatedCurve.knots == [0.0, 0.0, 0.0, 0.5, 1.0, 1.0, 1.0])
+    #expect(updatedCurve.controlPoints.count == originalCurve.controlPoints.count + 1)
+    #expect(updatedCurve.weights.count == originalCurve.weights.count + 1)
+    for index in sampleParameters.indices {
+        #expect(abs(actualPoints[index].x - expectedPoints[index].x) <= 1.0e-12)
+        #expect(abs(actualPoints[index].y - expectedPoints[index].y) <= 1.0e-12)
+    }
+    try updatedLoop.validate(on: surfaceFeature.surface)
+
+    let updatedSummary = try SurfaceSourceSummaryService().summarize(document: document)
+    let updatedEdge = try #require(updatedSummary.sources.first?.patches.first?.trimLoops.first?.edges.first)
+    #expect(updatedEdge.parameterCurve.knots == updatedCurve.knots)
+    #expect(updatedEdge.parameterCurve.spans.count == 2)
+    let insertedKnot = try #require(updatedEdge.parameterCurve.knotVector.first { $0.index == 3 })
+    #expect(insertedKnot.isValueEditable)
+    #expect(insertedKnot.isMultiplicityEditable)
+
+    try document.setSurfaceTrimKnotValue(
+        target: trimReference,
+        knotIndex: 3,
+        value: .scalar(0.4)
+    )
+    let retimedFeature = try #require(document.cadDocument.designGraph.nodes[featureID])
+    guard case let .bSplineSurface(retimedSurfaceFeature) = retimedFeature.operation,
+          let retimedLoop = retimedSurfaceFeature.trimLoops.first,
+          case .bSpline(let retimedCurve) = retimedLoop.edges[0].parameterCurve else {
+        Issue.record("Expected a retimed B-spline trim parameter curve.")
+        return
+    }
+    #expect(retimedCurve.knots == [0.0, 0.0, 0.0, 0.4, 1.0, 1.0, 1.0])
+
+    let retimedSampleParameters = [0.0, 0.2, 0.4, 0.7, 1.0]
+    let retimedExpectedPoints = try retimedSampleParameters.map { try retimedCurve.point(at: $0) }
+    try document.setSurfaceTrimKnotMultiplicity(
+        target: trimReference,
+        knotIndex: 3,
+        multiplicity: 2
+    )
+    let saturatedFeature = try #require(document.cadDocument.designGraph.nodes[featureID])
+    guard case let .bSplineSurface(saturatedSurfaceFeature) = saturatedFeature.operation,
+          let saturatedLoop = saturatedSurfaceFeature.trimLoops.first,
+          case .bSpline(let saturatedCurve) = saturatedLoop.edges[0].parameterCurve else {
+        Issue.record("Expected a saturated B-spline trim parameter curve.")
+        return
+    }
+    let saturatedActualPoints = try retimedSampleParameters.map { try saturatedCurve.point(at: $0) }
+    #expect(saturatedCurve.knots == [0.0, 0.0, 0.0, 0.4, 0.4, 1.0, 1.0, 1.0])
+    for index in retimedSampleParameters.indices {
+        #expect(abs(saturatedActualPoints[index].x - retimedExpectedPoints[index].x) <= 1.0e-12)
+        #expect(abs(saturatedActualPoints[index].y - retimedExpectedPoints[index].y) <= 1.0e-12)
+    }
+}
+
 @Test func surfaceSpanSplitRejectsGeneratedPolySplineSpanReference() async throws {
     var document = DesignDocument.empty()
     let featureID = try document.createPolySplineSurface(
