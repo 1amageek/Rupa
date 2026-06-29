@@ -1241,6 +1241,16 @@ public final class AgentCommandController: AgentClientProtocol {
             failureMode: "Accepts editable direct B-spline surface internal knot references discovered from surfaceSourceSummary and a requested multiplicity greater than the current multiplicity and no greater than the surface degree in that direction; rejects boundary knots, PolySpline generated knots, non-knot references, lower or equal multiplicities, saturated knot multiplicity, stale generations, non-editable surface sources, and invalid rebuilt B-spline sheet topology."
         ),
         capability(
+            "matchSurfaceBoundaryContinuity",
+            category: .solid,
+            summary: "Match a source-owned direct B-spline surface trim boundary to another direct B-spline trim boundary at G0, G1, or G2 by editing the target boundary control rows.",
+            access: .automationCommand,
+            mutatesDocument: true,
+            discovery: [.surfaceSourceSummary, .surfaceFrames, .surfaceAnalysis, .surfaceContinuitySummary],
+            targets: [.surfaceTrim],
+            failureMode: "Accepts two direct B-spline rectangular outer trim references discovered from surfaceSourceSummary with compatible boundary control counts, boundary degree, and knot vectors; solves G1/G2 from each side's inward degree and knot spacing; rejects PolySpline trims, inner trims, stale generations, identical boundaries, incompatible boundary bases, non-clamped outer boundaries, insufficient cross-boundary control rows for G1/G2, and invalid rebuilt B-spline sheet topology."
+        ),
+        capability(
             "slidePolySplineSurfaceVertices",
             category: .solid,
             summary: "Slide generated PolySpline patch boundary CVs along local surface hull U, V, or normal directions with an explicit distance.",

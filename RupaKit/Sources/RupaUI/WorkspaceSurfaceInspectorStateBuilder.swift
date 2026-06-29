@@ -28,6 +28,15 @@ struct WorkspaceSurfaceInspectorStateBuilder {
         }
     }
 
+    var surfaceTrimReferences: [SelectionReference] {
+        selection.selectedReferences.filter { reference in
+            if case .surface(.trim) = reference {
+                return true
+            }
+            return false
+        }
+    }
+
     func surfaceControlPointStateResult() -> Result<SurfaceControlPointInspectorState?, Error> {
         guard !surfaceControlPointReferences.isEmpty else {
             return .success(nil)
@@ -67,6 +76,20 @@ struct WorkspaceSurfaceInspectorStateBuilder {
                 )
             }
             return .success(try resolveFrames(for: state))
+        } catch {
+            return .failure(error)
+        }
+    }
+
+    func surfaceBoundaryContinuityStateResult() -> Result<SurfaceBoundaryContinuityInspectorState?, Error> {
+        guard surfaceTrimReferences.isEmpty == false else {
+            return .success(nil)
+        }
+        do {
+            return .success(SurfaceBoundaryContinuityInspectorState(
+                selectedReferences: surfaceTrimReferences,
+                summaryResult: try SurfaceSourceSummaryService().summarize(document: document)
+            ))
         } catch {
             return .failure(error)
         }

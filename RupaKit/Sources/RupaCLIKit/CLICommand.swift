@@ -54,6 +54,9 @@ public struct Capabilities: ParsableCommand {
 
 extension CLIEditMode: ExpressibleByArgument {}
 extension ExportPreset.DestinationPolicy: ExpressibleByArgument {}
+extension SurfaceBoundaryContinuityLevel: ExpressibleByArgument {}
+extension SurfaceBoundaryMatchSide: ExpressibleByArgument {}
+extension SurfaceBoundaryReferenceDirection: ExpressibleByArgument {}
 
 public enum CLIParameterKind: String, CaseIterable, ExpressibleByArgument, Sendable {
     case length
@@ -899,6 +902,7 @@ public struct SurfaceCommand: ParsableCommand {
             SurfaceSetKnotValueCommand.self,
             SurfaceInsertKnotCommand.self,
             SurfaceSetKnotMultiplicityCommand.self,
+            SurfaceMatchBoundaryContinuityCommand.self,
             SurfaceSlideControlPointsCommand.self,
         ],
         defaultSubcommand: SurfaceSourcesCommand.self

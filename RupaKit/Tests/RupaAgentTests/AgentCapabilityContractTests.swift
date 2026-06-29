@@ -73,6 +73,7 @@ import SwiftCAD
     #expect(capabilities.contains("setSurfaceKnotValue"))
     #expect(capabilities.contains("insertSurfaceKnot"))
     #expect(capabilities.contains("setSurfaceKnotMultiplicity"))
+    #expect(capabilities.contains("matchSurfaceBoundaryContinuity"))
     #expect(capabilities.contains("setSurfaceControlPointDisplay"))
     #expect(capabilities.contains("setSurfaceFrameDisplay"))
     #expect(capabilities.contains("slidePolySplineSurfaceVertices"))
@@ -176,6 +177,9 @@ import SwiftCAD
     let surfaceKnotInsertion = try #require(descriptors.first { $0.name == "insertSurfaceKnot" })
     let surfaceKnotMultiplicity = try #require(
         descriptors.first { $0.name == "setSurfaceKnotMultiplicity" }
+    )
+    let surfaceBoundaryContinuity = try #require(
+        descriptors.first { $0.name == "matchSurfaceBoundaryContinuity" }
     )
     let surfaceControlPointDisplay = try #require(descriptors.first { $0.name == "setSurfaceControlPointDisplay" })
     let surfaceFrameDisplay = try #require(descriptors.first { $0.name == "setSurfaceFrameDisplay" })
@@ -628,6 +632,22 @@ import SwiftCAD
     #expect(surfaceKnotMultiplicity.summary.contains("shape-preserving knot insertion"))
     #expect(surfaceKnotMultiplicity.failureMode.contains("lower or equal multiplicities"))
     #expect(surfaceKnotMultiplicity.failureMode.contains("surface degree"))
+
+    #expect(surfaceBoundaryContinuity.category == .solid)
+    #expect(surfaceBoundaryContinuity.mutatesDocument)
+    #expect(surfaceBoundaryContinuity.access == .automationCommand)
+    #expect(surfaceBoundaryContinuity.discovery.contains(.surfaceSourceSummary))
+    #expect(surfaceBoundaryContinuity.discovery.contains(.surfaceFrames))
+    #expect(surfaceBoundaryContinuity.discovery.contains(.surfaceAnalysis))
+    #expect(surfaceBoundaryContinuity.discovery.contains(.surfaceContinuitySummary))
+    #expect(surfaceBoundaryContinuity.targets == [.surfaceTrim])
+    #expect(surfaceBoundaryContinuity.summary.contains("G0"))
+    #expect(surfaceBoundaryContinuity.summary.contains("G1"))
+    #expect(surfaceBoundaryContinuity.summary.contains("G2"))
+    #expect(surfaceBoundaryContinuity.summary.contains("control rows"))
+    #expect(surfaceBoundaryContinuity.failureMode.contains("compatible boundary control counts"))
+    #expect(surfaceBoundaryContinuity.failureMode.contains("PolySpline trims"))
+    #expect(surfaceBoundaryContinuity.failureMode.contains("insufficient cross-boundary control rows"))
 
     #expect(surfaceControlPointDisplay.category == .solid)
     #expect(surfaceControlPointDisplay.mutatesDocument)

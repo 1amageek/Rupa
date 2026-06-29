@@ -31,6 +31,9 @@ public struct MainView: View {
     @State private var surfaceControlPointFrameNormalMoveMeters: Double
     @State private var surfaceKnotInsertionValue: Double
     @State private var surfaceKnotMultiplicityValue: Int
+    @State private var surfaceBoundaryContinuityLevel: SurfaceBoundaryContinuityLevel
+    @State private var surfaceBoundaryMatchSide: SurfaceBoundaryMatchSide
+    @State private var surfaceBoundaryReferenceDirection: SurfaceBoundaryReferenceDirection
     @State private var sketchSplineControlPointSlideCount: Int
     @State private var slideCommandState: SlideCommandState
     @State private var sketchSplitFraction: Double
@@ -102,6 +105,9 @@ public struct MainView: View {
         self._surfaceControlPointFrameNormalMoveMeters = State(initialValue: 0.001)
         self._surfaceKnotInsertionValue = State(initialValue: 0.5)
         self._surfaceKnotMultiplicityValue = State(initialValue: 2)
+        self._surfaceBoundaryContinuityLevel = State(initialValue: .g1)
+        self._surfaceBoundaryMatchSide = State(initialValue: .automatic)
+        self._surfaceBoundaryReferenceDirection = State(initialValue: .automatic)
         self._sketchSplineControlPointSlideCount = State(initialValue: 1)
         self._slideCommandState = State(initialValue: .inactive)
         self._sketchSplitFraction = State(initialValue: 0.5)
@@ -3808,6 +3814,11 @@ public struct MainView: View {
         surfaceInspectorStateBuilder.surfaceParameterStateResult()
     }
 
+    private var selectedSurfaceBoundaryContinuityStateResult:
+        Result<SurfaceBoundaryContinuityInspectorState?, Error> {
+        surfaceInspectorStateBuilder.surfaceBoundaryContinuityStateResult()
+    }
+
     private var selectedSurfaceContinuitySummary: RupaCore.SurfaceContinuityResult? {
         surfaceInspectorStateBuilder.continuitySummary(for: selectedSceneNodes)
     }
@@ -4083,8 +4094,13 @@ public struct MainView: View {
         WorkspaceSurfaceInspectorView(
             analysisResult: selectedSurfaceAnalysisResult(for: nodes),
             continuityResult: selectedSurfaceContinuityResult(for: nodes),
+            boundaryContinuityStateResult: selectedSurfaceBoundaryContinuityStateResult,
             showsUnavailableSections: shouldShowSurfaceContinuitySection(for: nodes),
-            displayUnit: session.document.displayUnit
+            displayUnit: session.document.displayUnit,
+            boundaryContinuityLevel: $surfaceBoundaryContinuityLevel,
+            boundaryMatchSide: $surfaceBoundaryMatchSide,
+            boundaryReferenceDirection: $surfaceBoundaryReferenceDirection,
+            onMatchBoundaryContinuity: matchSurfaceBoundaryContinuity
         )
 
         projectCurvesToFaceSection()
@@ -5152,6 +5168,25 @@ public struct MainView: View {
         let result = session.setSurfaceKnotMultiplicity(
             target: target,
             multiplicity: multiplicity
+        )
+        if result?.diagnostics.isEmpty == false || result == nil {
+            isPreviewExpanded = true
+        }
+    }
+
+    private func matchSurfaceBoundaryContinuity(
+        target: SelectionReference,
+        reference: SelectionReference,
+        level: SurfaceBoundaryContinuityLevel,
+        matchSide: SurfaceBoundaryMatchSide,
+        referenceDirection: SurfaceBoundaryReferenceDirection
+    ) {
+        let result = session.matchSurfaceBoundaryContinuity(
+            target: target,
+            reference: reference,
+            level: level,
+            matchSide: matchSide,
+            referenceDirection: referenceDirection
         )
         if result?.diagnostics.isEmpty == false || result == nil {
             isPreviewExpanded = true

@@ -1125,6 +1125,25 @@ public final class CADDocumentStore {
             document = updatedDocument
             try commitMutation()
             evaluateCurrentDocument()
+        case .matchSurfaceBoundaryContinuity(
+            let target,
+            let reference,
+            let level,
+            let matchSide,
+            let referenceDirection
+        ):
+            var updatedDocument = document
+            try updatedDocument.matchSurfaceBoundaryContinuity(
+                target: target,
+                reference: reference,
+                level: level,
+                matchSide: matchSide,
+                referenceDirection: referenceDirection,
+                objectRegistry: objectRegistry
+            )
+            document = updatedDocument
+            try commitMutation()
+            evaluateCurrentDocument()
         case .slidePolySplineSurfaceVertices(let targets, let direction, let distance):
             var updatedDocument = document
             try updatedDocument.slidePolySplineSurfaceVertices(

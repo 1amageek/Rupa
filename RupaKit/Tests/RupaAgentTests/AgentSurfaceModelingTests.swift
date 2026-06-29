@@ -621,6 +621,111 @@ import SwiftCAD
 }
 
 @MainActor
+@Test func agentMatchesDirectBSplineSurfaceBoundaryContinuityThroughTrimReferences() async throws {
+    let server = AgentCommandController()
+    let sessionID = UUID()
+    let session = EditorSession()
+    server.register(session: session, id: sessionID)
+
+    let referenceResponse = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .createBSplineSurface(
+                name: "Agent Reference Boundary Surface",
+                surface: agentDirectBSplineSurface()
+            ),
+            expectedGeneration: DocumentGeneration(0)
+        )
+    )
+    guard case .command(let referenceResult) = referenceResponse else {
+        Issue.record("Agent must create a reference direct B-spline surface.")
+        return
+    }
+    #expect(referenceResult.didMutate)
+
+    let targetResponse = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .createBSplineSurface(
+                name: "Agent Target Boundary Surface",
+                surface: agentOffsetDirectBSplineSurface()
+            ),
+            expectedGeneration: DocumentGeneration(1)
+        )
+    )
+    guard case .command(let targetResult) = targetResponse else {
+        Issue.record("Agent must create a target direct B-spline surface.")
+        return
+    }
+    #expect(targetResult.didMutate)
+
+    let featureIDs = session.document.cadDocument.designGraph.order
+    let referenceFeatureID = try #require(featureIDs.first)
+    let targetFeatureID = try #require(featureIDs.last)
+    let summaryResponse = server.handle(
+        .surfaceSourceSummary(
+            sessionID: sessionID,
+            expectedGeneration: DocumentGeneration(2)
+        )
+    )
+    guard case .surfaceSourceSummary(let summary) = summaryResponse else {
+        Issue.record("Agent must return surface source summary for boundary matching.")
+        return
+    }
+    let referenceSource = try #require(summary.sources.first { $0.featureID == referenceFeatureID.description })
+    let targetSource = try #require(summary.sources.first { $0.featureID == targetFeatureID.description })
+    let referenceTrimLoop = try #require(referenceSource.patches.first?.trimLoops.first)
+    let targetTrimLoop = try #require(targetSource.patches.first?.trimLoops.first)
+    guard referenceTrimLoop.selectionReferences.indices.contains(2),
+          targetTrimLoop.selectionReferences.indices.contains(0) else {
+        Issue.record("Agent boundary match requires direct B-spline trim references.")
+        return
+    }
+    let referenceTrim = referenceTrimLoop.selectionReferences[2]
+    let targetTrim = targetTrimLoop.selectionReferences[0]
+
+    let matchResponse = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .matchSurfaceBoundaryContinuity(
+                target: targetTrim,
+                reference: referenceTrim,
+                level: .g1,
+                matchSide: .opposite,
+                referenceDirection: .forward
+            ),
+            expectedGeneration: DocumentGeneration(2)
+        )
+    )
+    guard case .command(let matchResult) = matchResponse else {
+        Issue.record("Agent must match direct B-spline surface boundary continuity.")
+        return
+    }
+    #expect(matchResult.commandName == "matchSurfaceBoundaryContinuity")
+    #expect(matchResult.didMutate)
+    #expect(matchResult.generation == DocumentGeneration(3))
+
+    let targetFeature = try #require(session.document.cadDocument.designGraph.nodes[targetFeatureID])
+    let referenceFeature = try #require(session.document.cadDocument.designGraph.nodes[referenceFeatureID])
+    guard case let .bSplineSurface(targetSurfaceFeature) = targetFeature.operation,
+          case let .bSplineSurface(referenceSurfaceFeature) = referenceFeature.operation else {
+        Issue.record("Agent boundary match must keep direct B-spline surface features.")
+        return
+    }
+    let referenceBoundary = referenceSurfaceFeature.surface.controlPoints[3][2]
+    let referenceInward = referenceSurfaceFeature.surface.controlPoints[2][2] - referenceBoundary
+    #expect(targetSurfaceFeature.surface.controlPoints[0][2].isApproximatelyEqual(
+        to: referenceBoundary,
+        tolerance: 1.0e-12
+    ))
+    #expect(targetSurfaceFeature.surface.controlPoints[1][2].isApproximatelyEqual(
+        to: referenceBoundary + (-referenceInward),
+        tolerance: 1.0e-12
+    ))
+    #expect(session.evaluationStatus == .valid)
+}
+
+@MainActor
 @Test func agentDispatchesPolySplineCommandAndExposesBSplineTopology() async throws {
     let server = AgentCommandController()
     let sessionID = UUID()

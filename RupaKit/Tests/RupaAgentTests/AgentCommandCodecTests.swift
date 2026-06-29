@@ -755,6 +755,32 @@ import SwiftCAD
         ),
         expectedGeneration: DocumentGeneration(5)
     )
+    let surfaceTrimReference = SelectionReference.surface(
+        .trim(
+            SurfaceTrimReference(
+                surface: SurfaceReference(
+                    faceName: PersistentName(components: [
+                        .feature(FeatureID()),
+                        .generated("bSplineSurface"),
+                        .subshape("patch:0:face"),
+                    ])
+                ),
+                loopIndex: 0,
+                edgeIndex: 0
+            )
+        )
+    )
+    let surfaceBoundaryContinuityRequest = AgentRequest.execute(
+        sessionID: sessionID,
+        command: .matchSurfaceBoundaryContinuity(
+            target: surfaceTrimReference,
+            reference: surfaceTrimReference,
+            level: .g1,
+            matchSide: .opposite,
+            referenceDirection: .reversed
+        ),
+        expectedGeneration: DocumentGeneration(5)
+    )
 
     let decodedRequest = try codec.decodeRequest(from: try codec.encode(request))
     let decodedSlideRequest = try codec.decodeRequest(from: try codec.encode(slideRequest))
@@ -785,6 +811,9 @@ import SwiftCAD
     let decodedSurfaceKnotMultiplicityRequest = try codec.decodeRequest(
         from: try codec.encode(surfaceKnotMultiplicityRequest)
     )
+    let decodedSurfaceBoundaryContinuityRequest = try codec.decodeRequest(
+        from: try codec.encode(surfaceBoundaryContinuityRequest)
+    )
 
     #expect(decodedRequest == request)
     #expect(decodedSlideRequest == slideRequest)
@@ -797,6 +826,7 @@ import SwiftCAD
     #expect(decodedSurfaceKnotValueRequest == surfaceKnotValueRequest)
     #expect(decodedSurfaceKnotInsertionRequest == surfaceKnotInsertionRequest)
     #expect(decodedSurfaceKnotMultiplicityRequest == surfaceKnotMultiplicityRequest)
+    #expect(decodedSurfaceBoundaryContinuityRequest == surfaceBoundaryContinuityRequest)
 }
 
 @Test func agentMessageCodecRoundTripsPolySplineMeshAnalysis() async throws {

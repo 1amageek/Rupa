@@ -4,7 +4,7 @@ public struct CADInteractionQualityAssessmentService: Sendable {
     public func assess() -> CADInteractionQualityAssessmentResult {
         let entries = Self.entries
         return CADInteractionQualityAssessmentResult(
-            referenceDate: "2026-06-24",
+            referenceDate: "2026-06-29",
             scoringModel: "Average of all gate ratings where missing=0, planned=1, partial=2, implemented=3, verified=4.",
             score: Self.score(for: entries),
             counts: Self.counts(for: entries),
@@ -759,10 +759,13 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                         "RupaKit/Sources/RupaCore/SurfaceAnalysisService.swift",
                         "RupaKit/Sources/RupaCore/SurfaceContinuityService.swift",
                         "RupaKit/Sources/RupaCore/Surface/BSplineSurfaceKnotEditingService.swift",
+                        "RupaKit/Sources/RupaCore/Surface/BSplineSurfaceBoundaryContinuityEditingService.swift",
                         "RupaKit/Sources/RupaAutomation/AutomationCommand.swift",
                         "RupaKit/Sources/RupaAgentProtocol/AgentMessage.swift",
                         "RupaKit/Sources/RupaAgentRuntime/AgentCommandController.swift",
                         "RupaKit/Sources/RupaCLIKit/SurfaceSetKnotMultiplicityCommand.swift",
+                        "RupaKit/Sources/RupaCLIKit/SurfaceMatchBoundaryContinuityCommand.swift",
+                        "RupaKit/Sources/RupaUI/SurfaceBoundaryContinuityInspectorState.swift",
                         "RupaKit/Sources/RupaRendering/ViewportSurfaceAnalysisOverlay.swift",
                         "RupaKit/Sources/RupaRendering/ViewportSurfaceContinuityOverlay.swift",
                     ],
@@ -773,24 +776,27 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                         "RupaKit/Tests/RupaCoreTests/DesignDocumentTests.swift",
                         "RupaKit/Tests/RupaRenderingTests/ViewportPolySplineSurfaceVertexSlideAffordanceGeometryTests.swift",
                         "RupaKit/Tests/RupaAgentTests/AgentSurfaceModelingTests.swift",
+                        "RupaKit/Tests/RupaAutomationTests/AutomationRunnerTests.swift",
+                        "RupaKit/Tests/RupaCLITests/CLIResponseTests.swift",
+                        "RupaKit/Tests/RupaUIPackageTests/WorkspaceSurfaceInspectorStateBuilderTests.swift",
                     ],
                     notes: [
                         "Surface source summaries expose Agent-readable B-spline degree, order, knot vectors, stable knot IDs, span IDs, CV weights, control-point selection references, trim-loop ownership, and generated topology links for supported PolySpline patches and direct B-spline surface sources.",
                         "Strict interior PolySpline CV weights are editable through the shared Core, Automation, and Agent command path while preserving CV position overrides.",
-                        "Direct B-spline surface sources can be created through Core, Automation, Agent, and CLI, evaluate to selectable sheet topology, appear in surface source summaries with stored degree, knot vectors, weights, control-net references, editable knot and span references, and rectangular trim-loop identity, and support direct CV position, CV weight, CV slide, internal knot-value mutation, shape-preserving knot insertion, and explicit internal knot multiplicity editing.",
+                        "Direct B-spline surface sources can be created through Core, Automation, Agent, and CLI, evaluate to selectable sheet topology, appear in surface source summaries with stored degree, knot vectors, weights, control-net references, editable knot and span references, and rectangular trim-loop identity, and support direct CV position, CV weight, CV slide, internal knot-value mutation, shape-preserving knot insertion, explicit internal knot multiplicity editing, and compatible clamped trim-boundary G0/G1/G2 matching with homogeneous inward derivative-scale solving.",
                     ]
                 ),
             ],
             openWork: [
-                "Direct B-spline surface source editing beyond existing CV, weight, slide, internal knot-value mutation, shape-preserving knot insertion, and explicit knot multiplicity editing, including broader span editing and authored trim-loop mutation.",
+                "Direct B-spline surface source editing beyond existing CV, weight, slide, internal knot-value mutation, shape-preserving knot insertion, explicit knot multiplicity editing, and compatible trim-boundary continuity matching, including broader span editing and authored trim-loop mutation.",
                 "Interactive viewport surface-frame handles, snap consumption, trim editing, offset, and sweep or loft section placement that consume the Agent-readable UVN frame contract.",
-                "Persistent continuity editing contracts for target G0/G1/G2 surface boundaries and G0/G1/G2/G3 curve matching.",
+                "Arbitrary B-rep adjacency solving, PolySpline continuity mutation, non-rectangular trim targets, and G0/G1/G2/G3 curve matching.",
                 "Non-planar G2 multi-patch reconstruction.",
                 "Patch merge and rounded-corner policy output.",
                 "General trim-curve and surface CV source editing.",
                 "Viewport creation controls.",
             ],
-            next: "Continue from direct B-spline source creation and readback into editable CV/knot/span/trim commands, UI-consumable UVN frame affordances, and explicit continuity diagnostics before broadening surface tools."
+            next: "Continue from direct B-spline source creation and readback into editable CV/knot/span/trim commands, UI-consumable UVN frame affordances, arbitrary adjacency continuity, and authored trim-loop mutation before broadening surface tools."
         ),
         entry(
             area: .curveContinuity,

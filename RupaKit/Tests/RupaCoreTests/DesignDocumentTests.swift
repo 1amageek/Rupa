@@ -703,6 +703,163 @@ import Testing
     }
 }
 
+@Test func directBSplineSurfaceTrimReferenceMatchesBoundaryContinuity() async throws {
+    var document = DesignDocument.empty()
+    let referenceSurface = designDocumentDirectBSplineSurface()
+    let targetSurface = designDocumentOffsetDirectBSplineSurface()
+
+    let referenceFeatureID = try document.createBSplineSurface(
+        name: "Reference Boundary Surface",
+        surface: referenceSurface
+    )
+    let targetFeatureID = try document.createBSplineSurface(
+        name: "Target Boundary Surface",
+        surface: targetSurface
+    )
+    let referenceTrim = try designDocumentSurfaceTrimReference(
+        featureID: referenceFeatureID,
+        edgeIndex: 2,
+        in: document
+    )
+    let targetTrim = try designDocumentSurfaceTrimReference(
+        featureID: targetFeatureID,
+        edgeIndex: 0,
+        in: document
+    )
+
+    try document.matchSurfaceBoundaryContinuity(
+        target: targetTrim,
+        reference: referenceTrim,
+        level: .g2,
+        matchSide: .opposite,
+        referenceDirection: .forward
+    )
+
+    let matchedFeature = try #require(document.cadDocument.designGraph.nodes[targetFeatureID])
+    let referenceFeature = try #require(document.cadDocument.designGraph.nodes[referenceFeatureID])
+    guard case let .bSplineSurface(matchedSurfaceFeature) = matchedFeature.operation,
+          case let .bSplineSurface(referenceSurfaceFeature) = referenceFeature.operation else {
+        Issue.record("Expected direct B-spline surface features.")
+        return
+    }
+    let matchedSurface = matchedSurfaceFeature.surface
+    let storedReferenceSurface = referenceSurfaceFeature.surface
+    for uIndex in 0..<matchedSurface.uControlPointCount {
+        let boundary = designDocumentHomogeneousControlPoint(
+            storedReferenceSurface,
+            vIndex: 3,
+            uIndex: uIndex
+        )
+        let firstInward = designDocumentHomogeneousControlPoint(
+            storedReferenceSurface,
+            vIndex: 2,
+            uIndex: uIndex
+        )
+        let secondInward = designDocumentHomogeneousControlPoint(
+            storedReferenceSurface,
+            vIndex: 1,
+            uIndex: uIndex
+        )
+        let referenceFirstDerivativeScale = 3.0
+        let targetFirstDerivativeScale = 3.0 / 2.0
+        let referenceSecondDerivativeScale = 6.0
+        let targetSecondDerivativeScale = 6.0 / 4.0
+        let referenceFirstDerivative = (firstInward - boundary) * referenceFirstDerivativeScale
+        let expectedFirstInward = boundary
+            + (referenceFirstDerivative * -1.0) / targetFirstDerivativeScale
+        let referenceSecondDifference = secondInward - firstInward * 2.0 + boundary
+        let referenceSecondDerivative = referenceSecondDifference * referenceSecondDerivativeScale
+        let expectedSecondInward = (referenceSecondDerivative / targetSecondDerivativeScale)
+            + expectedFirstInward * 2.0
+            - boundary
+        let expectedBoundary = try boundary.dehomogenized()
+        let expectedFirst = try expectedFirstInward.dehomogenized()
+        let expectedSecond = try expectedSecondInward.dehomogenized()
+        #expect(matchedSurface.controlPoints[0][uIndex].isApproximatelyEqual(
+            to: expectedBoundary.point,
+            tolerance: 1.0e-12
+        ))
+        #expect(
+            matchedSurface.controlPoints[1][uIndex].isApproximatelyEqual(
+                to: expectedFirst.point,
+                tolerance: 1.0e-12
+            )
+        )
+        #expect(
+            matchedSurface.controlPoints[2][uIndex].isApproximatelyEqual(
+                to: expectedSecond.point,
+                tolerance: 1.0e-12
+            )
+        )
+        #expect(matchedSurface.weights[0][uIndex] == expectedBoundary.weight)
+        #expect(matchedSurface.weights[1][uIndex] == expectedFirst.weight)
+        #expect(matchedSurface.weights[2][uIndex] == expectedSecond.weight)
+    }
+    for u in [0.25, 0.5, 0.75] {
+        let matchedGeometry = try matchedSurface.differentialGeometry(atU: u, v: 0.0)
+        let referenceGeometry = try storedReferenceSurface.differentialGeometry(atU: u, v: 1.0)
+        #expect(matchedGeometry.position.isApproximatelyEqual(
+            to: referenceGeometry.position,
+            tolerance: 1.0e-12
+        ))
+        #expect((matchedGeometry.tangentV - referenceGeometry.tangentV).length <= 1.0e-10)
+        #expect(
+            (
+                matchedGeometry.secondDerivativeVV
+                    - referenceGeometry.secondDerivativeVV
+            ).length <= 1.0e-9
+        )
+    }
+
+    let updatedSummary = try SurfaceSourceSummaryService().summarize(document: document)
+    let updatedTargetSource = try #require(
+        updatedSummary.sources.first { $0.featureID == targetFeatureID.description }
+    )
+    #expect(updatedTargetSource.patches.first?.trimLoops.first?.selectionReferences.count == 4)
+
+    #expect(throws: EditorError.self) {
+        try document.matchSurfaceBoundaryContinuity(
+            target: targetTrim,
+            reference: targetTrim,
+            level: .g0
+        )
+    }
+
+    let polySplineFeatureID = try document.createPolySplineSurface(
+        name: "Unsupported PolySpline Boundary",
+        sourceMesh: designDocumentPolySplineQuadMesh()
+    )
+    let polySplineTrim = try designDocumentSurfaceTrimReference(
+        featureID: polySplineFeatureID,
+        edgeIndex: 0,
+        in: document
+    )
+    #expect(throws: EditorError.self) {
+        try document.matchSurfaceBoundaryContinuity(
+            target: targetTrim,
+            reference: polySplineTrim,
+            level: .g0
+        )
+    }
+
+    let unclampedFeatureID = try document.createBSplineSurface(
+        name: "Unclamped Boundary Surface",
+        surface: designDocumentUnclampedDirectBSplineSurface()
+    )
+    let unclampedTrim = try designDocumentSurfaceTrimReference(
+        featureID: unclampedFeatureID,
+        edgeIndex: 0,
+        in: document
+    )
+    #expect(throws: EditorError.self) {
+        try document.matchSurfaceBoundaryContinuity(
+            target: unclampedTrim,
+            reference: referenceTrim,
+            level: .g1
+        )
+    }
+}
+
 @Test func polySplineSurfaceVertexMoveRejectsNonVertexTargets() async throws {
     var document = DesignDocument.empty()
 
@@ -2270,6 +2427,123 @@ private func designDocumentDirectBSplineSurface() -> BSplineSurface3D {
     )
 }
 
+private func designDocumentOffsetDirectBSplineSurface() -> BSplineSurface3D {
+    let base = BSplineSurface3D.cubicBezierPatch(
+        bottomLeft: Point3D(x: 0.0, y: 0.04, z: 0.004),
+        bottomRight: Point3D(x: 0.02, y: 0.04, z: -0.002),
+        topRight: Point3D(x: 0.02, y: 0.06, z: 0.003),
+        topLeft: Point3D(x: 0.0, y: 0.06, z: 0.001)
+    )
+    var weights = base.weights
+    weights[0][1] = 1.2
+    weights[1][1] = 1.4
+    weights[2][1] = 1.6
+    return BSplineSurface3D(
+        uDegree: base.uDegree,
+        vDegree: base.vDegree,
+        uKnots: base.uKnots,
+        vKnots: [0.0, 0.0, 0.0, 0.0, 2.0, 2.0, 2.0, 2.0],
+        controlPoints: base.controlPoints,
+        weights: weights
+    )
+}
+
+private func designDocumentUnclampedDirectBSplineSurface() -> BSplineSurface3D {
+    let base = designDocumentDirectBSplineSurface()
+    return BSplineSurface3D(
+        uDegree: base.uDegree,
+        vDegree: base.vDegree,
+        uKnots: [-1.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 2.0],
+        vKnots: [-1.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 2.0],
+        controlPoints: base.controlPoints,
+        weights: base.weights
+    )
+}
+
+private struct DesignDocumentHomogeneousControlPoint {
+    var point: Vector3D
+    var weight: Double
+
+    init(point: Point3D, weight: Double) {
+        self.point = Vector3D(
+            x: point.x * weight,
+            y: point.y * weight,
+            z: point.z * weight
+        )
+        self.weight = weight
+    }
+
+    func dehomogenized() throws -> (point: Point3D, weight: Double) {
+        guard weight.isFinite, weight > Double.ulpOfOne, point.isFinite else {
+            throw GeometryError.invalidDistance(weight)
+        }
+        let vector = point / weight
+        guard vector.isFinite else {
+            throw GeometryError.invalidCoordinate(vector.x)
+        }
+        return (
+            Point3D(x: vector.x, y: vector.y, z: vector.z),
+            weight
+        )
+    }
+
+    static func + (
+        lhs: DesignDocumentHomogeneousControlPoint,
+        rhs: DesignDocumentHomogeneousControlPoint
+    ) -> DesignDocumentHomogeneousControlPoint {
+        DesignDocumentHomogeneousControlPoint(
+            point: lhs.point + rhs.point,
+            weight: lhs.weight + rhs.weight
+        )
+    }
+
+    static func - (
+        lhs: DesignDocumentHomogeneousControlPoint,
+        rhs: DesignDocumentHomogeneousControlPoint
+    ) -> DesignDocumentHomogeneousControlPoint {
+        DesignDocumentHomogeneousControlPoint(
+            point: lhs.point - rhs.point,
+            weight: lhs.weight - rhs.weight
+        )
+    }
+
+    static func * (
+        lhs: DesignDocumentHomogeneousControlPoint,
+        rhs: Double
+    ) -> DesignDocumentHomogeneousControlPoint {
+        DesignDocumentHomogeneousControlPoint(
+            point: lhs.point * rhs,
+            weight: lhs.weight * rhs
+        )
+    }
+
+    static func / (
+        lhs: DesignDocumentHomogeneousControlPoint,
+        rhs: Double
+    ) -> DesignDocumentHomogeneousControlPoint {
+        DesignDocumentHomogeneousControlPoint(
+            point: lhs.point / rhs,
+            weight: lhs.weight / rhs
+        )
+    }
+
+    private init(point: Vector3D, weight: Double) {
+        self.point = point
+        self.weight = weight
+    }
+}
+
+private func designDocumentHomogeneousControlPoint(
+    _ surface: BSplineSurface3D,
+    vIndex: Int,
+    uIndex: Int
+) -> DesignDocumentHomogeneousControlPoint {
+    DesignDocumentHomogeneousControlPoint(
+        point: surface.controlPoints[vIndex][uIndex],
+        weight: surface.weights[vIndex][uIndex]
+    )
+}
+
 private func designDocumentDirectBSplineSurfaceWithInteriorKnots() -> BSplineSurface3D {
     let base = BSplineSurface3D.cubicBezierPatch(
         bottomLeft: Point3D(x: 0.0, y: 0.0, z: 0.0),
@@ -2285,6 +2559,23 @@ private func designDocumentDirectBSplineSurfaceWithInteriorKnots() -> BSplineSur
         controlPoints: base.controlPoints,
         weights: base.weights
     )
+}
+
+private func designDocumentSurfaceTrimReference(
+    featureID: FeatureID,
+    edgeIndex: Int,
+    in document: DesignDocument
+) throws -> SelectionReference {
+    let summary = try SurfaceSourceSummaryService().summarize(document: document)
+    let source = try #require(summary.sources.first { $0.featureID == featureID.description })
+    let trimLoop = try #require(source.patches.first?.trimLoops.first)
+    guard trimLoop.selectionReferences.indices.contains(edgeIndex) else {
+        throw EditorError(
+            code: .referenceUnresolved,
+            message: "Test surface trim reference is missing."
+        )
+    }
+    return trimLoop.selectionReferences[edgeIndex]
 }
 
 private func polySplineVertexTarget(

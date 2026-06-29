@@ -2190,6 +2190,25 @@ public final class EditorSession {
     }
 
     @discardableResult
+    public func matchSurfaceBoundaryContinuity(
+        target: SelectionReference,
+        reference: SelectionReference,
+        level: SurfaceBoundaryContinuityLevel,
+        matchSide: SurfaceBoundaryMatchSide = .automatic,
+        referenceDirection: SurfaceBoundaryReferenceDirection = .automatic
+    ) -> CommandExecutionResult? {
+        perform(
+            .matchSurfaceBoundaryContinuity(
+                target: target,
+                reference: reference,
+                level: level,
+                matchSide: matchSide,
+                referenceDirection: referenceDirection
+            )
+        )
+    }
+
+    @discardableResult
     public func slidePolySplineSurfaceVertices(
         targets: [SelectionTarget],
         direction: PolySplineSurfaceVertexSlideDirection,

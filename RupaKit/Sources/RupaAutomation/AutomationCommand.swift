@@ -255,6 +255,13 @@ public enum AutomationCommand: Codable, Equatable, Sendable {
     case setSurfaceKnotValue(target: SelectionReference, value: CADExpression)
     case insertSurfaceKnot(target: SelectionReference, value: CADExpression)
     case setSurfaceKnotMultiplicity(target: SelectionReference, multiplicity: Int)
+    case matchSurfaceBoundaryContinuity(
+        target: SelectionReference,
+        reference: SelectionReference,
+        level: SurfaceBoundaryContinuityLevel,
+        matchSide: SurfaceBoundaryMatchSide = .automatic,
+        referenceDirection: SurfaceBoundaryReferenceDirection = .automatic
+    )
     case slidePolySplineSurfaceVertices(
         targets: [SelectionTarget],
         direction: PolySplineSurfaceVertexSlideDirection,
@@ -759,6 +766,20 @@ public enum AutomationCommand: Codable, Equatable, Sendable {
             .insertSurfaceKnot(target: target, value: value)
         case .setSurfaceKnotMultiplicity(let target, let multiplicity):
             .setSurfaceKnotMultiplicity(target: target, multiplicity: multiplicity)
+        case .matchSurfaceBoundaryContinuity(
+            let target,
+            let reference,
+            let level,
+            let matchSide,
+            let referenceDirection
+        ):
+            .matchSurfaceBoundaryContinuity(
+                target: target,
+                reference: reference,
+                level: level,
+                matchSide: matchSide,
+                referenceDirection: referenceDirection
+            )
         case .slidePolySplineSurfaceVertices(let targets, let direction, let distance):
             .slidePolySplineSurfaceVertices(
                 targets: targets,

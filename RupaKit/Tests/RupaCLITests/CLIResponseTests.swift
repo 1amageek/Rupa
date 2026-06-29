@@ -3672,6 +3672,80 @@ func cliExecutableSurfaceKnotMultiplicityCommandMutatesClosedDocumentAsJSON() as
 }
 
 @Test(.timeLimit(.minutes(1)))
+func cliExecutableSurfaceBoundaryContinuityCommandMutatesClosedDocumentAsJSON() async throws {
+    let temporaryDirectory = try makeTemporaryDirectory()
+    defer {
+        removeTemporaryDirectory(temporaryDirectory)
+    }
+    let documentURL = temporaryDirectory.appendingPathComponent("process-surface-boundary-continuity.swcad")
+    var document = DesignDocument.empty(named: "Process Surface Boundary Continuity")
+    let referenceFeatureID = try document.createBSplineSurface(
+        name: "CLI Reference Boundary Surface",
+        surface: cliDirectBSplineSurface()
+    )
+    let targetFeatureID = try document.createBSplineSurface(
+        name: "CLI Target Boundary Surface",
+        surface: cliOffsetDirectBSplineSurface()
+    )
+    let referenceTrim = try cliSurfaceTrimReference(
+        featureID: referenceFeatureID,
+        edgeIndex: 2,
+        in: document
+    )
+    let targetTrim = try cliSurfaceTrimReference(
+        featureID: targetFeatureID,
+        edgeIndex: 0,
+        in: document
+    )
+    try DocumentFileService().save(document, to: documentURL)
+
+    let result = try await runCLI([
+        "surface",
+        "match-boundary-continuity",
+        documentURL.path,
+        "--target",
+        try encodedSelectionReference(targetTrim),
+        "--reference",
+        try encodedSelectionReference(referenceTrim),
+        "--level",
+        "g1",
+        "--match-side",
+        "opposite",
+        "--reference-direction",
+        "forward",
+        "--mode",
+        "file",
+        "--json",
+    ])
+    let response = try JSONDecoder().decode(
+        CLIResponse.self,
+        from: result.standardOutputData
+    )
+    let loaded = try DocumentFileService().load(from: documentURL)
+    let targetFeature = try #require(loaded.cadDocument.designGraph.nodes[targetFeatureID])
+    let referenceFeature = try #require(loaded.cadDocument.designGraph.nodes[referenceFeatureID])
+    guard case let .bSplineSurface(targetSurfaceFeature) = targetFeature.operation,
+          case let .bSplineSurface(referenceSurfaceFeature) = referenceFeature.operation else {
+        Issue.record("Expected direct B-spline surface features.")
+        return
+    }
+
+    let referenceBoundary = referenceSurfaceFeature.surface.controlPoints[3][1]
+    let referenceInward = referenceSurfaceFeature.surface.controlPoints[2][1] - referenceBoundary
+    #expect(result.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: result.standardError))
+    #expect(response.message == "Surface boundary continuity matched.")
+    #expect(response.saved)
+    #expect(targetSurfaceFeature.surface.controlPoints[0][1].isApproximatelyEqual(
+        to: referenceBoundary,
+        tolerance: 1.0e-12
+    ))
+    #expect(targetSurfaceFeature.surface.controlPoints[1][1].isApproximatelyEqual(
+        to: referenceBoundary + (-referenceInward),
+        tolerance: 1.0e-12
+    ))
+}
+
+@Test(.timeLimit(.minutes(1)))
 func cliExecutableSketchDimensionSummaryAndSetMutateClosedDocumentAsJSON() async throws {
     let temporaryDirectory = try makeTemporaryDirectory()
     defer {
@@ -6725,6 +6799,41 @@ private func cliDirectBSplineSurfaceWithInteriorKnots() -> BSplineSurface3D {
         controlPoints: base.controlPoints,
         weights: base.weights
     )
+}
+
+private func cliDirectBSplineSurface() -> BSplineSurface3D {
+    BSplineSurface3D.cubicBezierPatch(
+        bottomLeft: Point3D(x: 0.0, y: 0.0, z: 0.0),
+        bottomRight: Point3D(x: 0.02, y: 0.0, z: 0.0),
+        topRight: Point3D(x: 0.02, y: 0.02, z: 0.0),
+        topLeft: Point3D(x: 0.0, y: 0.02, z: 0.0)
+    )
+}
+
+private func cliOffsetDirectBSplineSurface() -> BSplineSurface3D {
+    BSplineSurface3D.cubicBezierPatch(
+        bottomLeft: Point3D(x: 0.0, y: 0.04, z: 0.002),
+        bottomRight: Point3D(x: 0.02, y: 0.04, z: -0.002),
+        topRight: Point3D(x: 0.02, y: 0.06, z: 0.001),
+        topLeft: Point3D(x: 0.0, y: 0.06, z: 0.003)
+    )
+}
+
+private func cliSurfaceTrimReference(
+    featureID: FeatureID,
+    edgeIndex: Int,
+    in document: DesignDocument
+) throws -> SelectionReference {
+    let summary = try SurfaceSourceSummaryService().summarize(document: document)
+    let source = try #require(summary.sources.first { $0.featureID == featureID.description })
+    let trimLoop = try #require(source.patches.first?.trimLoops.first)
+    guard trimLoop.selectionReferences.indices.contains(edgeIndex) else {
+        throw EditorError(
+            code: .referenceUnresolved,
+            message: "CLI surface trim reference is missing."
+        )
+    }
+    return trimLoop.selectionReferences[edgeIndex]
 }
 
 @MainActor

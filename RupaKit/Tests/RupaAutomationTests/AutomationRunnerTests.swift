@@ -616,6 +616,74 @@ import SwiftCAD
 }
 
 @MainActor
+@Test func automationCanMatchSurfaceBoundaryContinuity() async throws {
+    let session = EditorSession()
+    let runner = AutomationRunner()
+    let referenceResult = try runner.execute(
+        .createBSplineSurface(
+            name: "Automation Reference Surface Boundary",
+            surface: automationDirectBSplineSurface()
+        ),
+        in: session
+    )
+    let targetResult = try runner.execute(
+        .createBSplineSurface(
+            name: "Automation Target Surface Boundary",
+            surface: automationOffsetDirectBSplineSurface()
+        ),
+        in: session
+    )
+    #expect(referenceResult.didMutate)
+    #expect(targetResult.didMutate)
+    let featureIDs = session.document.cadDocument.designGraph.order
+    let referenceFeatureID = try #require(featureIDs.first)
+    let targetFeatureID = try #require(featureIDs.last)
+    let referenceTrim = try automationSurfaceTrimReference(
+        featureID: referenceFeatureID,
+        edgeIndex: 2,
+        in: session.document
+    )
+    let targetTrim = try automationSurfaceTrimReference(
+        featureID: targetFeatureID,
+        edgeIndex: 0,
+        in: session.document
+    )
+
+    let result = try runner.execute(
+        .matchSurfaceBoundaryContinuity(
+            target: targetTrim,
+            reference: referenceTrim,
+            level: .g1,
+            matchSide: .opposite,
+            referenceDirection: .forward
+        ),
+        in: session
+    )
+
+    let targetFeature = try #require(session.document.cadDocument.designGraph.nodes[targetFeatureID])
+    let referenceFeature = try #require(session.document.cadDocument.designGraph.nodes[referenceFeatureID])
+    guard case let .bSplineSurface(targetSurfaceFeature) = targetFeature.operation,
+          case let .bSplineSurface(referenceSurfaceFeature) = referenceFeature.operation else {
+        Issue.record("Automation boundary continuity must keep direct B-spline surface features.")
+        return
+    }
+    #expect(result.message == "Surface boundary continuity matched.")
+    #expect(result.commandName == "matchSurfaceBoundaryContinuity")
+    #expect(result.didMutate)
+    #expect(result.generation == DocumentGeneration(3))
+    let referenceBoundary = referenceSurfaceFeature.surface.controlPoints[3][1]
+    let referenceInward = referenceSurfaceFeature.surface.controlPoints[2][1] - referenceBoundary
+    #expect(targetSurfaceFeature.surface.controlPoints[0][1].isApproximatelyEqual(
+        to: referenceBoundary,
+        tolerance: 1.0e-12
+    ))
+    #expect(targetSurfaceFeature.surface.controlPoints[1][1].isApproximatelyEqual(
+        to: referenceBoundary + (-referenceInward),
+        tolerance: 1.0e-12
+    ))
+}
+
+@MainActor
 @Test func automationCanCreateSweepSourceFeature() async throws {
     var document = DesignDocument.empty()
     let profileID = try document.createRectangleSketch(
@@ -4873,6 +4941,41 @@ private func automationDirectBSplineSurfaceWithInteriorKnots() -> BSplineSurface
         controlPoints: base.controlPoints,
         weights: base.weights
     )
+}
+
+private func automationDirectBSplineSurface() -> BSplineSurface3D {
+    BSplineSurface3D.cubicBezierPatch(
+        bottomLeft: Point3D(x: 0.0, y: 0.0, z: 0.0),
+        bottomRight: Point3D(x: 0.02, y: 0.0, z: 0.0),
+        topRight: Point3D(x: 0.02, y: 0.02, z: 0.0),
+        topLeft: Point3D(x: 0.0, y: 0.02, z: 0.0)
+    )
+}
+
+private func automationOffsetDirectBSplineSurface() -> BSplineSurface3D {
+    BSplineSurface3D.cubicBezierPatch(
+        bottomLeft: Point3D(x: 0.0, y: 0.04, z: 0.002),
+        bottomRight: Point3D(x: 0.02, y: 0.04, z: -0.002),
+        topRight: Point3D(x: 0.02, y: 0.06, z: 0.001),
+        topLeft: Point3D(x: 0.0, y: 0.06, z: 0.003)
+    )
+}
+
+private func automationSurfaceTrimReference(
+    featureID: FeatureID,
+    edgeIndex: Int,
+    in document: DesignDocument
+) throws -> SelectionReference {
+    let summary = try SurfaceSourceSummaryService().summarize(document: document)
+    let source = try #require(summary.sources.first { $0.featureID == featureID.description })
+    let trimLoop = try #require(source.patches.first?.trimLoops.first)
+    guard trimLoop.selectionReferences.indices.contains(edgeIndex) else {
+        throw EditorError(
+            code: .referenceUnresolved,
+            message: "Automation surface trim reference is missing."
+        )
+    }
+    return trimLoop.selectionReferences[edgeIndex]
 }
 
 private func automationCylinderRadius(

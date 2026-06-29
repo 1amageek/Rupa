@@ -292,6 +292,13 @@ public enum EditorCommand: Codable, Equatable, Sendable {
         target: SelectionReference,
         multiplicity: Int
     )
+    case matchSurfaceBoundaryContinuity(
+        target: SelectionReference,
+        reference: SelectionReference,
+        level: SurfaceBoundaryContinuityLevel,
+        matchSide: SurfaceBoundaryMatchSide = .automatic,
+        referenceDirection: SurfaceBoundaryReferenceDirection = .automatic
+    )
     case slidePolySplineSurfaceVertices(
         targets: [SelectionTarget],
         direction: PolySplineSurfaceVertexSlideDirection,
@@ -518,6 +525,8 @@ public enum EditorCommand: Codable, Equatable, Sendable {
             "insertSurfaceKnot"
         case .setSurfaceKnotMultiplicity:
             "setSurfaceKnotMultiplicity"
+        case .matchSurfaceBoundaryContinuity:
+            "matchSurfaceBoundaryContinuity"
         case .slidePolySplineSurfaceVertices:
             "slidePolySplineSurfaceVertices"
         case .slideSurfaceControlPoints:
@@ -629,6 +638,7 @@ public enum EditorCommand: Codable, Equatable, Sendable {
              .setSurfaceKnotValue,
              .insertSurfaceKnot,
              .setSurfaceKnotMultiplicity,
+             .matchSurfaceBoundaryContinuity,
              .slidePolySplineSurfaceVertices,
              .slideSurfaceControlPoints,
              .createExtrudedRectangle,

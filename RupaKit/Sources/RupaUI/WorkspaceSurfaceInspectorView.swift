@@ -4,12 +4,24 @@ import RupaCore
 struct WorkspaceSurfaceInspectorView: View {
     var analysisResult: Result<InspectorSurfaceAnalysis?, Error>
     var continuityResult: Result<InspectorSurfaceContinuity?, Error>
+    var boundaryContinuityStateResult: Result<SurfaceBoundaryContinuityInspectorState?, Error>
     var showsUnavailableSections: Bool
     var displayUnit: LengthDisplayUnit
+    @Binding var boundaryContinuityLevel: SurfaceBoundaryContinuityLevel
+    @Binding var boundaryMatchSide: SurfaceBoundaryMatchSide
+    @Binding var boundaryReferenceDirection: SurfaceBoundaryReferenceDirection
+    var onMatchBoundaryContinuity: (
+        SelectionReference,
+        SelectionReference,
+        SurfaceBoundaryContinuityLevel,
+        SurfaceBoundaryMatchSide,
+        SurfaceBoundaryReferenceDirection
+    ) -> Void
 
     var body: some View {
         surfaceAnalysisSection
         surfaceContinuitySection
+        surfaceBoundaryContinuitySection
     }
 
     @ViewBuilder
@@ -155,6 +167,57 @@ struct WorkspaceSurfaceInspectorView: View {
     }
 
     @ViewBuilder
+    private var surfaceBoundaryContinuitySection: some View {
+        switch boundaryContinuityStateResult {
+        case .success(let state):
+            if let state {
+                inspectorSection("Boundary Continuity") {
+                    workspaceInspectorValueRow("Selection", "\(state.selectedTrimCount) trims")
+                    workspaceInspectorValueRow("Status", state.statusTitle)
+                    Picker("Level", selection: $boundaryContinuityLevel) {
+                        ForEach(SurfaceBoundaryContinuityLevel.allCases, id: \.self) { level in
+                            Text(surfaceBoundaryContinuityTitle(level)).tag(level)
+                        }
+                    }
+                    Picker("Side", selection: $boundaryMatchSide) {
+                        ForEach(SurfaceBoundaryMatchSide.allCases, id: \.self) { side in
+                            Text(surfaceBoundaryMatchSideTitle(side)).tag(side)
+                        }
+                    }
+                    Picker("Reference", selection: $boundaryReferenceDirection) {
+                        ForEach(SurfaceBoundaryReferenceDirection.allCases, id: \.self) { direction in
+                            Text(surfaceBoundaryReferenceDirectionTitle(direction)).tag(direction)
+                        }
+                    }
+                    Button {
+                        if let target = state.targetReference,
+                           let reference = state.referenceReference {
+                            onMatchBoundaryContinuity(
+                                target,
+                                reference,
+                                boundaryContinuityLevel,
+                                boundaryMatchSide,
+                                boundaryReferenceDirection
+                            )
+                        }
+                    } label: {
+                        Label("Match Boundary", systemImage: "link")
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(!state.canMatch)
+                }
+            }
+        case .failure(let error):
+            if showsUnavailableSections {
+                inspectorSection("Boundary Continuity") {
+                    workspaceInspectorValueRow("Status", "Unavailable")
+                    workspaceInspectorValueRow("Reason", error.localizedDescription)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
     private func adjacencyRows(_ adjacency: InspectorSurfaceAdjacency) -> some View {
         workspaceInspectorValueRow("Edge", surfaceAdjacencyEdgeSummary(adjacency))
         workspaceInspectorValueRow("Faces", surfaceAdjacencyFaceSummary(adjacency))
@@ -227,6 +290,41 @@ struct WorkspaceSurfaceInspectorView: View {
             return "G1"
         case .g2:
             return "G2"
+        }
+    }
+
+    private func surfaceBoundaryContinuityTitle(_ level: SurfaceBoundaryContinuityLevel) -> String {
+        switch level {
+        case .g0:
+            return "G0"
+        case .g1:
+            return "G1"
+        case .g2:
+            return "G2"
+        }
+    }
+
+    private func surfaceBoundaryMatchSideTitle(_ side: SurfaceBoundaryMatchSide) -> String {
+        switch side {
+        case .automatic:
+            return "Auto"
+        case .same:
+            return "Same"
+        case .opposite:
+            return "Opposite"
+        }
+    }
+
+    private func surfaceBoundaryReferenceDirectionTitle(
+        _ direction: SurfaceBoundaryReferenceDirection
+    ) -> String {
+        switch direction {
+        case .automatic:
+            return "Auto"
+        case .forward:
+            return "Forward"
+        case .reversed:
+            return "Reversed"
         }
     }
 

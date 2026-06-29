@@ -1881,6 +1881,36 @@ public struct CLIService {
         )
     }
 
+    public func matchSurfaceBoundaryContinuity(
+        target: CLIDocumentTarget,
+        targetReference: SelectionReference,
+        reference: SelectionReference,
+        level: SurfaceBoundaryContinuityLevel,
+        matchSide: SurfaceBoundaryMatchSide,
+        referenceDirection: SurfaceBoundaryReferenceDirection,
+        mode: CLIEditMode = .auto,
+        expectedGeneration: DocumentGeneration? = nil,
+        dryRun: Bool = false,
+        forceFileEdit: Bool = false,
+        client: AgentClientProtocol? = nil
+    ) throws -> CLIResponse {
+        try executeModelingCommand(
+            .matchSurfaceBoundaryContinuity(
+                target: targetReference,
+                reference: reference,
+                level: level,
+                matchSide: matchSide,
+                referenceDirection: referenceDirection
+            ),
+            target: target,
+            mode: mode,
+            expectedGeneration: expectedGeneration,
+            dryRun: dryRun,
+            forceFileEdit: forceFileEdit,
+            client: client
+        )
+    }
+
     public func slideSurfaceControlPoints(
         target: CLIDocumentTarget,
         references: [SelectionReference],

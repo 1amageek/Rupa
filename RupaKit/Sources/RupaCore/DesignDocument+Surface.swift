@@ -693,9 +693,80 @@ extension DesignDocument {
         }
     }
 
+    public mutating func matchSurfaceBoundaryContinuity(
+        target: SelectionReference,
+        reference: SelectionReference,
+        level: SurfaceBoundaryContinuityLevel,
+        matchSide: SurfaceBoundaryMatchSide = .automatic,
+        referenceDirection: SurfaceBoundaryReferenceDirection = .automatic,
+        objectRegistry: ObjectTypeRegistry = .builtIn
+    ) throws {
+        let targetResolution = try resolvedBSplineSurfaceBoundaryReference(
+            target,
+            owner: "B-spline surface boundary continuity target"
+        )
+        let referenceResolution = try resolvedBSplineSurfaceBoundaryReference(
+            reference,
+            owner: "B-spline surface boundary continuity reference"
+        )
+        guard targetResolution.featureID != referenceResolution.featureID
+                || targetResolution.side != referenceResolution.side else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "B-spline surface boundary continuity requires distinct target and reference boundaries."
+            )
+        }
+        guard var targetFeature = cadDocument.designGraph.nodes[targetResolution.featureID],
+              case let .bSplineSurface(targetSurfaceFeature) = targetFeature.operation else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "B-spline surface boundary continuity requires an existing target B-spline surface source feature."
+            )
+        }
+        guard let referenceFeature = cadDocument.designGraph.nodes[referenceResolution.featureID],
+              case let .bSplineSurface(referenceSurfaceFeature) = referenceFeature.operation else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "B-spline surface boundary continuity requires an existing reference B-spline surface source feature."
+            )
+        }
+
+        let continuityEditor = BSplineSurfaceBoundaryContinuityEditingService()
+        targetFeature.operation = .bSplineSurface(try continuityEditor.updatedFeature(
+            matching: targetSurfaceFeature,
+            targetSide: targetResolution.side,
+            to: referenceSurfaceFeature,
+            referenceSide: referenceResolution.side,
+            level: level,
+            matchSide: matchSide,
+            referenceDirection: referenceDirection,
+            owner: "B-spline surface boundary continuity"
+        ))
+
+        var updatedCADDocument = cadDocument
+        let previousCADDocument = cadDocument
+        do {
+            try updatedCADDocument.replaceFeature(targetFeature)
+            cadDocument = updatedCADDocument
+            try validate(objectRegistry: objectRegistry)
+        } catch {
+            cadDocument = previousCADDocument
+            throw EditorError(
+                code: .commandInvalid,
+                message: "B-spline surface boundary continuity produced invalid source geometry: \(error)."
+            )
+        }
+    }
+
     private struct BSplineSurfaceKnotResolution {
         var featureID: FeatureID
         var reference: SurfaceKnotReference
+    }
+
+    private struct BSplineSurfaceBoundaryResolution {
+        var featureID: FeatureID
+        var reference: SurfaceTrimReference
+        var side: BSplineSurfaceBoundarySide
     }
 
     private struct BSplineSurfaceSpanResolution {
@@ -724,6 +795,51 @@ extension DesignDocument {
                 resolution.reference.direction
             }
         }
+    }
+
+    private func resolvedBSplineSurfaceBoundaryReference(
+        _ selection: SelectionReference,
+        owner: String
+    ) throws -> BSplineSurfaceBoundaryResolution {
+        guard case .surface(.trim(let reference)) = selection else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "\(owner) requires a surface trim selection reference."
+            )
+        }
+        do {
+            try reference.validate()
+        } catch {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "\(owner) requires a valid surface trim selection reference: \(error)."
+            )
+        }
+        guard reference.loopIndex == 0 else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "\(owner) requires a direct B-spline outer trim edge."
+            )
+        }
+        let patchFace = try resolvedSurfacePatchFace(
+            from: reference.surface.faceName,
+            owner: owner
+        )
+        guard patchFace.generatedRole == "bSplineSurface",
+              patchFace.patchID == 0 else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "\(owner) requires a direct B-spline surface patch face selection reference."
+            )
+        }
+        return BSplineSurfaceBoundaryResolution(
+            featureID: patchFace.featureID,
+            reference: reference,
+            side: try BSplineSurfaceBoundarySide(
+                trimEdgeIndex: reference.edgeIndex,
+                owner: owner
+            )
+        )
     }
 
     private func resolvedBSplineSurfaceKnotReference(

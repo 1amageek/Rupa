@@ -4,7 +4,7 @@ import RupaCore
 @Test func cadInteractionQualityAssessmentCoversEveryGateForEachWorkflow() async throws {
     let result = CADInteractionQualityAssessmentService().assess()
 
-    #expect(result.referenceDate == "2026-06-24")
+    #expect(result.referenceDate == "2026-06-29")
     #expect(result.counts.entryCount == result.entries.count)
     #expect(Set(result.entries.map(\.area)) == Set(CADInteractionQualityArea.allCases))
     #expect(result.entries.map(\.area).count == Set(result.entries.map(\.area)).count)

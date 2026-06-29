@@ -1289,6 +1289,29 @@ public struct AutomationRunner {
                 didMutate: result.didMutate,
                 diagnostics: result.diagnostics
             )
+        case .matchSurfaceBoundaryContinuity(
+            let target,
+            let reference,
+            let level,
+            let matchSide,
+            let referenceDirection
+        ):
+            let result = try session.execute(
+                .matchSurfaceBoundaryContinuity(
+                    target: target,
+                    reference: reference,
+                    level: level,
+                    matchSide: matchSide,
+                    referenceDirection: referenceDirection
+                )
+            )
+            return AutomationResult(
+                message: "Surface boundary continuity matched.",
+                commandName: result.commandName,
+                generation: result.generation,
+                didMutate: result.didMutate,
+                diagnostics: result.diagnostics
+            )
         case .slidePolySplineSurfaceVertices(let targets, let direction, let distance):
             let result = try session.execute(
                 .slidePolySplineSurfaceVertices(

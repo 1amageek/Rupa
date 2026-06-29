@@ -53,6 +53,15 @@ func agentDirectBSplineSurface() -> BSplineSurface3D {
     )
 }
 
+func agentOffsetDirectBSplineSurface() -> BSplineSurface3D {
+    BSplineSurface3D.cubicBezierPatch(
+        bottomLeft: Point3D(x: 0.0, y: 0.04, z: 0.002),
+        bottomRight: Point3D(x: 0.02, y: 0.04, z: -0.002),
+        topRight: Point3D(x: 0.02, y: 0.06, z: 0.001),
+        topLeft: Point3D(x: 0.0, y: 0.06, z: 0.003)
+    )
+}
+
 func agentDirectBSplineSurfaceWithInteriorKnots() -> BSplineSurface3D {
     let base = BSplineSurface3D.cubicBezierPatch(
         bottomLeft: Point3D(x: 0.0, y: 0.0, z: 0.0),
