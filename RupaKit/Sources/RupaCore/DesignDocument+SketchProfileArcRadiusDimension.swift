@@ -3,6 +3,58 @@ import SwiftCAD
 import RupaCoreTypes
 
 extension DesignDocument {
+    func profileArcMoveSketch(
+        featureID: FeatureID,
+        entityID: SketchEntityID,
+        sketch: Sketch,
+        deltaX: CADExpression,
+        deltaY: CADExpression
+    ) throws -> Sketch? {
+        guard featureIsProfileOfNormalExtrude(featureID) else {
+            return nil
+        }
+        guard let entity = sketch.entities[entityID],
+              case let .arc(arc) = entity else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Sketch profile arc move requires an arc entity."
+            )
+        }
+        let deltaXMeters = try resolvedLengthValue(deltaX, owner: "Sketch profile arc move delta X")
+        let deltaYMeters = try resolvedLengthValue(deltaY, owner: "Sketch profile arc move delta Y")
+        let currentCenter = try sketchCornerPoint(
+            .arcCenter(entityID),
+            in: sketch,
+            owner: "Sketch profile arc move"
+        )
+        let desiredCenter = currentCenter.adding(
+            SketchCornerPoint(x: deltaXMeters, y: deltaYMeters)
+        )
+        let currentRadius = try resolvedPositiveLengthValue(
+            arc.radius,
+            owner: "Sketch profile arc move radius"
+        )
+        let nextRadius = try profileArcMoveRadius(
+            entityID: entityID,
+            sketch: sketch,
+            desiredCenter: desiredCenter,
+            owner: "Sketch profile arc move"
+        )
+        guard abs(nextRadius - currentRadius) > ModelingTolerance.standard.distance else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Sketch profile arc move delta does not move the arc along the supported tangent-preserving direction."
+            )
+        }
+        return try profileArcRadiusDimensionSketch(
+            featureID: featureID,
+            entityID: entityID,
+            sketch: sketch,
+            kind: .radius,
+            value: .length(nextRadius, .meter)
+        )
+    }
+
     func profileArcRadiusDimensionSketch(
         featureID: FeatureID,
         entityID: SketchEntityID,
@@ -134,6 +186,101 @@ extension DesignDocument {
             endArcReference: fillet.adjacentReference
         )
         return updatedSketch
+    }
+
+    private func profileArcMoveRadius(
+        entityID: SketchEntityID,
+        sketch: Sketch,
+        desiredCenter: SketchCornerPoint,
+        owner: String
+    ) throws -> Double {
+        let startAdjacent = try adjacentProfileLineEndpoint(
+            to: .arcStart(entityID),
+            in: sketch,
+            owner: owner
+        )
+        let endAdjacent = try adjacentProfileLineEndpoint(
+            to: .arcEnd(entityID),
+            in: sketch,
+            owner: owner
+        )
+        guard startAdjacent.endpoint.entityID != endAdjacent.endpoint.entityID else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "\(owner) requires a line-arc-line profile corner."
+            )
+        }
+        let startConnected = try sketchCornerPoint(
+            startAdjacent.endpoint.reference,
+            in: sketch,
+            owner: owner
+        )
+        let startFar = try sketchCornerPoint(
+            startAdjacent.endpoint.oppositeReference,
+            in: sketch,
+            owner: owner
+        )
+        let endConnected = try sketchCornerPoint(
+            endAdjacent.endpoint.reference,
+            in: sketch,
+            owner: owner
+        )
+        let endFar = try sketchCornerPoint(
+            endAdjacent.endpoint.oppositeReference,
+            in: sketch,
+            owner: owner
+        )
+        let corner = try lineIntersection(
+            firstStart: startConnected,
+            firstEnd: startFar,
+            secondStart: endConnected,
+            secondEnd: endFar,
+            owner: owner
+        )
+        let selectedGeometry = try profileLineEndpointGeometry(
+            endpoint: startAdjacent.endpoint,
+            entity: startAdjacent.entity,
+            corner: corner,
+            farPoint: startFar,
+            owner: owner
+        )
+        let adjacentGeometry = try profileLineEndpointGeometry(
+            endpoint: endAdjacent.endpoint,
+            entity: endAdjacent.entity,
+            corner: corner,
+            farPoint: endFar,
+            owner: owner
+        )
+        let dot = selectedGeometry.unit.dot(adjacentGeometry.unit)
+        let angle = acos(min(max(dot, -1.0), 1.0))
+        let sine = sin(angle / 2.0)
+        guard angle > ModelingTolerance.standard.angle,
+              abs(Double.pi - angle) > ModelingTolerance.standard.angle,
+              sine > 1.0e-12 else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "\(owner) requires a non-collinear line-arc-line profile corner."
+            )
+        }
+        let bisector = try selectedGeometry.unit.adding(adjacentGeometry.unit).normalized(
+            owner: "\(owner) bisector",
+            tolerance: ModelingTolerance.standard.distance
+        )
+        let centerDistance = desiredCenter.subtracting(corner).dot(bisector)
+        let radius = centerDistance * sine
+        guard radius.isFinite,
+              radius > ModelingTolerance.standard.distance else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "\(owner) would collapse the profile arc."
+            )
+        }
+        _ = try sketchLineLineCornerFilletCandidate(
+            selectedGeometry: selectedGeometry,
+            adjacentGeometry: adjacentGeometry,
+            radius: radius
+        )
+        return radius
     }
 
     private func featureIsProfileOfNormalExtrude(_ featureID: FeatureID) -> Bool {

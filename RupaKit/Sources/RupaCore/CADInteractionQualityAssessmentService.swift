@@ -283,15 +283,15 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                         "RupaKit/Tests/RupaAgentTests/AgentCommandControllerTests.swift",
                     ],
                     notes: [
-                        "Face offset, edge chamfer/fillet, generated source line/circle profile edge move, vertex move, and PolySpline surface vertex edits are routed through command contracts.",
-                        "Generated source line and circle profile edge moves rewrite the owning source sketch and preserve analytic line or circle identity.",
+                        "Face offset, edge chamfer/fillet, generated source line/circle/line-arc-line arc profile edge move, vertex move, and PolySpline surface vertex edits are routed through command contracts.",
+                        "Generated source line, circle, and line-arc-line arc profile edge moves rewrite the owning source sketch, preserve analytic source identity, and keep arc moves tangent-continuous by re-trimming adjacent source lines.",
                         "General push/pull, arbitrary edge move, delete face, match face, draft face, and proportional CV editing are not yet complete.",
                     ]
                 ),
             ],
             openWork: [
                 "General push/pull face edits with dependent offset, adjacent-angle, and grow policies.",
-                "Broader edge movement beyond generated source line and circle profile edges, including arc edges that require connected trim healing, arbitrary B-rep edges, and surface-boundary edges.",
+                "Broader edge movement beyond generated source line, circle, and line-arc-line arc profile edges, including arbitrary B-rep edges, non-line adjacent trim healing, and surface-boundary edges.",
                 "Delete Face, Match Face, Draft Face, and broader surface-CV proportional editing.",
                 "Direct edit rollback diagnostics when topology cannot be healed exactly.",
             ],

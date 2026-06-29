@@ -239,18 +239,19 @@ struct CADInteractionDesignProcessSpec: Sendable {
                 ownershipBoundaries: ["RupaCore maps generated targets to source-owned edits", "SwiftCAD validates rewritten CAD source"],
                 supportedCases: [
                     caseItem("rectangle-face-offset", "Supported rectangle and cylinder face offsets rewrite source-owned bodies.", .supported, .core),
-                    caseItem("generated-profile-edge-move", "Generated line and circle profile edges rewrite their source sketch line or circle while preserving analytic identity.", .supported, .core),
+                    caseItem("generated-profile-edge-move", "Generated line, circle, and line-arc-line arc profile edges rewrite their source sketch while preserving analytic identity.", .supported, .core),
                     caseItem("surface-cv-edit", "Supported PolySpline boundary/interior CV edits stay source-owned.", .supported, .core),
                 ],
                 boundaryCases: [
                     caseItem("arbitrary-topology-edit", "Arbitrary face/edge/vertex edits need stable rewrite policies.", .planned, .core),
+                    caseItem("arbitrary-arc-edge-move", "Arc edge movement outside the tangent-preserving line-arc-line subset needs broader trim healing.", .planned, .core),
                 ],
                 degenerateCases: [
                     caseItem("unresolved-generated-target", "Generated targets that cannot resolve to source must reject before mutation.", .rejected, .core),
                 ],
                 rejectedCases: [
                     caseItem("transient-topology-edit", "Transient mesh IDs cannot be accepted as direct-edit sources.", .rejected, .evaluation),
-                    caseItem("generated-arc-edge-move", "Generated arc profile edge movement rejects until connected trim healing can preserve adjacent source curves.", .rejected, .core),
+                    caseItem("non-source-owned-arc-edge-move", "Generated arc edge movement rejects when it cannot resolve to a source-owned line-arc-line profile corner.", .rejected, .core),
                 ],
                 performanceCases: [
                     caseItem("identity-picking-budget", "Identity picking and direct-edit previews need production-scene budgets.", .planned, .measurement),

@@ -85,10 +85,17 @@ extension DesignDocument {
                 deltaY: deltaY,
                 objectRegistry: objectRegistry
             )
+        case "arc":
+            try candidate.moveGeneratedProfileArcEdge(
+                target: source.editTarget,
+                deltaX: deltaX,
+                deltaY: deltaY,
+                objectRegistry: objectRegistry
+            )
         default:
             throw EditorError(
                 code: .commandInvalid,
-                message: "Body edge move currently supports generated line and circle profile edges; arc edge movement requires connected trim healing."
+                message: "Body edge move currently supports generated line, circle, and line-arc-line arc profile edges."
             )
         }
 
@@ -113,6 +120,54 @@ extension DesignDocument {
             try markBodyObjectAsSourceEditedSolid(featureID: bodyFeatureID)
         }
         return true
+    }
+
+    private mutating func moveGeneratedProfileArcEdge(
+        target: SelectionTarget,
+        deltaX: CADExpression,
+        deltaY: CADExpression,
+        objectRegistry: ObjectTypeRegistry
+    ) throws {
+        let selection = try editableSketchEntity(
+            for: target,
+            operationName: "Body edge arc move"
+        )
+        guard case .arc = selection.entity else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Body edge arc move requires an arc source profile edge."
+            )
+        }
+        guard let nextSketch = try profileArcMoveSketch(
+            featureID: selection.featureID,
+            entityID: selection.entityID,
+            sketch: selection.sketch,
+            deltaX: deltaX,
+            deltaY: deltaY
+        ) else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Body edge arc move requires a normal extrude line-arc-line profile corner."
+            )
+        }
+
+        var profileFeature = selection.feature
+        profileFeature.operation = .sketch(nextSketch)
+        do {
+            try cadDocument.replaceFeature(profileFeature)
+            try synchronizeSketchObjectProperties(
+                featureID: selection.featureID,
+                sketch: nextSketch,
+                objectRegistry: objectRegistry
+            )
+        } catch let error as EditorError {
+            throw error
+        } catch {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "Body edge arc move produced invalid sketch geometry: \(error)."
+            )
+        }
     }
 
     private mutating func moveBodyCornerEdge(

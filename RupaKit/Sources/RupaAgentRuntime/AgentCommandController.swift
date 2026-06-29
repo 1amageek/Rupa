@@ -705,12 +705,12 @@ public final class AgentCommandController: AgentClientProtocol {
         capability(
             "moveBodyEdge",
             category: .directEditing,
-            summary: "Move supported generated body line and circular profile edge targets through source-owned analytic sketch edits, preserving line and circle identity.",
+            summary: "Move supported generated body line, circular, and line-arc-line arc profile edge targets through source-owned analytic sketch edits, preserving source identity and tangent trim continuity.",
             access: .automationCommand,
             mutatesDocument: true,
             discovery: [.topologySummary, .sketchEntitySummary],
             targets: [.edge],
-            failureMode: "Rejects unsupported edge mappings, zero deltas, source arcs that require connected trim healing, invalid profile rewrites, and stale generations before mutation."
+            failureMode: "Rejects unsupported edge mappings, zero deltas, arc moves outside the tangent-preserving line-arc-line trim-healing subset, invalid profile rewrites, and stale generations before mutation."
         ),
         capability(
             "moveBodyVertex",

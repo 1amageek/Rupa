@@ -79,7 +79,7 @@ import Testing
 }
 
 @MainActor
-@Test func moveBodyEdgeCommandRejectsGeneratedArcEdgeUntilTrimHealingExists() async throws {
+@Test func moveBodyEdgeCommandMovesGeneratedArcEdgeThroughTrimHealing() async throws {
     let session = EditorSession()
     _ = try #require(session.createDefaultExtrudedRectangle())
     let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
@@ -93,6 +93,7 @@ import Testing
             segmentCount: 8
         )
     )
+    let beforeArc = try edgeMoveArcProfile(forBody: bodyFeatureID, in: session.document)
     let topology = try TopologySummaryService().summarize(document: session.document)
     let arcEdge = try #require(topology.entries.first {
         guard let radius = $0.curveRadius else {
@@ -105,21 +106,21 @@ import Testing
     })
     let target = try #require(arcEdge.selectionTarget())
 
-    do {
-        _ = try session.execute(
-            .moveBodyEdge(
-                target: target,
-                deltaX: .length(1.0, .millimeter),
-                deltaY: .length(0.0, .millimeter)
-            )
+    let result = try session.execute(
+        .moveBodyEdge(
+            target: target,
+            deltaX: .length(-1.0, .millimeter),
+            deltaY: .length(-1.0, .millimeter)
         )
-        Issue.record("Arc edge movement must reject until connected trim healing exists.")
-    } catch let error as EditorError {
-        #expect(error.code == .commandInvalid)
-        #expect(error.message.contains("arc edge movement requires connected trim healing"))
-    }
+    )
 
-    #expect(session.generation == DocumentGeneration(2))
+    let afterArc = try edgeMoveArcProfile(forBody: bodyFeatureID, in: session.document)
+    #expect(result.commandName == "moveBodyEdge")
+    #expect(result.didMutate)
+    #expect(session.generation == DocumentGeneration(3))
+    #expect(edgeMoveNearlyEqual(afterArc.centerX, beforeArc.centerX - 0.001))
+    #expect(edgeMoveNearlyEqual(afterArc.centerY, beforeArc.centerY - 0.001))
+    #expect(edgeMoveNearlyEqual(afterArc.radius, beforeArc.radius + 0.001))
     #expect(session.evaluationStatus == .valid)
 }
 
@@ -177,6 +178,28 @@ private func edgeMoveCircleProfile(
     let center = try edgeMovePoint(circle.center, in: document)
     let radius = try document.cadDocument.parameters.resolvedValue(for: circle.radius).value
     return EdgeMoveCircleProfile(centerX: center.x, centerY: center.y, radius: radius)
+}
+
+private func edgeMoveArcProfile(
+    forBody featureID: FeatureID,
+    in document: DesignDocument
+) throws -> EdgeMoveArcProfile {
+    guard let feature = document.cadDocument.designGraph.nodes[featureID],
+          case let .extrude(extrude) = feature.operation,
+          let profileFeature = document.cadDocument.designGraph.nodes[extrude.profile.featureID],
+          case let .sketch(sketch) = profileFeature.operation,
+          let entity = sketch.entities.values.first(where: { entity in
+              if case .arc = entity {
+                  return true
+              }
+              return false
+          }),
+          case let .arc(arc) = entity else {
+        throw EditorError(code: .referenceUnresolved, message: "Expected an extruded arc profile edge.")
+    }
+    let center = try edgeMovePoint(arc.center, in: document)
+    let radius = try document.cadDocument.parameters.resolvedValue(for: arc.radius).value
+    return EdgeMoveArcProfile(centerX: center.x, centerY: center.y, radius: radius)
 }
 
 private func edgeMovePoint(
@@ -237,6 +260,12 @@ private struct EdgeMoveRectangleBounds: Equatable {
 }
 
 private struct EdgeMoveCircleProfile: Equatable {
+    var centerX: Double
+    var centerY: Double
+    var radius: Double
+}
+
+private struct EdgeMoveArcProfile: Equatable {
     var centerX: Double
     var centerY: Double
     var radius: Double

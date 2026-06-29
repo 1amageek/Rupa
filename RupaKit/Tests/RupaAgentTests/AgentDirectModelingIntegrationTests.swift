@@ -125,6 +125,91 @@ import SwiftCAD
     #expect(session.evaluationStatus == .valid)
 }
 
+@Test func agentDispatchesGeneratedArcEdgeMoveCommandThroughAutomationAndCore() async throws {
+    let server = AgentCommandController()
+    let sessionID = UUID()
+    let session = EditorSession()
+    _ = try #require(session.createDefaultExtrudedRectangle())
+    let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let bodyNodeID = try #require(agentSceneNodeID(for: bodyFeatureID, in: session.document))
+    server.register(session: session, id: sessionID)
+
+    let filletResponse = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .filletBodyEdges(
+                targets: [
+                    SelectionTarget(sceneNodeID: bodyNodeID, component: .edge(.bodyEdgeRightTop)),
+                ],
+                radius: .length(1.0, .millimeter),
+                segmentCount: 8
+            ),
+            expectedGeneration: DocumentGeneration(1)
+        )
+    )
+    guard case .command(let filletResult) = filletResponse else {
+        Issue.record("Agent must return a fillet command result.")
+        return
+    }
+
+    let topologyResponse = server.handle(
+        .topologySummary(
+            sessionID: sessionID,
+            expectedGeneration: DocumentGeneration(2)
+        )
+    )
+    guard case .topologySummary(let topology) = topologyResponse else {
+        Issue.record("Agent must return a topology summary.")
+        return
+    }
+    let arcEdge = try #require(topology.entries.first {
+        guard let radius = $0.curveRadius else {
+            return false
+        }
+        return $0.kind == .edge &&
+            $0.generatedRole == "edge" &&
+            $0.curveKind == "circle" &&
+            nearlyEqualAgent(radius, 0.001)
+    })
+    let target = try #require(arcEdge.selectionTarget())
+
+    let response = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .moveBodyEdge(
+                target: target,
+                deltaX: .length(-1.0, .millimeter),
+                deltaY: .length(-1.0, .millimeter)
+            ),
+            expectedGeneration: DocumentGeneration(2)
+        )
+    )
+
+    guard case .command(let result) = response else {
+        Issue.record("Agent must return a command result.")
+        return
+    }
+    let afterTopology = try TopologySummaryService().summarize(document: session.document)
+    let movedArcEdge = try #require(afterTopology.entries.first {
+        guard let radius = $0.curveRadius else {
+            return false
+        }
+        return $0.kind == .edge &&
+            $0.generatedRole == "edge" &&
+            $0.curveKind == "circle" &&
+            nearlyEqualAgent(radius, 0.002)
+    })
+
+    #expect(filletResult.commandName == "filletBodyEdges")
+    #expect(filletResult.didMutate)
+    #expect(filletResult.generation == DocumentGeneration(2))
+    #expect(result.commandName == "moveBodyEdge")
+    #expect(result.didMutate)
+    #expect(result.generation == DocumentGeneration(3))
+    #expect(movedArcEdge.selectionTarget() != nil)
+    #expect(session.evaluationStatus == .valid)
+}
+
 @Test func agentDispatchesFaceKnifeCommandThroughAutomationAndCore() async throws {
     let server = AgentCommandController()
     let sessionID = UUID()
