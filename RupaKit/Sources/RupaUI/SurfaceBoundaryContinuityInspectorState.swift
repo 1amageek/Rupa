@@ -1,6 +1,27 @@
 import RupaCore
 
 struct SurfaceBoundaryContinuityInspectorState: Equatable {
+    struct TrimDomain: Equatable {
+        var targetReference: SelectionReference
+        var uLowerBound: Double
+        var uUpperBound: Double
+        var vLowerBound: Double
+        var vUpperBound: Double
+        var fullULowerBound: Double
+        var fullUUpperBound: Double
+        var fullVLowerBound: Double
+        var fullVUpperBound: Double
+
+        var isFullDomain: Bool {
+            let uScale = max(abs(fullUUpperBound - fullULowerBound), 1.0)
+            let vScale = max(abs(fullVUpperBound - fullVLowerBound), 1.0)
+            return abs(uLowerBound - fullULowerBound) <= uScale * 1.0e-9
+                && abs(uUpperBound - fullUUpperBound) <= uScale * 1.0e-9
+                && abs(vLowerBound - fullVLowerBound) <= vScale * 1.0e-9
+                && abs(vUpperBound - fullVUpperBound) <= vScale * 1.0e-9
+        }
+    }
+
     var selectedTrimCount: Int
     var targetReference: SelectionReference?
     var referenceReference: SelectionReference?
@@ -12,6 +33,7 @@ struct SurfaceBoundaryContinuityInspectorState: Equatable {
     var recommendedMatchSideSummary: String?
     var diagnosticMessages: [String]
     var statusTitle: String
+    var trimDomain: TrimDomain?
 
     var canMatch: Bool {
         targetReference != nil && referenceReference != nil && supportedContinuityLevels.isEmpty == false
@@ -32,6 +54,7 @@ struct SurfaceBoundaryContinuityInspectorState: Equatable {
             return false
         }
         selectedTrimCount = trimReferences.count
+        trimDomain = Self.trimDomain(for: trimReferences.first, in: summaryResult)
 
         let editableEdgesByReference = Self.editableDirectBSplineTrimEdgesByReference(in: summaryResult)
         let editableReferences = Set(editableEdgesByReference.keys)
@@ -124,6 +147,58 @@ struct SurfaceBoundaryContinuityInspectorState: Equatable {
             }
         }
         return edgesByReference
+    }
+
+    private static func trimDomain(
+        for reference: SelectionReference?,
+        in summary: SurfaceSourceSummaryResult
+    ) -> TrimDomain? {
+        guard let reference else {
+            return nil
+        }
+        for source in summary.sources where source.kind == "bSplineSurface" {
+            for patch in source.patches {
+                guard let fullUDomain = fullDomain(
+                    knots: patch.basis.uKnots,
+                    degree: patch.basis.uDegree
+                ),
+                let fullVDomain = fullDomain(
+                    knots: patch.basis.vKnots,
+                    degree: patch.basis.vDegree
+                ) else {
+                    continue
+                }
+                for trimLoop in patch.trimLoops {
+                    for edge in trimLoop.edges where edge.selectionReference == reference {
+                        return TrimDomain(
+                            targetReference: reference,
+                            uLowerBound: patch.uDomain.lowerBound,
+                            uUpperBound: patch.uDomain.upperBound,
+                            vLowerBound: patch.vDomain.lowerBound,
+                            vUpperBound: patch.vDomain.upperBound,
+                            fullULowerBound: fullUDomain.lowerBound,
+                            fullUUpperBound: fullUDomain.upperBound,
+                            fullVLowerBound: fullVDomain.lowerBound,
+                            fullVUpperBound: fullVDomain.upperBound
+                        )
+                    }
+                }
+            }
+        }
+        return nil
+    }
+
+    private static func fullDomain(
+        knots: [Double],
+        degree: Int
+    ) -> SurfaceSourceSummaryResult.ParameterRange? {
+        guard knots.count > degree + 1 else {
+            return nil
+        }
+        return SurfaceSourceSummaryResult.ParameterRange(
+            lowerBound: knots[degree],
+            upperBound: knots[knots.count - degree - 1]
+        )
     }
 
     private static func supportedLevelSummary(_ levels: [SurfaceBoundaryContinuityLevel]) -> String {

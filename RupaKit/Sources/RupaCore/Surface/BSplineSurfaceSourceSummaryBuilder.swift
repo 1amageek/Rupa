@@ -27,17 +27,16 @@ struct BSplineSurfaceSourceSummaryBuilder: Sendable {
         surfaceControlPointDisplays: [SurfaceControlPointDisplayID: SurfaceControlPointDisplay],
         surfaceFrameDisplays: [SurfaceFrameDisplayID: SurfaceFrameDisplay],
         topologyEntriesByPersistentName: [String: TopologySummaryResult.Entry]
-    ) -> SurfaceSourceSummaryResult.Source? {
+    ) throws -> SurfaceSourceSummaryResult.Source? {
         let surface = surfaceFeature.surface
-        guard case let .closed(uLower, uUpper) = surface.uDomain,
-              case let .closed(vLower, vUpper) = surface.vDomain else {
-            return nil
-        }
+        let trimDomain = try surfaceFeature.resolvedOuterTrimDomain()
+        let trimsFullSurfaceDomain = try trimDomain.isFullSurfaceDomain(of: surface)
         let patchBuildResult = bSplinePatch(
             featureID: featureID,
             surface: surface,
-            uBounds: (uLower, uUpper),
-            vBounds: (vLower, vUpper),
+            uBounds: (trimDomain.uLowerBound, trimDomain.uUpperBound),
+            vBounds: (trimDomain.vLowerBound, trimDomain.vUpperBound),
+            trimsFullSurfaceDomain: trimsFullSurfaceDomain,
             surfaceControlPointDisplays: surfaceControlPointDisplays,
             surfaceFrameDisplays: surfaceFrameDisplays,
             topologyEntriesByPersistentName: topologyEntriesByPersistentName
@@ -73,9 +72,12 @@ struct BSplineSurfaceSourceSummaryBuilder: Sendable {
                 SurfaceSourceSummaryResult.Diagnostic(
                     severity: "info",
                     code: "directBSplineSurface",
-                    message: "Direct B-spline surface source is represented by its stored degree, knot vectors, weights, control net, and rectangular trim loop."
+                    message: "Direct B-spline surface source is represented by its stored degree, knot vectors, weights, control net, and source-owned rectangular outer trim domain."
                 ),
-            ] + patchBuildResult.diagnostics
+            ] + trimDomainDiagnostics(
+                trimDomain: trimDomain,
+                trimsFullSurfaceDomain: trimsFullSurfaceDomain
+            ) + patchBuildResult.diagnostics
         )
     }
 
@@ -84,6 +86,7 @@ struct BSplineSurfaceSourceSummaryBuilder: Sendable {
         surface: BSplineSurface3D,
         uBounds: (lower: Double, upper: Double),
         vBounds: (lower: Double, upper: Double),
+        trimsFullSurfaceDomain: Bool,
         surfaceControlPointDisplays: [SurfaceControlPointDisplayID: SurfaceControlPointDisplay],
         surfaceFrameDisplays: [SurfaceFrameDisplayID: SurfaceFrameDisplay],
         topologyEntriesByPersistentName: [String: TopologySummaryResult.Entry]
@@ -117,6 +120,7 @@ struct BSplineSurfaceSourceSummaryBuilder: Sendable {
             surfaceReference: surfaceReference,
             uBounds: uBounds,
             vBounds: vBounds,
+            trimsFullSurfaceDomain: trimsFullSurfaceDomain,
             topologyEntriesByPersistentName: topologyEntriesByPersistentName
         )
         let basis = basis(surface: surface, surfaceReference: surfaceReference)
@@ -125,8 +129,8 @@ struct BSplineSurfaceSourceSummaryBuilder: Sendable {
             patchID: 0,
             surface: surface,
             surfaceReference: surfaceReference,
-            uSpans: basis.uSpans,
-            vSpans: basis.vSpans,
+            uSpans: clippedSpans(basis.uSpans, to: uBounds),
+            vSpans: clippedSpans(basis.vSpans, to: vBounds),
             surfaceFrameDisplays: surfaceFrameDisplays
         )
 
@@ -217,6 +221,7 @@ struct BSplineSurfaceSourceSummaryBuilder: Sendable {
         surfaceReference: SurfaceReference,
         uBounds: (lower: Double, upper: Double),
         vBounds: (lower: Double, upper: Double),
+        trimsFullSurfaceDomain: Bool,
         topologyEntriesByPersistentName: [String: TopologySummaryResult.Entry]
     ) -> [SurfaceSourceSummaryResult.TrimLoop.Edge] {
         BSplineSurfaceBoundarySide.allCases.enumerated().map { index, side in
@@ -239,6 +244,7 @@ struct BSplineSurfaceSourceSummaryBuilder: Sendable {
             let levels = supportedBoundaryContinuityLevels(
                 side: side,
                 surface: surface,
+                trimsFullSurfaceDomain: trimsFullSurfaceDomain,
                 hasSelectionReference: selectionReference != nil
             )
             return SurfaceSourceSummaryResult.TrimLoop.Edge(
@@ -250,30 +256,31 @@ struct BSplineSurfaceSourceSummaryBuilder: Sendable {
                 endParameter: parameters.end,
                 boundaryDirection: side.boundaryDirection,
                 inwardDirection: side.inwardDirection,
-                boundaryControlPointReferences: controlPointReferences(
+                boundaryControlPointReferences: trimsFullSurfaceDomain ? controlPointReferences(
                     side: side,
                     inwardOffset: 0,
                     surface: surface,
                     surfaceReference: surfaceReference
-                ),
-                firstInwardControlPointReferences: controlPointReferences(
+                ) : [],
+                firstInwardControlPointReferences: trimsFullSurfaceDomain ? controlPointReferences(
                     side: side,
                     inwardOffset: 1,
                     surface: surface,
                     surfaceReference: surfaceReference
-                ),
-                secondInwardControlPointReferences: controlPointReferences(
+                ) : [],
+                secondInwardControlPointReferences: trimsFullSurfaceDomain ? controlPointReferences(
                     side: side,
                     inwardOffset: 2,
                     surface: surface,
                     surfaceReference: surfaceReference
-                ),
+                ) : [],
                 supportedBoundaryContinuityLevels: levels,
                 supportsBoundaryContinuityMatching: levels.isEmpty == false,
                 unsupportedReason: levels.isEmpty
                     ? unsupportedBoundaryContinuityReason(
                         side: side,
                         surface: surface,
+                        trimsFullSurfaceDomain: trimsFullSurfaceDomain,
                         hasSelectionReference: selectionReference != nil
                     )
                     : nil
@@ -363,9 +370,13 @@ struct BSplineSurfaceSourceSummaryBuilder: Sendable {
     private func supportedBoundaryContinuityLevels(
         side: BSplineSurfaceBoundarySide,
         surface: BSplineSurface3D,
+        trimsFullSurfaceDomain: Bool,
         hasSelectionReference: Bool
     ) -> [SurfaceBoundaryContinuityLevel] {
         guard hasSelectionReference else {
+            return []
+        }
+        guard trimsFullSurfaceDomain else {
             return []
         }
         return boundaryProfileBuilder
@@ -376,10 +387,14 @@ struct BSplineSurfaceSourceSummaryBuilder: Sendable {
     private func unsupportedBoundaryContinuityReason(
         side: BSplineSurfaceBoundarySide,
         surface: BSplineSurface3D,
+        trimsFullSurfaceDomain: Bool,
         hasSelectionReference: Bool
     ) -> String? {
         if hasSelectionReference == false {
             return "Trim edge is not present in the evaluated topology summary."
+        }
+        if trimsFullSurfaceDomain == false {
+            return "Interior rectangular trim domains do not expose boundary control rows for continuity matching."
         }
         let profile = boundaryProfileBuilder.profile(side: side, surface: surface)
         if profile.boundaryControlPointCount < 2 {
@@ -389,6 +404,22 @@ struct BSplineSurfaceSourceSummaryBuilder: Sendable {
             return "Boundary is not clamped, so the boundary control row does not map exactly to the surface edge."
         }
         return nil
+    }
+
+    private func trimDomainDiagnostics(
+        trimDomain: BSplineSurfaceTrimDomain,
+        trimsFullSurfaceDomain: Bool
+    ) -> [SurfaceSourceSummaryResult.Diagnostic] {
+        guard trimsFullSurfaceDomain == false else {
+            return []
+        }
+        return [
+            SurfaceSourceSummaryResult.Diagnostic(
+                severity: "info",
+                code: "directBSplineSurfaceTrimDomain",
+                message: "Direct B-spline surface uses an authored rectangular outer trim domain u[\(trimDomain.uLowerBound), \(trimDomain.uUpperBound)] v[\(trimDomain.vLowerBound), \(trimDomain.vUpperBound)]."
+            ),
+        ]
     }
 
     private func isSurfaceControlPointDisplayVisible(
@@ -516,6 +547,23 @@ struct BSplineSurfaceSourceSummaryBuilder: Sendable {
             ))
         }
         return result
+    }
+
+    private func clippedSpans(
+        _ spans: [SurfaceSourceSummaryResult.Basis.Span],
+        to bounds: (lower: Double, upper: Double)
+    ) -> [SurfaceSourceSummaryResult.Basis.Span] {
+        spans.compactMap { span in
+            let lowerBound = max(span.lowerBound, bounds.lower)
+            let upperBound = min(span.upperBound, bounds.upper)
+            guard upperBound > lowerBound else {
+                return nil
+            }
+            var clippedSpan = span
+            clippedSpan.lowerBound = lowerBound
+            clippedSpan.upperBound = upperBound
+            return clippedSpan
+        }
     }
 
     private func patchParameterAddresses(

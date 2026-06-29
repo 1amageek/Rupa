@@ -1300,6 +1300,29 @@ public struct AutomationRunner {
                 didMutate: result.didMutate,
                 diagnostics: result.diagnostics
             )
+        case .setSurfaceTrimDomain(
+            let target,
+            let uLowerBound,
+            let uUpperBound,
+            let vLowerBound,
+            let vUpperBound
+        ):
+            let result = try session.execute(
+                .setSurfaceTrimDomain(
+                    target: target,
+                    uLowerBound: uLowerBound,
+                    uUpperBound: uUpperBound,
+                    vLowerBound: vLowerBound,
+                    vUpperBound: vUpperBound
+                )
+            )
+            return AutomationResult(
+                message: "Surface trim domain updated.",
+                commandName: result.commandName,
+                generation: result.generation,
+                didMutate: result.didMutate,
+                diagnostics: result.diagnostics
+            )
         case .matchSurfaceBoundaryContinuity(
             let target,
             let reference,

@@ -74,6 +74,7 @@ import SwiftCAD
     #expect(capabilities.contains("insertSurfaceKnot"))
     #expect(capabilities.contains("splitSurfaceSpan"))
     #expect(capabilities.contains("setSurfaceKnotMultiplicity"))
+    #expect(capabilities.contains("setSurfaceTrimDomain"))
     #expect(capabilities.contains("matchSurfaceBoundaryContinuity"))
     #expect(capabilities.contains("surfaceBoundaryContinuityCompatibility"))
     #expect(capabilities.contains("setSurfaceControlPointDisplay"))
@@ -181,6 +182,7 @@ import SwiftCAD
     let surfaceKnotMultiplicity = try #require(
         descriptors.first { $0.name == "setSurfaceKnotMultiplicity" }
     )
+    let surfaceTrimDomain = try #require(descriptors.first { $0.name == "setSurfaceTrimDomain" })
     let surfaceBoundaryContinuity = try #require(
         descriptors.first { $0.name == "matchSurfaceBoundaryContinuity" }
     )
@@ -650,6 +652,18 @@ import SwiftCAD
     #expect(surfaceKnotMultiplicity.failureMode.contains("lower or equal multiplicities"))
     #expect(surfaceKnotMultiplicity.failureMode.contains("surface degree"))
 
+    #expect(surfaceTrimDomain.category == .solid)
+    #expect(surfaceTrimDomain.mutatesDocument)
+    #expect(surfaceTrimDomain.access == .automationCommand)
+    #expect(surfaceTrimDomain.discovery.contains(.surfaceSourceSummary))
+    #expect(surfaceTrimDomain.discovery.contains(.surfaceFrames))
+    #expect(surfaceTrimDomain.discovery.contains(.surfaceAnalysis))
+    #expect(surfaceTrimDomain.discovery.contains(.topologySummary))
+    #expect(surfaceTrimDomain.targets == [.surface, .face, .surfaceTrim])
+    #expect(surfaceTrimDomain.summary.contains("rectangular outer trim domain"))
+    #expect(surfaceTrimDomain.failureMode.contains("bounds outside the stored surface domain"))
+    #expect(surfaceTrimDomain.failureMode.contains("invalid rebuilt trimmed sheet topology"))
+
     #expect(surfaceBoundaryContinuity.category == .solid)
     #expect(surfaceBoundaryContinuity.mutatesDocument)
     #expect(surfaceBoundaryContinuity.access == .automationCommand)
@@ -664,6 +678,7 @@ import SwiftCAD
     #expect(surfaceBoundaryContinuity.summary.contains("control rows"))
     #expect(surfaceBoundaryContinuity.failureMode.contains("compatible boundary control counts"))
     #expect(surfaceBoundaryContinuity.failureMode.contains("PolySpline trims"))
+    #expect(surfaceBoundaryContinuity.failureMode.contains("authored interior trim domains"))
     #expect(surfaceBoundaryContinuity.failureMode.contains("insufficient cross-boundary control rows"))
 
     #expect(surfaceControlPointDisplay.category == .solid)

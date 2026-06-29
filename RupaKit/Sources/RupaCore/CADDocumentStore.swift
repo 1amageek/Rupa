@@ -1135,6 +1135,25 @@ public final class CADDocumentStore {
             document = updatedDocument
             try commitMutation()
             evaluateCurrentDocument()
+        case .setSurfaceTrimDomain(
+            let target,
+            let uLowerBound,
+            let uUpperBound,
+            let vLowerBound,
+            let vUpperBound
+        ):
+            var updatedDocument = document
+            try updatedDocument.setSurfaceTrimDomain(
+                target: target,
+                uLowerBound: uLowerBound,
+                uUpperBound: uUpperBound,
+                vLowerBound: vLowerBound,
+                vUpperBound: vUpperBound,
+                objectRegistry: objectRegistry
+            )
+            document = updatedDocument
+            try commitMutation()
+            evaluateCurrentDocument()
         case .matchSurfaceBoundaryContinuity(
             let target,
             let reference,

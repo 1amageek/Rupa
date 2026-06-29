@@ -10,12 +10,23 @@ struct WorkspaceSurfaceInspectorView: View {
     @Binding var boundaryContinuityLevel: SurfaceBoundaryContinuityLevel
     @Binding var boundaryMatchSide: SurfaceBoundaryMatchSide
     @Binding var boundaryReferenceDirection: SurfaceBoundaryReferenceDirection
+    @Binding var trimDomainULowerBound: Double
+    @Binding var trimDomainUUpperBound: Double
+    @Binding var trimDomainVLowerBound: Double
+    @Binding var trimDomainVUpperBound: Double
     var onMatchBoundaryContinuity: (
         SelectionReference,
         SelectionReference,
         SurfaceBoundaryContinuityLevel,
         SurfaceBoundaryMatchSide,
         SurfaceBoundaryReferenceDirection
+    ) -> Void
+    var onSetTrimDomain: (
+        SelectionReference,
+        Double,
+        Double,
+        Double,
+        Double
     ) -> Void
 
     var body: some View {
@@ -174,6 +185,7 @@ struct WorkspaceSurfaceInspectorView: View {
                 inspectorSection("Boundary Continuity") {
                     workspaceInspectorValueRow("Selection", "\(state.selectedTrimCount) trims")
                     workspaceInspectorValueRow("Status", state.statusTitle)
+                    trimDomainControls(state.trimDomain)
                     if let targetLevels = state.targetSupportedLevelSummary {
                         workspaceInspectorValueRow("Target Levels", targetLevels)
                     }
@@ -233,6 +245,106 @@ struct WorkspaceSurfaceInspectorView: View {
                     workspaceInspectorValueRow("Status", "Unavailable")
                     workspaceInspectorValueRow("Reason", error.localizedDescription)
                 }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func trimDomainControls(
+        _ trimDomain: SurfaceBoundaryContinuityInspectorState.TrimDomain?
+    ) -> some View {
+        if let trimDomain {
+            workspaceInspectorValueRow(
+                "Trim U",
+                "\(shortNumber(trimDomain.uLowerBound)) ... \(shortNumber(trimDomain.uUpperBound))"
+            )
+            workspaceInspectorValueRow(
+                "Trim V",
+                "\(shortNumber(trimDomain.vLowerBound)) ... \(shortNumber(trimDomain.vUpperBound))"
+            )
+            numericControl(
+                "U Min",
+                values: [trimDomainDraft(
+                    trimDomainULowerBound,
+                    current: trimDomain.uLowerBound,
+                    lowerBound: trimDomain.fullULowerBound,
+                    upperBound: trimDomain.fullUUpperBound
+                )],
+                sliderRange: trimDomain.fullULowerBound ... trimDomain.fullUUpperBound
+            ) { value in
+                trimDomainULowerBound = value
+            }
+            numericControl(
+                "U Max",
+                values: [trimDomainDraft(
+                    trimDomainUUpperBound,
+                    current: trimDomain.uUpperBound,
+                    lowerBound: trimDomain.fullULowerBound,
+                    upperBound: trimDomain.fullUUpperBound
+                )],
+                sliderRange: trimDomain.fullULowerBound ... trimDomain.fullUUpperBound
+            ) { value in
+                trimDomainUUpperBound = value
+            }
+            numericControl(
+                "V Min",
+                values: [trimDomainDraft(
+                    trimDomainVLowerBound,
+                    current: trimDomain.vLowerBound,
+                    lowerBound: trimDomain.fullVLowerBound,
+                    upperBound: trimDomain.fullVUpperBound
+                )],
+                sliderRange: trimDomain.fullVLowerBound ... trimDomain.fullVUpperBound
+            ) { value in
+                trimDomainVLowerBound = value
+            }
+            numericControl(
+                "V Max",
+                values: [trimDomainDraft(
+                    trimDomainVUpperBound,
+                    current: trimDomain.vUpperBound,
+                    lowerBound: trimDomain.fullVLowerBound,
+                    upperBound: trimDomain.fullVUpperBound
+                )],
+                sliderRange: trimDomain.fullVLowerBound ... trimDomain.fullVUpperBound
+            ) { value in
+                trimDomainVUpperBound = value
+            }
+            inspectorActionRow {
+                Button {
+                    guard let draft = resolvedTrimDomainDraft(trimDomain) else {
+                        return
+                    }
+                    onSetTrimDomain(
+                        trimDomain.targetReference,
+                        draft.uLowerBound,
+                        draft.uUpperBound,
+                        draft.vLowerBound,
+                        draft.vUpperBound
+                    )
+                } label: {
+                    Label("Apply Trim", systemImage: "checkmark")
+                }
+                .buttonStyle(.bordered)
+                .disabled(resolvedTrimDomainDraft(trimDomain) == nil)
+
+                Button {
+                    trimDomainULowerBound = trimDomain.fullULowerBound
+                    trimDomainUUpperBound = trimDomain.fullUUpperBound
+                    trimDomainVLowerBound = trimDomain.fullVLowerBound
+                    trimDomainVUpperBound = trimDomain.fullVUpperBound
+                    onSetTrimDomain(
+                        trimDomain.targetReference,
+                        trimDomain.fullULowerBound,
+                        trimDomain.fullUUpperBound,
+                        trimDomain.fullVLowerBound,
+                        trimDomain.fullVUpperBound
+                    )
+                } label: {
+                    Label("Reset", systemImage: "arrow.counterclockwise")
+                }
+                .buttonStyle(.bordered)
+                .disabled(trimDomain.isFullDomain)
             }
         }
     }
@@ -412,6 +524,63 @@ struct WorkspaceSurfaceInspectorView: View {
 
     private func formattedDegrees(_ degrees: Double) -> String {
         "\(degrees.formatted(.number.precision(.fractionLength(0...2)))) deg"
+    }
+
+    private func shortNumber(_ value: Double) -> String {
+        value.formatted(.number.precision(.fractionLength(0...6)))
+    }
+
+    private func trimDomainDraft(
+        _ draft: Double,
+        current: Double,
+        lowerBound: Double,
+        upperBound: Double
+    ) -> Double {
+        guard draft.isFinite,
+              draft >= lowerBound,
+              draft <= upperBound else {
+            return current
+        }
+        return draft
+    }
+
+    private func resolvedTrimDomainDraft(
+        _ trimDomain: SurfaceBoundaryContinuityInspectorState.TrimDomain
+    ) -> (
+        uLowerBound: Double,
+        uUpperBound: Double,
+        vLowerBound: Double,
+        vUpperBound: Double
+    )? {
+        let uLowerBound = trimDomainDraft(
+            trimDomainULowerBound,
+            current: trimDomain.uLowerBound,
+            lowerBound: trimDomain.fullULowerBound,
+            upperBound: trimDomain.fullUUpperBound
+        )
+        let uUpperBound = trimDomainDraft(
+            trimDomainUUpperBound,
+            current: trimDomain.uUpperBound,
+            lowerBound: trimDomain.fullULowerBound,
+            upperBound: trimDomain.fullUUpperBound
+        )
+        let vLowerBound = trimDomainDraft(
+            trimDomainVLowerBound,
+            current: trimDomain.vLowerBound,
+            lowerBound: trimDomain.fullVLowerBound,
+            upperBound: trimDomain.fullVUpperBound
+        )
+        let vUpperBound = trimDomainDraft(
+            trimDomainVUpperBound,
+            current: trimDomain.vUpperBound,
+            lowerBound: trimDomain.fullVLowerBound,
+            upperBound: trimDomain.fullVUpperBound
+        )
+        guard uUpperBound > uLowerBound,
+              vUpperBound > vLowerBound else {
+            return nil
+        }
+        return (uLowerBound, uUpperBound, vLowerBound, vUpperBound)
     }
 
     private func degrees(fromRadians radians: Double) -> Double {

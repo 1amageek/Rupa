@@ -48,14 +48,15 @@ public struct SurfaceSourceSummaryService: Sendable {
             currentEvaluation: currentEvaluation,
             currentGeneration: currentGeneration
         )
-        let sources = document.cadDocument.designGraph.order.compactMap { featureID -> SurfaceSourceSummaryResult.Source? in
+        var sources: [SurfaceSourceSummaryResult.Source] = []
+        for featureID in document.cadDocument.designGraph.order {
             guard let feature = document.cadDocument.designGraph.nodes[featureID],
                   feature.isSuppressed == false else {
-                return nil
+                continue
             }
             switch feature.operation {
             case let .polySpline(polySpline):
-                return source(
+                sources.append(source(
                     featureID: featureID,
                     feature: feature,
                     polySpline: polySpline,
@@ -63,9 +64,9 @@ public struct SurfaceSourceSummaryService: Sendable {
                     surfaceControlPointDisplays: document.productMetadata.surfaceControlPointDisplays,
                     surfaceFrameDisplays: document.productMetadata.surfaceFrameDisplays,
                     topologyEntriesByPersistentName: topologyEntriesByPersistentName
-                )
+                ))
             case let .bSplineSurface(surfaceFeature):
-                return BSplineSurfaceSourceSummaryBuilder().source(
+                if let surfaceSource = try BSplineSurfaceSourceSummaryBuilder().source(
                     featureID: featureID,
                     feature: feature,
                     surfaceFeature: surfaceFeature,
@@ -73,9 +74,11 @@ public struct SurfaceSourceSummaryService: Sendable {
                     surfaceControlPointDisplays: document.productMetadata.surfaceControlPointDisplays,
                     surfaceFrameDisplays: document.productMetadata.surfaceFrameDisplays,
                     topologyEntriesByPersistentName: topologyEntriesByPersistentName
-                )
+                ) {
+                    sources.append(surfaceSource)
+                }
             default:
-                return nil
+                continue
             }
         }
 

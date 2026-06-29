@@ -256,6 +256,13 @@ public enum AutomationCommand: Codable, Equatable, Sendable {
     case insertSurfaceKnot(target: SelectionReference, value: CADExpression)
     case splitSurfaceSpan(target: SelectionReference, fraction: CADExpression)
     case setSurfaceKnotMultiplicity(target: SelectionReference, multiplicity: Int)
+    case setSurfaceTrimDomain(
+        target: SelectionReference,
+        uLowerBound: CADExpression,
+        uUpperBound: CADExpression,
+        vLowerBound: CADExpression,
+        vUpperBound: CADExpression
+    )
     case matchSurfaceBoundaryContinuity(
         target: SelectionReference,
         reference: SelectionReference,
@@ -769,6 +776,20 @@ public enum AutomationCommand: Codable, Equatable, Sendable {
             .splitSurfaceSpan(target: target, fraction: fraction)
         case .setSurfaceKnotMultiplicity(let target, let multiplicity):
             .setSurfaceKnotMultiplicity(target: target, multiplicity: multiplicity)
+        case .setSurfaceTrimDomain(
+            let target,
+            let uLowerBound,
+            let uUpperBound,
+            let vLowerBound,
+            let vUpperBound
+        ):
+            .setSurfaceTrimDomain(
+                target: target,
+                uLowerBound: uLowerBound,
+                uUpperBound: uUpperBound,
+                vLowerBound: vLowerBound,
+                vUpperBound: vUpperBound
+            )
         case .matchSurfaceBoundaryContinuity(
             let target,
             let reference,

@@ -180,6 +180,52 @@ import Testing
     #expect(g0OnlyState.resolvedContinuityLevel(preferred: .g2) == .g0)
 }
 
+@Test func workspaceSurfaceInspectorStateBuilderExposesTrimDomainEditingSelection() throws {
+    var document = DesignDocument.empty()
+    let featureID = try document.createBSplineSurface(
+        name: "Trim Domain Surface",
+        surface: workspaceSurfaceInspectorDirectBSplineSurface()
+    )
+    let initialSummary = try SurfaceSourceSummaryService().summarize(document: document)
+    let faceReference = try #require(initialSummary.sources.first?.patches.first?.faceSelectionReference)
+    try document.setSurfaceTrimDomain(
+        target: faceReference,
+        uLowerBound: .scalar(0.25),
+        uUpperBound: .scalar(0.75),
+        vLowerBound: .scalar(0.2),
+        vUpperBound: .scalar(0.8)
+    )
+    let trimReference = try workspaceSurfaceInspectorTrimReference(
+        featureID: featureID,
+        edgeIndex: 0,
+        in: document
+    )
+    let builder = WorkspaceSurfaceInspectorStateBuilder(
+        document: document,
+        selection: SelectionModel(selectedReferences: [trimReference]),
+        currentEvaluation: nil,
+        documentGeneration: DocumentGeneration(),
+        objectRegistry: .builtIn,
+        surfaceAnalysisOptions: SurfaceAnalysisOptions(sampleDensity: .standard)
+    )
+
+    let state = try #require(try builder.surfaceBoundaryContinuityStateResult().get())
+    let trimDomain = try #require(state.trimDomain)
+
+    #expect(state.selectedTrimCount == 1)
+    #expect(!state.canMatch)
+    #expect(trimDomain.targetReference == trimReference)
+    #expect(trimDomain.uLowerBound == 0.25)
+    #expect(trimDomain.uUpperBound == 0.75)
+    #expect(trimDomain.vLowerBound == 0.2)
+    #expect(trimDomain.vUpperBound == 0.8)
+    #expect(trimDomain.fullULowerBound == 0.0)
+    #expect(trimDomain.fullUUpperBound == 1.0)
+    #expect(trimDomain.fullVLowerBound == 0.0)
+    #expect(trimDomain.fullVUpperBound == 1.0)
+    #expect(!trimDomain.isFullDomain)
+}
+
 @Test func workspaceSurfaceInspectorStateBuilderRejectsPolySplineBoundaryContinuitySelection() throws {
     let fixture = try workspaceSurfaceInspectorFixture()
     let summary = try SurfaceSourceSummaryService().summarize(document: fixture.document)

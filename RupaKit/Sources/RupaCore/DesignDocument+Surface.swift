@@ -750,6 +750,77 @@ extension DesignDocument {
         }
     }
 
+    public mutating func setSurfaceTrimDomain(
+        target: SelectionReference,
+        uLowerBound: CADExpression,
+        uUpperBound: CADExpression,
+        vLowerBound: CADExpression,
+        vUpperBound: CADExpression,
+        objectRegistry: ObjectTypeRegistry = .builtIn
+    ) throws {
+        let resolvedULowerBound = try resolvedScalarValue(
+            uLowerBound,
+            owner: "B-spline surface trim domain U lower bound"
+        )
+        let resolvedUUpperBound = try resolvedScalarValue(
+            uUpperBound,
+            owner: "B-spline surface trim domain U upper bound"
+        )
+        let resolvedVLowerBound = try resolvedScalarValue(
+            vLowerBound,
+            owner: "B-spline surface trim domain V lower bound"
+        )
+        let resolvedVUpperBound = try resolvedScalarValue(
+            vUpperBound,
+            owner: "B-spline surface trim domain V upper bound"
+        )
+        let surfaceResolution = try resolvedBSplineSurfaceSourceReference(
+            target,
+            owner: "B-spline surface trim domain"
+        )
+        guard var feature = cadDocument.designGraph.nodes[surfaceResolution.featureID],
+              case let .bSplineSurface(surfaceFeature) = feature.operation else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "B-spline surface trim domain requires an existing direct B-spline surface source feature."
+            )
+        }
+
+        let trimDomain = BSplineSurfaceTrimDomain(
+            uLowerBound: resolvedULowerBound,
+            uUpperBound: resolvedUUpperBound,
+            vLowerBound: resolvedVLowerBound,
+            vUpperBound: resolvedVUpperBound
+        )
+        do {
+            try trimDomain.validate(containedIn: surfaceFeature.surface)
+        } catch {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "B-spline surface trim domain is outside the source surface domain or degenerate: \(error)."
+            )
+        }
+
+        var updatedSurfaceFeature = surfaceFeature
+        let storesFullSurfaceDomain = try trimDomain.isFullSurfaceDomain(of: surfaceFeature.surface)
+        updatedSurfaceFeature.outerTrimDomain = storesFullSurfaceDomain ? nil : trimDomain
+        feature.operation = .bSplineSurface(updatedSurfaceFeature)
+
+        var updatedCADDocument = cadDocument
+        let previousCADDocument = cadDocument
+        do {
+            try updatedCADDocument.replaceFeature(feature)
+            cadDocument = updatedCADDocument
+            try validate(objectRegistry: objectRegistry)
+        } catch {
+            cadDocument = previousCADDocument
+            throw EditorError(
+                code: .commandInvalid,
+                message: "B-spline surface trim domain produced invalid source geometry: \(error)."
+            )
+        }
+    }
+
     public mutating func matchSurfaceBoundaryContinuity(
         target: SelectionReference,
         reference: SelectionReference,
@@ -787,6 +858,14 @@ extension DesignDocument {
                 message: "B-spline surface boundary continuity requires an existing reference B-spline surface source feature."
             )
         }
+        try validateFullSurfaceTrimDomain(
+            targetSurfaceFeature,
+            owner: "B-spline surface boundary continuity target"
+        )
+        try validateFullSurfaceTrimDomain(
+            referenceSurfaceFeature,
+            owner: "B-spline surface boundary continuity reference"
+        )
 
         let continuityEditor = BSplineSurfaceBoundaryContinuityEditingService()
         targetFeature.operation = .bSplineSurface(try continuityEditor.updatedFeature(
@@ -841,6 +920,14 @@ extension DesignDocument {
                 message: "B-spline surface boundary continuity compatibility requires an existing reference B-spline surface source feature."
             )
         }
+        try validateFullSurfaceTrimDomain(
+            targetSurfaceFeature,
+            owner: "B-spline surface boundary continuity compatibility target"
+        )
+        try validateFullSurfaceTrimDomain(
+            referenceSurfaceFeature,
+            owner: "B-spline surface boundary continuity compatibility reference"
+        )
 
         return try SurfaceBoundaryContinuityCompatibilityService().compatibility(
             targetFeatureID: targetResolution.featureID,
@@ -863,6 +950,11 @@ extension DesignDocument {
         var featureID: FeatureID
         var reference: SurfaceTrimReference
         var side: BSplineSurfaceBoundarySide
+    }
+
+    private struct BSplineSurfaceSourceResolution {
+        var featureID: FeatureID
+        var reference: SurfaceReference
     }
 
     private struct BSplineSurfaceSpanResolution {
@@ -936,6 +1028,68 @@ extension DesignDocument {
                 owner: owner
             )
         )
+    }
+
+    private func resolvedBSplineSurfaceSourceReference(
+        _ selection: SelectionReference,
+        owner: String
+    ) throws -> BSplineSurfaceSourceResolution {
+        let reference: SurfaceReference
+        switch selection {
+        case .surface(.whole(let surfaceReference)):
+            reference = surfaceReference
+        case .surface(.parameter(let parameterReference)):
+            reference = parameterReference.surface
+        case .surface(.span(let spanReference)):
+            reference = spanReference.surface
+        case .surface(.controlPoint(let controlPointReference)):
+            reference = controlPointReference.surface
+        case .surface(.knot(let knotReference)):
+            reference = knotReference.surface
+        case .surface(.trim(let trimReference)):
+            reference = trimReference.surface
+        default:
+            throw EditorError(
+                code: .commandInvalid,
+                message: "\(owner) requires a direct B-spline surface selection reference."
+            )
+        }
+        do {
+            try reference.validate()
+        } catch {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "\(owner) requires a valid surface selection reference: \(error)."
+            )
+        }
+        let patchFace = try resolvedSurfacePatchFace(
+            from: reference.faceName,
+            owner: owner
+        )
+        guard patchFace.generatedRole == "bSplineSurface",
+              patchFace.patchID == 0 else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "\(owner) requires a direct B-spline surface patch face selection reference."
+            )
+        }
+        return BSplineSurfaceSourceResolution(
+            featureID: patchFace.featureID,
+            reference: reference
+        )
+    }
+
+    private func validateFullSurfaceTrimDomain(
+        _ feature: BSplineSurfaceFeature,
+        owner: String
+    ) throws {
+        let trimDomain = try feature.resolvedOuterTrimDomain()
+        guard try trimDomain.isFullSurfaceDomain(of: feature.surface) else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "\(owner) requires a full-domain rectangular outer trim because interior trim domains do not expose boundary control rows for continuity matching."
+            )
+        }
     }
 
     private func resolvedBSplineSurfaceKnotReference(

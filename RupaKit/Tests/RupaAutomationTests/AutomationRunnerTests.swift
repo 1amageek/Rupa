@@ -616,6 +616,49 @@ import SwiftCAD
 }
 
 @MainActor
+@Test func automationCanSetSurfaceTrimDomain() async throws {
+    let session = EditorSession()
+    let runner = AutomationRunner()
+    let sourceSurface = automationDirectBSplineSurfaceWithInteriorKnots()
+    _ = try runner.execute(
+        .createBSplineSurface(
+            name: "Automation Trim Domain Surface",
+            surface: sourceSurface
+        ),
+        in: session
+    )
+    let summary = try SurfaceSourceSummaryService().summarize(document: session.document)
+    let faceReference = try #require(summary.sources.first?.patches.first?.faceSelectionReference)
+
+    let result = try runner.execute(
+        .setSurfaceTrimDomain(
+            target: faceReference,
+            uLowerBound: .scalar(0.25),
+            uUpperBound: .scalar(0.75),
+            vLowerBound: .scalar(0.2),
+            vUpperBound: .scalar(0.8)
+        ),
+        in: session
+    )
+
+    let featureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let feature = try #require(session.document.cadDocument.designGraph.nodes[featureID])
+    guard case let .bSplineSurface(surfaceFeature) = feature.operation else {
+        Issue.record("Automation must keep a direct B-spline surface feature.")
+        return
+    }
+    let trimDomain = try #require(surfaceFeature.outerTrimDomain)
+    #expect(result.message == "Surface trim domain updated.")
+    #expect(result.commandName == "setSurfaceTrimDomain")
+    #expect(result.didMutate)
+    #expect(result.generation == DocumentGeneration(2))
+    #expect(trimDomain.uLowerBound == 0.25)
+    #expect(trimDomain.uUpperBound == 0.75)
+    #expect(trimDomain.vLowerBound == 0.2)
+    #expect(trimDomain.vUpperBound == 0.8)
+}
+
+@MainActor
 @Test func automationCanSplitSurfaceSpan() async throws {
     let session = EditorSession()
     let runner = AutomationRunner()

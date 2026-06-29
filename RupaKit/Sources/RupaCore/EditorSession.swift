@@ -2203,6 +2203,25 @@ public final class EditorSession {
     }
 
     @discardableResult
+    public func setSurfaceTrimDomain(
+        target: SelectionReference,
+        uLowerBound: CADExpression,
+        uUpperBound: CADExpression,
+        vLowerBound: CADExpression,
+        vUpperBound: CADExpression
+    ) -> CommandExecutionResult? {
+        perform(
+            .setSurfaceTrimDomain(
+                target: target,
+                uLowerBound: uLowerBound,
+                uUpperBound: uUpperBound,
+                vLowerBound: vLowerBound,
+                vUpperBound: vUpperBound
+            )
+        )
+    }
+
+    @discardableResult
     public func matchSurfaceBoundaryContinuity(
         target: SelectionReference,
         reference: SelectionReference,

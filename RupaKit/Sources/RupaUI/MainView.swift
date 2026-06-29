@@ -35,6 +35,10 @@ public struct MainView: View {
     @State private var surfaceBoundaryContinuityLevel: SurfaceBoundaryContinuityLevel
     @State private var surfaceBoundaryMatchSide: SurfaceBoundaryMatchSide
     @State private var surfaceBoundaryReferenceDirection: SurfaceBoundaryReferenceDirection
+    @State private var surfaceTrimDomainULowerBound: Double
+    @State private var surfaceTrimDomainUUpperBound: Double
+    @State private var surfaceTrimDomainVLowerBound: Double
+    @State private var surfaceTrimDomainVUpperBound: Double
     @State private var sketchSplineControlPointSlideCount: Int
     @State private var slideCommandState: SlideCommandState
     @State private var sketchSplitFraction: Double
@@ -110,6 +114,10 @@ public struct MainView: View {
         self._surfaceBoundaryContinuityLevel = State(initialValue: .g1)
         self._surfaceBoundaryMatchSide = State(initialValue: .automatic)
         self._surfaceBoundaryReferenceDirection = State(initialValue: .automatic)
+        self._surfaceTrimDomainULowerBound = State(initialValue: 0.0)
+        self._surfaceTrimDomainUUpperBound = State(initialValue: 1.0)
+        self._surfaceTrimDomainVLowerBound = State(initialValue: 0.0)
+        self._surfaceTrimDomainVUpperBound = State(initialValue: 1.0)
         self._sketchSplineControlPointSlideCount = State(initialValue: 1)
         self._slideCommandState = State(initialValue: .inactive)
         self._sketchSplitFraction = State(initialValue: 0.5)
@@ -4102,7 +4110,12 @@ public struct MainView: View {
             boundaryContinuityLevel: $surfaceBoundaryContinuityLevel,
             boundaryMatchSide: $surfaceBoundaryMatchSide,
             boundaryReferenceDirection: $surfaceBoundaryReferenceDirection,
-            onMatchBoundaryContinuity: matchSurfaceBoundaryContinuity
+            trimDomainULowerBound: $surfaceTrimDomainULowerBound,
+            trimDomainUUpperBound: $surfaceTrimDomainUUpperBound,
+            trimDomainVLowerBound: $surfaceTrimDomainVLowerBound,
+            trimDomainVUpperBound: $surfaceTrimDomainVUpperBound,
+            onMatchBoundaryContinuity: matchSurfaceBoundaryContinuity,
+            onSetTrimDomain: setSurfaceTrimDomain
         )
 
         projectCurvesToFaceSection()
@@ -5204,6 +5217,25 @@ public struct MainView: View {
             level: level,
             matchSide: matchSide,
             referenceDirection: referenceDirection
+        )
+        if result?.diagnostics.isEmpty == false || result == nil {
+            isPreviewExpanded = true
+        }
+    }
+
+    private func setSurfaceTrimDomain(
+        target: SelectionReference,
+        uLowerBound: Double,
+        uUpperBound: Double,
+        vLowerBound: Double,
+        vUpperBound: Double
+    ) {
+        let result = session.setSurfaceTrimDomain(
+            target: target,
+            uLowerBound: .scalar(uLowerBound),
+            uUpperBound: .scalar(uUpperBound),
+            vLowerBound: .scalar(vLowerBound),
+            vUpperBound: .scalar(vUpperBound)
         )
         if result?.diagnostics.isEmpty == false || result == nil {
             isPreviewExpanded = true

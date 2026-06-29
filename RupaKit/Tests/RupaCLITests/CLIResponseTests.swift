@@ -3672,6 +3672,69 @@ func cliExecutableSurfaceKnotMultiplicityCommandMutatesClosedDocumentAsJSON() as
 }
 
 @Test(.timeLimit(.minutes(1)))
+func cliExecutableSurfaceTrimDomainCommandMutatesClosedDocumentAsJSON() async throws {
+    let temporaryDirectory = try makeTemporaryDirectory()
+    defer {
+        removeTemporaryDirectory(temporaryDirectory)
+    }
+    let documentURL = temporaryDirectory.appendingPathComponent("process-surface-trim-domain.swcad")
+    var document = DesignDocument.empty(named: "Process Surface Trim Domain")
+    let sourceSurface = cliDirectBSplineSurfaceWithInteriorKnots()
+    let featureID = try document.createBSplineSurface(
+        name: "CLI Trim Domain B-spline Surface",
+        surface: sourceSurface
+    )
+    let summary = try SurfaceSourceSummaryService().summarize(document: document)
+    let faceReference = try #require(summary.sources.first?.patches.first?.faceSelectionReference)
+    let faceJSON = try encodedSelectionReference(faceReference)
+    try DocumentFileService().save(document, to: documentURL)
+
+    let result = try await runCLI([
+        "surface",
+        "set-trim-domain",
+        documentURL.path,
+        "--reference",
+        faceJSON,
+        "--u-lower",
+        "0.25",
+        "--u-upper",
+        "0.75",
+        "--v-lower",
+        "0.2",
+        "--v-upper",
+        "0.8",
+        "--mode",
+        "file",
+        "--json",
+    ])
+    let response = try JSONDecoder().decode(
+        CLIResponse.self,
+        from: result.standardOutputData
+    )
+    let loaded = try DocumentFileService().load(from: documentURL)
+    let feature = try #require(loaded.cadDocument.designGraph.nodes[featureID])
+    guard case let .bSplineSurface(surfaceFeature) = feature.operation else {
+        Issue.record("Expected a direct B-spline surface feature.")
+        return
+    }
+    let trimDomain = try #require(surfaceFeature.outerTrimDomain)
+    let updatedSummary = try SurfaceSourceSummaryService().summarize(document: loaded)
+    let updatedPatch = try #require(updatedSummary.sources.first?.patches.first)
+
+    #expect(result.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: result.standardError))
+    #expect(response.message == "Surface trim domain updated.")
+    #expect(response.saved)
+    #expect(trimDomain.uLowerBound == 0.25)
+    #expect(trimDomain.uUpperBound == 0.75)
+    #expect(trimDomain.vLowerBound == 0.2)
+    #expect(trimDomain.vUpperBound == 0.8)
+    #expect(updatedPatch.uDomain.lowerBound == 0.25)
+    #expect(updatedPatch.uDomain.upperBound == 0.75)
+    #expect(updatedPatch.vDomain.lowerBound == 0.2)
+    #expect(updatedPatch.vDomain.upperBound == 0.8)
+}
+
+@Test(.timeLimit(.minutes(1)))
 func cliExecutableSurfaceSpanSplitMutatesClosedDocumentAsJSON() async throws {
     let temporaryDirectory = try makeTemporaryDirectory()
     defer {
