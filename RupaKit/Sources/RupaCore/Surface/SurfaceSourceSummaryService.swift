@@ -215,6 +215,13 @@ public struct SurfaceSourceSummaryService: Sendable {
             patchCandidate: patchCandidate,
             polySpline: polySpline
         )
+        let trimEdges = trimEdges(
+            featureID: featureID,
+            patchID: patchID,
+            surfaceReference: surfaceReference,
+            surface: patchSurface,
+            topologyEntriesByPersistentName: topologyEntriesByPersistentName
+        )
         let controlPoints = surfaceControlPoints(
             featureID: featureID,
             patchID: patchID,
@@ -254,12 +261,161 @@ public struct SurfaceSourceSummaryService: Sendable {
                     parameterAddresses: cornerParameterAddresses(surfaceReference: surfaceReference),
                     sourceVertexIndices: patchCandidate.boundaryVertexIndices,
                     edgePersistentNames: edgePersistentNames,
-                    selectionReferences: trimSelectionReferences
+                    selectionReferences: trimSelectionReferences,
+                    edges: trimEdges
                 ),
             ],
             frameSamples: frameSampleResult.samples,
             parameterAddresses: patchParameterAddresses(surfaceReference: surfaceReference)
         ), diagnostics: frameSampleResult.diagnostics)
+    }
+
+    private func trimEdges(
+        featureID: FeatureID,
+        patchID: Int,
+        surfaceReference: SurfaceReference,
+        surface: BSplineSurface3D?,
+        topologyEntriesByPersistentName: [String: TopologySummaryResult.Entry]
+    ) -> [SurfaceSourceSummaryResult.TrimLoop.Edge] {
+        BSplineSurfaceBoundarySide.allCases.enumerated().map { index, side in
+            let edgePersistentName = persistentNameString(
+                persistentName(featureID: featureID, subshape: "patch:\(patchID):edge:\(side.rawValue)")
+            )
+            let selectionReference: SelectionReference? = topologyEntriesByPersistentName[edgePersistentName] == nil
+                ? nil
+                : .surface(.trim(SurfaceTrimReference(
+                    surface: surfaceReference,
+                    loopIndex: 0,
+                    edgeIndex: index
+                )))
+            let parameters = trimEdgeParameters(side: side, surfaceReference: surfaceReference)
+            return SurfaceSourceSummaryResult.TrimLoop.Edge(
+                index: index,
+                role: side.rawValue,
+                persistentName: edgePersistentName,
+                selectionReference: selectionReference,
+                startParameter: parameters.start,
+                endParameter: parameters.end,
+                boundaryDirection: side.boundaryDirection,
+                inwardDirection: side.inwardDirection,
+                boundaryControlPointReferences: surface.map {
+                    controlPointReferences(
+                        side: side,
+                        inwardOffset: 0,
+                        surface: $0,
+                        surfaceReference: surfaceReference
+                    )
+                } ?? [],
+                firstInwardControlPointReferences: surface.map {
+                    controlPointReferences(
+                        side: side,
+                        inwardOffset: 1,
+                        surface: $0,
+                        surfaceReference: surfaceReference
+                    )
+                } ?? [],
+                secondInwardControlPointReferences: surface.map {
+                    controlPointReferences(
+                        side: side,
+                        inwardOffset: 2,
+                        surface: $0,
+                        surfaceReference: surfaceReference
+                    )
+                } ?? [],
+                supportedBoundaryContinuityLevels: [],
+                supportsBoundaryContinuityMatching: false,
+                unsupportedReason: "PolySpline trim continuity mutation is not implemented; use surface continuity diagnostics or direct B-spline boundary matching."
+            )
+        }
+    }
+
+    private func trimEdgeParameters(
+        side: BSplineSurfaceBoundarySide,
+        surfaceReference: SurfaceReference
+    ) -> (start: SurfaceSourceSummaryResult.ParameterAddress, end: SurfaceSourceSummaryResult.ParameterAddress) {
+        switch side {
+        case .vMin:
+            return (
+                parameterAddress(id: "uMin:vMin", surfaceReference: surfaceReference, u: 0.0, v: 0.0),
+                parameterAddress(id: "uMax:vMin", surfaceReference: surfaceReference, u: 1.0, v: 0.0)
+            )
+        case .uMax:
+            return (
+                parameterAddress(id: "uMax:vMin", surfaceReference: surfaceReference, u: 1.0, v: 0.0),
+                parameterAddress(id: "uMax:vMax", surfaceReference: surfaceReference, u: 1.0, v: 1.0)
+            )
+        case .vMax:
+            return (
+                parameterAddress(id: "uMax:vMax", surfaceReference: surfaceReference, u: 1.0, v: 1.0),
+                parameterAddress(id: "uMin:vMax", surfaceReference: surfaceReference, u: 0.0, v: 1.0)
+            )
+        case .uMin:
+            return (
+                parameterAddress(id: "uMin:vMax", surfaceReference: surfaceReference, u: 0.0, v: 1.0),
+                parameterAddress(id: "uMin:vMin", surfaceReference: surfaceReference, u: 0.0, v: 0.0)
+            )
+        }
+    }
+
+    private func controlPointReferences(
+        side: BSplineSurfaceBoundarySide,
+        inwardOffset: Int,
+        surface: BSplineSurface3D,
+        surfaceReference: SurfaceReference
+    ) -> [SelectionReference] {
+        guard inwardOffset < inwardControlPointCount(for: side, in: surface) else {
+            return []
+        }
+        return boundaryOrdinals(for: side, in: surface).map { ordinal in
+            let indices = controlPointIndices(side: side, ordinal: ordinal, inwardOffset: inwardOffset, surface: surface)
+            return .surface(.controlPoint(SurfaceControlPointReference(
+                surface: surfaceReference,
+                uIndex: indices.uIndex,
+                vIndex: indices.vIndex
+            )))
+        }
+    }
+
+    private func boundaryOrdinals(
+        for side: BSplineSurfaceBoundarySide,
+        in surface: BSplineSurface3D
+    ) -> [Int] {
+        switch side {
+        case .vMin:
+            return Array(0..<surface.uControlPointCount)
+        case .uMax:
+            return Array(0..<surface.vControlPointCount)
+        case .vMax:
+            return Array((0..<surface.uControlPointCount).reversed())
+        case .uMin:
+            return Array((0..<surface.vControlPointCount).reversed())
+        }
+    }
+
+    private func controlPointIndices(
+        side: BSplineSurfaceBoundarySide,
+        ordinal: Int,
+        inwardOffset: Int,
+        surface: BSplineSurface3D
+    ) -> (uIndex: Int, vIndex: Int) {
+        switch side {
+        case .vMin, .vMax:
+            return (uIndex: ordinal, vIndex: side.inwardIndex(offset: inwardOffset, in: surface))
+        case .uMin, .uMax:
+            return (uIndex: side.inwardIndex(offset: inwardOffset, in: surface), vIndex: ordinal)
+        }
+    }
+
+    private func inwardControlPointCount(
+        for side: BSplineSurfaceBoundarySide,
+        in surface: BSplineSurface3D
+    ) -> Int {
+        switch side.inwardDirection {
+        case .u:
+            return surface.uControlPointCount
+        case .v:
+            return surface.vControlPointCount
+        }
     }
 
     private func surfaceControlPoints(
@@ -618,6 +774,24 @@ public struct SurfaceSourceSummaryService: Sendable {
                 partial + source.patches.reduce(0) { $0 + $1.trimLoops.count }
             },
             adjacencyCount: sources.reduce(0) { $0 + $1.adjacencies.count }
+        )
+    }
+
+    private func parameterAddress(
+        id: String,
+        surfaceReference: SurfaceReference,
+        u: Double,
+        v: Double
+    ) -> SurfaceSourceSummaryResult.ParameterAddress {
+        SurfaceSourceSummaryResult.ParameterAddress(
+            id: id,
+            u: u,
+            v: v,
+            selectionReference: .surface(.parameter(SurfaceParameterReference(
+                surface: surfaceReference,
+                u: u,
+                v: v
+            )))
         )
     }
 

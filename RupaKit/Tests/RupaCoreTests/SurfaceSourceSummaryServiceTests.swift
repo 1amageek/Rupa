@@ -122,6 +122,16 @@ import SwiftCAD
     #expect(trimLoop.sourceVertexIndices == [0, 1, 4, 3])
     #expect(trimLoop.edgePersistentNames.count == 4)
     #expect(trimLoop.selectionReferences.count == 4)
+    #expect(trimLoop.edges.map(\.role) == ["vMin", "uMax", "vMax", "uMin"])
+    #expect(trimLoop.edges.allSatisfy { $0.supportedBoundaryContinuityLevels.isEmpty })
+    #expect(trimLoop.edges.allSatisfy { $0.supportsBoundaryContinuityMatching == false })
+    #expect(trimLoop.edges.allSatisfy { $0.unsupportedReason?.contains("PolySpline") == true })
+    let polySplineBoundaryEdge = try #require(trimLoop.edges.first)
+    #expect(polySplineBoundaryEdge.boundaryDirection == .u)
+    #expect(polySplineBoundaryEdge.inwardDirection == .v)
+    #expect(polySplineBoundaryEdge.boundaryControlPointReferences.count == 4)
+    #expect(polySplineBoundaryEdge.firstInwardControlPointReferences.count == 4)
+    #expect(polySplineBoundaryEdge.secondInwardControlPointReferences.count == 4)
     #expect(trimLoop.parameterAddresses.map(\.id) == ["uMin:vMin", "uMax:vMin", "uMax:vMax", "uMin:vMax"])
     #expect(trimLoop.parameterAddresses.allSatisfy { $0.selectionReference != nil })
     #expect(patch.controlVertices.count == 4)
@@ -201,8 +211,40 @@ import SwiftCAD
     }
     #expect(spanReference.direction == .u)
     #expect(spanReference.spanIndex == firstUSpan.index)
-    #expect(patch.trimLoops.first?.edgePersistentNames.count == 4)
-    #expect(patch.trimLoops.first?.selectionReferences.count == 4)
+    let trimLoop = try #require(patch.trimLoops.first)
+    #expect(trimLoop.edgePersistentNames.count == 4)
+    #expect(trimLoop.selectionReferences.count == 4)
+    #expect(trimLoop.edges.map(\.role) == ["vMin", "uMax", "vMax", "uMin"])
+    #expect(trimLoop.edges.allSatisfy { $0.supportsBoundaryContinuityMatching })
+    #expect(trimLoop.edges.allSatisfy { $0.supportedBoundaryContinuityLevels == [.g0, .g1, .g2] })
+    #expect(trimLoop.edges.allSatisfy { $0.unsupportedReason == nil })
+    let vMinEdge = try #require(trimLoop.edges.first)
+    #expect(vMinEdge.index == 0)
+    #expect(vMinEdge.startParameter.id == "uMin:vMin")
+    #expect(vMinEdge.endParameter.id == "uMax:vMin")
+    #expect(vMinEdge.boundaryDirection == .u)
+    #expect(vMinEdge.inwardDirection == .v)
+    #expect(vMinEdge.boundaryControlPointReferences.count == surface.uControlPointCount)
+    #expect(vMinEdge.firstInwardControlPointReferences.count == surface.uControlPointCount)
+    #expect(vMinEdge.secondInwardControlPointReferences.count == surface.uControlPointCount)
+    let firstBoundaryReference = try surfaceSourceControlPointReference(
+        from: vMinEdge.boundaryControlPointReferences[0]
+    )
+    #expect(firstBoundaryReference.uIndex == 0)
+    #expect(firstBoundaryReference.vIndex == 0)
+    let firstInwardReference = try surfaceSourceControlPointReference(
+        from: vMinEdge.firstInwardControlPointReferences[0]
+    )
+    #expect(firstInwardReference.uIndex == 0)
+    #expect(firstInwardReference.vIndex == 1)
+    let vMaxEdge = try #require(trimLoop.edges.first { $0.role == "vMax" })
+    #expect(vMaxEdge.startParameter.id == "uMax:vMax")
+    #expect(vMaxEdge.endParameter.id == "uMin:vMax")
+    let vMaxFirstBoundaryReference = try surfaceSourceControlPointReference(
+        from: vMaxEdge.boundaryControlPointReferences[0]
+    )
+    #expect(vMaxFirstBoundaryReference.uIndex == surface.uControlPointCount - 1)
+    #expect(vMaxFirstBoundaryReference.vIndex == surface.vControlPointCount - 1)
     let frameSample = try #require(patch.frameSamples.first)
     #expect(frameSample.uSpanID == firstUSpan.id)
     #expect(frameSample.vSpanID == patch.basis.vSpans.first?.id)
@@ -370,6 +412,18 @@ private func expectUnitSurfaceSourceVector(
     tolerance: Double = 1.0e-12
 ) {
     #expect(abs(surfaceSourceLength(vector) - 1.0) <= tolerance)
+}
+
+private func surfaceSourceControlPointReference(
+    from selectionReference: SelectionReference
+) throws -> SurfaceControlPointReference {
+    guard case .surface(.controlPoint(let reference)) = selectionReference else {
+        throw EditorError(
+            code: .referenceUnresolved,
+            message: "Expected a surface control-point selection reference."
+        )
+    }
+    return reference
 }
 
 private func surfaceSourceDot(

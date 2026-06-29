@@ -387,24 +387,76 @@ public struct SurfaceSourceSummaryResult: Codable, Equatable, Sendable {
     }
 
     public struct TrimLoop: Codable, Equatable, Sendable {
+        public struct Edge: Codable, Equatable, Sendable {
+            public var index: Int
+            public var role: String
+            public var persistentName: String?
+            public var selectionReference: SelectionReference?
+            public var startParameter: ParameterAddress
+            public var endParameter: ParameterAddress
+            public var boundaryDirection: SurfaceParameterDirection
+            public var inwardDirection: SurfaceParameterDirection
+            public var boundaryControlPointReferences: [SelectionReference]
+            public var firstInwardControlPointReferences: [SelectionReference]
+            public var secondInwardControlPointReferences: [SelectionReference]
+            public var supportedBoundaryContinuityLevels: [SurfaceBoundaryContinuityLevel]
+            public var supportsBoundaryContinuityMatching: Bool
+            public var unsupportedReason: String?
+
+            public init(
+                index: Int,
+                role: String,
+                persistentName: String?,
+                selectionReference: SelectionReference?,
+                startParameter: ParameterAddress,
+                endParameter: ParameterAddress,
+                boundaryDirection: SurfaceParameterDirection,
+                inwardDirection: SurfaceParameterDirection,
+                boundaryControlPointReferences: [SelectionReference],
+                firstInwardControlPointReferences: [SelectionReference] = [],
+                secondInwardControlPointReferences: [SelectionReference] = [],
+                supportedBoundaryContinuityLevels: [SurfaceBoundaryContinuityLevel] = [],
+                supportsBoundaryContinuityMatching: Bool,
+                unsupportedReason: String? = nil
+            ) {
+                self.index = index
+                self.role = role
+                self.persistentName = persistentName
+                self.selectionReference = selectionReference
+                self.startParameter = startParameter
+                self.endParameter = endParameter
+                self.boundaryDirection = boundaryDirection
+                self.inwardDirection = inwardDirection
+                self.boundaryControlPointReferences = boundaryControlPointReferences
+                self.firstInwardControlPointReferences = firstInwardControlPointReferences
+                self.secondInwardControlPointReferences = secondInwardControlPointReferences
+                self.supportedBoundaryContinuityLevels = supportedBoundaryContinuityLevels
+                self.supportsBoundaryContinuityMatching = supportsBoundaryContinuityMatching
+                self.unsupportedReason = unsupportedReason
+            }
+        }
+
         public var role: String
         public var parameterAddresses: [ParameterAddress]
         public var sourceVertexIndices: [Int]
         public var edgePersistentNames: [String]
         public var selectionReferences: [SelectionReference]
+        public var edges: [Edge]
 
         public init(
             role: String,
             parameterAddresses: [ParameterAddress],
             sourceVertexIndices: [Int],
             edgePersistentNames: [String],
-            selectionReferences: [SelectionReference] = []
+            selectionReferences: [SelectionReference] = [],
+            edges: [Edge] = []
         ) {
             self.role = role
             self.parameterAddresses = parameterAddresses
             self.sourceVertexIndices = sourceVertexIndices
             self.edgePersistentNames = edgePersistentNames
             self.selectionReferences = selectionReferences
+            self.edges = edges
         }
     }
 

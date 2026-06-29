@@ -117,6 +117,8 @@ import Testing
     #expect(state.canMatch)
     #expect(state.targetReference == secondReference)
     #expect(state.referenceReference == firstReference)
+    #expect(state.targetSupportedLevelSummary == "G0 / G1 / G2")
+    #expect(state.referenceSupportedLevelSummary == "G0 / G1 / G2")
     #expect(state.statusTitle == "Ready")
 }
 
@@ -138,7 +140,9 @@ import Testing
 
     #expect(!state.canMatch)
     #expect(state.selectedTrimCount == 2)
-    #expect(state.statusTitle == "Direct B-spline trims required")
+    #expect(state.targetSupportedLevelSummary == nil)
+    #expect(state.referenceSupportedLevelSummary == nil)
+    #expect(state.statusTitle == "Supported direct B-spline trim edges required")
 }
 
 private struct WorkspaceSurfaceInspectorFixture {

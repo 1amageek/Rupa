@@ -174,6 +174,12 @@ struct WorkspaceSurfaceInspectorView: View {
                 inspectorSection("Boundary Continuity") {
                     workspaceInspectorValueRow("Selection", "\(state.selectedTrimCount) trims")
                     workspaceInspectorValueRow("Status", state.statusTitle)
+                    if let targetLevels = state.targetSupportedLevelSummary {
+                        workspaceInspectorValueRow("Target Levels", targetLevels)
+                    }
+                    if let referenceLevels = state.referenceSupportedLevelSummary {
+                        workspaceInspectorValueRow("Reference Levels", referenceLevels)
+                    }
                     Picker("Level", selection: $boundaryContinuityLevel) {
                         ForEach(SurfaceBoundaryContinuityLevel.allCases, id: \.self) { level in
                             Text(surfaceBoundaryContinuityTitle(level)).tag(level)

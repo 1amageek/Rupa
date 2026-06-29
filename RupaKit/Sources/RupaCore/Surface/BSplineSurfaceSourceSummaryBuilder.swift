@@ -106,9 +106,17 @@ struct BSplineSurfaceSourceSummaryBuilder: Sendable {
             return .surface(.trim(SurfaceTrimReference(
                 surface: surfaceReference,
                 loopIndex: 0,
-                edgeIndex: index
-            )))
+                    edgeIndex: index
+                )))
         }
+        let trimEdges = trimEdges(
+            featureID: featureID,
+            surface: surface,
+            surfaceReference: surfaceReference,
+            uBounds: uBounds,
+            vBounds: vBounds,
+            topologyEntriesByPersistentName: topologyEntriesByPersistentName
+        )
         let basis = basis(surface: surface, surfaceReference: surfaceReference)
         let frameSampleResult = SurfaceSourceFrameSampleBuilder().buildSamples(
             featureID: featureID,
@@ -145,7 +153,8 @@ struct BSplineSurfaceSourceSummaryBuilder: Sendable {
                     ),
                     sourceVertexIndices: [],
                     edgePersistentNames: edgePersistentNames,
-                    selectionReferences: trimSelectionReferences
+                    selectionReferences: trimSelectionReferences,
+                    edges: trimEdges
                 ),
             ],
             frameSamples: frameSampleResult.samples,
@@ -198,6 +207,273 @@ struct BSplineSurfaceSourceSummaryBuilder: Sendable {
             }
         }
         return result
+    }
+
+    private func trimEdges(
+        featureID: FeatureID,
+        surface: BSplineSurface3D,
+        surfaceReference: SurfaceReference,
+        uBounds: (lower: Double, upper: Double),
+        vBounds: (lower: Double, upper: Double),
+        topologyEntriesByPersistentName: [String: TopologySummaryResult.Entry]
+    ) -> [SurfaceSourceSummaryResult.TrimLoop.Edge] {
+        BSplineSurfaceBoundarySide.allCases.enumerated().map { index, side in
+            let edgePersistentName = persistentNameString(
+                persistentName(featureID: featureID, subshape: "patch:0:edge:\(side.rawValue)")
+            )
+            let selectionReference: SelectionReference? = topologyEntriesByPersistentName[edgePersistentName] == nil
+                ? nil
+                : .surface(.trim(SurfaceTrimReference(
+                    surface: surfaceReference,
+                    loopIndex: 0,
+                    edgeIndex: index
+                )))
+            let parameters = trimEdgeParameters(
+                side: side,
+                surfaceReference: surfaceReference,
+                uBounds: uBounds,
+                vBounds: vBounds
+            )
+            let levels = supportedBoundaryContinuityLevels(
+                side: side,
+                surface: surface,
+                hasSelectionReference: selectionReference != nil
+            )
+            return SurfaceSourceSummaryResult.TrimLoop.Edge(
+                index: index,
+                role: side.rawValue,
+                persistentName: edgePersistentName,
+                selectionReference: selectionReference,
+                startParameter: parameters.start,
+                endParameter: parameters.end,
+                boundaryDirection: side.boundaryDirection,
+                inwardDirection: side.inwardDirection,
+                boundaryControlPointReferences: controlPointReferences(
+                    side: side,
+                    inwardOffset: 0,
+                    surface: surface,
+                    surfaceReference: surfaceReference
+                ),
+                firstInwardControlPointReferences: controlPointReferences(
+                    side: side,
+                    inwardOffset: 1,
+                    surface: surface,
+                    surfaceReference: surfaceReference
+                ),
+                secondInwardControlPointReferences: controlPointReferences(
+                    side: side,
+                    inwardOffset: 2,
+                    surface: surface,
+                    surfaceReference: surfaceReference
+                ),
+                supportedBoundaryContinuityLevels: levels,
+                supportsBoundaryContinuityMatching: levels.isEmpty == false,
+                unsupportedReason: levels.isEmpty
+                    ? unsupportedBoundaryContinuityReason(
+                        side: side,
+                        surface: surface,
+                        hasSelectionReference: selectionReference != nil
+                    )
+                    : nil
+            )
+        }
+    }
+
+    private func trimEdgeParameters(
+        side: BSplineSurfaceBoundarySide,
+        surfaceReference: SurfaceReference,
+        uBounds: (lower: Double, upper: Double),
+        vBounds: (lower: Double, upper: Double)
+    ) -> (start: SurfaceSourceSummaryResult.ParameterAddress, end: SurfaceSourceSummaryResult.ParameterAddress) {
+        switch side {
+        case .vMin:
+            return (
+                parameterAddress(id: "uMin:vMin", surfaceReference: surfaceReference, u: uBounds.lower, v: vBounds.lower),
+                parameterAddress(id: "uMax:vMin", surfaceReference: surfaceReference, u: uBounds.upper, v: vBounds.lower)
+            )
+        case .uMax:
+            return (
+                parameterAddress(id: "uMax:vMin", surfaceReference: surfaceReference, u: uBounds.upper, v: vBounds.lower),
+                parameterAddress(id: "uMax:vMax", surfaceReference: surfaceReference, u: uBounds.upper, v: vBounds.upper)
+            )
+        case .vMax:
+            return (
+                parameterAddress(id: "uMax:vMax", surfaceReference: surfaceReference, u: uBounds.upper, v: vBounds.upper),
+                parameterAddress(id: "uMin:vMax", surfaceReference: surfaceReference, u: uBounds.lower, v: vBounds.upper)
+            )
+        case .uMin:
+            return (
+                parameterAddress(id: "uMin:vMax", surfaceReference: surfaceReference, u: uBounds.lower, v: vBounds.upper),
+                parameterAddress(id: "uMin:vMin", surfaceReference: surfaceReference, u: uBounds.lower, v: vBounds.lower)
+            )
+        }
+    }
+
+    private func controlPointReferences(
+        side: BSplineSurfaceBoundarySide,
+        inwardOffset: Int,
+        surface: BSplineSurface3D,
+        surfaceReference: SurfaceReference
+    ) -> [SelectionReference] {
+        guard inwardOffset < inwardControlPointCount(for: side, in: surface) else {
+            return []
+        }
+        return boundaryOrdinals(for: side, in: surface).map { ordinal in
+            let indices = controlPointIndices(side: side, ordinal: ordinal, inwardOffset: inwardOffset, surface: surface)
+            return .surface(.controlPoint(SurfaceControlPointReference(
+                surface: surfaceReference,
+                uIndex: indices.uIndex,
+                vIndex: indices.vIndex
+            )))
+        }
+    }
+
+    private func boundaryOrdinals(
+        for side: BSplineSurfaceBoundarySide,
+        in surface: BSplineSurface3D
+    ) -> [Int] {
+        switch side {
+        case .vMin:
+            return Array(0..<surface.uControlPointCount)
+        case .uMax:
+            return Array(0..<surface.vControlPointCount)
+        case .vMax:
+            return Array((0..<surface.uControlPointCount).reversed())
+        case .uMin:
+            return Array((0..<surface.vControlPointCount).reversed())
+        }
+    }
+
+    private func controlPointIndices(
+        side: BSplineSurfaceBoundarySide,
+        ordinal: Int,
+        inwardOffset: Int,
+        surface: BSplineSurface3D
+    ) -> (uIndex: Int, vIndex: Int) {
+        switch side {
+        case .vMin, .vMax:
+            return (uIndex: ordinal, vIndex: side.inwardIndex(offset: inwardOffset, in: surface))
+        case .uMin, .uMax:
+            return (uIndex: side.inwardIndex(offset: inwardOffset, in: surface), vIndex: ordinal)
+        }
+    }
+
+    private func supportedBoundaryContinuityLevels(
+        side: BSplineSurfaceBoundarySide,
+        surface: BSplineSurface3D,
+        hasSelectionReference: Bool
+    ) -> [SurfaceBoundaryContinuityLevel] {
+        guard hasSelectionReference,
+              boundaryControlPointCount(for: side, in: surface) >= 2,
+              isClampedBoundary(side, in: surface) else {
+            return []
+        }
+        var levels: [SurfaceBoundaryContinuityLevel] = [.g0]
+        if inwardControlPointCount(for: side, in: surface) >= 2 {
+            levels.append(.g1)
+        }
+        if inwardControlPointCount(for: side, in: surface) >= 3,
+           inwardDegree(for: side, in: surface) >= 2 {
+            levels.append(.g2)
+        }
+        return levels
+    }
+
+    private func unsupportedBoundaryContinuityReason(
+        side: BSplineSurfaceBoundarySide,
+        surface: BSplineSurface3D,
+        hasSelectionReference: Bool
+    ) -> String? {
+        if hasSelectionReference == false {
+            return "Trim edge is not present in the evaluated topology summary."
+        }
+        if boundaryControlPointCount(for: side, in: surface) < 2 {
+            return "Boundary has fewer than two control points."
+        }
+        if isClampedBoundary(side, in: surface) == false {
+            return "Boundary is not clamped, so the boundary control row does not map exactly to the surface edge."
+        }
+        return nil
+    }
+
+    private func isClampedBoundary(
+        _ side: BSplineSurfaceBoundarySide,
+        in surface: BSplineSurface3D
+    ) -> Bool {
+        let profile = inwardKnotProfile(for: side, in: surface)
+        guard profile.knots.indices.contains(profile.degree + 1) else {
+            return false
+        }
+        let boundaryValue = profile.knots[profile.degree]
+        let multiplicity = profile.knots.reduce(0) { count, knot in
+            abs(knot - boundaryValue) <= ModelingTolerance.standard.distance ? count + 1 : count
+        }
+        return multiplicity == profile.degree + 1
+            && profile.knots[profile.degree + 1] > boundaryValue + ModelingTolerance.standard.distance
+    }
+
+    private func inwardKnotProfile(
+        for side: BSplineSurfaceBoundarySide,
+        in surface: BSplineSurface3D
+    ) -> (degree: Int, knots: [Double]) {
+        let basis = inwardBasis(for: side, in: surface)
+        guard side.usesReversedInwardParameter else {
+            return basis
+        }
+        let lowerBound = basis.knots[basis.degree]
+        let upperBound = basis.knots[basis.knots.count - basis.degree - 1]
+        return (
+            basis.degree,
+            basis.knots.reversed().map { lowerBound + upperBound - $0 }
+        )
+    }
+
+    private func inwardBasis(
+        for side: BSplineSurfaceBoundarySide,
+        in surface: BSplineSurface3D
+    ) -> (degree: Int, knots: [Double]) {
+        switch side.inwardDirection {
+        case .u:
+            return (surface.uDegree, surface.uKnots)
+        case .v:
+            return (surface.vDegree, surface.vKnots)
+        }
+    }
+
+    private func boundaryControlPointCount(
+        for side: BSplineSurfaceBoundarySide,
+        in surface: BSplineSurface3D
+    ) -> Int {
+        switch side.boundaryDirection {
+        case .u:
+            return surface.uControlPointCount
+        case .v:
+            return surface.vControlPointCount
+        }
+    }
+
+    private func inwardControlPointCount(
+        for side: BSplineSurfaceBoundarySide,
+        in surface: BSplineSurface3D
+    ) -> Int {
+        switch side.inwardDirection {
+        case .u:
+            return surface.uControlPointCount
+        case .v:
+            return surface.vControlPointCount
+        }
+    }
+
+    private func inwardDegree(
+        for side: BSplineSurfaceBoundarySide,
+        in surface: BSplineSurface3D
+    ) -> Int {
+        switch side.inwardDirection {
+        case .u:
+            return surface.uDegree
+        case .v:
+            return surface.vDegree
+        }
     }
 
     private func isSurfaceControlPointDisplayVisible(

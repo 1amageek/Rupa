@@ -758,6 +758,8 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                         "RupaKit/Sources/RupaCore/SurfaceFrameService.swift",
                         "RupaKit/Sources/RupaCore/SurfaceAnalysisService.swift",
                         "RupaKit/Sources/RupaCore/SurfaceContinuityService.swift",
+                        "RupaKit/Sources/RupaCore/Surface/SurfaceSourceSummaryResult.swift",
+                        "RupaKit/Sources/RupaCore/Surface/BSplineSurfaceSourceSummaryBuilder.swift",
                         "RupaKit/Sources/RupaCore/Surface/BSplineSurfaceKnotEditingService.swift",
                         "RupaKit/Sources/RupaCore/Surface/BSplineSurfaceBoundaryContinuityEditingService.swift",
                         "RupaKit/Sources/RupaAutomation/AutomationCommand.swift",
@@ -781,9 +783,9 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                         "RupaKit/Tests/RupaUIPackageTests/WorkspaceSurfaceInspectorStateBuilderTests.swift",
                     ],
                     notes: [
-                        "Surface source summaries expose Agent-readable B-spline degree, order, knot vectors, stable knot IDs, span IDs, CV weights, control-point selection references, trim-loop ownership, and generated topology links for supported PolySpline patches and direct B-spline surface sources.",
+                        "Surface source summaries expose Agent-readable B-spline degree, order, knot vectors, stable knot IDs, span IDs, CV weights, control-point selection references, trim-loop ownership, typed trim-edge roles, endpoint UVs, boundary/inward directions, control-row references, supported direct B-spline G0/G1/G2 boundary-continuity levels, and generated topology links for supported PolySpline patches and direct B-spline surface sources.",
                         "Strict interior PolySpline CV weights are editable through the shared Core, Automation, and Agent command path while preserving CV position overrides.",
-                        "Direct B-spline surface sources can be created through Core, Automation, Agent, and CLI, evaluate to selectable sheet topology, appear in surface source summaries with stored degree, knot vectors, weights, control-net references, editable knot and span references, and rectangular trim-loop identity, and support direct CV position, CV weight, CV slide, internal knot-value mutation, shape-preserving knot insertion, explicit internal knot multiplicity editing, and compatible clamped trim-boundary G0/G1/G2 matching with homogeneous inward derivative-scale solving.",
+                        "Direct B-spline surface sources can be created through Core, Automation, Agent, and CLI, evaluate to selectable sheet topology, appear in surface source summaries with stored degree, knot vectors, weights, control-net references, editable knot and span references, rectangular trim-loop identity, and typed trim-edge continuity capability, and support direct CV position, CV weight, CV slide, internal knot-value mutation, shape-preserving knot insertion, explicit internal knot multiplicity editing, and compatible clamped trim-boundary G0/G1/G2 matching with homogeneous inward derivative-scale solving.",
                     ]
                 ),
             ],
