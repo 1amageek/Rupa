@@ -329,9 +329,17 @@ import RupaCore
         evidence.sourceFiles.contains("RupaKit/Sources/RupaCore/SurfaceFrameService.swift")
     })
     #expect(surfaceModeling.evidence.contains { evidence in
+        evidence.sourceFiles.contains("RupaKit/Sources/RupaCore/SnapResolver.swift")
+    })
+    #expect(surfaceModeling.evidence.contains { evidence in
         evidence.notes.contains("Direct B-spline surface sources can be created through Core, Automation, Agent, and CLI, evaluate to selectable sheet topology, appear in surface source summaries with stored degree, knot vectors, weights, control-net references, editable knot and span references, rectangular trim-loop identity, authored trim-loop identity, selectable trim-edge references, Agent-readable authored p-curve control-point summary indices and weights, shared adaptive UV trim-loop validation, rational 2D B-spline p-curve trim preservation, and typed trim-edge continuity capability, and support direct CV position, CV weight, CV slide, internal knot-value mutation, shape-preserving knot insertion, fraction-based span splitting, explicit internal knot multiplicity editing, authored trim endpoint moves with loop-closure preservation, strict interior polyline and 2D B-spline trim p-curve control-point moves, 2D B-spline trim p-curve control-point weight edits, selected viewport trim endpoint handles, selected viewport trim interior control-point handles, authored B-spline trim p-curve span/knot UVN frame resolution and display persistence, and compatible clamped trim-boundary G0/G1/G2 matching with homogeneous inward derivative-scale solving.")
     })
-    #expect(surfaceModeling.openWork.contains { $0.contains("snap consumption") })
+    #expect(surfaceModeling.evidence.contains { evidence in
+        evidence.notes.contains { note in
+            note.contains("Visible surface frame displays now feed SnapResolver surfaceFrame candidates")
+        }
+    })
+    #expect(surfaceModeling.openWork.contains { $0.contains("visible-frame snap anchors") })
 
     let performance = try #require(result.entries.first { $0.area == .performance })
     #expect(performance.currentRating == .partial)

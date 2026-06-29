@@ -1172,6 +1172,132 @@ import SwiftCAD
 }
 
 @MainActor
+@Test func agentResolvesVisibleSurfaceFrameSnapCandidatesWithoutMutation() async throws {
+    let server = AgentCommandController()
+    let sessionID = UUID()
+    let session = EditorSession()
+    server.register(session: session, id: sessionID)
+
+    let createResponse = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .createBSplineSurface(
+                name: "Agent Snap Surface Frame",
+                surface: agentDirectBSplineSurfaceWithInteriorKnots()
+            ),
+            expectedGeneration: DocumentGeneration(0)
+        )
+    )
+    guard case .command(let createResult) = createResponse else {
+        Issue.record("Agent must create a direct B-spline surface.")
+        return
+    }
+    #expect(createResult.didMutate)
+
+    let initialSummaryResponse = server.handle(
+        .surfaceSourceSummary(
+            sessionID: sessionID,
+            expectedGeneration: DocumentGeneration(1)
+        )
+    )
+    guard case .surfaceSourceSummary(let initialSummary) = initialSummaryResponse else {
+        Issue.record("Agent must discover the created direct B-spline surface.")
+        return
+    }
+    let faceReference = try #require(initialSummary.sources.first?.patches.first?.faceSelectionReference)
+
+    let trimResponse = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .setSurfaceTrimLoops(
+                target: faceReference,
+                trimLoops: [agentAuthoredBSplineSurfaceTrimLoop()]
+            ),
+            expectedGeneration: DocumentGeneration(1)
+        )
+    )
+    guard case .command(let trimResult) = trimResponse else {
+        Issue.record("Agent must set authored trim loops.")
+        return
+    }
+    #expect(trimResult.didMutate)
+
+    let summaryResponse = server.handle(
+        .surfaceSourceSummary(
+            sessionID: sessionID,
+            expectedGeneration: DocumentGeneration(2)
+        )
+    )
+    guard case .surfaceSourceSummary(let summary) = summaryResponse else {
+        Issue.record("Agent must discover authored trim p-curve references.")
+        return
+    }
+    let trimEdge = try #require(summary.sources.first?.patches.first?.trimLoops.first?.edges.first)
+    let spanSelection = try #require(trimEdge.parameterCurve.spans.first?.selectionReference)
+    let query = SurfaceFrameQuery(selectionReference: spanSelection)
+    let displayID = try SurfaceFrameDisplayID(query: query)
+
+    let displayResponse = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .setSurfaceFrameDisplay(query: query, isVisible: true),
+            expectedGeneration: DocumentGeneration(2)
+        )
+    )
+    guard case .command(let displayResult) = displayResponse else {
+        Issue.record("Agent must display the trim p-curve surface frame.")
+        return
+    }
+    #expect(displayResult.didMutate)
+
+    let frameResponse = server.handle(
+        .surfaceFrames(
+            sessionID: sessionID,
+            queries: [query],
+            expectedGeneration: DocumentGeneration(3)
+        )
+    )
+    guard case .surfaceFrames(let frames) = frameResponse,
+          let frame = frames.frames.first else {
+        Issue.record("Agent must resolve the displayed surface frame.")
+        return
+    }
+
+    let snapResponse = server.handle(
+        .resolveSnap(
+            sessionID: sessionID,
+            point: CADCore.Point2D(x: frame.position.x + 0.00001, y: frame.position.y + 0.00001),
+            options: SnapResolutionOptions(
+                usesGrid: false,
+                usesObjects: true,
+                gridIntervalMeters: 0.001,
+                objectSearchRadiusMeters: 0.0002,
+                maximumCandidateCount: 32
+            ),
+            expectedGeneration: DocumentGeneration(3)
+        )
+    )
+
+    guard case .snapResolution(let result) = snapResponse else {
+        Issue.record("Agent must return a surface frame snap resolution.")
+        return
+    }
+    let candidate = try #require(result.candidates.first { candidate in
+        candidate.kind == .surfaceFrame &&
+            candidate.surfaceFrameSource?.displayID == displayID
+    })
+    #expect(result.selectedCandidate?.kind == .surfaceFrame)
+    #expect(candidate.surfaceFrameSource?.query == query)
+    #expect(candidate.surfaceFrameSource?.faceID.isEmpty == false)
+    #expect(candidate.surfaceFrameSource?.facePersistentNames == frame.facePersistentNames)
+    #expect(abs((candidate.surfaceFrameSource?.worldPoint.x ?? 0.0) - frame.position.x) <= 1.0e-12)
+    #expect(abs((candidate.surfaceFrameSource?.worldPoint.y ?? 0.0) - frame.position.y) <= 1.0e-12)
+    #expect(abs((candidate.surfaceFrameSource?.worldPoint.z ?? 0.0) - frame.position.z) <= 1.0e-12)
+    #expect(session.generation == DocumentGeneration(3))
+    #expect(session.commandStack.canUndo)
+}
+
+@MainActor
 @Test func agentResolvesRegionCenterSnapCandidatesWithoutMutation() async throws {
     let server = AgentCommandController()
     let sessionID = UUID()

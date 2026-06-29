@@ -1199,9 +1199,11 @@ import SwiftCAD
     #expect(snapResolution.discovery.contains(.snapResolution))
     #expect(snapResolution.discovery.contains(.sketchEntitySummary))
     #expect(snapResolution.discovery.contains(.topologySummary))
-    #expect(snapResolution.targets == [.document, .sceneNode, .profile, .region, .sketchEntity])
+    #expect(snapResolution.discovery.contains(.surfaceFrames))
+    #expect(snapResolution.targets == [.document, .sceneNode, .profile, .region, .sketchEntity, .face, .surfaceTrim])
     #expect(snapResolution.failureMode.contains("object-targeting force enable"))
     #expect(snapResolution.failureMode.contains("candidate-kind suppression"))
+    #expect(snapResolution.summary.contains("visible UVN surface frame handles"))
     #expect(snapResolution.summary.contains("curve-axis"))
     #expect(snapResolution.summary.contains("curve-coordinate-plane"))
 

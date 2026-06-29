@@ -903,6 +903,7 @@ import Testing
     #expect(SnapCandidateKind.regionCenter.isReferenceLineAnchorSource)
     #expect(SnapCandidateKind.edgeMidpoint.isReferenceLineAnchorSource)
     #expect(SnapCandidateKind.faceCenter.isReferenceLineAnchorSource)
+    #expect(SnapCandidateKind.surfaceFrame.isReferenceLineAnchorSource)
     #expect(SnapCandidateKind.grid.isReferenceLineAnchorSource == false)
     #expect(SnapCandidateKind.referenceLine.isReferenceLineAnchorSource == false)
 }
@@ -1279,6 +1280,116 @@ import Testing
     #expect(abs(candidate.point.y - point.y) <= 1.0e-12)
 }
 
+@Test func snapResolverReportsVisibleTrimSurfaceFrameCandidate() async throws {
+    var document = DesignDocument.empty()
+    _ = try document.createBSplineSurface(
+        name: "Snap Trim Frame Surface",
+        surface: snapResolverDirectBSplineSurface()
+    )
+    let initialSummary = try SurfaceSourceSummaryService().summarize(document: document)
+    let faceReference = try #require(initialSummary.sources.first?.patches.first?.faceSelectionReference)
+    try document.setSurfaceTrimLoops(
+        target: faceReference,
+        trimLoops: [snapResolverAuthoredTrimLoop()]
+    )
+    let summary = try SurfaceSourceSummaryService().summarize(document: document)
+    let trimEdge = try #require(summary.sources.first?.patches.first?.trimLoops.first?.edges.first)
+    let spanSelection = try #require(trimEdge.parameterCurve.spans.first?.selectionReference)
+    let query = SurfaceFrameQuery(selectionReference: spanSelection)
+    try document.setSurfaceFrameDisplay(query: query, isVisible: true)
+    let displayID = try SurfaceFrameDisplayID(query: query)
+    let frame = try #require(
+        SurfaceFrameService()
+            .resolve(document: document, queries: [query])
+            .frames
+            .first
+    )
+
+    let result = try SnapResolver().resolve(
+        point: Point2D(x: frame.position.x + 0.00001, y: frame.position.y + 0.00001),
+        in: document,
+        options: SnapResolutionOptions(
+            usesGrid: false,
+            usesObjects: true,
+            gridIntervalMeters: 0.001,
+            objectSearchRadiusMeters: 0.0002,
+            maximumCandidateCount: 32
+        )
+    )
+
+    let candidate = try #require(result.candidates.first { candidate in
+        candidate.kind == .surfaceFrame &&
+            candidate.surfaceFrameSource?.displayID == displayID
+    })
+    let surfaceFrameSource = try #require(candidate.surfaceFrameSource)
+    #expect(result.selectedCandidate?.kind == .surfaceFrame)
+    #expect(candidate.label == "Surface Frame")
+    #expect(surfaceFrameSource.query == query)
+    #expect(surfaceFrameSource.faceID.isEmpty == false)
+    #expect(surfaceFrameSource.facePersistentNames == frame.facePersistentNames)
+    #expect(surfaceFrameSource.u == frame.u)
+    #expect(surfaceFrameSource.v == frame.v)
+    #expect(abs(surfaceFrameSource.worldPoint.x - frame.position.x) <= 1.0e-12)
+    #expect(abs(surfaceFrameSource.worldPoint.y - frame.position.y) <= 1.0e-12)
+    #expect(abs(surfaceFrameSource.worldPoint.z - frame.position.z) <= 1.0e-12)
+    #expect(abs(candidate.point.x - frame.position.x) <= 1.0e-12)
+    #expect(abs(candidate.point.y - frame.position.y) <= 1.0e-12)
+    let selectedWorldPoint = try #require(result.selectedSurfaceFrameWorldPoint)
+    #expect(abs(selectedWorldPoint.x - frame.position.x) <= 1.0e-12)
+    #expect(abs(selectedWorldPoint.y - frame.position.y) <= 1.0e-12)
+    #expect(abs(selectedWorldPoint.z - frame.position.z) <= 1.0e-12)
+}
+
+@Test func snapResolverProjectsVisibleSurfaceFrameCandidateOntoConstructionPlane() async throws {
+    var document = DesignDocument.empty()
+    _ = try document.createBSplineSurface(
+        name: "Snap Projected Frame Surface",
+        surface: snapResolverDirectBSplineSurface(topRightZ: 0.004)
+    )
+    let summary = try SurfaceSourceSummaryService().summarize(document: document)
+    let faceReference = try #require(summary.sources.first?.patches.first?.faceSelectionReference)
+    let query = SurfaceFrameQuery(
+        selectionReference: faceReference,
+        u: 0.5,
+        v: 0.5
+    )
+    try document.setSurfaceFrameDisplay(query: query, isVisible: true)
+    let displayID = try SurfaceFrameDisplayID(query: query)
+    let frame = try #require(
+        SurfaceFrameService()
+            .resolve(document: document, queries: [query])
+            .frames
+            .first
+    )
+
+    let result = try SnapResolver().resolve(
+        point: Point2D(x: frame.position.y + 0.00001, y: frame.position.z + 0.00001),
+        in: document,
+        options: SnapResolutionOptions(
+            usesGrid: false,
+            usesObjects: true,
+            usesConstructionPlaneProjection: true,
+            constructionPlane: .yz,
+            gridIntervalMeters: 0.001,
+            objectSearchRadiusMeters: 0.0002,
+            maximumCandidateCount: 32
+        )
+    )
+
+    let candidate = try #require(result.candidates.first { candidate in
+        candidate.kind == .surfaceFrame &&
+            candidate.surfaceFrameSource?.displayID == displayID
+    })
+    let surfaceFrameSource = try #require(candidate.surfaceFrameSource)
+    #expect(result.selectedCandidate?.kind == .surfaceFrame)
+    #expect(surfaceFrameSource.query == query)
+    #expect(abs(candidate.point.x - frame.position.y) <= 1.0e-12)
+    #expect(abs(candidate.point.y - frame.position.z) <= 1.0e-12)
+    #expect(abs(surfaceFrameSource.worldPoint.x - frame.position.x) <= 1.0e-12)
+    #expect(abs(surfaceFrameSource.worldPoint.y - frame.position.y) <= 1.0e-12)
+    #expect(abs(surfaceFrameSource.worldPoint.z - frame.position.z) <= 1.0e-12)
+}
+
 @Test func snapResolverReportsSplineControlVerticesAsCVTargets() async throws {
     var document = DesignDocument.empty()
     _ = try document.createSplineSketch(
@@ -1355,5 +1466,39 @@ private func snapResolverPolySplineQuadMesh() -> Mesh {
             Point3D(x: 0.0, y: 0.02, z: 0.0),
         ],
         indices: [0, 1, 2, 0, 2, 3]
+    )
+}
+
+private func snapResolverDirectBSplineSurface(topRightZ: Double = 0.0) -> BSplineSurface3D {
+    BSplineSurface3D.cubicBezierPatch(
+        bottomLeft: Point3D(x: 0.0, y: 0.0, z: 0.0),
+        bottomRight: Point3D(x: 1.0, y: 0.0, z: 0.0),
+        topRight: Point3D(x: 1.0, y: 1.0, z: topRightZ),
+        topLeft: Point3D(x: 0.0, y: 1.0, z: 0.0)
+    )
+}
+
+private func snapResolverAuthoredTrimLoop() -> BSplineSurfaceTrimLoop {
+    BSplineSurfaceTrimLoop(
+        role: .outer,
+        edges: [
+            BSplineSurfaceTrimEdge(parameterCurve: .bSpline(BSplineCurve2D(
+                degree: 2,
+                knots: [0.0, 0.0, 0.0, 1.0, 1.0, 1.0],
+                controlPoints: [
+                    Point2D(x: 0.2, y: 0.2),
+                    Point2D(x: 0.52, y: 0.42),
+                    Point2D(x: 0.8, y: 0.25),
+                ]
+            ))),
+            BSplineSurfaceTrimEdge(parameterCurve: .polyline([
+                SurfaceParameter(u: 0.8, v: 0.25),
+                SurfaceParameter(u: 0.45, v: 0.8),
+            ])),
+            BSplineSurfaceTrimEdge(parameterCurve: .polyline([
+                SurfaceParameter(u: 0.45, v: 0.8),
+                SurfaceParameter(u: 0.2, v: 0.2),
+            ])),
+        ]
     )
 }

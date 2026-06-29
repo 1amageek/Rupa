@@ -35,6 +35,7 @@ public enum SnapCandidateKind: String, Codable, Equatable, Hashable, Sendable {
     case edgeEnd
     case edgeMidpoint
     case faceCenter
+    case surfaceFrame
 
     public var isReferenceLineAnchorSource: Bool {
         switch self {
@@ -182,6 +183,49 @@ public struct SnapMeasurementReference: Codable, Equatable, Sendable {
     }
 }
 
+public struct SnapSurfaceFrameReference: Codable, Equatable, Sendable {
+    public var displayID: SurfaceFrameDisplayID
+    public var query: SurfaceFrameQuery
+    public var faceID: String
+    public var facePersistentNames: [String]
+    public var sourceFeatureID: String?
+    public var sceneNodeID: String?
+    public var u: Double
+    public var v: Double
+    public var worldPoint: Point3D
+    public var uAxis: SurfaceAnalysisResult.Vector
+    public var vAxis: SurfaceAnalysisResult.Vector
+    public var normal: SurfaceAnalysisResult.Vector
+
+    public init(
+        displayID: SurfaceFrameDisplayID,
+        query: SurfaceFrameQuery,
+        faceID: String,
+        facePersistentNames: [String],
+        sourceFeatureID: String?,
+        sceneNodeID: String?,
+        u: Double,
+        v: Double,
+        worldPoint: Point3D,
+        uAxis: SurfaceAnalysisResult.Vector,
+        vAxis: SurfaceAnalysisResult.Vector,
+        normal: SurfaceAnalysisResult.Vector
+    ) {
+        self.displayID = displayID
+        self.query = query
+        self.faceID = faceID
+        self.facePersistentNames = facePersistentNames
+        self.sourceFeatureID = sourceFeatureID
+        self.sceneNodeID = sceneNodeID
+        self.u = u
+        self.v = v
+        self.worldPoint = worldPoint
+        self.uAxis = uAxis
+        self.vAxis = vAxis
+        self.normal = normal
+    }
+}
+
 public struct SnapResolutionOptions: Codable, Equatable, Sendable {
     public var usesGrid: Bool
     public var usesObjects: Bool
@@ -326,6 +370,7 @@ public struct SnapCandidate: Codable, Equatable, Sendable {
     public var topologySource: SnapTopologyReference?
     public var regionSource: SnapRegionReference?
     public var measurementSource: SnapMeasurementReference?
+    public var surfaceFrameSource: SnapSurfaceFrameReference?
     public var axisSource: SnapAxisReference?
     public var coordinatePlaneSource: SnapCoordinatePlaneReference?
 
@@ -339,6 +384,7 @@ public struct SnapCandidate: Codable, Equatable, Sendable {
         topologySource: SnapTopologyReference? = nil,
         regionSource: SnapRegionReference? = nil,
         measurementSource: SnapMeasurementReference? = nil,
+        surfaceFrameSource: SnapSurfaceFrameReference? = nil,
         axisSource: SnapAxisReference? = nil,
         coordinatePlaneSource: SnapCoordinatePlaneReference? = nil
     ) {
@@ -351,6 +397,7 @@ public struct SnapCandidate: Codable, Equatable, Sendable {
         self.topologySource = topologySource
         self.regionSource = regionSource
         self.measurementSource = measurementSource
+        self.surfaceFrameSource = surfaceFrameSource
         self.axisSource = axisSource
         self.coordinatePlaneSource = coordinatePlaneSource
     }
@@ -379,6 +426,10 @@ public struct SnapResolutionResult: Codable, Equatable, Sendable {
             return nil
         }
         return Point3D(x: point.x, y: point.y, z: point.z)
+    }
+
+    public var selectedSurfaceFrameWorldPoint: Point3D? {
+        selectedCandidate?.surfaceFrameSource?.worldPoint
     }
 }
 
@@ -533,6 +584,10 @@ public struct SnapResolver: Sendable {
             topology: topology,
             constructionPlane: constructionPlane
         )
+        candidates += try surfaceFrameCandidates(
+            in: document,
+            constructionPlane: constructionPlane
+        )
         candidates += try regionCandidates(
             in: document,
             sceneNodeIDsByFeatureID: sceneNodeIDsByFeatureID,
@@ -603,6 +658,32 @@ public struct SnapResolver: Sendable {
         }
 
         return candidates
+    }
+
+    private func surfaceFrameCandidates(
+        in document: DesignDocument,
+        constructionPlane: SketchPlaneCoordinateSystem?
+    ) throws -> [PrioritizedSnapCandidate] {
+        let visibleDisplays = document.productMetadata.surfaceFrameDisplays.values
+            .filter(\.isVisible)
+            .sorted { first, second in
+                first.id.rawValue.localizedStandardCompare(second.id.rawValue) == .orderedAscending
+            }
+        guard visibleDisplays.isEmpty == false else {
+            return []
+        }
+
+        let result = try SurfaceFrameService().resolve(
+            document: document,
+            queries: visibleDisplays.map(\.query)
+        )
+        return zip(visibleDisplays, result.frames).compactMap { display, frame in
+            surfaceFrameCandidate(
+                display: display,
+                frame: frame,
+                constructionPlane: constructionPlane
+            )
+        }
     }
 
     private func measurementCandidates(
@@ -1892,6 +1973,52 @@ public struct SnapResolver: Sendable {
         )
     }
 
+    private func surfaceFrameCandidate(
+        display: SurfaceFrameDisplay,
+        frame: SurfaceFrameResult.Frame,
+        constructionPlane: SketchPlaneCoordinateSystem?
+    ) -> PrioritizedSnapCandidate? {
+        let worldPoint = Point3D(
+            x: frame.position.x,
+            y: frame.position.y,
+            z: frame.position.z
+        )
+        guard finiteWorldPoint(worldPoint) else {
+            return nil
+        }
+        let snapPoint = projectedSurfaceFramePoint(worldPoint, onto: constructionPlane)
+        guard isFinite(snapPoint) else {
+            return nil
+        }
+        return PrioritizedSnapCandidate(
+            priority: -1,
+            sortKey: [
+                "surfaceFrame",
+                display.id.rawValue,
+            ].joined(separator: ":"),
+            candidate: SnapCandidate(
+                kind: .surfaceFrame,
+                point: snapPoint,
+                distanceMeters: 0.0,
+                label: "Surface Frame",
+                surfaceFrameSource: SnapSurfaceFrameReference(
+                    displayID: display.id,
+                    query: display.query,
+                    faceID: frame.faceID,
+                    facePersistentNames: frame.facePersistentNames,
+                    sourceFeatureID: frame.sourceFeatureID,
+                    sceneNodeID: frame.sceneNodeID,
+                    u: frame.u,
+                    v: frame.v,
+                    worldPoint: worldPoint,
+                    uAxis: frame.uAxis,
+                    vAxis: frame.vAxis,
+                    normal: frame.normal
+                )
+            )
+        )
+    }
+
     private func candidate(
         kind: SnapCandidateKind,
         point: Point2D,
@@ -1934,6 +2061,16 @@ public struct SnapResolver: Sendable {
     }
 
     private func projectedMeasurementPoint(
+        _ point: Point3D,
+        onto constructionPlane: SketchPlaneCoordinateSystem?
+    ) -> Point2D {
+        guard let constructionPlane else {
+            return Point2D(x: point.x, y: point.y)
+        }
+        return constructionPlane.project(point).point
+    }
+
+    private func projectedSurfaceFramePoint(
         _ point: Point3D,
         onto constructionPlane: SketchPlaneCoordinateSystem?
     ) -> Point2D {
