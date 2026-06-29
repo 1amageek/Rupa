@@ -581,11 +581,11 @@ struct CADInteractionDesignProcessSpec: Sendable {
                 supportedCases: [
                     caseItem("polyspline-patch", "Supported single-quad and planar unmerged PolySpline patches become B-spline sheet B-reps.", .supported, .kernel),
                     caseItem("surface-cv-frame", "Surface source summaries expose CV references and UVN frame readback.", .supported, .core),
-                    caseItem("direct-bspline-source", "Direct B-spline surface sources expose stable CV, weight, knot, span, face, rectangular trim references, source-owned rectangular outer trim domains, and authored UV p-curve trim loops.", .supported, .core),
+                    caseItem("direct-bspline-source", "Direct B-spline surface sources expose stable CV, weight, knot, span, face, rectangular trim references, source-owned rectangular outer trim domains, authored UV p-curve trim loops, and p-curve-first mesh tessellation for current direct surface trims.", .supported, .core),
                     caseItem("direct-bspline-parameter-edits", "Direct B-spline surface sources support CV moves/slides, CV weights, knot value edits, shape-preserving knot insertion, fraction-based span split, knot multiplicity edits, rectangular trim-domain edits, authored trim-loop edits, and compatible G0/G1/G2 boundary matching for full-domain rectangular surfaces.", .supported, .core),
                 ],
                 boundaryCases: [
-                    caseItem("arbitrary-nurbs-trim-foundation", "Arbitrary NURBS sources, exact arbitrary NURBS trim-edge reconstruction, p-curve-first tessellation for all trim loops, watertight polysurfaces, remaining span policies, continuity solving on authored interior trims, and arbitrary adjacency solving remain next foundation work.", .planned, .kernel),
+                    caseItem("arbitrary-nurbs-trim-foundation", "Arbitrary NURBS sources, exact arbitrary NURBS trim-edge reconstruction, watertight polysurfaces, remaining span policies, continuity solving on authored interior trims, and arbitrary adjacency solving remain next foundation work.", .planned, .kernel),
                 ],
                 degenerateCases: [
                     caseItem("nonplanar-g2-network", "Unsupported non-planar G2 patch networks report unresolved continuity constraints.", .rejected, .kernel),
