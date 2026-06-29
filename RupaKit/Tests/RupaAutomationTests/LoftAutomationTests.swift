@@ -26,8 +26,14 @@ import SwiftCAD
         .createLoft(
             name: "Automation Ruled Loft",
             sections: [
-                LoftSectionReference(profile: ProfileReference(featureID: firstProfileID)),
-                LoftSectionReference(profile: ProfileReference(featureID: secondProfileID)),
+                LoftSectionReference(
+                    profile: ProfileReference(featureID: firstProfileID),
+                    startSampleIndex: 1
+                ),
+                LoftSectionReference(
+                    profile: ProfileReference(featureID: secondProfileID),
+                    startSampleIndex: 1
+                ),
             ],
             options: LoftOptions(resultKind: .solid)
         ),
@@ -46,6 +52,7 @@ import SwiftCAD
     #expect(result.didMutate)
     #expect(result.generation == DocumentGeneration(1))
     #expect(loft.sections.map(\.featureID) == [firstProfileID, secondProfileID])
+    #expect(loft.sections.map(\.startSampleIndex) == [1, 1])
     #expect(feature.outputs == [FeatureOutput(role: .body)])
     #expect(session.evaluationStatus == .valid)
     #expect(session.evaluatedBodyCount == 1)

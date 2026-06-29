@@ -507,7 +507,10 @@ struct WorkspaceObjectOverviewInspectorStateBuilder {
     }
 
     private func loftSectionSummary(_ section: LoftSectionReference) -> String {
-        "Profile \(shortID(section.featureID))"
+        if let startSampleIndex = section.startSampleIndex {
+            return "Profile \(shortID(section.featureID)) start \(startSampleIndex)"
+        }
+        return "Profile \(shortID(section.featureID))"
     }
 
     private func bodySourceSectionSummary(_ section: BodySourceSectionReference) -> String {

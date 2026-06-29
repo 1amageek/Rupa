@@ -573,8 +573,14 @@ import SwiftCAD
         command: .createLoft(
             name: "Encoded Loft",
             sections: [
-                LoftSectionReference(profile: ProfileReference(featureID: firstProfileID)),
-                LoftSectionReference(profile: ProfileReference(featureID: secondProfileID)),
+                LoftSectionReference(
+                    profile: ProfileReference(featureID: firstProfileID),
+                    startSampleIndex: 1
+                ),
+                LoftSectionReference(
+                    profile: ProfileReference(featureID: secondProfileID),
+                    startSampleIndex: 1
+                ),
             ],
             options: LoftOptions(resultKind: .sheet)
         ),

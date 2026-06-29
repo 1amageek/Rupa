@@ -58,7 +58,10 @@ struct PatternArrayFeatureIDRemapper: Sendable {
             return .sweep(sweep)
         case .loft(var loft):
             loft.sections = try loft.sections.map { section in
-                LoftSectionReference(profile: try remappedProfileReference(section.profile))
+                LoftSectionReference(
+                    profile: try remappedProfileReference(section.profile),
+                    startSampleIndex: section.startSampleIndex
+                )
             }
             return .loft(loft)
         case .boolean(var boolean):

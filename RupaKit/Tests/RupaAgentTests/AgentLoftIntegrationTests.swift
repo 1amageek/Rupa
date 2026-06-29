@@ -33,8 +33,14 @@ import SwiftCAD
             command: .createLoft(
                 name: "Agent Ruled Loft",
                 sections: [
-                    LoftSectionReference(profile: ProfileReference(featureID: firstProfileID)),
-                    LoftSectionReference(profile: ProfileReference(featureID: secondProfileID)),
+                    LoftSectionReference(
+                        profile: ProfileReference(featureID: firstProfileID),
+                        startSampleIndex: 1
+                    ),
+                    LoftSectionReference(
+                        profile: ProfileReference(featureID: secondProfileID),
+                        startSampleIndex: 1
+                    ),
                 ],
                 options: LoftOptions(resultKind: .solid)
             ),
@@ -57,6 +63,7 @@ import SwiftCAD
     #expect(result.didMutate)
     #expect(result.generation == DocumentGeneration(1))
     #expect(loft.sections.map(\.featureID) == [firstProfileID, secondProfileID])
+    #expect(loft.sections.map(\.startSampleIndex) == [1, 1])
     #expect(loft.options.resultKind == .solid)
     #expect(feature.outputs == [FeatureOutput(role: .body)])
     #expect(session.evaluatedBodyCount == 1)

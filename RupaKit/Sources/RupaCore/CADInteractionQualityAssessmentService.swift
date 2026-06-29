@@ -765,12 +765,12 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                         "RupaKit/Tests/RupaCLITests/CLIResponseTests.swift",
                     ],
                     notes: [
-                        "Loft now has a source-owned Swift-CAD IR, same-boundary-count planar ruled B-rep evaluator, cyclic section matching independent of arbitrary closed-loop start vertices, solid and sheet output, RupaCore mutation, Automation, Agent command dispatch, CLI model loft creation, measurement, viewport scene display, and Inspector operation summaries.",
+                        "Loft now has a source-owned Swift-CAD IR, same-boundary-count planar ruled B-rep evaluator, explicit per-section startSampleIndex seam starts, automatic cyclic section matching for unspecified seams, solid and sheet output, RupaCore mutation, Automation, Agent command dispatch, CLI model loft creation, measurement, viewport scene display, and Inspector operation summaries.",
                     ]
                 ),
             ],
             openWork: [
-                "Loft guide curves, rails, explicit seam selection, non-planar section matching, NURBS surface output, and G0/G1/G2/G3 section-continuity controls.",
+                "Loft guide curves, rails, viewport seam placement, non-planar section matching, NURBS surface output, and G0/G1/G2/G3 section-continuity controls.",
                 "Rail deformation beyond the current affine, signed-axis, convex quadrilateral bilinear, convex mean-value cage, and radial point-guide sections.",
                 "Non-box boolean operands.",
                 "Stable result topology beyond current exact subsets.",

@@ -44,6 +44,9 @@ public struct LoftModelCommand: ParsableCommand {
     @Option(name: .customLong("section-profile-index"), help: "Profile index for each section feature. Omit to use profile index 0 for every section.")
     public var sectionProfileIndexes: [Int] = []
 
+    @Option(name: .customLong("section-start-sample-index"), help: "Boundary sample index to use as the seam start for each section. Omit to auto-match all section seams.")
+    public var sectionStartSampleIndexes: [Int] = []
+
     @Option(help: "Loft section matching policy.")
     public var sectionMatching: SectionMatching = .byIndex
 
@@ -91,15 +94,31 @@ public struct LoftModelCommand: ParsableCommand {
         guard profileIndexes.allSatisfy({ $0 >= 0 }) else {
             throw ValidationError("Section profile indexes must be zero or greater.")
         }
+        let startSampleIndexes: [Int?]
+        if sectionStartSampleIndexes.isEmpty {
+            startSampleIndexes = Array(repeating: nil, count: sectionFeatureIDs.count)
+        } else {
+            guard sectionStartSampleIndexes.count == sectionFeatureIDs.count else {
+                throw ValidationError("Section start sample index count must match section feature ID count.")
+            }
+            guard sectionStartSampleIndexes.allSatisfy({ $0 >= 0 }) else {
+                throw ValidationError("Section start sample indexes must be zero or greater.")
+            }
+            startSampleIndexes = sectionStartSampleIndexes.map(Optional.some)
+        }
 
-        let sections = try zip(sectionFeatureIDs, profileIndexes).map { featureIDValue, profileIndex in
-            LoftSectionReference(profile: ProfileReference(
-                featureID: try CLIFeatureReferenceParser.featureID(
-                    featureIDValue,
-                    valueName: "Section feature ID"
+        let sections = try zip(zip(sectionFeatureIDs, profileIndexes), startSampleIndexes).map { values, startSampleIndex in
+            let (featureIDValue, profileIndex) = values
+            return LoftSectionReference(
+                profile: ProfileReference(
+                    featureID: try CLIFeatureReferenceParser.featureID(
+                        featureIDValue,
+                        valueName: "Section feature ID"
+                    ),
+                    profileIndex: profileIndex
                 ),
-                profileIndex: profileIndex
-            ))
+                startSampleIndex: startSampleIndex
+            )
         }
         return (
             sections: sections,

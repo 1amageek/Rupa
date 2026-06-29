@@ -22,8 +22,14 @@ import SwiftCAD
     let loftID = try document.createLoft(
         name: "Ruled Loft",
         sections: [
-            LoftSectionReference(profile: ProfileReference(featureID: firstProfileID)),
-            LoftSectionReference(profile: ProfileReference(featureID: secondProfileID)),
+            LoftSectionReference(
+                profile: ProfileReference(featureID: firstProfileID),
+                startSampleIndex: 1
+            ),
+            LoftSectionReference(
+                profile: ProfileReference(featureID: secondProfileID),
+                startSampleIndex: 1
+            ),
         ]
     )
     let feature = try #require(document.cadDocument.designGraph.nodes[loftID])
@@ -47,6 +53,7 @@ import SwiftCAD
     ])
     #expect(feature.outputs == [FeatureOutput(role: .body)])
     #expect(loft.sections.map(\.featureID) == [firstProfileID, secondProfileID])
+    #expect(loft.sections.map(\.startSampleIndex) == [1, 1])
     #expect(loft.options.resultKind == .solid)
     #expect(document.cadDocument.designGraph.dependencies.contains(
         DependencyEdge(source: firstProfileID, target: loftID)

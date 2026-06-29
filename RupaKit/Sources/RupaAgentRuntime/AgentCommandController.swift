@@ -1176,7 +1176,7 @@ public final class AgentCommandController: AgentClientProtocol {
             mutatesDocument: true,
             discovery: [.sketchEntitySummary],
             targets: [.profile],
-            failureMode: "Rejects missing, duplicate, open, unsupported, or differently sampled closed profile sections, non-planar matched side quads, invalid generated topology, and stale generations before mutation; current evaluation creates ruled planar side faces between matched profile vertices and planar start/end caps for solid output.",
+            failureMode: "Rejects missing, duplicate, open, unsupported, differently sampled closed profile sections, invalid-start-index sections, non-planar matched side quads, invalid generated topology, and stale generations before mutation; current evaluation creates ruled planar side faces between matched profile vertices and planar start/end caps for solid output.",
             optionMatrix: [
                 AgentCapabilityDescriptor.OptionAxis(
                     name: "resultKind",
@@ -1192,6 +1192,14 @@ public final class AgentCommandController: AgentClientProtocol {
                     notes: [
                         "profile sections must currently have the same ordered boundary sample count",
                         "future NURBS loft work can add richer section correspondence without changing the command surface"
+                    ]
+                ),
+                AgentCapabilityDescriptor.OptionAxis(
+                    name: "sectionStartSampleIndex",
+                    supportedValues: ["automatic", "zeroBasedBoundarySampleIndex"],
+                    notes: [
+                        "automatic preserves the current cyclic matching behavior",
+                        "a zero-based boundary sample index locks the seam start for that section before direction matching"
                     ]
                 ),
             ]

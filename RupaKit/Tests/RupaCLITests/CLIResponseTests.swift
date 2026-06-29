@@ -802,6 +802,10 @@ struct CLIModelCommandTests {
             "0",
             "--section-profile-index",
             "0",
+            "--section-start-sample-index",
+            "1",
+            "--section-start-sample-index",
+            "1",
             "--section-matching",
             "byIndex",
             "--result-kind",
@@ -828,8 +832,14 @@ struct CLIModelCommandTests {
         #expect(!response.dirty)
         #expect(loaded.cadDocument.designGraph.order.count == 3)
         #expect(loft.sections == [
-            LoftSectionReference(profile: ProfileReference(featureID: firstProfileID)),
-            LoftSectionReference(profile: ProfileReference(featureID: secondProfileID)),
+            LoftSectionReference(
+                profile: ProfileReference(featureID: firstProfileID),
+                startSampleIndex: 1
+            ),
+            LoftSectionReference(
+                profile: ProfileReference(featureID: secondProfileID),
+                startSampleIndex: 1
+            ),
         ])
         #expect(loft.options.resultKind == .solid)
         #expect(feature.inputs == [
