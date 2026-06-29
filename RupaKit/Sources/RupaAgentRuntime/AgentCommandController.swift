@@ -1176,7 +1176,7 @@ public final class AgentCommandController: AgentClientProtocol {
             mutatesDocument: true,
             discovery: [.sketchEntitySummary],
             targets: [.profile],
-            failureMode: "Rejects missing, duplicate, open, unsupported, differently sampled closed profile sections, invalid-start-index sections, closed section loops with solid output, closed section loops with fewer than three sections, non-planar matched side quads, invalid generated topology, and stale generations before mutation; current evaluation creates ruled planar side faces between matched profile vertices, planar start/end caps for solid output, or a last-to-first ruled sheet loop for closed sheet output.",
+            failureMode: "Rejects missing, duplicate, open, unsupported, differently sampled closed profile sections, invalid-start-index sections, closed section loops with solid output, closed section loops with fewer than three sections, invalid generated topology, and stale generations before mutation; current evaluation creates degree-1 ruled B-spline side faces between matched profile vertices, planar start/end caps for solid output, or a last-to-first ruled B-spline sheet loop for closed sheet output.",
             optionMatrix: [
                 AgentCapabilityDescriptor.OptionAxis(
                     name: "resultKind",

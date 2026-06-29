@@ -549,7 +549,7 @@ import SwiftCAD
     #expect(loft.summary.contains("Loft source feature"))
     #expect(loft.failureMode.contains("differently sampled closed profile sections"))
     #expect(loft.failureMode.contains("closed section loops with solid output"))
-    #expect(loft.failureMode.contains("ruled planar side faces"))
+    #expect(loft.failureMode.contains("degree-1 ruled B-spline side faces"))
     #expect(loft.optionMatrix.map(\.name) == [
         "resultKind",
         "sectionMatching",

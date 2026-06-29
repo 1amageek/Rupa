@@ -128,6 +128,41 @@ import SwiftCAD
     try document.validate()
 }
 
+@Test func createLoftSupportsNonParallelSectionsWithRuledBSplineSideSurfaces() throws {
+    var document = DesignDocument.empty()
+    let firstProfileID = try createLoftProfile(
+        in: &document,
+        name: "Non Parallel Loft Bottom",
+        width: 4.0,
+        height: 2.0,
+        z: 0.0
+    )
+    let secondProfileID = try createTiltedLoftProfile(
+        in: &document,
+        name: "Non Parallel Loft Top",
+        width: 6.0,
+        height: 3.0,
+        z: 10.0
+    )
+
+    _ = try document.createLoft(
+        name: "Non Parallel Ruled Loft",
+        sections: [
+            LoftSectionReference(profile: ProfileReference(featureID: firstProfileID)),
+            LoftSectionReference(profile: ProfileReference(featureID: secondProfileID)),
+        ]
+    )
+    let evaluated = try CADPipeline.modelingDefault(for: document).evaluate(document.cadDocument)
+    let sideSurfaces = evaluated.brep.geometry.surfaces.values.compactMap(\.bSplineSurface)
+    let capSurfaceCount = evaluated.brep.geometry.surfaces.values.filter(\.isPlaneSurface).count
+
+    #expect(evaluated.brep.bodies.values.first?.kind == .solid)
+    #expect(sideSurfaces.count == 4)
+    #expect(capSurfaceCount == 2)
+    #expect(sideSurfaces.allSatisfy { $0.uDegree == 1 && $0.vDegree == 1 })
+    try document.validate()
+}
+
 @Test func createLoftCanCreateClosedSectionLoopSheetResult() throws {
     var document = DesignDocument.empty()
     let firstProfileID = try createLoftProfile(
@@ -314,6 +349,24 @@ private func createLoftProfile(
     )
 }
 
+private func createTiltedLoftProfile(
+    in document: inout DesignDocument,
+    name: String,
+    width: Double,
+    height: Double,
+    z: Double
+) throws -> FeatureID {
+    try document.createRectangleSketch(
+        name: name,
+        plane: .plane(Plane3D(
+            origin: Point3D(x: 0.0, y: 0.0, z: z / 1000.0),
+            normal: Vector3D(x: 0.0, y: -0.3713906763541037, z: 0.9284766908852594)
+        )),
+        width: .length(width, .millimeter),
+        height: .length(height, .millimeter)
+    )
+}
+
 private func loftPlane(x: Double = 0.0, z: Double) -> SketchPlane {
     if x == 0.0 && z == 0.0 {
         return .xy
@@ -345,4 +398,20 @@ private func loftTriangleProfileSketch(z: Double) -> Sketch {
         ],
         dimensions: []
     )
+}
+
+private extension Surface3D {
+    var isPlaneSurface: Bool {
+        if case .plane = self {
+            return true
+        }
+        return false
+    }
+
+    var bSplineSurface: BSplineSurface3D? {
+        if case .bSpline(let surface) = self {
+            return surface
+        }
+        return nil
+    }
 }
