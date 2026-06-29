@@ -1261,6 +1261,16 @@ public final class AgentCommandController: AgentClientProtocol {
             failureMode: "Accepts direct B-spline surface whole, parameter, span, knot, control-point, or trim references discovered from surfaceSourceSummary; rejects PolySpline surfaces, non-surface references, non-scalar or non-finite bounds, degenerate U/V ranges, bounds outside the stored surface domain, stale generations, and invalid rebuilt trimmed sheet topology."
         ),
         capability(
+            "setSurfaceTrimLoops",
+            category: .solid,
+            summary: "Set source-owned UV p-curve trim loops on a direct B-spline surface, allowing non-rectangular outer and inner loops while preserving the original surface basis.",
+            access: .automationCommand,
+            mutatesDocument: true,
+            discovery: [.surfaceSourceSummary, .surfaceFrames, .surfaceAnalysis, .topologySummary],
+            targets: [.surface, .face, .surfaceTrim],
+            failureMode: "Accepts direct B-spline surface whole, parameter, span, knot, control-point, or trim references discovered from surfaceSourceSummary plus closed UV trim loops with exactly one outer loop; rejects PolySpline surfaces, non-surface references, unclosed loops, p-curves outside the stored surface domain, stale generations, invalid rebuilt trimmed sheet topology, and continuity matching on authored trim loops."
+        ),
+        capability(
             "matchSurfaceBoundaryContinuity",
             category: .solid,
             summary: "Match a source-owned direct B-spline surface trim boundary to another direct B-spline trim boundary at G0, G1, or G2 by editing the target boundary control rows.",

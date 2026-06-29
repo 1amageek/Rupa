@@ -75,6 +75,7 @@ import SwiftCAD
     #expect(capabilities.contains("splitSurfaceSpan"))
     #expect(capabilities.contains("setSurfaceKnotMultiplicity"))
     #expect(capabilities.contains("setSurfaceTrimDomain"))
+    #expect(capabilities.contains("setSurfaceTrimLoops"))
     #expect(capabilities.contains("matchSurfaceBoundaryContinuity"))
     #expect(capabilities.contains("surfaceBoundaryContinuityCompatibility"))
     #expect(capabilities.contains("setSurfaceControlPointDisplay"))
@@ -183,6 +184,7 @@ import SwiftCAD
         descriptors.first { $0.name == "setSurfaceKnotMultiplicity" }
     )
     let surfaceTrimDomain = try #require(descriptors.first { $0.name == "setSurfaceTrimDomain" })
+    let surfaceTrimLoops = try #require(descriptors.first { $0.name == "setSurfaceTrimLoops" })
     let surfaceBoundaryContinuity = try #require(
         descriptors.first { $0.name == "matchSurfaceBoundaryContinuity" }
     )
@@ -663,6 +665,20 @@ import SwiftCAD
     #expect(surfaceTrimDomain.summary.contains("rectangular outer trim domain"))
     #expect(surfaceTrimDomain.failureMode.contains("bounds outside the stored surface domain"))
     #expect(surfaceTrimDomain.failureMode.contains("invalid rebuilt trimmed sheet topology"))
+
+    #expect(surfaceTrimLoops.category == .solid)
+    #expect(surfaceTrimLoops.mutatesDocument)
+    #expect(surfaceTrimLoops.access == .automationCommand)
+    #expect(surfaceTrimLoops.discovery.contains(.surfaceSourceSummary))
+    #expect(surfaceTrimLoops.discovery.contains(.surfaceFrames))
+    #expect(surfaceTrimLoops.discovery.contains(.surfaceAnalysis))
+    #expect(surfaceTrimLoops.discovery.contains(.topologySummary))
+    #expect(surfaceTrimLoops.targets == [.surface, .face, .surfaceTrim])
+    #expect(surfaceTrimLoops.summary.contains("UV p-curve trim loops"))
+    #expect(surfaceTrimLoops.summary.contains("non-rectangular outer and inner loops"))
+    #expect(surfaceTrimLoops.failureMode.contains("exactly one outer loop"))
+    #expect(surfaceTrimLoops.failureMode.contains("p-curves outside the stored surface domain"))
+    #expect(surfaceTrimLoops.failureMode.contains("continuity matching on authored trim loops"))
 
     #expect(surfaceBoundaryContinuity.category == .solid)
     #expect(surfaceBoundaryContinuity.mutatesDocument)

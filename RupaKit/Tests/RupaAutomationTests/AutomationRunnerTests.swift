@@ -658,6 +658,63 @@ import SwiftCAD
     #expect(trimDomain.vUpperBound == 0.8)
 }
 
+@Test func automationCanSetSurfaceTrimLoops() async throws {
+    let session = EditorSession()
+    let runner = AutomationRunner()
+    let sourceSurface = automationDirectBSplineSurfaceWithInteriorKnots()
+    _ = try runner.execute(
+        .createBSplineSurface(
+            name: "Automation Trim Loop Surface",
+            surface: sourceSurface
+        ),
+        in: session
+    )
+    let summary = try SurfaceSourceSummaryService().summarize(document: session.document)
+    let faceReference = try #require(summary.sources.first?.patches.first?.faceSelectionReference)
+    let trimLoop = BSplineSurfaceTrimLoop(
+        role: .outer,
+        edges: [
+            BSplineSurfaceTrimEdge(parameterCurve: .polyline([
+                SurfaceParameter(u: 0.2, v: 0.2),
+                SurfaceParameter(u: 0.8, v: 0.25),
+            ])),
+            BSplineSurfaceTrimEdge(parameterCurve: .polyline([
+                SurfaceParameter(u: 0.8, v: 0.25),
+                SurfaceParameter(u: 0.45, v: 0.8),
+            ])),
+            BSplineSurfaceTrimEdge(parameterCurve: .polyline([
+                SurfaceParameter(u: 0.45, v: 0.8),
+                SurfaceParameter(u: 0.2, v: 0.2),
+            ])),
+        ]
+    )
+
+    let result = try runner.execute(
+        .setSurfaceTrimLoops(
+            target: faceReference,
+            trimLoops: [trimLoop]
+        ),
+        in: session
+    )
+
+    let featureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let feature = try #require(session.document.cadDocument.designGraph.nodes[featureID])
+    guard case let .bSplineSurface(surfaceFeature) = feature.operation else {
+        Issue.record("Automation must keep a direct B-spline surface feature.")
+        return
+    }
+    let updatedSummary = try SurfaceSourceSummaryService().summarize(document: session.document)
+    let updatedTrimLoop = try #require(updatedSummary.sources.first?.patches.first?.trimLoops.first)
+    #expect(result.message == "Surface trim loops updated.")
+    #expect(result.commandName == "setSurfaceTrimLoops")
+    #expect(result.didMutate)
+    #expect(result.generation == DocumentGeneration(2))
+    #expect(surfaceFeature.outerTrimDomain == nil)
+    #expect(surfaceFeature.trimLoops == [trimLoop])
+    #expect(updatedTrimLoop.edges.count == 3)
+    #expect(updatedTrimLoop.selectionReferences.count == 3)
+}
+
 @MainActor
 @Test func automationCanSplitSurfaceSpan() async throws {
     let session = EditorSession()

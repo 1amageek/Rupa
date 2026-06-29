@@ -2222,6 +2222,19 @@ public final class EditorSession {
     }
 
     @discardableResult
+    public func setSurfaceTrimLoops(
+        target: SelectionReference,
+        trimLoops: [BSplineSurfaceTrimLoop]
+    ) -> CommandExecutionResult? {
+        perform(
+            .setSurfaceTrimLoops(
+                target: target,
+                trimLoops: trimLoops
+            )
+        )
+    }
+
+    @discardableResult
     public func matchSurfaceBoundaryContinuity(
         target: SelectionReference,
         reference: SelectionReference,

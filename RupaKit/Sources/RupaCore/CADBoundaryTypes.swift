@@ -9,6 +9,7 @@ public typealias CADBRepModel = SwiftCAD.BRepModel
 public typealias CADFace = SwiftCAD.Face
 public typealias CADProfile = SwiftCAD.Profile
 public typealias BSplineSurface3D = SwiftCAD.BSplineSurface3D
+public typealias BSplineSurfaceTrimLoop = SwiftCAD.BSplineSurfaceTrimLoop
 public typealias BodyID = SwiftCAD.BodyID
 public typealias CurveEvaluationSample = SwiftCAD.CurveEvaluationSample
 public typealias EdgeID = SwiftCAD.EdgeID

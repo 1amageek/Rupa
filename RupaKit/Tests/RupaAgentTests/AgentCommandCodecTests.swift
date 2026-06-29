@@ -815,6 +815,31 @@ import SwiftCAD
         ),
         expectedGeneration: DocumentGeneration(5)
     )
+    let surfaceTrimLoop = BSplineSurfaceTrimLoop(
+        role: .outer,
+        edges: [
+            BSplineSurfaceTrimEdge(parameterCurve: .polyline([
+                SurfaceParameter(u: 0.2, v: 0.2),
+                SurfaceParameter(u: 0.8, v: 0.25),
+            ])),
+            BSplineSurfaceTrimEdge(parameterCurve: .polyline([
+                SurfaceParameter(u: 0.8, v: 0.25),
+                SurfaceParameter(u: 0.45, v: 0.8),
+            ])),
+            BSplineSurfaceTrimEdge(parameterCurve: .polyline([
+                SurfaceParameter(u: 0.45, v: 0.8),
+                SurfaceParameter(u: 0.2, v: 0.2),
+            ])),
+        ]
+    )
+    let surfaceTrimLoopsRequest = AgentRequest.execute(
+        sessionID: sessionID,
+        command: .setSurfaceTrimLoops(
+            target: surfaceTrimReference,
+            trimLoops: [surfaceTrimLoop]
+        ),
+        expectedGeneration: DocumentGeneration(5)
+    )
 
     let decodedRequest = try codec.decodeRequest(from: try codec.encode(request))
     let decodedSlideRequest = try codec.decodeRequest(from: try codec.encode(slideRequest))
@@ -851,6 +876,9 @@ import SwiftCAD
     let decodedSurfaceTrimDomainRequest = try codec.decodeRequest(
         from: try codec.encode(surfaceTrimDomainRequest)
     )
+    let decodedSurfaceTrimLoopsRequest = try codec.decodeRequest(
+        from: try codec.encode(surfaceTrimLoopsRequest)
+    )
     let decodedSurfaceBoundaryContinuityRequest = try codec.decodeRequest(
         from: try codec.encode(surfaceBoundaryContinuityRequest)
     )
@@ -868,6 +896,7 @@ import SwiftCAD
     #expect(decodedSurfaceSpanSplitRequest == surfaceSpanSplitRequest)
     #expect(decodedSurfaceKnotMultiplicityRequest == surfaceKnotMultiplicityRequest)
     #expect(decodedSurfaceTrimDomainRequest == surfaceTrimDomainRequest)
+    #expect(decodedSurfaceTrimLoopsRequest == surfaceTrimLoopsRequest)
     #expect(decodedSurfaceBoundaryContinuityRequest == surfaceBoundaryContinuityRequest)
 }
 

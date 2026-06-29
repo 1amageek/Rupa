@@ -721,6 +721,92 @@ import Testing
     #expect(resetSurfaceFeature.outerTrimDomain == nil)
 }
 
+@Test func directBSplineSurfaceTrimLoopsUpdateSummaryAndContinuityContracts() async throws {
+    var document = DesignDocument.empty()
+    let surface = designDocumentDirectBSplineSurfaceWithInteriorKnots()
+
+    let featureID = try document.createBSplineSurface(
+        name: "Direct Trim Loop Surface",
+        surface: surface
+    )
+    let summary = try SurfaceSourceSummaryService().summarize(document: document)
+    let faceReference = try #require(summary.sources.first?.patches.first?.faceSelectionReference)
+    let trimLoop = BSplineSurfaceTrimLoop(
+        role: .outer,
+        edges: [
+            BSplineSurfaceTrimEdge(parameterCurve: .polyline([
+                SurfaceParameter(u: 0.2, v: 0.2),
+                SurfaceParameter(u: 0.8, v: 0.25),
+            ])),
+            BSplineSurfaceTrimEdge(parameterCurve: .polyline([
+                SurfaceParameter(u: 0.8, v: 0.25),
+                SurfaceParameter(u: 0.45, v: 0.8),
+            ])),
+            BSplineSurfaceTrimEdge(parameterCurve: .polyline([
+                SurfaceParameter(u: 0.45, v: 0.8),
+                SurfaceParameter(u: 0.2, v: 0.2),
+            ])),
+        ]
+    )
+
+    try document.setSurfaceTrimLoops(
+        target: faceReference,
+        trimLoops: [trimLoop]
+    )
+
+    let feature = try #require(document.cadDocument.designGraph.nodes[featureID])
+    guard case let .bSplineSurface(surfaceFeature) = feature.operation else {
+        Issue.record("Expected a direct B-spline surface feature.")
+        return
+    }
+    #expect(surfaceFeature.outerTrimDomain == nil)
+    #expect(surfaceFeature.trimLoops == [trimLoop])
+
+    let trimmedSummary = try SurfaceSourceSummaryService().summarize(document: document)
+    let trimmedPatch = try #require(trimmedSummary.sources.first?.patches.first)
+    #expect(trimmedPatch.uDomain.lowerBound == 0.0)
+    #expect(trimmedPatch.uDomain.upperBound == 1.0)
+    #expect(trimmedPatch.vDomain.lowerBound == 0.0)
+    #expect(trimmedPatch.vDomain.upperBound == 1.0)
+    let summaryTrimLoop = try #require(trimmedPatch.trimLoops.first)
+    #expect(summaryTrimLoop.edges.count == 3)
+    #expect(summaryTrimLoop.edgePersistentNames.count == 3)
+    #expect(summaryTrimLoop.selectionReferences.count == 3)
+    #expect(summaryTrimLoop.parameterAddresses.map(\.id) == [
+        "loop:0:edge:0:start",
+        "loop:0:edge:1:start",
+        "loop:0:edge:2:start",
+    ])
+    #expect(summaryTrimLoop.edgePersistentNames.allSatisfy { $0.contains("subshape:patch:0:loop:0:edge:") })
+    #expect(summaryTrimLoop.edges.allSatisfy { !$0.supportsBoundaryContinuityMatching })
+    #expect(summaryTrimLoop.edges.allSatisfy { edge in
+        edge.unsupportedReason == "Authored trim edges do not expose boundary control rows for continuity matching."
+    })
+    #expect(trimmedSummary.sources.first?.diagnostics.contains { diagnostic in
+        diagnostic.code == "directBSplineSurfaceTrimLoops"
+    } == true)
+
+    let trimReference = try #require(summaryTrimLoop.selectionReferences.first)
+    #expect(throws: EditorError.self) {
+        try document.surfaceBoundaryContinuityCompatibility(
+            target: trimReference,
+            reference: trimReference
+        )
+    }
+
+    try document.setSurfaceTrimLoops(
+        target: faceReference,
+        trimLoops: []
+    )
+    let resetFeature = try #require(document.cadDocument.designGraph.nodes[featureID])
+    guard case let .bSplineSurface(resetSurfaceFeature) = resetFeature.operation else {
+        Issue.record("Expected a direct B-spline surface feature after reset.")
+        return
+    }
+    #expect(resetSurfaceFeature.outerTrimDomain == nil)
+    #expect(resetSurfaceFeature.trimLoops.isEmpty)
+}
+
 @Test func surfaceSpanSplitRejectsGeneratedPolySplineSpanReference() async throws {
     var document = DesignDocument.empty()
     let featureID = try document.createPolySplineSurface(

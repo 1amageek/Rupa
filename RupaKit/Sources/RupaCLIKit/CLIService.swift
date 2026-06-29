@@ -1992,6 +1992,30 @@ public struct CLIService {
         )
     }
 
+    public func setSurfaceTrimLoops(
+        target: CLIDocumentTarget,
+        reference: SelectionReference,
+        trimLoops: [BSplineSurfaceTrimLoop],
+        mode: CLIEditMode = .auto,
+        expectedGeneration: DocumentGeneration? = nil,
+        dryRun: Bool = false,
+        forceFileEdit: Bool = false,
+        client: AgentClientProtocol? = nil
+    ) throws -> CLIResponse {
+        try executeModelingCommand(
+            .setSurfaceTrimLoops(
+                target: reference,
+                trimLoops: trimLoops
+            ),
+            target: target,
+            mode: mode,
+            expectedGeneration: expectedGeneration,
+            dryRun: dryRun,
+            forceFileEdit: forceFileEdit,
+            client: client
+        )
+    }
+
     public func matchSurfaceBoundaryContinuity(
         target: CLIDocumentTarget,
         targetReference: SelectionReference,

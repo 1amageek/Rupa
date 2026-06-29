@@ -804,6 +804,7 @@ extension DesignDocument {
         var updatedSurfaceFeature = surfaceFeature
         let storesFullSurfaceDomain = try trimDomain.isFullSurfaceDomain(of: surfaceFeature.surface)
         updatedSurfaceFeature.outerTrimDomain = storesFullSurfaceDomain ? nil : trimDomain
+        updatedSurfaceFeature.trimLoops = []
         feature.operation = .bSplineSurface(updatedSurfaceFeature)
 
         var updatedCADDocument = cadDocument
@@ -817,6 +818,63 @@ extension DesignDocument {
             throw EditorError(
                 code: .commandInvalid,
                 message: "B-spline surface trim domain produced invalid source geometry: \(error)."
+            )
+        }
+    }
+
+    public mutating func setSurfaceTrimLoops(
+        target: SelectionReference,
+        trimLoops: [BSplineSurfaceTrimLoop],
+        objectRegistry: ObjectTypeRegistry = .builtIn
+    ) throws {
+        let surfaceResolution = try resolvedBSplineSurfaceSourceReference(
+            target,
+            owner: "B-spline surface trim loops"
+        )
+        guard var feature = cadDocument.designGraph.nodes[surfaceResolution.featureID],
+              case let .bSplineSurface(surfaceFeature) = feature.operation else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "B-spline surface trim loops require an existing direct B-spline surface source feature."
+            )
+        }
+
+        do {
+            for trimLoop in trimLoops {
+                try trimLoop.validate(on: surfaceFeature.surface)
+            }
+            if trimLoops.isEmpty == false,
+               trimLoops.filter({ $0.role == .outer }).count != 1 {
+                throw EditorError(
+                    code: .commandInvalid,
+                    message: "B-spline surface trim loops require exactly one outer loop."
+                )
+            }
+        } catch let editorError as EditorError {
+            throw editorError
+        } catch {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "B-spline surface trim loops are invalid for the source surface: \(error)."
+            )
+        }
+
+        var updatedSurfaceFeature = surfaceFeature
+        updatedSurfaceFeature.outerTrimDomain = nil
+        updatedSurfaceFeature.trimLoops = trimLoops
+        feature.operation = .bSplineSurface(updatedSurfaceFeature)
+
+        var updatedCADDocument = cadDocument
+        let previousCADDocument = cadDocument
+        do {
+            try updatedCADDocument.replaceFeature(feature)
+            cadDocument = updatedCADDocument
+            try validate(objectRegistry: objectRegistry)
+        } catch {
+            cadDocument = previousCADDocument
+            throw EditorError(
+                code: .commandInvalid,
+                message: "B-spline surface trim loops produced invalid source geometry: \(error)."
             )
         }
     }
@@ -1083,6 +1141,12 @@ extension DesignDocument {
         _ feature: BSplineSurfaceFeature,
         owner: String
     ) throws {
+        guard feature.trimLoops.isEmpty else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "\(owner) requires a full-domain rectangular outer trim because authored trim loops do not expose boundary control rows for continuity matching."
+            )
+        }
         let trimDomain = try feature.resolvedOuterTrimDomain()
         guard try trimDomain.isFullSurfaceDomain(of: feature.surface) else {
             throw EditorError(

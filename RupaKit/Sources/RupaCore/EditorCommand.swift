@@ -303,6 +303,10 @@ public enum EditorCommand: Codable, Equatable, Sendable {
         vLowerBound: CADExpression,
         vUpperBound: CADExpression
     )
+    case setSurfaceTrimLoops(
+        target: SelectionReference,
+        trimLoops: [BSplineSurfaceTrimLoop]
+    )
     case matchSurfaceBoundaryContinuity(
         target: SelectionReference,
         reference: SelectionReference,
@@ -540,6 +544,8 @@ public enum EditorCommand: Codable, Equatable, Sendable {
             "setSurfaceKnotMultiplicity"
         case .setSurfaceTrimDomain:
             "setSurfaceTrimDomain"
+        case .setSurfaceTrimLoops:
+            "setSurfaceTrimLoops"
         case .matchSurfaceBoundaryContinuity:
             "matchSurfaceBoundaryContinuity"
         case .slidePolySplineSurfaceVertices:
@@ -655,6 +661,7 @@ public enum EditorCommand: Codable, Equatable, Sendable {
              .splitSurfaceSpan,
              .setSurfaceKnotMultiplicity,
              .setSurfaceTrimDomain,
+             .setSurfaceTrimLoops,
              .matchSurfaceBoundaryContinuity,
              .slidePolySplineSurfaceVertices,
              .slideSurfaceControlPoints,

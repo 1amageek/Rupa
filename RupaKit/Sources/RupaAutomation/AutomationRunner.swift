@@ -1323,6 +1323,20 @@ public struct AutomationRunner {
                 didMutate: result.didMutate,
                 diagnostics: result.diagnostics
             )
+        case .setSurfaceTrimLoops(let target, let trimLoops):
+            let result = try session.execute(
+                .setSurfaceTrimLoops(
+                    target: target,
+                    trimLoops: trimLoops
+                )
+            )
+            return AutomationResult(
+                message: "Surface trim loops updated.",
+                commandName: result.commandName,
+                generation: result.generation,
+                didMutate: result.didMutate,
+                diagnostics: result.diagnostics
+            )
         case .matchSurfaceBoundaryContinuity(
             let target,
             let reference,
