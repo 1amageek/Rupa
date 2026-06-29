@@ -869,28 +869,7 @@ import SwiftCAD
         return
     }
     let faceReference = try #require(initialSummary.sources.first?.patches.first?.faceSelectionReference)
-    let trimLoop = BSplineSurfaceTrimLoop(
-        role: .outer,
-        edges: [
-            BSplineSurfaceTrimEdge(parameterCurve: .bSpline(BSplineCurve2D(
-                degree: 2,
-                knots: [0.0, 0.0, 0.0, 1.0, 1.0, 1.0],
-                controlPoints: [
-                    Point2D(x: 0.2, y: 0.2),
-                    Point2D(x: 0.52, y: 0.42),
-                    Point2D(x: 0.8, y: 0.25),
-                ]
-            ))),
-            BSplineSurfaceTrimEdge(parameterCurve: .polyline([
-                SurfaceParameter(u: 0.8, v: 0.25),
-                SurfaceParameter(u: 0.45, v: 0.8),
-            ])),
-            BSplineSurfaceTrimEdge(parameterCurve: .polyline([
-                SurfaceParameter(u: 0.45, v: 0.8),
-                SurfaceParameter(u: 0.2, v: 0.2),
-            ])),
-        ]
-    )
+    let trimLoop = agentAuthoredBSplineSurfaceTrimLoop()
 
     let setLoopsResponse = server.handle(
         .execute(
@@ -1089,6 +1068,123 @@ import SwiftCAD
         return
     }
     #expect(saturatedCurve.knots == [0.0, 0.0, 0.0, 0.4, 0.4, 1.0, 1.0, 1.0])
+}
+
+@MainActor
+@Test func agentMeasuresDirectBSplineSurfaceTrimParameterCurveSelections() async throws {
+    let server = AgentCommandController()
+    let sessionID = UUID()
+    let session = EditorSession()
+    server.register(session: session, id: sessionID)
+
+    let createResponse = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .createBSplineSurface(
+                name: "Agent Trim Measurement Surface",
+                surface: agentDirectBSplineSurfaceWithInteriorKnots()
+            ),
+            expectedGeneration: DocumentGeneration(0)
+        )
+    )
+    guard case .command(let createResult) = createResponse else {
+        Issue.record("Agent must create a direct B-spline surface for trim measurement.")
+        return
+    }
+    #expect(createResult.commandName == "createBSplineSurface")
+
+    let initialSummaryResponse = server.handle(
+        .surfaceSourceSummary(
+            sessionID: sessionID,
+            expectedGeneration: DocumentGeneration(1)
+        )
+    )
+    guard case .surfaceSourceSummary(let initialSummary) = initialSummaryResponse else {
+        Issue.record("Agent must return a surface source summary before trim measurement.")
+        return
+    }
+    let faceReference = try #require(initialSummary.sources.first?.patches.first?.faceSelectionReference)
+
+    let setLoopsResponse = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .setSurfaceTrimLoops(
+                target: faceReference,
+                trimLoops: [agentAuthoredBSplineSurfaceTrimLoop()]
+            ),
+            expectedGeneration: DocumentGeneration(1)
+        )
+    )
+    guard case .command(let setLoopsResult) = setLoopsResponse else {
+        Issue.record("Agent must set authored trim loops before trim measurement.")
+        return
+    }
+    #expect(setLoopsResult.commandName == "setSurfaceTrimLoops")
+    #expect(setLoopsResult.didMutate)
+
+    let generation = session.generation
+    let dirty = session.isDirty
+    let summaryResponse = server.handle(
+        .surfaceSourceSummary(
+            sessionID: sessionID,
+            expectedGeneration: generation
+        )
+    )
+    guard case .surfaceSourceSummary(let summary) = summaryResponse else {
+        Issue.record("Agent must return authored trim p-curve summary.")
+        return
+    }
+    let authoredTrimEdge = try #require(summary.sources.first?.patches.first?.trimLoops.first?.edges.first)
+    let spanSelection = try #require(authoredTrimEdge.parameterCurve.spans.first?.selectionReference)
+    let knotSelection = try #require(authoredTrimEdge.parameterCurve.knotVector.first?.selectionReference)
+
+    let spanResponse = server.handle(
+        .selectionMeasurement(
+            sessionID: sessionID,
+            query: CADAgentMeasurementQuery(kind: .point, first: spanSelection),
+            expectedGeneration: generation
+        )
+    )
+    guard case .selectionMeasurement(.point(let spanPoint)) = spanResponse else {
+        Issue.record("Agent must measure a discovered trim p-curve span selection reference.")
+        return
+    }
+    #expect(spanPoint.point.x.isFinite)
+    #expect(spanPoint.point.y.isFinite)
+    #expect(spanPoint.point.z.isFinite)
+    #expect(spanPoint.tangent != nil)
+    #expect(spanPoint.normal != nil)
+
+    let knotResponse = server.handle(
+        .selectionMeasurement(
+            sessionID: sessionID,
+            query: CADAgentMeasurementQuery(kind: .point, first: knotSelection),
+            expectedGeneration: generation
+        )
+    )
+    guard case .selectionMeasurement(.point(let knotPoint)) = knotResponse else {
+        Issue.record("Agent must measure a discovered trim p-curve knot selection reference.")
+        return
+    }
+    #expect(knotPoint.point.x.isFinite)
+    #expect(knotPoint.point.y.isFinite)
+    #expect(knotPoint.point.z.isFinite)
+    #expect(knotPoint.normal != nil)
+
+    let distanceResponse = server.handle(
+        .selectionMeasurement(
+            sessionID: sessionID,
+            query: CADAgentMeasurementQuery(kind: .distance, first: knotSelection, second: spanSelection),
+            expectedGeneration: generation
+        )
+    )
+    guard case .selectionMeasurement(.distance(let distance)) = distanceResponse else {
+        Issue.record("Agent must measure distance between trim p-curve knot and span selections.")
+        return
+    }
+    #expect(distance.distance > 0.0)
+    #expect(session.generation == generation)
+    #expect(session.isDirty == dirty)
 }
 
 @MainActor
