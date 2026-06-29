@@ -30,6 +30,8 @@ public enum SnapCandidateKind: String, Codable, Equatable, Hashable, Sendable {
     case measurementPoint
     case regionCenter
     case surfaceControlVertex
+    case surfaceTrimEndpoint
+    case surfaceTrimControlPoint
     case topologyVertex
     case edgeStart
     case edgeEnd
@@ -226,6 +228,54 @@ public struct SnapSurfaceFrameReference: Codable, Equatable, Sendable {
     }
 }
 
+public enum SnapSurfaceTrimPointKind: String, Codable, Equatable, Sendable {
+    case endpoint
+    case controlPoint
+}
+
+public struct SnapSurfaceTrimReference: Codable, Equatable, Sendable {
+    public var kind: SnapSurfaceTrimPointKind
+    public var selectionReference: SelectionReference
+    public var endpoint: SurfaceTrimEndpoint?
+    public var controlPointIndex: Int?
+    public var sourceFeatureID: String
+    public var sceneNodeID: SceneNodeID?
+    public var u: Double
+    public var v: Double
+    public var worldPoint: Point3D
+    public var uAxis: SurfaceAnalysisResult.Vector
+    public var vAxis: SurfaceAnalysisResult.Vector
+    public var normal: SurfaceAnalysisResult.Vector
+
+    public init(
+        kind: SnapSurfaceTrimPointKind,
+        selectionReference: SelectionReference,
+        endpoint: SurfaceTrimEndpoint? = nil,
+        controlPointIndex: Int? = nil,
+        sourceFeatureID: String,
+        sceneNodeID: SceneNodeID?,
+        u: Double,
+        v: Double,
+        worldPoint: Point3D,
+        uAxis: SurfaceAnalysisResult.Vector,
+        vAxis: SurfaceAnalysisResult.Vector,
+        normal: SurfaceAnalysisResult.Vector
+    ) {
+        self.kind = kind
+        self.selectionReference = selectionReference
+        self.endpoint = endpoint
+        self.controlPointIndex = controlPointIndex
+        self.sourceFeatureID = sourceFeatureID
+        self.sceneNodeID = sceneNodeID
+        self.u = u
+        self.v = v
+        self.worldPoint = worldPoint
+        self.uAxis = uAxis
+        self.vAxis = vAxis
+        self.normal = normal
+    }
+}
+
 public struct SnapResolutionOptions: Codable, Equatable, Sendable {
     public var usesGrid: Bool
     public var usesObjects: Bool
@@ -371,6 +421,7 @@ public struct SnapCandidate: Codable, Equatable, Sendable {
     public var regionSource: SnapRegionReference?
     public var measurementSource: SnapMeasurementReference?
     public var surfaceFrameSource: SnapSurfaceFrameReference?
+    public var surfaceTrimSource: SnapSurfaceTrimReference?
     public var axisSource: SnapAxisReference?
     public var coordinatePlaneSource: SnapCoordinatePlaneReference?
 
@@ -385,6 +436,7 @@ public struct SnapCandidate: Codable, Equatable, Sendable {
         regionSource: SnapRegionReference? = nil,
         measurementSource: SnapMeasurementReference? = nil,
         surfaceFrameSource: SnapSurfaceFrameReference? = nil,
+        surfaceTrimSource: SnapSurfaceTrimReference? = nil,
         axisSource: SnapAxisReference? = nil,
         coordinatePlaneSource: SnapCoordinatePlaneReference? = nil
     ) {
@@ -398,6 +450,7 @@ public struct SnapCandidate: Codable, Equatable, Sendable {
         self.regionSource = regionSource
         self.measurementSource = measurementSource
         self.surfaceFrameSource = surfaceFrameSource
+        self.surfaceTrimSource = surfaceTrimSource
         self.axisSource = axisSource
         self.coordinatePlaneSource = coordinatePlaneSource
     }
@@ -430,6 +483,10 @@ public struct SnapResolutionResult: Codable, Equatable, Sendable {
 
     public var selectedSurfaceFrameWorldPoint: Point3D? {
         selectedCandidate?.surfaceFrameSource?.worldPoint
+    }
+
+    public var selectedSurfaceTrimWorldPoint: Point3D? {
+        selectedCandidate?.surfaceTrimSource?.worldPoint
     }
 }
 
@@ -588,6 +645,11 @@ public struct SnapResolver: Sendable {
             in: document,
             constructionPlane: constructionPlane
         )
+        candidates += try surfaceTrimCandidates(
+            in: document,
+            sceneNodeIDsByFeatureID: sceneNodeIDsByFeatureID,
+            constructionPlane: constructionPlane
+        )
         candidates += try regionCandidates(
             in: document,
             sceneNodeIDsByFeatureID: sceneNodeIDsByFeatureID,
@@ -683,6 +745,96 @@ public struct SnapResolver: Sendable {
                 frame: frame,
                 constructionPlane: constructionPlane
             )
+        }
+    }
+
+    private func surfaceTrimCandidates(
+        in document: DesignDocument,
+        sceneNodeIDsByFeatureID: [FeatureID: SceneNodeID],
+        constructionPlane: SketchPlaneCoordinateSystem?
+    ) throws -> [PrioritizedSnapCandidate] {
+        var candidates: [PrioritizedSnapCandidate] = []
+        for featureID in document.cadDocument.designGraph.order {
+            guard let feature = document.cadDocument.designGraph.nodes[featureID],
+                  case let .bSplineSurface(surfaceFeature) = feature.operation,
+                  surfaceFeature.trimLoops.isEmpty == false else {
+                continue
+            }
+            let surfaceReference = SurfaceReference(faceName: PersistentName(components: [
+                .feature(featureID),
+                .generated("bSplineSurface"),
+                .subshape("patch:0:face"),
+            ]))
+            for (loopIndex, trimLoop) in surfaceFeature.trimLoops.enumerated() {
+                for (edgeIndex, edge) in trimLoop.edges.enumerated() {
+                    let trimReference = SurfaceTrimReference(
+                        surface: surfaceReference,
+                        loopIndex: loopIndex,
+                        edgeIndex: edgeIndex
+                    )
+                    let selectionReference = SelectionReference.surface(.trim(trimReference))
+                    if let startCandidate = try surfaceTrimEndpointCandidate(
+                        selectionReference: selectionReference,
+                        endpoint: .start,
+                        parameter: edge.startParameter(),
+                        surface: surfaceFeature.surface,
+                        featureID: featureID,
+                        sceneNodeID: sceneNodeIDsByFeatureID[featureID],
+                        constructionPlane: constructionPlane
+                    ) {
+                        candidates.append(startCandidate)
+                    }
+                    if let endCandidate = try surfaceTrimEndpointCandidate(
+                        selectionReference: selectionReference,
+                        endpoint: .end,
+                        parameter: edge.endParameter(),
+                        surface: surfaceFeature.surface,
+                        featureID: featureID,
+                        sceneNodeID: sceneNodeIDsByFeatureID[featureID],
+                        constructionPlane: constructionPlane
+                    ) {
+                        candidates.append(endCandidate)
+                    }
+                    for controlPoint in surfaceTrimControlPointParameters(edge.parameterCurve) {
+                        if let candidate = try surfaceTrimControlPointCandidate(
+                            selectionReference: selectionReference,
+                            controlPointIndex: controlPoint.index,
+                            parameter: controlPoint.parameter,
+                            surface: surfaceFeature.surface,
+                            featureID: featureID,
+                            sceneNodeID: sceneNodeIDsByFeatureID[featureID],
+                            constructionPlane: constructionPlane
+                        ) {
+                            candidates.append(candidate)
+                        }
+                    }
+                }
+            }
+        }
+        return candidates
+    }
+
+    private func surfaceTrimControlPointParameters(
+        _ curve: SurfaceParameterCurve
+    ) -> [(index: Int, parameter: SurfaceParameter)] {
+        switch curve {
+        case .constantU, .constantV:
+            return []
+        case let .polyline(points):
+            guard points.count > 2 else {
+                return []
+            }
+            return points.indices.dropFirst().dropLast().map { index in
+                (index, points[index])
+            }
+        case let .bSpline(curve):
+            guard curve.controlPoints.count > 2 else {
+                return []
+            }
+            return curve.controlPoints.indices.dropFirst().dropLast().map { index in
+                let point = curve.controlPoints[index]
+                return (index, SurfaceParameter(u: point.x, v: point.y))
+            }
         }
     }
 
@@ -1036,8 +1188,7 @@ public struct SnapResolver: Sendable {
     private func sceneNodeIDsByFeatureID(in document: DesignDocument) -> [FeatureID: SceneNodeID] {
         var mapping: [FeatureID: SceneNodeID] = [:]
         for (sceneNodeID, sceneNode) in document.productMetadata.sceneNodes {
-            guard sceneNode.reference?.kind == .sketch,
-                  let featureID = sceneNode.reference?.featureID else {
+            guard let featureID = sceneNode.reference?.featureID else {
                 continue
             }
             mapping[featureID] = sceneNodeID
@@ -2019,6 +2170,113 @@ public struct SnapResolver: Sendable {
         )
     }
 
+    private func surfaceTrimEndpointCandidate(
+        selectionReference: SelectionReference,
+        endpoint: SurfaceTrimEndpoint,
+        parameter: SurfaceParameter,
+        surface: BSplineSurface3D,
+        featureID: FeatureID,
+        sceneNodeID: SceneNodeID?,
+        constructionPlane: SketchPlaneCoordinateSystem?
+    ) throws -> PrioritizedSnapCandidate? {
+        try surfaceTrimCandidate(
+            kind: .surfaceTrimEndpoint,
+            label: endpoint == .start ? "Surface Trim Start" : "Surface Trim End",
+            pointKind: .endpoint,
+            selectionReference: selectionReference,
+            endpoint: endpoint,
+            controlPointIndex: nil,
+            parameter: parameter,
+            surface: surface,
+            featureID: featureID,
+            sceneNodeID: sceneNodeID,
+            constructionPlane: constructionPlane
+        )
+    }
+
+    private func surfaceTrimControlPointCandidate(
+        selectionReference: SelectionReference,
+        controlPointIndex: Int,
+        parameter: SurfaceParameter,
+        surface: BSplineSurface3D,
+        featureID: FeatureID,
+        sceneNodeID: SceneNodeID?,
+        constructionPlane: SketchPlaneCoordinateSystem?
+    ) throws -> PrioritizedSnapCandidate? {
+        try surfaceTrimCandidate(
+            kind: .surfaceTrimControlPoint,
+            label: "Surface Trim CP",
+            pointKind: .controlPoint,
+            selectionReference: selectionReference,
+            endpoint: nil,
+            controlPointIndex: controlPointIndex,
+            parameter: parameter,
+            surface: surface,
+            featureID: featureID,
+            sceneNodeID: sceneNodeID,
+            constructionPlane: constructionPlane
+        )
+    }
+
+    private func surfaceTrimCandidate(
+        kind: SnapCandidateKind,
+        label: String,
+        pointKind: SnapSurfaceTrimPointKind,
+        selectionReference: SelectionReference,
+        endpoint: SurfaceTrimEndpoint?,
+        controlPointIndex: Int?,
+        parameter: SurfaceParameter,
+        surface: BSplineSurface3D,
+        featureID: FeatureID,
+        sceneNodeID: SceneNodeID?,
+        constructionPlane: SketchPlaneCoordinateSystem?
+    ) throws -> PrioritizedSnapCandidate? {
+        guard parameter.u.isFinite, parameter.v.isFinite else {
+            return nil
+        }
+        let geometry = try surface.differentialGeometry(atU: parameter.u, v: parameter.v)
+        let worldPoint = geometry.position
+        guard finiteWorldPoint(worldPoint),
+              let uAxis = normalized(geometry.tangentU),
+              let vAxis = normalized(geometry.tangentV),
+              let normal = normalized(uAxis.cross(vAxis)) else {
+            return nil
+        }
+        let snapPoint = projectedSurfaceTrimPoint(worldPoint, onto: constructionPlane)
+        guard isFinite(snapPoint) else {
+            return nil
+        }
+        return PrioritizedSnapCandidate(
+            priority: -1,
+            sortKey: [
+                "surfaceTrim",
+                featureID.description,
+                String(describing: selectionReference),
+                endpoint?.rawValue ?? "controlPoint:\(controlPointIndex ?? -1)",
+            ].joined(separator: ":"),
+            candidate: SnapCandidate(
+                kind: kind,
+                point: snapPoint,
+                distanceMeters: 0.0,
+                label: label,
+                surfaceTrimSource: SnapSurfaceTrimReference(
+                    kind: pointKind,
+                    selectionReference: selectionReference,
+                    endpoint: endpoint,
+                    controlPointIndex: controlPointIndex,
+                    sourceFeatureID: featureID.description,
+                    sceneNodeID: sceneNodeID,
+                    u: parameter.u,
+                    v: parameter.v,
+                    worldPoint: worldPoint,
+                    uAxis: vector(uAxis),
+                    vAxis: vector(vAxis),
+                    normal: vector(normal)
+                )
+            )
+        )
+    }
+
     private func candidate(
         kind: SnapCandidateKind,
         point: Point2D,
@@ -2078,6 +2336,36 @@ public struct SnapResolver: Sendable {
             return Point2D(x: point.x, y: point.y)
         }
         return constructionPlane.project(point).point
+    }
+
+    private func projectedSurfaceTrimPoint(
+        _ point: Point3D,
+        onto constructionPlane: SketchPlaneCoordinateSystem?
+    ) -> Point2D {
+        guard let constructionPlane else {
+            return Point2D(x: point.x, y: point.y)
+        }
+        return constructionPlane.project(point).point
+    }
+
+    private func normalized(_ vector: Vector3D) -> Vector3D? {
+        let length = vector.length
+        guard length > 1.0e-12 else {
+            return nil
+        }
+        return Vector3D(
+            x: vector.x / length,
+            y: vector.y / length,
+            z: vector.z / length
+        )
+    }
+
+    private func vector(_ vector: Vector3D) -> SurfaceAnalysisResult.Vector {
+        SurfaceAnalysisResult.Vector(
+            x: vector.x,
+            y: vector.y,
+            z: vector.z
+        )
     }
 
     private func modelPoint(

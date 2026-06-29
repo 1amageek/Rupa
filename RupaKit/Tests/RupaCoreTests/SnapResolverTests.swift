@@ -1390,6 +1390,154 @@ import Testing
     #expect(abs(surfaceFrameSource.worldPoint.z - frame.position.z) <= 1.0e-12)
 }
 
+@Test func snapResolverReportsSurfaceTrimEndpointCandidate() async throws {
+    var document = DesignDocument.empty()
+    let surface = snapResolverDirectBSplineSurface()
+    let featureID = try document.createBSplineSurface(
+        name: "Snap Trim Endpoint Surface",
+        surface: surface
+    )
+    let initialSummary = try SurfaceSourceSummaryService().summarize(document: document)
+    let faceReference = try #require(initialSummary.sources.first?.patches.first?.faceSelectionReference)
+    try document.setSurfaceTrimLoops(
+        target: faceReference,
+        trimLoops: [snapResolverAuthoredTrimLoop()]
+    )
+    let summary = try SurfaceSourceSummaryService().summarize(document: document)
+    let trimEdge = try #require(summary.sources.first?.patches.first?.trimLoops.first?.edges.first)
+    let selectionReference = try #require(trimEdge.selectionReference)
+    let expected = try surface.differentialGeometry(atU: 0.2, v: 0.2).position
+
+    let result = try SnapResolver().resolve(
+        point: Point2D(x: expected.x + 0.00001, y: expected.y + 0.00001),
+        in: document,
+        options: SnapResolutionOptions(
+            usesGrid: false,
+            usesObjects: true,
+            gridIntervalMeters: 0.001,
+            objectSearchRadiusMeters: 0.0002,
+            maximumCandidateCount: 64
+        )
+    )
+
+    let candidate = try #require(result.candidates.first { candidate in
+        candidate.kind == .surfaceTrimEndpoint &&
+            candidate.surfaceTrimSource?.selectionReference == selectionReference &&
+            candidate.surfaceTrimSource?.endpoint == .start
+    })
+    let source = try #require(candidate.surfaceTrimSource)
+    #expect(candidate.label == "Surface Trim Start")
+    #expect(source.kind == .endpoint)
+    #expect(source.controlPointIndex == nil)
+    #expect(source.sourceFeatureID == featureID.description)
+    #expect(source.sceneNodeID != nil)
+    #expect(abs(source.u - 0.2) <= 1.0e-12)
+    #expect(abs(source.v - 0.2) <= 1.0e-12)
+    #expect(abs(source.worldPoint.x - expected.x) <= 1.0e-12)
+    #expect(abs(source.worldPoint.y - expected.y) <= 1.0e-12)
+    #expect(abs(source.worldPoint.z - expected.z) <= 1.0e-12)
+    #expect(abs(candidate.point.x - expected.x) <= 1.0e-12)
+    #expect(abs(candidate.point.y - expected.y) <= 1.0e-12)
+    #expect(abs(snapResolverVectorLength(source.normal) - 1.0) <= 1.0e-12)
+}
+
+@Test func snapResolverReportsSurfaceTrimControlPointCandidate() async throws {
+    var document = DesignDocument.empty()
+    let surface = snapResolverDirectBSplineSurface()
+    let featureID = try document.createBSplineSurface(
+        name: "Snap Trim Control Point Surface",
+        surface: surface
+    )
+    let initialSummary = try SurfaceSourceSummaryService().summarize(document: document)
+    let faceReference = try #require(initialSummary.sources.first?.patches.first?.faceSelectionReference)
+    try document.setSurfaceTrimLoops(
+        target: faceReference,
+        trimLoops: [snapResolverAuthoredTrimLoop()]
+    )
+    let summary = try SurfaceSourceSummaryService().summarize(document: document)
+    let trimEdge = try #require(summary.sources.first?.patches.first?.trimLoops.first?.edges.first)
+    let selectionReference = try #require(trimEdge.selectionReference)
+    let expected = try surface.differentialGeometry(atU: 0.52, v: 0.42).position
+
+    let result = try SnapResolver().resolve(
+        point: Point2D(x: expected.x + 0.00001, y: expected.y + 0.00001),
+        in: document,
+        options: SnapResolutionOptions(
+            usesGrid: false,
+            usesObjects: true,
+            gridIntervalMeters: 0.001,
+            objectSearchRadiusMeters: 0.0002,
+            maximumCandidateCount: 64
+        )
+    )
+
+    let candidate = try #require(result.candidates.first { candidate in
+        candidate.kind == .surfaceTrimControlPoint &&
+            candidate.surfaceTrimSource?.selectionReference == selectionReference &&
+            candidate.surfaceTrimSource?.controlPointIndex == 1
+    })
+    let source = try #require(candidate.surfaceTrimSource)
+    let selectedWorldPoint = try #require(result.selectedSurfaceTrimWorldPoint)
+    #expect(result.selectedCandidate?.kind == .surfaceTrimControlPoint)
+    #expect(candidate.label == "Surface Trim CP")
+    #expect(source.kind == .controlPoint)
+    #expect(source.endpoint == nil)
+    #expect(source.sourceFeatureID == featureID.description)
+    #expect(source.sceneNodeID != nil)
+    #expect(abs(source.u - 0.52) <= 1.0e-12)
+    #expect(abs(source.v - 0.42) <= 1.0e-12)
+    #expect(abs(source.worldPoint.x - expected.x) <= 1.0e-12)
+    #expect(abs(source.worldPoint.y - expected.y) <= 1.0e-12)
+    #expect(abs(source.worldPoint.z - expected.z) <= 1.0e-12)
+    #expect(abs(selectedWorldPoint.x - expected.x) <= 1.0e-12)
+    #expect(abs(selectedWorldPoint.y - expected.y) <= 1.0e-12)
+    #expect(abs(selectedWorldPoint.z - expected.z) <= 1.0e-12)
+    #expect(abs(snapResolverVectorLength(source.uAxis) - 1.0) <= 1.0e-12)
+    #expect(abs(snapResolverVectorLength(source.vAxis) - 1.0) <= 1.0e-12)
+}
+
+@Test func snapResolverProjectsSurfaceTrimCandidateOntoConstructionPlane() async throws {
+    var document = DesignDocument.empty()
+    let surface = snapResolverDirectBSplineSurface(topRightZ: 0.004)
+    _ = try document.createBSplineSurface(
+        name: "Snap Projected Trim Surface",
+        surface: surface
+    )
+    let initialSummary = try SurfaceSourceSummaryService().summarize(document: document)
+    let faceReference = try #require(initialSummary.sources.first?.patches.first?.faceSelectionReference)
+    try document.setSurfaceTrimLoops(
+        target: faceReference,
+        trimLoops: [snapResolverAuthoredTrimLoop()]
+    )
+    let expected = try surface.differentialGeometry(atU: 0.52, v: 0.42).position
+
+    let result = try SnapResolver().resolve(
+        point: Point2D(x: expected.y + 0.00001, y: expected.z + 0.00001),
+        in: document,
+        options: SnapResolutionOptions(
+            usesGrid: false,
+            usesObjects: true,
+            usesConstructionPlaneProjection: true,
+            constructionPlane: .yz,
+            gridIntervalMeters: 0.001,
+            objectSearchRadiusMeters: 0.0002,
+            maximumCandidateCount: 64
+        )
+    )
+
+    let candidate = try #require(result.candidates.first { candidate in
+        candidate.kind == .surfaceTrimControlPoint &&
+            candidate.surfaceTrimSource?.controlPointIndex == 1
+    })
+    let source = try #require(candidate.surfaceTrimSource)
+    #expect(result.selectedCandidate?.kind == .surfaceTrimControlPoint)
+    #expect(abs(candidate.point.x - expected.y) <= 1.0e-12)
+    #expect(abs(candidate.point.y - expected.z) <= 1.0e-12)
+    #expect(abs(source.worldPoint.x - expected.x) <= 1.0e-12)
+    #expect(abs(source.worldPoint.y - expected.y) <= 1.0e-12)
+    #expect(abs(source.worldPoint.z - expected.z) <= 1.0e-12)
+}
+
 @Test func snapResolverReportsSplineControlVerticesAsCVTargets() async throws {
     var document = DesignDocument.empty()
     _ = try document.createSplineSketch(
@@ -1467,6 +1615,10 @@ private func snapResolverPolySplineQuadMesh() -> Mesh {
         ],
         indices: [0, 1, 2, 0, 2, 3]
     )
+}
+
+private func snapResolverVectorLength(_ vector: SurfaceAnalysisResult.Vector) -> Double {
+    sqrt(vector.x * vector.x + vector.y * vector.y + vector.z * vector.z)
 }
 
 private func snapResolverDirectBSplineSurface(topRightZ: Double = 0.0) -> BSplineSurface3D {

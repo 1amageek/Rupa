@@ -1449,10 +1449,10 @@ public final class AgentCommandController: AgentClientProtocol {
         capability(
             "resolveSnap",
             category: .read,
-            summary: "Resolve a model-space sketch input point against grid, measurement annotations, source sketch special points, source profile region centers, generated topology points, visible UVN surface frame handles, source spline CVs, closest curve points, supported curve intersections, reference-point curve-axis candidates, reference-point curve-coordinate-plane candidates, and reference-point tangent/perpendicular curve candidates without mutating the document.",
+            summary: "Resolve a model-space sketch input point against grid, measurement annotations, source sketch special points, source profile region centers, generated topology points, visible UVN surface frame handles, authored surface trim endpoints and p-curve control points, source spline CVs, closest curve points, supported curve intersections, reference-point curve-axis candidates, reference-point curve-coordinate-plane candidates, and reference-point tangent/perpendicular curve candidates without mutating the document.",
             access: .agentRequest,
             mutatesDocument: false,
-            discovery: [.snapResolution, .sketchEntitySummary, .topologySummary, .surfaceFrames],
+            discovery: [.snapResolution, .sketchEntitySummary, .topologySummary, .surfaceSourceSummary, .surfaceFrames],
             targets: [.document, .sceneNode, .profile, .region, .sketchEntity, .face, .surfaceTrim],
             failureMode: "Rejects stale generations, invalid points, invalid snap options, or source expressions that cannot be resolved before returning candidates; object-targeting force enable, candidate-kind suppression, source-curve X/Y/Z axis candidates, and source-curve XY/YZ/ZX coordinate-plane candidates are supported through snap options."
         ),
