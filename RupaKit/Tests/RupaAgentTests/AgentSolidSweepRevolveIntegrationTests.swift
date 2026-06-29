@@ -188,6 +188,71 @@ import SwiftCAD
 }
 
 @MainActor
+@Test func agentCreatesStandaloneBooleanThroughAutomationAndCore() async throws {
+    var document = DesignDocument.empty()
+    let targetID = try agentCreateBooleanBox(
+        in: &document,
+        name: "Agent Boolean Target",
+        minX: -0.020,
+        minY: -0.010,
+        maxX: 0.020,
+        maxY: 0.010
+    )
+    let toolID = try agentCreateBooleanBox(
+        in: &document,
+        name: "Agent Boolean Tool",
+        minX: 0.020,
+        minY: -0.010,
+        maxX: 0.040,
+        maxY: 0.010
+    )
+    let server = AgentCommandController()
+    let sessionID = UUID()
+    let session = EditorSession(document: document)
+    server.register(session: session, id: sessionID)
+
+    let response = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .createBoolean(
+                name: "Agent Boolean Union",
+                targets: [BooleanTargetReference(featureID: targetID)],
+                tool: BooleanToolReference(featureID: toolID),
+                operation: .union,
+                keepTools: false
+            ),
+            expectedGeneration: DocumentGeneration(0)
+        )
+    )
+
+    guard case .command(let result) = response else {
+        Issue.record("Agent must return a Boolean command result.")
+        return
+    }
+    let booleanID = try #require(session.document.cadDocument.designGraph.order.last)
+    let feature = try #require(session.document.cadDocument.designGraph.nodes[booleanID])
+    let evaluated = try CADPipeline.modelingDefault(for: session.document).evaluate(
+        session.document.cadDocument
+    )
+
+    guard case .boolean(let boolean) = feature.operation else {
+        Issue.record("Agent must create a Boolean feature.")
+        return
+    }
+
+    #expect(result.commandName == "createBoolean")
+    #expect(result.didMutate)
+    #expect(result.generation == DocumentGeneration(1))
+    #expect(boolean.targets == [BooleanTargetReference(featureID: targetID)])
+    #expect(boolean.tool == BooleanToolReference(featureID: toolID))
+    #expect(boolean.operation == .union)
+    #expect(feature.outputs == [FeatureOutput(role: .body)])
+    #expect(evaluated.brep.bodies.count == 1)
+    #expect(session.evaluationStatus == .valid)
+    #expect(result.diagnostics.contains { diagnostic in diagnostic.severity == .error } == false)
+}
+
+@MainActor
 @Test func agentCreatesRevolveSourceThroughAutomationAndCore() async throws {
     var document = DesignDocument.empty()
     let profileID = try document.createRectangleSketchFromCorners(
@@ -241,6 +306,30 @@ import SwiftCAD
     #expect(session.evaluatedBodyCount == 1)
     #expect(session.evaluationStatus == .valid)
     #expect(result.diagnostics.contains { diagnostic in diagnostic.severity == .error } == false)
+}
+
+@discardableResult
+private func agentCreateBooleanBox(
+    in document: inout DesignDocument,
+    name: String,
+    minX: Double,
+    minY: Double,
+    maxX: Double,
+    maxY: Double,
+    depth: Double = 0.010
+) throws -> FeatureID {
+    let sketchID = try document.createRectangleSketchFromCorners(
+        name: "\(name) Sketch",
+        plane: .xy,
+        firstCorner: agentSketchPoint(x: minX, y: minY),
+        oppositeCorner: agentSketchPoint(x: maxX, y: maxY)
+    )
+    return try document.extrudeProfile(
+        name: name,
+        profile: ProfileReference(featureID: sketchID),
+        distance: .length(depth, .meter),
+        direction: .normal
+    )
 }
 
 @MainActor

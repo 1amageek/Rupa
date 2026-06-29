@@ -56,6 +56,14 @@ struct PatternArrayFeatureIDRemapper: Sendable {
                 SweepTargetReference(featureID: try remappedFeatureID($0.featureID))
             }
             return .sweep(sweep)
+        case .boolean(var boolean):
+            boolean.targets = try boolean.targets.map {
+                BooleanTargetReference(featureID: try remappedFeatureID($0.featureID))
+            }
+            boolean.tool = BooleanToolReference(
+                featureID: try remappedFeatureID(boolean.tool.featureID)
+            )
+            return .boolean(boolean)
         case .polySpline:
             return operation
         case .bSplineSurface:

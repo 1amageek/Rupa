@@ -503,6 +503,39 @@ public struct MeasurementService {
                 solids.append(solid)
                 totals.solidVolumeCubicMeters += solid.volumeCubicMeters
                 bounds.include(solid.bounds)
+            case .boolean(let boolean):
+                guard !isSupersededInDocumentScope(featureID) else {
+                    continue
+                }
+                guard shouldMeasure(featureID) else {
+                    continue
+                }
+                includedSourceFeatureIDs.insert(featureID)
+                let sourceFeatureID = boolean.targets.first?.featureID ?? boolean.tool.featureID
+                let sourceNode = document.cadDocument.designGraph.nodes[sourceFeatureID]
+                var evaluatedSkipReason: String?
+                let solid = try measureEvaluatedSolid(
+                    featureID: featureID,
+                    featureName: node.name,
+                    sourceFeatureID: sourceFeatureID,
+                    sourceFeatureName: sourceNode?.name,
+                    evaluatedDocument: evaluatedDocument(),
+                    unsupportedReason: &evaluatedSkipReason
+                )
+                guard let solid else {
+                    let detail = evaluatedSkipReason.map { " \($0)" } ?? ""
+                    diagnostics.append(
+                        EditorDiagnostic(
+                            severity: .info,
+                            message: "Measurement skipped Boolean solid outside the supported evaluation subset.\(detail)"
+                        )
+                    )
+                    continue
+                }
+                counts.solids += 1
+                solids.append(solid)
+                totals.solidVolumeCubicMeters += solid.volumeCubicMeters
+                bounds.include(solid.bounds)
             case .polySpline(let polySpline):
                 guard !isSupersededInDocumentScope(featureID) else {
                     continue
@@ -695,9 +728,7 @@ public struct MeasurementService {
                   !node.isSuppressed else {
                 continue
             }
-            if let supersededFeatureID = node.operation.supersededBodyFeatureID {
-                result.insert(supersededFeatureID)
-            }
+            result.formUnion(node.operation.supersededBodyFeatureIDs)
         }
         return result
     }

@@ -11,6 +11,8 @@ extension FeatureOperation {
             return true
         case .sweep:
             return true
+        case .boolean:
+            return true
         case .polySpline:
             return true
         case .bSplineSurface:
@@ -32,34 +34,39 @@ extension FeatureOperation {
         }
     }
 
-    var supersededBodyFeatureID: FeatureID? {
+    var supersededBodyFeatureIDs: Set<FeatureID> {
         switch self {
         case .sketch:
-            return nil
+            return []
         case .extrude:
-            return nil
+            return []
         case .revolve:
-            return nil
+            return []
         case .sweep:
-            return nil
+            return []
+        case .boolean(let feature):
+            guard feature.keepTools == false else {
+                return []
+            }
+            return Set(feature.targets.map(\.featureID) + [feature.tool.featureID])
         case .polySpline:
-            return nil
+            return []
         case .bSplineSurface:
-            return nil
+            return []
         case .faceLoopOffset(let feature):
-            return feature.target.featureID
+            return [feature.target.featureID]
         case .edgeOffset(let feature):
-            return feature.target.featureID
+            return [feature.target.featureID]
         case .faceKnife(let feature):
-            return feature.target.featureID
+            return [feature.target.featureID]
         case .bridgeCurve:
-            return nil
+            return []
         case .curveEdit:
-            return nil
+            return []
         case .curveOffset:
-            return nil
+            return []
         case .curveTrim:
-            return nil
+            return []
         }
     }
 }

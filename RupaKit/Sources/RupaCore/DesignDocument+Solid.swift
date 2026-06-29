@@ -247,6 +247,87 @@ extension DesignDocument {
         return featureID
     }
 
+    @discardableResult
+    public mutating func createBoolean(
+        name: String,
+        targets: [BooleanTargetReference],
+        tool: BooleanToolReference,
+        operation: BooleanOperation,
+        keepTools: Bool = false,
+        objectRegistry: ObjectTypeRegistry = .builtIn
+    ) throws -> FeatureID {
+        let trimmedName = try normalizedMetadataName(name, owner: "Boolean")
+        let boolean = BooleanFeature(
+            targets: targets,
+            tool: tool,
+            operation: operation,
+            keepTools: keepTools
+        )
+        do {
+            try boolean.validate()
+        } catch {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Boolean command is invalid: \(error)."
+            )
+        }
+        for target in targets {
+            try requireBodyFeature(target.featureID, owner: "Boolean target")
+        }
+        try requireBodyFeature(tool.featureID, owner: "Boolean tool")
+
+        let featureID = FeatureID()
+        let inputs = targets.map { target in
+            FeatureInput(featureID: target.featureID, role: .target)
+        } + [
+            FeatureInput(featureID: tool.featureID, role: .body),
+        ]
+        let feature = FeatureNode(
+            id: featureID,
+            name: trimmedName,
+            operation: .boolean(boolean),
+            inputs: inputs,
+            outputs: [FeatureOutput(role: .body)]
+        )
+
+        let previousCADDocument = cadDocument
+        let previousProductMetadata = productMetadata
+        var didCommitBoolean = false
+        defer {
+            if didCommitBoolean == false {
+                cadDocument = previousCADDocument
+                productMetadata = previousProductMetadata
+            }
+        }
+
+        try appendFeature(feature)
+        _ = try productMetadata.appendSceneNodeToFirstRoot(
+            name: trimmedName,
+            reference: .body(featureID),
+            object: .body(
+                featureID: featureID,
+                sourceSection: nil,
+                typeID: nil,
+                geometryRole: .solid,
+                objectRegistry: objectRegistry
+            )
+        )
+        try cadDocument.validate()
+        try productMetadata.validate(against: cadDocument, objectRegistry: objectRegistry)
+        do {
+            _ = try CADPipeline
+                .modelingDefault(for: self, objectRegistry: objectRegistry)
+                .evaluate(cadDocument)
+        } catch {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Boolean produced unsupported or invalid geometry: \(error)."
+            )
+        }
+        didCommitBoolean = true
+        return featureID
+    }
+
     private func containsSupportedExtrudeProfile(_ source: FeatureNode) throws -> Bool {
         guard case .sketch(let sketch) = source.operation else {
             return false
@@ -301,7 +382,7 @@ extension DesignDocument {
         }
     }
 
-    private func requireSweepTargetBodyFeature(
+    private func requireBodyFeature(
         _ featureID: FeatureID,
         owner: String
     ) throws {
@@ -312,6 +393,13 @@ extension DesignDocument {
                 message: "\(owner) must reference an existing body-producing feature."
             )
         }
+    }
+
+    private func requireSweepTargetBodyFeature(
+        _ featureID: FeatureID,
+        owner: String
+    ) throws {
+        try requireBodyFeature(featureID, owner: owner)
     }
 
     public mutating func createExtrudedRectangle(

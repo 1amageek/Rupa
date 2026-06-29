@@ -240,6 +240,13 @@ public enum EditorCommand: Codable, Equatable, Sendable {
         targets: [SweepTargetReference],
         options: SweepOptions
     )
+    case createBoolean(
+        name: String,
+        targets: [BooleanTargetReference],
+        tool: BooleanToolReference,
+        operation: BooleanOperation,
+        keepTools: Bool
+    )
     case createBSplineSurface(
         name: String,
         surface: BSplineSurface3D
@@ -549,6 +556,8 @@ public enum EditorCommand: Codable, Equatable, Sendable {
             "createRevolve"
         case .createSweep:
             "createSweep"
+        case .createBoolean:
+            "createBoolean"
         case .createBSplineSurface:
             "createBSplineSurface"
         case .createPolySplineSurface:
@@ -691,6 +700,7 @@ public enum EditorCommand: Codable, Equatable, Sendable {
              .extrudeProfile,
              .createRevolve,
              .createSweep,
+             .createBoolean,
              .createBSplineSurface,
              .createPolySplineSurface,
              .setSurfaceControlPointDisplay,

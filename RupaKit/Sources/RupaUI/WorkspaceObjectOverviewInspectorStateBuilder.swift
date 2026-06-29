@@ -219,6 +219,23 @@ struct WorkspaceObjectOverviewInspectorStateBuilder {
                 )
             }
             return rows
+        case .boolean(let boolean):
+            return [
+                WorkspaceInspectorTextRow(title: "Operation", value: "Boolean"),
+                WorkspaceInspectorTextRow(
+                    title: "Targets",
+                    value: valueSummary(boolean.targets.map { shortID($0.featureID) })
+                ),
+                WorkspaceInspectorTextRow(title: "Tool", value: shortID(boolean.tool.featureID)),
+                WorkspaceInspectorTextRow(
+                    title: "Boolean Operation",
+                    value: boolean.operation.rawValue.capitalized
+                ),
+                WorkspaceInspectorTextRow(
+                    title: "Keep Tools",
+                    value: boolean.keepTools ? "Yes" : "No"
+                ),
+            ]
         case .polySpline(let polySpline):
             return [
                 WorkspaceInspectorTextRow(title: "Operation", value: "PolySpline"),

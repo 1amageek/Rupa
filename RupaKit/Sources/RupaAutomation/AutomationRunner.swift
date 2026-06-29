@@ -1149,6 +1149,23 @@ public struct AutomationRunner {
                 didMutate: result.didMutate,
                 diagnostics: result.diagnostics
             )
+        case .createBoolean(let name, let targets, let tool, let operation, let keepTools):
+            let result = try session.execute(
+                .createBoolean(
+                    name: name,
+                    targets: targets,
+                    tool: tool,
+                    operation: operation,
+                    keepTools: keepTools
+                )
+            )
+            return AutomationResult(
+                message: "Boolean \(name) source created.",
+                commandName: result.commandName,
+                generation: result.generation,
+                didMutate: result.didMutate,
+                diagnostics: result.diagnostics
+            )
         case .createPolySplineSurface(let name, let sourceMesh, let options):
             let result = try session.execute(
                 .createPolySplineSurface(

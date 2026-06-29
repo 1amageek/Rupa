@@ -221,6 +221,13 @@ public enum AutomationCommand: Codable, Equatable, Sendable {
         targets: [SweepTargetReference],
         options: SweepOptions
     )
+    case createBoolean(
+        name: String,
+        targets: [BooleanTargetReference],
+        tool: BooleanToolReference,
+        operation: BooleanOperation,
+        keepTools: Bool
+    )
     case createBSplineSurface(
         name: String,
         surface: BSplineSurface3D
@@ -754,6 +761,14 @@ public enum AutomationCommand: Codable, Equatable, Sendable {
                 guides: guides,
                 targets: targets,
                 options: options
+            )
+        case .createBoolean(let name, let targets, let tool, let operation, let keepTools):
+            .createBoolean(
+                name: name,
+                targets: targets,
+                tool: tool,
+                operation: operation,
+                keepTools: keepTools
             )
         case .createBSplineSurface(let name, let surface):
             .createBSplineSurface(

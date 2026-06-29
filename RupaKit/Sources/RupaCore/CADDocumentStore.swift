@@ -1001,6 +1001,19 @@ public final class CADDocumentStore {
             document = updatedDocument
             try commitMutation()
             evaluateCurrentDocument()
+        case .createBoolean(let name, let targets, let tool, let operation, let keepTools):
+            var updatedDocument = document
+            try updatedDocument.createBoolean(
+                name: name,
+                targets: targets,
+                tool: tool,
+                operation: operation,
+                keepTools: keepTools,
+                objectRegistry: objectRegistry
+            )
+            document = updatedDocument
+            try commitMutation()
+            evaluateCurrentDocument()
         case .createBSplineSurface(let name, let surface):
             var updatedDocument = document
             try updatedDocument.createBSplineSurface(

@@ -1111,6 +1111,34 @@ public final class AgentCommandController: AgentClientProtocol {
             ]
         ),
         capability(
+            "createBoolean",
+            category: .solid,
+            summary: "Create a standalone source-owned Boolean feature from target body references, one tool body reference, an operation, and keep-tools policy.",
+            access: .automationCommand,
+            mutatesDocument: true,
+            discovery: [.topologySummary, .designDisplaySnapshot],
+            targets: [.body],
+            failureMode: "Rejects missing targets, duplicate targets, a tool that is also a target, non-body references, stale generations, unsupported sheet operands, non-box operands, collapsed empty results, and connected boolean topology outside the current exact axis-aligned box and orthogonal cell-union subset before committing invalid geometry.",
+            optionMatrix: [
+                AgentCapabilityDescriptor.OptionAxis(
+                    name: "operation",
+                    supportedValues: ["union", "difference", "intersect", "slice"],
+                    notes: [
+                        "the first supported kernel subset uses exact axis-aligned box B-rep operands",
+                        "unsupported topology returns diagnostics instead of mesh-only fallback"
+                    ]
+                ),
+                AgentCapabilityDescriptor.OptionAxis(
+                    name: "keepTools",
+                    supportedValues: ["false", "true"],
+                    notes: [
+                        "false replaces target and tool B-rep output with the Boolean result during evaluation",
+                        "true keeps target and tool B-rep output and adds the Boolean result body"
+                    ]
+                ),
+            ]
+        ),
+        capability(
             "sweepEvaluationPlan",
             category: .read,
             summary: "Preflight a proposed Sweep without mutating the document, returning the resolved path shape, section state, evaluation kind, output topology, boolean support, guide strategies, unsupported code, and ordered checks used by the shared sweep evaluation contract.",

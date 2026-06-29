@@ -58,9 +58,13 @@ import RupaCore
     let booleans = try #require(result.entries.first { $0.area == .booleanModeling })
     #expect(booleans.currentRating == .partial)
     #expect(booleans.referenceSources.contains("https://doc.plasticity.xyz/solid/boolean"))
-    #expect(booleans.openWork.contains("Standalone Boolean command with target/tool selection contracts."))
+    #expect(!booleans.openWork.contains("Standalone Boolean command with target/tool selection contracts."))
+    #expect(booleans.openWork.contains { $0.contains("general Solid and Sheet topology") })
     #expect(booleans.evidence.contains { evidence in
-        evidence.notes.contains("Standalone Boolean target/tool workflows and mixed Solid/Sheet operations remain gap items.")
+        evidence.notes.contains("Standalone Boolean features now own target body references, one tool body reference, operation, and keep-tools policy in source data.")
+    })
+    #expect(booleans.evidence.contains { evidence in
+        evidence.tests.contains("RupaKit/Tests/RupaCoreTests/BooleanCommandTests.swift")
     })
 
     let directModeling = try #require(result.entries.first { $0.area == .directModeling })
