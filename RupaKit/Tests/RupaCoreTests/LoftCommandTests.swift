@@ -180,6 +180,54 @@ import SwiftCAD
     try document.validate()
 }
 
+@Test func createLoftUsesCurvedGuideToCreateRailFollowingIntermediateRings() throws {
+    var document = DesignDocument.empty()
+    let firstProfileID = try createLoftProfile(
+        in: &document,
+        name: "Rail Loft Bottom",
+        width: 4.0,
+        height: 2.0,
+        z: 0.0
+    )
+    let secondProfileID = try createLoftProfile(
+        in: &document,
+        name: "Rail Loft Top",
+        width: 4.0,
+        height: 2.0,
+        z: 10.0
+    )
+    let guideID = try document.createSketch(
+        name: "Rail Loft Guide",
+        sketch: loftCurvedGuideSketch(x: 2.0, y: -1.0, zStart: 0.0, zEnd: 10.0),
+        geometryRole: .curve
+    )
+
+    _ = try document.createLoft(
+        name: "Rail Loft",
+        sections: [
+            LoftSectionReference(profile: ProfileReference(featureID: firstProfileID)),
+            LoftSectionReference(profile: ProfileReference(featureID: secondProfileID)),
+        ],
+        guides: [
+            LoftGuideReference(featureID: guideID),
+        ]
+    )
+    let evaluated = try CADPipeline.modelingDefault(for: document).evaluate(document.cadDocument)
+    let body = try #require(evaluated.brep.bodies.values.first)
+    let railVertices = evaluated.brep.vertices.values.filter { vertex in
+        abs(vertex.point.y + 0.001) <= 1.0e-12
+            && vertex.point.z > 0.0
+            && vertex.point.z < 0.010
+            && vertex.point.x > 0.0025
+    }
+
+    #expect(body.kind == .solid)
+    #expect(evaluated.brep.vertices.count > 8)
+    #expect(evaluated.brep.faces.count > 6)
+    #expect(railVertices.isEmpty == false)
+    try document.validate()
+}
+
 @Test func createLoftSupportsNonParallelSectionsWithRuledBSplineSideSurfaces() throws {
     var document = DesignDocument.empty()
     let firstProfileID = try createLoftProfile(
@@ -468,6 +516,26 @@ private func loftVerticalGuideSketch(x: Double, y: Double, zStart: Double, zEnd:
                 start: SketchPoint(x: .constant(.length(0.0, unit: .meter)), y: .constant(.length(0.0, unit: .meter))),
                 end: SketchPoint(x: .constant(.length(0.0, unit: .meter)), y: .constant(.length((zEnd - zStart) / 1000.0, unit: .meter)))
             )),
+        ],
+        constraints: [],
+        dimensions: []
+    )
+}
+
+private func loftCurvedGuideSketch(x: Double, y: Double, zStart: Double, zEnd: Double) -> Sketch {
+    let splineID = SketchEntityID()
+    return Sketch(
+        plane: .plane(Plane3D(
+            origin: Point3D(x: x / 1000.0, y: y / 1000.0, z: zStart / 1000.0),
+            normal: .unitY
+        )),
+        entities: [
+            splineID: .spline(SketchSpline(controlPoints: [
+                SketchPoint(x: .constant(.length(0.0, unit: .meter)), y: .constant(.length(0.0, unit: .meter))),
+                SketchPoint(x: .constant(.length(-0.003, unit: .meter)), y: .constant(.length(0.0025, unit: .meter))),
+                SketchPoint(x: .constant(.length(-0.003, unit: .meter)), y: .constant(.length(0.0075, unit: .meter))),
+                SketchPoint(x: .constant(.length(0.0, unit: .meter)), y: .constant(.length((zEnd - zStart) / 1000.0, unit: .meter))),
+            ])),
         ],
         constraints: [],
         dimensions: []

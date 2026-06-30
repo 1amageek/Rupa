@@ -1176,7 +1176,7 @@ public final class AgentCommandController: AgentClientProtocol {
             mutatesDocument: true,
             discovery: [.sketchEntitySummary],
             targets: [.profile, .sketchEntity],
-            failureMode: "Rejects missing, duplicate, open, unsupported profile sections, missing or duplicate guide curves, guide curves whose endpoints do not touch first and last section boundary samples, invalid-start-index sections, guide/start-index conflicts, closed section loops with solid output, closed section loops with fewer than three sections, invalid generated topology, and stale generations before mutation; current evaluation creates boundary-progress matched degree-1 ruled B-spline side faces between profile sections, resamples unequal boundary sample counts, lets guide endpoints lock first and last section seam samples, creates planar start/end caps for solid output, or a last-to-first ruled B-spline sheet loop for closed sheet output.",
+            failureMode: "Rejects missing, duplicate, open, unsupported profile sections, missing or duplicate guide curves, guide curves whose endpoints do not touch first and last section boundary samples, invalid-start-index sections, guide/start-index conflicts, closed section loops with solid output, closed section loops with fewer than three sections, invalid generated topology, and stale generations before mutation; current evaluation creates boundary-progress matched degree-1 ruled B-spline side faces between profile sections, resamples unequal boundary sample counts, lets guide endpoints lock first and last section seam samples, inserts rail-following intermediate section rings for the two-section single-guide subset, creates planar start/end caps for solid output, or a last-to-first ruled B-spline sheet loop for closed sheet output.",
             optionMatrix: [
                 AgentCapabilityDescriptor.OptionAxis(
                     name: "resultKind",
@@ -1209,7 +1209,8 @@ public final class AgentCommandController: AgentClientProtocol {
                     notes: [
                         "guide endpoints must touch first and last section boundary samples",
                         "guide endpoints lock section seams before boundary-progress matching",
-                        "guide curve shape does not yet deform higher-order Loft surfaces"
+                        "one open guide curve can add rail-following intermediate section rings for two-section Loft",
+                        "higher-order smooth Loft surfaces, multi-guide rail deformation, and multi-section rail deformation remain unsupported"
                     ]
                 ),
                 AgentCapabilityDescriptor.OptionAxis(
