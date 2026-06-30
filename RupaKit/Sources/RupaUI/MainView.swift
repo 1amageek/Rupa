@@ -4542,6 +4542,7 @@ public struct MainView: View {
             bridgeCurve: bridgeCurve,
             onSetParameter: setBridgeCurveParameter,
             onSetSense: setBridgeCurveSense,
+            onSetTrimSide: setBridgeCurveTrimSide,
             onTrimSources: trimBridgeCurveSources,
             onSetCurvatureDisplay: setBridgeCurveCurvatureDisplay,
             onSetTension: setBridgeCurveTension,
@@ -5565,26 +5566,20 @@ public struct MainView: View {
         case .first:
             var tension = bridgeCurve.firstEndpoint.tension
             setBridgeTensionLevel(&tension, level: level, value: nextValue)
+            var nextEndpoint = bridgeCurve.firstEndpoint
+            nextEndpoint.tension = tension
             result = session.setBridgeCurveParameters(
                 sourceID: bridgeCurve.sourceID,
-                firstEndpoint: BridgeCurveEndpoint(
-                    reference: bridgeCurve.firstEndpoint.reference,
-                    parameter: bridgeCurve.firstEndpoint.parameter,
-                    reversesSense: bridgeCurve.firstEndpoint.reversesSense,
-                    tension: tension
-                )
+                firstEndpoint: nextEndpoint
             )
         case .second:
             var tension = bridgeCurve.secondEndpoint.tension
             setBridgeTensionLevel(&tension, level: level, value: nextValue)
+            var nextEndpoint = bridgeCurve.secondEndpoint
+            nextEndpoint.tension = tension
             result = session.setBridgeCurveParameters(
                 sourceID: bridgeCurve.sourceID,
-                secondEndpoint: BridgeCurveEndpoint(
-                    reference: bridgeCurve.secondEndpoint.reference,
-                    parameter: bridgeCurve.secondEndpoint.parameter,
-                    reversesSense: bridgeCurve.secondEndpoint.reversesSense,
-                    tension: tension
-                )
+                secondEndpoint: nextEndpoint
             )
         }
         if result?.diagnostics.isEmpty == false {
@@ -5616,24 +5611,18 @@ public struct MainView: View {
         let result: CommandExecutionResult?
         switch endpoint {
         case .first:
+            var nextEndpoint = bridgeCurve.firstEndpoint
+            nextEndpoint.parameter = .scalar(clampedValue)
             result = session.setBridgeCurveParameters(
                 sourceID: bridgeCurve.sourceID,
-                firstEndpoint: BridgeCurveEndpoint(
-                    reference: bridgeCurve.firstEndpoint.reference,
-                    parameter: .scalar(clampedValue),
-                    reversesSense: bridgeCurve.firstEndpoint.reversesSense,
-                    tension: bridgeCurve.firstEndpoint.tension
-                )
+                firstEndpoint: nextEndpoint
             )
         case .second:
+            var nextEndpoint = bridgeCurve.secondEndpoint
+            nextEndpoint.parameter = .scalar(clampedValue)
             result = session.setBridgeCurveParameters(
                 sourceID: bridgeCurve.sourceID,
-                secondEndpoint: BridgeCurveEndpoint(
-                    reference: bridgeCurve.secondEndpoint.reference,
-                    parameter: .scalar(clampedValue),
-                    reversesSense: bridgeCurve.secondEndpoint.reversesSense,
-                    tension: bridgeCurve.secondEndpoint.tension
-                )
+                secondEndpoint: nextEndpoint
             )
         }
         if result?.diagnostics.isEmpty == false {
@@ -5648,24 +5637,45 @@ public struct MainView: View {
         let result: CommandExecutionResult?
         switch endpoint {
         case .first:
+            var nextEndpoint = bridgeCurve.firstEndpoint
+            nextEndpoint.reversesSense.toggle()
             result = session.setBridgeCurveParameters(
                 sourceID: bridgeCurve.sourceID,
-                firstEndpoint: BridgeCurveEndpoint(
-                    reference: bridgeCurve.firstEndpoint.reference,
-                    parameter: bridgeCurve.firstEndpoint.parameter,
-                    reversesSense: !bridgeCurve.firstEndpoint.reversesSense,
-                    tension: bridgeCurve.firstEndpoint.tension
-                )
+                firstEndpoint: nextEndpoint
             )
         case .second:
+            var nextEndpoint = bridgeCurve.secondEndpoint
+            nextEndpoint.reversesSense.toggle()
             result = session.setBridgeCurveParameters(
                 sourceID: bridgeCurve.sourceID,
-                secondEndpoint: BridgeCurveEndpoint(
-                    reference: bridgeCurve.secondEndpoint.reference,
-                    parameter: bridgeCurve.secondEndpoint.parameter,
-                    reversesSense: !bridgeCurve.secondEndpoint.reversesSense,
-                    tension: bridgeCurve.secondEndpoint.tension
-                )
+                secondEndpoint: nextEndpoint
+            )
+        }
+        if result?.diagnostics.isEmpty == false {
+            isPreviewExpanded = true
+        }
+    }
+
+    private func setBridgeCurveTrimSide(
+        _ bridgeCurve: InspectorBridgeCurve,
+        endpoint: InspectorBridgeCurveEndpoint,
+        trimSide: BridgeCurveTrimSide
+    ) {
+        let result: CommandExecutionResult?
+        switch endpoint {
+        case .first:
+            var nextEndpoint = bridgeCurve.firstEndpoint
+            nextEndpoint.trimSide = trimSide
+            result = session.setBridgeCurveParameters(
+                sourceID: bridgeCurve.sourceID,
+                firstEndpoint: nextEndpoint
+            )
+        case .second:
+            var nextEndpoint = bridgeCurve.secondEndpoint
+            nextEndpoint.trimSide = trimSide
+            result = session.setBridgeCurveParameters(
+                sourceID: bridgeCurve.sourceID,
+                secondEndpoint: nextEndpoint
             )
         }
         if result?.diagnostics.isEmpty == false {

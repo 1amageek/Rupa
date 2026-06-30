@@ -72,12 +72,14 @@ flowchart LR
 | Event ordering | Read pointer, keyboard, async start/stop, undo/redo, and validation order, including paths where another view or task intercepts the event. |
 | Clear and rollback | Verify nil, cancel, failed validation, stale generation, and UI hover-exit paths clear every derived state they can expose. |
 | Target normalization | Verify Inspector, Viewport, Automation, Agent, and Core use the same stable target after converting from handles or generated UI affordances. |
+| Concept separation | Verify one field does not encode two independent domain decisions, such as tangent direction versus retained trim side. |
 | Error surface | Confirm errors are typed, propagated, or converted into diagnostics intentionally; tests passing with hidden failure is not acceptable evidence. |
 | Performance ownership | Check large geometry or high-frequency hover paths for unnecessary copies, repeated evaluation, and cache invalidation drift. |
 
 The reading notes become `ObservationSet` entries. If a code-reading finding
-identifies a state owner, lifecycle, or target-normalization bug, the fix starts
-at that ownership boundary rather than at the nearest visible UI symptom.
+identifies a state owner, lifecycle, target-normalization, or domain-concept
+coupling bug, the fix starts at that ownership boundary rather than at the
+nearest visible UI symptom.
 
 ## Relationship to Existing Documents
 

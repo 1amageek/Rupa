@@ -910,15 +910,16 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                         "Bridge Curve endpoint selections now resolve from point-backed sketch selection targets into the same BridgeCurveEndpoint contract used by Core, Automation, Agent, and CLI.",
                         "Selected Bridge Curve sources now expose projected viewport endpoint handles with tangent guide rendering, hover hit-testing, press-state isolation, exact line/arc/spline Value projection, and command-backed endpoint parameter drag commits through setBridgeCurveParameters.",
                         "Bridge Curve Inspector Show Curvature controls now target the generated bridge spline through the same CurveCurvatureDisplay contract used by generic source curves, while generic curve display controls are suppressed for bridge-generated spline selections to avoid duplicate ownership.",
+                        "Bridge Curve Trim Side is now an endpoint-owned Core value that chooses the retained start-side or end-side source segment independently from Sense, so Sense only controls tangent direction and Agent/UI callers can operate the same explicit contract.",
                     ]
                 ),
             ],
             openWork: [
                 "G3 bridge constraints.",
                 "Edge and face endpoint bridge targets.",
-                "Bridge Curve side selection and richer preview controls.",
+                "Bridge Curve richer preview controls.",
             ],
-            next: "Add Bridge Curve side selection plus edge, face, and surface-boundary endpoint targets without bypassing the Core endpoint contract."
+            next: "Add edge, face, and surface-boundary Bridge Curve endpoint targets plus richer preview controls without bypassing the Core endpoint contract."
         ),
         entry(
             area: .agentOperability,

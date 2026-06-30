@@ -220,6 +220,10 @@ extension DesignDocument {
                     source.firstEndpoint,
                     entityID: entityID
                 ),
+                trimSide: rewriteBridgeEndpointTrimSideAfterCurveReverse(
+                    source.firstEndpoint,
+                    entityID: entityID
+                ),
                 tension: source.firstEndpoint.tension
             )
             let secondEndpoint = BridgeCurveEndpoint(
@@ -233,6 +237,10 @@ extension DesignDocument {
                     entityID: entityID
                 ),
                 reversesSense: rewriteBridgeEndpointSenseAfterCurveReverse(
+                    source.secondEndpoint,
+                    entityID: entityID
+                ),
+                trimSide: rewriteBridgeEndpointTrimSideAfterCurveReverse(
                     source.secondEndpoint,
                     entityID: entityID
                 ),
@@ -304,6 +312,16 @@ extension DesignDocument {
             return endpoint.reversesSense
         }
         return !endpoint.reversesSense
+    }
+
+    private func rewriteBridgeEndpointTrimSideAfterCurveReverse(
+        _ endpoint: BridgeCurveEndpoint,
+        entityID: SketchEntityID
+    ) -> BridgeCurveTrimSide {
+        guard bridgeEndpointReferencesEntity(endpoint.reference, entityID: entityID) else {
+            return endpoint.trimSide
+        }
+        return endpoint.trimSide.reversed
     }
 
     private func rewriteSplineEndpointReferenceAfterCurveReverse(

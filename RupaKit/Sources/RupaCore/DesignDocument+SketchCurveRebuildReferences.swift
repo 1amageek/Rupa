@@ -153,6 +153,7 @@ extension DesignDocument {
                     ),
                     parameter: source.firstEndpoint.parameter,
                     reversesSense: source.firstEndpoint.reversesSense,
+                    trimSide: source.firstEndpoint.trimSide,
                     tension: source.firstEndpoint.tension
                 ),
                 secondEndpoint: BridgeCurveEndpoint(
@@ -163,6 +164,7 @@ extension DesignDocument {
                     ),
                     parameter: source.secondEndpoint.parameter,
                     reversesSense: source.secondEndpoint.reversesSense,
+                    trimSide: source.secondEndpoint.trimSide,
                     tension: source.secondEndpoint.tension
                 ),
                 continuity: source.continuity,

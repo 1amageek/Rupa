@@ -3,6 +3,11 @@ import RupaCore
 
 typealias BridgeCurveParameterHandler = (InspectorBridgeCurve, InspectorBridgeCurveEndpoint, Double) -> Void
 typealias BridgeCurveEndpointHandler = (InspectorBridgeCurve, InspectorBridgeCurveEndpoint) -> Void
+typealias BridgeCurveTrimSideHandler = (
+    InspectorBridgeCurve,
+    InspectorBridgeCurveEndpoint,
+    BridgeCurveTrimSide
+) -> Void
 typealias BridgeCurveTrimHandler = (InspectorBridgeCurve) -> Void
 typealias BridgeCurveCurvatureDisplayHandler = (InspectorBridgeCurve, Bool, Double) -> Void
 typealias BridgeCurveTensionHandler = (
@@ -21,6 +26,7 @@ struct WorkspaceBridgeCurveInspectorView: View {
     var bridgeCurve: InspectorBridgeCurve
     var onSetParameter: BridgeCurveParameterHandler
     var onSetSense: BridgeCurveEndpointHandler
+    var onSetTrimSide: BridgeCurveTrimSideHandler
     var onTrimSources: BridgeCurveTrimHandler
     var onSetCurvatureDisplay: BridgeCurveCurvatureDisplayHandler
     var onSetTension: BridgeCurveTensionHandler
@@ -55,12 +61,66 @@ struct WorkspaceBridgeCurveInspectorView: View {
                 onSetParameter(bridgeCurve, .second, value)
             }
             senseControls
+            trimSideControls
             trimControl
             curvatureControls
             tensionControls
             startContinuityControls
             endContinuityControls
         }
+    }
+
+    private var trimSideControls: some View {
+        Group {
+            inspectorActionRow {
+                trimSideButton(
+                    title: "Start Keep Start",
+                    endpoint: .first,
+                    trimSide: .towardStart,
+                    current: bridgeCurve.firstEndpoint.trimSide,
+                    accessibilityIdentifier: "InspectorCurve.bridge.startTrimSideStart"
+                )
+                trimSideButton(
+                    title: "Start Keep End",
+                    endpoint: .first,
+                    trimSide: .towardEnd,
+                    current: bridgeCurve.firstEndpoint.trimSide,
+                    accessibilityIdentifier: "InspectorCurve.bridge.startTrimSideEnd"
+                )
+            }
+            inspectorActionRow {
+                trimSideButton(
+                    title: "End Keep Start",
+                    endpoint: .second,
+                    trimSide: .towardStart,
+                    current: bridgeCurve.secondEndpoint.trimSide,
+                    accessibilityIdentifier: "InspectorCurve.bridge.endTrimSideStart"
+                )
+                trimSideButton(
+                    title: "End Keep End",
+                    endpoint: .second,
+                    trimSide: .towardEnd,
+                    current: bridgeCurve.secondEndpoint.trimSide,
+                    accessibilityIdentifier: "InspectorCurve.bridge.endTrimSideEnd"
+                )
+            }
+        }
+    }
+
+    private func trimSideButton(
+        title: String,
+        endpoint: InspectorBridgeCurveEndpoint,
+        trimSide: BridgeCurveTrimSide,
+        current: BridgeCurveTrimSide,
+        accessibilityIdentifier: String
+    ) -> some View {
+        Button {
+            onSetTrimSide(bridgeCurve, endpoint, trimSide)
+        } label: {
+            Label(title, systemImage: trimSide == .towardStart ? "arrow.backward.to.line" : "arrow.forward.to.line")
+        }
+        .disabled(current == trimSide || bridgeCurve.trimsSourceCurves)
+        .accessibilityIdentifier(accessibilityIdentifier)
     }
 
     private var senseControls: some View {

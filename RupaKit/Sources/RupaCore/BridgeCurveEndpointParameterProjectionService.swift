@@ -128,6 +128,7 @@ public struct BridgeCurveEndpointParameterProjectionService: Sendable {
             reference: endpoint.reference,
             parameter: .scalar(parameter),
             reversesSense: endpoint.reversesSense,
+            trimSide: endpoint.trimSide,
             tension: endpoint.tension
         )
         guard let sample = try SketchCurveEndpointResolver().sample(

@@ -605,7 +605,7 @@ public final class AgentCommandController: AgentClientProtocol {
         capability(
             "createBridgeCurve",
             category: .sourceCurveEditing,
-            summary: "Create a multi-span cubic Bezier bridge source curve between two sketch curve positions, with optional endpoint parameter and sense, optional source-curve Trim, endpoint-specific Tension 1/2/3 values, and endpoint-specific G0/G1/G2 continuity constraints where persistent endpoint constraints are available; G3 is reported as unsupported before mutation.",
+            summary: "Create a multi-span cubic Bezier bridge source curve between two sketch curve positions, with optional endpoint parameter, sense, explicit Trim side, optional source-curve Trim, endpoint-specific Tension 1/2/3 values, and endpoint-specific G0/G1/G2 continuity constraints where persistent endpoint constraints are available; G3 is reported as unsupported before mutation.",
             access: .automationCommand,
             mutatesDocument: true,
             discovery: [.sketchEntitySummary, .curveAnalysis],
@@ -615,7 +615,7 @@ public final class AgentCommandController: AgentClientProtocol {
         capability(
             "setBridgeCurveParameters",
             category: .sourceCurveEditing,
-            summary: "Edit an existing bridge source curve by regenerating its multi-span cubic Bezier control points from stored or updated curve references, endpoint parameters, sense flags, optional source-curve Trim, endpoint-specific Tension 1/2/3 values, and endpoint-specific G0/G1/G2 continuity intent while preserving the generated spline entity ID.",
+            summary: "Edit an existing bridge source curve by regenerating its multi-span cubic Bezier control points from stored or updated curve references, endpoint parameters, sense flags, explicit Trim side, optional source-curve Trim, endpoint-specific Tension 1/2/3 values, and endpoint-specific G0/G1/G2 continuity intent while preserving the generated spline entity ID.",
             access: .automationCommand,
             mutatesDocument: true,
             discovery: [.sketchEntitySummary, .curveAnalysis],

@@ -367,6 +367,7 @@ extension DesignDocument {
                 reference: rewriteSketchReferenceAfterCurveSplit(endpoint.reference, split: split),
                 parameter: endpoint.parameter,
                 reversesSense: endpoint.reversesSense,
+                trimSide: endpoint.trimSide,
                 tension: endpoint.tension
             )
         }
@@ -381,6 +382,7 @@ extension DesignDocument {
                 reference: endpoint.reference,
                 parameter: .divide(parameter, splitExpression),
                 reversesSense: endpoint.reversesSense,
+                trimSide: endpoint.trimSide,
                 tension: endpoint.tension
             )
         }
@@ -394,6 +396,7 @@ extension DesignDocument {
                 .subtract(.scalar(1.0), splitExpression)
             ),
             reversesSense: endpoint.reversesSense,
+            trimSide: endpoint.trimSide,
             tension: endpoint.tension
         )
     }

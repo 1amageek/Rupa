@@ -2475,11 +2475,13 @@ import SwiftCAD
             firstEndpoint: BridgeCurveEndpoint(
                 reference: .entity(setup.firstLineID),
                 parameter: .scalar(0.5),
-                reversesSense: true
+                reversesSense: true,
+                trimSide: .towardEnd
             ),
             secondEndpoint: BridgeCurveEndpoint(
                 reference: .entity(setup.secondLineID),
-                parameter: .scalar(0.25)
+                parameter: .scalar(0.25),
+                trimSide: .towardStart
             ),
             continuity: .g1,
             trimsSourceCurves: true
@@ -2509,8 +2511,10 @@ import SwiftCAD
     #expect(updatedSource.firstEndpoint.reference == .lineStart(setup.firstLineID))
     #expect(updatedSource.firstEndpoint.parameter == nil)
     #expect(updatedSource.firstEndpoint.reversesSense == false)
+    #expect(updatedSource.firstEndpoint.trimSide == .towardEnd)
     #expect(updatedSource.secondEndpoint.reference == .lineEnd(setup.secondLineID))
     #expect(updatedSource.secondEndpoint.parameter == nil)
+    #expect(updatedSource.secondEndpoint.trimSide == .towardStart)
     #expect(updatedSource.continuity == .g1)
     #expect(sketch.constraints.contains(.coincident(
         .splineControlPoint(entity: source.entityID, index: 0),

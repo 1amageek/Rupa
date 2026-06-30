@@ -222,6 +222,18 @@ import SwiftCAD
     #expect(projection.endpoint.parameter == .scalar(0.5))
     #expect(projection.endpoint.reversesSense)
     #expect(projection.endpoint.tension == tension)
+
+    let sideProjection = try BridgeCurveEndpointParameterProjectionService().projection(
+        for: BridgeCurveEndpoint(
+            reference: .lineEnd(setup.firstLineID),
+            trimSide: .towardEnd
+        ),
+        featureID: setup.featureID,
+        near: Point2D(x: 0.0015, y: 0.0004),
+        in: setup.document
+    )
+
+    #expect(sideProjection.endpoint.trimSide == .towardEnd)
 }
 
 @Test func bridgeCurveEndpointParameterProjectionResolvesCurrentParameterSources() throws {
@@ -354,7 +366,8 @@ import SwiftCAD
         secondEndpoint: BridgeCurveEndpoint(
             reference: .entity(setup.secondLineID),
             parameter: .scalar(0.25),
-            reversesSense: true
+            reversesSense: true,
+            trimSide: .towardEnd
         ),
         continuity: .g1,
         trimsSourceCurves: true
@@ -372,8 +385,11 @@ import SwiftCAD
     #expect(source.trimsSourceCurves)
     #expect(source.firstEndpoint.reference == .lineEnd(setup.firstLineID))
     #expect(source.firstEndpoint.parameter == nil)
+    #expect(source.firstEndpoint.trimSide == .towardStart)
     #expect(source.secondEndpoint.reference == .lineStart(setup.secondLineID))
     #expect(source.secondEndpoint.parameter == nil)
+    #expect(source.secondEndpoint.reversesSense == false)
+    #expect(source.secondEndpoint.trimSide == .towardEnd)
     #expect(bridgeCurveNearlyEqual(firstStart.x, 0.0))
     #expect(bridgeCurveNearlyEqual(firstEnd.x, 0.0015))
     #expect(bridgeCurveNearlyEqual(secondStart.y, 0.00375))
@@ -396,6 +412,85 @@ import SwiftCAD
         endpoint: .end,
         line: setup.secondLineID
     )))
+}
+
+@Test func createBridgeCurveTrimSideIsIndependentFromSense() throws {
+    let startSideSetup = try bridgeCurveTwoLineDocument()
+    var startSideDocument = startSideSetup.document
+
+    let startSideBridgeID = try startSideDocument.createBridgeCurve(
+        featureID: startSideSetup.featureID,
+        firstEndpoint: BridgeCurveEndpoint(
+            reference: .entity(startSideSetup.firstLineID),
+            parameter: .scalar(0.5),
+            reversesSense: true,
+            trimSide: .towardStart
+        ),
+        secondEndpoint: BridgeCurveEndpoint(
+            reference: .lineStart(startSideSetup.secondLineID)
+        ),
+        continuity: .g0,
+        trimsSourceCurves: true
+    )
+
+    let startSideSketch = try #require(bridgeCurveSketch(in: startSideDocument, featureID: startSideSetup.featureID))
+    let startSideSource = try #require(startSideDocument.productMetadata.bridgeCurveSources.values.first)
+    let startSideLine = try #require(bridgeCurveLine(startSideSetup.firstLineID, in: startSideSketch))
+    let startSideLineStart = try bridgeCurveResolvedPoint(startSideLine.start, in: startSideDocument)
+    let startSideLineEnd = try bridgeCurveResolvedPoint(startSideLine.end, in: startSideDocument)
+    let startSideBridgeEntity = try #require(startSideSketch.entities[startSideBridgeID])
+    guard case .spline(let startSideSpline) = startSideBridgeEntity else {
+        Issue.record("Bridge curve should remain a spline after start-side trim.")
+        return
+    }
+    let startSideControlPoints = try startSideSpline.controlPoints.map { point in
+        try bridgeCurveResolvedPoint(point, in: startSideDocument)
+    }
+
+    #expect(startSideSource.firstEndpoint.reference == .lineEnd(startSideSetup.firstLineID))
+    #expect(startSideSource.firstEndpoint.reversesSense)
+    #expect(startSideSource.firstEndpoint.trimSide == .towardStart)
+    #expect(bridgeCurveNearlyEqual(startSideLineStart.x, 0.0))
+    #expect(bridgeCurveNearlyEqual(startSideLineEnd.x, 0.0015))
+    #expect(startSideControlPoints[1].x < startSideControlPoints[0].x)
+
+    let endSideSetup = try bridgeCurveTwoLineDocument()
+    var endSideDocument = endSideSetup.document
+
+    let endSideBridgeID = try endSideDocument.createBridgeCurve(
+        featureID: endSideSetup.featureID,
+        firstEndpoint: BridgeCurveEndpoint(
+            reference: .entity(endSideSetup.firstLineID),
+            parameter: .scalar(0.5),
+            trimSide: .towardEnd
+        ),
+        secondEndpoint: BridgeCurveEndpoint(
+            reference: .lineStart(endSideSetup.secondLineID)
+        ),
+        continuity: .g0,
+        trimsSourceCurves: true
+    )
+
+    let endSideSketch = try #require(bridgeCurveSketch(in: endSideDocument, featureID: endSideSetup.featureID))
+    let endSideSource = try #require(endSideDocument.productMetadata.bridgeCurveSources.values.first)
+    let endSideLine = try #require(bridgeCurveLine(endSideSetup.firstLineID, in: endSideSketch))
+    let endSideLineStart = try bridgeCurveResolvedPoint(endSideLine.start, in: endSideDocument)
+    let endSideLineEnd = try bridgeCurveResolvedPoint(endSideLine.end, in: endSideDocument)
+    let endSideBridgeEntity = try #require(endSideSketch.entities[endSideBridgeID])
+    guard case .spline(let endSideSpline) = endSideBridgeEntity else {
+        Issue.record("Bridge curve should remain a spline after end-side trim.")
+        return
+    }
+    let endSideControlPoints = try endSideSpline.controlPoints.map { point in
+        try bridgeCurveResolvedPoint(point, in: endSideDocument)
+    }
+
+    #expect(endSideSource.firstEndpoint.reference == .lineStart(endSideSetup.firstLineID))
+    #expect(endSideSource.firstEndpoint.reversesSense)
+    #expect(endSideSource.firstEndpoint.trimSide == .towardEnd)
+    #expect(bridgeCurveNearlyEqual(endSideLineStart.x, 0.0015))
+    #expect(bridgeCurveNearlyEqual(endSideLineEnd.x, 0.003))
+    #expect(endSideControlPoints[1].x > endSideControlPoints[0].x)
 }
 
 @Test func createBridgeCurveAddsSmoothConstraintsBetweenSplineEndpoints() throws {

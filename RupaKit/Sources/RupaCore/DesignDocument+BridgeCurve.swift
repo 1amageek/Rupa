@@ -610,12 +610,14 @@ extension DesignDocument {
             entity,
             entityID: entityID,
             parameter: parameter,
-            keepsBeforeEndpoint: endpoint.reversesSense == false,
+            trimSide: endpoint.trimSide,
             owner: owner
         )
         sketch.entities[entityID] = trimmed.entity
         return BridgeCurveEndpoint(
             reference: trimmed.endpointReference,
+            reversesSense: adjustedReversesSenseAfterTrim(endpoint),
+            trimSide: endpoint.trimSide,
             tension: endpoint.tension
         )
     }
@@ -649,7 +651,7 @@ extension DesignDocument {
         _ entity: SketchEntity,
         entityID: SketchEntityID,
         parameter: Double,
-        keepsBeforeEndpoint: Bool,
+        trimSide: BridgeCurveTrimSide,
         owner: String
     ) throws -> TrimmedBridgeCurveEndpointSource {
         switch entity {
@@ -659,7 +661,7 @@ extension DesignDocument {
                 fraction: parameter,
                 owner: owner
             )
-            if keepsBeforeEndpoint {
+            if trimSide.keepsLowerParameterSide {
                 let trimmed = SketchLine(start: line.start, end: splitPoint)
                 _ = try resolvedLineMetrics(trimmed, owner: owner)
                 return TrimmedBridgeCurveEndpointSource(
@@ -675,7 +677,7 @@ extension DesignDocument {
             )
         case .arc(let arc):
             let split = try splitArc(arc, fraction: parameter, owner: owner)
-            if keepsBeforeEndpoint {
+            if trimSide.keepsLowerParameterSide {
                 try validateArc(split.retained, owner: owner)
                 return TrimmedBridgeCurveEndpointSource(
                     entity: .arc(split.retained),
@@ -689,7 +691,7 @@ extension DesignDocument {
             )
         case .spline(let spline):
             let split = try splitSpline(spline, fraction: parameter, owner: owner)
-            if keepsBeforeEndpoint {
+            if trimSide.keepsLowerParameterSide {
                 try validateSpline(split.retained, owner: owner)
                 return TrimmedBridgeCurveEndpointSource(
                     entity: .spline(split.retained),
@@ -711,6 +713,13 @@ extension DesignDocument {
                 message: "\(owner) requires a line, arc, or spline curve position."
             )
         }
+    }
+
+    private func adjustedReversesSenseAfterTrim(_ endpoint: BridgeCurveEndpoint) -> Bool {
+        if endpoint.trimSide.keepsLowerParameterSide {
+            return endpoint.reversesSense
+        }
+        return !endpoint.reversesSense
     }
 
     private func bridgeCurveEndpointEntityID(_ endpoint: BridgeCurveEndpoint) -> SketchEntityID? {

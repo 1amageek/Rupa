@@ -510,7 +510,8 @@ import SwiftCAD
             firstEndpoint: BridgeCurveEndpoint(
                 reference: .entity(firstLineID),
                 parameter: .scalar(0.5),
-                reversesSense: true
+                reversesSense: true,
+                trimSide: .towardEnd
             ),
             secondEndpoint: BridgeCurveEndpoint(
                 reference: .entity(secondLineID),
@@ -1098,7 +1099,8 @@ import SwiftCAD
             firstEndpoint: BridgeCurveEndpoint(
                 reference: .entity(firstLineID),
                 parameter: .scalar(0.5),
-                reversesSense: true
+                reversesSense: true,
+                trimSide: .towardEnd
             ),
             secondEndpoint: nil,
             continuity: BridgeCurveContinuity(first: .g1, second: .g0),
