@@ -289,6 +289,69 @@ import SwiftCAD
     try document.validate()
 }
 
+@Test func createLoftUsesCurvedGuideBetweenMultipleProfileSections() throws {
+    var document = DesignDocument.empty()
+    let firstProfileID = try createLoftProfile(
+        in: &document,
+        name: "Multi Section Rail Loft Bottom",
+        width: 4.0,
+        height: 2.0,
+        z: 0.0
+    )
+    let middleProfileID = try createLoftProfile(
+        in: &document,
+        name: "Multi Section Rail Loft Middle",
+        width: 4.0,
+        height: 2.0,
+        z: 5.0
+    )
+    let lastProfileID = try createLoftProfile(
+        in: &document,
+        name: "Multi Section Rail Loft Top",
+        width: 4.0,
+        height: 2.0,
+        z: 10.0
+    )
+    let guideID = try document.createSketch(
+        name: "Multi Section Rail Loft Guide",
+        sketch: loftCurvedGuideSketch(x: 2.0, y: -1.0, zStart: 0.0, zEnd: 10.0),
+        geometryRole: .curve
+    )
+
+    _ = try document.createLoft(
+        name: "Multi Section Rail Loft",
+        sections: [
+            LoftSectionReference(profile: ProfileReference(featureID: firstProfileID)),
+            LoftSectionReference(profile: ProfileReference(featureID: middleProfileID)),
+            LoftSectionReference(profile: ProfileReference(featureID: lastProfileID)),
+        ],
+        guides: [
+            LoftGuideReference(featureID: guideID),
+        ]
+    )
+    let evaluated = try CADPipeline.modelingDefault(for: document).evaluate(document.cadDocument)
+    let body = try #require(evaluated.brep.bodies.values.first)
+    let railVertices = evaluated.brep.vertices.values.filter { vertex in
+        abs(vertex.point.y + 0.001) <= 1.0e-12
+            && vertex.point.z > 0.0
+            && vertex.point.z < 0.010
+            && abs(vertex.point.z - 0.005) > 1.0e-6
+            && vertex.point.x > 0.0025
+    }
+    let middleSectionVertices = evaluated.brep.vertices.values.filter { vertex in
+        abs(vertex.point.x - 0.002) <= 1.0e-12
+            && abs(vertex.point.y + 0.001) <= 1.0e-12
+            && abs(vertex.point.z - 0.005) <= 1.0e-12
+    }
+
+    #expect(body.kind == .solid)
+    #expect(evaluated.brep.vertices.count > 12)
+    #expect(evaluated.brep.faces.count > 10)
+    #expect(railVertices.isEmpty == false)
+    #expect(middleSectionVertices.isEmpty == false)
+    try document.validate()
+}
+
 @Test func createLoftSupportsNonParallelSectionsWithRuledBSplineSideSurfaces() throws {
     var document = DesignDocument.empty()
     let firstProfileID = try createLoftProfile(

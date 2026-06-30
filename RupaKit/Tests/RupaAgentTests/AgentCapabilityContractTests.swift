@@ -577,7 +577,7 @@ import SwiftCAD
     #expect(loftGuideAxis.notes.contains { $0.contains("guide endpoints must touch") })
     #expect(loftGuideAxis.notes.contains { $0.contains("first guide locks section seams") })
     #expect(loftGuideAxis.notes.contains { $0.contains("rail-following intermediate section rings") })
-    #expect(loftGuideAxis.notes.contains { $0.contains("multi-section rail deformation") })
+    #expect(loftGuideAxis.notes.contains { $0.contains("exact smooth rail-surface solving") })
     #expect(loftLoopAxis.supportedValues == ["false", "true"])
     #expect(loftLoopAxis.notes.contains { $0.contains("requires sheet resultKind") })
 
