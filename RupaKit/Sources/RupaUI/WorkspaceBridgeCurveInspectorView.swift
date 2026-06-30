@@ -4,6 +4,7 @@ import RupaCore
 typealias BridgeCurveParameterHandler = (InspectorBridgeCurve, InspectorBridgeCurveEndpoint, Double) -> Void
 typealias BridgeCurveEndpointHandler = (InspectorBridgeCurve, InspectorBridgeCurveEndpoint) -> Void
 typealias BridgeCurveTrimHandler = (InspectorBridgeCurve) -> Void
+typealias BridgeCurveCurvatureDisplayHandler = (InspectorBridgeCurve, Bool, Double) -> Void
 typealias BridgeCurveTensionHandler = (
     InspectorBridgeCurve,
     InspectorBridgeCurveEndpoint,
@@ -21,6 +22,7 @@ struct WorkspaceBridgeCurveInspectorView: View {
     var onSetParameter: BridgeCurveParameterHandler
     var onSetSense: BridgeCurveEndpointHandler
     var onTrimSources: BridgeCurveTrimHandler
+    var onSetCurvatureDisplay: BridgeCurveCurvatureDisplayHandler
     var onSetTension: BridgeCurveTensionHandler
     var onSetContinuity: BridgeCurveContinuityHandler
 
@@ -39,6 +41,7 @@ struct WorkspaceBridgeCurveInspectorView: View {
             )
             workspaceInspectorValueRow("First", sketchReferenceTitle(bridgeCurve.firstEndpoint.reference))
             workspaceInspectorValueRow("Second", sketchReferenceTitle(bridgeCurve.secondEndpoint.reference))
+            workspaceInspectorValueRow("Curvature", bridgeCurve.curvatureDisplay == nil ? "Off" : "On")
             bridgeCurveParameterControl(
                 "Start Value",
                 value: bridgeCurve.firstParameter
@@ -53,6 +56,7 @@ struct WorkspaceBridgeCurveInspectorView: View {
             }
             senseControls
             trimControl
+            curvatureControls
             tensionControls
             startContinuityControls
             endContinuityControls
@@ -92,6 +96,39 @@ struct WorkspaceBridgeCurveInspectorView: View {
             }
             .disabled(bridgeCurve.trimsSourceCurves)
             .accessibilityIdentifier("InspectorCurve.bridge.trimSources")
+        }
+    }
+
+    private var curvatureControls: some View {
+        Group {
+            inspectorActionRow {
+                Button {
+                    onSetCurvatureDisplay(
+                        bridgeCurve,
+                        bridgeCurve.curvatureDisplay == nil,
+                        bridgeCurve.curvatureDisplay?.combScale ?? CurveCurvatureDisplay.defaultCombScale
+                    )
+                } label: {
+                    Label(
+                        bridgeCurve.curvatureDisplay == nil ? "Show Curvature" : "Hide Curvature",
+                        systemImage: bridgeCurve.curvatureDisplay == nil ? "waveform.path.ecg" : "eye.slash"
+                    )
+                }
+                .accessibilityIdentifier("InspectorCurve.bridge.curvature.toggle")
+            }
+            if let curvatureDisplay = bridgeCurve.curvatureDisplay {
+                numericControl(
+                    "Curvature Scale",
+                    values: [curvatureDisplay.combScale],
+                    sliderRange: 0.01 ... max(1.0, curvatureDisplay.combScale * 2.0)
+                ) { value in
+                    onSetCurvatureDisplay(
+                        bridgeCurve,
+                        true,
+                        max(value, 1.0e-6)
+                    )
+                }
+            }
         }
     }
 

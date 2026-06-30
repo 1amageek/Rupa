@@ -119,7 +119,11 @@ struct WorkspaceSketchEntityInspectorStateBuilder {
                 sourceFeatureName: feature.name,
                 entityKind: "spline",
                 analysis: analysis,
-                bridgeCurve: try bridgeCurve(featureID: reference.featureID, entityID: reference.entityID),
+                bridgeCurve: try bridgeCurve(
+                    featureID: reference.featureID,
+                    entityID: reference.entityID,
+                    target: target
+                ),
                 start: controlPoints.first,
                 end: controlPoints.last,
                 controlPoints: controlPoints,
@@ -442,7 +446,8 @@ struct WorkspaceSketchEntityInspectorStateBuilder {
 
     private func bridgeCurve(
         featureID: FeatureID,
-        entityID: SketchEntityID
+        entityID: SketchEntityID,
+        target: SelectionTarget
     ) throws -> InspectorBridgeCurve? {
         guard let source = document.productMetadata.bridgeCurveSources.values.first(where: {
             $0.featureID == featureID && $0.entityID == entityID
@@ -451,10 +456,22 @@ struct WorkspaceSketchEntityInspectorStateBuilder {
         }
         return InspectorBridgeCurve(
             sourceID: source.id,
+            target: SelectionTarget(
+                sceneNodeID: target.sceneNodeID,
+                component: .sketchEntity(
+                    SelectionComponentID.sketchEntity(
+                        featureID: source.featureID,
+                        entityID: source.entityID
+                    )
+                )
+            ),
             firstEndpoint: source.firstEndpoint,
             secondEndpoint: source.secondEndpoint,
             continuity: source.continuity,
             trimsSourceCurves: source.trimsSourceCurves,
+            curvatureDisplay: document.productMetadata.curveCurvatureDisplays[
+                .sketchEntity(featureID: source.featureID, entityID: source.entityID)
+            ],
             firstParameter: try bridgeCurveParameter(source.firstEndpoint),
             secondParameter: try bridgeCurveParameter(source.secondEndpoint),
             firstTension: try bridgeCurveTension(source.firstEndpoint.tension),

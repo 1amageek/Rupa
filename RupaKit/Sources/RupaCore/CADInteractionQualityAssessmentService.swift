@@ -896,16 +896,20 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                         "RupaKit/Sources/RupaRendering/ViewportBridgeCurveEndpointAffordanceService.swift",
                         "RupaKit/Sources/RupaRendering/ViewportBridgeCurveEndpointDragTarget.swift",
                         "RupaKit/Sources/RupaRendering/ViewportCurveCurvatureComb.swift",
+                        "RupaKit/Sources/RupaUI/WorkspaceBridgeCurveInspectorView.swift",
+                        "RupaKit/Sources/RupaUI/WorkspaceSketchEntityInspectorStateBuilder.swift",
                     ],
                     tests: [
                         "RupaKit/Tests/RupaCoreTests/BridgeCurveCommandTests.swift",
                         "RupaKit/Tests/RupaCoreTests/CurveAnalysisServiceTests.swift",
                         "RupaKit/Tests/RupaRenderingTests/ViewportBridgeCurveEndpointAffordanceServiceTests.swift",
                         "RupaKit/Tests/RupaRenderingTests/ViewportCurveCurvatureCombTests.swift",
+                        "RupaKit/Tests/RupaUIPackageTests/WorkspaceSketchEntityInspectorStateBuilderTests.swift",
                     ],
                     notes: [
                         "Bridge Curve endpoint selections now resolve from point-backed sketch selection targets into the same BridgeCurveEndpoint contract used by Core, Automation, Agent, and CLI.",
                         "Selected Bridge Curve sources now expose projected viewport endpoint handles with tangent guide rendering, hover hit-testing, press-state isolation, exact line/arc/spline Value projection, and command-backed endpoint parameter drag commits through setBridgeCurveParameters.",
+                        "Bridge Curve Inspector Show Curvature controls now target the generated bridge spline through the same CurveCurvatureDisplay contract used by generic source curves, while generic curve display controls are suppressed for bridge-generated spline selections to avoid duplicate ownership.",
                     ]
                 ),
             ],

@@ -116,6 +116,7 @@ public struct Viewport: View {
     private let canvasDragSketchPlaneOverride: SketchPlane?
     private let projectionRequest: ViewportProjectionRequest?
     private let selectionHitPolicy: ViewportSelectionHitPolicy
+    private let hoverClearSignal: Int
     private let showsConstructionPlaneHover: Bool
     private let allowsSelectionRectangle: Bool
     private let allowsObjectAffordances: Bool
@@ -184,6 +185,7 @@ public struct Viewport: View {
         canvasDragSketchPlaneOverride: SketchPlane? = nil,
         projectionRequest: ViewportProjectionRequest? = nil,
         selectionHitPolicy: ViewportSelectionHitPolicy = .all,
+        hoverClearSignal: Int = 0,
         showsConstructionPlaneHover: Bool = false,
         allowsSelectionRectangle: Bool = false,
         allowsObjectAffordances: Bool = true,
@@ -251,6 +253,7 @@ public struct Viewport: View {
         self.canvasDragSketchPlaneOverride = canvasDragSketchPlaneOverride
         self.projectionRequest = projectionRequest
         self.selectionHitPolicy = selectionHitPolicy
+        self.hoverClearSignal = hoverClearSignal
         self.showsConstructionPlaneHover = showsConstructionPlaneHover
         self.allowsSelectionRectangle = allowsSelectionRectangle
         self.allowsObjectAffordances = allowsObjectAffordances
@@ -425,6 +428,9 @@ public struct Viewport: View {
             }
             .onChange(of: snapResolutionOptions) { _, _ in
                 refreshSnapCandidateKind(size: proxy.size)
+            }
+            .onChange(of: hoverClearSignal) { _, _ in
+                clearCanvasHover()
             }
         }
         .onAppear {

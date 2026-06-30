@@ -50,6 +50,35 @@ tracked assessment entry, but the fields must be explicit.
 | `FeedbackSignal` | Update instruction | Which layer must change next: fine UI affordance, mid command/source mapping, or coarse product intent. |
 | `FlowGraph` | Connection graph | The `In` and `Out` ports across UI, Core, Automation, Agent, CLI, SwiftCAD, evaluation, and diagnostics. |
 
+## Code Reading Gate
+
+Tests are required evidence, but they are not the review process. Every shipped
+slice must include a code-reading pass that follows ownership and state across
+the call graph before accepting green tests as sufficient.
+
+```mermaid
+flowchart LR
+    Entry["Changed entry point"] --> Owner["State owner"]
+    Owner --> Event["Input or async event"]
+    Event --> Mutation["Mutation boundary"]
+    Mutation --> Clear["Clear or rollback path"]
+    Clear --> Evidence["Tests and review notes"]
+    Evidence --> Feedback["ObservationSet"]
+```
+
+| Reading axis | Required check |
+|---|---|
+| State ownership | Identify the single owner for hover, selection, command, lifecycle, document, and display state. |
+| Event ordering | Read pointer, keyboard, async start/stop, undo/redo, and validation order, including paths where another view or task intercepts the event. |
+| Clear and rollback | Verify nil, cancel, failed validation, stale generation, and UI hover-exit paths clear every derived state they can expose. |
+| Target normalization | Verify Inspector, Viewport, Automation, Agent, and Core use the same stable target after converting from handles or generated UI affordances. |
+| Error surface | Confirm errors are typed, propagated, or converted into diagnostics intentionally; tests passing with hidden failure is not acceptable evidence. |
+| Performance ownership | Check large geometry or high-frequency hover paths for unnecessary copies, repeated evaluation, and cache invalidation drift. |
+
+The reading notes become `ObservationSet` entries. If a code-reading finding
+identifies a state owner, lifecycle, or target-normalization bug, the fix starts
+at that ownership boundary rather than at the nearest visible UI symptom.
+
 ## Relationship to Existing Documents
 
 The current Rupa documents already cover many pieces of the process, and the
@@ -78,6 +107,7 @@ These are the process foundations that gate broad feature work.
 | `MappingSpec` | UI, Core, Automation, Agent, CLI, and kernel routes can drift apart. | Implemented with capability-specific route matrices and selected route IDs. |
 | `DecisionLog` | Tradeoffs and rejected routes can disappear, making future refactors repeat old mistakes. | Implemented with packet decision records tied to actual route IDs. |
 | `ObservationSet` | Reviews, test coverage, route drift, and performance gaps must become structured feedback. | Implemented for CAD interaction packets from open work, gate ratings, test evidence, route status, performance status, and FlowGraph validation. |
+| Code reading gate | Green tests can miss dangerous state ownership, event-ordering, and lifecycle bugs. | Implemented as a mandatory review pass that records ownership, event, clear/rollback, target-normalization, error-surface, and performance findings into ObservationSet before accepting a slice. |
 | Confidence | `implemented` and `verified` ratings must distinguish missing channels and stale evidence. | Implemented from ObservationSet, evidence completeness, tests, calibration anchors, performance measurement records, and calibration state. CAD interaction packets measure Agent JSON payload size and deterministic dense geometry fixture budgets; production wall-clock and memory regression fixtures remain open for heavy geometry paths. |
 | `FlowGraph` | A feature can exist in Core but remain unreachable from UI, Agent, CLI, or diagnostics. | Implemented with static connection checks for required capability routes. |
 | Evaluation calibration | Subjective UI or modeling-quality judgments cannot be delegated safely. | Implemented at the packet level with calibration anchors. Production calibration still depends on feeding measured benchmark fixtures and review anchors into those records. |

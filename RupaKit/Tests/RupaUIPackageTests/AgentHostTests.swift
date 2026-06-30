@@ -1,10 +1,10 @@
 import Foundation
 import RupaAgentProtocol
 import RupaAgentTransport
-import RupaAgentUI
 import RupaCore
 import RupaUI
 import Testing
+@testable import RupaAgentUI
 
 @MainActor
 @Test(.timeLimit(.minutes(1))) func agentHostStartsSocketAndPublishesRegisteredSession() async throws {
@@ -60,6 +60,36 @@ import Testing
     }
 }
 
+@MainActor
+@Test(.timeLimit(.minutes(1))) func agentHostDoesNotReturnToRunningAfterStopDuringStart() async throws {
+    let socketPath = AgentSocketPath("/tmp/rupa-host-race-\(UUID().uuidString).sock")
+    let listener = BlockingAgentHostListener()
+    let host = AgentHost(socketPath: socketPath, listener: listener)
+
+    let startTask = Task { @MainActor in
+        await host.start()
+    }
+    var didReachStarting = false
+    for _ in 0..<20 {
+        if host.state == .starting,
+           await listener.hasPendingStart() {
+            didReachStarting = true
+            break
+        }
+        await Task.yield()
+    }
+    #expect(didReachStarting)
+
+    let stopTask = Task { @MainActor in
+        await host.stop()
+    }
+    await stopTask.value
+    await startTask.value
+
+    #expect(host.state == .stopped)
+    #expect(await listener.stopCallCount() == 1)
+}
+
 private func sendThroughDetachedClient(
     _ request: AgentRequest,
     socketPath: AgentSocketPath
@@ -85,5 +115,39 @@ private func removeTemporaryDirectory(_ url: URL) {
         try FileManager.default.removeItem(at: url)
     } catch {
         Issue.record("Failed to remove temporary directory: \(error)")
+    }
+}
+
+private actor BlockingAgentHostListener: AgentHostListening {
+    private var startContinuation: CheckedContinuation<Void, any Error>?
+    private var didStop = false
+    private var stopCount = 0
+
+    func start() async throws {
+        guard !didStop else {
+            return
+        }
+        try await withCheckedThrowingContinuation { continuation in
+            if didStop {
+                continuation.resume()
+            } else {
+                startContinuation = continuation
+            }
+        }
+    }
+
+    func stop() async {
+        stopCount += 1
+        didStop = true
+        startContinuation?.resume()
+        startContinuation = nil
+    }
+
+    func hasPendingStart() -> Bool {
+        startContinuation != nil
+    }
+
+    func stopCallCount() -> Int {
+        stopCount
     }
 }

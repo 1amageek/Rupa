@@ -115,10 +115,12 @@ struct InspectorSketchEntity: Equatable {
 
 struct InspectorBridgeCurve: Equatable {
     var sourceID: BridgeCurveSourceID
+    var target: SelectionTarget
     var firstEndpoint: BridgeCurveEndpoint
     var secondEndpoint: BridgeCurveEndpoint
     var continuity: BridgeCurveContinuity
     var trimsSourceCurves: Bool
+    var curvatureDisplay: CurveCurvatureDisplay?
     var firstParameter: Double
     var secondParameter: Double
     var firstTension: InspectorBridgeCurveTension

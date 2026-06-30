@@ -54,6 +54,31 @@ import Testing
     #expect(!operationState.canOffsetVertex)
 }
 
+@MainActor
+@Test func workspaceSketchEntityInspectorStateBuilderExposesBridgeCurvatureDisplayTarget() async throws {
+    var fixture = try workspaceBridgeCurveInspectorFixture()
+    try fixture.document.setCurveCurvatureDisplay(
+        target: fixture.bridgeTarget,
+        isVisible: true,
+        combScale: 0.35
+    )
+    let builder = WorkspaceSketchEntityInspectorStateBuilder(
+        document: fixture.document,
+        selection: SelectionModel(selectedTargets: [fixture.bridgeTarget]),
+        objectRegistry: .builtIn
+    )
+
+    let entity = try #require(try builder.selectedEntity())
+    let bridgeCurve = try #require(entity.bridgeCurve)
+
+    #expect(entity.entityID == fixture.bridgeEntityID)
+    #expect(bridgeCurve.target == fixture.bridgeTarget)
+    #expect(bridgeCurve.curvatureDisplay == CurveCurvatureDisplay(
+        componentID: fixture.bridgeComponentID,
+        combScale: 0.35
+    ))
+}
+
 private struct WorkspaceSketchEntityInspectorFixture {
     var document: DesignDocument
     var referenceLineID: SketchEntityID
@@ -110,6 +135,76 @@ private func workspaceSketchEntityInspectorFixture() throws -> WorkspaceSketchEn
     )
 }
 
+private struct WorkspaceBridgeCurveInspectorFixture {
+    var document: DesignDocument
+    var featureID: FeatureID
+    var firstLineID: SketchEntityID
+    var secondLineID: SketchEntityID
+    var bridgeEntityID: SketchEntityID
+    var bridgeTarget: SelectionTarget
+    var bridgeComponentID: SelectionComponentID
+}
+
+@MainActor
+private func workspaceBridgeCurveInspectorFixture() throws -> WorkspaceBridgeCurveInspectorFixture {
+    var document = DesignDocument.empty()
+    let featureID = try document.createLineSketch(
+        name: "Inspector Bridge",
+        plane: .xy,
+        start: SketchPoint(
+            x: .length(0.0, .meter),
+            y: .length(0.0, .meter)
+        ),
+        end: SketchPoint(
+            x: .length(0.003, .meter),
+            y: .length(0.0, .meter)
+        )
+    )
+    guard var feature = document.cadDocument.designGraph.nodes[featureID],
+          case var .sketch(sketch) = feature.operation,
+          let firstLineID = sketch.entities.keys.first else {
+        throw EditorError(
+            code: .referenceUnresolved,
+            message: "Bridge inspector setup requires a source line sketch."
+        )
+    }
+    let secondLineID = SketchEntityID()
+    sketch.entities[secondLineID] = .line(SketchLine(
+        start: SketchPoint(
+            x: .length(0.006, .meter),
+            y: .length(0.003, .meter)
+        ),
+        end: SketchPoint(
+            x: .length(0.006, .meter),
+            y: .length(0.006, .meter)
+        )
+    ))
+    feature.operation = .sketch(sketch)
+    document.cadDocument.designGraph.nodes[featureID] = feature
+    document.cadDocument.designGraph.revision = document.cadDocument.designGraph.revision.advanced()
+
+    let bridgeEntityID = try document.createBridgeCurve(
+        featureID: featureID,
+        firstEndpoint: BridgeCurveEndpoint(reference: .lineEnd(firstLineID)),
+        secondEndpoint: BridgeCurveEndpoint(reference: .lineStart(secondLineID)),
+        continuity: .g1
+    )
+    let summary = try SketchEntitySummaryService().summarize(document: document)
+    let bridgeEntry = try #require(summary.entries.first { $0.entityID == bridgeEntityID.description })
+    let bridgeTarget = try #require(bridgeEntry.selectionTarget())
+    let bridgeComponentID = try #require(sketchEntityComponentID(from: bridgeTarget))
+
+    return WorkspaceBridgeCurveInspectorFixture(
+        document: document,
+        featureID: featureID,
+        firstLineID: firstLineID,
+        secondLineID: secondLineID,
+        bridgeEntityID: bridgeEntityID,
+        bridgeTarget: bridgeTarget,
+        bridgeComponentID: bridgeComponentID
+    )
+}
+
 private func pointHandleSelectionTarget(
     _ entry: SketchEntitySummaryResult.EntityEntry,
     handle: SketchEntityPointHandle
@@ -120,4 +215,11 @@ private func pointHandleSelectionTarget(
         sceneNodeID: sourceTarget.sceneNodeID,
         component: .sketchEntity(SelectionComponentID(rawValue: pointHandle.selectionComponentID))
     )
+}
+
+private func sketchEntityComponentID(from target: SelectionTarget) -> SelectionComponentID? {
+    guard case .sketchEntity(let componentID) = target.component else {
+        return nil
+    }
+    return componentID
 }

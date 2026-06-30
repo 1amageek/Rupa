@@ -1648,7 +1648,7 @@ public final class AgentCommandController: AgentClientProtocol {
         capability(
             "setCurveCurvatureDisplay",
             category: .sourceCurveEditing,
-            summary: "Toggle persistent viewport curvature-comb display for a source curve target and set the comb scale used by the curve-quality overlay.",
+            summary: "Toggle persistent viewport curvature-comb display for a source curve target, including the generated spline target used by Bridge Curve Show Curvature, and set the comb scale used by the curve-quality overlay.",
             access: .automationCommand,
             mutatesDocument: true,
             discovery: [.sketchEntitySummary, .curveAnalysis],

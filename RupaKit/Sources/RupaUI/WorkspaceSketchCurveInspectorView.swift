@@ -20,6 +20,7 @@ struct WorkspaceSketchCurveInspectorView: View {
     var displayUnit: LengthDisplayUnit
     var curvatureDisplay: CurveCurvatureDisplay?
     var pointDisplay: PointDisplay?
+    var showsCurveDisplayControls = true
     var onSetCurveCurvatureDisplay: (InspectorSketchEntity, Bool, Double) -> Void
     var onSetPointDisplay: (InspectorSketchEntity, Bool) -> Void
 
@@ -63,36 +64,40 @@ struct WorkspaceSketchCurveInspectorView: View {
             workspaceInspectorValueRow("Samples", "\(analysis.sampleCount)")
             workspaceInspectorValueRow("Length", formatted(analysis.approximateLength))
             workspaceInspectorValueRow("Max Curvature", formattedCurvature(analysis.maxAbsCurvature))
-            workspaceInspectorValueRow("Curvature Comb", curvatureDisplay == nil ? "Off" : "On")
+            if showsCurveDisplayControls {
+                workspaceInspectorValueRow("Curvature Comb", curvatureDisplay == nil ? "Off" : "On")
+            }
             if analysis.maxAbsCurvature <= 1.0e-12 {
                 workspaceInspectorValueRow("Comb Output", "Flat curve")
             }
-            inspectorActionRow {
-                Button {
-                    onSetCurveCurvatureDisplay(
-                        entity,
-                        curvatureDisplay == nil,
-                        curvatureDisplay?.combScale ?? CurveCurvatureDisplay.defaultCombScale
-                    )
-                } label: {
-                    Label(
-                        curvatureDisplay == nil ? "Show Comb" : "Hide Comb",
-                        systemImage: curvatureDisplay == nil ? "waveform.path.ecg" : "eye.slash"
-                    )
+            if showsCurveDisplayControls {
+                inspectorActionRow {
+                    Button {
+                        onSetCurveCurvatureDisplay(
+                            entity,
+                            curvatureDisplay == nil,
+                            curvatureDisplay?.combScale ?? CurveCurvatureDisplay.defaultCombScale
+                        )
+                    } label: {
+                        Label(
+                            curvatureDisplay == nil ? "Show Comb" : "Hide Comb",
+                            systemImage: curvatureDisplay == nil ? "waveform.path.ecg" : "eye.slash"
+                        )
+                    }
+                    .accessibilityIdentifier("InspectorCurve.curvatureComb.toggle")
                 }
-                .accessibilityIdentifier("InspectorCurve.curvatureComb.toggle")
-            }
-            if let curvatureDisplay {
-                numericControl(
-                    "Comb Scale",
-                    values: [curvatureDisplay.combScale],
-                    sliderRange: 0.01 ... max(1.0, curvatureDisplay.combScale * 2.0)
-                ) { value in
-                    onSetCurveCurvatureDisplay(
-                        entity,
-                        true,
-                        max(value, 1.0e-6)
-                    )
+                if let curvatureDisplay {
+                    numericControl(
+                        "Comb Scale",
+                        values: [curvatureDisplay.combScale],
+                        sliderRange: 0.01 ... max(1.0, curvatureDisplay.combScale * 2.0)
+                    ) { value in
+                        onSetCurveCurvatureDisplay(
+                            entity,
+                            true,
+                            max(value, 1.0e-6)
+                        )
+                    }
                 }
             }
             workspaceInspectorValueRow("Points", pointDisplayTitle(pointDisplay))

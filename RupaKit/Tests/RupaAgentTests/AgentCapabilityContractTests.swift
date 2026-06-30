@@ -1104,6 +1104,7 @@ import SwiftCAD
     #expect(curveCurvatureDisplay.discovery.contains(.curveAnalysis))
     #expect(curveCurvatureDisplay.targets == [.sketchEntity])
     #expect(curveCurvatureDisplay.summary.contains("curvature-comb display"))
+    #expect(curveCurvatureDisplay.summary.contains("Bridge Curve Show Curvature"))
     #expect(curveCurvatureDisplay.failureMode.contains("source points"))
     #expect(curveCurvatureDisplay.failureMode.contains("non-positive comb scales"))
 

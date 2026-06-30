@@ -16,8 +16,9 @@ public final class AgentHost: WorkspaceAgentHost {
     public private(set) var state: AgentHostState
 
     private let bridge: MainActorAgentBridge
-    private let listener: AgentSocketListener
+    private let listener: any AgentHostListening
     private let socketPath: AgentSocketPath
+    private var lifecycleGeneration: Int
 
     public init(socketPath: AgentSocketPath = AgentSocketPath()) {
         self.socketPath = socketPath
@@ -27,6 +28,18 @@ public final class AgentHost: WorkspaceAgentHost {
             socketPath: socketPath
         )
         self.state = .stopped
+        self.lifecycleGeneration = 0
+    }
+
+    init(
+        socketPath: AgentSocketPath,
+        listener: any AgentHostListening
+    ) {
+        self.socketPath = socketPath
+        self.bridge = MainActorAgentBridge()
+        self.listener = listener
+        self.state = .stopped
+        self.lifecycleGeneration = 0
     }
 
     public func start() async {
@@ -37,11 +50,19 @@ public final class AgentHost: WorkspaceAgentHost {
             break
         }
 
+        advanceLifecycleGeneration()
+        let generation = lifecycleGeneration
         state = .starting
         do {
             try await listener.start()
+            guard lifecycleGeneration == generation else {
+                return
+            }
             state = .running(socketPath: socketPath.value)
         } catch {
+            guard lifecycleGeneration == generation else {
+                return
+            }
             state = .failed(message: error.localizedDescription)
         }
     }
@@ -51,6 +72,7 @@ public final class AgentHost: WorkspaceAgentHost {
             return
         }
 
+        advanceLifecycleGeneration()
         await listener.stop()
         state = .stopped
     }
@@ -67,4 +89,19 @@ public final class AgentHost: WorkspaceAgentHost {
     public func unregister(id: UUID) {
         bridge.unregister(id: id)
     }
+
+    private func advanceLifecycleGeneration() {
+        if lifecycleGeneration == Int.max {
+            lifecycleGeneration = 1
+        } else {
+            lifecycleGeneration += 1
+        }
+    }
 }
+
+protocol AgentHostListening: Sendable {
+    func start() async throws
+    func stop() async
+}
+
+extension AgentSocketListener: AgentHostListening {}

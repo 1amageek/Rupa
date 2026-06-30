@@ -71,6 +71,7 @@ public struct MainView: View {
     @State private var constructionPlaneRenameTargetID: ConstructionPlaneSourceID?
     @State private var constructionPlaneRenameText: String
     @State private var hoveredViewportPickingBackend: ViewportPickingBackend?
+    @State private var viewportHoverClearSignal: Int
     @State private var agentSessionID: UUID?
     @FocusState private var isWorkspaceFocused: Bool
 
@@ -150,6 +151,7 @@ public struct MainView: View {
         self._viewportProjectionRequest = State(initialValue: nil)
         self._constructionPlaneRenameTargetID = State(initialValue: nil)
         self._constructionPlaneRenameText = State(initialValue: "")
+        self._viewportHoverClearSignal = State(initialValue: 0)
         self.objectRegistry = objectRegistry
         self.agentHost = agentHost
         self.documentURL = documentURL
@@ -460,6 +462,7 @@ public struct MainView: View {
                     canvasDragSketchPlaneOverride: workspacePlaneMode.sketchPlane,
                     projectionRequest: viewportProjectionRequest,
                     selectionHitPolicy: selectionScope.viewportSelectionHitPolicy,
+                    hoverClearSignal: viewportHoverClearSignal,
                     showsConstructionPlaneHover: showsConstructionPlaneHover,
                     allowsSelectionRectangle: allowsSelectionRectangle,
                     allowsObjectAffordances: allowsObjectAffordances,
@@ -516,19 +519,23 @@ public struct MainView: View {
                 workspaceTopBar
                     .padding(.top, 8)
                     .padding(.horizontal, 8)
+                    .onHover(perform: handleWorkspaceOverlayHover)
             }
             .overlay(alignment: .leading) {
                 floatingToolPalette
                     .padding(.leading, 8)
+                    .onHover(perform: handleWorkspaceOverlayHover)
             }
             .overlay(alignment: .trailing) {
                 workspaceUtilityRail
                     .padding(.trailing, 8)
+                    .onHover(perform: handleWorkspaceOverlayHover)
             }
             .overlay(alignment: .bottom) {
                 viewportContextPanel
                     .padding(.bottom, 8)
                     .padding(.horizontal, 8)
+                    .onHover(perform: handleWorkspaceOverlayHover)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         } content: {
@@ -3401,6 +3408,19 @@ public struct MainView: View {
         setHoveredTarget(target)
     }
 
+    private func handleWorkspaceOverlayHover(_ isHovered: Bool) {
+        guard isHovered else {
+            return
+        }
+        if viewportHoverClearSignal == Int.max {
+            viewportHoverClearSignal = 1
+        } else {
+            viewportHoverClearSignal += 1
+        }
+        snapOverrideState.updateHoveredCandidateKind(nil)
+        handleViewportHover(nil)
+    }
+
     private func updatePatternArrayCurvePathPreviewCandidate(for target: SelectionTarget) {
         guard patternArrayCurvePathPickState.isActive else {
             patternArrayCurvePathPreviewCandidate = nil
@@ -3541,21 +3561,36 @@ public struct MainView: View {
     }
 
     private func setHoveredSceneNode(_ id: SceneNodeID?) {
-        guard session.selection.hoveredSceneNodeID != id else {
+        if id == nil {
+            guard session.selection.hoveredTarget != nil ||
+                session.selection.hoveredReference != nil else {
+                return
+            }
+        } else if session.selection.hoveredSceneNodeID == id {
             return
         }
         _ = session.hoverSceneNode(id)
     }
 
     private func setHoveredTarget(_ target: SelectionTarget?) {
-        guard session.selection.hoveredTarget != target else {
+        if target == nil {
+            guard session.selection.hoveredTarget != nil ||
+                session.selection.hoveredReference != nil else {
+                return
+            }
+        } else if session.selection.hoveredTarget == target {
             return
         }
         _ = session.hoverTarget(target)
     }
 
     private func setHoveredReference(_ reference: SelectionReference?) {
-        guard session.selection.hoveredReference != reference else {
+        if reference == nil {
+            guard session.selection.hoveredTarget != nil ||
+                session.selection.hoveredReference != nil else {
+                return
+            }
+        } else if session.selection.hoveredReference == reference {
             return
         }
         _ = session.hoverReference(reference)
@@ -4487,6 +4522,7 @@ public struct MainView: View {
             displayUnit: session.document.displayUnit,
             curvatureDisplay: curveCurvatureDisplay(for: entity),
             pointDisplay: pointDisplay(for: entity),
+            showsCurveDisplayControls: entity.bridgeCurve == nil,
             onSetCurveCurvatureDisplay: setCurveCurvatureDisplay,
             onSetPointDisplay: setPointDisplay
         )
@@ -4507,6 +4543,7 @@ public struct MainView: View {
             onSetParameter: setBridgeCurveParameter,
             onSetSense: setBridgeCurveSense,
             onTrimSources: trimBridgeCurveSources,
+            onSetCurvatureDisplay: setBridgeCurveCurvatureDisplay,
             onSetTension: setBridgeCurveTension,
             onSetContinuity: setBridgeCurveContinuity
         )
@@ -5640,6 +5677,21 @@ public struct MainView: View {
         let result = session.setBridgeCurveParameters(
             sourceID: bridgeCurve.sourceID,
             trimsSourceCurves: true
+        )
+        if result?.diagnostics.isEmpty == false {
+            isPreviewExpanded = true
+        }
+    }
+
+    private func setBridgeCurveCurvatureDisplay(
+        _ bridgeCurve: InspectorBridgeCurve,
+        isVisible: Bool,
+        combScale: Double
+    ) {
+        let result = session.setCurveCurvatureDisplay(
+            target: bridgeCurve.target,
+            isVisible: isVisible,
+            combScale: max(combScale, 1.0e-6)
         )
         if result?.diagnostics.isEmpty == false {
             isPreviewExpanded = true
