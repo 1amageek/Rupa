@@ -89,6 +89,8 @@ struct ViewportBridgeCurveEndpointAffordanceService: Sendable {
             role: handle.role,
             endpoint: handle.endpoint,
             referenceDescription: handle.referenceDescription,
+            point: handle.point,
+            modelTransform: item.modelTransform,
             projectedPoint: projectedPoint,
             projectedTangentTip: projectedTangentTip
         )
@@ -113,6 +115,8 @@ struct ViewportBridgeCurveEndpointHandleTarget: Equatable {
     var role: BridgeCurveEndpointHandleRole
     var endpoint: BridgeCurveEndpoint
     var referenceDescription: String
+    var point: Point2D
+    var modelTransform: Transform3D
     var projectedPoint: CGPoint
     var projectedTangentTip: CGPoint
 
@@ -120,6 +124,13 @@ struct ViewportBridgeCurveEndpointHandleTarget: Equatable {
         ViewportBridgeCurveEndpointHandleIdentity(
             sourceID: sourceID,
             role: role
+        )
+    }
+
+    var geometry: ViewportPlanarHandleDragGeometry {
+        ViewportPlanarHandleDragGeometry(
+            localPoint: Point3D(x: point.x, y: 0.0, z: point.y),
+            modelTransform: modelTransform
         )
     }
 }

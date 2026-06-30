@@ -114,6 +114,162 @@ import SwiftCAD
     #expect(handles[1].pointReference == .lineStart(setup.secondLineID))
 }
 
+@Test func bridgeCurveEndpointParameterProjectionProjectsLineParameter() throws {
+    let setup = try bridgeCurveTwoLineDocument()
+
+    let projection = try BridgeCurveEndpointParameterProjectionService().projection(
+        for: BridgeCurveEndpoint(reference: .lineEnd(setup.firstLineID)),
+        featureID: setup.featureID,
+        near: Point2D(x: 0.0015, y: 0.0004),
+        in: setup.document
+    )
+
+    #expect(bridgeCurveNearlyEqual(projection.parameter, 0.5))
+    #expect(projection.endpoint.reference == .lineEnd(setup.firstLineID))
+    #expect(projection.endpoint.parameter == .scalar(0.5))
+    #expect(bridgeCurveNearlyEqual(projection.point.x, 0.0015))
+    #expect(bridgeCurveNearlyEqual(projection.point.y, 0.0))
+}
+
+@Test func bridgeCurveEndpointParameterProjectionProjectsArcParameter() throws {
+    let setup = try bridgeCurveLineArcDocument()
+    let radius = 0.002
+    let angle = Double.pi / 4.0
+
+    let projection = try BridgeCurveEndpointParameterProjectionService().projection(
+        for: BridgeCurveEndpoint(reference: .arcStart(setup.arcID)),
+        featureID: setup.featureID,
+        near: Point2D(
+            x: 0.006 + cos(angle) * radius,
+            y: 0.003 + sin(angle) * radius
+        ),
+        in: setup.document
+    )
+
+    #expect(bridgeCurveNearlyEqual(projection.parameter, 0.5))
+    #expect(projection.endpoint.reference == .arcStart(setup.arcID))
+    #expect(projection.endpoint.parameter == .scalar(0.5))
+    #expect(bridgeCurveNearlyEqual(projection.point.x, 0.006 + cos(angle) * radius))
+    #expect(bridgeCurveNearlyEqual(projection.point.y, 0.003 + sin(angle) * radius))
+}
+
+@Test func bridgeCurveEndpointParameterProjectionClampsArcToNearestEndpointOutsideSpan() throws {
+    let setup = try bridgeCurveLineArcDocument()
+    let radius = 0.002
+    let beforeStartAngle = -Double.pi / 4.0
+    let afterEndAngle = Double.pi
+
+    let startProjection = try BridgeCurveEndpointParameterProjectionService().projection(
+        for: BridgeCurveEndpoint(reference: .arcStart(setup.arcID)),
+        featureID: setup.featureID,
+        near: Point2D(
+            x: 0.006 + cos(beforeStartAngle) * radius,
+            y: 0.003 + sin(beforeStartAngle) * radius
+        ),
+        in: setup.document
+    )
+    let endProjection = try BridgeCurveEndpointParameterProjectionService().projection(
+        for: BridgeCurveEndpoint(reference: .arcStart(setup.arcID)),
+        featureID: setup.featureID,
+        near: Point2D(
+            x: 0.006 + cos(afterEndAngle) * radius,
+            y: 0.003 + sin(afterEndAngle) * radius
+        ),
+        in: setup.document
+    )
+
+    #expect(bridgeCurveNearlyEqual(startProjection.parameter, 0.0))
+    #expect(bridgeCurveNearlyEqual(endProjection.parameter, 1.0))
+}
+
+@Test func bridgeCurveEndpointParameterProjectionProjectsSplineParameter() throws {
+    let setup = try bridgeCurveTwoSplineDocument()
+
+    let projection = try BridgeCurveEndpointParameterProjectionService().projection(
+        for: BridgeCurveEndpoint(reference: .splineControlPoint(entity: setup.firstSplineID, index: 3)),
+        featureID: setup.featureID,
+        near: Point2D(x: 0.00225, y: 0.0005),
+        in: setup.document
+    )
+
+    #expect(bridgeCurveNearlyEqual(projection.parameter, 0.75, tolerance: 1.0e-8))
+    #expect(projection.endpoint.reference == .splineControlPoint(entity: setup.firstSplineID, index: 3))
+    #expect(projection.endpoint.parameter == .scalar(projection.parameter))
+    #expect(bridgeCurveNearlyEqual(projection.point.x, 0.00225, tolerance: 1.0e-8))
+    #expect(bridgeCurveNearlyEqual(projection.point.y, 0.0, tolerance: 1.0e-8))
+}
+
+@Test func bridgeCurveEndpointParameterProjectionPreservesEndpointOptions() throws {
+    let setup = try bridgeCurveTwoLineDocument()
+    let tension = BridgeCurveTension(
+        first: .scalar(0.5),
+        second: .scalar(1.25),
+        third: .scalar(1.75)
+    )
+
+    let projection = try BridgeCurveEndpointParameterProjectionService().projection(
+        for: BridgeCurveEndpoint(
+            reference: .lineEnd(setup.firstLineID),
+            reversesSense: true,
+            tension: tension
+        ),
+        featureID: setup.featureID,
+        near: Point2D(x: 0.0015, y: 0.0004),
+        in: setup.document
+    )
+
+    #expect(projection.endpoint.reference == .lineEnd(setup.firstLineID))
+    #expect(projection.endpoint.parameter == .scalar(0.5))
+    #expect(projection.endpoint.reversesSense)
+    #expect(projection.endpoint.tension == tension)
+}
+
+@Test func bridgeCurveEndpointParameterProjectionResolvesCurrentParameterSources() throws {
+    let setup = try bridgeCurveTwoLineDocument()
+    var document = setup.document
+    try document.upsertParameter(
+        name: "bridgeValue",
+        expression: .scalar(0.25),
+        kind: .scalar
+    )
+    let bridgeValueID = try #require(document.cadDocument.parameterID(named: "bridgeValue"))
+    let service = BridgeCurveEndpointParameterProjectionService()
+
+    let endpointParameter = try service.parameter(
+        for: BridgeCurveEndpoint(reference: .lineEnd(setup.firstLineID)),
+        featureID: setup.featureID,
+        in: document
+    )
+    let expressionParameter = try service.parameter(
+        for: BridgeCurveEndpoint(
+            reference: .entity(setup.firstLineID),
+            parameter: .parameter(bridgeValueID)
+        ),
+        featureID: setup.featureID,
+        in: document
+    )
+
+    #expect(bridgeCurveNearlyEqual(endpointParameter, 1.0))
+    #expect(bridgeCurveNearlyEqual(expressionParameter, 0.25))
+}
+
+@Test func bridgeCurveEndpointParameterProjectionRejectsEntityWithoutParameter() throws {
+    let setup = try bridgeCurveTwoLineDocument()
+    var caught: EditorError?
+
+    do {
+        _ = try BridgeCurveEndpointParameterProjectionService().parameter(
+            for: BridgeCurveEndpoint(reference: .entity(setup.firstLineID)),
+            featureID: setup.featureID,
+            in: setup.document
+        )
+    } catch let error as EditorError {
+        caught = error
+    }
+
+    #expect(caught?.code == .commandInvalid)
+}
+
 @Test func createBridgeCurveSupportsParametricLinePositionsWithSense() throws {
     let setup = try bridgeCurveTwoLineDocument()
     var document = setup.document

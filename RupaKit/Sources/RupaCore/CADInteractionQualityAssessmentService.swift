@@ -891,8 +891,10 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                         "RupaKit/Sources/RupaCore/BridgeCurveSource.swift",
                         "RupaKit/Sources/RupaCore/BridgeCurveEndpointSelectionResolver.swift",
                         "RupaKit/Sources/RupaCore/BridgeCurveEndpointHandleService.swift",
+                        "RupaKit/Sources/RupaCore/BridgeCurveEndpointParameterProjectionService.swift",
                         "RupaKit/Sources/RupaCore/CurveAnalysisService.swift",
                         "RupaKit/Sources/RupaRendering/ViewportBridgeCurveEndpointAffordanceService.swift",
+                        "RupaKit/Sources/RupaRendering/ViewportBridgeCurveEndpointDragTarget.swift",
                         "RupaKit/Sources/RupaRendering/ViewportCurveCurvatureComb.swift",
                     ],
                     tests: [
@@ -903,16 +905,16 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                     ],
                     notes: [
                         "Bridge Curve endpoint selections now resolve from point-backed sketch selection targets into the same BridgeCurveEndpoint contract used by Core, Automation, Agent, and CLI.",
-                        "Selected Bridge Curve sources now expose projected viewport endpoint handles with tangent guide rendering, hover hit-testing, and press-state isolation while preserving BridgeCurveSource ownership for future parameter drag commits through setBridgeCurveParameters.",
+                        "Selected Bridge Curve sources now expose projected viewport endpoint handles with tangent guide rendering, hover hit-testing, press-state isolation, exact line/arc/spline Value projection, and command-backed endpoint parameter drag commits through setBridgeCurveParameters.",
                     ]
                 ),
             ],
             openWork: [
                 "G3 bridge constraints.",
                 "Edge and face endpoint bridge targets.",
-                "Bridge Curve parameter drag commit wiring and side selection.",
+                "Bridge Curve side selection and richer preview controls.",
             ],
-            next: "Add exact curve-parameter projection for Bridge Curve endpoint drag commits before broadening surface-boundary bridge workflows."
+            next: "Add Bridge Curve side selection plus edge, face, and surface-boundary endpoint targets without bypassing the Core endpoint contract."
         ),
         entry(
             area: .agentOperability,

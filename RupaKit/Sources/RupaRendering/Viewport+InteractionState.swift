@@ -72,6 +72,15 @@ struct ViewportSplineControlPointDragState: Equatable {
     var viewportDelta: CGPoint
 }
 
+struct ViewportBridgeCurveEndpointDragState: Equatable {
+    var target: ViewportBridgeCurveEndpointHandleTarget
+    var startPoint: CGPoint
+    var endpoint: BridgeCurveEndpoint
+    var parameter: Double
+    var projectedPoint: CGPoint
+    var projectedTangentTip: CGPoint
+}
+
 struct ViewportSplineControlPointSlideDragState: Equatable {
     var target: ViewportSplineControlPointSlideHandleTarget
     var startPoint: CGPoint
@@ -449,8 +458,8 @@ struct ViewportPolySplineSurfaceVertexHandleTarget: Equatable {
     var modelTransform: Transform3D
     var dragMode: ViewportPolySplineSurfaceVertexDragMode
 
-    var geometry: ViewportPolySplineSurfaceVertexDragGeometry {
-        ViewportPolySplineSurfaceVertexDragGeometry(
+    var geometry: ViewportPlanarHandleDragGeometry {
+        ViewportPlanarHandleDragGeometry(
             localPoint: point,
             modelTransform: modelTransform
         )
@@ -468,8 +477,8 @@ struct ViewportSurfaceControlPointHandleTarget: Equatable {
         ViewportSurfaceControlPointHandleIdentity(target: target)
     }
 
-    var geometry: ViewportPolySplineSurfaceVertexDragGeometry {
-        ViewportPolySplineSurfaceVertexDragGeometry(
+    var geometry: ViewportPlanarHandleDragGeometry {
+        ViewportPlanarHandleDragGeometry(
             localPoint: point,
             modelTransform: modelTransform
         )
@@ -495,8 +504,8 @@ struct ViewportSurfaceTrimEndpointHandleTarget: Equatable {
         ViewportSurfaceTrimEndpointHandleIdentity(target: target, endpoint: endpoint)
     }
 
-    var geometry: ViewportPolySplineSurfaceVertexDragGeometry {
-        ViewportPolySplineSurfaceVertexDragGeometry(
+    var geometry: ViewportPlanarHandleDragGeometry {
+        ViewportPlanarHandleDragGeometry(
             localPoint: point,
             modelTransform: modelTransform
         )
@@ -526,8 +535,8 @@ struct ViewportSurfaceTrimControlPointHandleTarget: Equatable {
         )
     }
 
-    var geometry: ViewportPolySplineSurfaceVertexDragGeometry {
-        ViewportPolySplineSurfaceVertexDragGeometry(
+    var geometry: ViewportPlanarHandleDragGeometry {
+        ViewportPlanarHandleDragGeometry(
             localPoint: point,
             modelTransform: modelTransform
         )

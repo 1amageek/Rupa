@@ -491,6 +491,7 @@ public struct MainView: View {
                     onSketchCurveHandleDrag: viewportSketchCurveHandleDragHandler,
                     onSketchDimensionDrag: viewportSketchDimensionDragHandler,
                     onSketchPointHandleDrag: viewportSketchPointHandleDragHandler,
+                    onBridgeCurveEndpointDrag: viewportBridgeCurveEndpointDragHandler,
                     onSplineControlPointDrag: viewportSplineControlPointDragHandler,
                     onSplineControlPointSlideDrag: viewportSplineControlPointSlideDragHandler,
                     onPolySplineSurfaceVertexDrag: viewportPolySplineSurfaceVertexDragHandler,
@@ -834,6 +835,16 @@ public struct MainView: View {
         }
         return { target in
             handleViewportSplineControlPointDrag(target)
+        }
+    }
+
+    private var viewportBridgeCurveEndpointDragHandler: ((ViewportBridgeCurveEndpointDragTarget) -> Void)? {
+        guard session.selectedTool == .select,
+              selectionScope == .sketchEntity else {
+            return nil
+        }
+        return { target in
+            handleViewportBridgeCurveEndpointDrag(target)
         }
     }
 
@@ -3214,6 +3225,29 @@ public struct MainView: View {
             deltaX: target.deltaX,
             deltaY: target.deltaY
         )
+    }
+
+    private func handleViewportBridgeCurveEndpointDrag(_ target: ViewportBridgeCurveEndpointDragTarget) {
+        guard session.selectedTool == .select,
+              selectionScope == .sketchEntity else {
+            return
+        }
+        let result: CommandExecutionResult?
+        switch target.role {
+        case .first:
+            result = session.setBridgeCurveParameters(
+                sourceID: target.sourceID,
+                firstEndpoint: target.endpoint
+            )
+        case .second:
+            result = session.setBridgeCurveParameters(
+                sourceID: target.sourceID,
+                secondEndpoint: target.endpoint
+            )
+        }
+        if result?.diagnostics.isEmpty == false {
+            isPreviewExpanded = true
+        }
     }
 
     private func handleViewportSplineControlPointSlideDrag(_ target: ViewportSplineControlPointSlideDragTarget) {

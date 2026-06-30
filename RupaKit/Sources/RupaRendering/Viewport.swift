@@ -11,6 +11,7 @@ public struct Viewport: View {
     @State private var activeSketchCurveHandleDrag: ViewportSketchCurveHandleDragState?
     @State private var activeSketchDimensionDrag: ViewportSketchDimensionDragState?
     @State private var activeSketchPointHandleDrag: ViewportSketchPointHandleDragState?
+    @State private var activeBridgeCurveEndpointDrag: ViewportBridgeCurveEndpointDragState?
     @State private var activeSplineControlPointDrag: ViewportSplineControlPointDragState?
     @State private var activeSplineControlPointSlideDrag: ViewportSplineControlPointSlideDragState?
     @State private var activePolySplineSurfaceVertexDrag: ViewportPolySplineSurfaceVertexDragState?
@@ -146,6 +147,7 @@ public struct Viewport: View {
     private let onSketchCurveHandleDrag: ((ViewportSketchCurveHandleDragTarget) -> Void)?
     private let onSketchDimensionDrag: ((ViewportSketchDimensionDragTarget) -> Void)?
     private let onSketchPointHandleDrag: ((ViewportSketchPointHandleDragTarget) -> Void)?
+    private let onBridgeCurveEndpointDrag: ((ViewportBridgeCurveEndpointDragTarget) -> Void)?
     private let onSplineControlPointDrag: ((ViewportSplineControlPointDragTarget) -> Void)?
     private let onSplineControlPointSlideDrag: ((ViewportSplineControlPointSlideDragTarget) -> Void)?
     private let onPolySplineSurfaceVertexDrag: ((ViewportPolySplineSurfaceVertexDragTarget) -> Void)?
@@ -213,6 +215,7 @@ public struct Viewport: View {
         onSketchCurveHandleDrag: ((ViewportSketchCurveHandleDragTarget) -> Void)? = nil,
         onSketchDimensionDrag: ((ViewportSketchDimensionDragTarget) -> Void)? = nil,
         onSketchPointHandleDrag: ((ViewportSketchPointHandleDragTarget) -> Void)? = nil,
+        onBridgeCurveEndpointDrag: ((ViewportBridgeCurveEndpointDragTarget) -> Void)? = nil,
         onSplineControlPointDrag: ((ViewportSplineControlPointDragTarget) -> Void)? = nil,
         onSplineControlPointSlideDrag: ((ViewportSplineControlPointSlideDragTarget) -> Void)? = nil,
         onPolySplineSurfaceVertexDrag: ((ViewportPolySplineSurfaceVertexDragTarget) -> Void)? = nil,
@@ -279,6 +282,7 @@ public struct Viewport: View {
         self.onSketchCurveHandleDrag = onSketchCurveHandleDrag
         self.onSketchDimensionDrag = onSketchDimensionDrag
         self.onSketchPointHandleDrag = onSketchPointHandleDrag
+        self.onBridgeCurveEndpointDrag = onBridgeCurveEndpointDrag
         self.onSplineControlPointDrag = onSplineControlPointDrag
         self.onSplineControlPointSlideDrag = onSplineControlPointSlideDrag
         self.onPolySplineSurfaceVertexDrag = onPolySplineSurfaceVertexDrag
@@ -1164,6 +1168,7 @@ public struct Viewport: View {
                 in: &context
             )
         }
+        drawActiveBridgeCurveEndpointDrag(in: &context)
         if let hoveredBridgeCurveEndpointHandle {
             drawBridgeCurveEndpointHandle(
                 hoveredBridgeCurveEndpointHandle,
@@ -4736,8 +4741,42 @@ public struct Viewport: View {
         style: ViewportFaceHighlightStyle,
         in context: inout GraphicsContext
     ) {
-        let point = target.projectedPoint
-        let tip = target.projectedTangentTip
+        drawBridgeCurveEndpointHandle(
+            point: target.projectedPoint,
+            tangentTip: target.projectedTangentTip,
+            style: style,
+            in: &context
+        )
+    }
+
+    private func drawActiveBridgeCurveEndpointDrag(
+        in context: inout GraphicsContext
+    ) {
+        guard let activeBridgeCurveEndpointDrag else {
+            return
+        }
+        var guide = Path()
+        guide.move(to: activeBridgeCurveEndpointDrag.target.projectedPoint)
+        guide.addLine(to: activeBridgeCurveEndpointDrag.projectedPoint)
+        context.stroke(
+            guide,
+            with: .color(ViewportTheme.hover.opacity(0.72)),
+            style: StrokeStyle(lineWidth: 2.0, lineCap: .round, dash: [4.0, 4.0])
+        )
+        drawBridgeCurveEndpointHandle(
+            point: activeBridgeCurveEndpointDrag.projectedPoint,
+            tangentTip: activeBridgeCurveEndpointDrag.projectedTangentTip,
+            style: .hovered,
+            in: &context
+        )
+    }
+
+    private func drawBridgeCurveEndpointHandle(
+        point: CGPoint,
+        tangentTip tip: CGPoint,
+        style: ViewportFaceHighlightStyle,
+        in context: inout GraphicsContext
+    ) {
         var tangentPath = Path()
         tangentPath.move(to: point)
         tangentPath.addLine(to: tip)
@@ -8634,9 +8673,16 @@ public struct Viewport: View {
         if activeSketchPointHandleDrag != nil {
             return
         }
-        if pendingBridgeCurveEndpointHandle != nil {
-            activeCanvasDrag = nil
-            publishSelectionDragPreview(hits: [])
+        if let start, let current, let pendingBridgeCurveEndpointHandle {
+            updateBridgeCurveEndpointDrag(
+                target: pendingBridgeCurveEndpointHandle,
+                start: start,
+                current: current,
+                size: size
+            )
+            return
+        }
+        if activeBridgeCurveEndpointDrag != nil {
             return
         }
         if let start, let current, let pendingSplineControlPointSlideHandle {
@@ -8954,6 +9000,7 @@ public struct Viewport: View {
         activeSketchCurveHandleDrag = nil
         activeSketchDimensionDrag = nil
         activeSketchPointHandleDrag = nil
+        activeBridgeCurveEndpointDrag = nil
         activeSplineControlPointDrag = nil
         activeSplineControlPointSlideDrag = nil
         activePolySplineSurfaceVertexDrag = nil
@@ -8992,7 +9039,8 @@ public struct Viewport: View {
             activeCanvasDrag = nil
             return
         }
-        if let bridgeCurveEndpointTarget = selectedBridgeCurveEndpointTarget(at: point, size: size) {
+        if onBridgeCurveEndpointDrag != nil,
+           let bridgeCurveEndpointTarget = selectedBridgeCurveEndpointTarget(at: point, size: size) {
             pendingBridgeCurveEndpointHandle = bridgeCurveEndpointTarget
             activeCanvasDrag = nil
             return
@@ -11014,6 +11062,69 @@ public struct Viewport: View {
         )
     }
 
+    private func updateBridgeCurveEndpointDrag(
+        target: ViewportBridgeCurveEndpointHandleTarget,
+        start: CGPoint,
+        current: CGPoint,
+        size: CGSize
+    ) {
+        let layout = makeLayout(
+            size: size,
+            camera: camera,
+            basis: currentProjectionBasis
+        )
+        let delta = target.geometry.localPlanarDelta(start: start, current: current, layout: layout)
+        let nearPoint = Point2D(
+            x: target.point.x + delta.x,
+            y: target.point.y + delta.z
+        )
+        let projection: BridgeCurveEndpointParameterProjection
+        do {
+            projection = try BridgeCurveEndpointParameterProjectionService().projection(
+                for: target.endpoint,
+                featureID: target.featureID,
+                near: nearPoint,
+                in: document
+            )
+        } catch {
+            activeBridgeCurveEndpointDrag = nil
+            return
+        }
+        let projectedPoint = projectedBridgeCurveEndpointPoint(
+            projection.point,
+            modelTransform: target.modelTransform,
+            layout: layout
+        )
+        let tangentTip = Point2D(
+            x: projection.point.x + projection.outgoingTangent.x * 0.001,
+            y: projection.point.y + projection.outgoingTangent.y * 0.001
+        )
+        activeBridgeCurveEndpointDrag = ViewportBridgeCurveEndpointDragState(
+            target: target,
+            startPoint: start,
+            endpoint: projection.endpoint,
+            parameter: projection.parameter,
+            projectedPoint: projectedPoint,
+            projectedTangentTip: projectedBridgeCurveEndpointPoint(
+                tangentTip,
+                modelTransform: target.modelTransform,
+                layout: layout
+            )
+        )
+    }
+
+    private func projectedBridgeCurveEndpointPoint(
+        _ point: Point2D,
+        modelTransform: Transform3D,
+        layout: ViewportLayout
+    ) -> CGPoint {
+        layout.project(modelTransform.viewportTransformedPoint(Point3D(
+            x: point.x,
+            y: 0.0,
+            z: point.y
+        )))
+    }
+
     private func updateSplineControlPointSlideDrag(
         target: ViewportSplineControlPointSlideHandleTarget,
         start: CGPoint,
@@ -11675,6 +11786,7 @@ public struct Viewport: View {
         }
         if pendingBridgeCurveEndpointHandle != nil {
             pendingBridgeCurveEndpointHandle = nil
+            activeBridgeCurveEndpointDrag = nil
             activeCanvasDrag = nil
             return
         }
@@ -11855,10 +11967,15 @@ public struct Viewport: View {
             }
             return
         }
-        if pendingBridgeCurveEndpointHandle != nil {
+        if pendingBridgeCurveEndpointHandle != nil || activeBridgeCurveEndpointDrag != nil {
+            let bridgeCurveEndpointDragTarget = committedBridgeCurveEndpointDragTarget()
             pendingBridgeCurveEndpointHandle = nil
+            activeBridgeCurveEndpointDrag = nil
             activeCanvasDrag = nil
             publishSelectionDragPreview(hits: [])
+            if let bridgeCurveEndpointDragTarget {
+                onBridgeCurveEndpointDrag?(bridgeCurveEndpointDragTarget)
+            }
             return
         }
         if pendingSplineControlPointSlideHandle != nil || activeSplineControlPointSlideDrag != nil {
@@ -12234,6 +12351,40 @@ public struct Viewport: View {
             deltaX: Double(localDelta.x),
             deltaY: Double(localDelta.y)
         )
+    }
+
+    private func committedBridgeCurveEndpointDragTarget() -> ViewportBridgeCurveEndpointDragTarget? {
+        guard let activeBridgeCurveEndpointDrag else {
+            return nil
+        }
+        let currentParameter = resolvedBridgeCurveEndpointParameter(
+            activeBridgeCurveEndpointDrag.target.endpoint,
+            featureID: activeBridgeCurveEndpointDrag.target.featureID
+        )
+        if let currentParameter,
+           abs(currentParameter - activeBridgeCurveEndpointDrag.parameter) <= 1.0e-8 {
+            return nil
+        }
+        return ViewportBridgeCurveEndpointDragTarget(
+            sourceID: activeBridgeCurveEndpointDrag.target.sourceID,
+            role: activeBridgeCurveEndpointDrag.target.role,
+            endpoint: activeBridgeCurveEndpointDrag.endpoint
+        )
+    }
+
+    private func resolvedBridgeCurveEndpointParameter(
+        _ endpoint: BridgeCurveEndpoint,
+        featureID: FeatureID
+    ) -> Double? {
+        do {
+            return try BridgeCurveEndpointParameterProjectionService().parameter(
+                for: endpoint,
+                featureID: featureID,
+                in: document
+            )
+        } catch {
+            return nil
+        }
     }
 
     private func committedSplineControlPointSlideDragTarget() -> ViewportSplineControlPointSlideDragTarget? {

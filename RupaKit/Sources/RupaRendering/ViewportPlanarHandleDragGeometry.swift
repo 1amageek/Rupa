@@ -2,7 +2,7 @@ import CoreGraphics
 import RupaCore
 import RupaViewportScene
 
-struct ViewportPolySplineSurfaceVertexDragGeometry: Equatable {
+struct ViewportPlanarHandleDragGeometry: Equatable {
     var localPoint: Point3D
     var modelTransform: Transform3D
 

@@ -4,11 +4,11 @@ import SwiftCAD
 import Testing
 @testable import RupaRendering
 
-@Test func viewportPolySplineSurfaceVertexDragGeometryKeepsAxisDeltaLocalUnderTransform() throws {
-    let layout = polySplineSurfaceVertexDragLayout()
-    let geometry = ViewportPolySplineSurfaceVertexDragGeometry(
+@Test func viewportPlanarHandleDragGeometryKeepsAxisDeltaLocalUnderTransform() throws {
+    let layout = planarHandleDragLayout()
+    let geometry = ViewportPlanarHandleDragGeometry(
         localPoint: .origin,
-        modelTransform: try polySplineSurfaceVertexDragTransform(scale: 2.0, translationX: 0.006)
+        modelTransform: try planarHandleDragTransform(scale: 2.0, translationX: 0.006)
     )
     let start = geometry.projectedPoint(layout: layout)
     let current = layout.project(Point3D(x: 0.008, y: 0.0, z: 0.0))
@@ -30,11 +30,11 @@ import Testing
     #expect(abs(movedDisplayPoint.x - 0.008) < 1.0e-12)
 }
 
-@Test func viewportPolySplineSurfaceVertexDragGeometryConvertsPlanarDeltaBackToLocal() throws {
-    let layout = polySplineSurfaceVertexDragLayout()
-    let geometry = ViewportPolySplineSurfaceVertexDragGeometry(
+@Test func viewportPlanarHandleDragGeometryConvertsPlanarDeltaBackToLocal() throws {
+    let layout = planarHandleDragLayout()
+    let geometry = ViewportPlanarHandleDragGeometry(
         localPoint: .origin,
-        modelTransform: try polySplineSurfaceVertexDragTransform(scale: 2.0, translationX: 0.006)
+        modelTransform: try planarHandleDragTransform(scale: 2.0, translationX: 0.006)
     )
     let start = geometry.projectedPoint(layout: layout)
     let current = layout.project(Point3D(x: 0.008, y: 0.0, z: 0.0))
@@ -62,14 +62,14 @@ import Testing
     #expect(abs(inverted.z - vector.z) < 1.0e-12)
 }
 
-private func polySplineSurfaceVertexDragLayout() -> ViewportLayout {
+private func planarHandleDragLayout() -> ViewportLayout {
     ViewportLayout(
         modelBounds: CGRect(x: -0.002, y: -0.002, width: 0.020, height: 0.020),
         size: CGSize(width: 800.0, height: 600.0)
     )
 }
 
-private func polySplineSurfaceVertexDragTransform(
+private func planarHandleDragTransform(
     scale: Double,
     translationX: Double
 ) throws -> Transform3D {
