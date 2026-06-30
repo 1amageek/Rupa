@@ -14,6 +14,8 @@ enum ViewportTheme {
     static let background = Color(red: 0.105, green: 0.112, blue: 0.118)
     static let gridMinor = Color.white.opacity(0.055)
     static let gridMajor = Color.white.opacity(0.135)
+    static let gridOrigin = Color.white.opacity(0.22)
+    static let gridScaleLabel = Color.white.opacity(0.42)
     static let bodySurface = Color(red: 0.62, green: 0.64, blue: 0.62)
     static let selection = Color(red: 0.14, green: 0.66, blue: 0.95)
     static let hover = Color(red: 0.24, green: 0.88, blue: 0.82)

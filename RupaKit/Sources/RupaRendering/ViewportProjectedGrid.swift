@@ -1,4 +1,5 @@
 import CoreGraphics
+import Foundation
 import RupaCore
 import RupaViewportScene
 
@@ -10,17 +11,39 @@ public struct ViewportProjectedGrid: Equatable {
         public var start: CGPoint
         public var end: CGPoint
         public var isMajor: Bool
+        public var isOrigin: Bool
 
         public init(
             axis: Axis,
             start: CGPoint,
             end: CGPoint,
-            isMajor: Bool
+            isMajor: Bool,
+            isOrigin: Bool = false
         ) {
             self.axis = axis
             self.start = start
             self.end = end
             self.isMajor = isMajor
+            self.isOrigin = isOrigin
+        }
+    }
+
+    public struct ScaleLabel: Equatable {
+        public var axis: Axis
+        public var valueMeters: Double
+        public var position: CGPoint
+        public var text: String
+
+        public init(
+            axis: Axis,
+            valueMeters: Double,
+            position: CGPoint,
+            text: String
+        ) {
+            self.axis = axis
+            self.valueMeters = valueMeters
+            self.position = position
+            self.text = text
         }
     }
 
@@ -29,6 +52,7 @@ public struct ViewportProjectedGrid: Equatable {
     public var majorStepMeters: Double
     public var minorStepPixels: CGFloat
     public var lines: [Line]
+    public var scaleLabels: [ScaleLabel]
 
     public init(
         document: DesignDocument,
@@ -54,19 +78,35 @@ public struct ViewportProjectedGrid: Equatable {
         )
         let minorStepPixels = max(CGFloat(minorStepMeters) * layout.scale, 8.0)
         let majorEvery = max(1, Int((majorStepMeters / minorStepMeters).rounded()))
+        let resolvedMajorStepMeters = minorStepMeters * Double(majorEvery)
         let basis = layout.basis
         let plane = Self.gridPlane(for: basis)
+        let modelBounds = Self.visibleModelBounds(
+            layout: layout,
+            size: size,
+            plane: plane,
+            step: max(CGFloat(minorStepMeters), 1.0e-12)
+        )
 
         self.basis = basis
         self.minorStepMeters = minorStepMeters
-        self.majorStepMeters = majorStepMeters
+        self.majorStepMeters = resolvedMajorStepMeters
         self.minorStepPixels = minorStepPixels
         self.lines = Self.makeLines(
             layout: layout,
             size: size,
             plane: plane,
+            modelBounds: modelBounds,
             minorStepMeters: minorStepMeters,
             majorEvery: majorEvery
+        )
+        self.scaleLabels = Self.makeScaleLabels(
+            layout: layout,
+            size: size,
+            plane: plane,
+            modelBounds: modelBounds,
+            majorStepMeters: resolvedMajorStepMeters,
+            unit: document.displayUnit
         )
     }
 
@@ -90,11 +130,11 @@ public struct ViewportProjectedGrid: Equatable {
         layout: ViewportLayout,
         size: CGSize,
         plane: GridPlane,
+        modelBounds: CGRect,
         minorStepMeters: Double,
         majorEvery: Int
     ) -> [Line] {
         let step = max(CGFloat(minorStepMeters), 1.0e-12)
-        let modelBounds = visibleModelBounds(layout: layout, size: size, plane: plane, step: step)
         let minFirstIndex = Int(floor(modelBounds.minX / step)) - 2
         let maxFirstIndex = Int(ceil(modelBounds.maxX / step)) + 2
         let minSecondIndex = Int(floor(modelBounds.minY / step)) - 2
@@ -110,7 +150,8 @@ public struct ViewportProjectedGrid: Equatable {
                     axis: plane.firstAxis,
                     start: project(first: modelBounds.minX, second: second, layout: layout, plane: plane),
                     end: project(first: modelBounds.maxX, second: second, layout: layout, plane: plane),
-                    isMajor: isMajor
+                    isMajor: isMajor,
+                    isOrigin: index == 0
                 )
             )
         }
@@ -123,12 +164,108 @@ public struct ViewportProjectedGrid: Equatable {
                     axis: plane.secondAxis,
                     start: project(first: first, second: modelBounds.minY, layout: layout, plane: plane),
                     end: project(first: first, second: modelBounds.maxY, layout: layout, plane: plane),
-                    isMajor: isMajor
+                    isMajor: isMajor,
+                    isOrigin: index == 0
                 )
             )
         }
 
         return lines
+    }
+
+    private static func makeScaleLabels(
+        layout: ViewportLayout,
+        size: CGSize,
+        plane: GridPlane,
+        modelBounds: CGRect,
+        majorStepMeters: Double,
+        unit: LengthDisplayUnit
+    ) -> [ScaleLabel] {
+        let step = max(CGFloat(majorStepMeters), 1.0e-12)
+        let minFirstIndex = Int(floor(modelBounds.minX / step))
+        let maxFirstIndex = Int(ceil(modelBounds.maxX / step))
+        let minSecondIndex = Int(floor(modelBounds.minY / step))
+        let maxSecondIndex = Int(ceil(modelBounds.maxY / step))
+        let visibleRect = CGRect(
+            x: -32.0,
+            y: -24.0,
+            width: size.width + 64.0,
+            height: size.height + 48.0
+        )
+        var labels: [ScaleLabel] = []
+        labels.reserveCapacity(maxFirstIndex - minFirstIndex + maxSecondIndex - minSecondIndex)
+
+        for index in minFirstIndex ... maxFirstIndex where index != 0 {
+            let value = CGFloat(index) * step
+            let basePosition = project(first: value, second: 0.0, layout: layout, plane: plane)
+            guard visibleRect.contains(basePosition) else {
+                continue
+            }
+            let position = offsetLabelPosition(basePosition, axis: plane.firstAxis, layout: layout)
+            labels.append(
+                ScaleLabel(
+                    axis: plane.firstAxis,
+                    valueMeters: Double(value),
+                    position: position,
+                    text: formattedScaleLabel(valueMeters: Double(value), unit: unit)
+                )
+            )
+        }
+
+        for index in minSecondIndex ... maxSecondIndex where index != 0 {
+            let value = CGFloat(index) * step
+            let basePosition = project(first: 0.0, second: value, layout: layout, plane: plane)
+            guard visibleRect.contains(basePosition) else {
+                continue
+            }
+            let position = offsetLabelPosition(basePosition, axis: plane.secondAxis, layout: layout)
+            labels.append(
+                ScaleLabel(
+                    axis: plane.secondAxis,
+                    valueMeters: Double(value),
+                    position: position,
+                    text: formattedScaleLabel(valueMeters: Double(value), unit: unit)
+                )
+            )
+        }
+
+        return labels
+    }
+
+    private static func offsetLabelPosition(
+        _ position: CGPoint,
+        axis: Axis,
+        layout: ViewportLayout
+    ) -> CGPoint {
+        let direction = layout.basis.direction(for: axis)
+        let length = max(hypot(direction.dx, direction.dy), 1.0e-9)
+        var normal = CGVector(dx: -direction.dy / length, dy: direction.dx / length)
+        if normal.dy > 0.0 {
+            normal = CGVector(dx: -normal.dx, dy: -normal.dy)
+        }
+        return CGPoint(
+            x: position.x + normal.dx * 12.0,
+            y: position.y + normal.dy * 12.0
+        )
+    }
+
+    private static func formattedScaleLabel(
+        valueMeters: Double,
+        unit: LengthDisplayUnit
+    ) -> String {
+        let value = abs(unit.value(fromMeters: valueMeters))
+        let maxFractionDigits: Int
+        if value >= 100.0 {
+            maxFractionDigits = 0
+        } else if value >= 10.0 {
+            maxFractionDigits = 1
+        } else {
+            maxFractionDigits = 3
+        }
+        let formatted = value.formatted(
+            .number.precision(.fractionLength(0...maxFractionDigits))
+        )
+        return "\(formatted)\(unit.symbol)"
     }
 
     private static func visibleModelBounds(

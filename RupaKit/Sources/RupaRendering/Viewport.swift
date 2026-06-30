@@ -37,6 +37,7 @@ public struct Viewport: View {
     @State private var hoveredSketchCurveHandle: ViewportSketchCurveHandleTarget?
     @State private var hoveredSketchDimension: ViewportSketchDimensionTarget?
     @State private var hoveredSketchPointHandle: ViewportSketchPointHandleTarget?
+    @State private var hoveredBridgeCurveEndpointHandle: ViewportBridgeCurveEndpointHandleTarget?
     @State private var hoveredSplineControlPoint: ViewportSplineControlPointHandleTarget?
     @State private var hoveredSplineControlPointSlideHandle: ViewportSplineControlPointSlideHandleTarget?
     @State private var hoveredPolySplineSurfaceVertex: ViewportPolySplineSurfaceVertexHandleTarget?
@@ -62,6 +63,7 @@ public struct Viewport: View {
     @State private var pendingSketchCurveHandle: ViewportSketchCurveHandleTarget?
     @State private var pendingSketchDimension: ViewportSketchDimensionTarget?
     @State private var pendingSketchPointHandle: ViewportSketchPointHandleTarget?
+    @State private var pendingBridgeCurveEndpointHandle: ViewportBridgeCurveEndpointHandleTarget?
     @State private var pendingSplineControlPoint: ViewportSplineControlPointHandleTarget?
     @State private var pendingSplineControlPointSlideHandle: ViewportSplineControlPointSlideHandleTarget?
     @State private var pendingPolySplineSurfaceVertex: ViewportPolySplineSurfaceVertexHandleTarget?
@@ -296,6 +298,7 @@ public struct Viewport: View {
         GeometryReader { proxy in
             TimelineView(.animation) { timeline in
                 let basis = projectionBasis(at: timeline.date)
+                let chromeLayout = ViewportCanvasChromeLayout(viewportSize: proxy.size)
 
                 Canvas { context, size in
                     drawGrid(in: &context, size: size, camera: camera, basis: basis)
@@ -310,7 +313,19 @@ public struct Viewport: View {
                 .contentShape(Rectangle())
                 .overlay(alignment: .topLeading) {
                     viewportBadge
-                        .padding(12)
+                        .frame(
+                            width: ViewportCanvasChromeLayout.viewportBadgeSize.width,
+                            height: ViewportCanvasChromeLayout.viewportBadgeSize.height,
+                            alignment: .leading
+                        )
+                        .padding(.top, ViewportCanvasChromeLayout.viewportBadgePadding)
+                        .padding(.leading, ViewportCanvasChromeLayout.viewportBadgePadding)
+                        .zIndex(2.0)
+                        .onHover { isHovered in
+                            if isHovered {
+                                clearCanvasHover()
+                            }
+                        }
                 }
                 .overlay {
                     canvasDragPlaceholderOverlay(basis: basis)
@@ -372,7 +387,8 @@ public struct Viewport: View {
                         },
                         onShiftTap: { point, size in
                             captureReferenceLineAnchor(at: point, size: size)
-                        }
+                        },
+                        inputExclusionRects: chromeLayout.inputExclusionRects
                     )
                     .accessibilityHidden(true)
                 }
@@ -382,7 +398,7 @@ public struct Viewport: View {
                 .overlay {
                     edgeAccessibilityMarkers(size: proxy.size, basis: basis)
                 }
-                .overlay(alignment: .bottomTrailing) {
+                .overlay(alignment: .bottom) {
                     ViewportAxisTriad(
                         selectedAxis: selectedAxis,
                         basis: basis,
@@ -393,8 +409,13 @@ public struct Viewport: View {
                             selectProjectionAxis(axis)
                         }
                     )
-                    .padding(.trailing, 14)
-                    .padding(.bottom, 70)
+                    .padding(.bottom, ViewportCanvasChromeLayout.axisBottomPadding)
+                    .zIndex(2.0)
+                    .onHover { isHovered in
+                        if isHovered {
+                            clearCanvasHover()
+                        }
+                    }
                 }
                 .frame(width: proxy.size.width, height: proxy.size.height)
             }
@@ -556,6 +577,7 @@ public struct Viewport: View {
                 .frame(height: 12)
             Text(statusTitle)
                 .font(.caption)
+                .lineLimit(1)
             Divider()
                 .frame(height: 12)
             Text("\(Int((camera.zoom * 100.0).rounded()))%")
@@ -565,10 +587,16 @@ public struct Viewport: View {
                     .frame(height: 12)
                 Text("\(featureCount) features")
                     .font(.caption)
+                    .lineLimit(1)
             }
         }
         .padding(.horizontal, 9)
         .padding(.vertical, 5)
+        .frame(
+            width: ViewportCanvasChromeLayout.viewportBadgeSize.width,
+            height: ViewportCanvasChromeLayout.viewportBadgeSize.height,
+            alignment: .leading
+        )
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 6))
     }
 
@@ -638,9 +666,13 @@ public struct Viewport: View {
         )
         var minorPath = Path()
         var majorPath = Path()
+        var originPath = Path()
 
         for line in grid.lines {
-            if line.isMajor {
+            if line.isOrigin {
+                originPath.move(to: line.start)
+                originPath.addLine(to: line.end)
+            } else if line.isMajor {
                 majorPath.move(to: line.start)
                 majorPath.addLine(to: line.end)
             } else {
@@ -651,6 +683,23 @@ public struct Viewport: View {
 
         context.stroke(minorPath, with: .color(ViewportTheme.gridMinor), lineWidth: 0.45)
         context.stroke(majorPath, with: .color(ViewportTheme.gridMajor), lineWidth: 0.85)
+        context.stroke(originPath, with: .color(ViewportTheme.gridOrigin), lineWidth: 1.05)
+        drawGridScaleLabels(grid.scaleLabels, in: &context)
+    }
+
+    private func drawGridScaleLabels(
+        _ labels: [ViewportProjectedGrid.ScaleLabel],
+        in context: inout GraphicsContext
+    ) {
+        for label in labels {
+            context.draw(
+                Text(label.text)
+                    .font(.system(size: 10.0, weight: .medium, design: .monospaced))
+                    .foregroundStyle(ViewportTheme.gridScaleLabel),
+                at: label.position,
+                anchor: .center
+            )
+        }
     }
 
     private func makeScene() -> ViewportScene {
@@ -1108,6 +1157,20 @@ public struct Viewport: View {
             layout: layout,
             in: &context
         )
+        for target in bridgeCurveEndpointHandleTargets(in: scene, layout: layout) {
+            drawBridgeCurveEndpointHandle(
+                target,
+                style: .selected,
+                in: &context
+            )
+        }
+        if let hoveredBridgeCurveEndpointHandle {
+            drawBridgeCurveEndpointHandle(
+                hoveredBridgeCurveEndpointHandle,
+                style: .hovered,
+                in: &context
+            )
+        }
         if onPolySplineSurfaceVertexDrag != nil {
             let topologyVertices = polySplineSurfaceTopologyVertices(in: scene)
             for target in polySplineSurfaceVertexHandleTargets(in: scene) {
@@ -1332,7 +1395,8 @@ public struct Viewport: View {
                   for: probe.point,
                   referencePoint: probe.referencePoint
               ),
-              let candidate = result.selectedCandidate else {
+              let candidate = result.selectedCandidate,
+              shouldDrawSnapOverlay(for: candidate) else {
             return
         }
         let projectedPoint = layout.project(
@@ -1360,26 +1424,46 @@ public struct Viewport: View {
         crosshair.addLine(to: CGPoint(x: projectedPoint.x, y: projectedPoint.y + 9.0))
         context.stroke(crosshair, with: .color(accent.opacity(0.84)), lineWidth: 1.0)
 
-        let label = Text(candidate.label)
-            .font(.caption2.weight(.semibold))
-            .foregroundStyle(Color.white)
-        let labelPoint = CGPoint(x: projectedPoint.x + 14.0, y: projectedPoint.y - 15.0)
-        let backgroundRect = CGRect(
-            x: labelPoint.x - 7.0,
-            y: labelPoint.y - 10.0,
-            width: max(CGFloat(candidate.label.count) * 6.4 + 14.0, 34.0),
-            height: 20.0
+        if shouldDrawSnapLabel(for: candidate) {
+            let label = Text(candidate.label)
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(Color.white)
+            let labelPoint = CGPoint(x: projectedPoint.x + 14.0, y: projectedPoint.y - 15.0)
+            let backgroundRect = CGRect(
+                x: labelPoint.x - 7.0,
+                y: labelPoint.y - 10.0,
+                width: max(CGFloat(candidate.label.count) * 6.4 + 14.0, 34.0),
+                height: 20.0
+            )
+            context.fill(
+                Path(roundedRect: backgroundRect, cornerRadius: 6.0),
+                with: .color(Color.black.opacity(0.72))
+            )
+            context.stroke(
+                Path(roundedRect: backgroundRect, cornerRadius: 6.0),
+                with: .color(accent.opacity(0.45)),
+                lineWidth: 1.0
+            )
+            context.draw(label, at: labelPoint, anchor: .leading)
+        }
+    }
+
+    private func shouldDrawSnapOverlay(for candidate: SnapCandidate) -> Bool {
+        ViewportSnapOverlayPolicy.drawsOverlay(
+            kind: candidate.kind,
+            context: snapOverlayContext
         )
-        context.fill(
-            Path(roundedRect: backgroundRect, cornerRadius: 6.0),
-            with: .color(Color.black.opacity(0.72))
+    }
+
+    private func shouldDrawSnapLabel(for candidate: SnapCandidate) -> Bool {
+        ViewportSnapOverlayPolicy.drawsLabel(
+            kind: candidate.kind,
+            context: snapOverlayContext
         )
-        context.stroke(
-            Path(roundedRect: backgroundRect, cornerRadius: 6.0),
-            with: .color(accent.opacity(0.45)),
-            lineWidth: 1.0
-        )
-        context.draw(label, at: labelPoint, anchor: .leading)
+    }
+
+    private var snapOverlayContext: ViewportSnapOverlayContext {
+        ViewportSnapOverlayContext(activeCanvasDrag: activeCanvasDrag)
     }
 
     private func drawReferenceLines(
@@ -1515,7 +1599,12 @@ public struct Viewport: View {
             publishSnapCandidateKind(nil)
             return
         }
-        publishSnapCandidateKind(result.selectedCandidate?.kind)
+        publishSnapCandidateKind(
+            ViewportSnapOverlayPolicy.publishedKind(
+                result.selectedCandidate?.kind,
+                context: snapOverlayContext
+            )
+        )
     }
 
     private func captureReferenceLineAnchor(at point: CGPoint, size: CGSize) -> Bool {
@@ -4640,6 +4729,51 @@ public struct Viewport: View {
             style: StrokeStyle(lineWidth: 2.2, lineCap: .round, dash: [5.0, 4.0])
         )
         drawTransformHandle(at: end, style: .vertex, isHighlighted: true, in: &context)
+    }
+
+    private func drawBridgeCurveEndpointHandle(
+        _ target: ViewportBridgeCurveEndpointHandleTarget,
+        style: ViewportFaceHighlightStyle,
+        in context: inout GraphicsContext
+    ) {
+        let point = target.projectedPoint
+        let tip = target.projectedTangentTip
+        var tangentPath = Path()
+        tangentPath.move(to: point)
+        tangentPath.addLine(to: tip)
+        context.stroke(
+            tangentPath,
+            with: .color(style.color.opacity(style == .selected ? 0.70 : 0.92)),
+            style: StrokeStyle(lineWidth: style == .selected ? 1.8 : 2.4, lineCap: .round, dash: [5.0, 3.5])
+        )
+
+        let radius: CGFloat = style == .selected ? 6.4 : 8.0
+        let outerRect = CGRect(
+            x: point.x - radius,
+            y: point.y - radius,
+            width: radius * 2.0,
+            height: radius * 2.0
+        )
+        context.fill(
+            Path(ellipseIn: outerRect),
+            with: .color(style.color.opacity(style == .selected ? 0.20 : 0.34))
+        )
+        context.stroke(
+            Path(ellipseIn: outerRect),
+            with: .color(style.color.opacity(style.strokeOpacity)),
+            lineWidth: style.lineWidth
+        )
+
+        let innerRadius: CGFloat = 2.4
+        context.fill(
+            Path(ellipseIn: CGRect(
+                x: point.x - innerRadius,
+                y: point.y - innerRadius,
+                width: innerRadius * 2.0,
+                height: innerRadius * 2.0
+            )),
+            with: .color(.white.opacity(style == .selected ? 0.72 : 0.90))
+        )
     }
 
     private func drawSurfaceTrimEndpointHandle(
@@ -8458,6 +8592,12 @@ public struct Viewport: View {
         defer {
             refreshSnapCandidateKind(size: size)
         }
+        if start == nil || current == nil {
+            clearPendingCanvasInteractionTargets()
+            activeCanvasDrag = nil
+            publishSelectionDragPreview(hits: [])
+            return
+        }
         if let start, let current, let pendingSketchCurveHandle {
             updateSketchCurveHandleDrag(
                 target: pendingSketchCurveHandle,
@@ -8492,6 +8632,11 @@ public struct Viewport: View {
             return
         }
         if activeSketchPointHandleDrag != nil {
+            return
+        }
+        if pendingBridgeCurveEndpointHandle != nil {
+            activeCanvasDrag = nil
+            publishSelectionDragPreview(hits: [])
             return
         }
         if let start, let current, let pendingSplineControlPointSlideHandle {
@@ -8778,6 +8923,59 @@ public struct Viewport: View {
         )
     }
 
+    private func clearPendingCanvasInteractionTargets() {
+        pendingAffordance = nil
+        pendingSketchCurveHandle = nil
+        pendingSketchDimension = nil
+        pendingSketchPointHandle = nil
+        pendingBridgeCurveEndpointHandle = nil
+        pendingSplineControlPoint = nil
+        pendingSplineControlPointSlideHandle = nil
+        pendingPolySplineSurfaceVertex = nil
+        pendingSurfaceControlPoint = nil
+        pendingSurfaceTrimEndpoint = nil
+        pendingSurfaceTrimControlPoint = nil
+        pendingPolySplineSurfaceVertexSlideHandle = nil
+        pendingSurfaceControlPointSlideHandle = nil
+        pendingSurfaceFrameHandle = nil
+        pendingRegionOffsetHandle = nil
+        pendingEdgeOffsetHandle = nil
+        pendingSlotWidthHandle = nil
+        pendingSketchVertexOffsetHandle = nil
+        pendingPatternArrayLinearAxisHandle = nil
+        pendingIndependentCopyExtrudeDistanceHandle = nil
+        pendingIndependentCopyBodyDimensionHandle = nil
+        pendingPatternArrayRadialAngleHandle = nil
+        pendingPatternArrayCopyCountHandle = nil
+        pendingPatternArrayCurveExtentHandle = nil
+        pendingPatternArrayCurvePathPointHandle = nil
+        pendingPatternArrayOutputModeHandle = nil
+        activeAffordanceDrag = nil
+        activeSketchCurveHandleDrag = nil
+        activeSketchDimensionDrag = nil
+        activeSketchPointHandleDrag = nil
+        activeSplineControlPointDrag = nil
+        activeSplineControlPointSlideDrag = nil
+        activePolySplineSurfaceVertexDrag = nil
+        activeSurfaceControlPointDrag = nil
+        activeSurfaceTrimEndpointDrag = nil
+        activeSurfaceTrimControlPointDrag = nil
+        activePolySplineSurfaceVertexSlideDrag = nil
+        activeSurfaceControlPointSlideDrag = nil
+        activeSurfaceFrameDrag = nil
+        activeRegionOffsetDrag = nil
+        activeEdgeOffsetDrag = nil
+        activeSlotWidthDrag = nil
+        activeSketchVertexOffsetDrag = nil
+        activePatternArrayLinearAxisDrag = nil
+        activeIndependentCopyExtrudeDistanceDrag = nil
+        activeIndependentCopyBodyDimensionDrag = nil
+        activePatternArrayRadialAngleDrag = nil
+        activePatternArrayCopyCountDrag = nil
+        activePatternArrayCurveExtentDrag = nil
+        activePatternArrayCurvePathPointDrag = nil
+    }
+
     private func beginViewportPress(at point: CGPoint, size: CGSize) {
         if let sketchCurveHandleTarget = selectedSketchCurveHandleTarget(at: point, size: size) {
             pendingSketchCurveHandle = sketchCurveHandleTarget
@@ -8791,6 +8989,11 @@ public struct Viewport: View {
         }
         if let sketchDimensionTarget = selectedSketchDimensionTarget(at: point, size: size) {
             pendingSketchDimension = sketchDimensionTarget
+            activeCanvasDrag = nil
+            return
+        }
+        if let bridgeCurveEndpointTarget = selectedBridgeCurveEndpointTarget(at: point, size: size) {
+            pendingBridgeCurveEndpointHandle = bridgeCurveEndpointTarget
             activeCanvasDrag = nil
             return
         }
@@ -9497,6 +9700,25 @@ public struct Viewport: View {
         return nearest?.target
     }
 
+    private func selectedBridgeCurveEndpointTarget(
+        at point: CGPoint,
+        size: CGSize
+    ) -> ViewportBridgeCurveEndpointHandleTarget? {
+        let sceneContext = makeSceneContext(
+            size: size,
+            camera: camera,
+            basis: currentProjectionBasis
+        )
+        let service = ViewportBridgeCurveEndpointAffordanceService()
+        let candidates = service.candidatesOrEmpty(
+            document: document,
+            scene: sceneContext.scene,
+            selection: selection,
+            layout: sceneContext.layout
+        )
+        return service.target(at: point, candidates: candidates)
+    }
+
     private func selectedSurfaceTrimControlPointTarget(
         at point: CGPoint,
         size: CGSize
@@ -9800,6 +10022,18 @@ public struct Viewport: View {
             }
             return []
         }
+    }
+
+    private func bridgeCurveEndpointHandleTargets(
+        in scene: ViewportScene,
+        layout: ViewportLayout
+    ) -> [ViewportBridgeCurveEndpointHandleTarget] {
+        ViewportBridgeCurveEndpointAffordanceService().candidatesOrEmpty(
+            document: document,
+            scene: scene,
+            selection: selection,
+            layout: layout
+        ).map(\.target)
     }
 
     private func surfaceTrimControlPointHandleTargets(
@@ -11439,6 +11673,11 @@ public struct Viewport: View {
             activeSketchPointHandleDrag = nil
             return
         }
+        if pendingBridgeCurveEndpointHandle != nil {
+            pendingBridgeCurveEndpointHandle = nil
+            activeCanvasDrag = nil
+            return
+        }
         if pendingSplineControlPointSlideHandle != nil {
             pendingSplineControlPointSlideHandle = nil
             activeSplineControlPointSlideDrag = nil
@@ -11614,6 +11853,12 @@ public struct Viewport: View {
             if let sketchPointHandleDragTarget {
                 onSketchPointHandleDrag?(sketchPointHandleDragTarget)
             }
+            return
+        }
+        if pendingBridgeCurveEndpointHandle != nil {
+            pendingBridgeCurveEndpointHandle = nil
+            activeCanvasDrag = nil
+            publishSelectionDragPreview(hits: [])
             return
         }
         if pendingSplineControlPointSlideHandle != nil || activeSplineControlPointSlideDrag != nil {
@@ -12638,6 +12883,7 @@ public struct Viewport: View {
         hoveredSurfaceControlPoint = nil
         hoveredSurfaceTrimEndpoint = nil
         hoveredSurfaceTrimControlPoint = nil
+        hoveredBridgeCurveEndpointHandle = nil
         if let sketchCurveHandleTarget = selectedSketchCurveHandleTarget(at: point, size: size) {
             hoveredSketchCurveHandle = sketchCurveHandleTarget
             hoveredSketchDimension = nil
@@ -12683,6 +12929,20 @@ public struct Viewport: View {
             return
         }
         hoveredSketchDimension = nil
+        if let bridgeCurveEndpointTarget = selectedBridgeCurveEndpointTarget(at: point, size: size) {
+            hoveredBridgeCurveEndpointHandle = bridgeCurveEndpointTarget
+            hoveredSplineControlPoint = nil
+            hoveredSplineControlPointSlideHandle = nil
+            hoveredPolySplineSurfaceVertexSlideHandle = nil
+            hoveredPolySplineSurfaceVertex = nil
+            hoveredSketchVertexOffsetHandle = nil
+            hoveredAffordance = nil
+            hoveredCanvasHit = nil
+            hoveredModelPoint = nil
+            clearHoverCallbacks()
+            return
+        }
+        hoveredBridgeCurveEndpointHandle = nil
         if let splineControlPointSlideTarget = selectedSplineControlPointSlideAffordanceTarget(at: point, size: size) {
             hoveredSplineControlPointSlideHandle = splineControlPointSlideTarget
             hoveredPolySplineSurfaceVertexSlideHandle = nil
@@ -13007,6 +13267,7 @@ public struct Viewport: View {
         hoveredSketchCurveHandle = nil
         hoveredSketchDimension = nil
         hoveredSketchPointHandle = nil
+        hoveredBridgeCurveEndpointHandle = nil
         hoveredSplineControlPoint = nil
         hoveredSplineControlPointSlideHandle = nil
         hoveredPolySplineSurfaceVertexSlideHandle = nil

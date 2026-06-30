@@ -25,6 +25,26 @@ flowchart LR
     Feedback --> Intent
 ```
 
+## Canvas Grid Design Rule
+
+The Canvas grid is part of the modeling affordance, not decoration. It must
+communicate scale, orientation, and depth while keeping floating controls small
+enough to avoid covering editable geometry.
+
+| Element | Design contract |
+|---|---|
+| Minor grid | Low-contrast projected construction lines generated from the active ruler minor step. |
+| Major grid | Stronger projected construction lines generated from the resolved ruler major step. |
+| Origin lines | Slightly stronger axis-aligned grid lines through the document origin. |
+| Scale labels | In-plane major-step labels using the document display unit, rendered without panels or badges. |
+| Canvas chrome | Compact edge padding and small controls so the grid remains visible under normal modeling work; visible chrome rectangles and Canvas-input exclusion rectangles must come from one layout contract. |
+| View navigation | Bottom-center compact controls with explicit Canvas-input exclusion so viewport gestures do not block the controls. |
+| Snap feedback | Passive grid snapping is a coordinate-resolution service, not a persistent hover affordance; visible snap labels are reserved for object, topology, reference, or active creation feedback. |
+
+Canvas chrome must not leave stale Canvas interaction state behind. When the
+pointer enters a Canvas chrome exclusion rectangle, hover, snap publication, and
+drag preview state are cleared before the chrome receives input.
+
 ## Capability List
 
 | Priority | Area | Required capability | First implementation slice |

@@ -889,22 +889,30 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                     label: "Bridge source metadata and curve analysis",
                     sourceFiles: [
                         "RupaKit/Sources/RupaCore/BridgeCurveSource.swift",
+                        "RupaKit/Sources/RupaCore/BridgeCurveEndpointSelectionResolver.swift",
+                        "RupaKit/Sources/RupaCore/BridgeCurveEndpointHandleService.swift",
                         "RupaKit/Sources/RupaCore/CurveAnalysisService.swift",
+                        "RupaKit/Sources/RupaRendering/ViewportBridgeCurveEndpointAffordanceService.swift",
                         "RupaKit/Sources/RupaRendering/ViewportCurveCurvatureComb.swift",
                     ],
                     tests: [
                         "RupaKit/Tests/RupaCoreTests/BridgeCurveCommandTests.swift",
                         "RupaKit/Tests/RupaCoreTests/CurveAnalysisServiceTests.swift",
+                        "RupaKit/Tests/RupaRenderingTests/ViewportBridgeCurveEndpointAffordanceServiceTests.swift",
                         "RupaKit/Tests/RupaRenderingTests/ViewportCurveCurvatureCombTests.swift",
+                    ],
+                    notes: [
+                        "Bridge Curve endpoint selections now resolve from point-backed sketch selection targets into the same BridgeCurveEndpoint contract used by Core, Automation, Agent, and CLI.",
+                        "Selected Bridge Curve sources now expose projected viewport endpoint handles with tangent guide rendering, hover hit-testing, and press-state isolation while preserving BridgeCurveSource ownership for future parameter drag commits through setBridgeCurveParameters.",
                     ]
                 ),
             ],
             openWork: [
                 "G3 bridge constraints.",
                 "Edge and face endpoint bridge targets.",
-                "Dedicated viewport bridge handles and side selection.",
+                "Bridge Curve parameter drag commit wiring and side selection.",
             ],
-            next: "Add endpoint-target and viewport-handle parity for Bridge Curve before broadening surface-boundary bridge workflows."
+            next: "Add exact curve-parameter projection for Bridge Curve endpoint drag commits before broadening surface-boundary bridge workflows."
         ),
         entry(
             area: .agentOperability,

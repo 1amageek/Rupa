@@ -26,6 +26,7 @@ struct ViewportInputSurface: NSViewRepresentable {
     var onSecondaryClick: (CGPoint, CGSize) -> Void
     var onShiftScroll: (ViewportScrollDirection) -> Bool
     var onShiftTap: (CGPoint, CGSize) -> Bool
+    var inputExclusionRects: [CGRect] = []
 
     func makeNSView(context: Context) -> InputView {
         let view = InputView()
@@ -47,6 +48,7 @@ struct ViewportInputSurface: NSViewRepresentable {
         nsView.onSecondaryClick = onSecondaryClick
         nsView.onShiftScroll = onShiftScroll
         nsView.onShiftTap = onShiftTap
+        nsView.inputExclusionRects = inputExclusionRects
     }
 }
 
@@ -64,10 +66,12 @@ extension ViewportInputSurface {
         var onSecondaryClick: ((CGPoint, CGSize) -> Void)?
         var onShiftScroll: ((ViewportScrollDirection) -> Bool)?
         var onShiftTap: ((CGPoint, CGSize) -> Bool)?
+        var inputExclusionRects: [CGRect] = []
 
         private var dragStart: CGPoint?
         private var secondaryDragStart: CGPoint?
         private var isOrbiting = false
+        private var isInsideInputExclusion = false
         private var lastOrbitCentroid: CGPoint?
         private var shiftScrollAccumulator: CGFloat = 0.0
         private var isShiftPressed = false
@@ -82,6 +86,14 @@ extension ViewportInputSurface {
 
         override func acceptsFirstMouse(for event: NSEvent?) -> Bool {
             true
+        }
+
+        override func hitTest(_ point: NSPoint) -> NSView? {
+            if inputExclusionRects.contains(where: { $0.contains(point) }) {
+                clearInteractionStateForInputExclusion()
+                return nil
+            }
+            return super.hitTest(point)
         }
 
         override func updateTrackingAreas() {
@@ -110,22 +122,36 @@ extension ViewportInputSurface {
             publishModifierFlags(from: event)
             window?.makeFirstResponder(self)
             dragStart = location(from: event)
-            if let dragStart {
-                onPress?(dragStart, bounds.size, selectionIntent(from: event))
+            guard let dragStart,
+                  !isInputExcluded(dragStart) else {
+                clearInteractionStateForInputExclusion()
+                return
             }
+            markCanvasInputActive()
+            onPress?(dragStart, bounds.size, selectionIntent(from: event))
         }
 
         override func mouseDragged(with event: NSEvent) {
             publishModifierFlags(from: event)
+            if isInputExcluded(location(from: event)) {
+                clearInteractionStateForInputExclusion()
+                return
+            }
             guard let dragStart else {
                 return
             }
+            markCanvasInputActive()
             onDragPreview?(dragStart, location(from: event), bounds.size)
         }
 
         override func mouseUp(with event: NSEvent) {
             publishModifierFlags(from: event)
             let end = location(from: event)
+            if isInputExcluded(end) {
+                clearInteractionStateForInputExclusion()
+                return
+            }
+            markCanvasInputActive()
             let intent = selectionIntent(from: event)
             guard let start = dragStart else {
                 onPick?(end, bounds.size, intent)
@@ -145,18 +171,33 @@ extension ViewportInputSurface {
         override func rightMouseDown(with event: NSEvent) {
             publishModifierFlags(from: event)
             let location = location(from: event)
+            guard !isInputExcluded(location) else {
+                clearInteractionStateForInputExclusion()
+                return
+            }
+            markCanvasInputActive()
             dragStart = location
             secondaryDragStart = location
         }
 
         override func rightMouseDragged(with event: NSEvent) {
             publishModifierFlags(from: event)
+            if isInputExcluded(location(from: event)) {
+                clearInteractionStateForInputExclusion()
+                return
+            }
+            markCanvasInputActive()
             panDrag(to: location(from: event))
         }
 
         override func rightMouseUp(with event: NSEvent) {
             publishModifierFlags(from: event)
             let end = location(from: event)
+            if isInputExcluded(end) {
+                clearInteractionStateForInputExclusion()
+                return
+            }
+            markCanvasInputActive()
             if let start = secondaryDragStart {
                 let dragDistance = hypot(end.x - start.x, end.y - start.y)
                 if dragDistance <= 4.0 {
@@ -170,31 +211,59 @@ extension ViewportInputSurface {
         override func otherMouseDown(with event: NSEvent) {
             publishModifierFlags(from: event)
             dragStart = location(from: event)
+            if let dragStart,
+               isInputExcluded(dragStart) {
+                clearInteractionStateForInputExclusion()
+                return
+            }
+            markCanvasInputActive()
         }
 
         override func otherMouseDragged(with event: NSEvent) {
             publishModifierFlags(from: event)
+            if isInputExcluded(location(from: event)) {
+                clearInteractionStateForInputExclusion()
+                return
+            }
+            markCanvasInputActive()
             panDrag(to: location(from: event))
         }
 
         override func otherMouseUp(with event: NSEvent) {
             publishModifierFlags(from: event)
+            if isInputExcluded(location(from: event)) {
+                clearInteractionStateForInputExclusion()
+                return
+            }
+            markCanvasInputActive()
             dragStart = nil
         }
 
         override func mouseMoved(with event: NSEvent) {
             publishModifierFlags(from: event)
             window?.makeFirstResponder(self)
-            onHover?(location(from: event), bounds.size)
+            let location = location(from: event)
+            guard !isInputExcluded(location) else {
+                clearInteractionStateForInputExclusion()
+                return
+            }
+            markCanvasInputActive()
+            onHover?(location, bounds.size)
         }
 
         override func mouseExited(with event: NSEvent) {
+            markCanvasInputActive()
             onHover?(nil, bounds.size)
         }
 
         override func scrollWheel(with event: NSEvent) {
             publishModifierFlags(from: event)
             resetOrbitTracking()
+            if isInputExcluded(location(from: event)) {
+                clearInteractionStateForInputExclusion()
+                return
+            }
+            markCanvasInputActive()
             if handleShiftScroll(event) {
                 return
             }
@@ -232,9 +301,11 @@ extension ViewportInputSurface {
                 return
             }
             let location = location(from: event)
-            guard bounds.contains(location) else {
+            guard bounds.contains(location),
+                  !isInputExcluded(location) else {
                 return
             }
+            markCanvasInputActive()
             _ = onShiftTap?(location, bounds.size)
         }
 
@@ -273,6 +344,11 @@ extension ViewportInputSurface {
             guard !isOrbiting else {
                 return
             }
+            if isInputExcluded(location(from: event)) {
+                clearInteractionStateForInputExclusion()
+                return
+            }
+            markCanvasInputActive()
 
             let factor = min(max(1.0 + event.magnification, 0.20), 5.0)
             onZoom?(factor, location(from: event), bounds.size)
@@ -346,6 +422,31 @@ extension ViewportInputSurface {
             if activeIndirectTouches(from: event).count < 3 {
                 resetOrbitTracking()
             }
+        }
+
+        private func isInputExcluded(_ point: CGPoint) -> Bool {
+            inputExclusionRects.contains { $0.contains(point) }
+        }
+
+        private func clearInteractionStateForInputExclusion() {
+            let shouldPublishClear = !isInsideInputExclusion
+                || dragStart != nil
+                || secondaryDragStart != nil
+                || isOrbiting
+            dragStart = nil
+            secondaryDragStart = nil
+            shiftScrollAccumulator = 0.0
+            resetOrbitTracking()
+            isInsideInputExclusion = true
+            guard shouldPublishClear else {
+                return
+            }
+            onDragPreview?(nil, nil, bounds.size)
+            onHover?(nil, bounds.size)
+        }
+
+        private func markCanvasInputActive() {
+            isInsideInputExclusion = false
         }
 
         private func resetOrbitTracking() {

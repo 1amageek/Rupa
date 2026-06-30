@@ -62,6 +62,58 @@ import SwiftCAD
     #expect(analysis.continuityJoins.filter { $0.joinKind == .internalSplineKnot }.count == 1)
 }
 
+@Test func bridgeCurveEndpointSelectionResolverResolvesSelectedLineEndpoint() throws {
+    let setup = try bridgeCurveTwoLineDocument()
+    let summary = try SketchEntitySummaryService().summarize(document: setup.document)
+    let firstLine = try #require(summary.entries.first { $0.entityID == setup.firstLineID.description })
+    let lineEnd = try #require(firstLine.pointHandles.first { $0.handle == .lineEnd })
+    let sceneNodeID = try #require(firstLine.sceneNodeID.flatMap(UUID.init(uuidString:)))
+    let target = SelectionTarget(
+        sceneNodeID: SceneNodeID(sceneNodeID),
+        component: .sketchEntity(SelectionComponentID(rawValue: lineEnd.selectionComponentID))
+    )
+
+    let endpoint = try #require(
+        try BridgeCurveEndpointSelectionResolver().endpoint(for: target, in: setup.document)
+    )
+
+    #expect(endpoint.reference == .lineEnd(setup.firstLineID))
+    #expect(endpoint.parameter == nil)
+    #expect(endpoint.reversesSense == false)
+}
+
+@Test func bridgeCurveEndpointHandleServiceResolvesSelectedBridgeSourceEndpoints() throws {
+    let setup = try bridgeCurveTwoLineDocument()
+    var document = setup.document
+    let bridgeID = try document.createBridgeCurve(
+        featureID: setup.featureID,
+        firstEndpoint: BridgeCurveEndpoint(reference: .lineEnd(setup.firstLineID)),
+        secondEndpoint: BridgeCurveEndpoint(reference: .lineStart(setup.secondLineID)),
+        continuity: .g1
+    )
+    let source = try #require(document.productMetadata.bridgeCurveSources.values.first)
+    let summary = try SketchEntitySummaryService().summarize(document: document)
+    let bridgeEntry = try #require(summary.entries.first { $0.entityID == bridgeID.description })
+    let selectedTarget = try #require(bridgeEntry.selectionTarget())
+
+    let handles = try BridgeCurveEndpointHandleService().handles(
+        for: SelectionModel(selectedTargets: [selectedTarget]),
+        in: document
+    )
+
+    #expect(handles.map(\.role) == [.first, .second])
+    #expect(handles.allSatisfy { $0.sourceID == source.id })
+    #expect(handles.allSatisfy { $0.bridgeEntityID == bridgeID })
+    #expect(handles[0].endpoint.reference == .lineEnd(setup.firstLineID))
+    #expect(handles[1].endpoint.reference == .lineStart(setup.secondLineID))
+    #expect(bridgeCurveNearlyEqual(handles[0].point.x, 0.003))
+    #expect(bridgeCurveNearlyEqual(handles[0].point.y, 0.0))
+    #expect(bridgeCurveNearlyEqual(handles[1].point.x, 0.006))
+    #expect(bridgeCurveNearlyEqual(handles[1].point.y, 0.003))
+    #expect(handles[0].pointReference == .lineEnd(setup.firstLineID))
+    #expect(handles[1].pointReference == .lineStart(setup.secondLineID))
+}
+
 @Test func createBridgeCurveSupportsParametricLinePositionsWithSense() throws {
     let setup = try bridgeCurveTwoLineDocument()
     var document = setup.document

@@ -1,3 +1,4 @@
+import AppKit
 import CoreGraphics
 import RupaCore
 import SwiftCAD
@@ -2820,11 +2821,21 @@ import Testing
     let zLines = grid.lines(for: .z)
     let firstXVector = vector(for: xLines[0])
     let firstZVector = vector(for: zLines[0])
+    let scaleLabelAxes = Set(grid.scaleLabels.map(\.axis))
 
     #expect(!xLines.isEmpty)
     #expect(!zLines.isEmpty)
     #expect(xLines.contains { $0.isMajor })
     #expect(zLines.contains { $0.isMajor })
+    #expect(xLines.contains { $0.isOrigin })
+    #expect(zLines.contains { $0.isOrigin })
+    #expect(scaleLabelAxes.contains(.x))
+    #expect(scaleLabelAxes.contains(.z))
+    #expect(grid.scaleLabels.contains {
+        abs(abs($0.valueMeters) - grid.majorStepMeters) < 1.0e-12
+    })
+    #expect(grid.scaleLabels.allSatisfy { $0.text.hasSuffix(document.displayUnit.symbol) })
+    #expect(grid.scaleLabels.allSatisfy { abs($0.valueMeters) >= grid.majorStepMeters - 1.0e-12 })
     #expect(grid.majorStepMeters >= document.ruler.majorTickMeters)
     #expect(grid.minorStepMeters >= document.ruler.minorTickMeters)
     #expect(abs(firstXVector.dx) > 0.0)
@@ -2835,6 +2846,107 @@ import Testing
     #expect(!isParallel(firstXVector, firstZVector))
     #expect(xLines.prefix(12).allSatisfy { isParallel(vector(for: $0), firstXVector) })
     #expect(zLines.prefix(12).allSatisfy { isParallel(vector(for: $0), firstZVector) })
+}
+
+@MainActor
+@Test func viewportAxisTriadUsesCompactBottomCenterInputExclusion() {
+    let viewportSize = CGSize(width: 800.0, height: 600.0)
+    let layout = ViewportCanvasChromeLayout(viewportSize: viewportSize)
+    let rect = layout.axisControlExclusionRect
+
+    #expect(ViewportCanvasChromeLayout.axisControlSize.height <= 44.0)
+    #expect(abs(rect.midX - viewportSize.width / 2.0) < 1.0e-9)
+    #expect(rect.minY > viewportSize.height * 0.80)
+    #expect(rect.width > ViewportCanvasChromeLayout.axisControlSize.width)
+    #expect(rect.height > ViewportCanvasChromeLayout.axisControlSize.height)
+    #expect(rect.contains(CGPoint(x: viewportSize.width / 2.0, y: viewportSize.height - 24.0)))
+    #expect(layout.inputExclusionRects.count == 2)
+    #expect(layout.containsCanvasChrome(CGPoint(x: 20.0, y: 20.0)))
+    #expect(!layout.containsCanvasChrome(CGPoint(x: viewportSize.width / 2.0, y: viewportSize.height / 2.0)))
+}
+
+@MainActor
+@Test func viewportInputSurfaceClearsInteractionStateOnChromeHitTest() {
+    let view = ViewportInputSurface.InputView(frame: CGRect(
+        x: 0.0,
+        y: 0.0,
+        width: 800.0,
+        height: 600.0
+    ))
+    var clearedHover = false
+    var clearedDragPreview = false
+    view.inputExclusionRects = [CGRect(x: 10.0, y: 10.0, width: 100.0, height: 40.0)]
+    view.onHover = { point, _ in
+        if point == nil {
+            clearedHover = true
+        }
+    }
+    view.onDragPreview = { start, current, _ in
+        if start == nil && current == nil {
+            clearedDragPreview = true
+        }
+    }
+
+    let hit = view.hitTest(CGPoint(x: 20.0, y: 20.0))
+
+    #expect(hit == nil)
+    #expect(clearedHover)
+    #expect(clearedDragPreview)
+}
+
+@MainActor
+@Test func viewportInputSurfaceSuppressesRepeatedChromeClearCallbacks() {
+    let view = ViewportInputSurface.InputView(frame: CGRect(
+        x: 0.0,
+        y: 0.0,
+        width: 800.0,
+        height: 600.0
+    ))
+    var hoverClearCount = 0
+    var dragPreviewClearCount = 0
+    view.inputExclusionRects = [CGRect(x: 10.0, y: 10.0, width: 100.0, height: 40.0)]
+    view.onHover = { point, _ in
+        if point == nil {
+            hoverClearCount += 1
+        }
+    }
+    view.onDragPreview = { start, current, _ in
+        if start == nil && current == nil {
+            dragPreviewClearCount += 1
+        }
+    }
+
+    _ = view.hitTest(CGPoint(x: 20.0, y: 20.0))
+    _ = view.hitTest(CGPoint(x: 30.0, y: 20.0))
+    _ = view.hitTest(CGPoint(x: 40.0, y: 20.0))
+
+    #expect(hoverClearCount == 1)
+    #expect(dragPreviewClearCount == 1)
+}
+
+@Test func viewportSnapOverlayPolicySuppressesPassiveGridLabels() {
+    let passiveHover = ViewportSnapOverlayContext.passiveHover
+    let creationDrag = ViewportSnapOverlayContext.creationDrag
+    let activeCreationDrag = ViewportActiveDrag(
+        startLocation: .zero,
+        currentLocation: CGPoint(x: 10.0, y: 10.0),
+        kind: .creation(.rectangle(widthMeters: nil, heightMeters: nil))
+    )
+    let activeSelectionDrag = ViewportActiveDrag(
+        startLocation: .zero,
+        currentLocation: CGPoint(x: 10.0, y: 10.0),
+        kind: .selection
+    )
+
+    #expect(ViewportSnapOverlayContext(activeCanvasDrag: activeCreationDrag) == .creationDrag)
+    #expect(ViewportSnapOverlayContext(activeCanvasDrag: activeSelectionDrag) == .passiveHover)
+    #expect(!ViewportSnapOverlayPolicy.drawsOverlay(kind: .grid, context: passiveHover))
+    #expect(ViewportSnapOverlayPolicy.drawsOverlay(kind: .grid, context: creationDrag))
+    #expect(!ViewportSnapOverlayPolicy.drawsLabel(kind: .grid, context: creationDrag))
+    #expect(ViewportSnapOverlayPolicy.drawsOverlay(kind: .lineStart, context: passiveHover))
+    #expect(ViewportSnapOverlayPolicy.drawsLabel(kind: .lineStart, context: passiveHover))
+    #expect(ViewportSnapOverlayPolicy.publishedKind(.grid, context: passiveHover) == nil)
+    #expect(ViewportSnapOverlayPolicy.publishedKind(.lineStart, context: passiveHover) == .lineStart)
 }
 
 private func vector(for line: ViewportProjectedGrid.Line) -> CGVector {

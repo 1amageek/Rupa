@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import RupaAgentUI
 import RupaUI
 
 @main

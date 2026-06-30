@@ -2,58 +2,94 @@ import SwiftUI
 import RupaViewportScene
 
 struct ViewportAxisTriad: View {
+    static let controlSize = ViewportCanvasChromeLayout.axisControlSize
+    static let bottomPadding = ViewportCanvasChromeLayout.axisBottomPadding
+
     var selectedAxis: ViewportCoordinateAxis?
     var basis: ViewportProjectionBasis = .isometric
     var onResetView: () -> Void
     var onSelectAxis: (ViewportCoordinateAxis?) -> Void
 
     var body: some View {
-        VStack(spacing: 6.0) {
-            HStack(spacing: 10.0) {
-                actionButton(
-                    title: "Reset",
-                    accessibilityIdentifier: "CanvasAxisTriad.Reset",
-                    accessibilityLabel: "Reset viewport"
-                ) {
-                    onResetView()
-                }
-
-                ZStack {
-                    Canvas { context, size in
-                        drawAxisDisk(in: &context, size: size)
-                    }
-
-                    GeometryReader { proxy in
-                        centerButton(at: axisCenter(size: proxy.size))
-
-                        ForEach(ViewportCoordinateAxis.allCases, id: \.self) { axis in
-                            axisButton(
-                                axis,
-                                at: axisNodePoint(axis, size: proxy.size)
-                            )
-                        }
-                    }
-                }
-                .frame(width: 62.0, height: 62.0)
-                .accessibilityIdentifier("CanvasAxisTriad")
-                .accessibilityLabel("Canvas 3D axes")
-                .accessibilityValue(accessibilityValue)
-
-                actionButton(
-                    title: "Isometric",
-                    accessibilityIdentifier: "CanvasAxisTriad.IsometricButton",
-                    accessibilityLabel: "Isometric view"
-                ) {
-                    onSelectAxis(nil)
-                }
+        HStack(spacing: 6.0) {
+            iconButton(
+                systemName: "arrow.counterclockwise",
+                accessibilityIdentifier: "CanvasAxisTriad.Reset",
+                accessibilityLabel: "Reset viewport"
+            ) {
+                onResetView()
             }
 
+            ZStack {
+                Canvas { context, size in
+                    drawAxisDisk(in: &context, size: size)
+                }
+
+                GeometryReader { proxy in
+                    centerButton(at: axisCenter(size: proxy.size))
+
+                    ForEach(ViewportCoordinateAxis.allCases, id: \.self) { axis in
+                        axisButton(
+                            axis,
+                            at: axisNodePoint(axis, size: proxy.size)
+                        )
+                    }
+                }
+            }
+            .frame(width: 36.0, height: 36.0)
+            .accessibilityIdentifier("CanvasAxisTriad")
+            .accessibilityLabel("Canvas 3D axes")
+            .accessibilityValue(accessibilityValue)
+
             projectionIndicator
+
+            compactTextButton(
+                title: "Iso",
+                accessibilityIdentifier: "CanvasAxisTriad.IsometricButton",
+                accessibilityLabel: "Isometric view"
+            ) {
+                onSelectAxis(nil)
+            }
         }
+        .padding(.horizontal, 7.0)
+        .padding(.vertical, 4.0)
+        .frame(width: Self.controlSize.width, height: Self.controlSize.height)
+        .background(.regularMaterial, in: Capsule())
+        .overlay(
+            Capsule()
+                .stroke(.white.opacity(0.10), lineWidth: 1.0)
+        )
+        .contentShape(Capsule())
         .accessibilityElement(children: .contain)
     }
 
-    private func actionButton(
+    static func inputExclusionRect(in size: CGSize) -> CGRect {
+        ViewportCanvasChromeLayout(viewportSize: size).axisControlExclusionRect
+    }
+
+    private func iconButton(
+        systemName: String,
+        accessibilityIdentifier: String,
+        accessibilityLabel: String,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Image(systemName: systemName)
+                .font(.system(size: 12.0, weight: .semibold))
+                .foregroundStyle(.white.opacity(0.88))
+                .frame(width: 30.0, height: 30.0)
+                .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .background(
+            Capsule()
+                .fill(.black.opacity(0.34))
+        )
+        .accessibilityIdentifier(accessibilityIdentifier)
+        .accessibilityLabel(accessibilityLabel)
+    }
+
+    private func compactTextButton(
         title: String,
         accessibilityIdentifier: String,
         accessibilityLabel: String,
@@ -61,17 +97,17 @@ struct ViewportAxisTriad: View {
     ) -> some View {
         Button(action: action) {
             Text(title)
-                .font(.system(size: 11.0, weight: .medium))
-                .foregroundStyle(.white.opacity(0.88))
+                .font(.system(size: 10.0, weight: .semibold))
+                .foregroundStyle(.white.opacity(0.86))
                 .lineLimit(1)
-                .minimumScaleFactor(0.76)
-                .frame(width: 78.0, height: 36.0)
+                .minimumScaleFactor(0.82)
+                .frame(width: 38.0, height: 30.0)
                 .contentShape(Capsule())
         }
         .buttonStyle(.plain)
         .background(
             Capsule()
-                .fill(.black.opacity(0.52))
+                .fill(.black.opacity(0.34))
         )
         .accessibilityIdentifier(accessibilityIdentifier)
         .accessibilityLabel(accessibilityLabel)
@@ -84,23 +120,23 @@ struct ViewportAxisTriad: View {
                 .foregroundStyle(.white.opacity(0.88))
                 .lineLimit(1)
                 .minimumScaleFactor(0.82)
-                .frame(width: 88.0, height: 26.0)
+                .frame(width: 74.0, height: 28.0)
                 .background(
                     Capsule()
-                        .fill(.white.opacity(0.16))
+                        .fill(.white.opacity(0.14))
                 )
 
-            Text("Perspective")
+            Text("Persp")
                 .font(.system(size: 10.0, weight: .medium))
                 .foregroundStyle(.white.opacity(0.54))
                 .lineLimit(1)
                 .minimumScaleFactor(0.82)
-                .frame(width: 86.0, height: 26.0)
+                .frame(width: 54.0, height: 28.0)
         }
-        .padding(3.0)
+        .padding(2.0)
         .background(
             Capsule()
-                .fill(.black.opacity(0.52))
+                .fill(.black.opacity(0.34))
         )
         .accessibilityElement(children: .ignore)
         .accessibilityIdentifier("CanvasProjectionIndicator")
@@ -142,7 +178,7 @@ struct ViewportAxisTriad: View {
         } label: {
             Circle()
                 .fill(Color.clear)
-                .frame(width: 24.0, height: 24.0)
+                .frame(width: 18.0, height: 18.0)
                 .contentShape(Circle())
         }
         .buttonStyle(.plain)
@@ -159,7 +195,7 @@ struct ViewportAxisTriad: View {
         } label: {
             Circle()
                 .fill(Color.clear)
-                .frame(width: 24.0, height: 24.0)
+                .frame(width: 18.0, height: 18.0)
                 .contentShape(Circle())
         }
         .buttonStyle(.plain)
@@ -171,22 +207,22 @@ struct ViewportAxisTriad: View {
     }
 
     private func drawAxisDisk(in context: inout GraphicsContext, size: CGSize) {
-        let diskRect = CGRect(origin: .zero, size: size).insetBy(dx: 1.0, dy: 1.0)
+        let diskRect = CGRect(origin: .zero, size: size).insetBy(dx: 0.5, dy: 0.5)
         context.fill(
             Path(ellipseIn: diskRect),
-            with: .color(.black.opacity(0.52))
+            with: .color(.black.opacity(0.30))
         )
         context.stroke(
             Path(ellipseIn: diskRect),
-            with: .color(.white.opacity(0.08)),
+            with: .color(.white.opacity(0.10)),
             lineWidth: 1.0
         )
 
         let center = axisCenter(size: size)
         var axes = [
-            AxisNode(axis: .x, color: ViewportCoordinateAxis.x.color, end: axisNodePoint(.x, size: size), radius: 4.4),
-            AxisNode(axis: .y, color: ViewportCoordinateAxis.y.color, end: axisNodePoint(.y, size: size), radius: 4.4),
-            AxisNode(axis: .z, color: ViewportCoordinateAxis.z.color, end: axisNodePoint(.z, size: size), radius: 4.4),
+            AxisNode(axis: .x, color: ViewportCoordinateAxis.x.color, end: axisNodePoint(.x, size: size), radius: 3.3),
+            AxisNode(axis: .y, color: ViewportCoordinateAxis.y.color, end: axisNodePoint(.y, size: size), radius: 3.3),
+            AxisNode(axis: .z, color: ViewportCoordinateAxis.z.color, end: axisNodePoint(.z, size: size), radius: 3.3),
         ]
         for axis in ViewportCoordinateAxis.allCases where axis != selectedAxis {
             axes.append(
@@ -194,7 +230,7 @@ struct ViewportAxisTriad: View {
                     axis: nil,
                     color: .white.opacity(0.28),
                     end: negativeAxisNodePoint(axis, size: size),
-                    radius: 4.0
+                    radius: 3.0
                 )
             )
         }
@@ -220,7 +256,7 @@ struct ViewportAxisTriad: View {
         if basis.mode == .isometric {
             drawNode(
                 at: center,
-                radius: 4.6,
+                radius: 3.4,
                 color: .white.opacity(0.34),
                 in: &context
             )
@@ -232,7 +268,7 @@ struct ViewportAxisTriad: View {
     }
 
     private func axisLength(size: CGSize) -> CGFloat {
-        size.width * 0.30
+        size.width * 0.28
     }
 
     private func axisNodePoint(_ axis: ViewportCoordinateAxis, size: CGSize) -> CGPoint {
@@ -263,7 +299,7 @@ struct ViewportAxisTriad: View {
         var path = Path()
         path.move(to: start)
         path.addLine(to: end)
-        context.stroke(path, with: .color(color.opacity(0.56)), lineWidth: 1.8)
+        context.stroke(path, with: .color(color.opacity(0.58)), lineWidth: 1.4)
     }
 
     private func drawNode(
