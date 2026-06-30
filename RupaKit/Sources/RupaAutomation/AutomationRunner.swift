@@ -1190,11 +1190,12 @@ public struct AutomationRunner {
                 didMutate: result.didMutate,
                 diagnostics: result.diagnostics
             )
-        case .createLoft(let name, let sections, let options):
+        case .createLoft(let name, let sections, let guides, let options):
             let result = try session.execute(
                 .createLoft(
                     name: name,
                     sections: sections,
+                    guides: guides,
                     options: options
                 )
             )

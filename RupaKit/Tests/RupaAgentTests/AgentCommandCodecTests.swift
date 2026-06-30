@@ -569,6 +569,7 @@ import SwiftCAD
     let firstProfileID = FeatureID()
     let secondProfileID = FeatureID()
     let thirdProfileID = FeatureID()
+    let guideID = FeatureID()
     let request = AgentRequest.execute(
         sessionID: sessionID,
         command: .createLoft(
@@ -586,6 +587,9 @@ import SwiftCAD
                     profile: ProfileReference(featureID: thirdProfileID),
                     startSampleIndex: 1
                 ),
+            ],
+            guides: [
+                LoftGuideReference(featureID: guideID),
             ],
             options: LoftOptions(resultKind: .sheet, closesSectionLoop: true)
         ),

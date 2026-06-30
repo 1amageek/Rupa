@@ -246,6 +246,7 @@ public enum EditorCommand: Codable, Equatable, Sendable {
     case createLoft(
         name: String,
         sections: [LoftSectionReference],
+        guides: [LoftGuideReference] = [],
         options: LoftOptions
     )
     case createBoolean(

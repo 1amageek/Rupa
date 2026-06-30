@@ -772,6 +772,7 @@ public struct CLIService {
         target: CLIDocumentTarget,
         name: String,
         sections: [LoftSectionReference],
+        guides: [LoftGuideReference] = [],
         options: LoftOptions,
         mode: CLIEditMode = .auto,
         expectedGeneration: DocumentGeneration? = nil,
@@ -782,6 +783,7 @@ public struct CLIService {
         let command = AutomationCommand.createLoft(
             name: name,
             sections: sections,
+            guides: guides,
             options: options
         )
         return try executeModelingCommand(

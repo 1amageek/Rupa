@@ -63,6 +63,9 @@ struct PatternArrayFeatureIDRemapper: Sendable {
                     startSampleIndex: section.startSampleIndex
                 )
             }
+            loft.guides = try loft.guides.map {
+                LoftGuideReference(featureID: try remappedFeatureID($0.featureID))
+            }
             return .loft(loft)
         case .boolean(var boolean):
             boolean.targets = try boolean.targets.map {

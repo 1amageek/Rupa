@@ -128,6 +128,58 @@ import SwiftCAD
     try document.validate()
 }
 
+@Test func createLoftUsesGuideEndpointToLockSectionSeam() throws {
+    var document = DesignDocument.empty()
+    let firstProfileID = try createLoftProfile(
+        in: &document,
+        name: "Guided Loft Bottom",
+        width: 4.0,
+        height: 2.0,
+        z: 0.0
+    )
+    let secondProfileID = try createLoftProfile(
+        in: &document,
+        name: "Guided Loft Top",
+        width: 4.0,
+        height: 2.0,
+        z: 10.0
+    )
+    let guideID = try document.createSketch(
+        name: "Guided Loft Seam",
+        sketch: loftVerticalGuideSketch(x: 2.0, y: -1.0, zStart: 0.0, zEnd: 10.0),
+        geometryRole: .curve
+    )
+
+    let loftID = try document.createLoft(
+        name: "Guided Loft",
+        sections: [
+            LoftSectionReference(profile: ProfileReference(featureID: firstProfileID)),
+            LoftSectionReference(profile: ProfileReference(featureID: secondProfileID)),
+        ],
+        guides: [
+            LoftGuideReference(featureID: guideID),
+        ]
+    )
+    let feature = try #require(document.cadDocument.designGraph.nodes[loftID])
+    let evaluated = try CADPipeline.modelingDefault(for: document).evaluate(document.cadDocument)
+    let vertexReference = try #require(evaluated.generatedNames[PersistentName(components: [
+        .feature(loftID),
+        .generated(GeneratedSubshapeRole.vertex.rawValue),
+        .index(0),
+    ])])
+    guard case .loft(let loft) = feature.operation,
+          case .vertex(let vertexID) = vertexReference,
+          let vertex = evaluated.brep.vertices[vertexID] else {
+        Issue.record("Guided Loft must create a loft feature and a generated vertex reference.")
+        return
+    }
+
+    #expect(loft.guides == [LoftGuideReference(featureID: guideID)])
+    #expect(feature.inputs.contains(FeatureInput(featureID: guideID, role: .guide)))
+    #expect(vertex.point.isApproximatelyEqual(to: Point3D(x: 0.002, y: -0.001, z: 0.0), tolerance: 1.0e-12))
+    try document.validate()
+}
+
 @Test func createLoftSupportsNonParallelSectionsWithRuledBSplineSideSurfaces() throws {
     var document = DesignDocument.empty()
     let firstProfileID = try createLoftProfile(
@@ -400,6 +452,24 @@ private func loftTriangleProfileSketch(z: Double) -> Sketch {
             .coincident(.lineEnd(secondID), .lineStart(thirdID)),
             .coincident(.lineEnd(thirdID), .lineStart(firstID)),
         ],
+        dimensions: []
+    )
+}
+
+private func loftVerticalGuideSketch(x: Double, y: Double, zStart: Double, zEnd: Double) -> Sketch {
+    let lineID = SketchEntityID()
+    return Sketch(
+        plane: .plane(Plane3D(
+            origin: Point3D(x: x / 1000.0, y: y / 1000.0, z: zStart / 1000.0),
+            normal: .unitY
+        )),
+        entities: [
+            lineID: .line(SketchLine(
+                start: SketchPoint(x: .constant(.length(0.0, unit: .meter)), y: .constant(.length(0.0, unit: .meter))),
+                end: SketchPoint(x: .constant(.length(0.0, unit: .meter)), y: .constant(.length((zEnd - zStart) / 1000.0, unit: .meter)))
+            )),
+        ],
+        constraints: [],
         dimensions: []
     )
 }

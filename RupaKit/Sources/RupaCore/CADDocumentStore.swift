@@ -1032,11 +1032,12 @@ public final class CADDocumentStore {
             document = updatedDocument
             try commitMutation()
             evaluateCurrentDocument()
-        case .createLoft(let name, let sections, let options):
+        case .createLoft(let name, let sections, let guides, let options):
             var updatedDocument = document
             try updatedDocument.createLoft(
                 name: name,
                 sections: sections,
+                guides: guides,
                 options: options,
                 objectRegistry: objectRegistry
             )

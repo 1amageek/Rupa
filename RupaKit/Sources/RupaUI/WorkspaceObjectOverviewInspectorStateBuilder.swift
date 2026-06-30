@@ -227,6 +227,10 @@ struct WorkspaceObjectOverviewInspectorStateBuilder {
                     value: valueSummary(loft.sections.map(loftSectionSummary))
                 ),
                 WorkspaceInspectorTextRow(
+                    title: "Guides",
+                    value: valueSummary(loft.guides.map { shortID($0.featureID) })
+                ),
+                WorkspaceInspectorTextRow(
                     title: "Result",
                     value: loft.options.resultKind.rawValue.capitalized
                 ),

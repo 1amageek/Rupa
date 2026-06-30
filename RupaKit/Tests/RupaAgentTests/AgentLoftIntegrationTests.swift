@@ -141,6 +141,78 @@ import SwiftCAD
     #expect(result.diagnostics.contains { diagnostic in diagnostic.severity == .error } == false)
 }
 
+@MainActor
+@Test func agentCreatesGuidedLoftThroughAutomationAndCore() async throws {
+    var document = DesignDocument.empty()
+    let firstProfileID = try createAgentLoftProfile(
+        in: &document,
+        name: "Agent Guided Loft Bottom",
+        width: 4.0,
+        height: 2.0,
+        z: 0.0
+    )
+    let secondProfileID = try createAgentLoftProfile(
+        in: &document,
+        name: "Agent Guided Loft Top",
+        width: 4.0,
+        height: 2.0,
+        z: 10.0
+    )
+    let guideID = try document.createSketch(
+        name: "Agent Guided Loft Seam",
+        sketch: agentLoftVerticalGuideSketch(x: 2.0, y: -1.0, zStart: 0.0, zEnd: 10.0),
+        geometryRole: .curve
+    )
+    let server = AgentCommandController()
+    let sessionID = UUID()
+    let session = EditorSession(document: document)
+    server.register(session: session, id: sessionID)
+
+    let response = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .createLoft(
+                name: "Agent Guided Loft",
+                sections: [
+                    LoftSectionReference(profile: ProfileReference(featureID: firstProfileID)),
+                    LoftSectionReference(profile: ProfileReference(featureID: secondProfileID)),
+                ],
+                guides: [
+                    LoftGuideReference(featureID: guideID),
+                ],
+                options: LoftOptions(resultKind: .solid)
+            ),
+            expectedGeneration: DocumentGeneration(0)
+        )
+    )
+
+    guard case .command(let result) = response else {
+        Issue.record("Agent must return a guided loft command result.")
+        return
+    }
+    let loftID = try #require(session.document.cadDocument.designGraph.order.last)
+    let feature = try #require(session.document.cadDocument.designGraph.nodes[loftID])
+    let evaluated = try #require(session.currentEvaluation?.evaluatedDocument)
+    let vertexReference = try #require(evaluated.generatedNames[PersistentName(components: [
+        .feature(loftID),
+        .generated(GeneratedSubshapeRole.vertex.rawValue),
+        .index(0),
+    ])])
+    guard case .loft(let loft) = feature.operation,
+          case .vertex(let vertexID) = vertexReference,
+          let vertex = evaluated.brep.vertices[vertexID] else {
+        Issue.record("Agent must create a guided loft feature and generated vertex reference.")
+        return
+    }
+
+    #expect(result.commandName == "createLoft")
+    #expect(result.didMutate)
+    #expect(loft.guides == [LoftGuideReference(featureID: guideID)])
+    #expect(vertex.point.isApproximatelyEqual(to: Point3D(x: 0.002, y: -0.001, z: 0.0), tolerance: 1.0e-12))
+    #expect(session.evaluationStatus == .valid)
+    #expect(result.diagnostics.contains { diagnostic in diagnostic.severity == .error } == false)
+}
+
 private func createAgentLoftProfile(
     in document: inout DesignDocument,
     name: String,
@@ -154,6 +226,24 @@ private func createAgentLoftProfile(
         plane: agentLoftPlane(x: x, z: z),
         width: .length(width, .millimeter),
         height: .length(height, .millimeter)
+    )
+}
+
+private func agentLoftVerticalGuideSketch(x: Double, y: Double, zStart: Double, zEnd: Double) -> Sketch {
+    let lineID = SketchEntityID()
+    return Sketch(
+        plane: .plane(Plane3D(
+            origin: Point3D(x: x / 1000.0, y: y / 1000.0, z: zStart / 1000.0),
+            normal: .unitY
+        )),
+        entities: [
+            lineID: .line(SketchLine(
+                start: SketchPoint(x: .constant(.length(0.0, unit: .meter)), y: .constant(.length(0.0, unit: .meter))),
+                end: SketchPoint(x: .constant(.length(0.0, unit: .meter)), y: .constant(.length((zEnd - zStart) / 1000.0, unit: .meter)))
+            )),
+        ],
+        constraints: [],
+        dimensions: []
     )
 }
 

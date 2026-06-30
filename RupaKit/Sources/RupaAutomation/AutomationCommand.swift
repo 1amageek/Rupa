@@ -227,6 +227,7 @@ public enum AutomationCommand: Codable, Equatable, Sendable {
     case createLoft(
         name: String,
         sections: [LoftSectionReference],
+        guides: [LoftGuideReference] = [],
         options: LoftOptions
     )
     case createBoolean(
@@ -784,10 +785,11 @@ public enum AutomationCommand: Codable, Equatable, Sendable {
                 targets: targets,
                 options: options
             )
-        case .createLoft(let name, let sections, let options):
+        case .createLoft(let name, let sections, let guides, let options):
             .createLoft(
                 name: name,
                 sections: sections,
+                guides: guides,
                 options: options
             )
         case .createBoolean(let name, let targets, let tool, let operation, let keepTools):

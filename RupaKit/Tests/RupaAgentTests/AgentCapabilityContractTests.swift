@@ -545,20 +545,23 @@ import SwiftCAD
     #expect(loft.mutatesDocument)
     #expect(loft.access == .automationCommand)
     #expect(loft.discovery.contains(.sketchEntitySummary))
-    #expect(loft.targets == [.profile])
+    #expect(loft.targets == [.profile, .sketchEntity])
     #expect(loft.summary.contains("Loft source feature"))
     #expect(loft.failureMode.contains("resamples unequal boundary sample counts"))
+    #expect(loft.failureMode.contains("guide endpoints lock first and last section seam samples"))
     #expect(loft.failureMode.contains("closed section loops with solid output"))
     #expect(loft.failureMode.contains("degree-1 ruled B-spline side faces"))
     #expect(loft.optionMatrix.map(\.name) == [
         "resultKind",
         "sectionMatching",
         "sectionStartSampleIndex",
+        "guides",
         "closesSectionLoop",
     ])
     let loftResultAxis = try #require(loft.optionMatrix.first { $0.name == "resultKind" })
     let loftMatchingAxis = try #require(loft.optionMatrix.first { $0.name == "sectionMatching" })
     let loftStartAxis = try #require(loft.optionMatrix.first { $0.name == "sectionStartSampleIndex" })
+    let loftGuideAxis = try #require(loft.optionMatrix.first { $0.name == "guides" })
     let loftLoopAxis = try #require(loft.optionMatrix.first { $0.name == "closesSectionLoop" })
     #expect(loftResultAxis.supportedValues == ["solid", "sheet"])
     #expect(loftResultAxis.notes.contains { $0.contains("planar caps") })
@@ -568,6 +571,9 @@ import SwiftCAD
     #expect(loftMatchingAxis.notes.contains { $0.contains("resampled by closed-loop boundary progress") })
     #expect(loftStartAxis.supportedValues == ["automatic", "zeroBasedBoundarySampleIndex"])
     #expect(loftStartAxis.notes.contains { $0.contains("locks the seam start") })
+    #expect(loftGuideAxis.supportedValues == ["none", "openCurveFeatureIDs"])
+    #expect(loftGuideAxis.notes.contains { $0.contains("guide endpoints must touch") })
+    #expect(loftGuideAxis.notes.contains { $0.contains("lock section seams") })
     #expect(loftLoopAxis.supportedValues == ["false", "true"])
     #expect(loftLoopAxis.notes.contains { $0.contains("requires sheet resultKind") })
 

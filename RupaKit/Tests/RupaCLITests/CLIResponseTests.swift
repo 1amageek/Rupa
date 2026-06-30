@@ -871,6 +871,81 @@ struct CLIModelCommandTests {
         ])
         #expect(loaded.productMetadata.sceneNodes.values.contains { $0.reference == .body(loftFeatureID) })
     }
+
+    @Test(.timeLimit(.minutes(1)))
+    func executableModelLoftPersistsGuideReferencesAsJSON() async throws {
+        let temporaryDirectory = try makeTemporaryDirectory()
+        defer {
+            removeTemporaryDirectory(temporaryDirectory)
+        }
+        let documentURL = temporaryDirectory.appendingPathComponent("process-guided-loft.swcad")
+        var document = DesignDocument.empty(named: "Process Guided Loft")
+        let firstProfileID = try document.createRectangleSketch(
+            name: "Guided Loft Bottom Profile",
+            plane: .xy,
+            width: .length(4.0, .millimeter),
+            height: .length(2.0, .millimeter)
+        )
+        let secondProfileID = try document.createRectangleSketch(
+            name: "Guided Loft Top Profile",
+            plane: .plane(Plane3D(
+                origin: Point3D(x: 0.0, y: 0.0, z: 0.010),
+                normal: .unitZ
+            )),
+            width: .length(4.0, .millimeter),
+            height: .length(2.0, .millimeter)
+        )
+        let guideID = try document.createSketch(
+            name: "Guided Loft Seam",
+            sketch: cliLoftVerticalGuideSketch(x: 2.0, y: -1.0, zStart: 0.0, zEnd: 10.0),
+            geometryRole: .curve
+        )
+        try DocumentFileService().save(document, to: documentURL)
+
+        let result = try await runCLI([
+            "model",
+            "loft",
+            documentURL.path,
+            "--name",
+            "CLI Guided Loft",
+            "--section-feature-id",
+            firstProfileID.description,
+            "--section-feature-id",
+            secondProfileID.description,
+            "--guide-feature-id",
+            guideID.description,
+            "--section-matching",
+            "byBoundaryProgress",
+            "--result-kind",
+            "solid",
+            "--mode",
+            "file",
+            "--json",
+        ])
+        let response = try JSONDecoder().decode(
+            CLIResponse.self,
+            from: result.standardOutputData
+        )
+        let loaded = try DocumentFileService().load(from: documentURL)
+        let loftFeatureID = try #require(loaded.cadDocument.designGraph.order.last)
+        let feature = try #require(loaded.cadDocument.designGraph.nodes[loftFeatureID])
+        guard case let .loft(loft) = feature.operation else {
+            #expect(Bool(false))
+            return
+        }
+
+        #expect(result.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: result.standardError))
+        #expect(response.message == "Loft CLI Guided Loft source created.")
+        #expect(response.saved)
+        #expect(!response.dirty)
+        #expect(loft.guides == [LoftGuideReference(featureID: guideID)])
+        #expect(feature.inputs == [
+            FeatureInput(featureID: firstProfileID, role: .profile),
+            FeatureInput(featureID: secondProfileID, role: .profile),
+            FeatureInput(featureID: guideID, role: .guide),
+        ])
+        try loaded.validate()
+    }
 }
 
 @Test(.timeLimit(.minutes(1)))
@@ -7912,6 +7987,24 @@ private func cliStandalonePoint(
     return (
         x: try cliLength(point.x, in: document),
         y: try cliLength(point.y, in: document)
+    )
+}
+
+private func cliLoftVerticalGuideSketch(x: Double, y: Double, zStart: Double, zEnd: Double) -> Sketch {
+    let lineID = SketchEntityID()
+    return Sketch(
+        plane: .plane(Plane3D(
+            origin: Point3D(x: x / 1000.0, y: y / 1000.0, z: zStart / 1000.0),
+            normal: .unitY
+        )),
+        entities: [
+            lineID: .line(SketchLine(
+                start: SketchPoint(x: .constant(.length(0.0, unit: .meter)), y: .constant(.length(0.0, unit: .meter))),
+                end: SketchPoint(x: .constant(.length(0.0, unit: .meter)), y: .constant(.length((zEnd - zStart) / 1000.0, unit: .meter)))
+            )),
+        ],
+        constraints: [],
+        dimensions: []
     )
 }
 

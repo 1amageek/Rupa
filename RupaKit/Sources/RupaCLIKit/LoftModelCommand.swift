@@ -47,6 +47,9 @@ public struct LoftModelCommand: ParsableCommand {
     @Option(name: .customLong("section-start-sample-index"), help: "Boundary sample index to use as the seam start for each section. Omit to auto-match all section seams.")
     public var sectionStartSampleIndexes: [Int] = []
 
+    @Option(name: .customLong("guide-feature-id"), help: "Open guide curve sketch feature UUID used to lock Loft section seam matching. Repeatable.")
+    public var guideFeatureIDs: [String] = []
+
     @Option(help: "Loft section matching policy.")
     public var sectionMatching: SectionMatching = .byBoundaryProgress
 
@@ -67,6 +70,7 @@ public struct LoftModelCommand: ParsableCommand {
                 target: document.target(sessionID: sessionID),
                 name: name,
                 sections: input.sections,
+                guides: input.guides,
                 options: input.options,
                 mode: document.mode,
                 expectedGeneration: document.generation(),
@@ -80,6 +84,7 @@ public struct LoftModelCommand: ParsableCommand {
 
     private func loftInput() throws -> (
         sections: [LoftSectionReference],
+        guides: [LoftGuideReference],
         options: LoftOptions
     ) {
         guard sectionFeatureIDs.count >= 2 else {
@@ -123,8 +128,17 @@ public struct LoftModelCommand: ParsableCommand {
                 startSampleIndex: startSampleIndex
             )
         }
+        let guides = try guideFeatureIDs.map { featureIDValue in
+            LoftGuideReference(
+                featureID: try CLIFeatureReferenceParser.featureID(
+                    featureIDValue,
+                    valueName: "Guide feature ID"
+                )
+            )
+        }
         return (
             sections: sections,
+            guides: guides,
             options: LoftOptions(
                 resultKind: resultKind.loftValue,
                 sectionMatching: sectionMatching.loftValue,

@@ -251,11 +251,12 @@ extension DesignDocument {
     public mutating func createLoft(
         name: String,
         sections: [LoftSectionReference],
+        guides: [LoftGuideReference] = [],
         options: LoftOptions = LoftOptions(),
         objectRegistry: ObjectTypeRegistry = .builtIn
     ) throws -> FeatureID {
         let trimmedName = try normalizedMetadataName(name, owner: "Loft")
-        let loft = LoftFeature(sections: sections, options: options)
+        let loft = LoftFeature(sections: sections, guides: guides, options: options)
         do {
             try loft.validate()
         } catch {
@@ -267,6 +268,9 @@ extension DesignDocument {
         for section in sections {
             try requireLoftSourceProfileFeature(section.featureID, owner: "Loft profile")
         }
+        for guide in guides {
+            try requireSweepSourceCurveFeature(guide.featureID, owner: "Loft guide")
+        }
 
         let featureID = FeatureID()
         let feature = FeatureNode(
@@ -275,6 +279,8 @@ extension DesignDocument {
             operation: .loft(loft),
             inputs: sections.map { section in
                 FeatureInput(featureID: section.featureID, role: .profile)
+            } + guides.map { guide in
+                FeatureInput(featureID: guide.featureID, role: .guide)
             },
             outputs: [FeatureOutput(role: options.resultKind.featureOutputRole)]
         )

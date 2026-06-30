@@ -64,6 +64,7 @@ public typealias SketchSplineEndpointReference = SwiftCAD.SketchSplineEndpointRe
 public typealias SketchCurveSampler = SwiftCAD.SketchCurveSampler
 public typealias SweepFeature = SwiftCAD.SweepFeature
 public typealias LoftFeature = SwiftCAD.LoftFeature
+public typealias LoftGuideReference = SwiftCAD.LoftGuideReference
 public typealias LoftSectionReference = SwiftCAD.LoftSectionReference
 public typealias LoftOptions = SwiftCAD.LoftOptions
 public typealias LoftResultKind = SwiftCAD.LoftResultKind
