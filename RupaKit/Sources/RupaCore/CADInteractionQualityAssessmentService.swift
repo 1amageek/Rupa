@@ -765,12 +765,12 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                         "RupaKit/Tests/RupaCLITests/CLIResponseTests.swift",
                     ],
                     notes: [
-                        "Loft now has a source-owned Swift-CAD IR, same-boundary-count ruled B-spline B-rep evaluator, optional guide curve references that lock first and last section seam samples by endpoint contact, single-guide rail-following intermediate section rings for the two-section subset, explicit per-section startSampleIndex seam starts, automatic cyclic section matching for unspecified seams, solid output, open sheet output, closed section-loop sheet output, RupaCore mutation, Automation, Agent command dispatch, CLI model loft creation, measurement, viewport scene display, and Inspector operation summaries.",
+                        "Loft now has a source-owned Swift-CAD IR, same-boundary-count ruled B-spline B-rep evaluator, optional guide curve references that lock first and last section seam samples by first-guide endpoint contact when explicit section starts are absent, multi-guide rail-following intermediate section rings for the two-section subset, explicit per-section startSampleIndex seam starts, automatic cyclic section matching for unspecified seams, solid output, open sheet output, closed section-loop sheet output, RupaCore mutation, Automation, Agent command dispatch, CLI model loft creation, measurement, viewport scene display, and Inspector operation summaries.",
                     ]
                 ),
             ],
             openWork: [
-                "Loft multi-guide and multi-section rail-shape deformation, viewport seam placement, higher-order NURBS surface output, and G0/G1/G2/G3 section-continuity controls.",
+                "Loft multi-section rail-shape deformation, viewport seam placement, higher-order NURBS surface output, and G0/G1/G2/G3 section-continuity controls.",
                 "Rail deformation beyond the current affine, signed-axis, convex quadrilateral bilinear, convex mean-value cage, and radial point-guide sections.",
                 "Non-box boolean operands.",
                 "Stable result topology beyond current exact subsets.",

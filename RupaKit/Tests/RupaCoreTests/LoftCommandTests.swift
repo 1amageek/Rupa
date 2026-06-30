@@ -228,6 +228,67 @@ import SwiftCAD
     try document.validate()
 }
 
+@Test func createLoftUsesMultipleCurvedGuidesToCreateDistinctRailConstrainedVertices() throws {
+    var document = DesignDocument.empty()
+    let firstProfileID = try createLoftProfile(
+        in: &document,
+        name: "Multi Rail Loft Bottom",
+        width: 4.0,
+        height: 2.0,
+        z: 0.0
+    )
+    let secondProfileID = try createLoftProfile(
+        in: &document,
+        name: "Multi Rail Loft Top",
+        width: 4.0,
+        height: 2.0,
+        z: 10.0
+    )
+    let rightGuideID = try document.createSketch(
+        name: "Multi Rail Loft Right Guide",
+        sketch: loftCurvedGuideSketch(x: 2.0, y: -1.0, zStart: 0.0, zEnd: 10.0, localXOffset: -0.003),
+        geometryRole: .curve
+    )
+    let leftGuideID = try document.createSketch(
+        name: "Multi Rail Loft Left Guide",
+        sketch: loftCurvedGuideSketch(x: -2.0, y: 1.0, zStart: 0.0, zEnd: 10.0, localXOffset: 0.003),
+        geometryRole: .curve
+    )
+
+    _ = try document.createLoft(
+        name: "Multi Rail Loft",
+        sections: [
+            LoftSectionReference(profile: ProfileReference(featureID: firstProfileID)),
+            LoftSectionReference(profile: ProfileReference(featureID: secondProfileID)),
+        ],
+        guides: [
+            LoftGuideReference(featureID: rightGuideID),
+            LoftGuideReference(featureID: leftGuideID),
+        ]
+    )
+    let evaluated = try CADPipeline.modelingDefault(for: document).evaluate(document.cadDocument)
+    let body = try #require(evaluated.brep.bodies.values.first)
+    let rightRailVertices = evaluated.brep.vertices.values.filter { vertex in
+        abs(vertex.point.y + 0.001) <= 1.0e-12
+            && vertex.point.z > 0.0
+            && vertex.point.z < 0.010
+            && vertex.point.x > 0.0025
+    }
+    let leftRailVertices = evaluated.brep.vertices.values.filter { vertex in
+        abs(vertex.point.y - 0.001) <= 1.0e-12
+            && vertex.point.z > 0.0
+            && vertex.point.z < 0.010
+            && vertex.point.x < -0.0025
+    }
+
+    #expect(body.kind == .solid)
+    #expect(evaluated.brep.vertices.count > 8)
+    #expect(evaluated.brep.faces.count > 6)
+    #expect(rightRailVertices.isEmpty == false)
+    #expect(leftRailVertices.isEmpty == false)
+    try document.validate()
+}
+
 @Test func createLoftSupportsNonParallelSectionsWithRuledBSplineSideSurfaces() throws {
     var document = DesignDocument.empty()
     let firstProfileID = try createLoftProfile(
@@ -522,7 +583,13 @@ private func loftVerticalGuideSketch(x: Double, y: Double, zStart: Double, zEnd:
     )
 }
 
-private func loftCurvedGuideSketch(x: Double, y: Double, zStart: Double, zEnd: Double) -> Sketch {
+private func loftCurvedGuideSketch(
+    x: Double,
+    y: Double,
+    zStart: Double,
+    zEnd: Double,
+    localXOffset: Double = -0.003
+) -> Sketch {
     let splineID = SketchEntityID()
     return Sketch(
         plane: .plane(Plane3D(
@@ -532,8 +599,8 @@ private func loftCurvedGuideSketch(x: Double, y: Double, zStart: Double, zEnd: D
         entities: [
             splineID: .spline(SketchSpline(controlPoints: [
                 SketchPoint(x: .constant(.length(0.0, unit: .meter)), y: .constant(.length(0.0, unit: .meter))),
-                SketchPoint(x: .constant(.length(-0.003, unit: .meter)), y: .constant(.length(0.0025, unit: .meter))),
-                SketchPoint(x: .constant(.length(-0.003, unit: .meter)), y: .constant(.length(0.0075, unit: .meter))),
+                SketchPoint(x: .constant(.length(localXOffset, unit: .meter)), y: .constant(.length(0.0025, unit: .meter))),
+                SketchPoint(x: .constant(.length(localXOffset, unit: .meter)), y: .constant(.length(0.0075, unit: .meter))),
                 SketchPoint(x: .constant(.length(0.0, unit: .meter)), y: .constant(.length((zEnd - zStart) / 1000.0, unit: .meter))),
             ])),
         ],

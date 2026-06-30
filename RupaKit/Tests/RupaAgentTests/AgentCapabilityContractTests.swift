@@ -548,8 +548,9 @@ import SwiftCAD
     #expect(loft.targets == [.profile, .sketchEntity])
     #expect(loft.summary.contains("Loft source feature"))
     #expect(loft.failureMode.contains("resamples unequal boundary sample counts"))
-    #expect(loft.failureMode.contains("guide endpoints lock first and last section seam samples"))
+    #expect(loft.failureMode.contains("first guide endpoints lock first and last section seam samples"))
     #expect(loft.failureMode.contains("rail-following intermediate section rings"))
+    #expect(loft.failureMode.contains("duplicate guide endpoint samples"))
     #expect(loft.failureMode.contains("closed section loops with solid output"))
     #expect(loft.failureMode.contains("degree-1 ruled B-spline side faces"))
     #expect(loft.optionMatrix.map(\.name) == [
@@ -574,9 +575,9 @@ import SwiftCAD
     #expect(loftStartAxis.notes.contains { $0.contains("locks the seam start") })
     #expect(loftGuideAxis.supportedValues == ["none", "openCurveFeatureIDs"])
     #expect(loftGuideAxis.notes.contains { $0.contains("guide endpoints must touch") })
-    #expect(loftGuideAxis.notes.contains { $0.contains("lock section seams") })
+    #expect(loftGuideAxis.notes.contains { $0.contains("first guide locks section seams") })
     #expect(loftGuideAxis.notes.contains { $0.contains("rail-following intermediate section rings") })
-    #expect(loftGuideAxis.notes.contains { $0.contains("multi-guide rail deformation") })
+    #expect(loftGuideAxis.notes.contains { $0.contains("multi-section rail deformation") })
     #expect(loftLoopAxis.supportedValues == ["false", "true"])
     #expect(loftLoopAxis.notes.contains { $0.contains("requires sheet resultKind") })
 
