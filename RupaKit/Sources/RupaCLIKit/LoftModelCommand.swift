@@ -27,6 +27,20 @@ public struct LoftModelCommand: ParsableCommand {
         }
     }
 
+    public enum SurfaceMode: String, ExpressibleByArgument, Sendable {
+        case ruled
+        case smooth
+
+        var loftValue: LoftSurfaceMode {
+            switch self {
+            case .ruled:
+                .ruled
+            case .smooth:
+                .smooth
+            }
+        }
+    }
+
     public static let configuration = CommandConfiguration(
         commandName: "loft",
         abstract: "Loft closed profile sections into a source-owned solid or sheet."
@@ -55,6 +69,9 @@ public struct LoftModelCommand: ParsableCommand {
 
     @Option(help: "Loft result kind: solid or sheet.")
     public var resultKind: ResultKind = .solid
+
+    @Option(help: "Loft surface mode: ruled or smooth.")
+    public var surfaceMode: SurfaceMode = .ruled
 
     @Flag(help: "Close the last section back to the first section. Requires sheet result kind and at least three sections.")
     public var closeSectionLoop = false
@@ -142,7 +159,8 @@ public struct LoftModelCommand: ParsableCommand {
             options: LoftOptions(
                 resultKind: resultKind.loftValue,
                 sectionMatching: sectionMatching.loftValue,
-                closesSectionLoop: closeSectionLoop
+                closesSectionLoop: closeSectionLoop,
+                surfaceMode: surfaceMode.loftValue
             )
         )
     }

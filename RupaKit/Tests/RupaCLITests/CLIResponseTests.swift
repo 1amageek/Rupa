@@ -862,6 +862,7 @@ struct CLIModelCommandTests {
             ),
         ])
         #expect(loft.options.resultKind == .sheet)
+        #expect(loft.options.surfaceMode == .ruled)
         #expect(loft.options.closesSectionLoop)
         #expect(feature.outputs == [FeatureOutput(role: .sheet)])
         #expect(feature.inputs == [
@@ -918,6 +919,8 @@ struct CLIModelCommandTests {
             "byBoundaryProgress",
             "--result-kind",
             "solid",
+            "--surface-mode",
+            "smooth",
             "--mode",
             "file",
             "--json",
@@ -939,6 +942,7 @@ struct CLIModelCommandTests {
         #expect(response.saved)
         #expect(!response.dirty)
         #expect(loft.guides == [LoftGuideReference(featureID: guideID)])
+        #expect(loft.options.surfaceMode == .smooth)
         #expect(feature.inputs == [
             FeatureInput(featureID: firstProfileID, role: .profile),
             FeatureInput(featureID: secondProfileID, role: .profile),

@@ -553,15 +553,19 @@ import SwiftCAD
     #expect(loft.failureMode.contains("duplicate guide endpoint samples"))
     #expect(loft.failureMode.contains("closed section loops with solid output"))
     #expect(loft.failureMode.contains("degree-1 ruled B-spline side faces"))
+    #expect(loft.failureMode.contains("smooth cubic section-direction B-spline side faces"))
+    #expect(loft.failureMode.contains("smooth closed section loops"))
     #expect(loft.optionMatrix.map(\.name) == [
         "resultKind",
         "sectionMatching",
+        "surfaceMode",
         "sectionStartSampleIndex",
         "guides",
         "closesSectionLoop",
     ])
     let loftResultAxis = try #require(loft.optionMatrix.first { $0.name == "resultKind" })
     let loftMatchingAxis = try #require(loft.optionMatrix.first { $0.name == "sectionMatching" })
+    let loftSurfaceAxis = try #require(loft.optionMatrix.first { $0.name == "surfaceMode" })
     let loftStartAxis = try #require(loft.optionMatrix.first { $0.name == "sectionStartSampleIndex" })
     let loftGuideAxis = try #require(loft.optionMatrix.first { $0.name == "guides" })
     let loftLoopAxis = try #require(loft.optionMatrix.first { $0.name == "closesSectionLoop" })
@@ -571,6 +575,10 @@ import SwiftCAD
     #expect(loftMatchingAxis.supportedValues == ["byBoundaryProgress"])
     #expect(loftMatchingAxis.notes.contains { $0.contains("preserve source samples") })
     #expect(loftMatchingAxis.notes.contains { $0.contains("resampled by closed-loop boundary progress") })
+    #expect(loftSurfaceAxis.supportedValues == ["ruled", "smooth"])
+    #expect(loftSurfaceAxis.notes.contains { $0.contains("straight connector edges") })
+    #expect(loftSurfaceAxis.notes.contains { $0.contains("cubic connector edges") })
+    #expect(loftSurfaceAxis.notes.contains { $0.contains("closed section loops remain unsupported") })
     #expect(loftStartAxis.supportedValues == ["automatic", "zeroBasedBoundarySampleIndex"])
     #expect(loftStartAxis.notes.contains { $0.contains("locks the seam start") })
     #expect(loftGuideAxis.supportedValues == ["none", "openCurveFeatureIDs"])

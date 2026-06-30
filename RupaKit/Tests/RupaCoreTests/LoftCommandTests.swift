@@ -387,6 +387,69 @@ import SwiftCAD
     try document.validate()
 }
 
+@Test func createLoftSmoothSurfaceModeCreatesCubicSideSurfaces() throws {
+    var document = DesignDocument.empty()
+    let firstProfileID = try createLoftProfile(
+        in: &document,
+        name: "Smooth Loft Bottom",
+        width: 4.0,
+        height: 2.0,
+        x: 0.0,
+        z: 0.0
+    )
+    let middleProfileID = try createLoftProfile(
+        in: &document,
+        name: "Smooth Loft Middle",
+        width: 5.0,
+        height: 2.5,
+        x: 3.0,
+        z: 5.0
+    )
+    let lastProfileID = try createLoftProfile(
+        in: &document,
+        name: "Smooth Loft Top",
+        width: 4.0,
+        height: 2.0,
+        x: 0.0,
+        z: 10.0
+    )
+
+    let loftID = try document.createLoft(
+        name: "Smooth Loft",
+        sections: [
+            LoftSectionReference(profile: ProfileReference(featureID: firstProfileID)),
+            LoftSectionReference(profile: ProfileReference(featureID: middleProfileID)),
+            LoftSectionReference(profile: ProfileReference(featureID: lastProfileID)),
+        ],
+        options: LoftOptions(resultKind: .solid, surfaceMode: .smooth)
+    )
+    let feature = try #require(document.cadDocument.designGraph.nodes[loftID])
+    let evaluated = try CADPipeline.modelingDefault(for: document).evaluate(document.cadDocument)
+    let body = try #require(evaluated.brep.bodies.values.first)
+    let sideSurfaces = evaluated.brep.geometry.surfaces.values.compactMap(\.bSplineSurface)
+    let connectorCurves = evaluated.brep.geometry.curves.values.compactMap(\.bSplineCurve)
+
+    guard case .loft(let loft) = feature.operation else {
+        Issue.record("Smooth Loft command must create a loft feature.")
+        return
+    }
+
+    #expect(loft.options.surfaceMode == .smooth)
+    #expect(body.kind == .solid)
+    #expect(sideSurfaces.count == 8)
+    #expect(connectorCurves.count == 8)
+    #expect(sideSurfaces.allSatisfy { surface in
+        surface.uDegree == 1
+            && surface.vDegree == 3
+            && surface.uControlPointCount == 2
+            && surface.vControlPointCount == 4
+    })
+    #expect(connectorCurves.allSatisfy { curve in
+        curve.degree == 3 && curve.controlPointCount == 4
+    })
+    try document.validate()
+}
+
 @Test func createLoftCanCreateClosedSectionLoopSheetResult() throws {
     var document = DesignDocument.empty()
     let firstProfileID = try createLoftProfile(
@@ -522,6 +585,50 @@ import SwiftCAD
                 LoftSectionReference(profile: ProfileReference(featureID: secondProfileID)),
             ],
             options: LoftOptions(resultKind: .sheet, closesSectionLoop: true)
+        )
+    }
+    #expect(document.cadDocument.designGraph.order == orderBeforeLoft)
+}
+
+@Test func createLoftRejectsSmoothClosedSectionLoopWithoutMutation() throws {
+    var document = DesignDocument.empty()
+    let firstProfileID = try createLoftProfile(
+        in: &document,
+        name: "Invalid Smooth Loop First",
+        width: 4.0,
+        height: 2.0,
+        z: 0.0
+    )
+    let secondProfileID = try createLoftProfile(
+        in: &document,
+        name: "Invalid Smooth Loop Second",
+        width: 4.0,
+        height: 2.0,
+        x: 6.0,
+        z: 4.0
+    )
+    let thirdProfileID = try createLoftProfile(
+        in: &document,
+        name: "Invalid Smooth Loop Third",
+        width: 4.0,
+        height: 2.0,
+        z: 8.0
+    )
+    let orderBeforeLoft = document.cadDocument.designGraph.order
+
+    #expect(throws: EditorError.self) {
+        _ = try document.createLoft(
+            name: "Invalid Smooth Closed Loop Loft",
+            sections: [
+                LoftSectionReference(profile: ProfileReference(featureID: firstProfileID)),
+                LoftSectionReference(profile: ProfileReference(featureID: secondProfileID)),
+                LoftSectionReference(profile: ProfileReference(featureID: thirdProfileID)),
+            ],
+            options: LoftOptions(
+                resultKind: .sheet,
+                closesSectionLoop: true,
+                surfaceMode: .smooth
+            )
         )
     }
     #expect(document.cadDocument.designGraph.order == orderBeforeLoft)
@@ -683,6 +790,15 @@ private extension Surface3D {
     var bSplineSurface: BSplineSurface3D? {
         if case .bSpline(let surface) = self {
             return surface
+        }
+        return nil
+    }
+}
+
+private extension Curve3D {
+    var bSplineCurve: BSplineCurve3D? {
+        if case .bSpline(let curve) = self {
+            return curve
         }
         return nil
     }

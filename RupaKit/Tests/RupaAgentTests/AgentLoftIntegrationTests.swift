@@ -142,6 +142,85 @@ import SwiftCAD
 }
 
 @MainActor
+@Test func agentCreatesSmoothLoftThroughAutomationAndCore() async throws {
+    var document = DesignDocument.empty()
+    let firstProfileID = try createAgentLoftProfile(
+        in: &document,
+        name: "Agent Smooth Loft Bottom",
+        width: 4.0,
+        height: 2.0,
+        z: 0.0
+    )
+    let middleProfileID = try createAgentLoftProfile(
+        in: &document,
+        name: "Agent Smooth Loft Middle",
+        width: 5.0,
+        height: 2.5,
+        x: 3.0,
+        z: 5.0
+    )
+    let lastProfileID = try createAgentLoftProfile(
+        in: &document,
+        name: "Agent Smooth Loft Top",
+        width: 4.0,
+        height: 2.0,
+        z: 10.0
+    )
+    let server = AgentCommandController()
+    let sessionID = UUID()
+    let session = EditorSession(document: document)
+    server.register(session: session, id: sessionID)
+
+    let response = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .createLoft(
+                name: "Agent Smooth Loft",
+                sections: [
+                    LoftSectionReference(profile: ProfileReference(featureID: firstProfileID)),
+                    LoftSectionReference(profile: ProfileReference(featureID: middleProfileID)),
+                    LoftSectionReference(profile: ProfileReference(featureID: lastProfileID)),
+                ],
+                options: LoftOptions(resultKind: .solid, surfaceMode: .smooth)
+            ),
+            expectedGeneration: DocumentGeneration(0)
+        )
+    )
+
+    guard case .command(let result) = response else {
+        Issue.record("Agent must return a smooth loft command result.")
+        return
+    }
+    let loftID = try #require(session.document.cadDocument.designGraph.order.last)
+    let feature = try #require(session.document.cadDocument.designGraph.nodes[loftID])
+    let evaluated = try #require(session.currentEvaluation?.evaluatedDocument)
+    let sideSurfaces = evaluated.brep.geometry.surfaces.values.compactMap(\.bSplineSurface)
+    let connectorCurves = evaluated.brep.geometry.curves.values.compactMap(\.bSplineCurve)
+    guard case .loft(let loft) = feature.operation else {
+        Issue.record("Agent must create a smooth loft feature.")
+        return
+    }
+
+    #expect(result.commandName == "createLoft")
+    #expect(result.didMutate)
+    #expect(loft.options.surfaceMode == .smooth)
+    #expect(feature.outputs == [FeatureOutput(role: .body)])
+    #expect(sideSurfaces.count == 8)
+    #expect(connectorCurves.count == 8)
+    #expect(sideSurfaces.allSatisfy { surface in
+        surface.uDegree == 1
+            && surface.vDegree == 3
+            && surface.uControlPointCount == 2
+            && surface.vControlPointCount == 4
+    })
+    #expect(connectorCurves.allSatisfy { curve in
+        curve.degree == 3 && curve.controlPointCount == 4
+    })
+    #expect(session.evaluationStatus == .valid)
+    #expect(result.diagnostics.contains { diagnostic in diagnostic.severity == .error } == false)
+}
+
+@MainActor
 @Test func agentCreatesGuidedLoftThroughAutomationAndCore() async throws {
     var document = DesignDocument.empty()
     let firstProfileID = try createAgentLoftProfile(
@@ -255,4 +334,22 @@ private func agentLoftPlane(x: Double = 0.0, z: Double) -> SketchPlane {
         origin: Point3D(x: x / 1000.0, y: 0.0, z: z / 1000.0),
         normal: .unitZ
     ))
+}
+
+private extension Surface3D {
+    var bSplineSurface: BSplineSurface3D? {
+        if case .bSpline(let surface) = self {
+            return surface
+        }
+        return nil
+    }
+}
+
+private extension Curve3D {
+    var bSplineCurve: BSplineCurve3D? {
+        if case .bSpline(let curve) = self {
+            return curve
+        }
+        return nil
+    }
 }
