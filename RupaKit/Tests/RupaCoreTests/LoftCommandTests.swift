@@ -481,6 +481,43 @@ import SwiftCAD
     try scaledResult.document.validate()
 }
 
+@Test func createLoftSectionSmoothTangentScaleOverridesGlobalScale() throws {
+    let defaultResult = try smoothLoftDocument(smoothTangentScale: 1.0)
+    let sectionScaledResult = try smoothLoftDocument(
+        smoothTangentScale: 1.0,
+        sectionSmoothTangentScales: [0.25, nil, nil]
+    )
+    let defaultEvaluated = try CADPipeline.modelingDefault(for: defaultResult.document)
+        .evaluate(defaultResult.document.cadDocument)
+    let sectionScaledEvaluated = try CADPipeline.modelingDefault(for: sectionScaledResult.document)
+        .evaluate(sectionScaledResult.document.cadDocument)
+    let defaultCurve = try firstSmoothConnectorCurve(in: defaultEvaluated, loftID: defaultResult.loftID)
+    let sectionScaledCurve = try firstSmoothConnectorCurve(
+        in: sectionScaledEvaluated,
+        loftID: sectionScaledResult.loftID
+    )
+    let sectionScaledFeature = try #require(
+        sectionScaledResult.document.cadDocument.designGraph.nodes[sectionScaledResult.loftID]
+    )
+    guard case .loft(let sectionScaledLoft) = sectionScaledFeature.operation else {
+        Issue.record("Section-scaled smooth Loft command must create a loft feature.")
+        return
+    }
+
+    #expect(sectionScaledLoft.sections.map(\.smoothTangentScale) == [0.25, nil, nil])
+
+    let defaultStartHandleLength = (defaultCurve.controlPoints[1] - defaultCurve.controlPoints[0]).length
+    let sectionScaledStartHandleLength =
+        (sectionScaledCurve.controlPoints[1] - sectionScaledCurve.controlPoints[0]).length
+    let defaultEndHandleLength = (defaultCurve.controlPoints[2] - defaultCurve.controlPoints[3]).length
+    let sectionScaledEndHandleLength =
+        (sectionScaledCurve.controlPoints[2] - sectionScaledCurve.controlPoints[3]).length
+
+    #expect(abs(sectionScaledStartHandleLength - defaultStartHandleLength * 0.25) <= 1.0e-12)
+    #expect(abs(sectionScaledEndHandleLength - defaultEndHandleLength) <= 1.0e-12)
+    try sectionScaledResult.document.validate()
+}
+
 @Test func createLoftRejectsInvalidSmoothTangentScaleWithoutMutation() throws {
     var document = DesignDocument.empty()
     let firstProfileID = try createLoftProfile(
@@ -511,6 +548,40 @@ import SwiftCAD
                 surfaceMode: .smooth,
                 smoothTangentScale: 0.0
             )
+        )
+    }
+    #expect(document.cadDocument.designGraph.order == orderBeforeLoft)
+}
+
+@Test func createLoftRejectsInvalidSectionSmoothTangentScaleWithoutMutation() throws {
+    var document = DesignDocument.empty()
+    let firstProfileID = try createLoftProfile(
+        in: &document,
+        name: "Invalid Section Tangent Scale First",
+        width: 4.0,
+        height: 2.0,
+        z: 0.0
+    )
+    let secondProfileID = try createLoftProfile(
+        in: &document,
+        name: "Invalid Section Tangent Scale Second",
+        width: 4.0,
+        height: 2.0,
+        z: 10.0
+    )
+    let orderBeforeLoft = document.cadDocument.designGraph.order
+
+    #expect(throws: EditorError.self) {
+        _ = try document.createLoft(
+            name: "Invalid Section Smooth Tangent Scale Loft",
+            sections: [
+                LoftSectionReference(
+                    profile: ProfileReference(featureID: firstProfileID),
+                    smoothTangentScale: 0.0
+                ),
+                LoftSectionReference(profile: ProfileReference(featureID: secondProfileID)),
+            ],
+            options: LoftOptions(resultKind: .solid, surfaceMode: .smooth)
         )
     }
     #expect(document.cadDocument.designGraph.order == orderBeforeLoft)
@@ -757,7 +828,11 @@ import SwiftCAD
     try document.validate()
 }
 
-private func smoothLoftDocument(smoothTangentScale: Double) throws -> (document: DesignDocument, loftID: FeatureID) {
+private func smoothLoftDocument(
+    smoothTangentScale: Double,
+    sectionSmoothTangentScales: [Double?] = [nil, nil, nil]
+) throws -> (document: DesignDocument, loftID: FeatureID) {
+    precondition(sectionSmoothTangentScales.count == 3)
     var document = DesignDocument.empty()
     let firstProfileID = try createLoftProfile(
         in: &document,
@@ -786,9 +861,18 @@ private func smoothLoftDocument(smoothTangentScale: Double) throws -> (document:
     let loftID = try document.createLoft(
         name: "Smooth Tangent Scale Loft",
         sections: [
-            LoftSectionReference(profile: ProfileReference(featureID: firstProfileID)),
-            LoftSectionReference(profile: ProfileReference(featureID: middleProfileID)),
-            LoftSectionReference(profile: ProfileReference(featureID: lastProfileID)),
+            LoftSectionReference(
+                profile: ProfileReference(featureID: firstProfileID),
+                smoothTangentScale: sectionSmoothTangentScales[0]
+            ),
+            LoftSectionReference(
+                profile: ProfileReference(featureID: middleProfileID),
+                smoothTangentScale: sectionSmoothTangentScales[1]
+            ),
+            LoftSectionReference(
+                profile: ProfileReference(featureID: lastProfileID),
+                smoothTangentScale: sectionSmoothTangentScales[2]
+            ),
         ],
         options: LoftOptions(
             resultKind: .solid,

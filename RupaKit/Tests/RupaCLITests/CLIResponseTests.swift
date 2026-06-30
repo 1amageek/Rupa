@@ -821,6 +821,12 @@ struct CLIModelCommandTests {
             "1",
             "--section-start-sample-index",
             "1",
+            "--section-smooth-tangent-scale",
+            "0.5",
+            "--section-smooth-tangent-scale",
+            "1.0",
+            "--section-smooth-tangent-scale",
+            "1.5",
             "--section-matching",
             "byBoundaryProgress",
             "--result-kind",
@@ -852,15 +858,18 @@ struct CLIModelCommandTests {
         #expect(loft.sections == [
             LoftSectionReference(
                 profile: ProfileReference(featureID: firstProfileID),
-                startSampleIndex: 1
+                startSampleIndex: 1,
+                smoothTangentScale: 0.5
             ),
             LoftSectionReference(
                 profile: ProfileReference(featureID: secondProfileID),
-                startSampleIndex: 1
+                startSampleIndex: 1,
+                smoothTangentScale: 1.0
             ),
             LoftSectionReference(
                 profile: ProfileReference(featureID: thirdProfileID),
-                startSampleIndex: 1
+                startSampleIndex: 1,
+                smoothTangentScale: 1.5
             ),
         ])
         #expect(loft.options.resultKind == .sheet)

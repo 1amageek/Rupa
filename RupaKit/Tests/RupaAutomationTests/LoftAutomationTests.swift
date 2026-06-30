@@ -28,7 +28,8 @@ import SwiftCAD
             sections: [
                 LoftSectionReference(
                     profile: ProfileReference(featureID: firstProfileID),
-                    startSampleIndex: 1
+                    startSampleIndex: 1,
+                    smoothTangentScale: 0.75
                 ),
                 LoftSectionReference(
                     profile: ProfileReference(featureID: secondProfileID),
@@ -53,6 +54,7 @@ import SwiftCAD
     #expect(result.generation == DocumentGeneration(1))
     #expect(loft.sections.map(\.featureID) == [firstProfileID, secondProfileID])
     #expect(loft.sections.map(\.startSampleIndex) == [1, 1])
+    #expect(loft.sections.map(\.smoothTangentScale) == [0.75, nil])
     #expect(feature.outputs == [FeatureOutput(role: .body)])
     #expect(session.evaluationStatus == .valid)
     #expect(session.evaluatedBodyCount == 1)

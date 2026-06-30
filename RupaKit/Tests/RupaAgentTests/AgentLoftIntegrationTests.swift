@@ -196,7 +196,10 @@ import SwiftCAD
             command: .createLoft(
                 name: "Agent Smooth Loft",
                 sections: [
-                    LoftSectionReference(profile: ProfileReference(featureID: firstProfileID)),
+                    LoftSectionReference(
+                        profile: ProfileReference(featureID: firstProfileID),
+                        smoothTangentScale: 0.25
+                    ),
                     LoftSectionReference(profile: ProfileReference(featureID: middleProfileID)),
                     LoftSectionReference(profile: ProfileReference(featureID: lastProfileID)),
                 ],
@@ -228,6 +231,7 @@ import SwiftCAD
     #expect(result.didMutate)
     #expect(loft.options.surfaceMode == .smooth)
     #expect(loft.options.smoothTangentScale == 0.5)
+    #expect(loft.sections.map(\.smoothTangentScale) == [0.25, nil, nil])
     #expect(feature.outputs == [FeatureOutput(role: .body)])
     #expect(sideSurfaces.count == 8)
     #expect(connectorCurves.count == 8)

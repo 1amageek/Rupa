@@ -76,6 +76,12 @@ public struct LoftModelCommand: ParsableCommand {
     @Option(help: "Positive scale applied to smooth Loft section-direction tangents.")
     public var smoothTangentScale: Double = 1.0
 
+    @Option(
+        name: .customLong("section-smooth-tangent-scale"),
+        help: "Positive smooth tangent scale override for each authored section. Repeat once per section or omit to use the global scale."
+    )
+    public var sectionSmoothTangentScales: [Double] = []
+
     @Flag(help: "Close the last section back to the first section. Requires sheet result kind and at least three sections.")
     public var closeSectionLoop = false
 
@@ -126,6 +132,18 @@ public struct LoftModelCommand: ParsableCommand {
               smoothTangentScale > 0.0 else {
             throw ValidationError("Smooth tangent scale must be finite and greater than zero.")
         }
+        let sectionSmoothScales: [Double?]
+        if sectionSmoothTangentScales.isEmpty {
+            sectionSmoothScales = Array(repeating: nil, count: sectionFeatureIDs.count)
+        } else {
+            guard sectionSmoothTangentScales.count == sectionFeatureIDs.count else {
+                throw ValidationError("Section smooth tangent scale count must match section feature ID count.")
+            }
+            guard sectionSmoothTangentScales.allSatisfy({ $0.isFinite && $0 > 0.0 }) else {
+                throw ValidationError("Section smooth tangent scales must be finite and greater than zero.")
+            }
+            sectionSmoothScales = sectionSmoothTangentScales.map(Optional.some)
+        }
         let startSampleIndexes: [Int?]
         if sectionStartSampleIndexes.isEmpty {
             startSampleIndexes = Array(repeating: nil, count: sectionFeatureIDs.count)
@@ -139,18 +157,20 @@ public struct LoftModelCommand: ParsableCommand {
             startSampleIndexes = sectionStartSampleIndexes.map(Optional.some)
         }
 
-        let sections = try zip(zip(sectionFeatureIDs, profileIndexes), startSampleIndexes).map { values, startSampleIndex in
-            let (featureIDValue, profileIndex) = values
-            return LoftSectionReference(
+        var sections: [LoftSectionReference] = []
+        sections.reserveCapacity(sectionFeatureIDs.count)
+        for index in sectionFeatureIDs.indices {
+            sections.append(LoftSectionReference(
                 profile: ProfileReference(
                     featureID: try CLIFeatureReferenceParser.featureID(
-                        featureIDValue,
+                        sectionFeatureIDs[index],
                         valueName: "Section feature ID"
                     ),
-                    profileIndex: profileIndex
+                    profileIndex: profileIndexes[index]
                 ),
-                startSampleIndex: startSampleIndex
-            )
+                startSampleIndex: startSampleIndexes[index],
+                smoothTangentScale: sectionSmoothScales[index]
+            ))
         }
         let guides = try guideFeatureIDs.map { featureIDValue in
             LoftGuideReference(

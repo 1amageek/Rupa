@@ -765,12 +765,12 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                         "RupaKit/Tests/RupaCLITests/CLIResponseTests.swift",
                     ],
                     notes: [
-                        "Loft now has a source-owned Swift-CAD IR, same-boundary-count ruled B-spline and smooth cubic section-direction B-spline B-rep evaluator modes, finite positive smooth tangent scale control for automatic cubic section-direction handles, optional guide curve references that lock first and last section seam samples by first-guide endpoint contact when explicit section starts are absent, multi-section multi-guide rail-following intermediate section rings, explicit per-section startSampleIndex seam starts, automatic cyclic section matching for unspecified seams, solid output, open sheet output, closed section-loop sheet output in ruled or smooth mode, RupaCore mutation, Automation, Agent command dispatch, CLI model loft surface-mode and tangent-scale creation, measurement, viewport scene display, and Inspector operation summaries.",
+                        "Loft now has a source-owned Swift-CAD IR, same-boundary-count ruled B-spline and smooth cubic section-direction B-spline B-rep evaluator modes, finite positive global and per-section smooth tangent scale control for automatic cubic section-direction handles, linear section-scale interpolation for guide-inserted intermediate rings, optional guide curve references that lock first and last section seam samples by first-guide endpoint contact when explicit section starts are absent, multi-section multi-guide rail-following intermediate section rings, explicit per-section startSampleIndex seam starts, automatic cyclic section matching for unspecified seams, solid output, open sheet output, closed section-loop sheet output in ruled or smooth mode, RupaCore mutation, Automation, Agent command dispatch, CLI model loft surface-mode and tangent-scale creation, measurement, viewport scene display, and Inspector operation summaries.",
                     ]
                 ),
             ],
             openWork: [
-                "Loft viewport seam placement, continuity-driven smooth rail-surface solving, and G0/G1/G2/G3 section-continuity controls.",
+                "Loft viewport seam placement, continuity-driven smooth rail-surface solving, and G0/G1/G2/G3 section-continuity controls beyond tangent-handle scaling.",
                 "Rail deformation beyond the current affine, signed-axis, convex quadrilateral bilinear, convex mean-value cage, and radial point-guide sections.",
                 "Non-box boolean operands.",
                 "Stable result topology beyond current exact subsets.",
