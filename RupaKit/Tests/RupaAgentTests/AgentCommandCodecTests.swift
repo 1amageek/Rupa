@@ -578,7 +578,8 @@ import SwiftCAD
                 LoftSectionReference(
                     profile: ProfileReference(featureID: firstProfileID),
                     startSampleIndex: 1,
-                    smoothTangentScale: 0.25
+                    smoothTangentScale: 0.25,
+                    smoothTangentMode: .zero
                 ),
                 LoftSectionReference(
                     profile: ProfileReference(featureID: secondProfileID),

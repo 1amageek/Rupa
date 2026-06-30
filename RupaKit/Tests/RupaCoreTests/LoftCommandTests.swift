@@ -518,6 +518,37 @@ import SwiftCAD
     try sectionScaledResult.document.validate()
 }
 
+@Test func createLoftSectionZeroSmoothTangentModeClampsConnectorHandle() throws {
+    let defaultResult = try smoothLoftDocument(smoothTangentScale: 1.0)
+    let zeroModeResult = try smoothLoftDocument(
+        smoothTangentScale: 1.0,
+        sectionSmoothTangentModes: [.zero, .automatic, .automatic]
+    )
+    let defaultEvaluated = try CADPipeline.modelingDefault(for: defaultResult.document)
+        .evaluate(defaultResult.document.cadDocument)
+    let zeroModeEvaluated = try CADPipeline.modelingDefault(for: zeroModeResult.document)
+        .evaluate(zeroModeResult.document.cadDocument)
+    let defaultCurve = try firstSmoothConnectorCurve(in: defaultEvaluated, loftID: defaultResult.loftID)
+    let zeroModeCurve = try firstSmoothConnectorCurve(in: zeroModeEvaluated, loftID: zeroModeResult.loftID)
+    let zeroModeFeature = try #require(zeroModeResult.document.cadDocument.designGraph.nodes[zeroModeResult.loftID])
+    guard case .loft(let zeroModeLoft) = zeroModeFeature.operation else {
+        Issue.record("Zero-mode smooth Loft command must create a loft feature.")
+        return
+    }
+
+    #expect(zeroModeLoft.sections.map(\.smoothTangentMode) == [.zero, .automatic, .automatic])
+
+    let defaultStartHandleLength = (defaultCurve.controlPoints[1] - defaultCurve.controlPoints[0]).length
+    let zeroStartHandleLength = (zeroModeCurve.controlPoints[1] - zeroModeCurve.controlPoints[0]).length
+    let defaultEndHandleLength = (defaultCurve.controlPoints[2] - defaultCurve.controlPoints[3]).length
+    let zeroEndHandleLength = (zeroModeCurve.controlPoints[2] - zeroModeCurve.controlPoints[3]).length
+
+    #expect(defaultStartHandleLength > 0.0)
+    #expect(abs(zeroStartHandleLength) <= 1.0e-12)
+    #expect(abs(zeroEndHandleLength - defaultEndHandleLength) <= 1.0e-12)
+    try zeroModeResult.document.validate()
+}
+
 @Test func createLoftRejectsInvalidSmoothTangentScaleWithoutMutation() throws {
     var document = DesignDocument.empty()
     let firstProfileID = try createLoftProfile(
@@ -830,9 +861,11 @@ import SwiftCAD
 
 private func smoothLoftDocument(
     smoothTangentScale: Double,
-    sectionSmoothTangentScales: [Double?] = [nil, nil, nil]
+    sectionSmoothTangentScales: [Double?] = [nil, nil, nil],
+    sectionSmoothTangentModes: [LoftSectionSmoothTangentMode] = [.automatic, .automatic, .automatic]
 ) throws -> (document: DesignDocument, loftID: FeatureID) {
     precondition(sectionSmoothTangentScales.count == 3)
+    precondition(sectionSmoothTangentModes.count == 3)
     var document = DesignDocument.empty()
     let firstProfileID = try createLoftProfile(
         in: &document,
@@ -863,15 +896,18 @@ private func smoothLoftDocument(
         sections: [
             LoftSectionReference(
                 profile: ProfileReference(featureID: firstProfileID),
-                smoothTangentScale: sectionSmoothTangentScales[0]
+                smoothTangentScale: sectionSmoothTangentScales[0],
+                smoothTangentMode: sectionSmoothTangentModes[0]
             ),
             LoftSectionReference(
                 profile: ProfileReference(featureID: middleProfileID),
-                smoothTangentScale: sectionSmoothTangentScales[1]
+                smoothTangentScale: sectionSmoothTangentScales[1],
+                smoothTangentMode: sectionSmoothTangentModes[1]
             ),
             LoftSectionReference(
                 profile: ProfileReference(featureID: lastProfileID),
-                smoothTangentScale: sectionSmoothTangentScales[2]
+                smoothTangentScale: sectionSmoothTangentScales[2],
+                smoothTangentMode: sectionSmoothTangentModes[2]
             ),
         ],
         options: LoftOptions(

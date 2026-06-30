@@ -60,7 +60,9 @@ struct PatternArrayFeatureIDRemapper: Sendable {
             loft.sections = try loft.sections.map { section in
                 LoftSectionReference(
                     profile: try remappedProfileReference(section.profile),
-                    startSampleIndex: section.startSampleIndex
+                    startSampleIndex: section.startSampleIndex,
+                    smoothTangentScale: section.smoothTangentScale,
+                    smoothTangentMode: section.smoothTangentMode
                 )
             }
             loft.guides = try loft.guides.map {

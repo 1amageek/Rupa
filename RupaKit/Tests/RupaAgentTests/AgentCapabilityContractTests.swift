@@ -553,6 +553,8 @@ import SwiftCAD
     #expect(loft.failureMode.contains("duplicate guide endpoint samples"))
     #expect(loft.failureMode.contains("closed section loops with solid output"))
     #expect(loft.failureMode.contains("global or section smooth tangent scale"))
+    #expect(loft.failureMode.contains("section smooth tangent modes"))
+    #expect(loft.failureMode.contains("zero section smooth tangent mode"))
     #expect(loft.failureMode.contains("interpolates section smooth tangent scales"))
     #expect(loft.failureMode.contains("degree-1 ruled B-spline side faces"))
     #expect(loft.failureMode.contains("smooth cubic section-direction B-spline side faces"))
@@ -563,6 +565,7 @@ import SwiftCAD
         "surfaceMode",
         "smoothTangentScale",
         "sectionSmoothTangentScale",
+        "sectionSmoothTangentMode",
         "sectionStartSampleIndex",
         "guides",
         "closesSectionLoop",
@@ -572,6 +575,7 @@ import SwiftCAD
     let loftSurfaceAxis = try #require(loft.optionMatrix.first { $0.name == "surfaceMode" })
     let loftSmoothScaleAxis = try #require(loft.optionMatrix.first { $0.name == "smoothTangentScale" })
     let loftSectionSmoothScaleAxis = try #require(loft.optionMatrix.first { $0.name == "sectionSmoothTangentScale" })
+    let loftSectionSmoothModeAxis = try #require(loft.optionMatrix.first { $0.name == "sectionSmoothTangentMode" })
     let loftStartAxis = try #require(loft.optionMatrix.first { $0.name == "sectionStartSampleIndex" })
     let loftGuideAxis = try #require(loft.optionMatrix.first { $0.name == "guides" })
     let loftLoopAxis = try #require(loft.optionMatrix.first { $0.name == "closesSectionLoop" })
@@ -593,6 +597,10 @@ import SwiftCAD
     #expect(loftSectionSmoothScaleAxis.notes.contains { $0.contains("inherit smoothTangentScale") })
     #expect(loftSectionSmoothScaleAxis.notes.contains { $0.contains("authored section overrides") })
     #expect(loftSectionSmoothScaleAxis.notes.contains { $0.contains("intermediate section rings") })
+    #expect(loftSectionSmoothModeAxis.supportedValues == ["automatic", "zero"])
+    #expect(loftSectionSmoothModeAxis.notes.contains { $0.contains("finite-difference tangent") })
+    #expect(loftSectionSmoothModeAxis.notes.contains { $0.contains("zero length") })
+    #expect(loftSectionSmoothModeAxis.notes.contains { $0.contains("not a G-continuity solve") })
     #expect(loftStartAxis.supportedValues == ["automatic", "zeroBasedBoundarySampleIndex"])
     #expect(loftStartAxis.notes.contains { $0.contains("locks the seam start") })
     #expect(loftGuideAxis.supportedValues == ["none", "openCurveFeatureIDs"])

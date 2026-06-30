@@ -41,6 +41,20 @@ public struct LoftModelCommand: ParsableCommand {
         }
     }
 
+    public enum SectionSmoothTangentMode: String, ExpressibleByArgument, Sendable {
+        case automatic
+        case zero
+
+        var loftValue: LoftSectionSmoothTangentMode {
+            switch self {
+            case .automatic:
+                .automatic
+            case .zero:
+                .zero
+            }
+        }
+    }
+
     public static let configuration = CommandConfiguration(
         commandName: "loft",
         abstract: "Loft closed profile sections into a source-owned solid or sheet."
@@ -81,6 +95,12 @@ public struct LoftModelCommand: ParsableCommand {
         help: "Positive smooth tangent scale override for each authored section. Repeat once per section or omit to use the global scale."
     )
     public var sectionSmoothTangentScales: [Double] = []
+
+    @Option(
+        name: .customLong("section-smooth-tangent-mode"),
+        help: "Smooth tangent mode for each authored section: automatic or zero. Repeat once per section or omit to use automatic."
+    )
+    public var sectionSmoothTangentModes: [SectionSmoothTangentMode] = []
 
     @Flag(help: "Close the last section back to the first section. Requires sheet result kind and at least three sections.")
     public var closeSectionLoop = false
@@ -144,6 +164,15 @@ public struct LoftModelCommand: ParsableCommand {
             }
             sectionSmoothScales = sectionSmoothTangentScales.map(Optional.some)
         }
+        let sectionSmoothModes: [LoftSectionSmoothTangentMode]
+        if sectionSmoothTangentModes.isEmpty {
+            sectionSmoothModes = Array(repeating: .automatic, count: sectionFeatureIDs.count)
+        } else {
+            guard sectionSmoothTangentModes.count == sectionFeatureIDs.count else {
+                throw ValidationError("Section smooth tangent mode count must match section feature ID count.")
+            }
+            sectionSmoothModes = sectionSmoothTangentModes.map(\.loftValue)
+        }
         let startSampleIndexes: [Int?]
         if sectionStartSampleIndexes.isEmpty {
             startSampleIndexes = Array(repeating: nil, count: sectionFeatureIDs.count)
@@ -169,7 +198,8 @@ public struct LoftModelCommand: ParsableCommand {
                     profileIndex: profileIndexes[index]
                 ),
                 startSampleIndex: startSampleIndexes[index],
-                smoothTangentScale: sectionSmoothScales[index]
+                smoothTangentScale: sectionSmoothScales[index],
+                smoothTangentMode: sectionSmoothModes[index]
             ))
         }
         let guides = try guideFeatureIDs.map { featureIDValue in

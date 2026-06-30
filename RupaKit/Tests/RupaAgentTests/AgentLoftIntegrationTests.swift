@@ -198,7 +198,8 @@ import SwiftCAD
                 sections: [
                     LoftSectionReference(
                         profile: ProfileReference(featureID: firstProfileID),
-                        smoothTangentScale: 0.25
+                        smoothTangentScale: 0.25,
+                        smoothTangentMode: .zero
                     ),
                     LoftSectionReference(profile: ProfileReference(featureID: middleProfileID)),
                     LoftSectionReference(profile: ProfileReference(featureID: lastProfileID)),
@@ -232,6 +233,7 @@ import SwiftCAD
     #expect(loft.options.surfaceMode == .smooth)
     #expect(loft.options.smoothTangentScale == 0.5)
     #expect(loft.sections.map(\.smoothTangentScale) == [0.25, nil, nil])
+    #expect(loft.sections.map(\.smoothTangentMode) == [.zero, .automatic, .automatic])
     #expect(feature.outputs == [FeatureOutput(role: .body)])
     #expect(sideSurfaces.count == 8)
     #expect(connectorCurves.count == 8)

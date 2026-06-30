@@ -827,6 +827,12 @@ struct CLIModelCommandTests {
             "1.0",
             "--section-smooth-tangent-scale",
             "1.5",
+            "--section-smooth-tangent-mode",
+            "zero",
+            "--section-smooth-tangent-mode",
+            "automatic",
+            "--section-smooth-tangent-mode",
+            "automatic",
             "--section-matching",
             "byBoundaryProgress",
             "--result-kind",
@@ -859,7 +865,8 @@ struct CLIModelCommandTests {
             LoftSectionReference(
                 profile: ProfileReference(featureID: firstProfileID),
                 startSampleIndex: 1,
-                smoothTangentScale: 0.5
+                smoothTangentScale: 0.5,
+                smoothTangentMode: .zero
             ),
             LoftSectionReference(
                 profile: ProfileReference(featureID: secondProfileID),

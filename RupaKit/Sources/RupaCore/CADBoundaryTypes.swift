@@ -69,6 +69,7 @@ public typealias LoftSectionReference = SwiftCAD.LoftSectionReference
 public typealias LoftOptions = SwiftCAD.LoftOptions
 public typealias LoftResultKind = SwiftCAD.LoftResultKind
 public typealias LoftSectionMatching = SwiftCAD.LoftSectionMatching
+public typealias LoftSectionSmoothTangentMode = SwiftCAD.LoftSectionSmoothTangentMode
 public typealias LoftSurfaceMode = SwiftCAD.LoftSurfaceMode
 public typealias SweepCurveSectionReference = SwiftCAD.SweepCurveSectionReference
 public typealias SweepGuideReference = SwiftCAD.SweepGuideReference

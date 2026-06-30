@@ -515,10 +515,20 @@ struct WorkspaceObjectOverviewInspectorStateBuilder {
     }
 
     private func loftSectionSummary(_ section: LoftSectionReference) -> String {
+        var details: [String] = []
         if let startSampleIndex = section.startSampleIndex {
-            return "Profile \(shortID(section.featureID)) start \(startSampleIndex)"
+            details.append("start \(startSampleIndex)")
         }
-        return "Profile \(shortID(section.featureID))"
+        if let smoothTangentScale = section.smoothTangentScale {
+            details.append("scale \(String(format: "%.3g", smoothTangentScale))")
+        }
+        if section.smoothTangentMode != .automatic {
+            details.append("tangent \(section.smoothTangentMode.rawValue)")
+        }
+        guard details.isEmpty == false else {
+            return "Profile \(shortID(section.featureID))"
+        }
+        return "Profile \(shortID(section.featureID)) \(details.joined(separator: ", "))"
     }
 
     private func bodySourceSectionSummary(_ section: BodySourceSectionReference) -> String {
