@@ -1176,7 +1176,7 @@ public final class AgentCommandController: AgentClientProtocol {
             mutatesDocument: true,
             discovery: [.sketchEntitySummary],
             targets: [.profile],
-            failureMode: "Rejects missing, duplicate, open, unsupported, differently sampled closed profile sections, invalid-start-index sections, closed section loops with solid output, closed section loops with fewer than three sections, invalid generated topology, and stale generations before mutation; current evaluation creates degree-1 ruled B-spline side faces between matched profile vertices, planar start/end caps for solid output, or a last-to-first ruled B-spline sheet loop for closed sheet output.",
+            failureMode: "Rejects missing, duplicate, open, unsupported profile sections, invalid-start-index sections, closed section loops with solid output, closed section loops with fewer than three sections, invalid generated topology, and stale generations before mutation; current evaluation creates boundary-progress matched degree-1 ruled B-spline side faces between profile sections, resamples unequal boundary sample counts, creates planar start/end caps for solid output, or a last-to-first ruled B-spline sheet loop for closed sheet output.",
             optionMatrix: [
                 AgentCapabilityDescriptor.OptionAxis(
                     name: "resultKind",
@@ -1188,9 +1188,10 @@ public final class AgentCommandController: AgentClientProtocol {
                 ),
                 AgentCapabilityDescriptor.OptionAxis(
                     name: "sectionMatching",
-                    supportedValues: ["byIndex"],
+                    supportedValues: ["byBoundaryProgress"],
                     notes: [
-                        "profile sections must currently have the same ordered boundary sample count",
+                        "equal boundary sample counts preserve source samples directly",
+                        "unequal boundary sample counts are resampled by closed-loop boundary progress before side-face generation",
                         "future NURBS loft work can add richer section correspondence without changing the command surface"
                     ]
                 ),

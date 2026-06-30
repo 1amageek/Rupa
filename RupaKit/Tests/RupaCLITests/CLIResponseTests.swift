@@ -822,7 +822,7 @@ struct CLIModelCommandTests {
             "--section-start-sample-index",
             "1",
             "--section-matching",
-            "byIndex",
+            "byBoundaryProgress",
             "--result-kind",
             "sheet",
             "--close-section-loop",

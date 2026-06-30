@@ -770,7 +770,7 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                 ),
             ],
             openWork: [
-                "Loft guide curves, rails, viewport seam placement, unequal-sample section matching, higher-order NURBS surface output, and G0/G1/G2/G3 section-continuity controls.",
+                "Loft guide curves, rails, viewport seam placement, higher-order NURBS surface output, and G0/G1/G2/G3 section-continuity controls.",
                 "Rail deformation beyond the current affine, signed-axis, convex quadrilateral bilinear, convex mean-value cage, and radial point-guide sections.",
                 "Non-box boolean operands.",
                 "Stable result topology beyond current exact subsets.",

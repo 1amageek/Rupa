@@ -17,12 +17,12 @@ public struct LoftModelCommand: ParsableCommand {
     }
 
     public enum SectionMatching: String, ExpressibleByArgument, Sendable {
-        case byIndex
+        case byBoundaryProgress
 
         var loftValue: LoftSectionMatching {
             switch self {
-            case .byIndex:
-                .byIndex
+            case .byBoundaryProgress:
+                .byBoundaryProgress
             }
         }
     }
@@ -48,7 +48,7 @@ public struct LoftModelCommand: ParsableCommand {
     public var sectionStartSampleIndexes: [Int] = []
 
     @Option(help: "Loft section matching policy.")
-    public var sectionMatching: SectionMatching = .byIndex
+    public var sectionMatching: SectionMatching = .byBoundaryProgress
 
     @Option(help: "Loft result kind: solid or sheet.")
     public var resultKind: ResultKind = .solid

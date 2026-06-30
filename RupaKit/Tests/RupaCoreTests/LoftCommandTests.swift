@@ -303,9 +303,8 @@ import SwiftCAD
     #expect(document.cadDocument.designGraph.order == orderBeforeLoft)
 }
 
-@Test func createLoftRejectsUnsupportedMismatchedProfileSampleCountsWithoutMutation() throws {
+@Test func createLoftSupportsMismatchedProfileSampleCountsWithBoundaryResampling() throws {
     var document = DesignDocument.empty()
-    let originalOrder = document.cadDocument.designGraph.order
     let firstProfileID = try createLoftProfile(
         in: &document,
         name: "Loft Rect Profile",
@@ -318,19 +317,24 @@ import SwiftCAD
         sketch: loftTriangleProfileSketch(z: 10.0),
         geometryRole: .sketchProfile
     )
-    let orderBeforeLoft = document.cadDocument.designGraph.order
 
-    #expect(throws: EditorError.self) {
-        _ = try document.createLoft(
-            name: "Invalid Loft",
-            sections: [
-                LoftSectionReference(profile: ProfileReference(featureID: firstProfileID)),
-                LoftSectionReference(profile: ProfileReference(featureID: triangleProfileID)),
-            ]
-        )
-    }
-    #expect(document.cadDocument.designGraph.order == orderBeforeLoft)
-    #expect(document.cadDocument.designGraph.order != originalOrder)
+    let loftID = try document.createLoft(
+        name: "Resampled Loft",
+        sections: [
+            LoftSectionReference(profile: ProfileReference(featureID: firstProfileID)),
+            LoftSectionReference(profile: ProfileReference(featureID: triangleProfileID)),
+        ]
+    )
+    let evaluated = try CADPipeline.modelingDefault(for: document).evaluate(document.cadDocument)
+    let body = try #require(evaluated.brep.bodies.values.first)
+    let sideSurfaces = evaluated.brep.geometry.surfaces.values.compactMap(\.bSplineSurface)
+
+    #expect(document.cadDocument.designGraph.order.last == loftID)
+    #expect(body.kind == .solid)
+    #expect(evaluated.brep.faces.count == 6)
+    #expect(evaluated.brep.vertices.count == 8)
+    #expect(sideSurfaces.count == 4)
+    try document.validate()
 }
 
 private func createLoftProfile(
