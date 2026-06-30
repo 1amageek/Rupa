@@ -923,6 +923,8 @@ struct CLIModelCommandTests {
             "solid",
             "--surface-mode",
             "smooth",
+            "--smooth-tangent-scale",
+            "0.5",
             "--mode",
             "file",
             "--json",
@@ -945,6 +947,7 @@ struct CLIModelCommandTests {
         #expect(!response.dirty)
         #expect(loft.guides == [LoftGuideReference(featureID: guideID)])
         #expect(loft.options.surfaceMode == .smooth)
+        #expect(loft.options.smoothTangentScale == 0.5)
         #expect(feature.inputs == [
             FeatureInput(featureID: firstProfileID, role: .profile),
             FeatureInput(featureID: secondProfileID, role: .profile),

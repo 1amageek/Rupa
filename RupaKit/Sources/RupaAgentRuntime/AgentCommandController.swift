@@ -1176,7 +1176,7 @@ public final class AgentCommandController: AgentClientProtocol {
             mutatesDocument: true,
             discovery: [.sketchEntitySummary],
             targets: [.profile, .sketchEntity],
-            failureMode: "Rejects missing, duplicate, open, unsupported profile sections, missing or duplicate guide curves, guide curves whose endpoints do not touch first and last section boundary samples, invalid-start-index sections, closed section loops with solid output, closed section loops with fewer than three sections, duplicate guide endpoint samples, guide endpoint pairs that do not resolve to matching section sample indexes after section matching, invalid generated topology, and stale generations before mutation; current evaluation creates boundary-progress matched degree-1 ruled B-spline side faces or smooth cubic section-direction B-spline side faces between profile sections, resamples unequal boundary sample counts, lets the first guide endpoints lock first and last section seam samples when explicit section starts are absent, inserts rail-following intermediate section rings for the multi-section multi-guide subset, creates planar start/end caps for solid output, or a last-to-first ruled or smooth cubic B-spline sheet loop for closed sheet output.",
+            failureMode: "Rejects missing, duplicate, open, unsupported profile sections, missing or duplicate guide curves, guide curves whose endpoints do not touch first and last section boundary samples, invalid-start-index sections, non-positive or non-finite smooth tangent scale, closed section loops with solid output, closed section loops with fewer than three sections, duplicate guide endpoint samples, guide endpoint pairs that do not resolve to matching section sample indexes after section matching, invalid generated topology, and stale generations before mutation; current evaluation creates boundary-progress matched degree-1 ruled B-spline side faces or smooth cubic section-direction B-spline side faces between profile sections, resamples unequal boundary sample counts, lets the first guide endpoints lock first and last section seam samples when explicit section starts are absent, inserts rail-following intermediate section rings for the multi-section multi-guide subset, creates planar start/end caps for solid output, or a last-to-first ruled or smooth cubic B-spline sheet loop for closed sheet output.",
             optionMatrix: [
                 AgentCapabilityDescriptor.OptionAxis(
                     name: "resultKind",
@@ -1202,6 +1202,15 @@ public final class AgentCommandController: AgentClientProtocol {
                         "ruled creates degree-1 section-direction side faces and straight connector edges",
                         "smooth creates cubic section-direction side faces and cubic connector edges for open section chains",
                         "smooth supports closed section-loop sheets when resultKind is sheet and closesSectionLoop is true"
+                    ]
+                ),
+                AgentCapabilityDescriptor.OptionAxis(
+                    name: "smoothTangentScale",
+                    supportedValues: ["positiveFiniteScalar"],
+                    notes: [
+                        "applies to automatic section-direction tangents when surfaceMode is smooth",
+                        "1.0 preserves the default automatic smooth Loft tangents",
+                        "smaller values tighten cubic connector handles and larger values loosen them"
                     ]
                 ),
                 AgentCapabilityDescriptor.OptionAxis(

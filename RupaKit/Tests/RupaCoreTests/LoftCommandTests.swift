@@ -450,6 +450,72 @@ import SwiftCAD
     try document.validate()
 }
 
+@Test func createLoftSmoothTangentScaleControlsCubicConnectorHandles() throws {
+    let defaultResult = try smoothLoftDocument(smoothTangentScale: 1.0)
+    let scaledResult = try smoothLoftDocument(smoothTangentScale: 0.25)
+    let defaultEvaluated = try CADPipeline.modelingDefault(for: defaultResult.document)
+        .evaluate(defaultResult.document.cadDocument)
+    let scaledEvaluated = try CADPipeline.modelingDefault(for: scaledResult.document)
+        .evaluate(scaledResult.document.cadDocument)
+    let defaultCurve = try firstSmoothConnectorCurve(in: defaultEvaluated, loftID: defaultResult.loftID)
+    let scaledCurve = try firstSmoothConnectorCurve(in: scaledEvaluated, loftID: scaledResult.loftID)
+    let scaledFeature = try #require(scaledResult.document.cadDocument.designGraph.nodes[scaledResult.loftID])
+    guard case .loft(let scaledLoft) = scaledFeature.operation else {
+        Issue.record("Scaled smooth Loft command must create a loft feature.")
+        return
+    }
+
+    #expect(scaledLoft.options.smoothTangentScale == 0.25)
+    #expect(defaultCurve.controlPointCount == 4)
+    #expect(scaledCurve.controlPointCount == 4)
+    #expect(defaultCurve.controlPoints[0].isApproximatelyEqual(to: scaledCurve.controlPoints[0], tolerance: 1.0e-12))
+    #expect(defaultCurve.controlPoints[3].isApproximatelyEqual(to: scaledCurve.controlPoints[3], tolerance: 1.0e-12))
+
+    let defaultStartHandleLength = (defaultCurve.controlPoints[1] - defaultCurve.controlPoints[0]).length
+    let scaledStartHandleLength = (scaledCurve.controlPoints[1] - scaledCurve.controlPoints[0]).length
+    let defaultEndHandleLength = (defaultCurve.controlPoints[2] - defaultCurve.controlPoints[3]).length
+    let scaledEndHandleLength = (scaledCurve.controlPoints[2] - scaledCurve.controlPoints[3]).length
+
+    #expect(abs(scaledStartHandleLength - defaultStartHandleLength * 0.25) <= 1.0e-12)
+    #expect(abs(scaledEndHandleLength - defaultEndHandleLength * 0.25) <= 1.0e-12)
+    try scaledResult.document.validate()
+}
+
+@Test func createLoftRejectsInvalidSmoothTangentScaleWithoutMutation() throws {
+    var document = DesignDocument.empty()
+    let firstProfileID = try createLoftProfile(
+        in: &document,
+        name: "Invalid Tangent Scale First",
+        width: 4.0,
+        height: 2.0,
+        z: 0.0
+    )
+    let secondProfileID = try createLoftProfile(
+        in: &document,
+        name: "Invalid Tangent Scale Second",
+        width: 4.0,
+        height: 2.0,
+        z: 10.0
+    )
+    let orderBeforeLoft = document.cadDocument.designGraph.order
+
+    #expect(throws: EditorError.self) {
+        _ = try document.createLoft(
+            name: "Invalid Smooth Tangent Scale Loft",
+            sections: [
+                LoftSectionReference(profile: ProfileReference(featureID: firstProfileID)),
+                LoftSectionReference(profile: ProfileReference(featureID: secondProfileID)),
+            ],
+            options: LoftOptions(
+                resultKind: .solid,
+                surfaceMode: .smooth,
+                smoothTangentScale: 0.0
+            )
+        )
+    }
+    #expect(document.cadDocument.designGraph.order == orderBeforeLoft)
+}
+
 @Test func createLoftCanCreateClosedSectionLoopSheetResult() throws {
     var document = DesignDocument.empty()
     let firstProfileID = try createLoftProfile(
@@ -689,6 +755,68 @@ import SwiftCAD
     #expect(evaluated.brep.vertices.count == 8)
     #expect(sideSurfaces.count == 4)
     try document.validate()
+}
+
+private func smoothLoftDocument(smoothTangentScale: Double) throws -> (document: DesignDocument, loftID: FeatureID) {
+    var document = DesignDocument.empty()
+    let firstProfileID = try createLoftProfile(
+        in: &document,
+        name: "Smooth Tangent Scale Loft Bottom",
+        width: 4.0,
+        height: 2.0,
+        x: 0.0,
+        z: 0.0
+    )
+    let middleProfileID = try createLoftProfile(
+        in: &document,
+        name: "Smooth Tangent Scale Loft Middle",
+        width: 5.0,
+        height: 2.5,
+        x: 3.0,
+        z: 5.0
+    )
+    let lastProfileID = try createLoftProfile(
+        in: &document,
+        name: "Smooth Tangent Scale Loft Top",
+        width: 4.0,
+        height: 2.0,
+        x: 0.0,
+        z: 10.0
+    )
+    let loftID = try document.createLoft(
+        name: "Smooth Tangent Scale Loft",
+        sections: [
+            LoftSectionReference(profile: ProfileReference(featureID: firstProfileID)),
+            LoftSectionReference(profile: ProfileReference(featureID: middleProfileID)),
+            LoftSectionReference(profile: ProfileReference(featureID: lastProfileID)),
+        ],
+        options: LoftOptions(
+            resultKind: .solid,
+            surfaceMode: .smooth,
+            smoothTangentScale: smoothTangentScale
+        )
+    )
+    return (document, loftID)
+}
+
+private func firstSmoothConnectorCurve(
+    in evaluated: EvaluatedDocument,
+    loftID: FeatureID
+) throws -> BSplineCurve3D {
+    let firstConnectorName = PersistentName(components: [
+        .feature(loftID),
+        .generated(GeneratedSubshapeRole.edge.rawValue),
+        .index(12),
+    ])
+    guard case .edge(let edgeID) = evaluated.generatedNames[firstConnectorName],
+          let edge = evaluated.brep.edges[edgeID],
+          let curve = evaluated.brep.geometry.curves[edge.curveID]?.bSplineCurve else {
+        throw EditorError(
+            code: .evaluationFailed,
+            message: "Missing first smooth Loft connector curve."
+        )
+    }
+    return curve
 }
 
 private func createLoftProfile(

@@ -552,6 +552,7 @@ import SwiftCAD
     #expect(loft.failureMode.contains("rail-following intermediate section rings"))
     #expect(loft.failureMode.contains("duplicate guide endpoint samples"))
     #expect(loft.failureMode.contains("closed section loops with solid output"))
+    #expect(loft.failureMode.contains("smooth tangent scale"))
     #expect(loft.failureMode.contains("degree-1 ruled B-spline side faces"))
     #expect(loft.failureMode.contains("smooth cubic section-direction B-spline side faces"))
     #expect(loft.failureMode.contains("last-to-first ruled or smooth cubic B-spline sheet loop"))
@@ -559,6 +560,7 @@ import SwiftCAD
         "resultKind",
         "sectionMatching",
         "surfaceMode",
+        "smoothTangentScale",
         "sectionStartSampleIndex",
         "guides",
         "closesSectionLoop",
@@ -566,6 +568,7 @@ import SwiftCAD
     let loftResultAxis = try #require(loft.optionMatrix.first { $0.name == "resultKind" })
     let loftMatchingAxis = try #require(loft.optionMatrix.first { $0.name == "sectionMatching" })
     let loftSurfaceAxis = try #require(loft.optionMatrix.first { $0.name == "surfaceMode" })
+    let loftSmoothScaleAxis = try #require(loft.optionMatrix.first { $0.name == "smoothTangentScale" })
     let loftStartAxis = try #require(loft.optionMatrix.first { $0.name == "sectionStartSampleIndex" })
     let loftGuideAxis = try #require(loft.optionMatrix.first { $0.name == "guides" })
     let loftLoopAxis = try #require(loft.optionMatrix.first { $0.name == "closesSectionLoop" })
@@ -579,6 +582,10 @@ import SwiftCAD
     #expect(loftSurfaceAxis.notes.contains { $0.contains("straight connector edges") })
     #expect(loftSurfaceAxis.notes.contains { $0.contains("cubic connector edges") })
     #expect(loftSurfaceAxis.notes.contains { $0.contains("closed section-loop sheets") })
+    #expect(loftSmoothScaleAxis.supportedValues == ["positiveFiniteScalar"])
+    #expect(loftSmoothScaleAxis.notes.contains { $0.contains("section-direction tangents") })
+    #expect(loftSmoothScaleAxis.notes.contains { $0.contains("1.0 preserves") })
+    #expect(loftSmoothScaleAxis.notes.contains { $0.contains("connector handles") })
     #expect(loftStartAxis.supportedValues == ["automatic", "zeroBasedBoundarySampleIndex"])
     #expect(loftStartAxis.notes.contains { $0.contains("locks the seam start") })
     #expect(loftGuideAxis.supportedValues == ["none", "openCurveFeatureIDs"])

@@ -591,7 +591,12 @@ import SwiftCAD
             guides: [
                 LoftGuideReference(featureID: guideID),
             ],
-            options: LoftOptions(resultKind: .sheet, closesSectionLoop: true)
+            options: LoftOptions(
+                resultKind: .sheet,
+                closesSectionLoop: true,
+                surfaceMode: .smooth,
+                smoothTangentScale: 0.5
+            )
         ),
         expectedGeneration: DocumentGeneration(5)
     )

@@ -73,6 +73,9 @@ public struct LoftModelCommand: ParsableCommand {
     @Option(help: "Loft surface mode: ruled or smooth.")
     public var surfaceMode: SurfaceMode = .ruled
 
+    @Option(help: "Positive scale applied to smooth Loft section-direction tangents.")
+    public var smoothTangentScale: Double = 1.0
+
     @Flag(help: "Close the last section back to the first section. Requires sheet result kind and at least three sections.")
     public var closeSectionLoop = false
 
@@ -119,6 +122,10 @@ public struct LoftModelCommand: ParsableCommand {
         guard profileIndexes.allSatisfy({ $0 >= 0 }) else {
             throw ValidationError("Section profile indexes must be zero or greater.")
         }
+        guard smoothTangentScale.isFinite,
+              smoothTangentScale > 0.0 else {
+            throw ValidationError("Smooth tangent scale must be finite and greater than zero.")
+        }
         let startSampleIndexes: [Int?]
         if sectionStartSampleIndexes.isEmpty {
             startSampleIndexes = Array(repeating: nil, count: sectionFeatureIDs.count)
@@ -160,7 +167,8 @@ public struct LoftModelCommand: ParsableCommand {
                 resultKind: resultKind.loftValue,
                 sectionMatching: sectionMatching.loftValue,
                 closesSectionLoop: closeSectionLoop,
-                surfaceMode: surfaceMode.loftValue
+                surfaceMode: surfaceMode.loftValue,
+                smoothTangentScale: smoothTangentScale
             )
         )
     }

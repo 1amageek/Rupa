@@ -200,7 +200,11 @@ import SwiftCAD
                     LoftSectionReference(profile: ProfileReference(featureID: middleProfileID)),
                     LoftSectionReference(profile: ProfileReference(featureID: lastProfileID)),
                 ],
-                options: LoftOptions(resultKind: .solid, surfaceMode: .smooth)
+                options: LoftOptions(
+                    resultKind: .solid,
+                    surfaceMode: .smooth,
+                    smoothTangentScale: 0.5
+                )
             ),
             expectedGeneration: DocumentGeneration(0)
         )
@@ -223,6 +227,7 @@ import SwiftCAD
     #expect(result.commandName == "createLoft")
     #expect(result.didMutate)
     #expect(loft.options.surfaceMode == .smooth)
+    #expect(loft.options.smoothTangentScale == 0.5)
     #expect(feature.outputs == [FeatureOutput(role: .body)])
     #expect(sideSurfaces.count == 8)
     #expect(connectorCurves.count == 8)
