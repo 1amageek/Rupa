@@ -554,7 +554,7 @@ import SwiftCAD
     #expect(loft.failureMode.contains("closed section loops with solid output"))
     #expect(loft.failureMode.contains("degree-1 ruled B-spline side faces"))
     #expect(loft.failureMode.contains("smooth cubic section-direction B-spline side faces"))
-    #expect(loft.failureMode.contains("smooth closed section loops"))
+    #expect(loft.failureMode.contains("last-to-first ruled or smooth cubic B-spline sheet loop"))
     #expect(loft.optionMatrix.map(\.name) == [
         "resultKind",
         "sectionMatching",
@@ -578,7 +578,7 @@ import SwiftCAD
     #expect(loftSurfaceAxis.supportedValues == ["ruled", "smooth"])
     #expect(loftSurfaceAxis.notes.contains { $0.contains("straight connector edges") })
     #expect(loftSurfaceAxis.notes.contains { $0.contains("cubic connector edges") })
-    #expect(loftSurfaceAxis.notes.contains { $0.contains("closed section loops remain unsupported") })
+    #expect(loftSurfaceAxis.notes.contains { $0.contains("closed section-loop sheets") })
     #expect(loftStartAxis.supportedValues == ["automatic", "zeroBasedBoundarySampleIndex"])
     #expect(loftStartAxis.notes.contains { $0.contains("locks the seam start") })
     #expect(loftGuideAxis.supportedValues == ["none", "openCurveFeatureIDs"])

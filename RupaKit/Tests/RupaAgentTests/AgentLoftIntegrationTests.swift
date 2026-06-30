@@ -107,13 +107,17 @@ import SwiftCAD
         .execute(
             sessionID: sessionID,
             command: .createLoft(
-                name: "Agent Closed Loop Loft Sheet",
+                name: "Agent Smooth Closed Loop Loft Sheet",
                 sections: [
                     LoftSectionReference(profile: ProfileReference(featureID: firstProfileID)),
                     LoftSectionReference(profile: ProfileReference(featureID: secondProfileID)),
                     LoftSectionReference(profile: ProfileReference(featureID: thirdProfileID)),
                 ],
-                options: LoftOptions(resultKind: .sheet, closesSectionLoop: true)
+                options: LoftOptions(
+                    resultKind: .sheet,
+                    closesSectionLoop: true,
+                    surfaceMode: .smooth
+                )
             ),
             expectedGeneration: DocumentGeneration(0)
         )
@@ -125,6 +129,9 @@ import SwiftCAD
     }
     let loftID = try #require(session.document.cadDocument.designGraph.order.last)
     let feature = try #require(session.document.cadDocument.designGraph.nodes[loftID])
+    let evaluated = try #require(session.currentEvaluation?.evaluatedDocument)
+    let sideSurfaces = evaluated.brep.geometry.surfaces.values.compactMap(\.bSplineSurface)
+    let connectorCurves = evaluated.brep.geometry.curves.values.compactMap(\.bSplineCurve)
     guard case .loft(let loft) = feature.operation else {
         Issue.record("Agent must create a closed loop loft feature.")
         return
@@ -135,7 +142,19 @@ import SwiftCAD
     #expect(result.generation == DocumentGeneration(1))
     #expect(loft.options.resultKind == .sheet)
     #expect(loft.options.closesSectionLoop)
+    #expect(loft.options.surfaceMode == .smooth)
     #expect(feature.outputs == [FeatureOutput(role: .sheet)])
+    #expect(sideSurfaces.count == 12)
+    #expect(connectorCurves.count == 12)
+    #expect(sideSurfaces.allSatisfy { surface in
+        surface.uDegree == 1
+            && surface.vDegree == 3
+            && surface.uControlPointCount == 2
+            && surface.vControlPointCount == 4
+    })
+    #expect(connectorCurves.allSatisfy { curve in
+        curve.degree == 3 && curve.controlPointCount == 4
+    })
     #expect(session.evaluatedBodyCount == 1)
     #expect(session.evaluationStatus == .valid)
     #expect(result.diagnostics.contains { diagnostic in diagnostic.severity == .error } == false)

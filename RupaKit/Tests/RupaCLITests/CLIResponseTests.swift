@@ -825,6 +825,8 @@ struct CLIModelCommandTests {
             "byBoundaryProgress",
             "--result-kind",
             "sheet",
+            "--surface-mode",
+            "smooth",
             "--close-section-loop",
             "--mode",
             "file",
@@ -862,7 +864,7 @@ struct CLIModelCommandTests {
             ),
         ])
         #expect(loft.options.resultKind == .sheet)
-        #expect(loft.options.surfaceMode == .ruled)
+        #expect(loft.options.surfaceMode == .smooth)
         #expect(loft.options.closesSectionLoop)
         #expect(feature.outputs == [FeatureOutput(role: .sheet)])
         #expect(feature.inputs == [
