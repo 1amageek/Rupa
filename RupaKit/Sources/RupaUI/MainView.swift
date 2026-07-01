@@ -3668,19 +3668,16 @@ public struct MainView: View {
         referencePoint: Point2D? = nil,
         modifierFlags: ViewportInputModifierFlags = ViewportInputModifierFlags()
     ) -> SnapResolutionOptions {
-        let interval = max(session.document.ruler.minorTickMeters, 1.0e-9)
-        return SnapResolutionOptions(
-            usesGrid: isGridSnapEnabled,
-            usesObjects: isObjectTargetingEnabled,
-            objectTargetingOverride: snapOverrideState.objectTargetingOverride(for: modifierFlags),
-            suppressedCandidateKinds: snapOverrideState.suppressedCandidateKinds,
-            usesConstructionPlaneProjection: isConstructionPlaneSnapEnabled,
+        WorkspaceSnapOptionsBuilder(
+            isGridSnapEnabled: isGridSnapEnabled,
+            isObjectTargetingEnabled: isObjectTargetingEnabled,
+            isConstructionPlaneSnapEnabled: isConstructionPlaneSnapEnabled,
             constructionPlane: constructionPlaneSnapPlane,
-            gridIntervalMeters: interval,
-            objectSearchRadiusMeters: max(min(interval * 2.0, 0.01), 1.0e-6),
-            maximumCandidateCount: 16,
-            referencePoint: referencePoint,
+            overrideState: snapOverrideState,
             referenceLineAnchors: session.sketchInputState.referenceLineAnchors
+        ).options(
+            referencePoint: referencePoint,
+            modifierFlags: modifierFlags
         )
     }
 
