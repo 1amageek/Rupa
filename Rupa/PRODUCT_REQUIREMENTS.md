@@ -85,7 +85,7 @@ The following capabilities are required in the universal CAD model and must be r
 
 | Area | Requirement |
 |---|---|
-| Scale and units | Rulers, grids, dimensions, inputs, and display formatting must support at least micrometer (μm) detail through meter (m) scale building work. |
+| Scale and units | Rulers, grids, dimensions, inputs, and display formatting must support at least micrometer (μm) detail through kilometer (km) range site work while keeping ordinary part and building edits readable in mm, cm, or m. |
 | Object dimensions | Object `Size` values are first-class CAD dimensions, not renderer scale. Shape editing must preserve unit-aware `Size X/Y/Z`, centers, constraints, measurements, and export units separately from scene-node transform scale. |
 | Object semantics | Browser, Canvas, Inspector, CLI, and Agent references must treat Object as the user-selectable occurrence and keep body geometry, feature source, sketch source, component instance, material, and transform as separate but linked layers. Object types must be registry/protocol-backed and property-schema driven so new object types do not require a stored enum or hard-coded Inspector layout. |
 | Parameters | Named parameters, formulas, unit-aware expressions, and bulk parameter editing are required. |

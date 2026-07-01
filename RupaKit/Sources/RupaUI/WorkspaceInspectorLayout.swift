@@ -164,12 +164,14 @@ func workspaceLengthFieldPresentation(
     preferredUnit: LengthDisplayUnit
 ) -> WorkspaceLengthFieldPresentation {
     let unit = preferredUnit.readableUnit(forMeters: meters)
-    let value = unit.value(fromMeters: meters)
+    let rawValue = unit.value(fromMeters: meters)
+    let text = WorkspaceInspectorNumberText.string(from: rawValue)
+    let value = WorkspaceInspectorNumberText.value(from: text) ?? rawValue
     return WorkspaceLengthFieldPresentation(
         meters: meters,
         value: value,
         unit: unit,
-        text: WorkspaceInspectorNumberText.string(from: value)
+        text: text
     )
 }
 

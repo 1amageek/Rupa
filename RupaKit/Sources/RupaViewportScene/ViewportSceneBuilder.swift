@@ -1293,7 +1293,15 @@ public struct ViewportSceneBuilder {
         surfaceFrameDisplaysByFeatureID: [FeatureID: [ViewportSurfaceFrameDisplay]] = [:],
         bodyDisplaySnapshots: [FeatureID: BodyDisplaySnapshot]
     ) -> ViewportSceneItem? {
-        guard let snapshot = bodyDisplaySnapshots[featureID] else {
+        let snapshot: BodyDisplaySnapshot
+        if let evaluatedSnapshot = bodyDisplaySnapshots[featureID] {
+            snapshot = evaluatedSnapshot
+        } else if let fallbackSnapshot = directBSplineSurfaceSnapshot(
+            featureID: featureID,
+            document: document
+        ) {
+            snapshot = fallbackSnapshot
+        } else {
             return nil
         }
         let object = objectDescriptor(
@@ -1335,6 +1343,61 @@ public struct ViewportSceneBuilder {
             ),
             kind: .body(component: component)
         )
+    }
+
+    private func directBSplineSurfaceSnapshot(
+        featureID: FeatureID,
+        document: DesignDocument
+    ) -> BodyDisplaySnapshot? {
+        guard let feature = document.cadDocument.designGraph.nodes[featureID],
+              case let .bSplineSurface(surfaceFeature) = feature.operation,
+              let uBounds = closedDomainBounds(surfaceFeature.surface.uDomain),
+              let vBounds = closedDomainBounds(surfaceFeature.surface.vDomain) else {
+            return nil
+        }
+
+        let positions: [Point3D]
+        do {
+            positions = [
+                try surfaceFeature.surface.point(u: uBounds.lower, v: vBounds.lower),
+                try surfaceFeature.surface.point(u: uBounds.upper, v: vBounds.lower),
+                try surfaceFeature.surface.point(u: uBounds.upper, v: vBounds.upper),
+                try surfaceFeature.surface.point(u: uBounds.lower, v: vBounds.upper),
+            ]
+        } catch {
+            return nil
+        }
+        let boundsPoints = surfaceFeature.surface.controlPoints.flatMap { $0 } + positions
+        guard let bounds = pointBounds(boundsPoints) else {
+            return nil
+        }
+
+        return BodyDisplaySnapshot(
+            featureID: featureID,
+            bounds: BodyDisplaySnapshot.Bounds(
+                minX: bounds.minX,
+                minY: bounds.minY,
+                minZ: bounds.minZ,
+                maxX: bounds.maxX,
+                maxY: bounds.maxY,
+                maxZ: bounds.maxZ
+            ),
+            mesh: BodyDisplaySnapshot.Mesh(
+                positions: positions,
+                indices: [0, 1, 2, 0, 2, 3]
+            ),
+            topology: BodyDisplaySnapshot.Topology()
+        )
+    }
+
+    private func closedDomainBounds(_ domain: ParameterDomain) -> (lower: Double, upper: Double)? {
+        guard case let .closed(lower, upper) = domain,
+              lower.isFinite,
+              upper.isFinite,
+              upper > lower else {
+            return nil
+        }
+        return (lower, upper)
     }
 
     private func bodyComponent(

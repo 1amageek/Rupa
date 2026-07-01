@@ -10,9 +10,9 @@ public enum ViewportCameraZoomPolicy {
         identityScale: CGFloat
     ) -> CGFloat {
         let ruler = document.ruler.normalizedForWorkspaceScale()
-        let minorTickMeters = max(CGFloat(ruler.minorTickMeters), 1.0e-12)
+        let referenceMeters = max(CGFloat(zoomReferenceMeters(for: ruler)), 1.0e-12)
         let scale = max(identityScale, 1.0e-12)
-        let requiredZoom = targetMinorTickPixels / (minorTickMeters * scale)
+        let requiredZoom = targetMinorTickPixels / (referenceMeters * scale)
         guard requiredZoom.isFinite else {
             return ViewportCamera.maximumZoom
         }
@@ -20,5 +20,10 @@ public enum ViewportCameraZoomPolicy {
             max(ViewportCamera.maximumZoom, requiredZoom),
             absoluteMaximumZoom
         )
+    }
+
+    private static func zoomReferenceMeters(for ruler: RulerConfiguration) -> Double {
+        let workspaceDetailMeters = max(ruler.visibleSpanMeters / 100_000.0, 1.0)
+        return min(ruler.minorTickMeters, workspaceDetailMeters)
     }
 }

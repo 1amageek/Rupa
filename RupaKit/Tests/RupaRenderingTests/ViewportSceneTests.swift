@@ -1257,7 +1257,12 @@ import Testing
         size: CGSize(width: 900.0, height: 700.0)
     ))
     let vertex = try #require(topology.vertices.first)
-    let edgeHitTarget = try #require(generatedEdgeHitTarget(in: topology, scene: scene, layout: layout))
+    let edgeHitTarget = try #require(generatedEdgeHitTarget(
+        in: topology,
+        scene: scene,
+        layout: layout,
+        selectionHitPolicy: .edge
+    ))
     let faceHitTarget = try #require(generatedFaceHitTarget(
         in: topology,
         scene: scene,
@@ -1273,7 +1278,8 @@ import Testing
     let edgeHit = ViewportHitTester().hitTest(
         point: edgeHitTarget.point,
         in: scene,
-        layout: layout
+        layout: layout,
+        selectionHitPolicy: .edge
     )
     let faceHit = ViewportHitTester(tolerance: 0.0).hitTest(
         point: faceHitTarget.point,
@@ -2562,6 +2568,45 @@ import Testing
     #expect(abs(actualDepth - expectedDepth) < 1.0e-9)
 }
 
+@Test func viewportLayoutIncludesVerticalBoundsWhenFittingTallModels() {
+    let bounds = CGRect(x: -5.0, y: -5.0, width: 10.0, height: 10.0)
+    let size = CGSize(width: 800.0, height: 600.0)
+    let verticalBounds = 0.0 ... 1_000.0
+    let layout = ViewportLayout(
+        modelBounds: bounds,
+        size: size,
+        verticalBounds: verticalBounds
+    )
+    let expectedBounds = projectedBounds(
+        width: bounds.width,
+        height: bounds.height,
+        verticalHeight: CGFloat(verticalBounds.upperBound - verticalBounds.lowerBound),
+        basis: layout.basis
+    )
+    let expectedScale = min(
+        (size.width - 180.0) / expectedBounds.width,
+        (size.height - 140.0) / expectedBounds.height
+    )
+    let projectedCorners = [
+        Point3D(x: Double(bounds.minX), y: verticalBounds.lowerBound, z: Double(bounds.minY)),
+        Point3D(x: Double(bounds.maxX), y: verticalBounds.lowerBound, z: Double(bounds.minY)),
+        Point3D(x: Double(bounds.minX), y: verticalBounds.lowerBound, z: Double(bounds.maxY)),
+        Point3D(x: Double(bounds.maxX), y: verticalBounds.lowerBound, z: Double(bounds.maxY)),
+        Point3D(x: Double(bounds.minX), y: verticalBounds.upperBound, z: Double(bounds.minY)),
+        Point3D(x: Double(bounds.maxX), y: verticalBounds.upperBound, z: Double(bounds.minY)),
+        Point3D(x: Double(bounds.minX), y: verticalBounds.upperBound, z: Double(bounds.maxY)),
+        Point3D(x: Double(bounds.maxX), y: verticalBounds.upperBound, z: Double(bounds.maxY)),
+    ].map(layout.project)
+    let xValues = projectedCorners.map(\.x)
+    let yValues = projectedCorners.map(\.y)
+    let projectedWidth = (xValues.max() ?? 0.0) - (xValues.min() ?? 0.0)
+    let projectedHeight = (yValues.max() ?? 0.0) - (yValues.min() ?? 0.0)
+
+    #expect(abs(layout.scale - expectedScale) < expectedScale * 1.0e-12)
+    #expect(projectedWidth <= size.width - 180.0 + 1.0e-9)
+    #expect(projectedHeight <= size.height - 140.0 + 1.0e-9)
+}
+
 @MainActor
 @Test func viewportSceneProjectsZXCanvasSketchBackToCanvasCoordinates() async throws {
     let session = EditorSession()
@@ -3019,10 +3064,12 @@ import Testing
         camera: ViewportCamera(zoom: maximumZoom * 2.0)
     ).layout
     let minorTickPixels = CGFloat(document.ruler.minorTickMeters) * zoomedLayout.scale
+    let meterPixels = zoomedLayout.scale
 
     #expect(maximumZoom > ViewportCamera.maximumZoom)
     #expect(identityLayout.maximumZoom == maximumZoom)
     #expect(minorTickPixels >= ViewportCameraZoomPolicy.targetMinorTickPixels - 0.001)
+    #expect(meterPixels >= ViewportCameraZoomPolicy.targetMinorTickPixels - 0.001)
 }
 
 @MainActor
@@ -3213,7 +3260,8 @@ private func projectedCenter(
 private func generatedEdgeHitTarget(
     in topology: ViewportBodyTopology,
     scene: ViewportScene,
-    layout: ViewportLayout
+    layout: ViewportLayout,
+    selectionHitPolicy: ViewportSelectionHitPolicy = .all
 ) -> (edge: ViewportBodyTopology.Edge, point: CGPoint)? {
     let tester = ViewportHitTester()
     for edge in topology.edges {
@@ -3224,7 +3272,12 @@ private func generatedEdgeHitTarget(
                 z: edge.start.z + (edge.end.z - edge.start.z) * ratio
             )
             let projectedPoint = layout.project(point)
-            let hit = tester.hitTest(point: projectedPoint, in: scene, layout: layout)
+            let hit = tester.hitTest(
+                point: projectedPoint,
+                in: scene,
+                layout: layout,
+                selectionHitPolicy: selectionHitPolicy
+            )
             if hit?.selectionComponent == .edge(edge.componentID) {
                 return (edge, projectedPoint)
             }
@@ -3582,17 +3635,25 @@ private func modelBounds(for points: [Point3D]) -> CGRect {
 private func projectedBounds(
     width: CGFloat,
     height: CGFloat,
+    verticalHeight: CGFloat = 0.0,
     basis: ViewportProjectionBasis
 ) -> CGRect {
-    let points = [
-        CGPoint(x: 0.0, y: 0.0),
-        CGPoint(x: basis.xDirection.dx * width, y: basis.xDirection.dy * width),
-        CGPoint(x: basis.zDirection.dx * height, y: basis.zDirection.dy * height),
-        CGPoint(
-            x: basis.xDirection.dx * width + basis.zDirection.dx * height,
-            y: basis.xDirection.dy * width + basis.zDirection.dy * height
-        ),
-    ]
+    var points: [CGPoint] = []
+    points.reserveCapacity(8)
+    for x in [CGFloat(0.0), width] {
+        for y in [CGFloat(0.0), verticalHeight] {
+            for z in [CGFloat(0.0), height] {
+                points.append(CGPoint(
+                    x: basis.xDirection.dx * x
+                        + basis.yDirection.dx * y
+                        + basis.zDirection.dx * z,
+                    y: basis.xDirection.dy * x
+                        + basis.yDirection.dy * y
+                        + basis.zDirection.dy * z
+                ))
+            }
+        }
+    }
     let minX = points.map(\.x).min() ?? 0.0
     let minY = points.map(\.y).min() ?? 0.0
     let maxX = points.map(\.x).max() ?? 0.0

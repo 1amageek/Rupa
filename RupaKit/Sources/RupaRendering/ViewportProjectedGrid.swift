@@ -171,7 +171,8 @@ public struct ViewportProjectedGrid: Equatable {
             plane: plane,
             modelBounds: modelBounds,
             majorStepMeters: resolvedMajorStepMeters,
-            unit: document.displayUnit
+            unit: document.displayUnit,
+            maximumLabelMeters: RulerConfiguration.visibleSpanMetersRange.upperBound
         )
         self.scaleReadout = Self.makeScaleReadout(
             minorStepMeters: minorStepMeters,
@@ -273,7 +274,8 @@ public struct ViewportProjectedGrid: Equatable {
         plane: GridPlane,
         modelBounds: CGRect,
         majorStepMeters: Double,
-        unit: LengthDisplayUnit
+        unit: LengthDisplayUnit,
+        maximumLabelMeters: Double
     ) -> [ScaleLabel] {
         let step = max(CGFloat(majorStepMeters), 1.0e-12)
         let minFirstIndex = Int(floor(modelBounds.minX / step))
@@ -291,6 +293,9 @@ public struct ViewportProjectedGrid: Equatable {
 
         for index in minFirstIndex ... maxFirstIndex where index != 0 {
             let value = CGFloat(index) * step
+            guard shouldShowScaleLabel(valueMeters: Double(value), maximumLabelMeters: maximumLabelMeters) else {
+                continue
+            }
             let basePosition = project(first: value, second: 0.0, layout: layout, plane: plane)
             guard visibleRect.contains(basePosition) else {
                 continue
@@ -311,6 +316,9 @@ public struct ViewportProjectedGrid: Equatable {
 
         for index in minSecondIndex ... maxSecondIndex where index != 0 {
             let value = CGFloat(index) * step
+            guard shouldShowScaleLabel(valueMeters: Double(value), maximumLabelMeters: maximumLabelMeters) else {
+                continue
+            }
             let basePosition = project(first: 0.0, second: value, layout: layout, plane: plane)
             guard visibleRect.contains(basePosition) else {
                 continue
@@ -330,6 +338,13 @@ public struct ViewportProjectedGrid: Equatable {
         }
 
         return labels
+    }
+
+    private static func shouldShowScaleLabel(
+        valueMeters: Double,
+        maximumLabelMeters: Double
+    ) -> Bool {
+        abs(valueMeters) <= maximumLabelMeters + 1.0e-9
     }
 
     private static func offsetLabelPosition(

@@ -29,14 +29,15 @@ flowchart TD
 
 ## 1. Units, Scale, and Rulers
 
-Rupa must support modeling across small mechanical detail and building-scale contexts without switching products.
+Rupa must support modeling across small mechanical detail, building-scale contexts, and site-scale coordinate ranges without switching products.
 
 | Requirement | Contract |
 |---|---|
 | Internal length unit | Meter, inherited from Swift-CAD quantity rules. |
 | Display length units | Micrometer (μm), millimeter, centimeter, meter, kilometer, inch, foot, and fractional architectural feet/inches. |
+| Supported range intent | Kilometer support is a workspace and coordinate-range contract, not a requirement to show km as the default unit. UI should choose readable units by magnitude and active ruler settings. |
 | Scale ownership | Changing the display unit must preserve the current physical ruler distances; workspace scale changes belong to ruler configuration or named scale presets. |
-| Ruler scale | View rulers, grid labels, and compact canvas readouts must auto-scale from μm detail to km-scale layouts. |
+| Ruler scale | View rulers, grid labels, and compact canvas readouts must auto-scale from μm detail to km-scale layouts while suppressing labels outside the supported workspace range. |
 | Editable length fields | Length inputs should display the current value in readable units while storing the canonical meter value. |
 | Length sliders | Large-range length controls should avoid linear-only sliders that make small-scale edits unusable. |
 | Mixed unit input | Editable length and dimension inputs may accept explicit units and architectural feet/inches notation different from the current display unit. |
@@ -69,7 +70,7 @@ Rupa must support small-detail and large-scene work without precision loss.
 |---|---|
 | World coordinate system | Every document has one world coordinate system. |
 | Local coordinate systems | Components, sketches, construction planes, drawing views, and imported references may own local coordinate systems. |
-| Floating origin strategy | Large documents should evaluate and render through local origins where needed to avoid precision loss. Viewport projection, unprojection, and projected-depth ordering use a shared render origin; source-level rebase remains the command-backed workflow when coordinate resolution exceeds the modeling tolerance budget. |
+| Floating origin strategy | Large documents should evaluate and render through local origins where needed to avoid precision loss. Viewport projection, unprojection, projected-depth ordering, and identity-buffer render plans use a shared render origin; viewport fitting includes horizontal footprint and vertical body extents. Source-level rebase remains the command-backed workflow when coordinate resolution exceeds the modeling tolerance budget. |
 | Axes | X, Y, Z axes and handedness must be explicit. |
 | Up axis | Export presets must map Rupa's up axis to target format expectations. |
 | Georeference metadata | Optional site/building metadata must be attachable without changing the CAD core. |

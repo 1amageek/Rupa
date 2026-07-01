@@ -1222,6 +1222,7 @@ public struct ViewportLayout: Equatable {
         let projectedBounds = Self.projectedBounds(
             width: modelWidth,
             height: modelHeight,
+            verticalHeight: Self.verticalHeight(verticalBounds),
             basis: basis
         )
         let usableWidth = max(size.width - 180.0, 1.0)
@@ -1358,17 +1359,25 @@ public struct ViewportLayout: Equatable {
     private static func projectedBounds(
         width: CGFloat,
         height: CGFloat,
+        verticalHeight: CGFloat,
         basis: ViewportProjectionBasis
     ) -> CGRect {
-        let points = [
-            CGPoint(x: 0.0, y: 0.0),
-            CGPoint(x: basis.xDirection.dx * width, y: basis.xDirection.dy * width),
-            CGPoint(x: basis.zDirection.dx * height, y: basis.zDirection.dy * height),
-            CGPoint(
-                x: basis.xDirection.dx * width + basis.zDirection.dx * height,
-                y: basis.xDirection.dy * width + basis.zDirection.dy * height
-            ),
-        ]
+        var points: [CGPoint] = []
+        points.reserveCapacity(8)
+        for x in [CGFloat(0.0), width] {
+            for y in [CGFloat(0.0), verticalHeight] {
+                for z in [CGFloat(0.0), height] {
+                    points.append(CGPoint(
+                        x: basis.xDirection.dx * x
+                            + basis.yDirection.dx * y
+                            + basis.zDirection.dx * z,
+                        y: basis.xDirection.dy * x
+                            + basis.yDirection.dy * y
+                            + basis.zDirection.dy * z
+                    ))
+                }
+            }
+        }
         let minX = points.map(\.x).min() ?? 0.0
         let minY = points.map(\.y).min() ?? 0.0
         let maxX = points.map(\.x).max() ?? 0.0
@@ -1379,6 +1388,18 @@ public struct ViewportLayout: Equatable {
             width: maxX - minX,
             height: maxY - minY
         )
+    }
+
+    private static func verticalHeight(_ verticalBounds: ClosedRange<Double>?) -> CGFloat {
+        guard let verticalBounds else {
+            return 0.0
+        }
+        let height = verticalBounds.upperBound - verticalBounds.lowerBound
+        guard height.isFinite,
+              height > 0.0 else {
+            return 0.0
+        }
+        return CGFloat(height)
     }
 
     private var modelCenterOffsetX: CGFloat {

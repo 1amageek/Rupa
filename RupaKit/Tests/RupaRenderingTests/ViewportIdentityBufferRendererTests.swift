@@ -97,6 +97,44 @@ import Testing
     #expect(metrics.totalDurationSeconds >= metrics.readbackDurationSeconds)
 }
 
+@Test func viewportIdentityPickRenderPlanUsesViewportLocalCoordinatesForKilometerOrigin() throws {
+    let origin = Point3D(x: 1_000_000.0, y: 2_000.0, z: -1_000_000.0)
+    let scene = identityBufferGeneratedTopologyScene(origin: origin)
+    let viewportSize = CGSize(width: 240.0, height: 180.0)
+    let layout = try #require(ViewportLayout(scene: scene, size: viewportSize))
+    let plan = ViewportIdentityPickRenderPlanBuilder().build(scene: scene, layout: layout)
+    let renderer = try ViewportIdentityBufferRenderer()
+    let faceComponentID = SelectionComponentID.generatedTopology(
+        "feature:body:subshape:identity:face:front"
+    )
+
+    let encodedPoints = identityPlanPoints(plan)
+    let buffer = try renderer.render(plan: plan, viewportSize: viewportSize)
+    let sample = try buffer.sample(at: layout.project(origin))
+    let finitePointCount = encodedPoints.filter { point in
+        point.x.isFinite && point.y.isFinite
+    }.count
+    let localPointCount = encodedPoints.filter { point in
+        abs(point.x) < 10_000.0 && abs(point.y) < 10_000.0
+    }.count
+    let localDepthCount = plan.drawItems.filter { item in
+        guard let depth = item.depth else {
+            return true
+        }
+        return depth.isFinite && abs(depth) < 1.0
+    }.count
+
+    #expect(layout.renderOrigin.x == origin.x)
+    #expect(abs(layout.renderOrigin.y - (origin.y + 0.010)) < 1.0e-12)
+    #expect(layout.renderOrigin.z == origin.z)
+    #expect(encodedPoints.isEmpty == false)
+    #expect(finitePointCount == encodedPoints.count)
+    #expect(localPointCount == encodedPoints.count)
+    #expect(localDepthCount == plan.drawItems.count)
+    #expect(sample.hit?.pickingBackend == .identityBuffer)
+    #expect(sample.hit?.selectionComponent == .face(faceComponentID))
+}
+
 @Test func viewportIdentityBufferRendererCachesStableMeshPrimitiveEncoding() throws {
     let scene = identityBufferMeshFallbackScene()
     let viewportSize = CGSize(width: 240.0, height: 180.0)
@@ -640,7 +678,9 @@ import Testing
     #expect(vertexSample.hit?.bodyVertex == .backTopRight)
 }
 
-private func identityBufferGeneratedTopologyScene() -> ViewportScene {
+private func identityBufferGeneratedTopologyScene(
+    origin: Point3D = .origin
+) -> ViewportScene {
     let featureID = FeatureID()
     let faceComponentID = SelectionComponentID.generatedTopology(
         "feature:body:subshape:identity:face:front"
@@ -651,10 +691,26 @@ private func identityBufferGeneratedTopologyScene() -> ViewportScene {
     let vertexComponentID = SelectionComponentID.generatedTopology(
         "feature:body:subshape:identity:vertex:frontBottomLeft"
     )
-    let frontBottomLeft = Point3D(x: -0.020, y: 0.0, z: -0.020)
-    let frontBottomRight = Point3D(x: 0.020, y: 0.0, z: -0.020)
-    let frontTopRight = Point3D(x: 0.020, y: 0.0, z: 0.020)
-    let frontTopLeft = Point3D(x: -0.020, y: 0.0, z: 0.020)
+    let frontBottomLeft = Point3D(
+        x: origin.x - 0.020,
+        y: origin.y,
+        z: origin.z - 0.020
+    )
+    let frontBottomRight = Point3D(
+        x: origin.x + 0.020,
+        y: origin.y,
+        z: origin.z - 0.020
+    )
+    let frontTopRight = Point3D(
+        x: origin.x + 0.020,
+        y: origin.y,
+        z: origin.z + 0.020
+    )
+    let frontTopLeft = Point3D(
+        x: origin.x - 0.020,
+        y: origin.y,
+        z: origin.z + 0.020
+    )
     let topology = ViewportBodyTopology(
         faces: [
             ViewportBodyTopology.Face(
@@ -685,17 +741,37 @@ private func identityBufferGeneratedTopologyScene() -> ViewportScene {
         sizeXMeters: 0.040,
         sizeYMeters: 0.020,
         sizeZMeters: 0.040,
-        yMinMeters: 0.0,
-        yMaxMeters: 0.020,
+        yMinMeters: origin.y,
+        yMaxMeters: origin.y + 0.020,
         topology: topology
     )
     let item = ViewportSceneItem(
         id: featureID.description,
         featureID: featureID,
-        modelBounds: CGRect(x: -0.020, y: -0.020, width: 0.040, height: 0.040),
+        modelBounds: CGRect(
+            x: CGFloat(origin.x - 0.020),
+            y: CGFloat(origin.z - 0.020),
+            width: 0.040,
+            height: 0.040
+        ),
         kind: .body(component: component)
     )
     return ViewportScene(items: [item])
+}
+
+private func identityPlanPoints(_ plan: ViewportIdentityPickRenderPlan) -> [CGPoint] {
+    plan.drawItems.flatMap { item in
+        switch item.primitive {
+        case .polygon(let points):
+            return points
+        case .polyline(let points, _, _):
+            return points
+        case .segment(let start, let end, _):
+            return [start, end]
+        case .point(let center, _):
+            return [center]
+        }
+    }
 }
 
 private func identityBufferMeshFallbackScene() -> ViewportScene {
