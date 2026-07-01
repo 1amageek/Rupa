@@ -258,9 +258,14 @@ import Testing
 
     #expect(summary.compactTitle == "Site · 100 km")
     #expect(summary.presetTitle == "Site Planning")
+    #expect(summary.displayUnitTitle == "km")
     #expect(summary.minorStepTitle == "0.1 km")
     #expect(summary.majorStepTitle == "1 km")
     #expect(summary.visibleSpanTitle == "100 km")
+    #expect(summary.detailTitle == "Site Planning, unit km, minor 0.1 km, major 1 km, visible 100 km")
+    #expect(summary.accessibilityValue == summary.detailTitle)
+    #expect(summary.smallerPreset == .architecture)
+    #expect(summary.largerPreset == nil)
 }
 
 @Test func workspaceScaleStatusSummaryReportsReadableCustomScale() {
@@ -278,6 +283,27 @@ import Testing
     #expect(summary.minorStepTitle == "1 μm")
     #expect(summary.majorStepTitle == "1 mm")
     #expect(summary.visibleSpanTitle == "1 km")
+    #expect(summary.smallerPreset == .roomInterior)
+    #expect(summary.largerPreset == .architecture)
+}
+
+@Test func workspaceScaleStatusSummaryExposesPresetAdjustmentAffordances() {
+    let product = WorkspaceScaleStatusSummary(
+        ruler: WorkspaceScalePreset.productDesign.rulerConfiguration
+    )
+    let architecture = WorkspaceScaleStatusSummary(
+        ruler: WorkspaceScalePreset.architecture.rulerConfiguration
+    )
+    let imperialSite = WorkspaceScaleStatusSummary(
+        ruler: WorkspaceScalePreset.sitePlanningImperial.rulerConfiguration
+    )
+
+    #expect(product.smallerPreset == .precisionMechanical)
+    #expect(product.largerPreset == .roomInterior)
+    #expect(architecture.smallerPreset == .roomInterior)
+    #expect(architecture.largerPreset == .sitePlanning)
+    #expect(imperialSite.smallerPreset == .architectureImperial)
+    #expect(imperialSite.largerPreset == nil)
 }
 
 @Test func workspaceDocumentPrecisionRecommendationStateFormatsRebaseAction() {

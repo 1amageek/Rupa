@@ -1297,6 +1297,27 @@ public struct MainView: View {
     private var workspaceScaleMenu: some View {
         let summary = workspaceScaleSummary
         return Menu {
+            Section("Current") {
+                Text(summary.detailTitle)
+            }
+            if summary.smallerPreset != nil || summary.largerPreset != nil {
+                Section("Adjust") {
+                    if let smallerPreset = summary.smallerPreset {
+                        Button {
+                            applyWorkspaceScalePreset(smallerPreset)
+                        } label: {
+                            Label("Smaller Workspace: \(smallerPreset.title)", systemImage: "minus.circle")
+                        }
+                    }
+                    if let largerPreset = summary.largerPreset {
+                        Button {
+                            applyWorkspaceScalePreset(largerPreset)
+                        } label: {
+                            Label("Larger Workspace: \(largerPreset.title)", systemImage: "plus.circle")
+                        }
+                    }
+                }
+            }
             Section("Scale Preset") {
                 ForEach(WorkspaceScalePreset.allCases) { preset in
                     Button(preset.title) {
@@ -1334,7 +1355,7 @@ public struct MainView: View {
         .help("Workspace Scale")
         .accessibilityIdentifier("WorkspaceScale.menu")
         .accessibilityLabel("Workspace Scale")
-        .accessibilityValue(summary.compactTitle)
+        .accessibilityValue(summary.accessibilityValue)
     }
 
     private var floatingToolPalette: some View {
@@ -1370,7 +1391,7 @@ public struct MainView: View {
                     )
                 }
                 let scaleSummary = workspaceScaleSummary
-                workspaceValueRow("Scale", scaleSummary.presetTitle)
+                workspaceValueRow("Scale", "\(scaleSummary.presetTitle) · \(scaleSummary.displayUnitTitle)")
                 workspaceValueRow("Step", scaleSummary.minorStepTitle)
                 workspaceValueRow("Major", scaleSummary.majorStepTitle)
                 workspaceValueRow("Visible", scaleSummary.visibleSpanTitle)
