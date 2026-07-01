@@ -859,11 +859,15 @@ public struct MeasurementService {
 
         counts.profiles = profiles.count
         counts.sheets = sheets.count
-        diagnostics += WorkspacePrecisionDiagnosticService().diagnostics(
+        let workspacePrecisionService = WorkspacePrecisionDiagnosticService()
+        let workspacePrecision = workspacePrecisionService.report(
             for: bounds.bounds,
             ruler: document.ruler,
-            displayUnit: document.displayUnit,
             tolerance: tolerance
+        )
+        diagnostics += workspacePrecisionService.diagnostics(
+            for: workspacePrecision,
+            displayUnit: document.displayUnit
         )
 
         return MeasurementResult(
@@ -875,7 +879,8 @@ public struct MeasurementService {
             profiles: profiles,
             solids: solids,
             sheets: sheets,
-            diagnostics: diagnostics
+            diagnostics: diagnostics,
+            workspacePrecision: workspacePrecision
         )
     }
 

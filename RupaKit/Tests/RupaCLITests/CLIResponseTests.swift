@@ -3468,6 +3468,18 @@ struct CLICommandApplyTests {
         ).measure(document: fixture.document)
         #expect(initialMeasurement.diagnostics.contains { $0.message.contains("Workspace precision warning") })
 
+        let measurementResult = try await runCLI([
+            "measure",
+            documentURL.path,
+            "--mode",
+            "file",
+            "--json",
+        ])
+        let measurementResponse = try JSONDecoder().decode(
+            CLIMeasurementResponse.self,
+            from: measurementResult.standardOutputData
+        )
+
         let result = try await runCLI([
             "command",
             "rebase-origin",
@@ -3492,6 +3504,15 @@ struct CLICommandApplyTests {
             tolerance: .workspaceScaleAware(for: loaded)
         ).measure(document: loaded)
 
+        #expect(
+            measurementResult.terminationStatus == CLIExitCode.success.rawValue,
+            Comment(rawValue: measurementResult.standardError)
+        )
+        #expect(measurementResponse.measurement.workspacePrecision?.recommendedRebaseTranslation == Vector3D(
+            x: -(1.0e12 + 5.0),
+            y: -(1.0e12 + 5.0),
+            z: 0.0
+        ))
         #expect(result.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: result.standardError))
         #expect(response.message.contains("Workspace origin rebased"))
         #expect(response.saved)

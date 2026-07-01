@@ -12,6 +12,20 @@ func agentCanRebaseFarOriginWorkspaceThroughAutomationCommand() throws {
     let session = EditorSession(document: try agentFarFromOriginRectangleDocument())
     server.register(session: session, id: sessionID)
 
+    let initialMeasurementResponse = server.handle(.measure(
+        sessionID: sessionID,
+        expectedGeneration: DocumentGeneration(0)
+    ))
+    guard case .measurement(let initialMeasurement) = initialMeasurementResponse else {
+        Issue.record("Expected initial measurement response.")
+        return
+    }
+    #expect(initialMeasurement.workspacePrecision?.recommendedRebaseTranslation == Vector3D(
+        x: -(1.0e12 + 5.0),
+        y: -(1.0e12 + 5.0),
+        z: 0.0
+    ))
+
     let response = server.handle(.execute(
         sessionID: sessionID,
         command: .rebaseWorkspaceOrigin(
@@ -38,6 +52,7 @@ func agentCanRebaseFarOriginWorkspaceThroughAutomationCommand() throws {
         return
     }
     #expect(measurement.diagnostics.contains { $0.message.contains("Workspace precision warning") } == false)
+    #expect(measurement.workspacePrecision == nil)
 }
 
 private func agentFarFromOriginRectangleDocument() throws -> DesignDocument {

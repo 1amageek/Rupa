@@ -297,6 +297,9 @@ import SwiftCAD
     #expect(workspaceOriginRebase.optionMatrix.contains { axis in
         axis.name == "translation" && axis.supportedValues.contains("x meters")
     })
+    let measureDocument = try #require(descriptors.first { $0.name == "measureDocument" })
+    #expect(measureDocument.discovery.contains(.measurement))
+    #expect(measureDocument.summary.contains("workspace precision"))
     #expect(objectDimensionExpression.access == .agentRequest)
     #expect(objectDimensionExpression.discovery.contains(.objectDimensionSummary))
     #expect(objectDimensionExpression.targets == [.body, .face, .edge])

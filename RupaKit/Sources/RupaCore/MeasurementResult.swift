@@ -1,4 +1,5 @@
 import Foundation
+import SwiftCAD
 import RupaCoreTypes
 
 public struct MeasurementResult: Codable, Equatable, Sendable {
@@ -11,6 +12,7 @@ public struct MeasurementResult: Codable, Equatable, Sendable {
     public var solids: [Solid]
     public var sheets: [Sheet]
     public var diagnostics: [EditorDiagnostic]
+    public var workspacePrecision: WorkspacePrecisionReport?
 
     public init(
         scope: Scope = .document,
@@ -21,7 +23,8 @@ public struct MeasurementResult: Codable, Equatable, Sendable {
         profiles: [Profile] = [],
         solids: [Solid] = [],
         sheets: [Sheet] = [],
-        diagnostics: [EditorDiagnostic] = []
+        diagnostics: [EditorDiagnostic] = [],
+        workspacePrecision: WorkspacePrecisionReport? = nil
     ) {
         self.scope = scope
         self.displayUnit = displayUnit
@@ -32,6 +35,7 @@ public struct MeasurementResult: Codable, Equatable, Sendable {
         self.solids = solids
         self.sheets = sheets
         self.diagnostics = diagnostics
+        self.workspacePrecision = workspacePrecision
     }
 
     public var message: String {

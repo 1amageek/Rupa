@@ -3,44 +3,8 @@ import SwiftCAD
 import RupaCoreTypes
 
 public struct WorkspacePrecisionDiagnosticService: Sendable {
-    public enum Reason: String, Codable, Equatable, Sendable {
-        case coordinateResolution
-        case farFromOrigin
-    }
-
-    public struct Report: Codable, Equatable, Sendable {
-        public var reason: Reason
-        public var severity: EditorDiagnostic.Severity
-        public var originDistanceMeters: Double
-        public var maximumCoordinateMagnitudeMeters: Double
-        public var coordinateResolutionMeters: Double
-        public var precisionBudgetMeters: Double
-        public var modelSpanMeters: Double
-        public var workspaceSpanMeters: Double
-        public var originToModelSpanRatio: Double
-
-        public init(
-            reason: Reason,
-            severity: EditorDiagnostic.Severity,
-            originDistanceMeters: Double,
-            maximumCoordinateMagnitudeMeters: Double,
-            coordinateResolutionMeters: Double,
-            precisionBudgetMeters: Double,
-            modelSpanMeters: Double,
-            workspaceSpanMeters: Double,
-            originToModelSpanRatio: Double
-        ) {
-            self.reason = reason
-            self.severity = severity
-            self.originDistanceMeters = originDistanceMeters
-            self.maximumCoordinateMagnitudeMeters = maximumCoordinateMagnitudeMeters
-            self.coordinateResolutionMeters = coordinateResolutionMeters
-            self.precisionBudgetMeters = precisionBudgetMeters
-            self.modelSpanMeters = modelSpanMeters
-            self.workspaceSpanMeters = workspaceSpanMeters
-            self.originToModelSpanRatio = originToModelSpanRatio
-        }
-    }
+    public typealias Reason = WorkspacePrecisionReport.Reason
+    public typealias Report = WorkspacePrecisionReport
 
     public init() {}
 
@@ -73,6 +37,13 @@ public struct WorkspacePrecisionDiagnosticService: Sendable {
         let precisionBudget = max(modelingTolerance.distance * 0.1, Double.leastNonzeroMagnitude)
         let originRatio = originDistance / modelSpan
         let workspaceSpan = normalizedRuler.visibleSpanMeters
+        let modelCenter = bounds.center
+        let recommendedRebaseTranslation = Self.recommendedRebaseTranslation(
+            center: modelCenter,
+            modelSpanMeters: modelSpan,
+            ruler: normalizedRuler,
+            tolerance: modelingTolerance
+        )
 
         if coordinateResolution >= precisionBudget {
             return Report(
@@ -84,7 +55,9 @@ public struct WorkspacePrecisionDiagnosticService: Sendable {
                 precisionBudgetMeters: precisionBudget,
                 modelSpanMeters: modelSpan,
                 workspaceSpanMeters: workspaceSpan,
-                originToModelSpanRatio: originRatio
+                originToModelSpanRatio: originRatio,
+                modelCenter: modelCenter,
+                recommendedRebaseTranslation: recommendedRebaseTranslation
             )
         }
 
@@ -99,7 +72,9 @@ public struct WorkspacePrecisionDiagnosticService: Sendable {
                 precisionBudgetMeters: precisionBudget,
                 modelSpanMeters: modelSpan,
                 workspaceSpanMeters: workspaceSpan,
-                originToModelSpanRatio: originRatio
+                originToModelSpanRatio: originRatio,
+                modelCenter: modelCenter,
+                recommendedRebaseTranslation: recommendedRebaseTranslation
             )
         }
 
@@ -112,7 +87,17 @@ public struct WorkspacePrecisionDiagnosticService: Sendable {
         displayUnit: LengthDisplayUnit,
         tolerance: ModelingTolerance? = nil
     ) -> [EditorDiagnostic] {
-        guard let report = report(for: bounds, ruler: ruler, tolerance: tolerance) else {
+        diagnostics(
+            for: report(for: bounds, ruler: ruler, tolerance: tolerance),
+            displayUnit: displayUnit
+        )
+    }
+
+    public func diagnostics(
+        for report: Report?,
+        displayUnit: LengthDisplayUnit
+    ) -> [EditorDiagnostic] {
+        guard let report else {
             return []
         }
         return [
@@ -179,6 +164,38 @@ public struct WorkspacePrecisionDiagnosticService: Sendable {
         let unit = preferredUnit.readableUnit(forMeters: meters)
         return LengthDisplayText.lengthString(fromMeters: meters, unit: unit)
     }
+
+    private static func recommendedRebaseTranslation(
+        center: Point3D,
+        modelSpanMeters: Double,
+        ruler: RulerConfiguration,
+        tolerance: ModelingTolerance
+    ) -> Vector3D? {
+        let threshold = max(
+            modelSpanMeters * 1_000.0,
+            ruler.majorTickMeters,
+            ruler.visibleSpanMeters * 0.5
+        )
+        let vector = Vector3D(
+            x: recommendedAxisTranslation(center.x, threshold: threshold),
+            y: recommendedAxisTranslation(center.y, threshold: threshold),
+            z: recommendedAxisTranslation(center.z, threshold: threshold)
+        )
+        guard vector.isFinite, vector.length > tolerance.distance else {
+            return nil
+        }
+        return vector
+    }
+
+    private static func recommendedAxisTranslation(
+        _ center: Double,
+        threshold: Double
+    ) -> Double {
+        guard center.isFinite, threshold.isFinite, abs(center) >= threshold else {
+            return 0.0
+        }
+        return -center
+    }
 }
 
 private struct WorkspacePrecisionBoundsAccumulator {
@@ -209,6 +226,14 @@ private struct WorkspacePrecisionBoundsAccumulator {
 }
 
 private extension MeasurementResult.Bounds {
+    var center: Point3D {
+        Point3D(
+            x: (minX + maxX) * 0.5,
+            y: (minY + maxY) * 0.5,
+            z: (minZ + maxZ) * 0.5
+        )
+    }
+
     var maximumAbsoluteCoordinate: Double {
         [
             minX,

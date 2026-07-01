@@ -41,6 +41,18 @@ import Testing
     #expect(diagnostics.first?.severity == .warning)
     #expect(diagnostics.first?.message.contains("floating-point coordinate resolution") == true)
     #expect(diagnostics.first?.message.contains("local origin") == true)
+
+    let report = WorkspacePrecisionDiagnosticService().report(
+        for: bounds,
+        ruler: WorkspaceScalePreset.sitePlanning.rulerConfiguration
+    )
+    #expect(report?.reason == .coordinateResolution)
+    #expect(report?.modelCenter == Point3D(x: 1.0e12 + 5.0, y: 1.0e12 + 5.0, z: 5.0))
+    #expect(report?.recommendedRebaseTranslation == Vector3D(
+        x: -(1.0e12 + 5.0),
+        y: -(1.0e12 + 5.0),
+        z: 0.0
+    ))
 }
 
 @Test func workspacePrecisionDiagnosticsNoticeSmallModelFarFromOrigin() {
@@ -93,6 +105,12 @@ import Testing
         $0.severity == .warning
             && $0.message.contains("Workspace precision warning")
     })
+    #expect(result.workspacePrecision?.reason == .coordinateResolution)
+    #expect(result.workspacePrecision?.recommendedRebaseTranslation == Vector3D(
+        x: -(1.0e12 + 5.0),
+        y: -(1.0e12 + 5.0),
+        z: 0.0
+    ))
 }
 
 @MainActor
