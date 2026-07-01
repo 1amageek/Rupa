@@ -1,6 +1,7 @@
 import ArgumentParser
 import RupaAutomation
 import RupaCore
+import SwiftCAD
 
 extension WorkspaceScalePreset: ExpressibleByArgument {}
 
@@ -63,6 +64,36 @@ public struct SetWorkspaceScalePresetCommand: ParsableCommand {
         try CLIAutomationCommandRunner.run(
             document: document,
             command: .setWorkspaceScalePreset(preset)
+        )
+    }
+}
+
+public struct RebaseWorkspaceOriginCommand: ParsableCommand {
+    public static let configuration = CommandConfiguration(
+        commandName: "rebase-origin",
+        abstract: "Translate authored CAD source coordinates by a meter-space vector."
+    )
+
+    @OptionGroup
+    public var document: CLIWriteDocumentOptions
+
+    @Option(help: "Translation along the world X axis in meters.")
+    public var x: Double = 0.0
+
+    @Option(help: "Translation along the world Y axis in meters.")
+    public var y: Double = 0.0
+
+    @Option(help: "Translation along the world Z axis in meters.")
+    public var z: Double = 0.0
+
+    public init() {}
+
+    public func run() throws {
+        try CLIAutomationCommandRunner.run(
+            document: document,
+            command: .rebaseWorkspaceOrigin(
+                translation: Vector3D(x: x, y: y, z: z)
+            )
         )
     }
 }

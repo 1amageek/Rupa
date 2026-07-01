@@ -3452,6 +3452,57 @@ struct CLICommandApplyTests {
         #expect(loadedAfterUnit.displayUnit == .inch)
         #expect(loadedAfterUnit.ruler == RulerConfiguration.standard(for: .inch))
     }
+
+    @Test(.timeLimit(.minutes(1)))
+    func executableWorkspaceOriginRebaseMovesClosedDocumentSourcesAsJSON() async throws {
+        let temporaryDirectory = try makeTemporaryDirectory()
+        defer {
+            removeTemporaryDirectory(temporaryDirectory)
+        }
+        let documentURL = temporaryDirectory.appendingPathComponent("process-command-rebase-origin.swcad")
+        let fixture = try cliFarFromOriginRectangleDocument()
+        try DocumentFileService().save(fixture.document, to: documentURL)
+
+        let initialMeasurement = try MeasurementService(
+            tolerance: .workspaceScaleAware(for: fixture.document)
+        ).measure(document: fixture.document)
+        #expect(initialMeasurement.diagnostics.contains { $0.message.contains("Workspace precision warning") })
+
+        let result = try await runCLI([
+            "command",
+            "rebase-origin",
+            documentURL.path,
+            "--x",
+            "-1000000000000",
+            "--y",
+            "-1000000000000",
+            "--z",
+            "0",
+            "--mode",
+            "file",
+            "--json",
+        ])
+        let response = try JSONDecoder().decode(
+            CLIResponse.self,
+            from: result.standardOutputData
+        )
+        let loaded = try DocumentFileService().load(from: documentURL)
+        let bounds = try cliProfileBounds(forBody: fixture.bodyFeatureID, in: loaded)
+        let translatedMeasurement = try MeasurementService(
+            tolerance: .workspaceScaleAware(for: loaded)
+        ).measure(document: loaded)
+
+        #expect(result.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: result.standardError))
+        #expect(response.message.contains("Workspace origin rebased"))
+        #expect(response.saved)
+        #expect(response.workspaceScale?.matchedPreset == .sitePlanning)
+        #expect(response.diagnostics.contains { $0.message.contains("Workspace precision warning") } == false)
+        #expect(translatedMeasurement.diagnostics.contains { $0.message.contains("Workspace precision warning") } == false)
+        #expect(cliNearlyEqual(bounds.minX, 0.0, tolerance: 1.0e-6))
+        #expect(cliNearlyEqual(bounds.minY, 0.0, tolerance: 1.0e-6))
+        #expect(cliNearlyEqual(bounds.maxX, 10.0, tolerance: 1.0e-6))
+        #expect(cliNearlyEqual(bounds.maxY, 10.0, tolerance: 1.0e-6))
+    }
 }
 
 @Suite(.serialized)
@@ -7984,6 +8035,33 @@ private func cliDefaultBoxFixture() throws -> (
     let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
     let bodyNodeID = try #require(cliBodySceneNodeID(for: bodyFeatureID, in: session.document))
     return (session.document, bodyFeatureID, bodyNodeID)
+}
+
+private func cliFarFromOriginRectangleDocument() throws -> (
+    document: DesignDocument,
+    bodyFeatureID: FeatureID
+) {
+    var document = DesignDocument.empty(named: "CLI Remote Site")
+    try document.setRulerConfiguration(WorkspaceScalePreset.sitePlanning.rulerConfiguration)
+    let profileID = try document.createRectangleSketchFromCorners(
+        name: "Remote Profile",
+        plane: .xy,
+        firstCorner: SketchPoint(
+            x: .length(1.0e12, .meter),
+            y: .length(1.0e12, .meter)
+        ),
+        oppositeCorner: SketchPoint(
+            x: .length(1.0e12 + 10.0, .meter),
+            y: .length(1.0e12 + 10.0, .meter)
+        )
+    )
+    let bodyFeatureID = try document.extrudeProfile(
+        name: "Remote Solid",
+        profile: ProfileReference(featureID: profileID),
+        distance: .length(10.0, .meter),
+        direction: .normal
+    )
+    return (document, bodyFeatureID)
 }
 
 private func cliBodySceneNodeID(
