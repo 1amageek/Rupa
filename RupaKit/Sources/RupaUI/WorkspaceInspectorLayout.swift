@@ -1,31 +1,69 @@
 import SwiftUI
 import RupaCore
 
-let inspectorLabelWidth: CGFloat = 124
-let inspectorControlWidth: CGFloat = 104
-let inspectorUnitWidth: CGFloat = 36
-let inspectorRowSpacing: CGFloat = 10
-let inspectorSliderLeadingPadding: CGFloat = inspectorLabelWidth + inspectorRowSpacing
+enum WorkspaceInspectorLayout {
+    static let panelHorizontalInset: CGFloat = 12
+    static let panelVerticalInset: CGFloat = 12
+    static let sectionSpacing: CGFloat = 12
+    static let sectionCornerRadius: CGFloat = 8
+    static let sectionHeaderHorizontalPadding: CGFloat = 10
+    static let sectionHeaderVerticalPadding: CGFloat = 7
+    static let sectionContentVerticalPadding: CGFloat = 4
+    static let rowHorizontalPadding: CGFloat = 10
+    static let rowVerticalPadding: CGFloat = 5
+    static let rowMinimumHeight: CGFloat = 26
+    static let rowSpacing: CGFloat = 8
+    static let labelWidth: CGFloat = 116
+    static let controlWidth: CGFloat = 104
+    static let unitWidth: CGFloat = 36
+}
+
+let inspectorLabelWidth: CGFloat = WorkspaceInspectorLayout.labelWidth
+let inspectorControlWidth: CGFloat = WorkspaceInspectorLayout.controlWidth
+let inspectorUnitWidth: CGFloat = WorkspaceInspectorLayout.unitWidth
+let inspectorRowSpacing: CGFloat = WorkspaceInspectorLayout.rowSpacing
+let inspectorSliderLeadingPadding: CGFloat = WorkspaceInspectorLayout.rowHorizontalPadding
+    + inspectorLabelWidth
+    + inspectorRowSpacing
 
 @MainActor
 func inspectorSection<Content: View>(
     _ title: String,
     @ViewBuilder content: () -> Content
 ) -> some View {
-    VStack(alignment: .leading, spacing: 8) {
-        Text(title)
-            .font(.caption)
-            .fontWeight(.semibold)
-            .foregroundStyle(.secondary)
-            .textCase(.uppercase)
-            .frame(maxWidth: .infinity, alignment: .leading)
+    VStack(alignment: .leading, spacing: 0) {
+        HStack(spacing: 8) {
+            Text(title)
+                .font(.caption)
+                .fontWeight(.semibold)
+                .foregroundStyle(.secondary)
+                .textCase(.uppercase)
+                .lineLimit(1)
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, WorkspaceInspectorLayout.sectionHeaderHorizontalPadding)
+        .padding(.vertical, WorkspaceInspectorLayout.sectionHeaderVerticalPadding)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.primary.opacity(0.035))
 
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 0) {
             content()
         }
+        .padding(.vertical, WorkspaceInspectorLayout.sectionContentVerticalPadding)
         .frame(maxWidth: .infinity, alignment: .leading)
     }
     .frame(maxWidth: .infinity, alignment: .leading)
+    .background(
+        RoundedRectangle(cornerRadius: WorkspaceInspectorLayout.sectionCornerRadius, style: .continuous)
+            .fill(Color.primary.opacity(0.035))
+    )
+    .overlay {
+        RoundedRectangle(cornerRadius: WorkspaceInspectorLayout.sectionCornerRadius, style: .continuous)
+            .strokeBorder(Color.primary.opacity(0.10), lineWidth: 1)
+    }
+    .clipShape(
+        RoundedRectangle(cornerRadius: WorkspaceInspectorLayout.sectionCornerRadius, style: .continuous)
+    )
 }
 
 @MainActor
@@ -35,13 +73,24 @@ func inspectorControlRow<Content: View>(
 ) -> some View {
     HStack(alignment: .center, spacing: inspectorRowSpacing) {
         Text(title)
+            .font(.callout)
             .foregroundStyle(.secondary)
+            .lineLimit(1)
             .frame(width: inspectorLabelWidth, alignment: .leading)
         content()
+            .font(.callout)
             .frame(maxWidth: .infinity, alignment: .trailing)
     }
-    .font(.callout)
+    .padding(.horizontal, WorkspaceInspectorLayout.rowHorizontalPadding)
+    .padding(.vertical, WorkspaceInspectorLayout.rowVerticalPadding)
+    .frame(minHeight: WorkspaceInspectorLayout.rowMinimumHeight)
     .frame(maxWidth: .infinity, alignment: .leading)
+    .overlay(alignment: .bottom) {
+        Rectangle()
+            .fill(Color.primary.opacity(0.055))
+            .frame(height: 1)
+            .padding(.leading, WorkspaceInspectorLayout.rowHorizontalPadding + inspectorLabelWidth + inspectorRowSpacing)
+    }
 }
 
 @MainActor
@@ -54,6 +103,9 @@ func inspectorActionRow<Content: View>(
         content()
         Spacer(minLength: 0)
     }
+    .padding(.horizontal, WorkspaceInspectorLayout.rowHorizontalPadding)
+    .padding(.vertical, WorkspaceInspectorLayout.rowVerticalPadding)
+    .frame(minHeight: WorkspaceInspectorLayout.rowMinimumHeight)
     .frame(maxWidth: .infinity, alignment: .leading)
 }
 
@@ -61,10 +113,13 @@ func inspectorActionRow<Content: View>(
 func workspaceInspectorValueRow(_ title: String, _ value: String) -> some View {
     inspectorControlRow(title) {
         Text(value)
+            .foregroundStyle(.primary.opacity(0.88))
+            .fontWeight(.medium)
             .lineLimit(1)
             .truncationMode(.middle)
             .monospacedDigit()
             .textSelection(.enabled)
+            .frame(maxWidth: .infinity, alignment: .trailing)
     }
 }
 
@@ -102,7 +157,7 @@ func numericControl(
     )
     let unit = unitLabel()
 
-    return VStack(alignment: .leading, spacing: 5) {
+    return VStack(alignment: .leading, spacing: 4) {
         inspectorControlRow(title) {
             HStack(spacing: 6) {
                 TextField(title, text: textBinding)
@@ -117,8 +172,9 @@ func numericControl(
         }
         Slider(value: sliderBinding, in: sliderRange)
             .padding(.leading, inspectorSliderLeadingPadding)
+            .padding(.trailing, WorkspaceInspectorLayout.rowHorizontalPadding)
     }
-    .padding(.vertical, 1)
+    .padding(.vertical, 2)
 }
 
 func commonWorkspaceInspectorValue(_ values: [Double]) -> Double? {

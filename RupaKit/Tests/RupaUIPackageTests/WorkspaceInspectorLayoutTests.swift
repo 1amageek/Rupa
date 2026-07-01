@@ -1,4 +1,5 @@
 import Testing
+@testable import RupaCore
 @testable import RupaUI
 
 @Test func commonWorkspaceInspectorValueAcceptsFiniteEqualValues() {
@@ -9,4 +10,49 @@ import Testing
     #expect(commonWorkspaceInspectorValue([2.0, 2.1]) == nil)
     #expect(commonWorkspaceInspectorValue([2.0, .nan]) == nil)
     #expect(commonWorkspaceInspectorValue([]) == nil)
+}
+
+@Test func workspaceInspectorLayoutKeepsDensePropertyPanelRhythm() {
+    #expect(WorkspaceInspectorLayout.panelHorizontalInset == 12)
+    #expect(WorkspaceInspectorLayout.sectionSpacing == 12)
+    #expect(WorkspaceInspectorLayout.rowMinimumHeight == 26)
+    #expect(WorkspaceInspectorLayout.labelWidth < 124)
+    let expectedSliderLeadingPadding = WorkspaceInspectorLayout.rowHorizontalPadding
+        + inspectorLabelWidth
+        + inspectorRowSpacing
+    #expect(abs(inspectorSliderLeadingPadding - expectedSliderLeadingPadding) < 0.01)
+}
+
+@Test func rulerScaleControlUsesLogMetersAcrossSupportedCADRange() {
+    let lowSlider = RulerScaleControl.sliderValue(
+        fromMeters: RulerConfiguration.minorTickMetersRange.lowerBound,
+        for: .minor
+    )
+    let highSlider = RulerScaleControl.sliderValue(
+        fromMeters: RulerConfiguration.visibleSpanMetersRange.upperBound,
+        for: .visible
+    )
+    let visibleMeters = RulerScaleControl.meters(
+        fromSliderValue: highSlider,
+        for: .visible
+    )
+
+    #expect(lowSlider < highSlider)
+    #expect(abs(visibleMeters - RulerConfiguration.visibleSpanMetersRange.upperBound) < 0.001)
+}
+
+@Test func rulerScaleControlKeepsTextInputInDisplayUnitsButClampsInMeters() {
+    let requestedMeters = RulerScaleControl.meters(
+        fromFieldValue: 200_000_000.0,
+        unit: .millimeter,
+        for: .visible
+    )
+    let displayedMillimeters = RulerScaleControl.fieldValue(
+        fromMeters: RulerConfiguration.visibleSpanMetersRange.upperBound,
+        unit: .millimeter,
+        for: .visible
+    )
+
+    #expect(requestedMeters == RulerConfiguration.visibleSpanMetersRange.upperBound)
+    #expect(displayedMillimeters == 100_000_000.0)
 }

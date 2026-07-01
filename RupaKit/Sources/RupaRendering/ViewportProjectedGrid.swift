@@ -5,6 +5,7 @@ import RupaViewportScene
 
 public struct ViewportProjectedGrid: Equatable {
     public typealias Axis = ViewportCoordinateAxis
+    private static let maximumGridLineCount = 360
 
     public struct Line: Equatable {
         public var axis: Axis
@@ -66,10 +67,23 @@ public struct ViewportProjectedGrid: Equatable {
             camera: camera,
             basis: basis
         ).layout
-        let minorStepMeters = Self.adjustedStep(
+        let baseMinorStepMeters = Self.adjustedStep(
             document.ruler.minorTickMeters,
             scale: layout.scale,
             minimumPixels: 8.0
+        )
+        let basis = layout.basis
+        let plane = Self.gridPlane(for: basis)
+        let initialModelBounds = Self.visibleModelBounds(
+            layout: layout,
+            size: size,
+            plane: plane,
+            step: max(CGFloat(baseMinorStepMeters), 1.0e-12)
+        )
+        let minorStepMeters = Self.adjustedStepForLineBudget(
+            baseMinorStepMeters,
+            modelBounds: initialModelBounds,
+            maximumLineCount: Self.maximumGridLineCount
         )
         let majorStepMeters = Self.adjustedStep(
             max(document.ruler.majorTickMeters, minorStepMeters),
@@ -79,8 +93,6 @@ public struct ViewportProjectedGrid: Equatable {
         let minorStepPixels = max(CGFloat(minorStepMeters) * layout.scale, 8.0)
         let majorEvery = max(1, Int((majorStepMeters / minorStepMeters).rounded()))
         let resolvedMajorStepMeters = minorStepMeters * Double(majorEvery)
-        let basis = layout.basis
-        let plane = Self.gridPlane(for: basis)
         let modelBounds = Self.visibleModelBounds(
             layout: layout,
             size: size,
@@ -124,6 +136,28 @@ public struct ViewportProjectedGrid: Equatable {
             step *= 2.0
         }
         return step
+    }
+
+    private static func adjustedStepForLineBudget(
+        _ baseStep: Double,
+        modelBounds: CGRect,
+        maximumLineCount: Int
+    ) -> Double {
+        var step = max(baseStep, 1.0e-12)
+        while estimatedLineCount(modelBounds: modelBounds, step: step) > maximumLineCount {
+            step *= 2.0
+        }
+        return step
+    }
+
+    private static func estimatedLineCount(
+        modelBounds: CGRect,
+        step: Double
+    ) -> Int {
+        let safeStep = max(CGFloat(step), 1.0e-12)
+        let firstAxisCount = Int(ceil(modelBounds.width / safeStep)) + 5
+        let secondAxisCount = Int(ceil(modelBounds.height / safeStep)) + 5
+        return max(0, firstAxisCount) + max(0, secondAxisCount)
     }
 
     private static func makeLines(

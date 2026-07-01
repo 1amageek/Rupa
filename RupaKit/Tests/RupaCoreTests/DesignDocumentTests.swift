@@ -23,6 +23,36 @@ import Testing
     #expect(abs(document.ruler.majorTickMeters - 0.000_01) < 0.000_000_000_001)
 }
 
+@Test func rulerScaleRangeCoversPrecisionMechanicsThroughArchitecture() async throws {
+    #expect(RulerConfiguration.minorTickMetersRange.lowerBound == 1.0e-6)
+    #expect(RulerConfiguration.visibleSpanMetersRange.upperBound >= 100_000.0)
+
+    let configuration = RulerConfiguration(
+        displayUnit: .millimeter,
+        minorTickMeters: 1.0e-12,
+        majorTickMeters: 1.0e-12,
+        visibleSpanMeters: 1.0e9
+    ).normalizedForWorkspaceScale()
+
+    #expect(configuration.minorTickMeters == RulerConfiguration.minorTickMetersRange.lowerBound)
+    #expect(configuration.majorTickMeters >= configuration.minorTickMeters * 2.0)
+    #expect(configuration.visibleSpanMeters == RulerConfiguration.visibleSpanMetersRange.upperBound)
+    try configuration.validate()
+}
+
+@Test func rulerValidationRejectsValuesOutsideWorkspaceScaleRange() async throws {
+    let configuration = RulerConfiguration(
+        displayUnit: .meter,
+        minorTickMeters: 1.0,
+        majorTickMeters: 10.0,
+        visibleSpanMeters: RulerConfiguration.visibleSpanMetersRange.upperBound * 2.0
+    )
+
+    #expect(throws: DocumentValidationError.self) {
+        try configuration.validate()
+    }
+}
+
 @Test func rectangleGeneratedRepresentationFollowsExtrusionProperty() async throws {
     let definition = try #require(ObjectTypeCatalog.definition(for: .rectangle))
     #expect(definition.sourceRepresentation == .twoDimensional)

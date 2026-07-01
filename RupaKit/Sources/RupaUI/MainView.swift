@@ -4336,7 +4336,7 @@ public struct MainView: View {
 
     private var inspectorContent: some View {
         ScrollView(.vertical) {
-            VStack(alignment: .leading, spacing: 18) {
+            VStack(alignment: .leading, spacing: WorkspaceInspectorLayout.sectionSpacing) {
                 switch selectedSketchEntityResult {
                 case .success(let sketchEntity):
                     if let sketchEntity {
@@ -4348,8 +4348,8 @@ public struct MainView: View {
                     sketchEntityInspectorErrorSections(error)
                 }
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 14)
+            .padding(.horizontal, WorkspaceInspectorLayout.panelHorizontalInset)
+            .padding(.vertical, WorkspaceInspectorLayout.panelVerticalInset)
             .frame(maxWidth: .infinity, alignment: .topLeading)
         }
         .scrollIndicators(.visible)
@@ -6762,11 +6762,7 @@ public struct MainView: View {
             ruler.visibleSpanMeters = visibleSpanMeters
         }
 
-        let minimum = ruler.displayUnit.meters(from: 0.0001)
-        ruler.minorTickMeters = max(ruler.minorTickMeters, minimum)
-        ruler.majorTickMeters = max(ruler.majorTickMeters, ruler.minorTickMeters * 2.0)
-        ruler.visibleSpanMeters = max(ruler.visibleSpanMeters, ruler.majorTickMeters)
-        session.setRulerConfiguration(ruler)
+        session.setRulerConfiguration(ruler.normalizedForWorkspaceScale())
     }
 
     private func inspectorRow(_ title: String, _ meters: Double) -> some View {

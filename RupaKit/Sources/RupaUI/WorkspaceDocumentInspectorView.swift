@@ -68,20 +68,20 @@ struct WorkspaceDocumentInspectorView: View {
         inspectorSection("Ruler") {
             rulerLengthControl(
                 "Minor",
+                kind: .minor,
                 meters: state.ruler.minorTickMeters,
-                sliderRange: 0.01 ... 100.0,
                 onChange: setMinorTickMeters
             )
             rulerLengthControl(
                 "Major",
+                kind: .major,
                 meters: state.ruler.majorTickMeters,
-                sliderRange: 0.1 ... 1_000.0,
                 onChange: setMajorTickMeters
             )
             rulerLengthControl(
                 "Visible",
+                kind: .visible,
                 meters: state.ruler.visibleSpanMeters,
-                sliderRange: 1.0 ... 100_000.0,
                 onChange: setVisibleSpanMeters
             )
         }
@@ -111,19 +111,58 @@ struct WorkspaceDocumentInspectorView: View {
 
     private func rulerLengthControl(
         _ title: String,
+        kind: RulerScaleControl.Kind,
         meters: Double,
-        sliderRange: ClosedRange<Double>,
         onChange: @escaping (Double) -> Void
     ) -> some View {
         let unit = state.displayUnit
-        return numericControl(
-            title,
-            values: [unit.value(fromMeters: meters)],
-            sliderRange: sliderRange
-        ) { value in
-            onChange(unit.meters(from: max(value, 0.0)))
-        } unitLabel: {
-            unit.symbol
+        let textBinding = Binding<String>(
+            get: {
+                let value = RulerScaleControl.fieldValue(
+                    fromMeters: meters,
+                    unit: unit,
+                    for: kind
+                )
+                return value.formatted(.number.precision(.fractionLength(0...6)))
+            },
+            set: { text in
+                let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard let value = Double(trimmedText), value.isFinite else {
+                    return
+                }
+                onChange(
+                    RulerScaleControl.meters(
+                        fromFieldValue: value,
+                        unit: unit,
+                        for: kind
+                    )
+                )
+            }
+        )
+        let sliderBinding = Binding<Double>(
+            get: {
+                RulerScaleControl.sliderValue(fromMeters: meters, for: kind)
+            },
+            set: { value in
+                onChange(RulerScaleControl.meters(fromSliderValue: value, for: kind))
+            }
+        )
+
+        return VStack(alignment: .leading, spacing: 4) {
+            inspectorControlRow(title) {
+                HStack(spacing: 6) {
+                    TextField(title, text: textBinding)
+                        .multilineTextAlignment(.trailing)
+                        .frame(width: inspectorControlWidth)
+                    Text(unit.symbol)
+                        .foregroundStyle(.secondary)
+                        .frame(width: inspectorUnitWidth, alignment: .leading)
+                }
+            }
+            Slider(value: sliderBinding, in: RulerScaleControl.sliderRange(for: kind))
+                .padding(.leading, inspectorSliderLeadingPadding)
+                .padding(.trailing, WorkspaceInspectorLayout.rowHorizontalPadding)
         }
+        .padding(.vertical, 2)
     }
 }

@@ -2848,6 +2848,29 @@ import Testing
     #expect(zLines.prefix(12).allSatisfy { isParallel(vector(for: $0), firstZVector) })
 }
 
+@Test func viewportProjectedGridSupportsArchitectureScaleRuler() throws {
+    var document = DesignDocument.empty()
+    try document.setRulerConfiguration(
+        RulerConfiguration(
+            displayUnit: .meter,
+            minorTickMeters: 1.0,
+            majorTickMeters: 10.0,
+            visibleSpanMeters: RulerConfiguration.visibleSpanMetersRange.upperBound
+        )
+    )
+
+    let grid = ViewportProjectedGrid(
+        document: document,
+        size: CGSize(width: 800.0, height: 600.0)
+    )
+
+    #expect(!grid.lines.isEmpty)
+    #expect(grid.lines.count < 400)
+    #expect(grid.minorStepMeters >= document.ruler.minorTickMeters)
+    #expect(grid.majorStepMeters >= document.ruler.majorTickMeters)
+    #expect(grid.scaleLabels.allSatisfy { $0.text.hasSuffix(document.displayUnit.symbol) })
+}
+
 @MainActor
 @Test func viewportAxisTriadUsesCompactBottomCenterInputExclusion() {
     let viewportSize = CGSize(width: 800.0, height: 600.0)
