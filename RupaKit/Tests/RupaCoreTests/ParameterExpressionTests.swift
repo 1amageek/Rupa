@@ -55,6 +55,30 @@ import Testing
     #expect(abs(expressionMeters - 500.0) < 0.000_000_000_001)
 }
 
+@Test func lengthInputParserResolvesArchitecturalFeetAndInches() throws {
+    let parser = LengthInputParser()
+    let markedMeters = try parser.parseMeters(
+        from: "6' 4\"",
+        defaultUnit: .millimeter
+    )
+    let wordMeters = try parser.parseMeters(
+        from: "6 ft 4 1/2 in",
+        defaultUnit: .millimeter
+    )
+    let fractionalMeters = try parser.parseMeters(
+        from: "1/2 in",
+        defaultUnit: .meter
+    )
+    let expectedMarkedMeters = LengthDisplayUnit.foot.meters(from: 6.0)
+        + LengthDisplayUnit.inch.meters(from: 4.0)
+    let expectedWordMeters = LengthDisplayUnit.foot.meters(from: 6.0)
+        + LengthDisplayUnit.inch.meters(from: 4.5)
+
+    #expect(abs(markedMeters - expectedMarkedMeters) < 0.000_000_000_001)
+    #expect(abs(wordMeters - expectedWordMeters) < 0.000_000_000_001)
+    #expect(abs(fractionalMeters - LengthDisplayUnit.inch.meters(from: 0.5)) < 0.000_000_000_001)
+}
+
 @Test func parameterExpressionParserRejectsUnknownParameterBeforeMutation() throws {
     var caught: EditorError?
 

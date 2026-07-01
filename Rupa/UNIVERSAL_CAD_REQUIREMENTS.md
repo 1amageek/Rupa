@@ -38,7 +38,7 @@ Rupa must support modeling across small mechanical detail and building-scale con
 | Ruler scale | View rulers, grid labels, and compact canvas readouts must auto-scale from μm detail to km-scale layouts. |
 | Editable length fields | Length inputs should display the current value in readable units while storing the canonical meter value. |
 | Length sliders | Large-range length controls should avoid linear-only sliders that make small-scale edits unusable. |
-| Mixed unit input | Editable length inputs may accept explicit units different from the current display unit. |
+| Mixed unit input | Editable length inputs may accept explicit units and architectural feet/inches notation different from the current display unit. |
 | Unit conversion | All conversions must be finite, typed, and reversible within tolerance. |
 | Dimension formatting | Scientific, decimal, fractional, and architectural formatting must be available where appropriate. |
 | Scale bars | Saved views and drawing views must carry scale metadata. |

@@ -73,6 +73,25 @@ import Testing
     #expect(workspaceLengthMeters(fromFieldText: "not-a-length", defaultUnit: .meter) == nil)
 }
 
+@Test func workspaceLengthMetersAcceptsArchitecturalFeetInches() {
+    let markedMeters = workspaceLengthMeters(
+        fromFieldText: "6' 4\"",
+        defaultUnit: .millimeter
+    )
+    let wordMeters = workspaceLengthMeters(
+        fromFieldText: "6 ft 4 1/2 in",
+        defaultUnit: .millimeter
+    )
+
+    let expectedMarkedMeters = LengthDisplayUnit.foot.meters(from: 6.0)
+        + LengthDisplayUnit.inch.meters(from: 4.0)
+    let expectedWordMeters = LengthDisplayUnit.foot.meters(from: 6.0)
+        + LengthDisplayUnit.inch.meters(from: 4.5)
+
+    #expect(abs((markedMeters ?? 0.0) - expectedMarkedMeters) < 0.000_000_000_001)
+    #expect(abs((wordMeters ?? 0.0) - expectedWordMeters) < 0.000_000_000_001)
+}
+
 @Test func workspaceLengthSliderScaleKeepsNormalRangesLinear() {
     let scale = WorkspaceLengthSliderScale(metersRange: 0.0 ... 10.0)
 
