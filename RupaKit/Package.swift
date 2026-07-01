@@ -209,6 +209,15 @@ let package = Package(
             ]
         ),
         .testTarget(
+            name: "RupaAgentTransportTests",
+            dependencies: [
+                "RupaAgent",
+                "RupaAgentProtocol",
+                "RupaAgentRuntime",
+                "RupaAgentTransport",
+            ]
+        ),
+        .testTarget(
             name: "RupaUIPackageTests",
             dependencies: [
                 "RupaAgentProtocol",
