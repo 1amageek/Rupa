@@ -5,6 +5,7 @@ struct WorkspaceSplineEditOperationsView: View {
     var target: SelectionTarget
     @Binding var rebuildControlPointCount: Int
     @Binding var rebuildToleranceMeters: Double
+    var rebuildToleranceMetersRange: ClosedRange<Double>
     @Binding var rebuildKeepsCorners: Bool
     @Binding var explicitDegree: Int
     @Binding var explicitSpanCount: Int
@@ -32,9 +33,12 @@ struct WorkspaceSplineEditOperationsView: View {
         numericControl(
             "Refit Tol",
             values: [rebuildToleranceMeters],
-            sliderRange: 0.00001 ... 0.01
+            sliderRange: rebuildToleranceMetersRange
         ) { tolerance in
-            rebuildToleranceMeters = min(max(tolerance, 0.00001), 0.01)
+            rebuildToleranceMeters = min(
+                max(tolerance, rebuildToleranceMetersRange.lowerBound),
+                rebuildToleranceMetersRange.upperBound
+            )
         } unitLabel: {
             "m"
         }

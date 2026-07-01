@@ -5316,6 +5316,7 @@ public struct MainView: View {
                 target: entity.target,
                 rebuildControlPointCount: $sketchRebuildControlPointCount,
                 rebuildToleranceMeters: $sketchRebuildToleranceMeters,
+                rebuildToleranceMetersRange: workspaceEditingScaleDefaults.sketchRebuildToleranceRange,
                 rebuildKeepsCorners: $sketchRebuildKeepsCorners,
                 explicitDegree: $sketchRebuildExplicitDegree,
                 explicitSpanCount: $sketchRebuildExplicitSpanCount,
