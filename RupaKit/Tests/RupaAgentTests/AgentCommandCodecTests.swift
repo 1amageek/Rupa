@@ -29,6 +29,27 @@ import SwiftCAD
     #expect(decodedResponse == response)
 }
 
+@Test func agentMessageCodecRoundTripsRulerConfigurationCommand() async throws {
+    let codec = AgentMessageCodec()
+    let sessionID = UUID()
+    let request = AgentRequest.execute(
+        sessionID: sessionID,
+        command: .setRulerConfiguration(
+            RulerConfiguration(
+                displayUnit: .meter,
+                minorTickMeters: 0.25,
+                majorTickMeters: 5.0,
+                visibleSpanMeters: 2_000.0
+            )
+        ),
+        expectedGeneration: DocumentGeneration(5)
+    )
+
+    let decodedRequest = try codec.decodeRequest(from: try codec.encode(request))
+
+    #expect(decodedRequest == request)
+}
+
 @Test func agentMessageCodecRoundTripsArcSketchCommand() async throws {
     let codec = AgentMessageCodec()
     let sessionID = UUID()

@@ -4,6 +4,7 @@ import RupaCore
 public enum AutomationCommand: Codable, Equatable, Sendable {
     case describeDocument
     case setDisplayUnit(LengthDisplayUnit)
+    case setRulerConfiguration(RulerConfiguration)
     case renameDocument(name: String)
     case upsertParameter(name: String, expression: CADExpression, kind: QuantityKind)
     case deleteParameter(name: String)
@@ -360,6 +361,8 @@ public enum AutomationCommand: Codable, Equatable, Sendable {
             nil
         case .setDisplayUnit(let unit):
             .setDisplayUnit(unit)
+        case .setRulerConfiguration(let configuration):
+            .setRulerConfiguration(configuration)
         case .renameDocument(let name):
             .renameDocument(name: name)
         case .upsertParameter(let name, let expression, let kind):

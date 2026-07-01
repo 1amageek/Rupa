@@ -18,6 +18,27 @@ import SwiftCAD
 }
 
 @MainActor
+@Test func automationCanChangeRulerConfigurationForArchitecturalScale() async throws {
+    let session = EditorSession()
+    let runner = AutomationRunner()
+    let configuration = RulerConfiguration(
+        displayUnit: .meter,
+        minorTickMeters: 0.5,
+        majorTickMeters: 10.0,
+        visibleSpanMeters: 10_000.0
+    )
+
+    let result = try runner.execute(.setRulerConfiguration(configuration), in: session)
+
+    #expect(session.document.displayUnit == .meter)
+    #expect(session.document.ruler == configuration)
+    #expect(session.generation == DocumentGeneration(1))
+    #expect(result.commandName == "setRulerConfiguration")
+    #expect(result.didMutate)
+    #expect(result.message.contains("visible span 10000.0m"))
+}
+
+@MainActor
 @Test func automationBatchUsesExpectedGeneration() async throws {
     let session = EditorSession()
     let runner = AutomationRunner()

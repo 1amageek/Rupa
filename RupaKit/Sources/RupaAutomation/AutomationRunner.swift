@@ -24,6 +24,16 @@ public struct AutomationRunner {
                 didMutate: result.didMutate,
                 diagnostics: result.diagnostics
             )
+        case .setRulerConfiguration(let configuration):
+            let normalized = configuration.normalizedForWorkspaceScale()
+            let result = try session.execute(.setRulerConfiguration(normalized))
+            return AutomationResult(
+                message: "Ruler configuration changed to \(normalized.displayUnit.symbol), minor \(normalized.minorTickMeters)m, major \(normalized.majorTickMeters)m, visible span \(normalized.visibleSpanMeters)m.",
+                commandName: result.commandName,
+                generation: result.generation,
+                didMutate: result.didMutate,
+                diagnostics: result.diagnostics
+            )
         case .renameDocument(let name):
             let result = try session.execute(.renameDocument(name: name))
             return AutomationResult(

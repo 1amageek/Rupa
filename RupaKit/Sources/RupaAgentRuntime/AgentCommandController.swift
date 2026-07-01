@@ -59,6 +59,25 @@ public final class AgentCommandController: AgentClientProtocol {
             failureMode: "Rejects stale generations before mutation."
         ),
         capability(
+            "setRulerConfiguration",
+            category: .document,
+            summary: "Set the document ruler unit, tick spacing, and visible workspace span for precision or architectural scale.",
+            access: .automationCommand,
+            mutatesDocument: true,
+            targets: [.document],
+            failureMode: "Rejects stale generations before mutation and clamps ruler distances to the supported workspace scale range.",
+            optionMatrix: [
+                AgentCapabilityDescriptor.OptionAxis(
+                    name: "rulerDistanceMeters",
+                    supportedValues: ["minorTickMeters", "majorTickMeters", "visibleSpanMeters"],
+                    notes: [
+                        "Distances are stored in meters regardless of the display unit.",
+                        "The supported visible workspace span covers micro-scale modeling through large architectural scenes.",
+                    ]
+                )
+            ]
+        ),
+        capability(
             "renameDocument",
             category: .document,
             summary: "Rename the document through the undoable command pipeline.",
