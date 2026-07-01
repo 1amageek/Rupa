@@ -101,6 +101,7 @@ public struct MainView: View {
         agentHost: (any WorkspaceAgentHost)? = nil,
         documentURL: URL? = nil
     ) {
+        let editingDefaults = WorkspaceEditingScaleDefaults(ruler: session.document.ruler)
         self._session = State(initialValue: session)
         self._isPreviewExpanded = State(initialValue: isPreviewExpanded)
         self._columnVisibility = State(initialValue: columnVisibility)
@@ -118,11 +119,11 @@ public struct MainView: View {
         self._snapOverrideState = State(initialValue: WorkspaceSnapOverrideState())
         self._surfaceAnalysisOptions = State(initialValue: ViewportSurfaceAnalysisOptions())
         self._selectedSplineControlPointIndex = State(initialValue: 0)
-        self._sketchSplineControlPointSlideDistanceMeters = State(initialValue: 0.001)
-        self._polySplineSurfaceVertexSlideDistanceMeters = State(initialValue: 0.001)
+        self._sketchSplineControlPointSlideDistanceMeters = State(initialValue: editingDefaults.operationStepMeters)
+        self._polySplineSurfaceVertexSlideDistanceMeters = State(initialValue: editingDefaults.operationStepMeters)
         self._surfaceControlPointFrameUMoveMeters = State(initialValue: 0.0)
         self._surfaceControlPointFrameVMoveMeters = State(initialValue: 0.0)
-        self._surfaceControlPointFrameNormalMoveMeters = State(initialValue: 0.001)
+        self._surfaceControlPointFrameNormalMoveMeters = State(initialValue: editingDefaults.operationStepMeters)
         self._surfaceKnotInsertionValue = State(initialValue: 0.5)
         self._surfaceSpanSplitFraction = State(initialValue: 0.5)
         self._surfaceKnotMultiplicityValue = State(initialValue: 2)
@@ -137,27 +138,27 @@ public struct MainView: View {
         self._slideCommandState = State(initialValue: .inactive)
         self._sketchSplitFraction = State(initialValue: 0.5)
         self._sketchRebuildControlPointCount = State(initialValue: 7)
-        self._sketchRebuildToleranceMeters = State(initialValue: 0.001)
+        self._sketchRebuildToleranceMeters = State(initialValue: editingDefaults.sketchRebuildToleranceMeters)
         self._sketchRebuildKeepsCorners = State(initialValue: true)
         self._sketchRebuildExplicitDegree = State(initialValue: 3)
         self._sketchRebuildExplicitSpanCount = State(initialValue: 2)
         self._sketchRebuildExplicitWeight = State(initialValue: 0.5)
-        self._sketchExtendDistanceMeters = State(initialValue: 0.001)
+        self._sketchExtendDistanceMeters = State(initialValue: editingDefaults.operationStepMeters)
         self._sketchExtendShape = State(initialValue: .natural)
-        self._sketchVertexOffsetDistanceMeters = State(initialValue: 0.001)
-        self._sketchCornerTreatmentDistanceMeters = State(initialValue: 0.001)
+        self._sketchVertexOffsetDistanceMeters = State(initialValue: editingDefaults.operationStepMeters)
+        self._sketchCornerTreatmentDistanceMeters = State(initialValue: editingDefaults.operationStepMeters)
         self._sketchCornerTreatment = State(initialValue: .fillet)
         self._sketchCurveJoinContinuity = State(initialValue: .g0)
         self._sketchVertexAlignmentContinuity = State(initialValue: .g0)
-        self._regionOffsetDistanceMeters = State(initialValue: 0.001)
+        self._regionOffsetDistanceMeters = State(initialValue: editingDefaults.operationStepMeters)
         self._regionOffsetGapFill = State(initialValue: .round)
         self._regionOffsetCommandState = State(initialValue: .inactive)
         self._faceDraftAngleDegrees = State(initialValue: 5.0)
-        self._edgeOffsetDistanceMeters = State(initialValue: 0.001)
+        self._edgeOffsetDistanceMeters = State(initialValue: editingDefaults.operationStepMeters)
         self._edgeOffsetGapFill = State(initialValue: .round)
         self._edgeOffsetCommandState = State(initialValue: .inactive)
         self._dimensionCommandState = State(initialValue: .inactive)
-        self._slotProfileWidthMeters = State(initialValue: 0.002)
+        self._slotProfileWidthMeters = State(initialValue: editingDefaults.slotWidthMeters)
         self._slotProfileCommandState = State(initialValue: .inactive)
         self._viewportProjectionBasis = State(initialValue: .isometric)
         self._viewportContextPanelHeight = State(initialValue: 0.0)
@@ -4205,23 +4206,27 @@ public struct MainView: View {
     }
 
     private var defaultFaceOffsetStepMeters: Double {
-        0.001
+        workspaceEditingScaleDefaults.operationStepMeters
     }
 
     private var defaultEdgeChamferStepMeters: Double {
-        0.001
+        workspaceEditingScaleDefaults.operationStepMeters
     }
 
     private var defaultEdgeFilletRadiusMeters: Double {
-        0.001
+        workspaceEditingScaleDefaults.operationStepMeters
     }
 
     private var defaultVertexMoveStepMeters: Double {
-        0.001
+        workspaceEditingScaleDefaults.operationStepMeters
     }
 
     private var defaultSketchEntityMoveStepMeters: Double {
-        0.001
+        workspaceEditingScaleDefaults.operationStepMeters
+    }
+
+    private var workspaceEditingScaleDefaults: WorkspaceEditingScaleDefaults {
+        WorkspaceEditingScaleDefaults(ruler: session.document.ruler)
     }
 
     private func sketchCurveOperationControls(
@@ -4391,9 +4396,9 @@ public struct MainView: View {
     private var canvasInspectorSections: some View {
         WorkspaceDocumentInspectorView(
             state: workspaceDocumentInspectorState,
-            setDisplayUnit: { session.setDisplayUnit($0) },
+            setDisplayUnit: applyDisplayUnit,
             setWorkspaceScalePreset: {
-                session.setRulerConfiguration($0.rulerConfiguration.normalizedForWorkspaceScale())
+                applyWorkspaceScalePreset($0)
             },
             setMinorTickMeters: { setRulerConfiguration(minorTickMeters: $0) },
             setMajorTickMeters: { setRulerConfiguration(majorTickMeters: $0) },
@@ -6235,7 +6240,11 @@ public struct MainView: View {
     private func refitSelectedSketchCurve(
         _ target: SelectionTarget
     ) {
-        let tolerance = min(max(sketchRebuildToleranceMeters, 0.00001), 0.01)
+        let toleranceRange = workspaceEditingScaleDefaults.sketchRebuildToleranceRange
+        let tolerance = min(
+            max(sketchRebuildToleranceMeters, toleranceRange.lowerBound),
+            toleranceRange.upperBound
+        )
         let result = session.rebuildSketchCurve(
             target: target,
             options: .refit(
@@ -6560,8 +6569,19 @@ public struct MainView: View {
 
     private func lengthSliderRange(for meters: Double) -> ClosedRange<Double> {
         let unit = session.document.displayUnit
-        let upperMeters = max(meters * 4.0, session.document.ruler.visibleSpanMeters, 0.001)
+        let upperMeters = max(
+            meters * 4.0,
+            session.document.ruler.visibleSpanMeters,
+            minimumWorkspaceLengthMeters
+        )
         return 0.0 ... max(unit.value(fromMeters: upperMeters), 0.0001)
+    }
+
+    private var minimumWorkspaceLengthMeters: Double {
+        max(
+            session.document.ruler.normalizedForWorkspaceScale().minorTickMeters,
+            RulerConfiguration.minorTickMetersRange.lowerBound
+        )
     }
 
     private var regionOffsetSliderRange: ClosedRange<Double> {
@@ -6627,7 +6647,10 @@ public struct MainView: View {
         guard let length = sketchLineLength(for: entity) else {
             return defaultSketchEntityMoveStepMeters
         }
-        let bounded = min(length / 4.0, max(session.document.ruler.visibleSpanMeters / 20.0, 0.001))
+        let bounded = min(
+            length / 4.0,
+            max(session.document.ruler.visibleSpanMeters / 20.0, minimumWorkspaceLengthMeters)
+        )
         return max(bounded, defaultSketchEntityMoveStepMeters)
     }
 
@@ -6766,6 +6789,30 @@ public struct MainView: View {
         }
 
         session.setRulerConfiguration(ruler.normalizedForWorkspaceScale())
+    }
+
+    private func applyDisplayUnit(_ unit: LengthDisplayUnit) {
+        session.setDisplayUnit(unit)
+        resetWorkspaceEditingScaleDefaults()
+    }
+
+    private func applyWorkspaceScalePreset(_ preset: WorkspaceScalePreset) {
+        session.setRulerConfiguration(preset.rulerConfiguration.normalizedForWorkspaceScale())
+        resetWorkspaceEditingScaleDefaults()
+    }
+
+    private func resetWorkspaceEditingScaleDefaults() {
+        let defaults = workspaceEditingScaleDefaults
+        sketchSplineControlPointSlideDistanceMeters = defaults.operationStepMeters
+        polySplineSurfaceVertexSlideDistanceMeters = defaults.operationStepMeters
+        surfaceControlPointFrameNormalMoveMeters = defaults.operationStepMeters
+        sketchRebuildToleranceMeters = defaults.sketchRebuildToleranceMeters
+        sketchExtendDistanceMeters = defaults.operationStepMeters
+        sketchVertexOffsetDistanceMeters = defaults.operationStepMeters
+        sketchCornerTreatmentDistanceMeters = defaults.operationStepMeters
+        regionOffsetDistanceMeters = defaults.operationStepMeters
+        edgeOffsetDistanceMeters = defaults.operationStepMeters
+        slotProfileWidthMeters = defaults.slotWidthMeters
     }
 
     private func inspectorRow(_ title: String, _ meters: Double) -> some View {
