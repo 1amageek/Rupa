@@ -3065,6 +3065,16 @@ import Testing
     #expect(grid.scaleReadout.accessibilityText.contains("visible span"))
 }
 
+@Test func viewportProjectedGridUsesReadableOneTwoFiveStepProgression() {
+    #expect(ViewportProjectedGrid.readableStep(atLeast: 0.000_25) == 0.000_5)
+    #expect(ViewportProjectedGrid.readableStep(atLeast: 0.001) == 0.001)
+    #expect(ViewportProjectedGrid.readableStep(atLeast: 0.003) == 0.005)
+    #expect(ViewportProjectedGrid.readableStep(atLeast: 300.0) == 500.0)
+    #expect(ViewportProjectedGrid.nextReadableStep(after: 500.0) == 1_000.0)
+    #expect(ViewportProjectedGrid.nextReadableStep(after: 1_000.0) == 2_000.0)
+    #expect(ViewportProjectedGrid.nextReadableStep(after: 2_000.0) == 5_000.0)
+}
+
 @Test func viewportProjectedGridFormatsLargeScaleLabelsWithGrouping() {
     #expect(
         ViewportProjectedGrid.formattedScaleLabel(

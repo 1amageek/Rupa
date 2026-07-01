@@ -6,6 +6,7 @@ import RupaViewportScene
 public struct ViewportProjectedGrid: Equatable {
     public typealias Axis = ViewportCoordinateAxis
     private static let maximumGridLineCount = 360
+    private static let readableStepMultipliers = [1.0, 2.0, 5.0, 10.0]
 
     public struct Line: Equatable {
         public var axis: Axis
@@ -144,7 +145,10 @@ public struct ViewportProjectedGrid: Equatable {
             minimumPixels: 48.0
         )
         let minorStepPixels = max(CGFloat(minorStepMeters) * layout.scale, 8.0)
-        let majorEvery = max(1, Int((majorStepMeters / minorStepMeters).rounded()))
+        let majorEvery = Self.majorLineInterval(
+            minorStepMeters: minorStepMeters,
+            requestedMajorStepMeters: majorStepMeters
+        )
         let resolvedMajorStepMeters = minorStepMeters * Double(majorEvery)
         let modelBounds = Self.visibleModelBounds(
             layout: layout,
@@ -192,11 +196,13 @@ public struct ViewportProjectedGrid: Equatable {
         scale: CGFloat,
         minimumPixels: CGFloat
     ) -> Double {
-        var step = max(baseStep, 1.0e-12)
-        while CGFloat(step) * scale < minimumPixels {
-            step *= 2.0
-        }
-        return step
+        let safeScale = max(scale, 1.0e-12)
+        let requiredMeters = max(
+            baseStep,
+            Double(minimumPixels / safeScale),
+            1.0e-12
+        )
+        return readableStep(atLeast: requiredMeters)
     }
 
     private static func adjustedStepForLineBudget(
@@ -204,11 +210,50 @@ public struct ViewportProjectedGrid: Equatable {
         modelBounds: CGRect,
         maximumLineCount: Int
     ) -> Double {
-        var step = max(baseStep, 1.0e-12)
+        var step = readableStep(atLeast: baseStep)
         while estimatedLineCount(modelBounds: modelBounds, step: step) > maximumLineCount {
-            step *= 2.0
+            step = nextReadableStep(after: step)
         }
         return step
+    }
+
+    static func readableStep(atLeast meters: Double) -> Double {
+        guard meters.isFinite,
+              meters > 0.0 else {
+            return 1.0e-12
+        }
+        let exponent = floor(log10(meters))
+        let scale = pow(10.0, exponent)
+        let tolerance = meters * 1.0e-12
+        for multiplier in readableStepMultipliers {
+            let candidate = multiplier * scale
+            if candidate + tolerance >= meters {
+                return candidate
+            }
+        }
+        return 10.0 * scale
+    }
+
+    static func nextReadableStep(after meters: Double) -> Double {
+        guard meters.isFinite,
+              meters > 0.0 else {
+            return 1.0e-12
+        }
+        return readableStep(atLeast: meters * (1.0 + 1.0e-9))
+    }
+
+    private static func majorLineInterval(
+        minorStepMeters: Double,
+        requestedMajorStepMeters: Double
+    ) -> Int {
+        guard minorStepMeters.isFinite,
+              requestedMajorStepMeters.isFinite,
+              minorStepMeters > 0.0,
+              requestedMajorStepMeters > 0.0 else {
+            return 2
+        }
+        let ratio = max(2.0, requestedMajorStepMeters / minorStepMeters)
+        return max(2, Int(readableStep(atLeast: ratio).rounded(.up)))
     }
 
     private static func estimatedLineCount(
