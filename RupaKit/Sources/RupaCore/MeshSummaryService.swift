@@ -84,6 +84,17 @@ public struct MeshSummaryService: Sendable {
             )
         }
 
+        let diagnostics = [
+            EditorDiagnostic(
+                severity: .info,
+                message: "Mesh summary completed with \(bodies.count) generated body meshes."
+            ),
+        ] + WorkspacePrecisionDiagnosticService().diagnostics(
+            for: accumulator.bounds,
+            ruler: document.ruler,
+            displayUnit: document.displayUnit
+        )
+
         return MeshSummaryResult(
             displayUnit: document.displayUnit,
             bodyCount: bodies.count,
@@ -93,12 +104,7 @@ public struct MeshSummaryService: Sendable {
             indexedElementCount: indexedElementCount,
             bounds: accumulator.bounds,
             bodies: bodies,
-            diagnostics: [
-                EditorDiagnostic(
-                    severity: .info,
-                    message: "Mesh summary completed with \(bodies.count) generated body meshes."
-                ),
-            ]
+            diagnostics: diagnostics
         )
     }
 }

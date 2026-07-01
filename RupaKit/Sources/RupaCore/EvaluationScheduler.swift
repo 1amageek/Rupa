@@ -58,6 +58,17 @@ public struct EvaluationScheduler: Sendable {
             )
         }
 
+        let diagnostics = [
+            EditorDiagnostic(
+                severity: .info,
+                message: "Evaluation completed with \(evaluatedDocument.meshes.count) generated bodies."
+            ),
+        ] + WorkspacePrecisionDiagnosticService().diagnostics(
+            for: evaluatedDocument,
+            ruler: document.ruler,
+            displayUnit: document.displayUnit
+        )
+
         return DocumentEvaluationResult(
             snapshot: EvaluationSnapshot(
                 status: .valid,
@@ -67,12 +78,7 @@ public struct EvaluationScheduler: Sendable {
                     reason: .evaluated
                 ),
                 bodyCount: evaluatedDocument.meshes.count,
-                diagnostics: [
-                    EditorDiagnostic(
-                        severity: .info,
-                        message: "Evaluation completed with \(evaluatedDocument.meshes.count) generated bodies."
-                    ),
-                ]
+                diagnostics: diagnostics
             ),
             evaluationCache: EvaluatedDocumentCache(
                 generation: generation,

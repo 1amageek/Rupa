@@ -859,6 +859,13 @@ public struct MeasurementService {
 
         counts.profiles = profiles.count
         counts.sheets = sheets.count
+        diagnostics += WorkspacePrecisionDiagnosticService().diagnostics(
+            for: bounds.bounds,
+            ruler: document.ruler,
+            displayUnit: document.displayUnit,
+            tolerance: tolerance
+        )
+
         return MeasurementResult(
             scope: scope,
             displayUnit: document.displayUnit,
