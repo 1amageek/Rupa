@@ -59,8 +59,13 @@ import Testing
 @Test func designDisplaySnapshotReportsWorkspaceScaleForAgentPlanning() async throws {
     let session = EditorSession()
     session.setRulerConfiguration(WorkspaceScalePreset.sitePlanning.rulerConfiguration)
+    let failingPipeline = CADPipeline(
+        evaluator: DocumentEvaluator(featureEvaluator: DesignDisplayFailingFeatureEvaluator())
+    )
 
-    let result = try DesignDisplaySnapshotService().result(
+    let result = try DesignDisplaySnapshotService(
+        bodyService: BodyDisplaySnapshotService(pipeline: failingPipeline)
+    ).result(
         document: session.document,
         currentEvaluation: session.currentEvaluation,
         generation: session.generation,
@@ -334,4 +339,10 @@ private func designDisplaySnapshotBodyFeatureID(
         pendingSceneNodeIDs.append(contentsOf: sceneNode.childIDs)
     }
     return nil
+}
+
+private struct DesignDisplayFailingFeatureEvaluator: FeatureEvaluating {
+    func evaluate(feature _: FeatureNode, context _: EvaluationContext) throws -> EvaluationResult {
+        throw FeatureEvaluationError.unsupportedOperation("Body evaluation should not be required.")
+    }
 }

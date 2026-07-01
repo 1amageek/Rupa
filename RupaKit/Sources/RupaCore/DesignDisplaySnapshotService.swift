@@ -23,6 +23,9 @@ public struct DesignDisplaySnapshotService: Sendable {
         currentEvaluation: DocumentEvaluationContext? = nil,
         currentGeneration: DocumentGeneration? = nil
     ) throws -> DesignDisplaySnapshot {
+        guard hasRenderableBodyOutput(in: document) else {
+            return snapshot(document: document, bodies: [:])
+        }
         let bodies = try bodyService.snapshots(
             document: document,
             objectRegistry: objectRegistry,
@@ -112,6 +115,16 @@ public struct DesignDisplaySnapshotService: Sendable {
             componentInstances: sortedComponentInstanceSnapshots(snapshot.componentInstances),
             patternArrays: sortedPatternArraySnapshots(snapshot.patternArrays)
         )
+    }
+
+    private func hasRenderableBodyOutput(in document: DesignDocument) -> Bool {
+        document.cadDocument.designGraph.order.contains { featureID in
+            guard let feature = document.cadDocument.designGraph.nodes[featureID],
+                  !feature.isSuppressed else {
+                return false
+            }
+            return feature.outputs.contains { $0.role == .body }
+        }
     }
 
     private func componentDefinitionSnapshots(

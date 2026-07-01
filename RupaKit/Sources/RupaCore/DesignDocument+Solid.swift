@@ -409,8 +409,9 @@ extension DesignDocument {
             return false
         }
         let parameters = try ParameterResolver().resolve(cadDocument.parameters)
+        let tolerance = ModelingTolerance.workspaceScaleAware(for: self)
         do {
-            return try SketchProfileExtractor()
+            return try SketchProfileExtractor(tolerance: tolerance)
                 .extractProfiles(
                     from: sketch,
                     sourceFeatureID: source.id,
