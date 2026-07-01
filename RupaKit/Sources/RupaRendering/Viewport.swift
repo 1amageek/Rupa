@@ -13562,10 +13562,11 @@ public struct Viewport: View {
             camera: camera,
             basis: basis
         )
+        let maximumZoom = oldLayout.maximumZoom
         let anchoredModelPoint = oldLayout.unproject(anchor)
         let newZoom = min(
             max(camera.zoom * factor, ViewportCamera.minimumZoom),
-            ViewportCamera.maximumZoom
+            maximumZoom
         )
         var nextCamera = ViewportCamera(
             zoom: newZoom,
@@ -13579,6 +13580,6 @@ public struct Viewport: View {
         let projectedAnchor = nextLayout.project(anchoredModelPoint)
         nextCamera.pan.width += anchor.x - projectedAnchor.x
         nextCamera.pan.height += anchor.y - projectedAnchor.y
-        camera = nextCamera.clamped()
+        camera = nextCamera.clamped(maximumZoom: maximumZoom)
     }
 }

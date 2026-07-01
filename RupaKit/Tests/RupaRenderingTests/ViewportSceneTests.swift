@@ -1,6 +1,7 @@
 import AppKit
 import CoreGraphics
 import RupaCore
+import RupaViewportScene
 import SwiftCAD
 import Testing
 @testable import RupaRendering
@@ -2869,6 +2870,30 @@ import Testing
     #expect(grid.minorStepMeters >= document.ruler.minorTickMeters)
     #expect(grid.majorStepMeters >= document.ruler.majorTickMeters)
     #expect(grid.scaleLabels.allSatisfy { $0.text.hasSuffix(document.displayUnit.symbol) })
+}
+
+@Test func viewportCameraZoomPolicyExpandsForSitePlanningScale() throws {
+    var document = DesignDocument.empty()
+    try document.setRulerConfiguration(WorkspaceScalePreset.sitePlanning.rulerConfiguration)
+    let size = CGSize(width: 800.0, height: 600.0)
+    let identityLayout = ViewportModelCoordinateMapper(
+        document: document,
+        size: size
+    ).layout
+    let maximumZoom = ViewportCameraZoomPolicy.maximumZoom(
+        for: document,
+        identityScale: identityLayout.scale
+    )
+    let zoomedLayout = ViewportModelCoordinateMapper(
+        document: document,
+        size: size,
+        camera: ViewportCamera(zoom: maximumZoom * 2.0)
+    ).layout
+    let minorTickPixels = CGFloat(document.ruler.minorTickMeters) * zoomedLayout.scale
+
+    #expect(maximumZoom > ViewportCamera.maximumZoom)
+    #expect(identityLayout.maximumZoom == maximumZoom)
+    #expect(minorTickPixels >= ViewportCameraZoomPolicy.targetMinorTickPixels - 0.001)
 }
 
 @MainActor

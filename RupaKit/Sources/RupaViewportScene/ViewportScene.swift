@@ -1164,28 +1164,37 @@ public struct ViewportLayout: Equatable {
     public var scale: CGFloat
     public var center: CGPoint
     public var basis: ViewportProjectionBasis
+    public var maximumZoom: CGFloat
 
     public init?(
         scene: ViewportScene,
         size: CGSize,
         camera: ViewportCamera = .identity,
-        basis: ViewportProjectionBasis = .isometric
+        basis: ViewportProjectionBasis = .isometric,
+        maximumZoom: CGFloat = ViewportCamera.maximumZoom
     ) {
         guard let modelBounds = scene.modelBounds else {
             return nil
         }
-        self.init(modelBounds: modelBounds, size: size, camera: camera, basis: basis)
+        self.init(
+            modelBounds: modelBounds,
+            size: size,
+            camera: camera,
+            basis: basis,
+            maximumZoom: maximumZoom
+        )
     }
 
     public init(
         modelBounds: CGRect,
         size: CGSize,
         camera: ViewportCamera = .identity,
-        basis: ViewportProjectionBasis = .isometric
+        basis: ViewportProjectionBasis = .isometric,
+        maximumZoom: CGFloat = ViewportCamera.maximumZoom
     ) {
         let modelWidth = max(modelBounds.width, 1.0e-9)
         let modelHeight = max(modelBounds.height, 1.0e-9)
-        let clampedCamera = camera.clamped()
+        let clampedCamera = camera.clamped(maximumZoom: maximumZoom)
         let projectedBounds = Self.projectedBounds(
             width: modelWidth,
             height: modelHeight,
@@ -1205,6 +1214,7 @@ public struct ViewportLayout: Equatable {
             y: size.height / 2.0 + clampedCamera.pan.height
         )
         self.basis = basis
+        self.maximumZoom = max(maximumZoom, ViewportCamera.minimumZoom)
     }
 
     public func project(_ point: CGPoint) -> CGPoint {
@@ -1381,11 +1391,22 @@ public struct ViewportModelCoordinateMapper {
         basis: ViewportProjectionBasis = .isometric
     ) {
         let modelBounds = Self.modelBounds(for: document, scene: scene)
+        let identityLayout = ViewportLayout(
+            modelBounds: modelBounds,
+            size: size,
+            camera: .identity,
+            basis: basis
+        )
+        let maximumZoom = ViewportCameraZoomPolicy.maximumZoom(
+            for: document,
+            identityScale: identityLayout.scale
+        )
         self.layout = ViewportLayout(
             modelBounds: modelBounds,
             size: size,
             camera: camera,
-            basis: basis
+            basis: basis,
+            maximumZoom: maximumZoom
         )
     }
 

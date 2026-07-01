@@ -16,9 +16,12 @@ public struct ViewportCamera: Equatable, Sendable {
     public static let maximumZoom: CGFloat = 256.0
     public static let identity = ViewportCamera()
 
-    public func clamped() -> ViewportCamera {
-        ViewportCamera(
-            zoom: min(max(zoom, Self.minimumZoom), Self.maximumZoom),
+    public func clamped(
+        maximumZoom: CGFloat = Self.maximumZoom
+    ) -> ViewportCamera {
+        let resolvedMaximumZoom = max(maximumZoom, Self.minimumZoom)
+        return ViewportCamera(
+            zoom: min(max(zoom, Self.minimumZoom), resolvedMaximumZoom),
             pan: pan
         )
     }
