@@ -574,6 +574,60 @@ import Testing
 }
 
 @MainActor
+@Test func viewportIdentityHitResolverFallsBackBeforeRenderingWhenEstimatedMemoryBudgetIsExceeded() throws {
+    let scene = identityBufferGeneratedTopologyScene()
+    let viewportSize = CGSize(width: 240.0, height: 180.0)
+    let layout = try #require(ViewportLayout(scene: scene, size: viewportSize))
+    let renderer = CountingIdentityBufferRenderer()
+    let resolver = ViewportIdentityHitResolver(
+        rendererFactory: { renderer },
+        renderBudget: ViewportIdentityHitResolver.RenderBudget(
+            maximumPixelCount: 8_294_400,
+            maximumDrawItemCount: 200_000,
+            maximumEncodedPointCount: 1_000_000,
+            maximumEstimatedResidentByteCount: 1
+        )
+    )
+
+    let hits = resolver.selectionHits(
+        in: CGRect(x: 0.0, y: 0.0, width: viewportSize.width, height: viewportSize.height),
+        scene: scene,
+        layout: layout
+    )
+
+    #expect(renderer.renderCount == 0)
+    #expect(resolver.lastBudgetRejection?.limit == .estimatedResidentByteCount)
+    #expect((resolver.lastRenderCost?.estimatedResidentByteCount ?? 0) > 1)
+    #expect(resolver.lastResolutionStatus == .fellBackAfterBudgetRejection)
+    #expect(resolver.lastResolutionSummary?.budgetRejection?.limit == .estimatedResidentByteCount)
+    #expect(hits.contains { $0.pickingBackend == .projectedCPU })
+}
+
+@Test func viewportIdentityRenderCostReportsEstimatedResidentBytes() {
+    let cost = ViewportIdentityHitResolver.RenderCost(
+        viewportWidth: 100,
+        viewportHeight: 50,
+        pixelCount: 5_000,
+        drawItemCount: 20,
+        encodedPointCount: 80,
+        identityRecordCount: 21
+    )
+
+    #expect(cost.estimatedTextureByteCount == 20_000)
+    #expect(cost.estimatedReadbackByteCount == 20_000)
+    #expect(cost.estimatedCommandBufferByteCount == 640)
+    #expect(cost.estimatedPointBufferByteCount == 640)
+    #expect(
+        cost.estimatedIdentityIndexByteCount ==
+            21 * ViewportIdentityHitResolver.RenderCost.identityIndexBytesPerRecord
+    )
+    #expect(
+        cost.estimatedResidentByteCount ==
+            41_296 + cost.estimatedIdentityIndexByteCount
+    )
+}
+
+@MainActor
 @Test func viewportIdentityHitResolverDoesNotCacheMismatchedRenderedBuffer() throws {
     let scene = identityBufferGeneratedTopologyScene()
     let viewportSize = CGSize(width: 240.0, height: 180.0)

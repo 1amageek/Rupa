@@ -75,7 +75,10 @@ public struct ViewportPickingReadinessService: Sendable {
         return ViewportIdentityHitResolver.RenderCost(
             viewportWidth: renderWidth,
             viewportHeight: renderHeight,
-            pixelCount: renderWidth * renderHeight,
+            pixelCount: ViewportIdentityHitResolver.RenderCost.saturatedProduct(
+                renderWidth,
+                renderHeight
+            ),
             drawItemCount: plan.drawItems.count,
             encodedPointCount: plan.encodedPointCount,
             identityRecordCount: plan.index.count

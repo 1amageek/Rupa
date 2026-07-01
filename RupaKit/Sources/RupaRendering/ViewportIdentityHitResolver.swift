@@ -20,9 +20,17 @@ public final class ViewportIdentityHitResolver {
         case pixelCount
         case drawItemCount
         case encodedPointCount
+        case estimatedResidentByteCount
     }
 
     public struct RenderCost: Codable, Equatable, Sendable {
+        public static let identityTextureBytesPerPixel = 4
+        public static let identityReadbackBytesPerPixel = 4
+        public static let commandBufferBytesPerDrawItem = 32
+        public static let pointBufferBytesPerEncodedPoint = 8
+        public static let identityIndexBytesPerRecord = MemoryLayout<ViewportIdentityPickRecord>.stride * 2
+        public static let parameterBufferByteCount = 16
+
         public var viewportWidth: Int
         public var viewportHeight: Int
         public var pixelCount: Int
@@ -45,21 +53,80 @@ public final class ViewportIdentityHitResolver {
             self.encodedPointCount = encodedPointCount
             self.identityRecordCount = identityRecordCount
         }
+
+        public var estimatedTextureByteCount: Int {
+            Self.saturatedProduct(pixelCount, Self.identityTextureBytesPerPixel)
+        }
+
+        public var estimatedReadbackByteCount: Int {
+            Self.saturatedProduct(pixelCount, Self.identityReadbackBytesPerPixel)
+        }
+
+        public var estimatedCommandBufferByteCount: Int {
+            Self.saturatedProduct(drawItemCount, Self.commandBufferBytesPerDrawItem)
+        }
+
+        public var estimatedPointBufferByteCount: Int {
+            Self.saturatedProduct(encodedPointCount, Self.pointBufferBytesPerEncodedPoint)
+        }
+
+        public var estimatedIdentityIndexByteCount: Int {
+            Self.saturatedProduct(identityRecordCount, Self.identityIndexBytesPerRecord)
+        }
+
+        public var estimatedResidentByteCount: Int {
+            let pixelBuffers = Self.saturatedAdd(
+                estimatedTextureByteCount,
+                estimatedReadbackByteCount
+            )
+            let encodedBuffers = Self.saturatedAdd(
+                estimatedCommandBufferByteCount,
+                estimatedPointBufferByteCount
+            )
+            let planBuffers = Self.saturatedAdd(
+                encodedBuffers,
+                estimatedIdentityIndexByteCount
+            )
+            return Self.saturatedAdd(
+                Self.saturatedAdd(pixelBuffers, planBuffers),
+                Self.parameterBufferByteCount
+            )
+        }
+
+        static func saturatedProduct(_ value: Int, _ multiplier: Int) -> Int {
+            let lhs = Swift.max(value, 0)
+            let rhs = Swift.max(multiplier, 0)
+            let result = lhs.multipliedReportingOverflow(by: rhs)
+            return result.overflow ? Int.max : result.partialValue
+        }
+
+        static func saturatedAdd(_ lhs: Int, _ rhs: Int) -> Int {
+            let result = Swift.max(lhs, 0).addingReportingOverflow(Swift.max(rhs, 0))
+            if result.overflow {
+                return Int.max
+            }
+            return result.partialValue
+        }
     }
 
     public struct RenderBudget: Codable, Equatable, Sendable {
+        public static let standardMaximumEstimatedResidentByteCount = 96 * 1024 * 1024
+
         public var maximumPixelCount: Int
         public var maximumDrawItemCount: Int
         public var maximumEncodedPointCount: Int
+        public var maximumEstimatedResidentByteCount: Int
 
         public init(
             maximumPixelCount: Int = 8_294_400,
             maximumDrawItemCount: Int = 200_000,
-            maximumEncodedPointCount: Int = 1_000_000
+            maximumEncodedPointCount: Int = 1_000_000,
+            maximumEstimatedResidentByteCount: Int = Self.standardMaximumEstimatedResidentByteCount
         ) {
             self.maximumPixelCount = maximumPixelCount
             self.maximumDrawItemCount = maximumDrawItemCount
             self.maximumEncodedPointCount = maximumEncodedPointCount
+            self.maximumEstimatedResidentByteCount = maximumEstimatedResidentByteCount
         }
 
         public static let standard = RenderBudget()
@@ -86,6 +153,14 @@ public final class ViewportIdentityHitResolver {
                     limit: .encodedPointCount,
                     actual: cost.encodedPointCount,
                     maximum: max(maximumEncodedPointCount, 0),
+                    cost: cost
+                )
+            }
+            if cost.estimatedResidentByteCount > max(maximumEstimatedResidentByteCount, 0) {
+                return RenderBudgetRejection(
+                    limit: .estimatedResidentByteCount,
+                    actual: cost.estimatedResidentByteCount,
+                    maximum: max(maximumEstimatedResidentByteCount, 0),
                     cost: cost
                 )
             }
@@ -283,7 +358,7 @@ public final class ViewportIdentityHitResolver {
         let cost = RenderCost(
             viewportWidth: renderSize.width,
             viewportHeight: renderSize.height,
-            pixelCount: renderSize.width * renderSize.height,
+            pixelCount: RenderCost.saturatedProduct(renderSize.width, renderSize.height),
             drawItemCount: plan.drawItems.count,
             encodedPointCount: plan.encodedPointCount,
             identityRecordCount: plan.index.count

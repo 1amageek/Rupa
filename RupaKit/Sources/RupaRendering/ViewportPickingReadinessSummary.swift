@@ -93,6 +93,8 @@ public struct ViewportPickingReadinessSummary: Codable, Equatable, Sendable {
             return "Draw-item budget exceeded"
         case .encodedPointCount:
             return "Encoded-point budget exceeded"
+        case .estimatedResidentByteCount:
+            return "Memory budget exceeded"
         }
     }
 }

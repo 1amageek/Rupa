@@ -1684,6 +1684,36 @@ import Testing
     #expect(summary.nextBackendTitle == "Identity")
 }
 
+@Test func viewportPickingReadinessReportsDenseTopologyBudgetEstimate() throws {
+    let scene = denseGeneratedTopologyScene(columns: 100, rows: 100)
+    let layout = try #require(ViewportLayout(
+        scene: scene,
+        size: CGSize(width: 1_280.0, height: 720.0)
+    ))
+
+    let summary = ViewportPickingReadinessService()
+        .summarize(scene: scene, layout: layout)
+    let cost = try #require(summary.identityRenderCost)
+
+    #expect(summary.hasIdentityBudgetEstimate)
+    #expect(summary.isIdentityRenderWithinBudget)
+    #expect(summary.identityTargetCount == 10_001)
+    #expect(cost.pixelCount == 921_600)
+    #expect(cost.drawItemCount == 20_000)
+    #expect(cost.encodedPointCount == 80_000)
+    #expect(
+        cost.estimatedIdentityIndexByteCount ==
+            10_001 * ViewportIdentityHitResolver.RenderCost.identityIndexBytesPerRecord
+    )
+    #expect(
+        cost.estimatedResidentByteCount ==
+            8_652_816 + cost.estimatedIdentityIndexByteCount
+    )
+    #expect(summary.identityBudgetRejection == nil)
+    #expect(summary.identityBudgetStatusTitle == "Within budget")
+    #expect(summary.nextBackendTitle == "Identity")
+}
+
 @Test func viewportPickingReadinessReportsIdentityBudgetRejection() throws {
     let scene = viewportGeneratedTopologyScene()
     let layout = try #require(ViewportLayout(
@@ -1708,6 +1738,34 @@ import Testing
     #expect(summary.identityBudgetRejection?.actual == 43_200)
     #expect(summary.identityBudgetRejection?.maximum == 1)
     #expect(summary.identityBudgetStatusTitle == "Pixel budget exceeded")
+    #expect(summary.nextBackendTitle == "CPU")
+}
+
+@Test func viewportPickingReadinessReportsIdentityMemoryBudgetRejection() throws {
+    let scene = viewportGeneratedTopologyScene()
+    let layout = try #require(ViewportLayout(
+        scene: scene,
+        size: CGSize(width: 240.0, height: 180.0)
+    ))
+
+    let summary = ViewportPickingReadinessService()
+        .summarize(
+            scene: scene,
+            layout: layout,
+            renderBudget: ViewportIdentityHitResolver.RenderBudget(
+                maximumPixelCount: 8_294_400,
+                maximumDrawItemCount: 200_000,
+                maximumEncodedPointCount: 1_000_000,
+                maximumEstimatedResidentByteCount: 1
+            )
+        )
+
+    #expect(summary.hasIdentityBudgetEstimate)
+    #expect(summary.isIdentityRenderWithinBudget == false)
+    #expect(summary.identityBudgetRejection?.limit == .estimatedResidentByteCount)
+    #expect((summary.identityBudgetRejection?.actual ?? 0) > 1)
+    #expect(summary.identityBudgetRejection?.maximum == 1)
+    #expect(summary.identityBudgetStatusTitle == "Memory budget exceeded")
     #expect(summary.nextBackendTitle == "CPU")
 }
 
@@ -3376,6 +3434,58 @@ private func viewportGeneratedTopologyScene() -> ViewportScene {
         id: featureID.description,
         featureID: featureID,
         modelBounds: CGRect(x: -0.010, y: -0.010, width: 0.020, height: 0.020),
+        kind: .body(component: component)
+    )
+    return ViewportScene(items: [item])
+}
+
+private func denseGeneratedTopologyScene(columns: Int, rows: Int) -> ViewportScene {
+    let featureID = FeatureID()
+    let safeColumns = max(columns, 1)
+    let safeRows = max(rows, 1)
+    let cellSize = 0.01
+    let xOffset = Double(safeColumns) * cellSize * 0.5
+    let zOffset = Double(safeRows) * cellSize * 0.5
+    var faces: [ViewportBodyTopology.Face] = []
+    faces.reserveCapacity(safeColumns * safeRows)
+
+    for row in 0 ..< safeRows {
+        for column in 0 ..< safeColumns {
+            let x0 = Double(column) * cellSize - xOffset
+            let x1 = x0 + cellSize
+            let z0 = Double(row) * cellSize - zOffset
+            let z1 = z0 + cellSize
+            faces.append(ViewportBodyTopology.Face(
+                componentID: SelectionComponentID.generatedTopology(
+                    "feature:body:subshape:dense:face:\(row):\(column)"
+                ),
+                points: [
+                    Point3D(x: x0, y: 0.0, z: z0),
+                    Point3D(x: x1, y: 0.0, z: z0),
+                    Point3D(x: x1, y: 0.0, z: z1),
+                    Point3D(x: x0, y: 0.0, z: z1),
+                ]
+            ))
+        }
+    }
+
+    let component = ViewportBodyComponent(
+        sizeXMeters: Double(safeColumns) * cellSize,
+        sizeYMeters: cellSize,
+        sizeZMeters: Double(safeRows) * cellSize,
+        yMinMeters: 0.0,
+        yMaxMeters: cellSize,
+        topology: ViewportBodyTopology(faces: faces)
+    )
+    let item = ViewportSceneItem(
+        id: featureID.description,
+        featureID: featureID,
+        modelBounds: CGRect(
+            x: -xOffset,
+            y: -zOffset,
+            width: Double(safeColumns) * cellSize,
+            height: Double(safeRows) * cellSize
+        ),
         kind: .body(component: component)
     )
     return ViewportScene(items: [item])
