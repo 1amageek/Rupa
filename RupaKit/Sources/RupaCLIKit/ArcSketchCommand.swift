@@ -28,8 +28,8 @@ public struct ArcSketchCommand: ParsableCommand {
     @Option(help: "Arc end angle numeric literal.")
     public var endAngle: Double
 
-    @Option(help: "Length unit for center coordinates and radius.")
-    public var unit: LengthDisplayUnit = .millimeter
+    @Option(help: "Length unit for center coordinates and radius. Defaults to the document display unit.")
+    public var unit: LengthDisplayUnit?
 
     @Option(help: "Angle unit for start and end: degree or radian.")
     public var angleUnit: String = AngleUnit.degree.rawValue
@@ -41,9 +41,14 @@ public struct ArcSketchCommand: ParsableCommand {
 
     public func run() throws {
         let sessionID = try document.resolvedSessionID()
-        let input = try arcInput()
 
         try CLIExitCode.run {
+            let lengthUnit = try CLILengthUnitResolver.resolve(
+                unit: unit,
+                document: document,
+                sessionID: sessionID
+            )
+            let input = try arcInput(unit: lengthUnit)
             let response = try CLIService().createArcSketch(
                 target: document.target(sessionID: sessionID),
                 name: name,
@@ -62,7 +67,9 @@ public struct ArcSketchCommand: ParsableCommand {
         }
     }
 
-    private func arcInput() throws -> (
+    private func arcInput(
+        unit lengthUnit: LengthDisplayUnit
+    ) throws -> (
         center: SketchPoint,
         radius: CADExpression,
         startAngle: CADExpression,
@@ -70,10 +77,10 @@ public struct ArcSketchCommand: ParsableCommand {
     ) {
         (
             center: SketchPoint(
-                x: try CLIExpressionParser.length(value: centerX, unit: unit, valueName: "Arc center x"),
-                y: try CLIExpressionParser.length(value: centerY, unit: unit, valueName: "Arc center y")
+                x: try CLIExpressionParser.length(value: centerX, unit: lengthUnit, valueName: "Arc center x"),
+                y: try CLIExpressionParser.length(value: centerY, unit: lengthUnit, valueName: "Arc center y")
             ),
-            radius: try CLIExpressionParser.length(value: radius, unit: unit, valueName: "Arc radius"),
+            radius: try CLIExpressionParser.length(value: radius, unit: lengthUnit, valueName: "Arc radius"),
             startAngle: try CLIExpressionParser.angle(
                 value: startAngle,
                 unitName: angleUnit,

@@ -717,8 +717,8 @@ public struct DimensionSetSketchCommand: ParsableCommand {
     @Option(help: "Dimension value numeric literal.")
     public var value: Double
 
-    @Option(help: "Unit for the value. Use a length unit for length/radius/diameter, or degree/radian for angle.")
-    public var unit: String = LengthDisplayUnit.millimeter.rawValue
+    @Option(help: "Unit for the value. Length dimensions default to the document display unit; angle dimensions default to degree.")
+    public var unit: String?
 
     @Option(help: "Edit mode: auto, file, or live.")
     public var mode: CLIEditMode = .auto
@@ -750,11 +750,6 @@ public struct DimensionSetSketchCommand: ParsableCommand {
             filePath: targetFile,
             valueName: "SelectionTarget"
         )
-        let expression = try CLIDimensionExpressionParser.expression(
-            value: value,
-            unit: unit,
-            sketchKind: kind
-        )
 
         try CLIExitCode.run {
             let agentClient = CLIAgentClientFactory.makeAgentClient(
@@ -762,11 +757,22 @@ public struct DimensionSetSketchCommand: ParsableCommand {
                 sessionID: id,
                 socket: agentSocket
             )
+            let documentTarget = CLIDocumentTarget(
+                fileURL: file.map(URL.init(fileURLWithPath:)),
+                sessionID: id
+            )
+            let expression = try CLIDimensionExpressionParser.expression(
+                value: value,
+                unitName: unit,
+                sketchKind: kind,
+                target: documentTarget,
+                mode: mode,
+                expectedGeneration: expectedGeneration.map(DocumentGeneration.init),
+                forceFileEdit: forceFileEdit,
+                client: agentClient
+            )
             let response = try CLIService().setSketchEntityDimension(
-                target: CLIDocumentTarget(
-                    fileURL: file.map(URL.init(fileURLWithPath:)),
-                    sessionID: id
-                ),
+                target: documentTarget,
                 selectionTarget: selectionTarget,
                 kind: kind,
                 value: expression,
@@ -805,8 +811,8 @@ public struct DimensionSetObjectCommand: ParsableCommand {
     @Option(help: "Dimension value numeric literal.")
     public var value: Double
 
-    @Option(help: "Length unit for the value.")
-    public var unit: String = LengthDisplayUnit.millimeter.rawValue
+    @Option(help: "Length unit for the value. Defaults to the document display unit.")
+    public var unit: String?
 
     @Option(help: "Edit mode: auto, file, or live.")
     public var mode: CLIEditMode = .auto
@@ -838,19 +844,27 @@ public struct DimensionSetObjectCommand: ParsableCommand {
             filePath: targetFile,
             valueName: "SelectionTarget"
         )
-        let expression = try CLIDimensionExpressionParser.lengthExpression(value: value, unit: unit)
-
         try CLIExitCode.run {
             let agentClient = CLIAgentClientFactory.makeAgentClient(
                 mode: mode,
                 sessionID: id,
                 socket: agentSocket
             )
+            let documentTarget = CLIDocumentTarget(
+                fileURL: file.map(URL.init(fileURLWithPath:)),
+                sessionID: id
+            )
+            let expression = try CLIDimensionExpressionParser.lengthExpression(
+                value: value,
+                unitName: unit,
+                target: documentTarget,
+                mode: mode,
+                expectedGeneration: expectedGeneration.map(DocumentGeneration.init),
+                forceFileEdit: forceFileEdit,
+                client: agentClient
+            )
             let response = try CLIService().setObjectDimension(
-                target: CLIDocumentTarget(
-                    fileURL: file.map(URL.init(fileURLWithPath:)),
-                    sessionID: id
-                ),
+                target: documentTarget,
                 selectionTarget: selectionTarget,
                 kind: kind,
                 value: expression,
@@ -871,24 +885,51 @@ public struct DimensionSetObjectCommand: ParsableCommand {
 private enum CLIDimensionExpressionParser {
     static func expression(
         value: Double,
-        unit: String,
-        sketchKind: SketchEntityDimensionKind
+        unitName: String?,
+        sketchKind: SketchEntityDimensionKind,
+        target: CLIDocumentTarget,
+        mode: CLIEditMode,
+        expectedGeneration: DocumentGeneration?,
+        forceFileEdit: Bool,
+        client: AgentClientProtocol?
     ) throws -> CADExpression {
         switch sketchKind {
         case .angle:
+            let unit = unitName ?? AngleUnit.degree.rawValue
             guard let angleUnit = AngleUnit(rawValue: unit) else {
                 throw ValidationError("Angle dimension unit must be degree or radian.")
             }
             return .constant(.angle(value, unit: angleUnit))
         case .length, .radius, .diameter:
-            return try lengthExpression(value: value, unit: unit)
+            return try lengthExpression(
+                value: value,
+                unitName: unitName,
+                target: target,
+                mode: mode,
+                expectedGeneration: expectedGeneration,
+                forceFileEdit: forceFileEdit,
+                client: client
+            )
         }
     }
 
-    static func lengthExpression(value: Double, unit: String) throws -> CADExpression {
-        guard let lengthUnit = LengthDisplayUnit(rawValue: unit) else {
-            throw ValidationError("Length dimension unit must be a supported Rupa display unit.")
-        }
+    static func lengthExpression(
+        value: Double,
+        unitName: String?,
+        target: CLIDocumentTarget,
+        mode: CLIEditMode,
+        expectedGeneration: DocumentGeneration?,
+        forceFileEdit: Bool,
+        client: AgentClientProtocol?
+    ) throws -> CADExpression {
+        let lengthUnit = try CLILengthUnitResolver.resolve(
+            unitName: unitName,
+            target: target,
+            mode: mode,
+            expectedGeneration: expectedGeneration,
+            forceFileEdit: forceFileEdit,
+            client: client
+        )
         return .constant(Quantity(value: lengthUnit.meters(from: value), kind: .length))
     }
 }
@@ -999,8 +1040,8 @@ public struct SurfaceMoveControlPointCommand: ParsableCommand {
     @Option(help: "Delta Z numeric literal.")
     public var deltaZ: Double = 0.0
 
-    @Option(help: "Length unit for delta values.")
-    public var unit: String = LengthDisplayUnit.millimeter.rawValue
+    @Option(help: "Length unit for delta values. Defaults to the document display unit.")
+    public var unit: String?
 
     @Option(help: "Edit mode: auto, file, or live.")
     public var mode: CLIEditMode = .auto
@@ -1032,7 +1073,6 @@ public struct SurfaceMoveControlPointCommand: ParsableCommand {
             filePath: referenceFile,
             valueName: "SelectionReference"
         )
-        let deltas = try deltaExpressions()
 
         try CLIExitCode.run {
             let agentClient = CLIAgentClientFactory.makeAgentClient(
@@ -1040,11 +1080,21 @@ public struct SurfaceMoveControlPointCommand: ParsableCommand {
                 sessionID: id,
                 socket: agentSocket
             )
+            let documentTarget = CLIDocumentTarget(
+                fileURL: file.map(URL.init(fileURLWithPath:)),
+                sessionID: id
+            )
+            let lengthUnit = try CLILengthUnitResolver.resolve(
+                unitName: unit,
+                target: documentTarget,
+                mode: mode,
+                expectedGeneration: expectedGeneration.map(DocumentGeneration.init),
+                forceFileEdit: forceFileEdit,
+                client: agentClient
+            )
+            let deltas = deltaExpressions(unit: lengthUnit)
             let response = try CLIService().moveSurfaceControlPoint(
-                target: CLIDocumentTarget(
-                    fileURL: file.map(URL.init(fileURLWithPath:)),
-                    sessionID: id
-                ),
+                target: documentTarget,
                 reference: surfaceReference,
                 deltaX: deltas.x,
                 deltaY: deltas.y,
@@ -1062,10 +1112,9 @@ public struct SurfaceMoveControlPointCommand: ParsableCommand {
         }
     }
 
-    private func deltaExpressions() throws -> (x: CADExpression, y: CADExpression, z: CADExpression) {
-        guard let lengthUnit = LengthDisplayUnit(rawValue: unit) else {
-            throw ValidationError("Length unit must be a supported Rupa display unit.")
-        }
+    private func deltaExpressions(
+        unit lengthUnit: LengthDisplayUnit
+    ) -> (x: CADExpression, y: CADExpression, z: CADExpression) {
         return (
             lengthExpression(deltaX, unit: lengthUnit),
             lengthExpression(deltaY, unit: lengthUnit),
@@ -1102,8 +1151,8 @@ public struct SurfaceSlideControlPointsCommand: ParsableCommand {
     @Option(help: "Slide distance numeric literal.")
     public var distance: Double
 
-    @Option(help: "Length unit for slide distance.")
-    public var unit: String = LengthDisplayUnit.millimeter.rawValue
+    @Option(help: "Length unit for slide distance. Defaults to the document display unit.")
+    public var unit: String?
 
     @Option(help: "Edit mode: auto, file, or live.")
     public var mode: CLIEditMode = .auto
@@ -1137,7 +1186,6 @@ public struct SurfaceSlideControlPointsCommand: ParsableCommand {
             valueName: "SelectionReference",
             arrayName: "SelectionReference"
         )
-        let distanceExpression = try lengthExpression()
 
         try CLIExitCode.run {
             let agentClient = CLIAgentClientFactory.makeAgentClient(
@@ -1145,11 +1193,21 @@ public struct SurfaceSlideControlPointsCommand: ParsableCommand {
                 sessionID: id,
                 socket: agentSocket
             )
+            let documentTarget = CLIDocumentTarget(
+                fileURL: file.map(URL.init(fileURLWithPath:)),
+                sessionID: id
+            )
+            let lengthUnit = try CLILengthUnitResolver.resolve(
+                unitName: unit,
+                target: documentTarget,
+                mode: mode,
+                expectedGeneration: expectedGeneration.map(DocumentGeneration.init),
+                forceFileEdit: forceFileEdit,
+                client: agentClient
+            )
+            let distanceExpression = lengthExpression(unit: lengthUnit)
             let response = try CLIService().slideSurfaceControlPoints(
-                target: CLIDocumentTarget(
-                    fileURL: file.map(URL.init(fileURLWithPath:)),
-                    sessionID: id
-                ),
+                target: documentTarget,
                 references: references,
                 direction: direction.slideDirection,
                 distance: distanceExpression,
@@ -1166,10 +1224,7 @@ public struct SurfaceSlideControlPointsCommand: ParsableCommand {
         }
     }
 
-    private func lengthExpression() throws -> CADExpression {
-        guard let lengthUnit = LengthDisplayUnit(rawValue: unit) else {
-            throw ValidationError("Length unit must be a supported Rupa display unit.")
-        }
+    private func lengthExpression(unit lengthUnit: LengthDisplayUnit) -> CADExpression {
         return .constant(Quantity(value: lengthUnit.meters(from: distance), kind: .length))
     }
 }
@@ -1218,8 +1273,8 @@ public struct LineSketchCommand: ParsableCommand {
     @Option(help: "Line end Y numeric literal.")
     public var endY: Double
 
-    @Option(help: "Length unit for point coordinates.")
-    public var unit: String = LengthDisplayUnit.millimeter.rawValue
+    @Option(help: "Length unit for point coordinates. Defaults to the document display unit.")
+    public var unit: String?
 
     @Option(help: "Sketch plane: xy, yz, or zx.")
     public var plane: CLISketchPlane = .xy
@@ -1249,20 +1304,29 @@ public struct LineSketchCommand: ParsableCommand {
 
     public func run() throws {
         let id = try parsedSessionID(sessionID)
-        let points = try pointExpressions()
 
         try CLIExitCode.run {
             let url = URL(fileURLWithPath: file)
+            let target = CLIDocumentTarget(
+                fileURL: url,
+                sessionID: id
+            )
             let agentClient = makeAgentClient(
                 mode: mode,
                 sessionID: id,
                 socket: agentSocket
             )
+            let lengthUnit = try CLILengthUnitResolver.resolve(
+                unitName: unit,
+                target: target,
+                mode: mode,
+                expectedGeneration: expectedGeneration.map(DocumentGeneration.init),
+                forceFileEdit: forceFileEdit,
+                client: agentClient
+            )
+            let points = pointExpressions(unit: lengthUnit)
             let response = try CLIService().createLineSketch(
-                target: CLIDocumentTarget(
-                    fileURL: url,
-                    sessionID: id
-                ),
+                target: target,
                 name: name,
                 plane: plane.sketchPlane,
                 start: points.start,
@@ -1290,13 +1354,12 @@ public struct LineSketchCommand: ParsableCommand {
         return id
     }
 
-    private func pointExpressions() throws -> (
+    private func pointExpressions(
+        unit lengthUnit: LengthDisplayUnit
+    ) -> (
         start: SketchPoint,
         end: SketchPoint
     ) {
-        guard let lengthUnit = LengthDisplayUnit(rawValue: unit) else {
-            throw ValidationError("Length unit must be a supported Rupa display unit.")
-        }
         return (
             SketchPoint(
                 x: lengthExpression(startX, unit: lengthUnit),
@@ -1353,8 +1416,8 @@ public struct CircleSketchCommand: ParsableCommand {
     @Option(help: "Circle radius numeric literal.")
     public var radius: Double
 
-    @Option(help: "Length unit for center coordinates and radius.")
-    public var unit: String = LengthDisplayUnit.millimeter.rawValue
+    @Option(help: "Length unit for center coordinates and radius. Defaults to the document display unit.")
+    public var unit: String?
 
     @Option(help: "Sketch plane: xy, yz, or zx.")
     public var plane: CLISketchPlane = .xy
@@ -1384,20 +1447,29 @@ public struct CircleSketchCommand: ParsableCommand {
 
     public func run() throws {
         let id = try parsedSessionID(sessionID)
-        let values = try circleExpressions()
 
         try CLIExitCode.run {
             let url = URL(fileURLWithPath: file)
+            let target = CLIDocumentTarget(
+                fileURL: url,
+                sessionID: id
+            )
             let agentClient = makeAgentClient(
                 mode: mode,
                 sessionID: id,
                 socket: agentSocket
             )
+            let lengthUnit = try CLILengthUnitResolver.resolve(
+                unitName: unit,
+                target: target,
+                mode: mode,
+                expectedGeneration: expectedGeneration.map(DocumentGeneration.init),
+                forceFileEdit: forceFileEdit,
+                client: agentClient
+            )
+            let values = circleExpressions(unit: lengthUnit)
             let response = try CLIService().createCircleSketch(
-                target: CLIDocumentTarget(
-                    fileURL: url,
-                    sessionID: id
-                ),
+                target: target,
                 name: name,
                 plane: plane.sketchPlane,
                 center: values.center,
@@ -1425,13 +1497,12 @@ public struct CircleSketchCommand: ParsableCommand {
         return id
     }
 
-    private func circleExpressions() throws -> (
+    private func circleExpressions(
+        unit lengthUnit: LengthDisplayUnit
+    ) -> (
         center: SketchPoint,
         radius: CADExpression
     ) {
-        guard let lengthUnit = LengthDisplayUnit(rawValue: unit) else {
-            throw ValidationError("Length unit must be a supported Rupa display unit.")
-        }
         return (
             SketchPoint(
                 x: lengthExpression(centerX, unit: lengthUnit),
@@ -1482,8 +1553,8 @@ public struct RectangleSketchCommand: ParsableCommand {
     @Option(help: "Rectangle height numeric literal.")
     public var height: Double
 
-    @Option(help: "Length unit for width and height.")
-    public var unit: String = LengthDisplayUnit.millimeter.rawValue
+    @Option(help: "Length unit for width and height. Defaults to the document display unit.")
+    public var unit: String?
 
     @Option(help: "Sketch plane: xy, yz, or zx.")
     public var plane: CLISketchPlane = .xy
@@ -1513,20 +1584,29 @@ public struct RectangleSketchCommand: ParsableCommand {
 
     public func run() throws {
         let id = try parsedSessionID(sessionID)
-        let dimensions = try dimensionExpressions()
 
         try CLIExitCode.run {
             let url = URL(fileURLWithPath: file)
+            let target = CLIDocumentTarget(
+                fileURL: url,
+                sessionID: id
+            )
             let agentClient = makeAgentClient(
                 mode: mode,
                 sessionID: id,
                 socket: agentSocket
             )
+            let lengthUnit = try CLILengthUnitResolver.resolve(
+                unitName: unit,
+                target: target,
+                mode: mode,
+                expectedGeneration: expectedGeneration.map(DocumentGeneration.init),
+                forceFileEdit: forceFileEdit,
+                client: agentClient
+            )
+            let dimensions = dimensionExpressions(unit: lengthUnit)
             let response = try CLIService().createRectangleSketch(
-                target: CLIDocumentTarget(
-                    fileURL: url,
-                    sessionID: id
-                ),
+                target: target,
                 name: name,
                 plane: plane.sketchPlane,
                 width: dimensions.width,
@@ -1554,13 +1634,12 @@ public struct RectangleSketchCommand: ParsableCommand {
         return id
     }
 
-    private func dimensionExpressions() throws -> (
+    private func dimensionExpressions(
+        unit lengthUnit: LengthDisplayUnit
+    ) -> (
         width: CADExpression,
         height: CADExpression
     ) {
-        guard let lengthUnit = LengthDisplayUnit(rawValue: unit) else {
-            throw ValidationError("Length unit must be a supported Rupa display unit.")
-        }
         return (
             lengthExpression(width, unit: lengthUnit),
             lengthExpression(height, unit: lengthUnit)
@@ -1611,8 +1690,8 @@ public struct BoxModelCommand: ParsableCommand {
     @Option(help: "Extrude depth numeric literal.")
     public var depth: Double
 
-    @Option(help: "Length unit for width, height, and depth.")
-    public var unit: String = LengthDisplayUnit.millimeter.rawValue
+    @Option(help: "Length unit for width, height, and depth. Defaults to the document display unit.")
+    public var unit: String?
 
     @Option(help: "Sketch plane: xy, yz, or zx.")
     public var plane: CLISketchPlane = .xy
@@ -1645,20 +1724,29 @@ public struct BoxModelCommand: ParsableCommand {
 
     public func run() throws {
         let id = try parsedSessionID(sessionID)
-        let dimensions = try dimensionExpressions()
 
         try CLIExitCode.run {
             let url = URL(fileURLWithPath: file)
+            let target = CLIDocumentTarget(
+                fileURL: url,
+                sessionID: id
+            )
             let agentClient = makeAgentClient(
                 mode: mode,
                 sessionID: id,
                 socket: agentSocket
             )
+            let lengthUnit = try CLILengthUnitResolver.resolve(
+                unitName: unit,
+                target: target,
+                mode: mode,
+                expectedGeneration: expectedGeneration.map(DocumentGeneration.init),
+                forceFileEdit: forceFileEdit,
+                client: agentClient
+            )
+            let dimensions = dimensionExpressions(unit: lengthUnit)
             let response = try CLIService().createExtrudedRectangle(
-                target: CLIDocumentTarget(
-                    fileURL: url,
-                    sessionID: id
-                ),
+                target: target,
                 name: name,
                 plane: plane.sketchPlane,
                 width: dimensions.width,
@@ -1688,14 +1776,13 @@ public struct BoxModelCommand: ParsableCommand {
         return id
     }
 
-    private func dimensionExpressions() throws -> (
+    private func dimensionExpressions(
+        unit lengthUnit: LengthDisplayUnit
+    ) -> (
         width: CADExpression,
         height: CADExpression,
         depth: CADExpression
     ) {
-        guard let lengthUnit = LengthDisplayUnit(rawValue: unit) else {
-            throw ValidationError("Length unit must be a supported Rupa display unit.")
-        }
         return (
             .constant(Quantity(value: lengthUnit.meters(from: width), kind: .length)),
             .constant(Quantity(value: lengthUnit.meters(from: height), kind: .length)),
@@ -1749,8 +1836,8 @@ public struct BoxCornersModelCommand: ParsableCommand {
     @Option(help: "Extrude depth numeric literal.")
     public var depth: Double
 
-    @Option(help: "Length unit for coordinates and depth.")
-    public var unit: String = LengthDisplayUnit.millimeter.rawValue
+    @Option(help: "Length unit for coordinates and depth. Defaults to the document display unit.")
+    public var unit: String?
 
     @Option(help: "Sketch plane: xy, yz, or zx.")
     public var plane: CLISketchPlane = .xy
@@ -1783,20 +1870,29 @@ public struct BoxCornersModelCommand: ParsableCommand {
 
     public func run() throws {
         let id = try parsedSessionID(sessionID)
-        let modelInputs = try modelInputExpressions()
 
         try CLIExitCode.run {
             let url = URL(fileURLWithPath: file)
+            let target = CLIDocumentTarget(
+                fileURL: url,
+                sessionID: id
+            )
             let agentClient = makeAgentClient(
                 mode: mode,
                 sessionID: id,
                 socket: agentSocket
             )
+            let lengthUnit = try CLILengthUnitResolver.resolve(
+                unitName: unit,
+                target: target,
+                mode: mode,
+                expectedGeneration: expectedGeneration.map(DocumentGeneration.init),
+                forceFileEdit: forceFileEdit,
+                client: agentClient
+            )
+            let modelInputs = modelInputExpressions(unit: lengthUnit)
             let response = try CLIService().createExtrudedRectangleFromCorners(
-                target: CLIDocumentTarget(
-                    fileURL: url,
-                    sessionID: id
-                ),
+                target: target,
                 name: name,
                 plane: plane.sketchPlane,
                 firstCorner: modelInputs.firstCorner,
@@ -1826,14 +1922,13 @@ public struct BoxCornersModelCommand: ParsableCommand {
         return id
     }
 
-    private func modelInputExpressions() throws -> (
+    private func modelInputExpressions(
+        unit lengthUnit: LengthDisplayUnit
+    ) -> (
         firstCorner: SketchPoint,
         oppositeCorner: SketchPoint,
         depth: CADExpression
     ) {
-        guard let lengthUnit = LengthDisplayUnit(rawValue: unit) else {
-            throw ValidationError("Length unit must be a supported Rupa display unit.")
-        }
         return (
             SketchPoint(
                 x: lengthExpression(firstX, unit: lengthUnit),
@@ -1894,8 +1989,8 @@ public struct CylinderModelCommand: ParsableCommand {
     @Option(help: "Extrude depth numeric literal.")
     public var depth: Double
 
-    @Option(help: "Length unit for center, radius, and depth.")
-    public var unit: String = LengthDisplayUnit.millimeter.rawValue
+    @Option(help: "Length unit for center, radius, and depth. Defaults to the document display unit.")
+    public var unit: String?
 
     @Option(help: "Sketch plane: xy, yz, or zx.")
     public var plane: CLISketchPlane = .xy
@@ -1928,20 +2023,29 @@ public struct CylinderModelCommand: ParsableCommand {
 
     public func run() throws {
         let id = try parsedSessionID(sessionID)
-        let values = try dimensionExpressions()
 
         try CLIExitCode.run {
             let url = URL(fileURLWithPath: file)
+            let target = CLIDocumentTarget(
+                fileURL: url,
+                sessionID: id
+            )
             let agentClient = makeAgentClient(
                 mode: mode,
                 sessionID: id,
                 socket: agentSocket
             )
+            let lengthUnit = try CLILengthUnitResolver.resolve(
+                unitName: unit,
+                target: target,
+                mode: mode,
+                expectedGeneration: expectedGeneration.map(DocumentGeneration.init),
+                forceFileEdit: forceFileEdit,
+                client: agentClient
+            )
+            let values = dimensionExpressions(unit: lengthUnit)
             let response = try CLIService().createExtrudedCircle(
-                target: CLIDocumentTarget(
-                    fileURL: url,
-                    sessionID: id
-                ),
+                target: target,
                 name: name,
                 plane: plane.sketchPlane,
                 center: SketchPoint(x: values.centerX, y: values.centerY),
@@ -1971,15 +2075,14 @@ public struct CylinderModelCommand: ParsableCommand {
         return id
     }
 
-    private func dimensionExpressions() throws -> (
+    private func dimensionExpressions(
+        unit lengthUnit: LengthDisplayUnit
+    ) -> (
         centerX: CADExpression,
         centerY: CADExpression,
         radius: CADExpression,
         depth: CADExpression
     ) {
-        guard let lengthUnit = LengthDisplayUnit(rawValue: unit) else {
-            throw ValidationError("Length unit must be a supported Rupa display unit.")
-        }
         return (
             .constant(Quantity(value: lengthUnit.meters(from: centerX), kind: .length)),
             .constant(Quantity(value: lengthUnit.meters(from: centerY), kind: .length)),
@@ -2025,8 +2128,8 @@ public struct ExtrudeModelCommand: ParsableCommand {
     @Option(help: "Extrude distance numeric literal.")
     public var distance: Double
 
-    @Option(help: "Length unit for the distance.")
-    public var unit: String = LengthDisplayUnit.millimeter.rawValue
+    @Option(help: "Length unit for the distance. Defaults to the document display unit.")
+    public var unit: String?
 
     @Option(help: "Extrude direction: normal or symmetric.")
     public var direction: CLIExtrudeDirection = .normal
@@ -2057,20 +2160,29 @@ public struct ExtrudeModelCommand: ParsableCommand {
     public func run() throws {
         let id = try parsedSessionID(sessionID)
         let profile = try profileReference()
-        let distanceExpression = try distanceExpression()
 
         try CLIExitCode.run {
             let url = URL(fileURLWithPath: file)
+            let target = CLIDocumentTarget(
+                fileURL: url,
+                sessionID: id
+            )
             let agentClient = makeAgentClient(
                 mode: mode,
                 sessionID: id,
                 socket: agentSocket
             )
+            let lengthUnit = try CLILengthUnitResolver.resolve(
+                unitName: unit,
+                target: target,
+                mode: mode,
+                expectedGeneration: expectedGeneration.map(DocumentGeneration.init),
+                forceFileEdit: forceFileEdit,
+                client: agentClient
+            )
+            let distanceExpression = distanceExpression(unit: lengthUnit)
             let response = try CLIService().extrudeProfile(
-                target: CLIDocumentTarget(
-                    fileURL: url,
-                    sessionID: id
-                ),
+                target: target,
                 name: name,
                 profile: profile,
                 distance: distanceExpression,
@@ -2105,10 +2217,9 @@ public struct ExtrudeModelCommand: ParsableCommand {
         return ProfileReference(featureID: FeatureID(uuid))
     }
 
-    private func distanceExpression() throws -> CADExpression {
-        guard let lengthUnit = LengthDisplayUnit(rawValue: unit) else {
-            throw ValidationError("Length unit must be a supported Rupa display unit.")
-        }
+    private func distanceExpression(
+        unit lengthUnit: LengthDisplayUnit
+    ) -> CADExpression {
         return .constant(Quantity(value: lengthUnit.meters(from: distance), kind: .length))
     }
 
@@ -2708,7 +2819,6 @@ public struct SetParameterCommand: ParsableCommand {
 
     public func run() throws {
         let id = try parsedSessionID(sessionID)
-        let parameter = try parameterInput()
 
         try CLIExitCode.run {
             let url = URL(fileURLWithPath: file)
@@ -2722,6 +2832,10 @@ public struct SetParameterCommand: ParsableCommand {
                 sessionID: id
             )
             let service = CLIService()
+            let parameter = try parameterInput(
+                target: target,
+                client: agentClient
+            )
             let response: CLIResponse
             switch parameter {
             case .literal(let expression, let kind):
@@ -2772,7 +2886,10 @@ public struct SetParameterCommand: ParsableCommand {
         case formula(String, QuantityKind, ParameterExpressionDefaults)
     }
 
-    private func parameterInput() throws -> ParameterInput {
+    private func parameterInput(
+        target: CLIDocumentTarget,
+        client: AgentClientProtocol?
+    ) throws -> ParameterInput {
         if let expression {
             guard value == nil else {
                 throw ValidationError("Use either a numeric value or --expression, not both.")
@@ -2780,23 +2897,36 @@ public struct SetParameterCommand: ParsableCommand {
             return .formula(
                 expression,
                 kind.quantityKind,
-                try expressionDefaults()
+                try expressionDefaults(
+                    target: target,
+                    client: client
+                )
             )
         }
-        let parsed = try parameterExpression()
+        let parsed = try parameterExpression(
+            target: target,
+            client: client
+        )
         return .literal(parsed.expression, parsed.kind)
     }
 
-    private func parameterExpression() throws -> (expression: CADExpression, kind: QuantityKind) {
+    private func parameterExpression(
+        target: CLIDocumentTarget,
+        client: AgentClientProtocol?
+    ) throws -> (expression: CADExpression, kind: QuantityKind) {
         guard let value else {
             throw ValidationError("Parameter set requires a numeric value or --expression.")
         }
         switch kind {
         case .length:
-            let unitName = unit ?? LengthDisplayUnit.meter.rawValue
-            guard let lengthUnit = LengthDisplayUnit(rawValue: unitName) else {
-                throw ValidationError("Length unit must be a supported Rupa display unit.")
-            }
+            let lengthUnit = try CLILengthUnitResolver.resolve(
+                unitName: unit,
+                target: target,
+                mode: mode,
+                expectedGeneration: expectedGeneration.map(DocumentGeneration.init),
+                forceFileEdit: forceFileEdit,
+                client: client
+            )
             return (
                 .constant(
                     Quantity(
@@ -2826,13 +2956,20 @@ public struct SetParameterCommand: ParsableCommand {
         }
     }
 
-    private func expressionDefaults() throws -> ParameterExpressionDefaults {
+    private func expressionDefaults(
+        target: CLIDocumentTarget,
+        client: AgentClientProtocol?
+    ) throws -> ParameterExpressionDefaults {
         switch kind {
         case .length:
-            let unitName = unit ?? LengthDisplayUnit.meter.rawValue
-            guard let lengthUnit = LengthDisplayUnit(rawValue: unitName) else {
-                throw ValidationError("Length unit must be a supported Rupa display unit.")
-            }
+            let lengthUnit = try CLILengthUnitResolver.resolve(
+                unitName: unit,
+                target: target,
+                mode: mode,
+                expectedGeneration: expectedGeneration.map(DocumentGeneration.init),
+                forceFileEdit: forceFileEdit,
+                client: client
+            )
             return ParameterExpressionDefaults(
                 lengthUnit: lengthUnit,
                 angleUnit: .degree
@@ -2842,8 +2979,16 @@ public struct SetParameterCommand: ParsableCommand {
             guard let angleUnit = AngleUnit(rawValue: unitName) else {
                 throw ValidationError("Angle unit must be radian or degree.")
             }
+            let lengthUnit = try CLILengthUnitResolver.resolve(
+                unitName: nil,
+                target: target,
+                mode: mode,
+                expectedGeneration: expectedGeneration.map(DocumentGeneration.init),
+                forceFileEdit: forceFileEdit,
+                client: client
+            )
             return ParameterExpressionDefaults(
-                lengthUnit: .meter,
+                lengthUnit: lengthUnit,
                 angleUnit: angleUnit
             )
         case .scalar:

@@ -40,8 +40,8 @@ public struct SketchExtendCommand: ParsableCommand {
     @Option(help: "Extension distance numeric literal.")
     public var distance: Double
 
-    @Option(help: "Length unit for the extension distance.")
-    public var unit: String = LengthDisplayUnit.millimeter.rawValue
+    @Option(help: "Length unit for the extension distance. Defaults to the document display unit.")
+    public var unit: String?
 
     @Option(help: "Extension shape: natural, linear, soft, reflective, or arc.")
     public var shape: Shape = .natural
@@ -49,17 +49,21 @@ public struct SketchExtendCommand: ParsableCommand {
     public init() {}
 
     public func run() throws {
-        try CLIAutomationCommandRunner.run(
-            document: document,
-            command: .extendSketchCurve(
-                target: selection.decodedTarget(),
+        try CLIAutomationCommandRunner.run(document: document) { sessionID in
+            let lengthUnit = try CLIAutomationCommandRunner.lengthUnit(
+                unitName: unit,
+                document: document,
+                sessionID: sessionID
+            )
+            return .extendSketchCurve(
+                target: try selection.decodedTarget(),
                 distance: try CLIAutomationCommandRunner.lengthExpression(
                     value: distance,
-                    unitName: unit,
+                    unit: lengthUnit,
                     valueName: "Extension distance"
                 ),
                 shape: shape.curveShape
             )
-        )
+        }
     }
 }

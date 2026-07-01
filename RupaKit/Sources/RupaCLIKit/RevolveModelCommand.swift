@@ -28,8 +28,8 @@ public struct RevolveModelCommand: ParsableCommand {
     @Option(help: "Axis origin Z coordinate.")
     public var axisOriginZ: Double = 0.0
 
-    @Option(help: "Length unit for axis origin coordinates.")
-    public var axisUnit: String = LengthDisplayUnit.millimeter.rawValue
+    @Option(help: "Length unit for axis origin coordinates. Defaults to the document display unit.")
+    public var axisUnit: String?
 
     @Option(help: "Axis direction X component.")
     public var axisDirectionX: Double = 0.0
@@ -50,9 +50,14 @@ public struct RevolveModelCommand: ParsableCommand {
 
     public func run() throws {
         let sessionID = try document.resolvedSessionID()
-        let input = try revolveInput()
 
         try CLIExitCode.run {
+            let lengthUnit = try CLILengthUnitResolver.resolve(
+                unitName: axisUnit,
+                document: document,
+                sessionID: sessionID
+            )
+            let input = try revolveInput(axisUnit: lengthUnit)
             let response = try CLIService().createRevolve(
                 target: document.target(sessionID: sessionID),
                 name: name,
@@ -69,7 +74,7 @@ public struct RevolveModelCommand: ParsableCommand {
         }
     }
 
-    private func revolveInput() throws -> (
+    private func revolveInput(axisUnit lengthUnit: LengthDisplayUnit) throws -> (
         profile: ProfileReference,
         axis: RevolveAxis,
         angle: CADExpression
@@ -86,7 +91,7 @@ public struct RevolveModelCommand: ParsableCommand {
                 x: axisOriginX,
                 y: axisOriginY,
                 z: axisOriginZ,
-                unitName: axisUnit,
+                unit: lengthUnit,
                 valueName: "Revolve axis origin"
             ),
             direction: try CLI3DInputParser.vector(

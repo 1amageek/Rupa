@@ -6,12 +6,9 @@ enum CLI3DInputParser {
         x: Double,
         y: Double,
         z: Double,
-        unitName: String,
+        unit: LengthDisplayUnit,
         valueName: String
     ) throws -> Point3D {
-        guard let unit = LengthDisplayUnit(rawValue: unitName) else {
-            throw ValidationError("\(valueName) unit must be a supported Rupa display unit.")
-        }
         return Point3D(
             x: try coordinate(x, unit: unit, valueName: "\(valueName) x"),
             y: try coordinate(y, unit: unit, valueName: "\(valueName) y"),

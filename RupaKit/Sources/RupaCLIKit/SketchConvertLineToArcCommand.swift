@@ -17,22 +17,26 @@ public struct SketchConvertLineToArcCommand: ParsableCommand {
     @Option(help: "Sagitta numeric literal.")
     public var sagitta: Double
 
-    @Option(help: "Length unit for the sagitta.")
-    public var unit: String = LengthDisplayUnit.millimeter.rawValue
+    @Option(help: "Length unit for the sagitta. Defaults to the document display unit.")
+    public var unit: String?
 
     public init() {}
 
     public func run() throws {
-        try CLIAutomationCommandRunner.run(
-            document: document,
-            command: .convertSketchLineToArc(
-                target: selection.decodedTarget(),
+        try CLIAutomationCommandRunner.run(document: document) { sessionID in
+            let lengthUnit = try CLIAutomationCommandRunner.lengthUnit(
+                unitName: unit,
+                document: document,
+                sessionID: sessionID
+            )
+            return .convertSketchLineToArc(
+                target: try selection.decodedTarget(),
                 sagitta: try CLIAutomationCommandRunner.lengthExpression(
                     value: sagitta,
-                    unitName: unit,
+                    unit: lengthUnit,
                     valueName: "Line-to-arc sagitta"
                 )
             )
-        )
+        }
     }
 }

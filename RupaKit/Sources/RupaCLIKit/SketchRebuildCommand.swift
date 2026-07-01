@@ -1,4 +1,5 @@
 import ArgumentParser
+import Foundation
 import RupaAutomation
 import RupaCore
 
@@ -29,8 +30,8 @@ public struct SketchRebuildCommand: ParsableCommand {
     @Option(help: "Refit tolerance numeric literal.")
     public var tolerance: Double?
 
-    @Option(help: "Length unit for the refit tolerance.")
-    public var unit: String = LengthDisplayUnit.millimeter.rawValue
+    @Option(help: "Length unit for the refit tolerance. Defaults to the document display unit.")
+    public var unit: String?
 
     @Flag(help: "Keep sharp internal corners during refit when supported.")
     public var keepsCorners: Bool = false
@@ -47,16 +48,15 @@ public struct SketchRebuildCommand: ParsableCommand {
     public init() {}
 
     public func run() throws {
-        try CLIAutomationCommandRunner.run(
-            document: document,
-            command: .rebuildSketchCurve(
-                target: selection.decodedTarget(),
-                options: try rebuildOptions()
+        try CLIAutomationCommandRunner.run(document: document) { sessionID in
+            return .rebuildSketchCurve(
+                target: try selection.decodedTarget(),
+                options: try rebuildOptions(sessionID: sessionID)
             )
-        )
+        }
     }
 
-    private func rebuildOptions() throws -> CurveRebuildOptions {
+    private func rebuildOptions(sessionID: UUID?) throws -> CurveRebuildOptions {
         switch method {
         case .points:
             guard let controlPointCount else {
@@ -67,10 +67,15 @@ public struct SketchRebuildCommand: ParsableCommand {
             guard let tolerance else {
                 throw ValidationError("Refit rebuild requires --tolerance.")
             }
+            let lengthUnit = try CLIAutomationCommandRunner.lengthUnit(
+                unitName: unit,
+                document: document,
+                sessionID: sessionID
+            )
             return .refit(
                 tolerance: try CLIAutomationCommandRunner.lengthExpression(
                     value: tolerance,
-                    unitName: unit,
+                    unit: lengthUnit,
                     valueName: "Refit tolerance"
                 ),
                 keepsCorners: keepsCorners

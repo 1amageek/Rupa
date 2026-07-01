@@ -19,8 +19,8 @@ public struct SplineSketchCommand: ParsableCommand {
     )
     public var controlPoints: [CLISketchPointArgument] = []
 
-    @Option(help: "Length unit for control point coordinates.")
-    public var unit: LengthDisplayUnit = .millimeter
+    @Option(help: "Length unit for control point coordinates. Defaults to the document display unit.")
+    public var unit: LengthDisplayUnit?
 
     @Option(help: "Sketch plane: xy, yz, or zx.")
     public var plane: CLISketchPlane = .xy
@@ -29,9 +29,14 @@ public struct SplineSketchCommand: ParsableCommand {
 
     public func run() throws {
         let sessionID = try document.resolvedSessionID()
-        let spline = try sketchSpline()
 
         try CLIExitCode.run {
+            let lengthUnit = try CLILengthUnitResolver.resolve(
+                unit: unit,
+                document: document,
+                sessionID: sessionID
+            )
+            let spline = try sketchSpline(unit: lengthUnit)
             let response = try CLIService().createSplineSketch(
                 target: document.target(sessionID: sessionID),
                 name: name,
@@ -47,14 +52,16 @@ public struct SplineSketchCommand: ParsableCommand {
         }
     }
 
-    private func sketchSpline() throws -> SketchSpline {
+    private func sketchSpline(
+        unit lengthUnit: LengthDisplayUnit
+    ) throws -> SketchSpline {
         let count = controlPoints.count
         guard count >= 4, (count - 1).isMultiple(of: 3) else {
             throw ValidationError("Spline control point count must be 3n + 1 and at least 4.")
         }
         return SketchSpline(
             controlPoints: try controlPoints.map { point in
-                try point.sketchPoint(unit: unit)
+                try point.sketchPoint(unit: lengthUnit)
             }
         )
     }

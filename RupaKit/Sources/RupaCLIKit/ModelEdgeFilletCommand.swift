@@ -17,8 +17,8 @@ public struct ModelEdgeFilletCommand: ParsableCommand {
     @Option(help: "Fillet radius numeric literal.")
     public var radius: Double
 
-    @Option(help: "Length unit for the fillet radius.")
-    public var unit: String = LengthDisplayUnit.millimeter.rawValue
+    @Option(help: "Length unit for the fillet radius. Defaults to the document display unit.")
+    public var unit: String?
 
     @Option(help: "Profile arc segment count.")
     public var segmentCount: Int = 8
@@ -26,17 +26,21 @@ public struct ModelEdgeFilletCommand: ParsableCommand {
     public init() {}
 
     public func run() throws {
-        try CLIAutomationCommandRunner.run(
-            document: document,
-            command: .filletBodyEdges(
-                targets: selection.decodedTargets(),
+        try CLIAutomationCommandRunner.run(document: document) { sessionID in
+            let lengthUnit = try CLIAutomationCommandRunner.lengthUnit(
+                unitName: unit,
+                document: document,
+                sessionID: sessionID
+            )
+            return .filletBodyEdges(
+                targets: try selection.decodedTargets(),
                 radius: try CLIAutomationCommandRunner.lengthExpression(
                     value: radius,
-                    unitName: unit,
+                    unit: lengthUnit,
                     valueName: "Edge fillet radius"
                 ),
                 segmentCount: segmentCount
             )
-        )
+        }
     }
 }

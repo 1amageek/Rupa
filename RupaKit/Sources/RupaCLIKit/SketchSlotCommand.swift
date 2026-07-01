@@ -17,22 +17,26 @@ public struct SketchSlotCommand: ParsableCommand {
     @Option(help: "Slot width numeric literal.")
     public var width: Double
 
-    @Option(help: "Length unit for the slot width.")
-    public var unit: String = LengthDisplayUnit.millimeter.rawValue
+    @Option(help: "Length unit for the slot width. Defaults to the document display unit.")
+    public var unit: String?
 
     public init() {}
 
     public func run() throws {
-        try CLIAutomationCommandRunner.run(
-            document: document,
-            command: .createSlotSketch(
-                target: selection.decodedTarget(),
+        try CLIAutomationCommandRunner.run(document: document) { sessionID in
+            let lengthUnit = try CLIAutomationCommandRunner.lengthUnit(
+                unitName: unit,
+                document: document,
+                sessionID: sessionID
+            )
+            return .createSlotSketch(
+                target: try selection.decodedTarget(),
                 width: try CLIAutomationCommandRunner.lengthExpression(
                     value: width,
-                    unitName: unit,
+                    unit: lengthUnit,
                     valueName: "Slot width"
                 )
             )
-        )
+        }
     }
 }

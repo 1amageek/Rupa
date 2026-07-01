@@ -40,25 +40,29 @@ public struct SketchCornerTreatmentCommand: ParsableCommand {
     @Option(help: "Fillet radius or chamfer distance numeric literal.")
     public var distance: Double
 
-    @Option(help: "Length unit for the treatment distance.")
-    public var unit: String = LengthDisplayUnit.millimeter.rawValue
+    @Option(help: "Length unit for the treatment distance. Defaults to the document display unit.")
+    public var unit: String?
 
     public init() {}
 
     public func run() throws {
-        try CLIAutomationCommandRunner.run(
-            document: document,
-            command: .applySketchCornerTreatment(
-                target: selection.decodedTarget(),
+        try CLIAutomationCommandRunner.run(document: document) { sessionID in
+            let lengthUnit = try CLIAutomationCommandRunner.lengthUnit(
+                unitName: unit,
+                document: document,
+                sessionID: sessionID
+            )
+            return .applySketchCornerTreatment(
+                target: try selection.decodedTarget(),
                 adjacentTarget: try decodedAdjacentTarget(),
                 distance: try CLIAutomationCommandRunner.lengthExpression(
                     value: distance,
-                    unitName: unit,
+                    unit: lengthUnit,
                     valueName: "Corner treatment distance"
                 ),
                 treatment: treatment.sketchCornerTreatment
             )
-        )
+        }
     }
 
     private func decodedAdjacentTarget() throws -> SelectionTarget? {

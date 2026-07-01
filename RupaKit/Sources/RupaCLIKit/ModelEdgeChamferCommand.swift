@@ -17,22 +17,26 @@ public struct ModelEdgeChamferCommand: ParsableCommand {
     @Option(help: "Chamfer distance numeric literal.")
     public var distance: Double
 
-    @Option(help: "Length unit for the chamfer distance.")
-    public var unit: String = LengthDisplayUnit.millimeter.rawValue
+    @Option(help: "Length unit for the chamfer distance. Defaults to the document display unit.")
+    public var unit: String?
 
     public init() {}
 
     public func run() throws {
-        try CLIAutomationCommandRunner.run(
-            document: document,
-            command: .chamferBodyEdges(
-                targets: selection.decodedTargets(),
+        try CLIAutomationCommandRunner.run(document: document) { sessionID in
+            let lengthUnit = try CLIAutomationCommandRunner.lengthUnit(
+                unitName: unit,
+                document: document,
+                sessionID: sessionID
+            )
+            return .chamferBodyEdges(
+                targets: try selection.decodedTargets(),
                 distance: try CLIAutomationCommandRunner.lengthExpression(
                     value: distance,
-                    unitName: unit,
+                    unit: lengthUnit,
                     valueName: "Edge chamfer distance"
                 )
             )
-        )
+        }
     }
 }

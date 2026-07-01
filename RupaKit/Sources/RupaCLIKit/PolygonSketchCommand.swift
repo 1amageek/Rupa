@@ -28,8 +28,8 @@ public struct PolygonSketchCommand: ParsableCommand {
     @Option(help: "Polygon side count.")
     public var sides: Int = PolygonToolState.defaultSideCount
 
-    @Option(help: "Length unit for center coordinates and radius.")
-    public var unit: LengthDisplayUnit = .millimeter
+    @Option(help: "Length unit for center coordinates and radius. Defaults to the document display unit.")
+    public var unit: LengthDisplayUnit?
 
     @Option(help: "Sketch plane: xy, yz, or zx.")
     public var plane: CLISketchPlane = .xy
@@ -50,9 +50,14 @@ public struct PolygonSketchCommand: ParsableCommand {
 
     public func run() throws {
         let sessionID = try document.resolvedSessionID()
-        let input = try polygonInput()
 
         try CLIExitCode.run {
+            let lengthUnit = try CLILengthUnitResolver.resolve(
+                unit: unit,
+                document: document,
+                sessionID: sessionID
+            )
+            let input = try polygonInput(unit: lengthUnit)
             let response = try CLIService().createPolygonSketch(
                 target: document.target(sessionID: sessionID),
                 name: name,
@@ -73,7 +78,9 @@ public struct PolygonSketchCommand: ParsableCommand {
         }
     }
 
-    private func polygonInput() throws -> (
+    private func polygonInput(
+        unit lengthUnit: LengthDisplayUnit
+    ) throws -> (
         center: SketchPoint,
         radius: CADExpression,
         rotationAngle: CADExpression
@@ -83,10 +90,10 @@ public struct PolygonSketchCommand: ParsableCommand {
         }
         return (
             center: SketchPoint(
-                x: try CLIExpressionParser.length(value: centerX, unit: unit, valueName: "Polygon center x"),
-                y: try CLIExpressionParser.length(value: centerY, unit: unit, valueName: "Polygon center y")
+                x: try CLIExpressionParser.length(value: centerX, unit: lengthUnit, valueName: "Polygon center x"),
+                y: try CLIExpressionParser.length(value: centerY, unit: lengthUnit, valueName: "Polygon center y")
             ),
-            radius: try CLIExpressionParser.length(value: radius, unit: unit, valueName: "Polygon radius"),
+            radius: try CLIExpressionParser.length(value: radius, unit: lengthUnit, valueName: "Polygon radius"),
             rotationAngle: try CLIExpressionParser.angle(
                 value: rotationAngle,
                 unitName: angleUnit,

@@ -603,6 +603,66 @@ func cliExecutableModelExtrudeExistingProfilePersistsClosedDocumentAsJSON() asyn
 @Suite(.serialized)
 struct CLIModelCommandTests {
     @Test(.timeLimit(.minutes(1)))
+    func executableModelBoxDefaultsToDocumentDisplayUnit() async throws {
+        let temporaryDirectory = try makeTemporaryDirectory()
+        defer {
+            removeTemporaryDirectory(temporaryDirectory)
+        }
+        let documentURL = temporaryDirectory.appendingPathComponent("process-box-workspace-unit.swcad")
+        try DocumentFileService().save(.empty(named: "Process Workspace Unit Box"), to: documentURL)
+
+        _ = try await runCLI([
+            "command",
+            "set-scale-preset",
+            documentURL.path,
+            "sitePlanning",
+            "--mode",
+            "file",
+            "--json",
+        ])
+        let result = try await runCLI([
+            "model",
+            "box",
+            documentURL.path,
+            "--name",
+            "Workspace Unit Box",
+            "--width",
+            "12",
+            "--height",
+            "8",
+            "--depth",
+            "3",
+            "--mode",
+            "file",
+            "--json",
+        ])
+        let response = try JSONDecoder().decode(
+            CLIResponse.self,
+            from: result.standardOutputData
+        )
+        let loaded = try DocumentFileService().load(from: documentURL)
+        let bodyFeatureID = try #require(loaded.cadDocument.designGraph.order.last)
+        let bodyFeature = try #require(loaded.cadDocument.designGraph.nodes[bodyFeatureID])
+        guard case let .extrude(extrude) = bodyFeature.operation else {
+            Issue.record("Workspace unit box should create an extrude feature.")
+            return
+        }
+        let resolvedDepth = try loaded.cadDocument.parameters.resolvedValue(for: extrude.distance)
+        let sketchNode = try #require(loaded.productMetadata.sceneNodes.values.first {
+            $0.reference?.featureID == extrude.profile.featureID
+        })
+
+        #expect(result.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: result.standardError))
+        #expect(response.saved)
+        #expect(response.workspaceScale?.displayUnit == .meter)
+        #expect(loaded.displayUnit == .meter)
+        #expect(resolvedDepth.kind == .length)
+        #expect(cliNearlyEqual(resolvedDepth.value, 3.0))
+        #expect(sketchNode.object?.properties["size.x"] == .length(12.0))
+        #expect(sketchNode.object?.properties["size.y"] == .length(8.0))
+    }
+
+    @Test(.timeLimit(.minutes(1)))
     func executableModelRevolvePersistsClosedDocumentAsJSON() async throws {
         let temporaryDirectory = try makeTemporaryDirectory()
         defer {
@@ -1478,6 +1538,63 @@ func cliExecutableInspectsConstructionPlanesAndSnapAsJSON() async throws {
 
 @Suite(.serialized)
 struct CLISketchCommandTests {
+    @Test(.timeLimit(.minutes(1)))
+    func executableSketchArcDefaultsToDocumentDisplayUnit() async throws {
+        let temporaryDirectory = try makeTemporaryDirectory()
+        defer {
+            removeTemporaryDirectory(temporaryDirectory)
+        }
+        let documentURL = temporaryDirectory.appendingPathComponent("process-arc-workspace-unit.swcad")
+        try DocumentFileService().save(.empty(named: "Process Workspace Unit Arc"), to: documentURL)
+
+        _ = try await runCLI([
+            "command",
+            "set-scale-preset",
+            documentURL.path,
+            "architecture",
+            "--mode",
+            "file",
+            "--json",
+        ])
+        let result = try await runCLI([
+            "sketch",
+            "arc",
+            documentURL.path,
+            "--name",
+            "Workspace Unit Arc",
+            "--center-x",
+            "2",
+            "--center-y",
+            "3",
+            "--radius",
+            "4",
+            "--start-angle",
+            "0",
+            "--end-angle",
+            "90",
+            "--angle-unit",
+            "degree",
+            "--mode",
+            "file",
+            "--json",
+        ])
+        let response = try JSONDecoder().decode(
+            CLIResponse.self,
+            from: result.standardOutputData
+        )
+        let loaded = try DocumentFileService().load(from: documentURL)
+        let featureID = try #require(loaded.cadDocument.designGraph.order.first)
+        let arcNode = try #require(loaded.productMetadata.sceneNodes.values.first {
+            $0.reference?.featureID == featureID
+        })
+
+        #expect(result.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: result.standardError))
+        #expect(response.saved)
+        #expect(response.workspaceScale?.displayUnit == .meter)
+        #expect(loaded.displayUnit == .meter)
+        #expect(arcNode.object?.properties["radius"] == .length(4.0))
+    }
+
     @Test(.timeLimit(.minutes(1)))
     func executableSketchCurvePrimitivesPersistClosedDocumentAsJSON() async throws {
         let temporaryDirectory = try makeTemporaryDirectory()

@@ -20,27 +20,31 @@ public struct ModelVertexMoveCommand: ParsableCommand {
     @Option(help: "Delta Y numeric literal in the source profile plane.")
     public var deltaY: Double = 0.0
 
-    @Option(help: "Length unit for delta values.")
-    public var unit: String = LengthDisplayUnit.millimeter.rawValue
+    @Option(help: "Length unit for delta values. Defaults to the document display unit.")
+    public var unit: String?
 
     public init() {}
 
     public func run() throws {
-        try CLIAutomationCommandRunner.run(
-            document: document,
-            command: .moveBodyVertex(
-                target: selection.decodedTarget(),
+        try CLIAutomationCommandRunner.run(document: document) { sessionID in
+            let lengthUnit = try CLIAutomationCommandRunner.lengthUnit(
+                unitName: unit,
+                document: document,
+                sessionID: sessionID
+            )
+            return .moveBodyVertex(
+                target: try selection.decodedTarget(),
                 deltaX: try CLIAutomationCommandRunner.lengthExpression(
                     value: deltaX,
-                    unitName: unit,
+                    unit: lengthUnit,
                     valueName: "Vertex move delta X"
                 ),
                 deltaY: try CLIAutomationCommandRunner.lengthExpression(
                     value: deltaY,
-                    unitName: unit,
+                    unit: lengthUnit,
                     valueName: "Vertex move delta Y"
                 )
             )
-        )
+        }
     }
 }

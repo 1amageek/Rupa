@@ -1,4 +1,4 @@
-import ArgumentParser
+import Foundation
 import RupaAutomation
 import RupaCore
 
@@ -8,7 +8,31 @@ enum CLIAutomationCommandRunner {
         command: AutomationCommand
     ) throws {
         let sessionID = try document.resolvedSessionID()
+        try run(
+            document: document,
+            sessionID: sessionID,
+            command: command
+        )
+    }
 
+    static func run(
+        document: CLIWriteDocumentOptions,
+        command: (UUID?) throws -> AutomationCommand
+    ) throws {
+        let sessionID = try document.resolvedSessionID()
+        let resolvedCommand = try command(sessionID)
+        try run(
+            document: document,
+            sessionID: sessionID,
+            command: resolvedCommand
+        )
+    }
+
+    private static func run(
+        document: CLIWriteDocumentOptions,
+        sessionID: UUID?,
+        command: AutomationCommand
+    ) throws {
         try CLIExitCode.run {
             let response = try CLIService().applyAutomationCommand(
                 target: document.target(sessionID: sessionID),
@@ -23,14 +47,28 @@ enum CLIAutomationCommandRunner {
         }
     }
 
+    static func lengthUnit(
+        unitName: String?,
+        document: CLIWriteDocumentOptions,
+        sessionID: UUID?
+    ) throws -> LengthDisplayUnit {
+        try CLILengthUnitResolver.resolve(
+            unitName: unitName,
+            document: document,
+            sessionID: sessionID
+        )
+    }
+
     static func lengthExpression(
         value: Double,
-        unitName: String,
+        unit: LengthDisplayUnit,
         valueName: String
     ) throws -> CADExpression {
-        guard let unit = LengthDisplayUnit(rawValue: unitName) else {
-            throw ValidationError("\(valueName) unit must be a supported Rupa display unit.")
-        }
-        return try CLIExpressionParser.length(value: value, unit: unit, valueName: valueName)
+        try CLIExpressionParser.length(
+            value: value,
+            unit: unit,
+            valueName: valueName
+        )
     }
+
 }

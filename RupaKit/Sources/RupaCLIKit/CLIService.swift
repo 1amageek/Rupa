@@ -521,7 +521,7 @@ public struct CLIService {
         )
 
         let session = EditorSession(document: try fileService.load(from: url))
-        let result = try AutomationRunner().execute(
+        var result = try AutomationRunner().execute(
             .createExtrudedRectangle(
                 name: name,
                 plane: plane,
@@ -532,6 +532,9 @@ public struct CLIService {
             ),
             in: session
         )
+        if result.workspaceScale == nil {
+            result.workspaceScale = WorkspaceScaleSnapshot(ruler: session.document.ruler)
+        }
 
         if !dryRun {
             try fileService.save(session.document, to: url)
@@ -539,11 +542,9 @@ public struct CLIService {
         }
 
         return CLIResponse(
-            message: result.message,
-            generation: result.generation.value,
+            result: result,
             dirty: session.isDirty,
-            saved: !dryRun,
-            diagnostics: result.diagnostics
+            saved: !dryRun
         )
     }
 
@@ -561,54 +562,23 @@ public struct CLIService {
         forceFileEdit: Bool = false,
         client: AgentClientProtocol? = nil
     ) throws -> CLIResponse {
-        switch mode {
-        case .auto:
-            return try createExtrudedRectangleAutomatically(
-                target: target,
-                name: name,
-                plane: plane,
-                width: width,
-                height: height,
-                depth: depth,
-                direction: direction,
-                expectedGeneration: expectedGeneration,
-                dryRun: dryRun,
-                forceFileEdit: forceFileEdit,
-                client: client
-            )
-        case .file:
-            guard let url = target.fileURL else {
-                throw invalidCommand("File mode requires a document file path.")
-            }
-            return try createExtrudedRectangleFile(
-                at: url,
-                name: name,
-                plane: plane,
-                width: width,
-                height: height,
-                depth: depth,
-                direction: direction,
-                dryRun: dryRun,
-                forceFileEdit: forceFileEdit,
-                conflictClient: client
-            )
-        case .live:
-            let sessionID = try resolvedLiveSessionID(
-                target: target,
-                client: client
-            )
-            return try createExtrudedRectangleLiveSession(
-                sessionID: sessionID,
-                name: name,
-                plane: plane,
-                width: width,
-                height: height,
-                depth: depth,
-                direction: direction,
-                expectedGeneration: expectedGeneration,
-                client: requiredClient(client)
-            )
-        }
+        let command = AutomationCommand.createExtrudedRectangle(
+            name: name,
+            plane: plane,
+            width: width,
+            height: height,
+            depth: depth,
+            direction: direction
+        )
+        return try executeModelingCommand(
+            command,
+            target: target,
+            mode: mode,
+            expectedGeneration: expectedGeneration,
+            dryRun: dryRun,
+            forceFileEdit: forceFileEdit,
+            client: client
+        )
     }
 
     public func createExtrudedRectangleFromCorners(
@@ -1374,6 +1344,39 @@ public struct CLIService {
             client: client,
             missingTargetMessage: "Command application requires a document file path or live session ID."
         )
+    }
+
+    public func workspaceScale(
+        target: CLIDocumentTarget,
+        mode: CLIEditMode = .auto,
+        expectedGeneration: DocumentGeneration? = nil,
+        forceFileEdit: Bool = false,
+        client: AgentClientProtocol? = nil
+    ) throws -> WorkspaceScaleSnapshot {
+        switch mode {
+        case .auto:
+            return try workspaceScaleAutomatically(
+                target: target,
+                expectedGeneration: expectedGeneration,
+                forceFileEdit: forceFileEdit,
+                client: client
+            )
+        case .file:
+            guard let url = target.fileURL else {
+                throw invalidCommand("File mode requires a document file path.")
+            }
+            return try workspaceScaleFile(at: url)
+        case .live:
+            let sessionID = try resolvedLiveSessionID(
+                target: target,
+                client: client
+            )
+            return try workspaceScaleLiveSession(
+                sessionID: sessionID,
+                expectedGeneration: expectedGeneration,
+                client: requiredClient(client)
+            )
+        }
     }
 
     public func createConstructionPlane(
@@ -2635,13 +2638,18 @@ public struct CLIService {
                 expectedGeneration: expectedGeneration
             )
         )
-        let result = try commandResult(from: response)
+        var result = try commandResult(from: response)
+        if result.workspaceScale == nil {
+            result.workspaceScale = try workspaceScaleLiveSession(
+                sessionID: sessionID,
+                expectedGeneration: result.generation,
+                client: client
+            )
+        }
         return CLIResponse(
-            message: result.message,
-            generation: result.generation.value,
+            result: result,
             dirty: result.didMutate,
-            saved: false,
-            diagnostics: result.diagnostics
+            saved: false
         )
     }
 
@@ -2664,13 +2672,18 @@ public struct CLIService {
                 expectedGeneration: expectedGeneration
             )
         )
-        let result = try commandResult(from: response)
+        var result = try commandResult(from: response)
+        if result.workspaceScale == nil {
+            result.workspaceScale = try workspaceScaleLiveSession(
+                sessionID: sessionID,
+                expectedGeneration: result.generation,
+                client: client
+            )
+        }
         return CLIResponse(
-            message: result.message,
-            generation: result.generation.value,
+            result: result,
             dirty: result.didMutate,
-            saved: false,
-            diagnostics: result.diagnostics
+            saved: false
         )
     }
 
@@ -4090,70 +4103,6 @@ public struct CLIService {
         return try listParametersFile(at: url)
     }
 
-    private func createExtrudedRectangleAutomatically(
-        target: CLIDocumentTarget,
-        name: String,
-        plane: SketchPlane,
-        width: CADExpression,
-        height: CADExpression,
-        depth: CADExpression,
-        direction: ExtrudeDirection,
-        expectedGeneration: DocumentGeneration?,
-        dryRun: Bool,
-        forceFileEdit: Bool,
-        client: AgentClientProtocol?
-    ) throws -> CLIResponse {
-        if let sessionID = target.sessionID {
-            return try createExtrudedRectangleLiveSession(
-                sessionID: sessionID,
-                name: name,
-                plane: plane,
-                width: width,
-                height: height,
-                depth: depth,
-                direction: direction,
-                expectedGeneration: expectedGeneration,
-                client: requiredClient(client)
-            )
-        }
-
-        if let url = target.fileURL,
-           !forceFileEdit,
-           let client,
-           let session = try openSession(for: url, client: client) {
-            guard !dryRun else {
-                throw invalidCommand("Dry-run is not supported for live document mutation.")
-            }
-            return try createExtrudedRectangleLiveSession(
-                sessionID: session.id,
-                name: name,
-                plane: plane,
-                width: width,
-                height: height,
-                depth: depth,
-                direction: direction,
-                expectedGeneration: expectedGeneration,
-                client: client
-            )
-        }
-
-        guard let url = target.fileURL else {
-            throw invalidCommand("Modeling requires a document file path or live session ID.")
-        }
-        return try createExtrudedRectangleFile(
-            at: url,
-            name: name,
-            plane: plane,
-            width: width,
-            height: height,
-            depth: depth,
-            direction: direction,
-            dryRun: dryRun,
-            forceFileEdit: forceFileEdit,
-            conflictClient: client
-        )
-    }
-
     private func executeModelingCommand(
         _ command: AutomationCommand,
         target: CLIDocumentTarget,
@@ -4173,6 +4122,62 @@ public struct CLIService {
             client: client,
             missingTargetMessage: "Modeling requires a document file path or live session ID."
         )
+    }
+
+    private func workspaceScaleAutomatically(
+        target: CLIDocumentTarget,
+        expectedGeneration: DocumentGeneration?,
+        forceFileEdit: Bool,
+        client: AgentClientProtocol?
+    ) throws -> WorkspaceScaleSnapshot {
+        if let sessionID = target.sessionID {
+            return try workspaceScaleLiveSession(
+                sessionID: sessionID,
+                expectedGeneration: expectedGeneration,
+                client: requiredClient(client)
+            )
+        }
+
+        if let url = target.fileURL,
+           !forceFileEdit,
+           let client,
+           let session = try openSession(for: url, client: client) {
+            return try workspaceScaleLiveSession(
+                sessionID: session.id,
+                expectedGeneration: expectedGeneration,
+                client: client
+            )
+        }
+
+        guard let url = target.fileURL else {
+            throw invalidCommand("Workspace scale resolution requires a document file path or live session ID.")
+        }
+        return try workspaceScaleFile(at: url)
+    }
+
+    private func workspaceScaleFile(
+        at url: URL
+    ) throws -> WorkspaceScaleSnapshot {
+        WorkspaceScaleSnapshot(ruler: try fileService.load(from: url).ruler)
+    }
+
+    private func workspaceScaleLiveSession(
+        sessionID: UUID,
+        expectedGeneration: DocumentGeneration?,
+        client: AgentClientProtocol
+    ) throws -> WorkspaceScaleSnapshot {
+        let response = try client.send(
+            .execute(
+                sessionID: sessionID,
+                command: .describeDocument,
+                expectedGeneration: expectedGeneration
+            )
+        )
+        let result = try commandResult(from: response)
+        guard let workspaceScale = result.workspaceScale else {
+            throw unexpectedResponse("Document description did not include workspace scale.")
+        }
+        return workspaceScale
     }
 
     private func executeSketchCommand(
@@ -4328,7 +4333,10 @@ public struct CLIService {
         )
 
         let session = EditorSession(document: try fileService.load(from: url))
-        let result = try AutomationRunner().execute(command, in: session)
+        var result = try AutomationRunner().execute(command, in: session)
+        if result.workspaceScale == nil {
+            result.workspaceScale = WorkspaceScaleSnapshot(ruler: session.document.ruler)
+        }
         let shouldSave = !dryRun && result.didMutate
 
         if shouldSave {
@@ -4356,7 +4364,14 @@ public struct CLIService {
                 expectedGeneration: expectedGeneration
             )
         )
-        let result = try commandResult(from: response)
+        var result = try commandResult(from: response)
+        if result.workspaceScale == nil {
+            result.workspaceScale = try workspaceScaleLiveSession(
+                sessionID: sessionID,
+                expectedGeneration: result.generation,
+                client: client
+            )
+        }
         return CLIAutomationMutationExecution(
             result: result,
             dirty: result.didMutate,

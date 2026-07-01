@@ -1,4 +1,5 @@
 import ArgumentParser
+import Foundation
 import RupaCore
 
 public struct DimensionAddSelectionCommand: ParsableCommand {
@@ -31,8 +32,8 @@ public struct DimensionAddSelectionCommand: ParsableCommand {
     @Option(help: "Target dimension value numeric literal.")
     public var targetValue: Double
 
-    @Option(help: "Length unit for distance dimensions. Defaults to millimeter.")
-    public var lengthUnit: LengthDisplayUnit = .millimeter
+    @Option(help: "Length unit for distance dimensions. Defaults to the document display unit.")
+    public var lengthUnit: LengthDisplayUnit?
 
     @Option(help: "Angle unit for angle dimensions: degree or radian. Defaults to degree.")
     public var angleUnit: String = AngleUnit.degree.rawValue
@@ -43,9 +44,9 @@ public struct DimensionAddSelectionCommand: ParsableCommand {
         let sessionID = try document.resolvedSessionID()
         let first = try decodedFirstTarget()
         let second = try decodedSecondTarget()
-        let targetExpression = try expression()
 
         try CLIExitCode.run {
+            let targetExpression = try expression(sessionID: sessionID)
             let response = try CLIService().addSelectionDimension(
                 target: document.target(sessionID: sessionID),
                 name: name,
@@ -79,12 +80,17 @@ public struct DimensionAddSelectionCommand: ParsableCommand {
         )
     }
 
-    private func expression() throws -> CADExpression {
+    private func expression(sessionID: UUID?) throws -> CADExpression {
         switch kind {
         case .distance:
+            let resolvedLengthUnit = try CLILengthUnitResolver.resolve(
+                unit: lengthUnit,
+                document: document,
+                sessionID: sessionID
+            )
             return try CLIExpressionParser.length(
                 value: targetValue,
-                unit: lengthUnit,
+                unit: resolvedLengthUnit,
                 valueName: "Selection dimension target value"
             )
         case .angle:

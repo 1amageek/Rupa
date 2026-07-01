@@ -39,8 +39,8 @@ public struct SurfaceMoveControlPointsInFrameCommand: ParsableCommand {
     @Option(help: "Distance along the frame normal axis.")
     public var normalDistance: Double = 0.0
 
-    @Option(help: "Length unit for frame distances.")
-    public var unit: String = LengthDisplayUnit.millimeter.rawValue
+    @Option(help: "Length unit for frame distances. Defaults to the document display unit.")
+    public var unit: String?
 
     @Option(help: "Edit mode: auto, file, or live.")
     public var mode: CLIEditMode = .auto
@@ -69,7 +69,6 @@ public struct SurfaceMoveControlPointsInFrameCommand: ParsableCommand {
         let id = try CLISelectionInputParser.optionalSessionID(sessionID)
         let references = try decodedReferences()
         let resolvedFrameQuery = try decodedFrameQuery()
-        let distances = try distanceExpressions()
 
         try CLIExitCode.run {
             let agentClient = CLIAgentClientFactory.makeAgentClient(
@@ -77,11 +76,21 @@ public struct SurfaceMoveControlPointsInFrameCommand: ParsableCommand {
                 sessionID: id,
                 socket: agentSocket
             )
+            let documentTarget = CLIDocumentTarget(
+                fileURL: file.map(URL.init(fileURLWithPath:)),
+                sessionID: id
+            )
+            let lengthUnit = try CLILengthUnitResolver.resolve(
+                unitName: unit,
+                target: documentTarget,
+                mode: mode,
+                expectedGeneration: expectedGeneration.map(DocumentGeneration.init),
+                forceFileEdit: forceFileEdit,
+                client: agentClient
+            )
+            let distances = distanceExpressions(unit: lengthUnit)
             let response = try CLIService().moveSurfaceControlPointsInFrame(
-                target: CLIDocumentTarget(
-                    fileURL: file.map(URL.init(fileURLWithPath:)),
-                    sessionID: id
-                ),
+                target: documentTarget,
                 references: references,
                 frame: resolvedFrameQuery,
                 uDistance: distances.u,
@@ -115,14 +124,13 @@ public struct SurfaceMoveControlPointsInFrameCommand: ParsableCommand {
         )
     }
 
-    private func distanceExpressions() throws -> (
+    private func distanceExpressions(
+        unit lengthUnit: LengthDisplayUnit
+    ) -> (
         u: CADExpression,
         v: CADExpression,
         normal: CADExpression
     ) {
-        guard let lengthUnit = LengthDisplayUnit(rawValue: unit) else {
-            throw ValidationError("Length unit must be a supported Rupa display unit.")
-        }
         return (
             lengthExpression(uDistance, unit: lengthUnit),
             lengthExpression(vDistance, unit: lengthUnit),
