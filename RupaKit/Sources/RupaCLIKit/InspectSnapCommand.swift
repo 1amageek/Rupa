@@ -2,8 +2,6 @@ import ArgumentParser
 import RupaCore
 import SwiftCAD
 
-extension LengthDisplayUnit: ExpressibleByArgument {}
-
 public struct InspectSnapCommand: ParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "snap",

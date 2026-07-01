@@ -8,19 +8,22 @@ public struct CLIResponse: Codable, Equatable, Sendable {
     public var dirty: Bool
     public var saved: Bool
     public var diagnostics: [EditorDiagnostic]
+    public var workspaceScale: WorkspaceScaleSnapshot?
 
     public init(
         message: String,
         generation: UInt64,
         dirty: Bool,
         saved: Bool = false,
-        diagnostics: [EditorDiagnostic]
+        diagnostics: [EditorDiagnostic],
+        workspaceScale: WorkspaceScaleSnapshot? = nil
     ) {
         self.message = message
         self.generation = generation
         self.dirty = dirty
         self.saved = saved
         self.diagnostics = diagnostics
+        self.workspaceScale = workspaceScale
     }
 }
 

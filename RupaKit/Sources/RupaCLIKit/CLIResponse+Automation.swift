@@ -11,7 +11,8 @@ extension CLIResponse {
             generation: result.generation.value,
             dirty: dirty,
             saved: saved,
-            diagnostics: result.diagnostics
+            diagnostics: result.diagnostics,
+            workspaceScale: result.workspaceScale
         )
     }
 }

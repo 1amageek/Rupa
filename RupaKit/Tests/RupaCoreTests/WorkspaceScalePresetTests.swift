@@ -14,15 +14,20 @@ import Testing
     let micro = WorkspaceScalePreset.microFabrication.rulerConfiguration
     let precision = WorkspaceScalePreset.precisionMechanical.rulerConfiguration
     let architecture = WorkspaceScalePreset.architecture.rulerConfiguration
+    let architectureImperial = WorkspaceScalePreset.architectureImperial.rulerConfiguration
     let site = WorkspaceScalePreset.sitePlanning.rulerConfiguration
+    let siteImperial = WorkspaceScalePreset.sitePlanningImperial.rulerConfiguration
 
     #expect(micro.displayUnit == .micrometer)
     #expect(precision.displayUnit == .millimeter)
     #expect(architecture.displayUnit == .meter)
+    #expect(architectureImperial.displayUnit == .foot)
     #expect(site.displayUnit == .meter)
+    #expect(siteImperial.displayUnit == .foot)
     #expect(micro.visibleSpanMeters < precision.visibleSpanMeters)
     #expect(precision.visibleSpanMeters < architecture.visibleSpanMeters)
     #expect(site.visibleSpanMeters == RulerConfiguration.visibleSpanMetersRange.upperBound)
+    #expect(siteImperial.visibleSpanMeters == RulerConfiguration.visibleSpanMetersRange.upperBound)
 }
 
 @Test func workspaceScaleDefaultsFollowSitePlanningPreset() {

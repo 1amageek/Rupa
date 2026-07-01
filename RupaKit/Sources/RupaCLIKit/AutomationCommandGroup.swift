@@ -6,6 +6,10 @@ public struct AutomationCommandGroup: ParsableCommand {
         abstract: "Apply typed AutomationCommand payloads.",
         subcommands: [
             ApplyAutomationCommand.self,
+            DescribeDocumentCommand.self,
+            SetDisplayUnitCommand.self,
+            SetRulerConfigurationCommand.self,
+            SetWorkspaceScalePresetCommand.self,
         ],
         defaultSubcommand: ApplyAutomationCommand.self
     )

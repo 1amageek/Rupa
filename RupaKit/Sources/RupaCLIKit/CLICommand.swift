@@ -54,6 +54,7 @@ public struct Capabilities: ParsableCommand {
 
 extension CLIEditMode: ExpressibleByArgument {}
 extension ExportPreset.DestinationPolicy: ExpressibleByArgument {}
+extension LengthDisplayUnit: ExpressibleByArgument {}
 extension SurfaceBoundaryContinuityLevel: ExpressibleByArgument {}
 extension SurfaceBoundaryMatchSide: ExpressibleByArgument {}
 extension SurfaceBoundaryReferenceDirection: ExpressibleByArgument {}

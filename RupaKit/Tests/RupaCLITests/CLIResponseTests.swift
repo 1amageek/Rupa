@@ -3200,6 +3200,132 @@ struct CLICommandApplyTests {
         #expect(renameResponse.saved)
         #expect(loadedAfterRename.productMetadata.constructionPlanes[createdPlane.id]?.name == "Applied Plane Renamed")
     }
+
+    @Test(.timeLimit(.minutes(1)))
+    func executableWorkspaceScaleCommandsMutateClosedDocumentAsJSON() async throws {
+        let temporaryDirectory = try makeTemporaryDirectory()
+        defer {
+            removeTemporaryDirectory(temporaryDirectory)
+        }
+        let documentURL = temporaryDirectory.appendingPathComponent("process-command-scale.swcad")
+        try DocumentFileService().save(.empty(named: "Process Command Scale"), to: documentURL)
+
+        let presetResult = try await runCLI([
+            "command",
+            "set-scale-preset",
+            documentURL.path,
+            "sitePlanning",
+            "--mode",
+            "file",
+            "--json",
+        ])
+        let presetResponse = try JSONDecoder().decode(
+            CLIResponse.self,
+            from: presetResult.standardOutputData
+        )
+        let loadedAfterPreset = try DocumentFileService().load(from: documentURL)
+
+        let describeResult = try await runCLI([
+            "command",
+            "describe",
+            documentURL.path,
+            "--mode",
+            "file",
+            "--json",
+        ])
+        let describeResponse = try JSONDecoder().decode(
+            CLIResponse.self,
+            from: describeResult.standardOutputData
+        )
+
+        let rulerResult = try await runCLI([
+            "command",
+            "set-ruler",
+            documentURL.path,
+            "--display-unit",
+            "foot",
+            "--minor-tick-meters",
+            "0.3048",
+            "--major-tick-meters",
+            "3.048",
+            "--visible-span-meters",
+            "3048",
+            "--mode",
+            "file",
+            "--json",
+        ])
+        let rulerResponse = try JSONDecoder().decode(
+            CLIResponse.self,
+            from: rulerResult.standardOutputData
+        )
+        let loadedAfterRuler = try DocumentFileService().load(from: documentURL)
+
+        let unitResult = try await runCLI([
+            "command",
+            "set-display-unit",
+            documentURL.path,
+            "inch",
+            "--mode",
+            "file",
+            "--json",
+        ])
+        let unitResponse = try JSONDecoder().decode(
+            CLIResponse.self,
+            from: unitResult.standardOutputData
+        )
+        let loadedAfterUnit = try DocumentFileService().load(from: documentURL)
+
+        #expect(presetResult.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: presetResult.standardError))
+        #expect(presetResponse.saved)
+        #expect(presetResponse.workspaceScale?.matchedPreset == .sitePlanning)
+        #expect(presetResponse.workspaceScale?.visibleSpanMeters == 100_000.0)
+        #expect(loadedAfterPreset.displayUnit == .meter)
+        #expect(loadedAfterPreset.ruler == WorkspaceScalePreset.sitePlanning.rulerConfiguration.normalizedForWorkspaceScale())
+
+        let imperialPresetResult = try await runCLI([
+            "command",
+            "set-scale-preset",
+            documentURL.path,
+            "sitePlanningImperial",
+            "--mode",
+            "file",
+            "--json",
+        ])
+        let imperialPresetResponse = try JSONDecoder().decode(
+            CLIResponse.self,
+            from: imperialPresetResult.standardOutputData
+        )
+        let loadedAfterImperialPreset = try DocumentFileService().load(from: documentURL)
+
+        #expect(imperialPresetResult.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: imperialPresetResult.standardError))
+        #expect(imperialPresetResponse.saved)
+        #expect(imperialPresetResponse.workspaceScale?.displayUnit == .foot)
+        #expect(imperialPresetResponse.workspaceScale?.matchedPreset == .sitePlanningImperial)
+        #expect(loadedAfterImperialPreset.ruler == WorkspaceScalePreset.sitePlanningImperial.rulerConfiguration.normalizedForWorkspaceScale())
+
+        #expect(describeResult.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: describeResult.standardError))
+        #expect(!describeResponse.saved)
+        #expect(describeResponse.workspaceScale?.matchedPreset == .sitePlanning)
+        #expect(describeResponse.message.contains("Site Planning"))
+
+        #expect(rulerResult.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: rulerResult.standardError))
+        #expect(rulerResponse.saved)
+        #expect(rulerResponse.workspaceScale?.displayUnit == .foot)
+        #expect(rulerResponse.workspaceScale?.displayUnitSymbol == "ft")
+        #expect(rulerResponse.workspaceScale?.matchedPreset == nil)
+        #expect(cliNearlyEqual(rulerResponse.workspaceScale?.minorTickMeters ?? 0.0, 0.3048))
+        #expect(cliNearlyEqual(rulerResponse.workspaceScale?.majorTickMeters ?? 0.0, 3.048))
+        #expect(cliNearlyEqual(rulerResponse.workspaceScale?.visibleSpanMeters ?? 0.0, 3048.0))
+        #expect(loadedAfterRuler.displayUnit == .foot)
+        #expect(cliNearlyEqual(loadedAfterRuler.ruler.visibleSpanMeters, 3048.0))
+
+        #expect(unitResult.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: unitResult.standardError))
+        #expect(unitResponse.saved)
+        #expect(unitResponse.workspaceScale?.displayUnit == .inch)
+        #expect(unitResponse.workspaceScale?.displayUnitSymbol == "in")
+        #expect(loadedAfterUnit.displayUnit == .inch)
+        #expect(loadedAfterUnit.ruler == RulerConfiguration.standard(for: .inch))
+    }
 }
 
 @Suite(.serialized)
