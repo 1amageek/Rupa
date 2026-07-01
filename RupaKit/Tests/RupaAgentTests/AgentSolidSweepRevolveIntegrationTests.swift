@@ -298,6 +298,8 @@ import SwiftCAD
     #expect(plan.operation == .difference)
     #expect(plan.operandKind == .axisAlignedBoxSolids)
     #expect(plan.outputTopologyKind == .zThroughFrame)
+    #expect(plan.topologyNameSchemes.contains(.frameHoleSideFaces))
+    #expect(plan.topologyNameSchemes.contains(.frameBridgeEdges))
     #expect(plan.checks.last?.kind == .capabilityDecision)
     #expect(plan.checks.last?.status == .passed)
     #expect(session.generation == initialGeneration)

@@ -175,6 +175,17 @@ import SwiftCAD
             resultPrimitiveCount: 1,
             operandKind: .axisAlignedBoxSolids,
             outputTopologyKind: .zThroughFrame,
+            topologyNameSchemes: [
+                .body,
+                .frameOuterVertices,
+                .frameHoleVertices,
+                .frameOuterEdges,
+                .frameHoleEdges,
+                .frameBridgeEdges,
+                .frameCapFaces,
+                .frameOuterSideFaces,
+                .frameHoleSideFaces,
+            ],
             unsupportedCode: nil,
             message: "Boolean can evaluate as zThroughFrame.",
             checks: [

@@ -1300,7 +1300,7 @@ public final class AgentCommandController: AgentClientProtocol {
         capability(
             "booleanEvaluationPlan",
             category: .read,
-            summary: "Preflight a proposed standalone Boolean without mutating the document, returning the exact operand subset, output topology kind, primitive counts, unsupported code, and ordered checks used by the shared Boolean evaluation contract.",
+            summary: "Preflight a proposed standalone Boolean without mutating the document, returning the exact operand subset, output topology kind, topology name scheme, primitive counts, unsupported code, and ordered checks used by the shared Boolean evaluation contract.",
             access: .agentRequest,
             mutatesDocument: false,
             discovery: [.topologySummary, .booleanEvaluationPlan],

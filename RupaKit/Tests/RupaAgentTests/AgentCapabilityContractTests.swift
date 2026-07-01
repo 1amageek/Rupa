@@ -697,6 +697,7 @@ import SwiftCAD
     #expect(booleanEvaluationPlan.targets == [.body])
     #expect(booleanEvaluationPlan.summary.contains("Preflight"))
     #expect(booleanEvaluationPlan.summary.contains("output topology kind"))
+    #expect(booleanEvaluationPlan.summary.contains("topology name scheme"))
     #expect(booleanEvaluationPlan.failureMode.contains("structured unsupported results"))
     #expect(booleanEvaluationPlan.failureMode.contains("curved"))
     #expect(booleanEvaluationPlan.optionMatrix.map(\.name) == ["operation", "outputTopologyKind", "keepTools"])
