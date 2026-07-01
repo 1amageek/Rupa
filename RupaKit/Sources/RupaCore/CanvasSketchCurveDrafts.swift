@@ -107,6 +107,7 @@ public enum CanvasSketchCurveDrafts {
 
     public static func arc(
         centeredAt center: Point2D,
+        defaults: WorkspaceScaleDefaults = .standard,
         radiusMeters radiusOverrideMeters: Double? = nil,
         spanAngleRadians spanAngleOverrideRadians: Double? = nil
     ) throws -> Arc {
@@ -115,7 +116,7 @@ public enum CanvasSketchCurveDrafts {
         }
         let radius = try resolvedRadius(
             override: radiusOverrideMeters,
-            fallback: LengthDisplayUnit.millimeter.meters(from: 12.0),
+            fallback: defaults.curveRadiusMeters,
             failure: .zeroArcRadius
         )
         let spanAngle = try resolvedArcSpanAngle(
@@ -160,12 +161,19 @@ public enum CanvasSketchCurveDrafts {
     }
 
     public static func spline(centeredAt center: Point2D) throws -> Spline {
+        try spline(centeredAt: center, defaults: .standard)
+    }
+
+    public static func spline(
+        centeredAt center: Point2D,
+        defaults: WorkspaceScaleDefaults
+    ) throws -> Spline {
         guard isFinite(center) else {
             throw Failure.nonFiniteSplinePlacement
         }
 
-        let halfWidth = LengthDisplayUnit.millimeter.meters(from: 20.0)
-        let bow = LengthDisplayUnit.millimeter.meters(from: 12.0)
+        let halfWidth = defaults.splineHalfWidthMeters
+        let bow = defaults.splineBowMeters
         return Spline(controlPoints: [
             Point2D(x: center.x - halfWidth, y: center.y),
             Point2D(x: center.x - halfWidth / 3.0, y: center.y + bow),
@@ -177,6 +185,14 @@ public enum CanvasSketchCurveDrafts {
     public static func spline(
         from start: Point2D,
         to end: Point2D
+    ) throws -> Spline {
+        try spline(from: start, to: end, defaults: .standard)
+    }
+
+    public static func spline(
+        from start: Point2D,
+        to end: Point2D,
+        defaults: WorkspaceScaleDefaults
     ) throws -> Spline {
         guard isFinite(start), isFinite(end) else {
             throw Failure.nonFiniteSplineDrag
@@ -191,7 +207,7 @@ public enum CanvasSketchCurveDrafts {
 
         let normalX = -deltaY / length
         let normalY = deltaX / length
-        let bow = min(length * 0.25, LengthDisplayUnit.millimeter.meters(from: 24.0))
+        let bow = min(length * 0.25, defaults.maximumSplineBowMeters)
         return Spline(controlPoints: [
             start,
             Point2D(
@@ -211,6 +227,7 @@ public enum CanvasSketchCurveDrafts {
         sides: Int = defaultPolygonSides,
         sizingMode: PolygonSizingMode = .circumradius,
         inclinationMode: PolygonInclinationMode = .vertical,
+        defaults: WorkspaceScaleDefaults = .standard,
         radiusMeters radiusOverrideMeters: Double? = nil,
         rotationAngleRadians rotationAngleOverrideRadians: Double? = nil
     ) throws -> Polygon {
@@ -221,7 +238,7 @@ public enum CanvasSketchCurveDrafts {
 
         let radius = try resolvedRadius(
             override: radiusOverrideMeters,
-            fallback: LengthDisplayUnit.millimeter.meters(from: 12.0),
+            fallback: defaults.curveRadiusMeters,
             failure: .zeroPolygonRadius
         )
         let circumradius = sizingMode.circumradius(from: radius, sides: sides)

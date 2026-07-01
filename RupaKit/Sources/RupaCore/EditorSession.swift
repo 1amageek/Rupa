@@ -1149,12 +1149,13 @@ public final class EditorSession {
 
     @discardableResult
     public func createDefaultRectangleSketch() -> CommandExecutionResult? {
-        perform(
+        let defaults = document.workspaceScaleDefaults
+        return perform(
             .createRectangleSketch(
                 name: nextFeatureName(prefix: "Rectangle Sketch"),
                 plane: activeSketchPlane(),
-                width: .length(40.0, .millimeter),
-                height: .length(20.0, .millimeter)
+                width: lengthExpressionMeters(defaults.sketchWidthMeters),
+                height: lengthExpressionMeters(defaults.sketchHeightMeters)
             )
         )
     }
@@ -1173,8 +1174,9 @@ public final class EditorSession {
             return nil
         }
 
-        let widthMeters = activeSketchWidthInputMeters ?? LengthDisplayUnit.millimeter.meters(from: 40.0)
-        let heightMeters = activeSketchHeightInputMeters ?? LengthDisplayUnit.millimeter.meters(from: 40.0)
+        let defaults = document.workspaceScaleDefaults
+        let widthMeters = activeSketchWidthInputMeters ?? defaults.placedRectangleWidthMeters
+        let heightMeters = activeSketchHeightInputMeters ?? defaults.placedRectangleHeightMeters
         let halfWidthMeters = widthMeters / 2.0
         let halfHeightMeters = heightMeters / 2.0
         let center = sketchPoint2D(from: centerModelPoint, on: sketchPlane)
@@ -1249,15 +1251,16 @@ public final class EditorSession {
 
     @discardableResult
     public func createDefaultCircleSketch() -> CommandExecutionResult? {
-        perform(
+        let defaults = document.workspaceScaleDefaults
+        return perform(
             .createCircleSketch(
                 name: nextFeatureName(prefix: "Circle Sketch"),
                 plane: activeSketchPlane(),
                 center: SketchPoint(
-                    x: .length(0.0, .millimeter),
-                    y: .length(0.0, .millimeter)
+                    x: lengthExpressionMeters(0.0),
+                    y: lengthExpressionMeters(0.0)
                 ),
-                radius: .length(12.0, .millimeter)
+                radius: lengthExpressionMeters(defaults.curveRadiusMeters)
             )
         )
     }
@@ -1292,7 +1295,7 @@ public final class EditorSession {
         }
 
         let center = sketchPoint2D(from: centerModelPoint, on: sketchPlane)
-        let radiusMeters = activeSketchLengthInputMeters ?? LengthDisplayUnit.millimeter.meters(from: 12.0)
+        let radiusMeters = activeSketchLengthInputMeters ?? document.workspaceScaleDefaults.curveRadiusMeters
         return perform(
             .createCircleSketch(
                 name: nextFeatureName(prefix: "Circle Sketch"),
@@ -1408,6 +1411,7 @@ public final class EditorSession {
                     sides: sides,
                     sizingMode: sizingMode,
                     inclinationMode: inclinationMode,
+                    defaults: document.workspaceScaleDefaults,
                     radiusMeters: activeSketchLengthInputMeters,
                     rotationAngleRadians: activeSketchAngleInputRadians
                 )
@@ -1440,6 +1444,7 @@ public final class EditorSession {
                 sides: sides,
                 sizingMode: sizingMode,
                 inclinationMode: inclinationMode,
+                defaults: document.workspaceScaleDefaults,
                 radiusMeters: activeSketchLengthInputMeters,
                 rotationAngleRadians: activeSketchAngleInputRadians
             )
@@ -1722,6 +1727,7 @@ public final class EditorSession {
         do {
             draft = try CanvasSketchCurveDrafts.arc(
                 centeredAt: center,
+                defaults: document.workspaceScaleDefaults,
                 radiusMeters: activeSketchLengthInputMeters,
                 spanAngleRadians: activeSketchAngleInputRadians
             )
@@ -1842,7 +1848,8 @@ public final class EditorSession {
         let draft: CanvasSketchCurveDrafts.Spline
         do {
             draft = try CanvasSketchCurveDrafts.spline(
-                centeredAt: center
+                centeredAt: center,
+                defaults: document.workspaceScaleDefaults
             )
         } catch let failure as CanvasSketchCurveDrafts.Failure {
             reportToolStatus(failure.message, severity: .warning)
@@ -1875,7 +1882,8 @@ public final class EditorSession {
         do {
             draft = try CanvasSketchCurveDrafts.spline(
                 from: start,
-                to: end
+                to: end,
+                defaults: document.workspaceScaleDefaults
             )
         } catch let failure as CanvasSketchCurveDrafts.Failure {
             reportToolStatus(failure.message, severity: .warning)
@@ -1898,13 +1906,14 @@ public final class EditorSession {
 
     @discardableResult
     public func createDefaultExtrudedRectangle() -> CommandExecutionResult? {
-        perform(
+        let defaults = document.workspaceScaleDefaults
+        return perform(
             .createExtrudedRectangle(
                 name: nextFeatureName(prefix: "Box"),
                 plane: activeSketchPlane(),
-                width: .length(40.0, .millimeter),
-                height: .length(20.0, .millimeter),
-                depth: .length(10.0, .millimeter),
+                width: lengthExpressionMeters(defaults.sketchWidthMeters),
+                height: lengthExpressionMeters(defaults.sketchHeightMeters),
+                depth: lengthExpressionMeters(defaults.sketchDepthMeters),
                 direction: .normal
             )
         )
@@ -1924,8 +1933,8 @@ public final class EditorSession {
             return nil
         }
 
-        let halfSideMeters = LengthDisplayUnit.millimeter.meters(from: 20.0)
-        let sideMeters = halfSideMeters * 2.0
+        let sideMeters = document.workspaceScaleDefaults.placedSolidSideMeters
+        let halfSideMeters = sideMeters / 2.0
         let center = sketchPoint2D(from: centerModelPoint, on: sketchPlane)
         return perform(
             .createExtrudedRectangleFromCorners(
@@ -1988,7 +1997,7 @@ public final class EditorSession {
                     x: lengthExpressionMeters(maxX),
                     y: lengthExpressionMeters(maxY)
                 ),
-                depth: .length(10.0, .millimeter),
+                depth: lengthExpressionMeters(document.workspaceScaleDefaults.sketchDepthMeters),
                 direction: .normal
             )
         )
@@ -2012,7 +2021,7 @@ public final class EditorSession {
             .extrudeProfile(
                 name: nextFeatureName(prefix: "\(sceneNode.name) Body"),
                 profile: ProfileReference(featureID: featureID),
-                distance: .length(10.0, .millimeter),
+                distance: lengthExpressionMeters(document.workspaceScaleDefaults.sketchDepthMeters),
                 direction: .normal
             )
         )
@@ -3431,16 +3440,17 @@ public final class EditorSession {
 
     @discardableResult
     public func createDefaultExtrudedCircle() -> CommandExecutionResult? {
-        perform(
+        let defaults = document.workspaceScaleDefaults
+        return perform(
             .createExtrudedCircle(
                 name: nextFeatureName(prefix: "Cylinder"),
                 plane: activeSketchPlane(),
                 center: SketchPoint(
-                    x: .length(0.0, .millimeter),
-                    y: .length(0.0, .millimeter)
+                    x: lengthExpressionMeters(0.0),
+                    y: lengthExpressionMeters(0.0)
                 ),
-                radius: .length(12.0, .millimeter),
-                depth: .length(20.0, .millimeter),
+                radius: lengthExpressionMeters(defaults.curveRadiusMeters),
+                depth: lengthExpressionMeters(defaults.cylinderDepthMeters),
                 direction: .normal
             )
         )
