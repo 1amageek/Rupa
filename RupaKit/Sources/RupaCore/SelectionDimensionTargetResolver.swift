@@ -29,7 +29,7 @@ public struct SelectionDimensionTargetResolver: Sendable {
         }
 
         switch target.component {
-        case .object:
+        case .object, .constructionPlane:
             throw EditorError(
                 code: .commandInvalid,
                 message: "Selection dimension target requires a face, edge, vertex, or sketch curve target."

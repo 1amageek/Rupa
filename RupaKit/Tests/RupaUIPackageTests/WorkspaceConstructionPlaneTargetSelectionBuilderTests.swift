@@ -25,6 +25,28 @@ import Testing
     #expect(regionBuilder.constructionPlaneTargets == [regionTarget])
 }
 
+@Test func workspaceConstructionPlaneTargetSelectionBuilderAcceptsSavedConstructionPlanes() {
+    let firstTarget = SelectionTarget(
+        sceneNodeID: SceneNodeID(),
+        component: .constructionPlane(ConstructionPlaneSourceID())
+    )
+    let secondTarget = SelectionTarget(
+        sceneNodeID: SceneNodeID(),
+        component: .constructionPlane(ConstructionPlaneSourceID())
+    )
+    let singleBuilder = WorkspaceConstructionPlaneTargetSelectionBuilder(
+        document: DesignDocument.empty(),
+        selection: SelectionModel(selectedTargets: [firstTarget])
+    )
+    let pairBuilder = WorkspaceConstructionPlaneTargetSelectionBuilder(
+        document: DesignDocument.empty(),
+        selection: SelectionModel(selectedTargets: [firstTarget, secondTarget])
+    )
+
+    #expect(singleBuilder.constructionPlaneTargets == [firstTarget])
+    #expect(pairBuilder.constructionPlaneTargets == [firstTarget, secondTarget])
+}
+
 @Test func workspaceConstructionPlaneTargetSelectionBuilderAcceptsFaceEdgePair() {
     let sceneNodeID = SceneNodeID()
     let faceTarget = SelectionTarget(sceneNodeID: sceneNodeID, component: .face(.bodyFaceTop))

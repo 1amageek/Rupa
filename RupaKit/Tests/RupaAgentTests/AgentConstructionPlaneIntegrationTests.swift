@@ -78,6 +78,21 @@ import SwiftCAD
     #expect(renamedEntry.name == "Agent Renamed CPlane")
     let renamedSceneNodeID = try #require(renamedEntry.sceneNodeID)
     #expect(session.document.productMetadata.sceneNodes[renamedSceneNodeID]?.name == "Agent Renamed CPlane")
+    let renamedTarget = try #require(renamedEntry.selectionTarget())
+
+    let selectionResponse = server.handle(
+        .selectTargets(
+            sessionID: sessionID,
+            targets: [renamedTarget],
+            expectedGeneration: DocumentGeneration(2)
+        )
+    )
+    guard case .selection(let selectionResult) = selectionResponse else {
+        #expect(Bool(false))
+        return
+    }
+    #expect(selectionResult.selectedTargets == [renamedTarget])
+    #expect(session.selection.selectedTargets == [renamedTarget])
 
     let clearResponse = server.handle(
         .execute(

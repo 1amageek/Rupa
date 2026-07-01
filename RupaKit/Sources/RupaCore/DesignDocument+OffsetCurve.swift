@@ -229,7 +229,7 @@ extension DesignDocument {
                 objectRegistry: objectRegistry
             )
             return [resolvedTarget.featureID]
-        case .object:
+        case .object, .constructionPlane:
             throw EditorError(
                 code: .referenceUnresolved,
                 message: "Curve offset requires a selected curve, region, vertex, face loop, or edge target."

@@ -101,7 +101,7 @@ public struct ViewportSurfaceContinuityOverlay: Equatable {
         var names = Set<String>()
         for target in targets {
             switch target.component {
-            case .object, .sketchEntity, .region:
+            case .object, .sketchEntity, .region, .constructionPlane:
                 continue
             case .face(let componentID), .edge(let componentID), .vertex(let componentID):
                 guard let persistentName = componentID.generatedTopologyPersistentName else {

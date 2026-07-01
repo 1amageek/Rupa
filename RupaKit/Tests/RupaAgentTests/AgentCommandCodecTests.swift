@@ -1774,6 +1774,23 @@ import SwiftCAD
             selectedTargets: [selectionTarget]
         )
     )
+    let constructionPlaneSelectionTarget = SelectionTarget(
+        sceneNodeID: SceneNodeID(UUID()),
+        component: .constructionPlane(ConstructionPlaneSourceID(UUID()))
+    )
+    let constructionPlaneSelectRequest = AgentRequest.selectTargets(
+        sessionID: sessionID,
+        targets: [constructionPlaneSelectionTarget],
+        expectedGeneration: DocumentGeneration(4)
+    )
+    let constructionPlaneSelectResponse = AgentResponse.selection(
+        SelectionStateResult(
+            message: "1 construction plane selected.",
+            generation: DocumentGeneration(4),
+            dirty: false,
+            selectedTargets: [constructionPlaneSelectionTarget]
+        )
+    )
     let selectionReference = SelectionReference.surface(.controlPoint(SurfaceControlPointReference(
         surface: SurfaceReference(
             faceName: PersistentName(components: [
@@ -1847,6 +1864,14 @@ import SwiftCAD
     )
     #expect(try codec.decodeRequest(from: try codec.encode(selectRequest)) == selectRequest)
     #expect(try codec.decodeResponse(from: try codec.encode(selectResponse)) == selectResponse)
+    #expect(
+        try codec.decodeRequest(from: try codec.encode(constructionPlaneSelectRequest))
+            == constructionPlaneSelectRequest
+    )
+    #expect(
+        try codec.decodeResponse(from: try codec.encode(constructionPlaneSelectResponse))
+            == constructionPlaneSelectResponse
+    )
     #expect(try codec.decodeRequest(from: try codec.encode(selectReferenceRequest)) == selectReferenceRequest)
     #expect(try codec.decodeResponse(from: try codec.encode(selectReferenceResponse)) == selectReferenceResponse)
     #expect(try codec.decodeRequest(from: try codec.encode(saveRequest)) == saveRequest)

@@ -374,6 +374,12 @@ public struct SelectionModel: Codable, Equatable, Sendable {
                 sourceFeatureID: featureID,
                 document: document
             )
+        case .constructionPlane(let sourceID):
+            guard reference?.kind == .construction,
+                  reference?.constructionPlaneID == sourceID else {
+                return false
+            }
+            return document.productMetadata.constructionPlanes[sourceID] != nil
         }
     }
 
@@ -412,7 +418,7 @@ public struct SelectionModel: Codable, Equatable, Sendable {
         switch component {
         case .face(let id), .edge(let id), .vertex(let id):
             componentID = id
-        case .object, .sketchEntity, .region:
+        case .object, .sketchEntity, .region, .constructionPlane:
             componentID = nil
         }
         guard let persistentName = componentID?.generatedTopologyPersistentName else {

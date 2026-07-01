@@ -1713,6 +1713,7 @@ public struct MainView: View {
         _ entry: ConstructionPlaneSummaryResult.Entry
     ) -> some View {
         let isRenaming = constructionPlaneRenameTargetID == entry.id
+        let isSelected = entry.selectionTarget().map { session.selection.containsTarget($0) } ?? false
         let identifierSuffix = String(describing: entry.id)
         return HStack(spacing: 6) {
             Button {
@@ -1759,11 +1760,19 @@ public struct MainView: View {
                 }
                 .accessibilityIdentifier("WorkspacePlane.renameField.\(identifierSuffix)")
             } else {
-                Text(entry.name)
-                    .font(.caption)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                Button {
+                    selectConstructionPlane(entry)
+                } label: {
+                    Text(entry.name)
+                        .font(.caption)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help("Select Construction Plane")
+                .accessibilityIdentifier("WorkspacePlane.select.\(identifierSuffix)")
             }
 
             Button {
@@ -1800,12 +1809,18 @@ public struct MainView: View {
         .padding(.vertical, 4)
         .background {
             RoundedRectangle(cornerRadius: 7, style: .continuous)
-                .fill(entry.isActive ? Color.accentColor.opacity(0.16) : Color.primary.opacity(0.05))
+                .fill(
+                    isSelected || entry.isActive
+                        ? Color.accentColor.opacity(isSelected ? 0.18 : 0.16)
+                        : Color.primary.opacity(0.05)
+                )
         }
         .overlay {
             RoundedRectangle(cornerRadius: 7, style: .continuous)
                 .strokeBorder(
-                    entry.isActive ? Color.accentColor.opacity(0.38) : Color.primary.opacity(0.10),
+                    isSelected || entry.isActive
+                        ? Color.accentColor.opacity(isSelected ? 0.62 : 0.38)
+                        : Color.primary.opacity(0.10),
                     lineWidth: 1
                 )
         }
@@ -2544,6 +2559,24 @@ public struct MainView: View {
             return
         }
         alignViewport(to: entry.plane, name: entry.name)
+    }
+
+    private func selectConstructionPlane(
+        _ entry: ConstructionPlaneSummaryResult.Entry
+    ) {
+        guard let target = entry.selectionTarget() else {
+            session.reportToolStatus(
+                "Construction plane selection target is unavailable.",
+                severity: .warning
+            )
+            isPreviewExpanded = true
+            return
+        }
+        guard session.selectTarget(target) else {
+            isPreviewExpanded = true
+            return
+        }
+        session.reportToolStatus("Selected construction plane \(entry.name).")
     }
 
     private func alignViewport(
@@ -4105,6 +4138,8 @@ public struct MainView: View {
             return "Region"
         case .sketchEntity:
             return "Source Curve"
+        case .constructionPlane:
+            return "Construction Plane"
         }
     }
 

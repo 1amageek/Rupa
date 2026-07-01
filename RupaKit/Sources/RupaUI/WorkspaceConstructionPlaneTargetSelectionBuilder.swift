@@ -17,7 +17,9 @@ struct WorkspaceConstructionPlaneTargetSelectionBuilder {
         let classification = WorkspaceSelectionTargetClassification(targets: targets)
         let pointTargets = classification.vertexTargets + sketchPointTargets(from: targets)
         if targets.count == 1,
-           classification.faceTargets.count == 1 || classification.regionTargets.count == 1 {
+           classification.faceTargets.count == 1
+            || classification.regionTargets.count == 1
+            || classification.constructionPlaneTargets.count == 1 {
             return targets
         }
         if targets.count == 2,
@@ -27,7 +29,9 @@ struct WorkspaceConstructionPlaneTargetSelectionBuilder {
         }
         if targets.count >= 2,
            classification.edgeTargets.isEmpty,
-           targets.count == classification.faceTargets.count + classification.regionTargets.count {
+           targets.count == classification.faceTargets.count
+            + classification.regionTargets.count
+            + classification.constructionPlaneTargets.count {
             return targets
         }
         if targets.count >= 2,

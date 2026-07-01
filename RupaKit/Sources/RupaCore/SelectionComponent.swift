@@ -7,4 +7,5 @@ public enum SelectionComponent: Codable, Equatable, Hashable, Sendable {
     case vertex(SelectionComponentID)
     case sketchEntity(SelectionComponentID)
     case region(SelectionComponentID)
+    case constructionPlane(ConstructionPlaneSourceID)
 }

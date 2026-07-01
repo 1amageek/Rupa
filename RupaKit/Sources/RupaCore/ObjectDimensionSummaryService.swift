@@ -343,7 +343,7 @@ public struct ObjectDimensionSummaryService: Sendable {
             return false
         case .edge(_):
             return kind == .sizeY
-        case .vertex(_), .sketchEntity(_), .region(_):
+        case .vertex(_), .sketchEntity(_), .region(_), .constructionPlane(_):
             return false
         }
     }

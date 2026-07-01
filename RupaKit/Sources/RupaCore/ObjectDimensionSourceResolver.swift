@@ -17,7 +17,7 @@ struct ObjectDimensionSourceResolver: Sendable {
                     message: "Object dimension requires an object, face, or generated extrusion depth edge target."
                 )
             }
-        case .vertex(_), .sketchEntity(_), .region(_):
+        case .vertex(_), .sketchEntity(_), .region(_), .constructionPlane(_):
             throw EditorError(
                 code: .commandInvalid,
                 message: "Object dimension requires an object, face, or generated extrusion depth edge target."

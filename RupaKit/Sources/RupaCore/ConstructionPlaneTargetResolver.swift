@@ -21,6 +21,11 @@ public struct ConstructionPlaneTargetResolver: Sendable {
         objectRegistry: ObjectTypeRegistry = .builtIn
     ) throws -> SketchPlane {
         switch target.component {
+        case .constructionPlane:
+            return try savedConstructionPlane(
+                alignedTo: target,
+                in: document
+            )
         case .face:
             return try facePlane(
                 alignedTo: target,
@@ -36,7 +41,7 @@ public struct ConstructionPlaneTargetResolver: Sendable {
         case .object, .edge, .vertex, .sketchEntity:
             throw EditorError(
                 code: .commandInvalid,
-                message: "Construction plane target must be a generated face or source sketch region."
+                message: "Construction plane target must be a saved construction plane, generated face, or source sketch region."
             )
         }
     }
@@ -115,7 +120,7 @@ public struct ConstructionPlaneTargetResolver: Sendable {
         switch target.component {
         case .vertex, .sketchEntity:
             return true
-        case .object, .face, .edge, .region:
+        case .object, .face, .edge, .region, .constructionPlane:
             return false
         }
     }
@@ -274,7 +279,7 @@ public struct ConstructionPlaneTargetResolver: Sendable {
                 targetSceneNodeID: target.sceneNodeID,
                 in: document
             )
-        case .object, .face, .edge, .region:
+        case .object, .face, .edge, .region, .constructionPlane:
             throw EditorError(
                 code: .commandInvalid,
                 message: "Point-based construction plane requires generated vertex or source point targets."
@@ -666,6 +671,11 @@ public struct ConstructionPlaneTargetResolver: Sendable {
         topology: TopologySummaryResult
     ) throws -> PlaneReference {
         switch target.component {
+        case .constructionPlane:
+            return try savedConstructionPlaneReference(
+                alignedTo: target,
+                in: document
+            )
         case .face:
             return try faceReference(alignedTo: target, topology: topology)
         case .region(let componentID):
@@ -677,9 +687,54 @@ public struct ConstructionPlaneTargetResolver: Sendable {
         case .object, .edge, .vertex, .sketchEntity:
             throw EditorError(
                 code: .commandInvalid,
-                message: "Midplane construction requires only face or region targets."
+                message: "Midplane construction requires only construction plane, face, or region targets."
             )
         }
+    }
+
+    private func savedConstructionPlane(
+        alignedTo target: SelectionTarget,
+        in document: DesignDocument
+    ) throws -> SketchPlane {
+        let reference = try savedConstructionPlaneReference(
+            alignedTo: target,
+            in: document
+        )
+        return try plane(
+            origin: reference.origin,
+            normal: reference.normal,
+            operationName: "Saved construction plane"
+        )
+    }
+
+    private func savedConstructionPlaneReference(
+        alignedTo target: SelectionTarget,
+        in document: DesignDocument
+    ) throws -> PlaneReference {
+        guard case .constructionPlane(let sourceID) = target.component else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Saved construction plane alignment requires a construction plane target."
+            )
+        }
+        guard let sceneNode = document.productMetadata.sceneNodes[target.sceneNodeID],
+              sceneNode.reference?.constructionPlaneID == sourceID else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "Saved construction plane target does not match its scene node source."
+            )
+        }
+        guard let source = document.productMetadata.constructionPlanes[sourceID] else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "Saved construction plane target could not resolve its source plane."
+            )
+        }
+        let coordinateSystem = try SketchPlaneCoordinateSystem(plane: source.plane)
+        return PlaneReference(
+            origin: coordinateSystem.origin,
+            normal: coordinateSystem.normal
+        )
     }
 
     private func regionReference(

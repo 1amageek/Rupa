@@ -81,6 +81,54 @@ import Testing
     #expect(selection.selectedSceneNodeIDs.isEmpty)
 }
 
+@Test func selectionModelAcceptsSavedConstructionPlaneTargets() throws {
+    var document = DesignDocument.empty()
+    _ = try document.createConstructionPlane(
+        name: "Selectable Plane",
+        plane: .yz
+    )
+    let summary = ConstructionPlaneSummaryService().summarize(document: document)
+    let entry = try #require(summary.planes.first)
+    let target = try #require(entry.selectionTarget())
+    var selection = SelectionModel()
+
+    try selection.selectTarget(target, in: document)
+
+    #expect(selection.selectedTargets == [target])
+    #expect(selection.selectedSceneNodeIDs == [target.sceneNodeID])
+    #expect(selection.selectedSceneNodeReferences(in: document) == [.constructionPlane(entry.id)])
+}
+
+@Test func selectionModelRejectsMismatchedConstructionPlaneTargets() throws {
+    var document = DesignDocument.empty()
+    _ = try document.createConstructionPlane(
+        name: "First Plane",
+        plane: .yz
+    )
+    let secondID = try document.createConstructionPlane(
+        name: "Second Plane",
+        plane: .zx,
+        activates: false
+    )
+    let summary = ConstructionPlaneSummaryService().summarize(document: document)
+    let firstEntry = try #require(summary.planes.first { $0.name == "First Plane" })
+    let firstSceneNodeID = try #require(firstEntry.sceneNodeID)
+    let mismatchedTarget = SelectionTarget(
+        sceneNodeID: firstSceneNodeID,
+        component: .constructionPlane(secondID)
+    )
+    var selection = SelectionModel()
+
+    do {
+        try selection.selectTarget(mismatchedTarget, in: document)
+        Issue.record("Construction plane targets must match their scene node source.")
+    } catch let error as EditorError {
+        #expect(error.code == .referenceUnresolved)
+    }
+
+    #expect(selection.selectedTargets.isEmpty)
+}
+
 @Test func selectionModelAcceptsSketchPointHandleAndControlPointTargets() throws {
     var document = DesignDocument.empty()
     let lineFeatureID = try document.createLineSketch(

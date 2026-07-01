@@ -71,6 +71,82 @@ import SwiftCAD
 }
 
 @MainActor
+@Test func editorSessionCreatesConstructionPlaneAlignedToSavedConstructionPlaneTarget() async throws {
+    let session = EditorSession()
+    _ = try session.execute(
+        .createConstructionPlane(
+            name: "Saved Source Plane",
+            plane: .yz,
+            activates: true
+        )
+    )
+    let summary = ConstructionPlaneSummaryService().summarize(document: session.document)
+    let sourceEntry = try #require(summary.planes.first { $0.name == "Saved Source Plane" })
+    let sourceTarget = try #require(sourceEntry.selectionTarget())
+
+    let result = try session.execute(
+        .createConstructionPlaneFromTarget(
+            name: "Copied Saved Plane",
+            target: sourceTarget,
+            activates: true
+        )
+    )
+
+    let source = try #require(session.activeConstructionPlane)
+    #expect(result.commandName == "createConstructionPlaneFromTarget")
+    #expect(result.didMutate)
+    #expect(source.name == "Copied Saved Plane")
+    assertPlane(
+        source.plane,
+        hasOrigin: TopologySummaryResult.Entry.Point(x: 0.0, y: 0.0, z: 0.0),
+        normal: TopologySummaryResult.Entry.Point(x: 1.0, y: 0.0, z: 0.0)
+    )
+}
+
+@MainActor
+@Test func editorSessionCreatesMidplaneFromSavedConstructionPlaneTargets() async throws {
+    let session = EditorSession()
+    _ = try session.execute(
+        .createConstructionPlane(
+            name: "First Saved Plane",
+            plane: .yz,
+            activates: true
+        )
+    )
+    _ = try session.execute(
+        .createConstructionPlane(
+            name: "Second Saved Plane",
+            plane: .plane(Plane3D(
+                origin: Point3D(x: 0.020, y: 0.0, z: 0.0),
+                normal: .unitX
+            )),
+            activates: false
+        )
+    )
+    let summary = ConstructionPlaneSummaryService().summarize(document: session.document)
+    let firstTarget = try #require(summary.planes.first { $0.name == "First Saved Plane" }?.selectionTarget())
+    let secondTarget = try #require(summary.planes.first { $0.name == "Second Saved Plane" }?.selectionTarget())
+
+    let result = try session.execute(
+        .createConstructionPlaneFromTargets(
+            name: "Saved Midplane",
+            targets: [firstTarget, secondTarget],
+            viewNormal: nil,
+            activates: true
+        )
+    )
+
+    let source = try #require(session.activeConstructionPlane)
+    #expect(result.commandName == "createConstructionPlaneFromTargets")
+    #expect(result.didMutate)
+    assertPlane(
+        source.plane,
+        hasOrigin: TopologySummaryResult.Entry.Point(x: 0.010, y: 0.0, z: 0.0),
+        normal: TopologySummaryResult.Entry.Point(x: 1.0, y: 0.0, z: 0.0)
+    )
+}
+
+@MainActor
 @Test func editorSessionCreatesPerpendicularConstructionPlaneFromFaceAndEdgeTargets() async throws {
     let session = EditorSession()
     _ = try #require(session.createDefaultExtrudedRectangle())

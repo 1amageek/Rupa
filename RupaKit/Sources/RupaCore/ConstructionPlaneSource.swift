@@ -67,6 +67,16 @@ public struct ConstructionPlaneSummaryResult: Codable, Equatable, Sendable {
             self.sceneNodeID = sceneNodeID
             self.isActive = isActive
         }
+
+        public func selectionTarget() -> SelectionTarget? {
+            guard let sceneNodeID else {
+                return nil
+            }
+            return SelectionTarget(
+                sceneNodeID: sceneNodeID,
+                component: .constructionPlane(id)
+            )
+        }
     }
 
     public var activePlaneID: ConstructionPlaneSourceID?

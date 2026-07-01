@@ -71,6 +71,8 @@ public enum ViewportSelectionHitPolicy: Equatable, Sendable {
             return allowsRegionHits
         case .sketchEntity:
             return allowsSketchEntityHits
+        case .constructionPlane:
+            return allowsObjectHits
         }
     }
 

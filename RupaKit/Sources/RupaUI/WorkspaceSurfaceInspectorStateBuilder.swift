@@ -174,7 +174,7 @@ struct WorkspaceSurfaceInspectorStateBuilder {
         for target in selection.selectedTargets {
             let componentID: SelectionComponentID?
             switch target.component {
-            case .object, .sketchEntity, .region, .vertex:
+            case .object, .sketchEntity, .region, .vertex, .constructionPlane:
                 componentID = nil
             case .face(let id), .edge(let id):
                 componentID = id

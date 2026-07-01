@@ -4090,7 +4090,7 @@ public struct Viewport: View {
                 continue
             }
             switch target.component {
-            case .object, .sketchEntity, .region:
+            case .object, .sketchEntity, .region, .constructionPlane:
                 continue
             case .face(let componentID):
                 guard componentID.generatedTopologyPersistentName != nil,
@@ -5071,6 +5071,12 @@ public struct Viewport: View {
         for target: SelectionTarget,
         in scene: ViewportScene
     ) -> ViewportSceneItem? {
+        if case .constructionPlane(let sourceID) = target.component {
+            guard document.productMetadata.sceneNodes[target.sceneNodeID]?.reference?.constructionPlaneID == sourceID else {
+                return nil
+            }
+            return scene.items.first { $0.sceneNodeID == target.sceneNodeID }
+        }
         if let directItem = scene.items.first(where: { item in
             item.sceneNodeID == target.sceneNodeID && itemContains(target.component, in: item)
         }) {
@@ -5116,6 +5122,8 @@ public struct Viewport: View {
             return primitives.contains { $0.entityID == componentID.sketchEntityBaseReference?.entityID }
         case .region(let componentID):
             return item.sketchRegions.contains { $0.componentID == componentID }
+        case .constructionPlane:
+            return false
         }
     }
 

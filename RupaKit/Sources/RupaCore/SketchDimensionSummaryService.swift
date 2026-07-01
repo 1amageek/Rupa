@@ -157,7 +157,7 @@ public struct SketchDimensionSummaryService: Sendable {
         switch target.requestedTarget.component {
         case .edge:
             .radius
-        case .object, .face, .vertex, .sketchEntity, .region:
+        case .object, .face, .vertex, .sketchEntity, .region, .constructionPlane:
             .diameter
         }
     }

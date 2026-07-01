@@ -7,6 +7,7 @@ struct WorkspaceSelectionTargetClassification {
     var vertexTargets: [SelectionTarget] = []
     var sketchEntityTargets: [SelectionTarget] = []
     var regionTargets: [SelectionTarget] = []
+    var constructionPlaneTargets: [SelectionTarget] = []
     var objectDimensionTargets: [SelectionTarget] = []
     var sketchDimensionTargets: [SelectionTarget] = []
 
@@ -35,6 +36,8 @@ struct WorkspaceSelectionTargetClassification {
                 sketchDimensionTargets.append(target)
             case .region:
                 regionTargets.append(target)
+            case .constructionPlane:
+                constructionPlaneTargets.append(target)
             }
         }
     }

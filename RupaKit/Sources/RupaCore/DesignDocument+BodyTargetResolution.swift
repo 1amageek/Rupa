@@ -76,7 +76,7 @@ extension DesignDocument {
         switch component {
         case .face(let id), .edge(let id), .vertex(let id):
             componentID = id
-        case .object, .sketchEntity, .region:
+        case .object, .sketchEntity, .region, .constructionPlane:
             componentID = nil
         }
         guard let persistentName = componentID?.generatedTopologyPersistentName else {
