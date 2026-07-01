@@ -17,6 +17,7 @@ public typealias BooleanEvaluationCapabilities = SwiftCAD.BooleanEvaluationCapab
 public typealias BooleanEvaluationPlanResult = SwiftCAD.BooleanEvaluationPlanResult
 public typealias BooleanEvaluationPlanService = SwiftCAD.BooleanEvaluationPlanService
 public typealias BooleanEvaluationPreflightCheck = SwiftCAD.BooleanEvaluationPreflightCheck
+public typealias BooleanEvaluationTopologyCounts = SwiftCAD.BooleanEvaluationTopologyCounts
 public typealias BooleanFeature = SwiftCAD.BooleanFeature
 public typealias BooleanOperation = SwiftCAD.BooleanOperation
 public typealias BooleanTargetReference = SwiftCAD.BooleanTargetReference

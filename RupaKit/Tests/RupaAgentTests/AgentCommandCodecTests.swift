@@ -173,6 +173,14 @@ import SwiftCAD
             targetCellCount: 1,
             toolCellCount: 1,
             resultPrimitiveCount: 1,
+            resultTopologyCounts: BooleanEvaluationTopologyCounts(
+                bodyCount: 1,
+                shellCount: 1,
+                faceCount: 10,
+                loopCount: 12,
+                edgeCount: 24,
+                vertexCount: 16
+            ),
             operandKind: .axisAlignedBoxSolids,
             outputTopologyKind: .zThroughFrame,
             topologyNameSchemes: [
