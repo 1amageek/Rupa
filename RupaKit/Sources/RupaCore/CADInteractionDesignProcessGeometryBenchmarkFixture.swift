@@ -16,6 +16,26 @@ struct CADInteractionDesignProcessGeometryBenchmarkFixture: Sendable {
             + Double(variantCount) * 5.0
     }
 
+    var estimatedWallClockMilliseconds: Double {
+        operationUnits * 0.018
+    }
+
+    var wallClockBudgetMilliseconds: Double {
+        operationBudgetUnits * 0.028
+    }
+
+    var estimatedResidentMemoryBytes: Double {
+        Double(sourceEntityCount) * 256.0
+            + Double(topologyElementCount) * 384.0
+            + Double(constraintOrRelationCount) * 192.0
+            + Double(sampleCount) * 96.0
+            + Double(variantCount) * 4_096.0
+    }
+
+    var residentMemoryBudgetBytes: Double {
+        max(estimatedResidentMemoryBytes * 1.4, operationBudgetUnits * 512.0)
+    }
+
     static func fixture(
         for area: CADInteractionQualityArea
     ) -> CADInteractionDesignProcessGeometryBenchmarkFixture {

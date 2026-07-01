@@ -105,11 +105,23 @@ import RupaCore
         let geometryMeasurements = packet.confidence.performanceMeasurements.filter { measurement in
             measurement.metric == "denseGeometryFixtureOperationUnits"
         }
+        let wallClockMeasurements = packet.confidence.performanceMeasurements.filter { measurement in
+            measurement.metric == "denseGeometryFixtureEstimatedWallClockMilliseconds"
+        }
+        let residentMemoryMeasurements = packet.confidence.performanceMeasurements.filter { measurement in
+            measurement.metric == "denseGeometryFixtureEstimatedResidentMemoryBytes"
+        }
         let payloadMeasurement = try #require(packet.confidence.performanceMeasurements.first { measurement in
             measurement.metric == "encodedDesignProcessPacketPayloadBytes"
         })
         let geometryMeasurement = try #require(packet.confidence.performanceMeasurements.first { measurement in
             measurement.metric == "denseGeometryFixtureOperationUnits"
+        })
+        let wallClockMeasurement = try #require(packet.confidence.performanceMeasurements.first { measurement in
+            measurement.metric == "denseGeometryFixtureEstimatedWallClockMilliseconds"
+        })
+        let residentMemoryMeasurement = try #require(packet.confidence.performanceMeasurements.first { measurement in
+            measurement.metric == "denseGeometryFixtureEstimatedResidentMemoryBytes"
         })
         let measuredPerformanceCount = packet.confidence.performanceMeasurements.filter { measurement in
             measurement.status == .withinBudget || measurement.status == .exceedsBudget
@@ -145,6 +157,8 @@ import RupaCore
         })
         #expect(payloadMeasurements.count == 1)
         #expect(geometryMeasurements.count == 1)
+        #expect(wallClockMeasurements.count == 1)
+        #expect(residentMemoryMeasurements.count == 1)
         #expect(payloadMeasurement.status == .withinBudget)
         #expect(payloadMeasurement.measuredValue == Double(encodedPacket.count))
         #expect((payloadMeasurement.budgetValue ?? 0) >= Double(encodedPacket.count))
@@ -156,6 +170,22 @@ import RupaCore
         #expect(geometryMeasurement.source == "CADInteractionDesignProcessGeometryBenchmarkFixture.\(packet.intent.area.rawValue)")
         #expect(geometryMeasurement.notes.contains { note in
             note.contains("Deterministic dense-scene geometry fixture")
+        })
+        #expect(wallClockMeasurement.status == .withinBudget)
+        #expect((wallClockMeasurement.measuredValue ?? 0) > 0)
+        #expect((wallClockMeasurement.budgetValue ?? 0) >= (wallClockMeasurement.measuredValue ?? 0))
+        #expect(wallClockMeasurement.unit == "milliseconds")
+        #expect(wallClockMeasurement.source == "CADInteractionDesignProcessGeometryBenchmarkFixture.\(packet.intent.area.rawValue).wallClock")
+        #expect(wallClockMeasurement.notes.contains { note in
+            note.contains("production-scene wall-clock regression fixture")
+        })
+        #expect(residentMemoryMeasurement.status == .withinBudget)
+        #expect((residentMemoryMeasurement.measuredValue ?? 0) > 0)
+        #expect((residentMemoryMeasurement.budgetValue ?? 0) >= (residentMemoryMeasurement.measuredValue ?? 0))
+        #expect(residentMemoryMeasurement.unit == "bytes")
+        #expect(residentMemoryMeasurement.source == "CADInteractionDesignProcessGeometryBenchmarkFixture.\(packet.intent.area.rawValue).residentMemory")
+        #expect(residentMemoryMeasurement.notes.contains { note in
+            note.contains("resident-memory regression fixture")
         })
         #expect(packet.confidence.notes.contains(
             "Calibration uses \(packet.confidence.calibrationAnchors.count) anchors and \(measuredPerformanceCount)/\(packet.confidence.performanceMeasurements.count) measured performance records."

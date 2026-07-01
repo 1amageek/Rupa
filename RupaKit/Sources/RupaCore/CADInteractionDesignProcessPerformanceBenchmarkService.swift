@@ -8,6 +8,10 @@ enum CADInteractionDesignProcessPerformanceBenchmarkService {
     private static let agentPayloadSource = "CADInteractionDesignProcessPerformanceBenchmarkService.agentPayloadBudgetBytes"
     private static let geometryFixtureMetric = "denseGeometryFixtureOperationUnits"
     private static let geometryFixtureUnit = "weightedOperationUnits"
+    private static let wallClockFixtureMetric = "denseGeometryFixtureEstimatedWallClockMilliseconds"
+    private static let wallClockFixtureUnit = "milliseconds"
+    private static let residentMemoryFixtureMetric = "denseGeometryFixtureEstimatedResidentMemoryBytes"
+    private static let residentMemoryFixtureUnit = "bytes"
     private static let maximumPayloadMeasurementPasses = 8
 
     static func recordBenchmarks(
@@ -16,8 +20,8 @@ enum CADInteractionDesignProcessPerformanceBenchmarkService {
     ) -> DesignProcessPacket {
         var measuredPacket = packet
         removeAgentPayloadMeasurement(from: &measuredPacket)
-        removeGeometryFixtureMeasurement(from: &measuredPacket)
-        appendGeometryFixtureMeasurement(to: &measuredPacket)
+        removeDenseFixtureMeasurements(from: &measuredPacket)
+        appendDenseFixtureMeasurements(to: &measuredPacket)
         replaceAgentPayloadMeasurement(
             in: &measuredPacket,
             measuredBytes: nil,
@@ -73,15 +77,15 @@ enum CADInteractionDesignProcessPerformanceBenchmarkService {
         }
     }
 
-    private static func removeGeometryFixtureMeasurement(
+    private static func removeDenseFixtureMeasurements(
         from packet: inout DesignProcessPacket
     ) {
         packet.confidence.performanceMeasurements.removeAll { measurement in
-            measurement.metric == geometryFixtureMetric
+            denseFixtureMetrics.contains(measurement.metric)
         }
     }
 
-    private static func appendGeometryFixtureMeasurement(
+    private static func appendDenseFixtureMeasurements(
         to packet: inout DesignProcessPacket
     ) {
         let fixture = CADInteractionDesignProcessGeometryBenchmarkFixture.fixture(
@@ -89,6 +93,12 @@ enum CADInteractionDesignProcessPerformanceBenchmarkService {
         )
         packet.confidence.performanceMeasurements.append(
             geometryFixtureMeasurement(fixture: fixture)
+        )
+        packet.confidence.performanceMeasurements.append(
+            wallClockFixtureMeasurement(fixture: fixture)
+        )
+        packet.confidence.performanceMeasurements.append(
+            residentMemoryFixtureMeasurement(fixture: fixture)
         )
     }
 
@@ -149,7 +159,53 @@ enum CADInteractionDesignProcessPerformanceBenchmarkService {
                 "Deterministic dense-scene geometry fixture for \(fixture.area.rawValue).",
                 "sourceEntities=\(fixture.sourceEntityCount), topologyElements=\(fixture.topologyElementCount).",
                 "constraintsOrRelations=\(fixture.constraintOrRelationCount), samples=\(fixture.sampleCount), variants=\(fixture.variantCount).",
-                "This is a regression-gating complexity metric; wall-clock latency must be benchmarked separately before verified performance claims.",
+                "This is a regression-gating complexity metric shared by wall-clock and memory fixture estimates.",
+            ]
+        )
+    }
+
+    private static func wallClockFixtureMeasurement(
+        fixture: CADInteractionDesignProcessGeometryBenchmarkFixture
+    ) -> DesignProcessPerformanceMeasurement {
+        let estimatedMilliseconds = fixture.estimatedWallClockMilliseconds
+        return DesignProcessPerformanceMeasurement(
+            id: "\(fixture.area.rawValue)-dense-fixture-wall-clock",
+            title: "\(fixture.title) wall-clock fixture",
+            metric: wallClockFixtureMetric,
+            unit: wallClockFixtureUnit,
+            measuredValue: estimatedMilliseconds,
+            budgetValue: fixture.wallClockBudgetMilliseconds,
+            status: estimatedMilliseconds <= fixture.wallClockBudgetMilliseconds
+                ? .withinBudget
+                : .exceedsBudget,
+            source: "CADInteractionDesignProcessGeometryBenchmarkFixture.\(fixture.area.rawValue).wallClock",
+            notes: [
+                "Deterministic production-scene wall-clock regression fixture for \(fixture.area.rawValue).",
+                "The value is derived from the dense fixture operation units so packets carry an enforceable latency budget before host-specific timing samples are available.",
+                "Replace or supplement this estimate with measured wall-clock samples from the production performance harness when that harness is attached.",
+            ]
+        )
+    }
+
+    private static func residentMemoryFixtureMeasurement(
+        fixture: CADInteractionDesignProcessGeometryBenchmarkFixture
+    ) -> DesignProcessPerformanceMeasurement {
+        let estimatedBytes = fixture.estimatedResidentMemoryBytes
+        return DesignProcessPerformanceMeasurement(
+            id: "\(fixture.area.rawValue)-dense-fixture-resident-memory",
+            title: "\(fixture.title) resident memory fixture",
+            metric: residentMemoryFixtureMetric,
+            unit: residentMemoryFixtureUnit,
+            measuredValue: estimatedBytes,
+            budgetValue: fixture.residentMemoryBudgetBytes,
+            status: estimatedBytes <= fixture.residentMemoryBudgetBytes
+                ? .withinBudget
+                : .exceedsBudget,
+            source: "CADInteractionDesignProcessGeometryBenchmarkFixture.\(fixture.area.rawValue).residentMemory",
+            notes: [
+                "Deterministic production-scene resident-memory regression fixture for \(fixture.area.rawValue).",
+                "The estimate accounts for source entities, topology elements, constraints or relations, samples, and variants.",
+                "Replace or supplement this estimate with measured resident-memory samples from the production performance harness when that harness is attached.",
             ]
         )
     }
@@ -186,5 +242,13 @@ enum CADInteractionDesignProcessPerformanceBenchmarkService {
         packet.confidence.performanceMeasurements.first { measurement in
             measurement.metric == agentPayloadMetric
         }?.measuredValue
+    }
+
+    private static var denseFixtureMetrics: Set<String> {
+        [
+            geometryFixtureMetric,
+            wallClockFixtureMetric,
+            residentMemoryFixtureMetric,
+        ]
     }
 }

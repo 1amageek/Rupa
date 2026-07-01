@@ -237,7 +237,7 @@ struct CADInteractionDesignProcessObservationSet: Sendable {
                 source: "CADInteractionQualityGate.performanceBudget",
                 notes: [
                     "This record is a gate-derived calibration fixture, not an elapsed-time benchmark.",
-                    "Attach production wall-clock and memory regression fixtures before treating the performance budget as fully calibrated.",
+                    "Attach host-measured wall-clock and resident-memory samples before treating the performance budget as fully calibrated.",
                 ] + Self.unique(evidence.flatMap(\.notes)).filter { note in
                     let lowered = note.lowercased()
                     return lowered.contains("performance")
