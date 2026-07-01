@@ -2835,7 +2835,8 @@ import Testing
     #expect(grid.scaleLabels.contains {
         abs(abs($0.valueMeters) - grid.majorStepMeters) < 1.0e-12
     })
-    #expect(grid.scaleLabels.allSatisfy { $0.text.hasSuffix(document.displayUnit.symbol) })
+    #expect(grid.scaleLabels.allSatisfy { $0.displayUnit.isMetric })
+    #expect(grid.scaleLabels.allSatisfy { $0.displayValue <= 1_000.0 })
     #expect(grid.scaleLabels.allSatisfy { abs($0.valueMeters) >= grid.majorStepMeters - 1.0e-12 })
     #expect(grid.majorStepMeters >= document.ruler.majorTickMeters)
     #expect(grid.minorStepMeters >= document.ruler.minorTickMeters)
@@ -2869,7 +2870,8 @@ import Testing
     #expect(grid.lines.count < 400)
     #expect(grid.minorStepMeters >= document.ruler.minorTickMeters)
     #expect(grid.majorStepMeters >= document.ruler.majorTickMeters)
-    #expect(grid.scaleLabels.allSatisfy { $0.text.hasSuffix(document.displayUnit.symbol) })
+    #expect(grid.scaleLabels.allSatisfy { $0.displayUnit.isMetric })
+    #expect(grid.scaleLabels.allSatisfy { $0.displayValue <= 1_000.0 })
 }
 
 @Test func viewportProjectedGridFormatsLargeScaleLabelsWithGrouping() {
@@ -2877,7 +2879,25 @@ import Testing
         ViewportProjectedGrid.formattedScaleLabel(
             valueMeters: 1_000.0,
             unit: .meter
-        ) == "1,000m"
+        ) == "1km"
+    )
+    #expect(
+        ViewportProjectedGrid.formattedScaleLabel(
+            valueMeters: 1.0,
+            unit: .millimeter
+        ) == "1m"
+    )
+    #expect(
+        ViewportProjectedGrid.formattedScaleLabel(
+            valueMeters: 1.0,
+            unit: .kilometer
+        ) == "1m"
+    )
+    #expect(
+        ViewportProjectedGrid.formattedScaleLabel(
+            valueMeters: 0.000_25,
+            unit: .meter
+        ) == "250μm"
     )
     #expect(
         ViewportProjectedGrid.formattedScaleLabel(

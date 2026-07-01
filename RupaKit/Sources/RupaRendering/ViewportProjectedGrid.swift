@@ -32,17 +32,23 @@ public struct ViewportProjectedGrid: Equatable {
     public struct ScaleLabel: Equatable {
         public var axis: Axis
         public var valueMeters: Double
+        public var displayValue: Double
+        public var displayUnit: LengthDisplayUnit
         public var position: CGPoint
         public var text: String
 
         public init(
             axis: Axis,
             valueMeters: Double,
+            displayValue: Double,
+            displayUnit: LengthDisplayUnit,
             position: CGPoint,
             text: String
         ) {
             self.axis = axis
             self.valueMeters = valueMeters
+            self.displayValue = displayValue
+            self.displayUnit = displayUnit
             self.position = position
             self.text = text
         }
@@ -236,12 +242,15 @@ public struct ViewportProjectedGrid: Equatable {
                 continue
             }
             let position = offsetLabelPosition(basePosition, axis: plane.firstAxis, layout: layout)
+            let display = scaleLabelDisplay(valueMeters: Double(value), preferredUnit: unit)
             labels.append(
                 ScaleLabel(
                     axis: plane.firstAxis,
                     valueMeters: Double(value),
+                    displayValue: display.value,
+                    displayUnit: display.unit,
                     position: position,
-                    text: formattedScaleLabel(valueMeters: Double(value), unit: unit)
+                    text: display.text
                 )
             )
         }
@@ -253,12 +262,15 @@ public struct ViewportProjectedGrid: Equatable {
                 continue
             }
             let position = offsetLabelPosition(basePosition, axis: plane.secondAxis, layout: layout)
+            let display = scaleLabelDisplay(valueMeters: Double(value), preferredUnit: unit)
             labels.append(
                 ScaleLabel(
                     axis: plane.secondAxis,
                     valueMeters: Double(value),
+                    displayValue: display.value,
+                    displayUnit: display.unit,
                     position: position,
-                    text: formattedScaleLabel(valueMeters: Double(value), unit: unit)
+                    text: display.text
                 )
             )
         }
@@ -287,6 +299,14 @@ public struct ViewportProjectedGrid: Equatable {
         valueMeters: Double,
         unit: LengthDisplayUnit
     ) -> String {
+        scaleLabelDisplay(valueMeters: valueMeters, preferredUnit: unit).text
+    }
+
+    private static func scaleLabelDisplay(
+        valueMeters: Double,
+        preferredUnit: LengthDisplayUnit
+    ) -> (value: Double, unit: LengthDisplayUnit, text: String) {
+        let unit = preferredUnit.readableUnit(forMeters: valueMeters)
         let value = abs(unit.value(fromMeters: valueMeters))
         let maxFractionDigits: Int
         if value >= 100.0 {
@@ -301,7 +321,7 @@ public struct ViewportProjectedGrid: Equatable {
                 .grouping(.automatic)
                 .precision(.fractionLength(0...maxFractionDigits))
         )
-        return "\(formatted)\(unit.symbol)"
+        return (value, unit, "\(formatted)\(unit.symbol)")
     }
 
     private static func visibleModelBounds(

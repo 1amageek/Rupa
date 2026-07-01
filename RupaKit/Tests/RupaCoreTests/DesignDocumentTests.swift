@@ -15,6 +15,15 @@ import Testing
     #expect(LengthDisplayUnit.kilometer.metersPerUnit == 1_000.0)
 }
 
+@Test func lengthDisplayUnitsChooseReadableMetricScale() async throws {
+    #expect(LengthDisplayUnit.millimeter.readableUnit(forMeters: 0.25) == .millimeter)
+    #expect(LengthDisplayUnit.millimeter.readableUnit(forMeters: 1.0) == .meter)
+    #expect(LengthDisplayUnit.meter.readableUnit(forMeters: 1_000.0) == .kilometer)
+    #expect(LengthDisplayUnit.kilometer.readableUnit(forMeters: 1.0) == .meter)
+    #expect(LengthDisplayUnit.meter.readableUnit(forMeters: 0.000_25) == .micrometer)
+    #expect(LengthDisplayUnit.inch.readableUnit(forMeters: 0.3048) == .foot)
+}
+
 @Test func rulerTracksSelectedDisplayUnit() async throws {
     var document = DesignDocument.empty()
     document.setDisplayUnit(.micrometer)

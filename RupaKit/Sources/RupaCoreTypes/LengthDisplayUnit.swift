@@ -51,6 +51,56 @@ public enum LengthDisplayUnit: String, Codable, CaseIterable, Hashable, Identifi
         }
     }
 
+    public var isMetric: Bool {
+        switch self {
+        case .micrometer, .millimeter, .centimeter, .meter, .kilometer:
+            true
+        case .inch, .foot:
+            false
+        }
+    }
+
+    public func readableUnit(forMeters meters: Double) -> LengthDisplayUnit {
+        let magnitude = abs(meters)
+        guard magnitude.isFinite, magnitude > 0.0 else {
+            return self
+        }
+
+        if isMetric {
+            let preferredValue = abs(value(fromMeters: magnitude))
+            if preferredValue >= 0.1, preferredValue < 1_000.0 {
+                return self
+            }
+            return Self.readableMetricUnit(forMeters: magnitude)
+        }
+
+        switch self {
+        case .inch where abs(value(fromMeters: magnitude)) >= 12.0:
+            return .foot
+        case .foot where abs(value(fromMeters: magnitude)) < 1.0:
+            return .inch
+        default:
+            return self
+        }
+    }
+
+    public static func readableMetricUnit(forMeters meters: Double) -> LengthDisplayUnit {
+        let magnitude = abs(meters)
+        guard magnitude.isFinite, magnitude > 0.0 else {
+            return .meter
+        }
+        if magnitude >= 1_000.0 {
+            return .kilometer
+        }
+        if magnitude >= 1.0 {
+            return .meter
+        }
+        if magnitude >= 0.001 {
+            return .millimeter
+        }
+        return .micrometer
+    }
+
     public func meters(from value: Double) -> Double {
         value * metersPerUnit
     }
