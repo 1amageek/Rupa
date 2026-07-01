@@ -63,8 +63,14 @@ struct ViewportAxisTriad: View {
         .accessibilityElement(children: .contain)
     }
 
-    static func inputExclusionRect(in size: CGSize) -> CGRect {
-        ViewportCanvasChromeLayout(viewportSize: size).axisControlExclusionRect
+    static func inputExclusionRect(
+        in size: CGSize,
+        bottomReservedHeight: CGFloat = 0.0
+    ) -> CGRect {
+        ViewportCanvasChromeLayout(
+            viewportSize: size,
+            bottomReservedHeight: bottomReservedHeight
+        ).axisControlExclusionRect
     }
 
     private func iconButton(

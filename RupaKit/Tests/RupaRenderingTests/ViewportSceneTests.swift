@@ -2866,6 +2866,29 @@ import Testing
 }
 
 @MainActor
+@Test func viewportAxisTriadReservesBottomOverlayHeight() {
+    let viewportSize = CGSize(width: 800.0, height: 600.0)
+    let reservedHeight: CGFloat = 48.0
+    let baseline = ViewportCanvasChromeLayout(viewportSize: viewportSize)
+    let reserved = ViewportCanvasChromeLayout(
+        viewportSize: viewportSize,
+        bottomReservedHeight: reservedHeight
+    )
+
+    #expect(reserved.axisControlRect.minY == baseline.axisControlRect.minY - reservedHeight)
+    #expect(reserved.axisControlExclusionRect.minY == baseline.axisControlExclusionRect.minY - reservedHeight)
+    #expect(reserved.inputExclusionRects.count == baseline.inputExclusionRects.count)
+    #expect(!reserved.axisControlExclusionRect.contains(CGPoint(
+        x: viewportSize.width / 2.0,
+        y: viewportSize.height - 24.0
+    )))
+    #expect(reserved.axisControlExclusionRect.contains(CGPoint(
+        x: viewportSize.width / 2.0,
+        y: viewportSize.height - reservedHeight - 24.0
+    )))
+}
+
+@MainActor
 @Test func viewportInputSurfaceClearsInteractionStateOnChromeHitTest() {
     let view = ViewportInputSurface.InputView(frame: CGRect(
         x: 0.0,

@@ -5,6 +5,18 @@ import RupaPreview
 import RupaRendering
 import SwiftUI
 
+private enum WorkspaceCanvasOverlayLayout {
+    static let edgePadding: CGFloat = 8.0
+}
+
+private struct ViewportContextPanelHeightPreferenceKey: PreferenceKey {
+    static let defaultValue: CGFloat = 0.0
+
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
+    }
+}
+
 @MainActor
 public struct MainView: View {
     @State private var session: EditorSession
@@ -66,6 +78,7 @@ public struct MainView: View {
     @State private var slotProfileWidthMeters: Double
     @State private var slotProfileCommandState: SlotProfileCommandState
     @State private var viewportProjectionBasis: ViewportProjectionBasis
+    @State private var viewportContextPanelHeight: CGFloat
     @State private var viewAlignedConstructionPlaneRequest: ViewAlignedConstructionPlaneRequest?
     @State private var viewportProjectionRequest: ViewportProjectionRequest?
     @State private var constructionPlaneRenameTargetID: ConstructionPlaneSourceID?
@@ -147,6 +160,7 @@ public struct MainView: View {
         self._slotProfileWidthMeters = State(initialValue: 0.002)
         self._slotProfileCommandState = State(initialValue: .inactive)
         self._viewportProjectionBasis = State(initialValue: .isometric)
+        self._viewportContextPanelHeight = State(initialValue: 0.0)
         self._viewAlignedConstructionPlaneRequest = State(initialValue: nil)
         self._viewportProjectionRequest = State(initialValue: nil)
         self._constructionPlaneRenameTargetID = State(initialValue: nil)
@@ -462,6 +476,7 @@ public struct MainView: View {
                     canvasDragSketchPlaneOverride: workspacePlaneMode.sketchPlane,
                     projectionRequest: viewportProjectionRequest,
                     selectionHitPolicy: selectionScope.viewportSelectionHitPolicy,
+                    bottomChromeReservedHeight: viewportContextPanelHeight,
                     hoverClearSignal: viewportHoverClearSignal,
                     showsConstructionPlaneHover: showsConstructionPlaneHover,
                     allowsSelectionRectangle: allowsSelectionRectangle,
@@ -533,11 +548,25 @@ public struct MainView: View {
             }
             .overlay(alignment: .bottom) {
                 viewportContextPanel
-                    .padding(.bottom, 8)
-                    .padding(.horizontal, 8)
+                    .padding(.bottom, WorkspaceCanvasOverlayLayout.edgePadding)
+                    .padding(.horizontal, WorkspaceCanvasOverlayLayout.edgePadding)
+                    .background {
+                        GeometryReader { proxy in
+                            Color.clear.preference(
+                                key: ViewportContextPanelHeightPreferenceKey.self,
+                                value: proxy.size.height
+                            )
+                        }
+                    }
                     .onHover(perform: handleWorkspaceOverlayHover)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .onPreferenceChange(ViewportContextPanelHeightPreferenceKey.self) { height in
+                let normalizedHeight = max(0.0, height.rounded(.up))
+                if abs(viewportContextPanelHeight - normalizedHeight) > 0.5 {
+                    viewportContextPanelHeight = normalizedHeight
+                }
+            }
         } content: {
             PreviewSurface(
                 document: session.document,

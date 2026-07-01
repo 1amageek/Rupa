@@ -116,6 +116,7 @@ public struct Viewport: View {
     private let canvasDragSketchPlaneOverride: SketchPlane?
     private let projectionRequest: ViewportProjectionRequest?
     private let selectionHitPolicy: ViewportSelectionHitPolicy
+    private let bottomChromeReservedHeight: CGFloat
     private let hoverClearSignal: Int
     private let showsConstructionPlaneHover: Bool
     private let allowsSelectionRectangle: Bool
@@ -185,6 +186,7 @@ public struct Viewport: View {
         canvasDragSketchPlaneOverride: SketchPlane? = nil,
         projectionRequest: ViewportProjectionRequest? = nil,
         selectionHitPolicy: ViewportSelectionHitPolicy = .all,
+        bottomChromeReservedHeight: CGFloat = 0.0,
         hoverClearSignal: Int = 0,
         showsConstructionPlaneHover: Bool = false,
         allowsSelectionRectangle: Bool = false,
@@ -253,6 +255,7 @@ public struct Viewport: View {
         self.canvasDragSketchPlaneOverride = canvasDragSketchPlaneOverride
         self.projectionRequest = projectionRequest
         self.selectionHitPolicy = selectionHitPolicy
+        self.bottomChromeReservedHeight = max(0.0, bottomChromeReservedHeight)
         self.hoverClearSignal = hoverClearSignal
         self.showsConstructionPlaneHover = showsConstructionPlaneHover
         self.allowsSelectionRectangle = allowsSelectionRectangle
@@ -305,7 +308,10 @@ public struct Viewport: View {
         GeometryReader { proxy in
             TimelineView(.animation) { timeline in
                 let basis = projectionBasis(at: timeline.date)
-                let chromeLayout = ViewportCanvasChromeLayout(viewportSize: proxy.size)
+                let chromeLayout = ViewportCanvasChromeLayout(
+                    viewportSize: proxy.size,
+                    bottomReservedHeight: bottomChromeReservedHeight
+                )
 
                 Canvas { context, size in
                     drawGrid(in: &context, size: size, camera: camera, basis: basis)
@@ -416,7 +422,10 @@ public struct Viewport: View {
                             selectProjectionAxis(axis)
                         }
                     )
-                    .padding(.bottom, ViewportCanvasChromeLayout.axisBottomPadding)
+                    .padding(
+                        .bottom,
+                        ViewportCanvasChromeLayout.axisBottomPadding + bottomChromeReservedHeight
+                    )
                     .zIndex(2.0)
                     .onHover { isHovered in
                         if isHovered {
@@ -781,20 +790,12 @@ public struct Viewport: View {
         let origin = layout.project(.zero)
         let basis = layout.basis
         let planeExtent = hypot(size.width, size.height) * 1.10
-        let yExtent = min(size.width, size.height) * 0.34
 
         drawAxisLine(
             from: basis.endpoint(from: origin, axis: .x, length: -planeExtent),
             to: basis.endpoint(from: origin, axis: .x, length: planeExtent),
             color: ViewportCoordinateAxis.x.color,
             label: ViewportCoordinateAxis.x.label,
-            in: &context
-        )
-        drawAxisLine(
-            from: origin,
-            to: basis.endpoint(from: origin, axis: .y, length: yExtent),
-            color: ViewportCoordinateAxis.y.color,
-            label: ViewportCoordinateAxis.y.label,
             in: &context
         )
         drawAxisLine(

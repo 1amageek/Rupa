@@ -8,12 +8,16 @@ struct ViewportCanvasChromeLayout: Equatable {
     static let inputExclusionPadding: CGFloat = 6.0
 
     var viewportSize: CGSize
+    var bottomReservedHeight: CGFloat = 0.0
 
     var axisControlRect: CGRect {
         clamped(
             CGRect(
                 x: (viewportSize.width - Self.axisControlSize.width) / 2.0,
-                y: viewportSize.height - Self.axisBottomPadding - Self.axisControlSize.height,
+                y: viewportSize.height
+                    - bottomReservedHeight
+                    - Self.axisBottomPadding
+                    - Self.axisControlSize.height,
                 width: Self.axisControlSize.width,
                 height: Self.axisControlSize.height
             )
