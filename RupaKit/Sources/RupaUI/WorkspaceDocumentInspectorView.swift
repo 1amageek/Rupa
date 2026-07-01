@@ -150,20 +150,21 @@ struct WorkspaceDocumentInspectorView: View {
                     unit: unit,
                     for: kind
                 )
-                return value.formatted(.number.precision(.fractionLength(0...6)))
+                return value.formatted(
+                    .number
+                        .grouping(.automatic)
+                        .precision(.fractionLength(0...6))
+                )
             },
             set: { text in
-                let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
-                guard let value = Double(trimmedText), value.isFinite else {
+                guard let meters = RulerScaleControl.meters(
+                    fromFieldText: text,
+                    unit: unit,
+                    for: kind
+                ) else {
                     return
                 }
-                onChange(
-                    RulerScaleControl.meters(
-                        fromFieldValue: value,
-                        unit: unit,
-                        for: kind
-                    )
-                )
+                onChange(meters)
             }
         )
         let sliderBinding = Binding<Double>(

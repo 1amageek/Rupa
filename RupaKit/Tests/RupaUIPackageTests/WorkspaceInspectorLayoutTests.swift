@@ -56,3 +56,26 @@ import Testing
     #expect(requestedMeters == RulerConfiguration.visibleSpanMetersRange.upperBound)
     #expect(displayedMillimeters == 100_000_000.0)
 }
+
+@Test func rulerScaleControlAcceptsGroupedLargeWorkspaceValues() {
+    let commaMeters = RulerScaleControl.meters(
+        fromFieldText: "100,000",
+        unit: .meter,
+        for: .visible
+    )
+    let underscoreMeters = RulerScaleControl.meters(
+        fromFieldText: "100_000",
+        unit: .meter,
+        for: .visible
+    )
+    let imperialFeet = RulerScaleControl.meters(
+        fromFieldText: "328,084",
+        unit: .foot,
+        for: .visible
+    )
+
+    #expect(commaMeters == RulerConfiguration.visibleSpanMetersRange.upperBound)
+    #expect(underscoreMeters == RulerConfiguration.visibleSpanMetersRange.upperBound)
+    #expect(abs((imperialFeet ?? 0.0) - RulerConfiguration.visibleSpanMetersRange.upperBound) < 1.0)
+    #expect(RulerScaleControl.meters(fromFieldText: "not-a-number", unit: .meter, for: .visible) == nil)
+}
