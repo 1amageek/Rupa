@@ -80,6 +80,32 @@ import Testing
     #expect(displayedMillimeters == 1_000_000_000.0)
 }
 
+@Test func rulerScaleControlPresentsReadableMetricUnitsAcrossCADRange() {
+    let visiblePresentation = RulerScaleControl.fieldPresentation(
+        fromMeters: RulerConfiguration.visibleSpanMetersRange.upperBound,
+        preferredUnit: .millimeter,
+        for: .visible
+    )
+    let majorPresentation = RulerScaleControl.fieldPresentation(
+        fromMeters: 1_000.0,
+        preferredUnit: .millimeter,
+        for: .major
+    )
+    let minorPresentation = RulerScaleControl.fieldPresentation(
+        fromMeters: 0.000_25,
+        preferredUnit: .meter,
+        for: .minor
+    )
+
+    #expect(visiblePresentation.unit == .kilometer)
+    #expect(visiblePresentation.value == 1_000.0)
+    #expect(visiblePresentation.text == "1,000")
+    #expect(majorPresentation.unit == .kilometer)
+    #expect(majorPresentation.value == 1.0)
+    #expect(minorPresentation.unit == .micrometer)
+    #expect(minorPresentation.value == 250.0)
+}
+
 @Test func rulerScaleControlAcceptsGroupedLargeWorkspaceValues() {
     let commaMeters = RulerScaleControl.meters(
         fromFieldText: "1,000,000",

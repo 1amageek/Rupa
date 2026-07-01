@@ -142,15 +142,15 @@ struct WorkspaceDocumentInspectorView: View {
         meters: Double,
         onChange: @escaping (Double) -> Void
     ) -> some View {
-        let unit = state.displayUnit
+        let presentation = RulerScaleControl.fieldPresentation(
+            fromMeters: meters,
+            preferredUnit: state.displayUnit,
+            for: kind
+        )
+        let unit = presentation.unit
         let textBinding = Binding<String>(
             get: {
-                let value = RulerScaleControl.fieldValue(
-                    fromMeters: meters,
-                    unit: unit,
-                    for: kind
-                )
-                return WorkspaceInspectorNumberText.string(from: value)
+                presentation.text
             },
             set: { text in
                 guard let meters = RulerScaleControl.meters(
