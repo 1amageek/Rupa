@@ -69,26 +69,23 @@ struct WorkspaceObjectTransformInspectorView: View {
 
     private var scaleSection: some View {
         inspectorSection("Transform Scale") {
-            numericControl(
+            workspaceScaleFactorControl(
                 "X",
-                values: nodes.map { WorkspaceTransformMatrix.scale(for: $0).x },
-                sliderRange: 0.01 ... 10.0
+                values: nodes.map { WorkspaceTransformMatrix.scale(for: $0).x }
             ) { value in
-                onSetTransformComponent(.scaleX, max(value, 0.0001))
+                onSetTransformComponent(.scaleX, value)
             }
-            numericControl(
+            workspaceScaleFactorControl(
                 "Y",
-                values: nodes.map { WorkspaceTransformMatrix.scale(for: $0).y },
-                sliderRange: 0.01 ... 10.0
+                values: nodes.map { WorkspaceTransformMatrix.scale(for: $0).y }
             ) { value in
-                onSetTransformComponent(.scaleY, max(value, 0.0001))
+                onSetTransformComponent(.scaleY, value)
             }
-            numericControl(
+            workspaceScaleFactorControl(
                 "Z",
-                values: nodes.map { WorkspaceTransformMatrix.scale(for: $0).z },
-                sliderRange: 0.01 ... 10.0
+                values: nodes.map { WorkspaceTransformMatrix.scale(for: $0).z }
             ) { value in
-                onSetTransformComponent(.scaleZ, max(value, 0.0001))
+                onSetTransformComponent(.scaleZ, value)
             }
         }
     }

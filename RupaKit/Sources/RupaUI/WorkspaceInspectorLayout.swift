@@ -159,6 +159,45 @@ struct WorkspaceLengthSliderScale: Equatable {
     }
 }
 
+struct WorkspaceScaleFactorSliderScale: Equatable {
+    static let defaultMinimumValue = 1.0e-9
+    static let defaultMaximumValue = 1.0e9
+
+    var valueRange: ClosedRange<Double>
+
+    init(valueRange: ClosedRange<Double>) {
+        let lower = valueRange.lowerBound.isFinite && valueRange.lowerBound > 0.0
+            ? valueRange.lowerBound
+            : Self.defaultMinimumValue
+        let upper = valueRange.upperBound.isFinite
+            ? max(valueRange.upperBound, lower * 10.0)
+            : Self.defaultMaximumValue
+        self.valueRange = lower ... upper
+    }
+
+    func sliderValue(for value: Double) -> Double {
+        let value = clampedValue(value)
+        let ratio = log(valueRange.upperBound / valueRange.lowerBound)
+        guard ratio > 0.0 else {
+            return 0.0
+        }
+        return min(max(log(value / valueRange.lowerBound) / ratio, 0.0), 1.0)
+    }
+
+    func value(fromSliderValue sliderValue: Double) -> Double {
+        let progress = min(max(sliderValue, 0.0), 1.0)
+        let value = valueRange.lowerBound * pow(valueRange.upperBound / valueRange.lowerBound, progress)
+        return clampedValue(value)
+    }
+
+    private func clampedValue(_ value: Double) -> Double {
+        guard value.isFinite else {
+            return 1.0
+        }
+        return min(max(value, valueRange.lowerBound), valueRange.upperBound)
+    }
+}
+
 func workspaceLengthSliderMetersRange(
     for meters: Double,
     ruler: RulerConfiguration,
@@ -189,6 +228,23 @@ func workspaceSignedLengthSliderMetersRange(
         RulerConfiguration.visibleSpanMetersRange.lowerBound
     )
     return -extentMeters ... extentMeters
+}
+
+func workspaceScaleFactorSliderRange(
+    for values: [Double]
+) -> ClosedRange<Double> {
+    let positiveValues = values.filter { $0.isFinite && $0 > 0.0 }
+    let currentMinimum = positiveValues.min() ?? 1.0
+    let currentMaximum = positiveValues.max() ?? 1.0
+    let lower = min(
+        WorkspaceScaleFactorSliderScale.defaultMinimumValue,
+        currentMinimum / 10.0
+    )
+    let upper = max(
+        WorkspaceScaleFactorSliderScale.defaultMaximumValue,
+        currentMaximum * 10.0
+    )
+    return lower ... upper
 }
 
 func workspaceLengthFieldPresentation(
@@ -365,6 +421,56 @@ func numericControl(
             }
         }
         Slider(value: sliderBinding, in: sliderRange)
+            .padding(.leading, inspectorSliderLeadingPadding)
+            .padding(.trailing, WorkspaceInspectorLayout.rowHorizontalPadding)
+    }
+    .padding(.vertical, 2)
+}
+
+@MainActor
+func workspaceScaleFactorControl(
+    _ title: String,
+    values: [Double],
+    onChange: @escaping (Double) -> Void
+) -> some View {
+    let commonValue = commonWorkspaceInspectorValue(values)
+    let sliderRange = workspaceScaleFactorSliderRange(for: values)
+    let scale = WorkspaceScaleFactorSliderScale(valueRange: sliderRange)
+    let textBinding = Binding<String>(
+        get: {
+            if let commonValue {
+                return WorkspaceInspectorNumberText.string(from: commonValue)
+            }
+            return "Mixed"
+        },
+        set: { text in
+            guard let value = WorkspaceInspectorNumberText.value(from: text) else {
+                return
+            }
+            onChange(max(value, sliderRange.lowerBound))
+        }
+    )
+    let sliderBinding = Binding<Double>(
+        get: {
+            scale.sliderValue(for: commonValue ?? 1.0)
+        },
+        set: { sliderValue in
+            onChange(scale.value(fromSliderValue: sliderValue))
+        }
+    )
+
+    return VStack(alignment: .leading, spacing: 4) {
+        inspectorControlRow(title) {
+            HStack(spacing: 6) {
+                TextField(title, text: textBinding)
+                    .multilineTextAlignment(.trailing)
+                    .frame(width: inspectorControlWidth)
+                Text("x")
+                    .foregroundStyle(.secondary)
+                    .frame(width: inspectorUnitWidth, alignment: .leading)
+            }
+        }
+        Slider(value: sliderBinding, in: 0.0 ... 1.0)
             .padding(.leading, inspectorSliderLeadingPadding)
             .padding(.trailing, WorkspaceInspectorLayout.rowHorizontalPadding)
     }

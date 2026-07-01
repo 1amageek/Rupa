@@ -135,6 +135,32 @@ import Testing
     #expect(abs(negativeMeters + 1_000.0) < 0.000_001)
 }
 
+@Test func workspaceScaleFactorSliderScaleUsesLogForWideTransformRanges() {
+    let scale = WorkspaceScaleFactorSliderScale(valueRange: 1.0e-9 ... 1.0e9)
+    let smallValue = scale.sliderValue(for: 1.0e-6)
+    let identityValue = scale.sliderValue(for: 1.0)
+    let largeValue = scale.sliderValue(for: 1.0e6)
+
+    #expect(smallValue > 0.0)
+    #expect(smallValue < identityValue)
+    #expect(identityValue < largeValue)
+    #expect(largeValue < 1.0)
+    #expect(abs(scale.value(fromSliderValue: smallValue) - 1.0e-6) < 1.0e-18)
+    #expect(abs(scale.value(fromSliderValue: identityValue) - 1.0) < 1.0e-12)
+    #expect(abs(scale.value(fromSliderValue: largeValue) - 1.0e6) < 0.000_001)
+}
+
+@Test func workspaceScaleFactorSliderRangeIncludesLargeCurrentTransformScales() {
+    let defaultRange = workspaceScaleFactorSliderRange(for: [1.0])
+    let largeRange = workspaceScaleFactorSliderRange(for: [2.0e9])
+    let tinyRange = workspaceScaleFactorSliderRange(for: [2.0e-10])
+
+    #expect(defaultRange.lowerBound == 1.0e-9)
+    #expect(defaultRange.upperBound == 1.0e9)
+    #expect(largeRange.upperBound == 2.0e10)
+    #expect(abs(tinyRange.lowerBound - 2.0e-11) < 1.0e-24)
+}
+
 @Test func workspaceLengthSliderMetersRangeUsesWorkspaceRulerSpan() {
     let microRange = workspaceLengthSliderMetersRange(
         for: 0.000_001,
