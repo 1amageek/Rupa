@@ -1269,7 +1269,7 @@ public struct MainView: View {
     }
 
     private var workspaceUtilityRail: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: WorkspaceUtilityRailLayout.sectionSpacing) {
             workspaceRailSection("Select") {
                 WorkspaceSelectionScopeControl(selection: $selectionScope)
             }
@@ -1334,8 +1334,8 @@ public struct MainView: View {
                 workspaceValueRow("Issues", diagnosticSummary)
             }
         }
-        .padding(8)
-        .frame(width: 178, alignment: .topLeading)
+        .padding(WorkspaceUtilityRailLayout.contentPadding)
+        .frame(width: WorkspaceUtilityRailLayout.width, alignment: .topLeading)
         .workspaceGlassContainer()
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("WorkspaceUtilityRail")
@@ -2129,12 +2129,25 @@ public struct MainView: View {
             targetSceneNodeID = nil
         }
 
-        let snappedInput = snappedModelInput(target.modelPoint, modifierFlags: target.modifierFlags)
+        let sketchPlane = effectiveSketchPlane(fallback: target.sketchPlane)
+        guard let canvasInput = mappedCanvasInput(
+            modelPoint: target.modelPoint,
+            modelWorldPoint: target.modelWorldPoint,
+            sketchPlane: sketchPlane
+        ) else {
+            return
+        }
+        let snappedInput = snappedModelInput(canvasInput.point, modifierFlags: target.modifierFlags)
         let result = session.activateSelectedToolFromCanvas(
             targetSceneNodeID: targetSceneNodeID,
             modelPoint: snappedInput.point,
-            modelWorldPoint: snappedInput.topologyWorldPoint ?? target.modelWorldPoint,
-            sketchPlane: effectiveSketchPlane(fallback: target.sketchPlane)
+            modelWorldPoint: resolvedCanvasWorldPoint(
+                for: snappedInput.point,
+                topologyWorldPoint: snappedInput.topologyWorldPoint,
+                fallbackWorldPoint: canvasInput.worldPoint,
+                sketchPlane: sketchPlane
+            ),
+            sketchPlane: sketchPlane
         )
         if result.revealsDiagnostics {
             isPreviewExpanded = true
@@ -2662,18 +2675,22 @@ public struct MainView: View {
         from target: ViewportCanvasTarget,
         request: ViewAlignedConstructionPlaneRequest
     ) {
-        let snappedPoint = snappedModelPoint(target.modelPoint, modifierFlags: target.modifierFlags)
         let sketchPlane = effectiveSketchPlane(fallback: target.sketchPlane)
-        let origin: Point3D
-        do {
-            origin = try SketchPlaneCoordinateSystem(plane: sketchPlane).point(from: snappedPoint)
-        } catch {
+        guard let canvasInput = mappedCanvasInput(
+            modelPoint: target.modelPoint,
+            modelWorldPoint: target.modelWorldPoint,
+            sketchPlane: sketchPlane
+        ) else {
             viewAlignedConstructionPlaneRequest = nil
-            session.reportToolStatus(
-                "View-aligned construction plane origin could not be resolved.",
-                severity: .warning
-            )
-            isPreviewExpanded = true
+            return
+        }
+        let snappedInput = snappedModelInput(canvasInput.point, modifierFlags: target.modifierFlags)
+        guard let origin = resolvedSketchPlaneWorldPoint(
+            for: snappedInput.point,
+            topologyWorldPoint: snappedInput.topologyWorldPoint,
+            sketchPlane: sketchPlane
+        ) else {
+            viewAlignedConstructionPlaneRequest = nil
             return
         }
         viewAlignedConstructionPlaneRequest = nil
@@ -3306,13 +3323,27 @@ public struct MainView: View {
 
     private func handleViewportDrag(_ drag: ViewportModelDrag) {
         let sketchPlane = effectiveSketchPlane(fallback: drag.sketchPlane)
-        let startInput = snappedModelInput(drag.start, modifierFlags: drag.modifierFlags)
+        guard let startCanvasInput = mappedCanvasInput(
+            modelPoint: drag.start,
+            modelWorldPoint: drag.startWorldPoint,
+            sketchPlane: sketchPlane
+        ) else {
+            return
+        }
+        guard let endCanvasInput = mappedCanvasInput(
+            modelPoint: drag.end,
+            modelWorldPoint: drag.endWorldPoint,
+            sketchPlane: sketchPlane
+        ) else {
+            return
+        }
+        let startInput = snappedModelInput(startCanvasInput.point, modifierFlags: drag.modifierFlags)
         let startPoint = startInput.point
         let constrainedEndPoint = activeCanvasDragAxisConstraint?.constrainedCanvasPoint(
-            drag.end,
+            endCanvasInput.point,
             from: startPoint,
             on: sketchPlane
-        ) ?? drag.end
+        ) ?? endCanvasInput.point
         let endInput = snappedModelInput(
             constrainedEndPoint,
             referencePoint: startPoint,
@@ -3324,30 +3355,119 @@ public struct MainView: View {
             from: startPoint,
             on: sketchPlane
         ) ?? snappedEndPoint
-        let endWorldPoint = activeCanvasDragAxisConstraint == nil ? endInput.topologyWorldPoint : nil
-        let dragEndWorldPoint = activeCanvasDragAxisConstraint == nil ? drag.endWorldPoint : nil
+        let startWorldPoint = resolvedCanvasWorldPoint(
+            for: startPoint,
+            topologyWorldPoint: startInput.topologyWorldPoint,
+            fallbackWorldPoint: startCanvasInput.worldPoint,
+            sketchPlane: sketchPlane
+        )
+        let endWorldPoint = activeCanvasDragAxisConstraint == nil
+            ? resolvedCanvasWorldPoint(
+                for: endPoint,
+                topologyWorldPoint: endInput.topologyWorldPoint,
+                fallbackWorldPoint: endCanvasInput.worldPoint,
+                sketchPlane: sketchPlane
+            )
+            : resolvedConstrainedCanvasWorldPoint(
+                for: endPoint,
+                sketchPlane: sketchPlane
+            )
         let result = session.activateSelectedToolFromCanvasDrag(
             startModelPoint: startPoint,
             endModelPoint: endPoint,
             sketchPlane: sketchPlane,
-            startWorldPoint: startInput.topologyWorldPoint ?? drag.startWorldPoint,
-            endWorldPoint: endWorldPoint ?? dragEndWorldPoint
+            startWorldPoint: startWorldPoint,
+            endWorldPoint: endWorldPoint
         )
         if result.revealsDiagnostics {
             isPreviewExpanded = true
         }
     }
 
-    private func snappedModelPoint(
-        _ point: Point2D,
-        referencePoint: Point2D? = nil,
-        modifierFlags: ViewportInputModifierFlags = ViewportInputModifierFlags()
-    ) -> Point2D {
-        snappedModelInput(
-            point,
-            referencePoint: referencePoint,
-            modifierFlags: modifierFlags
-        ).point
+    private func mappedCanvasInput(
+        modelPoint: Point2D,
+        modelWorldPoint: Point3D?,
+        sketchPlane: SketchPlane
+    ) -> WorkspaceCanvasPlaneInputMapper.Result? {
+        do {
+            return try WorkspaceCanvasPlaneInputMapper(
+                projectionBasis: viewportProjectionBasis
+            ).map(
+                modelPoint: modelPoint,
+                modelWorldPoint: modelWorldPoint,
+                sketchPlane: sketchPlane
+            )
+        } catch WorkspaceCanvasPlaneInputMapper.Failure.unresolvedViewNormal {
+            session.reportToolStatus(
+                "Canvas input requires a resolved viewport normal for the active construction plane.",
+                severity: .warning
+            )
+        } catch WorkspaceCanvasPlaneInputMapper.Failure.viewRayParallelToPlane {
+            session.reportToolStatus(
+                "Canvas input is parallel to the active construction plane from this view.",
+                severity: .warning
+            )
+        } catch {
+            session.reportToolStatus(
+                "Canvas input could not be projected onto the active construction plane.",
+                severity: .warning
+            )
+        }
+        isPreviewExpanded = true
+        return nil
+    }
+
+    private func resolvedCanvasWorldPoint(
+        for point: Point2D,
+        topologyWorldPoint: Point3D?,
+        fallbackWorldPoint: Point3D?,
+        sketchPlane: SketchPlane
+    ) -> Point3D? {
+        if let topologyWorldPoint {
+            return topologyWorldPoint
+        }
+        guard case .plane = sketchPlane else {
+            return fallbackWorldPoint
+        }
+        return resolvedSketchPlaneWorldPoint(
+            for: point,
+            topologyWorldPoint: nil,
+            sketchPlane: sketchPlane
+        )
+    }
+
+    private func resolvedConstrainedCanvasWorldPoint(
+        for point: Point2D,
+        sketchPlane: SketchPlane
+    ) -> Point3D? {
+        guard case .plane = sketchPlane else {
+            return nil
+        }
+        return resolvedSketchPlaneWorldPoint(
+            for: point,
+            topologyWorldPoint: nil,
+            sketchPlane: sketchPlane
+        )
+    }
+
+    private func resolvedSketchPlaneWorldPoint(
+        for point: Point2D,
+        topologyWorldPoint: Point3D?,
+        sketchPlane: SketchPlane
+    ) -> Point3D? {
+        if let topologyWorldPoint {
+            return topologyWorldPoint
+        }
+        do {
+            return try SketchPlaneCoordinateSystem(plane: sketchPlane).point(from: point)
+        } catch {
+            session.reportToolStatus(
+                "Canvas input world point could not be resolved on the active construction plane.",
+                severity: .warning
+            )
+            isPreviewExpanded = true
+            return nil
+        }
     }
 
     private func snappedModelInput(

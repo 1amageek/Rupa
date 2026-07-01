@@ -30,23 +30,6 @@ enum WorkspaceSelectionScope: String, CaseIterable, Identifiable, Sendable {
         }
     }
 
-    var shortTitle: String {
-        switch self {
-        case .object:
-            return "Obj"
-        case .face:
-            return "Face"
-        case .edge:
-            return "Edge"
-        case .vertex:
-            return "Vert"
-        case .region:
-            return "Region"
-        case .sketchEntity:
-            return "Curve"
-        }
-    }
-
     var systemImage: String {
         switch self {
         case .object:

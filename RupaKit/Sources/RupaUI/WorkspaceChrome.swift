@@ -1,11 +1,22 @@
 import SwiftUI
 
+enum WorkspaceUtilityRailLayout {
+    static let width: CGFloat = 178
+    static let contentPadding: CGFloat = 8
+    static let sectionSpacing: CGFloat = 8
+    static let sectionHeaderSpacing: CGFloat = 7
+
+    static var contentWidth: CGFloat {
+        width - contentPadding * 2
+    }
+}
+
 @MainActor
 func workspaceRailSection<Content: View>(
     _ title: String,
     @ViewBuilder content: () -> Content
 ) -> some View {
-    VStack(alignment: .leading, spacing: 7) {
+    VStack(alignment: .leading, spacing: WorkspaceUtilityRailLayout.sectionHeaderSpacing) {
         Text(title)
             .font(.caption2.weight(.semibold))
             .foregroundStyle(.secondary)

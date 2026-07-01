@@ -18,10 +18,12 @@ import Testing
     }
 }
 
-@Test func workspaceSelectionScopeControlUsesCompactGridWithinUtilityRail() {
-    #expect(WorkspaceSelectionScopeControlLayout.columnCount == 6)
+@Test func workspaceSelectionScopeControlFitsUtilityRailAsSingleIconRow() {
+    #expect(WorkspaceSelectionScopeControlLayout.columnCount == WorkspaceSelectionScope.allCases.count)
     #expect(WorkspaceSelectionScopeControlLayout.rowCount(itemCount: WorkspaceSelectionScope.allCases.count) == 1)
-    #expect(WorkspaceSelectionScopeControlLayout.contentWidth <= 162.0)
+    #expect(WorkspaceSelectionScopeControlLayout.fitsInUtilityRail)
+    #expect(WorkspaceSelectionScopeControlLayout.contentWidth <= WorkspaceUtilityRailLayout.contentWidth)
     #expect(WorkspaceSelectionScopeControlLayout.buttonSize.width >= 25.0)
-    #expect(WorkspaceSelectionScopeControlLayout.buttonSize.height >= 28.0)
+    #expect(WorkspaceSelectionScopeControlLayout.buttonSize.height == 28.0)
+    #expect(WorkspaceUtilityRailLayout.contentWidth == 162.0)
 }

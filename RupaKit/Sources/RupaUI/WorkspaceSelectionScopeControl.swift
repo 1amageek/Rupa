@@ -4,10 +4,16 @@ struct WorkspaceSelectionScopeControlLayout: Equatable {
     static let columnCount = 6
     static let spacing: CGFloat = 2.0
     static let buttonSize = CGSize(width: 25.0, height: 28.0)
+    static let iconSize: CGFloat = 12.0
+    static let cornerRadius: CGFloat = 7.0
 
     static var contentWidth: CGFloat {
         CGFloat(columnCount) * buttonSize.width
             + CGFloat(columnCount - 1) * spacing
+    }
+
+    static var fitsInUtilityRail: Bool {
+        contentWidth <= WorkspaceUtilityRailLayout.contentWidth
     }
 
     static func rowCount(itemCount: Int) -> Int {
@@ -22,26 +28,17 @@ struct WorkspaceSelectionScopeControl: View {
     @Binding var selection: WorkspaceSelectionScope
 
     var body: some View {
-        LazyVGrid(
-            columns: gridColumns,
-            alignment: .leading,
-            spacing: WorkspaceSelectionScopeControlLayout.spacing
-        ) {
+        HStack(spacing: WorkspaceSelectionScopeControlLayout.spacing) {
             ForEach(WorkspaceSelectionScope.allCases) { scope in
                 scopeButton(scope)
             }
         }
-        .frame(width: WorkspaceSelectionScopeControlLayout.contentWidth, alignment: .leading)
-    }
-
-    private var gridColumns: [GridItem] {
-        Array(
-            repeating: GridItem(
-                .fixed(WorkspaceSelectionScopeControlLayout.buttonSize.width),
-                spacing: WorkspaceSelectionScopeControlLayout.spacing
-            ),
-            count: WorkspaceSelectionScopeControlLayout.columnCount
+        .frame(
+            width: WorkspaceSelectionScopeControlLayout.contentWidth,
+            height: WorkspaceSelectionScopeControlLayout.buttonSize.height,
+            alignment: .leading
         )
+        .fixedSize(horizontal: true, vertical: true)
     }
 
     private func scopeButton(_ scope: WorkspaceSelectionScope) -> some View {
@@ -50,8 +47,9 @@ struct WorkspaceSelectionScopeControl: View {
         return Button {
             selection = scope
         } label: {
-            Image(systemName: scope.systemImage)
-                .font(.system(size: 12, weight: .semibold))
+            Label(scope.title, systemImage: scope.systemImage)
+                .labelStyle(.iconOnly)
+                .font(.system(size: WorkspaceSelectionScopeControlLayout.iconSize, weight: .semibold))
                 .symbolRenderingMode(.hierarchical)
                 .foregroundStyle(foregroundStyle(isSelected: isSelected, isEnabled: isEnabled))
                 .frame(
@@ -59,14 +57,16 @@ struct WorkspaceSelectionScopeControl: View {
                     height: WorkspaceSelectionScopeControlLayout.buttonSize.height
                 )
                 .background {
-                    RoundedRectangle(cornerRadius: 7, style: .continuous)
+                    RoundedRectangle(cornerRadius: WorkspaceSelectionScopeControlLayout.cornerRadius, style: .continuous)
                         .fill(fillStyle(isSelected: isSelected, isEnabled: isEnabled))
                 }
                 .overlay {
-                    RoundedRectangle(cornerRadius: 7, style: .continuous)
+                    RoundedRectangle(cornerRadius: WorkspaceSelectionScopeControlLayout.cornerRadius, style: .continuous)
                         .strokeBorder(borderStyle(isSelected: isSelected, isEnabled: isEnabled), lineWidth: 1)
                 }
-                .contentShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+                .contentShape(
+                    RoundedRectangle(cornerRadius: WorkspaceSelectionScopeControlLayout.cornerRadius, style: .continuous)
+                )
         }
         .buttonStyle(.plain)
         .disabled(!isEnabled)
