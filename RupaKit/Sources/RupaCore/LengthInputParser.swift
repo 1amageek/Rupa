@@ -1,23 +1,40 @@
 import Foundation
+import SwiftCAD
 
 public struct LengthInputParser: Sendable {
     public init() {}
 
-    public func parseMeters(
+    public func parseExpression(
         from text: String,
-        defaultUnit: LengthDisplayUnit
-    ) throws -> Double {
+        defaultUnit: LengthDisplayUnit,
+        parameters: ParameterTable = ParameterTable()
+    ) throws -> CADExpression {
         let normalizedText = normalized(text)
         if let architecturalMeters = architecturalMeters(from: normalizedText) {
-            return CADInputValueNormalizer.standard.lengthMeters(architecturalMeters)
+            return .length(
+                CADInputValueNormalizer.standard.lengthMeters(architecturalMeters),
+                .meter
+            )
         }
-        let expression = try ParameterExpressionParser().parse(
+        return try ParameterExpressionParser().parse(
             normalizedText,
-            parameters: ParameterTable(),
+            parameters: parameters,
             targetKind: .length,
             defaults: ParameterExpressionDefaults(lengthUnit: defaultUnit)
         )
-        let quantity = try ParameterTable().resolvedValue(for: expression)
+    }
+
+    public func parseMeters(
+        from text: String,
+        defaultUnit: LengthDisplayUnit,
+        parameters: ParameterTable = ParameterTable()
+    ) throws -> Double {
+        let expression = try parseExpression(
+            from: text,
+            defaultUnit: defaultUnit,
+            parameters: parameters
+        )
+        let quantity = try parameters.resolvedValue(for: expression)
         guard quantity.kind == .length,
               quantity.value.isFinite else {
             throw EditorError(

@@ -20,6 +20,9 @@ import SwiftCAD
     #expect(capabilities.contains("upsertParameter"))
     #expect(capabilities.contains("deleteParameter"))
     #expect(capabilities.contains("setParameterExpression"))
+    #expect(capabilities.contains("setObjectDimensionExpression"))
+    #expect(capabilities.contains("setSketchEntityDimensionExpression"))
+    #expect(capabilities.contains("setSelectionDimensionTargetExpression"))
     #expect(capabilities.contains("listParameters"))
     #expect(capabilities.contains("cadInteractionQualityAssessment"))
     #expect(capabilities.contains("createComponentDefinition"))
@@ -156,6 +159,15 @@ import SwiftCAD
     let descriptors = AgentCommandController().capabilityDescriptors()
     let rulerConfiguration = try #require(descriptors.first { $0.name == "setRulerConfiguration" })
     let workspaceScalePreset = try #require(descriptors.first { $0.name == "setWorkspaceScalePreset" })
+    let objectDimensionExpression = try #require(
+        descriptors.first { $0.name == "setObjectDimensionExpression" }
+    )
+    let sketchEntityDimensionExpression = try #require(
+        descriptors.first { $0.name == "setSketchEntityDimensionExpression" }
+    )
+    let selectionDimensionTargetExpression = try #require(
+        descriptors.first { $0.name == "setSelectionDimensionTargetExpression" }
+    )
     let fillet = try #require(descriptors.first { $0.name == "filletBodyEdges" })
     let faceOffset = try #require(descriptors.first { $0.name == "offsetBodyFace" })
     let faceDraft = try #require(descriptors.first { $0.name == "draftBodyFaces" })
@@ -274,6 +286,17 @@ import SwiftCAD
     #expect(workspaceScalePreset.optionMatrix.contains { axis in
         axis.name == "preset" && axis.supportedValues.contains(WorkspaceScalePreset.sitePlanning.rawValue)
     })
+    #expect(objectDimensionExpression.access == .agentRequest)
+    #expect(objectDimensionExpression.discovery.contains(.objectDimensionSummary))
+    #expect(objectDimensionExpression.targets == [.body, .face, .edge])
+    #expect(objectDimensionExpression.mutatesDocument)
+    #expect(sketchEntityDimensionExpression.access == .agentRequest)
+    #expect(sketchEntityDimensionExpression.discovery.contains(.sketchDimensionSummary))
+    #expect(sketchEntityDimensionExpression.targets == [.sketchEntity])
+    #expect(sketchEntityDimensionExpression.mutatesDocument)
+    #expect(selectionDimensionTargetExpression.access == .agentRequest)
+    #expect(selectionDimensionTargetExpression.discovery.contains(.selectionDimensionEvaluation))
+    #expect(selectionDimensionTargetExpression.mutatesDocument)
     let constructionPlaneSetActive = try #require(descriptors.first { $0.name == "setActiveConstructionPlane" })
     let constructionPlaneRename = try #require(descriptors.first { $0.name == "renameConstructionPlane" })
     let constructionPlaneSummary = try #require(descriptors.first { $0.name == "constructionPlaneSummary" })

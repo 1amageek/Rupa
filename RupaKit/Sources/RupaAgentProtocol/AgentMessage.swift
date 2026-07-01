@@ -24,6 +24,29 @@ public enum AgentRequest: Codable, Equatable, Sendable {
         defaults: ParameterExpressionDefaults,
         expectedGeneration: DocumentGeneration?
     )
+    case setObjectDimensionExpression(
+        sessionID: UUID,
+        target: SelectionTarget,
+        kind: ObjectDimensionKind,
+        expression: String,
+        defaults: ParameterExpressionDefaults,
+        expectedGeneration: DocumentGeneration?
+    )
+    case setSketchEntityDimensionExpression(
+        sessionID: UUID,
+        target: SelectionTarget,
+        kind: SketchEntityDimensionKind,
+        expression: String,
+        defaults: ParameterExpressionDefaults,
+        expectedGeneration: DocumentGeneration?
+    )
+    case setSelectionDimensionTargetExpression(
+        sessionID: UUID,
+        id: SelectionDimensionID,
+        expression: String,
+        defaults: ParameterExpressionDefaults,
+        expectedGeneration: DocumentGeneration?
+    )
     case evaluate(
         sessionID: UUID,
         expectedGeneration: DocumentGeneration?
@@ -199,6 +222,12 @@ public extension AgentRequest {
             "document.parameters"
         case .setParameterExpression:
             "parameter.setExpression"
+        case .setObjectDimensionExpression:
+            "objectDimension.setExpression"
+        case .setSketchEntityDimensionExpression:
+            "sketchEntityDimension.setExpression"
+        case .setSelectionDimensionTargetExpression:
+            "selectionDimension.setTargetExpression"
         case .evaluate:
             "document.evaluate"
         case .measure:

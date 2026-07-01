@@ -136,6 +136,74 @@ public final class AgentCommandController: AgentClientProtocol {
             failureMode: "Rejects parse errors, dependency errors, kind mismatches, and stale generations before mutation."
         ),
         capability(
+            "setObjectDimensionExpression",
+            category: .solid,
+            summary: "Parse a user-facing length expression string and apply it to a supported selected object dimension.",
+            access: .agentRequest,
+            mutatesDocument: true,
+            discovery: [.topologySummary, .objectDimensionSummary],
+            targets: [.body, .face, .edge],
+            failureMode: "Rejects parse errors, non-length expressions, unsupported object dimensions, invalid values, and stale generations before mutation.",
+            optionMatrix: [
+                AgentCapabilityDescriptor.OptionAxis(
+                    name: "expression",
+                    supportedValues: [
+                        "document parameters",
+                        "explicit length units",
+                        "architectural feet and inches",
+                    ],
+                    notes: [
+                        "Expressions resolve through the current document parameter table.",
+                        "Length units include micrometers through kilometers plus inches and feet.",
+                    ]
+                )
+            ]
+        ),
+        capability(
+            "setSketchEntityDimensionExpression",
+            category: .sourceCurveEditing,
+            summary: "Parse a user-facing length or angle expression string and apply it to a supported source sketch entity dimension.",
+            access: .agentRequest,
+            mutatesDocument: true,
+            discovery: [.sketchEntitySummary, .sketchDimensionSummary],
+            targets: [.sketchEntity],
+            failureMode: "Rejects parse errors, quantity-kind mismatches, unsupported sketch dimensions, fixed conflicts, invalid values, and stale generations before mutation.",
+            optionMatrix: [
+                AgentCapabilityDescriptor.OptionAxis(
+                    name: "expression",
+                    supportedValues: [
+                        "document parameters",
+                        "explicit length or angle units",
+                        "architectural feet and inches for length dimensions",
+                    ],
+                    notes: [
+                        "Line, radius, and diameter dimensions resolve as lengths.",
+                        "Line angle and arc span dimensions resolve as angles.",
+                    ]
+                )
+            ]
+        ),
+        capability(
+            "setSelectionDimensionTargetExpression",
+            category: .sourceCurveEditing,
+            summary: "Parse a user-facing expression string and set the target of an existing persistent selection dimension.",
+            access: .agentRequest,
+            mutatesDocument: true,
+            discovery: [.selectionDimensionEvaluation],
+            targets: [.document, .face, .edge, .vertex, .sketchEntity, .sketchPointHandle, .sketchControlPoint],
+            failureMode: "Rejects missing selection dimension IDs, parse errors, quantity-kind mismatches, invalid values, and stale generations before mutation.",
+            optionMatrix: [
+                AgentCapabilityDescriptor.OptionAxis(
+                    name: "quantityKind",
+                    supportedValues: ["distance", "angle"],
+                    notes: [
+                        "The existing selection dimension determines whether the expression must resolve to length or angle.",
+                        "Length targets share the same explicit-unit and architectural input support as object dimensions.",
+                    ]
+                )
+            ]
+        ),
+        capability(
             "listParameters",
             category: .read,
             summary: "Read all document parameters without mutating source or undo history.",
@@ -1942,6 +2010,60 @@ public final class AgentCommandController: AgentClientProtocol {
                     in: session
                 )
                 return .command(result)
+            case let .setObjectDimensionExpression(sessionID, target, kind, expression, defaults, expectedGeneration):
+                let session = try registry.session(id: sessionID)
+                try session.store.requireGeneration(expectedGeneration)
+                let parsedExpression = try parseDimensionExpression(
+                    expression,
+                    targetKind: .length,
+                    defaults: defaults,
+                    session: session
+                )
+                let result = try runner.execute(
+                    .setObjectDimension(
+                        target: target,
+                        kind: kind,
+                        value: parsedExpression
+                    ),
+                    in: session
+                )
+                return .command(result)
+            case let .setSketchEntityDimensionExpression(sessionID, target, kind, expression, defaults, expectedGeneration):
+                let session = try registry.session(id: sessionID)
+                try session.store.requireGeneration(expectedGeneration)
+                let parsedExpression = try parseDimensionExpression(
+                    expression,
+                    targetKind: kind.quantityKind,
+                    defaults: defaults,
+                    session: session
+                )
+                let result = try runner.execute(
+                    .setSketchEntityDimension(
+                        target: target,
+                        kind: kind,
+                        value: parsedExpression
+                    ),
+                    in: session
+                )
+                return .command(result)
+            case let .setSelectionDimensionTargetExpression(sessionID, id, expression, defaults, expectedGeneration):
+                let session = try registry.session(id: sessionID)
+                try session.store.requireGeneration(expectedGeneration)
+                let targetKind = try selectionDimensionQuantityKind(id: id, session: session)
+                let parsedExpression = try parseDimensionExpression(
+                    expression,
+                    targetKind: targetKind,
+                    defaults: defaults,
+                    session: session
+                )
+                let result = try runner.execute(
+                    .setSelectionDimensionTarget(
+                        id: id,
+                        target: parsedExpression
+                    ),
+                    in: session
+                )
+                return .command(result)
             case let .evaluate(sessionID, expectedGeneration):
                 let session = try registry.session(id: sessionID)
                 let result = try runner.executeBatch(
@@ -2262,7 +2384,54 @@ public final class AgentCommandController: AgentClientProtocol {
         }
     }
 
+    private func parseDimensionExpression(
+        _ expression: String,
+        targetKind: QuantityKind,
+        defaults: ParameterExpressionDefaults,
+        session: EditorSession
+    ) throws -> CADExpression {
+        switch targetKind {
+        case .length:
+            return try LengthInputParser().parseExpression(
+                from: expression,
+                defaultUnit: defaults.lengthUnit,
+                parameters: session.document.cadDocument.parameters
+            )
+        case .angle, .scalar:
+            return try ParameterExpressionParser().parse(
+                expression,
+                parameters: session.document.cadDocument.parameters,
+                targetKind: targetKind,
+                defaults: defaults
+            )
+        }
+    }
+
+    private func selectionDimensionQuantityKind(
+        id: SelectionDimensionID,
+        session: EditorSession
+    ) throws -> QuantityKind {
+        guard let kind = session.document.cadDocument.selectionDimensions.first(where: { $0.id == id })?.kind else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "Selection dimension target expression requires an existing selection dimension."
+            )
+        }
+        return kind.quantityKind
+    }
+
     public func send(_ request: AgentRequest) throws -> AgentResponse {
         handle(request)
+    }
+}
+
+private extension SketchEntityDimensionKind {
+    var quantityKind: QuantityKind {
+        switch self {
+        case .length, .radius, .diameter:
+            .length
+        case .angle:
+            .angle
+        }
     }
 }

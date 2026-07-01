@@ -79,6 +79,25 @@ import Testing
     #expect(abs(fractionalMeters - LengthDisplayUnit.inch.meters(from: 0.5)) < 0.000_000_000_001)
 }
 
+@Test func lengthInputParserResolvesDocumentParameterExpressions() throws {
+    var document = DesignDocument.empty(named: "Length Input Parameters")
+    try document.upsertParameter(
+        name: "siteWidth",
+        expression: .constant(.length(1.0, unit: .kilometer)),
+        kind: .length
+    )
+
+    let expression = try LengthInputParser().parseExpression(
+        from: "siteWidth + 250m",
+        defaultUnit: .millimeter,
+        parameters: document.cadDocument.parameters
+    )
+    let resolved = try document.cadDocument.parameters.resolvedValue(for: expression)
+
+    #expect(resolved.kind == .length)
+    #expect(abs(resolved.value - 1_250.0) < 0.000_000_000_001)
+}
+
 @Test func parameterExpressionParserRejectsUnknownParameterBeforeMutation() throws {
     var caught: EditorError?
 

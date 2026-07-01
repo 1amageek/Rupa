@@ -98,6 +98,41 @@ public struct AgentRequestEnvelope: Codable, Equatable, Sendable {
                 ),
                 forKey: .params
             )
+        case let .setObjectDimensionExpression(sessionID, target, kind, expression, defaults, expectedGeneration):
+            try container.encode(
+                SetObjectDimensionExpressionParams(
+                    sessionID: sessionID,
+                    target: target,
+                    kind: kind,
+                    expression: expression,
+                    defaults: defaults,
+                    expectedGeneration: expectedGeneration
+                ),
+                forKey: .params
+            )
+        case let .setSketchEntityDimensionExpression(sessionID, target, kind, expression, defaults, expectedGeneration):
+            try container.encode(
+                SetSketchEntityDimensionExpressionParams(
+                    sessionID: sessionID,
+                    target: target,
+                    kind: kind,
+                    expression: expression,
+                    defaults: defaults,
+                    expectedGeneration: expectedGeneration
+                ),
+                forKey: .params
+            )
+        case let .setSelectionDimensionTargetExpression(sessionID, id, expression, defaults, expectedGeneration):
+            try container.encode(
+                SetSelectionDimensionTargetExpressionParams(
+                    sessionID: sessionID,
+                    id: id,
+                    expression: expression,
+                    defaults: defaults,
+                    expectedGeneration: expectedGeneration
+                ),
+                forKey: .params
+            )
         case let .evaluate(sessionID, expectedGeneration),
              let .measure(sessionID, expectedGeneration),
              let .constructionPlaneSummary(sessionID, expectedGeneration),
@@ -267,6 +302,43 @@ public struct AgentRequestEnvelope: Codable, Equatable, Sendable {
                 name: payload.name,
                 expression: payload.expression,
                 kind: payload.kind,
+                defaults: payload.defaults,
+                expectedGeneration: payload.expectedGeneration
+            )
+        case "objectDimension.setExpression":
+            let payload = try decodeParams(SetObjectDimensionExpressionParams.self, from: container, method: method)
+            return .setObjectDimensionExpression(
+                sessionID: payload.sessionID,
+                target: payload.target,
+                kind: payload.kind,
+                expression: payload.expression,
+                defaults: payload.defaults,
+                expectedGeneration: payload.expectedGeneration
+            )
+        case "sketchEntityDimension.setExpression":
+            let payload = try decodeParams(
+                SetSketchEntityDimensionExpressionParams.self,
+                from: container,
+                method: method
+            )
+            return .setSketchEntityDimensionExpression(
+                sessionID: payload.sessionID,
+                target: payload.target,
+                kind: payload.kind,
+                expression: payload.expression,
+                defaults: payload.defaults,
+                expectedGeneration: payload.expectedGeneration
+            )
+        case "selectionDimension.setTargetExpression":
+            let payload = try decodeParams(
+                SetSelectionDimensionTargetExpressionParams.self,
+                from: container,
+                method: method
+            )
+            return .setSelectionDimensionTargetExpression(
+                sessionID: payload.sessionID,
+                id: payload.id,
+                expression: payload.expression,
                 defaults: payload.defaults,
                 expectedGeneration: payload.expectedGeneration
             )
@@ -516,6 +588,58 @@ private struct SetParameterExpressionParams: AgentRequestParameterPayload, Equat
     var name: String
     var expression: String
     var kind: QuantityKind
+    var defaults: ParameterExpressionDefaults
+    var expectedGeneration: DocumentGeneration?
+}
+
+private struct SetObjectDimensionExpressionParams: AgentRequestParameterPayload, Equatable {
+    static let allowedKeys: Set<String> = [
+        "sessionID",
+        "target",
+        "kind",
+        "expression",
+        "defaults",
+        "expectedGeneration",
+    ]
+
+    var sessionID: UUID
+    var target: SelectionTarget
+    var kind: ObjectDimensionKind
+    var expression: String
+    var defaults: ParameterExpressionDefaults
+    var expectedGeneration: DocumentGeneration?
+}
+
+private struct SetSketchEntityDimensionExpressionParams: AgentRequestParameterPayload, Equatable {
+    static let allowedKeys: Set<String> = [
+        "sessionID",
+        "target",
+        "kind",
+        "expression",
+        "defaults",
+        "expectedGeneration",
+    ]
+
+    var sessionID: UUID
+    var target: SelectionTarget
+    var kind: SketchEntityDimensionKind
+    var expression: String
+    var defaults: ParameterExpressionDefaults
+    var expectedGeneration: DocumentGeneration?
+}
+
+private struct SetSelectionDimensionTargetExpressionParams: AgentRequestParameterPayload, Equatable {
+    static let allowedKeys: Set<String> = [
+        "sessionID",
+        "id",
+        "expression",
+        "defaults",
+        "expectedGeneration",
+    ]
+
+    var sessionID: UUID
+    var id: SelectionDimensionID
+    var expression: String
     var defaults: ParameterExpressionDefaults
     var expectedGeneration: DocumentGeneration?
 }
