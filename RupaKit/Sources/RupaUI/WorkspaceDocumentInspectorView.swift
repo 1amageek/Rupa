@@ -26,6 +26,7 @@ struct WorkspaceDocumentInspectorState: Equatable, Sendable {
 struct WorkspaceDocumentInspectorView: View {
     var state: WorkspaceDocumentInspectorState
     var setDisplayUnit: (LengthDisplayUnit) -> Void
+    var setWorkspaceScalePreset: (WorkspaceScalePreset) -> Void
     var setMinorTickMeters: (Double) -> Void
     var setMajorTickMeters: (Double) -> Void
     var setVisibleSpanMeters: (Double) -> Void
@@ -62,6 +63,7 @@ struct WorkspaceDocumentInspectorView: View {
         }
 
         inspectorSection("Units") {
+            scalePresetMenu
             displayUnitPicker
         }
 
@@ -84,6 +86,31 @@ struct WorkspaceDocumentInspectorView: View {
                 meters: state.ruler.visibleSpanMeters,
                 onChange: setVisibleSpanMeters
             )
+        }
+    }
+
+    private var scalePresetMenu: some View {
+        let selectedTitle = WorkspaceScalePreset.matching(state.ruler)?.title ?? "Custom"
+        return inspectorControlRow("Scale Preset") {
+            Menu {
+                ForEach(WorkspaceScalePreset.allCases) { preset in
+                    Button(preset.title) {
+                        setWorkspaceScalePreset(preset)
+                    }
+                }
+            } label: {
+                HStack(spacing: 6) {
+                    Text(selectedTitle)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                    Spacer(minLength: 4)
+                    Image(systemName: "chevron.up.chevron.down")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+                .frame(width: inspectorControlWidth + inspectorUnitWidth + 6)
+            }
+            .controlSize(.small)
         }
     }
 

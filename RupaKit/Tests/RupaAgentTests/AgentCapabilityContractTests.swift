@@ -15,6 +15,7 @@ import SwiftCAD
     #expect(capabilities.contains("describeDocument"))
     #expect(capabilities.contains("setDisplayUnit"))
     #expect(capabilities.contains("setRulerConfiguration"))
+    #expect(capabilities.contains("setWorkspaceScalePreset"))
     #expect(capabilities.contains("renameDocument"))
     #expect(capabilities.contains("upsertParameter"))
     #expect(capabilities.contains("deleteParameter"))
@@ -154,6 +155,7 @@ import SwiftCAD
 @Test func agentCapabilityDescriptorsExposeDiscoveryAndMutationContracts() async throws {
     let descriptors = AgentCommandController().capabilityDescriptors()
     let rulerConfiguration = try #require(descriptors.first { $0.name == "setRulerConfiguration" })
+    let workspaceScalePreset = try #require(descriptors.first { $0.name == "setWorkspaceScalePreset" })
     let fillet = try #require(descriptors.first { $0.name == "filletBodyEdges" })
     let faceOffset = try #require(descriptors.first { $0.name == "offsetBodyFace" })
     let faceDraft = try #require(descriptors.first { $0.name == "draftBodyFaces" })
@@ -266,6 +268,12 @@ import SwiftCAD
     #expect(rulerConfiguration.summary.contains("visible workspace span"))
     #expect(rulerConfiguration.failureMode.contains("workspace scale range"))
     #expect(rulerConfiguration.optionMatrix.contains { $0.name == "rulerDistanceMeters" })
+    #expect(workspaceScalePreset.category == .document)
+    #expect(workspaceScalePreset.mutatesDocument)
+    #expect(workspaceScalePreset.summary.contains("site planning"))
+    #expect(workspaceScalePreset.optionMatrix.contains { axis in
+        axis.name == "preset" && axis.supportedValues.contains(WorkspaceScalePreset.sitePlanning.rawValue)
+    })
     let constructionPlaneSetActive = try #require(descriptors.first { $0.name == "setActiveConstructionPlane" })
     let constructionPlaneRename = try #require(descriptors.first { $0.name == "renameConstructionPlane" })
     let constructionPlaneSummary = try #require(descriptors.first { $0.name == "constructionPlaneSummary" })

@@ -34,6 +34,16 @@ public struct AutomationRunner {
                 didMutate: result.didMutate,
                 diagnostics: result.diagnostics
             )
+        case .setWorkspaceScalePreset(let preset):
+            let configuration = preset.rulerConfiguration.normalizedForWorkspaceScale()
+            let result = try session.execute(.setRulerConfiguration(configuration))
+            return AutomationResult(
+                message: "Workspace scale preset changed to \(preset.title).",
+                commandName: result.commandName,
+                generation: result.generation,
+                didMutate: result.didMutate,
+                diagnostics: result.diagnostics
+            )
         case .renameDocument(let name):
             let result = try session.execute(.renameDocument(name: name))
             return AutomationResult(

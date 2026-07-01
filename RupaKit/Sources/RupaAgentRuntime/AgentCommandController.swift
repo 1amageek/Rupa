@@ -78,6 +78,25 @@ public final class AgentCommandController: AgentClientProtocol {
             ]
         ),
         capability(
+            "setWorkspaceScalePreset",
+            category: .document,
+            summary: "Apply a named workspace scale preset from micro fabrication through site planning.",
+            access: .automationCommand,
+            mutatesDocument: true,
+            targets: [.document],
+            failureMode: "Rejects stale generations before applying the preset ruler configuration.",
+            optionMatrix: [
+                AgentCapabilityDescriptor.OptionAxis(
+                    name: "preset",
+                    supportedValues: WorkspaceScalePreset.allCases.map(\.rawValue),
+                    notes: [
+                        "Presets update display unit, minor tick, major tick, and visible workspace span together.",
+                        "Use setRulerConfiguration when a custom scale is required.",
+                    ]
+                )
+            ]
+        ),
+        capability(
             "renameDocument",
             category: .document,
             summary: "Rename the document through the undoable command pipeline.",

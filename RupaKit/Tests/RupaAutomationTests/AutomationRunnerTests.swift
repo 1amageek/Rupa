@@ -39,6 +39,22 @@ import SwiftCAD
 }
 
 @MainActor
+@Test func automationCanApplyWorkspaceScalePreset() async throws {
+    let session = EditorSession()
+    let runner = AutomationRunner()
+    let preset = WorkspaceScalePreset.sitePlanning
+
+    let result = try runner.execute(.setWorkspaceScalePreset(preset), in: session)
+
+    #expect(session.document.displayUnit == .meter)
+    #expect(session.document.ruler == preset.rulerConfiguration.normalizedForWorkspaceScale())
+    #expect(session.generation == DocumentGeneration(1))
+    #expect(result.commandName == "setRulerConfiguration")
+    #expect(result.didMutate)
+    #expect(result.message.contains("Site Planning"))
+}
+
+@MainActor
 @Test func automationBatchUsesExpectedGeneration() async throws {
     let session = EditorSession()
     let runner = AutomationRunner()

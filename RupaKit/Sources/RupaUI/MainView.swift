@@ -4392,6 +4392,9 @@ public struct MainView: View {
         WorkspaceDocumentInspectorView(
             state: workspaceDocumentInspectorState,
             setDisplayUnit: { session.setDisplayUnit($0) },
+            setWorkspaceScalePreset: {
+                session.setRulerConfiguration($0.rulerConfiguration.normalizedForWorkspaceScale())
+            },
             setMinorTickMeters: { setRulerConfiguration(minorTickMeters: $0) },
             setMajorTickMeters: { setRulerConfiguration(majorTickMeters: $0) },
             setVisibleSpanMeters: { setRulerConfiguration(visibleSpanMeters: $0) }
