@@ -6,6 +6,9 @@ public struct WorkspaceScaleSnapshot: Codable, Equatable, Sendable {
     public var minorTickMeters: Double
     public var majorTickMeters: Double
     public var visibleSpanMeters: Double
+    public var minorTickDisplayValue: Double
+    public var majorTickDisplayValue: Double
+    public var visibleSpanDisplayValue: Double
     public var matchedPreset: WorkspaceScalePreset?
     public var matchedPresetTitle: String?
 
@@ -15,6 +18,9 @@ public struct WorkspaceScaleSnapshot: Codable, Equatable, Sendable {
         minorTickMeters: Double,
         majorTickMeters: Double,
         visibleSpanMeters: Double,
+        minorTickDisplayValue: Double? = nil,
+        majorTickDisplayValue: Double? = nil,
+        visibleSpanDisplayValue: Double? = nil,
         matchedPreset: WorkspaceScalePreset?,
         matchedPresetTitle: String?
     ) {
@@ -23,6 +29,12 @@ public struct WorkspaceScaleSnapshot: Codable, Equatable, Sendable {
         self.minorTickMeters = minorTickMeters
         self.majorTickMeters = majorTickMeters
         self.visibleSpanMeters = visibleSpanMeters
+        self.minorTickDisplayValue = minorTickDisplayValue
+            ?? displayUnit.value(fromMeters: minorTickMeters)
+        self.majorTickDisplayValue = majorTickDisplayValue
+            ?? displayUnit.value(fromMeters: majorTickMeters)
+        self.visibleSpanDisplayValue = visibleSpanDisplayValue
+            ?? displayUnit.value(fromMeters: visibleSpanMeters)
         self.matchedPreset = matchedPreset
         self.matchedPresetTitle = matchedPresetTitle
     }
@@ -43,9 +55,18 @@ public struct WorkspaceScaleSnapshot: Codable, Equatable, Sendable {
 
     public var summary: String {
         let presetTitle = matchedPresetTitle ?? "Custom"
-        let minorTick = MeasurementDisplayNumberText.lengthString(fromMeters: minorTickMeters)
-        let majorTick = MeasurementDisplayNumberText.lengthString(fromMeters: majorTickMeters)
-        let visibleSpan = MeasurementDisplayNumberText.lengthString(fromMeters: visibleSpanMeters)
+        let minorTick = MeasurementDisplayNumberText.lengthString(
+            fromMeters: minorTickMeters,
+            unit: displayUnit
+        )
+        let majorTick = MeasurementDisplayNumberText.lengthString(
+            fromMeters: majorTickMeters,
+            unit: displayUnit
+        )
+        let visibleSpan = MeasurementDisplayNumberText.lengthString(
+            fromMeters: visibleSpanMeters,
+            unit: displayUnit
+        )
         return "Workspace scale \(presetTitle), unit \(displayUnitSymbol), minor \(minorTick), major \(majorTick), visible span \(visibleSpan)."
     }
 }

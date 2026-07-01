@@ -3396,6 +3396,7 @@ struct CLICommandApplyTests {
         #expect(presetResponse.saved)
         #expect(presetResponse.workspaceScale?.matchedPreset == .sitePlanning)
         #expect(presetResponse.workspaceScale?.visibleSpanMeters == 100_000.0)
+        #expect(presetResponse.workspaceScale?.visibleSpanDisplayValue == 100_000.0)
         #expect(loadedAfterPreset.displayUnit == .meter)
         #expect(loadedAfterPreset.ruler == WorkspaceScalePreset.sitePlanning.rulerConfiguration.normalizedForWorkspaceScale())
 
@@ -3418,6 +3419,8 @@ struct CLICommandApplyTests {
         #expect(imperialPresetResponse.saved)
         #expect(imperialPresetResponse.workspaceScale?.displayUnit == .foot)
         #expect(imperialPresetResponse.workspaceScale?.matchedPreset == .sitePlanningImperial)
+        #expect(imperialPresetResponse.workspaceScale?.minorTickDisplayValue == 100.0)
+        #expect(imperialPresetResponse.workspaceScale?.majorTickDisplayValue == 1_000.0)
         #expect(loadedAfterImperialPreset.ruler == WorkspaceScalePreset.sitePlanningImperial.rulerConfiguration.normalizedForWorkspaceScale())
 
         #expect(describeResult.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: describeResult.standardError))
@@ -3433,6 +3436,9 @@ struct CLICommandApplyTests {
         #expect(cliNearlyEqual(rulerResponse.workspaceScale?.minorTickMeters ?? 0.0, 0.3048))
         #expect(cliNearlyEqual(rulerResponse.workspaceScale?.majorTickMeters ?? 0.0, 3.048))
         #expect(cliNearlyEqual(rulerResponse.workspaceScale?.visibleSpanMeters ?? 0.0, 3048.0))
+        #expect(cliNearlyEqual(rulerResponse.workspaceScale?.minorTickDisplayValue ?? 0.0, 1.0))
+        #expect(cliNearlyEqual(rulerResponse.workspaceScale?.majorTickDisplayValue ?? 0.0, 10.0))
+        #expect(cliNearlyEqual(rulerResponse.workspaceScale?.visibleSpanDisplayValue ?? 0.0, 10_000.0))
         #expect(loadedAfterRuler.displayUnit == .foot)
         #expect(cliNearlyEqual(loadedAfterRuler.ruler.visibleSpanMeters, 3048.0))
 

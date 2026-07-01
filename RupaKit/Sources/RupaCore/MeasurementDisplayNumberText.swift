@@ -28,7 +28,10 @@ enum MeasurementDisplayNumberText {
         return string(from: metersValue / divisor)
     }
 
-    static func lengthString(fromMeters meters: Double) -> String {
-        "\(string(from: meters)) m"
+    static func lengthString(
+        fromMeters meters: Double,
+        unit: LengthDisplayUnit = .meter
+    ) -> String {
+        "\(string(from: unit.value(fromMeters: meters))) \(unit.symbol)"
     }
 }

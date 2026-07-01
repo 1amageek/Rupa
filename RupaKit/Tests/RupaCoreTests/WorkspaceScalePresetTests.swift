@@ -40,7 +40,23 @@ import Testing
 @Test func workspaceScaleSnapshotSummaryGroupsLargeMeterValues() {
     let snapshot = WorkspaceScaleSnapshot(ruler: WorkspaceScalePreset.sitePlanning.rulerConfiguration)
 
+    #expect(snapshot.visibleSpanDisplayValue == 100_000.0)
     #expect(snapshot.summary.contains("minor 10 m"))
     #expect(snapshot.summary.contains("major 100 m"))
     #expect(snapshot.summary.contains("visible span 100,000 m"))
+}
+
+@Test func workspaceScaleSnapshotExposesDisplayUnitValues() {
+    let snapshot = WorkspaceScaleSnapshot(
+        ruler: WorkspaceScalePreset.sitePlanningImperial.rulerConfiguration
+    )
+
+    #expect(snapshot.displayUnit == .foot)
+    #expect(snapshot.minorTickMeters == 30.48)
+    #expect(snapshot.minorTickDisplayValue == 100.0)
+    #expect(snapshot.majorTickDisplayValue == 1_000.0)
+    #expect(abs(snapshot.visibleSpanDisplayValue - 328_083.9895013123) < 1.0e-9)
+    #expect(snapshot.summary.contains("minor 100 ft"))
+    #expect(snapshot.summary.contains("major 1,000 ft"))
+    #expect(snapshot.summary.contains("visible span 328,083.989501 ft"))
 }
