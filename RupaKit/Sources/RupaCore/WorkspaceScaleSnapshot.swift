@@ -12,6 +12,19 @@ public struct WorkspaceScaleSnapshot: Codable, Equatable, Sendable {
     public var matchedPreset: WorkspaceScalePreset?
     public var matchedPresetTitle: String?
 
+    private enum CodingKeys: String, CodingKey {
+        case displayUnit
+        case displayUnitSymbol
+        case minorTickMeters
+        case majorTickMeters
+        case visibleSpanMeters
+        case minorTickDisplayValue
+        case majorTickDisplayValue
+        case visibleSpanDisplayValue
+        case matchedPreset
+        case matchedPresetTitle
+    }
+
     public init(
         displayUnit: LengthDisplayUnit,
         displayUnitSymbol: String,
@@ -37,6 +50,41 @@ public struct WorkspaceScaleSnapshot: Codable, Equatable, Sendable {
             ?? displayUnit.value(fromMeters: visibleSpanMeters)
         self.matchedPreset = matchedPreset
         self.matchedPresetTitle = matchedPresetTitle
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let displayUnit = try container.decode(LengthDisplayUnit.self, forKey: .displayUnit)
+        let minorTickMeters = try container.decode(Double.self, forKey: .minorTickMeters)
+        let majorTickMeters = try container.decode(Double.self, forKey: .majorTickMeters)
+        let visibleSpanMeters = try container.decode(Double.self, forKey: .visibleSpanMeters)
+        self.init(
+            displayUnit: displayUnit,
+            displayUnitSymbol: try container.decode(String.self, forKey: .displayUnitSymbol),
+            minorTickMeters: minorTickMeters,
+            majorTickMeters: majorTickMeters,
+            visibleSpanMeters: visibleSpanMeters,
+            minorTickDisplayValue: try container.decodeIfPresent(
+                Double.self,
+                forKey: .minorTickDisplayValue
+            ),
+            majorTickDisplayValue: try container.decodeIfPresent(
+                Double.self,
+                forKey: .majorTickDisplayValue
+            ),
+            visibleSpanDisplayValue: try container.decodeIfPresent(
+                Double.self,
+                forKey: .visibleSpanDisplayValue
+            ),
+            matchedPreset: try container.decodeIfPresent(
+                WorkspaceScalePreset.self,
+                forKey: .matchedPreset
+            ),
+            matchedPresetTitle: try container.decodeIfPresent(
+                String.self,
+                forKey: .matchedPresetTitle
+            )
+        )
     }
 
     public init(ruler: RulerConfiguration) {
