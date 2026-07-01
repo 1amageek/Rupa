@@ -31,12 +31,13 @@ public struct EvaluatedDocumentCache: Sendable {
     public func matches(
         document: DesignDocument,
         generation: DocumentGeneration,
-        tolerance: ModelingTolerance = .standard
+        tolerance: ModelingTolerance? = nil
     ) throws -> Bool {
         guard self.generation == generation else {
             return false
         }
-        let currentFingerprint = try document.cadDocument.sourceFingerprint(tolerance: tolerance)
+        let resolvedTolerance = tolerance ?? .workspaceScaleAware(for: document)
+        let currentFingerprint = try document.cadDocument.sourceFingerprint(tolerance: resolvedTolerance)
         return currentFingerprint == sourceFingerprint
     }
 }

@@ -7,10 +7,12 @@ public extension DocumentEvaluator {
     }
 
     static func modelingDefault(
-        for _: DesignDocument,
+        for document: DesignDocument,
         objectRegistry _: ObjectTypeRegistry = .builtIn
     ) -> DocumentEvaluator {
-        .modelingDefault
+        DocumentEvaluator(
+            tolerance: .workspaceScaleAware(for: document)
+        )
     }
 }
 
@@ -20,9 +22,15 @@ public extension CADPipeline {
     }
 
     static func modelingDefault(
-        for _: DesignDocument,
+        for document: DesignDocument,
         objectRegistry _: ObjectTypeRegistry = .builtIn
     ) -> CADPipeline {
-        .modelingDefault
+        let tolerance = ModelingTolerance.workspaceScaleAware(for: document)
+        return CADPipeline(
+            evaluator: DocumentEvaluator(tolerance: tolerance),
+            snapQueryEvaluator: SnapQueryEvaluator(tolerance: tolerance),
+            selectionMeasurementEvaluator: SelectionMeasurementEvaluator(tolerance: tolerance),
+            selectionDimensionEvaluator: SelectionDimensionEvaluator(tolerance: tolerance)
+        )
     }
 }
