@@ -6860,9 +6860,10 @@ public struct MainView: View {
     }
 
     private func formatted(_ meters: Double) -> String {
-        let unit = session.document.displayUnit
-        let value = unit.value(fromMeters: meters)
-        return "\(value.formatted(.number.precision(.fractionLength(0...4)))) \(unit.symbol)"
+        WorkspaceInspectorNumberText.lengthString(
+            fromMeters: meters,
+            unit: session.document.displayUnit
+        )
     }
 
     private func formattedDimensionValue(

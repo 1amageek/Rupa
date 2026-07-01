@@ -1,4 +1,5 @@
 import Foundation
+import RupaCore
 
 enum WorkspaceInspectorNumberText {
     static func string(
@@ -25,5 +26,14 @@ enum WorkspaceInspectorNumberText {
             return nil
         }
         return value
+    }
+
+    static func lengthString(
+        fromMeters meters: Double,
+        unit: LengthDisplayUnit,
+        maximumFractionDigits: Int = 4
+    ) -> String {
+        let value = unit.value(fromMeters: meters)
+        return "\(string(from: value, maximumFractionDigits: maximumFractionDigits)) \(unit.symbol)"
     }
 }

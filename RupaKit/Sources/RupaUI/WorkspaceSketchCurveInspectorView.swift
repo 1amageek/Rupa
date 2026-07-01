@@ -228,8 +228,10 @@ struct WorkspaceSketchCurveInspectorView: View {
     }
 
     private func formatted(_ meters: Double) -> String {
-        let value = displayUnit.value(fromMeters: meters)
-        return "\(value.formatted(.number.precision(.fractionLength(0...4)))) \(displayUnit.symbol)"
+        WorkspaceInspectorNumberText.lengthString(
+            fromMeters: meters,
+            unit: displayUnit
+        )
     }
 
     private func formattedCurvature(_ value: Double) -> String {

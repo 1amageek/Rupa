@@ -552,9 +552,10 @@ struct WorkspaceObjectOverviewInspectorStateBuilder {
     }
 
     private func formatted(_ meters: Double) -> String {
-        let unit = document.displayUnit
-        let value = unit.value(fromMeters: meters)
-        return "\(value.formatted(.number.precision(.fractionLength(0...4)))) \(unit.symbol)"
+        WorkspaceInspectorNumberText.lengthString(
+            fromMeters: meters,
+            unit: document.displayUnit
+        )
     }
 
     private func valueSummary(_ values: [String]) -> String {

@@ -20,6 +20,21 @@ import Testing
     #expect(WorkspaceInspectorNumberText.value(from: "not-a-number") == nil)
 }
 
+@Test func workspaceInspectorLengthTextGroupsArchitecturalScaleValues() {
+    #expect(
+        WorkspaceInspectorNumberText.lengthString(
+            fromMeters: 100_000.0,
+            unit: .meter
+        ) == "100,000 m"
+    )
+    #expect(
+        WorkspaceInspectorNumberText.lengthString(
+            fromMeters: 30_480.0,
+            unit: .foot
+        ) == "100,000 ft"
+    )
+}
+
 @Test func workspaceInspectorLayoutKeepsDensePropertyPanelRhythm() {
     #expect(WorkspaceInspectorLayout.panelHorizontalInset == 12)
     #expect(WorkspaceInspectorLayout.sectionSpacing == 12)
