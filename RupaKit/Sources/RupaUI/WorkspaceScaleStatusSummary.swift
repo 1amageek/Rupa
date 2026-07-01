@@ -3,8 +3,10 @@ import RupaCore
 struct WorkspaceScaleStatusSummary: Equatable, Sendable {
     var compactTitle: String
     var presetTitle: String
+    var useCaseTitle: String
     var displayUnitTitle: String
     var visibleSpanTitle: String
+    var comfortableModelSpanTitle: String
     var minorStepTitle: String
     var majorStepTitle: String
     var detailTitle: String
@@ -16,11 +18,18 @@ struct WorkspaceScaleStatusSummary: Equatable, Sendable {
         let normalized = ruler.normalizedForWorkspaceScale()
         let matchedPreset = WorkspaceScalePreset.matching(normalized)
         let preferredUnit = normalized.displayUnit
+        let matchedProfile = matchedPreset?.profile
         let visibleSpanTitle = Self.lengthTitle(
             fromMeters: normalized.visibleSpanMeters,
             preferredUnit: preferredUnit
         )
         let presetTitle = matchedPreset?.title ?? "Custom"
+        let useCaseTitle = matchedProfile?.useCaseTitle ?? "custom ruler configuration"
+        let comfortableModelSpanTitle = matchedProfile?.comfortableModelSpanTitle
+            ?? Self.customComfortableModelSpanTitle(
+                ruler: normalized,
+                preferredUnit: preferredUnit
+            )
         let displayUnitTitle = preferredUnit.symbol
         let minorStepTitle = Self.lengthTitle(
             fromMeters: normalized.minorTickMeters,
@@ -32,8 +41,10 @@ struct WorkspaceScaleStatusSummary: Equatable, Sendable {
         )
         self.compactTitle = "\(Self.compactPresetTitle(matchedPreset)) · \(visibleSpanTitle)"
         self.presetTitle = presetTitle
+        self.useCaseTitle = useCaseTitle
         self.displayUnitTitle = displayUnitTitle
         self.visibleSpanTitle = visibleSpanTitle
+        self.comfortableModelSpanTitle = comfortableModelSpanTitle
         self.minorStepTitle = minorStepTitle
         self.majorStepTitle = majorStepTitle
         self.detailTitle = "\(presetTitle), unit \(displayUnitTitle), minor \(minorStepTitle), major \(majorStepTitle), visible \(visibleSpanTitle)"
@@ -84,6 +95,17 @@ struct WorkspaceScaleStatusSummary: Equatable, Sendable {
             fromMeters: meters,
             unit: unit
         )
+    }
+
+    private static func customComfortableModelSpanTitle(
+        ruler: RulerConfiguration,
+        preferredUnit: LengthDisplayUnit
+    ) -> String {
+        let lower = ruler.visibleSpanMeters * WorkspaceScalePreset.minimumComfortableModelSpanRatio
+        let upper = ruler.visibleSpanMeters * WorkspaceScalePreset.maximumComfortableModelSpanRatio
+        let lowerTitle = lengthTitle(fromMeters: lower, preferredUnit: preferredUnit)
+        let upperTitle = lengthTitle(fromMeters: upper, preferredUnit: preferredUnit)
+        return "\(lowerTitle) to \(upperTitle)"
     }
 
     private enum ScaleDirection {

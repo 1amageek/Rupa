@@ -297,6 +297,12 @@ import SwiftCAD
     #expect(workspaceScalePreset.optionMatrix.contains { axis in
         axis.name == "preset" && axis.supportedValues.contains(WorkspaceScalePreset.regionalPlanning.rawValue)
     })
+    #expect(workspaceScalePreset.optionMatrix.contains { axis in
+        axis.name == "preset"
+            && axis.notes.contains { $0.contains("regionalPlanning") }
+            && axis.notes.contains { $0.contains("visible span 1,000 km") }
+            && axis.notes.contains { $0.contains("comfortable model span 10 km to 800 km") }
+    })
     #expect(workspaceOriginRebase.category == .document)
     #expect(workspaceOriginRebase.access == .automationCommand)
     #expect(workspaceOriginRebase.mutatesDocument)

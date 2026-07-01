@@ -92,7 +92,7 @@ public final class AgentCommandController: AgentClientProtocol {
                     notes: [
                         "Presets update display unit, minor tick, major tick, and visible workspace span together.",
                         "Use setRulerConfiguration when a custom scale is required.",
-                    ]
+                    ] + WorkspaceScalePreset.allCases.map { $0.profile.agentGuidance }
                 )
             ]
         ),

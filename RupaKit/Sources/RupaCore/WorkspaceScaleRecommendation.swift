@@ -39,8 +39,6 @@ public struct WorkspaceScaleRecommendation: Codable, Equatable, Sendable {
 }
 
 public struct WorkspaceScaleRecommendationService: Sendable {
-    private static let minimumComfortableSpanRatio = 0.01
-    private static let maximumComfortableSpanRatio = 0.80
     private static let targetVisibleSpanMultiplier = 4.0
 
     public init() {}
@@ -59,9 +57,9 @@ public struct WorkspaceScaleRecommendationService: Sendable {
 
         let currentRuler = currentRuler.normalizedForWorkspaceScale()
         let minimumComfortableSpan = currentRuler.visibleSpanMeters
-            * Self.minimumComfortableSpanRatio
+            * WorkspaceScalePreset.minimumComfortableModelSpanRatio
         let maximumComfortableSpan = currentRuler.visibleSpanMeters
-            * Self.maximumComfortableSpanRatio
+            * WorkspaceScalePreset.maximumComfortableModelSpanRatio
 
         let reason: WorkspaceScaleRecommendation.Reason
         if modelSpan > maximumComfortableSpan {

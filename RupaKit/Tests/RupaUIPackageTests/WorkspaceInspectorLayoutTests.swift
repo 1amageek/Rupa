@@ -327,10 +327,12 @@ import Testing
 
     #expect(summary.compactTitle == "Site · 100 km")
     #expect(summary.presetTitle == "Site Planning")
+    #expect(summary.useCaseTitle == "site, campus, and civil-scale coordination")
     #expect(summary.displayUnitTitle == "km")
     #expect(summary.minorStepTitle == "0.1 km")
     #expect(summary.majorStepTitle == "1 km")
     #expect(summary.visibleSpanTitle == "100 km")
+    #expect(summary.comfortableModelSpanTitle == "1 km to 80 km")
     #expect(summary.detailTitle == "Site Planning, unit km, minor 0.1 km, major 1 km, visible 100 km")
     #expect(summary.accessibilityValue == summary.detailTitle)
     #expect(summary.smallerPreset == .architecture)
@@ -344,10 +346,12 @@ import Testing
 
     #expect(summary.compactTitle == "Region · 1,000 km")
     #expect(summary.presetTitle == "Regional Planning")
+    #expect(summary.useCaseTitle == "regional context, infrastructure corridors, and kilometer-scale terrain")
     #expect(summary.displayUnitTitle == "km")
     #expect(summary.minorStepTitle == "1 km")
     #expect(summary.majorStepTitle == "10 km")
     #expect(summary.visibleSpanTitle == "1,000 km")
+    #expect(summary.comfortableModelSpanTitle == "10 km to 800 km")
     #expect(summary.detailTitle == "Regional Planning, unit km, minor 1 km, major 10 km, visible 1,000 km")
     #expect(summary.accessibilityValue == summary.detailTitle)
     #expect(summary.smallerPreset == .sitePlanning)
@@ -366,9 +370,11 @@ import Testing
 
     #expect(summary.compactTitle == "Custom · 1 km")
     #expect(summary.presetTitle == "Custom")
+    #expect(summary.useCaseTitle == "custom ruler configuration")
     #expect(summary.minorStepTitle == "1 μm")
     #expect(summary.majorStepTitle == "1 mm")
     #expect(summary.visibleSpanTitle == "1 km")
+    #expect(summary.comfortableModelSpanTitle == "10 m to 800 m")
     #expect(summary.smallerPreset == .roomInterior)
     #expect(summary.largerPreset == .architecture)
 }

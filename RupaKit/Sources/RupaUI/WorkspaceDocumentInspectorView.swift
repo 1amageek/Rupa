@@ -132,8 +132,11 @@ struct WorkspaceDocumentInspectorView: View {
         return inspectorControlRow("Scale Preset") {
             Menu {
                 ForEach(WorkspaceScalePreset.allCases) { preset in
-                    Button(preset.title) {
+                    let profile = preset.profile
+                    Button {
                         setWorkspaceScalePreset(preset)
+                    } label: {
+                        Text(profile.menuTitle)
                     }
                 }
             } label: {
