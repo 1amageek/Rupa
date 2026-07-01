@@ -5,6 +5,7 @@ import SwiftCAD
 
 @Test func curveAnalysisServiceReportsSamplesCurvatureAndLength() throws {
     var document = DesignDocument.empty()
+    document.setDisplayUnit(.millimeter)
     _ = try document.createLineSketch(
         name: "Analysis Line",
         plane: .xy,
@@ -38,6 +39,8 @@ import SwiftCAD
 
     let result = try CurveAnalysisService(samplesPerSegment: 16).analyze(document: document)
 
+    #expect(result.displayUnit == .millimeter)
+    #expect(result.displayUnitSymbol == "mm")
     #expect(result.counts.curveCount == 4)
     #expect(result.counts.sampleCount > 40)
     let line = try #require(result.curves.first { $0.curveKind == .line })
@@ -48,11 +51,17 @@ import SwiftCAD
     #expect(abs(line.maxAbsCurvature) < 1.0e-12)
     #expect(abs(circle.maxAbsCurvature - 250.0) < 1.0e-9)
     #expect(abs(arc.maxAbsCurvature - (1.0 / 0.006)) < 1.0e-9)
+    #expect(abs(line.approximateLengthDisplayValue - 10.0) < 1.0e-12)
+    #expect(abs(circle.maxAbsCurvatureDisplayValue - 0.25) < 1.0e-12)
+    #expect(abs(arc.maxAbsCurvatureDisplayValue - (1.0 / 6.0)) < 1.0e-12)
+    #expect(circle.curvatureDisplayUnitSymbol == "1/mm")
     #expect(spline.samples.count == 17)
     #expect(spline.maxAbsCurvature > 1.0)
     #expect(spline.approximateLength > 0.008)
     let firstSplineSample = try #require(spline.samples.first)
     #expect(abs(firstSplineSample.parameter) < 1.0e-12)
+    #expect(spline.pointDisplayScale == 1_000.0)
+    #expect(spline.curvatureDisplayScale == 0.001)
     #expect(abs(hypot(firstSplineSample.normal.x, firstSplineSample.normal.y) - 1.0) < 1.0e-12)
 }
 
@@ -112,6 +121,7 @@ import SwiftCAD
     #expect(join.continuity == .g0)
     #expect(abs(join.positionGap) < 1.0e-12)
     #expect(abs((join.tangentAngle ?? 0.0) - (Double.pi / 2.0)) < 1.0e-12)
+    #expect(abs((join.tangentAngleDegrees ?? 0.0) - 90.0) < 1.0e-12)
     #expect(abs(join.curvatureGap ?? -1.0) < 1.0e-12)
 
     let selectedResult = try CurveAnalysisService(samplesPerSegment: 8).analyze(
@@ -144,6 +154,45 @@ import SwiftCAD
     #expect(abs(join.positionGap) < 1.0e-12)
     #expect(abs(join.tangentAngle ?? -1.0) < 1.0e-12)
     #expect(abs(join.curvatureGap ?? -1.0) < 1.0e-12)
+}
+
+@Test func curveAnalysisResultDecodesMissingDisplayValues() throws {
+    var document = DesignDocument.empty()
+    document.setDisplayUnit(.millimeter)
+    _ = try document.createLineSketch(
+        name: "Legacy Analysis Line",
+        plane: .xy,
+        start: curveAnalysisPoint(x: 0.0, y: 0.0),
+        end: curveAnalysisPoint(x: 0.010, y: 0.0)
+    )
+    let result = try CurveAnalysisService(samplesPerSegment: 8).analyze(document: document)
+    let json = try JSONSerialization.jsonObject(
+        with: try JSONEncoder().encode(result)
+    ) as? [String: Any]
+    var legacyJSON = try #require(json)
+    legacyJSON["displayUnitSymbol"] = nil
+    var legacyCurve = try #require((legacyJSON["curves"] as? [[String: Any]])?.first)
+    legacyCurve["maxAbsCurvatureDisplayValue"] = nil
+    legacyCurve["approximateLengthDisplayValue"] = nil
+    legacyCurve["displayUnitSymbol"] = nil
+    legacyCurve["pointDisplayScale"] = nil
+    legacyCurve["curvatureDisplayUnitSymbol"] = nil
+    legacyCurve["curvatureDisplayScale"] = nil
+    legacyJSON["curves"] = [legacyCurve]
+
+    let decoded = try JSONDecoder().decode(
+        CurveAnalysisResult.self,
+        from: try JSONSerialization.data(withJSONObject: legacyJSON)
+    )
+
+    let line = try #require(decoded.curves.first)
+    #expect(decoded.displayUnit == .millimeter)
+    #expect(decoded.displayUnitSymbol == "mm")
+    #expect(line.displayUnitSymbol == "mm")
+    #expect(line.pointDisplayScale == 1_000.0)
+    #expect(line.curvatureDisplayUnitSymbol == "1/mm")
+    #expect(line.curvatureDisplayScale == 0.001)
+    #expect(abs(line.approximateLengthDisplayValue - 10.0) < 1.0e-12)
 }
 
 private func curveAnalysisPoint(x: Double, y: Double) -> SketchPoint {
