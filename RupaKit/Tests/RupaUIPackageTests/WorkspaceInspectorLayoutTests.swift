@@ -12,6 +12,14 @@ import Testing
     #expect(commonWorkspaceInspectorValue([]) == nil)
 }
 
+@Test func workspaceInspectorNumberTextSupportsGroupedLargeValues() {
+    #expect(WorkspaceInspectorNumberText.string(from: 100_000.0) == "100,000")
+    #expect(WorkspaceInspectorNumberText.value(from: "100,000") == 100_000.0)
+    #expect(WorkspaceInspectorNumberText.value(from: "100_000") == 100_000.0)
+    #expect(WorkspaceInspectorNumberText.value(from: " 12.5 ") == 12.5)
+    #expect(WorkspaceInspectorNumberText.value(from: "not-a-number") == nil)
+}
+
 @Test func workspaceInspectorLayoutKeepsDensePropertyPanelRhythm() {
     #expect(WorkspaceInspectorLayout.panelHorizontalInset == 12)
     #expect(WorkspaceInspectorLayout.sectionSpacing == 12)

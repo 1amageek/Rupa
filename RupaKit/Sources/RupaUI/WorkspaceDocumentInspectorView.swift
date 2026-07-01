@@ -150,11 +150,7 @@ struct WorkspaceDocumentInspectorView: View {
                     unit: unit,
                     for: kind
                 )
-                return value.formatted(
-                    .number
-                        .grouping(.automatic)
-                        .precision(.fractionLength(0...6))
-                )
+                return WorkspaceInspectorNumberText.string(from: value)
             },
             set: { text in
                 guard let meters = RulerScaleControl.meters(

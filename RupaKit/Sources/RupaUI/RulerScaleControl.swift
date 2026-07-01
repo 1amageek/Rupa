@@ -62,7 +62,7 @@ enum RulerScaleControl {
         unit: LengthDisplayUnit,
         for kind: Kind
     ) -> Double? {
-        guard let value = numericValue(from: text) else {
+        guard let value = WorkspaceInspectorNumberText.value(from: text) else {
             return nil
         }
         return meters(fromFieldValue: value, unit: unit, for: kind)
@@ -79,18 +79,4 @@ enum RulerScaleControl {
         return min(max(meters, range.lowerBound), range.upperBound)
     }
 
-    private static func numericValue(from text: String) -> Double? {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else {
-            return nil
-        }
-        let normalized = trimmed
-            .replacingOccurrences(of: "_", with: "")
-            .replacingOccurrences(of: ",", with: "")
-        guard let value = Double(normalized),
-              value.isFinite else {
-            return nil
-        }
-        return value
-    }
 }

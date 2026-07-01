@@ -135,13 +135,12 @@ func numericControl(
     let textBinding = Binding<String>(
         get: {
             if let commonValue {
-                return commonValue.formatted(.number.precision(.fractionLength(0...6)))
+                return WorkspaceInspectorNumberText.string(from: commonValue)
             }
             return "Mixed"
         },
         set: { text in
-            let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard let value = Double(trimmedText), value.isFinite else {
+            guard let value = WorkspaceInspectorNumberText.value(from: text) else {
                 return
             }
             onChange(value)

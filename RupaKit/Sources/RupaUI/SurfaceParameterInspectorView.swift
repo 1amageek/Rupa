@@ -275,11 +275,10 @@ struct SurfaceParameterInspectorView: View {
     ) -> some View {
         let textBinding = Binding<String>(
             get: {
-                value.formatted(.number.precision(.fractionLength(0...6)))
+                WorkspaceInspectorNumberText.string(from: value)
             },
             set: { text in
-                let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
-                guard let newValue = Double(trimmedText), newValue.isFinite else {
+                guard let newValue = WorkspaceInspectorNumberText.value(from: text) else {
                     return
                 }
                 onChange(newValue)
@@ -313,11 +312,10 @@ struct SurfaceParameterInspectorView: View {
     ) -> some View {
         let textBinding = Binding<String>(
             get: {
-                value.wrappedValue.formatted(.number.precision(.fractionLength(0...6)))
+                WorkspaceInspectorNumberText.string(from: value.wrappedValue)
             },
             set: { text in
-                let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
-                guard let newValue = Double(trimmedText), newValue.isFinite else {
+                guard let newValue = WorkspaceInspectorNumberText.value(from: text) else {
                     return
                 }
                 value.wrappedValue = newValue
