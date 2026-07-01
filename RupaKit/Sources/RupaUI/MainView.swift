@@ -4637,26 +4637,7 @@ public struct MainView: View {
               ) else {
             return nil
         }
-        return WorkspaceDocumentScaleRecommendationState(
-            reasonTitle: workspaceScaleRecommendationReasonTitle(recommendation.reason),
-            presetTitle: recommendation.recommendedPreset.title,
-            visibleSpanTitle: LengthDisplayText.lengthString(
-                fromMeters: recommendation.recommendedScale.visibleSpanMeters,
-                unit: recommendation.recommendedScale.displayUnit
-            ),
-            preset: recommendation.recommendedPreset
-        )
-    }
-
-    private func workspaceScaleRecommendationReasonTitle(
-        _ reason: WorkspaceScaleRecommendation.Reason
-    ) -> String {
-        switch reason {
-        case .modelExceedsComfortableSpan:
-            "Model exceeds ruler"
-        case .modelTooSmallForWorkspace:
-            "Workspace too broad"
-        }
+        return workspaceDocumentScaleRecommendationState(recommendation: recommendation)
     }
 
     private var workspacePrecisionRecommendationInspectorState: WorkspaceDocumentPrecisionRecommendationState? {

@@ -16,6 +16,8 @@ public struct WorkspaceScaleRecommendation: Codable, Equatable, Sendable {
     public var currentScale: WorkspaceScaleSnapshot
     public var recommendedScale: WorkspaceScaleSnapshot
     public var recommendedPreset: WorkspaceScalePreset
+    public var currentScaleProfile: WorkspaceScalePresetProfile?
+    public var recommendedScaleProfile: WorkspaceScalePresetProfile
 
     public init(
         reason: Reason,
@@ -25,7 +27,9 @@ public struct WorkspaceScaleRecommendation: Codable, Equatable, Sendable {
         targetVisibleSpanMeters: Double,
         currentScale: WorkspaceScaleSnapshot,
         recommendedScale: WorkspaceScaleSnapshot,
-        recommendedPreset: WorkspaceScalePreset
+        recommendedPreset: WorkspaceScalePreset,
+        currentScaleProfile: WorkspaceScalePresetProfile?,
+        recommendedScaleProfile: WorkspaceScalePresetProfile
     ) {
         self.reason = reason
         self.modelSpanMeters = modelSpanMeters
@@ -35,6 +39,38 @@ public struct WorkspaceScaleRecommendation: Codable, Equatable, Sendable {
         self.currentScale = currentScale
         self.recommendedScale = recommendedScale
         self.recommendedPreset = recommendedPreset
+        self.currentScaleProfile = currentScaleProfile
+        self.recommendedScaleProfile = recommendedScaleProfile
+    }
+
+    public var currentComfortableModelSpanTitle: String {
+        currentScaleProfile?.comfortableModelSpanTitle ?? Self.comfortableModelSpanTitle(
+            lowerMeters: minimumComfortableModelSpanMeters,
+            upperMeters: maximumComfortableModelSpanMeters,
+            preferredUnit: currentScale.displayUnit
+        )
+    }
+
+    private static func comfortableModelSpanTitle(
+        lowerMeters: Double,
+        upperMeters: Double,
+        preferredUnit: LengthDisplayUnit
+    ) -> String {
+        let lowerTitle = lengthTitle(lowerMeters, preferredUnit: preferredUnit)
+        let upperTitle = lengthTitle(upperMeters, preferredUnit: preferredUnit)
+        return "\(lowerTitle) to \(upperTitle)"
+    }
+
+    private static func lengthTitle(
+        _ meters: Double,
+        preferredUnit: LengthDisplayUnit
+    ) -> String {
+        let unit = preferredUnit.readableUnit(forMeters: meters)
+        return LengthDisplayText.lengthString(
+            fromMeters: meters,
+            unit: unit,
+            usesArchitecturalFeet: true
+        )
     }
 }
 
@@ -87,7 +123,9 @@ public struct WorkspaceScaleRecommendationService: Sendable {
             targetVisibleSpanMeters: Self.targetVisibleSpan(forModelSpanMeters: modelSpan),
             currentScale: WorkspaceScaleSnapshot(ruler: currentRuler),
             recommendedScale: WorkspaceScaleSnapshot(ruler: recommendedRuler),
-            recommendedPreset: preset
+            recommendedPreset: preset,
+            currentScaleProfile: WorkspaceScalePreset.matching(currentRuler)?.profile,
+            recommendedScaleProfile: preset.profile
         )
     }
 
@@ -139,11 +177,13 @@ public struct WorkspaceScaleRecommendationService: Sendable {
             recommendation.recommendedScale.visibleSpanMeters,
             preferredUnit: recommendation.recommendedScale.displayUnit
         )
+        let currentRange = recommendation.currentComfortableModelSpanTitle
+        let recommendedRange = recommendation.recommendedScaleProfile.comfortableModelSpanTitle
         switch recommendation.reason {
         case .modelExceedsComfortableSpan:
-            return "Workspace scale recommendation: model span \(modelSpan) exceeds the comfortable range for the current ruler. Use \(recommendation.recommendedPreset.title) with \(visibleSpan) visible span."
+            return "Workspace scale recommendation: model span \(modelSpan) exceeds the current comfortable range \(currentRange). Use \(recommendation.recommendedPreset.title) with \(visibleSpan) visible span and \(recommendedRange) comfortable model span."
         case .modelTooSmallForWorkspace:
-            return "Workspace scale recommendation: model span \(modelSpan) is too small for the current ruler. Use \(recommendation.recommendedPreset.title) with \(visibleSpan) visible span."
+            return "Workspace scale recommendation: model span \(modelSpan) is below the current comfortable range \(currentRange). Use \(recommendation.recommendedPreset.title) with \(visibleSpan) visible span and \(recommendedRange) comfortable model span."
         }
     }
 

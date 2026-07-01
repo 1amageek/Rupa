@@ -398,6 +398,33 @@ import Testing
     #expect(imperialSite.largerPreset == nil)
 }
 
+@Test func workspaceDocumentScaleRecommendationStateReportsUseCaseAndComfortRanges() throws {
+    let recommendation = try #require(WorkspaceScaleRecommendationService().recommendation(
+        for: MeasurementResult.Bounds(
+            minX: 0.0,
+            minY: 0.0,
+            minZ: 0.0,
+            maxX: 250_000.0,
+            maxY: 120_000.0,
+            maxZ: 1_000.0
+        ),
+        currentRuler: WorkspaceScalePreset.sitePlanning.rulerConfiguration
+    ))
+
+    let state = try #require(workspaceDocumentScaleRecommendationState(
+        recommendation: recommendation
+    ))
+
+    #expect(state.reasonTitle == "Model exceeds ruler")
+    #expect(state.presetTitle == "Regional Planning")
+    #expect(state.useCaseTitle == "regional context, infrastructure corridors, and kilometer-scale terrain")
+    #expect(state.modelSpanTitle == "250 km")
+    #expect(state.currentComfortableModelSpanTitle == "1 km to 80 km")
+    #expect(state.visibleSpanTitle == "1,000 km")
+    #expect(state.recommendedComfortableModelSpanTitle == "10 km to 800 km")
+    #expect(state.preset == .regionalPlanning)
+}
+
 @Test func workspaceDocumentPrecisionRecommendationStateFormatsRebaseAction() {
     let translation = Vector3D(x: -1_000_000.0, y: 500.0, z: 0.0)
     let report = WorkspacePrecisionReport(

@@ -75,6 +75,9 @@ func agentMeasureReportsWorkspaceScaleRecommendationForLargeModel() throws {
     #expect(measurement.workspaceScaleRecommendation?.reason == .modelExceedsComfortableSpan)
     #expect(measurement.workspaceScaleRecommendation?.recommendedPreset == .sitePlanning)
     #expect(measurement.workspaceScaleRecommendation?.recommendedScale.displayUnit == .kilometer)
+    #expect(measurement.workspaceScaleRecommendation?.recommendedScaleProfile.useCaseTitle == "site, campus, and civil-scale coordination")
+    #expect(measurement.workspaceScaleRecommendation?.recommendedScaleProfile.comfortableModelSpanTitle == "1 km to 80 km")
+    #expect(measurement.workspaceScaleRecommendation?.currentComfortableModelSpanTitle == "10 mm to 800 mm")
 }
 
 private func agentFarFromOriginRectangleDocument() throws -> DesignDocument {

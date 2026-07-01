@@ -7850,6 +7850,9 @@ func cliExecutableReturnsDataExitForLiveGenerationMismatch() async throws {
     #expect(response.measurement.workspaceScaleRecommendation?.recommendedPreset == .sitePlanning)
     #expect(response.measurement.workspaceScaleRecommendation?.recommendedScale.displayUnit == .kilometer)
     #expect(response.measurement.workspaceScaleRecommendation?.recommendedScale.visibleSpanDisplayValue == 100.0)
+    #expect(response.measurement.workspaceScaleRecommendation?.recommendedScaleProfile.useCaseTitle == "site, campus, and civil-scale coordination")
+    #expect(response.measurement.workspaceScaleRecommendation?.recommendedScaleProfile.comfortableModelSpanTitle == "1 km to 80 km")
+    #expect(response.measurement.workspaceScaleRecommendation?.currentComfortableModelSpanTitle == "10 mm to 800 mm")
 }
 
 @MainActor

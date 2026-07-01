@@ -23,6 +23,12 @@ import Testing
     #expect(recommendation.recommendedScale.displayUnit == .kilometer)
     #expect(recommendation.recommendedScale.visibleSpanMeters == 100_000.0)
     #expect(recommendation.recommendedScale.visibleSpanDisplayValue == 100.0)
+    #expect(recommendation.currentScaleProfile == nil)
+    #expect(recommendation.currentComfortableModelSpanTitle == "10 mm to 800 mm")
+    #expect(recommendation.recommendedScaleProfile.category == .site)
+    #expect(recommendation.recommendedScaleProfile.useCaseTitle == "site, campus, and civil-scale coordination")
+    #expect(recommendation.recommendedScaleProfile.visibleSpanTitle == "100 km")
+    #expect(recommendation.recommendedScaleProfile.comfortableModelSpanTitle == "1 km to 80 km")
 }
 
 @Test func workspaceScaleRecommendationChoosesRegionalPlanningForHundredsOfKilometersModel() throws {
@@ -46,6 +52,11 @@ import Testing
     #expect(recommendation.recommendedScale.displayUnit == .kilometer)
     #expect(recommendation.recommendedScale.visibleSpanMeters == 1_000_000.0)
     #expect(recommendation.recommendedScale.visibleSpanDisplayValue == 1_000.0)
+    #expect(recommendation.currentScaleProfile?.preset == .sitePlanning)
+    #expect(recommendation.currentComfortableModelSpanTitle == "1 km to 80 km")
+    #expect(recommendation.recommendedScaleProfile.category == .regional)
+    #expect(recommendation.recommendedScaleProfile.visibleSpanTitle == "1,000 km")
+    #expect(recommendation.recommendedScaleProfile.comfortableModelSpanTitle == "10 km to 800 km")
 }
 
 @Test func workspaceScaleRecommendationChoosesSmallerPresetForTinyModelInSiteWorkspace() throws {
@@ -67,6 +78,10 @@ import Testing
     #expect(recommendation.modelSpanMeters == 0.5)
     #expect(recommendation.recommendedPreset == .productDesign)
     #expect(recommendation.recommendedScale.displayUnit == .millimeter)
+    #expect(recommendation.currentScaleProfile?.preset == .sitePlanning)
+    #expect(recommendation.currentComfortableModelSpanTitle == "1 km to 80 km")
+    #expect(recommendation.recommendedScaleProfile.category == .product)
+    #expect(recommendation.recommendedScaleProfile.comfortableModelSpanTitle == "100 mm to 8 m")
 }
 
 @Test func workspaceScaleRecommendationIgnoresComfortablyFramedModel() {
@@ -113,9 +128,12 @@ import Testing
 
     #expect(result.workspaceScaleRecommendation?.recommendedPreset == .sitePlanning)
     #expect(result.workspaceScaleRecommendation?.recommendedScale.displayUnit == .kilometer)
+    #expect(result.workspaceScaleRecommendation?.recommendedScaleProfile.useCaseTitle == "site, campus, and civil-scale coordination")
+    #expect(result.workspaceScaleRecommendation?.recommendedScaleProfile.comfortableModelSpanTitle == "1 km to 80 km")
     #expect(result.diagnostics.contains {
         $0.severity == .info
             && $0.message.contains("Workspace scale recommendation")
             && $0.message.contains("Site Planning")
+            && $0.message.contains("1 km to 80 km")
     })
 }

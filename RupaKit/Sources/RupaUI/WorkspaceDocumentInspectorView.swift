@@ -29,7 +29,11 @@ struct WorkspaceDocumentInspectorState: Equatable, Sendable {
 struct WorkspaceDocumentScaleRecommendationState: Equatable, Sendable {
     var reasonTitle: String
     var presetTitle: String
+    var useCaseTitle: String
+    var modelSpanTitle: String
+    var currentComfortableModelSpanTitle: String
     var visibleSpanTitle: String
+    var recommendedComfortableModelSpanTitle: String
     var preset: WorkspaceScalePreset
 }
 
@@ -201,7 +205,11 @@ struct WorkspaceDocumentInspectorView: View {
                 .accessibilityIdentifier("WorkspaceScaleRecommendation.apply")
             }
             workspaceInspectorValueRow("Reason", recommendation.reasonTitle)
+            workspaceInspectorValueRow("Use Case", recommendation.useCaseTitle)
+            workspaceInspectorValueRow("Model Span", recommendation.modelSpanTitle)
+            workspaceInspectorValueRow("Current Range", recommendation.currentComfortableModelSpanTitle)
             workspaceInspectorValueRow("Visible Span", recommendation.visibleSpanTitle)
+            workspaceInspectorValueRow("Target Range", recommendation.recommendedComfortableModelSpanTitle)
         }
         .padding(.vertical, 2)
     }
@@ -290,6 +298,51 @@ struct WorkspaceDocumentInspectorView: View {
         }
         .padding(.vertical, 2)
     }
+}
+
+func workspaceDocumentScaleRecommendationState(
+    recommendation: WorkspaceScaleRecommendation?
+) -> WorkspaceDocumentScaleRecommendationState? {
+    guard let recommendation else {
+        return nil
+    }
+    let recommendedProfile = recommendation.recommendedScaleProfile
+    return WorkspaceDocumentScaleRecommendationState(
+        reasonTitle: workspaceScaleRecommendationReasonTitle(recommendation.reason),
+        presetTitle: recommendedProfile.title,
+        useCaseTitle: recommendedProfile.useCaseTitle,
+        modelSpanTitle: workspaceScaleRecommendationLengthTitle(
+            recommendation.modelSpanMeters,
+            displayUnit: recommendation.recommendedScale.displayUnit
+        ),
+        currentComfortableModelSpanTitle: recommendation.currentComfortableModelSpanTitle,
+        visibleSpanTitle: recommendedProfile.visibleSpanTitle,
+        recommendedComfortableModelSpanTitle: recommendedProfile.comfortableModelSpanTitle,
+        preset: recommendation.recommendedPreset
+    )
+}
+
+private func workspaceScaleRecommendationReasonTitle(
+    _ reason: WorkspaceScaleRecommendation.Reason
+) -> String {
+    switch reason {
+    case .modelExceedsComfortableSpan:
+        "Model exceeds ruler"
+    case .modelTooSmallForWorkspace:
+        "Workspace too broad"
+    }
+}
+
+private func workspaceScaleRecommendationLengthTitle(
+    _ meters: Double,
+    displayUnit: LengthDisplayUnit
+) -> String {
+    let unit = displayUnit.readableUnit(forMeters: meters)
+    return LengthDisplayText.lengthString(
+        fromMeters: meters,
+        unit: unit,
+        usesArchitecturalFeet: true
+    )
 }
 
 func workspaceDocumentPrecisionRecommendationState(
