@@ -43,6 +43,9 @@ public struct WorkspaceScaleSnapshot: Codable, Equatable, Sendable {
 
     public var summary: String {
         let presetTitle = matchedPresetTitle ?? "Custom"
-        return "Workspace scale \(presetTitle), unit \(displayUnitSymbol), minor \(minorTickMeters)m, major \(majorTickMeters)m, visible span \(visibleSpanMeters)m."
+        let minorTick = MeasurementDisplayNumberText.lengthString(fromMeters: minorTickMeters)
+        let majorTick = MeasurementDisplayNumberText.lengthString(fromMeters: majorTickMeters)
+        let visibleSpan = MeasurementDisplayNumberText.lengthString(fromMeters: visibleSpanMeters)
+        return "Workspace scale \(presetTitle), unit \(displayUnitSymbol), minor \(minorTick), major \(majorTick), visible span \(visibleSpan)."
     }
 }

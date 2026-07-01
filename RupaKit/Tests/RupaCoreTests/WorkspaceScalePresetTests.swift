@@ -36,3 +36,11 @@ import Testing
     #expect(defaults.placedSolidSideMeters == 4_000.0)
     #expect(defaults.sketchDepthMeters == 1_000.0)
 }
+
+@Test func workspaceScaleSnapshotSummaryGroupsLargeMeterValues() {
+    let snapshot = WorkspaceScaleSnapshot(ruler: WorkspaceScalePreset.sitePlanning.rulerConfiguration)
+
+    #expect(snapshot.summary.contains("minor 10 m"))
+    #expect(snapshot.summary.contains("major 100 m"))
+    #expect(snapshot.summary.contains("visible span 100,000 m"))
+}

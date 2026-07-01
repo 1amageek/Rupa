@@ -37,7 +37,7 @@ import SwiftCAD
     #expect(result.didMutate)
     #expect(result.workspaceScale?.displayUnit == .meter)
     #expect(result.workspaceScale?.visibleSpanMeters == 10_000.0)
-    #expect(result.message.contains("visible span 10000.0m"))
+    #expect(result.message.contains("visible span 10,000 m"))
 }
 
 @MainActor
@@ -73,7 +73,7 @@ import SwiftCAD
     #expect(result.workspaceScale?.majorTickMeters == 100.0)
     #expect(result.workspaceScale?.visibleSpanMeters == 100_000.0)
     #expect(result.message.contains("Site Planning"))
-    #expect(result.message.contains("visible span 100000.0m"))
+    #expect(result.message.contains("visible span 100,000 m"))
 }
 
 @MainActor

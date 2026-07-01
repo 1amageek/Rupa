@@ -27,4 +27,8 @@ enum MeasurementDisplayNumberText {
         let divisor = pow(unit.metersPerUnit, Double(exponent))
         return string(from: metersValue / divisor)
     }
+
+    static func lengthString(fromMeters meters: Double) -> String {
+        "\(string(from: meters)) m"
+    }
 }
