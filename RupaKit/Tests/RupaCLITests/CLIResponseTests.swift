@@ -1536,6 +1536,42 @@ func cliExecutableInspectsConstructionPlanesAndSnapAsJSON() async throws {
     #expect(abs(snapResponse.snapResolution.resolvedPoint.y - 0.003) < 0.000_000_000_001)
 }
 
+@Test(.timeLimit(.minutes(1)))
+func cliExecutableSnapDefaultsToDocumentRulerGridAsJSON() async throws {
+    let temporaryDirectory = try makeTemporaryDirectory()
+    defer {
+        removeTemporaryDirectory(temporaryDirectory)
+    }
+    let documentURL = temporaryDirectory.appendingPathComponent("process-site-snap.swcad")
+    var document = DesignDocument.empty(named: "Process Site Snap")
+    try document.setRulerConfiguration(WorkspaceScalePreset.sitePlanning.rulerConfiguration)
+    try DocumentFileService().save(document, to: documentURL)
+
+    let snapResult = try await runCLI([
+        "inspect",
+        "snap",
+        documentURL.path,
+        "--x",
+        "149",
+        "--y",
+        "251",
+        "--unit",
+        "meter",
+        "--mode",
+        "file",
+        "--json",
+    ])
+    let snapResponse = try JSONDecoder().decode(
+        CLISnapResolutionResponse.self,
+        from: snapResult.standardOutputData
+    )
+
+    #expect(snapResult.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: snapResult.standardError))
+    #expect(snapResponse.snapResolution.selectedCandidate?.kind == .grid)
+    #expect(abs(snapResponse.snapResolution.resolvedPoint.x - 100.0) < 0.000_000_000_001)
+    #expect(abs(snapResponse.snapResolution.resolvedPoint.y - 300.0) < 0.000_000_000_001)
+}
+
 @Suite(.serialized)
 struct CLISketchCommandTests {
     @Test(.timeLimit(.minutes(1)))

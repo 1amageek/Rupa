@@ -84,7 +84,7 @@ Rupa must make scale visible and controllable.
 | Adaptive grid | Grid spacing adapts to zoom level and active unit display. |
 | Fixed grid | User can lock grid spacing for precision workflows. |
 | Grid scale readout | Canvas must expose the resolved minor grid step, major grid step, and visible span in readable units without changing internal meter storage. |
-| Snap increments | Snap increments are unit-aware and independent from display rounding. |
+| Snap increments | Snap increments are unit-aware and independent from display rounding. When no explicit snap interval is supplied, grid snapping follows the active ruler minor tick; explicit intervals remain fixed for precision and automation workflows. |
 | Object snaps | Endpoint, midpoint, center, tangent, perpendicular, intersection, face, edge, vertex, and construction references. |
 | Measurement | Distance, angle, radius, diameter, area, volume, bounding box, wall thickness, clearance, and mass properties where material density exists. |
 | Ruler overlays | View rulers must support micrometer, millimeter, centimeter, meter, kilometer, inch, foot, and drawing scale display. |

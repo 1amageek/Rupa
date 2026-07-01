@@ -283,8 +283,8 @@ public struct SnapResolutionOptions: Codable, Equatable, Sendable {
     public var suppressedCandidateKinds: Set<SnapCandidateKind>
     public var usesConstructionPlaneProjection: Bool
     public var constructionPlane: SketchPlane?
-    public var gridIntervalMeters: Double
-    public var objectSearchRadiusMeters: Double
+    public var gridIntervalMeters: Double?
+    public var objectSearchRadiusMeters: Double?
     public var maximumCandidateCount: Int
     public var referencePoint: Point2D?
     public var referenceLineAnchors: [SketchReferenceLineAnchor]
@@ -296,8 +296,8 @@ public struct SnapResolutionOptions: Codable, Equatable, Sendable {
         suppressedCandidateKinds: Set<SnapCandidateKind> = [],
         usesConstructionPlaneProjection: Bool = false,
         constructionPlane: SketchPlane? = nil,
-        gridIntervalMeters: Double = 0.001,
-        objectSearchRadiusMeters: Double = 0.002,
+        gridIntervalMeters: Double? = nil,
+        objectSearchRadiusMeters: Double? = nil,
         maximumCandidateCount: Int = 12,
         referencePoint: Point2D? = nil,
         referenceLineAnchors: [SketchReferenceLineAnchor] = []
@@ -346,8 +346,8 @@ public struct SnapResolutionOptions: Codable, Equatable, Sendable {
             forKey: .usesConstructionPlaneProjection
         ) ?? false
         constructionPlane = try container.decodeIfPresent(SketchPlane.self, forKey: .constructionPlane)
-        gridIntervalMeters = try container.decode(Double.self, forKey: .gridIntervalMeters)
-        objectSearchRadiusMeters = try container.decode(Double.self, forKey: .objectSearchRadiusMeters)
+        gridIntervalMeters = try container.decodeIfPresent(Double.self, forKey: .gridIntervalMeters)
+        objectSearchRadiusMeters = try container.decodeIfPresent(Double.self, forKey: .objectSearchRadiusMeters)
         maximumCandidateCount = try container.decode(Int.self, forKey: .maximumCandidateCount)
         referencePoint = try container.decodeIfPresent(Point2D.self, forKey: .referencePoint)
         referenceLineAnchors = try container.decodeIfPresent(
@@ -364,14 +364,32 @@ public struct SnapResolutionOptions: Codable, Equatable, Sendable {
         try container.encode(suppressedCandidateKinds, forKey: .suppressedCandidateKinds)
         try container.encode(usesConstructionPlaneProjection, forKey: .usesConstructionPlaneProjection)
         try container.encodeIfPresent(constructionPlane, forKey: .constructionPlane)
-        try container.encode(gridIntervalMeters, forKey: .gridIntervalMeters)
-        try container.encode(objectSearchRadiusMeters, forKey: .objectSearchRadiusMeters)
+        try container.encodeIfPresent(gridIntervalMeters, forKey: .gridIntervalMeters)
+        try container.encodeIfPresent(objectSearchRadiusMeters, forKey: .objectSearchRadiusMeters)
         try container.encode(maximumCandidateCount, forKey: .maximumCandidateCount)
         try container.encodeIfPresent(referencePoint, forKey: .referencePoint)
         try container.encode(referenceLineAnchors, forKey: .referenceLineAnchors)
     }
 
     public var resolvesObjects: Bool {
+        usesObjects || objectTargetingOverride == .forceEnabled
+    }
+}
+
+private struct ValidatedSnapResolutionOptions {
+    var usesGrid: Bool
+    var usesObjects: Bool
+    var objectTargetingOverride: SnapObjectTargetingOverride
+    var suppressedCandidateKinds: Set<SnapCandidateKind>
+    var usesConstructionPlaneProjection: Bool
+    var constructionPlane: SketchPlane?
+    var gridIntervalMeters: Double
+    var objectSearchRadiusMeters: Double
+    var maximumCandidateCount: Int
+    var referencePoint: Point2D?
+    var referenceLineAnchors: [SketchReferenceLineAnchor]
+
+    var resolvesObjects: Bool {
         usesObjects || objectTargetingOverride == .forceEnabled
     }
 }
@@ -503,7 +521,7 @@ public struct SnapResolver: Sendable {
         options: SnapResolutionOptions
     ) throws -> SnapResolutionResult {
         try validate(point: point)
-        let normalizedOptions = try validated(options)
+        let normalizedOptions = try validated(options, document: document)
         let constructionPlane = try constructionPlaneCoordinateSystem(
             from: normalizedOptions,
             document: document
@@ -2405,7 +2423,7 @@ public struct SnapResolver: Sendable {
     }
 
     private func constructionPlaneCoordinateSystem(
-        from options: SnapResolutionOptions,
+        from options: ValidatedSnapResolutionOptions,
         document: DesignDocument
     ) throws -> SketchPlaneCoordinateSystem? {
         guard options.usesConstructionPlaneProjection else {
@@ -3432,11 +3450,25 @@ public struct SnapResolver: Sendable {
             <= normalizedArcSpan(startAngle: startAngle, endAngle: endAngle) + 1.0e-10
     }
 
-    private func validated(_ options: SnapResolutionOptions) throws -> SnapResolutionOptions {
-        guard options.gridIntervalMeters.isFinite,
-              options.objectSearchRadiusMeters.isFinite,
-              options.gridIntervalMeters > 0.0,
-              options.objectSearchRadiusMeters >= 0.0,
+    private func validated(
+        _ options: SnapResolutionOptions,
+        document: DesignDocument
+    ) throws -> ValidatedSnapResolutionOptions {
+        let ruler = document.ruler.normalizedForWorkspaceScale()
+        let gridIntervalMeters = options.gridIntervalMeters ?? max(
+            ruler.minorTickMeters,
+            RulerConfiguration.minorTickMetersRange.lowerBound
+        )
+        let objectSearchRadiusMeters = options.objectSearchRadiusMeters
+            ?? defaultObjectSearchRadiusMeters(
+                ruler: ruler,
+                gridIntervalMeters: gridIntervalMeters
+            )
+
+        guard gridIntervalMeters.isFinite,
+              objectSearchRadiusMeters.isFinite,
+              gridIntervalMeters > 0.0,
+              objectSearchRadiusMeters >= 0.0,
               options.maximumCandidateCount > 0 else {
             throw EditorError(
                 code: .commandInvalid,
@@ -3449,7 +3481,35 @@ public struct SnapResolver: Sendable {
         for anchor in options.referenceLineAnchors {
             try validate(point: anchor.point)
         }
-        return options
+        return ValidatedSnapResolutionOptions(
+            usesGrid: options.usesGrid,
+            usesObjects: options.usesObjects,
+            objectTargetingOverride: options.objectTargetingOverride,
+            suppressedCandidateKinds: options.suppressedCandidateKinds,
+            usesConstructionPlaneProjection: options.usesConstructionPlaneProjection,
+            constructionPlane: options.constructionPlane,
+            gridIntervalMeters: gridIntervalMeters,
+            objectSearchRadiusMeters: objectSearchRadiusMeters,
+            maximumCandidateCount: options.maximumCandidateCount,
+            referencePoint: options.referencePoint,
+            referenceLineAnchors: options.referenceLineAnchors
+        )
+    }
+
+    private func defaultObjectSearchRadiusMeters(
+        ruler: RulerConfiguration,
+        gridIntervalMeters: Double
+    ) -> Double {
+        let minimum = max(
+            gridIntervalMeters * 2.0,
+            ruler.visibleSpanMeters * 1.0e-6,
+            1.0e-6
+        )
+        let maximum = max(
+            ruler.visibleSpanMeters * 1.0e-4,
+            0.01
+        )
+        return min(minimum, maximum)
     }
 
     private func validate(point: Point2D) throws {

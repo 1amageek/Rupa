@@ -22,6 +22,43 @@ import Testing
     #expect(result.candidates.map(\.kind) == [.grid])
 }
 
+@Test func snapResolverUsesDocumentRulerForDefaultGridInterval() async throws {
+    var document = DesignDocument.empty()
+    try document.setRulerConfiguration(WorkspaceScalePreset.sitePlanning.rulerConfiguration)
+
+    let result = try SnapResolver().resolve(
+        point: Point2D(x: 149.0, y: 251.0),
+        in: document,
+        options: SnapResolutionOptions(
+            usesGrid: true,
+            usesObjects: false,
+            maximumCandidateCount: 4
+        )
+    )
+
+    #expect(result.resolvedPoint == Point2D(x: 100.0, y: 300.0))
+    #expect(result.selectedCandidate?.kind == .grid)
+}
+
+@Test func snapResolverKeepsExplicitGridIntervalAsFixedSnapSpacing() async throws {
+    var document = DesignDocument.empty()
+    try document.setRulerConfiguration(WorkspaceScalePreset.sitePlanning.rulerConfiguration)
+
+    let result = try SnapResolver().resolve(
+        point: Point2D(x: 149.004, y: 251.006),
+        in: document,
+        options: SnapResolutionOptions(
+            usesGrid: true,
+            usesObjects: false,
+            gridIntervalMeters: 0.01,
+            maximumCandidateCount: 4
+        )
+    )
+
+    #expect(result.resolvedPoint == Point2D(x: 149.0, y: 251.01))
+    #expect(result.selectedCandidate?.kind == .grid)
+}
+
 @Test func snapResolverPrefersNearbyObjectCandidateOverGrid() async throws {
     var document = DesignDocument.empty()
     _ = try document.createLineSketch(
