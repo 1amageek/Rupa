@@ -26,6 +26,41 @@ let inspectorSliderLeadingPadding: CGFloat = WorkspaceInspectorLayout.rowHorizon
     + inspectorLabelWidth
     + inspectorRowSpacing
 
+struct WorkspaceLengthFieldPresentation: Equatable {
+    var meters: Double
+    var value: Double
+    var unit: LengthDisplayUnit
+    var text: String
+}
+
+func workspaceLengthFieldPresentation(
+    fromMeters meters: Double,
+    preferredUnit: LengthDisplayUnit
+) -> WorkspaceLengthFieldPresentation {
+    let unit = preferredUnit.readableUnit(forMeters: meters)
+    let value = unit.value(fromMeters: meters)
+    return WorkspaceLengthFieldPresentation(
+        meters: meters,
+        value: value,
+        unit: unit,
+        text: WorkspaceInspectorNumberText.string(from: value)
+    )
+}
+
+func workspaceLengthMeters(
+    fromFieldText text: String,
+    defaultUnit: LengthDisplayUnit
+) -> Double? {
+    do {
+        return try LengthInputParser().parseMeters(
+            from: text,
+            defaultUnit: defaultUnit
+        )
+    } catch {
+        return nil
+    }
+}
+
 @MainActor
 func inspectorSection<Content: View>(
     _ title: String,
@@ -198,13 +233,56 @@ func workspaceLengthControl(
     sliderRange: ClosedRange<Double>,
     onChange: @escaping (Double) -> Void
 ) -> some View {
-    numericControl(
-        title,
-        values: values.map { displayUnit.value(fromMeters: $0) },
-        sliderRange: sliderRange
-    ) { value in
-        onChange(displayUnit.meters(from: value))
-    } unitLabel: {
-        displayUnit.symbol
+    let commonMeters = commonWorkspaceInspectorValue(values)
+    let presentation = commonMeters.map {
+        workspaceLengthFieldPresentation(
+            fromMeters: $0,
+            preferredUnit: displayUnit
+        )
     }
+    let textBinding = Binding<String>(
+        get: {
+            if let presentation {
+                return presentation.text
+            }
+            return "Mixed"
+        },
+        set: { text in
+            let defaultUnit = presentation?.unit ?? displayUnit
+            guard let meters = workspaceLengthMeters(
+                fromFieldText: text,
+                defaultUnit: defaultUnit
+            ) else {
+                return
+            }
+            onChange(meters)
+        }
+    )
+    let sliderBinding = Binding<Double>(
+        get: {
+            let value = displayUnit.value(fromMeters: commonMeters ?? 0.0)
+            return min(max(value, sliderRange.lowerBound), sliderRange.upperBound)
+        },
+        set: { value in
+            onChange(displayUnit.meters(from: value))
+        }
+    )
+    let unit = presentation?.unit.symbol ?? displayUnit.symbol
+
+    return VStack(alignment: .leading, spacing: 4) {
+        inspectorControlRow(title) {
+            HStack(spacing: 6) {
+                TextField(title, text: textBinding)
+                    .multilineTextAlignment(.trailing)
+                    .frame(width: inspectorControlWidth)
+                Text(unit)
+                    .foregroundStyle(.secondary)
+                    .frame(width: inspectorUnitWidth, alignment: .leading)
+            }
+        }
+        Slider(value: sliderBinding, in: sliderRange)
+            .padding(.leading, inspectorSliderLeadingPadding)
+            .padding(.trailing, WorkspaceInspectorLayout.rowHorizontalPadding)
+    }
+    .padding(.vertical, 2)
 }

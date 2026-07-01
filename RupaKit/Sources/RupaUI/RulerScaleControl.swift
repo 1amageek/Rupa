@@ -2,11 +2,7 @@ import Foundation
 import RupaCore
 
 enum RulerScaleControl {
-    struct FieldPresentation: Equatable {
-        var value: Double
-        var unit: LengthDisplayUnit
-        var text: String
-    }
+    typealias FieldPresentation = WorkspaceLengthFieldPresentation
 
     enum Kind: CaseIterable {
         case minor
@@ -58,16 +54,9 @@ enum RulerScaleControl {
         for kind: Kind
     ) -> FieldPresentation {
         let resolvedMeters = clampedMeters(meters, for: kind)
-        let unit = fieldUnit(
+        return workspaceLengthFieldPresentation(
             fromMeters: resolvedMeters,
-            preferredUnit: preferredUnit,
-            for: kind
-        )
-        let value = unit.value(fromMeters: resolvedMeters)
-        return FieldPresentation(
-            value: value,
-            unit: unit,
-            text: WorkspaceInspectorNumberText.string(from: value)
+            preferredUnit: preferredUnit
         )
     }
 
@@ -76,9 +65,11 @@ enum RulerScaleControl {
         preferredUnit: LengthDisplayUnit,
         for kind: Kind
     ) -> LengthDisplayUnit {
-        preferredUnit.readableUnit(
-            forMeters: clampedMeters(meters, for: kind)
-        )
+        fieldPresentation(
+            fromMeters: meters,
+            preferredUnit: preferredUnit,
+            for: kind
+        ).unit
     }
 
     static func meters(
@@ -97,13 +88,10 @@ enum RulerScaleControl {
         unit: LengthDisplayUnit,
         for kind: Kind
     ) -> Double? {
-        let meters: Double
-        do {
-            meters = try LengthInputParser().parseMeters(
-                from: text,
-                defaultUnit: unit
-            )
-        } catch {
+        guard let meters = workspaceLengthMeters(
+            fromFieldText: text,
+            defaultUnit: unit
+        ) else {
             return nil
         }
         return clampedMeters(max(meters, 0.0), for: kind)

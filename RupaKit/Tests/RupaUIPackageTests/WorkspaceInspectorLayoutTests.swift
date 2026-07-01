@@ -35,6 +35,44 @@ import Testing
     )
 }
 
+@Test func workspaceLengthFieldPresentationUsesReadableUnits() {
+    let large = workspaceLengthFieldPresentation(
+        fromMeters: 1_000.0,
+        preferredUnit: .millimeter
+    )
+    let small = workspaceLengthFieldPresentation(
+        fromMeters: 0.000_25,
+        preferredUnit: .meter
+    )
+
+    #expect(large.unit == .kilometer)
+    #expect(large.value == 1.0)
+    #expect(large.text == "1")
+    #expect(small.unit == .micrometer)
+    #expect(small.value == 250.0)
+    #expect(small.text == "250")
+}
+
+@Test func workspaceLengthMetersAcceptsExplicitUnitsIndependentOfDisplayUnit() {
+    let kilometerMeters = workspaceLengthMeters(
+        fromFieldText: "1 km",
+        defaultUnit: .millimeter
+    )
+    let micrometerMeters = workspaceLengthMeters(
+        fromFieldText: "250 um",
+        defaultUnit: .meter
+    )
+    let expressionMeters = workspaceLengthMeters(
+        fromFieldText: "1 km / 2",
+        defaultUnit: .millimeter
+    )
+
+    #expect(kilometerMeters == 1_000.0)
+    #expect(micrometerMeters == 0.000_25)
+    #expect(expressionMeters == 500.0)
+    #expect(workspaceLengthMeters(fromFieldText: "not-a-length", defaultUnit: .meter) == nil)
+}
+
 @Test func workspaceInspectorLayoutKeepsDensePropertyPanelRhythm() {
     #expect(WorkspaceInspectorLayout.panelHorizontalInset == 12)
     #expect(WorkspaceInspectorLayout.sectionSpacing == 12)
