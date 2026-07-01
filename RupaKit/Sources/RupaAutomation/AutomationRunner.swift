@@ -10,39 +10,47 @@ public struct AutomationRunner {
     ) throws -> AutomationResult {
         switch command {
         case .describeDocument:
+            let scale = WorkspaceScaleSnapshot(ruler: session.document.ruler)
             return AutomationResult(
-                message: "Document uses \(session.document.displayUnit.symbol) display units.",
+                message: "Document uses \(session.document.displayUnit.symbol) display units. \(scale.summary)",
                 generation: session.generation,
-                diagnostics: session.diagnostics
+                diagnostics: session.diagnostics,
+                workspaceScale: scale
             )
         case .setDisplayUnit(let unit):
             let result = try session.execute(.setDisplayUnit(unit))
+            let scale = WorkspaceScaleSnapshot(ruler: session.document.ruler)
             return AutomationResult(
-                message: "Display unit changed to \(unit.symbol).",
+                message: "Display unit changed to \(unit.symbol). \(scale.summary)",
                 commandName: result.commandName,
                 generation: result.generation,
                 didMutate: result.didMutate,
-                diagnostics: result.diagnostics
+                diagnostics: result.diagnostics,
+                workspaceScale: scale
             )
         case .setRulerConfiguration(let configuration):
             let normalized = configuration.normalizedForWorkspaceScale()
             let result = try session.execute(.setRulerConfiguration(normalized))
+            let scale = WorkspaceScaleSnapshot(ruler: session.document.ruler)
             return AutomationResult(
-                message: "Ruler configuration changed to \(normalized.displayUnit.symbol), minor \(normalized.minorTickMeters)m, major \(normalized.majorTickMeters)m, visible span \(normalized.visibleSpanMeters)m.",
+                message: "Ruler configuration changed. \(scale.summary)",
                 commandName: result.commandName,
                 generation: result.generation,
                 didMutate: result.didMutate,
-                diagnostics: result.diagnostics
+                diagnostics: result.diagnostics,
+                workspaceScale: scale
             )
         case .setWorkspaceScalePreset(let preset):
             let configuration = preset.rulerConfiguration.normalizedForWorkspaceScale()
             let result = try session.execute(.setRulerConfiguration(configuration))
+            let scale = WorkspaceScaleSnapshot(ruler: session.document.ruler)
             return AutomationResult(
-                message: "Workspace scale preset changed to \(preset.title).",
+                message: "Workspace scale preset changed to \(preset.title). \(scale.summary)",
                 commandName: result.commandName,
                 generation: result.generation,
                 didMutate: result.didMutate,
-                diagnostics: result.diagnostics
+                diagnostics: result.diagnostics,
+                workspaceScale: scale
             )
         case .renameDocument(let name):
             let result = try session.execute(.renameDocument(name: name))

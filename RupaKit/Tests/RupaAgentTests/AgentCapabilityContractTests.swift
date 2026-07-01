@@ -1523,10 +1523,12 @@ import SwiftCAD
         .edge,
         .vertex,
     ])
+    #expect(designDisplaySnapshot.summary.contains("workspace scale"))
     #expect(designDisplaySnapshot.summary.contains("UI-visible sketch primitives"))
     #expect(designDisplaySnapshot.summary.contains("component definitions"))
     #expect(designDisplaySnapshot.summary.contains("component instances"))
     #expect(designDisplaySnapshot.summary.contains("generated topology"))
+    #expect(designDisplaySnapshot.failureMode.contains("normalized workspace scale"))
     #expect(designDisplaySnapshot.failureMode.contains("display-ready source snapshots"))
     #expect(designDisplaySnapshot.failureMode.contains("reusable component definitions"))
     #expect(designDisplaySnapshot.failureMode.contains("placed component instances"))

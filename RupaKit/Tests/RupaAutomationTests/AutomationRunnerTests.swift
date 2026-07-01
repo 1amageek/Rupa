@@ -35,6 +35,8 @@ import SwiftCAD
     #expect(session.generation == DocumentGeneration(1))
     #expect(result.commandName == "setRulerConfiguration")
     #expect(result.didMutate)
+    #expect(result.workspaceScale?.displayUnit == .meter)
+    #expect(result.workspaceScale?.visibleSpanMeters == 10_000.0)
     #expect(result.message.contains("visible span 10000.0m"))
 }
 
@@ -51,7 +53,27 @@ import SwiftCAD
     #expect(session.generation == DocumentGeneration(1))
     #expect(result.commandName == "setRulerConfiguration")
     #expect(result.didMutate)
+    #expect(result.workspaceScale?.matchedPreset == .sitePlanning)
+    #expect(result.workspaceScale?.visibleSpanMeters == 100_000.0)
     #expect(result.message.contains("Site Planning"))
+}
+
+@MainActor
+@Test func automationDescribeDocumentReportsWorkspaceScale() async throws {
+    let session = EditorSession()
+    let runner = AutomationRunner()
+    _ = try runner.execute(.setWorkspaceScalePreset(.sitePlanning), in: session)
+
+    let result = try runner.execute(.describeDocument, in: session)
+
+    #expect(!result.didMutate)
+    #expect(result.workspaceScale?.displayUnit == .meter)
+    #expect(result.workspaceScale?.matchedPreset == .sitePlanning)
+    #expect(result.workspaceScale?.minorTickMeters == 10.0)
+    #expect(result.workspaceScale?.majorTickMeters == 100.0)
+    #expect(result.workspaceScale?.visibleSpanMeters == 100_000.0)
+    #expect(result.message.contains("Site Planning"))
+    #expect(result.message.contains("visible span 100000.0m"))
 }
 
 @MainActor

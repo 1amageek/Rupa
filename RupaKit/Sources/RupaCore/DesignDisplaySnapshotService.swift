@@ -103,6 +103,7 @@ public struct DesignDisplaySnapshotService: Sendable {
         return DesignDisplaySnapshotResult(
             generation: generation,
             dirty: dirty,
+            workspaceScale: WorkspaceScaleSnapshot(ruler: document.ruler),
             sketches: order.compactMap { snapshot.sketches[$0] },
             extrudes: order.compactMap { snapshot.extrudes[$0] },
             straightPrismSweeps: order.compactMap { snapshot.straightPrismSweeps[$0] },
