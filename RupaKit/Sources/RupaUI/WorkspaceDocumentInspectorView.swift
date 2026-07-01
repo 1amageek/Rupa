@@ -23,6 +23,7 @@ struct WorkspaceDocumentInspectorState: Equatable, Sendable {
     var ruler: RulerConfiguration
     var scaleRecommendation: WorkspaceDocumentScaleRecommendationState?
     var precisionRecommendation: WorkspaceDocumentPrecisionRecommendationState?
+    var parameters: WorkspaceParameterInspectorState
 }
 
 struct WorkspaceDocumentScaleRecommendationState: Equatable, Sendable {
@@ -48,6 +49,8 @@ struct WorkspaceDocumentInspectorView: View {
     var setMinorTickMeters: (Double) -> Void
     var setMajorTickMeters: (Double) -> Void
     var setVisibleSpanMeters: (Double) -> Void
+    var upsertParameterExpression: (String, String, QuantityKind) -> Bool
+    var deleteParameter: (String) -> Bool
 
     var body: some View {
         inspectorSection("Document") {
@@ -114,6 +117,12 @@ struct WorkspaceDocumentInspectorView: View {
                 precisionRecommendationControl(precisionRecommendation)
             }
         }
+
+        WorkspaceParameterInspectorView(
+            state: state.parameters,
+            onUpsert: upsertParameterExpression,
+            onDelete: deleteParameter
+        )
     }
 
     private var scalePresetMenu: some View {

@@ -163,9 +163,35 @@ import Testing
         diagnostics: []
     )
     let summary = try #require(result.parameters.first { $0.name == "doubleWidth" })
+    let widthSummary = try #require(result.parameters.first { $0.name == "width" })
 
     #expect(result.message == "2 parameters.")
     #expect(summary.expression == "(width * 2)")
     #expect(summary.resolvedKind == .length)
     #expect(abs((summary.resolvedValue ?? 0.0) - 0.02) < 0.000_000_000_001)
+    #expect(summary.dependencyNames == ["width"])
+    #expect(summary.dependentNames == [])
+    #expect(widthSummary.dependencyNames == [])
+    #expect(widthSummary.dependentNames == ["doubleWidth"])
+}
+
+@Test func parameterSummaryDecodesMissingDependencyFieldsAsEmpty() throws {
+    let data = Data(
+        """
+        {
+          "id": "p1",
+          "name": "width",
+          "kind": "length",
+          "expression": "10mm",
+          "resolvedValue": 0.01,
+          "resolvedKind": "length",
+          "diagnostics": []
+        }
+        """.utf8
+    )
+
+    let summary = try JSONDecoder().decode(ParameterSummary.self, from: data)
+
+    #expect(summary.dependencyNames == [])
+    #expect(summary.dependentNames == [])
 }

@@ -4536,7 +4536,9 @@ public struct MainView: View {
             applyWorkspaceRebaseTranslation: applyWorkspaceRebaseTranslation,
             setMinorTickMeters: { setRulerConfiguration(minorTickMeters: $0) },
             setMajorTickMeters: { setRulerConfiguration(majorTickMeters: $0) },
-            setVisibleSpanMeters: { setRulerConfiguration(visibleSpanMeters: $0) }
+            setVisibleSpanMeters: { setRulerConfiguration(visibleSpanMeters: $0) },
+            upsertParameterExpression: upsertParameterExpression,
+            deleteParameter: deleteDocumentParameter
         )
     }
 
@@ -4562,7 +4564,20 @@ public struct MainView: View {
             exportPresetCount: session.document.productMetadata.exportPresets.count,
             ruler: session.document.ruler,
             scaleRecommendation: workspaceScaleRecommendationInspectorState,
-            precisionRecommendation: workspacePrecisionRecommendationInspectorState
+            precisionRecommendation: workspacePrecisionRecommendationInspectorState,
+            parameters: workspaceParameterInspectorState
+        )
+    }
+
+    private var workspaceParameterInspectorState: WorkspaceParameterInspectorState {
+        WorkspaceParameterInspectorState(
+            result: ParameterListResult(
+                document: session.document,
+                generation: session.generation,
+                dirty: session.isDirty,
+                diagnostics: session.diagnostics
+            ),
+            displayUnit: session.document.displayUnit
         )
     }
 
@@ -6953,6 +6968,42 @@ public struct MainView: View {
     private func applyWorkspaceScalePreset(_ preset: WorkspaceScalePreset) {
         session.setRulerConfiguration(preset.rulerConfiguration.normalizedForWorkspaceScale())
         resetWorkspaceEditingScaleDefaults()
+    }
+
+    private func upsertParameterExpression(
+        name: String,
+        expression: String,
+        kind: QuantityKind
+    ) -> Bool {
+        do {
+            let parsedExpression = try ParameterExpressionParser().parseForUpsert(
+                expression,
+                parameterName: name,
+                parameters: session.document.cadDocument.parameters,
+                targetKind: kind,
+                defaults: ParameterExpressionDefaults(
+                    lengthUnit: session.document.displayUnit,
+                    angleUnit: .degree
+                )
+            )
+            return session.perform(
+                .upsertParameter(
+                    name: name,
+                    expression: parsedExpression,
+                    kind: kind
+                )
+            ) != nil
+        } catch let error as EditorError {
+            session.reportToolStatus(error.message, severity: .warning)
+            return false
+        } catch {
+            session.reportToolStatus(String(describing: error), severity: .warning)
+            return false
+        }
+    }
+
+    private func deleteDocumentParameter(name: String) -> Bool {
+        session.perform(.deleteParameter(name: name)) != nil
     }
 
     private func resetWorkspaceEditingScaleDefaults() {
