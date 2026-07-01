@@ -87,10 +87,9 @@ struct WorkspaceSketchCurveInspectorView: View {
                     .accessibilityIdentifier("InspectorCurve.curvatureComb.toggle")
                 }
                 if let curvatureDisplay {
-                    numericControl(
+                    workspaceScaleFactorControl(
                         "Comb Scale",
-                        values: [curvatureDisplay.combScale],
-                        sliderRange: 0.01 ... max(1.0, curvatureDisplay.combScale * 2.0)
+                        values: [curvatureDisplay.combScale]
                     ) { value in
                         onSetCurveCurvatureDisplay(
                             entity,

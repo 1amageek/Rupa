@@ -278,14 +278,11 @@ struct PatternArrayInspectorView: View {
             inspectorRow("Twist", "Expression")
         }
         if let endScale = curve.endScale {
-            numericControl(
+            workspaceScaleFactorControl(
                 "End Scale",
-                values: [endScale],
-                sliderRange: 0.01 ... max(2.0, endScale * 2.0)
+                values: [endScale]
             ) { scale in
                 setCurveEndScale(scale)
-            } unitLabel: {
-                "x"
             }
             .accessibilityIdentifier("InspectorPatternArray.curve.endScale")
         } else {

@@ -177,10 +177,9 @@ struct WorkspaceBridgeCurveInspectorView: View {
                 .accessibilityIdentifier("InspectorCurve.bridge.curvature.toggle")
             }
             if let curvatureDisplay = bridgeCurve.curvatureDisplay {
-                numericControl(
+                workspaceScaleFactorControl(
                     "Curvature Scale",
-                    values: [curvatureDisplay.combScale],
-                    sliderRange: 0.01 ... max(1.0, curvatureDisplay.combScale * 2.0)
+                    values: [curvatureDisplay.combScale]
                 ) { value in
                     onSetCurvatureDisplay(
                         bridgeCurve,
