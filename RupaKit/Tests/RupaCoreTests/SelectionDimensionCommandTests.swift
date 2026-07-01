@@ -43,6 +43,105 @@ import Testing
     #expect(try measurement.isSatisfied())
 }
 
+@Test func selectionDimensionEvaluationExposesDisplayUnitValues() async throws {
+    var document = DesignDocument.empty()
+    document.setDisplayUnit(.millimeter)
+    let featureID = try document.createLineSketch(
+        name: "Measured Display Line",
+        plane: .xy,
+        start: SketchPoint(
+            x: .length(0.0, .millimeter),
+            y: .length(0.0, .millimeter)
+        ),
+        end: SketchPoint(
+            x: .length(10.0, .millimeter),
+            y: .length(0.0, .millimeter)
+        )
+    )
+    let targets = try lineEndpointTargets(in: document, featureID: featureID)
+    let dimensionID = try document.addSelectionDimension(
+        name: "Line Length Display",
+        kind: .distance,
+        first: targets.start,
+        second: targets.end,
+        target: .length(8.0, .millimeter)
+    )
+
+    let evaluation = try SelectionDimensionService().evaluate(
+        document: document,
+        dimensionID: dimensionID
+    )
+    let measurement = try #require(evaluation.measurements.first)
+
+    #expect(evaluation.displayUnit == .millimeter)
+    #expect(evaluation.displayUnitSymbol == "mm")
+    #expect(measurement.valueKind == .length)
+    #expect(measurement.displayUnitSymbol == "mm")
+    #expect(measurement.measured == .length(0.010, unit: .meter))
+    #expect(measurement.target == .length(0.008, unit: .meter))
+    #expect(abs(measurement.residual.value - 0.002) <= 1.0e-12)
+    #expect(abs(measurement.measuredDisplayValue - 10.0) <= 1.0e-12)
+    #expect(abs(measurement.targetDisplayValue - 8.0) <= 1.0e-12)
+    #expect(abs(measurement.residualDisplayValue - 2.0) <= 1.0e-12)
+}
+
+@Test func selectionDimensionEvaluationDecodesMissingDisplayValues() async throws {
+    var document = DesignDocument.empty()
+    document.setDisplayUnit(.millimeter)
+    let featureID = try document.createLineSketch(
+        name: "Measured Legacy Display Line",
+        plane: .xy,
+        start: SketchPoint(
+            x: .length(0.0, .millimeter),
+            y: .length(0.0, .millimeter)
+        ),
+        end: SketchPoint(
+            x: .length(10.0, .millimeter),
+            y: .length(0.0, .millimeter)
+        )
+    )
+    let targets = try lineEndpointTargets(in: document, featureID: featureID)
+    let dimensionID = try document.addSelectionDimension(
+        name: "Line Length Legacy Display",
+        kind: .distance,
+        first: targets.start,
+        second: targets.end,
+        target: .length(8.0, .millimeter)
+    )
+    let evaluation = try SelectionDimensionService().evaluate(
+        document: document,
+        dimensionID: dimensionID
+    )
+    let json = try JSONSerialization.jsonObject(
+        with: try JSONEncoder().encode(evaluation)
+    ) as? [String: Any]
+    var legacyJSON = try #require(json)
+    legacyJSON["displayUnitSymbol"] = nil
+    var legacyMeasurement = try #require(
+        (legacyJSON["measurements"] as? [[String: Any]])?.first
+    )
+    legacyMeasurement["valueKind"] = nil
+    legacyMeasurement["measuredDisplayValue"] = nil
+    legacyMeasurement["targetDisplayValue"] = nil
+    legacyMeasurement["residualDisplayValue"] = nil
+    legacyMeasurement["displayUnitSymbol"] = nil
+    legacyJSON["measurements"] = [legacyMeasurement]
+
+    let decoded = try JSONDecoder().decode(
+        SelectionDimensionEvaluationResult.self,
+        from: try JSONSerialization.data(withJSONObject: legacyJSON)
+    )
+    let measurement = try #require(decoded.measurements.first)
+
+    #expect(decoded.displayUnit == .millimeter)
+    #expect(decoded.displayUnitSymbol == "mm")
+    #expect(measurement.valueKind == .length)
+    #expect(measurement.displayUnitSymbol == "mm")
+    #expect(abs(measurement.measuredDisplayValue - 10.0) <= 1.0e-12)
+    #expect(abs(measurement.targetDisplayValue - 8.0) <= 1.0e-12)
+    #expect(abs(measurement.residualDisplayValue - 2.0) <= 1.0e-12)
+}
+
 @Test func selectionDimensionTargetAndRemovalCommandsMutateThroughCommandPath() async throws {
     var document = DesignDocument.empty()
     let featureID = try document.createLineSketch(

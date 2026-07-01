@@ -861,7 +861,7 @@ private func rawAgentProtocolJSON(_ source: String) -> Data {
         )
     )
     let selectionDimensionResponse = AgentResponse.selectionDimensionEvaluation(
-        SelectionDimensionEvaluation(measurements: [])
+        SelectionDimensionEvaluationResult(displayUnit: .millimeter)
     )
     let qualityAssessmentResponse = AgentResponse.cadInteractionQualityAssessment(
         CADInteractionQualityAssessmentService().assess()

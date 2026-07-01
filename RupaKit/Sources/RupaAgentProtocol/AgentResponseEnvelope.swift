@@ -284,7 +284,7 @@ public struct AgentResponseEnvelope: Codable, Equatable, Sendable {
             )
         case "selection.dimensionEvaluation":
             return .selectionDimensionEvaluation(
-                try container.decode(SelectionDimensionEvaluation.self, forKey: .result)
+                try container.decode(SelectionDimensionEvaluationResult.self, forKey: .result)
             )
         case "document.curveAnalysis":
             return .curveAnalysis(try container.decode(CurveAnalysisResult.self, forKey: .result))

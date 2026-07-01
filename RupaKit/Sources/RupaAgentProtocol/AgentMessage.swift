@@ -166,7 +166,7 @@ public enum AgentResponse: Codable, Equatable, Sendable {
     case polySplineMeshAnalysis(PolySplineMeshAnalysisResult)
     case sketchEntitySummary(SketchEntitySummaryResult)
     case sketchDimensionSummary(SketchDimensionSummaryResult)
-    case selectionDimensionEvaluation(SelectionDimensionEvaluation)
+    case selectionDimensionEvaluation(SelectionDimensionEvaluationResult)
     case curveAnalysis(CurveAnalysisResult)
     case topologySummary(TopologySummaryResult)
     case sweepEvaluationPlan(SweepEvaluationPlanResult)

@@ -151,6 +151,8 @@ public struct SketchDimensionSummaryResult: Codable, Equatable, Sendable {
                 "deg"
             case .length:
                 LengthDisplayUnit.meter.symbol
+            case .scalar:
+                ""
             }
         }
 
@@ -164,6 +166,8 @@ public struct SketchDimensionSummaryResult: Codable, Equatable, Sendable {
                 resolvedValue * 180.0 / Double.pi
             case .length:
                 unit.value(fromMeters: resolvedValue)
+            case .scalar:
+                resolvedValue
             }
         }
 
@@ -176,6 +180,8 @@ public struct SketchDimensionSummaryResult: Codable, Equatable, Sendable {
                 "deg"
             case .length:
                 unit.symbol
+            case .scalar:
+                ""
             }
         }
     }

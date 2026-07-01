@@ -9,6 +9,7 @@ import SwiftCAD
 @MainActor
 @Test func agentAddsAndEvaluatesPersistentSelectionDimension() async throws {
     var document = DesignDocument.empty()
+    document.setDisplayUnit(.millimeter)
     let featureID = try document.createLineSketch(
         name: "Agent Line",
         plane: .xy,
@@ -68,6 +69,13 @@ import SwiftCAD
     #expect(measurement.dimension.id == dimensionID)
     #expect(measurement.measured == .length(0.016, unit: .meter))
     #expect(abs(measurement.residual.value) <= 1.0e-12)
+    #expect(evaluation.displayUnit == .millimeter)
+    #expect(evaluation.displayUnitSymbol == "mm")
+    #expect(measurement.valueKind == .length)
+    #expect(measurement.displayUnitSymbol == "mm")
+    #expect(abs(measurement.measuredDisplayValue - 16.0) <= 1.0e-12)
+    #expect(abs(measurement.targetDisplayValue - 16.0) <= 1.0e-12)
+    #expect(abs(measurement.residualDisplayValue) <= 1.0e-12)
 
     let setResponse = server.handle(
         .execute(
@@ -105,6 +113,9 @@ import SwiftCAD
     #expect(updatedMeasurement.measured == .length(0.016, unit: .meter))
     #expect(updatedMeasurement.target == .length(0.012, unit: .meter))
     #expect(abs(updatedMeasurement.residual.value - 0.004) <= 1.0e-12)
+    #expect(abs(updatedMeasurement.measuredDisplayValue - 16.0) <= 1.0e-12)
+    #expect(abs(updatedMeasurement.targetDisplayValue - 12.0) <= 1.0e-12)
+    #expect(abs(updatedMeasurement.residualDisplayValue - 4.0) <= 1.0e-12)
 
     let applyResponse = server.handle(
         .execute(

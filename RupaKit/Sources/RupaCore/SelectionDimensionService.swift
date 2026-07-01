@@ -15,7 +15,7 @@ public struct SelectionDimensionService: Sendable {
         objectRegistry: ObjectTypeRegistry = .builtIn,
         currentEvaluation: DocumentEvaluationContext? = nil,
         currentGeneration: DocumentGeneration? = nil
-    ) throws -> SelectionDimensionEvaluation {
+    ) throws -> SelectionDimensionEvaluationResult {
         do {
             try document.validate(objectRegistry: objectRegistry)
         } catch {
@@ -38,12 +38,18 @@ public struct SelectionDimensionService: Sendable {
             currentGeneration: currentGeneration,
             failurePrefix: "Document must evaluate successfully before selection dimension evaluation"
         )
+        let rawEvaluation: SwiftCAD.SelectionDimensionEvaluation
         if let dimensionID {
-            return try pipeline.evaluateSelectionDimension(
+            rawEvaluation = try pipeline.evaluateSelectionDimension(
                 dimensionID,
                 in: evaluatedDocument
             )
+        } else {
+            rawEvaluation = try pipeline.evaluateSelectionDimensions(in: evaluatedDocument)
         }
-        return try pipeline.evaluateSelectionDimensions(in: evaluatedDocument)
+        return SelectionDimensionEvaluationResult(
+            evaluation: rawEvaluation,
+            displayUnit: document.displayUnit
+        )
     }
 }
