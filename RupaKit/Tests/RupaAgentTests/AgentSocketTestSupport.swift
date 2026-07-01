@@ -58,10 +58,8 @@ func sendThroughDetachedClient(
     _ request: AgentRequest,
     socketPath: AgentSocketPath
 ) async throws -> AgentResponse {
-    try await Task.detached {
-        let client = AgentClient(socketPath: socketPath)
-        return try client.send(request)
-    }.value
+    let client = AgentClient(socketPath: socketPath)
+    return try await client.send(request)
 }
 
 func makeTemporaryDirectory() throws -> URL {

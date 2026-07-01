@@ -3,13 +3,9 @@ import Foundation
 public struct ObjectTypeRegistry: Sendable {
     public var definitions: [ObjectTypeID: ObjectTypeDefinition]
 
-    public static var builtIn: ObjectTypeRegistry {
-        do {
-            return try ObjectTypeRegistry(definitions: ObjectTypeCatalog.builtInDefinitions)
-        } catch {
-            fatalError("Built-in object type definitions are invalid: \(error)")
-        }
-    }
+    public static let builtIn = ObjectTypeRegistry(
+        validatedBuiltInDefinitions: ObjectTypeCatalog.builtInDefinitions
+    )
 
     public init(definitions: [ObjectTypeDefinition]) throws {
         var registeredDefinitions: [ObjectTypeID: ObjectTypeDefinition] = [:]
@@ -25,6 +21,14 @@ public struct ObjectTypeRegistry: Sendable {
 
     public init(registrations: [ObjectTypeRegistration]) throws {
         try self.init(definitions: registrations.map(\.definition))
+    }
+
+    private init(validatedBuiltInDefinitions definitions: [ObjectTypeDefinition]) {
+        var registeredDefinitions: [ObjectTypeID: ObjectTypeDefinition] = [:]
+        for definition in definitions {
+            registeredDefinitions[definition.id] = definition
+        }
+        self.definitions = registeredDefinitions
     }
 
     public func definition(for id: ObjectTypeID?) -> ObjectTypeDefinition? {

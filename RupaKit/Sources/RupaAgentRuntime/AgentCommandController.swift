@@ -31,6 +31,10 @@ public final class AgentCommandController: AgentClientProtocol {
         capabilityDescriptors().map(\.name)
     }
 
+    public func send(_ request: AgentRequest) async throws -> AgentResponse {
+        handle(request)
+    }
+
     public func capabilityDescriptors() -> [AgentCapabilityDescriptor] {
         Self.capabilityCatalog
     }

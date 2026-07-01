@@ -47,6 +47,15 @@ import Testing
     #expect(ObjectTypeCatalog.definition(for: .torus) == nil)
 }
 
+@Test func builtInObjectCatalogBuildsValidatedRegistry() async throws {
+    let validatedRegistry = try ObjectTypeRegistry(
+        definitions: ObjectTypeCatalog.builtInDefinitions
+    )
+
+    #expect(validatedRegistry.definitions.count == ObjectTypeCatalog.builtInDefinitions.count)
+    #expect(ObjectTypeRegistry.builtIn.definitions == validatedRegistry.definitions)
+}
+
 @Test func polygonSketchCreatesClosedEqualLengthLineLoop() async throws {
     var document = DesignDocument.empty()
 

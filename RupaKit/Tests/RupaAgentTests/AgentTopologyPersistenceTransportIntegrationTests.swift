@@ -498,7 +498,7 @@ private func hasExpectedAgentCircularEdgeDefinition(_ entry: TopologySummaryResu
     server.register(session: EditorSession(document: .empty(named: "Open")))
 
     try await withRunningListener(controller: server, socketURL: socketURL) { listener, client in
-        let response = try client.send(.status)
+        let response = try await client.send(.status)
 
         guard case .status(let status) = response else {
             #expect(Bool(false))
@@ -522,7 +522,7 @@ private func hasExpectedAgentCircularEdgeDefinition(_ entry: TopologySummaryResu
     server.register(session: EditorSession(), id: sessionID)
 
     try await withRunningListener(controller: server, socketURL: socketURL) { _, client in
-        let response = try client.send(
+        let response = try await client.send(
             .execute(
                 sessionID: sessionID,
                 command: .renameDocument(name: "Socket Live"),
@@ -537,7 +537,7 @@ private func hasExpectedAgentCircularEdgeDefinition(_ entry: TopologySummaryResu
         #expect(result.didMutate)
         #expect(result.generation == DocumentGeneration(1))
 
-        let sessionsResponse = try client.send(.sessions)
+        let sessionsResponse = try await client.send(.sessions)
         guard case .sessions(let sessions) = sessionsResponse else {
             #expect(Bool(false))
             return
@@ -565,7 +565,7 @@ private func hasExpectedAgentCircularEdgeDefinition(_ entry: TopologySummaryResu
 
     var caught: EditorError?
     do {
-        _ = try client.send(.status)
+        _ = try await client.send(.status)
     } catch let error as EditorError {
         caught = error
     }
@@ -584,7 +584,7 @@ private func hasExpectedAgentCircularEdgeDefinition(_ entry: TopologySummaryResu
         controller: AgentCommandController(),
         socketURL: socketURL
     ) { _, client in
-        let response = try client.send(.status)
+        let response = try await client.send(.status)
         guard case .status(let status) = response else {
             #expect(Bool(false))
             return
@@ -617,7 +617,7 @@ private func hasExpectedAgentCircularEdgeDefinition(_ entry: TopologySummaryResu
         }
         #expect(error.code == .commandInvalid)
 
-        let response = try client.send(.status)
+        let response = try await client.send(.status)
         guard case .status(let status) = response else {
             #expect(Bool(false))
             return
