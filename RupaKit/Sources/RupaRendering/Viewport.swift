@@ -3502,9 +3502,10 @@ public struct Viewport: View {
     }
 
     private func formattedViewportLength(_ meters: Double) -> String {
-        let unit = document.displayUnit
-        let value = unit.value(fromMeters: meters)
-        return "\(value.formatted(.number.precision(.fractionLength(0...3)))) \(unit.symbol)"
+        ViewportLengthLabelFormatter.string(
+            fromMeters: meters,
+            preferredUnit: document.displayUnit
+        )
     }
 
     private func formattedViewportAngle(_ radians: Double) -> String {
