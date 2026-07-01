@@ -24,13 +24,29 @@ import Testing
     #expect(LengthDisplayUnit.inch.readableUnit(forMeters: 0.3048) == .foot)
 }
 
-@Test func rulerTracksSelectedDisplayUnit() async throws {
+@Test func displayUnitChangePreservesWorkspaceScaleDistances() async throws {
     var document = DesignDocument.empty()
-    document.setDisplayUnit(.micrometer)
+    let originalRuler = document.ruler
 
-    #expect(document.displayUnit == .micrometer)
-    #expect(abs(document.ruler.minorTickMeters - 0.000_001) < 0.000_000_000_001)
-    #expect(abs(document.ruler.majorTickMeters - 0.000_01) < 0.000_000_000_001)
+    document.setDisplayUnit(.kilometer)
+
+    #expect(document.displayUnit == .kilometer)
+    #expect(document.ruler.displayUnit == .kilometer)
+    #expect(document.ruler.minorTickMeters == originalRuler.minorTickMeters)
+    #expect(document.ruler.majorTickMeters == originalRuler.majorTickMeters)
+    #expect(document.ruler.visibleSpanMeters == originalRuler.visibleSpanMeters)
+}
+
+@Test func rulerDisplayUnitReplacementPreservesSitePlanningRange() async throws {
+    let ruler = WorkspaceScalePreset.sitePlanning.rulerConfiguration
+    let replaced = ruler.replacingDisplayUnit(.millimeter)
+
+    #expect(replaced.displayUnit == .millimeter)
+    #expect(replaced.minorTickMeters == ruler.minorTickMeters)
+    #expect(replaced.majorTickMeters == ruler.majorTickMeters)
+    #expect(replaced.visibleSpanMeters == ruler.visibleSpanMeters)
+    #expect(replaced.visibleSpanMeters == 100_000.0)
+    try replaced.validate()
 }
 
 @Test func rulerScaleRangeCoversPrecisionMechanicsThroughArchitecture() async throws {
@@ -2751,7 +2767,7 @@ import Testing
     )
 
     var document = DesignDocument.empty(named: "Product Metadata")
-    document.setDisplayUnit(.centimeter)
+    try document.setRulerConfiguration(.standard(for: .centimeter))
     document.productMetadata = metadata
 
     let url = temporaryDirectory.appendingPathComponent("product-metadata.swcad")

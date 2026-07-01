@@ -35,6 +35,7 @@ Rupa must support modeling across small mechanical detail and building-scale con
 |---|---|
 | Internal length unit | Meter, inherited from Swift-CAD quantity rules. |
 | Display length units | Micrometer (μm), millimeter, centimeter, meter, kilometer, inch, foot, and fractional architectural feet/inches. |
+| Scale ownership | Changing the display unit must preserve the current physical ruler distances; workspace scale changes belong to ruler configuration or named scale presets. |
 | Ruler scale | View rulers, grid labels, and compact canvas readouts must auto-scale from μm detail to km-scale layouts. |
 | Editable length fields | Length inputs should display the current value in readable units while storing the canonical meter value. |
 | Length sliders | Large-range length controls should avoid linear-only sliders that make small-scale edits unusable. |

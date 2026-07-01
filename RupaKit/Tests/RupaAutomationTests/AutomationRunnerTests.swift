@@ -8,13 +8,19 @@ import SwiftCAD
 @Test func automationCanChangeDisplayUnit() async throws {
     let session = EditorSession()
     let runner = AutomationRunner()
+    let originalRuler = session.document.ruler
 
     let result = try runner.execute(.setDisplayUnit(.meter), in: session)
 
     #expect(session.document.displayUnit == .meter)
+    #expect(session.document.ruler.displayUnit == .meter)
+    #expect(session.document.ruler.minorTickMeters == originalRuler.minorTickMeters)
+    #expect(session.document.ruler.majorTickMeters == originalRuler.majorTickMeters)
+    #expect(session.document.ruler.visibleSpanMeters == originalRuler.visibleSpanMeters)
     #expect(session.generation == DocumentGeneration(1))
     #expect(result.didMutate)
     #expect(result.message.contains("m"))
+    #expect(result.workspaceScale?.minorTickMeters == originalRuler.minorTickMeters)
 }
 
 @MainActor

@@ -54,7 +54,7 @@ flowchart TD
 |---|---|
 | Picking | Overlay controls must not sit over common pick zones unless they are directly related to the active command. |
 | Snapping | Snap and construction-plane indicators should summarize state compactly; detailed controls belong in the utility rail or inspector. |
-| Scale | Canvas scale should stay visible through grid labels and a compact resolved-grid readout; configuration controls belong in document settings or inspector panels. |
+| Scale | Canvas scale should stay visible through grid labels and a compact resolved-grid readout; configuration controls belong in document settings or inspector panels. Display-unit changes are formatting changes and must preserve physical ruler distances. |
 | Length editing | Inspector and dimension length fields should present readable units for the current magnitude, accept explicit and architectural length notation, use large-range slider scaling where a slider exists, and persist canonical meters. |
 | Dimensions | Dimension labels and handles are part of the canvas, not chrome. Keep surrounding chrome away from dimension-heavy regions. |
 | Tool controls | Use icons for stable tools, short labels only where state would otherwise be ambiguous, and tooltips for explanation. |

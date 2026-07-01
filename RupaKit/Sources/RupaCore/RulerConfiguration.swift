@@ -32,6 +32,17 @@ public struct RulerConfiguration: Codable, Hashable, Sendable {
         ).normalizedForWorkspaceScale()
     }
 
+    public func replacingDisplayUnit(
+        _ unit: LengthDisplayUnit
+    ) -> RulerConfiguration {
+        RulerConfiguration(
+            displayUnit: unit,
+            minorTickMeters: minorTickMeters,
+            majorTickMeters: majorTickMeters,
+            visibleSpanMeters: visibleSpanMeters
+        ).normalizedForWorkspaceScale()
+    }
+
     public func normalizedForWorkspaceScale() -> RulerConfiguration {
         var configuration = self
         configuration.minorTickMeters = Self.clamped(

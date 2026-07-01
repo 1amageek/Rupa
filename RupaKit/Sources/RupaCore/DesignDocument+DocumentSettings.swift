@@ -5,7 +5,7 @@ import RupaCoreTypes
 extension DesignDocument {
     public mutating func setDisplayUnit(_ unit: LengthDisplayUnit) {
         displayUnit = unit
-        ruler = .standard(for: unit)
+        ruler = ruler.replacingDisplayUnit(unit)
     }
 
     public mutating func setRulerConfiguration(_ configuration: RulerConfiguration) throws {

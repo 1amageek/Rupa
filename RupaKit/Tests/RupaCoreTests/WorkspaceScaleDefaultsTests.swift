@@ -43,7 +43,7 @@ import Testing
 @MainActor
 @Test func editorSessionDefaultSolidUsesWorkspaceScale() async throws {
     let session = EditorSession()
-    session.setDisplayUnit(.meter)
+    _ = try session.execute(.setRulerConfiguration(.standard(for: .meter)))
 
     _ = try #require(session.createDefaultExtrudedRectangle())
     let sketchNode = try #require(firstSceneNode(with: .sketch, in: session.document))
@@ -62,7 +62,7 @@ import Testing
 @MainActor
 @Test func editorSessionDefaultCircleUsesWorkspaceScale() async throws {
     let session = EditorSession()
-    session.setDisplayUnit(.meter)
+    _ = try session.execute(.setRulerConfiguration(.standard(for: .meter)))
 
     _ = try #require(session.createDefaultCircleSketch())
     let sketchNode = try #require(firstSceneNode(with: .sketch, in: session.document))
@@ -73,7 +73,7 @@ import Testing
 @MainActor
 @Test func editorSessionCanvasClickShapesUseWorkspaceScale() async throws {
     let rectangleSession = EditorSession()
-    rectangleSession.setDisplayUnit(.meter)
+    _ = try rectangleSession.execute(.setRulerConfiguration(.standard(for: .meter)))
     _ = try #require(
         rectangleSession.createRectangleSketchFromCanvasClick(
             centerModelPoint: Point2D(x: 0.0, y: 0.0)
@@ -84,7 +84,7 @@ import Testing
     #expect(approximatelyEqual(rectangleNode.object?.properties["size.y"]?.lengthValue, 40.0))
 
     let circleSession = EditorSession()
-    circleSession.setDisplayUnit(.meter)
+    _ = try circleSession.execute(.setRulerConfiguration(.standard(for: .meter)))
     _ = try #require(
         circleSession.createCircleSketchFromCanvasClick(
             centerModelPoint: Point2D(x: 0.0, y: 0.0)
