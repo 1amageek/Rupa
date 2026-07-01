@@ -312,9 +312,15 @@ public struct Viewport: View {
                     viewportSize: proxy.size,
                     bottomReservedHeight: bottomChromeReservedHeight
                 )
+                let projectedGrid = ViewportProjectedGrid(
+                    document: document,
+                    size: proxy.size,
+                    camera: camera,
+                    basis: basis
+                )
 
                 Canvas { context, size in
-                    drawGrid(in: &context, size: size, camera: camera, basis: basis)
+                    drawGrid(projectedGrid, in: &context)
                     drawAxes(in: &context, size: size, camera: camera, basis: basis)
                     drawModel(in: &context, size: size, camera: camera, basis: basis)
                     drawReferenceLines(in: &context, size: size, camera: camera, basis: basis)
@@ -325,7 +331,7 @@ public struct Viewport: View {
                 .accessibilityLabel("Canvas viewport")
                 .contentShape(Rectangle())
                 .overlay(alignment: .topLeading) {
-                    viewportBadge
+                    viewportBadge(scaleReadout: projectedGrid.scaleReadout)
                         .frame(
                             width: ViewportCanvasChromeLayout.viewportBadgeSize.width,
                             height: ViewportCanvasChromeLayout.viewportBadgeSize.height,
@@ -347,7 +353,7 @@ public struct Viewport: View {
                     selectionAffordanceAccessibilityMarker
                 }
                 .overlay {
-                    gridAccessibilityMarkers
+                    gridAccessibilityMarkers(readout: projectedGrid.scaleReadout)
                 }
                 .overlay {
                     ViewportInputSurface(
@@ -456,7 +462,9 @@ public struct Viewport: View {
         }
     }
 
-    private var gridAccessibilityMarkers: some View {
+    private func gridAccessibilityMarkers(
+        readout: ViewportProjectedGrid.ScaleReadout
+    ) -> some View {
         ZStack {
             Rectangle()
                 .fill(Color.clear)
@@ -464,12 +472,14 @@ public struct Viewport: View {
                 .accessibilityElement(children: .ignore)
                 .accessibilityIdentifier("CanvasCoordinateGrid")
                 .accessibilityLabel("Coordinate aligned grid")
+                .accessibilityValue(readout.accessibilityText)
             Rectangle()
                 .fill(Color.clear)
                 .frame(width: 1.0, height: 1.0)
                 .accessibilityElement(children: .ignore)
                 .accessibilityIdentifier("CanvasGridRuler")
                 .accessibilityLabel("In-plane grid ruler")
+                .accessibilityValue(readout.accessibilityText)
         }
         .allowsHitTesting(false)
     }
@@ -586,12 +596,19 @@ public struct Viewport: View {
         allowsObjectAffordances && !selectedObjectFeatureIDs().isEmpty
     }
 
-    private var viewportBadge: some View {
+    private func viewportBadge(
+        scaleReadout: ViewportProjectedGrid.ScaleReadout
+    ) -> some View {
         HStack(spacing: 8) {
             Image(systemName: "scope")
                 .symbolRenderingMode(.hierarchical)
             Text(document.displayUnit.symbol)
                 .font(.system(.caption, design: .monospaced))
+            Divider()
+                .frame(height: 12)
+            Text(scaleReadout.compactText)
+                .font(.system(.caption, design: .monospaced))
+                .lineLimit(1)
             Divider()
                 .frame(height: 12)
             Text(statusTitle)
@@ -672,17 +689,9 @@ public struct Viewport: View {
     }
 
     private func drawGrid(
-        in context: inout GraphicsContext,
-        size: CGSize,
-        camera: ViewportCamera,
-        basis: ViewportProjectionBasis
+        _ grid: ViewportProjectedGrid,
+        in context: inout GraphicsContext
     ) {
-        let grid = ViewportProjectedGrid(
-            document: document,
-            size: size,
-            camera: camera,
-            basis: basis
-        )
         var minorPath = Path()
         var majorPath = Path()
         var originPath = Path()

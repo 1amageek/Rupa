@@ -40,6 +40,7 @@ flowchart TD
 | Component | Outer placement | Internal spacing |
 |---|---:|---:|
 | `workspaceTopBar` | 8 pt top and horizontal overlay inset | 8 pt horizontal, 6 pt vertical |
+| `viewportBadge` | 12 pt top-leading overlay inset | Compact unit/status/zoom plus one `Grid ...` readout; detailed ruler controls belong outside the canvas badge |
 | `floatingToolPalette` | 8 pt leading overlay inset | 4 pt container padding, 5 pt item spacing |
 | `workspaceUtilityRail` | 8 pt trailing overlay inset | 8 pt container padding, 8 pt section spacing |
 | `viewportContextPanel` | 8 pt bottom and horizontal overlay inset | 8 pt horizontal, 6 pt vertical |
@@ -53,6 +54,7 @@ flowchart TD
 |---|---|
 | Picking | Overlay controls must not sit over common pick zones unless they are directly related to the active command. |
 | Snapping | Snap and construction-plane indicators should summarize state compactly; detailed controls belong in the utility rail or inspector. |
+| Scale | Canvas scale should stay visible through grid labels and a compact resolved-grid readout; configuration controls belong in document settings or inspector panels. |
 | Dimensions | Dimension labels and handles are part of the canvas, not chrome. Keep surrounding chrome away from dimension-heavy regions. |
 | Tool controls | Use icons for stable tools, short labels only where state would otherwise be ambiguous, and tooltips for explanation. |
 | Selection scopes | Keep scope buttons icon-only inside canvas overlays; text labels may truncate and should be exposed through tooltip/accessibility instead. |

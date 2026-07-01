@@ -9,7 +9,7 @@ This document lists the general-purpose CAD capabilities Rupa must define before
 | Product | Rupa |
 | Scope | Universal CAD requirements |
 | Core rule | No domain-specific app branches, document branches, or command branches |
-| Required scale support | Micrometer (μm) detail through meter (m) scale modeling and drawing |
+| Required scale support | Micrometer (μm) detail through kilometer (km) scale modeling and drawing |
 | Deferred extension | ApplicationProfile switching after the universal CAD implementation is complete |
 
 ## Universal CAD Concept
@@ -35,7 +35,7 @@ Rupa must support modeling across small mechanical detail and building-scale con
 |---|---|
 | Internal length unit | Meter, inherited from Swift-CAD quantity rules. |
 | Display length units | Micrometer (μm), millimeter, centimeter, meter, kilometer, inch, foot, and fractional architectural feet/inches. |
-| Ruler scale | View rulers and grid labels must auto-scale from μm detail to m-scale layouts. |
+| Ruler scale | View rulers, grid labels, and compact canvas readouts must auto-scale from μm detail to km-scale layouts. |
 | Mixed unit input | Inputs may accept explicit units different from the current display unit. |
 | Unit conversion | All conversions must be finite, typed, and reversible within tolerance. |
 | Dimension formatting | Scientific, decimal, fractional, and architectural formatting must be available where appropriate. |
@@ -79,6 +79,7 @@ Rupa must make scale visible and controllable.
 |---|---|
 | Adaptive grid | Grid spacing adapts to zoom level and active unit display. |
 | Fixed grid | User can lock grid spacing for precision workflows. |
+| Grid scale readout | Canvas must expose the resolved minor grid step, major grid step, and visible span in readable units without changing internal meter storage. |
 | Snap increments | Snap increments are unit-aware and independent from display rounding. |
 | Object snaps | Endpoint, midpoint, center, tangent, perpendicular, intersection, face, edge, vertex, and construction references. |
 | Measurement | Distance, angle, radius, diameter, area, volume, bounding box, wall thickness, clearance, and mass properties where material density exists. |

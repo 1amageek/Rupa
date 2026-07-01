@@ -54,12 +54,59 @@ public struct ViewportProjectedGrid: Equatable {
         }
     }
 
+    public struct ScaleReadout: Equatable {
+        public struct Length: Equatable {
+            public var meters: Double
+            public var displayValue: Double
+            public var displayUnit: LengthDisplayUnit
+            public var text: String
+
+            public init(
+                meters: Double,
+                displayValue: Double,
+                displayUnit: LengthDisplayUnit,
+                text: String
+            ) {
+                self.meters = meters
+                self.displayValue = displayValue
+                self.displayUnit = displayUnit
+                self.text = text
+            }
+        }
+
+        public var minorStep: Length
+        public var majorStep: Length
+        public var visibleSpan: Length
+        public var minorStepPixels: CGFloat
+
+        public init(
+            minorStep: Length,
+            majorStep: Length,
+            visibleSpan: Length,
+            minorStepPixels: CGFloat
+        ) {
+            self.minorStep = minorStep
+            self.majorStep = majorStep
+            self.visibleSpan = visibleSpan
+            self.minorStepPixels = minorStepPixels
+        }
+
+        public var compactText: String {
+            "Grid \(minorStep.text)"
+        }
+
+        public var accessibilityText: String {
+            "Grid \(minorStep.text), major \(majorStep.text), visible span \(visibleSpan.text)"
+        }
+    }
+
     public var basis: ViewportProjectionBasis
     public var minorStepMeters: Double
     public var majorStepMeters: Double
     public var minorStepPixels: CGFloat
     public var lines: [Line]
     public var scaleLabels: [ScaleLabel]
+    public var scaleReadout: ScaleReadout
 
     public init(
         document: DesignDocument,
@@ -124,6 +171,13 @@ public struct ViewportProjectedGrid: Equatable {
             plane: plane,
             modelBounds: modelBounds,
             majorStepMeters: resolvedMajorStepMeters,
+            unit: document.displayUnit
+        )
+        self.scaleReadout = Self.makeScaleReadout(
+            minorStepMeters: minorStepMeters,
+            majorStepMeters: resolvedMajorStepMeters,
+            visibleSpanMeters: max(Double(modelBounds.width), Double(modelBounds.height)),
+            minorStepPixels: minorStepPixels,
             unit: document.displayUnit
         )
     }
@@ -299,10 +353,50 @@ public struct ViewportProjectedGrid: Equatable {
         valueMeters: Double,
         unit: LengthDisplayUnit
     ) -> String {
-        scaleLabelDisplay(valueMeters: valueMeters, preferredUnit: unit).text
+        lengthDisplay(valueMeters: valueMeters, preferredUnit: unit).text
+    }
+
+    private static func makeScaleReadout(
+        minorStepMeters: Double,
+        majorStepMeters: Double,
+        visibleSpanMeters: Double,
+        minorStepPixels: CGFloat,
+        unit: LengthDisplayUnit
+    ) -> ScaleReadout {
+        let minor = lengthDisplay(valueMeters: minorStepMeters, preferredUnit: unit)
+        let major = lengthDisplay(valueMeters: majorStepMeters, preferredUnit: unit)
+        let span = lengthDisplay(valueMeters: visibleSpanMeters, preferredUnit: unit)
+        return ScaleReadout(
+            minorStep: ScaleReadout.Length(
+                meters: minorStepMeters,
+                displayValue: minor.value,
+                displayUnit: minor.unit,
+                text: minor.text
+            ),
+            majorStep: ScaleReadout.Length(
+                meters: majorStepMeters,
+                displayValue: major.value,
+                displayUnit: major.unit,
+                text: major.text
+            ),
+            visibleSpan: ScaleReadout.Length(
+                meters: visibleSpanMeters,
+                displayValue: span.value,
+                displayUnit: span.unit,
+                text: span.text
+            ),
+            minorStepPixels: minorStepPixels
+        )
     }
 
     private static func scaleLabelDisplay(
+        valueMeters: Double,
+        preferredUnit: LengthDisplayUnit
+    ) -> (value: Double, unit: LengthDisplayUnit, text: String) {
+        lengthDisplay(valueMeters: valueMeters, preferredUnit: preferredUnit)
+    }
+
+    private static func lengthDisplay(
         valueMeters: Double,
         preferredUnit: LengthDisplayUnit
     ) -> (value: Double, unit: LengthDisplayUnit, text: String) {

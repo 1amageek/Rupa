@@ -2838,6 +2838,11 @@ import Testing
     #expect(grid.scaleLabels.allSatisfy { $0.displayUnit.isMetric })
     #expect(grid.scaleLabels.allSatisfy { $0.displayValue <= 1_000.0 })
     #expect(grid.scaleLabels.allSatisfy { abs($0.valueMeters) >= grid.majorStepMeters - 1.0e-12 })
+    #expect(grid.scaleReadout.minorStep.meters == grid.minorStepMeters)
+    #expect(grid.scaleReadout.majorStep.meters == grid.majorStepMeters)
+    #expect(grid.scaleReadout.minorStepPixels == grid.minorStepPixels)
+    #expect(grid.scaleReadout.compactText == "Grid \(grid.scaleReadout.minorStep.text)")
+    #expect(grid.scaleReadout.accessibilityText.contains(grid.scaleReadout.visibleSpan.text))
     #expect(grid.majorStepMeters >= document.ruler.majorTickMeters)
     #expect(grid.minorStepMeters >= document.ruler.minorTickMeters)
     #expect(abs(firstXVector.dx) > 0.0)
@@ -2872,6 +2877,27 @@ import Testing
     #expect(grid.majorStepMeters >= document.ruler.majorTickMeters)
     #expect(grid.scaleLabels.allSatisfy { $0.displayUnit.isMetric })
     #expect(grid.scaleLabels.allSatisfy { $0.displayValue <= 1_000.0 })
+    #expect(grid.scaleReadout.majorStep.displayUnit.isMetric)
+    #expect(grid.scaleReadout.visibleSpan.displayUnit == .kilometer)
+}
+
+@Test func viewportProjectedGridReportsSitePlanningScaleReadout() throws {
+    var document = DesignDocument.empty()
+    try document.setRulerConfiguration(WorkspaceScalePreset.sitePlanning.rulerConfiguration)
+
+    let grid = ViewportProjectedGrid(
+        document: document,
+        size: CGSize(width: 800.0, height: 600.0)
+    )
+
+    #expect(grid.scaleReadout.minorStep.meters == grid.minorStepMeters)
+    #expect(grid.scaleReadout.majorStep.meters == grid.majorStepMeters)
+    #expect(grid.scaleReadout.minorStep.displayUnit == .kilometer)
+    #expect(grid.scaleReadout.majorStep.displayUnit == .kilometer)
+    #expect(grid.scaleReadout.visibleSpan.displayUnit == .kilometer)
+    #expect(grid.scaleReadout.compactText.contains("Grid"))
+    #expect(grid.scaleReadout.accessibilityText.contains("major"))
+    #expect(grid.scaleReadout.accessibilityText.contains("visible span"))
 }
 
 @Test func viewportProjectedGridFormatsLargeScaleLabelsWithGrouping() {
