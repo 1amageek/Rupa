@@ -512,6 +512,7 @@ import Testing
     #expect(resolver.lastRenderCost?.pixelCount == 43_200)
     #expect(resolver.lastRenderMetrics == nil)
     #expect(resolver.lastResolutionStatus == .fellBackAfterBudgetRejection)
+    #expect(resolver.lastResolutionSummary?.renderBudgetCalibration == .fixedStandard)
     #expect(resolver.lastResolutionSummary?.budgetRejection?.limit == .pixelCount)
     #expect(hit?.pickingBackend == .projectedCPU)
     #expect(hit?.selectionComponent == .face(faceComponentID))
@@ -597,10 +598,38 @@ import Testing
 
     #expect(renderer.renderCount == 0)
     #expect(resolver.lastBudgetRejection?.limit == .estimatedResidentByteCount)
+    #expect(resolver.lastBudgetRejection?.calibration == .fixedStandard)
     #expect((resolver.lastRenderCost?.estimatedResidentByteCount ?? 0) > 1)
     #expect(resolver.lastResolutionStatus == .fellBackAfterBudgetRejection)
     #expect(resolver.lastResolutionSummary?.budgetRejection?.limit == .estimatedResidentByteCount)
     #expect(hits.contains { $0.pickingBackend == .projectedCPU })
+}
+
+@MainActor
+@Test func viewportIdentityHitResolverReportsDeviceCalibratedBudgetProfile() throws {
+    let scene = identityBufferGeneratedTopologyScene()
+    let viewportSize = CGSize(width: 240.0, height: 180.0)
+    let layout = try #require(ViewportLayout(scene: scene, size: viewportSize))
+    let renderer = CountingIdentityBufferRenderer()
+    let resolver = ViewportIdentityHitResolver(
+        rendererFactory: { renderer },
+        renderBudget: .deviceCalibrated(
+            recommendedMaxWorkingSetSize: 16 * 1024 * 1024 * 1024,
+            isLowPower: false,
+            hasUnifiedMemory: true
+        )
+    )
+
+    _ = resolver.hitTest(
+        point: layout.project(Point3D(x: 0.0, y: 0.0, z: 0.0)),
+        in: scene,
+        layout: layout
+    )
+
+    #expect(renderer.renderCount == 1)
+    #expect(resolver.lastResolutionStatus == .renderedIdentityBuffer)
+    #expect(resolver.lastResolutionSummary?.renderBudgetCalibration == .unifiedMemory)
+    #expect(resolver.lastBudgetRejection == nil)
 }
 
 @Test func viewportIdentityRenderCostReportsEstimatedResidentBytes() {
@@ -625,6 +654,39 @@ import Testing
         cost.estimatedResidentByteCount ==
             41_296 + cost.estimatedIdentityIndexByteCount
     )
+}
+
+@Test func viewportIdentityRenderBudgetCalibratesThresholdsFromDeviceCapabilities() {
+    let lowPower = ViewportIdentityHitResolver.RenderBudget.deviceCalibrated(
+        recommendedMaxWorkingSetSize: 1 * 1024 * 1024 * 1024,
+        isLowPower: true,
+        hasUnifiedMemory: true
+    )
+    let unified = ViewportIdentityHitResolver.RenderBudget.deviceCalibrated(
+        recommendedMaxWorkingSetSize: 16 * 1024 * 1024 * 1024,
+        isLowPower: false,
+        hasUnifiedMemory: true
+    )
+    let discrete = ViewportIdentityHitResolver.RenderBudget.deviceCalibrated(
+        recommendedMaxWorkingSetSize: 16 * 1024 * 1024 * 1024,
+        isLowPower: false,
+        hasUnifiedMemory: false
+    )
+    let constrainedDiscrete = ViewportIdentityHitResolver.RenderBudget.deviceCalibrated(
+        recommendedMaxWorkingSetSize: 8 * 1024 * 1024 * 1024,
+        isLowPower: false,
+        hasUnifiedMemory: false
+    )
+
+    #expect(lowPower.calibration == .lowPowerUnifiedMemory)
+    #expect(lowPower.maximumPixelCount == 4_147_200)
+    #expect(lowPower.maximumEstimatedResidentByteCount == 32 * 1024 * 1024)
+    #expect(unified.calibration == .unifiedMemory)
+    #expect(unified.maximumEstimatedResidentByteCount == 128 * 1024 * 1024)
+    #expect(discrete.calibration == .discreteOrHighThroughput)
+    #expect(discrete.maximumPixelCount == 14_745_600)
+    #expect(discrete.maximumEstimatedResidentByteCount == 256 * 1024 * 1024)
+    #expect(constrainedDiscrete.maximumEstimatedResidentByteCount == 128 * 1024 * 1024)
 }
 
 @MainActor

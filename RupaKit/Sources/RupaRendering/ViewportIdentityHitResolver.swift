@@ -23,6 +23,29 @@ public final class ViewportIdentityHitResolver {
         case estimatedResidentByteCount
     }
 
+    public enum RenderBudgetCalibration: String, Codable, Equatable, Sendable {
+        case fixedStandard
+        case lowPowerUnifiedMemory
+        case unifiedMemory
+        case discreteOrHighThroughput
+        case unavailableDeviceFallback
+
+        public var title: String {
+            switch self {
+            case .fixedStandard:
+                "Fixed standard"
+            case .lowPowerUnifiedMemory:
+                "Low-power unified memory"
+            case .unifiedMemory:
+                "Unified memory"
+            case .discreteOrHighThroughput:
+                "Discrete or high-throughput"
+            case .unavailableDeviceFallback:
+                "Metal unavailable fallback"
+            }
+        }
+    }
+
     public struct RenderCost: Codable, Equatable, Sendable {
         public static let identityTextureBytesPerPixel = 4
         public static let identityReadbackBytesPerPixel = 4
@@ -110,19 +133,23 @@ public final class ViewportIdentityHitResolver {
     }
 
     public struct RenderBudget: Codable, Equatable, Sendable {
+        public static let megabyte = 1024 * 1024
         public static let standardMaximumEstimatedResidentByteCount = 96 * 1024 * 1024
 
+        public var calibration: RenderBudgetCalibration
         public var maximumPixelCount: Int
         public var maximumDrawItemCount: Int
         public var maximumEncodedPointCount: Int
         public var maximumEstimatedResidentByteCount: Int
 
         public init(
+            calibration: RenderBudgetCalibration = .fixedStandard,
             maximumPixelCount: Int = 8_294_400,
             maximumDrawItemCount: Int = 200_000,
             maximumEncodedPointCount: Int = 1_000_000,
             maximumEstimatedResidentByteCount: Int = Self.standardMaximumEstimatedResidentByteCount
         ) {
+            self.calibration = calibration
             self.maximumPixelCount = maximumPixelCount
             self.maximumDrawItemCount = maximumDrawItemCount
             self.maximumEncodedPointCount = maximumEncodedPointCount
@@ -131,9 +158,60 @@ public final class ViewportIdentityHitResolver {
 
         public static let standard = RenderBudget()
 
+        public static let lowPowerUnifiedMemory = RenderBudget(
+            calibration: .lowPowerUnifiedMemory,
+            maximumPixelCount: 4_147_200,
+            maximumDrawItemCount: 120_000,
+            maximumEncodedPointCount: 600_000,
+            maximumEstimatedResidentByteCount: 64 * megabyte
+        )
+
+        public static let unifiedMemory = RenderBudget(
+            calibration: .unifiedMemory,
+            maximumPixelCount: 8_294_400,
+            maximumDrawItemCount: 240_000,
+            maximumEncodedPointCount: 1_200_000,
+            maximumEstimatedResidentByteCount: 128 * megabyte
+        )
+
+        public static let discreteOrHighThroughput = RenderBudget(
+            calibration: .discreteOrHighThroughput,
+            maximumPixelCount: 14_745_600,
+            maximumDrawItemCount: 480_000,
+            maximumEncodedPointCount: 2_400_000,
+            maximumEstimatedResidentByteCount: 256 * megabyte
+        )
+
+        public static let unavailableDeviceFallback = RenderBudget(
+            calibration: .unavailableDeviceFallback,
+            maximumPixelCount: 4_147_200,
+            maximumDrawItemCount: 120_000,
+            maximumEncodedPointCount: 600_000,
+            maximumEstimatedResidentByteCount: 64 * megabyte
+        )
+
+        public static func deviceCalibrated(
+            recommendedMaxWorkingSetSize: UInt64?,
+            isLowPower: Bool,
+            hasUnifiedMemory: Bool
+        ) -> RenderBudget {
+            let base: RenderBudget
+            if isLowPower {
+                base = .lowPowerUnifiedMemory
+            } else if hasUnifiedMemory {
+                base = .unifiedMemory
+            } else {
+                base = .discreteOrHighThroughput
+            }
+            return base.withResidentMemoryCeiling(
+                recommendedMaxWorkingSetSize: recommendedMaxWorkingSetSize
+            )
+        }
+
         public func rejection(for cost: RenderCost) -> RenderBudgetRejection? {
             if cost.pixelCount > max(maximumPixelCount, 0) {
                 return RenderBudgetRejection(
+                    calibration: calibration,
                     limit: .pixelCount,
                     actual: cost.pixelCount,
                     maximum: max(maximumPixelCount, 0),
@@ -142,6 +220,7 @@ public final class ViewportIdentityHitResolver {
             }
             if cost.drawItemCount > max(maximumDrawItemCount, 0) {
                 return RenderBudgetRejection(
+                    calibration: calibration,
                     limit: .drawItemCount,
                     actual: cost.drawItemCount,
                     maximum: max(maximumDrawItemCount, 0),
@@ -150,6 +229,7 @@ public final class ViewportIdentityHitResolver {
             }
             if cost.encodedPointCount > max(maximumEncodedPointCount, 0) {
                 return RenderBudgetRejection(
+                    calibration: calibration,
                     limit: .encodedPointCount,
                     actual: cost.encodedPointCount,
                     maximum: max(maximumEncodedPointCount, 0),
@@ -158,6 +238,7 @@ public final class ViewportIdentityHitResolver {
             }
             if cost.estimatedResidentByteCount > max(maximumEstimatedResidentByteCount, 0) {
                 return RenderBudgetRejection(
+                    calibration: calibration,
                     limit: .estimatedResidentByteCount,
                     actual: cost.estimatedResidentByteCount,
                     maximum: max(maximumEstimatedResidentByteCount, 0),
@@ -166,20 +247,47 @@ public final class ViewportIdentityHitResolver {
             }
             return nil
         }
+
+        private func withResidentMemoryCeiling(
+            recommendedMaxWorkingSetSize: UInt64?
+        ) -> RenderBudget {
+            var adjusted = self
+            guard let recommendedMaxWorkingSetSize,
+                  recommendedMaxWorkingSetSize > 0 else {
+                return adjusted
+            }
+            let estimatedWorkingSetBudget = recommendedMaxWorkingSetSize / 64
+            let boundedWorkingSetBudget = min(
+                UInt64(Int.max),
+                max(UInt64(32 * Self.megabyte), estimatedWorkingSetBudget)
+            )
+            let residentBudget = min(
+                UInt64(maximumEstimatedResidentByteCount),
+                boundedWorkingSetBudget
+            )
+            adjusted.maximumEstimatedResidentByteCount = max(
+                32 * Self.megabyte,
+                Int(residentBudget)
+            )
+            return adjusted
+        }
     }
 
     public struct RenderBudgetRejection: Codable, Equatable, Sendable {
+        public var calibration: RenderBudgetCalibration
         public var limit: RenderBudgetLimit
         public var actual: Int
         public var maximum: Int
         public var cost: RenderCost
 
         public init(
+            calibration: RenderBudgetCalibration = .fixedStandard,
             limit: RenderBudgetLimit,
             actual: Int,
             maximum: Int,
             cost: RenderCost
         ) {
+            self.calibration = calibration
             self.limit = limit
             self.actual = actual
             self.maximum = maximum
@@ -189,17 +297,20 @@ public final class ViewportIdentityHitResolver {
 
     public struct ResolutionSummary: Codable, Equatable, Sendable {
         public var status: ResolutionStatus
+        public var renderBudgetCalibration: RenderBudgetCalibration
         public var renderCost: RenderCost?
         public var renderMetrics: ViewportIdentityBufferRenderMetrics?
         public var budgetRejection: RenderBudgetRejection?
 
         public init(
             status: ResolutionStatus,
+            renderBudgetCalibration: RenderBudgetCalibration = .fixedStandard,
             renderCost: RenderCost? = nil,
             renderMetrics: ViewportIdentityBufferRenderMetrics? = nil,
             budgetRejection: RenderBudgetRejection? = nil
         ) {
             self.status = status
+            self.renderBudgetCalibration = renderBudgetCalibration
             self.renderCost = renderCost
             self.renderMetrics = renderMetrics
             self.budgetRejection = budgetRejection
@@ -403,6 +514,7 @@ public final class ViewportIdentityHitResolver {
         lastBudgetRejection = budgetRejection
         lastResolutionSummary = ResolutionSummary(
             status: status,
+            renderBudgetCalibration: renderBudget.calibration,
             renderCost: renderCost,
             renderMetrics: renderMetrics,
             budgetRejection: budgetRejection

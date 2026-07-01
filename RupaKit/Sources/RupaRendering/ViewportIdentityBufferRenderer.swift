@@ -592,6 +592,21 @@ private struct ViewportIdentityMetalPoint {
 
 extension ViewportIdentityBufferRenderer: ViewportIdentityBufferRendering {}
 
+public extension ViewportIdentityHitResolver.RenderBudget {
+    static func deviceCalibrated(
+        for device: (any MTLDevice)? = MTLCreateSystemDefaultDevice()
+    ) -> ViewportIdentityHitResolver.RenderBudget {
+        guard let device else {
+            return .unavailableDeviceFallback
+        }
+        return .deviceCalibrated(
+            recommendedMaxWorkingSetSize: device.recommendedMaxWorkingSetSize,
+            isLowPower: device.isLowPower,
+            hasUnifiedMemory: device.hasUnifiedMemory
+        )
+    }
+}
+
 private struct ViewportIdentityMetalCommand {
     var kind: UInt32
     var identity: UInt32

@@ -7,6 +7,7 @@ public struct ViewportPickingReadinessSummary: Codable, Equatable, Sendable {
     public var generatedEdgeTargetCount: Int
     public var generatedVertexTargetCount: Int
     public var identityTargetCount: Int
+    public var identityBudgetCalibration: ViewportIdentityHitResolver.RenderBudgetCalibration
     public var identityRenderCost: ViewportIdentityHitResolver.RenderCost?
     public var identityBudgetRejection: ViewportIdentityHitResolver.RenderBudgetRejection?
 
@@ -18,6 +19,7 @@ public struct ViewportPickingReadinessSummary: Codable, Equatable, Sendable {
         generatedEdgeTargetCount: Int,
         generatedVertexTargetCount: Int,
         identityTargetCount: Int = 0,
+        identityBudgetCalibration: ViewportIdentityHitResolver.RenderBudgetCalibration = .fixedStandard,
         identityRenderCost: ViewportIdentityHitResolver.RenderCost? = nil,
         identityBudgetRejection: ViewportIdentityHitResolver.RenderBudgetRejection? = nil
     ) {
@@ -28,6 +30,7 @@ public struct ViewportPickingReadinessSummary: Codable, Equatable, Sendable {
         self.generatedEdgeTargetCount = generatedEdgeTargetCount
         self.generatedVertexTargetCount = generatedVertexTargetCount
         self.identityTargetCount = identityTargetCount
+        self.identityBudgetCalibration = identityBudgetCalibration
         self.identityRenderCost = identityRenderCost
         self.identityBudgetRejection = identityBudgetRejection
     }
@@ -96,5 +99,9 @@ public struct ViewportPickingReadinessSummary: Codable, Equatable, Sendable {
         case .estimatedResidentByteCount:
             return "Memory budget exceeded"
         }
+    }
+
+    public var identityBudgetCalibrationTitle: String {
+        identityBudgetCalibration.title
     }
 }

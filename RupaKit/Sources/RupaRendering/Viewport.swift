@@ -93,7 +93,9 @@ public struct Viewport: View {
     @State private var selectedAxis: ViewportCoordinateAxis?
     @State private var hoveredCanvasHit: ViewportHit?
     @State private var hoveredModelPoint: Point2D?
-    @State private var identityHitResolver = ViewportIdentityHitResolver()
+    @State private var identityHitResolver = ViewportIdentityHitResolver(
+        renderBudget: .deviceCalibrated()
+    )
 
     private let document: DesignDocument
     private let currentEvaluation: DocumentEvaluationContext?

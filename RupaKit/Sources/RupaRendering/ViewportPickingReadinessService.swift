@@ -52,6 +52,7 @@ public struct ViewportPickingReadinessService: Sendable {
             generatedEdgeTargetCount: generatedEdgeTargetCount,
             generatedVertexTargetCount: generatedVertexTargetCount,
             identityTargetCount: identityTargetCount,
+            identityBudgetCalibration: renderBudget.calibration,
             identityRenderCost: identityRenderCost,
             identityBudgetRejection: identityBudgetRejection
         )

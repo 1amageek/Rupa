@@ -1708,6 +1708,8 @@ import Testing
     #expect(summary.identityRenderCost?.identityRecordCount == summary.identityTargetCount)
     #expect(summary.identityBudgetRejection == nil)
     #expect(summary.identityBudgetStatusTitle == "Within budget")
+    #expect(summary.identityBudgetCalibration == .fixedStandard)
+    #expect(summary.identityBudgetCalibrationTitle == "Fixed standard")
     #expect(summary.nextBackendTitle == "Identity")
 }
 
@@ -1741,6 +1743,29 @@ import Testing
     #expect(summary.nextBackendTitle == "Identity")
 }
 
+@Test func viewportPickingReadinessReportsDeviceCalibratedBudgetProfile() throws {
+    let scene = denseGeneratedTopologyScene(columns: 100, rows: 100)
+    let layout = try #require(ViewportLayout(
+        scene: scene,
+        size: CGSize(width: 1_280.0, height: 720.0)
+    ))
+    let budget = ViewportIdentityHitResolver.RenderBudget.deviceCalibrated(
+        recommendedMaxWorkingSetSize: 16 * 1024 * 1024 * 1024,
+        isLowPower: false,
+        hasUnifiedMemory: false
+    )
+
+    let summary = ViewportPickingReadinessService()
+        .summarize(scene: scene, layout: layout, renderBudget: budget)
+
+    #expect(summary.hasIdentityBudgetEstimate)
+    #expect(summary.isIdentityRenderWithinBudget)
+    #expect(summary.identityBudgetCalibration == .discreteOrHighThroughput)
+    #expect(summary.identityBudgetCalibrationTitle == "Discrete or high-throughput")
+    #expect(summary.identityBudgetRejection == nil)
+    #expect(summary.nextBackendTitle == "Identity")
+}
+
 @Test func viewportPickingReadinessReportsIdentityBudgetRejection() throws {
     let scene = viewportGeneratedTopologyScene()
     let layout = try #require(ViewportLayout(
@@ -1762,6 +1787,7 @@ import Testing
     #expect(summary.hasIdentityBudgetEstimate)
     #expect(summary.isIdentityRenderWithinBudget == false)
     #expect(summary.identityBudgetRejection?.limit == .pixelCount)
+    #expect(summary.identityBudgetRejection?.calibration == .fixedStandard)
     #expect(summary.identityBudgetRejection?.actual == 43_200)
     #expect(summary.identityBudgetRejection?.maximum == 1)
     #expect(summary.identityBudgetStatusTitle == "Pixel budget exceeded")
