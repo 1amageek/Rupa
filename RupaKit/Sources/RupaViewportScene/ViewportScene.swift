@@ -524,6 +524,27 @@ public struct ViewportScene: Equatable {
         }
         return bounds
     }
+
+    public var verticalBounds: ClosedRange<Double>? {
+        var bounds: ClosedRange<Double>?
+        for item in items {
+            guard case .body(let component) = item.kind else {
+                continue
+            }
+            let itemBounds = min(component.yMinMeters, component.yMaxMeters)
+                ... max(component.yMinMeters, component.yMaxMeters)
+            if let currentBounds = bounds {
+                bounds = min(currentBounds.lowerBound, itemBounds.lowerBound)
+                    ... max(currentBounds.upperBound, itemBounds.upperBound)
+            } else {
+                bounds = itemBounds
+            }
+        }
+        if let bounds {
+            return bounds
+        }
+        return items.isEmpty ? nil : 0.0 ... 0.0
+    }
 }
 
 public struct ViewportModelDrag: Equatable, Sendable {
@@ -1161,6 +1182,7 @@ public struct ViewportBodyProjection: Equatable {
 public struct ViewportLayout: Equatable {
     public var viewportSize: CGSize
     public var modelBounds: CGRect
+    public var renderOrigin: Point3D
     public var scale: CGFloat
     public var center: CGPoint
     public var basis: ViewportProjectionBasis
@@ -1181,7 +1203,8 @@ public struct ViewportLayout: Equatable {
             size: size,
             camera: camera,
             basis: basis,
-            maximumZoom: maximumZoom
+            maximumZoom: maximumZoom,
+            verticalBounds: scene.verticalBounds
         )
     }
 
@@ -1190,7 +1213,8 @@ public struct ViewportLayout: Equatable {
         size: CGSize,
         camera: ViewportCamera = .identity,
         basis: ViewportProjectionBasis = .isometric,
-        maximumZoom: CGFloat = ViewportCamera.maximumZoom
+        maximumZoom: CGFloat = ViewportCamera.maximumZoom,
+        verticalBounds: ClosedRange<Double>? = nil
     ) {
         let modelWidth = max(modelBounds.width, 1.0e-9)
         let modelHeight = max(modelBounds.height, 1.0e-9)
@@ -1205,6 +1229,7 @@ public struct ViewportLayout: Equatable {
 
         self.viewportSize = size
         self.modelBounds = modelBounds
+        self.renderOrigin = Self.renderOrigin(modelBounds: modelBounds, verticalBounds: verticalBounds)
         self.scale = min(
             usableWidth / max(projectedBounds.width, 1.0e-9),
             usableHeight / max(projectedBounds.height, 1.0e-9)
@@ -1218,8 +1243,8 @@ public struct ViewportLayout: Equatable {
     }
 
     public func project(_ point: CGPoint) -> CGPoint {
-        let x = point.x - modelBounds.midX
-        let y = point.y - modelBounds.midY
+        let x = CGFloat(Double(point.x) - renderOrigin.x) - modelCenterOffsetX
+        let y = CGFloat(Double(point.y) - renderOrigin.z) - modelCenterOffsetZ
         return CGPoint(
             x: center.x + (basis.xDirection.dx * x + basis.zDirection.dx * y) * scale,
             y: center.y + (basis.xDirection.dy * x + basis.zDirection.dy * y) * scale
@@ -1227,9 +1252,9 @@ public struct ViewportLayout: Equatable {
     }
 
     public func project(_ point: Point3D) -> CGPoint {
-        let x = CGFloat(point.x) - modelBounds.midX
-        let y = CGFloat(point.y)
-        let z = CGFloat(point.z) - modelBounds.midY
+        let x = CGFloat(point.x - renderOrigin.x) - modelCenterOffsetX
+        let y = CGFloat(point.y - renderOrigin.y)
+        let z = CGFloat(point.z - renderOrigin.z) - modelCenterOffsetZ
         return CGPoint(
             x: center.x
                 + (basis.xDirection.dx * x + basis.yDirection.dx * y + basis.zDirection.dx * z) * scale,
@@ -1262,7 +1287,9 @@ public struct ViewportLayout: Equatable {
         guard let viewNormal = basis.viewNormal else {
             return nil
         }
-        return point.x * viewNormal.x + point.y * viewNormal.y + point.z * viewNormal.z
+        return (point.x - renderOrigin.x) * viewNormal.x
+            + (point.y - renderOrigin.y) * viewNormal.y
+            + (point.z - renderOrigin.z) * viewNormal.z
     }
 
     public func unproject(_ point: CGPoint) -> CGPoint {
@@ -1272,8 +1299,8 @@ public struct ViewportLayout: Equatable {
         let modelX = (viewportX * basis.zDirection.dy - basis.zDirection.dx * viewportY) / determinant
         let modelY = (basis.xDirection.dx * viewportY - viewportX * basis.xDirection.dy) / determinant
         return CGPoint(
-            x: modelBounds.midX + modelX,
-            y: modelBounds.midY + modelY
+            x: CGFloat(renderOrigin.x) + modelCenterOffsetX + modelX,
+            y: CGFloat(renderOrigin.z) + modelCenterOffsetZ + modelY
         )
     }
 
@@ -1353,6 +1380,26 @@ public struct ViewportLayout: Equatable {
             height: maxY - minY
         )
     }
+
+    private var modelCenterOffsetX: CGFloat {
+        CGFloat(Double(modelBounds.midX) - renderOrigin.x)
+    }
+
+    private var modelCenterOffsetZ: CGFloat {
+        CGFloat(Double(modelBounds.midY) - renderOrigin.z)
+    }
+
+    private static func renderOrigin(
+        modelBounds: CGRect,
+        verticalBounds: ClosedRange<Double>?
+    ) -> Point3D {
+        let y = verticalBounds.map { ($0.lowerBound + $0.upperBound) * 0.5 } ?? 0.0
+        return Point3D(
+            x: Double(modelBounds.midX),
+            y: y.isFinite ? y : 0.0,
+            z: Double(modelBounds.midY)
+        )
+    }
 }
 
 public struct ViewportModelCoordinateMapper {
@@ -1395,7 +1442,8 @@ public struct ViewportModelCoordinateMapper {
             modelBounds: modelBounds,
             size: size,
             camera: .identity,
-            basis: basis
+            basis: basis,
+            verticalBounds: scene.verticalBounds
         )
         let maximumZoom = ViewportCameraZoomPolicy.maximumZoom(
             for: document,
@@ -1406,7 +1454,8 @@ public struct ViewportModelCoordinateMapper {
             size: size,
             camera: camera,
             basis: basis,
-            maximumZoom: maximumZoom
+            maximumZoom: maximumZoom,
+            verticalBounds: scene.verticalBounds
         )
     }
 

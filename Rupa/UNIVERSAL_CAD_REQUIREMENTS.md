@@ -69,7 +69,7 @@ Rupa must support small-detail and large-scene work without precision loss.
 |---|---|
 | World coordinate system | Every document has one world coordinate system. |
 | Local coordinate systems | Components, sketches, construction planes, drawing views, and imported references may own local coordinate systems. |
-| Floating origin strategy | Large documents should evaluate and render through local origins where needed to avoid precision loss. |
+| Floating origin strategy | Large documents should evaluate and render through local origins where needed to avoid precision loss. Viewport projection, unprojection, and projected-depth ordering use a shared render origin; source-level rebase remains the command-backed workflow when coordinate resolution exceeds the modeling tolerance budget. |
 | Axes | X, Y, Z axes and handedness must be explicit. |
 | Up axis | Export presets must map Rupa's up axis to target format expectations. |
 | Georeference metadata | Optional site/building metadata must be attachable without changing the CAD core. |

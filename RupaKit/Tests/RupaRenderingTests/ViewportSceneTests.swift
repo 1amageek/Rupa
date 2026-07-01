@@ -2500,6 +2500,68 @@ import Testing
     #expect(drag.start != drag.end)
 }
 
+@Test func viewportSceneReportsVerticalBoundsForBodyItems() {
+    let bodyItem = ViewportSceneItem(
+        id: "body",
+        featureID: FeatureID(),
+        modelBounds: CGRect(x: 0.0, y: 0.0, width: 1.0, height: 1.0),
+        kind: .body(component: ViewportBodyComponent(
+            sizeXMeters: 1.0,
+            sizeYMeters: 4.0,
+            sizeZMeters: 1.0,
+            yMinMeters: 2.0,
+            yMaxMeters: 6.0
+        ))
+    )
+    let sketchItem = ViewportSceneItem(
+        id: "sketch",
+        featureID: FeatureID(),
+        modelBounds: CGRect(x: 4.0, y: 4.0, width: 1.0, height: 1.0),
+        kind: .sketch(primitives: [])
+    )
+    let scene = ViewportScene(items: [bodyItem, sketchItem])
+
+    #expect(scene.verticalBounds == 2.0 ... 6.0)
+}
+
+@Test func viewportSceneReportsZeroVerticalBoundsForSketchOnlyItems() {
+    let sketchItem = ViewportSceneItem(
+        id: "sketch",
+        featureID: FeatureID(),
+        modelBounds: CGRect(x: 4.0, y: 4.0, width: 1.0, height: 1.0),
+        kind: .sketch(primitives: [])
+    )
+
+    #expect(ViewportScene(items: [sketchItem]).verticalBounds == 0.0 ... 0.0)
+}
+
+@Test func viewportLayoutUsesRenderOriginForFarCoordinateProjectionAndDepth() throws {
+    let layout = ViewportLayout(
+        modelBounds: CGRect(x: 1.0e12, y: -1.0e12, width: 10.0, height: 20.0),
+        size: CGSize(width: 800.0, height: 600.0),
+        verticalBounds: 1.0e12 ... (1.0e12 + 10.0)
+    )
+    let renderOrigin = Point3D(x: 1.0e12 + 5.0, y: 1.0e12 + 5.0, z: -1.0e12 + 10.0)
+    let projectedOrigin = layout.project(renderOrigin)
+    let planarPoint = CGPoint(x: 1.0e12 + 2.0, y: -1.0e12 + 6.0)
+    let roundTrippedPlanarPoint = layout.unproject(layout.project(planarPoint))
+    let viewNormal = try #require(layout.basis.viewNormal)
+    let offsetPoint = Point3D(
+        x: renderOrigin.x + 1.0,
+        y: renderOrigin.y + 2.0,
+        z: renderOrigin.z + 3.0
+    )
+    let expectedDepth = viewNormal.x + viewNormal.y * 2.0 + viewNormal.z * 3.0
+    let actualDepth = try #require(layout.projectedDepth(offsetPoint))
+
+    #expect(layout.renderOrigin == renderOrigin)
+    #expect(abs(projectedOrigin.x - layout.center.x) < 1.0e-9)
+    #expect(abs(projectedOrigin.y - layout.center.y) < 1.0e-9)
+    #expect(abs(roundTrippedPlanarPoint.x - planarPoint.x) < 1.0e-6)
+    #expect(abs(roundTrippedPlanarPoint.y - planarPoint.y) < 1.0e-6)
+    #expect(abs(actualDepth - expectedDepth) < 1.0e-9)
+}
+
 @MainActor
 @Test func viewportSceneProjectsZXCanvasSketchBackToCanvasCoordinates() async throws {
     let session = EditorSession()
