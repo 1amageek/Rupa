@@ -250,3 +250,32 @@ import Testing
     #expect(micrometerMeters == 0.000_25)
     #expect(clampedSiteMeters == RulerConfiguration.visibleSpanMetersRange.upperBound)
 }
+
+@Test func workspaceScaleStatusSummaryReportsSitePlanningInKilometers() {
+    let summary = WorkspaceScaleStatusSummary(
+        ruler: WorkspaceScalePreset.sitePlanning.rulerConfiguration
+    )
+
+    #expect(summary.compactTitle == "Site · 100 km")
+    #expect(summary.presetTitle == "Site Planning")
+    #expect(summary.minorStepTitle == "0.1 km")
+    #expect(summary.majorStepTitle == "1 km")
+    #expect(summary.visibleSpanTitle == "100 km")
+}
+
+@Test func workspaceScaleStatusSummaryReportsReadableCustomScale() {
+    let summary = WorkspaceScaleStatusSummary(
+        ruler: RulerConfiguration(
+            displayUnit: .millimeter,
+            minorTickMeters: 0.000_001,
+            majorTickMeters: 0.001,
+            visibleSpanMeters: 1_000.0
+        )
+    )
+
+    #expect(summary.compactTitle == "Custom · 1 km")
+    #expect(summary.presetTitle == "Custom")
+    #expect(summary.minorStepTitle == "1 μm")
+    #expect(summary.majorStepTitle == "1 mm")
+    #expect(summary.visibleSpanTitle == "1 km")
+}

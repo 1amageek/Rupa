@@ -1227,11 +1227,7 @@ public struct MainView: View {
                 tint: .secondary
             )
 
-            workspaceStatusChip(
-                session.document.displayUnit.symbol,
-                systemImage: "ruler",
-                tint: .secondary
-            )
+            workspaceScaleMenu
 
             Spacer(minLength: 12)
 
@@ -1294,6 +1290,53 @@ public struct MainView: View {
         }
     }
 
+    private var workspaceScaleSummary: WorkspaceScaleStatusSummary {
+        WorkspaceScaleStatusSummary(ruler: session.document.ruler)
+    }
+
+    private var workspaceScaleMenu: some View {
+        let summary = workspaceScaleSummary
+        return Menu {
+            Section("Scale Preset") {
+                ForEach(WorkspaceScalePreset.allCases) { preset in
+                    Button(preset.title) {
+                        applyWorkspaceScalePreset(preset)
+                    }
+                }
+            }
+            Section("Display Unit") {
+                ForEach(LengthDisplayUnit.allCases) { unit in
+                    Button(unit.symbol) {
+                        applyDisplayUnit(unit)
+                    }
+                }
+            }
+        } label: {
+            Label {
+                Text(summary.compactTitle)
+                    .lineLimit(1)
+                    .monospacedDigit()
+            } icon: {
+                Image(systemName: "ruler")
+                    .symbolRenderingMode(.hierarchical)
+            }
+            .font(.caption.weight(.medium))
+            .foregroundStyle(Color.secondary)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 4)
+            .background {
+                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                    .fill(Color.secondary.opacity(0.12))
+            }
+        }
+        .menuStyle(.borderlessButton)
+        .fixedSize(horizontal: true, vertical: false)
+        .help("Workspace Scale")
+        .accessibilityIdentifier("WorkspaceScale.menu")
+        .accessibilityLabel("Workspace Scale")
+        .accessibilityValue(summary.compactTitle)
+    }
+
     private var floatingToolPalette: some View {
         WorkspaceToolPalette(
             selectedTool: session.selectedTool,
@@ -1326,7 +1369,11 @@ public struct MainView: View {
                         accessibilityIdentifier: "WorkspaceSnap.object"
                     )
                 }
-                workspaceValueRow("Step", formatted(session.document.ruler.minorTickMeters))
+                let scaleSummary = workspaceScaleSummary
+                workspaceValueRow("Scale", scaleSummary.presetTitle)
+                workspaceValueRow("Step", scaleSummary.minorStepTitle)
+                workspaceValueRow("Major", scaleSummary.majorStepTitle)
+                workspaceValueRow("Visible", scaleSummary.visibleSpanTitle)
             }
 
             workspaceRailSection("Plane") {
