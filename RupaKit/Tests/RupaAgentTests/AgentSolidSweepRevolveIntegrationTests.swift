@@ -253,6 +253,58 @@ import SwiftCAD
 }
 
 @MainActor
+@Test func agentReturnsBooleanEvaluationPlanWithoutMutatingDocument() async throws {
+    var document = DesignDocument.empty()
+    let targetID = try agentCreateBooleanBox(
+        in: &document,
+        name: "Agent Boolean Plan Target",
+        minX: -0.020,
+        minY: -0.020,
+        maxX: 0.020,
+        maxY: 0.020
+    )
+    let toolID = try agentCreateBooleanBox(
+        in: &document,
+        name: "Agent Boolean Plan Tool",
+        minX: -0.010,
+        minY: -0.010,
+        maxX: 0.010,
+        maxY: 0.010
+    )
+    let server = AgentCommandController()
+    let sessionID = UUID()
+    let session = EditorSession(document: document)
+    server.register(session: session, id: sessionID)
+    let initialGeneration = session.generation
+    let initialFeatureOrder = session.document.cadDocument.designGraph.order
+
+    let response = server.handle(
+        .booleanEvaluationPlan(
+            sessionID: sessionID,
+            targets: [BooleanTargetReference(featureID: targetID)],
+            tool: BooleanToolReference(featureID: toolID),
+            operation: .difference,
+            keepTools: false,
+            expectedGeneration: initialGeneration
+        )
+    )
+
+    guard case .booleanEvaluationPlan(let plan) = response else {
+        Issue.record("Agent must return a Boolean evaluation plan.")
+        return
+    }
+
+    #expect(plan.status == .supported)
+    #expect(plan.operation == .difference)
+    #expect(plan.operandKind == .axisAlignedBoxSolids)
+    #expect(plan.outputTopologyKind == .zThroughFrame)
+    #expect(plan.checks.last?.kind == .capabilityDecision)
+    #expect(plan.checks.last?.status == .passed)
+    #expect(session.generation == initialGeneration)
+    #expect(session.document.cadDocument.designGraph.order == initialFeatureOrder)
+}
+
+@MainActor
 @Test func agentCreatesRevolveSourceThroughAutomationAndCore() async throws {
     var document = DesignDocument.empty()
     let profileID = try document.createRectangleSketchFromCorners(

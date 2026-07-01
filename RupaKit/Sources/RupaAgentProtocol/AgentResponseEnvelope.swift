@@ -196,6 +196,8 @@ public struct AgentResponseEnvelope: Codable, Equatable, Sendable {
             try container.encode(value, forKey: .result)
         case .sweepEvaluationPlan(let value):
             try container.encode(value, forKey: .result)
+        case .booleanEvaluationPlan(let value):
+            try container.encode(value, forKey: .result)
         case .objectDimensionSummary(let value):
             try container.encode(value, forKey: .result)
         case .surfaceSourceSummary(let value):
@@ -294,6 +296,10 @@ public struct AgentResponseEnvelope: Codable, Equatable, Sendable {
             return .sweepEvaluationPlan(
                 try container.decode(SweepEvaluationPlanResult.self, forKey: .result)
             )
+        case "document.booleanEvaluationPlan":
+            return .booleanEvaluationPlan(
+                try container.decode(BooleanEvaluationPlanResult.self, forKey: .result)
+            )
         case "document.objectDimensionSummary":
             return .objectDimensionSummary(
                 try container.decode(ObjectDimensionSummaryResult.self, forKey: .result)
@@ -373,6 +379,8 @@ public struct AgentResponseEnvelope: Codable, Equatable, Sendable {
             "document.topologySummary"
         case .sweepEvaluationPlan:
             "document.sweepEvaluationPlan"
+        case .booleanEvaluationPlan:
+            "document.booleanEvaluationPlan"
         case .objectDimensionSummary:
             "document.objectDimensionSummary"
         case .surfaceSourceSummary:
@@ -420,6 +428,7 @@ public struct AgentResponseEnvelope: Codable, Equatable, Sendable {
              ("document.curveAnalysis", .curveAnalysis),
              ("document.topologySummary", .topologySummary),
              ("document.sweepEvaluationPlan", .sweepEvaluationPlan),
+             ("document.booleanEvaluationPlan", .booleanEvaluationPlan),
              ("document.objectDimensionSummary", .objectDimensionSummary),
              ("document.surfaceSourceSummary", .surfaceSourceSummary),
              ("document.surfaceAnalysis", .surfaceAnalysis),

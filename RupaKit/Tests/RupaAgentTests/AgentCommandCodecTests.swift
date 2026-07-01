@@ -151,6 +151,49 @@ import SwiftCAD
     #expect(decodedResponse == response)
 }
 
+@Test func agentMessageCodecRoundTripsBooleanEvaluationPlan() async throws {
+    let codec = AgentMessageCodec()
+    let sessionID = UUID()
+    let targetFeatureID = FeatureID()
+    let toolFeatureID = FeatureID()
+    let request = AgentRequest.booleanEvaluationPlan(
+        sessionID: sessionID,
+        targets: [BooleanTargetReference(featureID: targetFeatureID)],
+        tool: BooleanToolReference(featureID: toolFeatureID),
+        operation: .difference,
+        keepTools: false,
+        expectedGeneration: DocumentGeneration(5)
+    )
+    let response = AgentResponse.booleanEvaluationPlan(
+        BooleanEvaluationPlanResult(
+            status: .supported,
+            operation: .difference,
+            keepTools: false,
+            targetCount: 1,
+            targetCellCount: 1,
+            toolCellCount: 1,
+            resultPrimitiveCount: 1,
+            operandKind: .axisAlignedBoxSolids,
+            outputTopologyKind: .zThroughFrame,
+            unsupportedCode: nil,
+            message: "Boolean can evaluate as zThroughFrame.",
+            checks: [
+                BooleanEvaluationPreflightCheck(
+                    kind: .capabilityDecision,
+                    status: .passed,
+                    message: "Boolean can evaluate as zThroughFrame."
+                ),
+            ]
+        )
+    )
+
+    let decodedRequest = try codec.decodeRequest(from: try codec.encode(request))
+    let decodedResponse = try codec.decodeResponse(from: try codec.encode(response))
+
+    #expect(decodedRequest == request)
+    #expect(decodedResponse == response)
+}
+
 @Test func agentMessageCodecRoundTripsDirectBodyDimensionCommands() async throws {
     let codec = AgentMessageCodec()
     let sessionID = UUID()

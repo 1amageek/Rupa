@@ -1,0 +1,21 @@
+{
+  "jsonrpc": "2.0",
+  "id": "document.booleanEvaluationPlan-1",
+  "method": "document.booleanEvaluationPlan",
+  "params": {
+    "sessionID": "00000000-0000-0000-0000-000000000001",
+    "targets": [
+      {
+        "featureID": "00000000-0000-0000-0000-000000000101"
+      }
+    ],
+    "tool": {
+      "featureID": "00000000-0000-0000-0000-000000000102"
+    },
+    "operation": "difference",
+    "keepTools": false,
+    "expectedGeneration": {
+      "value": 7
+    }
+  }
+}

@@ -110,6 +110,7 @@ struct AgentProtocolFixtureFileTests {
         "document.curveAnalysis",
         "document.topologySummary",
         "document.sweepEvaluationPlan",
+        "document.booleanEvaluationPlan",
         "document.objectDimensionSummary",
         "document.surfaceSourceSummary",
         "document.surfaceAnalysis",

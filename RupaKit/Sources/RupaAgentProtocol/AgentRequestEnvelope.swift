@@ -194,6 +194,18 @@ public struct AgentRequestEnvelope: Codable, Equatable, Sendable {
                 ),
                 forKey: .params
             )
+        case let .booleanEvaluationPlan(sessionID, targets, tool, operation, keepTools, expectedGeneration):
+            try container.encode(
+                BooleanEvaluationPlanParams(
+                    sessionID: sessionID,
+                    targets: targets,
+                    tool: tool,
+                    operation: operation,
+                    keepTools: keepTools,
+                    expectedGeneration: expectedGeneration
+                ),
+                forKey: .params
+            )
         case let .sketchDimensionSummary(sessionID, targets, expectedGeneration),
              let .objectDimensionSummary(sessionID, targets, expectedGeneration),
              let .selectTargets(sessionID, targets, expectedGeneration):
@@ -427,6 +439,16 @@ public struct AgentRequestEnvelope: Codable, Equatable, Sendable {
                 guides: payload.guides,
                 targets: payload.targets,
                 options: payload.options,
+                expectedGeneration: payload.expectedGeneration
+            )
+        case "document.booleanEvaluationPlan":
+            let payload = try decodeParams(BooleanEvaluationPlanParams.self, from: container, method: method)
+            return .booleanEvaluationPlan(
+                sessionID: payload.sessionID,
+                targets: payload.targets,
+                tool: payload.tool,
+                operation: payload.operation,
+                keepTools: payload.keepTools,
                 expectedGeneration: payload.expectedGeneration
             )
         case "document.objectDimensionSummary":
@@ -736,6 +758,24 @@ private struct SweepEvaluationPlanParams: AgentRequestParameterPayload, Equatabl
     var guides: [SweepGuideReference]
     var targets: [SweepTargetReference]
     var options: SweepOptions
+    var expectedGeneration: DocumentGeneration?
+}
+
+private struct BooleanEvaluationPlanParams: AgentRequestParameterPayload, Equatable {
+    static let allowedKeys: Set<String> = [
+        "sessionID",
+        "targets",
+        "tool",
+        "operation",
+        "keepTools",
+        "expectedGeneration",
+    ]
+
+    var sessionID: UUID
+    var targets: [BooleanTargetReference]
+    var tool: BooleanToolReference
+    var operation: BooleanOperation
+    var keepTools: Bool
     var expectedGeneration: DocumentGeneration?
 }
 

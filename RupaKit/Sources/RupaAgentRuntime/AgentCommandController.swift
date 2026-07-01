@@ -1275,7 +1275,7 @@ public final class AgentCommandController: AgentClientProtocol {
             summary: "Create a standalone source-owned Boolean feature from target body references, one tool body reference, an operation, and keep-tools policy.",
             access: .automationCommand,
             mutatesDocument: true,
-            discovery: [.topologySummary, .designDisplaySnapshot],
+            discovery: [.topologySummary, .booleanEvaluationPlan, .designDisplaySnapshot],
             targets: [.body],
             failureMode: "Rejects missing targets, duplicate targets, a tool that is also a target, non-body references, stale generations, unsupported sheet operands, non-box operands, collapsed empty results, and connected boolean topology outside the current exact axis-aligned box and orthogonal cell-union subset before committing invalid geometry.",
             optionMatrix: [
@@ -1293,6 +1293,43 @@ public final class AgentCommandController: AgentClientProtocol {
                     notes: [
                         "false replaces target and tool B-rep output with the Boolean result during evaluation",
                         "true keeps target and tool B-rep output and adds the Boolean result body"
+                    ]
+                ),
+            ]
+        ),
+        capability(
+            "booleanEvaluationPlan",
+            category: .read,
+            summary: "Preflight a proposed standalone Boolean without mutating the document, returning the exact operand subset, output topology kind, primitive counts, unsupported code, and ordered checks used by the shared Boolean evaluation contract.",
+            access: .agentRequest,
+            mutatesDocument: false,
+            discovery: [.topologySummary, .booleanEvaluationPlan],
+            targets: [.body],
+            failureMode: "Rejects stale generations, missing references, duplicate targets, and a tool that is also a target; returns structured unsupported results for current kernel capability gaps such as curved, non-orthogonal, sheet, empty, or unsupported result topology before createBoolean mutates the document.",
+            optionMatrix: [
+                AgentCapabilityDescriptor.OptionAxis(
+                    name: "operation",
+                    supportedValues: ["union", "difference", "intersect", "slice"],
+                    notes: [
+                        "Use the result before createBoolean to avoid committing unsupported topology.",
+                        "The current exact subset supports axis-aligned box solids and orthogonal cell-union solids."
+                    ]
+                ),
+                AgentCapabilityDescriptor.OptionAxis(
+                    name: "outputTopologyKind",
+                    supportedValues: ["singleBox", "separatedBoxes", "orthogonalCellUnion", "zThroughFrame"],
+                    notes: [
+                        "singleBox and separatedBoxes keep box primitives explicit",
+                        "orthogonalCellUnion preserves connected orthogonal solid results",
+                        "zThroughFrame reports exact through-cut frame topology"
+                    ]
+                ),
+                AgentCapabilityDescriptor.OptionAxis(
+                    name: "keepTools",
+                    supportedValues: ["false", "true"],
+                    notes: [
+                        "false replaces target and tool B-rep output during evaluation",
+                        "true keeps target and tool output and adds the Boolean result body"
                     ]
                 ),
             ]
@@ -2254,6 +2291,25 @@ public final class AgentCommandController: AgentClientProtocol {
                         guides: guides,
                         targets: targets,
                         options: options
+                    )
+                )
+            case let .booleanEvaluationPlan(
+                sessionID,
+                targets,
+                tool,
+                operation,
+                keepTools,
+                expectedGeneration
+            ):
+                let session = try registry.session(id: sessionID)
+                try session.store.requireGeneration(expectedGeneration)
+                return .booleanEvaluationPlan(
+                    try BooleanEvaluationPlanService().plan(
+                        document: session.document.cadDocument,
+                        targets: targets,
+                        tool: tool,
+                        operation: operation,
+                        keepTools: keepTools
                     )
                 )
             case let .objectDimensionSummary(sessionID, targets, expectedGeneration):

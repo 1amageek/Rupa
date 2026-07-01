@@ -198,6 +198,7 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                     sourceFiles: [
                         "swift-CAD/Sources/CADIR/BooleanFeature.swift",
                         "swift-CAD/Sources/CADKernel/BooleanFeatureEvaluator.swift",
+                        "swift-CAD/Sources/CADKernel/BooleanEvaluationPlanService.swift",
                         "swift-CAD/Sources/CADKernel/BoxBRepBooleanEvaluator.swift",
                         "swift-CAD/Sources/CADKernel/OrthogonalSolidOperand.swift",
                         "swift-CAD/Sources/CADIR/DesignGraph.swift",
@@ -214,6 +215,7 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                     ],
                     tests: [
                         "swift-CAD/Tests/CADKernelTests/CADKernelTests.swift",
+                        "swift-CAD/Tests/CADKernelTests/BooleanEvaluationPlanServiceTests.swift",
                         "swift-CAD/Tests/CADExchangeTests/CADExchangeTests.swift",
                         "RupaKit/Tests/RupaCoreTests/BooleanCommandTests.swift",
                         "RupaKit/Tests/RupaCoreTests/SweepCommandTests.swift",
@@ -224,6 +226,7 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                     notes: [
                         "Standalone Boolean features now own target body references, one tool body reference, operation, and keep-tools policy in source data.",
                         "Core, Automation, and Agent can create exact axis-aligned box and orthogonal cell-union B-rep Boolean union, difference, intersect, and slice results through the shared command path.",
+                        "SwiftCAD exposes the shared Boolean kernel decision as a non-mutating plan service, and Agent exposes it as document.booleanEvaluationPlan before createBoolean.",
                         "SwiftCAD can extract occupied cells from supported orthogonal solid operands, so previous connected orthogonal cell-union Boolean results can become follow-on Boolean targets.",
                         "Boolean evaluation removes superseded target and tool generated names when keepTools is false, remaps kept tool names when keepTools is true, and returns typed failures for unsupported operands before invalid geometry is committed.",
                     ]

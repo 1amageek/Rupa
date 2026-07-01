@@ -71,6 +71,7 @@ import SwiftCAD
     #expect(capabilities.contains("createSweep"))
     #expect(capabilities.contains("createLoft"))
     #expect(capabilities.contains("sweepEvaluationPlan"))
+    #expect(capabilities.contains("booleanEvaluationPlan"))
     #expect(capabilities.contains("createBSplineSurface"))
     #expect(capabilities.contains("createPolySplineSurface"))
     #expect(capabilities.contains("movePolySplineSurfaceVertex"))
@@ -197,6 +198,7 @@ import SwiftCAD
     let loft = try #require(descriptors.first { $0.name == "createLoft" })
     let boolean = try #require(descriptors.first { $0.name == "createBoolean" })
     let sweepEvaluationPlan = try #require(descriptors.first { $0.name == "sweepEvaluationPlan" })
+    let booleanEvaluationPlan = try #require(descriptors.first { $0.name == "booleanEvaluationPlan" })
     let bSplineSurface = try #require(descriptors.first { $0.name == "createBSplineSurface" })
     let polySpline = try #require(descriptors.first { $0.name == "createPolySplineSurface" })
     let polySplineVertexMove = try #require(descriptors.first { $0.name == "movePolySplineSurfaceVertex" })
@@ -669,6 +671,7 @@ import SwiftCAD
     #expect(boolean.mutatesDocument)
     #expect(boolean.access == .automationCommand)
     #expect(boolean.discovery.contains(.topologySummary))
+    #expect(boolean.discovery.contains(.booleanEvaluationPlan))
     #expect(boolean.discovery.contains(.designDisplaySnapshot))
     #expect(boolean.targets == [.body])
     #expect(boolean.summary.contains("standalone"))
@@ -685,6 +688,31 @@ import SwiftCAD
     #expect(booleanKeepToolsAxis.supportedValues == ["false", "true"])
     #expect(booleanKeepToolsAxis.notes.contains { $0.contains("replaces target and tool") })
     #expect(booleanKeepToolsAxis.notes.contains { $0.contains("adds the Boolean result body") })
+
+    #expect(booleanEvaluationPlan.category == .read)
+    #expect(booleanEvaluationPlan.mutatesDocument == false)
+    #expect(booleanEvaluationPlan.access == .agentRequest)
+    #expect(booleanEvaluationPlan.discovery.contains(.topologySummary))
+    #expect(booleanEvaluationPlan.discovery.contains(.booleanEvaluationPlan))
+    #expect(booleanEvaluationPlan.targets == [.body])
+    #expect(booleanEvaluationPlan.summary.contains("Preflight"))
+    #expect(booleanEvaluationPlan.summary.contains("output topology kind"))
+    #expect(booleanEvaluationPlan.failureMode.contains("structured unsupported results"))
+    #expect(booleanEvaluationPlan.failureMode.contains("curved"))
+    #expect(booleanEvaluationPlan.optionMatrix.map(\.name) == ["operation", "outputTopologyKind", "keepTools"])
+    let booleanPlanOperationAxis = try #require(
+        booleanEvaluationPlan.optionMatrix.first { $0.name == "operation" }
+    )
+    let booleanPlanTopologyAxis = try #require(
+        booleanEvaluationPlan.optionMatrix.first { $0.name == "outputTopologyKind" }
+    )
+    let booleanPlanKeepToolsAxis = try #require(
+        booleanEvaluationPlan.optionMatrix.first { $0.name == "keepTools" }
+    )
+    #expect(booleanPlanOperationAxis.supportedValues == ["union", "difference", "intersect", "slice"])
+    #expect(booleanPlanTopologyAxis.supportedValues.contains("orthogonalCellUnion"))
+    #expect(booleanPlanTopologyAxis.supportedValues.contains("zThroughFrame"))
+    #expect(booleanPlanKeepToolsAxis.supportedValues == ["false", "true"])
 
     #expect(sweepEvaluationPlan.category == .read)
     #expect(sweepEvaluationPlan.mutatesDocument == false)
