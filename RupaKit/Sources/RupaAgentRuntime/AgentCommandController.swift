@@ -52,11 +52,11 @@ public final class AgentCommandController: AgentClientProtocol {
         capability(
             "setDisplayUnit",
             category: .document,
-            summary: "Change the display unit used by UI, summaries, measurements, and command feedback.",
+            summary: "Change the display unit used by UI, summaries, measurements, and command feedback without changing the physical ruler distances.",
             access: .automationCommand,
             mutatesDocument: true,
             targets: [.document],
-            failureMode: "Rejects stale generations before mutation."
+            failureMode: "Rejects stale generations before mutation; preserves the current minor tick, major tick, and visible span distances."
         ),
         capability(
             "setRulerConfiguration",

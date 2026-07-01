@@ -159,6 +159,7 @@ import SwiftCAD
 
 @Test func agentCapabilityDescriptorsExposeDiscoveryAndMutationContracts() async throws {
     let descriptors = AgentCommandController().capabilityDescriptors()
+    let displayUnit = try #require(descriptors.first { $0.name == "setDisplayUnit" })
     let rulerConfiguration = try #require(descriptors.first { $0.name == "setRulerConfiguration" })
     let workspaceScalePreset = try #require(descriptors.first { $0.name == "setWorkspaceScalePreset" })
     let workspaceOriginRebase = try #require(descriptors.first { $0.name == "rebaseWorkspaceOrigin" })
@@ -279,6 +280,10 @@ import SwiftCAD
     let constructionPlaneCreateFromTargets = try #require(descriptors.first { $0.name == "createConstructionPlaneFromTargets" })
     let constructionPlaneCreateFromView = try #require(descriptors.first { $0.name == "createViewAlignedConstructionPlane" })
 
+    #expect(displayUnit.category == .document)
+    #expect(displayUnit.mutatesDocument)
+    #expect(displayUnit.summary.contains("without changing the physical ruler distances"))
+    #expect(displayUnit.failureMode.contains("preserves the current minor tick"))
     #expect(rulerConfiguration.category == .document)
     #expect(rulerConfiguration.mutatesDocument)
     #expect(rulerConfiguration.summary.contains("visible workspace span"))
