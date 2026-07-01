@@ -2591,6 +2591,50 @@ import Testing
     #expect(drag.start != drag.end)
 }
 
+@Test func viewportModelCoordinateMapperFramesRemoteSceneWithoutOriginUnion() throws {
+    var document = DesignDocument.empty()
+    try document.setRulerConfiguration(WorkspaceScalePreset.sitePlanning.rulerConfiguration)
+    _ = try document.createLineSketch(
+        name: "Remote Site Line",
+        plane: .xy,
+        start: SketchPoint(
+            x: .length(1_000_000.0, .meter),
+            y: .length(2_000_000.0, .meter)
+        ),
+        end: SketchPoint(
+            x: .length(1_000_500.0, .meter),
+            y: .length(2_000_000.0, .meter)
+        )
+    )
+    let scene = ViewportSceneBuilder().build(document: document)
+    let sceneBounds = try #require(scene.modelBounds)
+    let mapper = ViewportModelCoordinateMapper(
+        document: document,
+        scene: scene,
+        size: CGSize(width: 800.0, height: 600.0)
+    )
+    let ruler = document.ruler.normalizedForWorkspaceScale()
+    let projectedSceneCenter = mapper.layout.project(CGPoint(
+        x: sceneBounds.midX,
+        y: sceneBounds.midY
+    ))
+
+    #expect(abs(mapper.layout.modelBounds.midX - sceneBounds.midX) < 1.0e-6)
+    #expect(abs(mapper.layout.modelBounds.midY - sceneBounds.midY) < 1.0e-6)
+    #expect(mapper.layout.modelBounds.minX < sceneBounds.minX)
+    #expect(mapper.layout.modelBounds.maxX > sceneBounds.maxX)
+    #expect(mapper.layout.modelBounds.minY < sceneBounds.minY)
+    #expect(mapper.layout.modelBounds.maxY > sceneBounds.maxY)
+    #expect(mapper.layout.modelBounds.minX > 0.0)
+    #expect(mapper.layout.modelBounds.minY > 0.0)
+    #expect(Double(mapper.layout.modelBounds.width) >= ruler.majorTickMeters * 4.0)
+    #expect(Double(mapper.layout.modelBounds.height) >= ruler.majorTickMeters * 4.0)
+    #expect(Double(mapper.layout.modelBounds.width) < document.ruler.visibleSpanMeters)
+    #expect(Double(mapper.layout.modelBounds.height) < document.ruler.visibleSpanMeters)
+    #expect(abs(projectedSceneCenter.x - 400.0) < 1.0e-6)
+    #expect(abs(projectedSceneCenter.y - 300.0) < 1.0e-6)
+}
+
 @Test func viewportSceneReportsVerticalBoundsForBodyItems() {
     let bodyItem = ViewportSceneItem(
         id: "body",

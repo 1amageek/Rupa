@@ -1507,10 +1507,11 @@ public struct ViewportModelCoordinateMapper {
     }
 
     private static func emptyModelBounds(for document: DesignDocument) -> CGRect {
+        let ruler = document.ruler.normalizedForWorkspaceScale()
         let span = max(
-            document.ruler.visibleSpanMeters,
-            document.ruler.majorTickMeters * 20.0,
-            document.ruler.minorTickMeters * 40.0
+            ruler.visibleSpanMeters,
+            ruler.majorTickMeters * 20.0,
+            ruler.minorTickMeters * 40.0
         )
         let size = CGFloat(span)
         return CGRect(
@@ -1518,6 +1519,32 @@ public struct ViewportModelCoordinateMapper {
             y: -size / 2.0,
             width: size,
             height: size
+        )
+    }
+
+    private static func framedSceneBounds(
+        _ sceneBounds: CGRect,
+        ruler: RulerConfiguration
+    ) -> CGRect {
+        let normalizedRuler = ruler.normalizedForWorkspaceScale()
+        let minimumSpan = max(
+            normalizedRuler.majorTickMeters * 4.0,
+            normalizedRuler.minorTickMeters * 20.0,
+            RulerConfiguration.minorTickMetersRange.lowerBound
+        )
+        let sceneSpan = max(Double(sceneBounds.width), Double(sceneBounds.height))
+        let padding = max(
+            sceneSpan * 0.12,
+            normalizedRuler.majorTickMeters,
+            normalizedRuler.minorTickMeters * 4.0
+        )
+        let width = max(Double(sceneBounds.width) + padding * 2.0, minimumSpan)
+        let height = max(Double(sceneBounds.height) + padding * 2.0, minimumSpan)
+        return CGRect(
+            x: sceneBounds.midX - CGFloat(width) / 2.0,
+            y: sceneBounds.midY - CGFloat(height) / 2.0,
+            width: CGFloat(width),
+            height: CGFloat(height)
         )
     }
 
@@ -1529,7 +1556,7 @@ public struct ViewportModelCoordinateMapper {
         guard let sceneBounds = scene.modelBounds else {
             return baseBounds
         }
-        return baseBounds.union(sceneBounds)
+        return framedSceneBounds(sceneBounds, ruler: document.ruler)
     }
 }
 

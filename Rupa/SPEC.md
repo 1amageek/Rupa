@@ -835,6 +835,8 @@ RupaRendering owns the editor viewport. The initial implementation may use a Swi
 
 Canvas length labels for dimensions, drags, and edit affordances must resolve to readable units from the document display unit so millimeter documents can still show meter and kilometer values without unreadable large millimeter numbers.
 
+Viewport framing must use the ruler visible span for empty documents and a ruler-padded scene-centered frame for non-empty documents. Non-empty viewport bounds must not force-include the world origin, because far-from-origin architectural and site-planning models need local framing for usable navigation and stable arithmetic.
+
 | File | Responsibility |
 |---|---|
 | `Viewport.swift` | Initial SwiftUI Canvas viewport drawing, axis and coordinate-grid hosting, selection highlighting, click-to-hit and click-to-model bridge, drag-to-model bridge, and camera navigation state ownership. |
