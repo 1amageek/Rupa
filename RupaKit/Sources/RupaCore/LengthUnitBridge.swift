@@ -12,6 +12,8 @@ public extension LengthDisplayUnit {
             .centimeter
         case .meter:
             .meter
+        case .kilometer:
+            .kilometer
         case .inch:
             .inch
         case .foot:
@@ -31,6 +33,8 @@ public extension LengthUnit {
             .centimeter
         case .meter:
             .meter
+        case .kilometer:
+            .kilometer
         case .inch:
             .inch
         case .foot:

@@ -2,9 +2,9 @@ import Foundation
 import RupaCoreTypes
 
 public struct RulerConfiguration: Codable, Hashable, Sendable {
-    public static let minorTickMetersRange: ClosedRange<Double> = 1.0e-6 ... 1_000.0
-    public static let majorTickMetersRange: ClosedRange<Double> = 2.0e-6 ... 10_000.0
-    public static let visibleSpanMetersRange: ClosedRange<Double> = 1.0e-5 ... 100_000.0
+    public static let minorTickMetersRange: ClosedRange<Double> = 1.0e-6 ... 10_000.0
+    public static let majorTickMetersRange: ClosedRange<Double> = 2.0e-6 ... 100_000.0
+    public static let visibleSpanMetersRange: ClosedRange<Double> = 1.0e-5 ... 1_000_000.0
 
     public var displayUnit: LengthDisplayUnit
     public var minorTickMeters: Double

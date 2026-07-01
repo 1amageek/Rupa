@@ -23,12 +23,13 @@ import Testing
     #expect(precision.displayUnit == .millimeter)
     #expect(architecture.displayUnit == .meter)
     #expect(architectureImperial.displayUnit == .foot)
-    #expect(site.displayUnit == .meter)
+    #expect(site.displayUnit == .kilometer)
     #expect(siteImperial.displayUnit == .foot)
     #expect(micro.visibleSpanMeters < precision.visibleSpanMeters)
     #expect(precision.visibleSpanMeters < architecture.visibleSpanMeters)
-    #expect(site.visibleSpanMeters == RulerConfiguration.visibleSpanMetersRange.upperBound)
-    #expect(siteImperial.visibleSpanMeters == RulerConfiguration.visibleSpanMetersRange.upperBound)
+    #expect(architecture.visibleSpanMeters < site.visibleSpanMeters)
+    #expect(site.visibleSpanMeters == 100_000.0)
+    #expect(siteImperial.visibleSpanMeters == 100_000.0)
 }
 
 @Test func workspaceScaleDefaultsFollowSitePlanningPreset() {
@@ -38,13 +39,17 @@ import Testing
     #expect(defaults.sketchDepthMeters == 1_000.0)
 }
 
-@Test func workspaceScaleSnapshotSummaryGroupsLargeMeterValues() {
+@Test func workspaceScaleSnapshotSummaryUsesKilometersForSitePlanning() {
     let snapshot = WorkspaceScaleSnapshot(ruler: WorkspaceScalePreset.sitePlanning.rulerConfiguration)
 
-    #expect(snapshot.visibleSpanDisplayValue == 100_000.0)
-    #expect(snapshot.summary.contains("minor 10 m"))
-    #expect(snapshot.summary.contains("major 100 m"))
-    #expect(snapshot.summary.contains("visible span 100,000 m"))
+    #expect(snapshot.displayUnit == .kilometer)
+    #expect(snapshot.displayUnitSymbol == "km")
+    #expect(snapshot.minorTickDisplayValue == 0.1)
+    #expect(snapshot.majorTickDisplayValue == 1.0)
+    #expect(snapshot.visibleSpanDisplayValue == 100.0)
+    #expect(snapshot.summary.contains("minor 0.1 km"))
+    #expect(snapshot.summary.contains("major 1 km"))
+    #expect(snapshot.summary.contains("visible span 100 km"))
 }
 
 @Test func workspaceScaleSnapshotExposesDisplayUnitValues() {

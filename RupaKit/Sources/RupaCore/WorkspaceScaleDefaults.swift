@@ -35,8 +35,8 @@ public struct WorkspaceScaleDefaults: Equatable, Sendable {
     }
 
     private static func baseFeatureMeters(for ruler: RulerConfiguration) -> Double {
-        let unitScaleMeters = ruler.displayUnit.meters(from: 40.0)
         let gridScaleMeters = ruler.majorTickMeters * 4.0
+        let unitScaleMeters = min(ruler.displayUnit.meters(from: 40.0), gridScaleMeters)
         let spanScaleMeters = ruler.visibleSpanMeters * 0.04
         let fitLimitMeters = max(
             ruler.visibleSpanMeters * 0.25,

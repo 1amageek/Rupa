@@ -32,7 +32,7 @@ public struct SetDisplayUnitCommand: ParsableCommand {
     @OptionGroup
     public var document: CLIWriteDocumentOptions
 
-    @Argument(help: "Display unit: micrometer, millimeter, centimeter, meter, inch, or foot.")
+    @Argument(help: "Display unit: micrometer, millimeter, centimeter, meter, kilometer, inch, or foot.")
     public var unit: LengthDisplayUnit
 
     public init() {}
@@ -76,7 +76,7 @@ public struct SetRulerConfigurationCommand: ParsableCommand {
     @OptionGroup
     public var document: CLIWriteDocumentOptions
 
-    @Option(help: "Display unit: micrometer, millimeter, centimeter, meter, inch, or foot.")
+    @Option(help: "Display unit: micrometer, millimeter, centimeter, meter, kilometer, inch, or foot.")
     public var displayUnit: LengthDisplayUnit
 
     @Option(help: "Minor ruler tick in meters.")

@@ -5,6 +5,7 @@ public enum LengthDisplayUnit: String, Codable, CaseIterable, Hashable, Identifi
     case millimeter
     case centimeter
     case meter
+    case kilometer
     case inch
     case foot
 
@@ -22,6 +23,8 @@ public enum LengthDisplayUnit: String, Codable, CaseIterable, Hashable, Identifi
             "cm"
         case .meter:
             "m"
+        case .kilometer:
+            "km"
         case .inch:
             "in"
         case .foot:
@@ -39,6 +42,8 @@ public enum LengthDisplayUnit: String, Codable, CaseIterable, Hashable, Identifi
             0.01
         case .meter:
             1.0
+        case .kilometer:
+            1_000.0
         case .inch:
             0.0254
         case .foot:

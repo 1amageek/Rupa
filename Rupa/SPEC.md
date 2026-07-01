@@ -681,7 +681,7 @@ flowchart LR
 | Dry run | Evaluate and resolve the output format without writing an output file. |
 | Preset selection | `ExportOptions` may select a `ExportPreset` by ID or name. The selected preset defines the exchange format, output unit, tessellation policy, validation rule references, metadata inclusion preference, and default destination policy. |
 | Format check | When a preset is selected, the output path extension must resolve to the same `ExchangeFileFormat` as the preset. Mismatches fail before writing. |
-| Output unit | Preset export units are applied to Swift-CAD exchange writers, including micrometer through meter scale workflows. Without a preset, the document unit system is used. |
+| Output unit | Preset export units are applied to Swift-CAD exchange writers, including micrometer through kilometer scale workflows. Without a preset, the document unit system is used. |
 | Destination policy | Export resolves `prompt`, `overwrite`, or `versioned` before writing. `prompt` refuses an existing path, `overwrite` replaces it atomically, and `versioned` writes the next available suffixed path. |
 | Errors | Evaluation failures return `evaluation.failed`; output failures return `export.failed`. |
 | Results | `ExportResult` includes format, final output path, byte count, generation, dry-run flag, preset name, output unit, destination policy, and diagnostics. |

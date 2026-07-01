@@ -3395,9 +3395,11 @@ struct CLICommandApplyTests {
         #expect(presetResult.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: presetResult.standardError))
         #expect(presetResponse.saved)
         #expect(presetResponse.workspaceScale?.matchedPreset == .sitePlanning)
+        #expect(presetResponse.workspaceScale?.displayUnit == .kilometer)
+        #expect(presetResponse.workspaceScale?.displayUnitSymbol == "km")
         #expect(presetResponse.workspaceScale?.visibleSpanMeters == 100_000.0)
-        #expect(presetResponse.workspaceScale?.visibleSpanDisplayValue == 100_000.0)
-        #expect(loadedAfterPreset.displayUnit == .meter)
+        #expect(presetResponse.workspaceScale?.visibleSpanDisplayValue == 100.0)
+        #expect(loadedAfterPreset.displayUnit == .kilometer)
         #expect(loadedAfterPreset.ruler == WorkspaceScalePreset.sitePlanning.rulerConfiguration.normalizedForWorkspaceScale())
 
         let imperialPresetResult = try await runCLI([
@@ -3426,6 +3428,7 @@ struct CLICommandApplyTests {
         #expect(describeResult.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: describeResult.standardError))
         #expect(!describeResponse.saved)
         #expect(describeResponse.workspaceScale?.matchedPreset == .sitePlanning)
+        #expect(describeResponse.workspaceScale?.displayUnit == .kilometer)
         #expect(describeResponse.message.contains("Site Planning"))
 
         #expect(rulerResult.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: rulerResult.standardError))

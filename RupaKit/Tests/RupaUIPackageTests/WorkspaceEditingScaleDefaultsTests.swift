@@ -14,8 +14,8 @@ import Testing
 @Test func workspaceEditingDefaultsFollowSitePlanningScale() {
     let defaults = WorkspaceEditingScaleDefaults(ruler: WorkspaceScalePreset.sitePlanning.rulerConfiguration)
 
-    #expect(defaults.operationStepMeters == 10.0)
-    #expect(defaults.slotWidthMeters == 20.0)
-    #expect(defaults.sketchRebuildToleranceMeters == 1.0)
-    #expect(defaults.sketchRebuildToleranceRange.upperBound == 10.0)
+    #expect(defaults.operationStepMeters == 100.0)
+    #expect(defaults.slotWidthMeters == 200.0)
+    #expect(defaults.sketchRebuildToleranceMeters == 10.0)
+    #expect(defaults.sketchRebuildToleranceRange.upperBound == 100.0)
 }

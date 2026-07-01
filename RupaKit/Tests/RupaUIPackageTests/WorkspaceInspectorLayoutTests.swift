@@ -66,7 +66,7 @@ import Testing
 
 @Test func rulerScaleControlKeepsTextInputInDisplayUnitsButClampsInMeters() {
     let requestedMeters = RulerScaleControl.meters(
-        fromFieldValue: 200_000_000.0,
+        fromFieldValue: 2_000_000_000.0,
         unit: .millimeter,
         for: .visible
     )
@@ -77,22 +77,22 @@ import Testing
     )
 
     #expect(requestedMeters == RulerConfiguration.visibleSpanMetersRange.upperBound)
-    #expect(displayedMillimeters == 100_000_000.0)
+    #expect(displayedMillimeters == 1_000_000_000.0)
 }
 
 @Test func rulerScaleControlAcceptsGroupedLargeWorkspaceValues() {
     let commaMeters = RulerScaleControl.meters(
-        fromFieldText: "100,000",
+        fromFieldText: "1,000,000",
         unit: .meter,
         for: .visible
     )
     let underscoreMeters = RulerScaleControl.meters(
-        fromFieldText: "100_000",
+        fromFieldText: "1_000_000",
         unit: .meter,
         for: .visible
     )
     let imperialFeet = RulerScaleControl.meters(
-        fromFieldText: "328,084",
+        fromFieldText: "3,280,840",
         unit: .foot,
         for: .visible
     )

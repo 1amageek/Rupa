@@ -2885,6 +2885,12 @@ import Testing
             unit: .foot
         ) == "100,000ft"
     )
+    #expect(
+        ViewportProjectedGrid.formattedScaleLabel(
+            valueMeters: 100_000.0,
+            unit: .kilometer
+        ) == "100km"
+    )
 }
 
 @Test func viewportCameraZoomPolicyExpandsForSitePlanningScale() throws {

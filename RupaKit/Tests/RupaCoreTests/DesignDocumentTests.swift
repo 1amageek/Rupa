@@ -9,9 +9,10 @@ import Testing
     #expect(document.cadDocument.units.angle.rawValue == "radian")
 }
 
-@Test func lengthDisplayUnitsCoverMicrometerThroughMeter() async throws {
+@Test func lengthDisplayUnitsCoverMicrometerThroughKilometer() async throws {
     #expect(LengthDisplayUnit.micrometer.metersPerUnit == 0.000_001)
     #expect(LengthDisplayUnit.meter.metersPerUnit == 1.0)
+    #expect(LengthDisplayUnit.kilometer.metersPerUnit == 1_000.0)
 }
 
 @Test func rulerTracksSelectedDisplayUnit() async throws {
@@ -25,7 +26,7 @@ import Testing
 
 @Test func rulerScaleRangeCoversPrecisionMechanicsThroughArchitecture() async throws {
     #expect(RulerConfiguration.minorTickMetersRange.lowerBound == 1.0e-6)
-    #expect(RulerConfiguration.visibleSpanMetersRange.upperBound >= 100_000.0)
+    #expect(RulerConfiguration.visibleSpanMetersRange.upperBound >= 1_000_000.0)
 
     let configuration = RulerConfiguration(
         displayUnit: .millimeter,

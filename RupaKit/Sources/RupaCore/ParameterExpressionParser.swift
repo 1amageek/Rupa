@@ -239,6 +239,8 @@ public struct ParameterExpressionParser {
                 .length(value, unit: .centimeter)
             case "m", "meter", "meters":
                 .length(value, unit: .meter)
+            case "km", "kilometer", "kilometers":
+                .length(value, unit: .kilometer)
             case "in", "inch", "inches":
                 .length(value, unit: .inch)
             case "ft", "foot", "feet":

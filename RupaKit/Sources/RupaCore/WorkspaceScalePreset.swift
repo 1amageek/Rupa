@@ -82,9 +82,9 @@ public enum WorkspaceScalePreset: String, Codable, CaseIterable, Hashable, Ident
             )
         case .sitePlanning:
             RulerConfiguration(
-                displayUnit: .meter,
-                minorTickMeters: 10.0,
-                majorTickMeters: 100.0,
+                displayUnit: .kilometer,
+                minorTickMeters: 100.0,
+                majorTickMeters: 1_000.0,
                 visibleSpanMeters: 100_000.0
             )
         case .sitePlanningImperial:

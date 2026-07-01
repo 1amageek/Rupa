@@ -49,14 +49,14 @@ import SwiftCAD
 
     let result = try runner.execute(.setWorkspaceScalePreset(preset), in: session)
 
-    #expect(session.document.displayUnit == .meter)
+    #expect(session.document.displayUnit == .kilometer)
     #expect(session.document.ruler == preset.rulerConfiguration.normalizedForWorkspaceScale())
     #expect(session.generation == DocumentGeneration(1))
     #expect(result.commandName == "setRulerConfiguration")
     #expect(result.didMutate)
     #expect(result.workspaceScale?.matchedPreset == .sitePlanning)
     #expect(result.workspaceScale?.visibleSpanMeters == 100_000.0)
-    #expect(result.workspaceScale?.visibleSpanDisplayValue == 100_000.0)
+    #expect(result.workspaceScale?.visibleSpanDisplayValue == 100.0)
     #expect(result.message.contains("Site Planning"))
 }
 
@@ -69,14 +69,14 @@ import SwiftCAD
     let result = try runner.execute(.describeDocument, in: session)
 
     #expect(!result.didMutate)
-    #expect(result.workspaceScale?.displayUnit == .meter)
+    #expect(result.workspaceScale?.displayUnit == .kilometer)
     #expect(result.workspaceScale?.matchedPreset == .sitePlanning)
-    #expect(result.workspaceScale?.minorTickMeters == 10.0)
-    #expect(result.workspaceScale?.majorTickMeters == 100.0)
+    #expect(result.workspaceScale?.minorTickMeters == 100.0)
+    #expect(result.workspaceScale?.majorTickMeters == 1_000.0)
     #expect(result.workspaceScale?.visibleSpanMeters == 100_000.0)
-    #expect(result.workspaceScale?.visibleSpanDisplayValue == 100_000.0)
+    #expect(result.workspaceScale?.visibleSpanDisplayValue == 100.0)
     #expect(result.message.contains("Site Planning"))
-    #expect(result.message.contains("visible span 100,000 m"))
+    #expect(result.message.contains("visible span 100 km"))
 }
 
 @MainActor

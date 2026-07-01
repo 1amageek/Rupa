@@ -34,7 +34,7 @@ Rupa must support modeling across small mechanical detail and building-scale con
 | Requirement | Contract |
 |---|---|
 | Internal length unit | Meter, inherited from Swift-CAD quantity rules. |
-| Display length units | Micrometer (μm), millimeter, centimeter, meter, inch, foot, and fractional architectural feet/inches. |
+| Display length units | Micrometer (μm), millimeter, centimeter, meter, kilometer, inch, foot, and fractional architectural feet/inches. |
 | Ruler scale | View rulers and grid labels must auto-scale from μm detail to m-scale layouts. |
 | Mixed unit input | Inputs may accept explicit units different from the current display unit. |
 | Unit conversion | All conversions must be finite, typed, and reversible within tolerance. |
@@ -82,7 +82,7 @@ Rupa must make scale visible and controllable.
 | Snap increments | Snap increments are unit-aware and independent from display rounding. |
 | Object snaps | Endpoint, midpoint, center, tangent, perpendicular, intersection, face, edge, vertex, and construction references. |
 | Measurement | Distance, angle, radius, diameter, area, volume, bounding box, wall thickness, clearance, and mass properties where material density exists. |
-| Ruler overlays | View rulers must support micrometer, millimeter, centimeter, meter, inch, foot, and drawing scale display. |
+| Ruler overlays | View rulers must support micrometer, millimeter, centimeter, meter, kilometer, inch, foot, and drawing scale display. |
 
 ## 5. Geometry and Body Types
 
@@ -211,6 +211,7 @@ The same universal CAD model must satisfy these cases.
 | Product part | Millimeter to centimeter | Parametric features, fillets, holes, materials, validation, STEP/STL/3MF export. |
 | Visual asset | Centimeter to meter | Hierarchy, pivots, materials, normals, UVs, USD/GLB export. |
 | Interior/building element | Meter | Levels or layout references, drawings, dimensions, schedules, DXF/PDF/IFC-oriented export. |
+| Site and regional planning | Meter to kilometer | Grid labels, dimensions, Agent measurements, and exchange units remain readable without changing internal meter storage. |
 
 ## 15. Deferred ApplicationProfile Readiness
 

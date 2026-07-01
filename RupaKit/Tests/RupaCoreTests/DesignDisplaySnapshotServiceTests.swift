@@ -67,12 +67,12 @@ import Testing
         dirty: session.isDirty
     )
 
-    #expect(result.workspaceScale.displayUnit == .meter)
-    #expect(result.workspaceScale.displayUnitSymbol == "m")
+    #expect(result.workspaceScale.displayUnit == .kilometer)
+    #expect(result.workspaceScale.displayUnitSymbol == "km")
     #expect(result.workspaceScale.matchedPreset == .sitePlanning)
     #expect(result.workspaceScale.matchedPresetTitle == "Site Planning")
-    #expect(result.workspaceScale.minorTickMeters == 10.0)
-    #expect(result.workspaceScale.majorTickMeters == 100.0)
+    #expect(result.workspaceScale.minorTickMeters == 100.0)
+    #expect(result.workspaceScale.majorTickMeters == 1_000.0)
     #expect(result.workspaceScale.visibleSpanMeters == 100_000.0)
 }
 
