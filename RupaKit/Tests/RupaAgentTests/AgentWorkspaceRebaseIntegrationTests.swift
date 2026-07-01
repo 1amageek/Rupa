@@ -1,0 +1,65 @@
+import Foundation
+import RupaAutomation
+import RupaCore
+import SwiftCAD
+import Testing
+@testable import RupaAgent
+
+@Test(.timeLimit(.minutes(1)))
+func agentCanRebaseFarOriginWorkspaceThroughAutomationCommand() throws {
+    let server = AgentCommandController()
+    let sessionID = UUID()
+    let session = EditorSession(document: try agentFarFromOriginRectangleDocument())
+    server.register(session: session, id: sessionID)
+
+    let response = server.handle(.execute(
+        sessionID: sessionID,
+        command: .rebaseWorkspaceOrigin(
+            translation: Vector3D(x: -1.0e12, y: -1.0e12, z: 0.0)
+        ),
+        expectedGeneration: DocumentGeneration(0)
+    ))
+
+    guard case .command(let result) = response else {
+        Issue.record("Expected rebase command result.")
+        return
+    }
+    #expect(result.commandName == "rebaseWorkspaceOrigin")
+    #expect(result.didMutate)
+    #expect(result.generation == DocumentGeneration(1))
+    #expect(result.diagnostics.contains { $0.message.contains("Workspace precision warning") } == false)
+
+    let measurementResponse = server.handle(.measure(
+        sessionID: sessionID,
+        expectedGeneration: DocumentGeneration(1)
+    ))
+    guard case .measurement(let measurement) = measurementResponse else {
+        Issue.record("Expected measurement response.")
+        return
+    }
+    #expect(measurement.diagnostics.contains { $0.message.contains("Workspace precision warning") } == false)
+}
+
+private func agentFarFromOriginRectangleDocument() throws -> DesignDocument {
+    var document = DesignDocument.empty(named: "Agent Remote Site")
+    try document.setRulerConfiguration(WorkspaceScalePreset.sitePlanning.rulerConfiguration)
+    let profileID = try document.createRectangleSketchFromCorners(
+        name: "Remote Profile",
+        plane: .xy,
+        firstCorner: SketchPoint(
+            x: .length(1.0e12, .meter),
+            y: .length(1.0e12, .meter)
+        ),
+        oppositeCorner: SketchPoint(
+            x: .length(1.0e12 + 10.0, .meter),
+            y: .length(1.0e12 + 10.0, .meter)
+        )
+    )
+    _ = try document.extrudeProfile(
+        name: "Remote Solid",
+        profile: ProfileReference(featureID: profileID),
+        distance: .length(10.0, .meter),
+        direction: .normal
+    )
+    return document
+}

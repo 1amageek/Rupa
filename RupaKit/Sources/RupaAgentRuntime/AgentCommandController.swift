@@ -97,6 +97,25 @@ public final class AgentCommandController: AgentClientProtocol {
             ]
         ),
         capability(
+            "rebaseWorkspaceOrigin",
+            category: .document,
+            summary: "Translate CAD source geometry by a meter-space vector so far-from-origin models can return to a local precision-safe workspace.",
+            access: .automationCommand,
+            mutatesDocument: true,
+            targets: [.document],
+            failureMode: "Rejects stale generations, non-finite translations, and standard-plane translations that would move a sketch along its unsupported normal axis before mutation.",
+            optionMatrix: [
+                AgentCapabilityDescriptor.OptionAxis(
+                    name: "translation",
+                    supportedValues: ["x meters", "y meters", "z meters"],
+                    notes: [
+                        "The translation is applied to authored CAD source coordinates, not only to rendered meshes.",
+                        "Use measurement or evaluation diagnostics to choose a vector that moves geometry near the local origin.",
+                    ]
+                )
+            ]
+        ),
+        capability(
             "renameDocument",
             category: .document,
             summary: "Rename the document through the undoable command pipeline.",

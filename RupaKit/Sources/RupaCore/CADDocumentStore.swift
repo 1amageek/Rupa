@@ -145,6 +145,13 @@ public final class CADDocumentStore {
             try document.setRulerConfiguration(configuration)
             try commitMutation()
             evaluateCurrentDocument()
+        case .rebaseWorkspaceOrigin(let translation):
+            try document.rebaseWorkspaceOrigin(
+                translation: translation,
+                objectRegistry: objectRegistry
+            )
+            try commitMutation()
+            evaluateCurrentDocument()
         case .renameDocument(let name):
             document.rename(name)
             try commitMutation()

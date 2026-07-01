@@ -5,6 +5,7 @@ import RupaCoreTypes
 public enum EditorCommand: Codable, Equatable, Sendable {
     case setDisplayUnit(LengthDisplayUnit)
     case setRulerConfiguration(RulerConfiguration)
+    case rebaseWorkspaceOrigin(translation: Vector3D)
     case renameDocument(name: String)
     case resetDocument(name: String)
     case replaceProductMetadata(ProductMetadata)
@@ -403,6 +404,8 @@ public enum EditorCommand: Codable, Equatable, Sendable {
             "setDisplayUnit"
         case .setRulerConfiguration:
             "setRulerConfiguration"
+        case .rebaseWorkspaceOrigin:
+            "rebaseWorkspaceOrigin"
         case .renameDocument:
             "renameDocument"
         case .resetDocument:
@@ -636,6 +639,7 @@ public enum EditorCommand: Codable, Equatable, Sendable {
         switch self {
         case .setDisplayUnit,
              .setRulerConfiguration,
+             .rebaseWorkspaceOrigin,
              .renameDocument,
              .resetDocument,
              .replaceProductMetadata,

@@ -16,6 +16,7 @@ import SwiftCAD
     #expect(capabilities.contains("setDisplayUnit"))
     #expect(capabilities.contains("setRulerConfiguration"))
     #expect(capabilities.contains("setWorkspaceScalePreset"))
+    #expect(capabilities.contains("rebaseWorkspaceOrigin"))
     #expect(capabilities.contains("renameDocument"))
     #expect(capabilities.contains("upsertParameter"))
     #expect(capabilities.contains("deleteParameter"))
@@ -159,6 +160,7 @@ import SwiftCAD
     let descriptors = AgentCommandController().capabilityDescriptors()
     let rulerConfiguration = try #require(descriptors.first { $0.name == "setRulerConfiguration" })
     let workspaceScalePreset = try #require(descriptors.first { $0.name == "setWorkspaceScalePreset" })
+    let workspaceOriginRebase = try #require(descriptors.first { $0.name == "rebaseWorkspaceOrigin" })
     let objectDimensionExpression = try #require(
         descriptors.first { $0.name == "setObjectDimensionExpression" }
     )
@@ -285,6 +287,15 @@ import SwiftCAD
     #expect(workspaceScalePreset.summary.contains("site planning"))
     #expect(workspaceScalePreset.optionMatrix.contains { axis in
         axis.name == "preset" && axis.supportedValues.contains(WorkspaceScalePreset.sitePlanning.rawValue)
+    })
+    #expect(workspaceOriginRebase.category == .document)
+    #expect(workspaceOriginRebase.access == .automationCommand)
+    #expect(workspaceOriginRebase.mutatesDocument)
+    #expect(workspaceOriginRebase.targets == [.document])
+    #expect(workspaceOriginRebase.summary.contains("local precision-safe workspace"))
+    #expect(workspaceOriginRebase.failureMode.contains("standard-plane"))
+    #expect(workspaceOriginRebase.optionMatrix.contains { axis in
+        axis.name == "translation" && axis.supportedValues.contains("x meters")
     })
     #expect(objectDimensionExpression.access == .agentRequest)
     #expect(objectDimensionExpression.discovery.contains(.objectDimensionSummary))

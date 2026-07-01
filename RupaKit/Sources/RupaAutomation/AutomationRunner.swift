@@ -52,6 +52,15 @@ public struct AutomationRunner {
                 diagnostics: result.diagnostics,
                 workspaceScale: scale
             )
+        case .rebaseWorkspaceOrigin(let translation):
+            let result = try session.execute(.rebaseWorkspaceOrigin(translation: translation))
+            return AutomationResult(
+                message: "Workspace origin rebased by (\(translation.x), \(translation.y), \(translation.z)) m.",
+                commandName: result.commandName,
+                generation: result.generation,
+                didMutate: result.didMutate,
+                diagnostics: result.diagnostics
+            )
         case .renameDocument(let name):
             let result = try session.execute(.renameDocument(name: name))
             return AutomationResult(
