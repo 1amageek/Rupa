@@ -3,6 +3,8 @@ import RupaCore
 import RupaViewportScene
 
 struct ViewportBridgeCurveEndpointAffordanceService: Sendable {
+    static let tangentGuideViewportLength: CGFloat = 34.0
+
     private let handleService: BridgeCurveEndpointHandleService
 
     init(handleService: BridgeCurveEndpointHandleService = BridgeCurveEndpointHandleService()) {
@@ -76,12 +78,13 @@ struct ViewportBridgeCurveEndpointAffordanceService: Sendable {
             return nil
         }
         let localPoint = CGPoint(x: handle.point.x, y: handle.point.y)
-        let localTangentTip = CGPoint(
-            x: handle.point.x + handle.outgoingTangent.x * 0.001,
-            y: handle.point.y + handle.outgoingTangent.y * 0.001
-        )
         let projectedPoint = layout.project(localPoint, in: item)
-        let projectedTangentTip = layout.project(localTangentTip, in: item)
+        let projectedTangentTip = Self.projectedTangentTip(
+            point: handle.point,
+            outgoingTangent: handle.outgoingTangent,
+            modelTransform: item.modelTransform,
+            layout: layout
+        )
         let target = ViewportBridgeCurveEndpointHandleTarget(
             sourceID: handle.sourceID,
             featureID: handle.featureID,
@@ -99,6 +102,42 @@ struct ViewportBridgeCurveEndpointAffordanceService: Sendable {
             projectedPoint: projectedPoint,
             projectedTangentTip: projectedTangentTip
         )
+    }
+
+    static func projectedTangentTip(
+        point: Point2D,
+        outgoingTangent: Point2D,
+        modelTransform: Transform3D,
+        layout: ViewportLayout,
+        viewportLength: CGFloat = tangentGuideViewportLength
+    ) -> CGPoint {
+        let geometry = ViewportPlanarHandleDragGeometry(
+            localPoint: Point3D(x: point.x, y: 0.0, z: point.y),
+            modelTransform: modelTransform
+        )
+        if let endpoint = geometry.localAxisEndpoint(
+            direction: Vector3D(
+                x: outgoingTangent.x,
+                y: 0.0,
+                z: outgoingTangent.y
+            ),
+            viewportLength: viewportLength,
+            layout: layout
+        ) {
+            return endpoint
+        }
+
+        let scale = max(layout.scale, CGFloat(1.0e-9))
+        let fallbackLengthMeters = max(
+            Double(viewportLength / scale),
+            RulerConfiguration.minorTickMetersRange.lowerBound
+        )
+        let localTip = Point3D(
+            x: point.x + outgoingTangent.x * fallbackLengthMeters,
+            y: 0.0,
+            z: point.y + outgoingTangent.y * fallbackLengthMeters
+        )
+        return layout.project(modelTransform.viewportTransformedPoint(localTip))
     }
 }
 

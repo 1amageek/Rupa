@@ -11119,18 +11119,15 @@ public struct Viewport: View {
             modelTransform: target.modelTransform,
             layout: layout
         )
-        let tangentTip = Point2D(
-            x: projection.point.x + projection.outgoingTangent.x * 0.001,
-            y: projection.point.y + projection.outgoingTangent.y * 0.001
-        )
         activeBridgeCurveEndpointDrag = ViewportBridgeCurveEndpointDragState(
             target: target,
             startPoint: start,
             endpoint: projection.endpoint,
             parameter: projection.parameter,
             projectedPoint: projectedPoint,
-            projectedTangentTip: projectedBridgeCurveEndpointPoint(
-                tangentTip,
+            projectedTangentTip: ViewportBridgeCurveEndpointAffordanceService.projectedTangentTip(
+                point: projection.point,
+                outgoingTangent: projection.outgoingTangent,
                 modelTransform: target.modelTransform,
                 layout: layout
             )

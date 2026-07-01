@@ -33,6 +33,28 @@ import Testing
     #expect(abs(second.projectedPoint.y - expectedSecond.y) < 1.0e-9)
     #expect(first.projectedTangentTip != first.projectedPoint)
     #expect(second.projectedTangentTip != second.projectedPoint)
+    #expect(tangentGuideLengthIsReadable(first))
+    #expect(tangentGuideLengthIsReadable(second))
+}
+
+@MainActor
+@Test func viewportBridgeCurveEndpointAffordanceServiceKeepsTangentGuideReadableAtSiteScale() throws {
+    let fixture = try bridgeCurveEndpointAffordanceFixture(
+        coordinateScale: 100_000.0,
+        ruler: WorkspaceScalePreset.sitePlanning.rulerConfiguration
+    )
+
+    let candidates = try ViewportBridgeCurveEndpointAffordanceService().candidates(
+        document: fixture.document,
+        scene: fixture.scene,
+        selection: SelectionModel(selectedTargets: [fixture.bridgeSelectionTarget]),
+        layout: fixture.layout
+    )
+    let first = try #require(candidates.first { $0.target.role == .first })
+    let second = try #require(candidates.first { $0.target.role == .second })
+
+    #expect(tangentGuideLengthIsReadable(first))
+    #expect(tangentGuideLengthIsReadable(second))
 }
 
 @MainActor
@@ -95,13 +117,19 @@ private struct BridgeCurveEndpointAffordanceFixture {
     var bridgeSelectionTarget: SelectionTarget
 }
 
-private func bridgeCurveEndpointAffordanceFixture() throws -> BridgeCurveEndpointAffordanceFixture {
+private func bridgeCurveEndpointAffordanceFixture(
+    coordinateScale: Double = 1.0,
+    ruler: RulerConfiguration? = nil
+) throws -> BridgeCurveEndpointAffordanceFixture {
     var document = DesignDocument.empty()
+    if let ruler {
+        try document.setRulerConfiguration(ruler)
+    }
     let featureID = try document.createLineSketch(
         name: "Bridge Endpoint Affordance",
         plane: .xy,
         start: bridgeCurveAffordancePoint(x: 0.0, y: 0.0),
-        end: bridgeCurveAffordancePoint(x: 0.003, y: 0.0)
+        end: bridgeCurveAffordancePoint(x: 0.003 * coordinateScale, y: 0.0)
     )
     guard var feature = document.cadDocument.designGraph.nodes[featureID],
           case var .sketch(sketch) = feature.operation,
@@ -114,8 +142,14 @@ private func bridgeCurveEndpointAffordanceFixture() throws -> BridgeCurveEndpoin
     let secondLineID = SketchEntityID()
     sketch.entities[secondLineID] = .line(
         SketchLine(
-            start: bridgeCurveAffordancePoint(x: 0.006, y: 0.003),
-            end: bridgeCurveAffordancePoint(x: 0.006, y: 0.006)
+            start: bridgeCurveAffordancePoint(
+                x: 0.006 * coordinateScale,
+                y: 0.003 * coordinateScale
+            ),
+            end: bridgeCurveAffordancePoint(
+                x: 0.006 * coordinateScale,
+                y: 0.006 * coordinateScale
+            )
         )
     )
     feature.operation = .sketch(sketch)
@@ -164,4 +198,13 @@ private func bridgeCurveAffordancePoint(x: Double, y: Double) -> SketchPoint {
         x: .length(x, .meter),
         y: .length(y, .meter)
     )
+}
+
+private func tangentGuideLengthIsReadable(
+    _ candidate: ViewportBridgeCurveEndpointAffordanceCandidate
+) -> Bool {
+    abs(
+        candidate.projectedPoint.distance(to: candidate.projectedTangentTip)
+            - ViewportBridgeCurveEndpointAffordanceService.tangentGuideViewportLength
+    ) < 1.0e-6
 }
