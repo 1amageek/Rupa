@@ -191,9 +191,9 @@ public struct Viewport: View {
         showsConstructionPlaneHover: Bool = false,
         allowsSelectionRectangle: Bool = false,
         allowsObjectAffordances: Bool = true,
-        slotWidthMeters: Double = 0.002,
-        sketchVertexOffsetDistanceMeters: Double = 0.001,
-        edgeOffsetDistanceMeters: Double = 0.001,
+        slotWidthMeters: Double? = nil,
+        sketchVertexOffsetDistanceMeters: Double? = nil,
+        edgeOffsetDistanceMeters: Double? = nil,
         onPick: ((ViewportCanvasTarget) -> Void)? = nil,
         onCanvasDrag: ((ViewportModelDrag) -> Void)? = nil,
         onShiftScroll: ((ViewportScrollDirection) -> Bool)? = nil,
@@ -260,9 +260,12 @@ public struct Viewport: View {
         self.showsConstructionPlaneHover = showsConstructionPlaneHover
         self.allowsSelectionRectangle = allowsSelectionRectangle
         self.allowsObjectAffordances = allowsObjectAffordances
-        self.slotWidthMeters = slotWidthMeters
+        let interactionScaleDefaults = ViewportInteractionScaleDefaults(ruler: document.ruler)
+        self.slotWidthMeters = slotWidthMeters ?? interactionScaleDefaults.slotWidthMeters
         self.sketchVertexOffsetDistanceMeters = sketchVertexOffsetDistanceMeters
+            ?? interactionScaleDefaults.operationStepMeters
         self.edgeOffsetDistanceMeters = edgeOffsetDistanceMeters
+            ?? interactionScaleDefaults.operationStepMeters
         self.onPick = onPick
         self.onCanvasDrag = onCanvasDrag
         self.onShiftScroll = onShiftScroll
