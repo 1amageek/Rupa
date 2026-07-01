@@ -54,15 +54,20 @@ import SwiftCAD
 @Test func agentMessageCodecRoundTripsWorkspaceScalePresetCommand() async throws {
     let codec = AgentMessageCodec()
     let sessionID = UUID()
-    let request = AgentRequest.execute(
-        sessionID: sessionID,
-        command: .setWorkspaceScalePreset(.architecture),
-        expectedGeneration: DocumentGeneration(5)
-    )
 
-    let decodedRequest = try codec.decodeRequest(from: try codec.encode(request))
+    for preset in [
+        WorkspaceScalePreset.architecture,
+        WorkspaceScalePreset.regionalPlanning,
+    ] {
+        let request = AgentRequest.execute(
+            sessionID: sessionID,
+            command: .setWorkspaceScalePreset(preset),
+            expectedGeneration: DocumentGeneration(5)
+        )
+        let decodedRequest = try codec.decodeRequest(from: try codec.encode(request))
 
-    #expect(decodedRequest == request)
+        #expect(decodedRequest == request)
+    }
 }
 
 @Test func agentMessageCodecRoundTripsArcSketchCommand() async throws {
