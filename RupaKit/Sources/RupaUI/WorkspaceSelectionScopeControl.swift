@@ -3,9 +3,9 @@ import SwiftUI
 struct WorkspaceSelectionScopeControlLayout: Equatable {
     static let columnCount = 6
     static let spacing: CGFloat = 2.0
-    static let buttonSize = CGSize(width: 25.0, height: 28.0)
+    static let buttonSize = CGSize(width: 25.0, height: 26.0)
     static let iconSize: CGFloat = 12.0
-    static let cornerRadius: CGFloat = 7.0
+    static let cornerRadius: CGFloat = 6.0
 
     static var contentWidth: CGFloat {
         CGFloat(columnCount) * buttonSize.width
@@ -47,8 +47,7 @@ struct WorkspaceSelectionScopeControl: View {
         return Button {
             selection = scope
         } label: {
-            Label(scope.title, systemImage: scope.systemImage)
-                .labelStyle(.iconOnly)
+            Image(systemName: scope.systemImage)
                 .font(.system(size: WorkspaceSelectionScopeControlLayout.iconSize, weight: .semibold))
                 .symbolRenderingMode(.hierarchical)
                 .foregroundStyle(foregroundStyle(isSelected: isSelected, isEnabled: isEnabled))

@@ -24,6 +24,6 @@ import Testing
     #expect(WorkspaceSelectionScopeControlLayout.fitsInUtilityRail)
     #expect(WorkspaceSelectionScopeControlLayout.contentWidth <= WorkspaceUtilityRailLayout.contentWidth)
     #expect(WorkspaceSelectionScopeControlLayout.buttonSize.width >= 25.0)
-    #expect(WorkspaceSelectionScopeControlLayout.buttonSize.height == 28.0)
+    #expect(WorkspaceSelectionScopeControlLayout.buttonSize.height == 26.0)
     #expect(WorkspaceUtilityRailLayout.contentWidth == 162.0)
 }
