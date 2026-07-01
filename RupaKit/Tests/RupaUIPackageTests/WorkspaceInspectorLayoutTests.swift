@@ -128,3 +128,25 @@ import Testing
     #expect(abs((imperialFeet ?? 0.0) - RulerConfiguration.visibleSpanMetersRange.upperBound) < 1.0)
     #expect(RulerScaleControl.meters(fromFieldText: "not-a-number", unit: .meter, for: .visible) == nil)
 }
+
+@Test func rulerScaleControlAcceptsExplicitUnitsIndependentOfDisplayUnit() {
+    let kilometerMeters = RulerScaleControl.meters(
+        fromFieldText: "1 km",
+        unit: .millimeter,
+        for: .visible
+    )
+    let micrometerMeters = RulerScaleControl.meters(
+        fromFieldText: "250 um",
+        unit: .meter,
+        for: .minor
+    )
+    let clampedSiteMeters = RulerScaleControl.meters(
+        fromFieldText: "2,000 km",
+        unit: .millimeter,
+        for: .visible
+    )
+
+    #expect(kilometerMeters == 1_000.0)
+    #expect(micrometerMeters == 0.000_25)
+    #expect(clampedSiteMeters == RulerConfiguration.visibleSpanMetersRange.upperBound)
+}

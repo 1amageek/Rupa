@@ -35,6 +35,26 @@ import Testing
     #expect(abs(resolved.value - 0.025) < 0.000_000_000_001)
 }
 
+@Test func lengthInputParserResolvesExplicitUnitsAndGroupedValues() throws {
+    let parser = LengthInputParser()
+    let siteMeters = try parser.parseMeters(
+        from: "1,000 km",
+        defaultUnit: .millimeter
+    )
+    let detailMeters = try parser.parseMeters(
+        from: "250 μm",
+        defaultUnit: .meter
+    )
+    let expressionMeters = try parser.parseMeters(
+        from: "1km / 2",
+        defaultUnit: .millimeter
+    )
+
+    #expect(abs(siteMeters - 1_000_000.0) < 0.000_000_000_001)
+    #expect(abs(detailMeters - 0.000_25) < 0.000_000_000_001)
+    #expect(abs(expressionMeters - 500.0) < 0.000_000_000_001)
+}
+
 @Test func parameterExpressionParserRejectsUnknownParameterBeforeMutation() throws {
     var caught: EditorError?
 

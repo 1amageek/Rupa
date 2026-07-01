@@ -97,10 +97,16 @@ enum RulerScaleControl {
         unit: LengthDisplayUnit,
         for kind: Kind
     ) -> Double? {
-        guard let value = WorkspaceInspectorNumberText.value(from: text) else {
+        let meters: Double
+        do {
+            meters = try LengthInputParser().parseMeters(
+                from: text,
+                defaultUnit: unit
+            )
+        } catch {
             return nil
         }
-        return meters(fromFieldValue: value, unit: unit, for: kind)
+        return clampedMeters(max(meters, 0.0), for: kind)
     }
 
     static func clampedMeters(
