@@ -14,11 +14,23 @@ struct WorkspaceEditingScaleDefaults: Equatable, Sendable {
         )
         self.operationStepMeters = step
         self.slotWidthMeters = step * 2.0
-        self.sketchRebuildToleranceMeters = max(
-            step * 0.1,
-            RulerConfiguration.minorTickMetersRange.lowerBound
+        self.sketchRebuildToleranceMeters = Self.sketchRebuildToleranceMeters(
+            ruler: normalized,
+            operationStepMeters: step
         )
         self.sketchRebuildToleranceRange = RulerConfiguration.minorTickMetersRange.lowerBound
             ... max(step, 0.01)
+    }
+
+    private static func sketchRebuildToleranceMeters(
+        ruler: RulerConfiguration,
+        operationStepMeters: Double
+    ) -> Double {
+        let gridFraction = operationStepMeters * 0.1
+        let visiblePrecisionBudget = ruler.visibleSpanMeters * 1.0e-6
+        return max(
+            min(gridFraction, visiblePrecisionBudget),
+            RulerConfiguration.minorTickMetersRange.lowerBound
+        )
     }
 }
