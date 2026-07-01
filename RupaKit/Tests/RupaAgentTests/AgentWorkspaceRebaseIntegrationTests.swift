@@ -55,6 +55,27 @@ func agentCanRebaseFarOriginWorkspaceThroughAutomationCommand() throws {
     #expect(measurement.workspacePrecision == nil)
 }
 
+@Test(.timeLimit(.minutes(1)))
+func agentMeasureReportsWorkspaceScaleRecommendationForLargeModel() throws {
+    let server = AgentCommandController()
+    let sessionID = UUID()
+    let session = EditorSession(document: try agentLargeSiteDocument())
+    server.register(session: session, id: sessionID)
+
+    let response = server.handle(.measure(
+        sessionID: sessionID,
+        expectedGeneration: DocumentGeneration(0)
+    ))
+
+    guard case .measurement(let measurement) = response else {
+        Issue.record("Expected measurement response.")
+        return
+    }
+    #expect(measurement.workspaceScaleRecommendation?.reason == .modelExceedsComfortableSpan)
+    #expect(measurement.workspaceScaleRecommendation?.recommendedPreset == .sitePlanning)
+    #expect(measurement.workspaceScaleRecommendation?.recommendedScale.displayUnit == .kilometer)
+}
+
 private func agentFarFromOriginRectangleDocument() throws -> DesignDocument {
     var document = DesignDocument.empty(named: "Agent Remote Site")
     try document.setRulerConfiguration(WorkspaceScalePreset.sitePlanning.rulerConfiguration)
@@ -74,6 +95,29 @@ private func agentFarFromOriginRectangleDocument() throws -> DesignDocument {
         name: "Remote Solid",
         profile: ProfileReference(featureID: profileID),
         distance: .length(10.0, .meter),
+        direction: .normal
+    )
+    return document
+}
+
+private func agentLargeSiteDocument() throws -> DesignDocument {
+    var document = DesignDocument.empty(named: "Agent Site")
+    let profileID = try document.createRectangleSketchFromCorners(
+        name: "Site Footprint",
+        plane: .xy,
+        firstCorner: SketchPoint(
+            x: .length(0.0, .meter),
+            y: .length(0.0, .meter)
+        ),
+        oppositeCorner: SketchPoint(
+            x: .length(25_000.0, .meter),
+            y: .length(10_000.0, .meter)
+        )
+    )
+    _ = try document.extrudeProfile(
+        name: "Site Mass",
+        profile: ProfileReference(featureID: profileID),
+        distance: .length(100.0, .meter),
         direction: .normal
     )
     return document

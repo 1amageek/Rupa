@@ -13,6 +13,7 @@ public struct MeasurementResult: Codable, Equatable, Sendable {
     public var sheets: [Sheet]
     public var diagnostics: [EditorDiagnostic]
     public var workspacePrecision: WorkspacePrecisionReport?
+    public var workspaceScaleRecommendation: WorkspaceScaleRecommendation?
 
     public init(
         scope: Scope = .document,
@@ -24,7 +25,8 @@ public struct MeasurementResult: Codable, Equatable, Sendable {
         solids: [Solid] = [],
         sheets: [Sheet] = [],
         diagnostics: [EditorDiagnostic] = [],
-        workspacePrecision: WorkspacePrecisionReport? = nil
+        workspacePrecision: WorkspacePrecisionReport? = nil,
+        workspaceScaleRecommendation: WorkspaceScaleRecommendation? = nil
     ) {
         self.scope = scope
         self.displayUnit = displayUnit
@@ -36,6 +38,7 @@ public struct MeasurementResult: Codable, Equatable, Sendable {
         self.sheets = sheets
         self.diagnostics = diagnostics
         self.workspacePrecision = workspacePrecision
+        self.workspaceScaleRecommendation = workspaceScaleRecommendation
     }
 
     public var message: String {
@@ -128,6 +131,42 @@ public extension MeasurementResult {
 
         public var sizeZ: Double {
             maxZ - minZ
+        }
+
+        public var center: Point3D {
+            Point3D(
+                x: (minX + maxX) * 0.5,
+                y: (minY + maxY) * 0.5,
+                z: (minZ + maxZ) * 0.5
+            )
+        }
+
+        public var maximumAbsoluteCoordinate: Double {
+            [
+                minX,
+                minY,
+                minZ,
+                maxX,
+                maxY,
+                maxZ,
+            ].map(abs).max() ?? 0.0
+        }
+
+        public var maximumSpan: Double {
+            max(abs(sizeX), abs(sizeY), abs(sizeZ))
+        }
+
+        public var maximumDistanceFromOrigin: Double {
+            [
+                hypot(hypot(minX, minY), minZ),
+                hypot(hypot(minX, minY), maxZ),
+                hypot(hypot(minX, maxY), minZ),
+                hypot(hypot(minX, maxY), maxZ),
+                hypot(hypot(maxX, minY), minZ),
+                hypot(hypot(maxX, minY), maxZ),
+                hypot(hypot(maxX, maxY), minZ),
+                hypot(hypot(maxX, maxY), maxZ),
+            ].max() ?? 0.0
         }
 
         public func formattedSize(in unit: LengthDisplayUnit) -> String {

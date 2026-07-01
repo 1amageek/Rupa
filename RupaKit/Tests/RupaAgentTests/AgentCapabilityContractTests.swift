@@ -300,6 +300,7 @@ import SwiftCAD
     let measureDocument = try #require(descriptors.first { $0.name == "measureDocument" })
     #expect(measureDocument.discovery.contains(.measurement))
     #expect(measureDocument.summary.contains("workspace precision"))
+    #expect(measureDocument.summary.contains("scale-preset"))
     #expect(objectDimensionExpression.access == .agentRequest)
     #expect(objectDimensionExpression.discovery.contains(.objectDimensionSummary))
     #expect(objectDimensionExpression.targets == [.body, .face, .edge])

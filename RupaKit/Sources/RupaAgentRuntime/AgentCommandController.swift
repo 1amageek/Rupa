@@ -1677,7 +1677,7 @@ public final class AgentCommandController: AgentClientProtocol {
         capability(
             "measureDocument",
             category: .read,
-            summary: "Measure selected or whole-document source-derived geometry and report workspace precision/rebase guidance without mutation.",
+            summary: "Measure selected or whole-document source-derived geometry and report workspace precision/rebase and scale-preset guidance without mutation.",
             access: .agentRequest,
             mutatesDocument: false,
             discovery: [.measurement, .selectionState],

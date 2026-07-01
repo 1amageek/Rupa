@@ -869,6 +869,14 @@ public struct MeasurementService {
             for: workspacePrecision,
             displayUnit: document.displayUnit
         )
+        let workspaceScaleRecommendationService = WorkspaceScaleRecommendationService()
+        let workspaceScaleRecommendation = workspaceScaleRecommendationService.recommendation(
+            for: bounds.bounds,
+            currentRuler: document.ruler
+        )
+        diagnostics += workspaceScaleRecommendationService.diagnostics(
+            for: workspaceScaleRecommendation
+        )
 
         return MeasurementResult(
             scope: scope,
@@ -880,7 +888,8 @@ public struct MeasurementService {
             solids: solids,
             sheets: sheets,
             diagnostics: diagnostics,
-            workspacePrecision: workspacePrecision
+            workspacePrecision: workspacePrecision,
+            workspaceScaleRecommendation: workspaceScaleRecommendation
         )
     }
 

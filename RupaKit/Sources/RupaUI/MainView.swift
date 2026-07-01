@@ -4426,8 +4426,39 @@ public struct MainView: View {
             defaultMaterialTitle: defaultMaterialTitle,
             validationRuleCount: session.document.productMetadata.validationRules.count,
             exportPresetCount: session.document.productMetadata.exportPresets.count,
-            ruler: session.document.ruler
+            ruler: session.document.ruler,
+            scaleRecommendation: workspaceScaleRecommendationInspectorState
         )
+    }
+
+    private var workspaceScaleRecommendationInspectorState: WorkspaceDocumentScaleRecommendationState? {
+        guard let evaluatedDocument = session.currentEvaluation?.evaluatedDocument,
+              let recommendation = WorkspaceScaleRecommendationService().recommendation(
+                for: evaluatedDocument,
+                currentRuler: session.document.ruler
+              ) else {
+            return nil
+        }
+        return WorkspaceDocumentScaleRecommendationState(
+            reasonTitle: workspaceScaleRecommendationReasonTitle(recommendation.reason),
+            presetTitle: recommendation.recommendedPreset.title,
+            visibleSpanTitle: LengthDisplayText.lengthString(
+                fromMeters: recommendation.recommendedScale.visibleSpanMeters,
+                unit: recommendation.recommendedScale.displayUnit
+            ),
+            preset: recommendation.recommendedPreset
+        )
+    }
+
+    private func workspaceScaleRecommendationReasonTitle(
+        _ reason: WorkspaceScaleRecommendation.Reason
+    ) -> String {
+        switch reason {
+        case .modelExceedsComfortableSpan:
+            "Model exceeds ruler"
+        case .modelTooSmallForWorkspace:
+            "Workspace too broad"
+        }
     }
 
     private func workspaceObjectOverviewInspectorState(

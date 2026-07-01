@@ -7709,6 +7709,45 @@ func cliExecutableReturnsDataExitForLiveGenerationMismatch() async throws {
 }
 
 @MainActor
+@Test func cliServiceFileMeasureReportsWorkspaceScaleRecommendationForLargeModel() async throws {
+    let temporaryDirectory = try makeTemporaryDirectory()
+    defer {
+        removeTemporaryDirectory(temporaryDirectory)
+    }
+
+    let documentURL = temporaryDirectory.appendingPathComponent("measure-site-scale.swcad")
+    var document = DesignDocument.empty(named: "Measured Site")
+    let profileID = try document.createRectangleSketchFromCorners(
+        name: "Site Footprint",
+        plane: .xy,
+        firstCorner: SketchPoint(
+            x: .length(0.0, .meter),
+            y: .length(0.0, .meter)
+        ),
+        oppositeCorner: SketchPoint(
+            x: .length(25_000.0, .meter),
+            y: .length(10_000.0, .meter)
+        )
+    )
+    _ = try document.extrudeProfile(
+        name: "Site Mass",
+        profile: ProfileReference(featureID: profileID),
+        distance: .length(100.0, .meter),
+        direction: .normal
+    )
+    try DocumentFileService().save(document, to: documentURL)
+
+    let response = try CLIService().measureDocument(
+        target: CLIDocumentTarget(fileURL: documentURL),
+        mode: .file
+    )
+
+    #expect(response.measurement.workspaceScaleRecommendation?.recommendedPreset == .sitePlanning)
+    #expect(response.measurement.workspaceScaleRecommendation?.recommendedScale.displayUnit == .kilometer)
+    #expect(response.measurement.workspaceScaleRecommendation?.recommendedScale.visibleSpanDisplayValue == 100.0)
+}
+
+@MainActor
 @Test func cliServiceAutoMeasureUsesLiveSessionForOpenFile() async throws {
     let temporaryDirectory = try makeTemporaryDirectory()
     defer {

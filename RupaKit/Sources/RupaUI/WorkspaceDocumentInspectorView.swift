@@ -21,6 +21,14 @@ struct WorkspaceDocumentInspectorState: Equatable, Sendable {
     var validationRuleCount: Int
     var exportPresetCount: Int
     var ruler: RulerConfiguration
+    var scaleRecommendation: WorkspaceDocumentScaleRecommendationState?
+}
+
+struct WorkspaceDocumentScaleRecommendationState: Equatable, Sendable {
+    var reasonTitle: String
+    var presetTitle: String
+    var visibleSpanTitle: String
+    var preset: WorkspaceScalePreset
 }
 
 struct WorkspaceDocumentInspectorView: View {
@@ -63,6 +71,9 @@ struct WorkspaceDocumentInspectorView: View {
         }
 
         inspectorSection("Units") {
+            if let scaleRecommendation = state.scaleRecommendation {
+                scaleRecommendationControl(scaleRecommendation)
+            }
             scalePresetMenu
             displayUnitPicker
         }
@@ -134,6 +145,35 @@ struct WorkspaceDocumentInspectorView: View {
             .controlSize(.small)
             .frame(width: inspectorControlWidth)
         }
+    }
+
+    private func scaleRecommendationControl(
+        _ recommendation: WorkspaceDocumentScaleRecommendationState
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            inspectorControlRow("Recommended") {
+                Button {
+                    setWorkspaceScalePreset(recommendation.preset)
+                } label: {
+                    HStack(spacing: 6) {
+                        Text(recommendation.presetTitle)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                        Spacer(minLength: 4)
+                        Image(systemName: "arrow.right.circle")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                    .frame(width: inspectorControlWidth + inspectorUnitWidth + 6)
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .accessibilityIdentifier("WorkspaceScaleRecommendation.apply")
+            }
+            workspaceInspectorValueRow("Reason", recommendation.reasonTitle)
+            workspaceInspectorValueRow("Visible Span", recommendation.visibleSpanTitle)
+        }
+        .padding(.vertical, 2)
     }
 
     private func rulerLengthControl(
