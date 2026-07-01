@@ -2872,6 +2872,21 @@ import Testing
     #expect(grid.scaleLabels.allSatisfy { $0.text.hasSuffix(document.displayUnit.symbol) })
 }
 
+@Test func viewportProjectedGridFormatsLargeScaleLabelsWithGrouping() {
+    #expect(
+        ViewportProjectedGrid.formattedScaleLabel(
+            valueMeters: 1_000.0,
+            unit: .meter
+        ) == "1,000m"
+    )
+    #expect(
+        ViewportProjectedGrid.formattedScaleLabel(
+            valueMeters: 30_480.0,
+            unit: .foot
+        ) == "100,000ft"
+    )
+}
+
 @Test func viewportCameraZoomPolicyExpandsForSitePlanningScale() throws {
     var document = DesignDocument.empty()
     try document.setRulerConfiguration(WorkspaceScalePreset.sitePlanning.rulerConfiguration)

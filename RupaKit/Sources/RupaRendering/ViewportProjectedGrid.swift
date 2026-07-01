@@ -283,7 +283,7 @@ public struct ViewportProjectedGrid: Equatable {
         )
     }
 
-    private static func formattedScaleLabel(
+    static func formattedScaleLabel(
         valueMeters: Double,
         unit: LengthDisplayUnit
     ) -> String {
@@ -297,7 +297,9 @@ public struct ViewportProjectedGrid: Equatable {
             maxFractionDigits = 3
         }
         let formatted = value.formatted(
-            .number.precision(.fractionLength(0...maxFractionDigits))
+            .number
+                .grouping(.automatic)
+                .precision(.fractionLength(0...maxFractionDigits))
         )
         return "\(formatted)\(unit.symbol)"
     }
