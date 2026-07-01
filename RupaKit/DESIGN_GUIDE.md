@@ -45,6 +45,7 @@ flowchart TD
 | `viewportContextPanel` | 8 pt bottom and horizontal overlay inset | 8 pt horizontal, 6 pt vertical |
 | `workspaceValuePill` | Inline in compact panels | 6 pt horizontal, 4 pt vertical |
 | `workspaceStatusChip` | Inline in compact panels | 6 pt horizontal, 4 pt vertical |
+| `WorkspaceSelectionScopeControl` | Utility rail `Select` section | One fixed-width icon rail; full labels belong in tooltips and accessibility metadata |
 
 ## Affordance Rules
 
@@ -54,6 +55,7 @@ flowchart TD
 | Snapping | Snap and construction-plane indicators should summarize state compactly; detailed controls belong in the utility rail or inspector. |
 | Dimensions | Dimension labels and handles are part of the canvas, not chrome. Keep surrounding chrome away from dimension-heavy regions. |
 | Tool controls | Use icons for stable tools, short labels only where state would otherwise be ambiguous, and tooltips for explanation. |
+| Selection scopes | Keep scope buttons icon-only inside canvas overlays; text labels may truncate and should be exposed through tooltip/accessibility instead. |
 | Inspector content | Detailed property editing belongs in the inspector, not floating over the canvas. |
 
 ## Review Checklist

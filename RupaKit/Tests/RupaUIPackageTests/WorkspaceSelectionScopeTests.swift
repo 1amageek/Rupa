@@ -19,8 +19,9 @@ import Testing
 }
 
 @Test func workspaceSelectionScopeControlUsesCompactGridWithinUtilityRail() {
-    #expect(WorkspaceSelectionScopeControlLayout.columnCount == 3)
-    #expect(WorkspaceSelectionScopeControlLayout.rowCount(itemCount: WorkspaceSelectionScope.allCases.count) == 2)
+    #expect(WorkspaceSelectionScopeControlLayout.columnCount == 6)
+    #expect(WorkspaceSelectionScopeControlLayout.rowCount(itemCount: WorkspaceSelectionScope.allCases.count) == 1)
     #expect(WorkspaceSelectionScopeControlLayout.contentWidth <= 162.0)
-    #expect(WorkspaceSelectionScopeControlLayout.buttonSize.width >= 48.0)
+    #expect(WorkspaceSelectionScopeControlLayout.buttonSize.width >= 25.0)
+    #expect(WorkspaceSelectionScopeControlLayout.buttonSize.height >= 28.0)
 }

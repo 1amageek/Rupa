@@ -1,9 +1,9 @@
 import SwiftUI
 
 struct WorkspaceSelectionScopeControlLayout: Equatable {
-    static let columnCount = 3
-    static let spacing: CGFloat = 6.0
-    static let buttonSize = CGSize(width: 48.0, height: 42.0)
+    static let columnCount = 6
+    static let spacing: CGFloat = 2.0
+    static let buttonSize = CGSize(width: 25.0, height: 28.0)
 
     static var contentWidth: CGFloat {
         CGFloat(columnCount) * buttonSize.width
@@ -50,28 +50,23 @@ struct WorkspaceSelectionScopeControl: View {
         return Button {
             selection = scope
         } label: {
-            VStack(spacing: 4) {
-                Image(systemName: scope.systemImage)
-                    .font(.system(size: 13, weight: .semibold))
-                Text(scope.shortTitle)
-                    .font(.caption2.weight(.medium))
-                    .lineLimit(1)
-                    .allowsTightening(true)
-                    .minimumScaleFactor(0.75)
-            }
-            .foregroundStyle(foregroundStyle(isSelected: isSelected, isEnabled: isEnabled))
-            .frame(
-                width: WorkspaceSelectionScopeControlLayout.buttonSize.width,
-                height: WorkspaceSelectionScopeControlLayout.buttonSize.height
-            )
-            .background {
-                RoundedRectangle(cornerRadius: 7, style: .continuous)
-                    .fill(fillStyle(isSelected: isSelected, isEnabled: isEnabled))
-            }
-            .overlay {
-                RoundedRectangle(cornerRadius: 7, style: .continuous)
-                    .strokeBorder(borderStyle(isSelected: isSelected, isEnabled: isEnabled), lineWidth: 1)
-            }
+            Image(systemName: scope.systemImage)
+                .font(.system(size: 12, weight: .semibold))
+                .symbolRenderingMode(.hierarchical)
+                .foregroundStyle(foregroundStyle(isSelected: isSelected, isEnabled: isEnabled))
+                .frame(
+                    width: WorkspaceSelectionScopeControlLayout.buttonSize.width,
+                    height: WorkspaceSelectionScopeControlLayout.buttonSize.height
+                )
+                .background {
+                    RoundedRectangle(cornerRadius: 7, style: .continuous)
+                        .fill(fillStyle(isSelected: isSelected, isEnabled: isEnabled))
+                }
+                .overlay {
+                    RoundedRectangle(cornerRadius: 7, style: .continuous)
+                        .strokeBorder(borderStyle(isSelected: isSelected, isEnabled: isEnabled), lineWidth: 1)
+                }
+                .contentShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
         }
         .buttonStyle(.plain)
         .disabled(!isEnabled)
