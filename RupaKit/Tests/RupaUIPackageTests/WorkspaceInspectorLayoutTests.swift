@@ -73,6 +73,42 @@ import Testing
     #expect(workspaceLengthMeters(fromFieldText: "not-a-length", defaultUnit: .meter) == nil)
 }
 
+@Test func workspaceLengthSliderScaleKeepsNormalRangesLinear() {
+    let scale = WorkspaceLengthSliderScale(metersRange: 0.0 ... 10.0)
+
+    #expect(scale.sliderValue(forMeters: 5.0) == 0.5)
+    #expect(scale.meters(fromSliderValue: 0.25) == 2.5)
+}
+
+@Test func workspaceLengthSliderScaleUsesLogForLargePositiveRanges() {
+    let scale = WorkspaceLengthSliderScale(metersRange: 0.0 ... 1_000_000.0)
+    let smallValue = scale.sliderValue(forMeters: 1.0)
+    let mediumValue = scale.sliderValue(forMeters: 1_000.0)
+    let roundTrippedMeters = scale.meters(fromSliderValue: mediumValue)
+
+    #expect(smallValue > 0.0)
+    #expect(smallValue < mediumValue)
+    #expect(mediumValue < 1.0)
+    #expect(abs(roundTrippedMeters - 1_000.0) < 0.000_001)
+    #expect(scale.meters(fromSliderValue: 0.0) == 0.0)
+    #expect(abs(scale.meters(fromSliderValue: 1.0) - 1_000_000.0) < 0.001)
+}
+
+@Test func workspaceLengthSliderScaleUsesSymmetricLogForLargePositionRanges() {
+    let scale = WorkspaceLengthSliderScale(metersRange: -1_000_000.0 ... 1_000_000.0)
+    let positiveValue = scale.sliderValue(forMeters: 1_000.0)
+    let negativeValue = scale.sliderValue(forMeters: -1_000.0)
+    let positiveMeters = scale.meters(fromSliderValue: positiveValue)
+    let negativeMeters = scale.meters(fromSliderValue: negativeValue)
+
+    #expect(scale.sliderValue(forMeters: 0.0) == 0.5)
+    #expect(scale.meters(fromSliderValue: 0.5) == 0.0)
+    #expect(positiveValue > 0.5)
+    #expect(negativeValue < 0.5)
+    #expect(abs(positiveMeters - 1_000.0) < 0.000_001)
+    #expect(abs(negativeMeters + 1_000.0) < 0.000_001)
+}
+
 @Test func workspaceInspectorLayoutKeepsDensePropertyPanelRhythm() {
     #expect(WorkspaceInspectorLayout.panelHorizontalInset == 12)
     #expect(WorkspaceInspectorLayout.sectionSpacing == 12)

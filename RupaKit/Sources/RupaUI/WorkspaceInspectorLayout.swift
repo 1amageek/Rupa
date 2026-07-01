@@ -33,6 +33,132 @@ struct WorkspaceLengthFieldPresentation: Equatable {
     var text: String
 }
 
+struct WorkspaceLengthSliderScale: Equatable {
+    private static let logarithmicRatioThreshold = 1_000.0
+    private static let logarithmicSpanThresholdMeters = 1_000.0
+    private static let minimumPositiveMeters = 1.0e-9
+
+    var metersRange: ClosedRange<Double>
+
+    init(metersRange: ClosedRange<Double>) {
+        let lower = metersRange.lowerBound.isFinite ? metersRange.lowerBound : 0.0
+        let upper = metersRange.upperBound.isFinite ? metersRange.upperBound : 1.0
+        if lower <= upper {
+            self.metersRange = lower ... upper
+        } else {
+            self.metersRange = upper ... lower
+        }
+    }
+
+    func sliderValue(forMeters meters: Double) -> Double {
+        let meters = clampedMeters(meters)
+        if usesSymmetricLogarithmicScale {
+            return symmetricSliderValue(forMeters: meters)
+        }
+        if usesPositiveLogarithmicScale {
+            return positiveLogarithmicSliderValue(forMeters: meters)
+        }
+        return linearSliderValue(forMeters: meters)
+    }
+
+    func meters(fromSliderValue value: Double) -> Double {
+        let value = min(max(value, 0.0), 1.0)
+        if usesSymmetricLogarithmicScale {
+            return clampedMeters(symmetricMeters(fromSliderValue: value))
+        }
+        if usesPositiveLogarithmicScale {
+            return clampedMeters(positiveLogarithmicMeters(fromSliderValue: value))
+        }
+        return clampedMeters(linearMeters(fromSliderValue: value))
+    }
+
+    private var span: Double {
+        metersRange.upperBound - metersRange.lowerBound
+    }
+
+    private var usesPositiveLogarithmicScale: Bool {
+        guard metersRange.lowerBound >= 0.0,
+              metersRange.upperBound >= Self.logarithmicSpanThresholdMeters else {
+            return false
+        }
+        let lower = max(metersRange.lowerBound, Self.minimumPositiveMeters)
+        return metersRange.upperBound / lower >= Self.logarithmicRatioThreshold
+    }
+
+    private var usesSymmetricLogarithmicScale: Bool {
+        guard metersRange.lowerBound < 0.0,
+              metersRange.upperBound > 0.0 else {
+            return false
+        }
+        let maxMagnitude = max(abs(metersRange.lowerBound), abs(metersRange.upperBound))
+        return maxMagnitude >= Self.logarithmicSpanThresholdMeters
+    }
+
+    private func clampedMeters(_ meters: Double) -> Double {
+        guard meters.isFinite else {
+            return metersRange.lowerBound
+        }
+        return min(max(meters, metersRange.lowerBound), metersRange.upperBound)
+    }
+
+    private func linearSliderValue(forMeters meters: Double) -> Double {
+        guard span > 0.0 else {
+            return 0.0
+        }
+        return min(max((meters - metersRange.lowerBound) / span, 0.0), 1.0)
+    }
+
+    private func linearMeters(fromSliderValue value: Double) -> Double {
+        metersRange.lowerBound + span * value
+    }
+
+    private func positiveLogarithmicSliderValue(forMeters meters: Double) -> Double {
+        if meters <= 0.0, metersRange.lowerBound <= 0.0 {
+            return 0.0
+        }
+        let lower = max(metersRange.lowerBound, Self.minimumPositiveMeters)
+        let upper = max(metersRange.upperBound, lower)
+        let ratio = log(upper / lower)
+        guard ratio > 0.0 else {
+            return 0.0
+        }
+        let value = max(meters, lower)
+        return min(max(log(value / lower) / ratio, 0.0), 1.0)
+    }
+
+    private func positiveLogarithmicMeters(fromSliderValue value: Double) -> Double {
+        if value <= 0.0, metersRange.lowerBound <= 0.0 {
+            return metersRange.lowerBound
+        }
+        let lower = max(metersRange.lowerBound, Self.minimumPositiveMeters)
+        let upper = max(metersRange.upperBound, lower)
+        return lower * pow(upper / lower, value)
+    }
+
+    private func symmetricSliderValue(forMeters meters: Double) -> Double {
+        guard meters != 0.0 else {
+            return 0.5
+        }
+        let maxMagnitude = max(abs(metersRange.lowerBound), abs(metersRange.upperBound), Self.minimumPositiveMeters)
+        let magnitude = max(abs(meters), Self.minimumPositiveMeters)
+        let progress = min(max(log(magnitude / Self.minimumPositiveMeters) / log(maxMagnitude / Self.minimumPositiveMeters), 0.0), 1.0)
+        if meters > 0.0 {
+            return 0.5 + progress * 0.5
+        }
+        return 0.5 - progress * 0.5
+    }
+
+    private func symmetricMeters(fromSliderValue value: Double) -> Double {
+        guard value != 0.5 else {
+            return 0.0
+        }
+        let maxMagnitude = max(abs(metersRange.lowerBound), abs(metersRange.upperBound), Self.minimumPositiveMeters)
+        let progress = abs(value - 0.5) * 2.0
+        let magnitude = Self.minimumPositiveMeters * pow(maxMagnitude / Self.minimumPositiveMeters, progress)
+        return value > 0.5 ? magnitude : -magnitude
+    }
+}
+
 func workspaceLengthFieldPresentation(
     fromMeters meters: Double,
     preferredUnit: LengthDisplayUnit
@@ -260,11 +386,19 @@ func workspaceLengthControl(
     )
     let sliderBinding = Binding<Double>(
         get: {
-            let value = displayUnit.value(fromMeters: commonMeters ?? 0.0)
-            return min(max(value, sliderRange.lowerBound), sliderRange.upperBound)
+            let displayValue = sliderRange.lowerBound ... sliderRange.upperBound
+            let metersRange = displayUnit.meters(from: displayValue.lowerBound)
+                ... displayUnit.meters(from: displayValue.upperBound)
+            return WorkspaceLengthSliderScale(metersRange: metersRange)
+                .sliderValue(forMeters: commonMeters ?? 0.0)
         },
         set: { value in
-            onChange(displayUnit.meters(from: value))
+            let displayValue = sliderRange.lowerBound ... sliderRange.upperBound
+            let metersRange = displayUnit.meters(from: displayValue.lowerBound)
+                ... displayUnit.meters(from: displayValue.upperBound)
+            let meters = WorkspaceLengthSliderScale(metersRange: metersRange)
+                .meters(fromSliderValue: value)
+            onChange(meters)
         }
     )
     let unit = presentation?.unit.symbol ?? displayUnit.symbol
@@ -280,7 +414,7 @@ func workspaceLengthControl(
                     .frame(width: inspectorUnitWidth, alignment: .leading)
             }
         }
-        Slider(value: sliderBinding, in: sliderRange)
+        Slider(value: sliderBinding, in: 0.0 ... 1.0)
             .padding(.leading, inspectorSliderLeadingPadding)
             .padding(.trailing, WorkspaceInspectorLayout.rowHorizontalPadding)
     }
