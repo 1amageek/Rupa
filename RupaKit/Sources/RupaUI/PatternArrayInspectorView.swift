@@ -5,7 +5,7 @@ import SwiftUI
 struct PatternArrayInspectorView: View {
     let state: PatternArrayInspectorState
     let session: EditorSession
-    let positionSliderRange: ClosedRange<Double>
+    let positionSliderMetersRange: ClosedRange<Double>
     let isCurvePathPickActive: Bool
     let onStartCurvePathPick: (PatternArraySourceID) -> Void
     let onCancelCurvePathPick: () -> Void
@@ -131,7 +131,7 @@ struct PatternArrayInspectorView: View {
             lengthControl(
                 "\(title) \(axis.distanceModeTitle)",
                 meters: distanceMeters,
-                sliderRange: distanceSliderRange(for: distanceMeters)
+                sliderMetersRange: distanceSliderMetersRange(for: distanceMeters)
             ) { meters in
                 setDistance(meters)
             }
@@ -299,7 +299,7 @@ struct PatternArrayInspectorView: View {
                 lengthControl(
                     "Curve Extent",
                     meters: extentMeters,
-                    sliderRange: distanceSliderRange(for: extentMeters)
+                    sliderMetersRange: distanceSliderMetersRange(for: extentMeters)
                 ) { meters in
                     setCurveExtentDistance(meters)
                 }
@@ -635,15 +635,13 @@ struct PatternArrayInspectorView: View {
         values: [Double],
         onChange: @escaping (Double) -> Void
     ) -> some View {
-        let unit = session.document.displayUnit
-        return numericControl(
+        workspaceLengthControl(
             title,
-            values: values.map { unit.value(fromMeters: $0) },
-            sliderRange: positionSliderRange
-        ) { value in
-            onChange(unit.meters(from: value))
-        } unitLabel: {
-            unit.symbol
+            values: values,
+            displayUnit: session.document.displayUnit,
+            sliderMetersRange: positionSliderMetersRange
+        ) { meters in
+            onChange(meters)
         }
     }
 
@@ -701,45 +699,25 @@ struct PatternArrayInspectorView: View {
     private func lengthControl(
         _ title: String,
         meters: Double,
-        sliderRange: ClosedRange<Double>,
+        sliderMetersRange: ClosedRange<Double>,
         onChange: @escaping (Double) -> Void
     ) -> some View {
-        let unit = session.document.displayUnit
-        let value = unit.value(fromMeters: meters)
-        let fieldBinding = Binding<Double>(
-            get: { value },
-            set: { newValue in
-                onChange(unit.meters(from: max(newValue, 0.0)))
-            }
-        )
-        let sliderBinding = Binding<Double>(
-            get: { min(max(value, sliderRange.lowerBound), sliderRange.upperBound) },
-            set: { newValue in
-                onChange(unit.meters(from: newValue))
-            }
-        )
-
-        return VStack(alignment: .leading, spacing: 5) {
-            inspectorControlRow(title) {
-                HStack(spacing: 6) {
-                    TextField(title, value: fieldBinding, formatter: numberFormatter)
-                        .multilineTextAlignment(.trailing)
-                        .frame(width: inspectorControlWidth)
-                    Text(unit.symbol)
-                        .foregroundStyle(.secondary)
-                        .frame(width: inspectorUnitWidth, alignment: .leading)
-                }
-            }
-            Slider(value: sliderBinding, in: sliderRange)
-                .padding(.leading, inspectorSliderLeadingPadding)
+        workspaceLengthControl(
+            title,
+            values: [meters],
+            displayUnit: session.document.displayUnit,
+            sliderMetersRange: sliderMetersRange
+        ) { nextMeters in
+            onChange(max(nextMeters, 0.0))
         }
-        .padding(.vertical, 1)
     }
 
-    private func distanceSliderRange(for meters: Double) -> ClosedRange<Double> {
-        let unit = session.document.displayUnit
-        let currentValue = max(unit.value(fromMeters: meters), 0.001)
-        return 0.0 ... max(currentValue * 2.0, 1.0)
+    private func distanceSliderMetersRange(for meters: Double) -> ClosedRange<Double> {
+        workspaceLengthSliderMetersRange(
+            for: meters,
+            ruler: session.document.ruler,
+            expansionMultiplier: 2.0
+        )
     }
 
     private func commonValue(_ values: [Double]) -> Double? {
@@ -751,14 +729,6 @@ struct PatternArrayInspectorView: View {
             return nil
         }
         return first
-    }
-
-    private var numberFormatter: NumberFormatter {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .decimal
-        formatter.minimumFractionDigits = 0
-        formatter.maximumFractionDigits = 6
-        return formatter
     }
 
     private func vectorSummary(_ vector: Vector3D) -> String {

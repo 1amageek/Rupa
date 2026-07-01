@@ -9,7 +9,7 @@ struct WorkspaceSplineControlPointControlsView: View {
     @Binding var slideDistanceMeters: Double
     @Binding var slideCount: Int
     var moveStepMeters: Double
-    var slideDistanceSliderRange: ClosedRange<Double>
+    var slideDistanceSliderMetersRange: ClosedRange<Double>
     var onAddSmoothControlPoint: (InspectorSketchEntity, Int) -> Void
     var onMoveControlPoint: (SelectionTarget, Int, Double, Double) -> Void
     var onSlideControlPoints: (SelectionTarget, [Int], SplineControlPointSlideDirection) -> Void
@@ -119,14 +119,13 @@ struct WorkspaceSplineControlPointControlsView: View {
     }
 
     private var slideDistanceControl: some View {
-        numericControl(
+        workspaceLengthControl(
             "Slide CV",
             values: [slideDistanceMeters],
-            sliderRange: slideDistanceSliderRange
-        ) { distance in
-            slideDistanceMeters = max(distance, 1.0e-9)
-        } unitLabel: {
-            "m"
+            displayUnit: displayUnit,
+            sliderMetersRange: slideDistanceSliderMetersRange
+        ) { meters in
+            slideDistanceMeters = max(meters, 1.0e-9)
         }
     }
 

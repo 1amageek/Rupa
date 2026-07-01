@@ -9,7 +9,7 @@ struct WorkspaceTopologyEditInspectorView: View {
     @Binding var edgeOffsetGapFill: OffsetCurveGapFill
     @Binding var regionOffsetDistanceMeters: Double
     @Binding var regionOffsetGapFill: OffsetCurveGapFill
-    var offsetSliderRange: ClosedRange<Double>
+    var offsetSliderMetersRange: ClosedRange<Double>
     var onOffsetFace: (SelectionTarget, Double) -> Void
     var onDeleteFaces: ([SelectionTarget]) -> Void
     var onDraftFace: (SelectionTarget, SelectionTarget, Double) -> Void
@@ -198,7 +198,7 @@ struct WorkspaceTopologyEditInspectorView: View {
             "Offset",
             values: [edgeOffsetDistanceMeters],
             displayUnit: displayUnit,
-            sliderRange: offsetSliderRange
+            sliderMetersRange: offsetSliderMetersRange
         ) { meters in
             edgeOffsetDistanceMeters = max(meters, 1.0e-9)
         }
@@ -300,7 +300,7 @@ struct WorkspaceTopologyEditInspectorView: View {
             "Distance",
             values: [regionOffsetDistanceMeters],
             displayUnit: displayUnit,
-            sliderRange: offsetSliderRange
+            sliderMetersRange: offsetSliderMetersRange
         ) { meters in
             regionOffsetDistanceMeters = max(meters, 1.0e-9)
         }

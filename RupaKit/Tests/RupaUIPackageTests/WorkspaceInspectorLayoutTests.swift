@@ -135,6 +135,39 @@ import Testing
     #expect(abs(negativeMeters + 1_000.0) < 0.000_001)
 }
 
+@Test func workspaceLengthSliderMetersRangeUsesWorkspaceRulerSpan() {
+    let microRange = workspaceLengthSliderMetersRange(
+        for: 0.000_001,
+        ruler: WorkspaceScalePreset.microFabrication.rulerConfiguration
+    )
+    let precisionRange = workspaceLengthSliderMetersRange(
+        for: 0.001,
+        ruler: WorkspaceScalePreset.precisionMechanical.rulerConfiguration
+    )
+    let siteRange = workspaceLengthSliderMetersRange(
+        for: 1.0,
+        ruler: WorkspaceScalePreset.sitePlanning.rulerConfiguration
+    )
+
+    #expect(microRange == 0.0 ... 0.01)
+    #expect(precisionRange == 0.0 ... 1.0)
+    #expect(siteRange == 0.0 ... 100_000.0)
+}
+
+@Test func workspaceSignedLengthSliderMetersRangeUsesWorkspaceRulerSpan() {
+    let precisionRange = workspaceSignedLengthSliderMetersRange(
+        for: 0.001,
+        ruler: WorkspaceScalePreset.precisionMechanical.rulerConfiguration
+    )
+    let siteRange = workspaceSignedLengthSliderMetersRange(
+        for: 1.0,
+        ruler: WorkspaceScalePreset.sitePlanning.rulerConfiguration
+    )
+
+    #expect(precisionRange == -1.0 ... 1.0)
+    #expect(siteRange == -100_000.0 ... 100_000.0)
+}
+
 @Test func workspaceInspectorLayoutKeepsDensePropertyPanelRhythm() {
     #expect(WorkspaceInspectorLayout.panelHorizontalInset == 12)
     #expect(WorkspaceInspectorLayout.sectionSpacing == 12)

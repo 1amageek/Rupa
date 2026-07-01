@@ -5,7 +5,7 @@ import SwiftUI
 struct SurfaceControlPointInspectorView: View {
     let state: SurfaceControlPointInspectorState
     let session: EditorSession
-    let positionSliderRange: ClosedRange<Double>
+    let positionSliderMetersRange: ClosedRange<Double>
     @Binding var slideDistanceMeters: Double
     @Binding var frameMoveUMeters: Double
     @Binding var frameMoveVMeters: Double
@@ -85,7 +85,7 @@ struct SurfaceControlPointInspectorView: View {
         signedLengthControl(
             "U",
             meters: frameMoveUMeters,
-            sliderRange: frameMoveSliderRange(for: frameMoveUMeters)
+            sliderMetersRange: frameMoveSliderMetersRange(for: frameMoveUMeters)
         ) { meters in
             frameMoveUMeters = meters
         }
@@ -94,7 +94,7 @@ struct SurfaceControlPointInspectorView: View {
         signedLengthControl(
             "V",
             meters: frameMoveVMeters,
-            sliderRange: frameMoveSliderRange(for: frameMoveVMeters)
+            sliderMetersRange: frameMoveSliderMetersRange(for: frameMoveVMeters)
         ) { meters in
             frameMoveVMeters = meters
         }
@@ -103,7 +103,7 @@ struct SurfaceControlPointInspectorView: View {
         signedLengthControl(
             "N",
             meters: frameMoveNormalMeters,
-            sliderRange: frameMoveSliderRange(for: frameMoveNormalMeters)
+            sliderMetersRange: frameMoveSliderMetersRange(for: frameMoveNormalMeters)
         ) { meters in
             frameMoveNormalMeters = meters
         }
@@ -194,7 +194,7 @@ struct SurfaceControlPointInspectorView: View {
         lengthControl(
             "Distance",
             meters: max(slideDistanceMeters, 1.0e-9),
-            sliderRange: distanceSliderRange(for: slideDistanceMeters)
+            sliderMetersRange: distanceSliderMetersRange(for: slideDistanceMeters)
         ) { meters in
             slideDistanceMeters = max(meters, 1.0e-9)
         }
@@ -344,95 +344,49 @@ struct SurfaceControlPointInspectorView: View {
         values: [Double],
         onChange: @escaping (Double) -> Void
     ) -> some View {
-        let unit = session.document.displayUnit
-        return numericControl(
+        workspaceLengthControl(
             title,
-            values: values.map { unit.value(fromMeters: $0) },
-            sliderRange: positionSliderRange
-        ) { value in
-            onChange(unit.meters(from: value))
-        } unitLabel: {
-            unit.symbol
+            values: values,
+            displayUnit: session.document.displayUnit,
+            sliderMetersRange: positionSliderMetersRange
+        ) { meters in
+            onChange(meters)
         }
     }
 
     private func lengthControl(
         _ title: String,
         meters: Double,
-        sliderRange: ClosedRange<Double>,
+        sliderMetersRange: ClosedRange<Double>,
         onChange: @escaping (Double) -> Void
     ) -> some View {
-        let unit = session.document.displayUnit
-        let value = unit.value(fromMeters: meters)
-        let fieldBinding = Binding<Double>(
-            get: { value },
-            set: { newValue in
-                onChange(unit.meters(from: max(newValue, 0.0)))
-            }
-        )
-        let sliderBinding = Binding<Double>(
-            get: { min(max(value, sliderRange.lowerBound), sliderRange.upperBound) },
-            set: { newValue in
-                onChange(unit.meters(from: newValue))
-            }
-        )
-
-        return VStack(alignment: .leading, spacing: 5) {
-            inspectorControlRow(title) {
-                HStack(spacing: 6) {
-                    TextField(title, value: fieldBinding, formatter: numberFormatter)
-                        .multilineTextAlignment(.trailing)
-                        .frame(width: inspectorControlWidth)
-                    Text(unit.symbol)
-                        .foregroundStyle(.secondary)
-                        .frame(width: inspectorUnitWidth, alignment: .leading)
-                }
-            }
-            Slider(value: sliderBinding, in: sliderRange)
-                .padding(.leading, inspectorSliderLeadingPadding)
+        workspaceLengthControl(
+            title,
+            values: [meters],
+            displayUnit: session.document.displayUnit,
+            sliderMetersRange: sliderMetersRange
+        ) { nextMeters in
+            onChange(max(nextMeters, 0.0))
         }
-        .padding(.vertical, 1)
     }
 
     private func signedLengthControl(
         _ title: String,
         meters: Double,
-        sliderRange: ClosedRange<Double>,
+        sliderMetersRange: ClosedRange<Double>,
         onChange: @escaping (Double) -> Void
     ) -> some View {
-        let unit = session.document.displayUnit
-        let value = unit.value(fromMeters: meters)
-        let fieldBinding = Binding<Double>(
-            get: { value },
-            set: { newValue in
-                guard newValue.isFinite else {
-                    return
-                }
-                onChange(unit.meters(from: newValue))
+        workspaceLengthControl(
+            title,
+            values: [meters],
+            displayUnit: session.document.displayUnit,
+            sliderMetersRange: sliderMetersRange
+        ) { nextMeters in
+            guard nextMeters.isFinite else {
+                return
             }
-        )
-        let sliderBinding = Binding<Double>(
-            get: { min(max(value, sliderRange.lowerBound), sliderRange.upperBound) },
-            set: { newValue in
-                onChange(unit.meters(from: newValue))
-            }
-        )
-
-        return VStack(alignment: .leading, spacing: 5) {
-            inspectorControlRow(title) {
-                HStack(spacing: 6) {
-                    TextField(title, value: fieldBinding, formatter: numberFormatter)
-                        .multilineTextAlignment(.trailing)
-                        .frame(width: inspectorControlWidth)
-                    Text(unit.symbol)
-                        .foregroundStyle(.secondary)
-                        .frame(width: inspectorUnitWidth, alignment: .leading)
-                }
-            }
-            Slider(value: sliderBinding, in: sliderRange)
-                .padding(.leading, inspectorSliderLeadingPadding)
+            onChange(nextMeters)
         }
-        .padding(.vertical, 1)
     }
 
     private func numericControl(
@@ -486,17 +440,20 @@ struct SurfaceControlPointInspectorView: View {
         .padding(.vertical, 1)
     }
 
-    private func distanceSliderRange(for meters: Double) -> ClosedRange<Double> {
-        let unit = session.document.displayUnit
-        let currentValue = max(unit.value(fromMeters: meters), 0.001)
-        return 0.0 ... max(currentValue * 2.0, 1.0)
+    private func distanceSliderMetersRange(for meters: Double) -> ClosedRange<Double> {
+        workspaceLengthSliderMetersRange(
+            for: meters,
+            ruler: session.document.ruler,
+            expansionMultiplier: 2.0
+        )
     }
 
-    private func frameMoveSliderRange(for meters: Double) -> ClosedRange<Double> {
-        let unit = session.document.displayUnit
-        let currentValue = abs(unit.value(fromMeters: meters))
-        let extent = max(currentValue * 2.0, 1.0)
-        return -extent ... extent
+    private func frameMoveSliderMetersRange(for meters: Double) -> ClosedRange<Double> {
+        workspaceSignedLengthSliderMetersRange(
+            for: meters,
+            ruler: session.document.ruler,
+            expansionMultiplier: 2.0
+        )
     }
 
     private var weightSliderRange: ClosedRange<Double> {
@@ -520,14 +477,6 @@ struct SurfaceControlPointInspectorView: View {
             return nil
         }
         return first
-    }
-
-    private var numberFormatter: NumberFormatter {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .decimal
-        formatter.minimumFractionDigits = 0
-        formatter.maximumFractionDigits = 6
-        return formatter
     }
 
     private var inspectorLabelWidth: CGFloat { 124 }

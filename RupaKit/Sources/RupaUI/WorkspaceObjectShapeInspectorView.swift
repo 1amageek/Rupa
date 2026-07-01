@@ -4,9 +4,9 @@ import RupaCore
 struct WorkspaceObjectShapeInspectorView: View {
     var shapes: [InspectorObjectShape]?
     var displayUnit: LengthDisplayUnit
-    var positionSliderRange: ClosedRange<Double>
-    var sizeSliderRange: ClosedRange<Double>
-    var fallbackLengthSliderRange: ClosedRange<Double>
+    var positionSliderMetersRange: ClosedRange<Double>
+    var sizeSliderMetersRange: ClosedRange<Double>
+    var fallbackLengthSliderMetersRange: ClosedRange<Double>
     var onSetCenter: (InspectorObjectAxis, Double, [InspectorObjectShape]) -> Void
     var onSetSize: (InspectorObjectAxis, Double, [InspectorObjectShape]) -> Void
     var onSetProperty: (ObjectPropertyDefinition, ObjectPropertyValue, [InspectorObjectShape]) -> Void
@@ -47,7 +47,7 @@ struct WorkspaceObjectShapeInspectorView: View {
             "Center X",
             values: shapes.map(\.center.x),
             displayUnit: displayUnit,
-            sliderRange: positionSliderRange
+            sliderMetersRange: positionSliderMetersRange
         ) { meters in
             onSetCenter(.x, meters, shapes)
         }
@@ -55,7 +55,7 @@ struct WorkspaceObjectShapeInspectorView: View {
             "Center Y",
             values: shapes.map(\.center.y),
             displayUnit: displayUnit,
-            sliderRange: positionSliderRange
+            sliderMetersRange: positionSliderMetersRange
         ) { meters in
             onSetCenter(.y, meters, shapes)
         }
@@ -63,7 +63,7 @@ struct WorkspaceObjectShapeInspectorView: View {
             "Center Z",
             values: shapes.map(\.center.z),
             displayUnit: displayUnit,
-            sliderRange: positionSliderRange
+            sliderMetersRange: positionSliderMetersRange
         ) { meters in
             onSetCenter(.z, meters, shapes)
         }
@@ -75,7 +75,7 @@ struct WorkspaceObjectShapeInspectorView: View {
             "Size X",
             values: shapes.map(\.size.x),
             displayUnit: displayUnit,
-            sliderRange: sizeSliderRange
+            sliderMetersRange: sizeSliderMetersRange
         ) { meters in
             onSetSize(.x, meters, shapes)
         }
@@ -83,7 +83,7 @@ struct WorkspaceObjectShapeInspectorView: View {
             "Size Y",
             values: shapes.map(\.size.y),
             displayUnit: displayUnit,
-            sliderRange: sizeSliderRange
+            sliderMetersRange: sizeSliderMetersRange
         ) { meters in
             onSetSize(.y, meters, shapes)
         }
@@ -91,7 +91,7 @@ struct WorkspaceObjectShapeInspectorView: View {
             "Size Z",
             values: shapes.map(\.size.z),
             displayUnit: displayUnit,
-            sliderRange: sizeSliderRange
+            sliderMetersRange: sizeSliderMetersRange
         ) { meters in
             onSetSize(.z, meters, shapes)
         }
@@ -147,13 +147,11 @@ struct WorkspaceObjectShapeInspectorView: View {
         }
         if meters.count == values.count {
             let range = lengthRange(for: property)
-            let displayRange = displayUnit.value(fromMeters: range.lowerBound)
-                ... displayUnit.value(fromMeters: range.upperBound)
             workspaceLengthControl(
                 property.title,
                 values: meters,
                 displayUnit: displayUnit,
-                sliderRange: displayRange
+                sliderMetersRange: range
             ) { meters in
                 onSetProperty(property, .length(meters), shapes)
             }
@@ -241,7 +239,7 @@ struct WorkspaceObjectShapeInspectorView: View {
         if let numericRange = property.numericRange {
             return numericRange.lowerBound ... numericRange.upperBound
         }
-        return fallbackLengthSliderRange
+        return fallbackLengthSliderMetersRange
     }
 
     private func commonObjectBoolean(_ values: [ObjectPropertyValue]) -> Bool? {

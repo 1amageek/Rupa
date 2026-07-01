@@ -4,7 +4,7 @@ import RupaCore
 struct WorkspaceObjectTransformInspectorView: View {
     var nodes: [SceneNode]
     var displayUnit: LengthDisplayUnit
-    var positionSliderRange: ClosedRange<Double>
+    var positionSliderMetersRange: ClosedRange<Double>
     var materialOptions: [WorkspaceObjectMaterialOption]
     var onSetVisibility: (SceneNodeID, Bool) -> Void
     var onSetLock: (SceneNodeID, Bool) -> Void
@@ -44,7 +44,7 @@ struct WorkspaceObjectTransformInspectorView: View {
                 "X",
                 values: nodes.map { WorkspaceTransformMatrix.translation(for: $0).x },
                 displayUnit: displayUnit,
-                sliderRange: positionSliderRange
+                sliderMetersRange: positionSliderMetersRange
             ) { meters in
                 onSetTransformComponent(.translationX, meters)
             }
@@ -52,7 +52,7 @@ struct WorkspaceObjectTransformInspectorView: View {
                 "Y",
                 values: nodes.map { WorkspaceTransformMatrix.translation(for: $0).y },
                 displayUnit: displayUnit,
-                sliderRange: positionSliderRange
+                sliderMetersRange: positionSliderMetersRange
             ) { meters in
                 onSetTransformComponent(.translationY, meters)
             }
@@ -60,7 +60,7 @@ struct WorkspaceObjectTransformInspectorView: View {
                 "Z",
                 values: nodes.map { WorkspaceTransformMatrix.translation(for: $0).z },
                 displayUnit: displayUnit,
-                sliderRange: positionSliderRange
+                sliderMetersRange: positionSliderMetersRange
             ) { meters in
                 onSetTransformComponent(.translationZ, meters)
             }

@@ -13,7 +13,7 @@ struct WorkspaceSketchCurveOperationControlsView: View {
     @Binding var cornerTreatment: SketchCornerTreatment
     @Binding var joinContinuity: SketchCurveJoinContinuity
     @Binding var vertexAlignmentContinuity: SketchVertexAlignmentContinuity
-    var sliderRange: (Double) -> ClosedRange<Double>
+    var sliderMetersRange: (Double) -> ClosedRange<Double>
     var onExtend: (SelectionTarget) -> Void
     var onOffsetVertex: (InspectorSketchEntity) -> Void
     var onApplyCornerTreatment: (SelectionTarget) -> Void
@@ -87,7 +87,7 @@ struct WorkspaceSketchCurveOperationControlsView: View {
             "Vertex Offset",
             values: [vertexOffsetDistanceMeters],
             displayUnit: displayUnit,
-            sliderRange: sliderRange(vertexOffsetDistanceMeters)
+            sliderMetersRange: sliderMetersRange(vertexOffsetDistanceMeters)
         ) { meters in
             vertexOffsetDistanceMeters = max(meters, 1.0e-9)
         }
@@ -108,7 +108,7 @@ struct WorkspaceSketchCurveOperationControlsView: View {
             "Corner",
             values: [cornerTreatmentDistanceMeters],
             displayUnit: displayUnit,
-            sliderRange: sliderRange(cornerTreatmentDistanceMeters)
+            sliderMetersRange: sliderMetersRange(cornerTreatmentDistanceMeters)
         ) { meters in
             cornerTreatmentDistanceMeters = max(meters, 1.0e-9)
         }
@@ -142,7 +142,7 @@ struct WorkspaceSketchCurveOperationControlsView: View {
             "Extend",
             values: [extendDistanceMeters],
             displayUnit: displayUnit,
-            sliderRange: sliderRange(extendDistanceMeters)
+            sliderMetersRange: sliderMetersRange(extendDistanceMeters)
         ) { meters in
             extendDistanceMeters = max(meters, 1.0e-9)
         }

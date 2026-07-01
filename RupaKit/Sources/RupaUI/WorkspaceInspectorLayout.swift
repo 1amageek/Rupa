@@ -159,6 +159,38 @@ struct WorkspaceLengthSliderScale: Equatable {
     }
 }
 
+func workspaceLengthSliderMetersRange(
+    for meters: Double,
+    ruler: RulerConfiguration,
+    expansionMultiplier: Double = 4.0
+) -> ClosedRange<Double> {
+    let normalizedRuler = ruler.normalizedForWorkspaceScale()
+    let currentMeters = meters.isFinite ? abs(meters) : 0.0
+    let upperMeters = max(
+        currentMeters * expansionMultiplier,
+        normalizedRuler.visibleSpanMeters,
+        normalizedRuler.minorTickMeters,
+        RulerConfiguration.visibleSpanMetersRange.lowerBound
+    )
+    return 0.0 ... upperMeters
+}
+
+func workspaceSignedLengthSliderMetersRange(
+    for meters: Double,
+    ruler: RulerConfiguration,
+    expansionMultiplier: Double = 2.0
+) -> ClosedRange<Double> {
+    let normalizedRuler = ruler.normalizedForWorkspaceScale()
+    let currentMeters = meters.isFinite ? abs(meters) : 0.0
+    let extentMeters = max(
+        currentMeters * expansionMultiplier,
+        normalizedRuler.visibleSpanMeters,
+        normalizedRuler.minorTickMeters,
+        RulerConfiguration.visibleSpanMetersRange.lowerBound
+    )
+    return -extentMeters ... extentMeters
+}
+
 func workspaceLengthFieldPresentation(
     fromMeters meters: Double,
     preferredUnit: LengthDisplayUnit
@@ -358,7 +390,7 @@ func workspaceLengthControl(
     _ title: String,
     values: [Double],
     displayUnit: LengthDisplayUnit,
-    sliderRange: ClosedRange<Double>,
+    sliderMetersRange: ClosedRange<Double>,
     onChange: @escaping (Double) -> Void
 ) -> some View {
     let commonMeters = commonWorkspaceInspectorValue(values)
@@ -388,17 +420,11 @@ func workspaceLengthControl(
     )
     let sliderBinding = Binding<Double>(
         get: {
-            let displayValue = sliderRange.lowerBound ... sliderRange.upperBound
-            let metersRange = displayUnit.meters(from: displayValue.lowerBound)
-                ... displayUnit.meters(from: displayValue.upperBound)
-            return WorkspaceLengthSliderScale(metersRange: metersRange)
+            WorkspaceLengthSliderScale(metersRange: sliderMetersRange)
                 .sliderValue(forMeters: commonMeters ?? 0.0)
         },
         set: { value in
-            let displayValue = sliderRange.lowerBound ... sliderRange.upperBound
-            let metersRange = displayUnit.meters(from: displayValue.lowerBound)
-                ... displayUnit.meters(from: displayValue.upperBound)
-            let meters = WorkspaceLengthSliderScale(metersRange: metersRange)
+            let meters = WorkspaceLengthSliderScale(metersRange: sliderMetersRange)
                 .meters(fromSliderValue: value)
             onChange(meters)
         }

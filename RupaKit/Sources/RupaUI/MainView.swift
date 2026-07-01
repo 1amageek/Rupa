@@ -4378,8 +4378,8 @@ public struct MainView: View {
             cornerTreatment: $sketchCornerTreatment,
             joinContinuity: $sketchCurveJoinContinuity,
             vertexAlignmentContinuity: $sketchVertexAlignmentContinuity,
-            sliderRange: { meters in
-                lengthSliderRange(for: meters)
+            sliderMetersRange: { meters in
+                lengthSliderMetersRange(for: meters)
             },
             onExtend: extendSelectedSketchCurve,
             onOffsetVertex: offsetSelectedSketchVertex,
@@ -4661,7 +4661,7 @@ public struct MainView: View {
             edgeOffsetGapFill: $edgeOffsetGapFill,
             regionOffsetDistanceMeters: $regionOffsetDistanceMeters,
             regionOffsetGapFill: $regionOffsetGapFill,
-            offsetSliderRange: regionOffsetSliderRange,
+            offsetSliderMetersRange: regionOffsetSliderMetersRange,
             onOffsetFace: { target, meters in
                 offsetSelectedFace(target, by: meters)
             },
@@ -4702,7 +4702,7 @@ public struct MainView: View {
         WorkspaceObjectTransformInspectorView(
             nodes: nodes,
             displayUnit: session.document.displayUnit,
-            positionSliderRange: transformPositionSliderRange,
+            positionSliderMetersRange: transformPositionSliderMetersRange,
             materialOptions: sortedMaterialOptions,
             onSetVisibility: { id, isVisible in
                 session.setSceneNodeVisibility(id, isVisible: isVisible)
@@ -4734,7 +4734,7 @@ public struct MainView: View {
         PatternArrayInspectorView(
             state: state,
             session: session,
-            positionSliderRange: transformPositionSliderRange,
+            positionSliderMetersRange: transformPositionSliderMetersRange,
             isCurvePathPickActive: patternArrayCurvePathPickState.isPicking(sourceID: state.sourceID),
             onStartCurvePathPick: startPatternArrayCurvePathPick,
             onCancelCurvePathPick: cancelPatternArrayCurvePathPick
@@ -4747,7 +4747,7 @@ public struct MainView: View {
         SurfaceControlPointInspectorView(
             state: state,
             session: session,
-            positionSliderRange: transformPositionSliderRange,
+            positionSliderMetersRange: transformPositionSliderMetersRange,
             slideDistanceMeters: $polySplineSurfaceVertexSlideDistanceMeters,
             frameMoveUMeters: $surfaceControlPointFrameUMoveMeters,
             frameMoveVMeters: $surfaceControlPointFrameVMoveMeters,
@@ -4940,7 +4940,7 @@ public struct MainView: View {
                 lengthControl(
                     "Length",
                     meters: length,
-                    sliderRange: lengthSliderRange(for: length)
+                    sliderMetersRange: lengthSliderMetersRange(for: length)
                 ) { meters in
                     setSelectedSketchEntityDimension(entity.target, kind: .length, meters: meters)
                 }
@@ -4981,7 +4981,7 @@ public struct MainView: View {
                 lengthControl(
                     "Slot Width",
                     meters: slotProfileWidthMeters,
-                    sliderRange: lengthSliderRange(for: slotProfileWidthMeters)
+                    sliderMetersRange: lengthSliderMetersRange(for: slotProfileWidthMeters)
                 ) { meters in
                     slotProfileWidthMeters = max(meters, 1.0e-9)
                 }
@@ -5068,7 +5068,7 @@ public struct MainView: View {
                 lengthControl(
                     "Radius",
                     meters: radius,
-                    sliderRange: lengthSliderRange(for: radius)
+                    sliderMetersRange: lengthSliderMetersRange(for: radius)
                 ) { meters in
                     setSelectedSketchEntityDimension(entity.target, kind: .radius, meters: meters)
                 }
@@ -5095,7 +5095,7 @@ public struct MainView: View {
                 lengthControl(
                     "Radius",
                     meters: radius,
-                    sliderRange: lengthSliderRange(for: radius)
+                    sliderMetersRange: lengthSliderMetersRange(for: radius)
                 ) { meters in
                     setSelectedSketchEntityDimension(entity.target, kind: .radius, meters: meters)
                 }
@@ -5165,7 +5165,7 @@ public struct MainView: View {
                 lengthControl(
                     "Slot Width",
                     meters: slotProfileWidthMeters,
-                    sliderRange: lengthSliderRange(for: slotProfileWidthMeters)
+                    sliderMetersRange: lengthSliderMetersRange(for: slotProfileWidthMeters)
                 ) { meters in
                     slotProfileWidthMeters = max(meters, 1.0e-9)
                 }
@@ -5236,7 +5236,7 @@ public struct MainView: View {
                 lengthControl(
                     "Slot Width",
                     meters: slotProfileWidthMeters,
-                    sliderRange: lengthSliderRange(for: slotProfileWidthMeters)
+                    sliderMetersRange: lengthSliderMetersRange(for: slotProfileWidthMeters)
                 ) { meters in
                     slotProfileWidthMeters = max(meters, 1.0e-9)
                 }
@@ -5279,7 +5279,9 @@ public struct MainView: View {
                     slideDistanceMeters: $sketchSplineControlPointSlideDistanceMeters,
                     slideCount: $sketchSplineControlPointSlideCount,
                     moveStepMeters: defaultSketchEntityMoveStepMeters,
-                    slideDistanceSliderRange: lengthSliderRange(for: sketchSplineControlPointSlideDistanceMeters),
+                    slideDistanceSliderMetersRange: lengthSliderMetersRange(
+                        for: sketchSplineControlPointSlideDistanceMeters
+                    ),
                     onAddSmoothControlPoint: addSmoothSplineControlPointConstraint,
                     onMoveControlPoint: moveSelectedSplineControlPoint,
                     onSlideControlPoints: { target, controlPointIndexes, direction in
@@ -5356,9 +5358,9 @@ public struct MainView: View {
         WorkspaceObjectShapeInspectorView(
             shapes: shapes,
             displayUnit: session.document.displayUnit,
-            positionSliderRange: transformPositionSliderRange,
-            sizeSliderRange: sizeSliderRange,
-            fallbackLengthSliderRange: 0.0 ... max(session.document.ruler.visibleSpanMeters, 1.0),
+            positionSliderMetersRange: transformPositionSliderMetersRange,
+            sizeSliderMetersRange: sizeSliderMetersRange,
+            fallbackLengthSliderMetersRange: 0.0 ... max(session.document.ruler.visibleSpanMeters, 1.0),
             onSetCenter: setObjectCenter,
             onSetSize: setObjectSize,
             onSetProperty: setObjectProperty
@@ -6663,15 +6665,13 @@ public struct MainView: View {
         }
     }
 
-    private var transformPositionSliderRange: ClosedRange<Double> {
-        let unit = session.document.displayUnit
-        let span = max(unit.value(fromMeters: session.document.ruler.visibleSpanMeters), 1.0)
+    private var transformPositionSliderMetersRange: ClosedRange<Double> {
+        let span = session.document.ruler.normalizedForWorkspaceScale().visibleSpanMeters
         return -span ... span
     }
 
-    private var sizeSliderRange: ClosedRange<Double> {
-        let unit = session.document.displayUnit
-        let visibleSpan = max(unit.value(fromMeters: session.document.ruler.visibleSpanMeters), 1.0)
+    private var sizeSliderMetersRange: ClosedRange<Double> {
+        let visibleSpan = session.document.ruler.normalizedForWorkspaceScale().visibleSpanMeters
         return 0.0 ... visibleSpan
     }
 
@@ -6747,25 +6747,15 @@ public struct MainView: View {
         }
     }
 
-    private func lengthSliderRange(for meters: Double) -> ClosedRange<Double> {
-        let unit = session.document.displayUnit
-        let upperMeters = max(
-            meters * 4.0,
-            session.document.ruler.visibleSpanMeters,
-            minimumWorkspaceLengthMeters
-        )
-        return 0.0 ... max(unit.value(fromMeters: upperMeters), 0.0001)
-    }
-
-    private var minimumWorkspaceLengthMeters: Double {
-        max(
-            session.document.ruler.normalizedForWorkspaceScale().minorTickMeters,
-            RulerConfiguration.minorTickMetersRange.lowerBound
+    private func lengthSliderMetersRange(for meters: Double) -> ClosedRange<Double> {
+        workspaceLengthSliderMetersRange(
+            for: meters,
+            ruler: session.document.ruler
         )
     }
 
-    private var regionOffsetSliderRange: ClosedRange<Double> {
-        lengthSliderRange(for: regionOffsetDistanceMeters)
+    private var regionOffsetSliderMetersRange: ClosedRange<Double> {
+        lengthSliderMetersRange(for: regionOffsetDistanceMeters)
     }
 
     private func regionOffsetGapFillTitle(_ gapFill: OffsetCurveGapFill) -> String {
@@ -6827,9 +6817,10 @@ public struct MainView: View {
         guard let length = sketchLineLength(for: entity) else {
             return defaultSketchEntityMoveStepMeters
         }
+        let ruler = session.document.ruler.normalizedForWorkspaceScale()
         let bounded = min(
             length / 4.0,
-            max(session.document.ruler.visibleSpanMeters / 20.0, minimumWorkspaceLengthMeters)
+            max(ruler.visibleSpanMeters / 20.0, ruler.minorTickMeters)
         )
         return max(bounded, defaultSketchEntityMoveStepMeters)
     }
@@ -6909,39 +6900,17 @@ public struct MainView: View {
     private func lengthControl(
         _ title: String,
         meters: Double,
-        sliderRange: ClosedRange<Double>,
+        sliderMetersRange: ClosedRange<Double>,
         onChange: @escaping (Double) -> Void
     ) -> some View {
-        let unit = session.document.displayUnit
-        let value = unit.value(fromMeters: meters)
-        let fieldBinding = Binding<Double>(
-            get: { value },
-            set: { newValue in
-                onChange(unit.meters(from: max(newValue, 0.0)))
-            }
-        )
-        let sliderBinding = Binding<Double>(
-            get: { min(max(value, sliderRange.lowerBound), sliderRange.upperBound) },
-            set: { newValue in
-                onChange(unit.meters(from: newValue))
-            }
-        )
-
-        return VStack(alignment: .leading, spacing: 5) {
-            inspectorControlRow(title) {
-                HStack(spacing: 6) {
-                    TextField(title, value: fieldBinding, formatter: inspectorNumberFormatter)
-                        .multilineTextAlignment(.trailing)
-                        .frame(width: inspectorControlWidth)
-                    Text(unit.symbol)
-                        .foregroundStyle(.secondary)
-                        .frame(width: inspectorUnitWidth, alignment: .leading)
-                }
-            }
-            Slider(value: sliderBinding, in: sliderRange)
-                .padding(.leading, inspectorSliderLeadingPadding)
+        workspaceLengthControl(
+            title,
+            values: [meters],
+            displayUnit: session.document.displayUnit,
+            sliderMetersRange: sliderMetersRange
+        ) { nextMeters in
+            onChange(max(nextMeters, 0.0))
         }
-        .padding(.vertical, 1)
     }
 
     private var inspectorNumberFormatter: NumberFormatter {
