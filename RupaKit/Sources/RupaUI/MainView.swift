@@ -584,7 +584,9 @@ public struct MainView: View {
         .dividerDragStrip(height: 10)
         .collapsibleToggleHelp(expanded: "Hide Logs", collapsed: "Show Logs")
         .frame(minWidth: 560)
+        // Keyboard focus is an input scope; visible canvas affordances are drawn by the viewport.
         .focusable()
+        .focusEffectDisabled()
         .focused($isWorkspaceFocused)
         .onAppear {
             isWorkspaceFocused = true
