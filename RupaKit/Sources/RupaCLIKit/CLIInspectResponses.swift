@@ -186,10 +186,10 @@ public struct CLISelectionMeasurementResponse: Codable, Equatable, Sendable {
     public var message: String
     public var generation: UInt64
     public var dirty: Bool
-    public var selectionMeasurement: CADAgentMeasurementQueryResult
+    public var selectionMeasurement: SelectionMeasurementResult
 
     public init(
-        selectionMeasurement: CADAgentMeasurementQueryResult,
+        selectionMeasurement: SelectionMeasurementResult,
         generation: DocumentGeneration,
         dirty: Bool
     ) {

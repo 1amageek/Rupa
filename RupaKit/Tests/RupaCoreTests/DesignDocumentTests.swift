@@ -316,6 +316,7 @@ import Testing
 
 @Test func surfaceControlPointReferenceMoveMutatesInteriorControlPointOverride() async throws {
     var document = DesignDocument.empty()
+    document.setDisplayUnit(.millimeter)
 
     let featureID = try document.createPolySplineSurface(
         name: "Interior Surface Reference Quad Surface",
@@ -356,6 +357,9 @@ import Testing
         return
     }
     #expect(abs(measuredPoint.point.z - override.point.z) <= 1.0e-12)
+    #expect(measuredPoint.displayUnit == .millimeter)
+    #expect(measuredPoint.displayUnitSymbol == "mm")
+    #expect(abs(measuredPoint.displayPoint.z - (override.point.z * 1_000.0)) <= 1.0e-12)
 }
 
 @Test func surfaceControlPointReferenceWeightMutatesInteriorControlPointOverride() async throws {

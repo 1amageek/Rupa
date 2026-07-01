@@ -157,7 +157,7 @@ public enum AgentResponse: Codable, Equatable, Sendable {
     case parameters(ParameterListResult)
     case evaluation(EvaluationSnapshot)
     case measurement(MeasurementResult)
-    case selectionMeasurement(CADAgentMeasurementQueryResult)
+    case selectionMeasurement(SelectionMeasurementResult)
     case snapResolution(SnapResolutionResult)
     case constructionPlaneSummary(ConstructionPlaneSummaryResult)
     case designDisplaySnapshot(DesignDisplaySnapshotResult)

@@ -1193,9 +1193,10 @@ import SwiftCAD
         expectedGeneration: DocumentGeneration(4)
     )
     let selectionMeasurementResponse = AgentResponse.selectionMeasurement(
-        .point(SelectionMeasurementPoint(
+        .point(SelectionMeasurementResult.Point(
             selection: selectionMeasurementReference,
-            point: Point3D(x: 0.0, y: 0.0, z: 0.0)
+            point: Point3D(x: 0.0, y: 0.0, z: 0.0),
+            displayUnit: .millimeter
         ))
     )
     let meshRequest = AgentRequest.meshSummary(

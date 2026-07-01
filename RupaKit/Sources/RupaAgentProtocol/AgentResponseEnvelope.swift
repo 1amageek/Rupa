@@ -252,7 +252,7 @@ public struct AgentResponseEnvelope: Codable, Equatable, Sendable {
             return .measurement(try container.decode(MeasurementResult.self, forKey: .result))
         case "selection.measure":
             return .selectionMeasurement(
-                try container.decode(CADAgentMeasurementQueryResult.self, forKey: .result)
+                try container.decode(SelectionMeasurementResult.self, forKey: .result)
             )
         case "snap.resolve":
             return .snapResolution(try container.decode(SnapResolutionResult.self, forKey: .result))

@@ -15,7 +15,7 @@ public struct SelectionMeasurementService: Sendable {
         objectRegistry: ObjectTypeRegistry = .builtIn,
         currentEvaluation: DocumentEvaluationContext? = nil,
         currentGeneration: DocumentGeneration? = nil
-    ) throws -> CADAgentMeasurementQueryResult {
+    ) throws -> SelectionMeasurementResult {
         do {
             try document.validate(objectRegistry: objectRegistry)
         } catch {
@@ -50,7 +50,12 @@ public struct SelectionMeasurementService: Sendable {
 
         switch query.kind {
         case .point:
-            return .point(try pipeline.measurementPoint(for: query.first, in: evaluatedDocument))
+            return .point(
+                SelectionMeasurementResult.Point(
+                    measurement: try pipeline.measurementPoint(for: query.first, in: evaluatedDocument),
+                    displayUnit: document.displayUnit
+                )
+            )
         case .distance:
             guard let second = query.second else {
                 throw EditorError(
@@ -58,7 +63,12 @@ public struct SelectionMeasurementService: Sendable {
                     message: "Selection distance measurement requires a second selection."
                 )
             }
-            return .distance(try pipeline.distance(from: query.first, to: second, in: evaluatedDocument))
+            return .distance(
+                SelectionMeasurementResult.Distance(
+                    measurement: try pipeline.distance(from: query.first, to: second, in: evaluatedDocument),
+                    displayUnit: document.displayUnit
+                )
+            )
         case .angle:
             guard let second = query.second else {
                 throw EditorError(
@@ -66,7 +76,11 @@ public struct SelectionMeasurementService: Sendable {
                     message: "Selection angle measurement requires a second selection."
                 )
             }
-            return .angle(try pipeline.angle(between: query.first, and: second, in: evaluatedDocument))
+            return .angle(
+                SelectionMeasurementResult.Angle(
+                    measurement: try pipeline.angle(between: query.first, and: second, in: evaluatedDocument)
+                )
+            )
         }
     }
 }
