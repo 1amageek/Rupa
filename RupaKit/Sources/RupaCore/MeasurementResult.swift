@@ -51,9 +51,11 @@ public struct MeasurementResult: Codable, Equatable, Sendable {
     }
 
     private func formatted(_ metersValue: Double, exponent: Int) -> String {
-        let divisor = pow(displayUnit.metersPerUnit, Double(exponent))
-        let displayValue = metersValue / divisor
-        return String(format: "%.6g", displayValue)
+        MeasurementDisplayNumberText.valueString(
+            fromMetersValue: metersValue,
+            unit: displayUnit,
+            exponent: exponent
+        )
     }
 }
 
@@ -125,10 +127,10 @@ public extension MeasurementResult {
         }
 
         public func formattedSize(in unit: LengthDisplayUnit) -> String {
-            let x = unit.value(fromMeters: sizeX)
-            let y = unit.value(fromMeters: sizeY)
-            let z = unit.value(fromMeters: sizeZ)
-            return String(format: "%.6g x %.6g x %.6g %@", x, y, z, unit.symbol)
+            let x = MeasurementDisplayNumberText.string(from: unit.value(fromMeters: sizeX))
+            let y = MeasurementDisplayNumberText.string(from: unit.value(fromMeters: sizeY))
+            let z = MeasurementDisplayNumberText.string(from: unit.value(fromMeters: sizeZ))
+            return "\(x) x \(y) x \(z) \(unit.symbol)"
         }
     }
 

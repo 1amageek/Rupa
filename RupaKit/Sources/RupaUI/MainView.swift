@@ -1074,10 +1074,11 @@ public struct MainView: View {
             guard let lengthMeters = session.sketchInputState.dimensionInputLengthMeters else {
                 return focus.statusTitle
             }
-            let unit = session.document.displayUnit
-            let value = unit.value(fromMeters: lengthMeters)
-                .formatted(.number.precision(.fractionLength(0...4)))
-            return "\(focus.statusTitle) \(value) \(unit.symbol)"
+            let length = WorkspaceInspectorNumberText.lengthString(
+                fromMeters: lengthMeters,
+                unit: session.document.displayUnit
+            )
+            return "\(focus.statusTitle) \(length)"
         case .angle:
             guard let angleRadians = session.sketchInputState.dimensionInputAngleRadians else {
                 return focus.statusTitle
@@ -1089,18 +1090,20 @@ public struct MainView: View {
             guard let widthMeters = session.sketchInputState.dimensionInputWidthMeters else {
                 return focus.statusTitle
             }
-            let unit = session.document.displayUnit
-            let value = unit.value(fromMeters: widthMeters)
-                .formatted(.number.precision(.fractionLength(0...4)))
-            return "\(focus.statusTitle) \(value) \(unit.symbol)"
+            let width = WorkspaceInspectorNumberText.lengthString(
+                fromMeters: widthMeters,
+                unit: session.document.displayUnit
+            )
+            return "\(focus.statusTitle) \(width)"
         case .height:
             guard let heightMeters = session.sketchInputState.dimensionInputHeightMeters else {
                 return focus.statusTitle
             }
-            let unit = session.document.displayUnit
-            let value = unit.value(fromMeters: heightMeters)
-                .formatted(.number.precision(.fractionLength(0...4)))
-            return "\(focus.statusTitle) \(value) \(unit.symbol)"
+            let height = WorkspaceInspectorNumberText.lengthString(
+                fromMeters: heightMeters,
+                unit: session.document.displayUnit
+            )
+            return "\(focus.statusTitle) \(height)"
         }
     }
 
