@@ -6,17 +6,10 @@ enum MeasurementDisplayNumberText {
         from value: Double,
         maximumFractionDigits: Int = 6
     ) -> String {
-        guard value.isFinite else {
-            return "\(value)"
-        }
-
-        let formatter = NumberFormatter()
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.numberStyle = .decimal
-        formatter.usesGroupingSeparator = true
-        formatter.minimumFractionDigits = 0
-        formatter.maximumFractionDigits = maximumFractionDigits
-        return formatter.string(from: NSNumber(value: value)) ?? "\(value)"
+        LengthDisplayText.numberString(
+            from: value,
+            maximumFractionDigits: maximumFractionDigits
+        )
     }
 
     static func valueString(
@@ -32,6 +25,6 @@ enum MeasurementDisplayNumberText {
         fromMeters meters: Double,
         unit: LengthDisplayUnit = .meter
     ) -> String {
-        "\(string(from: unit.value(fromMeters: meters))) \(unit.symbol)"
+        LengthDisplayText.lengthString(fromMeters: meters, unit: unit)
     }
 }

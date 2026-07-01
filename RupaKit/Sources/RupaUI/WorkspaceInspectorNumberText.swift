@@ -6,10 +6,9 @@ enum WorkspaceInspectorNumberText {
         from value: Double,
         maximumFractionDigits: Int = 6
     ) -> String {
-        value.formatted(
-            .number
-                .grouping(.automatic)
-                .precision(.fractionLength(0...maximumFractionDigits))
+        LengthDisplayText.numberString(
+            from: value,
+            maximumFractionDigits: maximumFractionDigits
         )
     }
 
@@ -33,7 +32,10 @@ enum WorkspaceInspectorNumberText {
         unit: LengthDisplayUnit,
         maximumFractionDigits: Int = 4
     ) -> String {
-        let value = unit.value(fromMeters: meters)
-        return "\(string(from: value, maximumFractionDigits: maximumFractionDigits)) \(unit.symbol)"
+        LengthDisplayText.lengthString(
+            fromMeters: meters,
+            unit: unit,
+            maximumFractionDigits: maximumFractionDigits
+        )
     }
 }

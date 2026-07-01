@@ -127,6 +127,12 @@ public extension MeasurementResult {
         }
 
         public func formattedSize(in unit: LengthDisplayUnit) -> String {
+            if unit == .foot {
+                let x = LengthDisplayText.lengthString(fromMeters: sizeX, unit: unit)
+                let y = LengthDisplayText.lengthString(fromMeters: sizeY, unit: unit)
+                let z = LengthDisplayText.lengthString(fromMeters: sizeZ, unit: unit)
+                return "\(x) x \(y) x \(z)"
+            }
             let x = MeasurementDisplayNumberText.string(from: unit.value(fromMeters: sizeX))
             let y = MeasurementDisplayNumberText.string(from: unit.value(fromMeters: sizeY))
             let z = MeasurementDisplayNumberText.string(from: unit.value(fromMeters: sizeZ))

@@ -14,6 +14,20 @@ import Testing
     #expect(bounds.formattedSize(in: .meter) == "100,000 x 30,480 x 1,000 m")
 }
 
+@Test func measurementResultFormatsFootBoundsAsArchitecturalLengths() {
+    let bounds = MeasurementResult.Bounds(
+        minX: 0.0,
+        minY: 0.0,
+        minZ: 0.0,
+        maxX: LengthDisplayUnit.foot.meters(from: 6.0)
+            + LengthDisplayUnit.inch.meters(from: 4.5),
+        maxY: LengthDisplayUnit.inch.meters(from: 10.0),
+        maxZ: LengthDisplayUnit.inch.meters(from: 0.5)
+    )
+
+    #expect(bounds.formattedSize(in: .foot) == "6' 4 1/2\" x 10\" x 1/2\"")
+}
+
 @Test func measurementResultMessageFormatsLargeTotalsWithGroupedValues() {
     let result = MeasurementResult(
         displayUnit: .meter,

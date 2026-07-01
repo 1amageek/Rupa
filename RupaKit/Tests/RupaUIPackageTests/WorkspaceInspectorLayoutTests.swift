@@ -31,7 +31,14 @@ import Testing
         WorkspaceInspectorNumberText.lengthString(
             fromMeters: 30_480.0,
             unit: .foot
-        ) == "100,000 ft"
+        ) == "100,000' 0\""
+    )
+    #expect(
+        WorkspaceInspectorNumberText.lengthString(
+            fromMeters: LengthDisplayUnit.foot.meters(from: 6.0)
+                + LengthDisplayUnit.inch.meters(from: 4.5),
+            unit: .foot
+        ) == "6' 4 1/2\""
     )
 }
 
