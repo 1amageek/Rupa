@@ -207,6 +207,30 @@ struct DimensionCommandState: Equatable {
         isInputModeActive = true
     }
 
+    mutating func setDraftText(
+        _ text: String,
+        displayUnit: LengthDisplayUnit
+    ) {
+        guard let activeEntry else {
+            return
+        }
+        switch activeEntry.valueKind {
+        case .length:
+            guard let meters = workspaceLengthMeters(
+                fromFieldText: text,
+                defaultUnit: displayUnit
+            ) else {
+                return
+            }
+            setDraftValue(meters)
+        case .angle:
+            guard let degrees = WorkspaceInspectorNumberText.value(from: text) else {
+                return
+            }
+            setDraftValue(degrees * Double.pi / 180.0)
+        }
+    }
+
     mutating func deactivate() {
         entries = []
         activeIndex = 0

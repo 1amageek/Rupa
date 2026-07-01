@@ -1991,11 +1991,10 @@ public struct MainView: View {
                     .foregroundStyle(.secondary)
                 TextField(
                     entry.label,
-                    value: workspaceDimensionInputBinding,
-                    formatter: inspectorNumberFormatter
+                    text: workspaceDimensionInputBinding
                 )
                 .multilineTextAlignment(.trailing)
-                .frame(width: 64)
+                .frame(width: 86)
                 Text(dimensionInputUnitSymbol(entry.valueKind))
                     .foregroundStyle(.secondary)
             }
@@ -2012,23 +2011,21 @@ public struct MainView: View {
         }
     }
 
-    private var workspaceDimensionInputBinding: Binding<Double> {
-        Binding<Double>(
+    private var workspaceDimensionInputBinding: Binding<String> {
+        Binding<String>(
             get: {
                 guard let entry = dimensionCommandState.activeEntry else {
-                    return 0.0
+                    return ""
                 }
-                return displayedDimensionValue(
+                return dimensionInputText(
                     dimensionCommandState.currentValue ?? 0.0,
                     kind: entry.valueKind
                 )
             },
-            set: { value in
-                guard let entry = dimensionCommandState.activeEntry else {
-                    return
-                }
-                dimensionCommandState.setDraftValue(
-                    modelDimensionValue(value, kind: entry.valueKind)
+            set: { text in
+                dimensionCommandState.setDraftText(
+                    text,
+                    displayUnit: session.document.displayUnit
                 )
             }
         )
@@ -6881,27 +6878,17 @@ public struct MainView: View {
         }
     }
 
-    private func displayedDimensionValue(
+    private func dimensionInputText(
         _ value: Double,
         kind: DimensionCommandEntry.ValueKind
-    ) -> Double {
+    ) -> String {
         switch kind {
         case .length:
-            return session.document.displayUnit.value(fromMeters: value)
+            return WorkspaceInspectorNumberText.string(
+                from: session.document.displayUnit.value(fromMeters: value)
+            )
         case .angle:
-            return degrees(fromRadians: value)
-        }
-    }
-
-    private func modelDimensionValue(
-        _ value: Double,
-        kind: DimensionCommandEntry.ValueKind
-    ) -> Double {
-        switch kind {
-        case .length:
-            return session.document.displayUnit.meters(from: value)
-        case .angle:
-            return value * Double.pi / 180.0
+            return WorkspaceInspectorNumberText.string(from: degrees(fromRadians: value))
         }
     }
 

@@ -59,6 +59,25 @@ import Testing
     #expect(state.canCommit)
 }
 
+@Test func dimensionCommandStateAcceptsExplicitLengthDraftText() {
+    var state = DimensionCommandState.inactive
+
+    state.activate(entries: [
+        dimensionEntry(source: .object(.sizeX), label: "Size X", resolvedValue: 0.030, valueKind: .length, isPrimary: true),
+    ])
+    state.activateInputMode()
+    state.setDraftText("1 km", displayUnit: .millimeter)
+
+    #expect(state.currentValue == 1_000.0)
+    #expect(state.canCommit)
+
+    state.setDraftText("6' 4\"", displayUnit: .millimeter)
+
+    let expectedMeters = LengthDisplayUnit.foot.meters(from: 6.0)
+        + LengthDisplayUnit.inch.meters(from: 4.0)
+    #expect(abs((state.currentValue ?? 0.0) - expectedMeters) < 0.000_000_000_001)
+}
+
 @Test func dimensionCommandStateAllowsFiniteAngleDraftValues() {
     var state = DimensionCommandState.inactive
 
@@ -69,6 +88,19 @@ import Testing
     state.setDraftValue(-.pi / 4.0)
 
     #expect(state.currentValue == -.pi / 4.0)
+    #expect(state.canCommit)
+}
+
+@Test func dimensionCommandStateAcceptsAngleDraftTextInDegrees() {
+    var state = DimensionCommandState.inactive
+
+    state.activate(entries: [
+        dimensionEntry(source: .sketch(.angle), label: "Angle", resolvedValue: 0.0, valueKind: .angle, isPrimary: true),
+    ])
+    state.activateInputMode()
+    state.setDraftText("90", displayUnit: .millimeter)
+
+    #expect(abs((state.currentValue ?? 0.0) - Double.pi / 2.0) < 0.000_000_000_001)
     #expect(state.canCommit)
 }
 
