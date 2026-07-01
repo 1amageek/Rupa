@@ -3500,16 +3500,13 @@ public struct SnapResolver: Sendable {
         ruler: RulerConfiguration,
         gridIntervalMeters: Double
     ) -> Double {
-        let minimum = max(
-            gridIntervalMeters * 2.0,
-            ruler.visibleSpanMeters * 1.0e-6,
+        let gridScaledRadiusMeters = gridIntervalMeters * 2.0
+        let visibleSpanPrecisionRadiusMeters = ruler.visibleSpanMeters * 1.0e-6
+        return max(
+            gridScaledRadiusMeters,
+            visibleSpanPrecisionRadiusMeters,
             1.0e-6
         )
-        let maximum = max(
-            ruler.visibleSpanMeters * 1.0e-4,
-            0.01
-        )
-        return min(minimum, maximum)
     }
 
     private func validate(point: Point2D) throws {

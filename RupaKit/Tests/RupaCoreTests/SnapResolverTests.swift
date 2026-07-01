@@ -40,6 +40,38 @@ import Testing
     #expect(result.selectedCandidate?.kind == .grid)
 }
 
+@Test func snapResolverUsesGridScaledDefaultObjectRadiusForSitePlanningRuler() async throws {
+    var document = DesignDocument.empty()
+    try document.setRulerConfiguration(WorkspaceScalePreset.sitePlanning.rulerConfiguration)
+    _ = try document.createLineSketch(
+        name: "Site Boundary",
+        plane: .xy,
+        start: SketchPoint(
+            x: .length(125.0, .meter),
+            y: .length(0.0, .meter)
+        ),
+        end: SketchPoint(
+            x: .length(200.0, .meter),
+            y: .length(0.0, .meter)
+        )
+    )
+
+    let result = try SnapResolver().resolve(
+        point: Point2D(x: 100.0, y: 0.0),
+        in: document,
+        options: SnapResolutionOptions(
+            usesGrid: true,
+            usesObjects: true,
+            maximumCandidateCount: 8
+        )
+    )
+
+    #expect(result.selectedCandidate?.kind == .grid)
+    #expect(result.candidates.contains { candidate in
+        candidate.kind == .lineEnd && abs(candidate.point.x - 125.0) <= 1.0e-12
+    })
+}
+
 @Test func snapResolverKeepsExplicitGridIntervalAsFixedSnapSpacing() async throws {
     var document = DesignDocument.empty()
     try document.setRulerConfiguration(WorkspaceScalePreset.sitePlanning.rulerConfiguration)
