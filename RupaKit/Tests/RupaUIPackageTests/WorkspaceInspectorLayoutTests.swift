@@ -423,6 +423,32 @@ import Testing
     #expect(state.visibleSpanTitle == "1,000 km")
     #expect(state.recommendedComfortableModelSpanTitle == "10 km to 800 km")
     #expect(state.preset == .regionalPlanning)
+    #expect(state.isActionable)
+}
+
+@Test func workspaceDocumentScaleRecommendationStateReportsActionlessScaleLimit() throws {
+    let recommendation = try #require(WorkspaceScaleRecommendationService().recommendation(
+        for: MeasurementResult.Bounds(
+            minX: 0.0,
+            minY: 0.0,
+            minZ: 0.0,
+            maxX: 1_200_000.0,
+            maxY: 400_000.0,
+            maxZ: 1_000.0
+        ),
+        currentRuler: WorkspaceScalePreset.regionalPlanning.rulerConfiguration
+    ))
+
+    let state = try #require(workspaceDocumentScaleRecommendationState(
+        recommendation: recommendation
+    ))
+
+    #expect(state.reasonTitle == "Beyond scale range")
+    #expect(state.presetTitle == "Regional Planning")
+    #expect(state.modelSpanTitle == "1,200 km")
+    #expect(state.recommendedComfortableModelSpanTitle == "10 km to 800 km")
+    #expect(state.preset == .regionalPlanning)
+    #expect(state.isActionable == false)
 }
 
 @Test func workspaceDocumentPrecisionRecommendationStateFormatsRebaseAction() {

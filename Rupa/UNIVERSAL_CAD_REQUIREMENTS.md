@@ -84,7 +84,7 @@ Rupa must make scale visible and controllable.
 | Adaptive grid | Grid spacing adapts to zoom level and active unit display. |
 | Fixed grid | User can lock grid spacing for precision workflows. |
 | Grid scale readout | Canvas must expose the resolved minor grid step, major grid step, and visible span in readable units without changing internal meter storage. |
-| Scale recommendations | Scale recommendation readback must include the current comfortable range, recommended use case, recommended visible span, and recommended comfortable model-span range so GUI, CLI, and Agent callers share the same explanation. |
+| Scale recommendations | Scale recommendation readback must include the current comfortable range, recommended use case, recommended visible span, recommended comfortable model-span range, whether the recommendation is directly actionable, and an explicit warning when the model exceeds the largest supported comfortable workspace range so GUI, CLI, and Agent callers share the same explanation. |
 | Snap increments | Snap increments are unit-aware and independent from display rounding. When no explicit snap interval is supplied, grid snapping follows the active ruler minor tick; explicit intervals remain fixed for precision and automation workflows. |
 | Object snaps | Endpoint, midpoint, center, tangent, perpendicular, intersection, face, edge, vertex, and construction references. |
 | Measurement | Distance, angle, radius, diameter, area, volume, bounding box, wall thickness, clearance, and mass properties where material density exists. |

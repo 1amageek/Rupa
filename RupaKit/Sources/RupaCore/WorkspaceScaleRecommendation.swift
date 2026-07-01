@@ -6,6 +6,7 @@ public struct WorkspaceScaleRecommendation: Codable, Equatable, Sendable {
     public enum Reason: String, Codable, Equatable, Sendable {
         case modelExceedsComfortableSpan
         case modelTooSmallForWorkspace
+        case modelExceedsSupportedScaleRange
     }
 
     public var reason: Reason
@@ -51,6 +52,10 @@ public struct WorkspaceScaleRecommendation: Codable, Equatable, Sendable {
         )
     }
 
+    public var isActionable: Bool {
+        recommendedScale != currentScale
+    }
+
     private static func comfortableModelSpanTitle(
         lowerMeters: Double,
         upperMeters: Double,
@@ -92,6 +97,11 @@ public struct WorkspaceScaleRecommendationService: Sendable {
         }
 
         let currentRuler = currentRuler.normalizedForWorkspaceScale()
+        let candidates = Self.presetCandidates(preferredUnit: currentRuler.displayUnit)
+        let largestPreset = candidates[candidates.index(before: candidates.endIndex)]
+        let largestRuler = largestPreset.rulerConfiguration.normalizedForWorkspaceScale()
+        let largestComfortableSpan = largestRuler.visibleSpanMeters
+            * WorkspaceScalePreset.maximumComfortableModelSpanRatio
         let minimumComfortableSpan = currentRuler.visibleSpanMeters
             * WorkspaceScalePreset.minimumComfortableModelSpanRatio
         let maximumComfortableSpan = currentRuler.visibleSpanMeters
@@ -99,7 +109,9 @@ public struct WorkspaceScaleRecommendationService: Sendable {
 
         let reason: WorkspaceScaleRecommendation.Reason
         if modelSpan > maximumComfortableSpan {
-            reason = .modelExceedsComfortableSpan
+            reason = modelSpan > largestComfortableSpan
+                ? .modelExceedsSupportedScaleRange
+                : .modelExceedsComfortableSpan
         } else if modelSpan < minimumComfortableSpan {
             reason = .modelTooSmallForWorkspace
         } else {
@@ -111,7 +123,8 @@ public struct WorkspaceScaleRecommendationService: Sendable {
             preferredUnit: currentRuler.displayUnit
         )
         let recommendedRuler = preset.rulerConfiguration.normalizedForWorkspaceScale()
-        guard recommendedRuler != currentRuler else {
+        guard recommendedRuler != currentRuler
+                || reason == .modelExceedsSupportedScaleRange else {
             return nil
         }
 
@@ -160,10 +173,21 @@ public struct WorkspaceScaleRecommendationService: Sendable {
         }
         return [
             EditorDiagnostic(
-                severity: .info,
+                severity: diagnosticSeverity(for: recommendation),
                 message: message(for: recommendation)
             ),
         ]
+    }
+
+    private func diagnosticSeverity(
+        for recommendation: WorkspaceScaleRecommendation
+    ) -> EditorDiagnostic.Severity {
+        switch recommendation.reason {
+        case .modelExceedsSupportedScaleRange:
+            .warning
+        case .modelExceedsComfortableSpan, .modelTooSmallForWorkspace:
+            .info
+        }
     }
 
     private func message(
@@ -184,6 +208,8 @@ public struct WorkspaceScaleRecommendationService: Sendable {
             return "Workspace scale recommendation: model span \(modelSpan) exceeds the current comfortable range \(currentRange). Use \(recommendation.recommendedPreset.title) with \(visibleSpan) visible span and \(recommendedRange) comfortable model span."
         case .modelTooSmallForWorkspace:
             return "Workspace scale recommendation: model span \(modelSpan) is below the current comfortable range \(currentRange). Use \(recommendation.recommendedPreset.title) with \(visibleSpan) visible span and \(recommendedRange) comfortable model span."
+        case .modelExceedsSupportedScaleRange:
+            return "Workspace scale warning: model span \(modelSpan) exceeds the largest supported comfortable range \(recommendedRange). Use \(recommendation.recommendedPreset.title) with \(visibleSpan) visible span as the broadest workspace, then segment the context or rebase local editing areas before precision CAD edits."
         }
     }
 

@@ -35,6 +35,7 @@ struct WorkspaceDocumentScaleRecommendationState: Equatable, Sendable {
     var visibleSpanTitle: String
     var recommendedComfortableModelSpanTitle: String
     var preset: WorkspaceScalePreset
+    var isActionable: Bool
 }
 
 struct WorkspaceDocumentPrecisionRecommendationState: Equatable, Sendable {
@@ -186,23 +187,34 @@ struct WorkspaceDocumentInspectorView: View {
     ) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             inspectorControlRow("Recommended") {
-                Button {
-                    setWorkspaceScalePreset(recommendation.preset)
-                } label: {
-                    HStack(spacing: 6) {
-                        Text(recommendation.presetTitle)
-                            .lineLimit(1)
-                            .truncationMode(.tail)
-                        Spacer(minLength: 4)
-                        Image(systemName: "arrow.right.circle")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
+                if recommendation.isActionable {
+                    Button {
+                        setWorkspaceScalePreset(recommendation.preset)
+                    } label: {
+                        HStack(spacing: 6) {
+                            Text(recommendation.presetTitle)
+                                .lineLimit(1)
+                                .truncationMode(.tail)
+                            Spacer(minLength: 4)
+                            Image(systemName: "arrow.right.circle")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+                        .frame(width: inspectorControlWidth + inspectorUnitWidth + 6)
                     }
-                    .frame(width: inspectorControlWidth + inspectorUnitWidth + 6)
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                    .accessibilityIdentifier("WorkspaceScaleRecommendation.apply")
+                } else {
+                    Text(recommendation.presetTitle)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                        .frame(
+                            width: inspectorControlWidth + inspectorUnitWidth + 6,
+                            alignment: .leading
+                        )
                 }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-                .accessibilityIdentifier("WorkspaceScaleRecommendation.apply")
             }
             workspaceInspectorValueRow("Reason", recommendation.reasonTitle)
             workspaceInspectorValueRow("Use Case", recommendation.useCaseTitle)
@@ -318,7 +330,8 @@ func workspaceDocumentScaleRecommendationState(
         currentComfortableModelSpanTitle: recommendation.currentComfortableModelSpanTitle,
         visibleSpanTitle: recommendedProfile.visibleSpanTitle,
         recommendedComfortableModelSpanTitle: recommendedProfile.comfortableModelSpanTitle,
-        preset: recommendation.recommendedPreset
+        preset: recommendation.recommendedPreset,
+        isActionable: recommendation.isActionable
     )
 }
 
@@ -330,6 +343,8 @@ private func workspaceScaleRecommendationReasonTitle(
         "Model exceeds ruler"
     case .modelTooSmallForWorkspace:
         "Workspace too broad"
+    case .modelExceedsSupportedScaleRange:
+        "Beyond scale range"
     }
 }
 

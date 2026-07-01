@@ -59,6 +59,55 @@ import Testing
     #expect(recommendation.recommendedScaleProfile.comfortableModelSpanTitle == "10 km to 800 km")
 }
 
+@Test func workspaceScaleRecommendationWarnsWhenModelExceedsLargestMetricScaleRange() throws {
+    let bounds = MeasurementResult.Bounds(
+        minX: 0.0,
+        minY: 0.0,
+        minZ: 0.0,
+        maxX: 1_200_000.0,
+        maxY: 400_000.0,
+        maxZ: 1_000.0
+    )
+
+    let recommendation = try #require(WorkspaceScaleRecommendationService().recommendation(
+        for: bounds,
+        currentRuler: WorkspaceScalePreset.regionalPlanning.rulerConfiguration
+    ))
+
+    #expect(recommendation.reason == .modelExceedsSupportedScaleRange)
+    #expect(recommendation.modelSpanMeters == 1_200_000.0)
+    #expect(recommendation.recommendedPreset == .regionalPlanning)
+    #expect(recommendation.recommendedScale.displayUnit == .kilometer)
+    #expect(recommendation.recommendedScaleProfile.visibleSpanTitle == "1,000 km")
+    #expect(recommendation.recommendedScaleProfile.comfortableModelSpanTitle == "10 km to 800 km")
+    #expect(recommendation.isActionable == false)
+
+    let diagnostics = WorkspaceScaleRecommendationService().diagnostics(for: recommendation)
+    #expect(diagnostics.first?.severity == .warning)
+    #expect(diagnostics.first?.message.contains("largest supported comfortable range") == true)
+    #expect(diagnostics.first?.message.contains("segment the context") == true)
+}
+
+@Test func workspaceScaleRecommendationStillRecommendsLargestPresetForOversizeModelFromSmallerScale() throws {
+    let bounds = MeasurementResult.Bounds(
+        minX: 0.0,
+        minY: 0.0,
+        minZ: 0.0,
+        maxX: 1_200_000.0,
+        maxY: 400_000.0,
+        maxZ: 1_000.0
+    )
+
+    let recommendation = try #require(WorkspaceScaleRecommendationService().recommendation(
+        for: bounds,
+        currentRuler: WorkspaceScalePreset.sitePlanning.rulerConfiguration
+    ))
+
+    #expect(recommendation.reason == .modelExceedsSupportedScaleRange)
+    #expect(recommendation.recommendedPreset == .regionalPlanning)
+    #expect(recommendation.isActionable)
+}
+
 @Test func workspaceScaleRecommendationChoosesSmallerPresetForTinyModelInSiteWorkspace() throws {
     let bounds = MeasurementResult.Bounds(
         minX: -0.25,
@@ -135,5 +184,40 @@ import Testing
             && $0.message.contains("Workspace scale recommendation")
             && $0.message.contains("Site Planning")
             && $0.message.contains("1 km to 80 km")
+    })
+}
+
+@MainActor
+@Test func measurementIncludesWorkspaceScaleWarningForModelBeyondLargestPreset() throws {
+    var document = DesignDocument.empty(named: "Regional Context")
+    try document.setRulerConfiguration(WorkspaceScalePreset.regionalPlanning.rulerConfiguration)
+    let profileID = try document.createRectangleSketchFromCorners(
+        name: "Regional Footprint",
+        plane: .xy,
+        firstCorner: SketchPoint(
+            x: .length(0.0, .meter),
+            y: .length(0.0, .meter)
+        ),
+        oppositeCorner: SketchPoint(
+            x: .length(1_200_000.0, .meter),
+            y: .length(400_000.0, .meter)
+        )
+    )
+    _ = try document.extrudeProfile(
+        name: "Regional Mass",
+        profile: ProfileReference(featureID: profileID),
+        distance: .length(1_000.0, .meter),
+        direction: .normal
+    )
+
+    let result = try MeasurementService().measure(document: document)
+
+    #expect(result.workspaceScaleRecommendation?.reason == .modelExceedsSupportedScaleRange)
+    #expect(result.workspaceScaleRecommendation?.isActionable == false)
+    #expect(result.workspaceScaleRecommendation?.recommendedPreset == .regionalPlanning)
+    #expect(result.diagnostics.contains {
+        $0.severity == .warning
+            && $0.message.contains("Workspace scale warning")
+            && $0.message.contains("largest supported comfortable range")
     })
 }
