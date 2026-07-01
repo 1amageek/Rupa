@@ -81,6 +81,27 @@ import Testing
 }
 
 @MainActor
+@Test func editorSessionDefaultSolidUsesRegionalPlanningWorkspaceScale() async throws {
+    let session = EditorSession()
+    _ = try session.execute(
+        .setRulerConfiguration(WorkspaceScalePreset.regionalPlanning.rulerConfiguration)
+    )
+
+    _ = try #require(session.createDefaultExtrudedRectangle())
+    let sketchNode = try #require(firstSceneNode(with: .sketch, in: session.document))
+    let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let bodyFeature = try #require(session.document.cadDocument.designGraph.nodes[bodyFeatureID])
+    guard case .extrude(let extrude) = bodyFeature.operation else {
+        Issue.record("Expected default solid creation to create an extrude feature.")
+        return
+    }
+
+    #expect(approximatelyEqual(sketchNode.object?.properties["size.x"]?.lengthValue, 40_000.0))
+    #expect(approximatelyEqual(sketchNode.object?.properties["size.y"]?.lengthValue, 20_000.0))
+    #expect(approximatelyEqual(try resolvedLength(extrude.distance, in: session.document), 10_000.0))
+}
+
+@MainActor
 @Test func editorSessionDefaultCircleUsesWorkspaceScale() async throws {
     let session = EditorSession()
     _ = try session.execute(.setRulerConfiguration(.standard(for: .meter)))
@@ -113,6 +134,34 @@ import Testing
     )
     let circleNode = try #require(firstSceneNode(with: .sketch, in: circleSession.document))
     #expect(approximatelyEqual(circleNode.object?.properties["radius"]?.lengthValue, 12.0))
+}
+
+@MainActor
+@Test func editorSessionCanvasClickShapesUseRegionalPlanningWorkspaceScale() async throws {
+    let rectangleSession = EditorSession()
+    _ = try rectangleSession.execute(
+        .setRulerConfiguration(WorkspaceScalePreset.regionalPlanning.rulerConfiguration)
+    )
+    _ = try #require(
+        rectangleSession.createRectangleSketchFromCanvasClick(
+            centerModelPoint: Point2D(x: 0.0, y: 0.0)
+        )
+    )
+    let rectangleNode = try #require(firstSceneNode(with: .sketch, in: rectangleSession.document))
+    #expect(approximatelyEqual(rectangleNode.object?.properties["size.x"]?.lengthValue, 40_000.0))
+    #expect(approximatelyEqual(rectangleNode.object?.properties["size.y"]?.lengthValue, 40_000.0))
+
+    let circleSession = EditorSession()
+    _ = try circleSession.execute(
+        .setRulerConfiguration(WorkspaceScalePreset.regionalPlanning.rulerConfiguration)
+    )
+    _ = try #require(
+        circleSession.createCircleSketchFromCanvasClick(
+            centerModelPoint: Point2D(x: 0.0, y: 0.0)
+        )
+    )
+    let circleNode = try #require(firstSceneNode(with: .sketch, in: circleSession.document))
+    #expect(approximatelyEqual(circleNode.object?.properties["radius"]?.lengthValue, 12_000.0))
 }
 
 @Test func canvasCurveDraftsAcceptWorkspaceScaleDefaults() async throws {
