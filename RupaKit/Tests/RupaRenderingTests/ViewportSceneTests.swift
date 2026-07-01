@@ -30,6 +30,33 @@ import Testing
 }
 
 @MainActor
+@Test func viewportSceneBuilderUsesRulerScaledMinimumSketchBounds() throws {
+    var document = DesignDocument.empty()
+    try document.setRulerConfiguration(WorkspaceScalePreset.microFabrication.rulerConfiguration)
+    let featureID = try document.createLineSketch(
+        name: "Micro Vertical Line",
+        plane: .xy,
+        start: SketchPoint(
+            x: .length(2.0e-6, .meter),
+            y: .length(0.0, .meter)
+        ),
+        end: SketchPoint(
+            x: .length(2.0e-6, .meter),
+            y: .length(3.0e-6, .meter)
+        )
+    )
+
+    let scene = ViewportSceneBuilder().build(document: document)
+    let item = try #require(scene.items.first { $0.featureID == featureID })
+
+    #expect(abs(item.modelBounds.width - 1.0e-6) < 1.0e-18)
+    #expect(abs(item.modelBounds.height - 3.0e-6) < 1.0e-18)
+    #expect(abs(item.modelBounds.midX - 2.0e-6) < 1.0e-18)
+    #expect(abs(item.modelBounds.midY - 1.5e-6) < 1.0e-18)
+    #expect(item.modelBounds.width < 0.001)
+}
+
+@MainActor
 @Test func viewportSceneBuilderExpandsComponentInstancePatternItemsWithSceneNodeIdentity() async throws {
     let session = EditorSession()
     _ = try #require(session.createDefaultExtrudedRectangle())

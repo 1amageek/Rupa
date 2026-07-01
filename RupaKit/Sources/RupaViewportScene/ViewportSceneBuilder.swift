@@ -69,7 +69,7 @@ public struct ViewportSceneBuilder {
                 guard let sketchSnapshot = designDisplaySnapshot.sketches[featureID] else {
                     return nil
                 }
-                let bounds = viewportBounds(sketchSnapshot.bounds)
+                let bounds = viewportBounds(sketchSnapshot.bounds, ruler: document.ruler)
                 return ViewportSceneItem(
                     id: featureID.description,
                     featureID: featureID,
@@ -84,7 +84,7 @@ public struct ViewportSceneBuilder {
                       let sketchSnapshot = designDisplaySnapshot.sketches[extrudeSnapshot.profileFeatureID] else {
                     return nil
                 }
-                let bounds = viewportBounds(sketchSnapshot.bounds)
+                let bounds = viewportBounds(sketchSnapshot.bounds, ruler: document.ruler)
                 let object = objectDescriptor(
                     featureID: featureID,
                     kind: .body,
@@ -124,7 +124,7 @@ public struct ViewportSceneBuilder {
                 }
                 if let sweepSnapshot = designDisplaySnapshot.straightPrismSweeps[featureID],
                    let sketchSnapshot = designDisplaySnapshot.sketches[sweepSnapshot.profileFeatureID] {
-                    let bounds = viewportBounds(sketchSnapshot.bounds)
+                    let bounds = viewportBounds(sketchSnapshot.bounds, ruler: document.ruler)
                     let object = objectDescriptor(
                         featureID: featureID,
                         kind: .body,
@@ -1471,12 +1471,21 @@ public struct ViewportSceneBuilder {
         }?.object
     }
 
-    private func viewportBounds(_ bounds: SketchDisplaySnapshot.Bounds) -> CGRect {
-        CGRect(
-            x: bounds.minX,
-            y: bounds.minY,
-            width: max(bounds.width, 0.001),
-            height: max(bounds.height, 0.001)
+    private func viewportBounds(
+        _ bounds: SketchDisplaySnapshot.Bounds,
+        ruler: RulerConfiguration
+    ) -> CGRect {
+        let minimumSpan = max(
+            ruler.normalizedForWorkspaceScale().minorTickMeters,
+            RulerConfiguration.minorTickMetersRange.lowerBound
+        )
+        let width = max(bounds.width, minimumSpan)
+        let height = max(bounds.height, minimumSpan)
+        return CGRect(
+            x: bounds.minX - (width - bounds.width) / 2.0,
+            y: bounds.minY - (height - bounds.height) / 2.0,
+            width: width,
+            height: height
         )
     }
 
