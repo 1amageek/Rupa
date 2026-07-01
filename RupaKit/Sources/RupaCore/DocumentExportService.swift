@@ -78,16 +78,10 @@ public struct DocumentExportService: Sendable {
             presetName: plan.presetName,
             outputUnit: plan.outputUnit,
             destinationPolicy: plan.destinationPolicy,
-            diagnostics: [
-                EditorDiagnostic(
-                    severity: .info,
-                    message: "Export completed with \(evaluatedDocument.meshes.count) generated bodies."
-                ),
-                EditorDiagnostic(
-                    severity: .info,
-                    message: "Export unit \(plan.outputUnit.rawValue), destination policy \(plan.destinationPolicy.rawValue)."
-                ),
-            ]
+            diagnostics: exportDiagnostics(
+                plan: plan,
+                meshCount: evaluatedDocument.meshes.count
+            )
         )
     }
 
@@ -119,27 +113,58 @@ public struct DocumentExportService: Sendable {
                     message: "Export preset \(preset.name) writes \(preset.format.displayName), but output path selects \(extensionFormat.displayName)."
                 )
             }
-            let outputUnit = preset.outputUnit
+            let outputUnitResolution = resolvedOutputUnit(
+                requestedUnit: preset.outputUnit,
+                format: preset.format
+            )
             return ResolvedExportPlan(
                 format: preset.format,
-                outputUnit: outputUnit,
+                outputUnit: outputUnitResolution.unit,
                 unitSystem: UnitSystem(
-                    length: outputUnit.swiftCADLengthUnit,
+                    length: outputUnitResolution.unit.swiftCADLengthUnit,
                     angle: document.cadDocument.units.angle
                 ),
                 destinationPolicy: options.destinationPolicy ?? preset.destinationPolicy,
-                presetName: preset.name
+                presetName: preset.name,
+                diagnostics: outputUnitResolution.diagnostics
             )
         }
 
-        let outputUnit = document.cadDocument.units.length.rupaDisplayUnit
+        let outputUnitResolution = resolvedOutputUnit(
+            requestedUnit: document.cadDocument.units.length.rupaDisplayUnit,
+            format: extensionFormat
+        )
         return ResolvedExportPlan(
             format: extensionFormat,
-            outputUnit: outputUnit,
-            unitSystem: document.cadDocument.units,
+            outputUnit: outputUnitResolution.unit,
+            unitSystem: UnitSystem(
+                length: outputUnitResolution.unit.swiftCADLengthUnit,
+                angle: document.cadDocument.units.angle
+            ),
             destinationPolicy: options.destinationPolicy ?? .overwrite,
-            presetName: nil
+            presetName: nil,
+            diagnostics: outputUnitResolution.diagnostics
         )
+    }
+
+    private func resolvedOutputUnit(
+        requestedUnit: LengthDisplayUnit,
+        format: ExchangeFileFormat
+    ) -> (unit: LengthDisplayUnit, diagnostics: [EditorDiagnostic]) {
+        switch (format, requestedUnit) {
+        case (.threeMF, .kilometer):
+            return (
+                .meter,
+                [
+                    EditorDiagnostic(
+                        severity: .info,
+                        message: "3MF does not support kilometer units; export uses meter coordinates while preserving model scale."
+                    )
+                ]
+            )
+        default:
+            return (requestedUnit, [])
+        }
     }
 
     private func resolvedPreset(
@@ -346,6 +371,22 @@ public struct DocumentExportService: Sendable {
             data.append(contentsOf: bytes)
         }
     }
+
+    private func exportDiagnostics(
+        plan: ResolvedExportPlan,
+        meshCount: Int
+    ) -> [EditorDiagnostic] {
+        [
+            EditorDiagnostic(
+                severity: .info,
+                message: "Export completed with \(meshCount) generated bodies."
+            ),
+            EditorDiagnostic(
+                severity: .info,
+                message: "Export unit \(plan.outputUnit.rawValue), destination policy \(plan.destinationPolicy.rawValue)."
+            ),
+        ] + plan.diagnostics
+    }
 }
 
 private struct ResolvedExportPlan: Sendable {
@@ -354,4 +395,5 @@ private struct ResolvedExportPlan: Sendable {
     var unitSystem: UnitSystem
     var destinationPolicy: ExportPreset.DestinationPolicy
     var presetName: String?
+    var diagnostics: [EditorDiagnostic] = []
 }

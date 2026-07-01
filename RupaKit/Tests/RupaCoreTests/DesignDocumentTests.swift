@@ -2926,6 +2926,59 @@ import Testing
 }
 
 @MainActor
+@Test func documentExportServiceNormalizesKilometerThreeMFExportToMeters() async throws {
+    let temporaryDirectory = try makeTemporaryDirectory()
+    defer {
+        removeTemporaryDirectory(temporaryDirectory)
+    }
+
+    let preset = ExportPreset(
+        name: "Site 3MF",
+        format: .threeMF,
+        outputUnit: .kilometer,
+        destinationPolicy: .overwrite
+    )
+    var metadata = ProductMetadata.empty()
+    metadata.exportPresets = [preset.id: preset]
+    var document = DesignDocument.empty(named: "Site Export")
+    try document.setRulerConfiguration(WorkspaceScalePreset.sitePlanning.rulerConfiguration)
+    document.productMetadata = metadata
+    let session = EditorSession(document: document)
+    _ = try session.execute(
+        .createExtrudedRectangle(
+            name: "Site Box",
+            plane: .xy,
+            width: .length(1.0, .kilometer),
+            height: .length(0.5, .kilometer),
+            depth: .length(0.1, .kilometer),
+            direction: .normal
+        )
+    )
+
+    let outputURL = temporaryDirectory.appendingPathComponent("site-box.3mf")
+    let result = try DocumentExportService().export(
+        document: session.document,
+        generation: session.generation,
+        to: outputURL,
+        options: ExportOptions(presetName: "Site 3MF")
+    )
+    let imported = try ThreeMFExchange().import(try Data(contentsOf: outputURL))
+    let bounds = try meshBounds(imported.meshes.values.flatMap(\.positions))
+
+    #expect(result.format == .threeMF)
+    #expect(result.presetName == "Site 3MF")
+    #expect(result.outputUnit == .meter)
+    #expect(imported.units.length == .meter)
+    #expect(result.diagnostics.contains { diagnostic in
+        diagnostic.severity == .info
+            && diagnostic.message.contains("3MF does not support kilometer units")
+    })
+    #expect(approximatelyEqual(bounds.width, 1_000.0))
+    #expect(approximatelyEqual(bounds.height, 500.0))
+    #expect(approximatelyEqual(bounds.depth, 100.0))
+}
+
+@MainActor
 @Test func documentExportServicePromptPolicyRejectsExistingOutput() async throws {
     let temporaryDirectory = try makeTemporaryDirectory()
     defer {
@@ -3132,6 +3185,44 @@ private func sketchBounds(
     let minY = points.dropFirst().reduce(first.y) { min($0, $1.y) }
     let maxY = points.dropFirst().reduce(first.y) { max($0, $1.y) }
     return (width: maxX - minX, height: maxY - minY)
+}
+
+private func meshBounds(
+    _ points: [Point3D]
+) throws -> (width: Double, height: Double, depth: Double) {
+    let first = try #require(points.first)
+    let bounds = points.dropFirst().reduce(
+        (
+            minX: first.x,
+            maxX: first.x,
+            minY: first.y,
+            maxY: first.y,
+            minZ: first.z,
+            maxZ: first.z
+        )
+    ) { bounds, point in
+        (
+            minX: min(bounds.minX, point.x),
+            maxX: max(bounds.maxX, point.x),
+            minY: min(bounds.minY, point.y),
+            maxY: max(bounds.maxY, point.y),
+            minZ: min(bounds.minZ, point.z),
+            maxZ: max(bounds.maxZ, point.z)
+        )
+    }
+    return (
+        width: bounds.maxX - bounds.minX,
+        height: bounds.maxY - bounds.minY,
+        depth: bounds.maxZ - bounds.minZ
+    )
+}
+
+private func approximatelyEqual(
+    _ lhs: Double,
+    _ rhs: Double,
+    tolerance: Double = 1.0e-9
+) -> Bool {
+    abs(lhs - rhs) <= tolerance
 }
 
 private func generatedDepthEdge(
