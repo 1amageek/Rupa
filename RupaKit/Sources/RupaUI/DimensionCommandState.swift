@@ -209,7 +209,7 @@ struct DimensionCommandState: Equatable {
 
     mutating func setDraftText(
         _ text: String,
-        displayUnit: LengthDisplayUnit
+        defaultUnit: LengthDisplayUnit
     ) {
         guard let activeEntry else {
             return
@@ -218,7 +218,7 @@ struct DimensionCommandState: Equatable {
         case .length:
             guard let meters = workspaceLengthMeters(
                 fromFieldText: text,
-                defaultUnit: displayUnit
+                defaultUnit: defaultUnit
             ) else {
                 return
             }

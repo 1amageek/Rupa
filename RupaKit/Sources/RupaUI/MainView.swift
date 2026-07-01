@@ -1946,12 +1946,11 @@ public struct MainView: View {
                 case .length:
                     TextField(
                         focus.statusTitle,
-                        value: workspaceSketchLengthInputBinding,
-                        formatter: inspectorNumberFormatter
+                        text: workspaceSketchLengthInputBinding
                     )
                     .multilineTextAlignment(.trailing)
-                    .frame(width: 54)
-                    Text(session.document.displayUnit.symbol)
+                    .frame(width: 64)
+                    Text(sketchDimensionLengthUnitSymbol(session.sketchInputState.dimensionInputLengthMeters))
                         .foregroundStyle(.secondary)
                 case .angle:
                     TextField(
@@ -1966,22 +1965,20 @@ public struct MainView: View {
                 case .width:
                     TextField(
                         focus.statusTitle,
-                        value: workspaceSketchWidthInputBinding,
-                        formatter: inspectorNumberFormatter
+                        text: workspaceSketchWidthInputBinding
                     )
                     .multilineTextAlignment(.trailing)
-                    .frame(width: 54)
-                    Text(session.document.displayUnit.symbol)
+                    .frame(width: 64)
+                    Text(sketchDimensionLengthUnitSymbol(session.sketchInputState.dimensionInputWidthMeters))
                         .foregroundStyle(.secondary)
                 case .height:
                     TextField(
                         focus.statusTitle,
-                        value: workspaceSketchHeightInputBinding,
-                        formatter: inspectorNumberFormatter
+                        text: workspaceSketchHeightInputBinding
                     )
                     .multilineTextAlignment(.trailing)
-                    .frame(width: 54)
-                    Text(session.document.displayUnit.symbol)
+                    .frame(width: 64)
+                    Text(sketchDimensionLengthUnitSymbol(session.sketchInputState.dimensionInputHeightMeters))
                         .foregroundStyle(.secondary)
                 }
             }
@@ -1998,15 +1995,16 @@ public struct MainView: View {
         }
     }
 
-    private var workspaceSketchLengthInputBinding: Binding<Double> {
-        Binding<Double>(
+    private var workspaceSketchLengthInputBinding: Binding<String> {
+        Binding<String>(
             get: {
-                let unit = session.document.displayUnit
-                return unit.value(fromMeters: session.sketchInputState.dimensionInputLengthMeters ?? 0.0)
+                sketchDimensionLengthInputText(session.sketchInputState.dimensionInputLengthMeters)
             },
-            set: { value in
-                let unit = session.document.displayUnit
-                _ = session.setSketchDimensionInputLength(unit.meters(from: value))
+            set: { text in
+                setSketchDimensionInputLength(
+                    text,
+                    currentMeters: session.sketchInputState.dimensionInputLengthMeters
+                )
             }
         )
     }
@@ -2025,28 +2023,30 @@ public struct MainView: View {
         )
     }
 
-    private var workspaceSketchWidthInputBinding: Binding<Double> {
-        Binding<Double>(
+    private var workspaceSketchWidthInputBinding: Binding<String> {
+        Binding<String>(
             get: {
-                let unit = session.document.displayUnit
-                return unit.value(fromMeters: session.sketchInputState.dimensionInputWidthMeters ?? 0.0)
+                sketchDimensionLengthInputText(session.sketchInputState.dimensionInputWidthMeters)
             },
-            set: { value in
-                let unit = session.document.displayUnit
-                _ = session.setSketchDimensionInputWidth(unit.meters(from: value))
+            set: { text in
+                setSketchDimensionInputWidth(
+                    text,
+                    currentMeters: session.sketchInputState.dimensionInputWidthMeters
+                )
             }
         )
     }
 
-    private var workspaceSketchHeightInputBinding: Binding<Double> {
-        Binding<Double>(
+    private var workspaceSketchHeightInputBinding: Binding<String> {
+        Binding<String>(
             get: {
-                let unit = session.document.displayUnit
-                return unit.value(fromMeters: session.sketchInputState.dimensionInputHeightMeters ?? 0.0)
+                sketchDimensionLengthInputText(session.sketchInputState.dimensionInputHeightMeters)
             },
-            set: { value in
-                let unit = session.document.displayUnit
-                _ = session.setSketchDimensionInputHeight(unit.meters(from: value))
+            set: { text in
+                setSketchDimensionInputHeight(
+                    text,
+                    currentMeters: session.sketchInputState.dimensionInputHeightMeters
+                )
             }
         )
     }
@@ -2054,6 +2054,7 @@ public struct MainView: View {
     @ViewBuilder
     private var workspaceDimensionInputField: some View {
         if let entry = dimensionCommandState.activeEntry {
+            let currentValue = dimensionCommandState.currentValue ?? entry.resolvedValue
             HStack(spacing: 5) {
                 Text(entry.label)
                     .foregroundStyle(.secondary)
@@ -2063,7 +2064,7 @@ public struct MainView: View {
                 )
                 .multilineTextAlignment(.trailing)
                 .frame(width: 86)
-                Text(dimensionInputUnitSymbol(entry.valueKind))
+                Text(dimensionInputUnitSymbol(entry.valueKind, value: currentValue))
                     .foregroundStyle(.secondary)
             }
             .font(.caption)
@@ -2091,12 +2092,76 @@ public struct MainView: View {
                 )
             },
             set: { text in
+                guard let entry = dimensionCommandState.activeEntry else {
+                    return
+                }
+                let currentValue = dimensionCommandState.currentValue ?? entry.resolvedValue
                 dimensionCommandState.setDraftText(
                     text,
-                    displayUnit: session.document.displayUnit
+                    defaultUnit: dimensionInputDefaultUnit(entry.valueKind, value: currentValue)
                 )
             }
         )
+    }
+
+    private func sketchDimensionLengthInputText(_ meters: Double?) -> String {
+        workspaceLengthFieldPresentation(
+            fromMeters: meters ?? 0.0,
+            preferredUnit: session.document.displayUnit
+        ).text
+    }
+
+    private func sketchDimensionLengthUnitSymbol(_ meters: Double?) -> String {
+        sketchDimensionLengthDefaultUnit(meters).symbol
+    }
+
+    private func sketchDimensionLengthDefaultUnit(_ meters: Double?) -> LengthDisplayUnit {
+        guard let meters else {
+            return session.document.displayUnit
+        }
+        return workspaceLengthFieldPresentation(
+            fromMeters: meters,
+            preferredUnit: session.document.displayUnit
+        ).unit
+    }
+
+    private func setSketchDimensionInputLength(
+        _ text: String,
+        currentMeters: Double?
+    ) {
+        guard let meters = workspaceLengthMeters(
+            fromFieldText: text,
+            defaultUnit: sketchDimensionLengthDefaultUnit(currentMeters)
+        ) else {
+            return
+        }
+        _ = session.setSketchDimensionInputLength(meters)
+    }
+
+    private func setSketchDimensionInputWidth(
+        _ text: String,
+        currentMeters: Double?
+    ) {
+        guard let meters = workspaceLengthMeters(
+            fromFieldText: text,
+            defaultUnit: sketchDimensionLengthDefaultUnit(currentMeters)
+        ) else {
+            return
+        }
+        _ = session.setSketchDimensionInputWidth(meters)
+    }
+
+    private func setSketchDimensionInputHeight(
+        _ text: String,
+        currentMeters: Double?
+    ) {
+        guard let meters = workspaceLengthMeters(
+            fromFieldText: text,
+            defaultUnit: sketchDimensionLengthDefaultUnit(currentMeters)
+        ) else {
+            return
+        }
+        _ = session.setSketchDimensionInputHeight(meters)
     }
 
     private func sweepPreviewFeatureLabel(_ featureID: FeatureID?) -> String {
@@ -6992,7 +7057,11 @@ public struct MainView: View {
     ) -> String {
         switch kind {
         case .length:
-            return formatted(value)
+            let unit = dimensionInputDefaultUnit(kind, value: value)
+            return WorkspaceInspectorNumberText.lengthString(
+                fromMeters: value,
+                unit: unit
+            )
         case .angle:
             return formattedDegrees(degrees(fromRadians: value))
         }
@@ -7004,20 +7073,39 @@ public struct MainView: View {
     ) -> String {
         switch kind {
         case .length:
-            return WorkspaceInspectorNumberText.string(
-                from: session.document.displayUnit.value(fromMeters: value)
-            )
+            return workspaceLengthFieldPresentation(
+                fromMeters: value,
+                preferredUnit: session.document.displayUnit
+            ).text
         case .angle:
             return WorkspaceInspectorNumberText.string(from: degrees(fromRadians: value))
         }
     }
 
-    private func dimensionInputUnitSymbol(_ kind: DimensionCommandEntry.ValueKind) -> String {
+    private func dimensionInputUnitSymbol(
+        _ kind: DimensionCommandEntry.ValueKind,
+        value: Double
+    ) -> String {
         switch kind {
         case .length:
-            return session.document.displayUnit.symbol
+            return dimensionInputDefaultUnit(kind, value: value).symbol
         case .angle:
             return "deg"
+        }
+    }
+
+    private func dimensionInputDefaultUnit(
+        _ kind: DimensionCommandEntry.ValueKind,
+        value: Double
+    ) -> LengthDisplayUnit {
+        switch kind {
+        case .length:
+            return workspaceLengthFieldPresentation(
+                fromMeters: value,
+                preferredUnit: session.document.displayUnit
+            ).unit
+        case .angle:
+            return session.document.displayUnit
         }
     }
 
