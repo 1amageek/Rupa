@@ -3,10 +3,10 @@ import Foundation
 import Testing
 import RupaCore
 import SwiftCAD
-@testable import RupaAgent
-@testable import RupaAgentTransport
+import RupaAgent
+import RupaAgentTransport
 
-func agentSourcePointSession() throws -> (
+public func agentSourcePointSession() throws -> (
     session: EditorSession,
     targets: [SelectionTarget]
 ) {
@@ -43,14 +43,14 @@ func agentSourcePointSession() throws -> (
     return (EditorSession(document: document), targets)
 }
 
-func agentSketchEntityComponentID(from target: SelectionTarget) -> SelectionComponentID? {
+public func agentSketchEntityComponentID(from target: SelectionTarget) -> SelectionComponentID? {
     guard case .sketchEntity(let componentID) = target.component else {
         return nil
     }
     return componentID
 }
 
-func agentPointHandleSelectionTarget(
+public func agentPointHandleSelectionTarget(
     _ entry: SketchEntitySummaryResult.EntityEntry,
     handle: SketchEntityPointHandle
 ) throws -> SelectionTarget {
@@ -62,7 +62,7 @@ func agentPointHandleSelectionTarget(
     )
 }
 
-func agentBottomRectangleLine(
+public func agentBottomRectangleLine(
     in summary: SketchEntitySummaryResult
 ) -> SketchEntitySummaryResult.EntityEntry? {
     summary.entries.first { entry in
@@ -74,15 +74,15 @@ func agentBottomRectangleLine(
     }
 }
 
-func agentVector(_ point: TopologySummaryResult.Entry.Point) -> Vector3D {
+public func agentVector(_ point: TopologySummaryResult.Entry.Point) -> Vector3D {
     Vector3D(x: point.x, y: point.y, z: point.z)
 }
 
-func agentPoint3D(_ point: TopologySummaryResult.Entry.Point) -> Point3D {
+public func agentPoint3D(_ point: TopologySummaryResult.Entry.Point) -> Point3D {
     Point3D(x: point.x, y: point.y, z: point.z)
 }
 
-func agentTopologyPoint(
+public func agentTopologyPoint(
     _ point: TopologySummaryResult.Entry.Point?,
     isOnDepth depth: Double
 ) -> Bool {
@@ -92,7 +92,7 @@ func agentTopologyPoint(
     return abs(point.z - depth) < 1.0e-10
 }
 
-func agentTranslationTransform(
+public func agentTranslationTransform(
     x: Double,
     y: Double,
     z: Double
@@ -109,7 +109,7 @@ func agentTranslationTransform(
     )
 }
 
-func agentLineEndpointTargets(
+public func agentLineEndpointTargets(
     in document: DesignDocument,
     featureID: FeatureID
 ) throws -> (start: SelectionTarget, end: SelectionTarget) {
@@ -134,7 +134,7 @@ func agentLineEndpointTargets(
     )
 }
 
-func agentLineCurveTarget(
+public func agentLineCurveTarget(
     in document: DesignDocument,
     featureID: FeatureID
 ) throws -> SelectionTarget {
@@ -151,7 +151,7 @@ func agentLineCurveTarget(
     )
 }
 
-func createAgentStandalonePointSketch(
+public func createAgentStandalonePointSketch(
     in document: inout DesignDocument,
     name: String,
     plane: SketchPlane,
@@ -178,7 +178,7 @@ func createAgentStandalonePointSketch(
     return featureID
 }
 
-func agentStandalonePointTarget(
+public func agentStandalonePointTarget(
     in document: DesignDocument,
     featureID: FeatureID
 ) throws -> SelectionTarget {
@@ -195,7 +195,7 @@ func agentStandalonePointTarget(
     )
 }
 
-func agentStandalonePointEntityID(
+public func agentStandalonePointEntityID(
     in document: DesignDocument,
     featureID: FeatureID
 ) throws -> SketchEntityID {
@@ -213,7 +213,7 @@ func agentStandalonePointEntityID(
     return entityID
 }
 
-func agentArcEndpointTargets(
+public func agentArcEndpointTargets(
     in document: DesignDocument,
     featureID: FeatureID
 ) throws -> (start: SelectionTarget, end: SelectionTarget) {
@@ -238,7 +238,7 @@ func agentArcEndpointTargets(
     )
 }
 
-func agentSplineControlPointTargets(
+public func agentSplineControlPointTargets(
     in document: DesignDocument,
     featureID: FeatureID
 ) throws -> [SelectionTarget] {
@@ -259,7 +259,7 @@ func agentSplineControlPointTargets(
         }
 }
 
-func agentCircleCenterAndCurveTargets(
+public func agentCircleCenterAndCurveTargets(
     in document: DesignDocument,
     featureID: FeatureID
 ) throws -> (center: SelectionTarget, curve: SelectionTarget) {
@@ -284,7 +284,7 @@ func agentCircleCenterAndCurveTargets(
     )
 }
 
-func agentCircleRadius(
+public func agentCircleRadius(
     in document: DesignDocument,
     featureID: FeatureID
 ) throws -> Double {
@@ -297,7 +297,7 @@ func agentCircleRadius(
     return try document.cadDocument.parameters.resolvedValue(for: circle.radius).value
 }
 
-func agentArcStartAngle(
+public func agentArcStartAngle(
     in document: DesignDocument,
     featureID: FeatureID
 ) throws -> Double {
@@ -310,7 +310,7 @@ func agentArcStartAngle(
     return try document.cadDocument.parameters.resolvedValue(for: arc.startAngle).value
 }
 
-func agentSplineControlPoints(
+public func agentSplineControlPoints(
     in document: DesignDocument,
     featureID: FeatureID
 ) throws -> [Point2D] {
@@ -323,7 +323,7 @@ func agentSplineControlPoints(
     return try spline.controlPoints.map { try agentPoint($0, in: document) }
 }
 
-func agentStandalonePoint(
+public func agentStandalonePoint(
     in document: DesignDocument,
     featureID: FeatureID
 ) throws -> Point2D {
@@ -342,7 +342,7 @@ func agentStandalonePoint(
     return try agentPoint(point, in: document)
 }
 
-func agentLineAngle(
+public func agentLineAngle(
     in document: DesignDocument,
     featureID: FeatureID
 ) throws -> Double {
@@ -350,7 +350,7 @@ func agentLineAngle(
     return atan2(endpoints.end.y - endpoints.start.y, endpoints.end.x - endpoints.start.x)
 }
 
-func agentLineEndpoints(
+public func agentLineEndpoints(
     in document: DesignDocument,
     featureID: FeatureID
 ) throws -> (start: Point2D, end: Point2D) {
@@ -366,7 +366,7 @@ func agentLineEndpoints(
     )
 }
 
-func assertAgentAngleQuantity(
+public func assertAgentAngleQuantity(
     _ quantity: Quantity,
     equals expectedValue: Double,
     tolerance: Double = 1.0e-12
@@ -375,7 +375,7 @@ func assertAgentAngleQuantity(
     #expect(abs(quantity.value - expectedValue) <= tolerance)
 }
 
-func assertAgentLengthQuantity(
+public func assertAgentLengthQuantity(
     _ quantity: Quantity,
     equals expectedValue: Double,
     tolerance: Double = 1.0e-12

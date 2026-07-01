@@ -3,10 +3,10 @@ import Foundation
 import Testing
 import RupaCore
 import SwiftCAD
-@testable import RupaAgent
-@testable import RupaAgentTransport
+import RupaAgent
+import RupaAgentTransport
 
-func agentCylinderRadius(
+public func agentCylinderRadius(
     forBody featureID: FeatureID,
     in document: DesignDocument
 ) throws -> Double {
@@ -33,7 +33,7 @@ func agentCylinderRadius(
     )
 }
 
-func agentLineArcOffsetVertexSketchDocument() throws -> (
+public func agentLineArcOffsetVertexSketchDocument() throws -> (
     document: DesignDocument,
     featureID: FeatureID,
     lineID: SketchEntityID,
@@ -89,7 +89,7 @@ func agentLineArcOffsetVertexSketchDocument() throws -> (
     return (document, featureID, lineID, arcID)
 }
 
-func agentLineArcCornerTreatmentSketchDocument() throws -> (
+public func agentLineArcCornerTreatmentSketchDocument() throws -> (
     document: DesignDocument,
     featureID: FeatureID,
     lineID: SketchEntityID,
@@ -146,7 +146,7 @@ func agentLineArcCornerTreatmentSketchDocument() throws -> (
     return (document, featureID, lineID, arcID, diagonalID)
 }
 
-func agentArcArcOffsetVertexSketchDocument() throws -> (
+public func agentArcArcOffsetVertexSketchDocument() throws -> (
     document: DesignDocument,
     featureID: FeatureID,
     upperArcID: SketchEntityID,
@@ -188,7 +188,7 @@ func agentArcArcOffsetVertexSketchDocument() throws -> (
     return (document, featureID, upperArcID, lowerArcID)
 }
 
-func agentConcaveLineLoopDocument() throws -> DesignDocument {
+public func agentConcaveLineLoopDocument() throws -> DesignDocument {
     var document = DesignDocument.empty()
     let points = [
         agentSketchPoint(x: 0.0, y: 0.0),
@@ -235,14 +235,14 @@ func agentConcaveLineLoopDocument() throws -> DesignDocument {
     return document
 }
 
-func agentSketchPoint(x: Double, y: Double) -> SketchPoint {
+public func agentSketchPoint(x: Double, y: Double) -> SketchPoint {
     SketchPoint(
         x: .length(x, .meter),
         y: .length(y, .meter)
     )
 }
 
-func nearlyEqualAgent(
+public func nearlyEqualAgent(
     _ lhs: Double,
     _ rhs: Double,
     tolerance: Double = 1.0e-9
@@ -250,7 +250,7 @@ func nearlyEqualAgent(
     abs(lhs - rhs) <= tolerance
 }
 
-func isAgentVerticalGeneratedEdge(_ entry: TopologySummaryResult.Entry) -> Bool {
+public func isAgentVerticalGeneratedEdge(_ entry: TopologySummaryResult.Entry) -> Bool {
     guard entry.kind == .edge,
           let start = entry.start,
           let end = entry.end else {
@@ -262,7 +262,7 @@ func isAgentVerticalGeneratedEdge(_ entry: TopologySummaryResult.Entry) -> Bool 
         && abs(start.z - end.z) > tolerance
 }
 
-func isAgentVerticalGeneratedEdge(
+public func isAgentVerticalGeneratedEdge(
     _ entry: TopologySummaryResult.Entry,
     x: Double,
     y: Double
@@ -277,7 +277,7 @@ func isAgentVerticalGeneratedEdge(
         && abs(((start.y + end.y) / 2.0) - y) <= tolerance
 }
 
-func isAgentGeneratedVertex(
+public func isAgentGeneratedVertex(
     _ entry: TopologySummaryResult.Entry,
     x: Double,
     y: Double
@@ -291,7 +291,7 @@ func isAgentGeneratedVertex(
         && abs(point.y - y) <= tolerance
 }
 
-func agentParallelFaceTargets(
+public func agentParallelFaceTargets(
     in topology: TopologySummaryResult
 ) throws -> [SelectionTarget] {
     let faces = topology.entries.filter { $0.kind == .face }
@@ -326,7 +326,7 @@ func agentParallelFaceTargets(
     )
 }
 
-func agentParallelFaceDimensionTargets(
+public func agentParallelFaceDimensionTargets(
     in topology: TopologySummaryResult
 ) throws -> (first: SelectionTarget, second: SelectionTarget, distance: Double) {
     let faces = topology.entries.filter { $0.kind == .face }
@@ -362,7 +362,7 @@ func agentParallelFaceDimensionTargets(
     )
 }
 
-func agentTwoPointVertexTargets(
+public func agentTwoPointVertexTargets(
     in topology: TopologySummaryResult,
     viewNormal: Vector3D
 ) throws -> [SelectionTarget] {

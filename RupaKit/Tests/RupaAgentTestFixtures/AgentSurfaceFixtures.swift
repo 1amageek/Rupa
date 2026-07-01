@@ -1,9 +1,8 @@
 import Darwin
 import RupaCore
 import SwiftCAD
-@testable import RupaAgent
 
-func agentPolySplineQuadMesh() -> Mesh {
+public func agentPolySplineQuadMesh() -> Mesh {
     Mesh(
         positions: [
             Point3D(x: 0.0, y: 0.0, z: 0.0),
@@ -15,7 +14,7 @@ func agentPolySplineQuadMesh() -> Mesh {
     )
 }
 
-func agentPolySplinePatchNetworkMesh(centerZ: Double = 0.001) -> Mesh {
+public func agentPolySplinePatchNetworkMesh(centerZ: Double = 0.001) -> Mesh {
     Mesh(
         positions: [
             Point3D(x: 0.0, y: 0.0, z: 0.0),
@@ -34,7 +33,7 @@ func agentPolySplinePatchNetworkMesh(centerZ: Double = 0.001) -> Mesh {
     )
 }
 
-func agentDirectBSplineSurface() -> BSplineSurface3D {
+public func agentDirectBSplineSurface() -> BSplineSurface3D {
     let base = BSplineSurface3D.cubicBezierPatch(
         bottomLeft: Point3D(x: 0.0, y: 0.0, z: 0.0),
         bottomRight: Point3D(x: 0.02, y: 0.0, z: 0.0),
@@ -53,7 +52,7 @@ func agentDirectBSplineSurface() -> BSplineSurface3D {
     )
 }
 
-func agentOffsetDirectBSplineSurface() -> BSplineSurface3D {
+public func agentOffsetDirectBSplineSurface() -> BSplineSurface3D {
     BSplineSurface3D.cubicBezierPatch(
         bottomLeft: Point3D(x: 0.0, y: 0.04, z: 0.002),
         bottomRight: Point3D(x: 0.02, y: 0.04, z: -0.002),
@@ -62,7 +61,7 @@ func agentOffsetDirectBSplineSurface() -> BSplineSurface3D {
     )
 }
 
-func agentDirectBSplineSurfaceWithInteriorKnots() -> BSplineSurface3D {
+public func agentDirectBSplineSurfaceWithInteriorKnots() -> BSplineSurface3D {
     let base = BSplineSurface3D.cubicBezierPatch(
         bottomLeft: Point3D(x: 0.0, y: 0.0, z: 0.0),
         bottomRight: Point3D(x: 0.02, y: 0.0, z: 0.0),
@@ -79,7 +78,7 @@ func agentDirectBSplineSurfaceWithInteriorKnots() -> BSplineSurface3D {
     )
 }
 
-func agentAuthoredBSplineSurfaceTrimLoop() -> BSplineSurfaceTrimLoop {
+public func agentAuthoredBSplineSurfaceTrimLoop() -> BSplineSurfaceTrimLoop {
     BSplineSurfaceTrimLoop(
         role: .outer,
         edges: [
@@ -104,18 +103,18 @@ func agentAuthoredBSplineSurfaceTrimLoop() -> BSplineSurfaceTrimLoop {
     )
 }
 
-func surfaceVectorLength(_ vector: SurfaceAnalysisResult.Vector) -> Double {
+public func surfaceVectorLength(_ vector: SurfaceAnalysisResult.Vector) -> Double {
     hypot(hypot(vector.x, vector.y), vector.z)
 }
 
-func surfaceVectorDot(
+public func surfaceVectorDot(
     _ lhs: SurfaceAnalysisResult.Vector,
     _ rhs: SurfaceAnalysisResult.Vector
 ) -> Double {
     lhs.x * rhs.x + lhs.y * rhs.y + lhs.z * rhs.z
 }
 
-func surfaceVectorCross(
+public func surfaceVectorCross(
     _ lhs: SurfaceAnalysisResult.Vector,
     _ rhs: SurfaceAnalysisResult.Vector
 ) -> SurfaceAnalysisResult.Vector {

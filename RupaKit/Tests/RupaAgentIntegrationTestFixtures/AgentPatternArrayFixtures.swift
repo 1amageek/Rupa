@@ -3,10 +3,10 @@ import Foundation
 import Testing
 import RupaCore
 import SwiftCAD
-@testable import RupaAgent
-@testable import RupaAgentTransport
+import RupaAgent
+import RupaAgentTransport
 
-func agentPoint(
+public func agentPoint(
     _ point: SketchPoint,
     in document: DesignDocument
 ) throws -> Point2D {
@@ -16,7 +16,7 @@ func agentPoint(
     )
 }
 
-func agentPatternArrayBodySceneNodeID(
+public func agentPatternArrayBodySceneNodeID(
     for featureID: FeatureID,
     in document: DesignDocument
 ) -> SceneNodeID? {
@@ -25,12 +25,12 @@ func agentPatternArrayBodySceneNodeID(
     }?.key
 }
 
-struct AgentIndependentCopyCloneExtrudeFeature {
-    var output: PatternArraySummary.IndependentCopyOutputStatus
-    var featureID: FeatureID
+public struct AgentIndependentCopyCloneExtrudeFeature {
+    public var output: PatternArraySummary.IndependentCopyOutputStatus
+    public var featureID: FeatureID
 }
 
-func agentIndependentCopyCloneExtrudeFeature(
+public func agentIndependentCopyCloneExtrudeFeature(
     server: AgentCommandController,
     sessionID: UUID,
     sourceID: PatternArraySourceID,
@@ -73,7 +73,7 @@ func agentIndependentCopyCloneExtrudeFeature(
     )
 }
 
-func agentFeatureID(
+public func agentFeatureID(
     inSceneSubtreeRootedAt rootSceneNodeID: SceneNodeID,
     document: DesignDocument
 ) -> FeatureID? {
@@ -95,7 +95,7 @@ func agentFeatureID(
 }
 
 extension ObjectPropertyValue {
-    var lengthValue: Double? {
+    public var lengthValue: Double? {
         guard case .length(let value) = self else {
             return nil
         }
@@ -104,11 +104,11 @@ extension ObjectPropertyValue {
 }
 
 extension UUID {
-    var featureID: FeatureID {
+    public var featureID: FeatureID {
         FeatureID(self)
     }
 
-    var sketchEntityID: SketchEntityID {
+    public var sketchEntityID: SketchEntityID {
         SketchEntityID(self)
     }
 }

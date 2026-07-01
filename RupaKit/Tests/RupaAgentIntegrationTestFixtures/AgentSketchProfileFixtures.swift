@@ -3,10 +3,10 @@ import Foundation
 import Testing
 import RupaCore
 import SwiftCAD
-@testable import RupaAgent
-@testable import RupaAgentTransport
+import RupaAgent
+import RupaAgentTransport
 
-func agentSketchFeature(
+public func agentSketchFeature(
     in document: DesignDocument,
     featureID: FeatureID
 ) -> Sketch? {
@@ -17,7 +17,7 @@ func agentSketchFeature(
     return sketch
 }
 
-func agentSingleSketchEntityID(
+public func agentSingleSketchEntityID(
     in document: DesignDocument,
     featureID: FeatureID
 ) -> SketchEntityID? {
@@ -28,7 +28,7 @@ func agentSingleSketchEntityID(
     return sketch.entities.keys.first
 }
 
-func agentSceneNodeID(
+public func agentSceneNodeID(
     for featureID: FeatureID,
     in document: DesignDocument
 ) -> SceneNodeID? {
@@ -37,7 +37,7 @@ func agentSceneNodeID(
     }?.key
 }
 
-func agentLineArcExtrudedSession() throws -> (session: EditorSession, bodyFeatureID: FeatureID) {
+public func agentLineArcExtrudedSession() throws -> (session: EditorSession, bodyFeatureID: FeatureID) {
     var document = DesignDocument.empty()
     let sketchFeatureID = FeatureID()
     document.cadDocument.designGraph.nodes[sketchFeatureID] = FeatureNode(
@@ -57,7 +57,7 @@ func agentLineArcExtrudedSession() throws -> (session: EditorSession, bodyFeatur
     return (EditorSession(document: document), bodyFeatureID)
 }
 
-func agentArcArcExtrudedSession() throws -> (session: EditorSession, bodyFeatureID: FeatureID) {
+public func agentArcArcExtrudedSession() throws -> (session: EditorSession, bodyFeatureID: FeatureID) {
     var document = DesignDocument.empty()
     let sketchFeatureID = FeatureID()
     document.cadDocument.designGraph.nodes[sketchFeatureID] = FeatureNode(
@@ -77,7 +77,7 @@ func agentArcArcExtrudedSession() throws -> (session: EditorSession, bodyFeature
     return (EditorSession(document: document), bodyFeatureID)
 }
 
-func agentLineArcProfileSketch() -> Sketch {
+public func agentLineArcProfileSketch() -> Sketch {
     let arcID = SketchEntityID()
     let bottomID = SketchEntityID()
     let diagonalID = SketchEntityID()
@@ -121,7 +121,7 @@ func agentLineArcProfileSketch() -> Sketch {
     )
 }
 
-func agentArcArcProfileSketch() -> Sketch {
+public func agentArcArcProfileSketch() -> Sketch {
     let previousArcID = SketchEntityID()
     let currentArcID = SketchEntityID()
     let lineID = SketchEntityID()
@@ -159,7 +159,7 @@ func agentArcArcProfileSketch() -> Sketch {
     )
 }
 
-func agentBodySceneNode(
+public func agentBodySceneNode(
     for featureID: FeatureID,
     in document: DesignDocument
 ) -> SceneNode? {
@@ -168,7 +168,7 @@ func agentBodySceneNode(
     }
 }
 
-func agentIsHorizontalLine(
+public func agentIsHorizontalLine(
     _ entry: SketchEntitySummaryResult.EntityEntry,
     y: Double
 ) -> Bool {
@@ -182,7 +182,7 @@ func agentIsHorizontalLine(
         abs(start.x - end.x) > 1.0e-12
 }
 
-func agentContainsSketchPoint(
+public func agentContainsSketchPoint(
     _ summary: SketchEntitySummaryResult,
     x: Double,
     y: Double
@@ -196,7 +196,7 @@ func agentContainsSketchPoint(
     }
 }
 
-func agentSketchSummaryBounds(
+public func agentSketchSummaryBounds(
     _ summary: SketchEntitySummaryResult
 ) -> (minX: Double, minY: Double, maxX: Double, maxY: Double)? {
     var points: [SketchEntitySummaryResult.Point] = []
@@ -223,7 +223,7 @@ func agentSketchSummaryBounds(
     }
 }
 
-func agentPointMatches(
+public func agentPointMatches(
     _ point: SketchEntitySummaryResult.Point?,
     x: Double,
     y: Double
@@ -234,7 +234,7 @@ func agentPointMatches(
     return abs(point.x - x) < 1.0e-12 && abs(point.y - y) < 1.0e-12
 }
 
-func agentResolvedSketchPoint(
+public func agentResolvedSketchPoint(
     _ point: SketchPoint,
     in document: DesignDocument
 ) throws -> SketchEntitySummaryResult.Point {
@@ -245,7 +245,7 @@ func agentResolvedSketchPoint(
     return SketchEntitySummaryResult.Point(x: x.value, y: y.value)
 }
 
-func agentTwoLineConstrainedSketchDocument(
+public func agentTwoLineConstrainedSketchDocument(
     name: String,
     constraint: (SketchEntityID, SketchEntityID) -> SketchConstraint
 ) throws -> (
@@ -283,7 +283,7 @@ func agentTwoLineConstrainedSketchDocument(
     return (document, featureID, firstLineID, secondLineID)
 }
 
-func agentTwoLineUnconstrainedSketchDocument(
+public func agentTwoLineUnconstrainedSketchDocument(
     name: String
 ) throws -> (
     document: DesignDocument,
@@ -319,7 +319,7 @@ func agentTwoLineUnconstrainedSketchDocument(
     return (document, featureID, firstLineID, secondLineID)
 }
 
-func agentCollinearLineChainSketchDocument(
+public func agentCollinearLineChainSketchDocument(
     name: String
 ) throws -> (
     document: DesignDocument,
@@ -361,7 +361,7 @@ func agentCollinearLineChainSketchDocument(
     return (document, featureID, lineIDs)
 }
 
-func agentOpenLineChainSlotDocument(
+public func agentOpenLineChainSlotDocument(
     name: String
 ) throws -> (
     document: DesignDocument,
@@ -403,7 +403,7 @@ func agentOpenLineChainSlotDocument(
     return (document, featureID, lineIDs)
 }
 
-func agentOpenLineArcChainSlotDocument(
+public func agentOpenLineArcChainSlotDocument(
     name: String
 ) throws -> (
     document: DesignDocument,
@@ -448,7 +448,7 @@ func agentOpenLineArcChainSlotDocument(
     return (document, featureID, lineID, arcID)
 }
 
-func agentLineCircleTangentSketchDocument(
+public func agentLineCircleTangentSketchDocument(
     name: String
 ) throws -> (
     document: DesignDocument,
@@ -484,7 +484,7 @@ func agentLineCircleTangentSketchDocument(
     return (document, featureID, lineID, circleID)
 }
 
-func agentSplinePointConstraintDocument(
+public func agentSplinePointConstraintDocument(
     name: String
 ) throws -> (
     document: DesignDocument,
@@ -519,7 +519,7 @@ func agentSplinePointConstraintDocument(
     return (document, featureID, splineID, pointID)
 }
 
-func agentSplineLineTangentSketchDocument(
+public func agentSplineLineTangentSketchDocument(
     name: String
 ) throws -> (
     document: DesignDocument,
@@ -559,7 +559,7 @@ func agentSplineLineTangentSketchDocument(
     return (document, featureID, splineID, lineID)
 }
 
-func agentTwoSplineTangentSketchDocument(
+public func agentTwoSplineTangentSketchDocument(
     name: String
 ) throws -> (
     document: DesignDocument,
@@ -601,7 +601,7 @@ func agentTwoSplineTangentSketchDocument(
     return (document, featureID, firstSplineID, secondSplineID)
 }
 
-func agentTwoCircleSketchDocument(
+public func agentTwoCircleSketchDocument(
     name: String
 ) throws -> (
     document: DesignDocument,
@@ -637,14 +637,14 @@ func agentTwoCircleSketchDocument(
     return (document, featureID, firstCircleID, secondCircleID)
 }
 
-func agentSketchTestPoint(x: Double, y: Double) -> SketchPoint {
+public func agentSketchTestPoint(x: Double, y: Double) -> SketchPoint {
     SketchPoint(
         x: .length(x, .meter),
         y: .length(y, .meter)
     )
 }
 
-func agentClosedBezierCircleSpline(radius: Double) -> SketchSpline {
+public func agentClosedBezierCircleSpline(radius: Double) -> SketchSpline {
     let kappa = 0.552_284_749_830_793_6
     func point(_ x: Double, _ y: Double) -> SketchPoint {
         agentSketchTestPoint(x: x * radius, y: y * radius)
@@ -669,7 +669,7 @@ func agentClosedBezierCircleSpline(radius: Double) -> SketchSpline {
     )
 }
 
-func agentLineEntriesAreParallel(
+public func agentLineEntriesAreParallel(
     _ lhs: SketchEntitySummaryResult.EntityEntry,
     _ rhs: SketchEntitySummaryResult.EntityEntry
 ) -> Bool {
@@ -686,7 +686,7 @@ func agentLineEntriesAreParallel(
     return abs(lhsX * rhsY - lhsY * rhsX) < 1.0e-12
 }
 
-func agentLineEntryLength(_ entry: SketchEntitySummaryResult.EntityEntry) -> Double {
+public func agentLineEntryLength(_ entry: SketchEntitySummaryResult.EntityEntry) -> Double {
     guard let start = entry.start,
           let end = entry.end else {
         return .nan

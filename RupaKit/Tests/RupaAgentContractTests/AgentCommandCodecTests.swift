@@ -2,6 +2,7 @@ import Foundation
 import Testing
 import RupaAutomation
 import RupaCore
+import RupaAgentTestFixtures
 import SwiftCAD
 @testable import RupaAgent
 

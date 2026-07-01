@@ -1,7 +1,7 @@
 import Foundation
 import Testing
 
-func makeTemporaryDirectory() throws -> URL {
+public func makeTemporaryDirectory() throws -> URL {
     let temporaryDirectory = FileManager.default.temporaryDirectory
         .appendingPathComponent(UUID().uuidString, isDirectory: true)
     try FileManager.default.createDirectory(
@@ -11,7 +11,7 @@ func makeTemporaryDirectory() throws -> URL {
     return temporaryDirectory
 }
 
-func removeTemporaryDirectory(_ url: URL) {
+public func removeTemporaryDirectory(_ url: URL) {
     do {
         try FileManager.default.removeItem(at: url)
     } catch {

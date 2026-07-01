@@ -187,6 +187,24 @@ let package = Package(
                 "RupaCLIKit",
             ]
         ),
+        .target(
+            name: "RupaAgentTestFixtures",
+            dependencies: [
+                "RupaCore",
+                .product(name: "SwiftCAD", package: "swift-CAD"),
+            ],
+            path: "Tests/RupaAgentTestFixtures"
+        ),
+        .target(
+            name: "RupaAgentIntegrationTestFixtures",
+            dependencies: [
+                "RupaAgent",
+                "RupaAgentTransport",
+                "RupaCore",
+                .product(name: "SwiftCAD", package: "swift-CAD"),
+            ],
+            path: "Tests/RupaAgentIntegrationTestFixtures"
+        ),
         .testTarget(
             name: "RupaKitTests",
             dependencies: ["RupaKit"]
@@ -206,6 +224,102 @@ let package = Package(
                 "RupaAgentProtocol",
                 "RupaAgentRuntime",
                 "RupaAgentTransport",
+                "RupaAgentTestFixtures",
+                "RupaAgentIntegrationTestFixtures",
+            ]
+        ),
+        .testTarget(
+            name: "RupaAgentContractTests",
+            dependencies: [
+                "RupaAgent",
+                "RupaAgentProtocol",
+                "RupaAgentRuntime",
+                "RupaAutomation",
+                "RupaCore",
+                "RupaAgentTestFixtures",
+                .product(name: "SwiftCAD", package: "swift-CAD"),
+            ]
+        ),
+        .testTarget(
+            name: "RupaAgentSurfaceTests",
+            dependencies: [
+                "RupaAgent",
+                "RupaAgentProtocol",
+                "RupaAgentRuntime",
+                "RupaAutomation",
+                "RupaCore",
+                "RupaAgentTestFixtures",
+                .product(name: "SwiftCAD", package: "swift-CAD"),
+            ]
+        ),
+        .testTarget(
+            name: "RupaAgentSketchTests",
+            dependencies: [
+                "RupaAgent",
+                "RupaAgentProtocol",
+                "RupaAgentRuntime",
+                "RupaAgentTransport",
+                "RupaAutomation",
+                "RupaCore",
+                "RupaAgentTestFixtures",
+                "RupaAgentIntegrationTestFixtures",
+                .product(name: "SwiftCAD", package: "swift-CAD"),
+            ]
+        ),
+        .testTarget(
+            name: "RupaAgentModelingTests",
+            dependencies: [
+                "RupaAgent",
+                "RupaAgentProtocol",
+                "RupaAgentRuntime",
+                "RupaAgentTransport",
+                "RupaAutomation",
+                "RupaCore",
+                "RupaAgentTestFixtures",
+                "RupaAgentIntegrationTestFixtures",
+                .product(name: "SwiftCAD", package: "swift-CAD"),
+            ]
+        ),
+        .testTarget(
+            name: "RupaAgentSelectionTests",
+            dependencies: [
+                "RupaAgent",
+                "RupaAgentProtocol",
+                "RupaAgentRuntime",
+                "RupaAgentTransport",
+                "RupaAutomation",
+                "RupaCore",
+                "RupaAgentTestFixtures",
+                "RupaAgentIntegrationTestFixtures",
+                .product(name: "SwiftCAD", package: "swift-CAD"),
+            ]
+        ),
+        .testTarget(
+            name: "RupaAgentInspectionTests",
+            dependencies: [
+                "RupaAgent",
+                "RupaAgentProtocol",
+                "RupaAgentRuntime",
+                "RupaAgentTransport",
+                "RupaAutomation",
+                "RupaCore",
+                "RupaAgentTestFixtures",
+                "RupaAgentIntegrationTestFixtures",
+                .product(name: "SwiftCAD", package: "swift-CAD"),
+            ]
+        ),
+        .testTarget(
+            name: "RupaAgentTopologyPersistenceTests",
+            dependencies: [
+                "RupaAgent",
+                "RupaAgentProtocol",
+                "RupaAgentRuntime",
+                "RupaAgentTransport",
+                "RupaAutomation",
+                "RupaCore",
+                "RupaAgentTestFixtures",
+                "RupaAgentIntegrationTestFixtures",
+                .product(name: "SwiftCAD", package: "swift-CAD"),
             ]
         ),
         .testTarget(

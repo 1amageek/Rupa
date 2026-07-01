@@ -3,6 +3,8 @@ import Darwin
 import Foundation
 import RupaAutomation
 import RupaCore
+import RupaAgentIntegrationTestFixtures
+import RupaAgentTestFixtures
 import SwiftCAD
 @testable import RupaAgent
 
