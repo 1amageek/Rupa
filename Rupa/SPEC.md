@@ -590,6 +590,28 @@ flowchart LR
 | Empty source | Valid sketch-only or empty documents return a zero-topology summary with an informational diagnostic. |
 | Open work | Metal identity-buffer picking, freeform single-vertex surface edits, and general kernel topology editing remain follow-up work. |
 
+### Boolean Evaluation Plan Contract
+
+Boolean evaluation planning is derived state. It runs the same Swift-CAD Boolean support decision used by mutation, but it must not create a feature, advance generation, change selection, or write undo history.
+
+```mermaid
+flowchart LR
+    Request["Boolean request"] --> Plan["BooleanEvaluationPlanService"]
+    Plan --> Slots["Generated topology slots"]
+    Request --> Create["createBoolean"]
+    Create --> Summary["topologySummary"]
+    Slots --> Agent["Agent plan"]
+    Summary --> Agent
+```
+
+| Concern | Contract |
+|---|---|
+| Scope | `document.booleanEvaluationPlan` reports operand kind, output topology kind, topology name schemes, B-rep topology counts, primitive counts, ordered preflight checks, unsupported codes, and generated topology slots for the supported exact subset before mutation. |
+| Topology slots | Each slot carries a generated subshape role and optional semantic subshape string. The supported exact box, z-through frame, and connected orthogonal cell-union paths emit body, side-face, edge, and vertex slots matching the generated topology names that `topologySummary` later exposes after `createBoolean`. |
+| Agent bridge | Agents can use the plan to decide whether a follow-on Face, Edge, or Vertex operation will have a selectable generated topology target. After mutation, the Agent verifies the planned slot by reading `topologySummary` and matching source feature ID, generated role, subshape role, and `selectionComponentID`. |
+| Non-mutation | Planning unsupported operands returns structured diagnostics and an empty slot set without mutating source, generation, dirty state, selection, or undo history. |
+| Open work | Non-orthogonal solids, curved topology, arbitrary sheet operands, and persistent naming across broad topology rewrites remain follow-up work. |
+
 ### Surface Continuity Summary Contract
 
 Surface analysis is derived state. It reads Swift-CAD evaluated BRep topology, generated persistent names, and B-spline surface definitions so UI and Agent workflows can inspect surface flow before exposing surface-editing affordances.
@@ -1190,6 +1212,7 @@ The package-level socket listener supports start, stop, stale socket replacement
 | `selection.dimensionEvaluation` | Evaluate an existing selection dimension without mutating source. |
 | `document.curveAnalysis` | Return source curve and curvature diagnostics without mutating source. |
 | `document.topologySummary` | Summarize Swift-CAD generated BRep topology and persistent names for an open document through its app session without mutating source. |
+| `document.booleanEvaluationPlan` | Preflight a proposed standalone Boolean through the shared Swift-CAD evaluation contract, returning exact support diagnostics and generated topology slots without mutating source. |
 | `document.objectDimensionSummary` | Return editable object dimension candidates for selected object, face including generated face-normal primary inference, generated depth-edge, or supported generated opposing face-pair targets without mutating source. |
 | `document.surfaceSourceSummary` | Return source and generated surface references for Agent targeting without mutating source. |
 | `document.surfaceAnalysis` | Sample generated B-spline faces for bounded UV points, oriented normals, analytic tangents, mean/Gaussian/U/V/principal curvature, principal directions, ordered trim-boundary points, and finite-difference surface curvature-comb diagnostics without mutating source. |

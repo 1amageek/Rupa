@@ -226,7 +226,7 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                     notes: [
                         "Standalone Boolean features now own target body references, one tool body reference, operation, and keep-tools policy in source data.",
                         "Core, Automation, and Agent can create exact axis-aligned box and orthogonal cell-union B-rep Boolean union, difference, intersect, and slice results through the shared command path.",
-                        "SwiftCAD exposes the shared Boolean kernel decision, result topology name scheme, and B-rep topology counts as a non-mutating plan service, and Agent exposes it as document.booleanEvaluationPlan before createBoolean.",
+                        "SwiftCAD exposes the shared Boolean kernel decision, result topology name scheme, generated topology slots, and B-rep topology counts as a non-mutating plan service, and Agent exposes it as document.booleanEvaluationPlan before createBoolean.",
                         "SwiftCAD can extract occupied cells from supported orthogonal solid operands, so previous connected orthogonal cell-union Boolean results can become follow-on Boolean targets.",
                         "Boolean evaluation removes superseded target and tool generated names when keepTools is false, remaps kept tool names when keepTools is true, and returns typed failures for unsupported operands before invalid geometry is committed.",
                     ]

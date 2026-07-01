@@ -303,10 +303,115 @@ import SwiftCAD
     #expect(plan.resultTopologyCounts?.vertexCount == 16)
     #expect(plan.topologyNameSchemes.contains(.frameHoleSideFaces))
     #expect(plan.topologyNameSchemes.contains(.frameBridgeEdges))
+    #expect(plan.topologySlots.count == 51)
+    #expect(plan.topologySlots.contains(BooleanEvaluationTopologySlot(
+        role: .sideFace,
+        subshape: "frame:holeFace:maxX"
+    )))
     #expect(plan.checks.last?.kind == .capabilityDecision)
     #expect(plan.checks.last?.status == .passed)
     #expect(session.generation == initialGeneration)
     #expect(session.document.cadDocument.designGraph.order == initialFeatureOrder)
+}
+
+@MainActor
+@Test func agentBooleanEvaluationTopologySlotsMatchCreatedTopologySummary() async throws {
+    var document = DesignDocument.empty()
+    let targetID = try agentCreateBooleanBox(
+        in: &document,
+        name: "Agent Boolean Slot Target",
+        minX: -0.020,
+        minY: -0.020,
+        maxX: 0.020,
+        maxY: 0.020
+    )
+    let toolID = try agentCreateBooleanBox(
+        in: &document,
+        name: "Agent Boolean Slot Tool",
+        minX: -0.010,
+        minY: -0.010,
+        maxX: 0.010,
+        maxY: 0.010
+    )
+    let server = AgentCommandController()
+    let sessionID = UUID()
+    let session = EditorSession(document: document)
+    server.register(session: session, id: sessionID)
+
+    let planResponse = server.handle(
+        .booleanEvaluationPlan(
+            sessionID: sessionID,
+            targets: [BooleanTargetReference(featureID: targetID)],
+            tool: BooleanToolReference(featureID: toolID),
+            operation: .difference,
+            keepTools: false,
+            expectedGeneration: session.generation
+        )
+    )
+    guard case .booleanEvaluationPlan(let plan) = planResponse else {
+        Issue.record("Agent must return a Boolean evaluation plan.")
+        return
+    }
+    let plannedSlots = [
+        BooleanEvaluationTopologySlot(
+            role: .vertex,
+            subshape: "frame:hole:corner:maxX:maxY:maxZ"
+        ),
+        BooleanEvaluationTopologySlot(
+            role: .edge,
+            subshape: "frame:hole:zEdge:x:maxX:y:maxY"
+        ),
+        BooleanEvaluationTopologySlot(
+            role: .sideFace,
+            subshape: "frame:holeFace:maxX"
+        ),
+    ]
+    for slot in plannedSlots {
+        #expect(plan.topologySlots.contains(slot))
+    }
+
+    let commandResponse = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .createBoolean(
+                name: "Agent Boolean Slot Difference",
+                targets: [BooleanTargetReference(featureID: targetID)],
+                tool: BooleanToolReference(featureID: toolID),
+                operation: .difference,
+                keepTools: false
+            ),
+            expectedGeneration: session.generation
+        )
+    )
+    guard case .command(let commandResult) = commandResponse else {
+        Issue.record("Agent must create a Boolean feature.")
+        return
+    }
+    let booleanID = try #require(session.document.cadDocument.designGraph.order.last)
+
+    let topologyResponse = server.handle(
+        .topologySummary(
+            sessionID: sessionID,
+            expectedGeneration: commandResult.generation
+        )
+    )
+    guard case .topologySummary(let topology) = topologyResponse else {
+        Issue.record("Agent must return topology summary after Boolean creation.")
+        return
+    }
+
+    #expect(commandResult.didMutate)
+    #expect(topology.counts.faceCount == 10)
+    #expect(topology.counts.edgeCount == 24)
+    #expect(topology.counts.vertexCount == 16)
+    for slot in plannedSlots {
+        #expect(topology.entries.contains { entry in
+            entry.sourceFeatureID == booleanID.description
+                && entry.generatedRole == slot.role.rawValue
+                && entry.subshapeRole == slot.subshape
+                && entry.selectionComponentID != nil
+        })
+    }
 }
 
 @MainActor

@@ -146,6 +146,7 @@ Nested domain payloads use the Codable JSON shape of the public RupaCore, RupaAu
 | `selection.dimensionEvaluation` | `SelectionDimensionEvaluationParams` | `SelectionDimensionEvaluation` | No |
 | `document.curveAnalysis` | `SessionGenerationParams` | `CurveAnalysisResult` | No |
 | `document.topologySummary` | `SessionGenerationParams` | `TopologySummaryResult` | No |
+| `document.booleanEvaluationPlan` | `BooleanEvaluationPlanParams` | `BooleanEvaluationPlanResult` | No |
 | `document.objectDimensionSummary` | `SelectionTargetsParams` | `ObjectDimensionSummaryResult` | No |
 | `document.surfaceSourceSummary` | `SessionGenerationParams` | `SurfaceSourceSummaryResult` | No |
 | `document.surfaceAnalysis` | `SurfaceAnalysisParams` | `SurfaceAnalysisResult` | No |

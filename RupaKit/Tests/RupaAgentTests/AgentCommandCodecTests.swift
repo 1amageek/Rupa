@@ -194,6 +194,21 @@ import SwiftCAD
                 .frameOuterSideFaces,
                 .frameHoleSideFaces,
             ],
+            topologySlots: [
+                BooleanEvaluationTopologySlot(role: .body),
+                BooleanEvaluationTopologySlot(
+                    role: .vertex,
+                    subshape: "frame:hole:corner:maxX:maxY:maxZ"
+                ),
+                BooleanEvaluationTopologySlot(
+                    role: .edge,
+                    subshape: "frame:hole:zEdge:x:maxX:y:maxY"
+                ),
+                BooleanEvaluationTopologySlot(
+                    role: .sideFace,
+                    subshape: "frame:holeFace:maxX"
+                ),
+            ],
             unsupportedCode: nil,
             message: "Boolean can evaluate as zThroughFrame.",
             checks: [

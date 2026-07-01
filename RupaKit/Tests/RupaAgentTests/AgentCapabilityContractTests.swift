@@ -703,6 +703,7 @@ import SwiftCAD
     #expect(booleanEvaluationPlan.summary.contains("Preflight"))
     #expect(booleanEvaluationPlan.summary.contains("output topology kind"))
     #expect(booleanEvaluationPlan.summary.contains("topology name scheme"))
+    #expect(booleanEvaluationPlan.summary.contains("topology slots"))
     #expect(booleanEvaluationPlan.summary.contains("B-rep topology counts"))
     #expect(booleanEvaluationPlan.failureMode.contains("structured unsupported results"))
     #expect(booleanEvaluationPlan.failureMode.contains("curved"))
