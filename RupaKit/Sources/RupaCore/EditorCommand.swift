@@ -57,6 +57,7 @@ public enum EditorCommand: Codable, Equatable, Sendable {
     )
     case setActiveConstructionPlane(id: ConstructionPlaneSourceID?)
     case renameConstructionPlane(id: ConstructionPlaneSourceID, name: String)
+    case setConstructionPlane(id: ConstructionPlaneSourceID, plane: SketchPlane)
     case setCurveCurvatureDisplay(target: SelectionTarget, isVisible: Bool?, combScale: Double?)
     case setPointDisplay(target: SelectionTarget, isVisible: Bool?)
     case createSketch(name: String, sketch: Sketch, geometryRole: ObjectDescriptor.GeometryRole)
@@ -459,6 +460,8 @@ public enum EditorCommand: Codable, Equatable, Sendable {
             "setActiveConstructionPlane"
         case .renameConstructionPlane:
             "renameConstructionPlane"
+        case .setConstructionPlane:
+            "setConstructionPlane"
         case .setCurveCurvatureDisplay:
             "setCurveCurvatureDisplay"
         case .setPointDisplay:
@@ -669,6 +672,7 @@ public enum EditorCommand: Codable, Equatable, Sendable {
              .createViewAlignedConstructionPlane,
              .setActiveConstructionPlane,
              .renameConstructionPlane,
+             .setConstructionPlane,
              .setCurveCurvatureDisplay,
              .setPointDisplay,
              .createSketch,

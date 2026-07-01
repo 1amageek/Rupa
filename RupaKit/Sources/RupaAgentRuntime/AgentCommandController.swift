@@ -619,6 +619,23 @@ public final class AgentCommandController: AgentClientProtocol {
             failureMode: "Rejects missing construction plane IDs, empty names, duplicate names, and stale generations before mutation."
         ),
         capability(
+            "setConstructionPlane",
+            category: .sketch,
+            summary: "Edit a saved construction plane's SketchPlane source so its origin and normal can be moved while keeping the same construction plane ID and linked scene node.",
+            access: .automationCommand,
+            mutatesDocument: true,
+            discovery: [.constructionPlaneSummary],
+            targets: [.constructionPlane],
+            failureMode: "Rejects missing construction plane IDs, invalid plane origins or normals, and stale generations before mutation.",
+            optionMatrix: [
+                AgentCapabilityDescriptor.OptionAxis(
+                    name: "plane",
+                    supportedValues: ["xy", "yz", "zx", "custom origin + normal"],
+                    notes: ["Custom planes require finite origin coordinates and a nonzero finite normal."]
+                ),
+            ]
+        ),
+        capability(
             "createSketch",
             category: .sketch,
             summary: "Create a source sketch containing one or more typed sketch entities, including connected open multi-entity curve chains for Sweep paths.",

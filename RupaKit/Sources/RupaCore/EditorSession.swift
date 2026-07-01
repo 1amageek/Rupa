@@ -900,6 +900,14 @@ public final class EditorSession {
     }
 
     @discardableResult
+    public func setConstructionPlane(
+        id: ConstructionPlaneSourceID,
+        plane: SketchPlane
+    ) -> CommandExecutionResult? {
+        perform(.setConstructionPlane(id: id, plane: plane))
+    }
+
+    @discardableResult
     public func setCurveCurvatureDisplay(
         target: SelectionTarget,
         isVisible: Bool? = nil,

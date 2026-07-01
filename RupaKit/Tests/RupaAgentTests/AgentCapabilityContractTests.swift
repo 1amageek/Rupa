@@ -49,6 +49,7 @@ import SwiftCAD
     #expect(capabilities.contains("createViewAlignedConstructionPlane"))
     #expect(capabilities.contains("setActiveConstructionPlane"))
     #expect(capabilities.contains("renameConstructionPlane"))
+    #expect(capabilities.contains("setConstructionPlane"))
     #expect(capabilities.contains("createSketch"))
     #expect(capabilities.contains("createLineSketch"))
     #expect(capabilities.contains("createCircleSketch"))
@@ -322,6 +323,7 @@ import SwiftCAD
     #expect(selectionDimensionTargetExpression.mutatesDocument)
     let constructionPlaneSetActive = try #require(descriptors.first { $0.name == "setActiveConstructionPlane" })
     let constructionPlaneRename = try #require(descriptors.first { $0.name == "renameConstructionPlane" })
+    let constructionPlaneEdit = try #require(descriptors.first { $0.name == "setConstructionPlane" })
     let constructionPlaneSummary = try #require(descriptors.first { $0.name == "constructionPlaneSummary" })
     let componentInstance = try #require(descriptors.first { $0.name == "createComponentInstance" })
     let componentInstanceVisibility = try #require(
@@ -1469,6 +1471,17 @@ import SwiftCAD
     #expect(constructionPlaneRename.discovery.contains(.constructionPlaneSummary))
     #expect(constructionPlaneRename.targets == [.constructionPlane])
     #expect(constructionPlaneRename.failureMode.contains("duplicate names"))
+
+    #expect(constructionPlaneEdit.category == .sketch)
+    #expect(constructionPlaneEdit.mutatesDocument)
+    #expect(constructionPlaneEdit.access == .automationCommand)
+    #expect(constructionPlaneEdit.discovery.contains(.constructionPlaneSummary))
+    #expect(constructionPlaneEdit.targets == [.constructionPlane])
+    #expect(constructionPlaneEdit.summary.contains("origin and normal"))
+    #expect(constructionPlaneEdit.failureMode.contains("invalid plane"))
+    #expect(constructionPlaneEdit.optionMatrix.contains { axis in
+        axis.name == "plane" && axis.supportedValues.contains("custom origin + normal")
+    })
 
     #expect(constructionPlaneSummary.category == .read)
     #expect(!constructionPlaneSummary.mutatesDocument)

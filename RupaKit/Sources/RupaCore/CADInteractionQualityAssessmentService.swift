@@ -651,22 +651,24 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                     label: "Saved construction plane source and workspace routing",
                     sourceFiles: [
                         "RupaKit/Sources/RupaCore/ConstructionPlaneSource.swift",
+                        "RupaKit/Sources/RupaCore/DesignDocument+ConstructionPlane.swift",
                         "RupaKit/Sources/RupaCore/ConstructionPlaneTargetResolver.swift",
                         "RupaKit/Sources/RupaUI/WorkspacePlaneModeControl.swift",
                         "RupaKit/Sources/RupaUI/MainView.swift",
                     ],
                     tests: [
                         "RupaKit/Tests/RupaCoreTests/ConstructionPlaneTargetResolverTests.swift",
+                        "RupaKit/Tests/RupaCoreTests/CommandStackTests.swift",
                         "RupaKit/Tests/RupaUIPackageTests/WorkspaceSnapOverrideStateTests.swift",
-                        "RupaKit/Tests/RupaAgentTests/AgentCommandControllerTests.swift",
+                        "RupaKit/Tests/RupaAgentTests/AgentConstructionPlaneIntegrationTests.swift",
                     ]
                 ),
             ],
             openWork: [
-                "Selectable and editable saved-plane handles.",
+                "Viewport saved-plane edit handles.",
                 "Full sketch-on-arbitrary-plane workflow verification.",
             ],
-            next: "Make saved construction planes directly selectable/editable in the viewport and prove sketch creation uses the selected plane end to end."
+            next: "Add viewport saved-plane edit handles on top of the setConstructionPlane command and prove sketch creation uses the selected plane end to end."
         ),
         entry(
             area: .selection,

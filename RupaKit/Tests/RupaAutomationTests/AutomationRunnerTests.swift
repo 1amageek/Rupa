@@ -4668,6 +4668,19 @@ import SwiftCAD
         ),
         in: session
     )
+    let editedPlane = SketchPlane.plane(
+        Plane3D(
+            origin: Point3D(x: 0.010, y: 0.020, z: 0.030),
+            normal: .unitY
+        )
+    )
+    let editResult = try runner.execute(
+        .setConstructionPlane(
+            id: activeID,
+            plane: editedPlane
+        ),
+        in: session
+    )
     let summaryResult = try runner.execute(.describeConstructionPlanes, in: session)
     let clearResult = try runner.execute(
         .setActiveConstructionPlane(id: nil),
@@ -4680,16 +4693,19 @@ import SwiftCAD
     #expect(renameResult.message == "Construction plane renamed to Renamed CPlane.")
     #expect(renameResult.commandName == "renameConstructionPlane")
     #expect(renameResult.didMutate)
+    #expect(editResult.message == "Construction plane Renamed CPlane updated.")
+    #expect(editResult.commandName == "setConstructionPlane")
+    #expect(editResult.didMutate)
     #expect(summaryResult.message == "1 construction plane(s). Active: Renamed CPlane.")
     #expect(summaryResult.commandName == nil)
     #expect(!summaryResult.didMutate)
-    #expect(session.document.productMetadata.constructionPlanes[activeID]?.plane == .zx)
+    #expect(session.document.productMetadata.constructionPlanes[activeID]?.plane == editedPlane)
     #expect(session.document.productMetadata.constructionPlanes[activeID]?.name == "Renamed CPlane")
     #expect(session.document.productMetadata.activeConstructionPlaneID == nil)
     #expect(clearResult.message == "Active construction plane set to none.")
     #expect(clearResult.commandName == "setActiveConstructionPlane")
     #expect(clearResult.didMutate)
-    #expect(session.generation == DocumentGeneration(3))
+    #expect(session.generation == DocumentGeneration(4))
 }
 
 @MainActor

@@ -352,6 +352,16 @@ public struct AutomationRunner {
                 didMutate: result.didMutate,
                 diagnostics: result.diagnostics
             )
+        case .setConstructionPlane(let id, let plane):
+            let result = try session.execute(.setConstructionPlane(id: id, plane: plane))
+            let editedName = session.document.productMetadata.constructionPlanes[id]?.name ?? id.description
+            return AutomationResult(
+                message: "Construction plane \(editedName) updated.",
+                commandName: result.commandName,
+                generation: result.generation,
+                didMutate: result.didMutate,
+                diagnostics: result.diagnostics
+            )
         case .setCurveCurvatureDisplay(let target, let isVisible, let combScale):
             let result = try session.execute(
                 .setCurveCurvatureDisplay(

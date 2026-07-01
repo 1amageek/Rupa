@@ -458,11 +458,11 @@ struct CADInteractionDesignProcessSpec: Sendable {
                 tolerances: ["plane normal tolerance", "coplanarity tolerance", "point-plane tolerance"],
                 ownershipBoundaries: ["RupaCore owns plane source metadata", "Viewport alignment consumes Core plane state"],
                 supportedCases: [
-                    caseItem("saved-plane-source", "Saved construction planes can be created, activated, and renamed.", .supported, .core),
+                    caseItem("saved-plane-source", "Saved construction planes can be created, activated, renamed, and edited.", .supported, .core),
                     caseItem("target-derived-plane", "Face/region/edge/point target sets can create construction planes.", .supported, .core),
                 ],
                 boundaryCases: [
-                    caseItem("editable-plane-handles", "Selectable/editable plane handles remain open work.", .planned, .ui),
+                    caseItem("editable-plane-handles", "Viewport saved-plane edit handles remain open work.", .planned, .ui),
                 ],
                 degenerateCases: [
                     caseItem("coplanar-midplane", "Coplanar midplane requests reject before mutation.", .verified, .core),

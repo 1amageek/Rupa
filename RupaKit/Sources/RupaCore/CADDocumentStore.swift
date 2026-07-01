@@ -384,6 +384,16 @@ public final class CADDocumentStore {
             document = updatedDocument
             try commitMutation()
             evaluateCurrentDocument()
+        case .setConstructionPlane(let id, let plane):
+            var updatedDocument = document
+            try updatedDocument.setConstructionPlane(
+                id: id,
+                plane: plane,
+                objectRegistry: objectRegistry
+            )
+            document = updatedDocument
+            try commitMutation()
+            evaluateCurrentDocument()
         case .setCurveCurvatureDisplay(let target, let isVisible, let combScale):
             var updatedDocument = document
             try updatedDocument.setCurveCurvatureDisplay(

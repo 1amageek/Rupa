@@ -55,6 +55,7 @@ public enum AutomationCommand: Codable, Equatable, Sendable {
     )
     case setActiveConstructionPlane(id: ConstructionPlaneSourceID?)
     case renameConstructionPlane(id: ConstructionPlaneSourceID, name: String)
+    case setConstructionPlane(id: ConstructionPlaneSourceID, plane: SketchPlane)
     case setCurveCurvatureDisplay(target: SelectionTarget, isVisible: Bool?, combScale: Double?)
     case setPointDisplay(target: SelectionTarget, isVisible: Bool?)
     case createSketch(name: String, sketch: Sketch, geometryRole: ObjectDescriptor.GeometryRole)
@@ -465,6 +466,8 @@ public enum AutomationCommand: Codable, Equatable, Sendable {
             .setActiveConstructionPlane(id: id)
         case .renameConstructionPlane(let id, let name):
             .renameConstructionPlane(id: id, name: name)
+        case .setConstructionPlane(let id, let plane):
+            .setConstructionPlane(id: id, plane: plane)
         case .setCurveCurvatureDisplay(let target, let isVisible, let combScale):
             .setCurveCurvatureDisplay(
                 target: target,

@@ -64,10 +64,33 @@ import SwiftCAD
     #expect(renameResult.commandName == "renameConstructionPlane")
     #expect(renameResult.didMutate)
 
+    let editedPlane = SketchPlane.plane(
+        Plane3D(
+            origin: Point3D(x: 0.010, y: 0.020, z: 0.030),
+            normal: .unitZ
+        )
+    )
+    let editResponse = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .setConstructionPlane(
+                id: entry.id,
+                plane: editedPlane
+            ),
+            expectedGeneration: DocumentGeneration(2)
+        )
+    )
+    guard case .command(let editResult) = editResponse else {
+        #expect(Bool(false))
+        return
+    }
+    #expect(editResult.commandName == "setConstructionPlane")
+    #expect(editResult.didMutate)
+
     let renamedSummaryResponse = server.handle(
         .constructionPlaneSummary(
             sessionID: sessionID,
-            expectedGeneration: DocumentGeneration(2)
+            expectedGeneration: DocumentGeneration(3)
         )
     )
     guard case .constructionPlaneSummary(let renamedSummary) = renamedSummaryResponse else {
@@ -76,6 +99,7 @@ import SwiftCAD
     }
     let renamedEntry = try #require(renamedSummary.planes.first)
     #expect(renamedEntry.name == "Agent Renamed CPlane")
+    #expect(renamedEntry.plane == editedPlane)
     let renamedSceneNodeID = try #require(renamedEntry.sceneNodeID)
     #expect(session.document.productMetadata.sceneNodes[renamedSceneNodeID]?.name == "Agent Renamed CPlane")
     let renamedTarget = try #require(renamedEntry.selectionTarget())
@@ -84,7 +108,7 @@ import SwiftCAD
         .selectTargets(
             sessionID: sessionID,
             targets: [renamedTarget],
-            expectedGeneration: DocumentGeneration(2)
+            expectedGeneration: DocumentGeneration(3)
         )
     )
     guard case .selection(let selectionResult) = selectionResponse else {
@@ -98,7 +122,7 @@ import SwiftCAD
         .execute(
             sessionID: sessionID,
             command: .setActiveConstructionPlane(id: nil),
-            expectedGeneration: DocumentGeneration(2)
+            expectedGeneration: DocumentGeneration(3)
         )
     )
     guard case .command(let clearResult) = clearResponse else {

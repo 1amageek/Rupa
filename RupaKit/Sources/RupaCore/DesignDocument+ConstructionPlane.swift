@@ -90,6 +90,24 @@ extension DesignDocument {
         try productMetadata.validate(against: cadDocument, objectRegistry: objectRegistry)
     }
 
+    public mutating func setConstructionPlane(
+        id: ConstructionPlaneSourceID,
+        plane: SketchPlane,
+        objectRegistry: ObjectTypeRegistry = .builtIn
+    ) throws {
+        guard var source = productMetadata.constructionPlanes[id] else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "Construction plane edit requires an existing construction plane source."
+            )
+        }
+        try ConstructionPlaneSource.validatePlane(plane)
+
+        source.plane = plane
+        productMetadata.constructionPlanes[id] = source
+        try productMetadata.validate(against: cadDocument, objectRegistry: objectRegistry)
+    }
+
     @discardableResult
     public mutating func createConstructionPlaneFromTarget(
         name: String,

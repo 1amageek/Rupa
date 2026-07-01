@@ -1473,6 +1473,47 @@ import Testing
 }
 
 @MainActor
+@Test func editorSessionEditsSavedConstructionPlaneSource() async throws {
+    let session = EditorSession()
+
+    _ = try #require(
+        session.createConstructionPlane(
+            name: "Editable Plane",
+            plane: .xy
+        )
+    )
+    let planeID = try #require(session.document.productMetadata.activeConstructionPlaneID)
+    let editedPlane = SketchPlane.plane(
+        Plane3D(
+            origin: Point3D(x: 0.020, y: 0.030, z: 0.040),
+            normal: .unitY
+        )
+    )
+
+    let editResult = try #require(
+        session.setConstructionPlane(
+            id: planeID,
+            plane: editedPlane
+        )
+    )
+
+    #expect(editResult.commandName == "setConstructionPlane")
+    #expect(editResult.didMutate)
+    #expect(session.activeConstructionPlane?.plane == editedPlane)
+    let summary = ConstructionPlaneSummaryService().summarize(document: session.document)
+    let entry = try #require(summary.planes.first { $0.id == planeID })
+    #expect(entry.plane == editedPlane)
+    #expect(entry.name == "Editable Plane")
+    #expect(entry.sceneNodeID != nil)
+
+    _ = try session.undo()
+    #expect(session.activeConstructionPlane?.plane == .xy)
+
+    _ = try session.redo()
+    #expect(session.activeConstructionPlane?.plane == editedPlane)
+}
+
+@MainActor
 @Test func editorSessionActivatesEveryCanvasToolbarTool() async throws {
     let session = EditorSession()
 
