@@ -17,3 +17,10 @@ import Testing
         #expect(scope.allowsSelectionRectangle)
     }
 }
+
+@Test func workspaceSelectionScopeControlUsesCompactGridWithinUtilityRail() {
+    #expect(WorkspaceSelectionScopeControlLayout.columnCount == 3)
+    #expect(WorkspaceSelectionScopeControlLayout.rowCount(itemCount: WorkspaceSelectionScope.allCases.count) == 2)
+    #expect(WorkspaceSelectionScopeControlLayout.contentWidth <= 162.0)
+    #expect(WorkspaceSelectionScopeControlLayout.buttonSize.width >= 48.0)
+}

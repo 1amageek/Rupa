@@ -1,14 +1,47 @@
 import SwiftUI
 
+struct WorkspaceSelectionScopeControlLayout: Equatable {
+    static let columnCount = 3
+    static let spacing: CGFloat = 6.0
+    static let buttonSize = CGSize(width: 48.0, height: 42.0)
+
+    static var contentWidth: CGFloat {
+        CGFloat(columnCount) * buttonSize.width
+            + CGFloat(columnCount - 1) * spacing
+    }
+
+    static func rowCount(itemCount: Int) -> Int {
+        guard itemCount > 0 else {
+            return 0
+        }
+        return (itemCount + columnCount - 1) / columnCount
+    }
+}
+
 struct WorkspaceSelectionScopeControl: View {
     @Binding var selection: WorkspaceSelectionScope
 
     var body: some View {
-        HStack(spacing: 6) {
+        LazyVGrid(
+            columns: gridColumns,
+            alignment: .leading,
+            spacing: WorkspaceSelectionScopeControlLayout.spacing
+        ) {
             ForEach(WorkspaceSelectionScope.allCases) { scope in
                 scopeButton(scope)
             }
         }
+        .frame(width: WorkspaceSelectionScopeControlLayout.contentWidth, alignment: .leading)
+    }
+
+    private var gridColumns: [GridItem] {
+        Array(
+            repeating: GridItem(
+                .fixed(WorkspaceSelectionScopeControlLayout.buttonSize.width),
+                spacing: WorkspaceSelectionScopeControlLayout.spacing
+            ),
+            count: WorkspaceSelectionScopeControlLayout.columnCount
+        )
     }
 
     private func scopeButton(_ scope: WorkspaceSelectionScope) -> some View {
@@ -23,10 +56,14 @@ struct WorkspaceSelectionScopeControl: View {
                 Text(scope.shortTitle)
                     .font(.caption2.weight(.medium))
                     .lineLimit(1)
-                    .minimumScaleFactor(0.8)
+                    .allowsTightening(true)
+                    .minimumScaleFactor(0.75)
             }
             .foregroundStyle(foregroundStyle(isSelected: isSelected, isEnabled: isEnabled))
-            .frame(maxWidth: .infinity, minHeight: 42)
+            .frame(
+                width: WorkspaceSelectionScopeControlLayout.buttonSize.width,
+                height: WorkspaceSelectionScopeControlLayout.buttonSize.height
+            )
             .background {
                 RoundedRectangle(cornerRadius: 7, style: .continuous)
                     .fill(fillStyle(isSelected: isSelected, isEnabled: isEnabled))
