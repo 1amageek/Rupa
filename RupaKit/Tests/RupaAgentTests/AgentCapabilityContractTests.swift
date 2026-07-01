@@ -293,9 +293,9 @@ import SwiftCAD
     #expect(rulerConfiguration.optionMatrix.contains { $0.name == "rulerDistanceMeters" })
     #expect(workspaceScalePreset.category == .document)
     #expect(workspaceScalePreset.mutatesDocument)
-    #expect(workspaceScalePreset.summary.contains("site planning"))
+    #expect(workspaceScalePreset.summary.contains("regional planning"))
     #expect(workspaceScalePreset.optionMatrix.contains { axis in
-        axis.name == "preset" && axis.supportedValues.contains(WorkspaceScalePreset.sitePlanning.rawValue)
+        axis.name == "preset" && axis.supportedValues.contains(WorkspaceScalePreset.regionalPlanning.rawValue)
     })
     #expect(workspaceOriginRebase.category == .document)
     #expect(workspaceOriginRebase.access == .automationCommand)

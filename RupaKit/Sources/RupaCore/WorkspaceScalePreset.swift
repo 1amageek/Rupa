@@ -9,6 +9,7 @@ public enum WorkspaceScalePreset: String, Codable, CaseIterable, Hashable, Ident
     case architecture
     case architectureImperial
     case sitePlanning
+    case regionalPlanning
     case sitePlanningImperial
 
     public var id: String {
@@ -31,6 +32,8 @@ public enum WorkspaceScalePreset: String, Codable, CaseIterable, Hashable, Ident
             "Architecture (ft)"
         case .sitePlanning:
             "Site Planning"
+        case .regionalPlanning:
+            "Regional Planning"
         case .sitePlanningImperial:
             "Site Planning (ft)"
         }
@@ -86,6 +89,13 @@ public enum WorkspaceScalePreset: String, Codable, CaseIterable, Hashable, Ident
                 minorTickMeters: 100.0,
                 majorTickMeters: 1_000.0,
                 visibleSpanMeters: 100_000.0
+            )
+        case .regionalPlanning:
+            RulerConfiguration(
+                displayUnit: .kilometer,
+                minorTickMeters: 1_000.0,
+                majorTickMeters: 10_000.0,
+                visibleSpanMeters: 1_000_000.0
             )
         case .sitePlanningImperial:
             RulerConfiguration(

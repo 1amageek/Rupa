@@ -148,10 +148,15 @@ import Testing
         for: 1.0,
         ruler: WorkspaceScalePreset.sitePlanning.rulerConfiguration
     )
+    let regionalRange = workspaceLengthSliderMetersRange(
+        for: 1.0,
+        ruler: WorkspaceScalePreset.regionalPlanning.rulerConfiguration
+    )
 
     #expect(microRange == 0.0 ... 0.01)
     #expect(precisionRange == 0.0 ... 1.0)
     #expect(siteRange == 0.0 ... 100_000.0)
+    #expect(regionalRange == 0.0 ... 1_000_000.0)
 }
 
 @Test func workspaceSignedLengthSliderMetersRangeUsesWorkspaceRulerSpan() {
@@ -163,9 +168,14 @@ import Testing
         for: 1.0,
         ruler: WorkspaceScalePreset.sitePlanning.rulerConfiguration
     )
+    let regionalRange = workspaceSignedLengthSliderMetersRange(
+        for: 1.0,
+        ruler: WorkspaceScalePreset.regionalPlanning.rulerConfiguration
+    )
 
     #expect(precisionRange == -1.0 ... 1.0)
     #expect(siteRange == -100_000.0 ... 100_000.0)
+    #expect(regionalRange == -1_000_000.0 ... 1_000_000.0)
 }
 
 @Test func workspaceInspectorLayoutKeepsDensePropertyPanelRhythm() {
@@ -298,6 +308,23 @@ import Testing
     #expect(summary.detailTitle == "Site Planning, unit km, minor 0.1 km, major 1 km, visible 100 km")
     #expect(summary.accessibilityValue == summary.detailTitle)
     #expect(summary.smallerPreset == .architecture)
+    #expect(summary.largerPreset == .regionalPlanning)
+}
+
+@Test func workspaceScaleStatusSummaryReportsRegionalPlanningInKilometers() {
+    let summary = WorkspaceScaleStatusSummary(
+        ruler: WorkspaceScalePreset.regionalPlanning.rulerConfiguration
+    )
+
+    #expect(summary.compactTitle == "Region · 1,000 km")
+    #expect(summary.presetTitle == "Regional Planning")
+    #expect(summary.displayUnitTitle == "km")
+    #expect(summary.minorStepTitle == "1 km")
+    #expect(summary.majorStepTitle == "10 km")
+    #expect(summary.visibleSpanTitle == "1,000 km")
+    #expect(summary.detailTitle == "Regional Planning, unit km, minor 1 km, major 10 km, visible 1,000 km")
+    #expect(summary.accessibilityValue == summary.detailTitle)
+    #expect(summary.smallerPreset == .sitePlanning)
     #expect(summary.largerPreset == nil)
 }
 

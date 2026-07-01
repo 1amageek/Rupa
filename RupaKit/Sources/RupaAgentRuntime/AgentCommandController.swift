@@ -80,7 +80,7 @@ public final class AgentCommandController: AgentClientProtocol {
         capability(
             "setWorkspaceScalePreset",
             category: .document,
-            summary: "Apply a named workspace scale preset from micro fabrication through site planning.",
+            summary: "Apply a named workspace scale preset from micro fabrication through regional planning.",
             access: .automationCommand,
             mutatesDocument: true,
             targets: [.document],

@@ -14,7 +14,8 @@ public struct SketchDisplaySnapshotService: Sendable {
                   let snapshot = snapshot(
                       featureID: featureID,
                       sketch: sketch,
-                      parameters: parameters
+                      parameters: parameters,
+                      ruler: document.ruler
                   ) else {
                 continue
             }
@@ -71,11 +72,13 @@ public struct SketchDisplaySnapshotService: Sendable {
     private func snapshot(
         featureID: FeatureID,
         sketch: Sketch,
-        parameters: ParameterTable
+        parameters: ParameterTable,
+        ruler: RulerConfiguration
     ) -> SketchDisplaySnapshot? {
         guard let bounds = bounds(
             for: sketch,
-            parameters: parameters
+            parameters: parameters,
+            ruler: ruler
         ) else {
             return nil
         }
@@ -105,7 +108,8 @@ public struct SketchDisplaySnapshotService: Sendable {
 
     private func bounds(
         for sketch: Sketch,
-        parameters: ParameterTable
+        parameters: ParameterTable,
+        ruler: RulerConfiguration
     ) -> SketchDisplaySnapshot.Bounds? {
         let points = sketch.entities.values.flatMap { entity in
             entityBoundsPoints(
@@ -132,11 +136,19 @@ public struct SketchDisplaySnapshotService: Sendable {
 
         let width = maxX - minX
         let height = maxY - minY
+        let minimumSpan = max(
+            ruler.normalizedForWorkspaceScale().minorTickMeters,
+            RulerConfiguration.minorTickMetersRange.lowerBound
+        )
+        let resolvedWidth = max(width, minimumSpan)
+        let resolvedHeight = max(height, minimumSpan)
+        let centerX = (minX + maxX) / 2.0
+        let centerY = (minY + maxY) / 2.0
         return SketchDisplaySnapshot.Bounds(
-            minX: minX,
-            minY: minY,
-            maxX: minX + max(width, 0.001),
-            maxY: minY + max(height, 0.001)
+            minX: centerX - resolvedWidth / 2.0,
+            minY: centerY - resolvedHeight / 2.0,
+            maxX: centerX + resolvedWidth / 2.0,
+            maxY: centerY + resolvedHeight / 2.0
         )
     }
 

@@ -25,6 +25,29 @@ import Testing
     #expect(recommendation.recommendedScale.visibleSpanDisplayValue == 100.0)
 }
 
+@Test func workspaceScaleRecommendationChoosesRegionalPlanningForHundredsOfKilometersModel() throws {
+    let bounds = MeasurementResult.Bounds(
+        minX: 0.0,
+        minY: 0.0,
+        minZ: 0.0,
+        maxX: 250_000.0,
+        maxY: 120_000.0,
+        maxZ: 1_000.0
+    )
+
+    let recommendation = try #require(WorkspaceScaleRecommendationService().recommendation(
+        for: bounds,
+        currentRuler: WorkspaceScalePreset.sitePlanning.rulerConfiguration
+    ))
+
+    #expect(recommendation.reason == .modelExceedsComfortableSpan)
+    #expect(recommendation.modelSpanMeters == 250_000.0)
+    #expect(recommendation.recommendedPreset == .regionalPlanning)
+    #expect(recommendation.recommendedScale.displayUnit == .kilometer)
+    #expect(recommendation.recommendedScale.visibleSpanMeters == 1_000_000.0)
+    #expect(recommendation.recommendedScale.visibleSpanDisplayValue == 1_000.0)
+}
+
 @Test func workspaceScaleRecommendationChoosesSmallerPresetForTinyModelInSiteWorkspace() throws {
     let bounds = MeasurementResult.Bounds(
         minX: -0.25,

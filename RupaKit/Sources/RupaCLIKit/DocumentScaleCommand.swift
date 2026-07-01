@@ -49,7 +49,7 @@ public struct SetDisplayUnitCommand: ParsableCommand {
 public struct SetWorkspaceScalePresetCommand: ParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "set-scale-preset",
-        abstract: "Apply a workspace scale preset from micro fabrication through site planning."
+        abstract: "Apply a workspace scale preset from micro fabrication through regional planning."
     )
 
     @OptionGroup

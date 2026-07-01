@@ -11,12 +11,13 @@ import Testing
     }
 }
 
-@Test func workspaceScalePresetsCoverPrecisionThroughSitePlanning() {
+@Test func workspaceScalePresetsCoverPrecisionThroughRegionalPlanning() {
     let micro = WorkspaceScalePreset.microFabrication.rulerConfiguration
     let precision = WorkspaceScalePreset.precisionMechanical.rulerConfiguration
     let architecture = WorkspaceScalePreset.architecture.rulerConfiguration
     let architectureImperial = WorkspaceScalePreset.architectureImperial.rulerConfiguration
     let site = WorkspaceScalePreset.sitePlanning.rulerConfiguration
+    let regional = WorkspaceScalePreset.regionalPlanning.rulerConfiguration
     let siteImperial = WorkspaceScalePreset.sitePlanningImperial.rulerConfiguration
 
     #expect(micro.displayUnit == .micrometer)
@@ -24,11 +25,14 @@ import Testing
     #expect(architecture.displayUnit == .meter)
     #expect(architectureImperial.displayUnit == .foot)
     #expect(site.displayUnit == .kilometer)
+    #expect(regional.displayUnit == .kilometer)
     #expect(siteImperial.displayUnit == .foot)
     #expect(micro.visibleSpanMeters < precision.visibleSpanMeters)
     #expect(precision.visibleSpanMeters < architecture.visibleSpanMeters)
     #expect(architecture.visibleSpanMeters < site.visibleSpanMeters)
+    #expect(site.visibleSpanMeters < regional.visibleSpanMeters)
     #expect(site.visibleSpanMeters == 100_000.0)
+    #expect(regional.visibleSpanMeters == 1_000_000.0)
     #expect(siteImperial.visibleSpanMeters == 100_000.0)
 }
 
@@ -50,6 +54,19 @@ import Testing
     #expect(snapshot.summary.contains("minor 0.1 km"))
     #expect(snapshot.summary.contains("major 1 km"))
     #expect(snapshot.summary.contains("visible span 100 km"))
+}
+
+@Test func workspaceScaleSnapshotSummaryUsesKilometersForRegionalPlanning() {
+    let snapshot = WorkspaceScaleSnapshot(ruler: WorkspaceScalePreset.regionalPlanning.rulerConfiguration)
+
+    #expect(snapshot.displayUnit == .kilometer)
+    #expect(snapshot.displayUnitSymbol == "km")
+    #expect(snapshot.minorTickDisplayValue == 1.0)
+    #expect(snapshot.majorTickDisplayValue == 10.0)
+    #expect(snapshot.visibleSpanDisplayValue == 1_000.0)
+    #expect(snapshot.summary.contains("minor 1 km"))
+    #expect(snapshot.summary.contains("major 10 km"))
+    #expect(snapshot.summary.contains("visible span 1,000 km"))
 }
 
 @Test func workspaceScaleSnapshotExposesDisplayUnitValues() {

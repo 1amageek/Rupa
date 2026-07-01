@@ -1556,7 +1556,11 @@ public struct ViewportModelCoordinateMapper {
         guard let sceneBounds = scene.modelBounds else {
             return baseBounds
         }
-        return framedSceneBounds(sceneBounds, ruler: document.ruler)
+        let framedBounds = framedSceneBounds(sceneBounds, ruler: document.ruler)
+        if baseBounds.intersects(sceneBounds) {
+            return baseBounds.union(framedBounds)
+        }
+        return framedBounds
     }
 }
 

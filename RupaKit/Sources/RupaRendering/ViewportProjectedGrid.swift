@@ -93,7 +93,7 @@ public struct ViewportProjectedGrid: Equatable {
         }
 
         public var compactText: String {
-            "Grid \(minorStep.text)"
+            "Grid \(minorStep.text) · \(visibleSpan.text)"
         }
 
         public var accessibilityText: String {

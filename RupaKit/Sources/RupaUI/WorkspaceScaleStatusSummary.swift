@@ -66,6 +66,8 @@ struct WorkspaceScaleStatusSummary: Equatable, Sendable {
             "Arch ft"
         case .sitePlanning:
             "Site"
+        case .regionalPlanning:
+            "Region"
         case .sitePlanningImperial:
             "Site ft"
         case nil:
@@ -134,6 +136,7 @@ struct WorkspaceScaleStatusSummary: Equatable, Sendable {
                 .roomInterior,
                 .architecture,
                 .sitePlanning,
+                .regionalPlanning,
             ]
         }
         return [

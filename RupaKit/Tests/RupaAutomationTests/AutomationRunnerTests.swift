@@ -67,6 +67,25 @@ import SwiftCAD
 }
 
 @MainActor
+@Test func automationCanApplyRegionalWorkspaceScalePreset() async throws {
+    let session = EditorSession()
+    let runner = AutomationRunner()
+    let preset = WorkspaceScalePreset.regionalPlanning
+
+    let result = try runner.execute(.setWorkspaceScalePreset(preset), in: session)
+
+    #expect(session.document.displayUnit == .kilometer)
+    #expect(session.document.ruler == preset.rulerConfiguration.normalizedForWorkspaceScale())
+    #expect(session.generation == DocumentGeneration(1))
+    #expect(result.commandName == "setRulerConfiguration")
+    #expect(result.didMutate)
+    #expect(result.workspaceScale?.matchedPreset == .regionalPlanning)
+    #expect(result.workspaceScale?.visibleSpanMeters == 1_000_000.0)
+    #expect(result.workspaceScale?.visibleSpanDisplayValue == 1_000.0)
+    #expect(result.message.contains("Regional Planning"))
+}
+
+@MainActor
 @Test func automationDescribeDocumentReportsWorkspaceScale() async throws {
     let session = EditorSession()
     let runner = AutomationRunner()

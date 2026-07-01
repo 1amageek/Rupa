@@ -3077,7 +3077,7 @@ import Testing
     #expect(grid.scaleReadout.minorStep.meters == grid.minorStepMeters)
     #expect(grid.scaleReadout.majorStep.meters == grid.majorStepMeters)
     #expect(grid.scaleReadout.minorStepPixels == grid.minorStepPixels)
-    #expect(grid.scaleReadout.compactText == "Grid \(grid.scaleReadout.minorStep.text)")
+    #expect(grid.scaleReadout.compactText == "Grid \(grid.scaleReadout.minorStep.text) · \(grid.scaleReadout.visibleSpan.text)")
     #expect(grid.scaleReadout.accessibilityText.contains(grid.scaleReadout.visibleSpan.text))
     #expect(grid.majorStepMeters >= document.ruler.majorTickMeters)
     #expect(grid.minorStepMeters >= document.ruler.minorTickMeters)
@@ -3132,8 +3132,29 @@ import Testing
     #expect(grid.scaleReadout.majorStep.displayUnit == .kilometer)
     #expect(grid.scaleReadout.visibleSpan.displayUnit == .kilometer)
     #expect(grid.scaleReadout.compactText.contains("Grid"))
+    #expect(grid.scaleReadout.compactText.contains(grid.scaleReadout.visibleSpan.text))
     #expect(grid.scaleReadout.accessibilityText.contains("major"))
     #expect(grid.scaleReadout.accessibilityText.contains("visible span"))
+}
+
+@Test func viewportProjectedGridReportsRegionalPlanningScaleReadout() throws {
+    var document = DesignDocument.empty()
+    try document.setRulerConfiguration(WorkspaceScalePreset.regionalPlanning.rulerConfiguration)
+
+    let grid = ViewportProjectedGrid(
+        document: document,
+        size: CGSize(width: 800.0, height: 600.0)
+    )
+
+    #expect(!grid.lines.isEmpty)
+    #expect(grid.lines.count < 400)
+    #expect(grid.scaleReadout.minorStep.displayUnit == .kilometer)
+    #expect(grid.scaleReadout.majorStep.displayUnit == .kilometer)
+    #expect(grid.scaleReadout.visibleSpan.displayUnit == .kilometer)
+    #expect(grid.scaleReadout.compactText.contains("Grid"))
+    #expect(grid.scaleReadout.compactText.contains("km"))
+    #expect(grid.scaleReadout.compactText.contains(grid.scaleReadout.visibleSpan.text))
+    #expect(grid.scaleLabels.allSatisfy { $0.displayUnit == .kilometer })
 }
 
 @Test func viewportProjectedGridUsesReadableOneTwoFiveStepProgression() {

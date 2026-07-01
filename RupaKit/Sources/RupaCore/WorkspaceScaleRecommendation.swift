@@ -189,6 +189,7 @@ public struct WorkspaceScaleRecommendationService: Sendable {
                 .roomInterior,
                 .architecture,
                 .sitePlanning,
+                .regionalPlanning,
             ]
         }
         return [
