@@ -1,3 +1,4 @@
+import Foundation
 import SwiftCAD
 import Testing
 @testable import RupaCore
@@ -35,6 +36,44 @@ import Testing
     let values = Dictionary(uniqueKeysWithValues: summary.entries.map { ($0.kind, $0.resolvedValue) })
     #expect(abs((values[.length] ?? -1.0) - 0.010) < 1.0e-12)
     #expect(abs((values[.angle] ?? -1.0) - 0.0) < 1.0e-12)
+}
+
+@Test func sketchDimensionSummaryExposesDocumentDisplayValues() async throws {
+    var document = DesignDocument.empty()
+    document.setDisplayUnit(.centimeter)
+    _ = try document.createLineSketch(
+        name: "Dimension Summary Display Line",
+        plane: .xy,
+        start: SketchPoint(
+            x: .length(0.0, .meter),
+            y: .length(0.0, .meter)
+        ),
+        end: SketchPoint(
+            x: .length(0.03, .meter),
+            y: .length(0.04, .meter)
+        )
+    )
+    let sketchSummary = try SketchEntitySummaryService().summarize(document: document)
+    let line = try #require(sketchSummary.entries.first { $0.entityKind == "line" })
+    let target = try #require(line.selectionTarget())
+
+    let summary = try SketchDimensionSummaryService().summarize(
+        document: document,
+        targets: [target]
+    )
+
+    let length = try #require(summary.entries.first { $0.kind == .length })
+    let angle = try #require(summary.entries.first { $0.kind == .angle })
+    #expect(summary.displayUnit == .centimeter)
+    #expect(summary.displayUnitSymbol == "cm")
+    #expect(length.valueKind == .length)
+    #expect(abs(length.resolvedValue - 0.05) < 1.0e-12)
+    #expect(abs(length.resolvedDisplayValue - 5.0) < 1.0e-12)
+    #expect(length.resolvedDisplayUnitSymbol == "cm")
+    #expect(angle.valueKind == .angle)
+    #expect(abs(angle.resolvedValue - atan2(0.04, 0.03)) < 1.0e-12)
+    #expect(abs(angle.resolvedDisplayValue - 53.130_102_354_155_98) < 1.0e-12)
+    #expect(angle.resolvedDisplayUnitSymbol == "deg")
 }
 
 @MainActor

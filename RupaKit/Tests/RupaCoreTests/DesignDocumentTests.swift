@@ -2335,6 +2335,35 @@ import Testing
     #expect(summary.entries.first { $0.kind == .sizeY }?.sourceExpression == .length(0.5, .meter))
 }
 
+@Test func objectDimensionSummaryExposesDocumentDisplayValues() async throws {
+    var document = DesignDocument.empty()
+    document.setDisplayUnit(.centimeter)
+    try document.createExtrudedRectangle(
+        name: "Dimension Summary Display Box",
+        plane: .xy,
+        width: .length(2.0, .meter),
+        height: .length(1.5, .meter),
+        depth: .length(0.5, .meter),
+        direction: .normal
+    )
+    let bodyNode = try #require(document.productMetadata.sceneNodes.values.first {
+        $0.reference?.kind == .body
+    })
+
+    let summary = try ObjectDimensionSummaryService().summarize(
+        document: document,
+        targets: [SelectionTarget(sceneNodeID: bodyNode.id)]
+    )
+
+    let sizeX = try #require(summary.entries.first { $0.kind == .sizeX })
+    #expect(summary.displayUnit == .centimeter)
+    #expect(summary.displayUnitSymbol == "cm")
+    #expect(sizeX.valueKind == .length)
+    #expect(abs(sizeX.resolvedMeters - 2.0) < 1.0e-12)
+    #expect(abs(sizeX.resolvedDisplayValue - 200.0) < 1.0e-12)
+    #expect(sizeX.resolvedDisplayUnitSymbol == "cm")
+}
+
 @Test func objectDimensionSummaryInfersPrimaryDimensionFromGeneratedBoxFace() async throws {
     var document = DesignDocument.empty()
     try document.createExtrudedRectangle(

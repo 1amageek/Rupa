@@ -100,3 +100,89 @@ import Testing
     #expect(decoded.minorTickDisplayValue == 100.0)
     #expect(decoded.majorTickDisplayValue == 1_000.0)
 }
+
+@Test func dimensionSummaryResultsDecodeMissingDisplayValues() throws {
+    let objectTarget = SelectionTarget(sceneNodeID: SceneNodeID())
+    let objectSummary = ObjectDimensionSummaryResult(
+        displayUnit: .centimeter,
+        entries: [
+            ObjectDimensionSummaryResult.Entry(
+                target: objectTarget,
+                sceneNodeID: objectTarget.sceneNodeID.description,
+                sourceFeatureID: FeatureID().description,
+                sourceKind: .box,
+                kind: .sizeX,
+                label: "Size X",
+                inputExpression: .length(1.5, .meter),
+                resolvedMeters: 1.5,
+                isPrimaryForTarget: true
+            ),
+        ]
+    )
+    let objectJSON = try JSONSerialization.jsonObject(
+        with: try JSONEncoder().encode(objectSummary)
+    ) as? [String: Any]
+    var legacyObjectJSON = try #require(objectJSON)
+    legacyObjectJSON["displayUnitSymbol"] = nil
+    var legacyObjectEntry = try #require(
+        (legacyObjectJSON["entries"] as? [[String: Any]])?.first
+    )
+    legacyObjectEntry["valueKind"] = nil
+    legacyObjectEntry["resolvedDisplayValue"] = nil
+    legacyObjectEntry["resolvedDisplayUnitSymbol"] = nil
+    legacyObjectJSON["entries"] = [legacyObjectEntry]
+
+    let decodedObject = try JSONDecoder().decode(
+        ObjectDimensionSummaryResult.self,
+        from: try JSONSerialization.data(withJSONObject: legacyObjectJSON)
+    )
+
+    let decodedObjectEntry = try #require(decodedObject.entries.first)
+    #expect(decodedObject.displayUnitSymbol == "cm")
+    #expect(decodedObjectEntry.valueKind == .length)
+    #expect(abs(decodedObjectEntry.resolvedDisplayValue - 150.0) < 1.0e-12)
+    #expect(decodedObjectEntry.resolvedDisplayUnitSymbol == "cm")
+
+    let sketchTarget = SelectionTarget(sceneNodeID: SceneNodeID())
+    let sketchSummary = SketchDimensionSummaryResult(
+        displayUnit: .centimeter,
+        entries: [
+            SketchDimensionSummaryResult.Entry(
+                requestedTarget: sketchTarget,
+                target: sketchTarget,
+                sceneNodeID: sketchTarget.sceneNodeID.description,
+                sourceFeatureID: FeatureID().description,
+                entityID: SketchEntityID().description,
+                entityKind: "line",
+                kind: .angle,
+                label: "Angle",
+                inputExpression: .angle(Double.pi / 2.0, .radian),
+                resolvedValue: Double.pi / 2.0,
+                isPrimaryForTarget: true
+            ),
+        ]
+    )
+    let sketchJSON = try JSONSerialization.jsonObject(
+        with: try JSONEncoder().encode(sketchSummary)
+    ) as? [String: Any]
+    var legacySketchJSON = try #require(sketchJSON)
+    legacySketchJSON["displayUnitSymbol"] = nil
+    var legacySketchEntry = try #require(
+        (legacySketchJSON["entries"] as? [[String: Any]])?.first
+    )
+    legacySketchEntry["valueKind"] = nil
+    legacySketchEntry["resolvedDisplayValue"] = nil
+    legacySketchEntry["resolvedDisplayUnitSymbol"] = nil
+    legacySketchJSON["entries"] = [legacySketchEntry]
+
+    let decodedSketch = try JSONDecoder().decode(
+        SketchDimensionSummaryResult.self,
+        from: try JSONSerialization.data(withJSONObject: legacySketchJSON)
+    )
+
+    let decodedSketchEntry = try #require(decodedSketch.entries.first)
+    #expect(decodedSketch.displayUnitSymbol == "cm")
+    #expect(decodedSketchEntry.valueKind == .angle)
+    #expect(abs(decodedSketchEntry.resolvedDisplayValue - 90.0) < 1.0e-12)
+    #expect(decodedSketchEntry.resolvedDisplayUnitSymbol == "deg")
+}
