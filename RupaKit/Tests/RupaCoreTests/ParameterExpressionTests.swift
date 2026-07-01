@@ -171,8 +171,56 @@ import Testing
     #expect(abs((summary.resolvedValue ?? 0.0) - 0.02) < 0.000_000_000_001)
     #expect(summary.dependencyNames == ["width"])
     #expect(summary.dependentNames == [])
+    #expect(summary.sourceUsages == [])
     #expect(widthSummary.dependencyNames == [])
     #expect(widthSummary.dependentNames == ["doubleWidth"])
+    #expect(widthSummary.sourceUsages == [])
+}
+
+@Test func parameterListResultReportsSourceFeatureUsages() throws {
+    var document = DesignDocument.empty(named: "Feature Usage Parameters")
+    try document.upsertParameter(
+        name: "width",
+        expression: .constant(.length(10.0, unit: .millimeter)),
+        kind: .length
+    )
+    let width = try #require(
+        document.cadDocument.parameters.parameters.values.first { $0.name == "width" }
+    )
+    let profileID = try document.createRectangleSketch(
+        name: "Profile",
+        plane: .xy,
+        width: .reference(width.id),
+        height: .constant(.length(5.0, unit: .millimeter))
+    )
+    try document.extrudeProfile(
+        name: "Body",
+        profile: ProfileReference(featureID: profileID),
+        distance: .reference(width.id),
+        direction: .normal
+    )
+
+    let result = ParameterListResult(
+        document: document,
+        generation: DocumentGeneration(2),
+        dirty: true,
+        diagnostics: []
+    )
+    let summary = try #require(result.parameters.first { $0.name == "width" })
+
+    #expect(Set(summary.sourceUsages.map(\.operation)) == ["extrude", "sketch"])
+    #expect(summary.sourceUsages.allSatisfy { $0.featureID.isEmpty == false })
+    #expect(summary.sourceUsages.contains { usage in
+        usage.featureName == "Body"
+            && usage.operation == "extrude"
+            && usage.expressionPath == "extrude.distance"
+    })
+    #expect(summary.sourceUsages.contains { usage in
+        usage.featureName == "Profile"
+            && usage.operation == "sketch"
+            && usage.expressionPath.contains(".line.")
+            && usage.expressionPath.hasSuffix(".x")
+    })
 }
 
 @Test func parameterSummaryDecodesMissingDependencyFieldsAsEmpty() throws {
@@ -194,4 +242,5 @@ import Testing
 
     #expect(summary.dependencyNames == [])
     #expect(summary.dependentNames == [])
+    #expect(summary.sourceUsages == [])
 }

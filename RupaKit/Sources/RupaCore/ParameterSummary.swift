@@ -11,6 +11,7 @@ public struct ParameterSummary: Codable, Equatable, Sendable, Identifiable {
     public var resolvedKind: QuantityKind?
     public var dependencyNames: [String]
     public var dependentNames: [String]
+    public var sourceUsages: [ParameterSourceUsageSummary]
     public var diagnostics: [EditorDiagnostic]
 
     private enum CodingKeys: String, CodingKey {
@@ -22,6 +23,7 @@ public struct ParameterSummary: Codable, Equatable, Sendable, Identifiable {
         case resolvedKind
         case dependencyNames
         case dependentNames
+        case sourceUsages
         case diagnostics
     }
 
@@ -34,6 +36,7 @@ public struct ParameterSummary: Codable, Equatable, Sendable, Identifiable {
         resolvedKind: QuantityKind?,
         dependencyNames: [String] = [],
         dependentNames: [String] = [],
+        sourceUsages: [ParameterSourceUsageSummary] = [],
         diagnostics: [EditorDiagnostic]
     ) {
         self.id = id
@@ -44,6 +47,7 @@ public struct ParameterSummary: Codable, Equatable, Sendable, Identifiable {
         self.resolvedKind = resolvedKind
         self.dependencyNames = dependencyNames
         self.dependentNames = dependentNames
+        self.sourceUsages = sourceUsages
         self.diagnostics = diagnostics
     }
 
@@ -58,6 +62,7 @@ public struct ParameterSummary: Codable, Equatable, Sendable, Identifiable {
             resolvedKind: try container.decodeIfPresent(QuantityKind.self, forKey: .resolvedKind),
             dependencyNames: try container.decodeIfPresent([String].self, forKey: .dependencyNames) ?? [],
             dependentNames: try container.decodeIfPresent([String].self, forKey: .dependentNames) ?? [],
+            sourceUsages: try container.decodeIfPresent([ParameterSourceUsageSummary].self, forKey: .sourceUsages) ?? [],
             diagnostics: try container.decodeIfPresent([EditorDiagnostic].self, forKey: .diagnostics) ?? []
         )
     }
@@ -72,13 +77,15 @@ public struct ParameterSummary: Codable, Equatable, Sendable, Identifiable {
         try container.encodeIfPresent(resolvedKind, forKey: .resolvedKind)
         try container.encode(dependencyNames, forKey: .dependencyNames)
         try container.encode(dependentNames, forKey: .dependentNames)
+        try container.encode(sourceUsages, forKey: .sourceUsages)
         try container.encode(diagnostics, forKey: .diagnostics)
     }
 
     public init(
         parameter: Parameter,
         table: ParameterTable,
-        formatter: ParameterExpressionFormatter
+        formatter: ParameterExpressionFormatter,
+        sourceUsages: [ParameterSourceUsageSummary] = []
     ) {
         let resolved: Quantity?
         let parameterDiagnostics: [EditorDiagnostic]
@@ -96,7 +103,7 @@ public struct ParameterSummary: Codable, Equatable, Sendable, Identifiable {
         }
 
         let dependencyNames = Self.parameterNames(
-            for: Self.referencedParameterIDs(in: parameter.expression),
+            for: CADExpressionParameterReferenceCollector.parameterIDs(in: parameter.expression),
             table: table
         )
         let dependentNames = Self.dependentNames(
@@ -113,6 +120,7 @@ public struct ParameterSummary: Codable, Equatable, Sendable, Identifiable {
             resolvedKind: resolved?.kind,
             dependencyNames: dependencyNames,
             dependentNames: dependentNames,
+            sourceUsages: sourceUsages,
             diagnostics: parameterDiagnostics
         )
     }
@@ -124,7 +132,7 @@ public struct ParameterSummary: Codable, Equatable, Sendable, Identifiable {
         table.parameters.values
             .filter { parameter in
                 parameter.id != id
-                    && referencedParameterIDs(in: parameter.expression).contains(id)
+                    && CADExpressionParameterReferenceCollector.parameterIDs(in: parameter.expression).contains(id)
             }
             .map(\.name)
             .sorted()
@@ -136,26 +144,5 @@ public struct ParameterSummary: Codable, Equatable, Sendable, Identifiable {
     ) -> [String] {
         ids.compactMap { table.parameters[$0]?.name }
             .sorted()
-    }
-
-    private static func referencedParameterIDs(
-        in expression: CADExpression
-    ) -> Set<ParameterID> {
-        switch expression {
-        case .constant, .variable:
-            []
-        case .reference(let id):
-            [id]
-        case .add(let left, let right),
-             .subtract(let left, let right),
-             .multiply(let left, let right),
-             .divide(let left, let right):
-            referencedParameterIDs(in: left)
-                .union(referencedParameterIDs(in: right))
-        case .sin(let argument),
-             .cos(let argument),
-             .tan(let argument):
-            referencedParameterIDs(in: argument)
-        }
     }
 }

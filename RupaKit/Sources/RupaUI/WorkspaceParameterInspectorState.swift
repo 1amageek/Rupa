@@ -11,6 +11,7 @@ struct WorkspaceParameterInspectorState: Equatable, Sendable {
         var resolvedTitle: String
         var dependencyTitle: String
         var dependentTitle: String
+        var sourceUsageTitle: String
         var diagnosticTitle: String
         var hasDiagnostics: Bool
 
@@ -23,6 +24,7 @@ struct WorkspaceParameterInspectorState: Equatable, Sendable {
                 && lhs.resolvedTitle == rhs.resolvedTitle
                 && lhs.dependencyTitle == rhs.dependencyTitle
                 && lhs.dependentTitle == rhs.dependentTitle
+                && lhs.sourceUsageTitle == rhs.sourceUsageTitle
                 && lhs.diagnosticTitle == rhs.diagnosticTitle
                 && lhs.hasDiagnostics == rhs.hasDiagnostics
         }
@@ -51,6 +53,7 @@ struct WorkspaceParameterInspectorState: Equatable, Sendable {
                 ),
                 dependencyTitle: Self.nameListTitle(parameter.dependencyNames),
                 dependentTitle: Self.nameListTitle(parameter.dependentNames),
+                sourceUsageTitle: Self.sourceUsageTitle(parameter.sourceUsages),
                 diagnosticTitle: Self.diagnosticTitle(parameter.diagnostics),
                 hasDiagnostics: parameter.diagnostics.isEmpty == false
             )
@@ -101,6 +104,19 @@ struct WorkspaceParameterInspectorState: Equatable, Sendable {
             return "None"
         }
         return names.joined(separator: ", ")
+    }
+
+    private static func sourceUsageTitle(
+        _ usages: [ParameterSourceUsageSummary]
+    ) -> String {
+        guard usages.isEmpty == false else {
+            return "None"
+        }
+        return usages.map { usage in
+            let feature = usage.featureName ?? usage.operation
+            return "\(feature): \(usage.expressionPath)"
+        }
+        .joined(separator: ", ")
     }
 
     private static func diagnosticTitle(_ diagnostics: [EditorDiagnostic]) -> String {

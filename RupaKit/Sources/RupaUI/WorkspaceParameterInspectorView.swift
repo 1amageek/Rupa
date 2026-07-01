@@ -72,6 +72,7 @@ struct WorkspaceParameterInspectorView: View {
         }
         workspaceInspectorValueRow("Uses", row.dependencyTitle)
         workspaceInspectorValueRow("Used By", row.dependentTitle)
+        workspaceInspectorValueRow("Used In", row.sourceUsageTitle)
         if row.hasDiagnostics {
             workspaceInspectorValueRow("Diagnostics", row.diagnosticTitle)
         }

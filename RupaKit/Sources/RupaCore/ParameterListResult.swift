@@ -31,13 +31,16 @@ public struct ParameterListResult: Codable, Equatable, Sendable {
     ) {
         let table = document.cadDocument.parameters
         let formatter = ParameterExpressionFormatter()
+        let sourceUsageMap = ParameterSourceUsageService()
+            .usageMap(in: document.cadDocument)
         let parameters = table.parameters.values
             .sorted { $0.name < $1.name }
             .map { parameter in
                 ParameterSummary(
                     parameter: parameter,
                     table: table,
-                    formatter: formatter
+                    formatter: formatter,
+                    sourceUsages: sourceUsageMap[parameter.id] ?? []
                 )
             }
         self.init(

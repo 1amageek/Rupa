@@ -388,9 +388,9 @@ flowchart LR
 | Rename safety | Renaming rejects missing parameters, duplicate names, invalid names, and unchanged names before mutation; existing expressions keep their `ParameterID` references and format with the new name after the mutation. |
 | Automation | Automation and Agent commands expose the same typed parameter upsert, rename, and deletion path. |
 | CLI | `rupa param set` supports numeric literals and parsed formulas for length, angle, and scalar parameters in file, live, and auto modes. `rupa param rename` and `rupa param delete` use the same mode and open-document safety model. |
-| Listing | `rupa param list` returns parameter IDs, names, kinds, normalized expression strings, resolved values, diagnostics, generation, and dirty state. |
+| Listing | `rupa param list` and `document.parameters` return parameter IDs, names, kinds, normalized expression strings, resolved values, direct dependency names, reverse dependent names, feature source usages, diagnostics, generation, and dirty state. |
 
-Parameter formulas are saved as Swift-CAD `CADExpression` AST values. Formula input strings are parsed at the command boundary and are not the source of truth after save. Dependency-aware UI editing remains follow-up work.
+Parameter formulas are saved as Swift-CAD `CADExpression` AST values. Formula input strings are parsed at the command boundary and are not the source of truth after save. Parameter listing derives feature source usages from Swift-CAD feature expressions, not from formatted strings. Dependency-aware UI editing remains follow-up work.
 
 ### Modeling Command Contract
 

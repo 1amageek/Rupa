@@ -54,6 +54,70 @@ import SwiftCAD
     #expect(height.expression == "(width * 2)")
     #expect(abs((height.resolvedValue ?? 0.0) - 0.02) < 0.000_000_000_001)
 }
+
+@MainActor
+@Test func agentListsParameterSourceFeatureUsages() async throws {
+    let server = AgentCommandController()
+    let sessionID = UUID()
+    let session = EditorSession()
+    _ = try session.execute(
+        .upsertParameter(
+            name: "width",
+            expression: .constant(.length(12.0, unit: .millimeter)),
+            kind: .length
+        ),
+        expectedGeneration: DocumentGeneration(0)
+    )
+    let width = try #require(
+        session.document.cadDocument.parameters.parameters.values.first { $0.name == "width" }
+    )
+    _ = try session.execute(
+        .createRectangleSketch(
+            name: "Profile",
+            plane: .xy,
+            width: .reference(width.id),
+            height: .constant(.length(6.0, unit: .millimeter))
+        ),
+        expectedGeneration: DocumentGeneration(1)
+    )
+    let profileID = try #require(
+        session.document.cadDocument.designGraph.nodes.values.first { $0.name == "Profile" }?.id
+    )
+    _ = try session.execute(
+        .extrudeProfile(
+            name: "Body",
+            profile: ProfileReference(featureID: profileID),
+            distance: .reference(width.id),
+            direction: .normal
+        ),
+        expectedGeneration: DocumentGeneration(2)
+    )
+    server.register(session: session, id: sessionID)
+
+    let listResponse = server.handle(
+        .parameters(
+            sessionID: sessionID,
+            expectedGeneration: DocumentGeneration(3)
+        )
+    )
+    guard case .parameters(let parameterList) = listResponse else {
+        #expect(Bool(false))
+        return
+    }
+    let listedWidth = try #require(parameterList.parameters.first { $0.name == "width" })
+
+    #expect(listedWidth.sourceUsages.contains { usage in
+        usage.featureName == "Profile"
+            && usage.operation == "sketch"
+            && usage.expressionPath.contains(".line.")
+    })
+    #expect(listedWidth.sourceUsages.contains { usage in
+        usage.featureName == "Body"
+            && usage.operation == "extrude"
+            && usage.expressionPath == "extrude.distance"
+    })
+}
+
 @MainActor
 @Test func agentDeletesParameterThroughAutomationCommand() async throws {
     let server = AgentCommandController()
