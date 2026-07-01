@@ -3102,8 +3102,14 @@ import Testing
     #expect(grid.scaleLabels.allSatisfy { abs($0.valueMeters) >= grid.majorStepMeters - 1.0e-12 })
     #expect(grid.scaleReadout.minorStep.meters == grid.minorStepMeters)
     #expect(grid.scaleReadout.majorStep.meters == grid.majorStepMeters)
+    #expect(grid.scaleReadout.snapStep.meters == document.ruler.minorTickMeters)
     #expect(grid.scaleReadout.minorStepPixels == grid.minorStepPixels)
-    #expect(grid.scaleReadout.compactText == "Grid \(grid.scaleReadout.minorStep.text) · \(grid.scaleReadout.visibleSpan.text)")
+    if grid.scaleReadout.showsSeparateSnapStep {
+        #expect(grid.scaleReadout.compactText == "Grid \(grid.scaleReadout.minorStep.text) · Snap \(grid.scaleReadout.snapStep.text)")
+    } else {
+        #expect(grid.scaleReadout.compactText == "Grid \(grid.scaleReadout.minorStep.text) · \(grid.scaleReadout.visibleSpan.text)")
+    }
+    #expect(grid.scaleReadout.accessibilityText.contains(grid.scaleReadout.snapStep.text))
     #expect(grid.scaleReadout.accessibilityText.contains(grid.scaleReadout.visibleSpan.text))
     #expect(grid.majorStepMeters >= document.ruler.majorTickMeters)
     #expect(grid.minorStepMeters >= document.ruler.minorTickMeters)
@@ -3154,12 +3160,16 @@ import Testing
 
     #expect(grid.scaleReadout.minorStep.meters == grid.minorStepMeters)
     #expect(grid.scaleReadout.majorStep.meters == grid.majorStepMeters)
+    #expect(grid.scaleReadout.snapStep.meters == document.ruler.minorTickMeters)
     #expect(grid.scaleReadout.minorStep.displayUnit == .kilometer)
     #expect(grid.scaleReadout.majorStep.displayUnit == .kilometer)
+    #expect(grid.scaleReadout.snapStep.displayUnit == .kilometer)
     #expect(grid.scaleReadout.visibleSpan.displayUnit == .kilometer)
     #expect(grid.scaleReadout.compactText.contains("Grid"))
-    #expect(grid.scaleReadout.compactText.contains(grid.scaleReadout.visibleSpan.text))
+    #expect(grid.scaleReadout.compactText.contains("Snap"))
+    #expect(grid.scaleReadout.compactText.contains(grid.scaleReadout.snapStep.text))
     #expect(grid.scaleReadout.accessibilityText.contains("major"))
+    #expect(grid.scaleReadout.accessibilityText.contains("snap"))
     #expect(grid.scaleReadout.accessibilityText.contains("visible span"))
 }
 
@@ -3176,10 +3186,12 @@ import Testing
     #expect(grid.lines.count < 400)
     #expect(grid.scaleReadout.minorStep.displayUnit == .kilometer)
     #expect(grid.scaleReadout.majorStep.displayUnit == .kilometer)
+    #expect(grid.scaleReadout.snapStep.displayUnit == .kilometer)
+    #expect(grid.scaleReadout.snapStep.meters == document.ruler.minorTickMeters)
     #expect(grid.scaleReadout.visibleSpan.displayUnit == .kilometer)
     #expect(grid.scaleReadout.compactText.contains("Grid"))
     #expect(grid.scaleReadout.compactText.contains("km"))
-    #expect(grid.scaleReadout.compactText.contains(grid.scaleReadout.visibleSpan.text))
+    #expect(grid.scaleReadout.accessibilityText.contains(grid.scaleReadout.visibleSpan.text))
     #expect(grid.scaleLabels.allSatisfy { $0.displayUnit == .kilometer })
 }
 

@@ -77,27 +77,37 @@ public struct ViewportProjectedGrid: Equatable {
 
         public var minorStep: Length
         public var majorStep: Length
+        public var snapStep: Length
         public var visibleSpan: Length
         public var minorStepPixels: CGFloat
 
         public init(
             minorStep: Length,
             majorStep: Length,
+            snapStep: Length,
             visibleSpan: Length,
             minorStepPixels: CGFloat
         ) {
             self.minorStep = minorStep
             self.majorStep = majorStep
+            self.snapStep = snapStep
             self.visibleSpan = visibleSpan
             self.minorStepPixels = minorStepPixels
         }
 
         public var compactText: String {
-            "Grid \(minorStep.text) · \(visibleSpan.text)"
+            if showsSeparateSnapStep {
+                return "Grid \(minorStep.text) · Snap \(snapStep.text)"
+            }
+            return "Grid \(minorStep.text) · \(visibleSpan.text)"
         }
 
         public var accessibilityText: String {
-            "Grid \(minorStep.text), major \(majorStep.text), visible span \(visibleSpan.text)"
+            "Grid \(minorStep.text), snap \(snapStep.text), major \(majorStep.text), visible span \(visibleSpan.text)"
+        }
+
+        public var showsSeparateSnapStep: Bool {
+            abs(minorStep.meters - snapStep.meters) > max(abs(snapStep.meters) * 1.0e-9, 1.0e-12)
         }
     }
 
@@ -181,6 +191,7 @@ public struct ViewportProjectedGrid: Equatable {
         self.scaleReadout = Self.makeScaleReadout(
             minorStepMeters: minorStepMeters,
             majorStepMeters: resolvedMajorStepMeters,
+            snapStepMeters: document.ruler.minorTickMeters,
             visibleSpanMeters: max(Double(modelBounds.width), Double(modelBounds.height)),
             minorStepPixels: minorStepPixels,
             unit: document.displayUnit
@@ -419,12 +430,14 @@ public struct ViewportProjectedGrid: Equatable {
     private static func makeScaleReadout(
         minorStepMeters: Double,
         majorStepMeters: Double,
+        snapStepMeters: Double,
         visibleSpanMeters: Double,
         minorStepPixels: CGFloat,
         unit: LengthDisplayUnit
     ) -> ScaleReadout {
         let minor = lengthDisplay(valueMeters: minorStepMeters, preferredUnit: unit)
         let major = lengthDisplay(valueMeters: majorStepMeters, preferredUnit: unit)
+        let snap = lengthDisplay(valueMeters: snapStepMeters, preferredUnit: unit)
         let span = lengthDisplay(valueMeters: visibleSpanMeters, preferredUnit: unit)
         return ScaleReadout(
             minorStep: ScaleReadout.Length(
@@ -438,6 +451,12 @@ public struct ViewportProjectedGrid: Equatable {
                 displayValue: major.value,
                 displayUnit: major.unit,
                 text: major.text
+            ),
+            snapStep: ScaleReadout.Length(
+                meters: snapStepMeters,
+                displayValue: snap.value,
+                displayUnit: snap.unit,
+                text: snap.text
             ),
             visibleSpan: ScaleReadout.Length(
                 meters: visibleSpanMeters,
