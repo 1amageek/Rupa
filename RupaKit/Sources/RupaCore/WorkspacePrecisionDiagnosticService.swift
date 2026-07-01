@@ -114,16 +114,37 @@ public struct WorkspacePrecisionDiagnosticService: Sendable {
         displayUnit: LengthDisplayUnit,
         tolerance: ModelingTolerance? = nil
     ) -> [EditorDiagnostic] {
+        diagnostics(
+            for: report(
+                for: evaluatedDocument,
+                ruler: ruler,
+                tolerance: tolerance
+            ),
+            displayUnit: displayUnit
+        )
+    }
+
+    public func report(
+        for evaluatedDocument: EvaluatedDocument,
+        ruler: RulerConfiguration,
+        tolerance: ModelingTolerance? = nil
+    ) -> Report? {
         var accumulator = WorkspacePrecisionBoundsAccumulator()
         for mesh in evaluatedDocument.meshes.values {
             for position in mesh.positions {
                 accumulator.include(position)
             }
         }
-        return diagnostics(
+        for curves in evaluatedDocument.curves.values {
+            for curve in curves {
+                for point in curve.points {
+                    accumulator.include(point)
+                }
+            }
+        }
+        return report(
             for: accumulator.bounds,
             ruler: ruler,
-            displayUnit: displayUnit,
             tolerance: tolerance
         )
     }

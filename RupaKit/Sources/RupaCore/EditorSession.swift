@@ -741,6 +741,14 @@ public final class EditorSession {
         }
     }
 
+    public func rebaseWorkspaceOrigin(translation: Vector3D) {
+        do {
+            try execute(.rebaseWorkspaceOrigin(translation: translation))
+        } catch {
+            record(error)
+        }
+    }
+
     public func renameDocument(_ name: String) {
         do {
             try execute(.renameDocument(name: name))

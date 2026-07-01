@@ -126,6 +126,55 @@ import Testing
 }
 
 @MainActor
+@Test func workspacePrecisionReportCanBeReadFromEvaluatedDocumentForInspectorActions() throws {
+    let document = try farFromOriginDocument()
+    let evaluated = try DocumentEvaluator.modelingDefault(for: document).evaluate(document.cadDocument)
+
+    let report = WorkspacePrecisionDiagnosticService().report(
+        for: evaluated,
+        ruler: document.ruler
+    )
+
+    #expect(report?.reason == .coordinateResolution)
+    #expect(report?.recommendedRebaseTranslation == Vector3D(
+        x: -(1.0e12 + 5.0),
+        y: -(1.0e12 + 5.0),
+        z: 0.0
+    ))
+}
+
+@MainActor
+@Test func workspacePrecisionReportIncludesEvaluatedCurvesForSketchOnlyDocuments() throws {
+    var document = DesignDocument.empty(named: "Remote Sketch")
+    try document.setRulerConfiguration(WorkspaceScalePreset.sitePlanning.rulerConfiguration)
+    _ = try document.createRectangleSketchFromCorners(
+        name: "Remote Sketch Profile",
+        plane: .xy,
+        firstCorner: SketchPoint(
+            x: .length(1.0e12, .meter),
+            y: .length(1.0e12, .meter)
+        ),
+        oppositeCorner: SketchPoint(
+            x: .length(1.0e12 + 10.0, .meter),
+            y: .length(1.0e12 + 10.0, .meter)
+        )
+    )
+    let evaluated = try DocumentEvaluator.modelingDefault(for: document).evaluate(document.cadDocument)
+
+    let report = WorkspacePrecisionDiagnosticService().report(
+        for: evaluated,
+        ruler: document.ruler
+    )
+
+    #expect(report?.reason == .coordinateResolution)
+    #expect(report?.recommendedRebaseTranslation == Vector3D(
+        x: -(1.0e12 + 5.0),
+        y: -(1.0e12 + 5.0),
+        z: 0.0
+    ))
+}
+
+@MainActor
 private func farFromOriginDocument() throws -> DesignDocument {
     var document = DesignDocument.empty(named: "Far Origin")
     try document.setRulerConfiguration(WorkspaceScalePreset.sitePlanning.rulerConfiguration)

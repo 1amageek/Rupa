@@ -22,6 +22,7 @@ struct WorkspaceDocumentInspectorState: Equatable, Sendable {
     var exportPresetCount: Int
     var ruler: RulerConfiguration
     var scaleRecommendation: WorkspaceDocumentScaleRecommendationState?
+    var precisionRecommendation: WorkspaceDocumentPrecisionRecommendationState?
 }
 
 struct WorkspaceDocumentScaleRecommendationState: Equatable, Sendable {
@@ -31,10 +32,19 @@ struct WorkspaceDocumentScaleRecommendationState: Equatable, Sendable {
     var preset: WorkspaceScalePreset
 }
 
+struct WorkspaceDocumentPrecisionRecommendationState: Equatable, Sendable {
+    var reasonTitle: String
+    var originDistanceTitle: String
+    var modelSpanTitle: String
+    var translationTitle: String
+    var translation: Vector3D
+}
+
 struct WorkspaceDocumentInspectorView: View {
     var state: WorkspaceDocumentInspectorState
     var setDisplayUnit: (LengthDisplayUnit) -> Void
     var setWorkspaceScalePreset: (WorkspaceScalePreset) -> Void
+    var applyWorkspaceRebaseTranslation: (Vector3D) -> Void
     var setMinorTickMeters: (Double) -> Void
     var setMajorTickMeters: (Double) -> Void
     var setVisibleSpanMeters: (Double) -> Void
@@ -97,6 +107,12 @@ struct WorkspaceDocumentInspectorView: View {
                 meters: state.ruler.visibleSpanMeters,
                 onChange: setVisibleSpanMeters
             )
+        }
+
+        if let precisionRecommendation = state.precisionRecommendation {
+            inspectorSection("Precision") {
+                precisionRecommendationControl(precisionRecommendation)
+            }
         }
     }
 
@@ -176,6 +192,37 @@ struct WorkspaceDocumentInspectorView: View {
         .padding(.vertical, 2)
     }
 
+    private func precisionRecommendationControl(
+        _ recommendation: WorkspaceDocumentPrecisionRecommendationState
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            inspectorControlRow("Recommended") {
+                Button {
+                    applyWorkspaceRebaseTranslation(recommendation.translation)
+                } label: {
+                    HStack(spacing: 6) {
+                        Text("Rebase Origin")
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                        Spacer(minLength: 4)
+                        Image(systemName: "scope")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                    .frame(width: inspectorControlWidth + inspectorUnitWidth + 6)
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .accessibilityIdentifier("WorkspacePrecisionRecommendation.apply")
+            }
+            workspaceInspectorValueRow("Reason", recommendation.reasonTitle)
+            workspaceInspectorValueRow("Origin", recommendation.originDistanceTitle)
+            workspaceInspectorValueRow("Span", recommendation.modelSpanTitle)
+            workspaceInspectorValueRow("Move", recommendation.translationTitle)
+        }
+        .padding(.vertical, 2)
+    }
+
     private func rulerLengthControl(
         _ title: String,
         kind: RulerScaleControl.Kind,
@@ -229,4 +276,64 @@ struct WorkspaceDocumentInspectorView: View {
         }
         .padding(.vertical, 2)
     }
+}
+
+func workspaceDocumentPrecisionRecommendationState(
+    report: WorkspacePrecisionReport?,
+    displayUnit: LengthDisplayUnit
+) -> WorkspaceDocumentPrecisionRecommendationState? {
+    guard let report,
+          let translation = report.recommendedRebaseTranslation else {
+        return nil
+    }
+    return WorkspaceDocumentPrecisionRecommendationState(
+        reasonTitle: workspacePrecisionReasonTitle(report.reason),
+        originDistanceTitle: workspacePrecisionLengthTitle(
+            report.originDistanceMeters,
+            displayUnit: displayUnit
+        ),
+        modelSpanTitle: workspacePrecisionLengthTitle(
+            report.modelSpanMeters,
+            displayUnit: displayUnit
+        ),
+        translationTitle: workspacePrecisionTranslationTitle(
+            translation,
+            displayUnit: displayUnit
+        ),
+        translation: translation
+    )
+}
+
+private func workspacePrecisionReasonTitle(
+    _ reason: WorkspacePrecisionReport.Reason
+) -> String {
+    switch reason {
+    case .coordinateResolution:
+        "Coordinate resolution"
+    case .farFromOrigin:
+        "Far from origin"
+    }
+}
+
+private func workspacePrecisionTranslationTitle(
+    _ translation: Vector3D,
+    displayUnit: LengthDisplayUnit
+) -> String {
+    [
+        "x \(workspacePrecisionLengthTitle(translation.x, displayUnit: displayUnit))",
+        "y \(workspacePrecisionLengthTitle(translation.y, displayUnit: displayUnit))",
+        "z \(workspacePrecisionLengthTitle(translation.z, displayUnit: displayUnit))",
+    ].joined(separator: ", ")
+}
+
+private func workspacePrecisionLengthTitle(
+    _ meters: Double,
+    displayUnit: LengthDisplayUnit
+) -> String {
+    let unit = displayUnit.readableUnit(forMeters: meters)
+    return LengthDisplayText.lengthString(
+        fromMeters: meters,
+        unit: unit,
+        maximumFractionDigits: 3
+    )
 }

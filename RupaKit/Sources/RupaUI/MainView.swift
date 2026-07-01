@@ -4447,6 +4447,7 @@ public struct MainView: View {
             setWorkspaceScalePreset: {
                 applyWorkspaceScalePreset($0)
             },
+            applyWorkspaceRebaseTranslation: applyWorkspaceRebaseTranslation,
             setMinorTickMeters: { setRulerConfiguration(minorTickMeters: $0) },
             setMajorTickMeters: { setRulerConfiguration(majorTickMeters: $0) },
             setVisibleSpanMeters: { setRulerConfiguration(visibleSpanMeters: $0) }
@@ -4474,7 +4475,8 @@ public struct MainView: View {
             validationRuleCount: session.document.productMetadata.validationRules.count,
             exportPresetCount: session.document.productMetadata.exportPresets.count,
             ruler: session.document.ruler,
-            scaleRecommendation: workspaceScaleRecommendationInspectorState
+            scaleRecommendation: workspaceScaleRecommendationInspectorState,
+            precisionRecommendation: workspacePrecisionRecommendationInspectorState
         )
     }
 
@@ -4506,6 +4508,20 @@ public struct MainView: View {
         case .modelTooSmallForWorkspace:
             "Workspace too broad"
         }
+    }
+
+    private var workspacePrecisionRecommendationInspectorState: WorkspaceDocumentPrecisionRecommendationState? {
+        guard let evaluatedDocument = session.currentEvaluation?.evaluatedDocument else {
+            return nil
+        }
+        let report = WorkspacePrecisionDiagnosticService().report(
+            for: evaluatedDocument,
+            ruler: session.document.ruler
+        )
+        return workspaceDocumentPrecisionRecommendationState(
+            report: report,
+            displayUnit: session.document.displayUnit
+        )
     }
 
     private func workspaceObjectOverviewInspectorState(
@@ -6871,6 +6887,11 @@ public struct MainView: View {
 
     private func applyDisplayUnit(_ unit: LengthDisplayUnit) {
         session.setDisplayUnit(unit)
+        resetWorkspaceEditingScaleDefaults()
+    }
+
+    private func applyWorkspaceRebaseTranslation(_ translation: Vector3D) {
+        session.rebaseWorkspaceOrigin(translation: translation)
         resetWorkspaceEditingScaleDefaults()
     }
 

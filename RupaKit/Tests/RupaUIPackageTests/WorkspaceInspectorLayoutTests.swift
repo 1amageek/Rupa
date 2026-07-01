@@ -279,3 +279,49 @@ import Testing
     #expect(summary.majorStepTitle == "1 mm")
     #expect(summary.visibleSpanTitle == "1 km")
 }
+
+@Test func workspaceDocumentPrecisionRecommendationStateFormatsRebaseAction() {
+    let translation = Vector3D(x: -1_000_000.0, y: 500.0, z: 0.0)
+    let report = WorkspacePrecisionReport(
+        reason: .coordinateResolution,
+        severity: .warning,
+        originDistanceMeters: 1_000_000.0,
+        maximumCoordinateMagnitudeMeters: 1_000_000.0,
+        coordinateResolutionMeters: 0.001,
+        precisionBudgetMeters: 0.0001,
+        modelSpanMeters: 250.0,
+        workspaceSpanMeters: 100_000.0,
+        originToModelSpanRatio: 4_000.0,
+        modelCenter: Point3D(x: 1_000_000.0, y: -500.0, z: 0.0),
+        recommendedRebaseTranslation: translation
+    )
+
+    let state = workspaceDocumentPrecisionRecommendationState(
+        report: report,
+        displayUnit: .kilometer
+    )
+
+    #expect(state?.reasonTitle == "Coordinate resolution")
+    #expect(state?.originDistanceTitle == "1,000 km")
+    #expect(state?.modelSpanTitle == "0.25 km")
+    #expect(state?.translationTitle == "x -1,000 km, y 0.5 km, z 0 km")
+    #expect(state?.translation == translation)
+}
+
+@Test func workspaceDocumentPrecisionRecommendationStateRequiresRebaseTranslation() {
+    let report = WorkspacePrecisionReport(
+        reason: .farFromOrigin,
+        severity: .info,
+        originDistanceMeters: 10_000.0,
+        maximumCoordinateMagnitudeMeters: 10_000.0,
+        coordinateResolutionMeters: 0.000_001,
+        precisionBudgetMeters: 0.0001,
+        modelSpanMeters: 0.01,
+        workspaceSpanMeters: 1.0,
+        originToModelSpanRatio: 1_000_000.0,
+        modelCenter: Point3D(x: 10_000.0, y: 0.0, z: 0.0),
+        recommendedRebaseTranslation: nil
+    )
+
+    #expect(workspaceDocumentPrecisionRecommendationState(report: report, displayUnit: .meter) == nil)
+}
