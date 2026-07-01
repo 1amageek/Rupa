@@ -85,6 +85,20 @@ public struct AutomationRunner {
                 didMutate: result.didMutate,
                 diagnostics: result.diagnostics
             )
+        case .renameParameter(let currentName, let newName):
+            let result = try session.execute(
+                .renameParameter(
+                    currentName: currentName,
+                    newName: newName
+                )
+            )
+            return AutomationResult(
+                message: "Parameter \(currentName) renamed to \(newName).",
+                commandName: result.commandName,
+                generation: result.generation,
+                didMutate: result.didMutate,
+                diagnostics: result.diagnostics
+            )
         case .deleteParameter(let name):
             let result = try session.execute(.deleteParameter(name: name))
             return AutomationResult(

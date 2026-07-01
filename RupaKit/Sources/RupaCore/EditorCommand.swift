@@ -10,6 +10,7 @@ public enum EditorCommand: Codable, Equatable, Sendable {
     case resetDocument(name: String)
     case replaceProductMetadata(ProductMetadata)
     case upsertParameter(name: String, expression: CADExpression, kind: QuantityKind)
+    case renameParameter(currentName: String, newName: String)
     case deleteParameter(name: String)
     case createComponentDefinition(name: String, rootSceneNodeIDs: [SceneNodeID])
     case createComponentInstance(
@@ -414,6 +415,8 @@ public enum EditorCommand: Codable, Equatable, Sendable {
             "replaceProductMetadata"
         case .upsertParameter:
             "upsertParameter"
+        case .renameParameter:
+            "renameParameter"
         case .deleteParameter:
             "deleteParameter"
         case .createComponentDefinition:
@@ -644,6 +647,7 @@ public enum EditorCommand: Codable, Equatable, Sendable {
              .resetDocument,
              .replaceProductMetadata,
              .upsertParameter,
+             .renameParameter,
              .deleteParameter,
              .createComponentDefinition,
              .createComponentInstance,

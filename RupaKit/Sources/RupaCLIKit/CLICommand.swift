@@ -2681,6 +2681,7 @@ public struct ParameterCommand: ParsableCommand {
         subcommands: [
             DeleteParameterCommand.self,
             ListParameterCommand.self,
+            RenameParameterCommand.self,
             SetParameterCommand.self,
         ],
         defaultSubcommand: ListParameterCommand.self
@@ -3069,6 +3070,103 @@ public struct DeleteParameterCommand: ParsableCommand {
                     sessionID: id
                 ),
                 name: name,
+                mode: mode,
+                expectedGeneration: expectedGeneration.map(DocumentGeneration.init),
+                dryRun: dryRun,
+                forceFileEdit: forceFileEdit,
+                client: agentClient
+            )
+            try CLIOutput.write(
+                response: response,
+                asJSON: json
+            )
+        }
+    }
+
+    private func parsedSessionID(_ value: String?) throws -> UUID? {
+        guard let value else {
+            return nil
+        }
+        guard let id = UUID(uuidString: value) else {
+            throw ValidationError("Session ID must be a UUID.")
+        }
+        return id
+    }
+
+    private func makeAgentClient(
+        mode: CLIEditMode,
+        sessionID: UUID?,
+        socket: String?
+    ) -> AgentClient? {
+        let resolvedSocket: String?
+        if let socket {
+            resolvedSocket = socket
+        } else if mode == .live || sessionID != nil {
+            resolvedSocket = AgentSocketPath.defaultPath
+        } else {
+            resolvedSocket = nil
+        }
+        return resolvedSocket.map { socket in
+                AgentClient(socketPath: AgentSocketPath(socket))
+        }
+    }
+}
+
+public struct RenameParameterCommand: ParsableCommand {
+    public static let configuration = CommandConfiguration(
+        commandName: "rename",
+        abstract: "Rename a document parameter while preserving references."
+    )
+
+    @Argument(help: "Path to the .swcad document.")
+    public var file: String
+
+    @Argument(help: "Current parameter name.")
+    public var currentName: String
+
+    @Argument(help: "New parameter name.")
+    public var newName: String
+
+    @Option(help: "Edit mode: auto, file, or live.")
+    public var mode: CLIEditMode = .auto
+
+    @Option(help: "Open document session UUID for live mode.")
+    public var sessionID: String?
+
+    @Option(help: "Expected document generation for live mode.")
+    public var expectedGeneration: UInt64?
+
+    @Flag(help: "Validate the command without saving the changed file.")
+    public var dryRun: Bool = false
+
+    @Flag(help: "Allow direct file mutation even if the app reports the same file as open.")
+    public var forceFileEdit: Bool = false
+
+    @Option(help: "Optional Rupa agent socket used to detect open document conflicts.")
+    public var agentSocket: String?
+
+    @Flag(help: "Print a JSON result.")
+    public var json: Bool = false
+
+    public init() {}
+
+    public func run() throws {
+        let id = try parsedSessionID(sessionID)
+
+        try CLIExitCode.run {
+            let url = URL(fileURLWithPath: file)
+            let agentClient = makeAgentClient(
+                mode: mode,
+                sessionID: id,
+                socket: agentSocket
+            )
+            let response = try CLIService().renameParameter(
+                target: CLIDocumentTarget(
+                    fileURL: url,
+                    sessionID: id
+                ),
+                currentName: currentName,
+                newName: newName,
                 mode: mode,
                 expectedGeneration: expectedGeneration.map(DocumentGeneration.init),
                 dryRun: dryRun,

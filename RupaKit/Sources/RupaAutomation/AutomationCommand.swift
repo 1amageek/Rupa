@@ -9,6 +9,7 @@ public enum AutomationCommand: Codable, Equatable, Sendable {
     case rebaseWorkspaceOrigin(translation: Vector3D)
     case renameDocument(name: String)
     case upsertParameter(name: String, expression: CADExpression, kind: QuantityKind)
+    case renameParameter(currentName: String, newName: String)
     case deleteParameter(name: String)
     case createComponentDefinition(name: String, rootSceneNodeIDs: [SceneNodeID])
     case createComponentInstance(
@@ -376,6 +377,11 @@ public enum AutomationCommand: Codable, Equatable, Sendable {
                 name: name,
                 expression: expression,
                 kind: kind
+            )
+        case .renameParameter(let currentName, let newName):
+            .renameParameter(
+                currentName: currentName,
+                newName: newName
             )
         case .deleteParameter(let name):
             .deleteParameter(name: name)

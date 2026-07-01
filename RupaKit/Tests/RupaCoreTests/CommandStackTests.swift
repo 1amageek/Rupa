@@ -3434,6 +3434,94 @@ import Testing
 }
 
 @MainActor
+@Test func parameterRenameCommandPreservesReferencesAndParticipatesInUndoRedo() async throws {
+    let session = EditorSession()
+
+    _ = try session.execute(
+        .upsertParameter(
+            name: "width",
+            expression: .constant(.length(10.0, unit: .millimeter)),
+            kind: .length
+        )
+    )
+    let width = try #require(
+        session.document.cadDocument.parameters.parameters.values.first { $0.name == "width" }
+    )
+    _ = try session.execute(
+        .upsertParameter(
+            name: "doubleWidth",
+            expression: .multiply(
+                .reference(width.id),
+                .constant(.scalar(2.0))
+            ),
+            kind: .length
+        )
+    )
+
+    let result = try session.execute(
+        .renameParameter(currentName: "width", newName: "siteWidth")
+    )
+    let renamed = try #require(
+        session.document.cadDocument.parameters.parameters.values.first { $0.name == "siteWidth" }
+    )
+    let dependent = try #require(
+        session.document.cadDocument.parameters.parameters.values.first { $0.name == "doubleWidth" }
+    )
+
+    #expect(result.commandName == "renameParameter")
+    #expect(result.didMutate)
+    #expect(renamed.id == width.id)
+    #expect(session.document.cadDocument.parameterID(named: "width") == nil)
+    #expect(dependent.expression == .multiply(
+        .reference(width.id),
+        .constant(.scalar(2.0))
+    ))
+    #expect(session.document.cadDocument.parameters.revision.value == 3)
+
+    _ = try session.undo()
+    #expect(session.document.cadDocument.parameterID(named: "width") == width.id)
+    #expect(session.document.cadDocument.parameterID(named: "siteWidth") == nil)
+
+    _ = try session.redo()
+    #expect(session.document.cadDocument.parameterID(named: "siteWidth") == width.id)
+}
+
+@MainActor
+@Test func parameterRenameRejectsDuplicateNameBeforeMutation() async throws {
+    let session = EditorSession()
+
+    _ = try session.execute(
+        .upsertParameter(
+            name: "width",
+            expression: .constant(.length(10.0, unit: .millimeter)),
+            kind: .length
+        )
+    )
+    _ = try session.execute(
+        .upsertParameter(
+            name: "height",
+            expression: .constant(.length(20.0, unit: .millimeter)),
+            kind: .length
+        )
+    )
+
+    var caught: EditorError?
+    do {
+        _ = try session.execute(
+            .renameParameter(currentName: "width", newName: "height")
+        )
+    } catch let error as EditorError {
+        caught = error
+    }
+
+    let parameterNames = session.document.cadDocument.parameters.parameters.values.map(\.name).sorted()
+    #expect(caught?.code == .commandInvalid)
+    #expect(parameterNames == ["height", "width"])
+    #expect(session.generation == DocumentGeneration(2))
+    #expect(session.document.cadDocument.parameters.revision.value == 2)
+}
+
+@MainActor
 @Test func parameterDeleteCommandParticipatesInUndoRedo() async throws {
     let session = EditorSession()
 

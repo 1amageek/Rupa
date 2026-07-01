@@ -135,6 +135,16 @@ public final class AgentCommandController: AgentClientProtocol {
             failureMode: "Rejects invalid expressions, kind mismatches, and stale generations before mutation."
         ),
         capability(
+            "renameParameter",
+            category: .parameter,
+            summary: "Rename a document parameter while preserving its stable ParameterID references.",
+            access: .automationCommand,
+            mutatesDocument: true,
+            discovery: [.parameters],
+            targets: [.document],
+            failureMode: "Rejects missing parameters, duplicate names, invalid names, unchanged names, and stale generations before mutation."
+        ),
+        capability(
             "deleteParameter",
             category: .parameter,
             summary: "Delete a parameter that is not referenced by current source expressions.",

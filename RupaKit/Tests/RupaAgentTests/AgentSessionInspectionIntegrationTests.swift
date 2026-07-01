@@ -87,6 +87,69 @@ import SwiftCAD
     #expect(result.generation == DocumentGeneration(2))
     #expect(session.document.cadDocument.parameters.parameters.isEmpty)
 }
+
+@MainActor
+@Test func agentRenamesParameterThroughAutomationCommand() async throws {
+    let server = AgentCommandController()
+    let sessionID = UUID()
+    let session = EditorSession()
+    _ = try session.execute(
+        .upsertParameter(
+            name: "width",
+            expression: .constant(.length(10.0, unit: .millimeter)),
+            kind: .length
+        ),
+        expectedGeneration: DocumentGeneration(0)
+    )
+    let width = try #require(
+        session.document.cadDocument.parameters.parameters.values.first { $0.name == "width" }
+    )
+    _ = try session.execute(
+        .upsertParameter(
+            name: "doubleWidth",
+            expression: .multiply(
+                .reference(width.id),
+                .constant(.scalar(2.0))
+            ),
+            kind: .length
+        ),
+        expectedGeneration: DocumentGeneration(1)
+    )
+    server.register(session: session, id: sessionID)
+
+    let response = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .renameParameter(currentName: "width", newName: "siteWidth"),
+            expectedGeneration: DocumentGeneration(2)
+        )
+    )
+    guard case .command(let result) = response else {
+        #expect(Bool(false))
+        return
+    }
+
+    let parameterResponse = server.handle(
+        .parameters(
+            sessionID: sessionID,
+            expectedGeneration: DocumentGeneration(3)
+        )
+    )
+    guard case .parameters(let list) = parameterResponse else {
+        #expect(Bool(false))
+        return
+    }
+    let siteWidth = try #require(list.parameters.first { $0.name == "siteWidth" })
+    let doubleWidth = try #require(list.parameters.first { $0.name == "doubleWidth" })
+
+    #expect(result.commandName == "renameParameter")
+    #expect(result.message == "Parameter width renamed to siteWidth.")
+    #expect(result.didMutate)
+    #expect(result.generation == DocumentGeneration(3))
+    #expect(siteWidth.id == width.id.description)
+    #expect(doubleWidth.expression == "(siteWidth * 2)")
+    #expect(doubleWidth.dependencyNames == ["siteWidth"])
+}
 @MainActor
 @Test func agentEvaluatesOpenSessionWithoutMutation() async throws {
     let server = AgentCommandController()

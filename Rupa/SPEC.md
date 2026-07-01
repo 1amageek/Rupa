@@ -287,6 +287,7 @@ RupaCore owns the editor model and command pipeline.
 | `ProductMetadata` | Persists scene nodes, components, material library, validation rules, export presets, and template defaults. |
 | `ModelingToolActivationResult` | Reports the Core-owned outcome of tool selection or canvas-target activation, including command name, mutation state, selected scene node, and whether diagnostics should be revealed. |
 | `EditorCommand.upsertParameter` | Adds or updates a Swift-CAD parameter by name using typed `CADExpression` and `QuantityKind`. |
+| `EditorCommand.renameParameter` | Renames a Swift-CAD parameter by name while preserving its stable `ParameterID` references. |
 | `EditorCommand.deleteParameter` | Deletes a Swift-CAD parameter by name through the undoable command path and rejects deletion while the parameter is still referenced. |
 | `EditorCommand.createComponentDefinition` | Creates a reusable generic component definition from existing scene roots without creating a domain-specific document branch. |
 | `EditorCommand.createComponentInstance` | Creates a component instance with a local transform and records a component scene reference. |
@@ -370,7 +371,7 @@ Parameters are Swift-CAD source, not Rupa-only metadata. Rupa commands provide t
 
 ```mermaid
 flowchart LR
-    Surface["UI / CLI / Agent"] --> Command["upsertParameter / deleteParameter"]
+    Surface["UI / CLI / Agent"] --> Command["upsertParameter / renameParameter / deleteParameter"]
     Command --> Store["CADDocumentStore"]
     Store --> Table["Swift-CAD ParameterTable"]
     Table --> Validation["Swift-CAD validation"]
@@ -379,13 +380,14 @@ flowchart LR
 
 | Concern | Contract |
 |---|---|
-| Identity | Parameter upsert and deletion resolve by name; upsert preserves the existing parameter ID when updating. |
+| Identity | Parameter upsert, rename, and deletion resolve by name; upsert preserves the existing parameter ID when updating, and rename preserves the existing parameter ID while changing only the user-facing name. |
 | Typing | Every command carries a `CADExpression` and `QuantityKind`; Swift-CAD validates expression kind and value. |
-| Revision | Successful upsert and deletion advance `ParameterTable.revision`. |
-| Undo and redo | Parameter edits, including deletion, participate in `CommandStack` like other source mutations. |
+| Revision | Successful upsert, rename, and deletion advance `ParameterTable.revision`. |
+| Undo and redo | Parameter edits, including rename and deletion, participate in `CommandStack` like other source mutations. |
 | Deletion safety | Deleting a parameter validates the resulting Swift-CAD document before mutation is committed; references from other parameters or model features reject the command. |
-| Automation | Automation and Agent commands expose the same typed parameter upsert and deletion path. |
-| CLI | `rupa param set` supports numeric literals and parsed formulas for length, angle, and scalar parameters in file, live, and auto modes. `rupa param delete` uses the same mode and open-document safety model. |
+| Rename safety | Renaming rejects missing parameters, duplicate names, invalid names, and unchanged names before mutation; existing expressions keep their `ParameterID` references and format with the new name after the mutation. |
+| Automation | Automation and Agent commands expose the same typed parameter upsert, rename, and deletion path. |
+| CLI | `rupa param set` supports numeric literals and parsed formulas for length, angle, and scalar parameters in file, live, and auto modes. `rupa param rename` and `rupa param delete` use the same mode and open-document safety model. |
 | Listing | `rupa param list` returns parameter IDs, names, kinds, normalized expression strings, resolved values, diagnostics, generation, and dirty state. |
 
 Parameter formulas are saved as Swift-CAD `CADExpression` AST values. Formula input strings are parsed at the command boundary and are not the source of truth after save. Dependency-aware UI editing remains follow-up work.

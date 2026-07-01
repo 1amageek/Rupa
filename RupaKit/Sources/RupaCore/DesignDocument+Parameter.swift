@@ -58,4 +58,45 @@ extension DesignDocument {
             throw error
         }
     }
+
+    public mutating func renameParameter(
+        currentName: String,
+        newName: String,
+        objectRegistry: ObjectTypeRegistry = .builtIn
+    ) throws {
+        guard currentName != newName else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Parameter rename requires a different name."
+            )
+        }
+        guard cadDocument.parameterID(named: currentName) != nil else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "Parameter rename requires an existing parameter."
+            )
+        }
+
+        let previousCADDocument = cadDocument
+        let previousProductMetadata = productMetadata
+        var updatedCADDocument = cadDocument
+        do {
+            try updatedCADDocument.renameParameter(named: currentName, to: newName)
+        } catch let error as ParameterError {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Parameter \(currentName) could not be renamed to \(newName): \(error)."
+            )
+        } catch {
+            throw error
+        }
+        cadDocument = updatedCADDocument
+        do {
+            try regeneratePatternArrays(objectRegistry: objectRegistry)
+        } catch {
+            cadDocument = previousCADDocument
+            productMetadata = previousProductMetadata
+            throw error
+        }
+    }
 }

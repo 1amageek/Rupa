@@ -49,6 +49,7 @@ struct WorkspaceDocumentInspectorView: View {
     var setMinorTickMeters: (Double) -> Void
     var setMajorTickMeters: (Double) -> Void
     var setVisibleSpanMeters: (Double) -> Void
+    var renameParameter: (String, String) -> Bool
     var upsertParameterExpression: (String, String, QuantityKind) -> Bool
     var deleteParameter: (String) -> Bool
 
@@ -120,6 +121,7 @@ struct WorkspaceDocumentInspectorView: View {
 
         WorkspaceParameterInspectorView(
             state: state.parameters,
+            onRename: renameParameter,
             onUpsert: upsertParameterExpression,
             onDelete: deleteParameter
         )

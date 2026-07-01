@@ -19,6 +19,7 @@ import SwiftCAD
     #expect(capabilities.contains("rebaseWorkspaceOrigin"))
     #expect(capabilities.contains("renameDocument"))
     #expect(capabilities.contains("upsertParameter"))
+    #expect(capabilities.contains("renameParameter"))
     #expect(capabilities.contains("deleteParameter"))
     #expect(capabilities.contains("setParameterExpression"))
     #expect(capabilities.contains("setObjectDimensionExpression"))

@@ -305,6 +305,40 @@ public struct CLIService {
         )
     }
 
+    public func renameParameterFile(
+        at url: URL,
+        currentName: String,
+        newName: String,
+        dryRun: Bool = false,
+        forceFileEdit: Bool = false,
+        conflictClient: AgentClientProtocol? = nil
+    ) throws -> CLIResponse {
+        try rejectOpenDocumentConflict(
+            fileURL: url,
+            forceFileEdit: forceFileEdit,
+            client: conflictClient
+        )
+
+        let session = EditorSession(document: try fileService.load(from: url))
+        let result = try AutomationRunner().execute(
+            .renameParameter(currentName: currentName, newName: newName),
+            in: session
+        )
+
+        if !dryRun {
+            try fileService.save(session.document, to: url)
+            session.store.markClean()
+        }
+
+        return CLIResponse(
+            message: result.message,
+            generation: result.generation.value,
+            dirty: session.isDirty,
+            saved: !dryRun,
+            diagnostics: result.diagnostics
+        )
+    }
+
     public func setParameter(
         target: CLIDocumentTarget,
         name: String,
@@ -407,6 +441,54 @@ public struct CLIService {
                 expression: expression,
                 kind: kind,
                 defaults: defaults,
+                expectedGeneration: expectedGeneration,
+                client: requiredClient(client)
+            )
+        }
+    }
+
+    public func renameParameter(
+        target: CLIDocumentTarget,
+        currentName: String,
+        newName: String,
+        mode: CLIEditMode = .auto,
+        expectedGeneration: DocumentGeneration? = nil,
+        dryRun: Bool = false,
+        forceFileEdit: Bool = false,
+        client: AgentClientProtocol? = nil
+    ) throws -> CLIResponse {
+        switch mode {
+        case .auto:
+            return try renameParameterAutomatically(
+                target: target,
+                currentName: currentName,
+                newName: newName,
+                expectedGeneration: expectedGeneration,
+                dryRun: dryRun,
+                forceFileEdit: forceFileEdit,
+                client: client
+            )
+        case .file:
+            guard let url = target.fileURL else {
+                throw invalidCommand("File mode requires a document file path.")
+            }
+            return try renameParameterFile(
+                at: url,
+                currentName: currentName,
+                newName: newName,
+                dryRun: dryRun,
+                forceFileEdit: forceFileEdit,
+                conflictClient: client
+            )
+        case .live:
+            let sessionID = try resolvedLiveSessionID(
+                target: target,
+                client: client
+            )
+            return try renameParameterLiveSession(
+                sessionID: sessionID,
+                currentName: currentName,
+                newName: newName,
                 expectedGeneration: expectedGeneration,
                 client: requiredClient(client)
             )
@@ -2739,6 +2821,30 @@ public struct CLIService {
         )
     }
 
+    public func renameParameterLiveSession(
+        sessionID: UUID,
+        currentName: String,
+        newName: String,
+        expectedGeneration: DocumentGeneration? = nil,
+        client: AgentClientProtocol
+    ) throws -> CLIResponse {
+        let response = try client.send(
+            .execute(
+                sessionID: sessionID,
+                command: .renameParameter(currentName: currentName, newName: newName),
+                expectedGeneration: expectedGeneration
+            )
+        )
+        let result = try commandResult(from: response)
+        return CLIResponse(
+            message: result.message,
+            generation: result.generation.value,
+            dirty: result.didMutate,
+            saved: false,
+            diagnostics: result.diagnostics
+        )
+    }
+
     public func selectTargetsLiveSession(
         sessionID: UUID,
         targets: [SelectionTarget],
@@ -4068,6 +4174,54 @@ public struct CLIService {
         return try deleteParameterFile(
             at: url,
             name: name,
+            dryRun: dryRun,
+            forceFileEdit: forceFileEdit,
+            conflictClient: client
+        )
+    }
+
+    private func renameParameterAutomatically(
+        target: CLIDocumentTarget,
+        currentName: String,
+        newName: String,
+        expectedGeneration: DocumentGeneration?,
+        dryRun: Bool,
+        forceFileEdit: Bool,
+        client: AgentClientProtocol?
+    ) throws -> CLIResponse {
+        if let sessionID = target.sessionID {
+            return try renameParameterLiveSession(
+                sessionID: sessionID,
+                currentName: currentName,
+                newName: newName,
+                expectedGeneration: expectedGeneration,
+                client: requiredClient(client)
+            )
+        }
+
+        if let url = target.fileURL,
+           !forceFileEdit,
+           let client,
+           let session = try openSession(for: url, client: client) {
+            guard !dryRun else {
+                throw invalidCommand("Dry-run is not supported for live document mutation.")
+            }
+            return try renameParameterLiveSession(
+                sessionID: session.id,
+                currentName: currentName,
+                newName: newName,
+                expectedGeneration: expectedGeneration,
+                client: client
+            )
+        }
+
+        guard let url = target.fileURL else {
+            throw invalidCommand("Parameter rename requires a document file path or live session ID.")
+        }
+        return try renameParameterFile(
+            at: url,
+            currentName: currentName,
+            newName: newName,
             dryRun: dryRun,
             forceFileEdit: forceFileEdit,
             conflictClient: client

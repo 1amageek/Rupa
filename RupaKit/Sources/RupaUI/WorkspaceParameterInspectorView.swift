@@ -3,9 +3,11 @@ import SwiftUI
 
 struct WorkspaceParameterInspectorView: View {
     var state: WorkspaceParameterInspectorState
+    var onRename: (String, String) -> Bool
     var onUpsert: (String, String, QuantityKind) -> Bool
     var onDelete: (String) -> Bool
 
+    @State private var nameDrafts: [String: String] = [:]
     @State private var expressionDrafts: [String: String] = [:]
     @State private var newName = ""
     @State private var newExpression = ""
@@ -32,7 +34,24 @@ struct WorkspaceParameterInspectorView: View {
 
     @ViewBuilder
     private func parameterRows(_ row: WorkspaceParameterInspectorState.Row) -> some View {
-        workspaceInspectorValueRow(row.name, row.kindTitle)
+        inspectorControlRow("Name") {
+            HStack(spacing: 6) {
+                TextField("Name", text: nameBinding(for: row))
+                    .multilineTextAlignment(.trailing)
+                    .frame(minWidth: inspectorControlWidth)
+                Button {
+                    applyName(row)
+                } label: {
+                    Image(systemName: "checkmark")
+                        .frame(width: 14, height: 14)
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .help("Rename parameter")
+                .accessibilityIdentifier("WorkspaceParameter.\(row.name).rename")
+            }
+        }
+        workspaceInspectorValueRow("Kind", row.kindTitle)
         workspaceInspectorValueRow("Resolved", row.resolvedTitle)
         inspectorControlRow("Expression") {
             HStack(spacing: 6) {
@@ -59,6 +78,7 @@ struct WorkspaceParameterInspectorView: View {
         inspectorActionRow {
             Button(role: .destructive) {
                 if onDelete(row.name) {
+                    nameDrafts[row.id] = nil
                     expressionDrafts[row.id] = nil
                 }
             } label: {
@@ -109,6 +129,19 @@ struct WorkspaceParameterInspectorView: View {
         }
     }
 
+    private func nameBinding(
+        for row: WorkspaceParameterInspectorState.Row
+    ) -> Binding<String> {
+        Binding(
+            get: {
+                nameDrafts[row.id] ?? row.name
+            },
+            set: { value in
+                nameDrafts[row.id] = value
+            }
+        )
+    }
+
     private func expressionBinding(
         for row: WorkspaceParameterInspectorState.Row
     ) -> Binding<String> {
@@ -120,6 +153,19 @@ struct WorkspaceParameterInspectorView: View {
                 expressionDrafts[row.id] = value
             }
         )
+    }
+
+    private func applyName(_ row: WorkspaceParameterInspectorState.Row) {
+        let name = nameDrafts[row.id] ?? row.name
+        let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmedName.isEmpty == false,
+              trimmedName != row.name else {
+            nameDrafts[row.id] = nil
+            return
+        }
+        if onRename(row.name, trimmedName) {
+            nameDrafts[row.id] = nil
+        }
     }
 
     private func applyExpression(_ row: WorkspaceParameterInspectorState.Row) {

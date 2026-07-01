@@ -4537,6 +4537,7 @@ public struct MainView: View {
             setMinorTickMeters: { setRulerConfiguration(minorTickMeters: $0) },
             setMajorTickMeters: { setRulerConfiguration(majorTickMeters: $0) },
             setVisibleSpanMeters: { setRulerConfiguration(visibleSpanMeters: $0) },
+            renameParameter: renameDocumentParameter,
             upsertParameterExpression: upsertParameterExpression,
             deleteParameter: deleteDocumentParameter
         )
@@ -6993,6 +6994,27 @@ public struct MainView: View {
                     kind: kind
                 )
             ) != nil
+        } catch let error as EditorError {
+            session.reportToolStatus(error.message, severity: .warning)
+            return false
+        } catch {
+            session.reportToolStatus(String(describing: error), severity: .warning)
+            return false
+        }
+    }
+
+    private func renameDocumentParameter(
+        currentName: String,
+        newName: String
+    ) -> Bool {
+        do {
+            let result = try session.execute(
+                .renameParameter(
+                    currentName: currentName,
+                    newName: newName
+                )
+            )
+            return result.didMutate
         } catch let error as EditorError {
             session.reportToolStatus(error.message, severity: .warning)
             return false

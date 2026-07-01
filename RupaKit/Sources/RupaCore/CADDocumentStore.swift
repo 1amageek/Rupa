@@ -173,6 +173,16 @@ public final class CADDocumentStore {
             )
             try commitMutation()
             evaluateCurrentDocument()
+        case .renameParameter(let currentName, let newName):
+            var updatedDocument = document
+            try updatedDocument.renameParameter(
+                currentName: currentName,
+                newName: newName,
+                objectRegistry: objectRegistry
+            )
+            document = updatedDocument
+            try commitMutation()
+            evaluateCurrentDocument()
         case .deleteParameter(let name):
             var updatedDocument = document
             try updatedDocument.deleteParameter(name: name, objectRegistry: objectRegistry)

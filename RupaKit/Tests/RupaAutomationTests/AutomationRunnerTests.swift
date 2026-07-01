@@ -156,6 +156,55 @@ import SwiftCAD
 }
 
 @MainActor
+@Test func automationCanRenameParameterWithoutBreakingReferences() async throws {
+    let session = EditorSession()
+    let runner = AutomationRunner()
+    _ = try runner.execute(
+        .upsertParameter(
+            name: "depth",
+            expression: .constant(.length(4.0, unit: .centimeter)),
+            kind: .length
+        ),
+        in: session
+    )
+    let depth = try #require(
+        session.document.cadDocument.parameters.parameters.values.first { $0.name == "depth" }
+    )
+    _ = try runner.execute(
+        .upsertParameter(
+            name: "doubleDepth",
+            expression: .multiply(
+                .reference(depth.id),
+                .constant(.scalar(2.0))
+            ),
+            kind: .length
+        ),
+        in: session
+    )
+
+    let result = try runner.execute(
+        .renameParameter(currentName: "depth", newName: "panelDepth"),
+        in: session
+    )
+    let renamed = try #require(
+        session.document.cadDocument.parameters.parameters.values.first { $0.name == "panelDepth" }
+    )
+    let dependent = try #require(
+        session.document.cadDocument.parameters.parameters.values.first { $0.name == "doubleDepth" }
+    )
+
+    #expect(result.message == "Parameter depth renamed to panelDepth.")
+    #expect(result.commandName == "renameParameter")
+    #expect(result.didMutate)
+    #expect(renamed.id == depth.id)
+    #expect(dependent.expression == .multiply(
+        .reference(depth.id),
+        .constant(.scalar(2.0))
+    ))
+    #expect(session.generation == DocumentGeneration(3))
+}
+
+@MainActor
 @Test func automationCanCreateExtrudedRectangle() async throws {
     let session = EditorSession()
     let runner = AutomationRunner()

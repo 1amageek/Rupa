@@ -918,6 +918,10 @@ public final class EditorSession {
         perform(.deleteParameter(name: name))
     }
 
+    public func renameParameter(named currentName: String, to newName: String) {
+        perform(.renameParameter(currentName: currentName, newName: newName))
+    }
+
     @discardableResult
     public func addSketchConstraint(
         featureID: FeatureID,

@@ -6682,6 +6682,75 @@ func cliExecutableReturnsDataExitForLiveGenerationMismatch() async throws {
     #expect(loaded.cadDocument.parameters.parameters.isEmpty)
 }
 
+@Test func cliServiceFileParameterRenamePersistsClosedDocument() async throws {
+    let temporaryDirectory = try makeTemporaryDirectory()
+    defer {
+        removeTemporaryDirectory(temporaryDirectory)
+    }
+
+    let url = temporaryDirectory.appendingPathComponent("parameter-rename.swcad")
+    var document = DesignDocument.empty(named: "Before")
+    try document.upsertParameter(
+        name: "width",
+        expression: .constant(.length(25.0, unit: .millimeter)),
+        kind: .length
+    )
+    let widthID = try #require(document.cadDocument.parameterID(named: "width"))
+    try DocumentFileService().save(document, to: url)
+
+    let response = try CLIService().renameParameter(
+        target: CLIDocumentTarget(fileURL: url),
+        currentName: "width",
+        newName: "siteWidth",
+        mode: .file
+    )
+
+    let loaded = try DocumentFileService().load(from: url)
+    #expect(response.message == "Parameter width renamed to siteWidth.")
+    #expect(response.saved)
+    #expect(loaded.cadDocument.parameterID(named: "siteWidth") == widthID)
+    #expect(loaded.cadDocument.parameterID(named: "width") == nil)
+}
+
+@Test func cliServiceAutoParameterRenameUsesLiveSessionForOpenFile() async throws {
+    let temporaryDirectory = try makeTemporaryDirectory()
+    defer {
+        removeTemporaryDirectory(temporaryDirectory)
+    }
+
+    let url = temporaryDirectory.appendingPathComponent("open-parameter-rename.swcad")
+    try DocumentFileService().save(.empty(named: "Before"), to: url)
+    let server = AgentCommandController()
+    let session = EditorSession(document: .empty(named: "Open"))
+    _ = try session.execute(
+        .upsertParameter(
+            name: "liveWidth",
+            expression: .constant(.length(12.0, unit: .millimeter)),
+            kind: .length
+        ),
+        expectedGeneration: DocumentGeneration(0)
+    )
+    let widthID = try #require(session.document.cadDocument.parameterID(named: "liveWidth"))
+    server.register(session: session, path: url)
+
+    let response = try CLIService().renameParameter(
+        target: CLIDocumentTarget(fileURL: url),
+        currentName: "liveWidth",
+        newName: "siteWidth",
+        mode: .auto,
+        expectedGeneration: DocumentGeneration(1),
+        client: server
+    )
+
+    let loaded = try DocumentFileService().load(from: url)
+    #expect(response.message == "Parameter liveWidth renamed to siteWidth.")
+    #expect(response.dirty)
+    #expect(!response.saved)
+    #expect(session.document.cadDocument.parameterID(named: "siteWidth") == widthID)
+    #expect(session.document.cadDocument.parameterID(named: "liveWidth") == nil)
+    #expect(loaded.cadDocument.parameters.parameters.isEmpty)
+}
+
 @Test func cliServiceParameterFileModeRejectsOpenDocumentConflict() async throws {
     let temporaryDirectory = try makeTemporaryDirectory()
     defer {
