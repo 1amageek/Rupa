@@ -1845,6 +1845,18 @@ public struct MainView: View {
                 .foregroundStyle(Color.primary.opacity(0.68))
                 .help("Activate and Align View")
                 .accessibilityIdentifier("WorkspacePlane.alignView.\(identifierSuffix)")
+
+                Button {
+                    updateConstructionPlaneFromView(entry)
+                } label: {
+                    Image(systemName: "arrow.triangle.2.circlepath")
+                        .font(.system(size: 11, weight: .semibold))
+                        .frame(width: 22, height: 22)
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(Color.primary.opacity(0.68))
+                .help("Update Plane From View")
+                .accessibilityIdentifier("WorkspacePlane.updateFromView.\(identifierSuffix)")
             }
 
             if isRenaming {
@@ -2737,6 +2749,41 @@ public struct MainView: View {
             return
         }
         alignViewport(to: entry.plane, name: entry.name)
+    }
+
+    private func updateConstructionPlaneFromView(
+        _ entry: ConstructionPlaneSummaryResult.Entry
+    ) {
+        guard let viewNormal = viewportProjectionBasis.viewNormal else {
+            session.reportToolStatus(
+                "Construction plane update requires a resolved viewport normal.",
+                severity: .warning
+            )
+            isPreviewExpanded = true
+            return
+        }
+
+        do {
+            let plane = try WorkspaceConstructionPlaneEditBuilder().planePreservingOrigin(
+                from: entry.plane,
+                viewNormal: viewNormal
+            )
+            let result = session.setConstructionPlane(id: entry.id, plane: plane)
+            if result?.diagnostics.isEmpty == false || result == nil {
+                isPreviewExpanded = true
+            } else {
+                session.reportToolStatus("Updated construction plane \(entry.name) from current view.")
+            }
+        } catch let error as EditorError {
+            session.reportToolStatus(error.message, severity: .warning)
+            isPreviewExpanded = true
+        } catch {
+            session.reportToolStatus(
+                "Construction plane update failed.",
+                severity: .warning
+            )
+            isPreviewExpanded = true
+        }
     }
 
     private func selectConstructionPlane(

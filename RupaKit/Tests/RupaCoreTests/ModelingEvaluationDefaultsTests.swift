@@ -17,10 +17,10 @@ import Testing
         for: WorkspaceScalePreset.sitePlanning.rulerConfiguration
     )
 
-    #expect(micro.distance == 1.0e-8)
-    #expect(precision.distance == 1.0e-8)
-    #expect(architecture.distance == 2.0e-6)
-    #expect(site.distance == 1.0e-4)
+    #expect(approximatelyEqual(micro.distance, 1.0e-8))
+    #expect(approximatelyEqual(precision.distance, 1.0e-8))
+    #expect(approximatelyEqual(architecture.distance, 2.0e-6))
+    #expect(approximatelyEqual(site.distance, 1.0e-4))
     #expect(micro.angle == ModelingTolerance.standard.angle)
     #expect(site.angle == ModelingTolerance.standard.angle)
 }
@@ -43,8 +43,8 @@ import Testing
         )
     )
 
-    #expect(smallest.distance == 1.0e-8)
-    #expect(largest.distance == 1.0e-3)
+    #expect(approximatelyEqual(smallest.distance, 1.0e-8))
+    #expect(approximatelyEqual(largest.distance, 1.0e-3))
 }
 
 @MainActor
@@ -87,4 +87,12 @@ import Testing
         document: session.document,
         generation: session.generation
     ))
+}
+
+private func approximatelyEqual(
+    _ lhs: Double,
+    _ rhs: Double,
+    tolerance: Double = 1.0e-12
+) -> Bool {
+    abs(lhs - rhs) <= tolerance
 }

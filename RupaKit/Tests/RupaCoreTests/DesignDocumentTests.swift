@@ -112,6 +112,26 @@ import Testing
     #expect(ObjectTypeRegistry.builtIn.definitions == validatedRegistry.definitions)
 }
 
+@Test func builtInObjectCatalogLengthRangesCoverSitePlanningScale() async throws {
+    let siteDefaults = WorkspaceScaleDefaults(
+        ruler: WorkspaceScalePreset.sitePlanning.rulerConfiguration
+    )
+
+    for definition in ObjectTypeCatalog.builtInDefinitions {
+        for property in definition.properties where property.valueKind == .length {
+            let range = try #require(
+                property.numericRange,
+                "Length property \(definition.id.rawValue).\(property.id.rawValue) must declare a numeric range."
+            )
+            #expect(range.lowerBound == 0.0)
+            #expect(
+                range.upperBound >= siteDefaults.baseFeatureMeters,
+                "Length property \(definition.id.rawValue).\(property.id.rawValue) must support site-planning defaults."
+            )
+        }
+    }
+}
+
 @Test func polygonSketchCreatesClosedEqualLengthLineLoop() async throws {
     var document = DesignDocument.empty()
 

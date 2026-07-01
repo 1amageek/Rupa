@@ -271,7 +271,10 @@ private extension ObjectPropertyDefinition {
             defaultValue: .length(defaultValue),
             inspectorControl: .textFieldAndSlider,
             renderBinding: binding,
-            numericRange: NumericRange(lowerBound: 0.0, upperBound: 100.0)
+            numericRange: NumericRange(
+                lowerBound: 0.0,
+                upperBound: RulerConfiguration.visibleSpanMetersRange.upperBound
+            )
         )
     }
 

@@ -654,21 +654,23 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                         "RupaKit/Sources/RupaCore/DesignDocument+ConstructionPlane.swift",
                         "RupaKit/Sources/RupaCore/ConstructionPlaneTargetResolver.swift",
                         "RupaKit/Sources/RupaUI/WorkspacePlaneModeControl.swift",
+                        "RupaKit/Sources/RupaUI/WorkspaceConstructionPlaneEditBuilder.swift",
                         "RupaKit/Sources/RupaUI/MainView.swift",
                     ],
                     tests: [
                         "RupaKit/Tests/RupaCoreTests/ConstructionPlaneTargetResolverTests.swift",
                         "RupaKit/Tests/RupaCoreTests/CommandStackTests.swift",
+                        "RupaKit/Tests/RupaUIPackageTests/WorkspaceConstructionPlaneEditBuilderTests.swift",
                         "RupaKit/Tests/RupaUIPackageTests/WorkspaceSnapOverrideStateTests.swift",
                         "RupaKit/Tests/RupaAgentTests/AgentConstructionPlaneIntegrationTests.swift",
                     ]
                 ),
             ],
             openWork: [
-                "Viewport saved-plane edit handles.",
+                "Direct viewport drag handles for saved construction-plane source edits.",
                 "Full sketch-on-arbitrary-plane workflow verification.",
             ],
-            next: "Add viewport saved-plane edit handles on top of the setConstructionPlane command and prove sketch creation uses the selected plane end to end."
+            next: "Extend Plane rail source edits to direct viewport saved-plane handles and prove sketch creation uses the selected plane end to end."
         ),
         entry(
             area: .selection,

@@ -60,6 +60,27 @@ import Testing
 }
 
 @MainActor
+@Test func editorSessionDefaultSolidUsesSitePlanningWorkspaceScale() async throws {
+    let session = EditorSession()
+    _ = try session.execute(
+        .setRulerConfiguration(WorkspaceScalePreset.sitePlanning.rulerConfiguration)
+    )
+
+    _ = try #require(session.createDefaultExtrudedRectangle())
+    let sketchNode = try #require(firstSceneNode(with: .sketch, in: session.document))
+    let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let bodyFeature = try #require(session.document.cadDocument.designGraph.nodes[bodyFeatureID])
+    guard case .extrude(let extrude) = bodyFeature.operation else {
+        Issue.record("Expected default solid creation to create an extrude feature.")
+        return
+    }
+
+    #expect(approximatelyEqual(sketchNode.object?.properties["size.x"]?.lengthValue, 4_000.0))
+    #expect(approximatelyEqual(sketchNode.object?.properties["size.y"]?.lengthValue, 2_000.0))
+    #expect(approximatelyEqual(try resolvedLength(extrude.distance, in: session.document), 1_000.0))
+}
+
+@MainActor
 @Test func editorSessionDefaultCircleUsesWorkspaceScale() async throws {
     let session = EditorSession()
     _ = try session.execute(.setRulerConfiguration(.standard(for: .meter)))

@@ -509,6 +509,8 @@ public struct SnapResolutionResult: Codable, Equatable, Sendable {
 }
 
 public struct SnapResolver: Sendable {
+    private static let exactHitToleranceMeters = 1.0e-10
+
     private let curveSampler: SketchCurveSampler
 
     public init(curveSampler: SketchCurveSampler = SketchCurveSampler()) {
@@ -554,6 +556,11 @@ public struct SnapResolver: Sendable {
         let sortedCandidates = candidates
             .filter { !normalizedOptions.suppressedCandidateKinds.contains($0.candidate.kind) }
             .sorted { first, second in
+                let firstIsExactHit = first.candidate.distanceMeters <= Self.exactHitToleranceMeters
+                let secondIsExactHit = second.candidate.distanceMeters <= Self.exactHitToleranceMeters
+                if firstIsExactHit != secondIsExactHit {
+                    return firstIsExactHit
+                }
                 let firstPriority = effectivePriority(
                     for: first,
                     suppressedCandidateKinds: normalizedOptions.suppressedCandidateKinds
@@ -1500,9 +1507,11 @@ public struct SnapResolver: Sendable {
         near point: Point2D,
         intervalMeters: Double
     ) -> PrioritizedSnapCandidate {
-        let snappedPoint = Point2D(
-            x: (point.x / intervalMeters).rounded() * intervalMeters,
-            y: (point.y / intervalMeters).rounded() * intervalMeters
+        let snappedPoint = CADInputValueNormalizer.standard.point(
+            Point2D(
+                x: (point.x / intervalMeters).rounded() * intervalMeters,
+                y: (point.y / intervalMeters).rounded() * intervalMeters
+            )
         )
         return PrioritizedSnapCandidate(
             priority: 10,

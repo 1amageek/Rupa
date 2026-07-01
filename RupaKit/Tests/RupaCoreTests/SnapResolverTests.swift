@@ -68,7 +68,7 @@ import Testing
 
     #expect(result.selectedCandidate?.kind == .grid)
     #expect(result.candidates.contains { candidate in
-        candidate.kind == .lineEnd && abs(candidate.point.x - 125.0) <= 1.0e-12
+        candidate.kind == .lineStart && abs(candidate.point.x - 125.0) <= 1.0e-12
     })
 }
 
