@@ -274,9 +274,9 @@ struct WorkspaceObjectShapeInspectorView: View {
     private func formattedObjectProperty(_ value: ObjectPropertyValue) -> String {
         switch value {
         case .length(let meters):
-            return WorkspaceInspectorNumberText.lengthString(
+            return WorkspaceInspectorNumberText.readableLengthString(
                 fromMeters: meters,
-                unit: displayUnit
+                preferredUnit: displayUnit
             )
         case .number(let number):
             return number.formatted(.number.precision(.fractionLength(0...4)))

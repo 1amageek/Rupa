@@ -38,4 +38,16 @@ enum WorkspaceInspectorNumberText {
             maximumFractionDigits: maximumFractionDigits
         )
     }
+
+    static func readableLengthString(
+        fromMeters meters: Double,
+        preferredUnit: LengthDisplayUnit,
+        maximumFractionDigits: Int = 4
+    ) -> String {
+        LengthDisplayText.readableLengthString(
+            fromMeters: meters,
+            preferredUnit: preferredUnit,
+            maximumFractionDigits: maximumFractionDigits
+        )
+    }
 }

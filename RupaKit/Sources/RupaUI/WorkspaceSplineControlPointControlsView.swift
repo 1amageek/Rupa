@@ -220,9 +220,9 @@ struct WorkspaceSplineControlPointControlsView: View {
     }
 
     private func formatted(_ meters: Double) -> String {
-        WorkspaceInspectorNumberText.lengthString(
+        WorkspaceInspectorNumberText.readableLengthString(
             fromMeters: meters,
-            unit: displayUnit
+            preferredUnit: displayUnit
         )
     }
 

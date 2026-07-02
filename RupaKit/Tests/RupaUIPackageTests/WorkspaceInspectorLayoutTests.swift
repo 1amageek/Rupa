@@ -42,6 +42,27 @@ import Testing
     )
 }
 
+@Test func workspaceInspectorReadableLengthTextScalesMetricRanges() {
+    #expect(
+        WorkspaceInspectorNumberText.readableLengthString(
+            fromMeters: 1_500.0,
+            preferredUnit: .millimeter
+        ) == "1.5 km"
+    )
+    #expect(
+        WorkspaceInspectorNumberText.readableLengthString(
+            fromMeters: 0.000_25,
+            preferredUnit: .meter
+        ) == "250 μm"
+    )
+    #expect(
+        WorkspaceInspectorNumberText.readableLengthString(
+            fromMeters: 0.512,
+            preferredUnit: .millimeter
+        ) == "512 mm"
+    )
+}
+
 @Test func workspaceLengthFieldPresentationUsesReadableUnits() {
     let large = workspaceLengthFieldPresentation(
         fromMeters: 1_000.0,

@@ -617,7 +617,7 @@ public struct Viewport: View {
         HStack(spacing: 8) {
             Image(systemName: "scope")
                 .symbolRenderingMode(.hierarchical)
-            Text(document.displayUnit.symbol)
+            Text(scaleReadout.minorStep.displayUnit.symbol)
                 .font(.system(.caption, design: .monospaced))
             Divider()
                 .frame(height: 12)

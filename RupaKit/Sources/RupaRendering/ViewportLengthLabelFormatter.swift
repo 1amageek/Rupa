@@ -7,9 +7,9 @@ struct ViewportLengthLabelFormatter {
         preferredUnit: LengthDisplayUnit
     ) -> String {
         let unit = preferredUnit.readableUnit(forMeters: meters)
-        return LengthDisplayText.lengthString(
+        return LengthDisplayText.readableLengthString(
             fromMeters: meters,
-            unit: unit,
+            preferredUnit: preferredUnit,
             maximumFractionDigits: maximumFractionDigits(for: unit.value(fromMeters: meters)),
             usesArchitecturalFeet: false
         )

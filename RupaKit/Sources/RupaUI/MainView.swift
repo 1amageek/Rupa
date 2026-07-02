@@ -7243,9 +7243,9 @@ public struct MainView: View {
     }
 
     private func formatted(_ meters: Double) -> String {
-        WorkspaceInspectorNumberText.lengthString(
+        WorkspaceInspectorNumberText.readableLengthString(
             fromMeters: meters,
-            unit: session.document.displayUnit
+            preferredUnit: session.document.displayUnit
         )
     }
 

@@ -30,6 +30,21 @@ public enum LengthDisplayText {
         return "\(numberString(from: unit.value(fromMeters: meters), maximumFractionDigits: maximumFractionDigits)) \(unit.symbol)"
     }
 
+    public static func readableLengthString(
+        fromMeters meters: Double,
+        preferredUnit: LengthDisplayUnit,
+        maximumFractionDigits: Int = 6,
+        usesArchitecturalFeet: Bool = true
+    ) -> String {
+        let unit = preferredUnit.readableUnit(forMeters: meters)
+        return lengthString(
+            fromMeters: meters,
+            unit: unit,
+            maximumFractionDigits: maximumFractionDigits,
+            usesArchitecturalFeet: usesArchitecturalFeet
+        )
+    }
+
     public static func architecturalString(
         fromMeters meters: Double,
         denominator: Int = 16

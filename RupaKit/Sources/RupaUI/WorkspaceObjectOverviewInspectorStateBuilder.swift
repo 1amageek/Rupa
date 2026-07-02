@@ -552,9 +552,9 @@ struct WorkspaceObjectOverviewInspectorStateBuilder {
     }
 
     private func formatted(_ meters: Double) -> String {
-        WorkspaceInspectorNumberText.lengthString(
+        WorkspaceInspectorNumberText.readableLengthString(
             fromMeters: meters,
-            unit: document.displayUnit
+            preferredUnit: document.displayUnit
         )
     }
 
