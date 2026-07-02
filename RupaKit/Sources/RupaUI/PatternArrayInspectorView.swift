@@ -6,6 +6,7 @@ struct PatternArrayInspectorView: View {
     let state: PatternArrayInspectorState
     let session: EditorSession
     let positionSliderMetersRange: ClosedRange<Double>
+    let defaultAxisDistanceMeters: Double
     let isCurvePathPickActive: Bool
     let onStartCurvePathPick: (PatternArraySourceID) -> Void
     let onCancelCurvePathPick: () -> Void
@@ -530,7 +531,10 @@ struct PatternArrayInspectorView: View {
     }
 
     private func setRadialAxisEnabled(_ isEnabled: Bool) {
-        editingService.setRadialAxisEnabled(isEnabled)
+        editingService.setRadialAxisEnabled(
+            isEnabled,
+            fallbackDistanceMeters: defaultAxisDistanceMeters
+        )
     }
 
     private func setCurveCopyCount(_ copyCount: Int) {

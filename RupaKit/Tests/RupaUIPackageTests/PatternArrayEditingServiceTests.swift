@@ -426,6 +426,34 @@ import Testing
 }
 
 @MainActor
+@Test func patternArrayEditingServiceAddsRadialAxisFromWorkspaceScale() async throws {
+    let session = EditorSession()
+    _ = try session.execute(.setRulerConfiguration(WorkspaceScalePreset.sitePlanning.rulerConfiguration))
+    _ = try #require(session.createDefaultExtrudedRectangle())
+    let sourceID = try createPatternArray(
+        in: session,
+        name: "Site Scale Radial Axis",
+        distribution: .radial(RadialPatternArray(
+            angularAxis: PatternArrayAngularAxis(
+                center: .origin,
+                axis: .unitZ,
+                angle: .angle(90.0, .degree),
+                copyCount: 3,
+                angleMode: .spacing
+            )
+        ))
+    )
+
+    let result = PatternArrayEditingService(
+        session: session,
+        sourceID: sourceID
+    ).setRadialAxisEnabled(true)
+
+    #expect(result?.didMutate == true)
+    #expect(try radialAxisDistance(in: session.document, sourceID: sourceID) == 100.0)
+}
+
+@MainActor
 @Test func patternArrayEditingServiceReplacesCurvePathWithSketchEntity() async throws {
     let session = EditorSession()
     _ = try #require(session.createDefaultExtrudedRectangle())

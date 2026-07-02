@@ -4864,6 +4864,7 @@ public struct MainView: View {
             state: state,
             session: session,
             positionSliderMetersRange: transformPositionSliderMetersRange,
+            defaultAxisDistanceMeters: workspaceEditingScaleDefaults.operationStepMeters,
             isCurvePathPickActive: patternArrayCurvePathPickState.isPicking(sourceID: state.sourceID),
             onStartCurvePathPick: startPatternArrayCurvePathPick,
             onCancelCurvePathPick: cancelPatternArrayCurvePathPick

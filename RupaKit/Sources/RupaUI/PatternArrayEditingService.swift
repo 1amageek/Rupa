@@ -11,6 +11,9 @@ struct PatternArrayEditingService {
     let sourceID: PatternArraySourceID
     private let anglePolicy = PatternArrayAnglePolicy.standard
     private let distancePolicy = PatternArrayDistancePolicy.standard
+    private var defaultLinearAxisDistanceMeters: Double {
+        WorkspaceEditingScaleDefaults(ruler: session.document.ruler).operationStepMeters
+    }
 
     @discardableResult
     func setOutputMode(_ outputMode: PatternArrayOutputMode) -> CommandExecutionResult? {
@@ -218,7 +221,10 @@ struct PatternArrayEditingService {
     }
 
     @discardableResult
-    func setRadialAxisEnabled(_ isEnabled: Bool) -> CommandExecutionResult? {
+    func setRadialAxisEnabled(
+        _ isEnabled: Bool,
+        fallbackDistanceMeters: Double? = nil
+    ) -> CommandExecutionResult? {
         guard let source = session.document.productMetadata.patternArrays[sourceID],
               case .radial(var radial) = source.distribution else {
             return nil
@@ -227,9 +233,12 @@ struct PatternArrayEditingService {
             guard radial.radialAxis == nil else {
                 return nil
             }
+            let distanceMeters = distancePolicy.normalizedLinearDistanceMeters(
+                fallbackDistanceMeters ?? defaultLinearAxisDistanceMeters
+            )
             radial.radialAxis = PatternArrayLinearAxis(
                 direction: defaultPerpendicularDirection(to: radial.angularAxis.axis),
-                distance: .length(distancePolicy.normalizedLinearDistanceMeters(0.01), .meter),
+                distance: .length(distanceMeters, .meter),
                 copyCount: 1,
                 distanceMode: .spacing
             )
