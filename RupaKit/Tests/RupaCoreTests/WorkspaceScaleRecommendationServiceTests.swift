@@ -188,6 +188,42 @@ import Testing
 }
 
 @MainActor
+@Test func evaluationSnapshotIncludesWorkspaceScaleRecommendationForSiteModel() throws {
+    var document = DesignDocument.empty(named: "Evaluated Site")
+    let profileID = try document.createRectangleSketchFromCorners(
+        name: "Evaluated Site Footprint",
+        plane: .xy,
+        firstCorner: SketchPoint(
+            x: .length(0.0, .meter),
+            y: .length(0.0, .meter)
+        ),
+        oppositeCorner: SketchPoint(
+            x: .length(25_000.0, .meter),
+            y: .length(10_000.0, .meter)
+        )
+    )
+    _ = try document.extrudeProfile(
+        name: "Evaluated Site Mass",
+        profile: ProfileReference(featureID: profileID),
+        distance: .length(100.0, .meter),
+        direction: .normal
+    )
+
+    let snapshot = EvaluationScheduler().evaluate(
+        document: document,
+        generation: DocumentGeneration(1)
+    )
+
+    #expect(snapshot.status == .valid)
+    #expect(snapshot.diagnostics.contains {
+        $0.severity == .info
+            && $0.message.contains("Workspace scale recommendation")
+            && $0.message.contains("Site Planning")
+            && $0.message.contains("1 km to 80 km")
+    })
+}
+
+@MainActor
 @Test func measurementIncludesWorkspaceScaleWarningForModelBeyondLargestPreset() throws {
     var document = DesignDocument.empty(named: "Regional Context")
     try document.setRulerConfiguration(WorkspaceScalePreset.regionalPlanning.rulerConfiguration)

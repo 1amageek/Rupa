@@ -58,15 +58,24 @@ public struct EvaluationScheduler: Sendable {
             )
         }
 
+        let workspaceBounds = WorkspaceBoundsService().bounds(for: evaluatedDocument)
+        let workspacePrecisionService = WorkspacePrecisionDiagnosticService()
+        let workspaceScaleRecommendationService = WorkspaceScaleRecommendationService()
+        let workspaceScaleRecommendation = workspaceScaleRecommendationService.recommendation(
+            for: workspaceBounds,
+            currentRuler: document.ruler
+        )
         let diagnostics = [
             EditorDiagnostic(
                 severity: .info,
                 message: "Evaluation completed with \(evaluatedDocument.meshes.count) generated bodies."
             ),
-        ] + WorkspacePrecisionDiagnosticService().diagnostics(
-            for: evaluatedDocument,
+        ] + workspacePrecisionService.diagnostics(
+            for: workspaceBounds,
             ruler: document.ruler,
             displayUnit: document.displayUnit
+        ) + workspaceScaleRecommendationService.diagnostics(
+            for: workspaceScaleRecommendation
         )
 
         return DocumentEvaluationResult(

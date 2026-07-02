@@ -337,6 +337,40 @@ import SwiftCAD
 }
 
 @MainActor
+@Test func automationCreateLargeExtrudedRectangleReportsWorkspaceScaleRecommendation() async throws {
+    let session = EditorSession()
+    let runner = AutomationRunner()
+
+    let result = try runner.execute(
+        .createExtrudedRectangleFromCorners(
+            name: "Automation Site Mass",
+            plane: .xy,
+            firstCorner: SketchPoint(
+                x: .length(0.0, .meter),
+                y: .length(0.0, .meter)
+            ),
+            oppositeCorner: SketchPoint(
+                x: .length(25_000.0, .meter),
+                y: .length(10_000.0, .meter)
+            ),
+            depth: .length(100.0, .meter),
+            direction: .normal
+        ),
+        in: session
+    )
+
+    #expect(result.commandName == "createExtrudedRectangleFromCorners")
+    #expect(result.didMutate)
+    #expect(result.generation == DocumentGeneration(1))
+    #expect(result.diagnostics.contains {
+        $0.severity == .info
+            && $0.message.contains("Workspace scale recommendation")
+            && $0.message.contains("Site Planning")
+            && $0.message.contains("1 km to 80 km")
+    })
+}
+
+@MainActor
 @Test func automationCanCreateExtrudedCircle() async throws {
     let session = EditorSession()
     let runner = AutomationRunner()
