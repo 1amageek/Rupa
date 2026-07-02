@@ -3577,7 +3577,7 @@ struct CLICommandApplyTests {
         let initialMeasurement = try MeasurementService(
             tolerance: .workspaceScaleAware(for: fixture.document)
         ).measure(document: fixture.document)
-        #expect(initialMeasurement.diagnostics.contains { $0.message.contains("Workspace precision warning") })
+        #expect(initialMeasurement.diagnostics.contains { $0.code == .workspacePrecisionWarning })
 
         let measurementResult = try await runCLI([
             "measure",
@@ -3628,8 +3628,8 @@ struct CLICommandApplyTests {
         #expect(response.message.contains("Workspace origin rebased"))
         #expect(response.saved)
         #expect(response.workspaceScale?.matchedPreset == .sitePlanning)
-        #expect(response.diagnostics.contains { $0.message.contains("Workspace precision warning") } == false)
-        #expect(translatedMeasurement.diagnostics.contains { $0.message.contains("Workspace precision warning") } == false)
+        #expect(response.diagnostics.contains { $0.code == .workspacePrecisionWarning } == false)
+        #expect(translatedMeasurement.diagnostics.contains { $0.code == .workspacePrecisionWarning } == false)
         #expect(cliNearlyEqual(bounds.minX, 0.0, tolerance: 1.0e-6))
         #expect(cliNearlyEqual(bounds.minY, 0.0, tolerance: 1.0e-6))
         #expect(cliNearlyEqual(bounds.maxX, 10.0, tolerance: 1.0e-6))

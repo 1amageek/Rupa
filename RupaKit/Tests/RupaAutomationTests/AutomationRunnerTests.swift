@@ -364,7 +364,7 @@ import SwiftCAD
     #expect(result.generation == DocumentGeneration(1))
     #expect(result.diagnostics.contains {
         $0.severity == .info
-            && $0.message.contains("Workspace scale recommendation")
+            && $0.code == .workspaceScaleRecommendation
             && $0.message.contains("Site Planning")
             && $0.message.contains("1 km to 80 km")
     })

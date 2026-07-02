@@ -8,7 +8,7 @@ func workspaceOriginRebaseMovesCADSourcesAndClearsFarOriginPrecisionWarnings() t
     let initialMeasurement = try MeasurementService(
         tolerance: .workspaceScaleAware(for: document)
     ).measure(document: document)
-    #expect(initialMeasurement.diagnostics.contains { $0.message.contains("Workspace precision warning") })
+    #expect(initialMeasurement.diagnostics.contains { $0.code == .workspacePrecisionWarning })
 
     let session = EditorSession(document: document)
     let result = try session.execute(.rebaseWorkspaceOrigin(
@@ -18,7 +18,7 @@ func workspaceOriginRebaseMovesCADSourcesAndClearsFarOriginPrecisionWarnings() t
     #expect(result.commandName == "rebaseWorkspaceOrigin")
     #expect(result.didMutate)
     #expect(result.generation == DocumentGeneration(1))
-    #expect(result.diagnostics.contains { $0.message.contains("Workspace precision warning") } == false)
+    #expect(result.diagnostics.contains { $0.code == .workspacePrecisionWarning } == false)
 
     let translatedSketch = try firstSketch(in: session.document.cadDocument)
     let translatedRange = try resolvedSketchCoordinateRange(
@@ -33,7 +33,7 @@ func workspaceOriginRebaseMovesCADSourcesAndClearsFarOriginPrecisionWarnings() t
     let translatedMeasurement = try MeasurementService(
         tolerance: .workspaceScaleAware(for: session.document)
     ).measure(document: session.document)
-    #expect(translatedMeasurement.diagnostics.contains { $0.message.contains("Workspace precision warning") } == false)
+    #expect(translatedMeasurement.diagnostics.contains { $0.code == .workspacePrecisionWarning } == false)
 }
 
 @Test(.timeLimit(.minutes(1)))

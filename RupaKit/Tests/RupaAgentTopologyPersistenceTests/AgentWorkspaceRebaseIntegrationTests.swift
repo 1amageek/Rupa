@@ -42,7 +42,7 @@ func agentCanRebaseFarOriginWorkspaceThroughAutomationCommand() throws {
     #expect(result.commandName == "rebaseWorkspaceOrigin")
     #expect(result.didMutate)
     #expect(result.generation == DocumentGeneration(1))
-    #expect(result.diagnostics.contains { $0.message.contains("Workspace precision warning") } == false)
+    #expect(result.diagnostics.contains { $0.code == .workspacePrecisionWarning } == false)
 
     let measurementResponse = server.handle(.measure(
         sessionID: sessionID,
@@ -52,7 +52,7 @@ func agentCanRebaseFarOriginWorkspaceThroughAutomationCommand() throws {
         Issue.record("Expected measurement response.")
         return
     }
-    #expect(measurement.diagnostics.contains { $0.message.contains("Workspace precision warning") } == false)
+    #expect(measurement.diagnostics.contains { $0.code == .workspacePrecisionWarning } == false)
     #expect(measurement.workspacePrecision == nil)
 }
 

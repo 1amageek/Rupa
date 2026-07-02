@@ -75,7 +75,6 @@ import Testing
     #expect(diagnostics.count == 1)
     #expect(diagnostics.first?.severity == .info)
     #expect(diagnostics.first?.code == .workspacePrecisionNotice)
-    #expect(diagnostics.first?.message.contains("Workspace precision notice") == true)
     #expect(diagnostics.first?.message.contains("rebase workflow") == true)
 }
 
@@ -91,7 +90,7 @@ import Testing
     #expect(snapshot.status == .valid)
     #expect(snapshot.diagnostics.contains {
         $0.severity == .warning
-            && $0.message.contains("Workspace precision warning")
+            && $0.code == .workspacePrecisionWarning
     })
 }
 
@@ -105,7 +104,7 @@ import Testing
 
     #expect(result.diagnostics.contains {
         $0.severity == .warning
-            && $0.message.contains("Workspace precision warning")
+            && $0.code == .workspacePrecisionWarning
     })
     #expect(result.workspacePrecision?.reason == .coordinateResolution)
     #expect(result.workspacePrecision?.recommendedRebaseTranslation == Vector3D(
@@ -123,7 +122,7 @@ import Testing
 
     #expect(result.diagnostics.contains {
         $0.severity == .warning
-            && $0.message.contains("Workspace precision warning")
+            && $0.code == .workspacePrecisionWarning
     })
 }
 

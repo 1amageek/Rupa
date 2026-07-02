@@ -183,7 +183,6 @@ import Testing
     #expect(result.diagnostics.contains {
         $0.severity == .info
             && $0.code == .workspaceScaleRecommendation
-            && $0.message.contains("Workspace scale recommendation")
             && $0.message.contains("Site Planning")
             && $0.message.contains("1 km to 80 km")
     })
@@ -220,7 +219,6 @@ import Testing
     #expect(snapshot.diagnostics.contains {
         $0.severity == .info
             && $0.code == .workspaceScaleRecommendation
-            && $0.message.contains("Workspace scale recommendation")
             && $0.message.contains("Site Planning")
             && $0.message.contains("1 km to 80 km")
     })
@@ -257,7 +255,6 @@ import Testing
     #expect(result.diagnostics.contains {
         $0.severity == .warning
             && $0.code == .workspaceScaleWarning
-            && $0.message.contains("Workspace scale warning")
             && $0.message.contains("largest supported comfortable range")
     })
 }
