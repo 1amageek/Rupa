@@ -12,7 +12,7 @@ struct PatternArrayEditingService {
     private let anglePolicy = PatternArrayAnglePolicy.standard
     private let distancePolicy = PatternArrayDistancePolicy.standard
     private var defaultLinearAxisDistanceMeters: Double {
-        WorkspaceEditingScaleDefaults(ruler: session.document.ruler).operationStepMeters
+        WorkspaceInteractionScaleDefaults(ruler: session.document.ruler).operationStepMeters
     }
 
     @discardableResult

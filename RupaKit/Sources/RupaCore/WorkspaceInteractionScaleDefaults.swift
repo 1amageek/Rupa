@@ -1,14 +1,14 @@
-import RupaCore
+import Foundation
 
-struct WorkspaceEditingScaleDefaults: Equatable, Sendable {
-    var operationStepMeters: Double
-    var slotWidthMeters: Double
-    var surfaceFrameTangentialMoveMeters: Double
-    var surfaceFrameNormalMoveMeters: Double
-    var sketchRebuildToleranceMeters: Double
-    var sketchRebuildToleranceRange: ClosedRange<Double>
+public struct WorkspaceInteractionScaleDefaults: Equatable, Sendable {
+    public let operationStepMeters: Double
+    public let slotWidthMeters: Double
+    public let surfaceFrameTangentialMoveMeters: Double
+    public let surfaceFrameNormalMoveMeters: Double
+    public let sketchRebuildToleranceMeters: Double
+    public let sketchRebuildToleranceRange: ClosedRange<Double>
 
-    init(ruler: RulerConfiguration) {
+    public init(ruler: RulerConfiguration) {
         let normalized = ruler.normalizedForWorkspaceScale()
         let step = max(
             normalized.minorTickMeters,

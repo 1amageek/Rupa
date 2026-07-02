@@ -102,7 +102,7 @@ public struct MainView: View {
         agentHost: (any WorkspaceAgentHost)? = nil,
         documentURL: URL? = nil
     ) {
-        let editingDefaults = WorkspaceEditingScaleDefaults(ruler: session.document.ruler)
+        let editingDefaults = WorkspaceInteractionScaleDefaults(ruler: session.document.ruler)
         self._session = State(initialValue: session)
         self._isPreviewExpanded = State(initialValue: isPreviewExpanded)
         self._columnVisibility = State(initialValue: columnVisibility)
@@ -4487,27 +4487,27 @@ public struct MainView: View {
     }
 
     private var defaultFaceOffsetStepMeters: Double {
-        workspaceEditingScaleDefaults.operationStepMeters
+        workspaceInteractionScaleDefaults.operationStepMeters
     }
 
     private var defaultEdgeChamferStepMeters: Double {
-        workspaceEditingScaleDefaults.operationStepMeters
+        workspaceInteractionScaleDefaults.operationStepMeters
     }
 
     private var defaultEdgeFilletRadiusMeters: Double {
-        workspaceEditingScaleDefaults.operationStepMeters
+        workspaceInteractionScaleDefaults.operationStepMeters
     }
 
     private var defaultVertexMoveStepMeters: Double {
-        workspaceEditingScaleDefaults.operationStepMeters
+        workspaceInteractionScaleDefaults.operationStepMeters
     }
 
     private var defaultSketchEntityMoveStepMeters: Double {
-        workspaceEditingScaleDefaults.operationStepMeters
+        workspaceInteractionScaleDefaults.operationStepMeters
     }
 
-    private var workspaceEditingScaleDefaults: WorkspaceEditingScaleDefaults {
-        WorkspaceEditingScaleDefaults(ruler: session.document.ruler)
+    private var workspaceInteractionScaleDefaults: WorkspaceInteractionScaleDefaults {
+        WorkspaceInteractionScaleDefaults(ruler: session.document.ruler)
     }
 
     private func sketchCurveOperationControls(
@@ -4864,7 +4864,7 @@ public struct MainView: View {
             state: state,
             session: session,
             positionSliderMetersRange: transformPositionSliderMetersRange,
-            defaultAxisDistanceMeters: workspaceEditingScaleDefaults.operationStepMeters,
+            defaultAxisDistanceMeters: workspaceInteractionScaleDefaults.operationStepMeters,
             isCurvePathPickActive: patternArrayCurvePathPickState.isPicking(sourceID: state.sourceID),
             onStartCurvePathPick: startPatternArrayCurvePathPick,
             onCancelCurvePathPick: cancelPatternArrayCurvePathPick
@@ -5386,7 +5386,7 @@ public struct MainView: View {
                 target: entity.target,
                 rebuildControlPointCount: $sketchRebuildControlPointCount,
                 rebuildToleranceMeters: $sketchRebuildToleranceMeters,
-                rebuildToleranceMetersRange: workspaceEditingScaleDefaults.sketchRebuildToleranceRange,
+                rebuildToleranceMetersRange: workspaceInteractionScaleDefaults.sketchRebuildToleranceRange,
                 rebuildKeepsCorners: $sketchRebuildKeepsCorners,
                 explicitDegree: $sketchRebuildExplicitDegree,
                 explicitSpanCount: $sketchRebuildExplicitSpanCount,
@@ -6553,7 +6553,7 @@ public struct MainView: View {
     private func refitSelectedSketchCurve(
         _ target: SelectionTarget
     ) {
-        let toleranceRange = workspaceEditingScaleDefaults.sketchRebuildToleranceRange
+        let toleranceRange = workspaceInteractionScaleDefaults.sketchRebuildToleranceRange
         let tolerance = min(
             max(sketchRebuildToleranceMeters, toleranceRange.lowerBound),
             toleranceRange.upperBound
@@ -7076,7 +7076,7 @@ public struct MainView: View {
 
     private func applyDisplayUnit(_ unit: LengthDisplayUnit) {
         session.setDisplayUnit(unit)
-        resetWorkspaceEditingScaleDefaults()
+        resetWorkspaceInteractionScaleDefaults()
     }
 
     private func applyViewportGridVisualSpacingMode(
@@ -7089,12 +7089,12 @@ public struct MainView: View {
 
     private func applyWorkspaceRebaseTranslation(_ translation: Vector3D) {
         session.rebaseWorkspaceOrigin(translation: translation)
-        resetWorkspaceEditingScaleDefaults()
+        resetWorkspaceInteractionScaleDefaults()
     }
 
     private func applyWorkspaceScalePreset(_ preset: WorkspaceScalePreset) {
         session.setRulerConfiguration(preset.rulerConfiguration.normalizedForWorkspaceScale())
-        resetWorkspaceEditingScaleDefaults()
+        resetWorkspaceInteractionScaleDefaults()
         requestViewportCameraReset()
     }
 
@@ -7116,7 +7116,7 @@ public struct MainView: View {
                 )
             case .applyPreset(let preset):
                 session.perform(.setRulerConfiguration(preset.rulerConfiguration.normalizedForWorkspaceScale()))
-                resetWorkspaceEditingScaleDefaults()
+                resetWorkspaceInteractionScaleDefaults()
                 requestViewportCameraReset()
             }
         } catch {
@@ -7185,8 +7185,8 @@ public struct MainView: View {
         session.perform(.deleteParameter(name: name)) != nil
     }
 
-    private func resetWorkspaceEditingScaleDefaults() {
-        let defaults = workspaceEditingScaleDefaults
+    private func resetWorkspaceInteractionScaleDefaults() {
+        let defaults = workspaceInteractionScaleDefaults
         sketchSplineControlPointSlideDistanceMeters = defaults.operationStepMeters
         polySplineSurfaceVertexSlideDistanceMeters = defaults.operationStepMeters
         surfaceControlPointFrameUMoveMeters = defaults.surfaceFrameTangentialMoveMeters

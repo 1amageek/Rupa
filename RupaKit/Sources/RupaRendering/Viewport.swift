@@ -268,7 +268,7 @@ public struct Viewport: View {
         self.showsConstructionPlaneHover = showsConstructionPlaneHover
         self.allowsSelectionRectangle = allowsSelectionRectangle
         self.allowsObjectAffordances = allowsObjectAffordances
-        let interactionScaleDefaults = ViewportInteractionScaleDefaults(ruler: document.ruler)
+        let interactionScaleDefaults = WorkspaceInteractionScaleDefaults(ruler: document.ruler)
         self.slotWidthMeters = slotWidthMeters ?? interactionScaleDefaults.slotWidthMeters
         self.sketchVertexOffsetDistanceMeters = sketchVertexOffsetDistanceMeters
             ?? interactionScaleDefaults.operationStepMeters
