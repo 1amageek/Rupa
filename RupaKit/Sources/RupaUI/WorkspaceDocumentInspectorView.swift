@@ -46,6 +46,11 @@ struct WorkspaceDocumentPrecisionRecommendationState: Equatable, Sendable {
     var translation: Vector3D
 }
 
+struct WorkspaceDocumentRecommendationStates: Equatable, Sendable {
+    var scale: WorkspaceDocumentScaleRecommendationState?
+    var precision: WorkspaceDocumentPrecisionRecommendationState?
+}
+
 struct WorkspaceDocumentInspectorView: View {
     var state: WorkspaceDocumentInspectorState
     var setDisplayUnit: (LengthDisplayUnit) -> Void
@@ -332,6 +337,28 @@ func workspaceDocumentScaleRecommendationState(
         recommendedComfortableModelSpanTitle: recommendedProfile.comfortableModelSpanTitle,
         preset: recommendation.recommendedPreset,
         isActionable: recommendation.isActionable
+    )
+}
+
+func workspaceDocumentRecommendationStates(
+    bounds: MeasurementResult.Bounds?,
+    ruler: RulerConfiguration,
+    displayUnit: LengthDisplayUnit
+) -> WorkspaceDocumentRecommendationStates {
+    let scaleRecommendation = WorkspaceScaleRecommendationService().recommendation(
+        for: bounds,
+        currentRuler: ruler
+    )
+    let precisionReport = WorkspacePrecisionDiagnosticService().report(
+        for: bounds,
+        ruler: ruler
+    )
+    return WorkspaceDocumentRecommendationStates(
+        scale: workspaceDocumentScaleRecommendationState(recommendation: scaleRecommendation),
+        precision: workspaceDocumentPrecisionRecommendationState(
+            report: precisionReport,
+            displayUnit: displayUnit
+        )
     )
 }
 

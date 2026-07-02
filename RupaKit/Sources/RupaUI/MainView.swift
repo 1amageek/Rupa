@@ -4611,7 +4611,15 @@ public struct MainView: View {
     }
 
     private var workspaceDocumentInspectorState: WorkspaceDocumentInspectorState {
-        WorkspaceDocumentInspectorState(
+        let workspaceBounds = session.currentEvaluation.flatMap {
+            WorkspaceBoundsService().bounds(for: $0.evaluatedDocument)
+        }
+        let recommendationStates = workspaceDocumentRecommendationStates(
+            bounds: workspaceBounds,
+            ruler: session.document.ruler,
+            displayUnit: session.document.displayUnit
+        )
+        return WorkspaceDocumentInspectorState(
             documentName: documentTitle,
             documentID: shortID(session.document.id),
             sourceUnitTitle: "m",
@@ -4631,8 +4639,8 @@ public struct MainView: View {
             validationRuleCount: session.document.productMetadata.validationRules.count,
             exportPresetCount: session.document.productMetadata.exportPresets.count,
             ruler: session.document.ruler,
-            scaleRecommendation: workspaceScaleRecommendationInspectorState,
-            precisionRecommendation: workspacePrecisionRecommendationInspectorState,
+            scaleRecommendation: recommendationStates.scale,
+            precisionRecommendation: recommendationStates.precision,
             parameters: workspaceParameterInspectorState
         )
     }
@@ -4645,31 +4653,6 @@ public struct MainView: View {
                 dirty: session.isDirty,
                 diagnostics: session.diagnostics
             ),
-            displayUnit: session.document.displayUnit
-        )
-    }
-
-    private var workspaceScaleRecommendationInspectorState: WorkspaceDocumentScaleRecommendationState? {
-        guard let evaluatedDocument = session.currentEvaluation?.evaluatedDocument,
-              let recommendation = WorkspaceScaleRecommendationService().recommendation(
-                for: evaluatedDocument,
-                currentRuler: session.document.ruler
-              ) else {
-            return nil
-        }
-        return workspaceDocumentScaleRecommendationState(recommendation: recommendation)
-    }
-
-    private var workspacePrecisionRecommendationInspectorState: WorkspaceDocumentPrecisionRecommendationState? {
-        guard let evaluatedDocument = session.currentEvaluation?.evaluatedDocument else {
-            return nil
-        }
-        let report = WorkspacePrecisionDiagnosticService().report(
-            for: evaluatedDocument,
-            ruler: session.document.ruler
-        )
-        return workspaceDocumentPrecisionRecommendationState(
-            report: report,
             displayUnit: session.document.displayUnit
         )
     }

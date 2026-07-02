@@ -465,6 +465,35 @@ import Testing
     #expect(state.isActionable == false)
 }
 
+@Test func workspaceDocumentRecommendationStatesShareBoundsForScaleAndPrecision() throws {
+    let states = workspaceDocumentRecommendationStates(
+        bounds: MeasurementResult.Bounds(
+            minX: 1.0e12,
+            minY: 1.0e12,
+            minZ: 0.0,
+            maxX: 1.0e12 + 250_000.0,
+            maxY: 1.0e12 + 120_000.0,
+            maxZ: 1_000.0
+        ),
+        ruler: WorkspaceScalePreset.sitePlanning.rulerConfiguration,
+        displayUnit: .kilometer
+    )
+
+    let scale = try #require(states.scale)
+    let precision = try #require(states.precision)
+
+    #expect(scale.reasonTitle == "Model exceeds ruler")
+    #expect(scale.preset == .regionalPlanning)
+    #expect(scale.modelSpanTitle == "250 km")
+    #expect(precision.reasonTitle == "Coordinate resolution")
+    #expect(precision.modelSpanTitle == "250 km")
+    #expect(precision.translation == Vector3D(
+        x: -(1.0e12 + 125_000.0),
+        y: -(1.0e12 + 60_000.0),
+        z: 0.0
+    ))
+}
+
 @Test func workspaceDocumentPrecisionRecommendationStateFormatsRebaseAction() {
     let translation = Vector3D(x: -1_000_000.0, y: 500.0, z: 0.0)
     let report = WorkspacePrecisionReport(
