@@ -499,6 +499,45 @@ import Testing
     #expect(imperialSite.largerPreset == nil)
 }
 
+@Test func workspaceDocumentScalePresetOptionStatesExposeFullCADRange() throws {
+    let options = workspaceDocumentScalePresetOptionStates(
+        ruler: WorkspaceScalePreset.regionalPlanning.rulerConfiguration
+    )
+    let micro = try #require(options.first { $0.preset == .microFabrication })
+    let regional = try #require(options.first { $0.preset == .regionalPlanning })
+    let selected = try #require(options.first { $0.isSelected })
+
+    #expect(options.map(\.preset) == WorkspaceScalePreset.allCases)
+    #expect(micro.visibleSpanTitle == "1 cm")
+    #expect(micro.comfortableModelSpanTitle == "100 μm to 8 mm")
+    #expect(regional.title == "Regional Planning")
+    #expect(regional.menuTitle == "Regional Planning · 1,000 km")
+    #expect(regional.visibleSpanTitle == "1,000 km")
+    #expect(regional.comfortableModelSpanTitle == "10 km to 800 km")
+    #expect(regional.minorStepTitle == "1 km")
+    #expect(regional.majorStepTitle == "10 km")
+    #expect(regional.displayUnitTitle == "km")
+    #expect(regional.accessibilityValue.contains("kilometer-scale terrain"))
+    #expect(selected.preset == .regionalPlanning)
+}
+
+@Test func workspaceDocumentScalePresetOptionStatesKeepRangeAvailableForCustomRulers() throws {
+    let options = workspaceDocumentScalePresetOptionStates(
+        ruler: RulerConfiguration(
+            displayUnit: .millimeter,
+            minorTickMeters: 0.000_001,
+            majorTickMeters: 0.001,
+            visibleSpanMeters: 1_000.0
+        )
+    )
+    let regional = try #require(options.first { $0.preset == .regionalPlanning })
+
+    #expect(options.count == WorkspaceScalePreset.allCases.count)
+    #expect(!options.contains { $0.isSelected })
+    #expect(regional.menuTitle == "Regional Planning · 1,000 km")
+    #expect(regional.accessibilityValue.contains("comfortable model span 10 km to 800 km"))
+}
+
 @Test func workspaceDocumentScaleRecommendationStateReportsUseCaseAndComfortRanges() throws {
     let recommendation = try #require(WorkspaceScaleRecommendationService().recommendation(
         for: MeasurementResult.Bounds(

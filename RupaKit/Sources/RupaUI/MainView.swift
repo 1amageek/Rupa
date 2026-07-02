@@ -4722,6 +4722,9 @@ public struct MainView: View {
             exportPresetCount: session.document.productMetadata.exportPresets.count,
             ruler: session.document.ruler,
             scaleRecommendation: recommendationStates.scale,
+            scalePresetOptions: workspaceDocumentScalePresetOptionStates(
+                ruler: session.document.ruler
+            ),
             precisionRecommendation: recommendationStates.precision,
             parameters: workspaceParameterInspectorState
         )

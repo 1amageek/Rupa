@@ -22,6 +22,7 @@ struct WorkspaceDocumentInspectorState: Equatable, Sendable {
     var exportPresetCount: Int
     var ruler: RulerConfiguration
     var scaleRecommendation: WorkspaceDocumentScaleRecommendationState?
+    var scalePresetOptions: [WorkspaceDocumentScalePresetOptionState]
     var precisionRecommendation: WorkspaceDocumentPrecisionRecommendationState?
     var parameters: WorkspaceParameterInspectorState
 }
@@ -36,6 +37,24 @@ struct WorkspaceDocumentScaleRecommendationState: Equatable, Sendable {
     var recommendedComfortableModelSpanTitle: String
     var preset: WorkspaceScalePreset
     var isActionable: Bool
+}
+
+struct WorkspaceDocumentScalePresetOptionState: Equatable, Identifiable, Sendable {
+    var preset: WorkspaceScalePreset
+    var title: String
+    var menuTitle: String
+    var useCaseTitle: String
+    var visibleSpanTitle: String
+    var comfortableModelSpanTitle: String
+    var minorStepTitle: String
+    var majorStepTitle: String
+    var displayUnitTitle: String
+    var accessibilityValue: String
+    var isSelected: Bool
+
+    var id: WorkspaceScalePreset {
+        preset
+    }
 }
 
 struct WorkspaceDocumentPrecisionRecommendationState: Equatable, Sendable {
@@ -139,16 +158,21 @@ struct WorkspaceDocumentInspectorView: View {
     }
 
     private var scalePresetMenu: some View {
-        let selectedTitle = WorkspaceScalePreset.matching(state.ruler)?.title ?? "Custom"
+        let selectedTitle = state.scalePresetOptions.first { $0.isSelected }?.title ?? "Custom"
         return inspectorControlRow("Scale Preset") {
             Menu {
-                ForEach(WorkspaceScalePreset.allCases) { preset in
-                    let profile = preset.profile
+                ForEach(state.scalePresetOptions) { option in
                     Button {
-                        setWorkspaceScalePreset(preset)
+                        setWorkspaceScalePreset(option.preset)
                     } label: {
-                        Text(profile.menuTitle)
+                        HStack {
+                            Text(option.menuTitle)
+                            if option.isSelected {
+                                Image(systemName: "checkmark")
+                            }
+                        }
                     }
+                    .help(option.accessibilityValue)
                 }
             } label: {
                 HStack(spacing: 6) {
@@ -339,6 +363,29 @@ func workspaceDocumentScaleRecommendationState(
         preset: recommendation.recommendedPreset,
         isActionable: recommendation.isActionable
     )
+}
+
+func workspaceDocumentScalePresetOptionStates(
+    ruler: RulerConfiguration
+) -> [WorkspaceDocumentScalePresetOptionState] {
+    let normalized = ruler.normalizedForWorkspaceScale()
+    let selectedPreset = WorkspaceScalePreset.matching(normalized)
+    return WorkspaceScalePreset.allCases.map { preset in
+        let profile = preset.profile
+        return WorkspaceDocumentScalePresetOptionState(
+            preset: preset,
+            title: profile.title,
+            menuTitle: profile.menuTitle,
+            useCaseTitle: profile.useCaseTitle,
+            visibleSpanTitle: profile.visibleSpanTitle,
+            comfortableModelSpanTitle: profile.comfortableModelSpanTitle,
+            minorStepTitle: profile.minorTickTitle,
+            majorStepTitle: profile.majorTickTitle,
+            displayUnitTitle: profile.displayUnitSymbol,
+            accessibilityValue: profile.summary,
+            isSelected: preset == selectedPreset
+        )
+    }
 }
 
 func workspaceDocumentRecommendationStates(
