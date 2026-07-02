@@ -238,7 +238,8 @@ let package = Package(
                 "RupaCore",
                 "RupaAgentTestFixtures",
                 .product(name: "SwiftCAD", package: "swift-CAD"),
-            ]
+            ],
+            exclude: ["Fixtures"]
         ),
         .testTarget(
             name: "RupaAgentSurfaceTests",

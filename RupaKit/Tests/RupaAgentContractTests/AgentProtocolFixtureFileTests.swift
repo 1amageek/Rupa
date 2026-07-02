@@ -23,7 +23,7 @@ struct AgentProtocolFixtureFileTests {
         let fixtures = try AgentProtocolFixtureFiles.loadJSONFiles(at: ["responses", "success"])
         let codec = AgentMessageCodec()
 
-        #expect(Set(fixtures.map(\.stem)) == ["agent.status", "parameter.setExpression"])
+        #expect(Set(fixtures.map(\.stem)) == ["agent.status", "command.apply", "parameter.setExpression"])
 
         for fixture in fixtures {
             let envelope = try codec.decodeResponseEnvelope(from: fixture.data)
@@ -38,6 +38,18 @@ struct AgentProtocolFixtureFileTests {
                 }
                 #expect(status.running)
                 #expect(status.sessionCount == 2)
+            case "command.apply":
+                guard case .command(let result) = response else {
+                    Issue.record("command.apply fixture must decode as AgentResponse.command.")
+                    continue
+                }
+                #expect(result.commandName == "setRulerConfiguration")
+                #expect(result.generation == DocumentGeneration(4))
+                #expect(result.didMutate)
+                #expect(result.workspaceScale?.matchedPreset == .sitePlanning)
+                #expect(result.workspaceScale?.displayUnit == .kilometer)
+                #expect(result.workspaceBounds?.maximumSpan == 25_000.0)
+                #expect(result.viewportGridSettings?.visualSpacingMode == .adaptive)
             case "parameter.setExpression":
                 guard case .command(let result) = response else {
                     Issue.record("parameter.setExpression fixture must decode as AgentResponse.command.")

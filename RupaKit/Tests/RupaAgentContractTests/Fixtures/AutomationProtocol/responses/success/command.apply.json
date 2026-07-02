@@ -1,0 +1,37 @@
+{
+  "jsonrpc": "2.0",
+  "id": "command.apply-1",
+  "method": "command.apply",
+  "result": {
+    "message": "Workspace scale fitted to Site Planning. Workspace scale Site Planning, unit km, minor 0.1 km, major 1 km, visible span 100 km.",
+    "commandName": "setRulerConfiguration",
+    "generation": {
+      "value": 4
+    },
+    "didMutate": true,
+    "diagnostics": [],
+    "workspaceScale": {
+      "displayUnit": "kilometer",
+      "displayUnitSymbol": "km",
+      "minorTickMeters": 100,
+      "majorTickMeters": 1000,
+      "visibleSpanMeters": 100000,
+      "minorTickDisplayValue": 0.1,
+      "majorTickDisplayValue": 1,
+      "visibleSpanDisplayValue": 100,
+      "matchedPreset": "sitePlanning",
+      "matchedPresetTitle": "Site Planning"
+    },
+    "workspaceBounds": {
+      "minX": 0,
+      "minY": 0,
+      "minZ": 0,
+      "maxX": 25000,
+      "maxY": 10000,
+      "maxZ": 100
+    },
+    "viewportGridSettings": {
+      "visualSpacingMode": "adaptive"
+    }
+  }
+}
