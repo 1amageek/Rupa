@@ -38,3 +38,31 @@ import Testing
             .normalizedForWorkspaceScale()
     )
 }
+
+@MainActor
+@Test func agentSetsViewportGridSettingsThroughCommandController() async throws {
+    let server = AgentCommandController()
+    let sessionID = UUID()
+    let session = EditorSession()
+    server.register(session: session, id: sessionID)
+    let settings = ViewportGridSettings(visualSpacingMode: .fixed)
+
+    let response = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .setViewportGridSettings(settings),
+            expectedGeneration: DocumentGeneration(0)
+        )
+    )
+
+    guard case .command(let result) = response else {
+        Issue.record("Expected viewport grid settings command response.")
+        return
+    }
+
+    #expect(result.commandName == "setViewportGridSettings")
+    #expect(result.didMutate)
+    #expect(result.generation == DocumentGeneration(1))
+    #expect(result.viewportGridSettings == settings)
+    #expect(session.document.productMetadata.viewportGridSettings == settings)
+}

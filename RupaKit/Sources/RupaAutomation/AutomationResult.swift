@@ -10,6 +10,7 @@ public struct AutomationResult: Codable, Equatable, Sendable {
     public var curveRebuildReport: CurveRebuildReport?
     public var addedSelectionDimensionID: SelectionDimensionID?
     public var workspaceScale: WorkspaceScaleSnapshot?
+    public var viewportGridSettings: ViewportGridSettings?
 
     public init(
         message: String,
@@ -19,7 +20,8 @@ public struct AutomationResult: Codable, Equatable, Sendable {
         diagnostics: [EditorDiagnostic] = [],
         curveRebuildReport: CurveRebuildReport? = nil,
         addedSelectionDimensionID: SelectionDimensionID? = nil,
-        workspaceScale: WorkspaceScaleSnapshot? = nil
+        workspaceScale: WorkspaceScaleSnapshot? = nil,
+        viewportGridSettings: ViewportGridSettings? = nil
     ) {
         self.message = message
         self.commandName = commandName
@@ -29,5 +31,6 @@ public struct AutomationResult: Codable, Equatable, Sendable {
         self.curveRebuildReport = curveRebuildReport
         self.addedSelectionDimensionID = addedSelectionDimensionID
         self.workspaceScale = workspaceScale
+        self.viewportGridSettings = viewportGridSettings
     }
 }

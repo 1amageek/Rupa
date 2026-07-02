@@ -8,10 +8,7 @@ public struct ViewportProjectedGrid: Equatable {
     private static let maximumGridLineCount = 360
     private static let readableStepMultipliers = [1.0, 2.0, 5.0, 10.0]
 
-    public enum VisualSpacingMode: String, Codable, Equatable, Sendable {
-        case adaptive
-        case fixed
-    }
+    public typealias VisualSpacingMode = ViewportGridVisualSpacingMode
 
     public struct Line: Equatable {
         public var axis: Axis

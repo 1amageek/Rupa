@@ -6,6 +6,7 @@ public enum AutomationCommand: Codable, Equatable, Sendable {
     case setDisplayUnit(LengthDisplayUnit)
     case setRulerConfiguration(RulerConfiguration)
     case setWorkspaceScalePreset(WorkspaceScalePreset)
+    case setViewportGridSettings(ViewportGridSettings)
     case rebaseWorkspaceOrigin(translation: Vector3D)
     case renameDocument(name: String)
     case upsertParameter(name: String, expression: CADExpression, kind: QuantityKind)
@@ -369,6 +370,8 @@ public enum AutomationCommand: Codable, Equatable, Sendable {
             .setRulerConfiguration(configuration)
         case .setWorkspaceScalePreset(let preset):
             .setRulerConfiguration(preset.rulerConfiguration.normalizedForWorkspaceScale())
+        case .setViewportGridSettings(let settings):
+            .setViewportGridSettings(settings)
         case .rebaseWorkspaceOrigin(let translation):
             .rebaseWorkspaceOrigin(translation: translation)
         case .renameDocument(let name):

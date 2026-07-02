@@ -741,6 +741,14 @@ public final class EditorSession {
         }
     }
 
+    public func setViewportGridSettings(_ settings: ViewportGridSettings) {
+        do {
+            try execute(.setViewportGridSettings(settings))
+        } catch {
+            record(error)
+        }
+    }
+
     public func rebaseWorkspaceOrigin(translation: Vector3D) {
         do {
             try execute(.rebaseWorkspaceOrigin(translation: translation))

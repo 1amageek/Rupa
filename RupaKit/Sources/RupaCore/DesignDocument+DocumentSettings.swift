@@ -14,6 +14,10 @@ extension DesignDocument {
         ruler = configuration
     }
 
+    public mutating func setViewportGridSettings(_ settings: ViewportGridSettings) {
+        productMetadata.viewportGridSettings = settings
+    }
+
     public mutating func rename(_ name: String, updatedAt: Date = Date()) {
         cadDocument.metadata.name = name
         cadDocument.metadata.updatedAt = updatedAt

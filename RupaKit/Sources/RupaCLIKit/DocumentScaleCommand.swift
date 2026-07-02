@@ -4,6 +4,7 @@ import RupaCore
 import SwiftCAD
 
 extension WorkspaceScalePreset: ExpressibleByArgument {}
+extension ViewportGridVisualSpacingMode: ExpressibleByArgument {}
 
 public struct DescribeDocumentCommand: ParsableCommand {
     public static let configuration = CommandConfiguration(
@@ -93,6 +94,30 @@ public struct RebaseWorkspaceOriginCommand: ParsableCommand {
             document: document,
             command: .rebaseWorkspaceOrigin(
                 translation: Vector3D(x: x, y: y, z: z)
+            )
+        )
+    }
+}
+
+public struct SetViewportGridCommand: ParsableCommand {
+    public static let configuration = CommandConfiguration(
+        commandName: "set-grid",
+        abstract: "Set viewport grid display behavior without changing snap precision."
+    )
+
+    @OptionGroup
+    public var document: CLIWriteDocumentOptions
+
+    @Argument(help: "Viewport grid visual spacing mode: adaptive or fixed.")
+    public var visualSpacingMode: ViewportGridVisualSpacingMode
+
+    public init() {}
+
+    public func run() throws {
+        try CLIAutomationCommandRunner.run(
+            document: document,
+            command: .setViewportGridSettings(
+                ViewportGridSettings(visualSpacingMode: visualSpacingMode)
             )
         )
     }

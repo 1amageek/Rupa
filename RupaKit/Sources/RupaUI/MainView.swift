@@ -31,7 +31,6 @@ public struct MainView: View {
     @State private var patternArrayCurvePathPreviewCandidate: PatternArrayCurvePathCandidate?
     @State private var patternArraySummaryCache: PatternArraySummaryCache
     @State private var isGridSnapEnabled: Bool
-    @State private var gridVisualSpacingMode: ViewportProjectedGrid.VisualSpacingMode
     @State private var isObjectTargetingEnabled: Bool
     @State private var isConstructionPlaneSnapEnabled: Bool
     @State private var snapOverrideState: WorkspaceSnapOverrideState
@@ -115,7 +114,6 @@ public struct MainView: View {
         self._patternArrayCurvePathPreviewCandidate = State(initialValue: nil)
         self._patternArraySummaryCache = State(initialValue: PatternArraySummaryCache())
         self._isGridSnapEnabled = State(initialValue: true)
-        self._gridVisualSpacingMode = State(initialValue: .adaptive)
         self._isObjectTargetingEnabled = State(initialValue: true)
         self._isConstructionPlaneSnapEnabled = State(initialValue: true)
         self._snapOverrideState = State(initialValue: WorkspaceSnapOverrideState())
@@ -480,7 +478,7 @@ public struct MainView: View {
                     projectionRequest: viewportProjectionRequest,
                     selectionHitPolicy: selectionScope.viewportSelectionHitPolicy,
                     bottomChromeReservedHeight: viewportContextPanelHeight,
-                    gridVisualSpacingMode: gridVisualSpacingMode,
+                    gridVisualSpacingMode: session.document.productMetadata.viewportGridSettings.visualSpacingMode,
                     hoverClearSignal: viewportHoverClearSignal,
                     showsConstructionPlaneHover: showsConstructionPlaneHover,
                     allowsSelectionRectangle: allowsSelectionRectangle,
@@ -1300,10 +1298,10 @@ public struct MainView: View {
     private var fixedGridVisualSpacingBinding: Binding<Bool> {
         Binding(
             get: {
-                gridVisualSpacingMode == .fixed
+                session.document.productMetadata.viewportGridSettings.visualSpacingMode == .fixed
             },
             set: { isFixed in
-                gridVisualSpacingMode = isFixed ? .fixed : .adaptive
+                applyViewportGridVisualSpacingMode(isFixed ? .fixed : .adaptive)
             }
         )
     }
@@ -1416,7 +1414,7 @@ public struct MainView: View {
                 }
                 let scaleSummary = workspaceScaleSummary
                 workspaceValueRow("Scale", "\(scaleSummary.presetTitle) · \(scaleSummary.displayUnitTitle)")
-                workspaceValueRow("Grid", gridVisualSpacingMode == .fixed ? "Fixed" : "Adaptive")
+                workspaceValueRow("Grid", session.document.productMetadata.viewportGridSettings.visualSpacingMode.title)
                 workspaceValueRow("Step", scaleSummary.minorStepTitle)
                 workspaceValueRow("Major", scaleSummary.majorStepTitle)
                 workspaceValueRow("Visible", scaleSummary.visibleSpanTitle)
@@ -7010,6 +7008,14 @@ public struct MainView: View {
     private func applyDisplayUnit(_ unit: LengthDisplayUnit) {
         session.setDisplayUnit(unit)
         resetWorkspaceEditingScaleDefaults()
+    }
+
+    private func applyViewportGridVisualSpacingMode(
+        _ visualSpacingMode: ViewportGridVisualSpacingMode
+    ) {
+        session.setViewportGridSettings(
+            ViewportGridSettings(visualSpacingMode: visualSpacingMode)
+        )
     }
 
     private func applyWorkspaceRebaseTranslation(_ translation: Vector3D) {

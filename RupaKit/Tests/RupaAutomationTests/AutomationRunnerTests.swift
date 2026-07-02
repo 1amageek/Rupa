@@ -102,6 +102,23 @@ import SwiftCAD
     #expect(result.workspaceScale?.visibleSpanDisplayValue == 100.0)
     #expect(result.message.contains("Site Planning"))
     #expect(result.message.contains("visible span 100 km"))
+    #expect(result.viewportGridSettings == .standard)
+}
+
+@MainActor
+@Test func automationCanSetViewportGridSettings() async throws {
+    let session = EditorSession()
+    let runner = AutomationRunner()
+    let settings = ViewportGridSettings(visualSpacingMode: .fixed)
+
+    let result = try runner.execute(.setViewportGridSettings(settings), in: session)
+
+    #expect(session.document.productMetadata.viewportGridSettings == settings)
+    #expect(session.generation == DocumentGeneration(1))
+    #expect(result.commandName == "setViewportGridSettings")
+    #expect(result.didMutate)
+    #expect(result.viewportGridSettings == settings)
+    #expect(result.message.contains("fixed"))
 }
 
 @MainActor

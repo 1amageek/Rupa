@@ -12,7 +12,8 @@ extension CLIResponse {
             dirty: dirty,
             saved: saved,
             diagnostics: result.diagnostics,
-            workspaceScale: result.workspaceScale
+            workspaceScale: result.workspaceScale,
+            viewportGridSettings: result.viewportGridSettings
         )
     }
 }

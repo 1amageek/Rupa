@@ -9,6 +9,7 @@ public struct CLIResponse: Codable, Equatable, Sendable {
     public var saved: Bool
     public var diagnostics: [EditorDiagnostic]
     public var workspaceScale: WorkspaceScaleSnapshot?
+    public var viewportGridSettings: ViewportGridSettings?
 
     public init(
         message: String,
@@ -16,7 +17,8 @@ public struct CLIResponse: Codable, Equatable, Sendable {
         dirty: Bool,
         saved: Bool = false,
         diagnostics: [EditorDiagnostic],
-        workspaceScale: WorkspaceScaleSnapshot? = nil
+        workspaceScale: WorkspaceScaleSnapshot? = nil,
+        viewportGridSettings: ViewportGridSettings? = nil
     ) {
         self.message = message
         self.generation = generation
@@ -24,6 +26,7 @@ public struct CLIResponse: Codable, Equatable, Sendable {
         self.saved = saved
         self.diagnostics = diagnostics
         self.workspaceScale = workspaceScale
+        self.viewportGridSettings = viewportGridSettings
     }
 }
 

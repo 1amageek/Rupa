@@ -15,7 +15,8 @@ public struct AutomationRunner {
                 message: "Document uses \(session.document.displayUnit.symbol) display units. \(scale.summary)",
                 generation: session.generation,
                 diagnostics: session.diagnostics,
-                workspaceScale: scale
+                workspaceScale: scale,
+                viewportGridSettings: session.document.productMetadata.viewportGridSettings
             )
         case .setDisplayUnit(let unit):
             let result = try session.execute(.setDisplayUnit(unit))
@@ -26,7 +27,8 @@ public struct AutomationRunner {
                 generation: result.generation,
                 didMutate: result.didMutate,
                 diagnostics: result.diagnostics,
-                workspaceScale: scale
+                workspaceScale: scale,
+                viewportGridSettings: session.document.productMetadata.viewportGridSettings
             )
         case .setRulerConfiguration(let configuration):
             let normalized = configuration.normalizedForWorkspaceScale()
@@ -38,7 +40,8 @@ public struct AutomationRunner {
                 generation: result.generation,
                 didMutate: result.didMutate,
                 diagnostics: result.diagnostics,
-                workspaceScale: scale
+                workspaceScale: scale,
+                viewportGridSettings: session.document.productMetadata.viewportGridSettings
             )
         case .setWorkspaceScalePreset(let preset):
             let configuration = preset.rulerConfiguration.normalizedForWorkspaceScale()
@@ -50,7 +53,18 @@ public struct AutomationRunner {
                 generation: result.generation,
                 didMutate: result.didMutate,
                 diagnostics: result.diagnostics,
-                workspaceScale: scale
+                workspaceScale: scale,
+                viewportGridSettings: session.document.productMetadata.viewportGridSettings
+            )
+        case .setViewportGridSettings(let settings):
+            let result = try session.execute(.setViewportGridSettings(settings))
+            return AutomationResult(
+                message: "Viewport grid settings changed. \(settings.summary)",
+                commandName: result.commandName,
+                generation: result.generation,
+                didMutate: result.didMutate,
+                diagnostics: result.diagnostics,
+                viewportGridSettings: session.document.productMetadata.viewportGridSettings
             )
         case .rebaseWorkspaceOrigin(let translation):
             let result = try session.execute(.rebaseWorkspaceOrigin(translation: translation))

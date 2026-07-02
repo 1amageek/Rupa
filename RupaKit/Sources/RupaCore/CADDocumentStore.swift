@@ -145,6 +145,10 @@ public final class CADDocumentStore {
             try document.setRulerConfiguration(configuration)
             try commitMutation()
             evaluateCurrentDocument()
+        case .setViewportGridSettings(let settings):
+            document.setViewportGridSettings(settings)
+            try commitMutation()
+            evaluateCurrentDocument()
         case .rebaseWorkspaceOrigin(let translation):
             try document.rebaseWorkspaceOrigin(
                 translation: translation,

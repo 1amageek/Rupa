@@ -3391,6 +3391,21 @@ struct CLICommandApplyTests {
             from: describeResult.standardOutputData
         )
 
+        let gridResult = try await runCLI([
+            "command",
+            "set-grid",
+            documentURL.path,
+            "fixed",
+            "--mode",
+            "file",
+            "--json",
+        ])
+        let gridResponse = try JSONDecoder().decode(
+            CLIResponse.self,
+            from: gridResult.standardOutputData
+        )
+        let loadedAfterGrid = try DocumentFileService().load(from: documentURL)
+
         let rulerResult = try await runCLI([
             "command",
             "set-ruler",
@@ -3465,7 +3480,13 @@ struct CLICommandApplyTests {
         #expect(!describeResponse.saved)
         #expect(describeResponse.workspaceScale?.matchedPreset == .sitePlanning)
         #expect(describeResponse.workspaceScale?.displayUnit == .kilometer)
+        #expect(describeResponse.viewportGridSettings == .standard)
         #expect(describeResponse.message.contains("Site Planning"))
+
+        #expect(gridResult.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: gridResult.standardError))
+        #expect(gridResponse.saved)
+        #expect(gridResponse.viewportGridSettings?.visualSpacingMode == .fixed)
+        #expect(loadedAfterGrid.productMetadata.viewportGridSettings.visualSpacingMode == .fixed)
 
         #expect(rulerResult.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: rulerResult.standardError))
         #expect(rulerResponse.saved)

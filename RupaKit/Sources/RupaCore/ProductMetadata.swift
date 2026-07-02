@@ -20,6 +20,7 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
     public var surfaceControlPointDisplays: [SurfaceControlPointDisplayID: SurfaceControlPointDisplay]
     public var surfaceFrameDisplays: [SurfaceFrameDisplayID: SurfaceFrameDisplay]
     public var measurements: [MeasurementAnnotationID: MeasurementAnnotation]
+    public var viewportGridSettings: ViewportGridSettings
     public var templateDefaults: TemplateDefaults
 
     public init(
@@ -41,6 +42,7 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
         surfaceControlPointDisplays: [SurfaceControlPointDisplayID: SurfaceControlPointDisplay] = [:],
         surfaceFrameDisplays: [SurfaceFrameDisplayID: SurfaceFrameDisplay] = [:],
         measurements: [MeasurementAnnotationID: MeasurementAnnotation] = [:],
+        viewportGridSettings: ViewportGridSettings = .standard,
         templateDefaults: TemplateDefaults = TemplateDefaults()
     ) {
         self.sceneNodes = sceneNodes
@@ -61,6 +63,7 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
         self.surfaceControlPointDisplays = surfaceControlPointDisplays
         self.surfaceFrameDisplays = surfaceFrameDisplays
         self.measurements = measurements
+        self.viewportGridSettings = viewportGridSettings
         self.templateDefaults = templateDefaults
     }
 
@@ -83,6 +86,7 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
         case surfaceControlPointDisplays
         case surfaceFrameDisplays
         case measurements
+        case viewportGridSettings
         case templateDefaults
     }
 
@@ -155,6 +159,10 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
                 [MeasurementAnnotationID: MeasurementAnnotation].self,
                 forKey: .measurements
             ) ?? [:],
+            viewportGridSettings: try container.decodeIfPresent(
+                ViewportGridSettings.self,
+                forKey: .viewportGridSettings
+            ) ?? .standard,
             templateDefaults: try container.decodeIfPresent(
                 TemplateDefaults.self,
                 forKey: .templateDefaults
@@ -182,6 +190,7 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
         try container.encode(surfaceControlPointDisplays, forKey: .surfaceControlPointDisplays)
         try container.encode(surfaceFrameDisplays, forKey: .surfaceFrameDisplays)
         try container.encode(measurements, forKey: .measurements)
+        try container.encode(viewportGridSettings, forKey: .viewportGridSettings)
         try container.encode(templateDefaults, forKey: .templateDefaults)
     }
 
