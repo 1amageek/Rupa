@@ -3104,11 +3104,18 @@ import Testing
     #expect(grid.scaleReadout.majorStep.meters == grid.majorStepMeters)
     #expect(grid.scaleReadout.snapStep.meters == document.ruler.minorTickMeters)
     #expect(grid.scaleReadout.minorStepPixels == grid.minorStepPixels)
-    if grid.scaleReadout.showsSeparateSnapStep {
+    #expect(grid.scaleReadout.visualSpacingMode == .adaptive)
+    if grid.scaleReadout.isVisualStepCapped {
+        #expect(
+            grid.scaleReadout.compactText
+                == "Grid \(grid.scaleReadout.minorStep.text) capped · Snap \(grid.scaleReadout.snapStep.text)"
+        )
+    } else if grid.scaleReadout.showsSeparateSnapStep {
         #expect(grid.scaleReadout.compactText == "Grid \(grid.scaleReadout.minorStep.text) · Snap \(grid.scaleReadout.snapStep.text)")
     } else {
         #expect(grid.scaleReadout.compactText == "Grid \(grid.scaleReadout.minorStep.text) · \(grid.scaleReadout.visibleSpan.text)")
     }
+    #expect(grid.scaleReadout.accessibilityText.contains("mode adaptive"))
     #expect(grid.scaleReadout.accessibilityText.contains(grid.scaleReadout.snapStep.text))
     #expect(grid.scaleReadout.accessibilityText.contains(grid.scaleReadout.visibleSpan.text))
     #expect(grid.majorStepMeters >= document.ruler.majorTickMeters)
@@ -3193,6 +3200,63 @@ import Testing
     #expect(grid.scaleReadout.compactText.contains("km"))
     #expect(grid.scaleReadout.accessibilityText.contains(grid.scaleReadout.visibleSpan.text))
     #expect(grid.scaleLabels.allSatisfy { $0.displayUnit == .kilometer })
+}
+
+@Test func viewportProjectedGridPreservesFixedVisualSpacingWhenWithinLineBudget() throws {
+    var document = DesignDocument.empty()
+    try document.setRulerConfiguration(WorkspaceScalePreset.architectureImperial.rulerConfiguration)
+    let size = CGSize(width: 800.0, height: 600.0)
+    let identityLayout = ViewportModelCoordinateMapper(
+        document: document,
+        size: size
+    ).layout
+    let maximumZoom = ViewportCameraZoomPolicy.maximumZoom(
+        for: document,
+        identityScale: identityLayout.scale
+    )
+
+    let grid = ViewportProjectedGrid(
+        document: document,
+        size: size,
+        camera: ViewportCamera(zoom: maximumZoom * 2.0),
+        visualSpacingMode: .fixed
+    )
+
+    #expect(!grid.lines.isEmpty)
+    #expect(grid.lines.count < 400)
+    #expect(grid.scaleReadout.visualSpacingMode == .fixed)
+    #expect(!grid.scaleReadout.isVisualStepCapped)
+    #expect(grid.minorStepMeters == document.ruler.minorTickMeters)
+    #expect(grid.scaleReadout.minorStep.meters == document.ruler.minorTickMeters)
+    #expect(grid.scaleReadout.snapStep.meters == document.ruler.minorTickMeters)
+    #expect(grid.scaleReadout.minorStep.displayUnit == .foot)
+    #expect(grid.scaleReadout.snapStep.displayUnit == .foot)
+    #expect(!grid.scaleReadout.showsSeparateSnapStep)
+    #expect(grid.scaleReadout.compactText == "Grid \(grid.scaleReadout.minorStep.text) · \(grid.scaleReadout.visibleSpan.text)")
+    #expect(grid.scaleReadout.accessibilityText.contains("mode fixed"))
+}
+
+@Test func viewportProjectedGridCapsFixedVisualSpacingForDenseRegionalViews() throws {
+    var document = DesignDocument.empty()
+    try document.setRulerConfiguration(WorkspaceScalePreset.regionalPlanning.rulerConfiguration)
+
+    let grid = ViewportProjectedGrid(
+        document: document,
+        size: CGSize(width: 800.0, height: 600.0),
+        visualSpacingMode: .fixed
+    )
+
+    #expect(!grid.lines.isEmpty)
+    #expect(grid.lines.count < 400)
+    #expect(grid.scaleReadout.visualSpacingMode == .fixed)
+    #expect(grid.scaleReadout.isVisualStepCapped)
+    #expect(grid.minorStepMeters > document.ruler.minorTickMeters)
+    #expect(grid.scaleReadout.minorStep.meters == grid.minorStepMeters)
+    #expect(grid.scaleReadout.snapStep.meters == document.ruler.minorTickMeters)
+    #expect(grid.scaleReadout.showsSeparateSnapStep)
+    #expect(grid.scaleReadout.compactText.contains("capped"))
+    #expect(grid.scaleReadout.compactText.contains(grid.scaleReadout.snapStep.text))
+    #expect(grid.scaleReadout.accessibilityText.contains("visual grid capped by line budget"))
 }
 
 @Test func viewportProjectedGridUsesReadableOneTwoFiveStepProgression() {

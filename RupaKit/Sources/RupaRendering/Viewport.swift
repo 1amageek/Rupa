@@ -119,6 +119,7 @@ public struct Viewport: View {
     private let projectionRequest: ViewportProjectionRequest?
     private let selectionHitPolicy: ViewportSelectionHitPolicy
     private let bottomChromeReservedHeight: CGFloat
+    private let gridVisualSpacingMode: ViewportProjectedGrid.VisualSpacingMode
     private let hoverClearSignal: Int
     private let showsConstructionPlaneHover: Bool
     private let allowsSelectionRectangle: Bool
@@ -189,6 +190,7 @@ public struct Viewport: View {
         projectionRequest: ViewportProjectionRequest? = nil,
         selectionHitPolicy: ViewportSelectionHitPolicy = .all,
         bottomChromeReservedHeight: CGFloat = 0.0,
+        gridVisualSpacingMode: ViewportProjectedGrid.VisualSpacingMode = .adaptive,
         hoverClearSignal: Int = 0,
         showsConstructionPlaneHover: Bool = false,
         allowsSelectionRectangle: Bool = false,
@@ -258,6 +260,7 @@ public struct Viewport: View {
         self.projectionRequest = projectionRequest
         self.selectionHitPolicy = selectionHitPolicy
         self.bottomChromeReservedHeight = max(0.0, bottomChromeReservedHeight)
+        self.gridVisualSpacingMode = gridVisualSpacingMode
         self.hoverClearSignal = hoverClearSignal
         self.showsConstructionPlaneHover = showsConstructionPlaneHover
         self.allowsSelectionRectangle = allowsSelectionRectangle
@@ -321,7 +324,8 @@ public struct Viewport: View {
                     document: document,
                     size: proxy.size,
                     camera: camera,
-                    basis: basis
+                    basis: basis,
+                    visualSpacingMode: gridVisualSpacingMode
                 )
 
                 Canvas { context, size in

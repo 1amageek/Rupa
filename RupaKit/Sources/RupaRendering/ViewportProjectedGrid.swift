@@ -8,6 +8,11 @@ public struct ViewportProjectedGrid: Equatable {
     private static let maximumGridLineCount = 360
     private static let readableStepMultipliers = [1.0, 2.0, 5.0, 10.0]
 
+    public enum VisualSpacingMode: String, Codable, Equatable, Sendable {
+        case adaptive
+        case fixed
+    }
+
     public struct Line: Equatable {
         public var axis: Axis
         public var start: CGPoint
@@ -80,22 +85,31 @@ public struct ViewportProjectedGrid: Equatable {
         public var snapStep: Length
         public var visibleSpan: Length
         public var minorStepPixels: CGFloat
+        public var visualSpacingMode: VisualSpacingMode
+        public var isVisualStepCapped: Bool
 
         public init(
             minorStep: Length,
             majorStep: Length,
             snapStep: Length,
             visibleSpan: Length,
-            minorStepPixels: CGFloat
+            minorStepPixels: CGFloat,
+            visualSpacingMode: VisualSpacingMode,
+            isVisualStepCapped: Bool
         ) {
             self.minorStep = minorStep
             self.majorStep = majorStep
             self.snapStep = snapStep
             self.visibleSpan = visibleSpan
             self.minorStepPixels = minorStepPixels
+            self.visualSpacingMode = visualSpacingMode
+            self.isVisualStepCapped = isVisualStepCapped
         }
 
         public var compactText: String {
+            if isVisualStepCapped {
+                return "Grid \(minorStep.text) capped · Snap \(snapStep.text)"
+            }
             if showsSeparateSnapStep {
                 return "Grid \(minorStep.text) · Snap \(snapStep.text)"
             }
@@ -103,7 +117,17 @@ public struct ViewportProjectedGrid: Equatable {
         }
 
         public var accessibilityText: String {
-            "Grid \(minorStep.text), snap \(snapStep.text), major \(majorStep.text), visible span \(visibleSpan.text)"
+            var components = [
+                "Grid \(minorStep.text)",
+                "mode \(visualSpacingMode.rawValue)",
+                "snap \(snapStep.text)",
+                "major \(majorStep.text)",
+                "visible span \(visibleSpan.text)",
+            ]
+            if isVisualStepCapped {
+                components.append("visual grid capped by line budget")
+            }
+            return components.joined(separator: ", ")
         }
 
         public var showsSeparateSnapStep: Bool {
@@ -123,18 +147,20 @@ public struct ViewportProjectedGrid: Equatable {
         document: DesignDocument,
         size: CGSize,
         camera: ViewportCamera = .identity,
-        basis: ViewportProjectionBasis = .isometric
+        basis: ViewportProjectionBasis = .isometric,
+        visualSpacingMode: VisualSpacingMode = .adaptive
     ) {
+        let ruler = document.ruler.normalizedForWorkspaceScale()
         let layout = ViewportModelCoordinateMapper(
             document: document,
             size: size,
             camera: camera,
             basis: basis
         ).layout
-        let baseMinorStepMeters = Self.adjustedStep(
-            document.ruler.minorTickMeters,
+        let requestedMinorStepMeters = Self.requestedVisualMinorStep(
+            ruler: ruler,
             scale: layout.scale,
-            minimumPixels: 8.0
+            mode: visualSpacingMode
         )
         let basis = layout.basis
         let plane = Self.gridPlane(for: basis)
@@ -142,15 +168,20 @@ public struct ViewportProjectedGrid: Equatable {
             layout: layout,
             size: size,
             plane: plane,
-            step: max(CGFloat(baseMinorStepMeters), 1.0e-12)
+            step: max(CGFloat(requestedMinorStepMeters), 1.0e-12)
         )
         let minorStepMeters = Self.adjustedStepForLineBudget(
-            baseMinorStepMeters,
+            requestedMinorStepMeters,
             modelBounds: initialModelBounds,
-            maximumLineCount: Self.maximumGridLineCount
+            maximumLineCount: Self.maximumGridLineCount,
+            preservesRequestedStep: visualSpacingMode == .fixed
+        )
+        let isVisualStepCapped = Self.isCappedStep(
+            resolvedStepMeters: minorStepMeters,
+            requestedStepMeters: requestedMinorStepMeters
         )
         let majorStepMeters = Self.adjustedStep(
-            max(document.ruler.majorTickMeters, minorStepMeters),
+            max(ruler.majorTickMeters, minorStepMeters),
             scale: layout.scale,
             minimumPixels: 48.0
         )
@@ -191,10 +222,12 @@ public struct ViewportProjectedGrid: Equatable {
         self.scaleReadout = Self.makeScaleReadout(
             minorStepMeters: minorStepMeters,
             majorStepMeters: resolvedMajorStepMeters,
-            snapStepMeters: document.ruler.minorTickMeters,
+            snapStepMeters: ruler.minorTickMeters,
             visibleSpanMeters: max(Double(modelBounds.width), Double(modelBounds.height)),
             minorStepPixels: minorStepPixels,
-            unit: document.displayUnit
+            unit: document.displayUnit,
+            visualSpacingMode: visualSpacingMode,
+            isVisualStepCapped: isVisualStepCapped
         )
     }
 
@@ -216,12 +249,46 @@ public struct ViewportProjectedGrid: Equatable {
         return readableStep(atLeast: requiredMeters)
     }
 
+    private static func requestedVisualMinorStep(
+        ruler: RulerConfiguration,
+        scale: CGFloat,
+        mode: VisualSpacingMode
+    ) -> Double {
+        let minorStepMeters = max(
+            ruler.normalizedForWorkspaceScale().minorTickMeters,
+            RulerConfiguration.minorTickMetersRange.lowerBound
+        )
+        switch mode {
+        case .adaptive:
+            return adjustedStep(
+                minorStepMeters,
+                scale: scale,
+                minimumPixels: 8.0
+            )
+        case .fixed:
+            return minorStepMeters
+        }
+    }
+
+    private static func isCappedStep(
+        resolvedStepMeters: Double,
+        requestedStepMeters: Double
+    ) -> Bool {
+        resolvedStepMeters > requestedStepMeters + max(abs(requestedStepMeters) * 1.0e-9, 1.0e-12)
+    }
+
     private static func adjustedStepForLineBudget(
         _ baseStep: Double,
         modelBounds: CGRect,
-        maximumLineCount: Int
+        maximumLineCount: Int,
+        preservesRequestedStep: Bool = false
     ) -> Double {
-        var step = readableStep(atLeast: baseStep)
+        var step: Double
+        if preservesRequestedStep {
+            step = max(baseStep, 1.0e-12)
+        } else {
+            step = readableStep(atLeast: baseStep)
+        }
         while estimatedLineCount(modelBounds: modelBounds, step: step) > maximumLineCount {
             step = nextReadableStep(after: step)
         }
@@ -433,7 +500,9 @@ public struct ViewportProjectedGrid: Equatable {
         snapStepMeters: Double,
         visibleSpanMeters: Double,
         minorStepPixels: CGFloat,
-        unit: LengthDisplayUnit
+        unit: LengthDisplayUnit,
+        visualSpacingMode: VisualSpacingMode,
+        isVisualStepCapped: Bool
     ) -> ScaleReadout {
         let minor = lengthDisplay(valueMeters: minorStepMeters, preferredUnit: unit)
         let major = lengthDisplay(valueMeters: majorStepMeters, preferredUnit: unit)
@@ -464,7 +533,9 @@ public struct ViewportProjectedGrid: Equatable {
                 displayUnit: span.unit,
                 text: span.text
             ),
-            minorStepPixels: minorStepPixels
+            minorStepPixels: minorStepPixels,
+            visualSpacingMode: visualSpacingMode,
+            isVisualStepCapped: isVisualStepCapped
         )
     }
 

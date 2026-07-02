@@ -82,8 +82,8 @@ Rupa must make scale visible and controllable.
 | Tool | Requirement |
 |---|---|
 | Adaptive grid | Grid spacing adapts to zoom level and active unit display. |
-| Fixed grid | User can lock grid spacing for precision workflows. |
-| Grid scale readout | Canvas must expose the resolved visual minor grid step, major grid step, snap step, and visible span in readable units without changing internal meter storage. Visual grid thinning for line budgets must not hide the active snap interval. |
+| Fixed grid | User can request locked visual grid spacing for precision workflows; the renderer may cap visible line density for performance, but the cap must be explicit in readout and must not change snapping precision. |
+| Grid scale readout | Canvas must expose the visual spacing mode, resolved visual minor grid step, major grid step, snap step, visible span, and line-budget cap state in readable units without changing internal meter storage. Visual grid thinning for line budgets must not hide the active snap interval. |
 | Scale recommendations | Scale recommendation readback must include the current comfortable range, recommended use case, recommended visible span, recommended comfortable model-span range, whether the recommendation is directly actionable, and an explicit warning when the model exceeds the largest supported comfortable workspace range so GUI, CLI, and Agent callers share the same explanation. |
 | Snap increments | Snap increments are unit-aware and independent from display rounding. When no explicit snap interval is supplied, grid snapping follows the active ruler minor tick; explicit intervals remain fixed for precision and automation workflows. |
 | Object snaps | Endpoint, midpoint, center, tangent, perpendicular, intersection, face, edge, vertex, and construction references. |

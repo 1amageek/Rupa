@@ -31,6 +31,7 @@ public struct MainView: View {
     @State private var patternArrayCurvePathPreviewCandidate: PatternArrayCurvePathCandidate?
     @State private var patternArraySummaryCache: PatternArraySummaryCache
     @State private var isGridSnapEnabled: Bool
+    @State private var gridVisualSpacingMode: ViewportProjectedGrid.VisualSpacingMode
     @State private var isObjectTargetingEnabled: Bool
     @State private var isConstructionPlaneSnapEnabled: Bool
     @State private var snapOverrideState: WorkspaceSnapOverrideState
@@ -114,6 +115,7 @@ public struct MainView: View {
         self._patternArrayCurvePathPreviewCandidate = State(initialValue: nil)
         self._patternArraySummaryCache = State(initialValue: PatternArraySummaryCache())
         self._isGridSnapEnabled = State(initialValue: true)
+        self._gridVisualSpacingMode = State(initialValue: .adaptive)
         self._isObjectTargetingEnabled = State(initialValue: true)
         self._isConstructionPlaneSnapEnabled = State(initialValue: true)
         self._snapOverrideState = State(initialValue: WorkspaceSnapOverrideState())
@@ -478,6 +480,7 @@ public struct MainView: View {
                     projectionRequest: viewportProjectionRequest,
                     selectionHitPolicy: selectionScope.viewportSelectionHitPolicy,
                     bottomChromeReservedHeight: viewportContextPanelHeight,
+                    gridVisualSpacingMode: gridVisualSpacingMode,
                     hoverClearSignal: viewportHoverClearSignal,
                     showsConstructionPlaneHover: showsConstructionPlaneHover,
                     allowsSelectionRectangle: allowsSelectionRectangle,
@@ -1294,6 +1297,17 @@ public struct MainView: View {
         WorkspaceScaleStatusSummary(ruler: session.document.ruler)
     }
 
+    private var fixedGridVisualSpacingBinding: Binding<Bool> {
+        Binding(
+            get: {
+                gridVisualSpacingMode == .fixed
+            },
+            set: { isFixed in
+                gridVisualSpacingMode = isFixed ? .fixed : .adaptive
+            }
+        )
+    }
+
     private var workspaceScaleMenu: some View {
         let summary = workspaceScaleSummary
         return Menu {
@@ -1392,9 +1406,17 @@ public struct MainView: View {
                         help: "Object Targeting",
                         accessibilityIdentifier: "WorkspaceSnap.object"
                     )
+                    workspaceToggleButton(
+                        isOn: fixedGridVisualSpacingBinding,
+                        systemImage: "lock",
+                        title: "Fixed",
+                        help: "Fixed Visual Grid",
+                        accessibilityIdentifier: "WorkspaceGrid.fixed"
+                    )
                 }
                 let scaleSummary = workspaceScaleSummary
                 workspaceValueRow("Scale", "\(scaleSummary.presetTitle) · \(scaleSummary.displayUnitTitle)")
+                workspaceValueRow("Grid", gridVisualSpacingMode == .fixed ? "Fixed" : "Adaptive")
                 workspaceValueRow("Step", scaleSummary.minorStepTitle)
                 workspaceValueRow("Major", scaleSummary.majorStepTitle)
                 workspaceValueRow("Visible", scaleSummary.visibleSpanTitle)
