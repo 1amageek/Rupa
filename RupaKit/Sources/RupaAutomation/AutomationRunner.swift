@@ -1480,40 +1480,11 @@ public struct AutomationRunner {
         commandResult: CommandExecutionResult,
         in session: EditorSession
     ) -> AutomationResult {
-        if shouldIncludeWorkspaceContext(for: commandResult) {
-            return workspaceAutomationResult(
-                message: message,
-                commandResult: commandResult,
-                in: session
-            )
-        }
-
-        return AutomationResult(
+        workspaceAutomationResult(
             message: message,
-            commandName: commandResult.commandName,
-            generation: commandResult.generation,
-            didMutate: commandResult.didMutate,
-            diagnostics: commandResult.diagnostics,
-            curveRebuildReport: commandResult.curveRebuildReport,
-            addedSelectionDimensionID: commandResult.addedSelectionDimensionID
+            commandResult: commandResult,
+            in: session
         )
-    }
-
-    private func shouldIncludeWorkspaceContext(
-        for commandResult: CommandExecutionResult
-    ) -> Bool {
-        commandResult.diagnostics.contains { diagnostic in
-            guard let code = diagnostic.code else {
-                return false
-            }
-            switch code {
-            case .workspacePrecisionNotice,
-                 .workspacePrecisionWarning,
-                 .workspaceScaleRecommendation,
-                 .workspaceScaleWarning:
-                return true
-            }
-        }
     }
 
     private func workspaceAutomationResult(
@@ -1527,10 +1498,14 @@ public struct AutomationRunner {
             commandName: commandResult?.commandName,
             generation: commandResult?.generation ?? session.generation,
             didMutate: commandResult?.didMutate ?? false,
-            diagnostics: commandResult?.diagnostics ?? session.diagnostics,
+            diagnostics: mergedDiagnostics(
+                commandResult?.diagnostics ?? session.diagnostics,
+                context.diagnostics
+            ),
             curveRebuildReport: commandResult?.curveRebuildReport,
             addedSelectionDimensionID: commandResult?.addedSelectionDimensionID,
             workspaceScale: context.scale,
+            workspaceInteractionScale: context.interactionScale,
             workspaceBounds: context.bounds,
             workspacePrecision: context.precision,
             workspaceScaleRecommendation: context.scaleRecommendation,
@@ -1584,6 +1559,7 @@ public struct AutomationRunner {
             didMutate: false,
             diagnostics: measurement.diagnostics,
             workspaceScale: WorkspaceScaleSnapshot(ruler: session.document.ruler),
+            workspaceInteractionScale: WorkspaceInteractionScaleSnapshot(ruler: session.document.ruler),
             workspaceBounds: measurement.bounds,
             workspacePrecision: measurement.workspacePrecision,
             workspaceScaleRecommendation: measurement.workspaceScaleRecommendation,
@@ -1594,22 +1570,95 @@ public struct AutomationRunner {
     private func workspaceAutomationContext(
         in session: EditorSession
     ) -> WorkspaceAutomationContext {
-        let bounds = session.currentEvaluation.flatMap {
+        let measurementContext = workspaceMeasurement(in: session)
+        let bounds = measurementContext.measurement?.bounds ?? session.currentEvaluation.flatMap {
             WorkspaceBoundsService().bounds(for: $0.evaluatedDocument)
         }
-        return WorkspaceAutomationContext(
-            scale: WorkspaceScaleSnapshot(ruler: session.document.ruler),
-            bounds: bounds,
-            precision: WorkspacePrecisionDiagnosticService().report(
+        let precision = measurementContext.measurement?.workspacePrecision
+            ?? WorkspacePrecisionDiagnosticService().report(
                 for: bounds,
                 ruler: session.document.ruler
-            ),
-            scaleRecommendation: WorkspaceScaleRecommendationService().recommendation(
+            )
+        let recommendation = measurementContext.measurement?.workspaceScaleRecommendation
+            ?? WorkspaceScaleRecommendationService().recommendation(
                 for: bounds,
                 currentRuler: session.document.ruler
-            ),
-            viewportGridSettings: session.document.productMetadata.viewportGridSettings
+            )
+        return WorkspaceAutomationContext(
+            scale: WorkspaceScaleSnapshot(ruler: session.document.ruler),
+            interactionScale: WorkspaceInteractionScaleSnapshot(ruler: session.document.ruler),
+            bounds: bounds,
+            precision: precision,
+            scaleRecommendation: recommendation,
+            viewportGridSettings: session.document.productMetadata.viewportGridSettings,
+            diagnostics: workspaceContextDiagnostics(
+                precision: precision,
+                recommendation: recommendation,
+                displayUnit: session.document.displayUnit
+            ) + measurementContext.diagnostics
         )
+    }
+
+    private func workspaceMeasurement(
+        in session: EditorSession
+    ) -> WorkspaceMeasurementContext {
+        do {
+            let measurement = try MeasurementService().measure(
+                document: session.document,
+                objectRegistry: session.objectRegistry,
+                currentEvaluation: session.currentEvaluation,
+                currentGeneration: session.generation
+            )
+            return WorkspaceMeasurementContext(measurement: measurement)
+        } catch {
+            return WorkspaceMeasurementContext(
+                measurement: nil,
+                diagnostics: [
+                    EditorDiagnostic(
+                        severity: .warning,
+                        message: "Workspace context measurement failed: \(String(describing: error))"
+                    ),
+                ]
+            )
+        }
+    }
+
+    private func workspaceContextDiagnostics(
+        precision: WorkspacePrecisionReport?,
+        recommendation: WorkspaceScaleRecommendation?,
+        displayUnit: LengthDisplayUnit
+    ) -> [EditorDiagnostic] {
+        WorkspacePrecisionDiagnosticService().diagnostics(
+            for: precision,
+            displayUnit: displayUnit
+        ) + WorkspaceScaleRecommendationService().diagnostics(
+            for: recommendation
+        )
+    }
+
+    private func mergedDiagnostics(
+        _ primary: [EditorDiagnostic],
+        _ workspaceDiagnostics: [EditorDiagnostic]
+    ) -> [EditorDiagnostic] {
+        var result = primary
+        for diagnostic in workspaceDiagnostics where !containsEquivalentDiagnostic(
+            diagnostic,
+            in: result
+        ) {
+            result.append(diagnostic)
+        }
+        return result
+    }
+
+    private func containsEquivalentDiagnostic(
+        _ diagnostic: EditorDiagnostic,
+        in diagnostics: [EditorDiagnostic]
+    ) -> Bool {
+        diagnostics.contains {
+            $0.severity == diagnostic.severity
+                && $0.code == diagnostic.code
+                && $0.message == diagnostic.message
+        }
     }
 
     private func sketchCornerTreatmentAutomationMessage(
@@ -1624,10 +1673,25 @@ public struct AutomationRunner {
     }
 }
 
+private struct WorkspaceMeasurementContext {
+    var measurement: MeasurementResult?
+    var diagnostics: [EditorDiagnostic]
+
+    init(
+        measurement: MeasurementResult?,
+        diagnostics: [EditorDiagnostic] = []
+    ) {
+        self.measurement = measurement
+        self.diagnostics = diagnostics
+    }
+}
+
 private struct WorkspaceAutomationContext {
     var scale: WorkspaceScaleSnapshot
+    var interactionScale: WorkspaceInteractionScaleSnapshot
     var bounds: MeasurementResult.Bounds?
     var precision: WorkspacePrecisionReport?
     var scaleRecommendation: WorkspaceScaleRecommendation?
     var viewportGridSettings: ViewportGridSettings
+    var diagnostics: [EditorDiagnostic]
 }

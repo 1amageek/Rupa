@@ -9,6 +9,7 @@ public struct CLIResponse: Codable, Equatable, Sendable {
     public var saved: Bool
     public var diagnostics: [EditorDiagnostic]
     public var workspaceScale: WorkspaceScaleSnapshot?
+    public var workspaceInteractionScale: WorkspaceInteractionScaleSnapshot?
     public var workspaceBounds: MeasurementResult.Bounds?
     public var workspacePrecision: WorkspacePrecisionReport?
     public var workspaceScaleRecommendation: WorkspaceScaleRecommendation?
@@ -21,6 +22,7 @@ public struct CLIResponse: Codable, Equatable, Sendable {
         saved: Bool = false,
         diagnostics: [EditorDiagnostic],
         workspaceScale: WorkspaceScaleSnapshot? = nil,
+        workspaceInteractionScale: WorkspaceInteractionScaleSnapshot? = nil,
         workspaceBounds: MeasurementResult.Bounds? = nil,
         workspacePrecision: WorkspacePrecisionReport? = nil,
         workspaceScaleRecommendation: WorkspaceScaleRecommendation? = nil,
@@ -32,6 +34,7 @@ public struct CLIResponse: Codable, Equatable, Sendable {
         self.saved = saved
         self.diagnostics = diagnostics
         self.workspaceScale = workspaceScale
+        self.workspaceInteractionScale = workspaceInteractionScale
         self.workspaceBounds = workspaceBounds
         self.workspacePrecision = workspacePrecision
         self.workspaceScaleRecommendation = workspaceScaleRecommendation

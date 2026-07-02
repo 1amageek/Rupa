@@ -10,6 +10,7 @@ public struct AutomationResult: Codable, Equatable, Sendable {
     public var curveRebuildReport: CurveRebuildReport?
     public var addedSelectionDimensionID: SelectionDimensionID?
     public var workspaceScale: WorkspaceScaleSnapshot?
+    public var workspaceInteractionScale: WorkspaceInteractionScaleSnapshot?
     public var workspaceBounds: MeasurementResult.Bounds?
     public var workspacePrecision: WorkspacePrecisionReport?
     public var workspaceScaleRecommendation: WorkspaceScaleRecommendation?
@@ -24,6 +25,7 @@ public struct AutomationResult: Codable, Equatable, Sendable {
         curveRebuildReport: CurveRebuildReport? = nil,
         addedSelectionDimensionID: SelectionDimensionID? = nil,
         workspaceScale: WorkspaceScaleSnapshot? = nil,
+        workspaceInteractionScale: WorkspaceInteractionScaleSnapshot? = nil,
         workspaceBounds: MeasurementResult.Bounds? = nil,
         workspacePrecision: WorkspacePrecisionReport? = nil,
         workspaceScaleRecommendation: WorkspaceScaleRecommendation? = nil,
@@ -37,6 +39,7 @@ public struct AutomationResult: Codable, Equatable, Sendable {
         self.curveRebuildReport = curveRebuildReport
         self.addedSelectionDimensionID = addedSelectionDimensionID
         self.workspaceScale = workspaceScale
+        self.workspaceInteractionScale = workspaceInteractionScale
         self.workspaceBounds = workspaceBounds
         self.workspacePrecision = workspacePrecision
         self.workspaceScaleRecommendation = workspaceScaleRecommendation

@@ -19,6 +19,8 @@ import Testing
             expectedGeneration: DocumentGeneration(0)
         )
     )
+    let codec = AgentMessageCodec()
+    let decodedResponse = try codec.decodeResponse(from: try codec.encode(response))
 
     guard case .command(let result) = response else {
         Issue.record("Expected regional workspace scale command response.")
@@ -32,7 +34,11 @@ import Testing
     #expect(result.workspaceScale?.displayUnit == .kilometer)
     #expect(result.workspaceScale?.visibleSpanMeters == 1_000_000.0)
     #expect(result.workspaceScale?.visibleSpanDisplayValue == 1_000.0)
+    #expect(result.workspaceInteractionScale?.operationStep.meters == 1_000.0)
+    #expect(result.workspaceInteractionScale?.operationStep.displayValue == 1.0)
+    #expect(result.workspaceInteractionScale?.operationStep.displayUnitSymbol == "km")
     #expect(result.message.contains("Regional Planning"))
+    #expect(decodedResponse == response)
     #expect(session.document.displayUnit == .kilometer)
     #expect(
         session.document.ruler == WorkspaceScalePreset.regionalPlanning.rulerConfiguration

@@ -63,6 +63,10 @@ import SwiftCAD
     #expect(result.workspaceScale?.matchedPreset == .sitePlanning)
     #expect(result.workspaceScale?.visibleSpanMeters == 100_000.0)
     #expect(result.workspaceScale?.visibleSpanDisplayValue == 100.0)
+    #expect(result.workspaceInteractionScale?.operationStep.meters == 100.0)
+    #expect(result.workspaceInteractionScale?.operationStep.displayValue == 0.1)
+    #expect(result.workspaceInteractionScale?.operationStep.displayUnitSymbol == "km")
+    #expect(result.workspaceInteractionScale?.slotWidth.meters == 200.0)
     #expect(result.message.contains("Site Planning"))
 }
 
@@ -82,6 +86,9 @@ import SwiftCAD
     #expect(result.workspaceScale?.matchedPreset == .regionalPlanning)
     #expect(result.workspaceScale?.visibleSpanMeters == 1_000_000.0)
     #expect(result.workspaceScale?.visibleSpanDisplayValue == 1_000.0)
+    #expect(result.workspaceInteractionScale?.operationStep.meters == 1_000.0)
+    #expect(result.workspaceInteractionScale?.operationStep.displayValue == 1.0)
+    #expect(result.workspaceInteractionScale?.operationStep.displayUnitSymbol == "km")
     #expect(result.message.contains("Regional Planning"))
 }
 
@@ -100,6 +107,8 @@ import SwiftCAD
     #expect(result.workspaceScale?.matchedPreset == .sitePlanning)
     #expect(result.workspaceScale?.displayUnit == .kilometer)
     #expect(result.workspaceScale?.visibleSpanDisplayValue == 100.0)
+    #expect(result.workspaceInteractionScale?.operationStep.meters == 100.0)
+    #expect(result.workspaceInteractionScale?.slotWidth.meters == 200.0)
     #expect(result.workspaceScaleRecommendation == nil)
     #expect(result.message.contains("Workspace scale fitted to Site Planning"))
 }

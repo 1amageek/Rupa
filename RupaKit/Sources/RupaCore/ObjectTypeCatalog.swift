@@ -257,6 +257,8 @@ public enum ObjectTypeCatalog {
 }
 
 private extension ObjectPropertyDefinition {
+    static let maximumAuthoringLengthMeters = RulerConfiguration.visibleSpanMetersRange.upperBound * 10.0
+
     static func length(
         id: ObjectPropertyID,
         title: String,
@@ -273,7 +275,7 @@ private extension ObjectPropertyDefinition {
             renderBinding: binding,
             numericRange: NumericRange(
                 lowerBound: 0.0,
-                upperBound: RulerConfiguration.visibleSpanMetersRange.upperBound
+                upperBound: maximumAuthoringLengthMeters
             )
         )
     }

@@ -13,6 +13,7 @@ extension CLIResponse {
             saved: saved,
             diagnostics: result.diagnostics,
             workspaceScale: result.workspaceScale,
+            workspaceInteractionScale: result.workspaceInteractionScale,
             workspaceBounds: result.workspaceBounds,
             workspacePrecision: result.workspacePrecision,
             workspaceScaleRecommendation: result.workspaceScaleRecommendation,

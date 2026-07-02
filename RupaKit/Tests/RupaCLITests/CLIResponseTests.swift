@@ -6319,6 +6319,9 @@ func cliExecutableReturnsDataExitForLiveGenerationMismatch() async throws {
         generation: DocumentGeneration(3),
         diagnostics: [],
         workspaceScale: WorkspaceScaleSnapshot(ruler: WorkspaceScalePreset.sitePlanning.rulerConfiguration),
+        workspaceInteractionScale: WorkspaceInteractionScaleSnapshot(
+            ruler: WorkspaceScalePreset.sitePlanning.rulerConfiguration
+        ),
         workspaceBounds: workspaceBounds,
         viewportGridSettings: .standard
     )
@@ -6330,6 +6333,9 @@ func cliExecutableReturnsDataExitForLiveGenerationMismatch() async throws {
     )
 
     #expect(response.workspaceScale?.matchedPreset == .sitePlanning)
+    #expect(response.workspaceInteractionScale?.operationStep.meters == 100.0)
+    #expect(response.workspaceInteractionScale?.operationStep.displayValue == 0.1)
+    #expect(response.workspaceInteractionScale?.operationStep.displayUnitSymbol == "km")
     #expect(response.workspaceBounds == workspaceBounds)
     #expect(response.viewportGridSettings == .standard)
 }
