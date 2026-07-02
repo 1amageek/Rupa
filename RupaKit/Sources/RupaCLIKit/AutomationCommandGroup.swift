@@ -10,6 +10,7 @@ public struct AutomationCommandGroup: ParsableCommand {
             SetDisplayUnitCommand.self,
             SetRulerConfigurationCommand.self,
             SetWorkspaceScalePresetCommand.self,
+            FitWorkspaceScaleCommand.self,
             SetViewportGridCommand.self,
             RebaseWorkspaceOriginCommand.self,
         ],

@@ -83,6 +83,20 @@ import SwiftCAD
     }
 }
 
+@Test func agentMessageCodecRoundTripsWorkspaceScaleFitCommand() async throws {
+    let codec = AgentMessageCodec()
+    let sessionID = UUID()
+    let request = AgentRequest.execute(
+        sessionID: sessionID,
+        command: .fitWorkspaceScaleToModel,
+        expectedGeneration: DocumentGeneration(8)
+    )
+
+    let decodedRequest = try codec.decodeRequest(from: try codec.encode(request))
+
+    #expect(decodedRequest == request)
+}
+
 @Test func agentMessageCodecRoundTripsArcSketchCommand() async throws {
     let codec = AgentMessageCodec()
     let sessionID = UUID()

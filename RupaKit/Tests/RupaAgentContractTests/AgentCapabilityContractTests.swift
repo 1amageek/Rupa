@@ -16,6 +16,7 @@ import SwiftCAD
     #expect(capabilities.contains("setDisplayUnit"))
     #expect(capabilities.contains("setRulerConfiguration"))
     #expect(capabilities.contains("setWorkspaceScalePreset"))
+    #expect(capabilities.contains("fitWorkspaceScaleToModel"))
     #expect(capabilities.contains("rebaseWorkspaceOrigin"))
     #expect(capabilities.contains("renameDocument"))
     #expect(capabilities.contains("upsertParameter"))
@@ -164,6 +165,7 @@ import SwiftCAD
     let displayUnit = try #require(descriptors.first { $0.name == "setDisplayUnit" })
     let rulerConfiguration = try #require(descriptors.first { $0.name == "setRulerConfiguration" })
     let workspaceScalePreset = try #require(descriptors.first { $0.name == "setWorkspaceScalePreset" })
+    let workspaceScaleFit = try #require(descriptors.first { $0.name == "fitWorkspaceScaleToModel" })
     let workspaceOriginRebase = try #require(descriptors.first { $0.name == "rebaseWorkspaceOrigin" })
     let objectDimensionExpression = try #require(
         descriptors.first { $0.name == "setObjectDimensionExpression" }
@@ -306,6 +308,17 @@ import SwiftCAD
             && axis.notes.contains { $0.contains("visible span 1,000 km") }
             && axis.notes.contains { $0.contains("comfortable model span 10 km to 800 km") }
     })
+    #expect(workspaceScaleFit.category == .document)
+    #expect(workspaceScaleFit.access == .automationCommand)
+    #expect(workspaceScaleFit.mutatesDocument)
+    #expect(workspaceScaleFit.targets == [.document])
+    #expect(workspaceScaleFit.summary.contains("current model size"))
+    #expect(workspaceScaleFit.failureMode.contains("leaves the document unchanged"))
+    #expect(workspaceScaleFit.optionMatrix.contains { axis in
+        axis.name == "recommendation"
+            && axis.supportedValues.contains("workspaceScaleRecommendation")
+            && axis.notes.contains { $0.contains("same recommendation service") }
+    })
     #expect(workspaceOriginRebase.category == .document)
     #expect(workspaceOriginRebase.access == .automationCommand)
     #expect(workspaceOriginRebase.mutatesDocument)
@@ -321,7 +334,7 @@ import SwiftCAD
             && axis.supportedValues.contains("workspaceBounds")
             && axis.supportedValues.contains("workspaceScaleRecommendation")
             && axis.supportedValues.contains("workspacePrecision")
-            && axis.notes.contains { $0.contains("setWorkspaceScalePreset") }
+            && axis.notes.contains { $0.contains("fitWorkspaceScaleToModel") }
             && axis.notes.contains { $0.contains("rebaseWorkspaceOrigin") }
     })
     let measureDocument = try #require(descriptors.first { $0.name == "measureDocument" })

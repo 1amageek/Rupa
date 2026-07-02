@@ -86,6 +86,43 @@ import SwiftCAD
 }
 
 @MainActor
+@Test func automationCanFitWorkspaceScaleToLargeModel() async throws {
+    let session = EditorSession(document: try automationSiteDocument())
+    let runner = AutomationRunner()
+
+    let result = try runner.execute(.fitWorkspaceScaleToModel, in: session)
+
+    #expect(session.document.displayUnit == .kilometer)
+    #expect(session.document.ruler == WorkspaceScalePreset.sitePlanning.rulerConfiguration.normalizedForWorkspaceScale())
+    #expect(session.generation == DocumentGeneration(1))
+    #expect(result.commandName == "setRulerConfiguration")
+    #expect(result.didMutate)
+    #expect(result.workspaceScale?.matchedPreset == .sitePlanning)
+    #expect(result.workspaceScale?.displayUnit == .kilometer)
+    #expect(result.workspaceScale?.visibleSpanDisplayValue == 100.0)
+    #expect(result.workspaceScaleRecommendation == nil)
+    #expect(result.message.contains("Workspace scale fitted to Site Planning"))
+}
+
+@MainActor
+@Test func automationFitWorkspaceScaleLeavesFittingModelUnchanged() async throws {
+    var document = try automationSiteDocument()
+    try document.setRulerConfiguration(WorkspaceScalePreset.sitePlanning.rulerConfiguration)
+    let session = EditorSession(document: document)
+    let runner = AutomationRunner()
+
+    let result = try runner.execute(.fitWorkspaceScaleToModel, in: session)
+
+    #expect(session.document.ruler == WorkspaceScalePreset.sitePlanning.rulerConfiguration.normalizedForWorkspaceScale())
+    #expect(session.generation == DocumentGeneration(0))
+    #expect(result.commandName == nil)
+    #expect(!result.didMutate)
+    #expect(result.workspaceScale?.matchedPreset == .sitePlanning)
+    #expect(result.workspaceScaleRecommendation == nil)
+    #expect(result.message == "Workspace scale already fits the current model.")
+}
+
+@MainActor
 @Test func automationDescribeDocumentReportsWorkspaceScale() async throws {
     let session = EditorSession()
     let runner = AutomationRunner()
@@ -5044,6 +5081,29 @@ import SwiftCAD
 
     #expect(caught?.code == .documentGenerationMismatch)
     #expect(session.document.cadDocument.metadata.name == "Untitled")
+}
+
+private func automationSiteDocument() throws -> DesignDocument {
+    var document = DesignDocument.empty(named: "Automation Site")
+    let profileID = try document.createRectangleSketchFromCorners(
+        name: "Automation Site Footprint",
+        plane: .xy,
+        firstCorner: SketchPoint(
+            x: .length(0.0, .meter),
+            y: .length(0.0, .meter)
+        ),
+        oppositeCorner: SketchPoint(
+            x: .length(25_000.0, .meter),
+            y: .length(10_000.0, .meter)
+        )
+    )
+    _ = try document.extrudeProfile(
+        name: "Automation Site Mass",
+        profile: ProfileReference(featureID: profileID),
+        distance: .length(100.0, .meter),
+        direction: .normal
+    )
+    return document
 }
 
 private func automationSketchFeature(

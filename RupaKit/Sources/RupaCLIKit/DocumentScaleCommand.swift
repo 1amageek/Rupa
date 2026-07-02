@@ -69,6 +69,25 @@ public struct SetWorkspaceScalePresetCommand: ParsableCommand {
     }
 }
 
+public struct FitWorkspaceScaleCommand: ParsableCommand {
+    public static let configuration = CommandConfiguration(
+        commandName: "fit-workspace-scale",
+        abstract: "Apply the recommended workspace scale preset for the current model size."
+    )
+
+    @OptionGroup
+    public var document: CLIWriteDocumentOptions
+
+    public init() {}
+
+    public func run() throws {
+        try CLIAutomationCommandRunner.run(
+            document: document,
+            command: .fitWorkspaceScaleToModel
+        )
+    }
+}
+
 public struct RebaseWorkspaceOriginCommand: ParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "rebase-origin",

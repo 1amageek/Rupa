@@ -3565,6 +3565,60 @@ struct CLICommandApplyTests {
     }
 
     @Test(.timeLimit(.minutes(1)))
+    func executableWorkspaceFitScaleAppliesRecommendedPresetAsJSON() async throws {
+        let temporaryDirectory = try makeTemporaryDirectory()
+        defer {
+            removeTemporaryDirectory(temporaryDirectory)
+        }
+        let documentURL = temporaryDirectory.appendingPathComponent("process-command-fit-scale.swcad")
+        var document = DesignDocument.empty(named: "Process Command Fit Site")
+        let profileID = try document.createRectangleSketchFromCorners(
+            name: "Process Command Fit Footprint",
+            plane: .xy,
+            firstCorner: SketchPoint(
+                x: .length(0.0, .meter),
+                y: .length(0.0, .meter)
+            ),
+            oppositeCorner: SketchPoint(
+                x: .length(25_000.0, .meter),
+                y: .length(10_000.0, .meter)
+            )
+        )
+        _ = try document.extrudeProfile(
+            name: "Process Command Fit Mass",
+            profile: ProfileReference(featureID: profileID),
+            distance: .length(100.0, .meter),
+            direction: .normal
+        )
+        try DocumentFileService().save(document, to: documentURL)
+
+        let result = try await runCLI([
+            "command",
+            "fit-workspace-scale",
+            documentURL.path,
+            "--mode",
+            "file",
+            "--json",
+        ])
+        let response = try JSONDecoder().decode(
+            CLIResponse.self,
+            from: result.standardOutputData
+        )
+        let loaded = try DocumentFileService().load(from: documentURL)
+
+        #expect(result.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: result.standardError))
+        #expect(response.saved)
+        #expect(response.generation == 1)
+        #expect(response.workspaceScale?.matchedPreset == .sitePlanning)
+        #expect(response.workspaceScale?.displayUnit == .kilometer)
+        #expect(response.workspaceScale?.visibleSpanDisplayValue == 100.0)
+        #expect(response.workspaceScaleRecommendation == nil)
+        #expect(response.message.contains("Workspace scale fitted to Site Planning"))
+        #expect(loaded.displayUnit == .kilometer)
+        #expect(loaded.ruler == WorkspaceScalePreset.sitePlanning.rulerConfiguration.normalizedForWorkspaceScale())
+    }
+
+    @Test(.timeLimit(.minutes(1)))
     func executableWorkspaceOriginRebaseMovesClosedDocumentSourcesAsJSON() async throws {
         let temporaryDirectory = try makeTemporaryDirectory()
         defer {

@@ -48,7 +48,7 @@ public final class AgentCommandController: AgentClientProtocol {
         ],
         notes: [
             "Modeling command results include these fields when evaluation detects scale or precision guidance.",
-            "Read workspaceScaleRecommendation before continuing large-model edits; apply setWorkspaceScalePreset when the recommendation is actionable.",
+            "Read workspaceScaleRecommendation before continuing large-model edits; apply fitWorkspaceScaleToModel or setWorkspaceScalePreset when the recommendation is actionable.",
             "Read workspacePrecision before precise far-from-origin edits; apply rebaseWorkspaceOrigin when a local-origin translation is recommended.",
         ]
     )
@@ -107,6 +107,25 @@ public final class AgentCommandController: AgentClientProtocol {
                         "Presets update display unit, minor tick, major tick, and visible workspace span together.",
                         "Use setRulerConfiguration when a custom scale is required.",
                     ] + WorkspaceScalePreset.allCases.map { $0.profile.agentGuidance }
+                )
+            ]
+        ),
+        capability(
+            "fitWorkspaceScaleToModel",
+            category: .document,
+            summary: "Apply the actionable workspace scale recommendation for the current model size.",
+            access: .automationCommand,
+            mutatesDocument: true,
+            targets: [.document],
+            failureMode: "Measures the current model, leaves the document unchanged when no recommendation exists or the model exceeds the supported preset range.",
+            optionMatrix: [
+                AgentCapabilityDescriptor.OptionAxis(
+                    name: "recommendation",
+                    supportedValues: ["workspaceScaleRecommendation"],
+                    notes: [
+                        "Uses the same recommendation service exposed by measurement and modeling command feedback.",
+                        "Applies a named workspace scale preset only when the recommendation is actionable.",
+                    ]
                 )
             ]
         ),
