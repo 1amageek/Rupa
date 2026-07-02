@@ -6506,6 +6506,26 @@ func cliExecutableReturnsDataExitForLiveGenerationMismatch() async throws {
     #expect(session.document.cadDocument.metadata.name == "Live")
 }
 
+@Test func cliServiceDerivesInteractionScaleForLegacyLiveAgentResponse() async throws {
+    let id = UUID()
+    let client = LegacyWorkspaceScaleAgentClient(sessionID: id)
+
+    let response = try CLIService().renameLiveSession(
+        sessionID: id,
+        name: "Legacy Live",
+        expectedGeneration: DocumentGeneration(0),
+        client: client
+    )
+
+    #expect(response.message == "Document renamed to Legacy Live.")
+    #expect(response.generation == 1)
+    #expect(response.workspaceScale?.matchedPreset == .sitePlanning)
+    #expect(response.workspaceInteractionScale?.operationStep.meters == 100.0)
+    #expect(response.workspaceInteractionScale?.operationStep.displayValue == 0.1)
+    #expect(response.workspaceInteractionScale?.operationStep.displayUnitSymbol == "km")
+    #expect(client.describeRequestCount == 1)
+}
+
 @MainActor
 @Test func cliServiceSelectsTargetsInLiveSessionThroughAgent() async throws {
     let server = AgentCommandController()
@@ -8728,6 +8748,62 @@ private func cliStandalonePoint(
         x: try cliLength(point.x, in: document),
         y: try cliLength(point.y, in: document)
     )
+}
+
+private final class LegacyWorkspaceScaleAgentClient: AgentClientProtocol {
+    let sessionID: UUID
+    private(set) var describeRequestCount = 0
+
+    init(sessionID: UUID) {
+        self.sessionID = sessionID
+    }
+
+    func send(_ request: AgentRequest) throws -> AgentResponse {
+        try handle(request)
+    }
+
+    func send(_ request: AgentRequest) async throws -> AgentResponse {
+        try handle(request)
+    }
+
+    private func handle(_ request: AgentRequest) throws -> AgentResponse {
+        guard case let .execute(requestSessionID, command, _) = request,
+              requestSessionID == sessionID else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Unexpected legacy agent request."
+            )
+        }
+
+        switch command {
+        case .renameDocument(let name):
+            return .command(
+                AutomationResult(
+                    message: "Document renamed to \(name).",
+                    commandName: "renameDocument",
+                    generation: DocumentGeneration(1),
+                    didMutate: true
+                )
+            )
+        case .describeDocument:
+            describeRequestCount += 1
+            return .command(
+                AutomationResult(
+                    message: "Document uses km display units.",
+                    generation: DocumentGeneration(1),
+                    didMutate: false,
+                    workspaceScale: WorkspaceScaleSnapshot(
+                        ruler: WorkspaceScalePreset.sitePlanning.rulerConfiguration
+                    )
+                )
+            )
+        default:
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Unexpected legacy agent command."
+            )
+        }
+    }
 }
 
 private func cliLoftVerticalGuideSketch(x: Double, y: Double, zStart: Double, zEnd: Double) -> Sketch {

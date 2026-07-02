@@ -614,9 +614,10 @@ public struct CLIService {
             ),
             in: session
         )
-        if result.workspaceScale == nil {
-            result.workspaceScale = WorkspaceScaleSnapshot(ruler: session.document.ruler)
-        }
+        ensureWorkspaceScaleContext(
+            in: &result,
+            ruler: session.document.ruler
+        )
 
         if !dryRun {
             try fileService.save(session.document, to: url)
@@ -2721,13 +2722,11 @@ public struct CLIService {
             )
         )
         var result = try commandResult(from: response)
-        if result.workspaceScale == nil {
-            result.workspaceScale = try workspaceScaleLiveSession(
-                sessionID: sessionID,
-                expectedGeneration: result.generation,
-                client: client
-            )
-        }
+        try ensureWorkspaceScaleContext(
+            in: &result,
+            sessionID: sessionID,
+            client: client
+        )
         return CLIResponse(
             result: result,
             dirty: result.didMutate,
@@ -2755,13 +2754,11 @@ public struct CLIService {
             )
         )
         var result = try commandResult(from: response)
-        if result.workspaceScale == nil {
-            result.workspaceScale = try workspaceScaleLiveSession(
-                sessionID: sessionID,
-                expectedGeneration: result.generation,
-                client: client
-            )
-        }
+        try ensureWorkspaceScaleContext(
+            in: &result,
+            sessionID: sessionID,
+            client: client
+        )
         return CLIResponse(
             result: result,
             dirty: result.didMutate,
@@ -4284,8 +4281,22 @@ public struct CLIService {
         forceFileEdit: Bool,
         client: AgentClientProtocol?
     ) throws -> WorkspaceScaleSnapshot {
+        try workspaceScaleContextAutomatically(
+            target: target,
+            expectedGeneration: expectedGeneration,
+            forceFileEdit: forceFileEdit,
+            client: client
+        ).scale
+    }
+
+    private func workspaceScaleContextAutomatically(
+        target: CLIDocumentTarget,
+        expectedGeneration: DocumentGeneration?,
+        forceFileEdit: Bool,
+        client: AgentClientProtocol?
+    ) throws -> CLIWorkspaceScaleContext {
         if let sessionID = target.sessionID {
-            return try workspaceScaleLiveSession(
+            return try workspaceScaleContextLiveSession(
                 sessionID: sessionID,
                 expectedGeneration: expectedGeneration,
                 client: requiredClient(client)
@@ -4296,7 +4307,7 @@ public struct CLIService {
            !forceFileEdit,
            let client,
            let session = try openSession(for: url, client: client) {
-            return try workspaceScaleLiveSession(
+            return try workspaceScaleContextLiveSession(
                 sessionID: session.id,
                 expectedGeneration: expectedGeneration,
                 client: client
@@ -4306,13 +4317,19 @@ public struct CLIService {
         guard let url = target.fileURL else {
             throw invalidCommand("Workspace scale resolution requires a document file path or live session ID.")
         }
-        return try workspaceScaleFile(at: url)
+        return try workspaceScaleContextFile(at: url)
     }
 
     private func workspaceScaleFile(
         at url: URL
     ) throws -> WorkspaceScaleSnapshot {
-        WorkspaceScaleSnapshot(ruler: try fileService.load(from: url).ruler)
+        try workspaceScaleContextFile(at: url).scale
+    }
+
+    private func workspaceScaleContextFile(
+        at url: URL
+    ) throws -> CLIWorkspaceScaleContext {
+        CLIWorkspaceScaleContext(ruler: try fileService.load(from: url).ruler)
     }
 
     private func workspaceScaleLiveSession(
@@ -4320,6 +4337,18 @@ public struct CLIService {
         expectedGeneration: DocumentGeneration?,
         client: AgentClientProtocol
     ) throws -> WorkspaceScaleSnapshot {
+        try workspaceScaleContextLiveSession(
+            sessionID: sessionID,
+            expectedGeneration: expectedGeneration,
+            client: client
+        ).scale
+    }
+
+    private func workspaceScaleContextLiveSession(
+        sessionID: UUID,
+        expectedGeneration: DocumentGeneration?,
+        client: AgentClientProtocol
+    ) throws -> CLIWorkspaceScaleContext {
         let response = try client.send(
             .execute(
                 sessionID: sessionID,
@@ -4331,7 +4360,10 @@ public struct CLIService {
         guard let workspaceScale = result.workspaceScale else {
             throw unexpectedResponse("Document description did not include workspace scale.")
         }
-        return workspaceScale
+        return CLIWorkspaceScaleContext(
+            scale: workspaceScale,
+            interactionScale: result.workspaceInteractionScale
+        )
     }
 
     private func executeSketchCommand(
@@ -4488,9 +4520,10 @@ public struct CLIService {
 
         let session = EditorSession(document: try fileService.load(from: url))
         var result = try AutomationRunner().execute(command, in: session)
-        if result.workspaceScale == nil {
-            result.workspaceScale = WorkspaceScaleSnapshot(ruler: session.document.ruler)
-        }
+        ensureWorkspaceScaleContext(
+            in: &result,
+            ruler: session.document.ruler
+        )
         let shouldSave = !dryRun && result.didMutate
 
         if shouldSave {
@@ -4519,18 +4552,59 @@ public struct CLIService {
             )
         )
         var result = try commandResult(from: response)
-        if result.workspaceScale == nil {
-            result.workspaceScale = try workspaceScaleLiveSession(
-                sessionID: sessionID,
-                expectedGeneration: result.generation,
-                client: client
-            )
-        }
+        try ensureWorkspaceScaleContext(
+            in: &result,
+            sessionID: sessionID,
+            client: client
+        )
         return CLIAutomationMutationExecution(
             result: result,
             dirty: result.didMutate,
             saved: false
         )
+    }
+
+    private func ensureWorkspaceScaleContext(
+        in result: inout AutomationResult,
+        ruler: RulerConfiguration
+    ) {
+        let context = CLIWorkspaceScaleContext(ruler: ruler)
+        if result.workspaceScale == nil {
+            result.workspaceScale = context.scale
+        }
+        if result.workspaceInteractionScale == nil {
+            result.workspaceInteractionScale = context.interactionScale
+        }
+    }
+
+    private func ensureWorkspaceScaleContext(
+        in result: inout AutomationResult,
+        sessionID: UUID,
+        client: AgentClientProtocol
+    ) throws {
+        if result.workspaceInteractionScale == nil,
+           let workspaceScale = result.workspaceScale {
+            result.workspaceInteractionScale = CLIWorkspaceScaleContext(
+                scale: workspaceScale,
+                interactionScale: nil
+            ).interactionScale
+        }
+
+        guard result.workspaceScale == nil || result.workspaceInteractionScale == nil else {
+            return
+        }
+
+        let context = try workspaceScaleContextLiveSession(
+            sessionID: sessionID,
+            expectedGeneration: result.generation,
+            client: client
+        )
+        if result.workspaceScale == nil {
+            result.workspaceScale = context.scale
+        }
+        if result.workspaceInteractionScale == nil {
+            result.workspaceInteractionScale = context.interactionScale
+        }
     }
 
     private func exportDocumentAutomatically(
@@ -4692,5 +4766,31 @@ public struct CLIService {
             .resolvingSymlinksInPath()
             .standardizedFileURL
             .path
+    }
+}
+
+private struct CLIWorkspaceScaleContext {
+    var scale: WorkspaceScaleSnapshot
+    var interactionScale: WorkspaceInteractionScaleSnapshot
+
+    init(ruler: RulerConfiguration) {
+        let normalized = ruler.normalizedForWorkspaceScale()
+        self.scale = WorkspaceScaleSnapshot(ruler: normalized)
+        self.interactionScale = WorkspaceInteractionScaleSnapshot(ruler: normalized)
+    }
+
+    init(
+        scale: WorkspaceScaleSnapshot,
+        interactionScale: WorkspaceInteractionScaleSnapshot?
+    ) {
+        self.scale = scale
+        self.interactionScale = interactionScale ?? WorkspaceInteractionScaleSnapshot(
+            ruler: RulerConfiguration(
+                displayUnit: scale.displayUnit,
+                minorTickMeters: scale.minorTickMeters,
+                majorTickMeters: scale.majorTickMeters,
+                visibleSpanMeters: scale.visibleSpanMeters
+            )
+        )
     }
 }
