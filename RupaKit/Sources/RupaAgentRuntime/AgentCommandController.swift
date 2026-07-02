@@ -954,12 +954,12 @@ public final class AgentCommandController: AgentClientProtocol {
         capability(
             "alignSketchVertex",
             category: .sourceCurveEditing,
-            summary: "Align Vertex for source sketch vertices: use ordered point-handle or spline-CV target/reference selections to add persistent G0 coincidence, with supported G1 line/arc/spline endpoint continuity and G2 spline-endpoint smooth continuity through the shared constraint solver.",
+            summary: "Align Vertex for source sketch vertices: use ordered point-handle or spline-CV target/reference selections to add persistent G0 coincidence, supported G1 line/arc/spline endpoint continuity, G2 spline-endpoint smooth continuity, and optional persistent Show Curvature overlays for the edited source curves.",
             access: .automationCommand,
             mutatesDocument: true,
             discovery: [.sketchEntitySummary, .curveAnalysis],
             targets: [.sketchEntity, .sketchPointHandle, .sketchControlPoint],
-            failureMode: "Rejects stale generations, non-point-backed selections, different sketch features, identical target/reference vertices, reference parameter requests, G0 continuity distance requests, non-spline continuity distance targets, mismatched G2 continuity distances, command-scoped curvature display requests, unsupported G1/G2 endpoint combinations, fixed conflicts, and over-constrained continuity before mutation."
+            failureMode: "Rejects stale generations, non-point-backed selections, different sketch features, identical target/reference vertices, reference parameter requests, G0 continuity distance requests, non-spline continuity distance targets, mismatched G2 continuity distances, Show Curvature requests for standalone points, unsupported G1/G2 endpoint combinations, fixed conflicts, and over-constrained continuity before mutation."
         ),
         capability(
             "slideSketchSplineControlPoints",

@@ -248,6 +248,63 @@ import Testing
 }
 
 @MainActor
+@Test func alignSketchVertexCommandPersistsCurvatureDisplaysForAlignedCurveEndpoints() async throws {
+    let setup = try twoSplineTangentSketchDocument(name: "Align Vertex Show Curvature")
+    let session = EditorSession(document: setup.document)
+    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let firstSpline = try #require(before.entries.first { $0.entityID == setup.firstSplineID.description })
+    let secondSpline = try #require(before.entries.first { $0.entityID == setup.secondSplineID.description })
+    let firstComponentID = SelectionComponentID.sketchEntity(
+        featureID: setup.featureID,
+        entityID: setup.firstSplineID
+    )
+    let secondComponentID = SelectionComponentID.sketchEntity(
+        featureID: setup.featureID,
+        entityID: setup.secondSplineID
+    )
+
+    let result = try session.execute(
+        .alignSketchVertex(
+            target: try controlPointSelectionTarget(secondSpline, index: 0),
+            reference: try controlPointSelectionTarget(firstSpline, index: 3),
+            options: SketchVertexAlignmentOptions(
+                continuity: .g2,
+                showsCurvature: true
+            )
+        )
+    )
+
+    let analysis = try CurveAnalysisService().analyze(document: session.document)
+    let continuityJoin = try #require(analysis.continuityJoins.first { join in
+        Set([join.firstEntityID, join.secondEntityID]) == Set([
+            setup.firstSplineID.description,
+            setup.secondSplineID.description,
+        ])
+    })
+
+    #expect(result.commandName == "alignSketchVertex")
+    #expect(result.didMutate)
+    #expect(session.document.productMetadata.curveCurvatureDisplays[firstComponentID] == CurveCurvatureDisplay(
+        componentID: firstComponentID,
+        combScale: CurveCurvatureDisplay.defaultCombScale
+    ))
+    #expect(session.document.productMetadata.curveCurvatureDisplays[secondComponentID] == CurveCurvatureDisplay(
+        componentID: secondComponentID,
+        combScale: CurveCurvatureDisplay.defaultCombScale
+    ))
+    #expect(continuityJoin.continuity == .g2)
+    #expect(session.evaluationStatus == .valid)
+
+    _ = try session.undo()
+    #expect(session.document.productMetadata.curveCurvatureDisplays[firstComponentID] == nil)
+    #expect(session.document.productMetadata.curveCurvatureDisplays[secondComponentID] == nil)
+
+    _ = try session.redo()
+    #expect(session.document.productMetadata.curveCurvatureDisplays[firstComponentID] != nil)
+    #expect(session.document.productMetadata.curveCurvatureDisplays[secondComponentID] != nil)
+}
+
+@MainActor
 @Test func alignSketchVertexCommandAllowsSeparateG1SplineContinuityDistances() async throws {
     let setup = try twoSplineTangentSketchDocument(name: "Align Vertex G1 Distance Controls")
     let session = EditorSession(document: setup.document)
@@ -323,6 +380,56 @@ import Testing
     #expect(session.generation == DocumentGeneration(0))
     #expect(after.counts.constraintCount == before.counts.constraintCount)
     #expect(session.evaluationStatus == beforeEvaluationStatus)
+}
+
+@MainActor
+@Test func alignSketchVertexRejectsShowCurvatureForStandalonePointsBeforeMutation() async throws {
+    let session = EditorSession()
+    let lineID = SketchEntityID()
+    let pointID = SketchEntityID()
+    _ = try session.execute(
+        .createSketch(
+            name: "Invalid Align Vertex Show Curvature",
+            sketch: Sketch(
+                plane: .xy,
+                entities: [
+                    lineID: .line(SketchLine(
+                        start: SketchPoint(x: .length(0.0, .millimeter), y: .length(0.0, .millimeter)),
+                        end: SketchPoint(x: .length(10.0, .millimeter), y: .length(0.0, .millimeter))
+                    )),
+                    pointID: .point(
+                        SketchPoint(x: .length(3.0, .millimeter), y: .length(2.0, .millimeter))
+                    ),
+                ]
+            ),
+            geometryRole: .curve
+        )
+    )
+    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let line = try #require(before.entries.first { $0.entityID == lineID.description })
+    let point = try #require(before.entries.first { $0.entityID == pointID.description })
+
+    do {
+        _ = try session.execute(
+            .alignSketchVertex(
+                target: try pointHandleSelectionTarget(point, handle: .point),
+                reference: try pointHandleSelectionTarget(line, handle: .lineStart),
+                options: SketchVertexAlignmentOptions(showsCurvature: true)
+            )
+        )
+        Issue.record("Align Vertex Show Curvature must reject standalone point targets.")
+    } catch let error as EditorError {
+        #expect(error.code == .commandInvalid)
+        #expect(error.message.contains("source curve endpoint"))
+    } catch {
+        Issue.record("Align Vertex Show Curvature must throw EditorError.")
+    }
+
+    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    #expect(session.generation == DocumentGeneration(1))
+    #expect(after.counts.entityCount == before.counts.entityCount)
+    #expect(after.counts.constraintCount == before.counts.constraintCount)
+    #expect(session.document.productMetadata.curveCurvatureDisplays.isEmpty)
 }
 
 @MainActor

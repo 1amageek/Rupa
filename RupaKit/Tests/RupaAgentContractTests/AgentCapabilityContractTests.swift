@@ -1089,10 +1089,12 @@ import SwiftCAD
     #expect(vertexAlign.summary.contains("G0"))
     #expect(vertexAlign.summary.contains("G1"))
     #expect(vertexAlign.summary.contains("G2"))
+    #expect(vertexAlign.summary.contains("Show Curvature"))
     #expect(vertexAlign.failureMode.contains("reference parameter"))
     #expect(vertexAlign.failureMode.contains("G0 continuity distance requests"))
     #expect(vertexAlign.failureMode.contains("non-spline continuity distance targets"))
     #expect(vertexAlign.failureMode.contains("mismatched G2 continuity distances"))
+    #expect(vertexAlign.failureMode.contains("standalone points"))
     #expect(vertexAlign.failureMode.contains("different sketch"))
 
     #expect(splineSlide.category == .sourceCurveEditing)

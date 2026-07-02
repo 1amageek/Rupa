@@ -379,6 +379,82 @@ import SwiftCAD
 }
 
 @MainActor
+@Test func agentAlignsSplineEndpointsWithCurvatureDisplayThroughAutomationAndCore() async throws {
+    let server = AgentCommandController()
+    let sessionID = UUID()
+    let setup = try agentTwoSplineTangentSketchDocument(name: "Agent Align Show Curvature")
+    let session = EditorSession(document: setup.document)
+    server.register(session: session, id: sessionID)
+
+    let summaryResponse = server.handle(
+        .sketchEntitySummary(
+            sessionID: sessionID,
+            expectedGeneration: session.generation
+        )
+    )
+    guard case .sketchEntitySummary(let summary) = summaryResponse else {
+        Issue.record("Agent must return a sketch entity summary.")
+        return
+    }
+    let firstSpline = try #require(summary.entries.first { $0.entityID == setup.firstSplineID.description })
+    let secondSpline = try #require(summary.entries.first { $0.entityID == setup.secondSplineID.description })
+    let firstEndpoint = try agentControlPointSelectionTarget(firstSpline, index: 3)
+    let secondEndpoint = try agentControlPointSelectionTarget(secondSpline, index: 0)
+
+    let editResponse = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .alignSketchVertex(
+                target: secondEndpoint,
+                reference: firstEndpoint,
+                options: SketchVertexAlignmentOptions(
+                    continuity: .g2,
+                    showsCurvature: true
+                )
+            ),
+            expectedGeneration: session.generation
+        )
+    )
+
+    guard case .command(let result) = editResponse else {
+        Issue.record("Agent must return a command result.")
+        return
+    }
+    let firstComponentID = SelectionComponentID.sketchEntity(
+        featureID: setup.featureID,
+        entityID: setup.firstSplineID
+    )
+    let secondComponentID = SelectionComponentID.sketchEntity(
+        featureID: setup.featureID,
+        entityID: setup.secondSplineID
+    )
+    let analysisResponse = server.handle(
+        .curveAnalysis(
+            sessionID: sessionID,
+            expectedGeneration: session.generation
+        )
+    )
+    guard case .curveAnalysis(let analysis) = analysisResponse else {
+        Issue.record("Agent must return curve analysis after Align Vertex.")
+        return
+    }
+    let continuityJoin = try #require(analysis.continuityJoins.first { join in
+        Set([join.firstEntityID, join.secondEntityID]) == Set([
+            setup.firstSplineID.description,
+            setup.secondSplineID.description,
+        ])
+    })
+
+    #expect(result.commandName == "alignSketchVertex")
+    #expect(result.didMutate)
+    #expect(session.document.productMetadata.curveCurvatureDisplays[firstComponentID] != nil)
+    #expect(session.document.productMetadata.curveCurvatureDisplays[secondComponentID] != nil)
+    #expect(continuityJoin.requiredContinuity == .g2)
+    #expect(continuityJoin.continuity == .g2)
+    #expect(session.evaluationStatus == .valid)
+}
+
+@MainActor
 @Test func agentUnjoinsSketchCurveThroughAutomationAndCore() async throws {
     let server = AgentCommandController()
     let sessionID = UUID()

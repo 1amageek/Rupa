@@ -30,6 +30,11 @@ extension DesignDocument {
                 message: "Align Vertex requires distinct target and reference vertices."
             )
         }
+        let curvatureDisplayComponentIDs = try sketchVertexAlignmentCurvatureDisplayComponentIDs(
+            options: options,
+            target: targetPoint,
+            reference: referencePoint
+        )
 
         var feature = targetPoint.feature
         var sketch = targetPoint.sketch
@@ -80,6 +85,10 @@ extension DesignDocument {
             sketch: sketch,
             objectRegistry: objectRegistry,
             errorOwner: "Align Vertex"
+        )
+        try applySketchVertexAlignmentCurvatureDisplays(
+            curvatureDisplayComponentIDs,
+            objectRegistry: objectRegistry
         )
     }
 
@@ -197,12 +206,68 @@ extension DesignDocument {
                 message: "Align Vertex continuity distance controls require G1 or G2 continuity."
             )
         }
-        if options.showsCurvature {
+    }
+
+    private func sketchVertexAlignmentCurvatureDisplayComponentIDs(
+        options: SketchVertexAlignmentOptions,
+        target: SketchVertexAlignmentPoint,
+        reference: SketchVertexAlignmentPoint
+    ) throws -> [SelectionComponentID] {
+        guard options.showsCurvature else {
+            return []
+        }
+        let targetComponentID = try sketchVertexAlignmentCurveComponentID(
+            for: target,
+            role: "target"
+        )
+        let referenceComponentID = try sketchVertexAlignmentCurveComponentID(
+            for: reference,
+            role: "reference"
+        )
+        if targetComponentID == referenceComponentID {
+            return [targetComponentID]
+        }
+        return [targetComponentID, referenceComponentID]
+    }
+
+    private func sketchVertexAlignmentCurveComponentID(
+        for point: SketchVertexAlignmentPoint,
+        role: String
+    ) throws -> SelectionComponentID {
+        let entityID: SketchEntityID
+        switch point.endpoint {
+        case .line(let lineID):
+            entityID = lineID
+        case .circular(let arcID):
+            entityID = arcID
+        case .spline(let splineEndpoint):
+            entityID = splineEndpoint.splineID
+        case nil:
             throw EditorError(
                 code: .commandInvalid,
-                message: "Align Vertex Show Curvature requires command-scoped curvature display wiring that is not implemented yet."
+                message: "Align Vertex Show Curvature requires \(role) to be a source curve endpoint."
             )
         }
+        return .sketchEntity(featureID: point.featureID, entityID: entityID)
+    }
+
+    private mutating func applySketchVertexAlignmentCurvatureDisplays(
+        _ componentIDs: [SelectionComponentID],
+        objectRegistry: ObjectTypeRegistry
+    ) throws {
+        guard componentIDs.isEmpty == false else {
+            return
+        }
+        for componentID in componentIDs {
+            let display = CurveCurvatureDisplay(
+                componentID: componentID,
+                combScale: productMetadata.curveCurvatureDisplays[componentID]?.combScale ??
+                    CurveCurvatureDisplay.defaultCombScale
+            )
+            try display.validate(against: cadDocument)
+            productMetadata.curveCurvatureDisplays[componentID] = display
+        }
+        try productMetadata.validate(against: cadDocument, objectRegistry: objectRegistry)
     }
 
     private func applySketchVertexAlignmentContinuityDistances(
