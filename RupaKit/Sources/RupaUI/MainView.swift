@@ -122,9 +122,9 @@ public struct MainView: View {
         self._selectedSplineControlPointIndex = State(initialValue: 0)
         self._sketchSplineControlPointSlideDistanceMeters = State(initialValue: editingDefaults.operationStepMeters)
         self._polySplineSurfaceVertexSlideDistanceMeters = State(initialValue: editingDefaults.operationStepMeters)
-        self._surfaceControlPointFrameUMoveMeters = State(initialValue: 0.0)
-        self._surfaceControlPointFrameVMoveMeters = State(initialValue: 0.0)
-        self._surfaceControlPointFrameNormalMoveMeters = State(initialValue: editingDefaults.operationStepMeters)
+        self._surfaceControlPointFrameUMoveMeters = State(initialValue: editingDefaults.surfaceFrameTangentialMoveMeters)
+        self._surfaceControlPointFrameVMoveMeters = State(initialValue: editingDefaults.surfaceFrameTangentialMoveMeters)
+        self._surfaceControlPointFrameNormalMoveMeters = State(initialValue: editingDefaults.surfaceFrameNormalMoveMeters)
         self._surfaceKnotInsertionValue = State(initialValue: 0.5)
         self._surfaceSpanSplitFraction = State(initialValue: 0.5)
         self._surfaceKnotMultiplicityValue = State(initialValue: 2)
@@ -7189,7 +7189,9 @@ public struct MainView: View {
         let defaults = workspaceEditingScaleDefaults
         sketchSplineControlPointSlideDistanceMeters = defaults.operationStepMeters
         polySplineSurfaceVertexSlideDistanceMeters = defaults.operationStepMeters
-        surfaceControlPointFrameNormalMoveMeters = defaults.operationStepMeters
+        surfaceControlPointFrameUMoveMeters = defaults.surfaceFrameTangentialMoveMeters
+        surfaceControlPointFrameVMoveMeters = defaults.surfaceFrameTangentialMoveMeters
+        surfaceControlPointFrameNormalMoveMeters = defaults.surfaceFrameNormalMoveMeters
         sketchRebuildToleranceMeters = defaults.sketchRebuildToleranceMeters
         sketchExtendDistanceMeters = defaults.operationStepMeters
         sketchVertexOffsetDistanceMeters = defaults.operationStepMeters

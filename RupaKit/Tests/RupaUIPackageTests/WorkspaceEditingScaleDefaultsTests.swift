@@ -7,6 +7,8 @@ import Testing
 
     #expect(defaults.operationStepMeters == 0.001)
     #expect(defaults.slotWidthMeters == 0.002)
+    #expect(defaults.surfaceFrameTangentialMoveMeters == 0.0)
+    #expect(defaults.surfaceFrameNormalMoveMeters == defaults.operationStepMeters)
     #expect(abs(defaults.sketchRebuildToleranceMeters - 0.000_001) < 1.0e-12)
     #expect(defaults.sketchRebuildToleranceRange.upperBound == 0.01)
 }
@@ -16,6 +18,8 @@ import Testing
 
     #expect(defaults.operationStepMeters == 100.0)
     #expect(defaults.slotWidthMeters == 200.0)
+    #expect(defaults.surfaceFrameTangentialMoveMeters == 0.0)
+    #expect(defaults.surfaceFrameNormalMoveMeters == 100.0)
     #expect(abs(defaults.sketchRebuildToleranceMeters - 0.1) < 1.0e-12)
     #expect(defaults.sketchRebuildToleranceRange.upperBound == 100.0)
 }

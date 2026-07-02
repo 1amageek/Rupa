@@ -3,6 +3,8 @@ import RupaCore
 struct WorkspaceEditingScaleDefaults: Equatable, Sendable {
     var operationStepMeters: Double
     var slotWidthMeters: Double
+    var surfaceFrameTangentialMoveMeters: Double
+    var surfaceFrameNormalMoveMeters: Double
     var sketchRebuildToleranceMeters: Double
     var sketchRebuildToleranceRange: ClosedRange<Double>
 
@@ -14,6 +16,8 @@ struct WorkspaceEditingScaleDefaults: Equatable, Sendable {
         )
         self.operationStepMeters = step
         self.slotWidthMeters = step * 2.0
+        self.surfaceFrameTangentialMoveMeters = 0.0
+        self.surfaceFrameNormalMoveMeters = step
         self.sketchRebuildToleranceMeters = Self.sketchRebuildToleranceMeters(
             ruler: normalized,
             operationStepMeters: step
