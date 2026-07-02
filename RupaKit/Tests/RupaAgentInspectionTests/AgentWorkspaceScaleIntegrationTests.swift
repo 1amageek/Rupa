@@ -184,6 +184,10 @@ import Testing
     #expect(snapshot.workspaceBounds?.sizeY == 10_000.0)
     #expect(snapshot.workspaceBounds?.sizeZ == 100.0)
     #expect(snapshot.workspaceBounds?.maximumSpan == 25_000.0)
+    #expect(snapshot.workspaceInteractionScale.displayUnit == .millimeter)
+    #expect(snapshot.workspaceInteractionScale.operationStep.meters == 0.001)
+    #expect(snapshot.workspaceInteractionScale.operationStep.displayValue == 1.0)
+    #expect(snapshot.workspaceInteractionScale.operationStep.displayUnitSymbol == "mm")
     #expect(decodedResponse == response)
 }
 

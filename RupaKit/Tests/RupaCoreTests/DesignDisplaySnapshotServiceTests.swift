@@ -1,3 +1,4 @@
+import Foundation
 import SwiftCAD
 import Testing
 @testable import RupaCore
@@ -81,7 +82,52 @@ import Testing
     #expect(result.workspaceScale.minorTickMeters == 100.0)
     #expect(result.workspaceScale.majorTickMeters == 1_000.0)
     #expect(result.workspaceScale.visibleSpanMeters == 100_000.0)
+    #expect(result.workspaceInteractionScale.displayUnit == .kilometer)
+    #expect(result.workspaceInteractionScale.displayUnitSymbol == "km")
+    #expect(result.workspaceInteractionScale.operationStep.meters == 100.0)
+    #expect(result.workspaceInteractionScale.operationStep.displayValue == 0.1)
+    #expect(result.workspaceInteractionScale.operationStep.displayUnit == .kilometer)
+    #expect(result.workspaceInteractionScale.slotWidth.meters == 200.0)
+    #expect(result.workspaceInteractionScale.surfaceFrameNormalMove.meters == 100.0)
+    #expect(abs(result.workspaceInteractionScale.sketchRebuildTolerance.meters - 0.1) < 1.0e-12)
     #expect(result.viewportGridSettings == gridSettings)
+}
+
+@Test func designDisplaySnapshotDecodesMissingWorkspaceInteractionScaleFromWorkspaceScale() throws {
+    let json = """
+    {
+      "generation": {
+        "value": 2
+      },
+      "dirty": false,
+      "workspaceScale": {
+        "displayUnit": "kilometer",
+        "displayUnitSymbol": "km",
+        "minorTickMeters": 100.0,
+        "majorTickMeters": 1000.0,
+        "visibleSpanMeters": 100000.0,
+        "matchedPreset": "sitePlanning",
+        "matchedPresetTitle": "Site Planning"
+      },
+      "viewportGridSettings": {
+        "visualSpacingMode": "fixed"
+      },
+      "sketches": [],
+      "extrudes": [],
+      "straightPrismSweeps": [],
+      "bodies": []
+    }
+    """
+
+    let result = try JSONDecoder().decode(
+        DesignDisplaySnapshotResult.self,
+        from: try #require(json.data(using: .utf8))
+    )
+
+    #expect(result.workspaceInteractionScale.displayUnit == .kilometer)
+    #expect(result.workspaceInteractionScale.operationStep.meters == 100.0)
+    #expect(result.workspaceInteractionScale.operationStep.displayValue == 0.1)
+    #expect(result.workspaceInteractionScale.slotWidth.meters == 200.0)
 }
 
 @MainActor

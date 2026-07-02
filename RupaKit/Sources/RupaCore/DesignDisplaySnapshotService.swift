@@ -115,6 +115,7 @@ public struct DesignDisplaySnapshotService: Sendable {
             generation: generation,
             dirty: dirty,
             workspaceScale: WorkspaceScaleSnapshot(ruler: document.ruler),
+            workspaceInteractionScale: WorkspaceInteractionScaleSnapshot(ruler: document.ruler),
             viewportGridSettings: document.productMetadata.viewportGridSettings,
             workspaceBounds: workspaceBounds,
             workspacePrecision: workspaceBounds.flatMap {

@@ -584,12 +584,12 @@ public final class AgentCommandController: AgentClientProtocol {
         capability(
             "designDisplaySnapshot",
             category: .read,
-            summary: "Return workspace scale, ordered UI-visible sketch primitives, profile regions, component definitions, component instances, pattern arrays, extrude and straight-prism sweep display bodies, evaluated body meshes, and generated topology for Agent viewport planning.",
+            summary: "Return workspace scale, interaction scale defaults, ordered UI-visible sketch primitives, profile regions, component definitions, component instances, pattern arrays, extrude and straight-prism sweep display bodies, evaluated body meshes, and generated topology for Agent viewport planning.",
             access: .agentRequest,
             mutatesDocument: false,
             discovery: [.designDisplaySnapshot, .sketchEntitySummary, .topologySummary],
             targets: [.document, .componentInstance, .sketchEntity, .region, .body, .face, .edge, .vertex],
-            failureMode: "Rejects stale generations before reading; reports normalized workspace scale, display-ready source snapshots, reusable component definitions, placed component instances, and generated pattern sources, not raw CAD kernel internals."
+            failureMode: "Rejects stale generations before reading; reports normalized workspace scale, Core-owned interaction scale defaults, display-ready source snapshots, reusable component definitions, placed component instances, and generated pattern sources, not raw CAD kernel internals."
         ),
         capability(
             "createConstructionPlane",
