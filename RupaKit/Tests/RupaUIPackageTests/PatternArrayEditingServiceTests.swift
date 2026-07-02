@@ -454,6 +454,57 @@ import Testing
 }
 
 @MainActor
+@Test func patternArrayEditingServiceUsesWorkspaceScaleFallbacksForGeneratedLinearDistances() async throws {
+    let session = EditorSession()
+    _ = try session.execute(.setRulerConfiguration(WorkspaceScalePreset.sitePlanning.rulerConfiguration))
+    _ = try #require(session.createDefaultExtrudedRectangle())
+    let rectangularSourceID = try createPatternArray(
+        in: session,
+        name: "Site Scale Rectangular Axis",
+        distribution: .rectangular(RectangularPatternArray(
+            firstAxis: PatternArrayLinearAxis(
+                direction: .unitX,
+                distance: .length(10.0, .millimeter),
+                copyCount: 3,
+                distanceMode: .spacing
+            )
+        ))
+    )
+    let curveSourceID = try createPatternArray(
+        in: session,
+        name: "Site Scale Curve Extent",
+        distribution: .curve(CurvePatternArray(
+            path: .polyline(
+                points: [
+                    .origin,
+                    Point3D(x: 200.0, y: 0.0, z: 0.0),
+                ],
+                normal: .unitZ
+            ),
+            copyCount: 2,
+            extent: .scalar(0.5),
+            extentMode: .ratio
+        ))
+    )
+
+    let rectangularResult = PatternArrayEditingService(
+        session: session,
+        sourceID: rectangularSourceID
+    ).setRectangularSecondAxisEnabled(true, fallbackDistanceMeters: nil)
+    let curveService = PatternArrayEditingService(session: session, sourceID: curveSourceID)
+    let curveResult = curveService.setCurveExtentMode(
+        .distance,
+        fallbackDistanceMeters: nil,
+        fallbackRatio: nil
+    )
+
+    #expect(rectangularResult?.didMutate == true)
+    #expect(curveResult?.didMutate == true)
+    #expect(try rectangularSecondAxisDistance(in: session.document, sourceID: rectangularSourceID) == 100.0)
+    #expect(try curveExtentDistance(in: session.document, sourceID: curveSourceID) == 100.0)
+}
+
+@MainActor
 @Test func patternArrayEditingServiceReplacesCurvePathWithSketchEntity() async throws {
     let session = EditorSession()
     _ = try #require(session.createDefaultExtrudedRectangle())
@@ -793,6 +844,23 @@ private func rectangularFirstAxisDistance(
         throw EditorError(
             code: .referenceUnresolved,
             message: "Expected a rectangular pattern source with a constant linear axis distance."
+        )
+    }
+    return quantity.value
+}
+
+private func rectangularSecondAxisDistance(
+    in document: DesignDocument,
+    sourceID: PatternArraySourceID
+) throws -> Double {
+    let source = try #require(document.productMetadata.patternArrays[sourceID])
+    guard case .rectangular(let rectangular) = source.distribution,
+          let secondAxis = rectangular.secondAxis,
+          case .constant(let quantity) = secondAxis.distance,
+          quantity.kind == .length else {
+        throw EditorError(
+            code: .referenceUnresolved,
+            message: "Expected a rectangular pattern source with a constant second-axis distance."
         )
     }
     return quantity.value

@@ -94,7 +94,9 @@ struct PatternArrayEditingService {
             guard rectangular.secondAxis == nil else {
                 return nil
             }
-            let distanceMeters = distancePolicy.normalizedLinearDistanceMeters(fallbackDistanceMeters ?? 0.01)
+            let distanceMeters = distancePolicy.normalizedLinearDistanceMeters(
+                fallbackDistanceMeters ?? defaultLinearAxisDistanceMeters
+            )
             rectangular.secondAxis = PatternArrayLinearAxis(
                 direction: defaultPerpendicularDirection(to: rectangular.firstAxis.direction),
                 distance: .length(distanceMeters, .meter),
@@ -326,7 +328,9 @@ struct PatternArrayEditingService {
         switch extentMode {
         case .distance:
             curve.extent = .length(
-                distancePolicy.normalizedLinearDistanceMeters(fallbackDistanceMeters ?? 0.01),
+                distancePolicy.normalizedLinearDistanceMeters(
+                    fallbackDistanceMeters ?? defaultLinearAxisDistanceMeters
+                ),
                 .meter
             )
         case .ratio:
