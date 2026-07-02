@@ -1621,12 +1621,10 @@ public struct AutomationRunner {
                     direction: direction
                 )
             )
-            return AutomationResult(
+            return commandAutomationResult(
                 message: "Extruded rectangle \(name) created.",
-                commandName: result.commandName,
-                generation: result.generation,
-                didMutate: result.didMutate,
-                diagnostics: result.diagnostics
+                commandResult: result,
+                in: session
             )
         case .createExtrudedRectangleFromCorners(
             let name,
@@ -1646,12 +1644,10 @@ public struct AutomationRunner {
                     direction: direction
                 )
             )
-            return AutomationResult(
+            return commandAutomationResult(
                 message: "Extruded rectangle \(name) created.",
-                commandName: result.commandName,
-                generation: result.generation,
-                didMutate: result.didMutate,
-                diagnostics: result.diagnostics
+                commandResult: result,
+                in: session
             )
         case .createExtrudedCircle(let name, let plane, let center, let radius, let depth, let direction):
             let result = try session.execute(
@@ -1664,12 +1660,10 @@ public struct AutomationRunner {
                     direction: direction
                 )
             )
-            return AutomationResult(
+            return commandAutomationResult(
                 message: "Extruded circle \(name) created.",
-                commandName: result.commandName,
-                generation: result.generation,
-                didMutate: result.didMutate,
-                diagnostics: result.diagnostics
+                commandResult: result,
+                in: session
             )
         case .validateDocument:
             let result = try session.execute(.validateDocument)
@@ -1693,6 +1687,40 @@ public struct AutomationRunner {
             results.append(try execute(command, in: session))
         }
         return results
+    }
+
+    private func commandAutomationResult(
+        message: String,
+        commandResult: CommandExecutionResult,
+        in session: EditorSession
+    ) -> AutomationResult {
+        if shouldIncludeWorkspaceContext(for: commandResult) {
+            return workspaceAutomationResult(
+                message: message,
+                commandResult: commandResult,
+                in: session
+            )
+        }
+
+        return AutomationResult(
+            message: message,
+            commandName: commandResult.commandName,
+            generation: commandResult.generation,
+            didMutate: commandResult.didMutate,
+            diagnostics: commandResult.diagnostics,
+            curveRebuildReport: commandResult.curveRebuildReport,
+            addedSelectionDimensionID: commandResult.addedSelectionDimensionID
+        )
+    }
+
+    private func shouldIncludeWorkspaceContext(
+        for commandResult: CommandExecutionResult
+    ) -> Bool {
+        commandResult.diagnostics.contains { diagnostic in
+            diagnostic.message.hasPrefix("Workspace scale recommendation:")
+                || diagnostic.message.hasPrefix("Workspace precision warning:")
+                || diagnostic.message.hasPrefix("Workspace precision notice:")
+        }
     }
 
     private func workspaceAutomationResult(

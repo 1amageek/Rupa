@@ -368,6 +368,13 @@ import SwiftCAD
             && $0.message.contains("Site Planning")
             && $0.message.contains("1 km to 80 km")
     })
+    #expect(result.workspaceBounds?.sizeX == 25_000.0)
+    #expect(result.workspaceBounds?.sizeY == 10_000.0)
+    #expect(result.workspaceBounds?.sizeZ == 100.0)
+    #expect(result.workspaceBounds?.maximumSpan == 25_000.0)
+    #expect(result.workspaceScaleRecommendation?.reason == .modelExceedsComfortableSpan)
+    #expect(result.workspaceScaleRecommendation?.recommendedPreset == .sitePlanning)
+    #expect(result.workspaceScaleRecommendation?.recommendedScale.displayUnit == .kilometer)
 }
 
 @MainActor

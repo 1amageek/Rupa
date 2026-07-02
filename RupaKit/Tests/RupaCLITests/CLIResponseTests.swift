@@ -7147,6 +7147,43 @@ func cliExecutableReturnsDataExitForLiveGenerationMismatch() async throws {
     #expect(loaded.productMetadata.sceneNodes.values.contains { $0.reference == .body(bodyFeatureID) })
 }
 
+@Test func cliServiceFileModelLargeBoxCornersReportsWorkspaceRange() async throws {
+    let temporaryDirectory = try makeTemporaryDirectory()
+    defer {
+        removeTemporaryDirectory(temporaryDirectory)
+    }
+
+    let url = temporaryDirectory.appendingPathComponent("site-box-corners.swcad")
+    try DocumentFileService().save(.empty(named: "Before"), to: url)
+
+    let response = try CLIService().createExtrudedRectangleFromCorners(
+        target: CLIDocumentTarget(fileURL: url),
+        name: "CLI Site Mass",
+        plane: .xy,
+        firstCorner: SketchPoint(
+            x: .length(0.0, .meter),
+            y: .length(0.0, .meter)
+        ),
+        oppositeCorner: SketchPoint(
+            x: .length(25_000.0, .meter),
+            y: .length(10_000.0, .meter)
+        ),
+        depth: .length(100.0, .meter),
+        direction: .normal,
+        mode: .file
+    )
+
+    #expect(response.saved)
+    #expect(!response.dirty)
+    #expect(response.workspaceBounds?.sizeX == 25_000.0)
+    #expect(response.workspaceBounds?.sizeY == 10_000.0)
+    #expect(response.workspaceBounds?.sizeZ == 100.0)
+    #expect(response.workspaceBounds?.maximumSpan == 25_000.0)
+    #expect(response.workspaceScaleRecommendation?.reason == .modelExceedsComfortableSpan)
+    #expect(response.workspaceScaleRecommendation?.recommendedPreset == .sitePlanning)
+    #expect(response.workspaceScaleRecommendation?.recommendedScale.displayUnit == .kilometer)
+}
+
 @Test func cliServiceFileModelCylinderPersistsClosedDocument() async throws {
     let temporaryDirectory = try makeTemporaryDirectory()
     defer {
