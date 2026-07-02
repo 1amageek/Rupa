@@ -3511,6 +3511,60 @@ struct CLICommandApplyTests {
     }
 
     @Test(.timeLimit(.minutes(1)))
+    func executableWorkspaceDescribeReportsRangeForLargeClosedDocumentAsJSON() async throws {
+        let temporaryDirectory = try makeTemporaryDirectory()
+        defer {
+            removeTemporaryDirectory(temporaryDirectory)
+        }
+        let documentURL = temporaryDirectory.appendingPathComponent("process-command-describe-range.swcad")
+        var document = DesignDocument.empty(named: "Process Command Site")
+        let profileID = try document.createRectangleSketchFromCorners(
+            name: "Process Command Site Footprint",
+            plane: .xy,
+            firstCorner: SketchPoint(
+                x: .length(0.0, .meter),
+                y: .length(0.0, .meter)
+            ),
+            oppositeCorner: SketchPoint(
+                x: .length(25_000.0, .meter),
+                y: .length(10_000.0, .meter)
+            )
+        )
+        _ = try document.extrudeProfile(
+            name: "Process Command Site Mass",
+            profile: ProfileReference(featureID: profileID),
+            distance: .length(100.0, .meter),
+            direction: .normal
+        )
+        try DocumentFileService().save(document, to: documentURL)
+
+        let result = try await runCLI([
+            "command",
+            "describe",
+            documentURL.path,
+            "--mode",
+            "file",
+            "--json",
+        ])
+        let response = try JSONDecoder().decode(
+            CLIResponse.self,
+            from: result.standardOutputData
+        )
+
+        #expect(result.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: result.standardError))
+        #expect(!response.saved)
+        #expect(response.workspaceScale?.displayUnit == .millimeter)
+        #expect(response.workspaceBounds?.sizeX == 25_000.0)
+        #expect(response.workspaceBounds?.sizeY == 10_000.0)
+        #expect(response.workspaceBounds?.sizeZ == 100.0)
+        #expect(response.workspaceBounds?.maximumSpan == 25_000.0)
+        #expect(response.workspaceScaleRecommendation?.reason == .modelExceedsComfortableSpan)
+        #expect(response.workspaceScaleRecommendation?.recommendedPreset == .sitePlanning)
+        #expect(response.workspaceScaleRecommendation?.recommendedScale.displayUnit == .kilometer)
+        #expect(response.workspacePrecision == nil)
+    }
+
+    @Test(.timeLimit(.minutes(1)))
     func executableWorkspaceOriginRebaseMovesClosedDocumentSourcesAsJSON() async throws {
         let temporaryDirectory = try makeTemporaryDirectory()
         defer {
