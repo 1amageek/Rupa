@@ -9,6 +9,12 @@ extension DesignDocument {
         var tangent: (x: Double, y: Double)
     }
 
+    private enum SketchCurveJoinContinuityEndpoint {
+        case line(SketchEntityID)
+        case arc(SketchEntityID)
+        case spline(SketchSplineEndpointReference)
+    }
+
         func sketchCurveGroupJoinPlan(
         target: SelectionTarget,
         targetSelection: EditableSketchEntitySelection,
@@ -105,6 +111,22 @@ extension DesignDocument {
                 ),
             ]
         }
+        if let controlPointReference = componentID.sketchControlPointReference {
+            guard controlPointReference.featureID == selection.featureID,
+                  controlPointReference.entityID == selection.entityID else {
+                throw EditorError(
+                    code: .referenceUnresolved,
+                    message: "\(owner) spline control-point target does not match the selected source curve."
+                )
+            }
+            return [
+                try joinCurveSplineEndpointReference(
+                    controlPointIndex: controlPointReference.index,
+                    selection: selection,
+                    owner: owner
+                ),
+            ]
+        }
         guard let entityReference = componentID.sketchEntityReference,
               entityReference.featureID == selection.featureID,
               entityReference.entityID == selection.entityID else {
@@ -124,12 +146,22 @@ extension DesignDocument {
                 .arcStart(selection.entityID),
                 .arcEnd(selection.entityID),
             ]
+        case .spline(let spline):
+            guard spline.controlPoints.count >= 2 else {
+                throw EditorError(
+                    code: .commandInvalid,
+                    message: "\(owner) requires a spline with editable endpoints."
+                )
+            }
+            return [
+                .splineControlPoint(entity: selection.entityID, index: 0),
+                .splineControlPoint(entity: selection.entityID, index: spline.controlPoints.count - 1),
+            ]
         case .point,
-             .circle,
-             .spline:
+             .circle:
             throw EditorError(
                 code: .commandInvalid,
-                message: "Join Curves composite join currently supports source line and arc endpoints."
+                message: "Join Curves composite join currently supports source line, arc, and spline endpoints."
             )
         }
     }
@@ -177,9 +209,35 @@ extension DesignDocument {
              .spline:
             throw EditorError(
                 code: .commandInvalid,
-                message: "Join Curves composite join currently supports source line and arc endpoints."
+                message: "Join Curves composite join currently supports source line, arc, and spline endpoints."
             )
         }
+    }
+
+        private func joinCurveSplineEndpointReference(
+        controlPointIndex: Int,
+        selection: EditableSketchEntitySelection,
+        owner: String
+    ) throws -> SketchReference {
+        guard case .spline(let spline) = selection.entity else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "\(owner) control-point target requires a source spline."
+            )
+        }
+        guard spline.controlPoints.indices.contains(controlPointIndex) else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "\(owner) references a missing spline control point."
+            )
+        }
+        guard controlPointIndex == 0 || controlPointIndex == spline.controlPoints.count - 1 else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "\(owner) requires a spline endpoint control point."
+            )
+        }
+        return .splineControlPoint(entity: selection.entityID, index: controlPointIndex)
     }
 
         private func joinCurveEndpointsAreAligned(
@@ -205,38 +263,42 @@ extension DesignDocument {
         case .g0:
             return
         case .g1:
-            guard try joinCurveGroupTangentConstraint(join, sketch: sketch) != nil else {
+            guard let continuityConstraint = try joinCurveGroupContinuityConstraint(join, sketch: sketch) else {
                 throw EditorError(
                     code: .commandInvalid,
-                    message: "Join Curves G1 continuity currently requires one source line endpoint and one source arc endpoint."
+                    message: "Join Curves G1 continuity currently supports line-arc, spline-line, and spline-spline endpoint pairs."
                 )
             }
-            let firstSample = try joinCurveEndpointSample(
-                join.firstJoinedReference,
-                sketch: sketch,
-                owner: "Join Curves first continuity"
-            )
-            let secondSample = try joinCurveEndpointSample(
-                join.secondJoinedReference,
-                sketch: sketch,
-                owner: "Join Curves second continuity"
-            )
-            let tangentAngle = joinCurveTangentAngle(
-                firstSample.tangent,
-                secondSample.tangent,
-                allowsReversedDirection: true
-            )
-            guard tangentAngle <= joinCurveTangentTolerance else {
-                throw EditorError(
-                    code: .commandInvalid,
-                    message: "Join Curves G1 continuity requires the selected endpoints to already be tangent."
+            if case .tangent = continuityConstraint {
+                let firstSample = try joinCurveEndpointSample(
+                    join.firstJoinedReference,
+                    sketch: sketch,
+                    owner: "Join Curves first continuity"
                 )
+                let secondSample = try joinCurveEndpointSample(
+                    join.secondJoinedReference,
+                    sketch: sketch,
+                    owner: "Join Curves second continuity"
+                )
+                let tangentAngle = joinCurveTangentAngle(
+                    firstSample.tangent,
+                    secondSample.tangent,
+                    allowsReversedDirection: true
+                )
+                guard tangentAngle <= joinCurveTangentTolerance else {
+                    throw EditorError(
+                        code: .commandInvalid,
+                        message: "Join Curves G1 continuity requires the selected endpoints to already be tangent."
+                    )
+                }
             }
         case .g2:
-            throw EditorError(
-                code: .commandInvalid,
-                message: "Join Curves G2 continuity requires a source curve continuity solver that is not implemented yet."
-            )
+            guard try joinCurveGroupContinuityConstraint(join, sketch: sketch) != nil else {
+                throw EditorError(
+                    code: .commandInvalid,
+                    message: "Join Curves G2 continuity currently requires two spline endpoints."
+                )
+            }
         }
     }
 
@@ -370,29 +432,52 @@ extension DesignDocument {
         }
     }
 
-        func constraintsAfterSketchCurveGroupJoin(
-        _ constraints: [SketchConstraint],
+        func applySketchCurveGroupJoinConstraints(
+        to sketch: inout Sketch,
         join: SketchCurveGroupJoinPlan,
-        sketch: Sketch
     ) throws -> [SketchConstraint] {
-        var updated = constraints
-        if updated.contains(where: { constraint in
+        if sketch.constraints.contains(where: { constraint in
             joinConstraintMatchesEndpoints(
                 constraint,
                 first: join.firstJoinedReference,
                 second: join.secondJoinedReference
             )
         }) == false {
-            updated.append(.coincident(join.firstJoinedReference, join.secondJoinedReference))
+            sketch.constraints.append(.coincident(join.firstJoinedReference, join.secondJoinedReference))
         }
-        if join.continuity == .g1,
-           let tangentConstraint = try joinCurveGroupTangentConstraint(join, sketch: sketch),
-           updated.contains(where: { constraint in
-               joinConstraintMatchesTangentEntities(constraint, tangentConstraint: tangentConstraint)
+        if let continuityConstraint = try joinCurveGroupContinuityConstraint(join, sketch: sketch),
+           sketch.constraints.contains(where: { constraint in
+               joinConstraintMatchesContinuity(constraint, continuityConstraint: continuityConstraint)
            }) == false {
-            updated.append(tangentConstraint)
+            switch continuityConstraint {
+            case .splineEndpointTangent,
+                 .tangentSplineEndpoints,
+                 .smoothSplineEndpoints:
+                let constraintPropagator = SketchPointConstraintPropagator(parameters: cadDocument.parameters)
+                try constraintPropagator.satisfyAddingConstraint(
+                    continuityConstraint,
+                    in: &sketch,
+                    owner: "Join Curves"
+                )
+            case .tangent:
+                sketch.constraints.append(continuityConstraint)
+            case .coincident,
+                 .fixed,
+                 .horizontal,
+                 .vertical,
+                 .parallel,
+                 .perpendicular,
+                 .equalLength,
+                 .concentric,
+                 .equalRadius,
+                 .smoothSplineControlPoint:
+                throw EditorError(
+                    code: .commandInvalid,
+                    message: "Join Curves built an unsupported continuity constraint."
+                )
+            }
         }
-        return updated
+        return sketch.constraints
     }
 
         private func joinConstraintMatchesEndpoints(
@@ -407,46 +492,129 @@ extension DesignDocument {
             (existingFirst == second && existingSecond == first)
     }
 
-        private func joinCurveGroupTangentConstraint(
+        private func joinCurveGroupContinuityConstraint(
         _ join: SketchCurveGroupJoinPlan,
         sketch: Sketch
     ) throws -> SketchConstraint? {
-        guard let firstEntityID = joinedCurveReferenceEntityID(join.firstJoinedReference),
-              let secondEntityID = joinedCurveReferenceEntityID(join.secondJoinedReference),
-              let firstEntity = sketch.entities[firstEntityID],
-              let secondEntity = sketch.entities[secondEntityID] else {
+        let firstEndpoint = try joinCurveContinuityEndpoint(
+            for: join.firstJoinedReference,
+            sketch: sketch
+        )
+        let secondEndpoint = try joinCurveContinuityEndpoint(
+            for: join.secondJoinedReference,
+            sketch: sketch
+        )
+        switch join.continuity {
+        case .g0:
+            return nil
+        case .g1:
+            switch (firstEndpoint, secondEndpoint) {
+            case (.line(let lineID), .arc(let arcID)):
+                return .tangent(lineID, arcID)
+            case (.arc(let arcID), .line(let lineID)):
+                return .tangent(lineID, arcID)
+            case (.spline(let splineEndpoint), .line(let lineID)),
+                 (.line(let lineID), .spline(let splineEndpoint)):
+                return .splineEndpointTangent(
+                    spline: splineEndpoint.splineID,
+                    endpoint: splineEndpoint.endpoint,
+                    line: lineID
+                )
+            case (.spline(let first), .spline(let second)):
+                return .tangentSplineEndpoints(first: first, second: second)
+            case (.line, .line),
+                 (.arc, .arc),
+                 (.arc, .spline),
+                 (.spline, .arc):
+                return nil
+            }
+        case .g2:
+            switch (firstEndpoint, secondEndpoint) {
+            case (.spline(let first), .spline(let second)):
+                return .smoothSplineEndpoints(first: first, second: second)
+            case (.line, _),
+                 (.arc, _),
+                 (.spline, .line),
+                 (.spline, .arc):
+                return nil
+            }
+        }
+    }
+
+        private func joinCurveContinuityEndpoint(
+        for reference: SketchReference,
+        sketch: Sketch
+    ) throws -> SketchCurveJoinContinuityEndpoint {
+        guard let entityID = joinedCurveReferenceEntityID(reference),
+              let entity = sketch.entities[entityID] else {
             throw EditorError(
                 code: .referenceUnresolved,
                 message: "Join Curves continuity requires existing source curve entities."
             )
         }
-        switch (firstEntity, secondEntity) {
-        case (.line, .arc):
-            return .tangent(firstEntityID, secondEntityID)
-        case (.arc, .line):
-            return .tangent(secondEntityID, firstEntityID)
-        case (.line, .line),
-             (.arc, .arc),
-             (.point, _),
-             (.circle, _),
-             (.spline, _),
-             (_, .point),
-             (_, .circle),
-             (_, .spline):
-            return nil
+        switch (reference, entity) {
+        case (.lineStart, .line),
+             (.lineEnd, .line):
+            return .line(entityID)
+        case (.arcStart, .arc),
+             (.arcEnd, .arc):
+            return .arc(entityID)
+        case (.splineControlPoint(_, let index), .spline(let spline)):
+            if index == 0 {
+                return .spline(SketchSplineEndpointReference(splineID: entityID, endpoint: .start))
+            }
+            if index == spline.controlPoints.count - 1 {
+                return .spline(SketchSplineEndpointReference(splineID: entityID, endpoint: .end))
+            }
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Join Curves continuity requires spline endpoint control points."
+            )
+        case (.entity, _),
+             (.circleCenter, _),
+             (.circleRadius, _),
+             (.arcCenter, _),
+             (.arcRadius, _),
+             (.lineStart, _),
+             (.lineEnd, _),
+             (.arcStart, _),
+             (.arcEnd, _),
+             (.splineControlPoint, _):
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "Join Curves continuity requires source line, arc, or spline endpoint references."
+            )
         }
     }
 
-        private func joinConstraintMatchesTangentEntities(
+        private func joinConstraintMatchesContinuity(
         _ constraint: SketchConstraint,
-        tangentConstraint: SketchConstraint
+        continuityConstraint: SketchConstraint
     ) -> Bool {
-        guard case .tangent(let first, let second) = constraint,
-              case .tangent(let tangentFirst, let tangentSecond) = tangentConstraint else {
+        switch (constraint, continuityConstraint) {
+        case let (.tangent(first, second), .tangent(expectedFirst, expectedSecond)):
+            return (first == expectedFirst && second == expectedSecond) ||
+                (first == expectedSecond && second == expectedFirst)
+        case let (
+            .splineEndpointTangent(splineID, endpoint, lineID),
+            .splineEndpointTangent(expectedSplineID, expectedEndpoint, expectedLineID)
+        ):
+            return splineID == expectedSplineID &&
+                endpoint == expectedEndpoint &&
+                lineID == expectedLineID
+        case let (
+            .tangentSplineEndpoints(first, second),
+            .tangentSplineEndpoints(expectedFirst, expectedSecond)
+        ),
+        let (
+            .smoothSplineEndpoints(first, second),
+            .smoothSplineEndpoints(expectedFirst, expectedSecond)
+        ):
+            return (first == expectedFirst && second == expectedSecond) ||
+                (first == expectedSecond && second == expectedFirst)
+        default:
             return false
         }
-        return (first == tangentFirst && second == tangentSecond) ||
-            (first == tangentSecond && second == tangentFirst)
     }
 
         private func joinedCurveReferenceEntityID(_ reference: SketchReference) -> SketchEntityID? {
@@ -454,14 +622,14 @@ extension DesignDocument {
         case .lineStart(let entityID),
              .lineEnd(let entityID),
              .arcStart(let entityID),
-             .arcEnd(let entityID):
+             .arcEnd(let entityID),
+             .splineControlPoint(let entityID, _):
             return entityID
         case .entity,
              .circleCenter,
              .circleRadius,
              .arcCenter,
-             .arcRadius,
-             .splineControlPoint:
+             .arcRadius:
             return nil
         }
     }

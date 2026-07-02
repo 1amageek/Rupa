@@ -50,7 +50,7 @@ extension DesignDocument {
         guard continuity != .g2 else {
             throw EditorError(
                 code: .commandInvalid,
-                message: "Join Curves G2 continuity requires a source curve continuity solver that is not implemented yet."
+                message: "Join Curves G2 continuity currently requires two spline endpoints."
             )
         }
         let join = try sketchLineJoinPlan(
@@ -144,11 +144,7 @@ extension DesignDocument {
         var sketch = targetSelection.sketch
         let constraintsBeforeJoin = sketch.constraints
         let dimensionsBeforeJoin = sketch.dimensions
-        sketch.constraints = try constraintsAfterSketchCurveGroupJoin(
-            sketch.constraints,
-            join: join,
-            sketch: sketch
-        )
+        _ = try applySketchCurveGroupJoinConstraints(to: &sketch, join: join)
 
         let previousCADDocument = cadDocument
         let previousProductMetadata = productMetadata

@@ -7006,6 +7006,64 @@ import Testing
 }
 
 @MainActor
+@Test func joinSketchCurvesStoresSolvedG2SplineContinuityAndAnalysisReadback() async throws {
+    let setup = try twoSplineTangentSketchDocument(name: "Join Source Splines G2")
+    let session = EditorSession(document: setup.document)
+    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let firstSpline = try #require(before.entries.first { $0.entityID == setup.firstSplineID.description })
+    let secondSpline = try #require(before.entries.first { $0.entityID == setup.secondSplineID.description })
+
+    let result = try session.execute(
+        .joinSketchCurves(
+            target: try controlPointSelectionTarget(firstSpline, index: 3),
+            adjacentTarget: try controlPointSelectionTarget(secondSpline, index: 0),
+            continuity: .g2
+        )
+    )
+
+    let feature = try #require(session.document.cadDocument.designGraph.nodes[setup.featureID])
+    guard case .sketch(let sketch) = feature.operation else {
+        Issue.record("Join G2 spline feature must remain a sketch.")
+        return
+    }
+    let joinedSource = try #require(session.document.productMetadata.joinedCurveGroupSources.values.first)
+    let analysis = try CurveAnalysisService().analyze(document: session.document)
+    let continuityJoin = try #require(analysis.continuityJoins.first { join in
+        Set([join.firstEntityID, join.secondEntityID]) == Set([
+            setup.firstSplineID.description,
+            setup.secondSplineID.description,
+        ])
+    })
+    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let solvedSecondSpline = try #require(after.entries.first { $0.entityID == setup.secondSplineID.description })
+    let solvedEndpoint = try #require(solvedSecondSpline.controlPoints.first)
+    let solvedHandle = try #require(solvedSecondSpline.controlPoints.dropFirst().first)
+
+    #expect(result.commandName == "joinSketchCurves")
+    #expect(result.didMutate)
+    #expect(joinedSource.continuity == .g2)
+    #expect(joinedSource.firstJoinedReference == .splineControlPoint(entity: setup.firstSplineID, index: 3))
+    #expect(joinedSource.secondJoinedReference == .splineControlPoint(entity: setup.secondSplineID, index: 0))
+    #expect(sketch.constraints.contains(.coincident(
+        .splineControlPoint(entity: setup.firstSplineID, index: 3),
+        .splineControlPoint(entity: setup.secondSplineID, index: 0)
+    )))
+    #expect(sketch.constraints.contains(.smoothSplineEndpoints(
+        first: SketchSplineEndpointReference(splineID: setup.firstSplineID, endpoint: .end),
+        second: SketchSplineEndpointReference(splineID: setup.secondSplineID, endpoint: .start)
+    )))
+    #expect(abs(solvedEndpoint.x - 0.009) < 1.0e-12)
+    #expect(abs(solvedEndpoint.y - 0.0) < 1.0e-12)
+    #expect(abs(solvedHandle.x - 0.012) < 1.0e-12)
+    #expect(abs(solvedHandle.y - 0.0) < 1.0e-12)
+    #expect(continuityJoin.requiredContinuity == .g2)
+    #expect(continuityJoin.continuity == .g2)
+    #expect(continuityJoin.constraintKinds.contains("smoothSplineEndpoints"))
+    #expect(continuityJoin.constraintKinds.contains("joinedCurveGroup"))
+    #expect(session.evaluationStatus == .valid)
+}
+
+@MainActor
 @Test func joinSketchCurvesRejectsG1LineArcWhenEndpointsAreNotTangent() async throws {
     var document = DesignDocument.empty()
     let featureID = try document.createLineSketch(

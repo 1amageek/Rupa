@@ -1183,17 +1183,17 @@ public final class AgentCommandController: AgentClientProtocol {
         capability(
             "joinSketchCurves",
             category: .sourceCurveEditing,
-            summary: "Join Curves for source-owned sketch curves: merge two same-sketch collinear source lines with exactly one aligned endpoint pair into one retained source line, or group same-sketch line/arc endpoints non-destructively with G0 or validated G1 continuity intent for exact Unjoin and curve-analysis readback.",
+            summary: "Join Curves for source-owned sketch curves: merge two same-sketch collinear source lines with exactly one aligned endpoint pair into one retained source line, or group same-sketch line/arc/spline endpoints non-destructively with G0, G1, or spline-endpoint G2 continuity intent for exact Unjoin and curve-analysis readback.",
             access: .automationCommand,
             mutatesDocument: true,
             discovery: [.sketchEntitySummary],
             targets: [.sketchEntity],
-            failureMode: "Rejects different sketches, same-curve pairs, ambiguous endpoint pairs, unsupported curve kinds, non-collinear source-line merge pairs, unsupported G2 continuity, G1 pairs that are not one line plus one arc or are not already tangent, dimensions or constraints attached to destructive line-join interior endpoints, removed-line whole-curve relationships, generated Bridge Curve source metadata, existing joined ownership, and stale generations before mutation."
+            failureMode: "Rejects different sketches, same-curve pairs, ambiguous endpoint pairs, unsupported curve kinds, non-collinear source-line merge pairs, G2 pairs that are not two spline endpoints, line-arc G1 pairs that are not already tangent, dimensions or constraints attached to destructive line-join interior endpoints, removed-line whole-curve relationships, generated Bridge Curve source metadata, existing joined ownership, and stale generations before mutation."
         ),
         capability(
             "unjoinSketchCurve",
             category: .sourceCurveEditing,
-            summary: "Unjoin Curve for source-owned Join Curves: restore a retained destructive line join from its stored ownership snapshot into the original two source lines or restore a non-destructive joined line/arc group back to its pre-join constraints and dimensions.",
+            summary: "Unjoin Curve for source-owned Join Curves: restore a retained destructive line join from its stored ownership snapshot into the original two source lines or restore a non-destructive joined line/arc/spline group back to its pre-join constraints and dimensions.",
             access: .automationCommand,
             mutatesDocument: true,
             discovery: [.sketchEntitySummary],

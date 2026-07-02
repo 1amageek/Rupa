@@ -651,7 +651,7 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
                 in: sketch
             ) else {
                 throw DocumentValidationError.invalidProductMetadata(
-                    "Joined curve group sources must store source line or arc endpoint references."
+                    "Joined curve group sources must store source line, arc, or spline endpoint references."
                 )
             }
             guard joinedCurveGroupReferenceEntityID(source.firstJoinedReference) !=
@@ -674,6 +674,7 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
         case lineEnd
         case arcStart
         case arcEnd
+        case splineEndpoint
     }
 
     private func joinedCurveReference(
@@ -690,12 +691,13 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
             referenceEntityID == entityID && allowed.contains(.arcStart)
         case .arcEnd(let referenceEntityID):
             referenceEntityID == entityID && allowed.contains(.arcEnd)
+        case .splineControlPoint(let referenceEntityID, _):
+            referenceEntityID == entityID && allowed.contains(.splineEndpoint)
         case .entity,
              .circleCenter,
              .circleRadius,
              .arcCenter,
-             .arcRadius,
-             .splineControlPoint:
+             .arcRadius:
             false
         }
     }
@@ -716,17 +718,19 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
              (.arcStart(_), .arc),
              (.arcEnd(_), .arc):
             return true
+        case (.splineControlPoint(_, let index), .spline(let spline)):
+            return index == 0 || index == spline.controlPoints.count - 1
         case (.entity, _),
              (.circleCenter, _),
              (.circleRadius, _),
              (.arcCenter, _),
-             (.arcRadius, _),
-             (.splineControlPoint, _):
+             (.arcRadius, _):
             return false
         case (.lineStart(_), _),
              (.lineEnd(_), _),
              (.arcStart(_), _),
-             (.arcEnd(_), _):
+             (.arcEnd(_), _),
+             (.splineControlPoint, _):
             return false
         }
     }
@@ -736,14 +740,14 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
         case .lineStart(let entityID),
              .lineEnd(let entityID),
              .arcStart(let entityID),
-             .arcEnd(let entityID):
+             .arcEnd(let entityID),
+             .splineControlPoint(let entityID, _):
             return entityID
         case .entity,
              .circleCenter,
              .circleRadius,
              .arcCenter,
-             .arcRadius,
-             .splineControlPoint:
+             .arcRadius:
             return nil
         }
     }
@@ -756,62 +760,156 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
         case .g0:
             return
         case .g1:
-            guard let tangentConstraint = joinedCurveGroupTangentConstraint(source, in: sketch) else {
+            guard let continuityConstraint = joinedCurveGroupContinuityConstraint(source, in: sketch) else {
                 throw DocumentValidationError.invalidProductMetadata(
-                    "Joined curve group G1 continuity currently requires one source line and one source arc."
+                    "Joined curve group G1 continuity requires line-arc, spline-line, or spline-spline endpoint pairs."
                 )
             }
             guard sketch.constraints.contains(where: { constraint in
-                joinedCurveGroupTangentConstraintMatches(constraint, tangentConstraint)
+                joinedCurveGroupContinuityConstraintMatches(constraint, continuityConstraint)
             }) else {
                 throw DocumentValidationError.invalidProductMetadata(
-                    "Joined curve group G1 continuity must store a matching tangent constraint."
+                    "Joined curve group G1 continuity must store a matching continuity constraint."
                 )
             }
         case .g2:
-            throw DocumentValidationError.invalidProductMetadata(
-                "Joined curve group G2 continuity is not supported yet."
-            )
+            guard let continuityConstraint = joinedCurveGroupContinuityConstraint(source, in: sketch) else {
+                throw DocumentValidationError.invalidProductMetadata(
+                    "Joined curve group G2 continuity requires two spline endpoints."
+                )
+            }
+            guard sketch.constraints.contains(where: { constraint in
+                joinedCurveGroupContinuityConstraintMatches(constraint, continuityConstraint)
+            }) else {
+                throw DocumentValidationError.invalidProductMetadata(
+                    "Joined curve group G2 continuity must store a matching smooth spline endpoint constraint."
+                )
+            }
         }
     }
 
-    private func joinedCurveGroupTangentConstraint(
+    private enum JoinedCurveGroupContinuityEndpoint {
+        case line(SketchEntityID)
+        case arc(SketchEntityID)
+        case spline(SketchSplineEndpointReference)
+    }
+
+    private func joinedCurveGroupContinuityConstraint(
         _ source: JoinedCurveGroupSource,
         in sketch: Sketch
     ) -> SketchConstraint? {
-        guard let firstEntityID = joinedCurveGroupReferenceEntityID(source.firstJoinedReference),
-              let secondEntityID = joinedCurveGroupReferenceEntityID(source.secondJoinedReference),
-              let firstEntity = sketch.entities[firstEntityID],
-              let secondEntity = sketch.entities[secondEntityID] else {
+        guard let first = joinedCurveGroupContinuityEndpoint(
+            source.firstJoinedReference,
+            in: sketch
+        ),
+        let second = joinedCurveGroupContinuityEndpoint(
+            source.secondJoinedReference,
+            in: sketch
+        ) else {
             return nil
         }
-        switch (firstEntity, secondEntity) {
-        case (.line, .arc):
-            return .tangent(firstEntityID, secondEntityID)
-        case (.arc, .line):
-            return .tangent(secondEntityID, firstEntityID)
-        case (.line, .line),
-             (.arc, .arc),
-             (.point, _),
-             (.circle, _),
-             (.spline, _),
-             (_, .point),
-             (_, .circle),
-             (_, .spline):
+        switch source.continuity {
+        case .g0:
+            return nil
+        case .g1:
+            switch (first, second) {
+            case (.line(let lineID), .arc(let arcID)):
+                return .tangent(lineID, arcID)
+            case (.arc(let arcID), .line(let lineID)):
+                return .tangent(lineID, arcID)
+            case (.spline(let endpoint), .line(let lineID)),
+                 (.line(let lineID), .spline(let endpoint)):
+                return .splineEndpointTangent(
+                    spline: endpoint.splineID,
+                    endpoint: endpoint.endpoint,
+                    line: lineID
+                )
+            case (.spline(let firstEndpoint), .spline(let secondEndpoint)):
+                return .tangentSplineEndpoints(first: firstEndpoint, second: secondEndpoint)
+            case (.line, .line),
+                 (.arc, .arc),
+                 (.arc, .spline),
+                 (.spline, .arc):
+                return nil
+            }
+        case .g2:
+            switch (first, second) {
+            case (.spline(let firstEndpoint), .spline(let secondEndpoint)):
+                return .smoothSplineEndpoints(first: firstEndpoint, second: secondEndpoint)
+            case (.line, _),
+                 (.arc, _),
+                 (.spline, .line),
+                 (.spline, .arc):
+                return nil
+            }
+        }
+    }
+
+    private func joinedCurveGroupContinuityEndpoint(
+        _ reference: SketchReference,
+        in sketch: Sketch
+    ) -> JoinedCurveGroupContinuityEndpoint? {
+        guard let entityID = joinedCurveGroupReferenceEntityID(reference),
+              let entity = sketch.entities[entityID] else {
+            return nil
+        }
+        switch (reference, entity) {
+        case (.lineStart, .line),
+             (.lineEnd, .line):
+            return .line(entityID)
+        case (.arcStart, .arc),
+             (.arcEnd, .arc):
+            return .arc(entityID)
+        case (.splineControlPoint(_, let index), .spline(let spline)):
+            if index == 0 {
+                return .spline(SketchSplineEndpointReference(splineID: entityID, endpoint: .start))
+            }
+            if index == spline.controlPoints.count - 1 {
+                return .spline(SketchSplineEndpointReference(splineID: entityID, endpoint: .end))
+            }
+            return nil
+        case (.entity, _),
+             (.circleCenter, _),
+             (.circleRadius, _),
+             (.arcCenter, _),
+             (.arcRadius, _),
+             (.lineStart, _),
+             (.lineEnd, _),
+             (.arcStart, _),
+             (.arcEnd, _),
+             (.splineControlPoint, _):
             return nil
         }
     }
 
-    private func joinedCurveGroupTangentConstraintMatches(
+    private func joinedCurveGroupContinuityConstraintMatches(
         _ constraint: SketchConstraint,
         _ expected: SketchConstraint
     ) -> Bool {
-        guard case .tangent(let first, let second) = constraint,
-              case .tangent(let expectedFirst, let expectedSecond) = expected else {
+        switch (constraint, expected) {
+        case let (.tangent(first, second), .tangent(expectedFirst, expectedSecond)):
+            return (first == expectedFirst && second == expectedSecond) ||
+                (first == expectedSecond && second == expectedFirst)
+        case let (
+            .splineEndpointTangent(splineID, endpoint, lineID),
+            .splineEndpointTangent(expectedSplineID, expectedEndpoint, expectedLineID)
+        ):
+            return splineID == expectedSplineID &&
+                endpoint == expectedEndpoint &&
+                lineID == expectedLineID
+        case let (
+            .tangentSplineEndpoints(first, second),
+            .tangentSplineEndpoints(expectedFirst, expectedSecond)
+        ),
+        let (
+            .smoothSplineEndpoints(first, second),
+            .smoothSplineEndpoints(expectedFirst, expectedSecond)
+        ):
+            return (first == expectedFirst && second == expectedSecond) ||
+                (first == expectedSecond && second == expectedFirst)
+        default:
             return false
         }
-        return (first == expectedFirst && second == expectedSecond) ||
-            (first == expectedSecond && second == expectedFirst)
     }
 
     private func validateConstructionPlanes() throws {
