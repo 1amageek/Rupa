@@ -213,6 +213,45 @@ import Testing
     #expect(regionalRange == 0.0 ... 1_000_000.0)
 }
 
+@Test func workspaceLengthInteractionSliderRangeKeepsValidationSeparateFromSliderScale() {
+    let range = workspaceLengthInteractionSliderMetersRange(
+        for: [0.001],
+        fallbackRange: 0.0 ... 0.01,
+        validationRange: ObjectPropertyDefinition.NumericRange(
+            lowerBound: 0.0,
+            upperBound: 1_000_000.0
+        )
+    )
+
+    #expect(range == 0.0 ... 0.01)
+}
+
+@Test func workspaceLengthInteractionSliderRangeIncludesLargeCurrentValues() {
+    let range = workspaceLengthInteractionSliderMetersRange(
+        for: [25.0],
+        fallbackRange: 0.0 ... 0.01,
+        validationRange: ObjectPropertyDefinition.NumericRange(
+            lowerBound: 0.0,
+            upperBound: 1_000_000.0
+        )
+    )
+
+    #expect(range == 0.0 ... 100.0)
+}
+
+@Test func workspaceLengthInteractionSliderRangeRespectsValidationUpperBound() {
+    let range = workspaceLengthInteractionSliderMetersRange(
+        for: [25.0],
+        fallbackRange: 0.0 ... 1_000.0,
+        validationRange: ObjectPropertyDefinition.NumericRange(
+            lowerBound: 0.0,
+            upperBound: 500.0
+        )
+    )
+
+    #expect(range == 0.0 ... 500.0)
+}
+
 @Test func workspaceSignedLengthSliderMetersRangeUsesWorkspaceRulerSpan() {
     let precisionRange = workspaceSignedLengthSliderMetersRange(
         for: 0.001,

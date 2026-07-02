@@ -146,7 +146,7 @@ struct WorkspaceObjectShapeInspectorView: View {
             return nil
         }
         if meters.count == values.count {
-            let range = lengthRange(for: property)
+            let range = lengthSliderRange(for: property, values: meters)
             workspaceLengthControl(
                 property.title,
                 values: meters,
@@ -235,11 +235,15 @@ struct WorkspaceObjectShapeInspectorView: View {
         return shape.typeID?.rawValue ?? "Object"
     }
 
-    private func lengthRange(for property: ObjectPropertyDefinition) -> ClosedRange<Double> {
-        if let numericRange = property.numericRange {
-            return numericRange.lowerBound ... numericRange.upperBound
-        }
-        return fallbackLengthSliderMetersRange
+    private func lengthSliderRange(
+        for property: ObjectPropertyDefinition,
+        values: [Double]
+    ) -> ClosedRange<Double> {
+        workspaceLengthInteractionSliderMetersRange(
+            for: values,
+            fallbackRange: fallbackLengthSliderMetersRange,
+            validationRange: property.numericRange
+        )
     }
 
     private func commonObjectBoolean(_ values: [ObjectPropertyValue]) -> Bool? {

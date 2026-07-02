@@ -214,6 +214,38 @@ func workspaceLengthSliderMetersRange(
     return 0.0 ... upperMeters
 }
 
+func workspaceLengthInteractionSliderMetersRange(
+    for values: [Double],
+    fallbackRange: ClosedRange<Double>,
+    validationRange: ObjectPropertyDefinition.NumericRange? = nil,
+    expansionMultiplier: Double = 4.0
+) -> ClosedRange<Double> {
+    let currentMaximum = values
+        .filter { $0.isFinite }
+        .map(abs)
+        .max() ?? 0.0
+    let fallbackUpper = max(
+        fallbackRange.upperBound,
+        fallbackRange.lowerBound,
+        currentMaximum * expansionMultiplier
+    )
+    let unclampedLower = min(fallbackRange.lowerBound, fallbackUpper)
+    let unclampedRange = unclampedLower ... fallbackUpper
+    guard let validationRange else {
+        return unclampedRange
+    }
+
+    let lower = max(unclampedRange.lowerBound, validationRange.lowerBound)
+    let upper = min(
+        max(unclampedRange.upperBound, currentMaximum, lower),
+        validationRange.upperBound
+    )
+    guard upper > lower else {
+        return validationRange.lowerBound ... validationRange.upperBound
+    }
+    return lower ... upper
+}
+
 func workspaceSignedLengthSliderMetersRange(
     for meters: Double,
     ruler: RulerConfiguration,

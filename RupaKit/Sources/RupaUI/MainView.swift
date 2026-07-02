@@ -5491,7 +5491,7 @@ public struct MainView: View {
             displayUnit: session.document.displayUnit,
             positionSliderMetersRange: transformPositionSliderMetersRange,
             sizeSliderMetersRange: sizeSliderMetersRange,
-            fallbackLengthSliderMetersRange: 0.0 ... max(session.document.ruler.visibleSpanMeters, 1.0),
+            fallbackLengthSliderMetersRange: lengthSliderMetersRange(for: 0.0),
             onSetCenter: setObjectCenter,
             onSetSize: setObjectSize,
             onSetProperty: setObjectProperty
