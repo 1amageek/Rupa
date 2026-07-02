@@ -85,6 +85,90 @@ import Testing
 }
 
 @MainActor
+@Test func designDisplaySnapshotReportsWorkspaceScaleRecommendationForAgentPlanning() throws {
+    var document = DesignDocument.empty(named: "Display Site")
+    let profileID = try document.createRectangleSketchFromCorners(
+        name: "Display Site Footprint",
+        plane: .xy,
+        firstCorner: SketchPoint(
+            x: .length(0.0, .meter),
+            y: .length(0.0, .meter)
+        ),
+        oppositeCorner: SketchPoint(
+            x: .length(25_000.0, .meter),
+            y: .length(10_000.0, .meter)
+        )
+    )
+    _ = try document.extrudeProfile(
+        name: "Display Site Mass",
+        profile: ProfileReference(featureID: profileID),
+        distance: .length(100.0, .meter),
+        direction: .normal
+    )
+    let generation = DocumentGeneration(1)
+    let currentEvaluation = try designDisplayEvaluationContext(
+        document: document,
+        generation: generation
+    )
+
+    let result = try DesignDisplaySnapshotService().result(
+        document: document,
+        currentEvaluation: currentEvaluation,
+        generation: generation,
+        dirty: false
+    )
+
+    #expect(result.workspaceScaleRecommendation?.reason == .modelExceedsComfortableSpan)
+    #expect(result.workspaceScaleRecommendation?.recommendedPreset == .sitePlanning)
+    #expect(result.workspaceScaleRecommendation?.recommendedScale.displayUnit == .kilometer)
+    #expect(result.workspaceScaleRecommendation?.recommendedScaleProfile.comfortableModelSpanTitle == "1 km to 80 km")
+    #expect(result.workspacePrecision == nil)
+}
+
+@MainActor
+@Test func designDisplaySnapshotReportsWorkspacePrecisionForAgentPlanning() throws {
+    var document = DesignDocument.empty(named: "Display Remote Site")
+    try document.setRulerConfiguration(WorkspaceScalePreset.sitePlanning.rulerConfiguration)
+    let profileID = try document.createRectangleSketchFromCorners(
+        name: "Display Remote Footprint",
+        plane: .xy,
+        firstCorner: SketchPoint(
+            x: .length(1.0e12, .meter),
+            y: .length(1.0e12, .meter)
+        ),
+        oppositeCorner: SketchPoint(
+            x: .length(1.0e12 + 10.0, .meter),
+            y: .length(1.0e12 + 10.0, .meter)
+        )
+    )
+    _ = try document.extrudeProfile(
+        name: "Display Remote Mass",
+        profile: ProfileReference(featureID: profileID),
+        distance: .length(10.0, .meter),
+        direction: .normal
+    )
+    let generation = DocumentGeneration(1)
+    let currentEvaluation = try designDisplayEvaluationContext(
+        document: document,
+        generation: generation
+    )
+
+    let result = try DesignDisplaySnapshotService().result(
+        document: document,
+        currentEvaluation: currentEvaluation,
+        generation: generation,
+        dirty: false
+    )
+
+    #expect(result.workspacePrecision?.reason == .coordinateResolution)
+    #expect(result.workspacePrecision?.recommendedRebaseTranslation == Vector3D(
+        x: -(1.0e12 + 5.0),
+        y: -(1.0e12 + 5.0),
+        z: 0.0
+    ))
+}
+
+@MainActor
 @Test func designDisplaySnapshotListsPatternArraySourcesForAgentPlanning() async throws {
     let session = EditorSession()
     _ = try #require(session.createDefaultExtrudedRectangle())
@@ -342,6 +426,22 @@ private func designDisplaySnapshotBodyFeatureID(
         pendingSceneNodeIDs.append(contentsOf: sceneNode.childIDs)
     }
     return nil
+}
+
+private func designDisplayEvaluationContext(
+    document: DesignDocument,
+    generation: DocumentGeneration
+) throws -> DocumentEvaluationContext {
+    let evaluatedDocument = try DocumentEvaluator.modelingDefault(for: document)
+        .evaluate(document.cadDocument)
+    let sourceFingerprint = try document.cadDocument.sourceFingerprint(
+        tolerance: .workspaceScaleAware(for: document)
+    )
+    return DocumentEvaluationContext(
+        generation: generation,
+        sourceFingerprint: sourceFingerprint,
+        evaluatedDocument: evaluatedDocument
+    )
 }
 
 private struct DesignDisplayFailingFeatureEvaluator: FeatureEvaluating {

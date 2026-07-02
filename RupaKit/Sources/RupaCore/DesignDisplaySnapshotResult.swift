@@ -4,6 +4,8 @@ public struct DesignDisplaySnapshotResult: Codable, Equatable, Sendable {
     public var dirty: Bool
     public var workspaceScale: WorkspaceScaleSnapshot
     public var viewportGridSettings: ViewportGridSettings
+    public var workspacePrecision: WorkspacePrecisionReport?
+    public var workspaceScaleRecommendation: WorkspaceScaleRecommendation?
     public var sketches: [SketchDisplaySnapshot]
     public var extrudes: [ExtrudeDisplaySnapshot]
     public var straightPrismSweeps: [StraightPrismSweepDisplaySnapshot]
@@ -17,6 +19,8 @@ public struct DesignDisplaySnapshotResult: Codable, Equatable, Sendable {
         dirty: Bool,
         workspaceScale: WorkspaceScaleSnapshot = WorkspaceScaleSnapshot(ruler: .standard(for: .millimeter)),
         viewportGridSettings: ViewportGridSettings = .standard,
+        workspacePrecision: WorkspacePrecisionReport? = nil,
+        workspaceScaleRecommendation: WorkspaceScaleRecommendation? = nil,
         sketches: [SketchDisplaySnapshot],
         extrudes: [ExtrudeDisplaySnapshot],
         straightPrismSweeps: [StraightPrismSweepDisplaySnapshot],
@@ -29,6 +33,8 @@ public struct DesignDisplaySnapshotResult: Codable, Equatable, Sendable {
         self.dirty = dirty
         self.workspaceScale = workspaceScale
         self.viewportGridSettings = viewportGridSettings
+        self.workspacePrecision = workspacePrecision
+        self.workspaceScaleRecommendation = workspaceScaleRecommendation
         self.sketches = sketches
         self.extrudes = extrudes
         self.straightPrismSweeps = straightPrismSweeps

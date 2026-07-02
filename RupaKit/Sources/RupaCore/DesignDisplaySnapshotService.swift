@@ -103,11 +103,28 @@ public struct DesignDisplaySnapshotService: Sendable {
             currentGeneration: generation
         )
         let order = document.cadDocument.designGraph.order
+        let evaluatedDocument = try currentWorkspaceEvaluation(
+            document: document,
+            currentEvaluation: currentEvaluation,
+            generation: generation
+        )
         return DesignDisplaySnapshotResult(
             generation: generation,
             dirty: dirty,
             workspaceScale: WorkspaceScaleSnapshot(ruler: document.ruler),
             viewportGridSettings: document.productMetadata.viewportGridSettings,
+            workspacePrecision: evaluatedDocument.flatMap {
+                WorkspacePrecisionDiagnosticService().report(
+                    for: $0,
+                    ruler: document.ruler
+                )
+            },
+            workspaceScaleRecommendation: evaluatedDocument.flatMap {
+                WorkspaceScaleRecommendationService().recommendation(
+                    for: $0,
+                    currentRuler: document.ruler
+                )
+            },
             sketches: order.compactMap { snapshot.sketches[$0] },
             extrudes: order.compactMap { snapshot.extrudes[$0] },
             straightPrismSweeps: order.compactMap { snapshot.straightPrismSweeps[$0] },
@@ -116,6 +133,23 @@ public struct DesignDisplaySnapshotService: Sendable {
             componentInstances: sortedComponentInstanceSnapshots(snapshot.componentInstances),
             patternArrays: sortedPatternArraySnapshots(snapshot.patternArrays)
         )
+    }
+
+    private func currentWorkspaceEvaluation(
+        document: DesignDocument,
+        currentEvaluation: DocumentEvaluationContext?,
+        generation: DocumentGeneration
+    ) throws -> EvaluatedDocument? {
+        guard let currentEvaluation else {
+            return nil
+        }
+        guard try currentEvaluation.matches(
+            document: document,
+            generation: generation
+        ) else {
+            return nil
+        }
+        return currentEvaluation.evaluatedDocument
     }
 
     private func hasRenderableBodyOutput(in document: DesignDocument) -> Bool {
