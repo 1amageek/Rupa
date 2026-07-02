@@ -19,15 +19,28 @@ import SwiftCAD
             message: "Encoded",
             commandName: "renameDocument",
             generation: DocumentGeneration(4),
-            didMutate: true
+            didMutate: true,
+            diagnostics: [
+                EditorDiagnostic(
+                    severity: .warning,
+                    code: .workspaceScaleWarning,
+                    message: "Workspace scale warning."
+                ),
+            ]
         )
     )
 
     let decodedRequest = try codec.decodeRequest(from: try codec.encode(request))
-    let decodedResponse = try codec.decodeResponse(from: try codec.encode(response))
+    let encodedResponse = try codec.encode(response)
+    let decodedResponse = try codec.decodeResponse(from: encodedResponse)
+    let json = try #require(JSONSerialization.jsonObject(with: encodedResponse) as? [String: Any])
+    let result = try #require(json["result"] as? [String: Any])
+    let diagnostics = try #require(result["diagnostics"] as? [[String: Any]])
+    let firstDiagnostic = try #require(diagnostics.first)
 
     #expect(decodedRequest == request)
     #expect(decodedResponse == response)
+    #expect(firstDiagnostic["code"] as? String == "workspaceScaleWarning")
 }
 
 @Test func agentMessageCodecRoundTripsRulerConfigurationCommand() async throws {

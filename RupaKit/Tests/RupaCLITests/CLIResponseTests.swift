@@ -6228,6 +6228,7 @@ func cliExecutableReturnsDataExitForLiveGenerationMismatch() async throws {
         diagnostics: [
             EditorDiagnostic(
                 severity: .info,
+                code: .workspaceScaleRecommendation,
                 message: "Document is valid."
             ),
         ],
@@ -6236,12 +6237,17 @@ func cliExecutableReturnsDataExitForLiveGenerationMismatch() async throws {
 
     let data = try JSONEncoder().encode(response)
     let decoded = try JSONDecoder().decode(CLIResponse.self, from: data)
+    let json = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+    let diagnostics = try #require(json["diagnostics"] as? [[String: Any]])
+    let firstDiagnostic = try #require(diagnostics.first)
 
     #expect(decoded.message == "Renamed")
     #expect(decoded.generation == 1)
     #expect(!decoded.dirty)
     #expect(!decoded.saved)
     #expect(decoded.diagnostics.first?.severity == .info)
+    #expect(decoded.diagnostics.first?.code == .workspaceScaleRecommendation)
+    #expect(firstDiagnostic["code"] as? String == "workspaceScaleRecommendation")
     #expect(decoded.workspaceBounds == workspaceBounds)
 }
 
