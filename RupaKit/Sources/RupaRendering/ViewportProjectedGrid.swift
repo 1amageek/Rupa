@@ -548,11 +548,12 @@ public struct ViewportProjectedGrid: Equatable {
         preferredUnit: LengthDisplayUnit
     ) -> (value: Double, unit: LengthDisplayUnit, text: String) {
         let unit = preferredUnit.readableUnit(forMeters: valueMeters)
-        let value = abs(unit.value(fromMeters: valueMeters))
+        let value = unit.value(fromMeters: valueMeters)
+        let magnitude = abs(value)
         let maxFractionDigits: Int
-        if value >= 100.0 {
+        if magnitude >= 100.0 {
             maxFractionDigits = 0
-        } else if value >= 10.0 {
+        } else if magnitude >= 10.0 {
             maxFractionDigits = 1
         } else {
             maxFractionDigits = 3

@@ -30,7 +30,7 @@ import RupaViewportScene
         abs(abs($0.valueMeters) - grid.majorStepMeters) < 1.0e-12
     })
     #expect(grid.scaleLabels.allSatisfy { $0.displayUnit.isMetric })
-    #expect(grid.scaleLabels.allSatisfy { $0.displayValue <= 1_000.0 })
+    #expect(grid.scaleLabels.allSatisfy { abs($0.displayValue) <= 1_000.0 })
     #expect(grid.scaleLabels.allSatisfy { abs($0.valueMeters) >= grid.majorStepMeters - 1.0e-12 })
     #expect(grid.scaleReadout.minorStep.meters == grid.minorStepMeters)
     #expect(grid.scaleReadout.majorStep.meters == grid.majorStepMeters)
@@ -73,7 +73,7 @@ import RupaViewportScene
     #expect(grid.minorStepMeters >= document.ruler.minorTickMeters)
     #expect(grid.majorStepMeters >= document.ruler.majorTickMeters)
     #expect(grid.scaleLabels.allSatisfy { $0.displayUnit.isMetric })
-    #expect(grid.scaleLabels.allSatisfy { $0.displayValue <= 1_000.0 })
+    #expect(grid.scaleLabels.allSatisfy { abs($0.displayValue) <= 1_000.0 })
     #expect(grid.scaleReadout.majorStep.displayUnit.isMetric)
     #expect(grid.scaleReadout.visibleSpan.displayUnit == .kilometer)
 }
@@ -250,9 +250,21 @@ import RupaViewportScene
     )
     #expect(
         ViewportProjectedGrid.formattedScaleLabel(
+            valueMeters: -0.000_25,
+            unit: .meter
+        ) == "-250μm"
+    )
+    #expect(
+        ViewportProjectedGrid.formattedScaleLabel(
             valueMeters: 30_480.0,
             unit: .foot
         ) == "100,000ft"
+    )
+    #expect(
+        ViewportProjectedGrid.formattedScaleLabel(
+            valueMeters: -1_000.0,
+            unit: .meter
+        ) == "-1km"
     )
     #expect(
         ViewportProjectedGrid.formattedScaleLabel(
@@ -260,6 +272,27 @@ import RupaViewportScene
             unit: .kilometer
         ) == "100km"
     )
+}
+
+@Test func viewportProjectedGridPreservesSignedCoordinateScaleLabels() throws {
+    var document = DesignDocument.empty(named: "Signed Grid")
+    try document.setRulerConfiguration(WorkspaceScalePreset.sitePlanning.rulerConfiguration)
+
+    let grid = ViewportProjectedGrid(
+        document: document,
+        size: CGSize(width: 1_200.0, height: 800.0),
+        camera: .identity,
+        basis: .isometric,
+        visualSpacingMode: .adaptive
+    )
+    let negativeLabel = try #require(grid.scaleLabels.first { $0.valueMeters < 0.0 })
+    let positiveLabel = try #require(grid.scaleLabels.first { $0.valueMeters > 0.0 })
+
+    #expect(negativeLabel.displayValue < 0.0)
+    #expect(negativeLabel.text.hasPrefix("-"))
+    #expect(negativeLabel.displayUnit == .kilometer)
+    #expect(positiveLabel.displayValue > 0.0)
+    #expect(!positiveLabel.text.hasPrefix("-"))
 }
 
 @Test func viewportProjectedGridKeepsReadableMeterLabelsForArchitectureScale() throws {
