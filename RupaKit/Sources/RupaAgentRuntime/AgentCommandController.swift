@@ -39,6 +39,20 @@ public final class AgentCommandController: AgentClientProtocol {
         Self.capabilityCatalog
     }
 
+    private static let workspaceFeedbackOptionAxis = AgentCapabilityDescriptor.OptionAxis(
+        name: "workspaceFeedback",
+        supportedValues: [
+            "workspaceBounds",
+            "workspaceScaleRecommendation",
+            "workspacePrecision",
+        ],
+        notes: [
+            "Modeling command results include these fields when evaluation detects scale or precision guidance.",
+            "Read workspaceScaleRecommendation before continuing large-model edits; apply setWorkspaceScalePreset when the recommendation is actionable.",
+            "Read workspacePrecision before precise far-from-origin edits; apply rebaseWorkspaceOrigin when a local-origin translation is recommended.",
+        ]
+    )
+
     private static let capabilityCatalog: [AgentCapabilityDescriptor] = [
         capability(
             "describeDocument",
@@ -1705,29 +1719,32 @@ public final class AgentCommandController: AgentClientProtocol {
         capability(
             "createExtrudedRectangle",
             category: .solid,
-            summary: "Create a rectangle sketch source and normal or symmetric extruded body.",
+            summary: "Create a rectangle sketch source and normal or symmetric extruded body; large results may include structured workspace scale and precision guidance.",
             access: .automationCommand,
             mutatesDocument: true,
             targets: [.document],
-            failureMode: "Rejects invalid dimensions and stale generations before mutation."
+            failureMode: "Rejects invalid dimensions and stale generations before mutation.",
+            optionMatrix: [workspaceFeedbackOptionAxis]
         ),
         capability(
             "createExtrudedRectangleFromCorners",
             category: .solid,
-            summary: "Create a rectangle sketch source from two corners and extrude it into a body.",
+            summary: "Create a rectangle sketch source from two corners and extrude it into a body; large results may include structured workspace scale and precision guidance.",
             access: .automationCommand,
             mutatesDocument: true,
             targets: [.document],
-            failureMode: "Rejects coincident corners, invalid depth, and stale generations before mutation."
+            failureMode: "Rejects coincident corners, invalid depth, and stale generations before mutation.",
+            optionMatrix: [workspaceFeedbackOptionAxis]
         ),
         capability(
             "createExtrudedCircle",
             category: .solid,
-            summary: "Create a circular sketch source and extrude it into a cylinder-like body.",
+            summary: "Create a circular sketch source and extrude it into a cylinder-like body; large results may include structured workspace scale and precision guidance.",
             access: .automationCommand,
             mutatesDocument: true,
             targets: [.document],
-            failureMode: "Rejects invalid radius, invalid depth, and stale generations before mutation."
+            failureMode: "Rejects invalid radius, invalid depth, and stale generations before mutation.",
+            optionMatrix: [workspaceFeedbackOptionAxis]
         ),
         capability(
             "evaluateDocument",

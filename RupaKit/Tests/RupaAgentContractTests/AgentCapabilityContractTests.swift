@@ -281,6 +281,9 @@ import SwiftCAD
     let constructionPlaneCreateFromTarget = try #require(descriptors.first { $0.name == "createConstructionPlaneFromTarget" })
     let constructionPlaneCreateFromTargets = try #require(descriptors.first { $0.name == "createConstructionPlaneFromTargets" })
     let constructionPlaneCreateFromView = try #require(descriptors.first { $0.name == "createViewAlignedConstructionPlane" })
+    let extrudedRectangleFromCorners = try #require(
+        descriptors.first { $0.name == "createExtrudedRectangleFromCorners" }
+    )
 
     #expect(displayUnit.category == .document)
     #expect(displayUnit.mutatesDocument)
@@ -311,6 +314,15 @@ import SwiftCAD
     #expect(workspaceOriginRebase.failureMode.contains("standard-plane"))
     #expect(workspaceOriginRebase.optionMatrix.contains { axis in
         axis.name == "translation" && axis.supportedValues.contains("x meters")
+    })
+    #expect(extrudedRectangleFromCorners.summary.contains("structured workspace scale"))
+    #expect(extrudedRectangleFromCorners.optionMatrix.contains { axis in
+        axis.name == "workspaceFeedback"
+            && axis.supportedValues.contains("workspaceBounds")
+            && axis.supportedValues.contains("workspaceScaleRecommendation")
+            && axis.supportedValues.contains("workspacePrecision")
+            && axis.notes.contains { $0.contains("setWorkspaceScalePreset") }
+            && axis.notes.contains { $0.contains("rebaseWorkspaceOrigin") }
     })
     let measureDocument = try #require(descriptors.first { $0.name == "measureDocument" })
     #expect(measureDocument.discovery.contains(.measurement))

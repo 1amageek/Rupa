@@ -69,6 +69,54 @@ import Testing
 }
 
 @MainActor
+@Test func agentLargeGeometryCommandReportsWorkspaceRangeThroughCommandController() async throws {
+    let server = AgentCommandController()
+    let sessionID = UUID()
+    let session = EditorSession()
+    server.register(session: session, id: sessionID)
+
+    let response = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .createExtrudedRectangleFromCorners(
+                name: "Agent Site Mass",
+                plane: .xy,
+                firstCorner: SketchPoint(
+                    x: .length(0.0, .meter),
+                    y: .length(0.0, .meter)
+                ),
+                oppositeCorner: SketchPoint(
+                    x: .length(25_000.0, .meter),
+                    y: .length(10_000.0, .meter)
+                ),
+                depth: .length(100.0, .meter),
+                direction: .normal
+            ),
+            expectedGeneration: DocumentGeneration(0)
+        )
+    )
+    let codec = AgentMessageCodec()
+    let decodedResponse = try codec.decodeResponse(from: try codec.encode(response))
+
+    guard case .command(let result) = response else {
+        Issue.record("Expected large geometry command response.")
+        return
+    }
+
+    #expect(result.commandName == "createExtrudedRectangleFromCorners")
+    #expect(result.didMutate)
+    #expect(result.generation == DocumentGeneration(1))
+    #expect(result.workspaceBounds?.sizeX == 25_000.0)
+    #expect(result.workspaceBounds?.sizeY == 10_000.0)
+    #expect(result.workspaceBounds?.sizeZ == 100.0)
+    #expect(result.workspaceBounds?.maximumSpan == 25_000.0)
+    #expect(result.workspaceScaleRecommendation?.reason == .modelExceedsComfortableSpan)
+    #expect(result.workspaceScaleRecommendation?.recommendedPreset == .sitePlanning)
+    #expect(result.workspaceScaleRecommendation?.recommendedScale.displayUnit == .kilometer)
+    #expect(decodedResponse == response)
+}
+
+@MainActor
 @Test func agentDesignDisplaySnapshotReportsWorkspaceScaleRecommendationThroughCommandController() async throws {
     var document = DesignDocument.empty(named: "Agent Site")
     let profileID = try document.createRectangleSketchFromCorners(
