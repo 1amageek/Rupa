@@ -112,7 +112,8 @@ public struct ObjectDimensionSummaryResult: Codable, Equatable, Sendable {
         }
 
         public func displayed(in unit: LengthDisplayUnit) -> Entry {
-            Entry(
+            let valueKind = DimensionSummaryValueKind.length
+            return Entry(
                 target: target,
                 sceneNodeID: sceneNodeID,
                 sourceFeatureID: sourceFeatureID,
@@ -122,9 +123,15 @@ public struct ObjectDimensionSummaryResult: Codable, Equatable, Sendable {
                 inputExpression: inputExpression,
                 sourceExpression: sourceExpression,
                 resolvedMeters: resolvedMeters,
-                valueKind: .length,
-                resolvedDisplayValue: unit.value(fromMeters: resolvedMeters),
-                resolvedDisplayUnitSymbol: unit.symbol,
+                valueKind: valueKind,
+                resolvedDisplayValue: valueKind.displayValue(
+                    forCanonicalValue: resolvedMeters,
+                    preferredLengthUnit: unit
+                ),
+                resolvedDisplayUnitSymbol: valueKind.displayUnitSymbol(
+                    forCanonicalValue: resolvedMeters,
+                    preferredLengthUnit: unit
+                ),
                 isPrimaryForTarget: isPrimaryForTarget
             )
         }

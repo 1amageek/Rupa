@@ -61,6 +61,15 @@ public struct SelectionDimensionMeasurementResult: Codable, Equatable, Sendable 
         displayUnit: LengthDisplayUnit
     ) {
         let valueKind = Self.valueKind(for: measurement.measured.kind)
+        let displayLengthUnit = Self.displayLengthUnit(
+            for: [
+                measurement.measured,
+                measurement.target,
+                measurement.residual,
+            ],
+            valueKind: valueKind,
+            preferredUnit: displayUnit
+        )
         self.init(
             dimension: measurement.dimension,
             first: measurement.first,
@@ -72,19 +81,22 @@ public struct SelectionDimensionMeasurementResult: Codable, Equatable, Sendable 
             measuredDisplayValue: Self.displayValue(
                 for: measurement.measured,
                 valueKind: valueKind,
-                unit: displayUnit
+                displayLengthUnit: displayLengthUnit
             ),
             targetDisplayValue: Self.displayValue(
                 for: measurement.target,
                 valueKind: valueKind,
-                unit: displayUnit
+                displayLengthUnit: displayLengthUnit
             ),
             residualDisplayValue: Self.displayValue(
                 for: measurement.residual,
                 valueKind: valueKind,
-                unit: displayUnit
+                displayLengthUnit: displayLengthUnit
             ),
-            displayUnitSymbol: Self.displayUnitSymbol(for: valueKind, unit: displayUnit)
+            displayUnitSymbol: Self.displayUnitSymbol(
+                for: valueKind,
+                displayLengthUnit: displayLengthUnit
+            )
         )
     }
 
@@ -124,6 +136,15 @@ public struct SelectionDimensionMeasurementResult: Codable, Equatable, Sendable 
 
     public func displayed(in unit: LengthDisplayUnit) -> SelectionDimensionMeasurementResult {
         let valueKind = Self.valueKind(for: measured.kind)
+        let displayLengthUnit = Self.displayLengthUnit(
+            for: [
+                measured,
+                target,
+                residual,
+            ],
+            valueKind: valueKind,
+            preferredUnit: unit
+        )
         return SelectionDimensionMeasurementResult(
             dimension: dimension,
             first: first,
@@ -132,10 +153,25 @@ public struct SelectionDimensionMeasurementResult: Codable, Equatable, Sendable 
             target: target,
             residual: residual,
             valueKind: valueKind,
-            measuredDisplayValue: Self.displayValue(for: measured, valueKind: valueKind, unit: unit),
-            targetDisplayValue: Self.displayValue(for: target, valueKind: valueKind, unit: unit),
-            residualDisplayValue: Self.displayValue(for: residual, valueKind: valueKind, unit: unit),
-            displayUnitSymbol: Self.displayUnitSymbol(for: valueKind, unit: unit)
+            measuredDisplayValue: Self.displayValue(
+                for: measured,
+                valueKind: valueKind,
+                displayLengthUnit: displayLengthUnit
+            ),
+            targetDisplayValue: Self.displayValue(
+                for: target,
+                valueKind: valueKind,
+                displayLengthUnit: displayLengthUnit
+            ),
+            residualDisplayValue: Self.displayValue(
+                for: residual,
+                valueKind: valueKind,
+                displayLengthUnit: displayLengthUnit
+            ),
+            displayUnitSymbol: Self.displayUnitSymbol(
+                for: valueKind,
+                displayLengthUnit: displayLengthUnit
+            )
         )
     }
 
@@ -176,11 +212,11 @@ public struct SelectionDimensionMeasurementResult: Codable, Equatable, Sendable 
     private static func displayValue(
         for quantity: Quantity,
         valueKind: DimensionSummaryValueKind,
-        unit: LengthDisplayUnit
+        displayLengthUnit: LengthDisplayUnit
     ) -> Double {
         switch valueKind {
         case .length:
-            unit.value(fromMeters: quantity.value)
+            displayLengthUnit.value(fromMeters: quantity.value)
         case .angle:
             quantity.value * 180.0 / Double.pi
         case .scalar:
@@ -190,16 +226,34 @@ public struct SelectionDimensionMeasurementResult: Codable, Equatable, Sendable 
 
     private static func displayUnitSymbol(
         for valueKind: DimensionSummaryValueKind,
-        unit: LengthDisplayUnit
+        displayLengthUnit: LengthDisplayUnit
     ) -> String {
         switch valueKind {
         case .length:
-            unit.symbol
+            displayLengthUnit.symbol
         case .angle:
             "deg"
         case .scalar:
             ""
         }
+    }
+
+    private static func displayLengthUnit(
+        for quantities: [Quantity],
+        valueKind: DimensionSummaryValueKind,
+        preferredUnit: LengthDisplayUnit
+    ) -> LengthDisplayUnit {
+        guard valueKind == .length else {
+            return preferredUnit
+        }
+        let representativeMeters = quantities
+            .filter { $0.kind == .length && $0.value.isFinite }
+            .map { abs($0.value) }
+            .max() ?? 0.0
+        return valueKind.readableLengthUnit(
+            forMeters: representativeMeters,
+            preferredLengthUnit: preferredUnit
+        )
     }
 }
 

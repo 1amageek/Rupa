@@ -123,14 +123,13 @@ public struct SketchDimensionSummaryResult: Codable, Equatable, Sendable {
                 inputExpression: inputExpression,
                 resolvedValue: resolvedValue,
                 valueKind: valueKind,
-                resolvedDisplayValue: Self.displayValue(
-                    for: resolvedValue,
-                    valueKind: valueKind,
-                    unit: unit
+                resolvedDisplayValue: valueKind.displayValue(
+                    forCanonicalValue: resolvedValue,
+                    preferredLengthUnit: unit
                 ),
-                resolvedDisplayUnitSymbol: Self.displayUnitSymbol(
-                    for: valueKind,
-                    unit: unit
+                resolvedDisplayUnitSymbol: valueKind.displayUnitSymbol(
+                    forCanonicalValue: resolvedValue,
+                    preferredLengthUnit: unit
                 ),
                 isPrimaryForTarget: isPrimaryForTarget
             )
@@ -156,34 +155,6 @@ public struct SketchDimensionSummaryResult: Codable, Equatable, Sendable {
             }
         }
 
-        private static func displayValue(
-            for resolvedValue: Double,
-            valueKind: DimensionSummaryValueKind,
-            unit: LengthDisplayUnit
-        ) -> Double {
-            switch valueKind {
-            case .angle:
-                resolvedValue * 180.0 / Double.pi
-            case .length:
-                unit.value(fromMeters: resolvedValue)
-            case .scalar:
-                resolvedValue
-            }
-        }
-
-        private static func displayUnitSymbol(
-            for valueKind: DimensionSummaryValueKind,
-            unit: LengthDisplayUnit
-        ) -> String {
-            switch valueKind {
-            case .angle:
-                "deg"
-            case .length:
-                unit.symbol
-            case .scalar:
-                ""
-            }
-        }
     }
 
     public var displayUnit: LengthDisplayUnit

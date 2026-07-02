@@ -85,6 +85,44 @@ import Testing
     #expect(abs(measurement.residualDisplayValue - 2.0) <= 1.0e-12)
 }
 
+@Test func selectionDimensionEvaluationUsesReadableLengthDisplayUnit() async throws {
+    var document = DesignDocument.empty()
+    document.setDisplayUnit(.millimeter)
+    let featureID = try document.createLineSketch(
+        name: "Measured Site Line",
+        plane: .xy,
+        start: SketchPoint(
+            x: .length(0.0, .meter),
+            y: .length(0.0, .meter)
+        ),
+        end: SketchPoint(
+            x: .length(1_500.0, .meter),
+            y: .length(0.0, .meter)
+        )
+    )
+    let targets = try lineEndpointTargets(in: document, featureID: featureID)
+    let dimensionID = try document.addSelectionDimension(
+        name: "Site Line Length",
+        kind: .distance,
+        first: targets.start,
+        second: targets.end,
+        target: .length(1_200.0, .meter)
+    )
+
+    let evaluation = try SelectionDimensionService().evaluate(
+        document: document,
+        dimensionID: dimensionID
+    )
+    let measurement = try #require(evaluation.measurements.first)
+
+    #expect(evaluation.displayUnit == .millimeter)
+    #expect(evaluation.displayUnitSymbol == "mm")
+    #expect(measurement.displayUnitSymbol == "m")
+    #expect(abs(measurement.measuredDisplayValue - 1_500.0) <= 1.0e-12)
+    #expect(abs(measurement.targetDisplayValue - 1_200.0) <= 1.0e-12)
+    #expect(abs(measurement.residualDisplayValue - 300.0) <= 1.0e-12)
+}
+
 @Test func selectionDimensionEvaluationDecodesMissingDisplayValues() async throws {
     var document = DesignDocument.empty()
     document.setDisplayUnit(.millimeter)

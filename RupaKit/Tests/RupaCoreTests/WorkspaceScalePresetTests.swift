@@ -208,3 +208,52 @@ import Testing
     #expect(abs(decodedSketchEntry.resolvedDisplayValue - 90.0) < 1.0e-12)
     #expect(decodedSketchEntry.resolvedDisplayUnitSymbol == "deg")
 }
+
+@Test func dimensionSummaryEntriesUseReadableLengthUnits() throws {
+    let objectTarget = SelectionTarget(sceneNodeID: SceneNodeID())
+    let objectSummary = ObjectDimensionSummaryResult(
+        displayUnit: .millimeter,
+        entries: [
+            ObjectDimensionSummaryResult.Entry(
+                target: objectTarget,
+                sceneNodeID: objectTarget.sceneNodeID.description,
+                sourceFeatureID: FeatureID().description,
+                sourceKind: .box,
+                kind: .sizeX,
+                label: "Size X",
+                inputExpression: .length(1_500.0, .meter),
+                resolvedMeters: 1_500.0,
+                isPrimaryForTarget: true
+            ),
+        ]
+    )
+    let objectEntry = try #require(objectSummary.entries.first)
+
+    let sketchTarget = SelectionTarget(sceneNodeID: SceneNodeID())
+    let sketchSummary = SketchDimensionSummaryResult(
+        displayUnit: .meter,
+        entries: [
+            SketchDimensionSummaryResult.Entry(
+                requestedTarget: sketchTarget,
+                target: sketchTarget,
+                sceneNodeID: sketchTarget.sceneNodeID.description,
+                sourceFeatureID: FeatureID().description,
+                entityID: SketchEntityID().description,
+                entityKind: "line",
+                kind: .length,
+                label: "Length",
+                inputExpression: .length(0.000_25, .meter),
+                resolvedValue: 0.000_25,
+                isPrimaryForTarget: true
+            ),
+        ]
+    )
+    let sketchEntry = try #require(sketchSummary.entries.first)
+
+    #expect(objectSummary.displayUnit == .millimeter)
+    #expect(objectEntry.resolvedDisplayValue == 1_500.0)
+    #expect(objectEntry.resolvedDisplayUnitSymbol == "m")
+    #expect(sketchSummary.displayUnit == .meter)
+    #expect(abs(sketchEntry.resolvedDisplayValue - 250.0) < 1.0e-9)
+    #expect(sketchEntry.resolvedDisplayUnitSymbol == "μm")
+}

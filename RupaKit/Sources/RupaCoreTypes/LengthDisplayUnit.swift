@@ -60,7 +60,10 @@ public enum LengthDisplayUnit: String, Codable, CaseIterable, Hashable, Identifi
         }
     }
 
-    public func readableUnit(forMeters meters: Double) -> LengthDisplayUnit {
+    public func readableUnit(
+        forMeters meters: Double,
+        allowsKilometers: Bool = true
+    ) -> LengthDisplayUnit {
         let magnitude = abs(meters)
         guard magnitude.isFinite, magnitude > 0.0 else {
             return self
@@ -71,7 +74,10 @@ public enum LengthDisplayUnit: String, Codable, CaseIterable, Hashable, Identifi
             if preferredValue >= 0.1, preferredValue < 1_000.0 {
                 return self
             }
-            return Self.readableMetricUnit(forMeters: magnitude)
+            return Self.readableMetricUnit(
+                forMeters: magnitude,
+                allowsKilometers: allowsKilometers || self == .kilometer
+            )
         }
 
         switch self {
@@ -84,12 +90,15 @@ public enum LengthDisplayUnit: String, Codable, CaseIterable, Hashable, Identifi
         }
     }
 
-    public static func readableMetricUnit(forMeters meters: Double) -> LengthDisplayUnit {
+    public static func readableMetricUnit(
+        forMeters meters: Double,
+        allowsKilometers: Bool = true
+    ) -> LengthDisplayUnit {
         let magnitude = abs(meters)
         guard magnitude.isFinite, magnitude > 0.0 else {
             return .meter
         }
-        if magnitude >= 1_000.0 {
+        if allowsKilometers, magnitude >= 1_000.0 {
             return .kilometer
         }
         if magnitude >= 1.0 {
