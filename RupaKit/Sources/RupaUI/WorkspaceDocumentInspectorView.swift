@@ -55,6 +55,7 @@ struct WorkspaceDocumentInspectorView: View {
     var state: WorkspaceDocumentInspectorState
     var setDisplayUnit: (LengthDisplayUnit) -> Void
     var setWorkspaceScalePreset: (WorkspaceScalePreset) -> Void
+    var fitWorkspaceScaleToModel: () -> Void
     var applyWorkspaceRebaseTranslation: (Vector3D) -> Void
     var setMinorTickMeters: (Double) -> Void
     var setMajorTickMeters: (Double) -> Void
@@ -194,10 +195,10 @@ struct WorkspaceDocumentInspectorView: View {
             inspectorControlRow("Recommended") {
                 if recommendation.isActionable {
                     Button {
-                        setWorkspaceScalePreset(recommendation.preset)
+                        fitWorkspaceScaleToModel()
                     } label: {
                         HStack(spacing: 6) {
-                            Text(recommendation.presetTitle)
+                            Text("Fit to \(recommendation.presetTitle)")
                                 .lineLimit(1)
                                 .truncationMode(.tail)
                             Spacer(minLength: 4)

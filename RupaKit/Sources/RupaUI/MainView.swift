@@ -1295,6 +1295,16 @@ public struct MainView: View {
         WorkspaceScaleStatusSummary(ruler: session.document.ruler)
     }
 
+    private var currentWorkspaceScaleRecommendation: WorkspaceScaleRecommendation? {
+        let workspaceBounds = session.currentEvaluation.flatMap {
+            WorkspaceBoundsService().bounds(for: $0.evaluatedDocument)
+        }
+        return WorkspaceScaleRecommendationService().recommendation(
+            for: workspaceBounds,
+            currentRuler: session.document.ruler
+        )
+    }
+
     private var fixedGridVisualSpacingBinding: Binding<Bool> {
         Binding(
             get: {
@@ -1311,6 +1321,19 @@ public struct MainView: View {
         return Menu {
             Section("Current") {
                 Text(summary.detailTitle)
+            }
+            if let recommendation = currentWorkspaceScaleRecommendation {
+                Section("Model Fit") {
+                    if recommendation.isActionable {
+                        Button {
+                            fitWorkspaceScaleToModel()
+                        } label: {
+                            Label("Fit to \(recommendation.recommendedPreset.title)", systemImage: "scope")
+                        }
+                    } else {
+                        Text("Beyond supported workspace range")
+                    }
+                }
             }
             if summary.smallerPreset != nil || summary.largerPreset != nil {
                 Section("Adjust") {
@@ -4600,6 +4623,7 @@ public struct MainView: View {
             setWorkspaceScalePreset: {
                 applyWorkspaceScalePreset($0)
             },
+            fitWorkspaceScaleToModel: fitWorkspaceScaleToModel,
             applyWorkspaceRebaseTranslation: applyWorkspaceRebaseTranslation,
             setMinorTickMeters: { setRulerConfiguration(minorTickMeters: $0) },
             setMajorTickMeters: { setRulerConfiguration(majorTickMeters: $0) },
@@ -7009,6 +7033,31 @@ public struct MainView: View {
     private func applyWorkspaceScalePreset(_ preset: WorkspaceScalePreset) {
         session.setRulerConfiguration(preset.rulerConfiguration.normalizedForWorkspaceScale())
         resetWorkspaceEditingScaleDefaults()
+    }
+
+    private func fitWorkspaceScaleToModel() {
+        do {
+            let plan = try WorkspaceScaleFitService().plan(
+                document: session.document,
+                objectRegistry: session.objectRegistry,
+                currentEvaluation: session.currentEvaluation,
+                currentGeneration: session.generation
+            )
+            switch plan.action {
+            case .alreadyFits:
+                session.reportToolStatus("Workspace scale already fits the current model.")
+            case .unsupportedRange:
+                session.reportToolStatus(
+                    "Workspace scale cannot fit the current model within the supported preset range.",
+                    severity: .warning
+                )
+            case .applyPreset(let preset):
+                session.perform(.setRulerConfiguration(preset.rulerConfiguration.normalizedForWorkspaceScale()))
+                resetWorkspaceEditingScaleDefaults()
+            }
+        } catch {
+            session.reportToolStatus(error.localizedDescription, severity: .warning)
+        }
     }
 
     private func upsertParameterExpression(

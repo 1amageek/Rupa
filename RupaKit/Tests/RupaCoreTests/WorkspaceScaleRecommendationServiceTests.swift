@@ -31,6 +31,59 @@ import Testing
     #expect(recommendation.recommendedScaleProfile.comfortableModelSpanTitle == "1 km to 80 km")
 }
 
+@Test func workspaceScaleFitPlanAppliesSitePlanningForKilometerScaleDocument() throws {
+    let document = try workspaceScaleFitSiteDocument()
+
+    let plan = try WorkspaceScaleFitService().plan(document: document)
+
+    #expect(plan.action == .applyPreset(.sitePlanning))
+    #expect(plan.measurement.bounds?.maximumSpan == 25_000.0)
+    #expect(plan.recommendation?.recommendedPreset == .sitePlanning)
+    #expect(plan.recommendation?.recommendedScale.displayUnit == .kilometer)
+}
+
+@Test func workspaceScaleFitPlanReportsAlreadyFittingDocument() throws {
+    var document = try workspaceScaleFitSiteDocument()
+    try document.setRulerConfiguration(WorkspaceScalePreset.sitePlanning.rulerConfiguration)
+
+    let plan = try WorkspaceScaleFitService().plan(document: document)
+
+    #expect(plan.action == .alreadyFits)
+    #expect(plan.measurement.bounds?.maximumSpan == 25_000.0)
+    #expect(plan.recommendation == nil)
+}
+
+@Test func workspaceScaleFitPlanReportsUnsupportedRegionalRange() throws {
+    var document = DesignDocument.empty(named: "Unsupported Regional")
+    try document.setRulerConfiguration(WorkspaceScalePreset.regionalPlanning.rulerConfiguration)
+    let profileID = try document.createRectangleSketchFromCorners(
+        name: "Regional Footprint",
+        plane: .xy,
+        firstCorner: SketchPoint(
+            x: .length(0.0, .meter),
+            y: .length(0.0, .meter)
+        ),
+        oppositeCorner: SketchPoint(
+            x: .length(1_200_000.0, .meter),
+            y: .length(400_000.0, .meter)
+        )
+    )
+    _ = try document.extrudeProfile(
+        name: "Regional Mass",
+        profile: ProfileReference(featureID: profileID),
+        distance: .length(1_000.0, .meter),
+        direction: .normal
+    )
+
+    let plan = try WorkspaceScaleFitService().plan(document: document)
+
+    #expect(plan.action == .unsupportedRange)
+    #expect(plan.measurement.bounds?.maximumSpan == 1_200_000.0)
+    #expect(plan.recommendation?.reason == .modelExceedsSupportedScaleRange)
+    #expect(plan.recommendation?.recommendedPreset == .regionalPlanning)
+    #expect(plan.recommendation?.isActionable == false)
+}
+
 @Test func workspaceScaleRecommendationChoosesRegionalPlanningForHundredsOfKilometersModel() throws {
     let bounds = MeasurementResult.Bounds(
         minX: 0.0,
@@ -257,4 +310,27 @@ import Testing
             && $0.code == .workspaceScaleWarning
             && $0.message.contains("largest supported comfortable range")
     })
+}
+
+private func workspaceScaleFitSiteDocument() throws -> DesignDocument {
+    var document = DesignDocument.empty(named: "Fit Site")
+    let profileID = try document.createRectangleSketchFromCorners(
+        name: "Fit Site Footprint",
+        plane: .xy,
+        firstCorner: SketchPoint(
+            x: .length(0.0, .meter),
+            y: .length(0.0, .meter)
+        ),
+        oppositeCorner: SketchPoint(
+            x: .length(25_000.0, .meter),
+            y: .length(10_000.0, .meter)
+        )
+    )
+    _ = try document.extrudeProfile(
+        name: "Fit Site Mass",
+        profile: ProfileReference(featureID: profileID),
+        distance: .length(100.0, .meter),
+        direction: .normal
+    )
+    return document
 }

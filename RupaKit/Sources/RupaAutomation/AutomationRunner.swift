@@ -1541,40 +1541,36 @@ public struct AutomationRunner {
     private func fitWorkspaceScaleToModel(
         in session: EditorSession
     ) throws -> AutomationResult {
-        let measurement = try MeasurementService(
-            tolerance: .workspaceScaleAware(for: session.document)
-        ).measure(
+        let plan = try WorkspaceScaleFitService().plan(
             document: session.document,
             objectRegistry: session.objectRegistry,
             currentEvaluation: session.currentEvaluation,
             currentGeneration: session.generation
         )
 
-        guard let recommendation = measurement.workspaceScaleRecommendation else {
+        switch plan.action {
+        case .alreadyFits:
             return workspaceAutomationResult(
                 message: "Workspace scale already fits the current model.",
-                measurement: measurement,
+                measurement: plan.measurement,
                 in: session
             )
-        }
-
-        guard recommendation.isActionable else {
+        case .unsupportedRange:
             return workspaceAutomationResult(
                 message: "Workspace scale cannot fit the current model within the supported preset range.",
-                measurement: measurement,
+                measurement: plan.measurement,
+                in: session
+            )
+        case .applyPreset(let preset):
+            let configuration = preset.rulerConfiguration.normalizedForWorkspaceScale()
+            let result = try session.execute(.setRulerConfiguration(configuration))
+            let scale = WorkspaceScaleSnapshot(ruler: session.document.ruler)
+            return workspaceAutomationResult(
+                message: "Workspace scale fitted to \(preset.title). \(scale.summary)",
+                commandResult: result,
                 in: session
             )
         }
-
-        let preset = recommendation.recommendedPreset
-        let configuration = preset.rulerConfiguration.normalizedForWorkspaceScale()
-        let result = try session.execute(.setRulerConfiguration(configuration))
-        let scale = WorkspaceScaleSnapshot(ruler: session.document.ruler)
-        return workspaceAutomationResult(
-            message: "Workspace scale fitted to \(preset.title). \(scale.summary)",
-            commandResult: result,
-            in: session
-        )
     }
 
     private func workspaceAutomationResult(
