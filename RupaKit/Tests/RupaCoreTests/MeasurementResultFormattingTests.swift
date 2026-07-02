@@ -1,7 +1,7 @@
 import Testing
 @testable import RupaCore
 
-@Test func measurementResultFormatsLargeBoundsWithGroupedValues() {
+@Test func measurementResultFormatsLargeBoundsWithReadableMetricUnits() {
     let bounds = MeasurementResult.Bounds(
         minX: 0.0,
         minY: 0.0,
@@ -11,7 +11,8 @@ import Testing
         maxZ: 1_000.0
     )
 
-    #expect(bounds.formattedSize(in: .meter) == "100,000 x 30,480 x 1,000 m")
+    #expect(bounds.formattedSize(in: .meter) == "100 km x 30.48 km x 1 km")
+    #expect(bounds.formattedSize(in: .millimeter) == "100 km x 30.48 km x 1 km")
 }
 
 @Test func measurementResultFormatsFootBoundsAsArchitecturalLengths() {
@@ -50,5 +51,5 @@ import Testing
     #expect(result.message.contains("100,000,000 m^2 profile area"))
     #expect(result.message.contains("30,480,000 m^2 sheet area"))
     #expect(result.message.contains("1,000,000,000 m^3 solid volume"))
-    #expect(result.message.contains("100,000 x 30,480 x 1,000 m bounds"))
+    #expect(result.message.contains("100 km x 30.48 km x 1 km bounds"))
 }

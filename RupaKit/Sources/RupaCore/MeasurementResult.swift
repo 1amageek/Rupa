@@ -176,10 +176,10 @@ public extension MeasurementResult {
                 let z = LengthDisplayText.lengthString(fromMeters: sizeZ, unit: unit)
                 return "\(x) x \(y) x \(z)"
             }
-            let x = MeasurementDisplayNumberText.string(from: unit.value(fromMeters: sizeX))
-            let y = MeasurementDisplayNumberText.string(from: unit.value(fromMeters: sizeY))
-            let z = MeasurementDisplayNumberText.string(from: unit.value(fromMeters: sizeZ))
-            return "\(x) x \(y) x \(z) \(unit.symbol)"
+            let x = LengthDisplayText.readableLengthString(fromMeters: sizeX, preferredUnit: unit)
+            let y = LengthDisplayText.readableLengthString(fromMeters: sizeY, preferredUnit: unit)
+            let z = LengthDisplayText.readableLengthString(fromMeters: sizeZ, preferredUnit: unit)
+            return "\(x) x \(y) x \(z)"
         }
     }
 
