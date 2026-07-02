@@ -34,29 +34,6 @@ struct WorkspaceScaleFitPromptState: Equatable, Sendable {
         guard isActionable else {
             return "Scale Limit"
         }
-        return "Fit \(compactPresetTitle(preset))"
-    }
-
-    private static func compactPresetTitle(_ preset: WorkspaceScalePreset) -> String {
-        switch preset {
-        case .microFabrication:
-            "Micro"
-        case .precisionMechanical:
-            "Precision"
-        case .productDesign:
-            "Product"
-        case .roomInterior:
-            "Room"
-        case .architecture:
-            "Arch"
-        case .architectureImperial:
-            "Arch ft"
-        case .sitePlanning:
-            "Site"
-        case .regionalPlanning:
-            "Region"
-        case .sitePlanningImperial:
-            "Site ft"
-        }
+        return "Fit \(preset.compactWorkspaceTitle)"
     }
 }

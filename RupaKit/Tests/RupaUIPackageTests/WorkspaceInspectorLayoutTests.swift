@@ -334,6 +334,18 @@ import Testing
     #expect(clampedSiteMeters == RulerConfiguration.visibleSpanMetersRange.upperBound)
 }
 
+@Test func workspaceScalePresetCompactWorkspaceTitlesStayConsistentAcrossChrome() {
+    #expect(WorkspaceScalePreset.microFabrication.compactWorkspaceTitle == "Micro")
+    #expect(WorkspaceScalePreset.precisionMechanical.compactWorkspaceTitle == "Precision")
+    #expect(WorkspaceScalePreset.productDesign.compactWorkspaceTitle == "Product")
+    #expect(WorkspaceScalePreset.roomInterior.compactWorkspaceTitle == "Room")
+    #expect(WorkspaceScalePreset.architecture.compactWorkspaceTitle == "Arch")
+    #expect(WorkspaceScalePreset.architectureImperial.compactWorkspaceTitle == "Arch ft")
+    #expect(WorkspaceScalePreset.sitePlanning.compactWorkspaceTitle == "Site")
+    #expect(WorkspaceScalePreset.regionalPlanning.compactWorkspaceTitle == "Region")
+    #expect(WorkspaceScalePreset.sitePlanningImperial.compactWorkspaceTitle == "Site ft")
+}
+
 @Test func workspaceScaleStatusSummaryReportsSitePlanningInKilometers() {
     let summary = WorkspaceScaleStatusSummary(
         ruler: WorkspaceScalePreset.sitePlanning.rulerConfiguration

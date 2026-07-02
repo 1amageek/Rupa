@@ -39,7 +39,7 @@ struct WorkspaceScaleStatusSummary: Equatable, Sendable {
             fromMeters: normalized.majorTickMeters,
             preferredUnit: preferredUnit
         )
-        self.compactTitle = "\(Self.compactPresetTitle(matchedPreset)) · \(visibleSpanTitle)"
+        self.compactTitle = "\(matchedPreset?.compactWorkspaceTitle ?? "Custom") · \(visibleSpanTitle)"
         self.presetTitle = presetTitle
         self.useCaseTitle = useCaseTitle
         self.displayUnitTitle = displayUnitTitle
@@ -59,31 +59,6 @@ struct WorkspaceScaleStatusSummary: Equatable, Sendable {
             matchedPreset: matchedPreset,
             direction: .larger
         )
-    }
-
-    private static func compactPresetTitle(_ preset: WorkspaceScalePreset?) -> String {
-        switch preset {
-        case .microFabrication:
-            "Micro"
-        case .precisionMechanical:
-            "Precision"
-        case .productDesign:
-            "Product"
-        case .roomInterior:
-            "Room"
-        case .architecture:
-            "Arch"
-        case .architectureImperial:
-            "Arch ft"
-        case .sitePlanning:
-            "Site"
-        case .regionalPlanning:
-            "Region"
-        case .sitePlanningImperial:
-            "Site ft"
-        case nil:
-            "Custom"
-        }
     }
 
     private static func lengthTitle(
