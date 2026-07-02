@@ -118,6 +118,13 @@ public enum ObjectTypeCatalog {
         definition(for: id)?.defaultProperties ?? ObjectPropertySet()
     }
 
+    public static func defaultProperties(
+        for id: ObjectTypeID?,
+        ruler: RulerConfiguration
+    ) -> ObjectPropertySet {
+        ObjectTypeRegistry.builtIn.defaultProperties(for: id, ruler: ruler)
+    }
+
     public static func geometryRole(for id: ObjectTypeID?) -> ObjectDescriptor.GeometryRole? {
         definition(for: id)?.geometryRole
     }
@@ -154,13 +161,25 @@ public enum ObjectTypeCatalog {
     )
 
     private static let lineProperties: [ObjectPropertyDefinition] = [
-        .length(id: "length", title: "Length", binding: .sizeX, defaultValue: 1.0),
+        .length(
+            id: "length",
+            title: "Length",
+            binding: .sizeX,
+            defaultValue: 1.0,
+            workspaceScaleDefault: .sketchWidth
+        ),
         .angle(id: "angle", title: "Angle", binding: .angle, defaultValue: 0.0),
         .length(id: "stroke.width", title: "Stroke", binding: .strokeWidth, defaultValue: 0.001),
     ]
 
     private static let arcProperties: [ObjectPropertyDefinition] = [
-        .length(id: "radius", title: "Radius", binding: .radius, defaultValue: 0.5),
+        .length(
+            id: "radius",
+            title: "Radius",
+            binding: .radius,
+            defaultValue: 0.5,
+            workspaceScaleDefault: .curveRadius
+        ),
         .angle(id: "start.angle", title: "Start", binding: .angle, defaultValue: 0.0),
         .angle(id: "end.angle", title: "End", binding: .angle, defaultValue: 90.0),
         .length(id: "stroke.width", title: "Stroke", binding: .strokeWidth, defaultValue: 0.001),
@@ -172,34 +191,85 @@ public enum ObjectTypeCatalog {
     ]
 
     private static let rectangleProperties: [ObjectPropertyDefinition] = [
-        .length(id: "size.x", title: "Size X", binding: .sizeX, defaultValue: 1.0),
-        .length(id: "size.y", title: "Size Y", binding: .sizeY, defaultValue: 1.0),
+        .length(
+            id: "size.x",
+            title: "Size X",
+            binding: .sizeX,
+            defaultValue: 1.0,
+            workspaceScaleDefault: .sketchWidth
+        ),
+        .length(
+            id: "size.y",
+            title: "Size Y",
+            binding: .sizeY,
+            defaultValue: 1.0,
+            workspaceScaleDefault: .sketchHeight
+        ),
         .integer(id: "subdivisions", title: "Subdivisions", binding: .subdivisionSegments, defaultValue: 40),
         .length(id: "corner.radius", title: "Corner", binding: .cornerRadius, defaultValue: 0.0),
-        .length(id: "extrusion", title: "Extrusion", binding: .extrusion, defaultValue: 0.0),
+        .length(
+            id: "extrusion",
+            title: "Extrusion",
+            binding: .extrusion,
+            defaultValue: 0.0
+        ),
         .length(id: "bevel", title: "Bevel", binding: .bevel, defaultValue: 0.0),
         .integer(id: "corner.sides", title: "Corner Sides", binding: .cornerSideSegments, defaultValue: 8),
         .length(id: "stroke.width", title: "Stroke", binding: .strokeWidth, defaultValue: 0.001),
     ]
 
     private static let circleProperties: [ObjectPropertyDefinition] = [
-        .length(id: "radius", title: "Radius", binding: .radius, defaultValue: 0.5),
+        .length(
+            id: "radius",
+            title: "Radius",
+            binding: .radius,
+            defaultValue: 0.5,
+            workspaceScaleDefault: .curveRadius
+        ),
         .integer(id: "sides.x", title: "Sides", binding: .sideSegments, defaultValue: 64),
-        .length(id: "extrusion", title: "Extrusion", binding: .extrusion, defaultValue: 0.0),
+        .length(
+            id: "extrusion",
+            title: "Extrusion",
+            binding: .extrusion,
+            defaultValue: 0.0
+        ),
         .length(id: "bevel", title: "Bevel", binding: .bevel, defaultValue: 0.0),
         .integer(id: "bevel.sides", title: "Bevel Sides", binding: .bevelSideSegments, defaultValue: 3),
         .length(id: "stroke.width", title: "Stroke", binding: .strokeWidth, defaultValue: 0.001),
     ]
 
     private static let polygonProperties: [ObjectPropertyDefinition] = [
-        .length(id: "radius", title: "Radius", binding: .radius, defaultValue: 0.5),
-        .length(id: "sizing.radius", title: "Sizing Radius", binding: nil, defaultValue: 0.5),
+        .length(
+            id: "radius",
+            title: "Radius",
+            binding: .radius,
+            defaultValue: 0.5,
+            workspaceScaleDefault: .curveRadius
+        ),
+        .length(
+            id: "sizing.radius",
+            title: "Sizing Radius",
+            binding: nil,
+            defaultValue: 0.5,
+            workspaceScaleDefault: .curveRadius
+        ),
         .boolean(id: "radius.is.inradius", title: "Use Inradius", binding: nil, defaultValue: false),
         .text(id: "inclination.mode", title: "Inclination", defaultValue: PolygonInclinationMode.vertical.rawValue),
-        .length(id: "side.length", title: "Side Length", binding: nil, defaultValue: 0.5),
+        .length(
+            id: "side.length",
+            title: "Side Length",
+            binding: nil,
+            defaultValue: 0.5,
+            workspaceScaleDefault: .curveRadius
+        ),
         .integer(id: "sides.x", title: "Sides", binding: .sideSegments, defaultValue: 6),
         .angle(id: "angle", title: "Rotation", binding: .angle, defaultValue: 0.0),
-        .length(id: "extrusion", title: "Extrusion", binding: .extrusion, defaultValue: 0.0),
+        .length(
+            id: "extrusion",
+            title: "Extrusion",
+            binding: .extrusion,
+            defaultValue: 0.0
+        ),
         .length(id: "bevel", title: "Bevel", binding: .bevel, defaultValue: 0.0),
         .integer(id: "bevel.sides", title: "Bevel Sides", binding: .bevelSideSegments, defaultValue: 3),
         .length(id: "stroke.width", title: "Stroke", binding: .strokeWidth, defaultValue: 0.001),
@@ -207,29 +277,94 @@ public enum ObjectTypeCatalog {
 
     private static let slotProperties: [ObjectPropertyDefinition] = [
         .text(id: "source.kind", title: "Source", defaultValue: "curve"),
-        .length(id: "width", title: "Width", binding: nil, defaultValue: 0.1),
-        .length(id: "path.length", title: "Path", binding: nil, defaultValue: 1.0),
-        .length(id: "radius", title: "Cap Radius", binding: .radius, defaultValue: 0.05),
+        .length(
+            id: "width",
+            title: "Width",
+            binding: nil,
+            defaultValue: 0.1,
+            workspaceScaleDefault: .narrowProfileWidth
+        ),
+        .length(
+            id: "path.length",
+            title: "Path",
+            binding: nil,
+            defaultValue: 1.0,
+            workspaceScaleDefault: .sketchWidth
+        ),
+        .length(
+            id: "radius",
+            title: "Cap Radius",
+            binding: .radius,
+            defaultValue: 0.05,
+            workspaceScaleDefault: .narrowProfileRadius
+        ),
         .integer(id: ProfileTessellationPolicy.arcSegmentsPropertyID, title: "Arc Segments", binding: .sideSegments, defaultValue: 32),
-        .length(id: "extrusion", title: "Extrusion", binding: .extrusion, defaultValue: 0.0),
+        .length(
+            id: "extrusion",
+            title: "Extrusion",
+            binding: .extrusion,
+            defaultValue: 0.0
+        ),
         .length(id: "bevel", title: "Bevel", binding: .bevel, defaultValue: 0.0),
         .integer(id: "bevel.sides", title: "Bevel Sides", binding: .bevelSideSegments, defaultValue: 3),
         .length(id: "stroke.width", title: "Stroke", binding: .strokeWidth, defaultValue: 0.001),
     ]
 
     private static let cubeProperties: [ObjectPropertyDefinition] = [
-        .length(id: "size.x", title: "Size X", binding: .sizeX, defaultValue: 1.0),
-        .length(id: "size.y", title: "Size Y", binding: .sizeY, defaultValue: 1.0),
-        .length(id: "size.z", title: "Size Z", binding: .sizeZ, defaultValue: 1.0),
+        .length(
+            id: "size.x",
+            title: "Size X",
+            binding: .sizeX,
+            defaultValue: 1.0,
+            workspaceScaleDefault: .placedSolidSide
+        ),
+        .length(
+            id: "size.y",
+            title: "Size Y",
+            binding: .sizeY,
+            defaultValue: 1.0,
+            workspaceScaleDefault: .placedSolidSide
+        ),
+        .length(
+            id: "size.z",
+            title: "Size Z",
+            binding: .sizeZ,
+            defaultValue: 1.0,
+            workspaceScaleDefault: .placedSolidSide
+        ),
         .length(id: "corner.radius", title: "Corner", binding: .cornerRadius, defaultValue: 0.0),
         .integer(id: "corner.sides", title: "Corner Sides", binding: .cornerSideSegments, defaultValue: 8),
     ]
 
     private static let cylinderProperties: [ObjectPropertyDefinition] = [
-        .length(id: "size.x", title: "Size X", binding: .sizeX, defaultValue: 1.0),
-        .length(id: "size.y", title: "Size Y", binding: .sizeY, defaultValue: 1.0),
-        .length(id: "size.z", title: "Size Z", binding: .sizeZ, defaultValue: 1.0),
-        .length(id: "radius", title: "Radius", binding: .radius, defaultValue: 0.5),
+        .length(
+            id: "size.x",
+            title: "Size X",
+            binding: .sizeX,
+            defaultValue: 1.0,
+            workspaceScaleDefault: .curveDiameter
+        ),
+        .length(
+            id: "size.y",
+            title: "Size Y",
+            binding: .sizeY,
+            defaultValue: 1.0,
+            workspaceScaleDefault: .cylinderDepth
+        ),
+        .length(
+            id: "size.z",
+            title: "Size Z",
+            binding: .sizeZ,
+            defaultValue: 1.0,
+            workspaceScaleDefault: .curveDiameter
+        ),
+        .length(
+            id: "radius",
+            title: "Radius",
+            binding: .radius,
+            defaultValue: 0.5,
+            workspaceScaleDefault: .curveRadius
+        ),
         .integer(id: "sides.x", title: "Sides X", binding: .sideSegments, defaultValue: 64),
         .integer(id: "sides.y", title: "Sides Y", binding: .verticalSegments, defaultValue: 1),
         .angle(id: "angle", title: "Angle", binding: .angle, defaultValue: 360.0),
@@ -263,7 +398,8 @@ private extension ObjectPropertyDefinition {
         id: ObjectPropertyID,
         title: String,
         binding: RenderBinding?,
-        defaultValue: Double
+        defaultValue: Double,
+        workspaceScaleDefault: WorkspaceScaleDefault? = nil
     ) -> ObjectPropertyDefinition {
         ObjectPropertyDefinition(
             id: id,
@@ -273,6 +409,7 @@ private extension ObjectPropertyDefinition {
             defaultValue: .length(defaultValue),
             inspectorControl: .textFieldAndSlider,
             renderBinding: binding,
+            workspaceScaleDefault: workspaceScaleDefault,
             numericRange: NumericRange(
                 lowerBound: 0.0,
                 upperBound: maximumAuthoringLengthMeters

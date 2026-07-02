@@ -116,6 +116,7 @@ extension DesignDocument {
                 typeID: nil,
                 geometryRole: .solid,
                 properties: ObjectPropertySet(),
+                ruler: ruler,
                 objectRegistry: objectRegistry
             )
         )

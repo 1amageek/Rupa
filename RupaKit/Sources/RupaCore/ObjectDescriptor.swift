@@ -98,9 +98,15 @@ public struct ObjectDescriptor: Codable, Hashable, Sendable {
         typeID: ObjectTypeID? = nil,
         geometryRole: GeometryRole = .sketchProfile,
         properties: ObjectPropertySet = ObjectPropertySet(),
+        ruler: RulerConfiguration? = nil,
         objectRegistry: ObjectTypeRegistry = .builtIn
     ) -> ObjectDescriptor {
-        let resolvedProperties = objectRegistry.defaultProperties(for: typeID).merging(properties)
+        let defaultProperties = if let ruler {
+            objectRegistry.defaultProperties(for: typeID, ruler: ruler)
+        } else {
+            objectRegistry.defaultProperties(for: typeID)
+        }
+        let resolvedProperties = defaultProperties.merging(properties)
         return ObjectDescriptor(
             category: .sketch,
             geometryRole: objectRegistry.geometryRole(for: typeID) ?? geometryRole,
@@ -116,9 +122,15 @@ public struct ObjectDescriptor: Codable, Hashable, Sendable {
         typeID: ObjectTypeID?,
         geometryRole: GeometryRole = .solid,
         properties: ObjectPropertySet = ObjectPropertySet(),
+        ruler: RulerConfiguration? = nil,
         objectRegistry: ObjectTypeRegistry = .builtIn
     ) -> ObjectDescriptor {
-        let resolvedProperties = objectRegistry.defaultProperties(for: typeID).merging(properties)
+        let defaultProperties = if let ruler {
+            objectRegistry.defaultProperties(for: typeID, ruler: ruler)
+        } else {
+            objectRegistry.defaultProperties(for: typeID)
+        }
+        let resolvedProperties = defaultProperties.merging(properties)
         return ObjectDescriptor(
             category: .body,
             geometryRole: objectRegistry.geometryRole(for: typeID) ?? geometryRole,

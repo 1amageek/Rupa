@@ -61,6 +61,7 @@ extension DesignDocument {
                 featureID: featureID,
                 sourceSection: .profile(profile),
                 typeID: typeID,
+                ruler: ruler,
                 objectRegistry: objectRegistry
             )
         )
@@ -129,6 +130,7 @@ extension DesignDocument {
                 featureID: featureID,
                 sourceSection: .profile(profile),
                 typeID: nil,
+                ruler: ruler,
                 objectRegistry: objectRegistry
             )
         )
@@ -228,6 +230,7 @@ extension DesignDocument {
                 sourceSection: sections.first.map(BodySourceSectionReference.init(sweepSection:)),
                 typeID: nil,
                 geometryRole: options.resultKind.objectGeometryRole,
+                ruler: ruler,
                 objectRegistry: objectRegistry
             )
         )
@@ -304,6 +307,7 @@ extension DesignDocument {
                 sourceSection: sections.first.map { .profile($0.profile) },
                 typeID: nil,
                 geometryRole: options.resultKind.objectGeometryRole,
+                ruler: ruler,
                 objectRegistry: objectRegistry
             )
         )
@@ -385,6 +389,7 @@ extension DesignDocument {
                 sourceSection: nil,
                 typeID: nil,
                 geometryRole: .solid,
+                ruler: ruler,
                 objectRegistry: objectRegistry
             )
         )

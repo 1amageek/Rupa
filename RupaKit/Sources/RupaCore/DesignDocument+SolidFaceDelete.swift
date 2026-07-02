@@ -135,6 +135,7 @@ extension DesignDocument {
                 typeID: nil,
                 geometryRole: .surface,
                 properties: ObjectPropertySet(),
+                ruler: ruler,
                 objectRegistry: objectRegistry
             )
         )

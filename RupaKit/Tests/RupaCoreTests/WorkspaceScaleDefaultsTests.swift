@@ -40,6 +40,100 @@ import Testing
     #expect(approximatelyEqual(defaults.curveRadiusMeters, 1.2))
 }
 
+@Test func objectTypeRegistryDefaultPropertiesUseWorkspaceScaleDefinitions() async throws {
+    let registry = ObjectTypeRegistry.builtIn
+    let siteRuler = WorkspaceScalePreset.sitePlanning.rulerConfiguration
+
+    let rectangle = registry.defaultProperties(for: .rectangle, ruler: siteRuler)
+    #expect(approximatelyEqual(rectangle["size.x"]?.lengthValue, 4_000.0))
+    #expect(approximatelyEqual(rectangle["size.y"]?.lengthValue, 2_000.0))
+    #expect(approximatelyEqual(rectangle["extrusion"]?.lengthValue, 0.0))
+
+    let regionalRuler = WorkspaceScalePreset.regionalPlanning.rulerConfiguration
+    let circle = registry.defaultProperties(for: .circle, ruler: regionalRuler)
+    #expect(approximatelyEqual(circle["radius"]?.lengthValue, 12_000.0))
+
+    let cube = registry.defaultProperties(for: .cube, ruler: regionalRuler)
+    #expect(approximatelyEqual(cube["size.x"]?.lengthValue, 40_000.0))
+    #expect(approximatelyEqual(cube["size.y"]?.lengthValue, 40_000.0))
+    #expect(approximatelyEqual(cube["size.z"]?.lengthValue, 40_000.0))
+
+    let cylinder = registry.defaultProperties(for: .cylinder, ruler: regionalRuler)
+    #expect(approximatelyEqual(cylinder["size.x"]?.lengthValue, 24_000.0))
+    #expect(approximatelyEqual(cylinder["size.y"]?.lengthValue, 20_000.0))
+    #expect(approximatelyEqual(cylinder["size.z"]?.lengthValue, 24_000.0))
+    #expect(approximatelyEqual(cylinder["radius"]?.lengthValue, 12_000.0))
+}
+
+@Test func customObjectRegistryCanDeclareWorkspaceScaleDefaults() async throws {
+    let typeID: ObjectTypeID = "custom.sitePanel"
+    let registry = try ObjectTypeRegistry(
+        definitions: [
+            ObjectTypeDefinition(
+                id: typeID,
+                title: "Site Panel",
+                systemImage: "rectangle",
+                representation: .twoDimensional,
+                category: .sketch,
+                geometryRole: .sketchProfile,
+                properties: [
+                    ObjectPropertyDefinition(
+                        id: "panel.width",
+                        title: "Width",
+                        group: "Shape",
+                        valueKind: .length,
+                        defaultValue: .length(1.0),
+                        inspectorControl: .textFieldAndSlider,
+                        renderBinding: "panel.width",
+                        workspaceScaleDefault: .sketchWidth
+                    ),
+                    ObjectPropertyDefinition(
+                        id: "panel.depth",
+                        title: "Depth",
+                        group: "Shape",
+                        valueKind: .length,
+                        defaultValue: .length(0.1),
+                        inspectorControl: .textFieldAndSlider,
+                        renderBinding: "panel.depth",
+                        workspaceScaleDefault: .sketchDepth
+                    ),
+                ]
+            ),
+        ]
+    )
+
+    let properties = registry.defaultProperties(
+        for: typeID,
+        ruler: WorkspaceScalePreset.sitePlanning.rulerConfiguration
+    )
+    #expect(approximatelyEqual(properties["panel.width"]?.lengthValue, 4_000.0))
+    #expect(approximatelyEqual(properties["panel.depth"]?.lengthValue, 1_000.0))
+}
+
+@Test func sketchObjectTypeDefaultsFollowDocumentWorkspaceScale() async throws {
+    var document = DesignDocument.empty()
+    try document.setRulerConfiguration(WorkspaceScalePreset.sitePlanning.rulerConfiguration)
+    let featureID = try document.createLineSketch(
+        name: "Typed Source",
+        plane: .xy,
+        start: SketchPoint(x: .length(0.0, .meter), y: .length(0.0, .meter)),
+        end: SketchPoint(x: .length(10.0, .meter), y: .length(0.0, .meter))
+    )
+
+    try document.setSketchObjectType(
+        featureID: featureID,
+        typeID: .rectangle,
+        objectRegistry: .builtIn
+    )
+
+    let sceneNode = try #require(document.productMetadata.sceneNodes.values.first {
+        $0.object?.sourceFeatureID == featureID
+    })
+    #expect(approximatelyEqual(sceneNode.object?.properties["size.x"]?.lengthValue, 4_000.0))
+    #expect(approximatelyEqual(sceneNode.object?.properties["size.y"]?.lengthValue, 2_000.0))
+    #expect(approximatelyEqual(sceneNode.object?.properties["extrusion"]?.lengthValue, 0.0))
+}
+
 @MainActor
 @Test func editorSessionDefaultSolidUsesWorkspaceScale() async throws {
     let session = EditorSession()

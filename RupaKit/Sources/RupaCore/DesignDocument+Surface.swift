@@ -47,6 +47,7 @@ extension DesignDocument {
                     "control.point.v": .integer(surface.vControlPointCount),
                     "surface.rational": .boolean(surface.isRational),
                 ]),
+                ruler: ruler,
                 objectRegistry: objectRegistry
             )
         )
@@ -110,6 +111,7 @@ extension DesignDocument {
                     "merge.patches": .boolean(options.mergePatches),
                     "interpolate.boundary": .boolean(options.interpolateBoundaryExactly),
                 ]),
+                ruler: ruler,
                 objectRegistry: objectRegistry
             )
         )

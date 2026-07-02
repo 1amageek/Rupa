@@ -345,6 +345,7 @@ extension DesignDocument {
                 typeID: nil,
                 geometryRole: sceneNode.object?.geometryRole ?? .solid,
                 properties: ObjectPropertySet(),
+                ruler: ruler,
                 objectRegistry: objectRegistry
             )
         )
@@ -511,6 +512,7 @@ extension DesignDocument {
                 typeID: nil,
                 geometryRole: sceneNode.object?.geometryRole ?? .solid,
                 properties: ObjectPropertySet(),
+                ruler: ruler,
                 objectRegistry: objectRegistry
             )
         )
