@@ -57,12 +57,10 @@ public struct AutomationRunner {
             )
         case .renameDocument(let name):
             let result = try session.execute(.renameDocument(name: name))
-            return AutomationResult(
+            return commandAutomationResult(
                 message: "Document renamed to \(name).",
-                commandName: result.commandName,
-                generation: result.generation,
-                didMutate: result.didMutate,
-                diagnostics: result.diagnostics
+                commandResult: result,
+                in: session
             )
         case .upsertParameter(let name, let expression, let kind):
             let result = try session.execute(
@@ -72,12 +70,10 @@ public struct AutomationRunner {
                     kind: kind
                 )
             )
-            return AutomationResult(
+            return commandAutomationResult(
                 message: "Parameter \(name) updated.",
-                commandName: result.commandName,
-                generation: result.generation,
-                didMutate: result.didMutate,
-                diagnostics: result.diagnostics
+                commandResult: result,
+                in: session
             )
         case .renameParameter(let currentName, let newName):
             let result = try session.execute(
@@ -86,21 +82,17 @@ public struct AutomationRunner {
                     newName: newName
                 )
             )
-            return AutomationResult(
+            return commandAutomationResult(
                 message: "Parameter \(currentName) renamed to \(newName).",
-                commandName: result.commandName,
-                generation: result.generation,
-                didMutate: result.didMutate,
-                diagnostics: result.diagnostics
+                commandResult: result,
+                in: session
             )
         case .deleteParameter(let name):
             let result = try session.execute(.deleteParameter(name: name))
-            return AutomationResult(
+            return commandAutomationResult(
                 message: "Parameter \(name) deleted.",
-                commandName: result.commandName,
-                generation: result.generation,
-                didMutate: result.didMutate,
-                diagnostics: result.diagnostics
+                commandResult: result,
+                in: session
             )
         case .createComponentDefinition(let name, let rootSceneNodeIDs):
             let result = try session.execute(
@@ -109,12 +101,10 @@ public struct AutomationRunner {
                     rootSceneNodeIDs: rootSceneNodeIDs
                 )
             )
-            return AutomationResult(
+            return commandAutomationResult(
                 message: "Component definition \(name) created.",
-                commandName: result.commandName,
-                generation: result.generation,
-                didMutate: result.didMutate,
-                diagnostics: result.diagnostics
+                commandResult: result,
+                in: session
             )
         case .createComponentInstance(let name, let definitionID, let localTransform):
             let result = try session.execute(
@@ -124,12 +114,10 @@ public struct AutomationRunner {
                     localTransform: localTransform
                 )
             )
-            return AutomationResult(
+            return commandAutomationResult(
                 message: "Component instance \(name) created.",
-                commandName: result.commandName,
-                generation: result.generation,
-                didMutate: result.didMutate,
-                diagnostics: result.diagnostics
+                commandResult: result,
+                in: session
             )
         case .createPatternArray(let name, let definitionID, let distribution, let outputMode):
             let result = try session.execute(
@@ -140,12 +128,10 @@ public struct AutomationRunner {
                     outputMode: outputMode
                 )
             )
-            return AutomationResult(
+            return commandAutomationResult(
                 message: "Pattern array \(name) created.",
-                commandName: result.commandName,
-                generation: result.generation,
-                didMutate: result.didMutate,
-                diagnostics: result.diagnostics
+                commandResult: result,
+                in: session
             )
         case .updatePatternArray(let id, let name, let definitionID, let distribution, let outputMode):
             let result = try session.execute(
@@ -157,43 +143,35 @@ public struct AutomationRunner {
                     outputMode: outputMode
                 )
             )
-            return AutomationResult(
+            return commandAutomationResult(
                 message: "Pattern array updated.",
-                commandName: result.commandName,
-                generation: result.generation,
-                didMutate: result.didMutate,
-                diagnostics: result.diagnostics
+                commandResult: result,
+                in: session
             )
         case .explodePatternArray(let id):
             let result = try session.execute(.explodePatternArray(id: id))
-            return AutomationResult(
+            return commandAutomationResult(
                 message: "Pattern array exploded.",
-                commandName: result.commandName,
-                generation: result.generation,
-                didMutate: result.didMutate,
-                diagnostics: result.diagnostics
+                commandResult: result,
+                in: session
             )
         case .setSceneNodeVisibility(let id, let isVisible):
             let result = try session.execute(
                 .setSceneNodeVisibility(id: id, isVisible: isVisible)
             )
-            return AutomationResult(
+            return commandAutomationResult(
                 message: "Scene node visibility updated.",
-                commandName: result.commandName,
-                generation: result.generation,
-                didMutate: result.didMutate,
-                diagnostics: result.diagnostics
+                commandResult: result,
+                in: session
             )
         case .setSceneNodeLock(let id, let isLocked):
             let result = try session.execute(
                 .setSceneNodeLock(id: id, isLocked: isLocked)
             )
-            return AutomationResult(
+            return commandAutomationResult(
                 message: "Scene node lock updated.",
-                commandName: result.commandName,
-                generation: result.generation,
-                didMutate: result.didMutate,
-                diagnostics: result.diagnostics
+                commandResult: result,
+                in: session
             )
         case .setSceneNodeTransform(let id, let localTransform):
             let result = try session.execute(
@@ -202,34 +180,28 @@ public struct AutomationRunner {
                     localTransform: localTransform
                 )
             )
-            return AutomationResult(
+            return commandAutomationResult(
                 message: "Scene node transform updated.",
-                commandName: result.commandName,
-                generation: result.generation,
-                didMutate: result.didMutate,
-                diagnostics: result.diagnostics
+                commandResult: result,
+                in: session
             )
         case .setComponentInstanceVisibility(let id, let isVisible):
             let result = try session.execute(
                 .setComponentInstanceVisibility(id: id, isVisible: isVisible)
             )
-            return AutomationResult(
+            return commandAutomationResult(
                 message: "Component instance visibility updated.",
-                commandName: result.commandName,
-                generation: result.generation,
-                didMutate: result.didMutate,
-                diagnostics: result.diagnostics
+                commandResult: result,
+                in: session
             )
         case .setComponentInstanceLock(let id, let isLocked):
             let result = try session.execute(
                 .setComponentInstanceLock(id: id, isLocked: isLocked)
             )
-            return AutomationResult(
+            return commandAutomationResult(
                 message: "Component instance lock updated.",
-                commandName: result.commandName,
-                generation: result.generation,
-                didMutate: result.didMutate,
-                diagnostics: result.diagnostics
+                commandResult: result,
+                in: session
             )
         case .setComponentInstanceTransform(let id, let localTransform):
             let result = try session.execute(
@@ -238,21 +210,17 @@ public struct AutomationRunner {
                     localTransform: localTransform
                 )
             )
-            return AutomationResult(
+            return commandAutomationResult(
                 message: "Component instance transform updated.",
-                commandName: result.commandName,
-                generation: result.generation,
-                didMutate: result.didMutate,
-                diagnostics: result.diagnostics
+                commandResult: result,
+                in: session
             )
         case .createSectionPlane(let name):
             let result = try session.execute(.createSectionPlane(name: name))
-            return AutomationResult(
+            return commandAutomationResult(
                 message: "Section plane \(name) created.",
-                commandName: result.commandName,
-                generation: result.generation,
-                didMutate: result.didMutate,
-                diagnostics: result.diagnostics
+                commandResult: result,
+                in: session
             )
         case .describeConstructionPlanes:
             let summary = ConstructionPlaneSummaryService().summarize(
@@ -272,12 +240,10 @@ public struct AutomationRunner {
                     activates: activates
                 )
             )
-            return AutomationResult(
+            return commandAutomationResult(
                 message: "Construction plane \(name) created.",
-                commandName: result.commandName,
-                generation: result.generation,
-                didMutate: result.didMutate,
-                diagnostics: result.diagnostics
+                commandResult: result,
+                in: session
             )
         case .createConstructionPlaneFromTarget(let name, let target, let activates):
             let result = try session.execute(
@@ -287,12 +253,10 @@ public struct AutomationRunner {
                     activates: activates
                 )
             )
-            return AutomationResult(
+            return commandAutomationResult(
                 message: "Construction plane \(name) created from target \(target.component).",
-                commandName: result.commandName,
-                generation: result.generation,
-                didMutate: result.didMutate,
-                diagnostics: result.diagnostics
+                commandResult: result,
+                in: session
             )
         case .createConstructionPlaneFromTargets(let name, let targets, let viewNormal, let activates):
             let result = try session.execute(
@@ -303,12 +267,10 @@ public struct AutomationRunner {
                     activates: activates
                 )
             )
-            return AutomationResult(
+            return commandAutomationResult(
                 message: "Construction plane \(name) created from \(targets.count) targets.",
-                commandName: result.commandName,
-                generation: result.generation,
-                didMutate: result.didMutate,
-                diagnostics: result.diagnostics
+                commandResult: result,
+                in: session
             )
         case .createViewAlignedConstructionPlane(let name, let origin, let viewNormal, let activates):
             let result = try session.execute(
@@ -319,42 +281,34 @@ public struct AutomationRunner {
                     activates: activates
                 )
             )
-            return AutomationResult(
+            return commandAutomationResult(
                 message: "View-aligned construction plane \(name) created.",
-                commandName: result.commandName,
-                generation: result.generation,
-                didMutate: result.didMutate,
-                diagnostics: result.diagnostics
+                commandResult: result,
+                in: session
             )
         case .setActiveConstructionPlane(let id):
             let result = try session.execute(.setActiveConstructionPlane(id: id))
             let activeName = session.activeConstructionPlane?.name ?? "none"
-            return AutomationResult(
+            return commandAutomationResult(
                 message: "Active construction plane set to \(activeName).",
-                commandName: result.commandName,
-                generation: result.generation,
-                didMutate: result.didMutate,
-                diagnostics: result.diagnostics
+                commandResult: result,
+                in: session
             )
         case .renameConstructionPlane(let id, let name):
             let result = try session.execute(.renameConstructionPlane(id: id, name: name))
             let renamedName = session.document.productMetadata.constructionPlanes[id]?.name ?? name
-            return AutomationResult(
+            return commandAutomationResult(
                 message: "Construction plane renamed to \(renamedName).",
-                commandName: result.commandName,
-                generation: result.generation,
-                didMutate: result.didMutate,
-                diagnostics: result.diagnostics
+                commandResult: result,
+                in: session
             )
         case .setConstructionPlane(let id, let plane):
             let result = try session.execute(.setConstructionPlane(id: id, plane: plane))
             let editedName = session.document.productMetadata.constructionPlanes[id]?.name ?? id.description
-            return AutomationResult(
+            return commandAutomationResult(
                 message: "Construction plane \(editedName) updated.",
-                commandName: result.commandName,
-                generation: result.generation,
-                didMutate: result.didMutate,
-                diagnostics: result.diagnostics
+                commandResult: result,
+                in: session
             )
         case .setCurveCurvatureDisplay(let target, let isVisible, let combScale):
             let result = try session.execute(
@@ -366,36 +320,30 @@ public struct AutomationRunner {
             )
             let visibility = isVisible.map { $0 ? "enabled" : "disabled" } ?? "toggled"
             let scale = combScale.map { " at comb scale \($0)" } ?? ""
-            return AutomationResult(
+            return commandAutomationResult(
                 message: "Curve curvature display \(visibility)\(scale).",
-                commandName: result.commandName,
-                generation: result.generation,
-                didMutate: result.didMutate,
-                diagnostics: result.diagnostics
+                commandResult: result,
+                in: session
             )
         case .setPointDisplay(let target, let isVisible):
             let result = try session.execute(
                 .setPointDisplay(target: target, isVisible: isVisible)
             )
             let visibility = isVisible.map { $0 ? "visible" : "hidden" } ?? "toggled"
-            return AutomationResult(
+            return commandAutomationResult(
                 message: "Point display \(visibility).",
-                commandName: result.commandName,
-                generation: result.generation,
-                didMutate: result.didMutate,
-                diagnostics: result.diagnostics
+                commandResult: result,
+                in: session
             )
         case .setSurfaceControlPointDisplay(let target, let isVisible):
             let result = try session.execute(
                 .setSurfaceControlPointDisplay(target: target, isVisible: isVisible)
             )
             let visibility = isVisible.map { $0 ? "visible" : "hidden" } ?? "toggled"
-            return AutomationResult(
+            return commandAutomationResult(
                 message: "Surface control point display \(visibility).",
-                commandName: result.commandName,
-                generation: result.generation,
-                didMutate: result.didMutate,
-                diagnostics: result.diagnostics
+                commandResult: result,
+                in: session
             )
         case .createSketch(let name, let sketch, let geometryRole):
             let result = try session.execute(
@@ -406,12 +354,10 @@ public struct AutomationRunner {
                 )
             )
             let entityLabel = sketch.entities.count == 1 ? "entity" : "entities"
-            return AutomationResult(
+            return commandAutomationResult(
                 message: "Sketch \(name) created with \(sketch.entities.count) \(entityLabel).",
-                commandName: result.commandName,
-                generation: result.generation,
-                didMutate: result.didMutate,
-                diagnostics: result.diagnostics
+                commandResult: result,
+                in: session
             )
         case .createLineSketch(let name, let plane, let start, let end):
             let result = try session.execute(
@@ -422,12 +368,10 @@ public struct AutomationRunner {
                     end: end
                 )
             )
-            return AutomationResult(
+            return commandAutomationResult(
                 message: "Line sketch \(name) created.",
-                commandName: result.commandName,
-                generation: result.generation,
-                didMutate: result.didMutate,
-                diagnostics: result.diagnostics
+                commandResult: result,
+                in: session
             )
         case .createCircleSketch(let name, let plane, let center, let radius):
             let result = try session.execute(
@@ -438,12 +382,10 @@ public struct AutomationRunner {
                     radius: radius
                 )
             )
-            return AutomationResult(
+            return commandAutomationResult(
                 message: "Circle sketch \(name) created.",
-                commandName: result.commandName,
-                generation: result.generation,
-                didMutate: result.didMutate,
-                diagnostics: result.diagnostics
+                commandResult: result,
+                in: session
             )
         case .createArcSketch(let name, let plane, let center, let radius, let startAngle, let endAngle):
             let result = try session.execute(
@@ -456,12 +398,10 @@ public struct AutomationRunner {
                     endAngle: endAngle
                 )
             )
-            return AutomationResult(
+            return commandAutomationResult(
                 message: "Arc sketch \(name) created.",
-                commandName: result.commandName,
-                generation: result.generation,
-                didMutate: result.didMutate,
-                diagnostics: result.diagnostics
+                commandResult: result,
+                in: session
             )
         case .createSplineSketch(let name, let plane, let spline):
             let result = try session.execute(
@@ -471,12 +411,10 @@ public struct AutomationRunner {
                     spline: spline
                 )
             )
-            return AutomationResult(
+            return commandAutomationResult(
                 message: "Spline sketch \(name) created.",
-                commandName: result.commandName,
-                generation: result.generation,
-                didMutate: result.didMutate,
-                diagnostics: result.diagnostics
+                commandResult: result,
+                in: session
             )
         case .createRectangleSketch(let name, let plane, let width, let height):
             let result = try session.execute(
@@ -487,12 +425,10 @@ public struct AutomationRunner {
                     height: height
                 )
             )
-            return AutomationResult(
+            return commandAutomationResult(
                 message: "Rectangle sketch \(name) created.",
-                commandName: result.commandName,
-                generation: result.generation,
-                didMutate: result.didMutate,
-                diagnostics: result.diagnostics
+                commandResult: result,
+                in: session
             )
         case .createPolygonSketch(
             let name,
@@ -516,12 +452,10 @@ public struct AutomationRunner {
                     rotationAngle: rotationAngle
                 )
             )
-            return AutomationResult(
+            return commandAutomationResult(
                 message: "Polygon sketch \(name) created.",
-                commandName: result.commandName,
-                generation: result.generation,
-                didMutate: result.didMutate,
-                diagnostics: result.diagnostics
+                commandResult: result,
+                in: session
             )
         case .createFaceKnife(let name, let target, let loop):
             let result = try session.execute(
@@ -531,12 +465,10 @@ public struct AutomationRunner {
                     loop: loop
                 )
             )
-            return AutomationResult(
+            return commandAutomationResult(
                 message: "Face Knife \(name) applied.",
-                commandName: result.commandName,
-                generation: result.generation,
-                didMutate: result.didMutate,
-                diagnostics: result.diagnostics
+                commandResult: result,
+                in: session
             )
         case .projectSketchCurvesToConstructionPlane(let targets, let plane, let name):
             let result = try session.execute(
@@ -546,12 +478,10 @@ public struct AutomationRunner {
                     name: name
                 )
             )
-            return AutomationResult(
+            return commandAutomationResult(
                 message: "Sketch curves projected.",
-                commandName: result.commandName,
-                generation: result.generation,
-                didMutate: result.didMutate,
-                diagnostics: result.diagnostics
+                commandResult: result,
+                in: session
             )
         case .projectCurvesToGeneratedFace(let targets, let face, let name):
             let result = try session.execute(
@@ -561,12 +491,10 @@ public struct AutomationRunner {
                     name: name
                 )
             )
-            return AutomationResult(
+            return commandAutomationResult(
                 message: "Curves projected to generated face.",
-                commandName: result.commandName,
-                generation: result.generation,
-                didMutate: result.didMutate,
-                diagnostics: result.diagnostics
+                commandResult: result,
+                in: session
             )
         case .projectBodyOutlinesToConstructionPlane(let targets, let plane, let name):
             let result = try session.execute(
@@ -576,12 +504,10 @@ public struct AutomationRunner {
                     name: name
                 )
             )
-            return AutomationResult(
+            return commandAutomationResult(
                 message: "Body outlines projected.",
-                commandName: result.commandName,
-                generation: result.generation,
-                didMutate: result.didMutate,
-                diagnostics: result.diagnostics
+                commandResult: result,
+                in: session
             )
         case .setObjectDimension(let target, let kind, let value):
             let result = try session.execute(
@@ -591,12 +517,10 @@ public struct AutomationRunner {
                     value: value
                 )
             )
-            return AutomationResult(
+            return commandAutomationResult(
                 message: "Object dimension updated.",
-                commandName: result.commandName,
-                generation: result.generation,
-                didMutate: result.didMutate,
-                diagnostics: result.diagnostics
+                commandResult: result,
+                in: session
             )
         case .addSelectionDimension(let name, let kind, let first, let second, let target):
             let result = try session.execute(
@@ -608,13 +532,10 @@ public struct AutomationRunner {
                     target: target
                 )
             )
-            return AutomationResult(
+            return commandAutomationResult(
                 message: "Selection dimension added.",
-                commandName: result.commandName,
-                generation: result.generation,
-                didMutate: result.didMutate,
-                diagnostics: result.diagnostics,
-                addedSelectionDimensionID: result.addedSelectionDimensionID
+                commandResult: result,
+                in: session
             )
         case .setSelectionDimensionTarget(let id, let target):
             let result = try session.execute(
@@ -623,30 +544,24 @@ public struct AutomationRunner {
                     target: target
                 )
             )
-            return AutomationResult(
+            return commandAutomationResult(
                 message: "Selection dimension target updated.",
-                commandName: result.commandName,
-                generation: result.generation,
-                didMutate: result.didMutate,
-                diagnostics: result.diagnostics
+                commandResult: result,
+                in: session
             )
         case .applySelectionDimensionTarget(let id):
             let result = try session.execute(.applySelectionDimensionTarget(id: id))
-            return AutomationResult(
+            return commandAutomationResult(
                 message: "Selection dimension target applied.",
-                commandName: result.commandName,
-                generation: result.generation,
-                didMutate: result.didMutate,
-                diagnostics: result.diagnostics
+                commandResult: result,
+                in: session
             )
         case .removeSelectionDimension(let id):
             let result = try session.execute(.removeSelectionDimension(id: id))
-            return AutomationResult(
+            return commandAutomationResult(
                 message: "Selection dimension removed.",
-                commandName: result.commandName,
-                generation: result.generation,
-                didMutate: result.didMutate,
-                diagnostics: result.diagnostics
+                commandResult: result,
+                in: session
             )
         case .addSketchConstraint(let featureID, let constraint):
             let result = try session.execute(
@@ -655,12 +570,10 @@ public struct AutomationRunner {
                     constraint: constraint
                 )
             )
-            return AutomationResult(
+            return commandAutomationResult(
                 message: "Sketch constraint added to \(featureID.description).",
-                commandName: result.commandName,
-                generation: result.generation,
-                didMutate: result.didMutate,
-                diagnostics: result.diagnostics
+                commandResult: result,
+                in: session
             )
         case .removeSketchConstraint(let featureID, let constraint):
             let result = try session.execute(
@@ -669,12 +582,10 @@ public struct AutomationRunner {
                     constraint: constraint
                 )
             )
-            return AutomationResult(
+            return commandAutomationResult(
                 message: "Sketch constraint removed from \(featureID.description).",
-                commandName: result.commandName,
-                generation: result.generation,
-                didMutate: result.didMutate,
-                diagnostics: result.diagnostics
+                commandResult: result,
+                in: session
             )
         case .createBridgeCurve(let featureID, let firstEndpoint, let secondEndpoint, let continuity, let trimsSourceCurves):
             let result = try session.execute(
@@ -686,12 +597,10 @@ public struct AutomationRunner {
                     trimsSourceCurves: trimsSourceCurves
                 )
             )
-            return AutomationResult(
+            return commandAutomationResult(
                 message: "Bridge curve created in sketch \(featureID.description).",
-                commandName: result.commandName,
-                generation: result.generation,
-                didMutate: result.didMutate,
-                diagnostics: result.diagnostics
+                commandResult: result,
+                in: session
             )
         case .setBridgeCurveParameters(let sourceID, let firstEndpoint, let secondEndpoint, let continuity, let trimsSourceCurves):
             let result = try session.execute(
@@ -703,12 +612,10 @@ public struct AutomationRunner {
                     trimsSourceCurves: trimsSourceCurves
                 )
             )
-            return AutomationResult(
+            return commandAutomationResult(
                 message: "Bridge curve \(sourceID.description) updated.",
-                commandName: result.commandName,
-                generation: result.generation,
-                didMutate: result.didMutate,
-                diagnostics: result.diagnostics
+                commandResult: result,
+                in: session
             )
         case .offsetCurve(let target, let distance, let options, let vertexHandle):
             let result = try session.execute(
@@ -727,12 +634,10 @@ public struct AutomationRunner {
             } else {
                 message = "Sketch vertex offset created."
             }
-            return AutomationResult(
+            return commandAutomationResult(
                 message: message,
-                commandName: result.commandName,
-                generation: result.generation,
-                didMutate: result.didMutate,
-                diagnostics: result.diagnostics
+                commandResult: result,
+                in: session
             )
         case .offsetRegions(let targets, let distance, let options, let combinesRegions):
             let result = try session.execute(
@@ -743,12 +648,10 @@ public struct AutomationRunner {
                     combinesRegions: combinesRegions
                 )
             )
-            return AutomationResult(
+            return commandAutomationResult(
                 message: combinesRegions ? "Combined sketch regions offset created." : "Sketch regions offset created.",
-                commandName: result.commandName,
-                generation: result.generation,
-                didMutate: result.didMutate,
-                diagnostics: result.diagnostics
+                commandResult: result,
+                in: session
             )
         case .offsetSketchVertex(let target, let handle, let distance):
             let result = try session.execute(
@@ -758,12 +661,10 @@ public struct AutomationRunner {
                     distance: distance
                 )
             )
-            return AutomationResult(
+            return commandAutomationResult(
                 message: "Sketch vertex offset created.",
-                commandName: result.commandName,
-                generation: result.generation,
-                didMutate: result.didMutate,
-                diagnostics: result.diagnostics
+                commandResult: result,
+                in: session
             )
         case .applySketchCornerTreatment(let target, let adjacentTarget, let distance, let treatment):
             let result = try session.execute(
@@ -774,12 +675,10 @@ public struct AutomationRunner {
                     treatment: treatment
                 )
             )
-            return AutomationResult(
+            return commandAutomationResult(
                 message: sketchCornerTreatmentAutomationMessage(treatment),
-                commandName: result.commandName,
-                generation: result.generation,
-                didMutate: result.didMutate,
-                diagnostics: result.diagnostics
+                commandResult: result,
+                in: session
             )
         case .createSlotSketch(let target, let width):
             let result = try session.execute(
@@ -788,12 +687,10 @@ public struct AutomationRunner {
                     width: width
                 )
             )
-            return AutomationResult(
+            return commandAutomationResult(
                 message: "Slot sketch profile created.",
-                commandName: result.commandName,
-                generation: result.generation,
-                didMutate: result.didMutate,
-                diagnostics: result.diagnostics
+                commandResult: result,
+                in: session
             )
         case .offsetBodyFace(let target, let distance):
             let result = try session.execute(
@@ -802,23 +699,19 @@ public struct AutomationRunner {
                     distance: distance
                 )
             )
-            return AutomationResult(
+            return commandAutomationResult(
                 message: "Body face offset applied.",
-                commandName: result.commandName,
-                generation: result.generation,
-                didMutate: result.didMutate,
-                diagnostics: result.diagnostics
+                commandResult: result,
+                in: session
             )
         case .deleteBodyFaces(let targets):
             let result = try session.execute(
                 .deleteBodyFaces(targets: targets)
             )
-            return AutomationResult(
+            return commandAutomationResult(
                 message: "Body face deletion applied.",
-                commandName: result.commandName,
-                generation: result.generation,
-                didMutate: result.didMutate,
-                diagnostics: result.diagnostics
+                commandResult: result,
+                in: session
             )
         case .draftBodyFaces(let targets, let neutralTarget, let angle):
             let result = try session.execute(
@@ -828,12 +721,10 @@ public struct AutomationRunner {
                     angle: angle
                 )
             )
-            return AutomationResult(
+            return commandAutomationResult(
                 message: "Body face draft applied.",
-                commandName: result.commandName,
-                generation: result.generation,
-                didMutate: result.didMutate,
-                diagnostics: result.diagnostics
+                commandResult: result,
+                in: session
             )
         case .chamferBodyEdges(let targets, let distance):
             let result = try session.execute(
@@ -842,12 +733,10 @@ public struct AutomationRunner {
                     distance: distance
                 )
             )
-            return AutomationResult(
+            return commandAutomationResult(
                 message: "Body edge chamfer applied.",
-                commandName: result.commandName,
-                generation: result.generation,
-                didMutate: result.didMutate,
-                diagnostics: result.diagnostics
+                commandResult: result,
+                in: session
             )
         case .filletBodyEdges(let targets, let radius, let segmentCount):
             let result = try session.execute(
@@ -857,12 +746,10 @@ public struct AutomationRunner {
                     segmentCount: segmentCount
                 )
             )
-            return AutomationResult(
+            return commandAutomationResult(
                 message: "Body edge fillet applied.",
-                commandName: result.commandName,
-                generation: result.generation,
-                didMutate: result.didMutate,
-                diagnostics: result.diagnostics
+                commandResult: result,
+                in: session
             )
         case .moveBodyEdge(let target, let deltaX, let deltaY):
             let result = try session.execute(
@@ -872,12 +759,10 @@ public struct AutomationRunner {
                     deltaY: deltaY
                 )
             )
-            return AutomationResult(
+            return commandAutomationResult(
                 message: "Body edge moved.",
-                commandName: result.commandName,
-                generation: result.generation,
-                didMutate: result.didMutate,
-                diagnostics: result.diagnostics
+                commandResult: result,
+                in: session
             )
         case .moveBodyVertex(let target, let deltaX, let deltaY):
             let result = try session.execute(
@@ -887,12 +772,10 @@ public struct AutomationRunner {
                     deltaY: deltaY
                 )
             )
-            return AutomationResult(
+            return commandAutomationResult(
                 message: "Body vertex moved.",
-                commandName: result.commandName,
-                generation: result.generation,
-                didMutate: result.didMutate,
-                diagnostics: result.diagnostics
+                commandResult: result,
+                in: session
             )
         case .moveSketchEntityPoint(let target, let handle, let deltaX, let deltaY):
             let result = try session.execute(
@@ -903,12 +786,10 @@ public struct AutomationRunner {
                     deltaY: deltaY
                 )
             )
-            return AutomationResult(
+            return commandAutomationResult(
                 message: "Sketch entity point moved.",
-                commandName: result.commandName,
-                generation: result.generation,
-                didMutate: result.didMutate,
-                diagnostics: result.diagnostics
+                commandResult: result,
+                in: session
             )
         case .moveSketchSplineControlPoint(let target, let controlPointIndex, let deltaX, let deltaY):
             let result = try session.execute(
@@ -919,12 +800,10 @@ public struct AutomationRunner {
                     deltaY: deltaY
                 )
             )
-            return AutomationResult(
+            return commandAutomationResult(
                 message: "Sketch spline control point moved.",
-                commandName: result.commandName,
-                generation: result.generation,
-                didMutate: result.didMutate,
-                diagnostics: result.diagnostics
+                commandResult: result,
+                in: session
             )
         case .alignSketchVertex(let target, let reference, let options):
             let result = try session.execute(
@@ -934,12 +813,10 @@ public struct AutomationRunner {
                     options: options
                 )
             )
-            return AutomationResult(
+            return commandAutomationResult(
                 message: "Sketch vertex aligned.",
-                commandName: result.commandName,
-                generation: result.generation,
-                didMutate: result.didMutate,
-                diagnostics: result.diagnostics
+                commandResult: result,
+                in: session
             )
         case .slideSketchSplineControlPoints(let target, let controlPointIndexes, let direction, let distance):
             let result = try session.execute(
@@ -950,12 +827,10 @@ public struct AutomationRunner {
                     distance: distance
                 )
             )
-            return AutomationResult(
+            return commandAutomationResult(
                 message: "Sketch spline control points slid.",
-                commandName: result.commandName,
-                generation: result.generation,
-                didMutate: result.didMutate,
-                diagnostics: result.diagnostics
+                commandResult: result,
+                in: session
             )
         case .insertSketchSplineControlPoint(let target, let fraction):
             let result = try session.execute(
@@ -964,12 +839,10 @@ public struct AutomationRunner {
                     fraction: fraction
                 )
             )
-            return AutomationResult(
+            return commandAutomationResult(
                 message: "Sketch spline control point inserted.",
-                commandName: result.commandName,
-                generation: result.generation,
-                didMutate: result.didMutate,
-                diagnostics: result.diagnostics
+                commandResult: result,
+                in: session
             )
         case .setSketchCircleParameters(let target, let center, let radius):
             let result = try session.execute(
@@ -979,12 +852,10 @@ public struct AutomationRunner {
                     radius: radius
                 )
             )
-            return AutomationResult(
+            return commandAutomationResult(
                 message: "Sketch circle parameters updated.",
-                commandName: result.commandName,
-                generation: result.generation,
-                didMutate: result.didMutate,
-                diagnostics: result.diagnostics
+                commandResult: result,
+                in: session
             )
         case .setSketchArcParameters(let target, let center, let radius, let startAngle, let endAngle):
             let result = try session.execute(
@@ -996,12 +867,10 @@ public struct AutomationRunner {
                     endAngle: endAngle
                 )
             )
-            return AutomationResult(
+            return commandAutomationResult(
                 message: "Sketch arc parameters updated.",
-                commandName: result.commandName,
-                generation: result.generation,
-                didMutate: result.didMutate,
-                diagnostics: result.diagnostics
+                commandResult: result,
+                in: session
             )
         case .setSketchEntityDimension(let target, let kind, let value):
             let result = try session.execute(
@@ -1011,12 +880,10 @@ public struct AutomationRunner {
                     value: value
                 )
             )
-            return AutomationResult(
+            return commandAutomationResult(
                 message: "Sketch entity dimension updated.",
-                commandName: result.commandName,
-                generation: result.generation,
-                didMutate: result.didMutate,
-                diagnostics: result.diagnostics
+                commandResult: result,
+                in: session
             )
         case .convertSketchLineToArc(let target, let sagitta):
             let result = try session.execute(
@@ -1025,34 +892,28 @@ public struct AutomationRunner {
                     sagitta: sagitta
                 )
             )
-            return AutomationResult(
+            return commandAutomationResult(
                 message: "Sketch line converted to an arc.",
-                commandName: result.commandName,
-                generation: result.generation,
-                didMutate: result.didMutate,
-                diagnostics: result.diagnostics
+                commandResult: result,
+                in: session
             )
         case .convertSketchLineToSpline(let target):
             let result = try session.execute(
                 .convertSketchLineToSpline(target: target)
             )
-            return AutomationResult(
+            return commandAutomationResult(
                 message: "Sketch line converted to a spline.",
-                commandName: result.commandName,
-                generation: result.generation,
-                didMutate: result.didMutate,
-                diagnostics: result.diagnostics
+                commandResult: result,
+                in: session
             )
         case .reverseSketchCurve(let target):
             let result = try session.execute(
                 .reverseSketchCurve(target: target)
             )
-            return AutomationResult(
+            return commandAutomationResult(
                 message: "Sketch curve direction reversed.",
-                commandName: result.commandName,
-                generation: result.generation,
-                didMutate: result.didMutate,
-                diagnostics: result.diagnostics
+                commandResult: result,
+                in: session
             )
         case .rebuildSketchCurve(let target, let options):
             let result = try session.execute(
@@ -1061,13 +922,10 @@ public struct AutomationRunner {
                     options: options
                 )
             )
-            return AutomationResult(
+            return commandAutomationResult(
                 message: "Sketch curve rebuilt.",
-                commandName: result.commandName,
-                generation: result.generation,
-                didMutate: result.didMutate,
-                diagnostics: result.diagnostics,
-                curveRebuildReport: result.curveRebuildReport
+                commandResult: result,
+                in: session
             )
         case .extendSketchCurve(let target, let distance, let shape):
             let result = try session.execute(
@@ -1077,12 +935,10 @@ public struct AutomationRunner {
                     shape: shape
                 )
             )
-            return AutomationResult(
+            return commandAutomationResult(
                 message: "Sketch curve extended.",
-                commandName: result.commandName,
-                generation: result.generation,
-                didMutate: result.didMutate,
-                diagnostics: result.diagnostics
+                commandResult: result,
+                in: session
             )
         case .joinSketchCurves(let target, let adjacentTarget, let continuity):
             let result = try session.execute(
@@ -1092,23 +948,19 @@ public struct AutomationRunner {
                     continuity: continuity
                 )
             )
-            return AutomationResult(
+            return commandAutomationResult(
                 message: "Sketch curves joined.",
-                commandName: result.commandName,
-                generation: result.generation,
-                didMutate: result.didMutate,
-                diagnostics: result.diagnostics
+                commandResult: result,
+                in: session
             )
         case .unjoinSketchCurve(let target):
             let result = try session.execute(
                 .unjoinSketchCurve(target: target)
             )
-            return AutomationResult(
+            return commandAutomationResult(
                 message: "Sketch curve unjoined.",
-                commandName: result.commandName,
-                generation: result.generation,
-                didMutate: result.didMutate,
-                diagnostics: result.diagnostics
+                commandResult: result,
+                in: session
             )
         case .splitSketchCurve(let target, let fraction):
             let result = try session.execute(
@@ -1117,23 +969,19 @@ public struct AutomationRunner {
                     fraction: fraction
                 )
             )
-            return AutomationResult(
+            return commandAutomationResult(
                 message: "Sketch curve segment split.",
-                commandName: result.commandName,
-                generation: result.generation,
-                didMutate: result.didMutate,
-                diagnostics: result.diagnostics
+                commandResult: result,
+                in: session
             )
         case .trimSketchCurveSegment(let target):
             let result = try session.execute(
                 .trimSketchCurveSegment(target: target)
             )
-            return AutomationResult(
+            return commandAutomationResult(
                 message: "Sketch curve segment trimmed.",
-                commandName: result.commandName,
-                generation: result.generation,
-                didMutate: result.didMutate,
-                diagnostics: result.diagnostics
+                commandResult: result,
+                in: session
             )
         case .cutSketchCurve(let target, let cutter, let options):
             let result = try session.execute(
@@ -1143,12 +991,10 @@ public struct AutomationRunner {
                     options: options
                 )
             )
-            return AutomationResult(
+            return commandAutomationResult(
                 message: "Cut Curve applied.",
-                commandName: result.commandName,
-                generation: result.generation,
-                didMutate: result.didMutate,
-                diagnostics: result.diagnostics
+                commandResult: result,
+                in: session
             )
         case .extrudeProfile(let name, let profile, let distance, let direction):
             let result = try session.execute(
@@ -1159,12 +1005,10 @@ public struct AutomationRunner {
                     direction: direction
                 )
             )
-            return AutomationResult(
+            return commandAutomationResult(
                 message: "Profile extrude \(name) created.",
-                commandName: result.commandName,
-                generation: result.generation,
-                didMutate: result.didMutate,
-                diagnostics: result.diagnostics
+                commandResult: result,
+                in: session
             )
         case .setExtrudeDistance(let featureID, let distance):
             let result = try session.execute(
@@ -1173,12 +1017,10 @@ public struct AutomationRunner {
                     distance: distance
                 )
             )
-            return AutomationResult(
+            return commandAutomationResult(
                 message: "Extrude distance updated.",
-                commandName: result.commandName,
-                generation: result.generation,
-                didMutate: result.didMutate,
-                diagnostics: result.diagnostics
+                commandResult: result,
+                in: session
             )
         case .setCubeDimensions(let featureID, let sizeX, let sizeY, let sizeZ):
             let result = try session.execute(
@@ -1189,12 +1031,10 @@ public struct AutomationRunner {
                     sizeZ: sizeZ
                 )
             )
-            return AutomationResult(
+            return commandAutomationResult(
                 message: "Cube dimensions updated.",
-                commandName: result.commandName,
-                generation: result.generation,
-                didMutate: result.didMutate,
-                diagnostics: result.diagnostics
+                commandResult: result,
+                in: session
             )
         case .setCylinderDimensions(let featureID, let radius, let sizeY):
             let result = try session.execute(
@@ -1204,12 +1044,10 @@ public struct AutomationRunner {
                     sizeY: sizeY
                 )
             )
-            return AutomationResult(
+            return commandAutomationResult(
                 message: "Cylinder dimensions updated.",
-                commandName: result.commandName,
-                generation: result.generation,
-                didMutate: result.didMutate,
-                diagnostics: result.diagnostics
+                commandResult: result,
+                in: session
             )
         case .createRevolve(let name, let profile, let axis, let angle):
             let result = try session.execute(
@@ -1220,12 +1058,10 @@ public struct AutomationRunner {
                     angle: angle
                 )
             )
-            return AutomationResult(
+            return commandAutomationResult(
                 message: "Revolve \(name) source created.",
-                commandName: result.commandName,
-                generation: result.generation,
-                didMutate: result.didMutate,
-                diagnostics: result.diagnostics
+                commandResult: result,
+                in: session
             )
         case .createSweep(let name, let sections, let path, let guides, let targets, let options):
             let result = try session.execute(
@@ -1238,12 +1074,10 @@ public struct AutomationRunner {
                     options: options
                 )
             )
-            return AutomationResult(
+            return commandAutomationResult(
                 message: "Sweep \(name) source created.",
-                commandName: result.commandName,
-                generation: result.generation,
-                didMutate: result.didMutate,
-                diagnostics: result.diagnostics
+                commandResult: result,
+                in: session
             )
         case .createLoft(let name, let sections, let guides, let options):
             let result = try session.execute(
@@ -1254,12 +1088,10 @@ public struct AutomationRunner {
                     options: options
                 )
             )
-            return AutomationResult(
+            return commandAutomationResult(
                 message: "Loft \(name) source created.",
-                commandName: result.commandName,
-                generation: result.generation,
-                didMutate: result.didMutate,
-                diagnostics: result.diagnostics
+                commandResult: result,
+                in: session
             )
         case .createBoolean(let name, let targets, let tool, let operation, let keepTools):
             let result = try session.execute(
@@ -1271,12 +1103,10 @@ public struct AutomationRunner {
                     keepTools: keepTools
                 )
             )
-            return AutomationResult(
+            return commandAutomationResult(
                 message: "Boolean \(name) source created.",
-                commandName: result.commandName,
-                generation: result.generation,
-                didMutate: result.didMutate,
-                diagnostics: result.diagnostics
+                commandResult: result,
+                in: session
             )
         case .createPolySplineSurface(let name, let sourceMesh, let options):
             let result = try session.execute(
@@ -1286,12 +1116,10 @@ public struct AutomationRunner {
                     options: options
                 )
             )
-            return AutomationResult(
+            return commandAutomationResult(
                 message: "PolySpline surface \(name) created.",
-                commandName: result.commandName,
-                generation: result.generation,
-                didMutate: result.didMutate,
-                diagnostics: result.diagnostics
+                commandResult: result,
+                in: session
             )
         case .createBSplineSurface(let name, let surface):
             let result = try session.execute(
@@ -1300,24 +1128,20 @@ public struct AutomationRunner {
                     surface: surface
                 )
             )
-            return AutomationResult(
+            return commandAutomationResult(
                 message: "B-spline surface \(name) created.",
-                commandName: result.commandName,
-                generation: result.generation,
-                didMutate: result.didMutate,
-                diagnostics: result.diagnostics
+                commandResult: result,
+                in: session
             )
         case .setSurfaceFrameDisplay(let query, let isVisible):
             let result = try session.execute(
                 .setSurfaceFrameDisplay(query: query, isVisible: isVisible)
             )
             let visibility = isVisible.map { $0 ? "visible" : "hidden" } ?? "toggled"
-            return AutomationResult(
+            return commandAutomationResult(
                 message: "Surface frame display \(visibility).",
-                commandName: result.commandName,
-                generation: result.generation,
-                didMutate: result.didMutate,
-                diagnostics: result.diagnostics
+                commandResult: result,
+                in: session
             )
         case .movePolySplineSurfaceVertex(let target, let deltaX, let deltaY, let deltaZ):
             let result = try session.execute(
@@ -1328,12 +1152,10 @@ public struct AutomationRunner {
                     deltaZ: deltaZ
                 )
             )
-            return AutomationResult(
+            return commandAutomationResult(
                 message: "PolySpline surface vertex moved.",
-                commandName: result.commandName,
-                generation: result.generation,
-                didMutate: result.didMutate,
-                diagnostics: result.diagnostics
+                commandResult: result,
+                in: session
             )
         case .moveSurfaceControlPoint(let target, let deltaX, let deltaY, let deltaZ):
             let result = try session.execute(
@@ -1344,12 +1166,10 @@ public struct AutomationRunner {
                     deltaZ: deltaZ
                 )
             )
-            return AutomationResult(
+            return commandAutomationResult(
                 message: "Surface control point moved.",
-                commandName: result.commandName,
-                generation: result.generation,
-                didMutate: result.didMutate,
-                diagnostics: result.diagnostics
+                commandResult: result,
+                in: session
             )
         case .moveSurfaceControlPointsInFrame(
             let targets,
@@ -1367,67 +1187,55 @@ public struct AutomationRunner {
                     normalDistance: normalDistance
                 )
             )
-            return AutomationResult(
+            return commandAutomationResult(
                 message: "Surface control points moved in frame.",
-                commandName: result.commandName,
-                generation: result.generation,
-                didMutate: result.didMutate,
-                diagnostics: result.diagnostics
+                commandResult: result,
+                in: session
             )
         case .setSurfaceControlPointWeight(let target, let weight):
             let result = try session.execute(
                 .setSurfaceControlPointWeight(target: target, weight: weight)
             )
-            return AutomationResult(
+            return commandAutomationResult(
                 message: "Surface control point weight updated.",
-                commandName: result.commandName,
-                generation: result.generation,
-                didMutate: result.didMutate,
-                diagnostics: result.diagnostics
+                commandResult: result,
+                in: session
             )
         case .setSurfaceKnotValue(let target, let value):
             let result = try session.execute(
                 .setSurfaceKnotValue(target: target, value: value)
             )
-            return AutomationResult(
+            return commandAutomationResult(
                 message: "Surface knot value updated.",
-                commandName: result.commandName,
-                generation: result.generation,
-                didMutate: result.didMutate,
-                diagnostics: result.diagnostics
+                commandResult: result,
+                in: session
             )
         case .insertSurfaceKnot(let target, let value):
             let result = try session.execute(
                 .insertSurfaceKnot(target: target, value: value)
             )
-            return AutomationResult(
+            return commandAutomationResult(
                 message: "Surface knot inserted.",
-                commandName: result.commandName,
-                generation: result.generation,
-                didMutate: result.didMutate,
-                diagnostics: result.diagnostics
+                commandResult: result,
+                in: session
             )
         case .splitSurfaceSpan(let target, let fraction):
             let result = try session.execute(
                 .splitSurfaceSpan(target: target, fraction: fraction)
             )
-            return AutomationResult(
+            return commandAutomationResult(
                 message: "Surface span split.",
-                commandName: result.commandName,
-                generation: result.generation,
-                didMutate: result.didMutate,
-                diagnostics: result.diagnostics
+                commandResult: result,
+                in: session
             )
         case .setSurfaceKnotMultiplicity(let target, let multiplicity):
             let result = try session.execute(
                 .setSurfaceKnotMultiplicity(target: target, multiplicity: multiplicity)
             )
-            return AutomationResult(
+            return commandAutomationResult(
                 message: "Surface knot multiplicity updated.",
-                commandName: result.commandName,
-                generation: result.generation,
-                didMutate: result.didMutate,
-                diagnostics: result.diagnostics
+                commandResult: result,
+                in: session
             )
         case .setSurfaceTrimDomain(
             let target,
@@ -1445,12 +1253,10 @@ public struct AutomationRunner {
                     vUpperBound: vUpperBound
                 )
             )
-            return AutomationResult(
+            return commandAutomationResult(
                 message: "Surface trim domain updated.",
-                commandName: result.commandName,
-                generation: result.generation,
-                didMutate: result.didMutate,
-                diagnostics: result.diagnostics
+                commandResult: result,
+                in: session
             )
         case .setSurfaceTrimLoops(let target, let trimLoops):
             let result = try session.execute(
@@ -1459,12 +1265,10 @@ public struct AutomationRunner {
                     trimLoops: trimLoops
                 )
             )
-            return AutomationResult(
+            return commandAutomationResult(
                 message: "Surface trim loops updated.",
-                commandName: result.commandName,
-                generation: result.generation,
-                didMutate: result.didMutate,
-                diagnostics: result.diagnostics
+                commandResult: result,
+                in: session
             )
         case .moveSurfaceTrimEndpoint(let target, let endpoint, let u, let v):
             let result = try session.execute(
@@ -1475,12 +1279,10 @@ public struct AutomationRunner {
                     v: v
                 )
             )
-            return AutomationResult(
+            return commandAutomationResult(
                 message: "Surface trim endpoint moved.",
-                commandName: result.commandName,
-                generation: result.generation,
-                didMutate: result.didMutate,
-                diagnostics: result.diagnostics
+                commandResult: result,
+                in: session
             )
         case .moveSurfaceTrimControlPoint(let target, let controlPointIndex, let u, let v):
             let result = try session.execute(
@@ -1491,12 +1293,10 @@ public struct AutomationRunner {
                     v: v
                 )
             )
-            return AutomationResult(
+            return commandAutomationResult(
                 message: "Surface trim control point moved.",
-                commandName: result.commandName,
-                generation: result.generation,
-                didMutate: result.didMutate,
-                diagnostics: result.diagnostics
+                commandResult: result,
+                in: session
             )
         case .setSurfaceTrimControlPointWeight(let target, let controlPointIndex, let weight):
             let result = try session.execute(
@@ -1506,12 +1306,10 @@ public struct AutomationRunner {
                     weight: weight
                 )
             )
-            return AutomationResult(
+            return commandAutomationResult(
                 message: "Surface trim control point weight updated.",
-                commandName: result.commandName,
-                generation: result.generation,
-                didMutate: result.didMutate,
-                diagnostics: result.diagnostics
+                commandResult: result,
+                in: session
             )
         case .insertSurfaceTrimKnot(let target, let value):
             let result = try session.execute(
@@ -1520,12 +1318,10 @@ public struct AutomationRunner {
                     value: value
                 )
             )
-            return AutomationResult(
+            return commandAutomationResult(
                 message: "Surface trim p-curve knot inserted.",
-                commandName: result.commandName,
-                generation: result.generation,
-                didMutate: result.didMutate,
-                diagnostics: result.diagnostics
+                commandResult: result,
+                in: session
             )
         case .setSurfaceTrimKnotValue(let target, let knotIndex, let value):
             let result = try session.execute(
@@ -1535,12 +1331,10 @@ public struct AutomationRunner {
                     value: value
                 )
             )
-            return AutomationResult(
+            return commandAutomationResult(
                 message: "Surface trim p-curve knot value updated.",
-                commandName: result.commandName,
-                generation: result.generation,
-                didMutate: result.didMutate,
-                diagnostics: result.diagnostics
+                commandResult: result,
+                in: session
             )
         case .setSurfaceTrimKnotMultiplicity(let target, let knotIndex, let multiplicity):
             let result = try session.execute(
@@ -1550,12 +1344,10 @@ public struct AutomationRunner {
                     multiplicity: multiplicity
                 )
             )
-            return AutomationResult(
+            return commandAutomationResult(
                 message: "Surface trim p-curve knot multiplicity updated.",
-                commandName: result.commandName,
-                generation: result.generation,
-                didMutate: result.didMutate,
-                diagnostics: result.diagnostics
+                commandResult: result,
+                in: session
             )
         case .matchSurfaceBoundaryContinuity(
             let target,
@@ -1573,12 +1365,10 @@ public struct AutomationRunner {
                     referenceDirection: referenceDirection
                 )
             )
-            return AutomationResult(
+            return commandAutomationResult(
                 message: "Surface boundary continuity matched.",
-                commandName: result.commandName,
-                generation: result.generation,
-                didMutate: result.didMutate,
-                diagnostics: result.diagnostics
+                commandResult: result,
+                in: session
             )
         case .slidePolySplineSurfaceVertices(let targets, let direction, let distance):
             let result = try session.execute(
@@ -1588,12 +1378,10 @@ public struct AutomationRunner {
                     distance: distance
                 )
             )
-            return AutomationResult(
+            return commandAutomationResult(
                 message: "PolySpline surface vertices slid.",
-                commandName: result.commandName,
-                generation: result.generation,
-                didMutate: result.didMutate,
-                diagnostics: result.diagnostics
+                commandResult: result,
+                in: session
             )
         case .slideSurfaceControlPoints(let targets, let direction, let distance):
             let result = try session.execute(
@@ -1603,12 +1391,10 @@ public struct AutomationRunner {
                     distance: distance
                 )
             )
-            return AutomationResult(
+            return commandAutomationResult(
                 message: "Surface control points slid.",
-                commandName: result.commandName,
-                generation: result.generation,
-                didMutate: result.didMutate,
-                diagnostics: result.diagnostics
+                commandResult: result,
+                in: session
             )
         case .createExtrudedRectangle(let name, let plane, let width, let height, let depth, let direction):
             let result = try session.execute(
@@ -1667,12 +1453,10 @@ public struct AutomationRunner {
             )
         case .validateDocument:
             let result = try session.execute(.validateDocument)
-            return AutomationResult(
+            return commandAutomationResult(
                 message: "Validation finished.",
-                commandName: result.commandName,
-                generation: result.generation,
-                didMutate: result.didMutate,
-                diagnostics: result.diagnostics
+                commandResult: result,
+                in: session
             )
         }
     }

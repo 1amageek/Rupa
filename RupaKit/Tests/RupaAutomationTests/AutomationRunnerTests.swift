@@ -2598,6 +2598,37 @@ import SwiftCAD
 }
 
 @MainActor
+@Test func automationLargeSketchCommandReportsWorkspaceScaleRecommendation() async throws {
+    let session = EditorSession()
+    let runner = AutomationRunner()
+
+    let result = try runner.execute(
+        .createLineSketch(
+            name: "Automation Site Baseline",
+            plane: .xy,
+            start: SketchPoint(
+                x: .length(0.0, .meter),
+                y: .length(0.0, .meter)
+            ),
+            end: SketchPoint(
+                x: .length(25_000.0, .meter),
+                y: .length(0.0, .meter)
+            )
+        ),
+        in: session
+    )
+
+    #expect(result.commandName == "createLineSketch")
+    #expect(result.didMutate)
+    #expect(result.generation == DocumentGeneration(1))
+    #expect(result.workspaceBounds?.sizeX == 25_000.0)
+    #expect(result.workspaceBounds?.maximumSpan == 25_000.0)
+    #expect(result.workspaceScaleRecommendation?.reason == .modelExceedsComfortableSpan)
+    #expect(result.workspaceScaleRecommendation?.recommendedPreset == .sitePlanning)
+    #expect(result.workspaceScaleRecommendation?.recommendedScale.displayUnit == .kilometer)
+}
+
+@MainActor
 @Test func automationCanAddSketchConstraint() async throws {
     let session = EditorSession()
     let runner = AutomationRunner()
