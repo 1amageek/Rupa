@@ -13,6 +13,9 @@ extension CLIResponse {
             saved: saved,
             diagnostics: result.diagnostics,
             workspaceScale: result.workspaceScale,
+            workspaceBounds: result.workspaceBounds,
+            workspacePrecision: result.workspacePrecision,
+            workspaceScaleRecommendation: result.workspaceScaleRecommendation,
             viewportGridSettings: result.viewportGridSettings
         )
     }

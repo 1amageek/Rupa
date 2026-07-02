@@ -10,6 +10,9 @@ public struct AutomationResult: Codable, Equatable, Sendable {
     public var curveRebuildReport: CurveRebuildReport?
     public var addedSelectionDimensionID: SelectionDimensionID?
     public var workspaceScale: WorkspaceScaleSnapshot?
+    public var workspaceBounds: MeasurementResult.Bounds?
+    public var workspacePrecision: WorkspacePrecisionReport?
+    public var workspaceScaleRecommendation: WorkspaceScaleRecommendation?
     public var viewportGridSettings: ViewportGridSettings?
 
     public init(
@@ -21,6 +24,9 @@ public struct AutomationResult: Codable, Equatable, Sendable {
         curveRebuildReport: CurveRebuildReport? = nil,
         addedSelectionDimensionID: SelectionDimensionID? = nil,
         workspaceScale: WorkspaceScaleSnapshot? = nil,
+        workspaceBounds: MeasurementResult.Bounds? = nil,
+        workspacePrecision: WorkspacePrecisionReport? = nil,
+        workspaceScaleRecommendation: WorkspaceScaleRecommendation? = nil,
         viewportGridSettings: ViewportGridSettings? = nil
     ) {
         self.message = message
@@ -31,6 +37,9 @@ public struct AutomationResult: Codable, Equatable, Sendable {
         self.curveRebuildReport = curveRebuildReport
         self.addedSelectionDimensionID = addedSelectionDimensionID
         self.workspaceScale = workspaceScale
+        self.workspaceBounds = workspaceBounds
+        self.workspacePrecision = workspacePrecision
+        self.workspaceScaleRecommendation = workspaceScaleRecommendation
         self.viewportGridSettings = viewportGridSettings
     }
 }

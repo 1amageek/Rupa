@@ -106,6 +106,44 @@ import SwiftCAD
 }
 
 @MainActor
+@Test func automationDescribeDocumentReportsWorkspaceRangeForLargeModel() async throws {
+    var document = DesignDocument.empty(named: "Automation Site")
+    let profileID = try document.createRectangleSketchFromCorners(
+        name: "Automation Site Footprint",
+        plane: .xy,
+        firstCorner: SketchPoint(
+            x: .length(0.0, .meter),
+            y: .length(0.0, .meter)
+        ),
+        oppositeCorner: SketchPoint(
+            x: .length(25_000.0, .meter),
+            y: .length(10_000.0, .meter)
+        )
+    )
+    _ = try document.extrudeProfile(
+        name: "Automation Site Mass",
+        profile: ProfileReference(featureID: profileID),
+        distance: .length(100.0, .meter),
+        direction: .normal
+    )
+    let session = EditorSession(document: document)
+    let runner = AutomationRunner()
+
+    let result = try runner.execute(.describeDocument, in: session)
+
+    #expect(!result.didMutate)
+    #expect(result.workspaceScale?.displayUnit == .millimeter)
+    #expect(result.workspaceBounds?.sizeX == 25_000.0)
+    #expect(result.workspaceBounds?.sizeY == 10_000.0)
+    #expect(result.workspaceBounds?.sizeZ == 100.0)
+    #expect(result.workspaceBounds?.maximumSpan == 25_000.0)
+    #expect(result.workspaceScaleRecommendation?.reason == .modelExceedsComfortableSpan)
+    #expect(result.workspaceScaleRecommendation?.recommendedPreset == .sitePlanning)
+    #expect(result.workspaceScaleRecommendation?.recommendedScale.displayUnit == .kilometer)
+    #expect(result.workspacePrecision == nil)
+}
+
+@MainActor
 @Test func automationCanSetViewportGridSettings() async throws {
     let session = EditorSession()
     let runner = AutomationRunner()

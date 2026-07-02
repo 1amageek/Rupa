@@ -11,69 +11,49 @@ public struct AutomationRunner {
         switch command {
         case .describeDocument:
             let scale = WorkspaceScaleSnapshot(ruler: session.document.ruler)
-            return AutomationResult(
+            return workspaceAutomationResult(
                 message: "Document uses \(session.document.displayUnit.symbol) display units. \(scale.summary)",
-                generation: session.generation,
-                diagnostics: session.diagnostics,
-                workspaceScale: scale,
-                viewportGridSettings: session.document.productMetadata.viewportGridSettings
+                in: session
             )
         case .setDisplayUnit(let unit):
             let result = try session.execute(.setDisplayUnit(unit))
             let scale = WorkspaceScaleSnapshot(ruler: session.document.ruler)
-            return AutomationResult(
+            return workspaceAutomationResult(
                 message: "Display unit changed to \(unit.symbol). \(scale.summary)",
-                commandName: result.commandName,
-                generation: result.generation,
-                didMutate: result.didMutate,
-                diagnostics: result.diagnostics,
-                workspaceScale: scale,
-                viewportGridSettings: session.document.productMetadata.viewportGridSettings
+                commandResult: result,
+                in: session
             )
         case .setRulerConfiguration(let configuration):
             let normalized = configuration.normalizedForWorkspaceScale()
             let result = try session.execute(.setRulerConfiguration(normalized))
             let scale = WorkspaceScaleSnapshot(ruler: session.document.ruler)
-            return AutomationResult(
+            return workspaceAutomationResult(
                 message: "Ruler configuration changed. \(scale.summary)",
-                commandName: result.commandName,
-                generation: result.generation,
-                didMutate: result.didMutate,
-                diagnostics: result.diagnostics,
-                workspaceScale: scale,
-                viewportGridSettings: session.document.productMetadata.viewportGridSettings
+                commandResult: result,
+                in: session
             )
         case .setWorkspaceScalePreset(let preset):
             let configuration = preset.rulerConfiguration.normalizedForWorkspaceScale()
             let result = try session.execute(.setRulerConfiguration(configuration))
             let scale = WorkspaceScaleSnapshot(ruler: session.document.ruler)
-            return AutomationResult(
+            return workspaceAutomationResult(
                 message: "Workspace scale preset changed to \(preset.title). \(scale.summary)",
-                commandName: result.commandName,
-                generation: result.generation,
-                didMutate: result.didMutate,
-                diagnostics: result.diagnostics,
-                workspaceScale: scale,
-                viewportGridSettings: session.document.productMetadata.viewportGridSettings
+                commandResult: result,
+                in: session
             )
         case .setViewportGridSettings(let settings):
             let result = try session.execute(.setViewportGridSettings(settings))
-            return AutomationResult(
+            return workspaceAutomationResult(
                 message: "Viewport grid settings changed. \(settings.summary)",
-                commandName: result.commandName,
-                generation: result.generation,
-                didMutate: result.didMutate,
-                diagnostics: result.diagnostics,
-                viewportGridSettings: session.document.productMetadata.viewportGridSettings
+                commandResult: result,
+                in: session
             )
         case .rebaseWorkspaceOrigin(let translation):
             let result = try session.execute(.rebaseWorkspaceOrigin(translation: translation))
-            return AutomationResult(
+            return workspaceAutomationResult(
                 message: "Workspace origin rebased by (\(translation.x), \(translation.y), \(translation.z)) m.",
-                commandName: result.commandName,
-                generation: result.generation,
-                didMutate: result.didMutate,
-                diagnostics: result.diagnostics
+                commandResult: result,
+                in: session
             )
         case .renameDocument(let name):
             let result = try session.execute(.renameDocument(name: name))
@@ -1715,6 +1695,49 @@ public struct AutomationRunner {
         return results
     }
 
+    private func workspaceAutomationResult(
+        message: String,
+        commandResult: CommandExecutionResult? = nil,
+        in session: EditorSession
+    ) -> AutomationResult {
+        let context = workspaceAutomationContext(in: session)
+        return AutomationResult(
+            message: message,
+            commandName: commandResult?.commandName,
+            generation: commandResult?.generation ?? session.generation,
+            didMutate: commandResult?.didMutate ?? false,
+            diagnostics: commandResult?.diagnostics ?? session.diagnostics,
+            curveRebuildReport: commandResult?.curveRebuildReport,
+            addedSelectionDimensionID: commandResult?.addedSelectionDimensionID,
+            workspaceScale: context.scale,
+            workspaceBounds: context.bounds,
+            workspacePrecision: context.precision,
+            workspaceScaleRecommendation: context.scaleRecommendation,
+            viewportGridSettings: context.viewportGridSettings
+        )
+    }
+
+    private func workspaceAutomationContext(
+        in session: EditorSession
+    ) -> WorkspaceAutomationContext {
+        let bounds = session.currentEvaluation.flatMap {
+            WorkspaceBoundsService().bounds(for: $0.evaluatedDocument)
+        }
+        return WorkspaceAutomationContext(
+            scale: WorkspaceScaleSnapshot(ruler: session.document.ruler),
+            bounds: bounds,
+            precision: WorkspacePrecisionDiagnosticService().report(
+                for: bounds,
+                ruler: session.document.ruler
+            ),
+            scaleRecommendation: WorkspaceScaleRecommendationService().recommendation(
+                for: bounds,
+                currentRuler: session.document.ruler
+            ),
+            viewportGridSettings: session.document.productMetadata.viewportGridSettings
+        )
+    }
+
     private func sketchCornerTreatmentAutomationMessage(
         _ treatment: SketchCornerTreatment
     ) -> String {
@@ -1725,4 +1748,12 @@ public struct AutomationRunner {
             "Sketch corner chamfer applied."
         }
     }
+}
+
+private struct WorkspaceAutomationContext {
+    var scale: WorkspaceScaleSnapshot
+    var bounds: MeasurementResult.Bounds?
+    var precision: WorkspacePrecisionReport?
+    var scaleRecommendation: WorkspaceScaleRecommendation?
+    var viewportGridSettings: ViewportGridSettings
 }

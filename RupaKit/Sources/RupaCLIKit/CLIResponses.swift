@@ -9,6 +9,9 @@ public struct CLIResponse: Codable, Equatable, Sendable {
     public var saved: Bool
     public var diagnostics: [EditorDiagnostic]
     public var workspaceScale: WorkspaceScaleSnapshot?
+    public var workspaceBounds: MeasurementResult.Bounds?
+    public var workspacePrecision: WorkspacePrecisionReport?
+    public var workspaceScaleRecommendation: WorkspaceScaleRecommendation?
     public var viewportGridSettings: ViewportGridSettings?
 
     public init(
@@ -18,6 +21,9 @@ public struct CLIResponse: Codable, Equatable, Sendable {
         saved: Bool = false,
         diagnostics: [EditorDiagnostic],
         workspaceScale: WorkspaceScaleSnapshot? = nil,
+        workspaceBounds: MeasurementResult.Bounds? = nil,
+        workspacePrecision: WorkspacePrecisionReport? = nil,
+        workspaceScaleRecommendation: WorkspaceScaleRecommendation? = nil,
         viewportGridSettings: ViewportGridSettings? = nil
     ) {
         self.message = message
@@ -26,6 +32,9 @@ public struct CLIResponse: Codable, Equatable, Sendable {
         self.saved = saved
         self.diagnostics = diagnostics
         self.workspaceScale = workspaceScale
+        self.workspaceBounds = workspaceBounds
+        self.workspacePrecision = workspacePrecision
+        self.workspaceScaleRecommendation = workspaceScaleRecommendation
         self.viewportGridSettings = viewportGridSettings
     }
 }

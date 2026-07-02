@@ -6159,6 +6159,14 @@ func cliExecutableReturnsDataExitForLiveGenerationMismatch() async throws {
 }
 
 @Test func cliResponseEncodesStableJSONFields() async throws {
+    let workspaceBounds = MeasurementResult.Bounds(
+        minX: 0.0,
+        minY: 0.0,
+        minZ: 0.0,
+        maxX: 25_000.0,
+        maxY: 10_000.0,
+        maxZ: 100.0
+    )
     let response = CLIResponse(
         message: "Renamed",
         generation: 1,
@@ -6168,7 +6176,8 @@ func cliExecutableReturnsDataExitForLiveGenerationMismatch() async throws {
                 severity: .info,
                 message: "Document is valid."
             ),
-        ]
+        ],
+        workspaceBounds: workspaceBounds
     )
 
     let data = try JSONEncoder().encode(response)
@@ -6179,6 +6188,36 @@ func cliExecutableReturnsDataExitForLiveGenerationMismatch() async throws {
     #expect(!decoded.dirty)
     #expect(!decoded.saved)
     #expect(decoded.diagnostics.first?.severity == .info)
+    #expect(decoded.workspaceBounds == workspaceBounds)
+}
+
+@Test func cliAutomationResponseCarriesWorkspaceRangeFields() {
+    let workspaceBounds = MeasurementResult.Bounds(
+        minX: 0.0,
+        minY: 0.0,
+        minZ: 0.0,
+        maxX: 25_000.0,
+        maxY: 10_000.0,
+        maxZ: 100.0
+    )
+    let automationResult = AutomationResult(
+        message: "Document described.",
+        generation: DocumentGeneration(3),
+        diagnostics: [],
+        workspaceScale: WorkspaceScaleSnapshot(ruler: WorkspaceScalePreset.sitePlanning.rulerConfiguration),
+        workspaceBounds: workspaceBounds,
+        viewportGridSettings: .standard
+    )
+
+    let response = CLIResponse(
+        result: automationResult,
+        dirty: false,
+        saved: false
+    )
+
+    #expect(response.workspaceScale?.matchedPreset == .sitePlanning)
+    #expect(response.workspaceBounds == workspaceBounds)
+    #expect(response.viewportGridSettings == .standard)
 }
 
 @Test func cliServiceReportsAgentStatus() async throws {
