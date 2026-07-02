@@ -79,6 +79,7 @@ public struct MainView: View {
     @State private var slotProfileCommandState: SlotProfileCommandState
     @State private var viewportProjectionBasis: ViewportProjectionBasis
     @State private var viewportContextPanelHeight: CGFloat
+    @State private var viewportCameraResetSignal: Int
     @State private var viewAlignedConstructionPlaneRequest: ViewAlignedConstructionPlaneRequest?
     @State private var viewportProjectionRequest: ViewportProjectionRequest?
     @State private var constructionPlaneRenameTargetID: ConstructionPlaneSourceID?
@@ -162,6 +163,7 @@ public struct MainView: View {
         self._slotProfileCommandState = State(initialValue: .inactive)
         self._viewportProjectionBasis = State(initialValue: .isometric)
         self._viewportContextPanelHeight = State(initialValue: 0.0)
+        self._viewportCameraResetSignal = State(initialValue: 0)
         self._viewAlignedConstructionPlaneRequest = State(initialValue: nil)
         self._viewportProjectionRequest = State(initialValue: nil)
         self._constructionPlaneRenameTargetID = State(initialValue: nil)
@@ -479,6 +481,7 @@ public struct MainView: View {
                     selectionHitPolicy: selectionScope.viewportSelectionHitPolicy,
                     bottomChromeReservedHeight: viewportContextPanelHeight,
                     gridVisualSpacingMode: session.document.productMetadata.viewportGridSettings.visualSpacingMode,
+                    cameraResetSignal: viewportCameraResetSignal,
                     hoverClearSignal: viewportHoverClearSignal,
                     showsConstructionPlaneHover: showsConstructionPlaneHover,
                     allowsSelectionRectangle: allowsSelectionRectangle,
@@ -7010,6 +7013,9 @@ public struct MainView: View {
         }
 
         session.setRulerConfiguration(ruler.normalizedForWorkspaceScale())
+        if visibleSpanMeters != nil {
+            requestViewportCameraReset()
+        }
     }
 
     private func applyDisplayUnit(_ unit: LengthDisplayUnit) {
@@ -7033,6 +7039,7 @@ public struct MainView: View {
     private func applyWorkspaceScalePreset(_ preset: WorkspaceScalePreset) {
         session.setRulerConfiguration(preset.rulerConfiguration.normalizedForWorkspaceScale())
         resetWorkspaceEditingScaleDefaults()
+        requestViewportCameraReset()
     }
 
     private func fitWorkspaceScaleToModel() {
@@ -7054,10 +7061,15 @@ public struct MainView: View {
             case .applyPreset(let preset):
                 session.perform(.setRulerConfiguration(preset.rulerConfiguration.normalizedForWorkspaceScale()))
                 resetWorkspaceEditingScaleDefaults()
+                requestViewportCameraReset()
             }
         } catch {
             session.reportToolStatus(error.localizedDescription, severity: .warning)
         }
+    }
+
+    private func requestViewportCameraReset() {
+        viewportCameraResetSignal += 1
     }
 
     private func upsertParameterExpression(

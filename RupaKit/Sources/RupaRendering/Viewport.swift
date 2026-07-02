@@ -120,6 +120,7 @@ public struct Viewport: View {
     private let selectionHitPolicy: ViewportSelectionHitPolicy
     private let bottomChromeReservedHeight: CGFloat
     private let gridVisualSpacingMode: ViewportProjectedGrid.VisualSpacingMode
+    private let cameraResetSignal: Int
     private let hoverClearSignal: Int
     private let showsConstructionPlaneHover: Bool
     private let allowsSelectionRectangle: Bool
@@ -191,6 +192,7 @@ public struct Viewport: View {
         selectionHitPolicy: ViewportSelectionHitPolicy = .all,
         bottomChromeReservedHeight: CGFloat = 0.0,
         gridVisualSpacingMode: ViewportProjectedGrid.VisualSpacingMode = .adaptive,
+        cameraResetSignal: Int = 0,
         hoverClearSignal: Int = 0,
         showsConstructionPlaneHover: Bool = false,
         allowsSelectionRectangle: Bool = false,
@@ -261,6 +263,7 @@ public struct Viewport: View {
         self.selectionHitPolicy = selectionHitPolicy
         self.bottomChromeReservedHeight = max(0.0, bottomChromeReservedHeight)
         self.gridVisualSpacingMode = gridVisualSpacingMode
+        self.cameraResetSignal = cameraResetSignal
         self.hoverClearSignal = hoverClearSignal
         self.showsConstructionPlaneHover = showsConstructionPlaneHover
         self.allowsSelectionRectangle = allowsSelectionRectangle
@@ -452,6 +455,9 @@ public struct Viewport: View {
             }
             .onChange(of: snapResolutionOptions) { _, _ in
                 refreshSnapCandidateKind(size: proxy.size)
+            }
+            .onChange(of: cameraResetSignal) { _, _ in
+                resetViewportCamera()
             }
             .onChange(of: hoverClearSignal) { _, _ in
                 clearCanvasHover()
