@@ -22,6 +22,54 @@
       "matchedPreset": "sitePlanning",
       "matchedPresetTitle": "Site Planning"
     },
+    "workspaceInteractionScale": {
+      "displayUnit": "kilometer",
+      "displayUnitSymbol": "km",
+      "operationStep": {
+        "meters": 100,
+        "displayValue": 0.1,
+        "displayUnit": "kilometer",
+        "displayUnitSymbol": "km"
+      },
+      "slotWidth": {
+        "meters": 200,
+        "displayValue": 0.2,
+        "displayUnit": "kilometer",
+        "displayUnitSymbol": "km"
+      },
+      "surfaceFrameTangentialMove": {
+        "meters": 0,
+        "displayValue": 0,
+        "displayUnit": "kilometer",
+        "displayUnitSymbol": "km"
+      },
+      "surfaceFrameNormalMove": {
+        "meters": 100,
+        "displayValue": 0.1,
+        "displayUnit": "kilometer",
+        "displayUnitSymbol": "km"
+      },
+      "sketchRebuildTolerance": {
+        "meters": 0.1,
+        "displayValue": 10,
+        "displayUnit": "centimeter",
+        "displayUnitSymbol": "cm"
+      },
+      "sketchRebuildToleranceRange": {
+        "lower": {
+          "meters": 0.000001,
+          "displayValue": 1,
+          "displayUnit": "micrometer",
+          "displayUnitSymbol": "μm"
+        },
+        "upper": {
+          "meters": 100,
+          "displayValue": 0.1,
+          "displayUnit": "kilometer",
+          "displayUnitSymbol": "km"
+        }
+      }
+    },
     "workspaceBounds": {
       "minX": 0,
       "minY": 0,

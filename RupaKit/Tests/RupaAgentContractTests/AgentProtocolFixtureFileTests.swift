@@ -48,6 +48,10 @@ struct AgentProtocolFixtureFileTests {
                 #expect(result.didMutate)
                 #expect(result.workspaceScale?.matchedPreset == .sitePlanning)
                 #expect(result.workspaceScale?.displayUnit == .kilometer)
+                #expect(result.workspaceInteractionScale?.operationStep.meters == 100.0)
+                #expect(result.workspaceInteractionScale?.operationStep.displayValue == 0.1)
+                #expect(result.workspaceInteractionScale?.operationStep.displayUnitSymbol == "km")
+                #expect(result.workspaceInteractionScale?.slotWidth.meters == 200.0)
                 #expect(result.workspaceBounds?.maximumSpan == 25_000.0)
                 #expect(result.viewportGridSettings?.visualSpacingMode == .adaptive)
             case "parameter.setExpression":

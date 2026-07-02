@@ -316,8 +316,10 @@ import SwiftCAD
     #expect(workspaceScaleFit.failureMode.contains("leaves the document unchanged"))
     #expect(workspaceScaleFit.optionMatrix.contains { axis in
         axis.name == "recommendation"
+            && axis.supportedValues.contains("workspaceInteractionScale")
             && axis.supportedValues.contains("workspaceScaleRecommendation")
             && axis.notes.contains { $0.contains("same recommendation service") }
+            && axis.notes.contains { $0.contains("scale-appropriate operation distances") }
     })
     #expect(workspaceOriginRebase.category == .document)
     #expect(workspaceOriginRebase.access == .automationCommand)
@@ -331,9 +333,12 @@ import SwiftCAD
     #expect(extrudedRectangleFromCorners.summary.contains("structured workspace scale"))
     #expect(extrudedRectangleFromCorners.optionMatrix.contains { axis in
         axis.name == "workspaceFeedback"
+            && axis.supportedValues.contains("workspaceScale")
+            && axis.supportedValues.contains("workspaceInteractionScale")
             && axis.supportedValues.contains("workspaceBounds")
             && axis.supportedValues.contains("workspaceScaleRecommendation")
             && axis.supportedValues.contains("workspacePrecision")
+            && axis.notes.contains { $0.contains("current ruler step") }
             && axis.notes.contains { $0.contains("fitWorkspaceScaleToModel") }
             && axis.notes.contains { $0.contains("rebaseWorkspaceOrigin") }
     })
