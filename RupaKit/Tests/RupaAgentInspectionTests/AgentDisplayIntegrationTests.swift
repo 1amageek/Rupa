@@ -46,6 +46,8 @@ import SwiftCAD
     let sessionID = UUID()
     let session = EditorSession()
     _ = try #require(session.createDefaultExtrudedRectangle())
+    let gridSettings = ViewportGridSettings(visualSpacingMode: .fixed)
+    _ = try session.execute(.setViewportGridSettings(gridSettings))
     server.register(session: session, id: sessionID)
 
     let response = server.handle(
@@ -67,6 +69,7 @@ import SwiftCAD
 
     #expect(snapshot.generation == session.generation)
     #expect(snapshot.dirty == session.isDirty)
+    #expect(snapshot.viewportGridSettings == gridSettings)
     #expect(snapshot.sketches.count == 1)
     #expect(snapshot.extrudes.count == 1)
     #expect(snapshot.straightPrismSweeps.isEmpty)

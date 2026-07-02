@@ -3,6 +3,7 @@ public struct DesignDisplaySnapshotResult: Codable, Equatable, Sendable {
     public var generation: DocumentGeneration
     public var dirty: Bool
     public var workspaceScale: WorkspaceScaleSnapshot
+    public var viewportGridSettings: ViewportGridSettings
     public var sketches: [SketchDisplaySnapshot]
     public var extrudes: [ExtrudeDisplaySnapshot]
     public var straightPrismSweeps: [StraightPrismSweepDisplaySnapshot]
@@ -15,6 +16,7 @@ public struct DesignDisplaySnapshotResult: Codable, Equatable, Sendable {
         generation: DocumentGeneration,
         dirty: Bool,
         workspaceScale: WorkspaceScaleSnapshot = WorkspaceScaleSnapshot(ruler: .standard(for: .millimeter)),
+        viewportGridSettings: ViewportGridSettings = .standard,
         sketches: [SketchDisplaySnapshot],
         extrudes: [ExtrudeDisplaySnapshot],
         straightPrismSweeps: [StraightPrismSweepDisplaySnapshot],
@@ -26,6 +28,7 @@ public struct DesignDisplaySnapshotResult: Codable, Equatable, Sendable {
         self.generation = generation
         self.dirty = dirty
         self.workspaceScale = workspaceScale
+        self.viewportGridSettings = viewportGridSettings
         self.sketches = sketches
         self.extrudes = extrudes
         self.straightPrismSweeps = straightPrismSweeps

@@ -107,6 +107,7 @@ public struct DesignDisplaySnapshotService: Sendable {
             generation: generation,
             dirty: dirty,
             workspaceScale: WorkspaceScaleSnapshot(ruler: document.ruler),
+            viewportGridSettings: document.productMetadata.viewportGridSettings,
             sketches: order.compactMap { snapshot.sketches[$0] },
             extrudes: order.compactMap { snapshot.extrudes[$0] },
             straightPrismSweeps: order.compactMap { snapshot.straightPrismSweeps[$0] },

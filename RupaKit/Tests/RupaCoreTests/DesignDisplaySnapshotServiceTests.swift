@@ -56,9 +56,11 @@ import Testing
 }
 
 @MainActor
-@Test func designDisplaySnapshotReportsWorkspaceScaleForAgentPlanning() async throws {
+@Test func designDisplaySnapshotReportsWorkspaceScaleAndViewportGridForAgentPlanning() async throws {
     let session = EditorSession()
     session.setRulerConfiguration(WorkspaceScalePreset.sitePlanning.rulerConfiguration)
+    let gridSettings = ViewportGridSettings(visualSpacingMode: .fixed)
+    _ = try session.execute(.setViewportGridSettings(gridSettings))
     let failingPipeline = CADPipeline(
         evaluator: DocumentEvaluator(featureEvaluator: DesignDisplayFailingFeatureEvaluator())
     )
@@ -79,6 +81,7 @@ import Testing
     #expect(result.workspaceScale.minorTickMeters == 100.0)
     #expect(result.workspaceScale.majorTickMeters == 1_000.0)
     #expect(result.workspaceScale.visibleSpanMeters == 100_000.0)
+    #expect(result.viewportGridSettings == gridSettings)
 }
 
 @MainActor

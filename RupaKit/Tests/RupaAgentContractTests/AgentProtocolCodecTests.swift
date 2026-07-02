@@ -807,6 +807,7 @@ private func rawAgentProtocolJSON(_ source: String) -> Data {
         DesignDisplaySnapshotResult(
             generation: DocumentGeneration(2),
             dirty: false,
+            viewportGridSettings: ViewportGridSettings(visualSpacingMode: .fixed),
             sketches: [],
             extrudes: [],
             straightPrismSweeps: [],
