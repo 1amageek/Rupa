@@ -108,18 +108,22 @@ public struct DesignDisplaySnapshotService: Sendable {
             currentEvaluation: currentEvaluation,
             generation: generation
         )
+        let workspaceBounds = evaluatedDocument.flatMap {
+            WorkspaceBoundsService().bounds(for: $0)
+        }
         return DesignDisplaySnapshotResult(
             generation: generation,
             dirty: dirty,
             workspaceScale: WorkspaceScaleSnapshot(ruler: document.ruler),
             viewportGridSettings: document.productMetadata.viewportGridSettings,
-            workspacePrecision: evaluatedDocument.flatMap {
+            workspaceBounds: workspaceBounds,
+            workspacePrecision: workspaceBounds.flatMap {
                 WorkspacePrecisionDiagnosticService().report(
                     for: $0,
                     ruler: document.ruler
                 )
             },
-            workspaceScaleRecommendation: evaluatedDocument.flatMap {
+            workspaceScaleRecommendation: workspaceBounds.flatMap {
                 WorkspaceScaleRecommendationService().recommendation(
                     for: $0,
                     currentRuler: document.ruler

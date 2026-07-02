@@ -129,21 +129,8 @@ public struct WorkspacePrecisionDiagnosticService: Sendable {
         ruler: RulerConfiguration,
         tolerance: ModelingTolerance? = nil
     ) -> Report? {
-        var accumulator = WorkspacePrecisionBoundsAccumulator()
-        for mesh in evaluatedDocument.meshes.values {
-            for position in mesh.positions {
-                accumulator.include(position)
-            }
-        }
-        for curves in evaluatedDocument.curves.values {
-            for curve in curves {
-                for point in curve.points {
-                    accumulator.include(point)
-                }
-            }
-        }
         return report(
-            for: accumulator.bounds,
+            for: WorkspaceBoundsService().bounds(for: evaluatedDocument),
             ruler: ruler,
             tolerance: tolerance
         )
@@ -216,32 +203,5 @@ public struct WorkspacePrecisionDiagnosticService: Sendable {
             return 0.0
         }
         return -center
-    }
-}
-
-private struct WorkspacePrecisionBoundsAccumulator {
-    private(set) var bounds: MeasurementResult.Bounds?
-
-    mutating func include(_ point: Point3D) {
-        let next = MeasurementResult.Bounds(
-            minX: point.x,
-            minY: point.y,
-            minZ: point.z,
-            maxX: point.x,
-            maxY: point.y,
-            maxZ: point.z
-        )
-        guard let current = bounds else {
-            bounds = next
-            return
-        }
-        bounds = MeasurementResult.Bounds(
-            minX: min(current.minX, next.minX),
-            minY: min(current.minY, next.minY),
-            minZ: min(current.minZ, next.minZ),
-            maxX: max(current.maxX, next.maxX),
-            maxY: max(current.maxY, next.maxY),
-            maxZ: max(current.maxZ, next.maxZ)
-        )
     }
 }

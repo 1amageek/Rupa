@@ -122,6 +122,10 @@ import Testing
     #expect(result.workspaceScaleRecommendation?.recommendedPreset == .sitePlanning)
     #expect(result.workspaceScaleRecommendation?.recommendedScale.displayUnit == .kilometer)
     #expect(result.workspaceScaleRecommendation?.recommendedScaleProfile.comfortableModelSpanTitle == "1 km to 80 km")
+    #expect(result.workspaceBounds?.sizeX == 25_000.0)
+    #expect(result.workspaceBounds?.sizeY == 10_000.0)
+    #expect(result.workspaceBounds?.sizeZ == 100.0)
+    #expect(result.workspaceBounds?.maximumSpan == 25_000.0)
     #expect(result.workspacePrecision == nil)
 }
 
@@ -161,6 +165,8 @@ import Testing
     )
 
     #expect(result.workspacePrecision?.reason == .coordinateResolution)
+    #expect(result.workspaceBounds?.maximumSpan == 10.0)
+    #expect(result.workspaceBounds?.maximumAbsoluteCoordinate == 1.0e12 + 10.0)
     #expect(result.workspacePrecision?.recommendedRebaseTranslation == Vector3D(
         x: -(1.0e12 + 5.0),
         y: -(1.0e12 + 5.0),

@@ -130,11 +130,17 @@ import Testing
     let document = try farFromOriginDocument()
     let evaluated = try DocumentEvaluator.modelingDefault(for: document).evaluate(document.cadDocument)
 
+    let bounds = WorkspaceBoundsService().bounds(for: evaluated)
     let report = WorkspacePrecisionDiagnosticService().report(
         for: evaluated,
         ruler: document.ruler
     )
 
+    #expect(bounds?.sizeX == 10.0)
+    #expect(bounds?.sizeY == 10.0)
+    #expect(bounds?.sizeZ == 10.0)
+    #expect(bounds?.maximumSpan == 10.0)
+    #expect(bounds?.maximumAbsoluteCoordinate == 1.0e12 + 10.0)
     #expect(report?.reason == .coordinateResolution)
     #expect(report?.recommendedRebaseTranslation == Vector3D(
         x: -(1.0e12 + 5.0),
@@ -161,11 +167,17 @@ import Testing
     )
     let evaluated = try DocumentEvaluator.modelingDefault(for: document).evaluate(document.cadDocument)
 
+    let bounds = WorkspaceBoundsService().bounds(for: evaluated)
     let report = WorkspacePrecisionDiagnosticService().report(
         for: evaluated,
         ruler: document.ruler
     )
 
+    #expect(bounds?.sizeX == 10.0)
+    #expect(bounds?.sizeY == 10.0)
+    #expect(bounds?.sizeZ == 0.0)
+    #expect(bounds?.maximumSpan == 10.0)
+    #expect(bounds?.maximumAbsoluteCoordinate == 1.0e12 + 10.0)
     #expect(report?.reason == .coordinateResolution)
     #expect(report?.recommendedRebaseTranslation == Vector3D(
         x: -(1.0e12 + 5.0),

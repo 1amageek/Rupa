@@ -808,6 +808,14 @@ private func rawAgentProtocolJSON(_ source: String) -> Data {
             generation: DocumentGeneration(2),
             dirty: false,
             viewportGridSettings: ViewportGridSettings(visualSpacingMode: .fixed),
+            workspaceBounds: MeasurementResult.Bounds(
+                minX: 0.0,
+                minY: 0.0,
+                minZ: 0.0,
+                maxX: 25_000.0,
+                maxY: 10_000.0,
+                maxZ: 100.0
+            ),
             sketches: [],
             extrudes: [],
             straightPrismSweeps: [],

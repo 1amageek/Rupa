@@ -4,6 +4,7 @@ public struct DesignDisplaySnapshotResult: Codable, Equatable, Sendable {
     public var dirty: Bool
     public var workspaceScale: WorkspaceScaleSnapshot
     public var viewportGridSettings: ViewportGridSettings
+    public var workspaceBounds: MeasurementResult.Bounds?
     public var workspacePrecision: WorkspacePrecisionReport?
     public var workspaceScaleRecommendation: WorkspaceScaleRecommendation?
     public var sketches: [SketchDisplaySnapshot]
@@ -19,6 +20,7 @@ public struct DesignDisplaySnapshotResult: Codable, Equatable, Sendable {
         dirty: Bool,
         workspaceScale: WorkspaceScaleSnapshot = WorkspaceScaleSnapshot(ruler: .standard(for: .millimeter)),
         viewportGridSettings: ViewportGridSettings = .standard,
+        workspaceBounds: MeasurementResult.Bounds? = nil,
         workspacePrecision: WorkspacePrecisionReport? = nil,
         workspaceScaleRecommendation: WorkspaceScaleRecommendation? = nil,
         sketches: [SketchDisplaySnapshot],
@@ -33,6 +35,7 @@ public struct DesignDisplaySnapshotResult: Codable, Equatable, Sendable {
         self.dirty = dirty
         self.workspaceScale = workspaceScale
         self.viewportGridSettings = viewportGridSettings
+        self.workspaceBounds = workspaceBounds
         self.workspacePrecision = workspacePrecision
         self.workspaceScaleRecommendation = workspaceScaleRecommendation
         self.sketches = sketches

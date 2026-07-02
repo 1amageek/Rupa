@@ -113,5 +113,9 @@ import Testing
     #expect(snapshot.workspaceScaleRecommendation?.recommendedPreset == .sitePlanning)
     #expect(snapshot.workspaceScaleRecommendation?.recommendedScale.displayUnit == .kilometer)
     #expect(snapshot.workspaceScaleRecommendation?.recommendedScaleProfile.comfortableModelSpanTitle == "1 km to 80 km")
+    #expect(snapshot.workspaceBounds?.sizeX == 25_000.0)
+    #expect(snapshot.workspaceBounds?.sizeY == 10_000.0)
+    #expect(snapshot.workspaceBounds?.sizeZ == 100.0)
+    #expect(snapshot.workspaceBounds?.maximumSpan == 25_000.0)
     #expect(decodedResponse == response)
 }
