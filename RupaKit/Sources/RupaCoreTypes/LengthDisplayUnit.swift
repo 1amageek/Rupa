@@ -95,6 +95,9 @@ public enum LengthDisplayUnit: String, Codable, CaseIterable, Hashable, Identifi
         if magnitude >= 1.0 {
             return .meter
         }
+        if magnitude >= 0.01 {
+            return .centimeter
+        }
         if magnitude >= 0.001 {
             return .millimeter
         }

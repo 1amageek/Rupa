@@ -18,6 +18,8 @@ import Testing
 @Test func lengthDisplayUnitsChooseReadableMetricScale() async throws {
     #expect(LengthDisplayUnit.millimeter.readableUnit(forMeters: 0.25) == .millimeter)
     #expect(LengthDisplayUnit.millimeter.readableUnit(forMeters: 1.0) == .meter)
+    #expect(LengthDisplayUnit.meter.readableUnit(forMeters: 0.02) == .centimeter)
+    #expect(LengthDisplayUnit.kilometer.readableUnit(forMeters: 0.25) == .centimeter)
     #expect(LengthDisplayUnit.meter.readableUnit(forMeters: 1_000.0) == .kilometer)
     #expect(LengthDisplayUnit.kilometer.readableUnit(forMeters: 1.0) == .meter)
     #expect(LengthDisplayUnit.meter.readableUnit(forMeters: 0.000_25) == .micrometer)

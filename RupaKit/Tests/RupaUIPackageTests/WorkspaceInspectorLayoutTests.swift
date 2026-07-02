@@ -47,6 +47,10 @@ import Testing
         fromMeters: 1_000.0,
         preferredUnit: .millimeter
     )
+    let intermediate = workspaceLengthFieldPresentation(
+        fromMeters: 0.02,
+        preferredUnit: .meter
+    )
     let small = workspaceLengthFieldPresentation(
         fromMeters: 0.000_25,
         preferredUnit: .meter
@@ -55,6 +59,9 @@ import Testing
     #expect(large.unit == .kilometer)
     #expect(large.value == 1.0)
     #expect(large.text == "1")
+    #expect(intermediate.unit == .centimeter)
+    #expect(intermediate.value == 2.0)
+    #expect(intermediate.text == "2")
     #expect(small.unit == .micrometer)
     #expect(small.value == 250.0)
     #expect(small.text == "250")
@@ -265,12 +272,19 @@ import Testing
         preferredUnit: .meter,
         for: .minor
     )
+    let centimeterPresentation = RulerScaleControl.fieldPresentation(
+        fromMeters: 0.02,
+        preferredUnit: .meter,
+        for: .major
+    )
 
     #expect(visiblePresentation.unit == .kilometer)
     #expect(visiblePresentation.value == 1_000.0)
     #expect(visiblePresentation.text == "1,000")
     #expect(majorPresentation.unit == .kilometer)
     #expect(majorPresentation.value == 1.0)
+    #expect(centimeterPresentation.unit == .centimeter)
+    #expect(centimeterPresentation.value == 2.0)
     #expect(minorPresentation.unit == .micrometer)
     #expect(minorPresentation.value == 250.0)
 }
