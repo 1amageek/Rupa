@@ -1231,6 +1231,10 @@ public struct MainView: View {
                 tint: .secondary
             )
 
+            if let scaleFitPromptState = workspaceScaleFitPromptState {
+                workspaceScaleFitPromptButton(scaleFitPromptState)
+            }
+
             workspaceScaleMenu
 
             Spacer(minLength: 12)
@@ -1308,6 +1312,10 @@ public struct MainView: View {
         )
     }
 
+    private var workspaceScaleFitPromptState: WorkspaceScaleFitPromptState? {
+        WorkspaceScaleFitPromptState(recommendation: currentWorkspaceScaleRecommendation)
+    }
+
     private var fixedGridVisualSpacingBinding: Binding<Bool> {
         Binding(
             get: {
@@ -1317,6 +1325,53 @@ public struct MainView: View {
                 applyViewportGridVisualSpacingMode(isFixed ? .fixed : .adaptive)
             }
         )
+    }
+
+    @ViewBuilder
+    private func workspaceScaleFitPromptButton(
+        _ state: WorkspaceScaleFitPromptState
+    ) -> some View {
+        if state.isActionable {
+            Button {
+                fitWorkspaceScaleToModel()
+            } label: {
+                Label {
+                    Text(state.title)
+                        .lineLimit(1)
+                        .monospacedDigit()
+                } icon: {
+                    Image(systemName: "scope")
+                        .symbolRenderingMode(.hierarchical)
+                }
+                .font(.caption.weight(.medium))
+                .foregroundStyle(Color.accentColor)
+                .padding(.horizontal, 6)
+                .padding(.vertical, 4)
+                .background {
+                    RoundedRectangle(cornerRadius: 7, style: .continuous)
+                        .fill(Color.accentColor.opacity(0.14))
+                }
+                .overlay {
+                    RoundedRectangle(cornerRadius: 7, style: .continuous)
+                        .strokeBorder(Color.accentColor.opacity(0.28), lineWidth: 1)
+                }
+            }
+            .buttonStyle(.plain)
+            .help(state.help)
+            .accessibilityIdentifier("WorkspaceScale.fitPrompt")
+            .accessibilityLabel("Workspace Scale Fit")
+            .accessibilityValue(state.accessibilityValue)
+        } else {
+            workspaceStatusChip(
+                state.title,
+                systemImage: "exclamationmark.triangle",
+                tint: .orange
+            )
+            .help(state.help)
+            .accessibilityIdentifier("WorkspaceScale.limitPrompt")
+            .accessibilityLabel("Workspace Scale Limit")
+            .accessibilityValue(state.accessibilityValue)
+        }
     }
 
     private var workspaceScaleMenu: some View {

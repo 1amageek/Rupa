@@ -465,6 +465,56 @@ import Testing
     #expect(state.isActionable == false)
 }
 
+@Test func workspaceScaleFitPromptStateReportsCompactActionableRecommendation() throws {
+    let recommendation = try #require(WorkspaceScaleRecommendationService().recommendation(
+        for: MeasurementResult.Bounds(
+            minX: 0.0,
+            minY: 0.0,
+            minZ: 0.0,
+            maxX: 25_000.0,
+            maxY: 10_000.0,
+            maxZ: 100.0
+        ),
+        currentRuler: RulerConfiguration.standard(for: .millimeter)
+    ))
+
+    let state = try #require(WorkspaceScaleFitPromptState(recommendation: recommendation))
+
+    #expect(state.title == "Fit Site")
+    #expect(state.isActionable)
+    #expect(state.preset == .sitePlanning)
+    #expect(state.help == "Fit workspace scale to Site Planning")
+    #expect(state.accessibilityValue.contains("modelExceedsComfortableSpan"))
+    #expect(state.accessibilityValue.contains("1 km to 80 km"))
+}
+
+@Test func workspaceScaleFitPromptStateReportsActionlessScaleLimit() throws {
+    let recommendation = try #require(WorkspaceScaleRecommendationService().recommendation(
+        for: MeasurementResult.Bounds(
+            minX: 0.0,
+            minY: 0.0,
+            minZ: 0.0,
+            maxX: 1_200_000.0,
+            maxY: 400_000.0,
+            maxZ: 1_000.0
+        ),
+        currentRuler: WorkspaceScalePreset.regionalPlanning.rulerConfiguration
+    ))
+
+    let state = try #require(WorkspaceScaleFitPromptState(recommendation: recommendation))
+
+    #expect(state.title == "Scale Limit")
+    #expect(state.isActionable == false)
+    #expect(state.preset == .regionalPlanning)
+    #expect(state.help == "Current model exceeds the supported workspace scale range")
+    #expect(state.accessibilityValue.contains("modelExceedsSupportedScaleRange"))
+    #expect(state.accessibilityValue.contains("10 km to 800 km"))
+}
+
+@Test func workspaceScaleFitPromptStateIgnoresMissingRecommendation() {
+    #expect(WorkspaceScaleFitPromptState(recommendation: nil) == nil)
+}
+
 @Test func workspaceDocumentRecommendationStatesShareBoundsForScaleAndPrecision() throws {
     let states = workspaceDocumentRecommendationStates(
         bounds: MeasurementResult.Bounds(
