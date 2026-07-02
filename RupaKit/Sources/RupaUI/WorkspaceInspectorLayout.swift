@@ -33,6 +33,20 @@ struct WorkspaceLengthFieldPresentation: Equatable {
     var text: String
 }
 
+enum WorkspaceLengthFieldPresentationPolicy: Equatable, Sendable {
+    case editing
+    case workspaceScale
+
+    var allowsKilometers: Bool {
+        switch self {
+        case .editing:
+            false
+        case .workspaceScale:
+            true
+        }
+    }
+}
+
 struct WorkspaceLengthSliderScale: Equatable {
     private static let logarithmicRatioThreshold = 1_000.0
     private static let logarithmicSpanThresholdMeters = 1_000.0
@@ -281,9 +295,13 @@ func workspaceScaleFactorSliderRange(
 
 func workspaceLengthFieldPresentation(
     fromMeters meters: Double,
-    preferredUnit: LengthDisplayUnit
+    preferredUnit: LengthDisplayUnit,
+    policy: WorkspaceLengthFieldPresentationPolicy = .editing
 ) -> WorkspaceLengthFieldPresentation {
-    let unit = preferredUnit.readableUnit(forMeters: meters)
+    let unit = preferredUnit.readableUnit(
+        forMeters: meters,
+        allowsKilometers: policy.allowsKilometers
+    )
     let rawValue = unit.value(fromMeters: meters)
     let text = WorkspaceInspectorNumberText.string(from: rawValue)
     let value = WorkspaceInspectorNumberText.value(from: text) ?? rawValue

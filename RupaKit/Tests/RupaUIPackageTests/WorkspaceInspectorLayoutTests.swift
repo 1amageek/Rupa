@@ -47,6 +47,13 @@ import Testing
         WorkspaceInspectorNumberText.readableLengthString(
             fromMeters: 1_500.0,
             preferredUnit: .millimeter
+        ) == "1,500 m"
+    )
+    #expect(
+        WorkspaceInspectorNumberText.readableLengthString(
+            fromMeters: 1_500.0,
+            preferredUnit: .millimeter,
+            allowsKilometers: true
         ) == "1.5 km"
     )
     #expect(
@@ -68,6 +75,11 @@ import Testing
         fromMeters: 1_000.0,
         preferredUnit: .millimeter
     )
+    let scaleLarge = workspaceLengthFieldPresentation(
+        fromMeters: 1_000.0,
+        preferredUnit: .millimeter,
+        policy: .workspaceScale
+    )
     let intermediate = workspaceLengthFieldPresentation(
         fromMeters: 0.02,
         preferredUnit: .meter
@@ -77,9 +89,12 @@ import Testing
         preferredUnit: .meter
     )
 
-    #expect(large.unit == .kilometer)
-    #expect(large.value == 1.0)
-    #expect(large.text == "1")
+    #expect(large.unit == .meter)
+    #expect(large.value == 1_000.0)
+    #expect(large.text == "1,000")
+    #expect(scaleLarge.unit == .kilometer)
+    #expect(scaleLarge.value == 1.0)
+    #expect(scaleLarge.text == "1")
     #expect(intermediate.unit == .centimeter)
     #expect(intermediate.value == 2.0)
     #expect(intermediate.text == "2")

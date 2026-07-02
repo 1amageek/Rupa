@@ -56,7 +56,8 @@ enum RulerScaleControl {
         let resolvedMeters = clampedMeters(meters, for: kind)
         return workspaceLengthFieldPresentation(
             fromMeters: resolvedMeters,
-            preferredUnit: preferredUnit
+            preferredUnit: preferredUnit,
+            policy: .workspaceScale
         )
     }
 

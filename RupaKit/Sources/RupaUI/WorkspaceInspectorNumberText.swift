@@ -42,11 +42,16 @@ enum WorkspaceInspectorNumberText {
     static func readableLengthString(
         fromMeters meters: Double,
         preferredUnit: LengthDisplayUnit,
-        maximumFractionDigits: Int = 4
+        maximumFractionDigits: Int = 4,
+        allowsKilometers: Bool = false
     ) -> String {
-        LengthDisplayText.readableLengthString(
+        let unit = preferredUnit.readableUnit(
+            forMeters: meters,
+            allowsKilometers: allowsKilometers
+        )
+        return LengthDisplayText.lengthString(
             fromMeters: meters,
-            preferredUnit: preferredUnit,
+            unit: unit,
             maximumFractionDigits: maximumFractionDigits
         )
     }
