@@ -1501,9 +1501,16 @@ public struct AutomationRunner {
         for commandResult: CommandExecutionResult
     ) -> Bool {
         commandResult.diagnostics.contains { diagnostic in
-            diagnostic.message.hasPrefix("Workspace scale recommendation:")
-                || diagnostic.message.hasPrefix("Workspace precision warning:")
-                || diagnostic.message.hasPrefix("Workspace precision notice:")
+            guard let code = diagnostic.code else {
+                return false
+            }
+            switch code {
+            case .workspacePrecisionNotice,
+                 .workspacePrecisionWarning,
+                 .workspaceScaleRecommendation,
+                 .workspaceScaleWarning:
+                return true
+            }
         }
     }
 

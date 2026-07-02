@@ -39,6 +39,7 @@ import Testing
 
     #expect(diagnostics.count == 1)
     #expect(diagnostics.first?.severity == .warning)
+    #expect(diagnostics.first?.code == .workspacePrecisionWarning)
     #expect(diagnostics.first?.message.contains("floating-point coordinate resolution") == true)
     #expect(diagnostics.first?.message.contains("local origin") == true)
 
@@ -73,6 +74,7 @@ import Testing
 
     #expect(diagnostics.count == 1)
     #expect(diagnostics.first?.severity == .info)
+    #expect(diagnostics.first?.code == .workspacePrecisionNotice)
     #expect(diagnostics.first?.message.contains("Workspace precision notice") == true)
     #expect(diagnostics.first?.message.contains("rebase workflow") == true)
 }

@@ -84,6 +84,7 @@ import Testing
 
     let diagnostics = WorkspaceScaleRecommendationService().diagnostics(for: recommendation)
     #expect(diagnostics.first?.severity == .warning)
+    #expect(diagnostics.first?.code == .workspaceScaleWarning)
     #expect(diagnostics.first?.message.contains("largest supported comfortable range") == true)
     #expect(diagnostics.first?.message.contains("segment the context") == true)
 }
@@ -181,6 +182,7 @@ import Testing
     #expect(result.workspaceScaleRecommendation?.recommendedScaleProfile.comfortableModelSpanTitle == "1 km to 80 km")
     #expect(result.diagnostics.contains {
         $0.severity == .info
+            && $0.code == .workspaceScaleRecommendation
             && $0.message.contains("Workspace scale recommendation")
             && $0.message.contains("Site Planning")
             && $0.message.contains("1 km to 80 km")
@@ -217,6 +219,7 @@ import Testing
     #expect(snapshot.status == .valid)
     #expect(snapshot.diagnostics.contains {
         $0.severity == .info
+            && $0.code == .workspaceScaleRecommendation
             && $0.message.contains("Workspace scale recommendation")
             && $0.message.contains("Site Planning")
             && $0.message.contains("1 km to 80 km")
@@ -253,6 +256,7 @@ import Testing
     #expect(result.workspaceScaleRecommendation?.recommendedPreset == .regionalPlanning)
     #expect(result.diagnostics.contains {
         $0.severity == .warning
+            && $0.code == .workspaceScaleWarning
             && $0.message.contains("Workspace scale warning")
             && $0.message.contains("largest supported comfortable range")
     })

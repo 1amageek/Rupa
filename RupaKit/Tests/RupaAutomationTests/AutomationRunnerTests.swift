@@ -2629,6 +2629,41 @@ import SwiftCAD
 }
 
 @MainActor
+@Test func automationOversizeSketchCommandReportsWorkspaceScaleWarningContext() async throws {
+    let session = EditorSession()
+    let runner = AutomationRunner()
+    _ = try runner.execute(.setWorkspaceScalePreset(.regionalPlanning), in: session)
+
+    let result = try runner.execute(
+        .createLineSketch(
+            name: "Automation Regional Baseline",
+            plane: .xy,
+            start: SketchPoint(
+                x: .length(0.0, .meter),
+                y: .length(0.0, .meter)
+            ),
+            end: SketchPoint(
+                x: .length(1_200_000.0, .meter),
+                y: .length(0.0, .meter)
+            )
+        ),
+        in: session
+    )
+
+    #expect(result.commandName == "createLineSketch")
+    #expect(result.didMutate)
+    #expect(result.generation == DocumentGeneration(2))
+    #expect(result.workspaceBounds?.sizeX == 1_200_000.0)
+    #expect(result.workspaceBounds?.maximumSpan == 1_200_000.0)
+    #expect(result.workspaceScaleRecommendation?.reason == .modelExceedsSupportedScaleRange)
+    #expect(result.workspaceScaleRecommendation?.recommendedPreset == .regionalPlanning)
+    #expect(result.workspaceScaleRecommendation?.isActionable == false)
+    #expect(result.diagnostics.contains {
+        $0.severity == .warning && $0.code == .workspaceScaleWarning
+    })
+}
+
+@MainActor
 @Test func automationCanAddSketchConstraint() async throws {
     let session = EditorSession()
     let runner = AutomationRunner()

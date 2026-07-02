@@ -103,6 +103,7 @@ public struct WorkspacePrecisionDiagnosticService: Sendable {
         return [
             EditorDiagnostic(
                 severity: report.severity,
+                code: diagnosticCode(for: report),
                 message: message(for: report, displayUnit: displayUnit)
             ),
         ]
@@ -134,6 +135,17 @@ public struct WorkspacePrecisionDiagnosticService: Sendable {
             ruler: ruler,
             tolerance: tolerance
         )
+    }
+
+    private func diagnosticCode(
+        for report: Report
+    ) -> EditorDiagnostic.Code {
+        switch report.reason {
+        case .coordinateResolution:
+            .workspacePrecisionWarning
+        case .farFromOrigin:
+            .workspacePrecisionNotice
+        }
     }
 
     private func message(

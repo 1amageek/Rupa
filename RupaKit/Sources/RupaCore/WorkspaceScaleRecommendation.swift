@@ -161,6 +161,7 @@ public struct WorkspaceScaleRecommendationService: Sendable {
         return [
             EditorDiagnostic(
                 severity: diagnosticSeverity(for: recommendation),
+                code: diagnosticCode(for: recommendation),
                 message: message(for: recommendation)
             ),
         ]
@@ -174,6 +175,17 @@ public struct WorkspaceScaleRecommendationService: Sendable {
             .warning
         case .modelExceedsComfortableSpan, .modelTooSmallForWorkspace:
             .info
+        }
+    }
+
+    private func diagnosticCode(
+        for recommendation: WorkspaceScaleRecommendation
+    ) -> EditorDiagnostic.Code {
+        switch recommendation.reason {
+        case .modelExceedsSupportedScaleRange:
+            .workspaceScaleWarning
+        case .modelExceedsComfortableSpan, .modelTooSmallForWorkspace:
+            .workspaceScaleRecommendation
         }
     }
 
