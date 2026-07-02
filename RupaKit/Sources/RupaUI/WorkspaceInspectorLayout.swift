@@ -40,7 +40,7 @@ enum WorkspaceLengthFieldPresentationPolicy: Equatable, Sendable {
     var allowsKilometers: Bool {
         switch self {
         case .editing:
-            false
+            true
         case .workspaceScale:
             true
         }

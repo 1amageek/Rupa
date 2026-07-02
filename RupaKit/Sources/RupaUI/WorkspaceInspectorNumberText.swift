@@ -43,7 +43,7 @@ enum WorkspaceInspectorNumberText {
         fromMeters meters: Double,
         preferredUnit: LengthDisplayUnit,
         maximumFractionDigits: Int = 4,
-        allowsKilometers: Bool = false
+        allowsKilometers: Bool = true
     ) -> String {
         let unit = preferredUnit.readableUnit(
             forMeters: meters,

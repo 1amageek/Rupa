@@ -47,7 +47,7 @@ import Testing
         WorkspaceInspectorNumberText.readableLengthString(
             fromMeters: 1_500.0,
             preferredUnit: .millimeter
-        ) == "1,500 m"
+        ) == "1.5 km"
     )
     #expect(
         WorkspaceInspectorNumberText.readableLengthString(
@@ -89,9 +89,9 @@ import Testing
         preferredUnit: .meter
     )
 
-    #expect(large.unit == .meter)
-    #expect(large.value == 1_000.0)
-    #expect(large.text == "1,000")
+    #expect(large.unit == .kilometer)
+    #expect(large.value == 1.0)
+    #expect(large.text == "1")
     #expect(scaleLarge.unit == .kilometer)
     #expect(scaleLarge.value == 1.0)
     #expect(scaleLarge.text == "1")
