@@ -48,10 +48,7 @@ public extension DimensionSummaryValueKind {
     ) -> LengthDisplayUnit {
         switch self {
         case .length:
-            preferredLengthUnit.readableUnit(
-                forMeters: meters,
-                allowsKilometers: preferredLengthUnit == .kilometer
-            )
+            preferredLengthUnit.readableUnit(forMeters: meters)
         case .angle, .scalar:
             preferredLengthUnit
         }

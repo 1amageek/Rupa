@@ -38,6 +38,26 @@ import Testing
     #expect(defaults.sketchRebuildToleranceRange.upperBound == 100.0)
 }
 
+@Test func workspaceInteractionScaleSnapshotUsesReadableKilometersForLargeMeterWorkspace() {
+    let ruler = RulerConfiguration(
+        displayUnit: .meter,
+        minorTickMeters: 1_000.0,
+        majorTickMeters: 10_000.0,
+        visibleSpanMeters: 100_000.0
+    )
+    let snapshot = WorkspaceInteractionScaleSnapshot(ruler: ruler)
+
+    #expect(snapshot.displayUnit == .meter)
+    #expect(snapshot.displayUnitSymbol == "m")
+    #expect(snapshot.operationStep.meters == 1_000.0)
+    #expect(snapshot.operationStep.displayValue == 1.0)
+    #expect(snapshot.operationStep.displayUnit == .kilometer)
+    #expect(snapshot.operationStep.displayUnitSymbol == "km")
+    #expect(snapshot.slotWidth.meters == 2_000.0)
+    #expect(snapshot.slotWidth.displayValue == 2.0)
+    #expect(snapshot.slotWidth.displayUnit == .kilometer)
+}
+
 @Test func workspaceInteractionScaleDefaultsKeepRebuildToleranceSeparateFromGridStep() {
     let architecture = WorkspaceInteractionScaleDefaults(
         ruler: WorkspaceScalePreset.architecture.rulerConfiguration

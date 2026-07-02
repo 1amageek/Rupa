@@ -25,10 +25,7 @@ public struct WorkspaceInteractionScaleSnapshot: Codable, Equatable, Sendable {
             forMeters meters: Double,
             preferredUnit: LengthDisplayUnit
         ) -> LengthDisplayUnit {
-            preferredUnit.readableUnit(
-                forMeters: meters,
-                allowsKilometers: preferredUnit == .kilometer
-            )
+            preferredUnit.readableUnit(forMeters: meters)
         }
     }
 

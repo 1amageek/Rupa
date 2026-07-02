@@ -117,10 +117,10 @@ import Testing
 
     #expect(evaluation.displayUnit == .millimeter)
     #expect(evaluation.displayUnitSymbol == "mm")
-    #expect(measurement.displayUnitSymbol == "m")
-    #expect(abs(measurement.measuredDisplayValue - 1_500.0) <= 1.0e-12)
-    #expect(abs(measurement.targetDisplayValue - 1_200.0) <= 1.0e-12)
-    #expect(abs(measurement.residualDisplayValue - 300.0) <= 1.0e-12)
+    #expect(measurement.displayUnitSymbol == "km")
+    #expect(abs(measurement.measuredDisplayValue - 1.5) <= 1.0e-12)
+    #expect(abs(measurement.targetDisplayValue - 1.2) <= 1.0e-12)
+    #expect(abs(measurement.residualDisplayValue - 0.3) <= 1.0e-12)
 }
 
 @Test func selectionDimensionEvaluationDecodesMissingDisplayValues() async throws {

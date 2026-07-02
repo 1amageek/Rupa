@@ -251,8 +251,8 @@ import Testing
     let sketchEntry = try #require(sketchSummary.entries.first)
 
     #expect(objectSummary.displayUnit == .millimeter)
-    #expect(objectEntry.resolvedDisplayValue == 1_500.0)
-    #expect(objectEntry.resolvedDisplayUnitSymbol == "m")
+    #expect(objectEntry.resolvedDisplayValue == 1.5)
+    #expect(objectEntry.resolvedDisplayUnitSymbol == "km")
     #expect(sketchSummary.displayUnit == .meter)
     #expect(abs(sketchEntry.resolvedDisplayValue - 250.0) < 1.0e-9)
     #expect(sketchEntry.resolvedDisplayUnitSymbol == "μm")
