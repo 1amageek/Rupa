@@ -181,6 +181,151 @@ import Testing
 }
 
 @MainActor
+@Test func alignSketchVertexCommandAppliesSplineContinuityDistanceControls() async throws {
+    let session = EditorSession()
+    let referenceSplineID = SketchEntityID()
+    let targetSplineID = SketchEntityID()
+    _ = try session.execute(
+        .createSketch(
+            name: "Align Vertex Distance Controls",
+            sketch: Sketch(
+                plane: .xy,
+                entities: [
+                    referenceSplineID: .spline(SketchSpline(controlPoints: [
+                        SketchPoint(x: .length(0.0, .millimeter), y: .length(0.0, .millimeter)),
+                        SketchPoint(x: .length(1.0, .millimeter), y: .length(0.0, .millimeter)),
+                        SketchPoint(x: .length(2.0, .millimeter), y: .length(0.0, .millimeter)),
+                        SketchPoint(x: .length(3.0, .millimeter), y: .length(0.0, .millimeter)),
+                    ])),
+                    targetSplineID: .spline(SketchSpline(controlPoints: [
+                        SketchPoint(x: .length(5.0, .millimeter), y: .length(2.0, .millimeter)),
+                        SketchPoint(x: .length(6.0, .millimeter), y: .length(4.0, .millimeter)),
+                        SketchPoint(x: .length(7.0, .millimeter), y: .length(4.0, .millimeter)),
+                        SketchPoint(x: .length(8.0, .millimeter), y: .length(2.0, .millimeter)),
+                    ])),
+                ]
+            ),
+            geometryRole: .curve
+        )
+    )
+    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let referenceSpline = try #require(before.entries.first { $0.entityID == referenceSplineID.description })
+    let targetSpline = try #require(before.entries.first { $0.entityID == targetSplineID.description })
+
+    let result = try session.execute(
+        .alignSketchVertex(
+            target: try controlPointSelectionTarget(targetSpline, index: 0),
+            reference: try controlPointSelectionTarget(referenceSpline, index: 3),
+            options: SketchVertexAlignmentOptions(
+                continuity: .g2,
+                targetContinuityDistance: .length(2.0, .millimeter)
+            )
+        )
+    )
+
+    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let solvedReferenceSpline = try #require(after.entries.first { $0.entityID == referenceSplineID.description })
+    let solvedTargetSpline = try #require(after.entries.first { $0.entityID == targetSplineID.description })
+    let analysis = try CurveAnalysisService().analyze(document: session.document)
+    let continuityJoin = try #require(analysis.continuityJoins.first { join in
+        Set([join.firstEntityID, join.secondEntityID]) == Set([
+            referenceSplineID.description,
+            targetSplineID.description,
+        ])
+    })
+    let referenceEndpoint = try #require(solvedReferenceSpline.controlPoints.last)
+    let referenceHandle = try #require(solvedReferenceSpline.controlPoints.dropLast().last)
+    let targetEndpoint = try #require(solvedTargetSpline.controlPoints.first)
+    let targetHandle = try #require(solvedTargetSpline.controlPoints.dropFirst().first)
+
+    #expect(result.commandName == "alignSketchVertex")
+    #expect(result.didMutate)
+    #expect(abs(distanceBetween(referenceEndpoint, referenceHandle) - 0.002) < 1.0e-12)
+    #expect(abs(distanceBetween(targetEndpoint, targetHandle) - 0.002) < 1.0e-12)
+    #expect(continuityJoin.requiredContinuity == .g2)
+    #expect(continuityJoin.continuity == .g2)
+    #expect(session.evaluationStatus == .valid)
+}
+
+@MainActor
+@Test func alignSketchVertexCommandAllowsSeparateG1SplineContinuityDistances() async throws {
+    let setup = try twoSplineTangentSketchDocument(name: "Align Vertex G1 Distance Controls")
+    let session = EditorSession(document: setup.document)
+    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let firstSpline = try #require(before.entries.first { $0.entityID == setup.firstSplineID.description })
+    let secondSpline = try #require(before.entries.first { $0.entityID == setup.secondSplineID.description })
+
+    let result = try session.execute(
+        .alignSketchVertex(
+            target: try controlPointSelectionTarget(secondSpline, index: 0),
+            reference: try controlPointSelectionTarget(firstSpline, index: 3),
+            options: SketchVertexAlignmentOptions(
+                continuity: .g1,
+                targetContinuityDistance: .length(2.5, .millimeter),
+                referenceContinuityDistance: .length(1.5, .millimeter)
+            )
+        )
+    )
+
+    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let solvedReferenceSpline = try #require(after.entries.first { $0.entityID == setup.firstSplineID.description })
+    let solvedTargetSpline = try #require(after.entries.first { $0.entityID == setup.secondSplineID.description })
+    let analysis = try CurveAnalysisService().analyze(document: session.document)
+    let continuityJoin = try #require(analysis.continuityJoins.first { join in
+        Set([join.firstEntityID, join.secondEntityID]) == Set([
+            setup.firstSplineID.description,
+            setup.secondSplineID.description,
+        ])
+    })
+    let referenceEndpoint = try #require(solvedReferenceSpline.controlPoints.last)
+    let referenceHandle = try #require(solvedReferenceSpline.controlPoints.dropLast().last)
+    let targetEndpoint = try #require(solvedTargetSpline.controlPoints.first)
+    let targetHandle = try #require(solvedTargetSpline.controlPoints.dropFirst().first)
+
+    #expect(result.commandName == "alignSketchVertex")
+    #expect(result.didMutate)
+    #expect(abs(distanceBetween(referenceEndpoint, referenceHandle) - 0.0015) < 1.0e-12)
+    #expect(abs(distanceBetween(targetEndpoint, targetHandle) - 0.0025) < 1.0e-12)
+    #expect(continuityJoin.requiredContinuity == .g1)
+    #expect(continuityJoin.continuity == .g1)
+}
+
+@MainActor
+@Test func alignSketchVertexRejectsMismatchedG2ContinuityDistanceControlsBeforeMutation() async throws {
+    let setup = try twoSplineTangentSketchDocument(name: "Reject Mismatched G2 Distances")
+    let session = EditorSession(document: setup.document)
+    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let firstSpline = try #require(before.entries.first { $0.entityID == setup.firstSplineID.description })
+    let secondSpline = try #require(before.entries.first { $0.entityID == setup.secondSplineID.description })
+    let beforeEvaluationStatus = session.evaluationStatus
+
+    do {
+        _ = try session.execute(
+            .alignSketchVertex(
+                target: try controlPointSelectionTarget(secondSpline, index: 0),
+                reference: try controlPointSelectionTarget(firstSpline, index: 3),
+                options: SketchVertexAlignmentOptions(
+                    continuity: .g2,
+                    targetContinuityDistance: .length(2.0, .millimeter),
+                    referenceContinuityDistance: .length(3.0, .millimeter)
+                )
+            )
+        )
+        Issue.record("Align Vertex must reject mismatched G2 continuity distances.")
+    } catch let error as EditorError {
+        #expect(error.code == .commandInvalid)
+        #expect(error.message.contains("matching target and reference continuity distances"))
+    } catch {
+        Issue.record("Align Vertex must throw EditorError.")
+    }
+
+    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    #expect(session.generation == DocumentGeneration(0))
+    #expect(after.counts.constraintCount == before.counts.constraintCount)
+    #expect(session.evaluationStatus == beforeEvaluationStatus)
+}
+
+@MainActor
 @Test func alignSketchVertexRejectsUnsupportedReferenceParameterBeforeMutation() async throws {
     let session = EditorSession()
     _ = try session.execute(
@@ -9522,6 +9667,15 @@ private func sketchReference(
          .splineControlPoint(let id, _):
         return id == entityID
     }
+}
+
+private func distanceBetween(
+    _ first: SketchEntitySummaryResult.Point,
+    _ second: SketchEntitySummaryResult.Point
+) -> Double {
+    let dx = first.x - second.x
+    let dy = first.y - second.y
+    return sqrt(dx * dx + dy * dy)
 }
 
 private func sketchTestPoint(x: Double, y: Double) -> SketchPoint {

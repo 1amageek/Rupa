@@ -293,6 +293,92 @@ import SwiftCAD
 }
 
 @MainActor
+@Test func agentJoinsSplineEndpointsWithG2ContinuityThroughAutomationAndCore() async throws {
+    let server = AgentCommandController()
+    let sessionID = UUID()
+    let setup = try agentTwoSplineTangentSketchDocument(name: "Agent Join Source Splines G2")
+    let session = EditorSession(document: setup.document)
+    server.register(session: session, id: sessionID)
+
+    let summaryResponse = server.handle(
+        .sketchEntitySummary(
+            sessionID: sessionID,
+            expectedGeneration: session.generation
+        )
+    )
+    guard case .sketchEntitySummary(let summary) = summaryResponse else {
+        Issue.record("Agent must return a sketch entity summary.")
+        return
+    }
+    let firstSpline = try #require(summary.entries.first { $0.entityID == setup.firstSplineID.description })
+    let secondSpline = try #require(summary.entries.first { $0.entityID == setup.secondSplineID.description })
+    let firstEndpoint = try agentControlPointSelectionTarget(firstSpline, index: 3)
+    let secondEndpoint = try agentControlPointSelectionTarget(secondSpline, index: 0)
+
+    let editResponse = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .joinSketchCurves(
+                target: firstEndpoint,
+                adjacentTarget: secondEndpoint,
+                continuity: .g2
+            ),
+            expectedGeneration: session.generation
+        )
+    )
+
+    guard case .command(let result) = editResponse else {
+        Issue.record("Agent must return a command result.")
+        return
+    }
+    let feature = try #require(session.document.cadDocument.designGraph.nodes[setup.featureID])
+    guard case .sketch(let sketch) = feature.operation else {
+        Issue.record("Agent G2 join feature must remain a sketch.")
+        return
+    }
+    let updatedSummary = try SketchEntitySummaryService().summarize(document: session.document)
+    let solvedSecondSpline = try #require(updatedSummary.entries.first {
+        $0.entityID == setup.secondSplineID.description
+    })
+    let solvedEndpoint = try #require(solvedSecondSpline.controlPoints.first)
+    let solvedHandle = try #require(solvedSecondSpline.controlPoints.dropFirst().first)
+    let joinedSource = try #require(session.document.productMetadata.joinedCurveGroupSources.values.first)
+    let analysisResponse = server.handle(
+        .curveAnalysis(
+            sessionID: sessionID,
+            expectedGeneration: session.generation
+        )
+    )
+    guard case .curveAnalysis(let analysis) = analysisResponse else {
+        Issue.record("Agent must return curve analysis after G2 join.")
+        return
+    }
+    let continuityJoin = try #require(analysis.continuityJoins.first { join in
+        Set([join.firstEntityID, join.secondEntityID]) == Set([
+            setup.firstSplineID.description,
+            setup.secondSplineID.description,
+        ])
+    })
+
+    #expect(result.commandName == "joinSketchCurves")
+    #expect(result.didMutate)
+    #expect(joinedSource.continuity == .g2)
+    #expect(sketch.constraints.contains(.smoothSplineEndpoints(
+        first: SketchSplineEndpointReference(splineID: setup.firstSplineID, endpoint: .end),
+        second: SketchSplineEndpointReference(splineID: setup.secondSplineID, endpoint: .start)
+    )))
+    #expect(abs(solvedEndpoint.x - 0.009) < 1.0e-12)
+    #expect(abs(solvedEndpoint.y - 0.0) < 1.0e-12)
+    #expect(abs(solvedHandle.x - 0.012) < 1.0e-12)
+    #expect(abs(solvedHandle.y - 0.0) < 1.0e-12)
+    #expect(continuityJoin.requiredContinuity == .g2)
+    #expect(continuityJoin.continuity == .g2)
+    #expect(continuityJoin.constraintKinds.contains("smoothSplineEndpoints"))
+    #expect(continuityJoin.constraintKinds.contains("joinedCurveGroup"))
+    #expect(session.evaluationStatus == .valid)
+}
+
+@MainActor
 @Test func agentUnjoinsSketchCurveThroughAutomationAndCore() async throws {
     let server = AgentCommandController()
     let sessionID = UUID()
@@ -356,6 +442,18 @@ import SwiftCAD
     #expect(abs((restoredLine.start?.x ?? -1.0) - 0.005) < 1.0e-12)
     #expect(session.document.productMetadata.joinedCurveSources.isEmpty)
     #expect(session.evaluationStatus == .valid)
+}
+
+private func agentControlPointSelectionTarget(
+    _ entry: SketchEntitySummaryResult.EntityEntry,
+    index: Int
+) throws -> SelectionTarget {
+    let sceneNodeID = try #require(entry.sceneNodeID.flatMap(UUID.init(uuidString:)))
+    let controlPoint = try #require(entry.controlPointTargets.first { $0.index == index })
+    return SelectionTarget(
+        sceneNodeID: SceneNodeID(sceneNodeID),
+        component: .sketchEntity(SelectionComponentID(rawValue: controlPoint.selectionComponentID))
+    )
 }
 
 @MainActor

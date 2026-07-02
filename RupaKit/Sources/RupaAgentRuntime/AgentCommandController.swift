@@ -959,7 +959,7 @@ public final class AgentCommandController: AgentClientProtocol {
             mutatesDocument: true,
             discovery: [.sketchEntitySummary, .curveAnalysis],
             targets: [.sketchEntity, .sketchPointHandle, .sketchControlPoint],
-            failureMode: "Rejects stale generations, non-point-backed selections, different sketch features, identical target/reference vertices, reference parameter requests, CV continuity distance controls, command-scoped curvature display requests, unsupported G1/G2 endpoint combinations, fixed conflicts, and over-constrained continuity before mutation."
+            failureMode: "Rejects stale generations, non-point-backed selections, different sketch features, identical target/reference vertices, reference parameter requests, G0 continuity distance requests, non-spline continuity distance targets, mismatched G2 continuity distances, command-scoped curvature display requests, unsupported G1/G2 endpoint combinations, fixed conflicts, and over-constrained continuity before mutation."
         ),
         capability(
             "slideSketchSplineControlPoints",

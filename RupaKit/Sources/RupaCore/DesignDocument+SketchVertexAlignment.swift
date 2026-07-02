@@ -66,6 +66,13 @@ extension DesignDocument {
                 )
             }
         }
+        try applySketchVertexAlignmentContinuityDistances(
+            options,
+            target: targetPoint,
+            reference: referencePoint,
+            sketch: &sketch,
+            pointPropagator: pointPropagator
+        )
 
         try commitSketchEntityEdit(
             featureID: targetPoint.featureID,
@@ -183,16 +190,173 @@ extension DesignDocument {
                 message: "Align Vertex reference parameter support requires curve-parameter source targeting that is not implemented yet."
             )
         }
-        if options.targetContinuityDistance != nil || options.referenceContinuityDistance != nil {
+        if (options.targetContinuityDistance != nil || options.referenceContinuityDistance != nil) &&
+            options.continuity == .g0 {
             throw EditorError(
                 code: .commandInvalid,
-                message: "Align Vertex CV continuity distance controls require distance-aware spline handle solving that is not implemented yet."
+                message: "Align Vertex continuity distance controls require G1 or G2 continuity."
             )
         }
         if options.showsCurvature {
             throw EditorError(
                 code: .commandInvalid,
                 message: "Align Vertex Show Curvature requires command-scoped curvature display wiring that is not implemented yet."
+            )
+        }
+    }
+
+    private func applySketchVertexAlignmentContinuityDistances(
+        _ options: SketchVertexAlignmentOptions,
+        target: SketchVertexAlignmentPoint,
+        reference: SketchVertexAlignmentPoint,
+        sketch: inout Sketch,
+        pointPropagator: SketchPointConstraintPropagator
+    ) throws {
+        let targetDistance = try options.targetContinuityDistance.map {
+            try resolvedPositiveLengthValue($0, owner: "Align Vertex target continuity distance")
+        }
+        let referenceDistance = try options.referenceContinuityDistance.map {
+            try resolvedPositiveLengthValue($0, owner: "Align Vertex reference continuity distance")
+        }
+        guard targetDistance != nil || referenceDistance != nil else {
+            return
+        }
+        if options.continuity == .g2,
+           let targetDistance,
+           let referenceDistance,
+           abs(targetDistance - referenceDistance) > 1.0e-9 {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Align Vertex G2 continuity requires matching target and reference continuity distances."
+            )
+        }
+        switch options.continuity {
+        case .g0:
+            return
+        case .g1:
+            if let referenceDistance {
+                try applySketchVertexAlignmentContinuityDistance(
+                    referenceDistance,
+                    to: reference,
+                    in: &sketch,
+                    pointPropagator: pointPropagator
+                )
+            }
+            if let targetDistance {
+                try applySketchVertexAlignmentContinuityDistance(
+                    targetDistance,
+                    to: target,
+                    in: &sketch,
+                    pointPropagator: pointPropagator
+                )
+            }
+        case .g2:
+            if let targetDistance {
+                try applySketchVertexAlignmentContinuityDistance(
+                    targetDistance,
+                    to: target,
+                    in: &sketch,
+                    pointPropagator: pointPropagator
+                )
+            } else if let referenceDistance {
+                try applySketchVertexAlignmentContinuityDistance(
+                    referenceDistance,
+                    to: reference,
+                    in: &sketch,
+                    pointPropagator: pointPropagator
+                )
+            }
+        }
+    }
+
+    private func applySketchVertexAlignmentContinuityDistance(
+        _ distance: Double,
+        to point: SketchVertexAlignmentPoint,
+        in sketch: inout Sketch,
+        pointPropagator: SketchPointConstraintPropagator
+    ) throws {
+        guard case .spline(let endpointReference) = point.endpoint else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Align Vertex continuity distance controls require spline endpoints."
+            )
+        }
+        let indexes = try sketchVertexAlignmentSplineEndpointIndexes(
+            endpointReference,
+            in: sketch
+        )
+        let handleReference = SketchReference.splineControlPoint(
+            entity: endpointReference.splineID,
+            index: indexes.handleIndex
+        )
+        guard sketch.constraints.contains(.fixed(handleReference)) == false else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Align Vertex cannot move a fixed spline continuity handle."
+            )
+        }
+        guard case .spline(var spline) = sketch.entities[endpointReference.splineID] else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "Align Vertex continuity distance requires a source spline endpoint."
+            )
+        }
+        let endpoint = try resolvedPoint(
+            .splineControlPoint(entity: endpointReference.splineID, index: indexes.endpointIndex),
+            in: sketch,
+            owner: "Align Vertex continuity endpoint"
+        )
+        let handle = try resolvedPoint(
+            handleReference,
+            in: sketch,
+            owner: "Align Vertex continuity handle"
+        )
+        guard let endpoint,
+              let handle else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "Align Vertex continuity distance requires point-backed spline handles."
+            )
+        }
+        let vector = (x: handle.x - endpoint.x, y: handle.y - endpoint.y)
+        let currentDistance = sqrt(vector.x * vector.x + vector.y * vector.y)
+        guard currentDistance > 1.0e-12 else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Align Vertex continuity handle must not collapse onto its endpoint."
+            )
+        }
+        let scale = distance / currentDistance
+        spline.controlPoints[indexes.handleIndex] = SketchPoint(
+            x: .length(endpoint.x + vector.x * scale, .meter),
+            y: .length(endpoint.y + vector.y * scale, .meter)
+        )
+        sketch.entities[endpointReference.splineID] = .spline(spline)
+        try pointPropagator.propagate(
+            from: handleReference,
+            in: &sketch,
+            owner: "Align Vertex"
+        )
+    }
+
+    private func sketchVertexAlignmentSplineEndpointIndexes(
+        _ reference: SketchSplineEndpointReference,
+        in sketch: Sketch
+    ) throws -> (endpointIndex: Int, handleIndex: Int) {
+        guard case .spline(let spline) = sketch.entities[reference.splineID],
+              spline.controlPoints.count >= 2 else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "Align Vertex continuity distance requires a source spline endpoint."
+            )
+        }
+        switch reference.endpoint {
+        case .start:
+            return (endpointIndex: 0, handleIndex: 1)
+        case .end:
+            return (
+                endpointIndex: spline.controlPoints.count - 1,
+                handleIndex: spline.controlPoints.count - 2
             )
         }
     }
