@@ -117,29 +117,48 @@ import Testing
 }
 
 @MainActor
-@Test func agentDesignDisplaySnapshotReportsWorkspaceScaleRecommendationThroughCommandController() async throws {
-    var document = DesignDocument.empty(named: "Agent Site")
-    let profileID = try document.createRectangleSketchFromCorners(
-        name: "Agent Site Footprint",
-        plane: .xy,
-        firstCorner: SketchPoint(
-            x: .length(0.0, .meter),
-            y: .length(0.0, .meter)
-        ),
-        oppositeCorner: SketchPoint(
-            x: .length(25_000.0, .meter),
-            y: .length(10_000.0, .meter)
-        )
-    )
-    _ = try document.extrudeProfile(
-        name: "Agent Site Mass",
-        profile: ProfileReference(featureID: profileID),
-        distance: .length(100.0, .meter),
-        direction: .normal
-    )
+@Test func agentFitsWorkspaceScaleToLargeModelThroughCommandController() async throws {
     let server = AgentCommandController()
     let sessionID = UUID()
-    let session = EditorSession(document: document)
+    let session = EditorSession(document: try agentSiteDocument())
+    server.register(session: session, id: sessionID)
+
+    let response = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .fitWorkspaceScaleToModel,
+            expectedGeneration: session.generation
+        )
+    )
+    let codec = AgentMessageCodec()
+    let decodedResponse = try codec.decodeResponse(from: try codec.encode(response))
+
+    guard case .command(let result) = response else {
+        Issue.record("Expected workspace scale fit command response.")
+        return
+    }
+
+    #expect(result.commandName == "setRulerConfiguration")
+    #expect(result.didMutate)
+    #expect(result.workspaceScale?.matchedPreset == .sitePlanning)
+    #expect(result.workspaceScale?.displayUnit == .kilometer)
+    #expect(result.workspaceScale?.visibleSpanDisplayValue == 100.0)
+    #expect(result.workspaceBounds?.maximumSpan == 25_000.0)
+    #expect(result.workspaceScaleRecommendation == nil)
+    #expect(result.message.contains("Workspace scale fitted to Site Planning"))
+    #expect(session.document.displayUnit == .kilometer)
+    #expect(
+        session.document.ruler == WorkspaceScalePreset.sitePlanning.rulerConfiguration
+            .normalizedForWorkspaceScale()
+    )
+    #expect(decodedResponse == response)
+}
+
+@MainActor
+@Test func agentDesignDisplaySnapshotReportsWorkspaceScaleRecommendationThroughCommandController() async throws {
+    let server = AgentCommandController()
+    let sessionID = UUID()
+    let session = EditorSession(document: try agentSiteDocument())
     _ = try session.execute(.setViewportGridSettings(.standard))
     server.register(session: session, id: sessionID)
 
@@ -166,4 +185,27 @@ import Testing
     #expect(snapshot.workspaceBounds?.sizeZ == 100.0)
     #expect(snapshot.workspaceBounds?.maximumSpan == 25_000.0)
     #expect(decodedResponse == response)
+}
+
+private func agentSiteDocument() throws -> DesignDocument {
+    var document = DesignDocument.empty(named: "Agent Site")
+    let profileID = try document.createRectangleSketchFromCorners(
+        name: "Agent Site Footprint",
+        plane: .xy,
+        firstCorner: SketchPoint(
+            x: .length(0.0, .meter),
+            y: .length(0.0, .meter)
+        ),
+        oppositeCorner: SketchPoint(
+            x: .length(25_000.0, .meter),
+            y: .length(10_000.0, .meter)
+        )
+    )
+    _ = try document.extrudeProfile(
+        name: "Agent Site Mass",
+        profile: ProfileReference(featureID: profileID),
+        distance: .length(100.0, .meter),
+        direction: .normal
+    )
+    return document
 }
