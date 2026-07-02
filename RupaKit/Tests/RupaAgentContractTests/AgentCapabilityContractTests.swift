@@ -337,9 +337,11 @@ import SwiftCAD
             && axis.supportedValues.contains("workspaceInteractionScale")
             && axis.supportedValues.contains("workspaceBounds")
             && axis.supportedValues.contains("workspaceScaleRecommendation")
+            && axis.supportedValues.contains("workspaceScalePresetOptions")
             && axis.supportedValues.contains("workspacePrecision")
             && axis.notes.contains { $0.contains("current ruler step") }
             && axis.notes.contains { $0.contains("fitWorkspaceScaleToModel") }
+            && axis.notes.contains { $0.contains("micro fabrication through regional planning") }
             && axis.notes.contains { $0.contains("rebaseWorkspaceOrigin") }
     })
     let measureDocument = try #require(descriptors.first { $0.name == "measureDocument" })

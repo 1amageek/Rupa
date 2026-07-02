@@ -82,6 +82,12 @@ import Testing
     #expect(result.workspaceScale.minorTickMeters == 100.0)
     #expect(result.workspaceScale.majorTickMeters == 1_000.0)
     #expect(result.workspaceScale.visibleSpanMeters == 100_000.0)
+    #expect(result.workspaceScalePresetOptions.map(\.preset) == WorkspaceScalePreset.allCases)
+    #expect(result.workspaceScalePresetOptions.contains { option in
+        option.preset == .regionalPlanning
+            && option.visibleSpanTitle == "1,000 km"
+            && option.comfortableModelSpanTitle == "10 km to 800 km"
+    })
     #expect(result.workspaceInteractionScale.displayUnit == .kilometer)
     #expect(result.workspaceInteractionScale.displayUnitSymbol == "km")
     #expect(result.workspaceInteractionScale.operationStep.meters == 100.0)
@@ -128,6 +134,12 @@ import Testing
     #expect(result.workspaceInteractionScale.operationStep.meters == 100.0)
     #expect(result.workspaceInteractionScale.operationStep.displayValue == 0.1)
     #expect(result.workspaceInteractionScale.slotWidth.meters == 200.0)
+    #expect(result.workspaceScalePresetOptions.map(\.preset) == WorkspaceScalePreset.allCases)
+    #expect(result.workspaceScalePresetOptions.contains { option in
+        option.preset == .regionalPlanning
+            && option.agentGuidance.contains("regionalPlanning")
+            && option.agentGuidance.contains("1,000 km")
+    })
 }
 
 @MainActor

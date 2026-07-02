@@ -46,12 +46,14 @@ public final class AgentCommandController: AgentClientProtocol {
             "workspaceInteractionScale",
             "workspaceBounds",
             "workspaceScaleRecommendation",
+            "workspaceScalePresetOptions",
             "workspacePrecision",
         ],
         notes: [
             "Workspace-aware command results include the current scale, interaction defaults, model bounds, scale recommendations, and precision guidance.",
             "Read workspaceInteractionScale before choosing operation distances so generated edits follow the current ruler step instead of hard-coded millimeter defaults.",
             "Read workspaceScaleRecommendation before continuing large-model edits; apply fitWorkspaceScaleToModel or setWorkspaceScalePreset when the recommendation is actionable.",
+            "Read workspaceScalePresetOptions before choosing custom workspace scale changes; it lists the supported presets from micro fabrication through regional planning.",
             "Read workspacePrecision before precise far-from-origin edits; apply rebaseWorkspaceOrigin when a local-origin translation is recommended.",
         ]
     )

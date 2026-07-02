@@ -8,6 +8,7 @@ public struct DesignDisplaySnapshotResult: Codable, Equatable, Sendable {
     public var workspaceBounds: MeasurementResult.Bounds?
     public var workspacePrecision: WorkspacePrecisionReport?
     public var workspaceScaleRecommendation: WorkspaceScaleRecommendation?
+    public var workspaceScalePresetOptions: [WorkspaceScalePresetProfile]
     public var sketches: [SketchDisplaySnapshot]
     public var extrudes: [ExtrudeDisplaySnapshot]
     public var straightPrismSweeps: [StraightPrismSweepDisplaySnapshot]
@@ -25,6 +26,9 @@ public struct DesignDisplaySnapshotResult: Codable, Equatable, Sendable {
         workspaceBounds: MeasurementResult.Bounds? = nil,
         workspacePrecision: WorkspacePrecisionReport? = nil,
         workspaceScaleRecommendation: WorkspaceScaleRecommendation? = nil,
+        workspaceScalePresetOptions: [WorkspaceScalePresetProfile] = WorkspaceScalePreset
+            .allCases
+            .map(\.profile),
         sketches: [SketchDisplaySnapshot],
         extrudes: [ExtrudeDisplaySnapshot],
         straightPrismSweeps: [StraightPrismSweepDisplaySnapshot],
@@ -41,6 +45,7 @@ public struct DesignDisplaySnapshotResult: Codable, Equatable, Sendable {
         self.workspaceBounds = workspaceBounds
         self.workspacePrecision = workspacePrecision
         self.workspaceScaleRecommendation = workspaceScaleRecommendation
+        self.workspaceScalePresetOptions = workspaceScalePresetOptions
         self.sketches = sketches
         self.extrudes = extrudes
         self.straightPrismSweeps = straightPrismSweeps
@@ -59,6 +64,7 @@ public struct DesignDisplaySnapshotResult: Codable, Equatable, Sendable {
         case workspaceBounds
         case workspacePrecision
         case workspaceScaleRecommendation
+        case workspaceScalePresetOptions
         case sketches
         case extrudes
         case straightPrismSweeps
@@ -108,6 +114,10 @@ public struct DesignDisplaySnapshotResult: Codable, Equatable, Sendable {
                 WorkspaceScaleRecommendation.self,
                 forKey: .workspaceScaleRecommendation
             ),
+            workspaceScalePresetOptions: try container.decodeIfPresent(
+                [WorkspaceScalePresetProfile].self,
+                forKey: .workspaceScalePresetOptions
+            ) ?? WorkspaceScalePreset.allCases.map(\.profile),
             sketches: try container.decode([SketchDisplaySnapshot].self, forKey: .sketches),
             extrudes: try container.decode([ExtrudeDisplaySnapshot].self, forKey: .extrudes),
             straightPrismSweeps: try container.decode(

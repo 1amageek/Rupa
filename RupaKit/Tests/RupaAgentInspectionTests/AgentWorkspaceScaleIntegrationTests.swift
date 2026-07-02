@@ -186,6 +186,12 @@ import Testing
     #expect(snapshot.workspaceScaleRecommendation?.recommendedPreset == .sitePlanning)
     #expect(snapshot.workspaceScaleRecommendation?.recommendedScale.displayUnit == .kilometer)
     #expect(snapshot.workspaceScaleRecommendation?.recommendedScaleProfile.comfortableModelSpanTitle == "1 km to 80 km")
+    #expect(snapshot.workspaceScalePresetOptions.map(\.preset) == WorkspaceScalePreset.allCases)
+    #expect(snapshot.workspaceScalePresetOptions.contains { option in
+        option.preset == .regionalPlanning
+            && option.visibleSpanTitle == "1,000 km"
+            && option.comfortableModelSpanTitle == "10 km to 800 km"
+    })
     #expect(snapshot.workspaceBounds?.sizeX == 25_000.0)
     #expect(snapshot.workspaceBounds?.sizeY == 10_000.0)
     #expect(snapshot.workspaceBounds?.sizeZ == 100.0)
