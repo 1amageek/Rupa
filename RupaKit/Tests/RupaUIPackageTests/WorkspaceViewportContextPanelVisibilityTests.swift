@@ -57,3 +57,40 @@ import Testing
         ))
     }
 }
+
+@Test func workspaceViewportContextPanelPresentsIdleSelectionState() {
+    #expect(WorkspaceViewportContextPanelVisibility.selectionPresentation(
+        selectedSceneNodeCount: 0,
+        selectedTargetCount: 0,
+        selectedReferenceCount: 0
+    ) == .idle)
+}
+
+@Test func workspaceViewportContextPanelPresentsTargetSelectionState() {
+    #expect(WorkspaceViewportContextPanelVisibility.selectionPresentation(
+        selectedSceneNodeCount: 1,
+        selectedTargetCount: 0,
+        selectedReferenceCount: 0
+    ) == .targetSelection)
+    #expect(WorkspaceViewportContextPanelVisibility.selectionPresentation(
+        selectedSceneNodeCount: 0,
+        selectedTargetCount: 1,
+        selectedReferenceCount: 0
+    ) == .targetSelection)
+}
+
+@Test func workspaceViewportContextPanelPresentsReferenceSelectionState() {
+    #expect(WorkspaceViewportContextPanelVisibility.selectionPresentation(
+        selectedSceneNodeCount: 0,
+        selectedTargetCount: 0,
+        selectedReferenceCount: 1
+    ) == .referenceSelection)
+}
+
+@Test func workspaceViewportContextPanelPrefersTargetSelectionState() {
+    #expect(WorkspaceViewportContextPanelVisibility.selectionPresentation(
+        selectedSceneNodeCount: 1,
+        selectedTargetCount: 1,
+        selectedReferenceCount: 1
+    ) == .targetSelection)
+}
