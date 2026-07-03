@@ -34,6 +34,9 @@ enum ViewportTheme {
     static let surfaceAnalysisPrincipalMaximum = Color(red: 0.34, green: 0.68, blue: 1.0)
     static let surfaceAnalysisBoundaryOuter = Color(red: 1.0, green: 0.82, blue: 0.24)
     static let surfaceAnalysisBoundaryInner = Color(red: 0.95, green: 0.36, blue: 0.76)
+    static let sectionAnalysisPlane = Color(red: 0.18, green: 0.82, blue: 0.94)
+    static let sectionAnalysisIntersection = Color(red: 0.98, green: 0.84, blue: 0.26)
+    static let sectionAnalysisNormal = Color(red: 0.46, green: 0.74, blue: 1.0)
     static let surfaceEdit = Color(red: 1.0, green: 0.78, blue: 0.28)
 }
 

@@ -110,6 +110,7 @@ public struct Viewport: View {
     private let surfaceAnalysis: SurfaceAnalysisResult?
     private let surfaceAnalysisOptions: ViewportSurfaceAnalysisOptions
     private let surfaceContinuity: RupaCore.SurfaceContinuityResult?
+    private let sectionAnalysis: SectionAnalysisResult?
     private let curveCurvatureDisplays: [SelectionComponentID: CurveCurvatureDisplay]
     private let pointDisplays: [SelectionComponentID: PointDisplay]
     private let snapResolutionOptions: SnapResolutionOptions?
@@ -182,6 +183,7 @@ public struct Viewport: View {
         surfaceAnalysis: SurfaceAnalysisResult? = nil,
         surfaceAnalysisOptions: ViewportSurfaceAnalysisOptions = ViewportSurfaceAnalysisOptions(),
         surfaceContinuity: RupaCore.SurfaceContinuityResult? = nil,
+        sectionAnalysis: SectionAnalysisResult? = nil,
         curveCurvatureDisplays: [SelectionComponentID: CurveCurvatureDisplay] = [:],
         pointDisplays: [SelectionComponentID: PointDisplay] = [:],
         snapResolutionOptions: SnapResolutionOptions? = nil,
@@ -253,6 +255,7 @@ public struct Viewport: View {
         self.surfaceAnalysis = surfaceAnalysis
         self.surfaceAnalysisOptions = surfaceAnalysisOptions
         self.surfaceContinuity = surfaceContinuity
+        self.sectionAnalysis = sectionAnalysis
         self.curveCurvatureDisplays = curveCurvatureDisplays
         self.pointDisplays = pointDisplays
         self.snapResolutionOptions = snapResolutionOptions
@@ -1342,6 +1345,11 @@ public struct Viewport: View {
             layout: layout
         )
 
+        drawSectionAnalysisOverlay(
+            in: &context,
+            layout: layout
+        )
+
         drawSurfaceContinuityOverlay(
             in: &context,
             scene: scene,
@@ -1371,6 +1379,78 @@ public struct Viewport: View {
                 selectedFeatureIDs: selectedObjectFeatureIDs
             )
         }
+    }
+
+    private func drawSectionAnalysisOverlay(
+        in context: inout GraphicsContext,
+        layout: ViewportLayout
+    ) {
+        let overlay = ViewportSectionAnalysisOverlay.build(
+            result: sectionAnalysis,
+            document: document
+        )
+        guard overlay.plane != nil || overlay.segments.isEmpty == false else {
+            return
+        }
+        if let plane = overlay.plane {
+            drawSectionAnalysisPlaneItem(
+                plane,
+                in: &context,
+                layout: layout
+            )
+        }
+        guard overlay.segments.isEmpty == false else {
+            return
+        }
+        var intersectionPath = Path()
+        for segment in overlay.segments {
+            intersectionPath.move(to: layout.project(segment.start))
+            intersectionPath.addLine(to: layout.project(segment.end))
+        }
+        context.stroke(
+            intersectionPath,
+            with: .color(Color.black.opacity(0.58)),
+            style: StrokeStyle(lineWidth: 3.8, lineCap: .round, lineJoin: .round)
+        )
+        context.stroke(
+            intersectionPath,
+            with: .color(ViewportTheme.sectionAnalysisIntersection.opacity(0.95)),
+            style: StrokeStyle(lineWidth: 1.65, lineCap: .round, lineJoin: .round)
+        )
+    }
+
+    private func drawSectionAnalysisPlaneItem(
+        _ item: ViewportSectionAnalysisOverlay.PlaneItem,
+        in context: inout GraphicsContext,
+        layout: ViewportLayout
+    ) {
+        guard let firstCorner = item.corners.first else {
+            return
+        }
+        var planePath = Path()
+        planePath.move(to: layout.project(firstCorner))
+        for corner in item.corners.dropFirst() {
+            planePath.addLine(to: layout.project(corner))
+        }
+        planePath.closeSubpath()
+        context.fill(
+            planePath,
+            with: .color(ViewportTheme.sectionAnalysisPlane.opacity(0.055))
+        )
+        context.stroke(
+            planePath,
+            with: .color(ViewportTheme.sectionAnalysisPlane.opacity(0.48)),
+            style: StrokeStyle(lineWidth: 1.0, lineJoin: .round, dash: [8.0, 5.0])
+        )
+
+        var normalPath = Path()
+        normalPath.move(to: layout.project(item.origin))
+        normalPath.addLine(to: layout.project(item.normalEnd))
+        context.stroke(
+            normalPath,
+            with: .color(ViewportTheme.sectionAnalysisNormal.opacity(0.62)),
+            style: StrokeStyle(lineWidth: 1.1, lineCap: .round, dash: [5.0, 4.0])
+        )
     }
 
     private func drawSurfaceAnalysisOverlay(

@@ -565,6 +565,10 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                         "RupaKit/Sources/RupaCore/SectionAnalysisResult.swift",
                         "RupaKit/Sources/RupaCore/SectionAnalysisService.swift",
                         "RupaKit/Sources/RupaCore/DesignDocument.swift",
+                        "RupaKit/Sources/RupaRendering/ViewportSectionAnalysisOverlay.swift",
+                        "RupaKit/Sources/RupaRendering/Viewport.swift",
+                        "RupaKit/Sources/RupaUI/WorkspaceSectionAnalysisStateBuilder.swift",
+                        "RupaKit/Sources/RupaUI/MainView.swift",
                         "RupaKit/Sources/RupaAutomation/AutomationCommand.swift",
                         "RupaKit/Sources/RupaAutomation/AutomationRunner.swift",
                         "RupaKit/Sources/RupaAgentRuntime/AgentCommandController.swift",
@@ -574,6 +578,8 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                         "RupaKit/Tests/RupaCoreTests/SelectionDimensionCommandTests.swift",
                         "RupaKit/Tests/RupaCoreTests/SurfaceContinuityServiceTests.swift",
                         "RupaKit/Tests/RupaCoreTests/SectionAnalysisServiceTests.swift",
+                        "RupaKit/Tests/RupaRenderingTests/ViewportSectionAnalysisOverlayTests.swift",
+                        "RupaKit/Tests/RupaUIPackageTests/WorkspaceSectionAnalysisStateBuilderTests.swift",
                         "RupaKit/Tests/RupaAutomationTests/AutomationRunnerTests.swift",
                         "RupaKit/Tests/RupaAgentInspectionTests/AgentSectionAnalysisIntegrationTests.swift",
                         "RupaKit/Tests/RupaAgentTests/AgentCommandControllerTests.swift",
@@ -582,17 +588,18 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                         "Measurement summaries, selection dimensions, surface continuity summaries, and section-plane creation are Agent-readable.",
                         "SectionAnalysisService evaluates generated body meshes against sketch, construction, active construction, and section scene-node planes without mutating the document.",
                         "Automation and Agent command results now expose body-side classifications, intersecting triangle counts, and bounded 3D plus in-plane section line segments.",
-                        "Viewport clipping, section hatching, interference highlighting, and section-distance controls remain incomplete.",
+                        "Selecting a section or construction plane can drive a non-mutating viewport overlay that renders the section plane frame and bounded body intersection segments from the same SectionAnalysisResult contract used by Agent and Automation.",
+                        "Viewport clipping, section fill and hatching, interference highlighting, and section-distance controls remain incomplete.",
                     ]
                 ),
             ],
             openWork: [
-                "Viewport clipping and section-fill rendering driven by the non-mutating SectionAnalysisResult.",
+                "Viewport clipping plus section-fill and hatching rendering driven by the non-mutating SectionAnalysisResult.",
                 "Selection, CPlane, previous-plane, distance, and flip policies for Section Analysis.",
                 "Interference highlighting and section hatching for drawing/export workflows.",
                 "Persistent inspection overlay controls that share the measurement and topology contracts.",
             ],
-            next: "Use SectionAnalysisResult to drive viewport clipping, hatching, interference diagnostics, selection policies, and persistent inspection overlay controls."
+            next: "Extend SectionAnalysisResult from plane and intersection overlays to clipping, hatching, interference diagnostics, selection policies, and persistent inspection overlay controls."
         ),
         entry(
             area: .snapping,

@@ -471,6 +471,7 @@ public struct MainView: View {
                     surfaceAnalysis: selectedSurfaceAnalysisSummary,
                     surfaceAnalysisOptions: surfaceAnalysisOptions,
                     surfaceContinuity: selectedSurfaceContinuitySummary,
+                    sectionAnalysis: selectedSectionAnalysisSummary,
                     curveCurvatureDisplays: session.document.productMetadata.curveCurvatureDisplays,
                     pointDisplays: session.document.productMetadata.pointDisplays,
                     snapResolutionOptions: activeSnapResolutionOptions(),
@@ -4264,6 +4265,15 @@ public struct MainView: View {
         )
     }
 
+    private var sectionAnalysisStateBuilder: WorkspaceSectionAnalysisStateBuilder {
+        WorkspaceSectionAnalysisStateBuilder(
+            document: session.document,
+            currentEvaluation: session.currentEvaluation,
+            documentGeneration: session.generation,
+            objectRegistry: objectRegistry
+        )
+    }
+
     private var topologyEditInspectorStateBuilder: WorkspaceTopologyEditInspectorStateBuilder {
         WorkspaceTopologyEditInspectorStateBuilder(
             selection: session.selection,
@@ -4460,6 +4470,10 @@ public struct MainView: View {
 
     private var selectedSurfaceAnalysisSummary: SurfaceAnalysisResult? {
         surfaceInspectorStateBuilder.analysisSummary(for: selectedSceneNodes)
+    }
+
+    private var selectedSectionAnalysisSummary: SectionAnalysisResult? {
+        sectionAnalysisStateBuilder.analysisSummary(for: selectedSceneNodes)
     }
 
     private func selectedSurfaceAnalysisSummaryResult(
