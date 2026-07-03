@@ -610,6 +610,25 @@ public final class AgentCommandController: AgentClientProtocol {
                         "Returns body-side classification, intersecting triangle counts, bounded 3D plus in-plane section segments, and reconstructed open or closed section contours.",
                         "Use sceneNode for saved section plane nodes and constructionPlane or activeConstructionPlane when the section follows the construction-plane workspace."
                     ]
+                ),
+                AgentCapabilityDescriptor.OptionAxis(
+                    name: "offsetMeters",
+                    supportedValues: [
+                        "finite signed meters",
+                    ],
+                    notes: [
+                        "Offsets the resolved source plane along its unflipped normal without mutating the section plane node or construction plane."
+                    ]
+                ),
+                AgentCapabilityDescriptor.OptionAxis(
+                    name: "flipsNormal",
+                    supportedValues: [
+                        "true",
+                        "false",
+                    ],
+                    notes: [
+                        "Flips front and behind classification while preserving the same section plane origin and in-plane coordinates."
+                    ]
                 )
             ]
         ),

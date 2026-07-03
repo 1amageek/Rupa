@@ -352,6 +352,9 @@ import RupaCore
         evidence.tests.contains("RupaKit/Tests/RupaRenderingTests/ViewportSectionAnalysisOverlayTests.swift")
     })
     #expect(section.evidence.contains { evidence in
+        evidence.notes.contains("Section analysis queries can offset the resolved source plane and flip front/behind classification; the result plane reflects the transformed origin and normal without mutating the section scene node, construction plane, or sketch plane source.")
+    })
+    #expect(section.evidence.contains { evidence in
         evidence.notes.contains("Selecting a section or construction plane can drive a non-mutating viewport overlay that renders the section plane frame, closed section fill, hatching, and bounded body intersection segments from the same SectionAnalysisResult contract used by Agent and Automation.")
     })
 

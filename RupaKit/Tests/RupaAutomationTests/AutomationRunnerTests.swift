@@ -4958,6 +4958,8 @@ import SwiftCAD
         .analyzeSection(
             query: SectionAnalysisQuery(
                 source: .sketchPlane(.yz),
+                offsetMeters: 0.25,
+                flipsNormal: true,
                 toleranceMeters: 1.0e-8
             )
         ),
@@ -4972,6 +4974,8 @@ import SwiftCAD
     #expect(result.generation == DocumentGeneration(0))
     #expect(session.generation == DocumentGeneration(0))
     #expect(sectionAnalysis.plane.sourceKind == .sketchPlane)
+    #expect(sectionAnalysis.plane.origin.x == 0.25)
+    #expect(sectionAnalysis.plane.normal == Vector3D(x: -1.0, y: 0.0, z: 0.0))
     #expect(sectionAnalysis.intersectingBodyCount == 1)
     #expect(sectionAnalysis.intersectionSegments.isEmpty == false)
     #expect(sectionAnalysis.closedIntersectionContourCount >= 1)

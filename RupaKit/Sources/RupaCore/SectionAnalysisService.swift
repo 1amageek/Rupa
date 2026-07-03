@@ -43,7 +43,13 @@ public struct SectionAnalysisService: Sendable {
 
         let tolerance = try resolvedTolerance(query.toleranceMeters, document: document)
         let maximumSegments = try resolvedMaximumSegments(query.maximumIntersectionSegments)
-        let plane = try resolvePlane(query.source, document: document)
+        let offsetMeters = try resolvedOffset(query.offsetMeters)
+        let plane = try resolvedPlane(
+            source: query.source,
+            offsetMeters: offsetMeters,
+            flipsNormal: query.flipsNormal,
+            document: document
+        )
 
         guard document.cadDocument.hasActiveRenderableTopologyFeatures else {
             return SectionAnalysisResult(
@@ -136,6 +142,33 @@ public struct SectionAnalysisService: Sendable {
         return maximumSegments
     }
 
+    private func resolvedOffset(_ offsetMeters: Double) throws -> Double {
+        guard offsetMeters.isFinite else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Section analysis offset must be finite."
+            )
+        }
+        return offsetMeters
+    }
+
+    private func resolvedPlane(
+        source: SectionAnalysisQuery.Source,
+        offsetMeters: Double,
+        flipsNormal: Bool,
+        document: DesignDocument
+    ) throws -> ResolvedPlane {
+        let basePlane = try resolvePlane(source, document: document)
+        guard offsetMeters != 0.0 || flipsNormal else {
+            return basePlane
+        }
+        return transformedPlane(
+            basePlane,
+            offsetMeters: offsetMeters,
+            flipsNormal: flipsNormal
+        )
+    }
+
     private func resolvePlane(
         _ source: SectionAnalysisQuery.Source,
         document: DesignDocument
@@ -183,6 +216,35 @@ public struct SectionAnalysisService: Sendable {
             }
             return try resolvedSceneNodePlane(node)
         }
+    }
+
+    private func transformedPlane(
+        _ plane: ResolvedPlane,
+        offsetMeters: Double,
+        flipsNormal: Bool
+    ) -> ResolvedPlane {
+        let source = plane.resultPlane
+        let origin = source.origin + source.normal * offsetMeters
+        let normal = flipsNormal ? source.normal * -1.0 : source.normal
+        let resultPlane = SectionAnalysisResult.Plane(
+            sourceKind: source.sourceKind,
+            sourceID: source.sourceID,
+            sourceName: source.sourceName,
+            origin: origin,
+            normal: normal,
+            u: source.u,
+            v: source.v
+        )
+        return ResolvedPlane(
+            resultPlane: resultPlane,
+            coordinateSystem: SketchPlaneCoordinateSystem(
+                plane: SketchPlane.plane(Plane3D(origin: origin, normal: normal)),
+                origin: origin,
+                normal: normal,
+                u: source.u,
+                v: source.v
+            )
+        )
     }
 
     private func resolvedSketchPlane(

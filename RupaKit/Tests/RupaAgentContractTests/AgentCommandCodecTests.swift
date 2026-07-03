@@ -102,6 +102,8 @@ import SwiftCAD
         command: .analyzeSection(
             query: SectionAnalysisQuery(
                 source: .sketchPlane(.yz),
+                offsetMeters: 0.25,
+                flipsNormal: true,
                 toleranceMeters: 1.0e-8,
                 includesIntersectionSegments: false,
                 maximumIntersectionSegments: 256

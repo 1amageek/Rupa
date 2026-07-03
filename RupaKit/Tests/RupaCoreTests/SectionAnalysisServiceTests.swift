@@ -92,6 +92,60 @@ import Testing
     })
 }
 
+@Test func sectionAnalysisAppliesOffsetAndFlipWithoutMutatingSourcePlane() throws {
+    let document = try sectionAnalysisTestDocument()
+    let baseResult = try SectionAnalysisService().analyze(
+        document: document,
+        query: SectionAnalysisQuery(
+            source: .sketchPlane(.xy),
+            offsetMeters: 1.0,
+            toleranceMeters: 1.0e-8
+        )
+    )
+    let flippedResult = try SectionAnalysisService().analyze(
+        document: document,
+        query: SectionAnalysisQuery(
+            source: .sketchPlane(.xy),
+            offsetMeters: 1.0,
+            flipsNormal: true,
+            toleranceMeters: 1.0e-8
+        )
+    )
+    let baseBody = try #require(baseResult.bodies.first)
+    let flippedBody = try #require(flippedResult.bodies.first)
+
+    #expect(baseResult.plane.origin.z == 1.0)
+    #expect(baseResult.plane.normal == .unitZ)
+    #expect(flippedResult.plane.origin.z == 1.0)
+    #expect(flippedResult.plane.normal == Vector3D(x: 0.0, y: 0.0, z: -1.0))
+    #expect(flippedResult.plane.u == baseResult.plane.u)
+    #expect(flippedResult.plane.v == baseResult.plane.v)
+    #expect(baseBody.frontVertexCount == flippedBody.behindVertexCount)
+    #expect(baseBody.behindVertexCount == flippedBody.frontVertexCount)
+    #expect(baseResult.intersectionContours.map(\.points) == flippedResult.intersectionContours.map(\.points))
+    #expect(baseResult.intersectionContours.map(\.points2D) == flippedResult.intersectionContours.map(\.points2D))
+    #expect(baseResult.intersectionContours.map(\.signedAreaSquareMeters) == flippedResult.intersectionContours.map(\.signedAreaSquareMeters))
+    #expect(baseResult.intersectionContours.map(\.lengthMeters) == flippedResult.intersectionContours.map(\.lengthMeters))
+    #expect(baseResult.intersectionSegments.allSatisfy { segment in
+        abs(segment.start.z - 1.0) <= baseResult.toleranceMeters * 10.0
+            && abs(segment.end.z - 1.0) <= baseResult.toleranceMeters * 10.0
+    })
+}
+
+@Test func sectionAnalysisRejectsNonFiniteOffset() throws {
+    let document = try sectionAnalysisTestDocument()
+
+    #expect(throws: EditorError.self) {
+        _ = try SectionAnalysisService().analyze(
+            document: document,
+            query: SectionAnalysisQuery(
+                source: .sketchPlane(.xy),
+                offsetMeters: .infinity
+            )
+        )
+    }
+}
+
 @Test func sectionAnalysisBoundsReturnedSegmentsWithoutLosingCounts() throws {
     let document = try sectionAnalysisTestDocument()
     let result = try SectionAnalysisService().analyze(

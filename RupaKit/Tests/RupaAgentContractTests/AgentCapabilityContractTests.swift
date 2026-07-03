@@ -283,6 +283,7 @@ import SwiftCAD
     let constructionPlaneCreateFromTarget = try #require(descriptors.first { $0.name == "createConstructionPlaneFromTarget" })
     let constructionPlaneCreateFromTargets = try #require(descriptors.first { $0.name == "createConstructionPlaneFromTargets" })
     let constructionPlaneCreateFromView = try #require(descriptors.first { $0.name == "createViewAlignedConstructionPlane" })
+    let analyzeSection = try #require(descriptors.first { $0.name == "analyzeSection" })
     let extrudedRectangleFromCorners = try #require(
         descriptors.first { $0.name == "createExtrudedRectangleFromCorners" }
     )
@@ -1545,6 +1546,25 @@ import SwiftCAD
     #expect(constructionPlaneSummary.access == .agentRequest)
     #expect(constructionPlaneSummary.discovery.contains(.constructionPlaneSummary))
     #expect(constructionPlaneSummary.targets == [.constructionPlane])
+
+    #expect(analyzeSection.category == .read)
+    #expect(!analyzeSection.mutatesDocument)
+    #expect(analyzeSection.access == .automationCommand)
+    #expect(analyzeSection.discovery.contains(.sectionAnalysis))
+    #expect(analyzeSection.discovery.contains(.meshSummary))
+    #expect(analyzeSection.discovery.contains(.constructionPlaneSummary))
+    #expect(analyzeSection.targets == [.body, .constructionPlane, .sceneNode])
+    #expect(analyzeSection.optionMatrix.map(\.name) == ["source", "offsetMeters", "flipsNormal"])
+    #expect(analyzeSection.optionMatrix.contains { axis in
+        axis.name == "offsetMeters"
+            && axis.supportedValues.contains("finite signed meters")
+            && axis.notes.contains { $0.contains("without mutating") }
+    })
+    #expect(analyzeSection.optionMatrix.contains { axis in
+        axis.name == "flipsNormal"
+            && axis.supportedValues == ["true", "false"]
+            && axis.notes.contains { $0.contains("front and behind") }
+    })
 
     #expect(componentInstance.category == .component)
     #expect(componentInstance.mutatesDocument)

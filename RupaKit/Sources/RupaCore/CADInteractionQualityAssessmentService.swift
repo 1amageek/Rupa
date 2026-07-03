@@ -589,14 +589,15 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                         "Measurement summaries, selection dimensions, surface continuity summaries, and section-plane creation are Agent-readable.",
                         "SectionAnalysisService evaluates generated body meshes against sketch, construction, active construction, and section scene-node planes without mutating the document.",
                         "Automation and Agent command results now expose body-side classifications, intersecting triangle counts, bounded 3D plus in-plane section line segments, and reconstructed section contours.",
+                        "Section analysis queries can offset the resolved source plane and flip front/behind classification; the result plane reflects the transformed origin and normal without mutating the section scene node, construction plane, or sketch plane source.",
                         "Selecting a section or construction plane can drive a non-mutating viewport overlay that renders the section plane frame, closed section fill, hatching, and bounded body intersection segments from the same SectionAnalysisResult contract used by Agent and Automation.",
-                        "Viewport clipping, interference highlighting, section-distance controls, and drawing/export section hatching remain incomplete.",
+                        "Viewport clipping, interference highlighting, persistent section-distance controls, and drawing/export section hatching remain incomplete.",
                     ]
                 ),
             ],
             openWork: [
                 "Viewport clipping driven by the non-mutating SectionAnalysisResult.",
-                "Selection, CPlane, previous-plane, distance, and flip policies for Section Analysis.",
+                "Selection, CPlane, previous-plane, and persistent distance/flip overlay policies for Section Analysis.",
                 "Interference highlighting and section hatching for drawing/export workflows.",
                 "Persistent inspection overlay controls that share the measurement and topology contracts.",
             ],

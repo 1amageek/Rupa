@@ -11,17 +11,23 @@ public struct SectionAnalysisQuery: Codable, Equatable, Sendable {
     }
 
     public var source: Source
+    public var offsetMeters: Double
+    public var flipsNormal: Bool
     public var toleranceMeters: Double?
     public var includesIntersectionSegments: Bool
     public var maximumIntersectionSegments: Int
 
     public init(
         source: Source,
+        offsetMeters: Double = 0.0,
+        flipsNormal: Bool = false,
         toleranceMeters: Double? = nil,
         includesIntersectionSegments: Bool = true,
         maximumIntersectionSegments: Int = 10_000
     ) {
         self.source = source
+        self.offsetMeters = offsetMeters
+        self.flipsNormal = flipsNormal
         self.toleranceMeters = toleranceMeters
         self.includesIntersectionSegments = includesIntersectionSegments
         self.maximumIntersectionSegments = maximumIntersectionSegments
