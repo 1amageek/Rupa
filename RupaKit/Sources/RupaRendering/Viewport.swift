@@ -355,7 +355,10 @@ public struct Viewport: View {
                 .accessibilityLabel("Canvas viewport")
                 .contentShape(Rectangle())
                 .overlay(alignment: .topLeading) {
-                    viewportBadgeOverlay(scaleReadout: projectedGrid.scaleReadout)
+                    viewportBadgeOverlay(
+                        scaleReadout: projectedGrid.scaleReadout,
+                        chromeLayout: chromeLayout
+                    )
                 }
                 .overlay {
                     canvasDragPlaceholderOverlay(basis: basis)
@@ -645,21 +648,22 @@ public struct Viewport: View {
             height: ViewportCanvasChromeLayout.viewportBadgeSize.height,
             alignment: .leading
         )
-        .fixedSize(horizontal: true, vertical: false)
         .viewportCanvasGlassChrome()
     }
 
     private func viewportBadgeOverlay(
-        scaleReadout: ViewportProjectedGrid.ScaleReadout
+        scaleReadout: ViewportProjectedGrid.ScaleReadout,
+        chromeLayout: ViewportCanvasChromeLayout
     ) -> some View {
-        viewportBadge(scaleReadout: scaleReadout)
+        let rect = chromeLayout.viewportBadgeRect
+        return viewportBadge(scaleReadout: scaleReadout)
             .frame(
-                maxWidth: ViewportCanvasChromeLayout.viewportBadgeSize.width,
+                width: rect.width,
+                height: rect.height,
                 alignment: .leading
             )
-            .frame(height: ViewportCanvasChromeLayout.viewportBadgeSize.height)
-            .padding(.top, ViewportCanvasChromeLayout.viewportBadgePadding)
-            .padding(.leading, ViewportCanvasChromeLayout.viewportBadgePadding)
+            .clipped()
+            .offset(x: rect.minX, y: rect.minY)
             .zIndex(2.0)
             .onHover { isHovered in
                 if isHovered {

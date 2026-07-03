@@ -36,12 +36,14 @@ struct ViewportCanvasChromeLayout: Equatable {
     }
 
     var viewportBadgeRect: CGRect {
-        clamped(
-            CGRect(
-                x: Self.viewportBadgePadding,
-                y: Self.viewportBadgePadding,
-                width: Self.viewportBadgeSize.width,
-                height: Self.viewportBadgeSize.height
+        badgeRectAvoidingAdditionalExclusions(
+            clamped(
+                CGRect(
+                    x: Self.viewportBadgePadding,
+                    y: Self.viewportBadgePadding,
+                    width: Self.viewportBadgeSize.width,
+                    height: Self.viewportBadgeSize.height
+                )
             )
         )
     }
@@ -58,15 +60,22 @@ struct ViewportCanvasChromeLayout: Equatable {
             viewportBadgeExclusionRect,
             axisControlExclusionRect,
         ]
-        rects.append(contentsOf: additionalExclusionRects.map { rect in
+        rects.append(contentsOf: paddedAdditionalExclusionRects)
+        return rects.filter { rect in
+            !rect.isEmpty && !rect.isNull
+        }
+    }
+
+    private var paddedAdditionalExclusionRects: [CGRect] {
+        additionalExclusionRects.map { rect in
             clamped(
                 rect.insetBy(
                     dx: -Self.inputExclusionPadding,
                     dy: -Self.inputExclusionPadding
                 )
             )
-        })
-        return rects.filter { rect in
+        }
+        .filter { rect in
             !rect.isEmpty && !rect.isNull
         }
     }
@@ -86,5 +95,27 @@ struct ViewportCanvasChromeLayout: Equatable {
             return .zero
         }
         return intersection
+    }
+
+    private func badgeRectAvoidingAdditionalExclusions(_ rect: CGRect) -> CGRect {
+        guard !rect.isEmpty, !rect.isNull else {
+            return .zero
+        }
+
+        var candidate = rect
+        let exclusions = paddedAdditionalExclusionRects.sorted { left, right in
+            if left.minY != right.minY {
+                return left.minY < right.minY
+            }
+            return left.minX < right.minX
+        }
+        for exclusion in exclusions where candidate.intersects(exclusion) {
+            let availableMaxY = max(0.0, viewportSize.height - candidate.height)
+            let nextY = min(exclusion.maxY + Self.inputExclusionPadding, availableMaxY)
+            if nextY > candidate.minY {
+                candidate.origin.y = nextY
+            }
+        }
+        return clamped(candidate)
     }
 }

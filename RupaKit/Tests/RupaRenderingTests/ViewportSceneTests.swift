@@ -3127,6 +3127,23 @@ import Testing
 }
 
 @MainActor
+@Test func viewportTopChromeBadgeAvoidsExternalOverlayExclusions() {
+    let viewportSize = CGSize(width: 800.0, height: 600.0)
+    let topOverlayRect = CGRect(x: 0.0, y: 0.0, width: 420.0, height: 46.0)
+    let layout = ViewportCanvasChromeLayout(
+        viewportSize: viewportSize,
+        additionalExclusionRects: [topOverlayRect]
+    )
+    let rect = layout.viewportBadgeRect
+
+    #expect(rect.minX == ViewportCanvasChromeLayout.viewportBadgePadding)
+    #expect(rect.minY > topOverlayRect.maxY)
+    #expect(!rect.intersects(topOverlayRect))
+    #expect(layout.containsCanvasChrome(CGPoint(x: 12.0, y: topOverlayRect.maxY + 16.0)))
+    #expect(!rect.contains(CGPoint(x: 12.0, y: 12.0)))
+}
+
+@MainActor
 @Test func viewportAxisTriadUsesCompactBottomCenterInputExclusion() {
     let viewportSize = CGSize(width: 800.0, height: 600.0)
     let layout = ViewportCanvasChromeLayout(viewportSize: viewportSize)
