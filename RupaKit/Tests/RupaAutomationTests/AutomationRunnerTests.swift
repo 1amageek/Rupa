@@ -4904,6 +4904,35 @@ import SwiftCAD
 }
 
 @MainActor
+@Test func automationCanAnalyzeSectionWithoutMutation() async throws {
+    let session = EditorSession(document: try automationSectionAnalysisTestDocument())
+    let runner = AutomationRunner()
+
+    let result = try runner.execute(
+        .analyzeSection(
+            query: SectionAnalysisQuery(
+                source: .sketchPlane(.yz),
+                toleranceMeters: 1.0e-8
+            )
+        ),
+        in: session
+    )
+
+    let sectionAnalysis = try #require(result.sectionAnalysis)
+
+    #expect(result.message == "Section analysis completed with 1 intersecting body mesh(es).")
+    #expect(result.commandName == "analyzeSection")
+    #expect(!result.didMutate)
+    #expect(result.generation == DocumentGeneration(0))
+    #expect(session.generation == DocumentGeneration(0))
+    #expect(sectionAnalysis.plane.sourceKind == .sketchPlane)
+    #expect(sectionAnalysis.intersectingBodyCount == 1)
+    #expect(sectionAnalysis.intersectionSegments.isEmpty == false)
+    #expect(result.workspaceScale != nil)
+    #expect(result.viewportGridScale != nil)
+}
+
+@MainActor
 @Test func automationCanCreateDescribeAndActivateConstructionPlanes() async throws {
     let session = EditorSession()
     let runner = AutomationRunner()
@@ -5972,6 +6001,29 @@ private func automationTranslationTransform(
             ]
         )
     )
+}
+
+private func automationSectionAnalysisTestDocument() throws -> DesignDocument {
+    var document = DesignDocument.empty(named: "Automation Section Fixture")
+    let profileID = try document.createRectangleSketchFromCorners(
+        name: "Automation Section Profile",
+        plane: .xy,
+        firstCorner: SketchPoint(
+            x: .length(-1.0, .meter),
+            y: .length(-1.0, .meter)
+        ),
+        oppositeCorner: SketchPoint(
+            x: .length(1.0, .meter),
+            y: .length(1.0, .meter)
+        )
+    )
+    _ = try document.extrudeProfile(
+        name: "Automation Section Body",
+        profile: ProfileReference(featureID: profileID),
+        distance: .length(2.0, .meter),
+        direction: .normal
+    )
+    return document
 }
 
 private extension UUID {

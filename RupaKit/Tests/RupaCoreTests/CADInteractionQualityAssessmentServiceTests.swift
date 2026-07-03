@@ -332,7 +332,13 @@ import RupaCore
     let section = try #require(result.entries.first { $0.area == .sectionAnalysis })
     #expect(section.currentRating == .partial)
     #expect(section.referenceSources.contains("https://doc.plasticity.xyz/common/section-analysis"))
-    #expect(section.openWork.contains { $0.contains("Virtual section clipping") })
+    #expect(section.openWork.contains { $0.contains("Viewport clipping") })
+    #expect(section.evidence.contains { evidence in
+        evidence.sourceFiles.contains("RupaKit/Sources/RupaCore/SectionAnalysisService.swift")
+    })
+    #expect(section.evidence.contains { evidence in
+        evidence.tests.contains("RupaKit/Tests/RupaAgentInspectionTests/AgentSectionAnalysisIntegrationTests.swift")
+    })
 
     let sketchPrecision = try #require(result.entries.first { $0.area == .sketchPrecision })
     #expect(sketchPrecision.currentRating == .partial)

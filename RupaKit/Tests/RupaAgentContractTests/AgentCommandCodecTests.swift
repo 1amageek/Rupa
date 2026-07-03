@@ -97,6 +97,27 @@ import SwiftCAD
     #expect(decodedRequest == request)
 }
 
+@Test func agentMessageCodecRoundTripsSectionAnalysisCommand() async throws {
+    let codec = AgentMessageCodec()
+    let sessionID = UUID()
+    let request = AgentRequest.execute(
+        sessionID: sessionID,
+        command: .analyzeSection(
+            query: SectionAnalysisQuery(
+                source: .sketchPlane(.yz),
+                toleranceMeters: 1.0e-8,
+                includesIntersectionSegments: false,
+                maximumIntersectionSegments: 256
+            )
+        ),
+        expectedGeneration: DocumentGeneration(5)
+    )
+
+    let decodedRequest = try codec.decodeRequest(from: try codec.encode(request))
+
+    #expect(decodedRequest == request)
+}
+
 @Test func agentMessageCodecRoundTripsArcSketchCommand() async throws {
     let codec = AgentMessageCodec()
     let sessionID = UUID()

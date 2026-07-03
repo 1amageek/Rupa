@@ -40,6 +40,7 @@ public enum AutomationCommand: Codable, Equatable, Sendable {
     case setComponentInstanceLock(id: ComponentInstanceID, isLocked: Bool)
     case setComponentInstanceTransform(id: ComponentInstanceID, localTransform: Transform3D)
     case createSectionPlane(name: String)
+    case analyzeSection(query: SectionAnalysisQuery)
     case describeConstructionPlanes
     case createConstructionPlane(name: String, plane: SketchPlane, activates: Bool)
     case createConstructionPlaneFromTarget(name: String, target: SelectionTarget, activates: Bool)
@@ -440,6 +441,8 @@ public enum AutomationCommand: Codable, Equatable, Sendable {
             )
         case .createSectionPlane(let name):
             .createSectionPlane(name: name)
+        case .analyzeSection:
+            nil
         case .describeConstructionPlanes:
             nil
         case .createConstructionPlane(let name, let plane, let activates):

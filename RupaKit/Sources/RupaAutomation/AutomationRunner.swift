@@ -224,6 +224,18 @@ public struct AutomationRunner {
                 commandResult: result,
                 in: session
             )
+        case .analyzeSection(let query):
+            let result = try SectionAnalysisService().analyze(
+                document: session.document,
+                query: query,
+                objectRegistry: session.objectRegistry,
+                currentEvaluation: session.currentEvaluation,
+                currentGeneration: session.generation
+            )
+            return sectionAnalysisAutomationResult(
+                result,
+                in: session
+            )
         case .describeConstructionPlanes:
             let summary = ConstructionPlaneSummaryService().summarize(
                 document: session.document
@@ -1571,6 +1583,29 @@ public struct AutomationRunner {
                 ruler: session.document.ruler,
                 settings: session.document.productMetadata.viewportGridSettings
             )
+        )
+    }
+
+    private func sectionAnalysisAutomationResult(
+        _ sectionAnalysis: SectionAnalysisResult,
+        in session: EditorSession
+    ) -> AutomationResult {
+        let context = workspaceAutomationContext(in: session)
+        return AutomationResult(
+            message: "Section analysis completed with \(sectionAnalysis.intersectingBodyCount) intersecting body mesh(es).",
+            commandName: "analyzeSection",
+            generation: session.generation,
+            didMutate: false,
+            diagnostics: mergedDiagnostics(sectionAnalysis.diagnostics, context.diagnostics),
+            workspaceScale: context.scale,
+            workspaceInteractionScale: context.interactionScale,
+            workspaceBounds: context.bounds,
+            workspacePrecision: context.precision,
+            workspaceScaleRecommendation: context.scaleRecommendation,
+            workspaceScalePresetOptions: context.scalePresetOptions,
+            viewportGridSettings: context.viewportGridSettings,
+            viewportGridScale: context.viewportGridScale,
+            sectionAnalysis: sectionAnalysis
         )
     }
 

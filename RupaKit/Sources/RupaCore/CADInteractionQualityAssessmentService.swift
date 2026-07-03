@@ -545,45 +545,54 @@ public struct CADInteractionQualityAssessmentService: Sendable {
             gates: [
                 .referenceContract: .verified,
                 .sourceOwnership: .partial,
-                .commandContract: .partial,
+                .commandContract: .implemented,
                 .selectionTopology: .partial,
                 .viewportAffordance: .partial,
                 .inspectorAffordance: .partial,
-                .agentParity: .partial,
+                .agentParity: .implemented,
                 .measurementDiagnostics: .implemented,
                 .verification: .verified,
                 .performanceBudget: .partial,
             ],
             evidence: [
                 CADInteractionQualityEvidence(
-                    label: "Measurements, surface continuity, and saved section-plane metadata",
+                    label: "Measurements, surface continuity, saved section planes, and non-mutating mesh section results",
                     sourceFiles: [
                         "RupaKit/Sources/RupaCore/MeasurementService.swift",
                         "RupaKit/Sources/RupaCore/MeasurementAnnotation.swift",
                         "RupaKit/Sources/RupaCore/SelectionDimensionService.swift",
                         "RupaKit/Sources/RupaCore/SurfaceContinuityService.swift",
+                        "RupaKit/Sources/RupaCore/SectionAnalysisResult.swift",
+                        "RupaKit/Sources/RupaCore/SectionAnalysisService.swift",
                         "RupaKit/Sources/RupaCore/DesignDocument.swift",
+                        "RupaKit/Sources/RupaAutomation/AutomationCommand.swift",
+                        "RupaKit/Sources/RupaAutomation/AutomationRunner.swift",
                         "RupaKit/Sources/RupaAgentRuntime/AgentCommandController.swift",
                     ],
                     tests: [
                         "RupaKit/Tests/RupaCoreTests/CommandStackTests.swift",
                         "RupaKit/Tests/RupaCoreTests/SelectionDimensionCommandTests.swift",
                         "RupaKit/Tests/RupaCoreTests/SurfaceContinuityServiceTests.swift",
+                        "RupaKit/Tests/RupaCoreTests/SectionAnalysisServiceTests.swift",
+                        "RupaKit/Tests/RupaAutomationTests/AutomationRunnerTests.swift",
+                        "RupaKit/Tests/RupaAgentInspectionTests/AgentSectionAnalysisIntegrationTests.swift",
                         "RupaKit/Tests/RupaAgentTests/AgentCommandControllerTests.swift",
                     ],
                     notes: [
                         "Measurement summaries, selection dimensions, surface continuity summaries, and section-plane creation are Agent-readable.",
-                        "Virtual section clipping, section hatching, interference highlighting, and section-distance controls remain incomplete.",
+                        "SectionAnalysisService evaluates generated body meshes against sketch, construction, active construction, and section scene-node planes without mutating the document.",
+                        "Automation and Agent command results now expose body-side classifications, intersecting triangle counts, and bounded 3D plus in-plane section line segments.",
+                        "Viewport clipping, section hatching, interference highlighting, and section-distance controls remain incomplete.",
                     ]
                 ),
             ],
             openWork: [
-                "Virtual section clipping through solids and meshes without mutating model geometry.",
+                "Viewport clipping and section-fill rendering driven by the non-mutating SectionAnalysisResult.",
                 "Selection, CPlane, previous-plane, distance, and flip policies for Section Analysis.",
                 "Interference highlighting and section hatching for drawing/export workflows.",
                 "Persistent inspection overlay controls that share the measurement and topology contracts.",
             ],
-            next: "Connect saved section planes to a non-mutating section analysis result that drives viewport clipping, hatching, interference diagnostics, and Agent-readable measurements."
+            next: "Use SectionAnalysisResult to drive viewport clipping, hatching, interference diagnostics, selection policies, and persistent inspection overlay controls."
         ),
         entry(
             area: .snapping,

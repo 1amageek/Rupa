@@ -589,6 +589,31 @@ public final class AgentCommandController: AgentClientProtocol {
             failureMode: "Rejects stale generations before mutation."
         ),
         capability(
+            "analyzeSection",
+            category: .read,
+            summary: "Evaluate generated body meshes against a sketch, construction, active construction, or section scene-node plane without mutating the document.",
+            access: .automationCommand,
+            mutatesDocument: false,
+            discovery: [.sectionAnalysis, .meshSummary, .constructionPlaneSummary],
+            targets: [.body, .constructionPlane, .sceneNode],
+            failureMode: "Rejects stale generations, missing plane sources, invalid tolerances, and non-construction scene-node plane sources before reading.",
+            optionMatrix: [
+                AgentCapabilityDescriptor.OptionAxis(
+                    name: "source",
+                    supportedValues: [
+                        "sketchPlane",
+                        "constructionPlane",
+                        "activeConstructionPlane",
+                        "sceneNode",
+                    ],
+                    notes: [
+                        "Returns body-side classification, intersecting triangle counts, and bounded 3D plus in-plane section segments.",
+                        "Use sceneNode for saved section plane nodes and constructionPlane or activeConstructionPlane when the section follows the construction-plane workspace."
+                    ]
+                )
+            ]
+        ),
+        capability(
             "describeConstructionPlanes",
             category: .sketch,
             summary: "Read saved construction planes, their scene-node linkage, and the active construction plane without mutating source.",

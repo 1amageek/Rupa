@@ -29,6 +29,7 @@ public struct AgentCapabilityDescriptor: Codable, Equatable, Sendable {
         case booleanEvaluationPlan
         case surfaceSourceSummary
         case surfaceAnalysis
+        case sectionAnalysis
         case surfaceFrames
         case surfaceContinuitySummary
         case surfaceBoundaryContinuityCompatibility
