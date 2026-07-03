@@ -507,7 +507,7 @@ import Testing
     let regional = try #require(options.first { $0.preset == .regionalPlanning })
     let selected = try #require(options.first { $0.isSelected })
 
-    #expect(options.map(\.preset) == WorkspaceScalePreset.allCases)
+    #expect(options.map(\.preset) == WorkspaceScalePreset.profiles.map(\.preset))
     #expect(micro.visibleSpanTitle == "1 cm")
     #expect(micro.comfortableModelSpanTitle == "100 μm to 8 mm")
     #expect(regional.title == "Regional Planning")
@@ -532,7 +532,7 @@ import Testing
     )
     let regional = try #require(options.first { $0.preset == .regionalPlanning })
 
-    #expect(options.count == WorkspaceScalePreset.allCases.count)
+    #expect(options.count == WorkspaceScalePreset.profiles.count)
     #expect(!options.contains { $0.isSelected })
     #expect(regional.menuTitle == "Regional Planning · 1,000 km")
     #expect(regional.accessibilityValue.contains("comfortable model span 10 km to 800 km"))

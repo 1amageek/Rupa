@@ -370,8 +370,8 @@ func workspaceDocumentScalePresetOptionStates(
 ) -> [WorkspaceDocumentScalePresetOptionState] {
     let normalized = ruler.normalizedForWorkspaceScale()
     let selectedPreset = WorkspaceScalePreset.matching(normalized)
-    return WorkspaceScalePreset.allCases.map { preset in
-        let profile = preset.profile
+    return WorkspaceScalePreset.profiles.map { profile in
+        let preset = profile.preset
         return WorkspaceDocumentScalePresetOptionState(
             preset: preset,
             title: profile.title,

@@ -107,11 +107,11 @@ public final class AgentCommandController: AgentClientProtocol {
             optionMatrix: [
                 AgentCapabilityDescriptor.OptionAxis(
                     name: "preset",
-                    supportedValues: WorkspaceScalePreset.allCases.map(\.rawValue),
+                    supportedValues: WorkspaceScalePreset.profiles.map { $0.preset.rawValue },
                     notes: [
                         "Presets update display unit, minor tick, major tick, and visible workspace span together.",
                         "Use setRulerConfiguration when a custom scale is required.",
-                    ] + WorkspaceScalePreset.allCases.map { $0.profile.agentGuidance }
+                    ] + WorkspaceScalePreset.profiles.map(\.agentGuidance)
                 )
             ]
         ),

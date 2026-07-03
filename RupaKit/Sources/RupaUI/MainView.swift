@@ -1412,8 +1412,8 @@ public struct MainView: View {
                 }
             }
             Section("Scale Preset") {
-                ForEach(WorkspaceScalePreset.allCases) { preset in
-                    let profile = preset.profile
+                ForEach(WorkspaceScalePreset.profiles, id: \.preset) { profile in
+                    let preset = profile.preset
                     Button {
                         applyWorkspaceScalePreset(preset)
                     } label: {
