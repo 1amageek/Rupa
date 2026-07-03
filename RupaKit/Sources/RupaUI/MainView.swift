@@ -1834,28 +1834,36 @@ public struct MainView: View {
 
     @ViewBuilder
     private func referenceSelectionContextPanelContent(_ references: [SelectionReference]) -> some View {
-        workspaceValuePill(
-            "Refs",
-            "\(references.count)",
-            accessibilityIdentifier: "WorkspaceReference.count"
+        let summary = WorkspaceReferenceContextSummary(references: references)
+        workspaceStatusChip(
+            summary.familyTitle,
+            systemImage: summary.systemImage,
+            tint: .accentColor
         )
         workspaceValuePill(
-            "Target",
-            selectedReferenceSummary,
-            accessibilityIdentifier: "WorkspaceReference.target"
+            "Kind",
+            summary.kindTitle,
+            accessibilityIdentifier: "WorkspaceReference.kind"
         )
-        if selectedSurfaceControlPointReferences.isEmpty == false {
+        if let directionTitle = summary.directionTitle {
             workspaceValuePill(
-                "Surface CV",
-                "\(selectedSurfaceControlPointReferences.count)",
-                accessibilityIdentifier: "WorkspaceReference.surfaceControlPoints"
+                "Dir",
+                directionTitle,
+                accessibilityIdentifier: "WorkspaceReference.direction"
             )
         }
-        if selectedSurfaceParameterReferences.isEmpty == false {
+        if let indexTitle = summary.indexTitle {
             workspaceValuePill(
-                "Surface UV",
-                "\(selectedSurfaceParameterReferences.count)",
-                accessibilityIdentifier: "WorkspaceReference.surfaceParameters"
+                "Index",
+                indexTitle,
+                accessibilityIdentifier: "WorkspaceReference.index"
+            )
+        }
+        if summary.showsReferenceCount {
+            workspaceValuePill(
+                "Refs",
+                "\(summary.referenceCount)",
+                accessibilityIdentifier: "WorkspaceReference.count"
             )
         }
     }
@@ -4572,79 +4580,6 @@ public struct MainView: View {
             return "\(targets.count) targets"
         }
         return selectionComponentTitle(target.component)
-    }
-
-    private var selectedReferenceSummary: String {
-        let references = session.selection.selectedReferences
-        guard !references.isEmpty else {
-            return "Reference"
-        }
-        guard references.count == 1, let reference = references.first else {
-            return "\(references.count) references"
-        }
-        return selectionReferenceTitle(reference)
-    }
-
-    private func selectionReferenceTitle(_ reference: SelectionReference) -> String {
-        switch reference {
-        case .topology:
-            return "Topology"
-        case let .edge(reference):
-            return edgeReferenceTitle(reference)
-        case let .curve(reference):
-            return curveReferenceTitle(reference)
-        case .sketchPoint:
-            return "Sketch Point"
-        case let .surface(reference):
-            return surfaceReferenceTitle(reference)
-        }
-    }
-
-    private func edgeReferenceTitle(_ reference: EdgeSubobjectReference) -> String {
-        switch reference {
-        case .whole:
-            return "Edge"
-        case .parameter:
-            return "Edge Param"
-        }
-    }
-
-    private func curveReferenceTitle(_ reference: CurveSubobjectReference) -> String {
-        switch reference {
-        case .whole:
-            return "Curve"
-        case .parameter:
-            return "Curve Param"
-        case .center:
-            return "Curve Center"
-        case .span:
-            return "Curve Span"
-        case .controlPoint:
-            return "Curve CV"
-        case .knot:
-            return "Curve Knot"
-        }
-    }
-
-    private func surfaceReferenceTitle(_ reference: SurfaceSubobjectReference) -> String {
-        switch reference {
-        case .whole:
-            return "Surface"
-        case .parameter:
-            return "Surface UV"
-        case .span:
-            return "Surface Span"
-        case .controlPoint:
-            return "Surface CV"
-        case .knot:
-            return "Surface Knot"
-        case .trim:
-            return "Surface Trim"
-        case .trimSpan:
-            return "Trim Span"
-        case .trimKnot:
-            return "Trim Knot"
-        }
     }
 
     private var selectedFaceTarget: SelectionTarget? {
