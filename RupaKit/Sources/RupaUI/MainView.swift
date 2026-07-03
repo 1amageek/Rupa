@@ -6,8 +6,8 @@ import RupaRendering
 import SwiftUI
 
 private enum WorkspaceCanvasOverlayLayout {
-    static let edgePadding: CGFloat = 8.0
-    static let topChromeHeight: CGFloat = 30.0
+    static let edgePadding: CGFloat = ViewportCanvasChromeMetrics.edgePadding
+    static let topChromeHeight: CGFloat = ViewportCanvasChromeMetrics.topControlHeight
 }
 
 private struct ViewportContextPanelHeightPreferenceKey: PreferenceKey {

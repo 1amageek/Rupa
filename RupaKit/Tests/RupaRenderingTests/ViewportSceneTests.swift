@@ -3111,9 +3111,15 @@ import Testing
     let layout = ViewportCanvasChromeLayout(viewportSize: viewportSize)
     let rect = layout.viewportBadgeRect
 
-    #expect(ViewportCanvasChromeLayout.viewportBadgeSize.height == 30.0)
-    #expect(ViewportCanvasChromeLayout.viewportBadgeSize.width <= 300.0)
-    #expect(ViewportCanvasChromeLayout.viewportBadgePadding <= 8.0)
+    #expect(
+        ViewportCanvasChromeLayout.viewportBadgeSize.height
+            == ViewportCanvasChromeMetrics.topControlHeight
+    )
+    #expect(
+        ViewportCanvasChromeLayout.viewportBadgeSize.width
+            == ViewportCanvasChromeMetrics.topControlMaximumWidth
+    )
+    #expect(ViewportCanvasChromeLayout.viewportBadgePadding == ViewportCanvasChromeMetrics.edgePadding)
     #expect(rect.minX == ViewportCanvasChromeLayout.viewportBadgePadding)
     #expect(rect.minY == ViewportCanvasChromeLayout.viewportBadgePadding)
     #expect(rect.height == ViewportCanvasChromeLayout.viewportBadgeSize.height)

@@ -653,7 +653,13 @@ public struct Viewport: View {
             height: ViewportCanvasChromeLayout.viewportBadgeSize.height,
             alignment: .leading
         )
-        .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .glassEffect(
+            .regular,
+            in: RoundedRectangle(
+                cornerRadius: ViewportCanvasChromeMetrics.cornerRadius,
+                style: .continuous
+            )
+        )
     }
 
     private var featureCount: Int {

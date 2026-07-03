@@ -3,8 +3,11 @@ import CoreGraphics
 struct ViewportCanvasChromeLayout: Equatable {
     static let axisControlSize = CGSize(width: 286.0, height: 42.0)
     static let axisBottomPadding: CGFloat = 14.0
-    static let viewportBadgeSize = CGSize(width: 300.0, height: 30.0)
-    static let viewportBadgePadding: CGFloat = 8.0
+    static let viewportBadgeSize = CGSize(
+        width: ViewportCanvasChromeMetrics.topControlMaximumWidth,
+        height: ViewportCanvasChromeMetrics.topControlHeight
+    )
+    static let viewportBadgePadding: CGFloat = ViewportCanvasChromeMetrics.edgePadding
     static let inputExclusionPadding: CGFloat = 6.0
 
     var viewportSize: CGSize
