@@ -808,6 +808,15 @@ private func rawAgentProtocolJSON(_ source: String) -> Data {
             generation: DocumentGeneration(2),
             dirty: false,
             viewportGridSettings: ViewportGridSettings(visualSpacingMode: .fixed),
+            viewportGridScale: ViewportGridScaleSnapshot(
+                ruler: RulerConfiguration(
+                    displayUnit: .meter,
+                    minorTickMeters: 0.5,
+                    majorTickMeters: 5.0,
+                    visibleSpanMeters: 5_000.0
+                ),
+                settings: ViewportGridSettings(visualSpacingMode: .fixed)
+            ),
             workspaceBounds: MeasurementResult.Bounds(
                 minX: 0.0,
                 minY: 0.0,

@@ -97,6 +97,16 @@ import Testing
     #expect(result.workspaceInteractionScale.surfaceFrameNormalMove.meters == 100.0)
     #expect(abs(result.workspaceInteractionScale.sketchRebuildTolerance.meters - 0.1) < 1.0e-12)
     #expect(result.viewportGridSettings == gridSettings)
+    #expect(result.viewportGridScale.visualSpacingMode == .fixed)
+    #expect(result.viewportGridScale.displayUnit == .kilometer)
+    #expect(result.viewportGridScale.snapStep.meters == 100.0)
+    #expect(result.viewportGridScale.snapStep.displayValue == 0.1)
+    #expect(result.viewportGridScale.configuredMinorStep.meters == 100.0)
+    #expect(result.viewportGridScale.configuredMajorStep.meters == 1_000.0)
+    #expect(result.viewportGridScale.workspaceSpan.meters == 100_000.0)
+    #expect(result.viewportGridScale.workspaceSpan.text == "100 km")
+    #expect(result.viewportGridScale.summary.contains("mode fixed"))
+    #expect(result.viewportGridScale.summary.contains("workspace span 100 km"))
 }
 
 @Test func designDisplaySnapshotDecodesMissingWorkspaceInteractionScaleFromWorkspaceScale() throws {
@@ -134,6 +144,12 @@ import Testing
     #expect(result.workspaceInteractionScale.operationStep.meters == 100.0)
     #expect(result.workspaceInteractionScale.operationStep.displayValue == 0.1)
     #expect(result.workspaceInteractionScale.slotWidth.meters == 200.0)
+    #expect(result.viewportGridSettings.visualSpacingMode == .fixed)
+    #expect(result.viewportGridScale.visualSpacingMode == .fixed)
+    #expect(result.viewportGridScale.snapStep.meters == 100.0)
+    #expect(result.viewportGridScale.configuredMajorStep.meters == 1_000.0)
+    #expect(result.viewportGridScale.workspaceSpan.meters == 100_000.0)
+    #expect(result.viewportGridScale.workspaceSpan.text == "100 km")
     #expect(result.workspaceScalePresetOptions.map(\.preset) == WorkspaceScalePreset.allCases)
     #expect(result.workspaceScalePresetOptions.contains { option in
         option.preset == .regionalPlanning

@@ -5,6 +5,7 @@ public struct DesignDisplaySnapshotResult: Codable, Equatable, Sendable {
     public var workspaceScale: WorkspaceScaleSnapshot
     public var workspaceInteractionScale: WorkspaceInteractionScaleSnapshot
     public var viewportGridSettings: ViewportGridSettings
+    public var viewportGridScale: ViewportGridScaleSnapshot
     public var workspaceBounds: MeasurementResult.Bounds?
     public var workspacePrecision: WorkspacePrecisionReport?
     public var workspaceScaleRecommendation: WorkspaceScaleRecommendation?
@@ -23,6 +24,7 @@ public struct DesignDisplaySnapshotResult: Codable, Equatable, Sendable {
         workspaceScale: WorkspaceScaleSnapshot = WorkspaceScaleSnapshot(ruler: .standard(for: .millimeter)),
         workspaceInteractionScale: WorkspaceInteractionScaleSnapshot = WorkspaceInteractionScaleSnapshot(ruler: .standard(for: .millimeter)),
         viewportGridSettings: ViewportGridSettings = .standard,
+        viewportGridScale: ViewportGridScaleSnapshot? = nil,
         workspaceBounds: MeasurementResult.Bounds? = nil,
         workspacePrecision: WorkspacePrecisionReport? = nil,
         workspaceScaleRecommendation: WorkspaceScaleRecommendation? = nil,
@@ -40,6 +42,15 @@ public struct DesignDisplaySnapshotResult: Codable, Equatable, Sendable {
         self.workspaceScale = workspaceScale
         self.workspaceInteractionScale = workspaceInteractionScale
         self.viewportGridSettings = viewportGridSettings
+        self.viewportGridScale = viewportGridScale ?? ViewportGridScaleSnapshot(
+            ruler: RulerConfiguration(
+                displayUnit: workspaceScale.displayUnit,
+                minorTickMeters: workspaceScale.minorTickMeters,
+                majorTickMeters: workspaceScale.majorTickMeters,
+                visibleSpanMeters: workspaceScale.visibleSpanMeters
+            ),
+            settings: viewportGridSettings
+        )
         self.workspaceBounds = workspaceBounds
         self.workspacePrecision = workspacePrecision
         self.workspaceScaleRecommendation = workspaceScaleRecommendation
@@ -59,6 +70,7 @@ public struct DesignDisplaySnapshotResult: Codable, Equatable, Sendable {
         case workspaceScale
         case workspaceInteractionScale
         case viewportGridSettings
+        case viewportGridScale
         case workspaceBounds
         case workspacePrecision
         case workspaceScaleRecommendation
@@ -78,6 +90,16 @@ public struct DesignDisplaySnapshotResult: Codable, Equatable, Sendable {
             WorkspaceScaleSnapshot.self,
             forKey: .workspaceScale
         )
+        let viewportGridSettings = try container.decodeIfPresent(
+            ViewportGridSettings.self,
+            forKey: .viewportGridSettings
+        ) ?? .standard
+        let ruler = RulerConfiguration(
+            displayUnit: workspaceScale.displayUnit,
+            minorTickMeters: workspaceScale.minorTickMeters,
+            majorTickMeters: workspaceScale.majorTickMeters,
+            visibleSpanMeters: workspaceScale.visibleSpanMeters
+        )
         self.init(
             generation: try container.decode(DocumentGeneration.self, forKey: .generation),
             dirty: try container.decode(Bool.self, forKey: .dirty),
@@ -87,18 +109,17 @@ public struct DesignDisplaySnapshotResult: Codable, Equatable, Sendable {
                 forKey: .workspaceInteractionScale
             ) ?? WorkspaceInteractionScaleSnapshot(
                 defaults: WorkspaceInteractionScaleDefaults(
-                    ruler: RulerConfiguration(
-                        displayUnit: workspaceScale.displayUnit,
-                        minorTickMeters: workspaceScale.minorTickMeters,
-                        majorTickMeters: workspaceScale.majorTickMeters,
-                        visibleSpanMeters: workspaceScale.visibleSpanMeters
-                    )
+                    ruler: ruler
                 ),
                 displayUnit: workspaceScale.displayUnit
             ),
-            viewportGridSettings: try container.decode(
-                ViewportGridSettings.self,
-                forKey: .viewportGridSettings
+            viewportGridSettings: viewportGridSettings,
+            viewportGridScale: try container.decodeIfPresent(
+                ViewportGridScaleSnapshot.self,
+                forKey: .viewportGridScale
+            ) ?? ViewportGridScaleSnapshot(
+                ruler: ruler,
+                settings: viewportGridSettings
             ),
             workspaceBounds: try container.decodeIfPresent(
                 MeasurementResult.Bounds.self,

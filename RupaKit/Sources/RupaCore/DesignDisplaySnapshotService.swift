@@ -117,6 +117,10 @@ public struct DesignDisplaySnapshotService: Sendable {
             workspaceScale: WorkspaceScaleSnapshot(ruler: document.ruler),
             workspaceInteractionScale: WorkspaceInteractionScaleSnapshot(ruler: document.ruler),
             viewportGridSettings: document.productMetadata.viewportGridSettings,
+            viewportGridScale: ViewportGridScaleSnapshot(
+                ruler: document.ruler,
+                settings: document.productMetadata.viewportGridSettings
+            ),
             workspaceBounds: workspaceBounds,
             workspacePrecision: workspaceBounds.flatMap {
                 WorkspacePrecisionDiagnosticService().report(
