@@ -29,6 +29,8 @@ public enum ViewportIdentityPickGeometry: Equatable, Sendable {
     case generatedFace(SelectionComponentID)
     case generatedEdge(SelectionComponentID)
     case generatedVertex(SelectionComponentID)
+    case surfaceKnot(SelectionReference)
+    case surfaceSpan(SelectionReference)
     case surfaceTrimKnot(SelectionReference)
     case surfaceTrimSpan(SelectionReference)
     case projectedBodyFace(ViewportBodyFace)
@@ -255,6 +257,36 @@ public struct ViewportIdentityPickIndexBuilder: Sendable {
         allocator: inout ViewportPickIdentityAllocator,
         records: inout [ViewportIdentityPickRecord]
     ) {
+        for display in component.surfaceKnotDisplays {
+            appendRecord(
+                featureID: item.featureID,
+                geometry: .surfaceKnot(display.selectionReference),
+                hit: ViewportHit(
+                    featureID: item.featureID,
+                    sceneNodeID: item.sceneNodeID,
+                    kind: .body,
+                    pickingBackend: .identityBuffer,
+                    selectionReference: display.selectionReference
+                ),
+                allocator: &allocator,
+                records: &records
+            )
+        }
+        for display in component.surfaceSpanDisplays {
+            appendRecord(
+                featureID: item.featureID,
+                geometry: .surfaceSpan(display.selectionReference),
+                hit: ViewportHit(
+                    featureID: item.featureID,
+                    sceneNodeID: item.sceneNodeID,
+                    kind: .body,
+                    pickingBackend: .identityBuffer,
+                    selectionReference: display.selectionReference
+                ),
+                allocator: &allocator,
+                records: &records
+            )
+        }
         for display in component.surfaceTrimKnotDisplays {
             appendRecord(
                 featureID: item.featureID,

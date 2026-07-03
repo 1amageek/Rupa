@@ -900,6 +900,61 @@ import Testing
     #expect(plan.drawItems.contains { $0.hit.selectionReference == spanDisplay.selectionReference })
 }
 
+@Test func viewportSceneBuilderExposesDirectSurfaceBasisDisplays() async throws {
+    var document = DesignDocument.empty()
+    let featureID = try document.createBSplineSurface(
+        name: "Viewport Surface Basis Parameters",
+        surface: viewportEditableDirectBSplineSurface()
+    )
+
+    let scene = ViewportSceneBuilder().build(document: document)
+    let body = try #require(scene.items.first { $0.featureID == featureID })
+    guard case .body(let component) = body.kind else {
+        Issue.record("Expected a B-spline surface body scene item.")
+        return
+    }
+    #expect(component.surfaceKnotDisplays.count == 2)
+    #expect(component.surfaceSpanDisplays.count == 4)
+    let knotDisplay = try #require(component.surfaceKnotDisplays.first)
+    let spanDisplay = try #require(component.surfaceSpanDisplays.first)
+    guard case .surface(.knot(let knotReference)) = knotDisplay.selectionReference else {
+        Issue.record("Expected a surface knot selection reference.")
+        return
+    }
+    guard case .surface(.span(let spanReference)) = spanDisplay.selectionReference else {
+        Issue.record("Expected a surface span selection reference.")
+        return
+    }
+    #expect(knotReference.direction == knotDisplay.direction)
+    #expect(knotReference.knotIndex == knotDisplay.knotIndex)
+    #expect(spanReference.direction == spanDisplay.direction)
+    #expect(spanReference.spanIndex == spanDisplay.spanIndex)
+
+    let layout = try #require(ViewportLayout(
+        scene: scene,
+        size: CGSize(width: 900.0, height: 700.0)
+    ))
+    let hit = try #require(ViewportHitTester().hitTest(
+        point: layout.project(knotDisplay.point, in: body),
+        in: scene,
+        layout: layout,
+        selectionHitPolicy: .vertex
+    ))
+    #expect(hit.selectionReference == knotDisplay.selectionReference)
+
+    let index = ViewportIdentityPickIndexBuilder(selectionHitPolicy: .vertex).build(scene: scene)
+    #expect(index.records.contains { $0.geometry == .surfaceKnot(knotDisplay.selectionReference) })
+    #expect(index.records.contains { $0.geometry == .surfaceSpan(spanDisplay.selectionReference) })
+    let plan = ViewportIdentityPickRenderPlanBuilder().build(
+        scene: scene,
+        layout: layout,
+        index: index,
+        selectionHitPolicy: .vertex
+    )
+    #expect(plan.drawItems.contains { $0.hit.selectionReference == knotDisplay.selectionReference })
+    #expect(plan.drawItems.contains { $0.hit.selectionReference == spanDisplay.selectionReference })
+}
+
 @MainActor
 @Test func viewportSceneBuilderExposesVisibleSurfaceFrameDisplays() async throws {
     var document = DesignDocument.empty()
@@ -3971,5 +4026,16 @@ private func viewportDirectBSplineSurface() -> BSplineSurface3D {
         bottomRight: Point3D(x: 0.02, y: 0.0, z: 0.0),
         topRight: Point3D(x: 0.02, y: 0.02, z: 0.0),
         topLeft: Point3D(x: 0.0, y: 0.02, z: 0.0)
+    )
+}
+
+private func viewportEditableDirectBSplineSurface() -> BSplineSurface3D {
+    let baseSurface = viewportDirectBSplineSurface()
+    return BSplineSurface3D(
+        uDegree: 2,
+        vDegree: 2,
+        uKnots: [0.0, 0.0, 0.0, 0.5, 1.0, 1.0, 1.0],
+        vKnots: [0.0, 0.0, 0.0, 0.5, 1.0, 1.0, 1.0],
+        controlPoints: baseSurface.controlPoints
     )
 }

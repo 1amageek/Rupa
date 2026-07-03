@@ -1414,6 +1414,16 @@ public struct Viewport: View {
             layout: layout,
             in: &context
         )
+        drawSurfaceKnotDisplays(
+            scene: scene,
+            layout: layout,
+            in: &context
+        )
+        drawSurfaceSpanDisplays(
+            scene: scene,
+            layout: layout,
+            in: &context
+        )
         drawSurfaceFrameDisplays(
             scene: scene,
             layout: layout,
@@ -4740,6 +4750,114 @@ public struct Viewport: View {
 
     private func drawSurfaceTrimSpanDisplay(
         _ display: ViewportSurfaceTrimSpanDisplay,
+        item: ViewportSceneItem,
+        layout: ViewportLayout,
+        isSelected: Bool,
+        isHovered: Bool,
+        in context: inout GraphicsContext
+    ) {
+        let point = layout.project(display.point, in: item)
+        let radius: CGFloat = if isSelected {
+            4.8
+        } else if isHovered {
+            4.0
+        } else {
+            2.9
+        }
+        let color = isSelected ? ViewportTheme.selection : (isHovered ? ViewportTheme.hover : ViewportTheme.surfaceEdit)
+        let rect = CGRect(
+            x: point.x - radius,
+            y: point.y - radius,
+            width: radius * 2.0,
+            height: radius * 2.0
+        )
+        context.stroke(
+            Path(ellipseIn: rect),
+            with: .color(color.opacity(isSelected || isHovered ? 0.86 : 0.54)),
+            lineWidth: isSelected ? 1.4 : 0.9
+        )
+    }
+
+    private func drawSurfaceKnotDisplays(
+        scene: ViewportScene,
+        layout: ViewportLayout,
+        in context: inout GraphicsContext
+    ) {
+        for item in scene.items {
+            guard case .body(let component) = item.kind else {
+                continue
+            }
+            for display in component.surfaceKnotDisplays {
+                drawSurfaceKnotDisplay(
+                    display,
+                    item: item,
+                    layout: layout,
+                    isSelected: selection.selectedReferences.contains(display.selectionReference),
+                    isHovered: selection.hoveredReference == display.selectionReference,
+                    in: &context
+                )
+            }
+        }
+    }
+
+    private func drawSurfaceKnotDisplay(
+        _ display: ViewportSurfaceKnotDisplay,
+        item: ViewportSceneItem,
+        layout: ViewportLayout,
+        isSelected: Bool,
+        isHovered: Bool,
+        in context: inout GraphicsContext
+    ) {
+        let point = layout.project(display.point, in: item)
+        let size: CGFloat = if isSelected {
+            8.8
+        } else if isHovered {
+            7.4
+        } else {
+            5.4
+        }
+        let color = isSelected ? ViewportTheme.selection : (isHovered ? ViewportTheme.hover : ViewportTheme.surfaceEdit)
+        let rect = CGRect(
+            x: point.x - size * 0.5,
+            y: point.y - size * 0.5,
+            width: size,
+            height: size
+        )
+        context.fill(
+            Path(rect),
+            with: .color(color.opacity(isSelected || isHovered ? 0.78 : 0.42))
+        )
+        context.stroke(
+            Path(rect),
+            with: .color(color.opacity(isSelected || isHovered ? 0.94 : 0.62)),
+            lineWidth: isSelected ? 1.25 : 0.85
+        )
+    }
+
+    private func drawSurfaceSpanDisplays(
+        scene: ViewportScene,
+        layout: ViewportLayout,
+        in context: inout GraphicsContext
+    ) {
+        for item in scene.items {
+            guard case .body(let component) = item.kind else {
+                continue
+            }
+            for display in component.surfaceSpanDisplays {
+                drawSurfaceSpanDisplay(
+                    display,
+                    item: item,
+                    layout: layout,
+                    isSelected: selection.selectedReferences.contains(display.selectionReference),
+                    isHovered: selection.hoveredReference == display.selectionReference,
+                    in: &context
+                )
+            }
+        }
+    }
+
+    private func drawSurfaceSpanDisplay(
+        _ display: ViewportSurfaceSpanDisplay,
         item: ViewportSceneItem,
         layout: ViewportLayout,
         isSelected: Bool,

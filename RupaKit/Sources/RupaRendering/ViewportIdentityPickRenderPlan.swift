@@ -284,6 +284,36 @@ public struct ViewportIdentityPickRenderPlanBuilder: Sendable {
         index: ViewportIdentityPickIndex,
         drawItems: inout [ViewportIdentityPickDrawItem]
     ) {
+        for display in component.surfaceKnotDisplays {
+            let geometry = ViewportIdentityPickGeometry.surfaceKnot(display.selectionReference)
+            guard let record = record(for: item, geometry: geometry, in: index) else {
+                continue
+            }
+            appendDrawItem(
+                record: record,
+                primitive: .point(
+                    center: layout.project(display.point, in: item),
+                    radius: controlPointRadius
+                ),
+                depth: layout.projectedDepth(display.point, in: item),
+                drawItems: &drawItems
+            )
+        }
+        for display in component.surfaceSpanDisplays {
+            let geometry = ViewportIdentityPickGeometry.surfaceSpan(display.selectionReference)
+            guard let record = record(for: item, geometry: geometry, in: index) else {
+                continue
+            }
+            appendDrawItem(
+                record: record,
+                primitive: .point(
+                    center: layout.project(display.point, in: item),
+                    radius: pointRadius
+                ),
+                depth: layout.projectedDepth(display.point, in: item),
+                drawItems: &drawItems
+            )
+        }
         for display in component.surfaceTrimKnotDisplays {
             let geometry = ViewportIdentityPickGeometry.surfaceTrimKnot(display.selectionReference)
             guard let record = record(for: item, geometry: geometry, in: index) else {

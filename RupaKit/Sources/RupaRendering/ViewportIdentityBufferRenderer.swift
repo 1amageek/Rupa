@@ -858,6 +858,8 @@ private struct ViewportIdentityBufferCommandEncoder {
             return 20.0
         case .sketchControlPoint,
              .generatedVertex,
+             .surfaceKnot,
+             .surfaceSpan,
              .surfaceTrimKnot,
              .surfaceTrimSpan,
              .projectedBodyVertex:

@@ -286,6 +286,32 @@ import Testing
     #expect(decodedSelection == selection)
 }
 
+@Test func selectionModelAcceptsDirectSurfaceBasisReferences() throws {
+    var document = DesignDocument.empty()
+    _ = try document.createBSplineSurface(
+        name: "Selectable Surface Basis",
+        surface: selectionModelEditableDirectBSplineSurface()
+    )
+    let summary = try SurfaceSourceSummaryService().summarize(document: document)
+    let patch = try #require(summary.sources.first?.patches.first)
+    let parameterReference = try #require(patch.parameterAddresses.first { $0.id == "center" }?.selectionReference)
+    let knotReference = try #require(patch.basis.uKnotVector.first { $0.index == 3 }?.selectionReference)
+    let spanReference = try #require(patch.basis.uSpans.first { $0.index == 0 }?.selectionReference)
+    var selection = SelectionModel()
+
+    try selection.selectReferences([parameterReference, knotReference, spanReference], in: document)
+    try selection.hoverReference(spanReference, in: document)
+
+    #expect(selection.selectedTargets.isEmpty)
+    #expect(selection.selectedReferences == [parameterReference, knotReference, spanReference])
+    #expect(selection.primaryReference == spanReference)
+    #expect(selection.hoveredReference == spanReference)
+
+    let data = try JSONEncoder().encode(selection)
+    let decodedSelection = try JSONDecoder().decode(SelectionModel.self, from: data)
+    #expect(decodedSelection == selection)
+}
+
 @Test func selectionModelPrunesMissingSubobjectTargets() throws {
     let missingID = SceneNodeID()
     var selection = SelectionModel(
@@ -321,6 +347,17 @@ private func selectionModelDirectBSplineSurface() -> BSplineSurface3D {
         bottomRight: Point3D(x: 0.02, y: 0.0, z: 0.0),
         topRight: Point3D(x: 0.02, y: 0.02, z: 0.0),
         topLeft: Point3D(x: 0.0, y: 0.02, z: 0.0)
+    )
+}
+
+private func selectionModelEditableDirectBSplineSurface() -> BSplineSurface3D {
+    let baseSurface = selectionModelDirectBSplineSurface()
+    return BSplineSurface3D(
+        uDegree: 2,
+        vDegree: 2,
+        uKnots: [0.0, 0.0, 0.0, 0.5, 1.0, 1.0, 1.0],
+        vKnots: [0.0, 0.0, 0.0, 0.5, 1.0, 1.0, 1.0],
+        controlPoints: baseSurface.controlPoints
     )
 }
 

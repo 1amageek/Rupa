@@ -50,6 +50,8 @@ public enum ViewportSelectionHitPolicy: Equatable, Sendable {
              .projectedBodyEdge:
             return allowsEdgeHits
         case .generatedVertex,
+             .surfaceKnot,
+             .surfaceSpan,
              .surfaceTrimKnot,
              .surfaceTrimSpan,
              .projectedBodyVertex:

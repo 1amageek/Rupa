@@ -143,6 +143,8 @@ public struct ViewportBodyComponent: Equatable {
     public var surfaceControlPointDisplays: [ViewportSurfaceControlPointDisplay]
     public var surfaceTrimEndpointDisplays: [ViewportSurfaceTrimEndpointDisplay]
     public var surfaceTrimControlPointDisplays: [ViewportSurfaceTrimControlPointDisplay]
+    public var surfaceKnotDisplays: [ViewportSurfaceKnotDisplay]
+    public var surfaceSpanDisplays: [ViewportSurfaceSpanDisplay]
     public var surfaceTrimKnotDisplays: [ViewportSurfaceTrimKnotDisplay]
     public var surfaceTrimSpanDisplays: [ViewportSurfaceTrimSpanDisplay]
     public var surfaceFrameDisplays: [ViewportSurfaceFrameDisplay]
@@ -163,6 +165,8 @@ public struct ViewportBodyComponent: Equatable {
         surfaceControlPointDisplays: [ViewportSurfaceControlPointDisplay] = [],
         surfaceTrimEndpointDisplays: [ViewportSurfaceTrimEndpointDisplay] = [],
         surfaceTrimControlPointDisplays: [ViewportSurfaceTrimControlPointDisplay] = [],
+        surfaceKnotDisplays: [ViewportSurfaceKnotDisplay] = [],
+        surfaceSpanDisplays: [ViewportSurfaceSpanDisplay] = [],
         surfaceTrimKnotDisplays: [ViewportSurfaceTrimKnotDisplay] = [],
         surfaceTrimSpanDisplays: [ViewportSurfaceTrimSpanDisplay] = [],
         surfaceFrameDisplays: [ViewportSurfaceFrameDisplay] = []
@@ -182,6 +186,8 @@ public struct ViewportBodyComponent: Equatable {
         self.surfaceControlPointDisplays = surfaceControlPointDisplays
         self.surfaceTrimEndpointDisplays = surfaceTrimEndpointDisplays
         self.surfaceTrimControlPointDisplays = surfaceTrimControlPointDisplays
+        self.surfaceKnotDisplays = surfaceKnotDisplays
+        self.surfaceSpanDisplays = surfaceSpanDisplays
         self.surfaceTrimKnotDisplays = surfaceTrimKnotDisplays
         self.surfaceTrimSpanDisplays = surfaceTrimSpanDisplays
         self.surfaceFrameDisplays = surfaceFrameDisplays
@@ -312,6 +318,65 @@ public struct ViewportSurfaceTrimSpanDisplay: Equatable, Sendable {
         v: Double
     ) {
         self.selectionReference = selectionReference
+        self.spanIndex = spanIndex
+        self.lowerBound = lowerBound
+        self.upperBound = upperBound
+        self.point = point
+        self.u = u
+        self.v = v
+    }
+}
+
+public struct ViewportSurfaceKnotDisplay: Equatable, Sendable {
+    public var selectionReference: SelectionReference
+    public var direction: SurfaceParameterDirection
+    public var knotIndex: Int
+    public var value: Double
+    public var point: Point3D
+    public var u: Double
+    public var v: Double
+
+    public init(
+        selectionReference: SelectionReference,
+        direction: SurfaceParameterDirection,
+        knotIndex: Int,
+        value: Double,
+        point: Point3D,
+        u: Double,
+        v: Double
+    ) {
+        self.selectionReference = selectionReference
+        self.direction = direction
+        self.knotIndex = knotIndex
+        self.value = value
+        self.point = point
+        self.u = u
+        self.v = v
+    }
+}
+
+public struct ViewportSurfaceSpanDisplay: Equatable, Sendable {
+    public var selectionReference: SelectionReference
+    public var direction: SurfaceParameterDirection
+    public var spanIndex: Int
+    public var lowerBound: Double
+    public var upperBound: Double
+    public var point: Point3D
+    public var u: Double
+    public var v: Double
+
+    public init(
+        selectionReference: SelectionReference,
+        direction: SurfaceParameterDirection,
+        spanIndex: Int,
+        lowerBound: Double,
+        upperBound: Double,
+        point: Point3D,
+        u: Double,
+        v: Double
+    ) {
+        self.selectionReference = selectionReference
+        self.direction = direction
         self.spanIndex = spanIndex
         self.lowerBound = lowerBound
         self.upperBound = upperBound
@@ -2502,6 +2567,42 @@ public struct ViewportHitTester {
                     depth: surfaceTrimSpanHit.depth
                 )
             }
+            if selectionHitPolicy.allowsVertexHits,
+               let surfaceKnotHit = hitSurfaceKnotDisplay(
+                   for: item,
+                   component: component,
+                   point: point,
+                   layout: layout
+               ) {
+                return HitCandidate(
+                    hit: ViewportHit(
+                        featureID: item.featureID,
+                        sceneNodeID: item.sceneNodeID,
+                        kind: item.kind.selectableKind,
+                        selectionReference: surfaceKnotHit.reference
+                    ),
+                    score: surfaceKnotHit.score,
+                    depth: surfaceKnotHit.depth
+                )
+            }
+            if selectionHitPolicy.allowsVertexHits,
+               let surfaceSpanHit = hitSurfaceSpanDisplay(
+                   for: item,
+                   component: component,
+                   point: point,
+                   layout: layout
+               ) {
+                return HitCandidate(
+                    hit: ViewportHit(
+                        featureID: item.featureID,
+                        sceneNodeID: item.sceneNodeID,
+                        kind: item.kind.selectableKind,
+                        selectionReference: surfaceSpanHit.reference
+                    ),
+                    score: surfaceSpanHit.score,
+                    depth: surfaceSpanHit.depth
+                )
+            }
             if let topologyHit = ViewportBodyTopologyHitTester(tolerance: tolerance).hitTest(
                 item: item,
                 component: component,
@@ -2650,6 +2751,60 @@ public struct ViewportHitTester {
         var bestHit: (reference: SelectionReference, score: CGFloat, depth: Double?)?
         let displayTolerance = max(tolerance, 8.0)
         for display in component.surfaceTrimSpanDisplays {
+            let projectedPoint = layout.project(display.point, in: item)
+            let distance = point.distance(to: projectedPoint)
+            guard distance <= displayTolerance else {
+                continue
+            }
+            let depth = layout.projectedDepth(display.point, in: item)
+            let candidate = (reference: display.selectionReference, score: distance, depth: depth)
+            if let current = bestHit {
+                if isReferenceHitCandidate(candidate, betterThan: current) {
+                    bestHit = candidate
+                }
+            } else {
+                bestHit = candidate
+            }
+        }
+        return bestHit
+    }
+
+    private func hitSurfaceKnotDisplay(
+        for item: ViewportSceneItem,
+        component: ViewportBodyComponent,
+        point: CGPoint,
+        layout: ViewportLayout
+    ) -> (reference: SelectionReference, score: CGFloat, depth: Double?)? {
+        var bestHit: (reference: SelectionReference, score: CGFloat, depth: Double?)?
+        let displayTolerance = max(tolerance, 8.0)
+        for display in component.surfaceKnotDisplays {
+            let projectedPoint = layout.project(display.point, in: item)
+            let distance = point.distance(to: projectedPoint)
+            guard distance <= displayTolerance else {
+                continue
+            }
+            let depth = layout.projectedDepth(display.point, in: item)
+            let candidate = (reference: display.selectionReference, score: distance, depth: depth)
+            if let current = bestHit {
+                if isReferenceHitCandidate(candidate, betterThan: current) {
+                    bestHit = candidate
+                }
+            } else {
+                bestHit = candidate
+            }
+        }
+        return bestHit
+    }
+
+    private func hitSurfaceSpanDisplay(
+        for item: ViewportSceneItem,
+        component: ViewportBodyComponent,
+        point: CGPoint,
+        layout: ViewportLayout
+    ) -> (reference: SelectionReference, score: CGFloat, depth: Double?)? {
+        var bestHit: (reference: SelectionReference, score: CGFloat, depth: Double?)?
+        let displayTolerance = max(tolerance, 8.0)
+        for display in component.surfaceSpanDisplays {
             let projectedPoint = layout.project(display.point, in: item)
             let distance = point.distance(to: projectedPoint)
             guard distance <= displayTolerance else {

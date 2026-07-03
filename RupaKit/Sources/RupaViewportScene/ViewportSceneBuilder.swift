@@ -47,6 +47,12 @@ public struct ViewportSceneBuilder {
         let surfaceTrimControlPointDisplaysByFeatureID = surfaceTrimControlPointDisplaysByFeatureID(
             in: document
         )
+        let surfaceKnotDisplaysByFeatureID = surfaceKnotDisplaysByFeatureID(
+            in: document
+        )
+        let surfaceSpanDisplaysByFeatureID = surfaceSpanDisplaysByFeatureID(
+            in: document
+        )
         let surfaceTrimKnotDisplaysByFeatureID = surfaceTrimKnotDisplaysByFeatureID(
             in: document
         )
@@ -210,6 +216,8 @@ public struct ViewportSceneBuilder {
                     surfaceControlPointDisplaysByFeatureID: surfaceControlPointDisplaysByFeatureID,
                     surfaceTrimEndpointDisplaysByFeatureID: surfaceTrimEndpointDisplaysByFeatureID,
                     surfaceTrimControlPointDisplaysByFeatureID: surfaceTrimControlPointDisplaysByFeatureID,
+                    surfaceKnotDisplaysByFeatureID: surfaceKnotDisplaysByFeatureID,
+                    surfaceSpanDisplaysByFeatureID: surfaceSpanDisplaysByFeatureID,
                     surfaceTrimKnotDisplaysByFeatureID: surfaceTrimKnotDisplaysByFeatureID,
                     surfaceTrimSpanDisplaysByFeatureID: surfaceTrimSpanDisplaysByFeatureID,
                     surfaceFrameDisplaysByFeatureID: surfaceFrameDisplaysByFeatureID,
@@ -1014,6 +1022,196 @@ public struct ViewportSceneBuilder {
         }
     }
 
+    private func surfaceKnotDisplaysByFeatureID(
+        in document: DesignDocument
+    ) -> [FeatureID: [ViewportSurfaceKnotDisplay]] {
+        var displaysByFeatureID: [FeatureID: [ViewportSurfaceKnotDisplay]] = [:]
+        for featureID in document.cadDocument.designGraph.order {
+            guard let feature = document.cadDocument.designGraph.nodes[featureID],
+                  case let .bSplineSurface(surfaceFeature) = feature.operation else {
+                continue
+            }
+            do {
+                let surfaceReference = directBSplineSurfaceReference(featureID: featureID)
+                let surface = surfaceFeature.surface
+                let uDomain = try activeDomain(knots: surface.uKnots, degree: surface.uDegree)
+                let vDomain = try activeDomain(knots: surface.vKnots, degree: surface.vDegree)
+                let uMiddle = (uDomain.lower + uDomain.upper) * 0.5
+                let vMiddle = (vDomain.lower + vDomain.upper) * 0.5
+                let uDisplays = try surfaceKnotDisplays(
+                    direction: .u,
+                    knots: surface.uKnots,
+                    degree: surface.uDegree,
+                    surface: surface,
+                    surfaceReference: surfaceReference,
+                    crossParameter: vMiddle
+                )
+                let vDisplays = try surfaceKnotDisplays(
+                    direction: .v,
+                    knots: surface.vKnots,
+                    degree: surface.vDegree,
+                    surface: surface,
+                    surfaceReference: surfaceReference,
+                    crossParameter: uMiddle
+                )
+                let displays = uDisplays + vDisplays
+                if displays.isEmpty == false {
+                    displaysByFeatureID[featureID] = displays
+                }
+            } catch {
+                continue
+            }
+        }
+        return displaysByFeatureID
+    }
+
+    private func surfaceSpanDisplaysByFeatureID(
+        in document: DesignDocument
+    ) -> [FeatureID: [ViewportSurfaceSpanDisplay]] {
+        var displaysByFeatureID: [FeatureID: [ViewportSurfaceSpanDisplay]] = [:]
+        for featureID in document.cadDocument.designGraph.order {
+            guard let feature = document.cadDocument.designGraph.nodes[featureID],
+                  case let .bSplineSurface(surfaceFeature) = feature.operation else {
+                continue
+            }
+            do {
+                let surfaceReference = directBSplineSurfaceReference(featureID: featureID)
+                let surface = surfaceFeature.surface
+                let uDomain = try activeDomain(knots: surface.uKnots, degree: surface.uDegree)
+                let vDomain = try activeDomain(knots: surface.vKnots, degree: surface.vDegree)
+                let uMiddle = (uDomain.lower + uDomain.upper) * 0.5
+                let vMiddle = (vDomain.lower + vDomain.upper) * 0.5
+                let uDisplays = try surfaceSpanDisplays(
+                    direction: .u,
+                    knots: surface.uKnots,
+                    degree: surface.uDegree,
+                    surface: surface,
+                    surfaceReference: surfaceReference,
+                    crossParameter: vMiddle
+                )
+                let vDisplays = try surfaceSpanDisplays(
+                    direction: .v,
+                    knots: surface.vKnots,
+                    degree: surface.vDegree,
+                    surface: surface,
+                    surfaceReference: surfaceReference,
+                    crossParameter: uMiddle
+                )
+                let displays = uDisplays + vDisplays
+                if displays.isEmpty == false {
+                    displaysByFeatureID[featureID] = displays
+                }
+            } catch {
+                continue
+            }
+        }
+        return displaysByFeatureID
+    }
+
+    private func surfaceKnotDisplays(
+        direction: SurfaceParameterDirection,
+        knots: [Double],
+        degree: Int,
+        surface: BSplineSurface3D,
+        surfaceReference: SurfaceReference,
+        crossParameter: Double
+    ) throws -> [ViewportSurfaceKnotDisplay] {
+        let domain = try activeDomain(knots: knots, degree: degree)
+        var displays: [ViewportSurfaceKnotDisplay] = []
+        for index in knots.indices {
+            let value = knots[index]
+            guard value > domain.lower,
+                  value < domain.upper else {
+                continue
+            }
+            let u = direction == .u ? value : crossParameter
+            let v = direction == .u ? crossParameter : value
+            let geometry = try surface.differentialGeometry(atU: u, v: v)
+            displays.append(ViewportSurfaceKnotDisplay(
+                selectionReference: .surface(.knot(SurfaceKnotReference(
+                    surface: surfaceReference,
+                    direction: direction,
+                    knotIndex: index
+                ))),
+                direction: direction,
+                knotIndex: index,
+                value: value,
+                point: geometry.position,
+                u: u,
+                v: v
+            ))
+        }
+        return displays
+    }
+
+    private func surfaceSpanDisplays(
+        direction: SurfaceParameterDirection,
+        knots: [Double],
+        degree: Int,
+        surface: BSplineSurface3D,
+        surfaceReference: SurfaceReference,
+        crossParameter: Double
+    ) throws -> [ViewportSurfaceSpanDisplay] {
+        let lowerIndex = degree
+        let upperIndex = knots.count - degree - 1
+        guard lowerIndex < upperIndex else {
+            return []
+        }
+        var displays: [ViewportSurfaceSpanDisplay] = []
+        for index in lowerIndex..<upperIndex {
+            let lowerBound = knots[index]
+            let upperBound = knots[index + 1]
+            guard upperBound > lowerBound else {
+                continue
+            }
+            let spanIndex = displays.count
+            let value = (lowerBound + upperBound) * 0.5
+            let u = direction == .u ? value : crossParameter
+            let v = direction == .u ? crossParameter : value
+            let geometry = try surface.differentialGeometry(atU: u, v: v)
+            displays.append(ViewportSurfaceSpanDisplay(
+                selectionReference: .surface(.span(SurfaceSpanReference(
+                    surface: surfaceReference,
+                    direction: direction,
+                    spanIndex: spanIndex
+                ))),
+                direction: direction,
+                spanIndex: spanIndex,
+                lowerBound: lowerBound,
+                upperBound: upperBound,
+                point: geometry.position,
+                u: u,
+                v: v
+            ))
+        }
+        return displays
+    }
+
+    private func directBSplineSurfaceReference(featureID: FeatureID) -> SurfaceReference {
+        SurfaceReference(faceName: PersistentName(components: [
+            .feature(featureID),
+            .generated("bSplineSurface"),
+            .subshape("patch:0:face"),
+        ]))
+    }
+
+    private func activeDomain(
+        knots: [Double],
+        degree: Int
+    ) throws -> (lower: Double, upper: Double) {
+        let lowerIndex = degree
+        let upperIndex = knots.count - degree - 1
+        guard knots.indices.contains(lowerIndex),
+              knots.indices.contains(upperIndex),
+              knots[lowerIndex] <= knots[upperIndex] else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "B-spline surface basis domain could not be resolved."
+            )
+        }
+        return (knots[lowerIndex], knots[upperIndex])
+    }
+
     private func surfaceTrimKnotDisplaysByFeatureID(
         in document: DesignDocument
     ) -> [FeatureID: [ViewportSurfaceTrimKnotDisplay]] {
@@ -1292,6 +1490,8 @@ public struct ViewportSceneBuilder {
         surfaceControlPointDisplaysByFeatureID: [FeatureID: [ViewportSurfaceControlPointDisplay]] = [:],
         surfaceTrimEndpointDisplaysByFeatureID: [FeatureID: [ViewportSurfaceTrimEndpointDisplay]] = [:],
         surfaceTrimControlPointDisplaysByFeatureID: [FeatureID: [ViewportSurfaceTrimControlPointDisplay]] = [:],
+        surfaceKnotDisplaysByFeatureID: [FeatureID: [ViewportSurfaceKnotDisplay]] = [:],
+        surfaceSpanDisplaysByFeatureID: [FeatureID: [ViewportSurfaceSpanDisplay]] = [:],
         surfaceTrimKnotDisplaysByFeatureID: [FeatureID: [ViewportSurfaceTrimKnotDisplay]] = [:],
         surfaceTrimSpanDisplaysByFeatureID: [FeatureID: [ViewportSurfaceTrimSpanDisplay]] = [:],
         surfaceFrameDisplaysByFeatureID: [FeatureID: [ViewportSurfaceFrameDisplay]] = [:],
@@ -1333,6 +1533,8 @@ public struct ViewportSceneBuilder {
             surfaceControlPointDisplays: surfaceControlPointDisplaysByFeatureID[featureID] ?? [],
             surfaceTrimEndpointDisplays: surfaceTrimEndpointDisplaysByFeatureID[featureID] ?? [],
             surfaceTrimControlPointDisplays: surfaceTrimControlPointDisplaysByFeatureID[featureID] ?? [],
+            surfaceKnotDisplays: surfaceKnotDisplaysByFeatureID[featureID] ?? [],
+            surfaceSpanDisplays: surfaceSpanDisplaysByFeatureID[featureID] ?? [],
             surfaceTrimKnotDisplays: surfaceTrimKnotDisplaysByFeatureID[featureID] ?? [],
             surfaceTrimSpanDisplays: surfaceTrimSpanDisplaysByFeatureID[featureID] ?? [],
             surfaceFrameDisplays: surfaceFrameDisplaysByFeatureID[featureID] ?? []

@@ -263,6 +263,12 @@ public struct SelectionModel: Codable, Equatable, Sendable {
         case .surface(.controlPoint):
             _ = try SurfaceControlPointSelectionTargetResolver()
                 .validateDisplayTarget(for: reference, in: document)
+        case .surface(.parameter(let parameterReference)):
+            try validateSurfaceParameterReference(parameterReference, in: document)
+        case .surface(.span(let spanReference)):
+            try validateSurfaceSpanReference(spanReference, in: document)
+        case .surface(.knot(let knotReference)):
+            try validateSurfaceKnotReference(knotReference, in: document)
         case .surface(.trim(let trimReference)):
             try validateSurfaceTrimReference(trimReference, in: document)
         case .surface(.trimSpan(let trimSpanReference)):
@@ -307,6 +313,99 @@ public struct SelectionModel: Codable, Equatable, Sendable {
             code: .referenceUnresolved,
             message: "Selection target is not compatible with the scene node."
         )
+    }
+
+    private func validateSurfaceParameterReference(
+        _ reference: SurfaceParameterReference,
+        in document: DesignDocument
+    ) throws {
+        do {
+            try reference.validate()
+        } catch {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Selection surface parameter reference is invalid: \(error)."
+            )
+        }
+        let surface = try directBSplineSurface(
+            for: reference.surface,
+            in: document,
+            owner: "Selection surface parameter reference"
+        )
+        let uDomain = try bSplineSurfaceParameterDomain(
+            knots: surface.uKnots,
+            degree: surface.uDegree,
+            owner: "Selection surface parameter reference"
+        )
+        let vDomain = try bSplineSurfaceParameterDomain(
+            knots: surface.vKnots,
+            degree: surface.vDegree,
+            owner: "Selection surface parameter reference"
+        )
+        guard reference.u >= uDomain.lower - 1.0e-9,
+              reference.u <= uDomain.upper + 1.0e-9,
+              reference.v >= vDomain.lower - 1.0e-9,
+              reference.v <= vDomain.upper + 1.0e-9 else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "Selection surface parameter reference is outside the B-spline surface domain."
+            )
+        }
+    }
+
+    private func validateSurfaceSpanReference(
+        _ reference: SurfaceSpanReference,
+        in document: DesignDocument
+    ) throws {
+        do {
+            try reference.validate()
+        } catch {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Selection surface span reference is invalid: \(error)."
+            )
+        }
+        let surface = try directBSplineSurface(
+            for: reference.surface,
+            in: document,
+            owner: "Selection surface span reference"
+        )
+        let spanCount = bSplineNonDegenerateSpanCount(
+            knots: bSplineSurfaceKnots(reference.direction, in: surface),
+            degree: bSplineSurfaceDegree(reference.direction, in: surface)
+        )
+        guard reference.spanIndex < spanCount else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "Selection surface span reference points to a missing B-spline surface span."
+            )
+        }
+    }
+
+    private func validateSurfaceKnotReference(
+        _ reference: SurfaceKnotReference,
+        in document: DesignDocument
+    ) throws {
+        do {
+            try reference.validate()
+        } catch {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Selection surface knot reference is invalid: \(error)."
+            )
+        }
+        let surface = try directBSplineSurface(
+            for: reference.surface,
+            in: document,
+            owner: "Selection surface knot reference"
+        )
+        let knots = bSplineSurfaceKnots(reference.direction, in: surface)
+        guard knots.indices.contains(reference.knotIndex) else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "Selection surface knot reference points to a missing B-spline surface knot."
+            )
+        }
     }
 
     private func isTargetValid(
@@ -569,6 +668,67 @@ public struct SelectionModel: Codable, Equatable, Sendable {
             count += 1
         }
         return count
+    }
+
+    private func directBSplineSurface(
+        for reference: SurfaceReference,
+        in document: DesignDocument,
+        owner: String
+    ) throws -> BSplineSurface3D {
+        let featureID = try sourceOwnedDirectBSplineSurfaceFeatureID(
+            from: reference.faceName,
+            owner: owner
+        )
+        guard let feature = document.cadDocument.designGraph.nodes[featureID],
+              case let .bSplineSurface(surfaceFeature) = feature.operation else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "\(owner) could not resolve its direct B-spline surface feature."
+            )
+        }
+        return surfaceFeature.surface
+    }
+
+    private func bSplineSurfaceKnots(
+        _ direction: SurfaceParameterDirection,
+        in surface: BSplineSurface3D
+    ) -> [Double] {
+        switch direction {
+        case .u:
+            return surface.uKnots
+        case .v:
+            return surface.vKnots
+        }
+    }
+
+    private func bSplineSurfaceDegree(
+        _ direction: SurfaceParameterDirection,
+        in surface: BSplineSurface3D
+    ) -> Int {
+        switch direction {
+        case .u:
+            return surface.uDegree
+        case .v:
+            return surface.vDegree
+        }
+    }
+
+    private func bSplineSurfaceParameterDomain(
+        knots: [Double],
+        degree: Int,
+        owner: String
+    ) throws -> (lower: Double, upper: Double) {
+        let lowerIndex = degree
+        let upperIndex = knots.count - degree - 1
+        guard knots.indices.contains(lowerIndex),
+              knots.indices.contains(upperIndex),
+              knots[lowerIndex] <= knots[upperIndex] else {
+            throw EditorError(
+                code: .referenceUnresolved,
+                message: "\(owner) could not resolve the B-spline surface parameter domain."
+            )
+        }
+        return (knots[lowerIndex], knots[upperIndex])
     }
 
     private func sourceOwnedDirectBSplineSurfaceFeatureID(
