@@ -358,6 +358,9 @@ import RupaCore
         evidence.sourceFiles.contains("RupaKit/Sources/RupaUI/WorkspaceSectionAnalysisStateBuilder.swift")
     })
     #expect(section.evidence.contains { evidence in
+        evidence.sourceFiles.contains("RupaKit/Sources/RupaUI/WorkspaceSectionClippingMode.swift")
+    })
+    #expect(section.evidence.contains { evidence in
         evidence.tests.contains("RupaKit/Tests/RupaAgentInspectionTests/AgentSectionAnalysisIntegrationTests.swift")
     })
     #expect(section.evidence.contains { evidence in
@@ -368,6 +371,9 @@ import RupaCore
     })
     #expect(section.evidence.contains { evidence in
         evidence.tests.contains("RupaKit/Tests/RupaRenderingTests/ViewportSectionMeshClipperTests.swift")
+    })
+    #expect(section.evidence.contains { evidence in
+        evidence.tests.contains("RupaKit/Tests/RupaUIPackageTests/WorkspaceSectionClippingModeTests.swift")
     })
     #expect(section.evidence.contains { evidence in
         evidence.tests.contains("RupaKit/Tests/RupaAgentContractTests/AgentCapabilityContractTests.swift")
@@ -386,6 +392,9 @@ import RupaCore
     })
     #expect(section.evidence.contains { evidence in
         evidence.notes.contains("Viewport section clipping now removes hidden bodies from the rendered and pickable scene and clips mesh triangles into retained-side display polygons without allocating replacement mesh buffers.")
+    })
+    #expect(section.evidence.contains { evidence in
+        evidence.notes.contains("The Section Analysis Inspector exposes off, front, and behind clipping modes so viewport clipping can be toggled without adding more canvas chrome.")
     })
     #expect(section.evidence.contains { evidence in
         evidence.notes.contains("Selecting a section or construction plane can drive a non-mutating viewport overlay that renders the section plane frame, closed section fill, hatching, and bounded body intersection segments from the same SectionAnalysisResult contract used by Agent and Automation.")

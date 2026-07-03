@@ -35,7 +35,7 @@ public struct MainView: View {
     @State private var isConstructionPlaneSnapEnabled: Bool
     @State private var snapOverrideState: WorkspaceSnapOverrideState
     @State private var surfaceAnalysisOptions: ViewportSurfaceAnalysisOptions
-    @State private var sectionClippingRetainedSide: SectionAnalysisRetainedSide
+    @State private var sectionClippingMode: WorkspaceSectionClippingMode
     @State private var selectedSplineControlPointIndex: Int
     @State private var sketchSplineControlPointSlideDistanceMeters: Double
     @State private var polySplineSurfaceVertexSlideDistanceMeters: Double
@@ -120,7 +120,7 @@ public struct MainView: View {
         self._isConstructionPlaneSnapEnabled = State(initialValue: true)
         self._snapOverrideState = State(initialValue: WorkspaceSnapOverrideState())
         self._surfaceAnalysisOptions = State(initialValue: ViewportSurfaceAnalysisOptions())
-        self._sectionClippingRetainedSide = State(initialValue: .front)
+        self._sectionClippingMode = State(initialValue: .front)
         self._selectedSplineControlPointIndex = State(initialValue: 0)
         self._sketchSplineControlPointSlideDistanceMeters = State(initialValue: editingDefaults.operationStepMeters)
         self._polySplineSurfaceVertexSlideDistanceMeters = State(initialValue: editingDefaults.operationStepMeters)
@@ -4483,12 +4483,14 @@ public struct MainView: View {
     private func selectedSectionClippingPlan(
         for analysis: SectionAnalysisResult?
     ) -> SectionAnalysisClippingPlan? {
-        analysis.map {
-            SectionAnalysisClippingPlan(
-                result: $0,
-                retaining: sectionClippingRetainedSide
-            )
+        guard let analysis,
+              let retainedSide = sectionClippingMode.retainedSide else {
+            return nil
         }
+        return SectionAnalysisClippingPlan(
+            result: analysis,
+            retaining: retainedSide
+        )
     }
 
     private func selectedSurfaceAnalysisSummaryResult(
@@ -4794,6 +4796,7 @@ public struct MainView: View {
 
         WorkspaceInspectorTextSectionView(section: overviewState.referenceSection)
         WorkspaceInspectorTextSectionView(section: overviewState.hierarchySection)
+        sectionAnalysisInspectorSection(nodes)
 
         WorkspaceSurfaceInspectorView(
             analysisResult: selectedSurfaceAnalysisResult(for: nodes),
@@ -4883,6 +4886,95 @@ public struct MainView: View {
                 }
             }
         )
+    }
+
+    @ViewBuilder
+    private func sectionAnalysisInspectorSection(_ nodes: [SceneNode]) -> some View {
+        switch sectionAnalysisStateBuilder.analysisSummaryResult(for: nodes) {
+        case .success(let analysis):
+            if let analysis {
+                inspectorSection("Section Analysis") {
+                    workspaceInspectorValueRow("Plane", sectionAnalysisPlaneTitle(analysis.plane))
+                    workspaceInspectorValueRow("Bodies", sectionAnalysisBodySummary(analysis))
+                    workspaceInspectorValueRow("Contours", sectionAnalysisContourSummary(analysis))
+                    workspaceInspectorValueRow("Segments", sectionAnalysisSegmentSummary(analysis))
+                    inspectorControlRow("Clipping") {
+                        Picker(
+                            "",
+                            selection: $sectionClippingMode
+                        ) {
+                            ForEach(WorkspaceSectionClippingMode.allCases) { mode in
+                                Text(mode.title).tag(mode)
+                            }
+                        }
+                        .labelsHidden()
+                        .controlSize(.small)
+                        .frame(width: inspectorControlWidth)
+                        .accessibilityIdentifier("InspectorSectionAnalysis.clipping")
+                    }
+                    workspaceInspectorValueRow("Clip State", sectionClippingMode.statusTitle)
+                }
+            }
+        case .failure(let error):
+            inspectorSection("Section Analysis") {
+                workspaceInspectorValueRow("Status", "Unavailable")
+                workspaceInspectorValueRow("Reason", error.localizedDescription)
+            }
+        }
+    }
+
+    private func sectionAnalysisPlaneTitle(
+        _ plane: SectionAnalysisResult.Plane
+    ) -> String {
+        if let name = plane.sourceName,
+           name.isEmpty == false {
+            return name
+        }
+        if let id = plane.sourceID {
+            return "\(sectionAnalysisPlaneSourceTitle(plane.sourceKind)) \(shortID(id))"
+        }
+        return sectionAnalysisPlaneSourceTitle(plane.sourceKind)
+    }
+
+    private func sectionAnalysisPlaneSourceTitle(
+        _ sourceKind: SectionAnalysisResult.PlaneSourceKind
+    ) -> String {
+        switch sourceKind {
+        case .sketchPlane:
+            "Sketch Plane"
+        case .constructionPlane:
+            "Construction Plane"
+        case .activeConstructionPlane:
+            "Active CPlane"
+        case .sceneNode:
+            "Scene Node"
+        }
+    }
+
+    private func sectionAnalysisBodySummary(
+        _ analysis: SectionAnalysisResult
+    ) -> String {
+        [
+            "\(analysis.bodyCount) total",
+            "\(analysis.intersectingBodyCount) intersecting",
+            "\(analysis.spansPlaneBodyCount) spanning",
+        ].joined(separator: ", ")
+    }
+
+    private func sectionAnalysisContourSummary(
+        _ analysis: SectionAnalysisResult
+    ) -> String {
+        [
+            "\(analysis.closedIntersectionContourCount) closed",
+            "\(analysis.openIntersectionContourCount) open",
+        ].joined(separator: ", ")
+    }
+
+    private func sectionAnalysisSegmentSummary(
+        _ analysis: SectionAnalysisResult
+    ) -> String {
+        let suffix = analysis.truncatedIntersectionSegments ? " capped" : ""
+        return "\(analysis.intersectionSegmentCount)\(suffix)"
     }
 
     private func topologyEditInspectorState(
