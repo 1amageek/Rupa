@@ -558,7 +558,7 @@ public struct MainView: View {
                     .onHover(perform: handleWorkspaceOverlayHover)
             }
             .overlay(alignment: .bottom) {
-                viewportContextPanel
+                viewportContextPanelContainer
                     .padding(.bottom, WorkspaceCanvasOverlayLayout.edgePadding)
                     .padding(.horizontal, WorkspaceCanvasOverlayLayout.edgePadding)
                     .background {
@@ -1547,6 +1547,21 @@ public struct MainView: View {
         .accessibilityIdentifier("WorkspaceUtilityRail")
     }
 
+    private var viewportContextPanelContainer: some View {
+        ViewThatFits(in: .horizontal) {
+            viewportContextPanel
+                .fixedSize(horizontal: true, vertical: false)
+
+            ScrollView(.horizontal) {
+                viewportContextPanel
+                    .fixedSize(horizontal: true, vertical: false)
+            }
+            .scrollIndicators(.hidden)
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("ViewportContextPanelContainer")
+    }
+
     private var viewportContextPanel: some View {
         HStack(spacing: 8) {
             if session.selectedTool == .sweep {
@@ -1632,7 +1647,7 @@ public struct MainView: View {
             }
         }
         .padding(.horizontal, 8)
-        .padding(.vertical, 6)
+        .padding(.vertical, WorkspaceChromeControlMetrics.containerVerticalPadding)
         .workspaceGlassContainer()
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("ViewportContextPanel")

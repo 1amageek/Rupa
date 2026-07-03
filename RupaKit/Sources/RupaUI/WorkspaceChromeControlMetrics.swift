@@ -1,4 +1,5 @@
 import CoreGraphics
+import RupaRendering
 
 enum WorkspaceChromeControlMetrics {
     static let controlHeight: CGFloat = 22.0
@@ -8,5 +9,9 @@ enum WorkspaceChromeControlMetrics {
 
     static var iconButtonSize: CGSize {
         CGSize(width: controlHeight, height: controlHeight)
+    }
+
+    static var containerVerticalPadding: CGFloat {
+        (ViewportCanvasChromeMetrics.topControlHeight - controlHeight) / 2.0
     }
 }
