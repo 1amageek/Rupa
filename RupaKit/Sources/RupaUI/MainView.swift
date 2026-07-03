@@ -1342,15 +1342,14 @@ public struct MainView: View {
                 }
                 .font(.caption.weight(.medium))
                 .foregroundStyle(Color.accentColor)
-                .padding(.horizontal, 6)
-                .padding(.vertical, 4)
+                .padding(.horizontal, WorkspaceChromeControlMetrics.horizontalPadding)
+                .frame(height: WorkspaceChromeControlMetrics.controlHeight)
                 .background {
-                    RoundedRectangle(cornerRadius: 7, style: .continuous)
+                    RoundedRectangle(
+                        cornerRadius: WorkspaceChromeControlMetrics.cornerRadius,
+                        style: .continuous
+                    )
                         .fill(Color.accentColor.opacity(0.14))
-                }
-                .overlay {
-                    RoundedRectangle(cornerRadius: 7, style: .continuous)
-                        .strokeBorder(Color.accentColor.opacity(0.28), lineWidth: 1)
                 }
             }
             .buttonStyle(.plain)
@@ -1436,10 +1435,13 @@ public struct MainView: View {
             }
             .font(.caption.weight(.medium))
             .foregroundStyle(Color.secondary)
-            .padding(.horizontal, 6)
-            .padding(.vertical, 4)
+            .padding(.horizontal, WorkspaceChromeControlMetrics.horizontalPadding)
+            .frame(height: WorkspaceChromeControlMetrics.controlHeight)
             .background {
-                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                RoundedRectangle(
+                    cornerRadius: WorkspaceChromeControlMetrics.cornerRadius,
+                    style: .continuous
+                )
                     .fill(Color.secondary.opacity(0.12))
             }
         }

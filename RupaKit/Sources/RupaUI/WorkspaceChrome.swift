@@ -104,10 +104,13 @@ func workspaceValuePill(
     }
     .font(.caption)
     .lineLimit(1)
-    .padding(.horizontal, 6)
-    .padding(.vertical, 4)
+    .padding(.horizontal, WorkspaceChromeControlMetrics.horizontalPadding)
+    .frame(height: WorkspaceChromeControlMetrics.controlHeight)
     .background {
-        RoundedRectangle(cornerRadius: 7, style: .continuous)
+        RoundedRectangle(
+            cornerRadius: WorkspaceChromeControlMetrics.cornerRadius,
+            style: .continuous
+        )
             .fill(Color.primary.opacity(0.06))
     }
 
@@ -130,10 +133,13 @@ func workspaceStatusChip(
     }
     .font(.caption.weight(.medium))
     .foregroundStyle(tint)
-    .padding(.horizontal, 6)
-    .padding(.vertical, 4)
+    .padding(.horizontal, WorkspaceChromeControlMetrics.horizontalPadding)
+    .frame(height: WorkspaceChromeControlMetrics.controlHeight)
     .background {
-        RoundedRectangle(cornerRadius: 7, style: .continuous)
+        RoundedRectangle(
+            cornerRadius: WorkspaceChromeControlMetrics.cornerRadius,
+            style: .continuous
+        )
             .fill(tint.opacity(0.12))
     }
 }
@@ -148,15 +154,23 @@ func workspaceIconButton(
     Button(action: action) {
         Image(systemName: systemImage)
             .font(.system(size: 13, weight: .semibold))
-            .frame(width: 28, height: 28)
+            .frame(
+                width: WorkspaceChromeControlMetrics.iconButtonSize.width,
+                height: WorkspaceChromeControlMetrics.iconButtonSize.height
+            )
             .background {
-                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                RoundedRectangle(
+                    cornerRadius: WorkspaceChromeControlMetrics.cornerRadius,
+                    style: .continuous
+                )
                     .fill(Color.primary.opacity(0.06))
             }
-            .overlay {
-                RoundedRectangle(cornerRadius: 7, style: .continuous)
-                    .strokeBorder(Color.primary.opacity(0.10), lineWidth: 1)
-            }
+            .contentShape(
+                RoundedRectangle(
+                    cornerRadius: WorkspaceChromeControlMetrics.cornerRadius,
+                    style: .continuous
+                )
+            )
     }
     .buttonStyle(.plain)
     .help(help)
@@ -166,12 +180,12 @@ func workspaceIconButton(
 
 @MainActor
 var workspaceDivider: some View {
-    WorkspaceDivider(height: 20)
+    WorkspaceDivider(height: WorkspaceChromeControlMetrics.dividerHeight)
 }
 
 @MainActor
 var workspaceContextDivider: some View {
-    WorkspaceDivider(height: 24)
+    WorkspaceDivider(height: WorkspaceChromeControlMetrics.dividerHeight)
 }
 
 private struct WorkspaceDivider: View {
