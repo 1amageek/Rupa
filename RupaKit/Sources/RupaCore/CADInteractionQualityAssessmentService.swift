@@ -662,18 +662,21 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                     ],
                     tests: [
                         "RupaKit/Tests/RupaCoreTests/ConstructionPlaneTargetResolverTests.swift",
+                        "RupaKit/Tests/RupaCoreTests/CanvasConstructionPlaneSketchWorkflowTests.swift",
                         "RupaKit/Tests/RupaCoreTests/CommandStackTests.swift",
                         "RupaKit/Tests/RupaUIPackageTests/WorkspaceConstructionPlaneEditBuilderTests.swift",
                         "RupaKit/Tests/RupaUIPackageTests/WorkspaceSnapOverrideStateTests.swift",
                         "RupaKit/Tests/RupaAgentTests/AgentConstructionPlaneIntegrationTests.swift",
+                    ],
+                    notes: [
+                        "Canvas click and drag sketch tools create rectangle, polygon, arc, spline, and circle sketches on the active saved custom construction plane instead of falling back to the default XY plane.",
                     ]
                 ),
             ],
             openWork: [
                 "Direct viewport drag handles for saved construction-plane source edits.",
-                "Full sketch-on-arbitrary-plane workflow verification.",
             ],
-            next: "Extend Plane rail source edits to direct viewport saved-plane handles and prove sketch creation uses the selected plane end to end."
+            next: "Extend Plane rail source edits to direct viewport saved-plane handles while preserving selected-plane sketch routing."
         ),
         entry(
             area: .selection,
