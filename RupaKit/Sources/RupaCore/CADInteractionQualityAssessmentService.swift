@@ -605,7 +605,7 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                         "Body display snapshots and section analysis results preserve generated persistent body identities, source feature IDs, and evaluation-local body IDs so classifications can be mapped back to viewport body items across reevaluation boundaries.",
                         "SectionAnalysisClippingPlan and ViewportSectionClippingPlan classify visible, hidden, and clipped bodies non-mutatingly for retained front or behind section sides.",
                         "Agent and Automation analyzeSection requests can ask for a retained clipping side and receive a SectionAnalysisClippingPlan in the same non-mutating result envelope.",
-                        "Viewport section clipping now removes hidden bodies from the rendered and pickable scene and culls mesh triangles to the retained section side without allocating replacement mesh buffers.",
+                        "Viewport section clipping now removes hidden bodies from the rendered and pickable scene and clips mesh triangles into retained-side display polygons without allocating replacement mesh buffers.",
                         "Selecting a section or construction plane can drive a non-mutating viewport overlay that renders the section plane frame, closed section fill, hatching, and bounded body intersection segments from the same SectionAnalysisResult contract used by Agent and Automation.",
                         "Exact clipped cap surfaces, clipping-side viewport controls, interference highlighting, persistent section-distance controls, and drawing/export section hatching remain incomplete.",
                     ]

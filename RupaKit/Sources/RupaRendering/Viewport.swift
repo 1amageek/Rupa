@@ -4109,26 +4109,36 @@ public struct Viewport: View {
                 index += 3
                 continue
             }
+            let polygon: [Point3D]
             if isSectionClipped,
                let sectionAnalysis,
-               let retainedSide = sectionClippingPlan?.retainedSide,
-               meshClipper.includesTriangle(
-                   first: mesh.positions[firstIndex],
-                   second: mesh.positions[secondIndex],
-                   third: mesh.positions[thirdIndex],
-                   item: item,
-                   plane: sectionAnalysis.plane,
-                   retaining: retainedSide,
-                   toleranceMeters: sectionAnalysis.toleranceMeters
-               ) == false {
-                index += 3
-                continue
+               let retainedSide = sectionClippingPlan?.retainedSide {
+                polygon = meshClipper.clippedTriangle(
+                    first: mesh.positions[firstIndex],
+                    second: mesh.positions[secondIndex],
+                    third: mesh.positions[thirdIndex],
+                    item: item,
+                    plane: sectionAnalysis.plane,
+                    retaining: retainedSide,
+                    toleranceMeters: sectionAnalysis.toleranceMeters
+                )
+                guard polygon.count >= 3 else {
+                    index += 3
+                    continue
+                }
+            } else {
+                polygon = [
+                    ViewportLayout.transformedPoint(mesh.positions[firstIndex], by: item.modelTransform),
+                    ViewportLayout.transformedPoint(mesh.positions[secondIndex], by: item.modelTransform),
+                    ViewportLayout.transformedPoint(mesh.positions[thirdIndex], by: item.modelTransform),
+                ]
             }
 
             var path = Path()
-            path.move(to: layout.project(mesh.positions[firstIndex], in: item))
-            path.addLine(to: layout.project(mesh.positions[secondIndex], in: item))
-            path.addLine(to: layout.project(mesh.positions[thirdIndex], in: item))
+            path.move(to: layout.project(polygon[0]))
+            for point in polygon.dropFirst() {
+                path.addLine(to: layout.project(point))
+            }
             path.closeSubpath()
             context.fill(path, with: .color(baseColor.opacity(fillOpacity)))
             context.stroke(path, with: .color(baseColor.opacity(strokeOpacity)), lineWidth: isSelected ? 1.1 : 0.7)

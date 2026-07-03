@@ -2,6 +2,16 @@ import RupaCore
 import RupaViewportScene
 
 public struct ViewportSectionMeshClipper: Sendable {
+    public struct Vertex: Equatable, Sendable {
+        public var point: Point3D
+        public var signedDistance: Double
+
+        public init(point: Point3D, signedDistance: Double) {
+            self.point = point
+            self.signedDistance = signedDistance
+        }
+    }
+
     public init() {}
 
     public func includedTriangleCount(
@@ -45,28 +55,155 @@ public struct ViewportSectionMeshClipper: Sendable {
         retaining retainedSide: SectionAnalysisRetainedSide,
         toleranceMeters: Double
     ) -> Bool {
-        let tolerance = max(toleranceMeters, 0.0)
-        let distances = [
-            signedDistance(
-                ViewportLayout.transformedPoint(first, by: item.modelTransform),
-                to: plane
-            ),
-            signedDistance(
-                ViewportLayout.transformedPoint(second, by: item.modelTransform),
-                to: plane
-            ),
-            signedDistance(
-                ViewportLayout.transformedPoint(third, by: item.modelTransform),
-                to: plane
-            ),
-        ]
+        clippedTriangle(
+            first: first,
+            second: second,
+            third: third,
+            item: item,
+            plane: plane,
+            retaining: retainedSide,
+            toleranceMeters: toleranceMeters
+        ).count >= 3
+    }
 
+    public func clippedTriangle(
+        first: Point3D,
+        second: Point3D,
+        third: Point3D,
+        item: ViewportSceneItem,
+        plane: SectionAnalysisResult.Plane,
+        retaining retainedSide: SectionAnalysisRetainedSide,
+        toleranceMeters: Double
+    ) -> [Point3D] {
+        let tolerance = max(toleranceMeters, 0.0)
+        let points = [
+            ViewportLayout.transformedPoint(first, by: item.modelTransform),
+            ViewportLayout.transformedPoint(second, by: item.modelTransform),
+            ViewportLayout.transformedPoint(third, by: item.modelTransform),
+        ]
+        let vertices = points.map { point in
+            Vertex(point: point, signedDistance: signedDistance(point, to: plane))
+        }
+        return clippedPolygon(
+            vertices,
+            retaining: retainedSide,
+            toleranceMeters: tolerance
+        ).map(\.point)
+    }
+
+    private func clippedPolygon(
+        _ vertices: [Vertex],
+        retaining retainedSide: SectionAnalysisRetainedSide,
+        toleranceMeters: Double
+    ) -> [Vertex] {
+        guard vertices.count >= 3 else {
+            return []
+        }
+        var output: [Vertex] = []
+        var previous = vertices[vertices.count - 1]
+        var previousInside = isInside(
+            previous.signedDistance,
+            retaining: retainedSide,
+            toleranceMeters: toleranceMeters
+        )
+        for current in vertices {
+            let currentInside = isInside(
+                current.signedDistance,
+                retaining: retainedSide,
+                toleranceMeters: toleranceMeters
+            )
+            if previousInside, currentInside {
+                append(current, to: &output)
+            } else if previousInside, !currentInside {
+                append(
+                    intersection(
+                        from: previous,
+                        to: current,
+                        retaining: retainedSide,
+                        toleranceMeters: toleranceMeters
+                    ),
+                    to: &output
+                )
+            } else if !previousInside, currentInside {
+                append(
+                    intersection(
+                        from: previous,
+                        to: current,
+                        retaining: retainedSide,
+                        toleranceMeters: toleranceMeters
+                    ),
+                    to: &output
+                )
+                append(current, to: &output)
+            }
+            previous = current
+            previousInside = currentInside
+        }
+        return output.filter { vertex in
+            isInside(
+                vertex.signedDistance,
+                retaining: retainedSide,
+                toleranceMeters: toleranceMeters
+            )
+        }
+    }
+
+    private func isInside(
+        _ signedDistance: Double,
+        retaining retainedSide: SectionAnalysisRetainedSide,
+        toleranceMeters: Double
+    ) -> Bool {
         switch retainedSide {
         case .front:
-            return distances.contains { $0 >= -tolerance }
+            return signedDistance >= -toleranceMeters
         case .behind:
-            return distances.contains { $0 <= tolerance }
+            return signedDistance <= toleranceMeters
         }
+    }
+
+    private func intersection(
+        from start: Vertex,
+        to end: Vertex,
+        retaining retainedSide: SectionAnalysisRetainedSide,
+        toleranceMeters: Double
+    ) -> Vertex {
+        let boundary = retainedSide == .front ? -toleranceMeters : toleranceMeters
+        let denominator = end.signedDistance - start.signedDistance
+        guard abs(denominator) > 1.0e-15 else {
+            return start
+        }
+        let fraction = min(max((boundary - start.signedDistance) / denominator, 0.0), 1.0)
+        let point = interpolatedPoint(from: start.point, to: end.point, fraction: fraction)
+        return Vertex(point: point, signedDistance: boundary)
+    }
+
+    private func append(_ vertex: Vertex, to vertices: inout [Vertex]) {
+        guard let last = vertices.last else {
+            vertices.append(vertex)
+            return
+        }
+        if pointsAreEquivalent(last.point, vertex.point) {
+            return
+        }
+        vertices.append(vertex)
+    }
+
+    private func interpolatedPoint(
+        from start: Point3D,
+        to end: Point3D,
+        fraction: Double
+    ) -> Point3D {
+        Point3D(
+            x: start.x + (end.x - start.x) * fraction,
+            y: start.y + (end.y - start.y) * fraction,
+            z: start.z + (end.z - start.z) * fraction
+        )
+    }
+
+    private func pointsAreEquivalent(_ lhs: Point3D, _ rhs: Point3D) -> Bool {
+        abs(lhs.x - rhs.x) <= 1.0e-12
+            && abs(lhs.y - rhs.y) <= 1.0e-12
+            && abs(lhs.z - rhs.z) <= 1.0e-12
     }
 
     private func signedDistance(

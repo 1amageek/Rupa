@@ -385,7 +385,7 @@ import RupaCore
         evidence.notes.contains("Agent and Automation analyzeSection requests can ask for a retained clipping side and receive a SectionAnalysisClippingPlan in the same non-mutating result envelope.")
     })
     #expect(section.evidence.contains { evidence in
-        evidence.notes.contains("Viewport section clipping now removes hidden bodies from the rendered and pickable scene and culls mesh triangles to the retained section side without allocating replacement mesh buffers.")
+        evidence.notes.contains("Viewport section clipping now removes hidden bodies from the rendered and pickable scene and clips mesh triangles into retained-side display polygons without allocating replacement mesh buffers.")
     })
     #expect(section.evidence.contains { evidence in
         evidence.notes.contains("Selecting a section or construction plane can drive a non-mutating viewport overlay that renders the section plane frame, closed section fill, hatching, and bounded body intersection segments from the same SectionAnalysisResult contract used by Agent and Automation.")
