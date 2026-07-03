@@ -76,8 +76,40 @@ import Testing
     #expect(overlay.segments.map(\.bodyID) == ["body-0", "body-1"])
 }
 
+@Test func viewportSectionAnalysisOverlayBuildsClosedContourHatches() throws {
+    var document = DesignDocument.empty()
+    try document.setRulerConfiguration(WorkspaceScalePreset.architecture.rulerConfiguration)
+    let contour = viewportSectionContour(
+        points2D: [
+            Point2D(x: -1.0, y: -1.0),
+            Point2D(x: 1.0, y: -1.0),
+            Point2D(x: 1.0, y: 1.0),
+            Point2D(x: -1.0, y: 1.0),
+        ]
+    )
+    let result = viewportSectionAnalysisResult(
+        segments: [],
+        contours: [contour]
+    )
+
+    let overlay = ViewportSectionAnalysisOverlay.build(
+        result: result,
+        document: document,
+        maximumVisibleHatches: 16
+    )
+
+    #expect(overlay.contours.count == 1)
+    #expect(overlay.sourceContourCount == 1)
+    #expect(overlay.omittedContourCount == 0)
+    #expect(overlay.contours.first?.isClosed == true)
+    #expect(overlay.hatches.isEmpty == false)
+    #expect(overlay.hatches.count <= 16)
+    #expect(overlay.hatches.allSatisfy { $0.contourID == contour.id })
+}
+
 private func viewportSectionAnalysisResult(
     segments: [SectionAnalysisResult.IntersectionSegment],
+    contours: [SectionAnalysisResult.IntersectionContour] = [],
     truncatedIntersectionSegments: Bool = false
 ) -> SectionAnalysisResult {
     SectionAnalysisResult(
@@ -94,6 +126,7 @@ private func viewportSectionAnalysisResult(
         toleranceMeters: 0.001,
         bodies: [],
         intersectionSegments: segments,
+        intersectionContours: contours,
         truncatedIntersectionSegments: truncatedIntersectionSegments,
         diagnostics: []
     )
@@ -111,5 +144,23 @@ private func viewportSectionSegment(
         end: Point3D(x: endX, y: 0.0, z: z),
         start2D: Point2D(x: startX, y: z),
         end2D: Point2D(x: endX, y: z)
+    )
+}
+
+private func viewportSectionContour(
+    points2D: [Point2D],
+    bodyID: String = "body-a"
+) -> SectionAnalysisResult.IntersectionContour {
+    SectionAnalysisResult.IntersectionContour(
+        id: "\(bodyID):contour:0",
+        bodyID: bodyID,
+        points: points2D.map { point in
+            Point3D(x: point.x, y: 0.0, z: point.y)
+        },
+        points2D: points2D,
+        isClosed: true,
+        signedAreaSquareMeters: 4.0,
+        lengthMeters: 8.0,
+        segmentCount: points2D.count
     )
 }

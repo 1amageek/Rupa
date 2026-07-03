@@ -22,6 +22,10 @@ import Testing
     #expect(result.triangleCount == body.triangleCount)
     #expect(result.intersectingTriangleCount > 0)
     #expect(result.intersectionSegmentCount == result.intersectionSegments.count)
+    #expect(result.closedIntersectionContourCount >= 1)
+    #expect(result.intersectionContours.contains { contour in
+        contour.isClosed && abs(contour.signedAreaSquareMeters) > result.toleranceMeters
+    })
     #expect(body.classification == .intersects)
     #expect(body.frontVertexCount > 0)
     #expect(body.behindVertexCount > 0)
@@ -124,7 +128,47 @@ import Testing
     #expect(result.intersectingTriangleCount > 0)
     #expect(result.intersectionSegmentCount > 0)
     #expect(result.intersectionSegments.isEmpty)
+    #expect(result.intersectionContours.isEmpty)
     #expect(!result.truncatedIntersectionSegments)
+}
+
+@Test func sectionAnalysisContourBuilderReconstructsClosedLoopFromSegments() throws {
+    let segments = [
+        sectionAnalysisSegment(start: Point2D(x: 1.0, y: 0.0), end: Point2D(x: 1.0, y: 1.0)),
+        sectionAnalysisSegment(start: Point2D(x: 0.0, y: 1.0), end: Point2D(x: 0.0, y: 0.0)),
+        sectionAnalysisSegment(start: Point2D(x: 0.0, y: 0.0), end: Point2D(x: 1.0, y: 0.0)),
+        sectionAnalysisSegment(start: Point2D(x: 1.0, y: 1.0), end: Point2D(x: 0.0, y: 1.0)),
+    ]
+
+    let contours = SectionAnalysisContourBuilder(tolerance: 1.0e-8).build(
+        segments: segments
+    )
+
+    let contour = try #require(contours.first)
+    #expect(contours.count == 1)
+    #expect(contour.isClosed)
+    #expect(contour.points2D.count == 4)
+    #expect(abs(abs(contour.signedAreaSquareMeters) - 1.0) <= 1.0e-8)
+    #expect(abs(contour.lengthMeters - 4.0) <= 1.0e-8)
+    #expect(contour.segmentCount == 4)
+}
+
+@Test func sectionAnalysisContourBuilderPreservesOpenPolylineWhenLoopIsIncomplete() throws {
+    let segments = [
+        sectionAnalysisSegment(start: Point2D(x: 0.0, y: 0.0), end: Point2D(x: 1.0, y: 0.0)),
+        sectionAnalysisSegment(start: Point2D(x: 1.0, y: 0.0), end: Point2D(x: 1.0, y: 1.0)),
+    ]
+
+    let contours = SectionAnalysisContourBuilder(tolerance: 1.0e-8).build(
+        segments: segments
+    )
+
+    let contour = try #require(contours.first)
+    #expect(contours.count == 1)
+    #expect(!contour.isClosed)
+    #expect(contour.points2D.count == 3)
+    #expect(contour.signedAreaSquareMeters == 0.0)
+    #expect(abs(contour.lengthMeters - 2.0) <= 1.0e-8)
 }
 
 private func sectionAnalysisTestDocument() throws -> DesignDocument {
@@ -148,4 +192,18 @@ private func sectionAnalysisTestDocument() throws -> DesignDocument {
         direction: .normal
     )
     return document
+}
+
+private func sectionAnalysisSegment(
+    start: Point2D,
+    end: Point2D,
+    bodyID: String = "body-a"
+) -> SectionAnalysisResult.IntersectionSegment {
+    SectionAnalysisResult.IntersectionSegment(
+        bodyID: bodyID,
+        start: Point3D(x: start.x, y: 0.0, z: start.y),
+        end: Point3D(x: end.x, y: 0.0, z: end.y),
+        start2D: start,
+        end2D: end
+    )
 }

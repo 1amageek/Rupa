@@ -564,6 +564,7 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                         "RupaKit/Sources/RupaCore/SurfaceContinuityService.swift",
                         "RupaKit/Sources/RupaCore/SectionAnalysisResult.swift",
                         "RupaKit/Sources/RupaCore/SectionAnalysisService.swift",
+                        "RupaKit/Sources/RupaCore/SectionAnalysisContourBuilder.swift",
                         "RupaKit/Sources/RupaCore/DesignDocument.swift",
                         "RupaKit/Sources/RupaRendering/ViewportSectionAnalysisOverlay.swift",
                         "RupaKit/Sources/RupaRendering/Viewport.swift",
@@ -587,19 +588,19 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                     notes: [
                         "Measurement summaries, selection dimensions, surface continuity summaries, and section-plane creation are Agent-readable.",
                         "SectionAnalysisService evaluates generated body meshes against sketch, construction, active construction, and section scene-node planes without mutating the document.",
-                        "Automation and Agent command results now expose body-side classifications, intersecting triangle counts, and bounded 3D plus in-plane section line segments.",
-                        "Selecting a section or construction plane can drive a non-mutating viewport overlay that renders the section plane frame and bounded body intersection segments from the same SectionAnalysisResult contract used by Agent and Automation.",
-                        "Viewport clipping, section fill and hatching, interference highlighting, and section-distance controls remain incomplete.",
+                        "Automation and Agent command results now expose body-side classifications, intersecting triangle counts, bounded 3D plus in-plane section line segments, and reconstructed section contours.",
+                        "Selecting a section or construction plane can drive a non-mutating viewport overlay that renders the section plane frame, closed section fill, hatching, and bounded body intersection segments from the same SectionAnalysisResult contract used by Agent and Automation.",
+                        "Viewport clipping, interference highlighting, section-distance controls, and drawing/export section hatching remain incomplete.",
                     ]
                 ),
             ],
             openWork: [
-                "Viewport clipping plus section-fill and hatching rendering driven by the non-mutating SectionAnalysisResult.",
+                "Viewport clipping driven by the non-mutating SectionAnalysisResult.",
                 "Selection, CPlane, previous-plane, distance, and flip policies for Section Analysis.",
                 "Interference highlighting and section hatching for drawing/export workflows.",
                 "Persistent inspection overlay controls that share the measurement and topology contracts.",
             ],
-            next: "Extend SectionAnalysisResult from plane and intersection overlays to clipping, hatching, interference diagnostics, selection policies, and persistent inspection overlay controls."
+            next: "Extend SectionAnalysisResult from viewport contour overlays to clipping, export hatching, interference diagnostics, selection policies, and persistent inspection overlay controls."
         ),
         entry(
             area: .snapping,

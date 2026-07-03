@@ -39,6 +39,8 @@ import Testing
     #expect(sectionAnalysis.plane.sourceKind == .sketchPlane)
     #expect(sectionAnalysis.intersectingBodyCount == 1)
     #expect(sectionAnalysis.intersectionSegments.isEmpty == false)
+    #expect(sectionAnalysis.closedIntersectionContourCount >= 1)
+    #expect(sectionAnalysis.intersectionContours.contains { $0.isClosed })
     #expect(decodedResponse == response)
 }
 

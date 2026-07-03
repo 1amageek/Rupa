@@ -1399,6 +1399,16 @@ public struct Viewport: View {
                 layout: layout
             )
         }
+        drawSectionAnalysisContourItems(
+            overlay.contours,
+            in: &context,
+            layout: layout
+        )
+        drawSectionAnalysisHatchItems(
+            overlay.hatches,
+            in: &context,
+            layout: layout
+        )
         guard overlay.segments.isEmpty == false else {
             return
         }
@@ -1416,6 +1426,50 @@ public struct Viewport: View {
             intersectionPath,
             with: .color(ViewportTheme.sectionAnalysisIntersection.opacity(0.95)),
             style: StrokeStyle(lineWidth: 1.65, lineCap: .round, lineJoin: .round)
+        )
+    }
+
+    private func drawSectionAnalysisContourItems(
+        _ items: [ViewportSectionAnalysisOverlay.ContourItem],
+        in context: inout GraphicsContext,
+        layout: ViewportLayout
+    ) {
+        for item in items where item.isClosed && item.points.count >= 3 {
+            var path = Path()
+            path.move(to: layout.project(item.points[0]))
+            for point in item.points.dropFirst() {
+                path.addLine(to: layout.project(point))
+            }
+            path.closeSubpath()
+            context.fill(
+                path,
+                with: .color(ViewportTheme.sectionAnalysisIntersection.opacity(0.10))
+            )
+            context.stroke(
+                path,
+                with: .color(ViewportTheme.sectionAnalysisIntersection.opacity(0.36)),
+                style: StrokeStyle(lineWidth: 0.8, lineJoin: .round)
+            )
+        }
+    }
+
+    private func drawSectionAnalysisHatchItems(
+        _ items: [ViewportSectionAnalysisOverlay.HatchItem],
+        in context: inout GraphicsContext,
+        layout: ViewportLayout
+    ) {
+        guard items.isEmpty == false else {
+            return
+        }
+        var hatchPath = Path()
+        for item in items {
+            hatchPath.move(to: layout.project(item.start))
+            hatchPath.addLine(to: layout.project(item.end))
+        }
+        context.stroke(
+            hatchPath,
+            with: .color(ViewportTheme.sectionAnalysisIntersection.opacity(0.34)),
+            style: StrokeStyle(lineWidth: 0.7, lineCap: .round)
         )
     }
 

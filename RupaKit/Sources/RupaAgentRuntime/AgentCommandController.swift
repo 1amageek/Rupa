@@ -607,7 +607,7 @@ public final class AgentCommandController: AgentClientProtocol {
                         "sceneNode",
                     ],
                     notes: [
-                        "Returns body-side classification, intersecting triangle counts, and bounded 3D plus in-plane section segments.",
+                        "Returns body-side classification, intersecting triangle counts, bounded 3D plus in-plane section segments, and reconstructed open or closed section contours.",
                         "Use sceneNode for saved section plane nodes and constructionPlane or activeConstructionPlane when the section follows the construction-plane workspace."
                     ]
                 )

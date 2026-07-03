@@ -337,6 +337,9 @@ import RupaCore
         evidence.sourceFiles.contains("RupaKit/Sources/RupaCore/SectionAnalysisService.swift")
     })
     #expect(section.evidence.contains { evidence in
+        evidence.sourceFiles.contains("RupaKit/Sources/RupaCore/SectionAnalysisContourBuilder.swift")
+    })
+    #expect(section.evidence.contains { evidence in
         evidence.sourceFiles.contains("RupaKit/Sources/RupaRendering/ViewportSectionAnalysisOverlay.swift")
     })
     #expect(section.evidence.contains { evidence in
@@ -349,7 +352,7 @@ import RupaCore
         evidence.tests.contains("RupaKit/Tests/RupaRenderingTests/ViewportSectionAnalysisOverlayTests.swift")
     })
     #expect(section.evidence.contains { evidence in
-        evidence.notes.contains("Selecting a section or construction plane can drive a non-mutating viewport overlay that renders the section plane frame and bounded body intersection segments from the same SectionAnalysisResult contract used by Agent and Automation.")
+        evidence.notes.contains("Selecting a section or construction plane can drive a non-mutating viewport overlay that renders the section plane frame, closed section fill, hatching, and bounded body intersection segments from the same SectionAnalysisResult contract used by Agent and Automation.")
     })
 
     let sketchPrecision = try #require(result.entries.first { $0.area == .sketchPrecision })

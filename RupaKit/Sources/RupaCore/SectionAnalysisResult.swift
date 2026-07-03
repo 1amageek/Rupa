@@ -150,6 +150,37 @@ public struct SectionAnalysisResult: Codable, Equatable, Sendable {
         }
     }
 
+    public struct IntersectionContour: Codable, Equatable, Sendable {
+        public var id: String
+        public var bodyID: String
+        public var points: [Point3D]
+        public var points2D: [Point2D]
+        public var isClosed: Bool
+        public var signedAreaSquareMeters: Double
+        public var lengthMeters: Double
+        public var segmentCount: Int
+
+        public init(
+            id: String,
+            bodyID: String,
+            points: [Point3D],
+            points2D: [Point2D],
+            isClosed: Bool,
+            signedAreaSquareMeters: Double,
+            lengthMeters: Double,
+            segmentCount: Int
+        ) {
+            self.id = id
+            self.bodyID = bodyID
+            self.points = points
+            self.points2D = points2D
+            self.isClosed = isClosed
+            self.signedAreaSquareMeters = signedAreaSquareMeters
+            self.lengthMeters = lengthMeters
+            self.segmentCount = segmentCount
+        }
+    }
+
     public var displayUnit: LengthDisplayUnit
     public var plane: Plane
     public var toleranceMeters: Double
@@ -163,9 +194,12 @@ public struct SectionAnalysisResult: Codable, Equatable, Sendable {
     public var spansPlaneBodyCount: Int
     public var intersectingTriangleCount: Int
     public var intersectionSegmentCount: Int
+    public var closedIntersectionContourCount: Int
+    public var openIntersectionContourCount: Int
     public var truncatedIntersectionSegments: Bool
     public var bodies: [Body]
     public var intersectionSegments: [IntersectionSegment]
+    public var intersectionContours: [IntersectionContour]
     public var diagnostics: [EditorDiagnostic]
 
     public init(
@@ -174,6 +208,7 @@ public struct SectionAnalysisResult: Codable, Equatable, Sendable {
         toleranceMeters: Double,
         bodies: [Body],
         intersectionSegments: [IntersectionSegment],
+        intersectionContours: [IntersectionContour] = [],
         truncatedIntersectionSegments: Bool,
         diagnostics: [EditorDiagnostic]
     ) {
@@ -190,9 +225,12 @@ public struct SectionAnalysisResult: Codable, Equatable, Sendable {
         self.spansPlaneBodyCount = bodies.filter { $0.classification == .spansPlane }.count
         self.intersectingTriangleCount = bodies.reduce(0) { $0 + $1.intersectingTriangleCount }
         self.intersectionSegmentCount = bodies.reduce(0) { $0 + $1.intersectionSegmentCount }
+        self.closedIntersectionContourCount = intersectionContours.filter(\.isClosed).count
+        self.openIntersectionContourCount = intersectionContours.filter { !$0.isClosed }.count
         self.truncatedIntersectionSegments = truncatedIntersectionSegments
         self.bodies = bodies
         self.intersectionSegments = intersectionSegments
+        self.intersectionContours = intersectionContours
         self.diagnostics = diagnostics
     }
 }

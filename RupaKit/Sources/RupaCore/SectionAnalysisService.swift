@@ -97,12 +97,16 @@ public struct SectionAnalysisService: Sendable {
             truncatedSegments: truncatedSegments,
             maximumSegments: maximumSegments
         )
+        let contours = SectionAnalysisContourBuilder(tolerance: tolerance).build(
+            segments: segments
+        )
         return SectionAnalysisResult(
             displayUnit: document.displayUnit,
             plane: plane.resultPlane,
             toleranceMeters: tolerance,
             bodies: bodies,
             intersectionSegments: segments,
+            intersectionContours: contours,
             truncatedIntersectionSegments: truncatedSegments,
             diagnostics: diagnostics
         )
