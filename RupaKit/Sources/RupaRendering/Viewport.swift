@@ -111,6 +111,7 @@ public struct Viewport: View {
     private let surfaceAnalysisOptions: ViewportSurfaceAnalysisOptions
     private let surfaceContinuity: RupaCore.SurfaceContinuityResult?
     private let sectionAnalysis: SectionAnalysisResult?
+    private let sectionClippingPlan: SectionAnalysisClippingPlan?
     private let curveCurvatureDisplays: [SelectionComponentID: CurveCurvatureDisplay]
     private let pointDisplays: [SelectionComponentID: PointDisplay]
     private let snapResolutionOptions: SnapResolutionOptions?
@@ -184,6 +185,7 @@ public struct Viewport: View {
         surfaceAnalysisOptions: ViewportSurfaceAnalysisOptions = ViewportSurfaceAnalysisOptions(),
         surfaceContinuity: RupaCore.SurfaceContinuityResult? = nil,
         sectionAnalysis: SectionAnalysisResult? = nil,
+        sectionClippingPlan: SectionAnalysisClippingPlan? = nil,
         curveCurvatureDisplays: [SelectionComponentID: CurveCurvatureDisplay] = [:],
         pointDisplays: [SelectionComponentID: PointDisplay] = [:],
         snapResolutionOptions: SnapResolutionOptions? = nil,
@@ -256,6 +258,7 @@ public struct Viewport: View {
         self.surfaceAnalysisOptions = surfaceAnalysisOptions
         self.surfaceContinuity = surfaceContinuity
         self.sectionAnalysis = sectionAnalysis
+        self.sectionClippingPlan = sectionClippingPlan
         self.curveCurvatureDisplays = curveCurvatureDisplays
         self.pointDisplays = pointDisplays
         self.snapResolutionOptions = snapResolutionOptions
@@ -749,11 +752,13 @@ public struct Viewport: View {
     }
 
     private func makeScene() -> ViewportScene {
-        ViewportSceneBuilder(objectRegistry: objectRegistry).build(
-            document: document,
-            currentEvaluation: currentEvaluation,
-            documentGeneration: documentGeneration,
-            evaluationCache: evaluationCache
+        sceneApplyingSectionClipping(
+            ViewportSceneBuilder(objectRegistry: objectRegistry).build(
+                document: document,
+                currentEvaluation: currentEvaluation,
+                documentGeneration: documentGeneration,
+                evaluationCache: evaluationCache
+            )
         )
     }
 
@@ -762,7 +767,7 @@ public struct Viewport: View {
         camera: ViewportCamera,
         basis: ViewportProjectionBasis
     ) -> ViewportSceneContext {
-        ViewportSceneContext(
+        var context = ViewportSceneContext(
             document: document,
             documentGeneration: documentGeneration,
             size: size,
@@ -772,6 +777,19 @@ public struct Viewport: View {
             camera: camera,
             basis: basis
         )
+        context.scene = sceneApplyingSectionClipping(context.scene)
+        return context
+    }
+
+    private func sceneApplyingSectionClipping(_ scene: ViewportScene) -> ViewportScene {
+        guard let sectionClippingPlan else {
+            return scene
+        }
+        return ViewportSectionClippingPlan(
+            sectionPlan: sectionClippingPlan,
+            scene: scene
+        )
+        .renderedScene(from: scene)
     }
 
     private func makeCoordinateMapper(
@@ -924,6 +942,12 @@ public struct Viewport: View {
             && activeAffordanceDrag == nil
         let constructionHit = showsConstructionHighlight ? hoveredCanvasHit : nil
         let constructionModelPoint = showsConstructionHighlight ? hoveredModelPoint : nil
+        let sectionDisplayPlan = sectionClippingPlan.map {
+            ViewportSectionClippingPlan(
+                sectionPlan: $0,
+                scene: scene
+            )
+        }
 
         if constructionHit?.bodyFace == nil,
            constructionHit?.bodyEdge == nil,
@@ -950,7 +974,8 @@ public struct Viewport: View {
                     isHovered: hoveredFeatureIDs.contains(item.featureID)
                         || previewObjectFeatureIDs.contains(item.featureID)
                         || item.sceneNodeID.map(hoveredSceneNodeIDs.contains) == true
-                        || item.sceneNodeID.map(previewObjectSceneNodeIDs.contains) == true
+                        || item.sceneNodeID.map(previewObjectSceneNodeIDs.contains) == true,
+                    sectionAction: sectionDisplayPlan?.action(forSceneItemID: item.id)
                 )
             }
         }
@@ -4022,9 +4047,13 @@ public struct Viewport: View {
         in context: inout GraphicsContext,
         layout: ViewportLayout,
         isSelected: Bool,
-        isHovered: Bool
+        isHovered: Bool,
+        sectionAction: SectionAnalysisClippingPlan.BodyAction?
     ) {
         guard case .body(let component) = item.kind else {
+            return
+        }
+        guard sectionAction != .hidden else {
             return
         }
         if let mesh = component.mesh {
@@ -4034,17 +4063,21 @@ public struct Viewport: View {
                 in: &context,
                 layout: layout,
                 isSelected: isSelected,
-                isHovered: isHovered
+                isHovered: isHovered,
+                sectionAction: sectionAction
             )
             return
         }
         let edit = editedBodies[item.featureID] ?? ViewportObjectEditState(item: item)
-        let fillColor = isSelected ? ViewportTheme.selection : ViewportTheme.bodySurface
+        let isSectionClipped = sectionAction == .clipped
+        let fillColor = isSelected
+            ? ViewportTheme.selection
+            : (isSectionClipped ? ViewportTheme.sectionAnalysisPlane : ViewportTheme.bodySurface)
         drawProjectedBox(
             edit.projectedBox(layout: layout),
             color: fillColor,
-            isHighlighted: isSelected || isHovered,
-            fillOpacity: isSelected ? 0.44 : 0.52,
+            isHighlighted: isSelected || isHovered || isSectionClipped,
+            fillOpacity: isSelected ? 0.44 : (isSectionClipped ? 0.24 : 0.52),
             in: &context
         )
     }
@@ -4055,11 +4088,16 @@ public struct Viewport: View {
         in context: inout GraphicsContext,
         layout: ViewportLayout,
         isSelected: Bool,
-        isHovered: Bool
+        isHovered: Bool,
+        sectionAction: SectionAnalysisClippingPlan.BodyAction?
     ) {
-        let baseColor = isSelected ? ViewportTheme.selection : ViewportTheme.bodySurface
-        let fillOpacity = isSelected ? 0.28 : 0.22
-        let strokeOpacity = isSelected || isHovered ? 0.62 : 0.26
+        let isSectionClipped = sectionAction == .clipped
+        let baseColor = isSelected
+            ? ViewportTheme.selection
+            : (isSectionClipped ? ViewportTheme.sectionAnalysisPlane : ViewportTheme.bodySurface)
+        let fillOpacity = isSelected ? 0.28 : (isSectionClipped ? 0.16 : 0.22)
+        let strokeOpacity = isSelected || isHovered || isSectionClipped ? 0.62 : 0.26
+        let meshClipper = ViewportSectionMeshClipper()
         var index = 0
         while index + 2 < mesh.indices.count {
             let firstIndex = Int(mesh.indices[index])
@@ -4068,6 +4106,21 @@ public struct Viewport: View {
             guard firstIndex < mesh.positions.count,
                   secondIndex < mesh.positions.count,
                   thirdIndex < mesh.positions.count else {
+                index += 3
+                continue
+            }
+            if isSectionClipped,
+               let sectionAnalysis,
+               let retainedSide = sectionClippingPlan?.retainedSide,
+               meshClipper.includesTriangle(
+                   first: mesh.positions[firstIndex],
+                   second: mesh.positions[secondIndex],
+                   third: mesh.positions[thirdIndex],
+                   item: item,
+                   plane: sectionAnalysis.plane,
+                   retaining: retainedSide,
+                   toleranceMeters: sectionAnalysis.toleranceMeters
+               ) == false {
                 index += 3
                 continue
             }

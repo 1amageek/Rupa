@@ -35,6 +35,7 @@ public struct MainView: View {
     @State private var isConstructionPlaneSnapEnabled: Bool
     @State private var snapOverrideState: WorkspaceSnapOverrideState
     @State private var surfaceAnalysisOptions: ViewportSurfaceAnalysisOptions
+    @State private var sectionClippingRetainedSide: SectionAnalysisRetainedSide
     @State private var selectedSplineControlPointIndex: Int
     @State private var sketchSplineControlPointSlideDistanceMeters: Double
     @State private var polySplineSurfaceVertexSlideDistanceMeters: Double
@@ -119,6 +120,7 @@ public struct MainView: View {
         self._isConstructionPlaneSnapEnabled = State(initialValue: true)
         self._snapOverrideState = State(initialValue: WorkspaceSnapOverrideState())
         self._surfaceAnalysisOptions = State(initialValue: ViewportSurfaceAnalysisOptions())
+        self._sectionClippingRetainedSide = State(initialValue: .front)
         self._selectedSplineControlPointIndex = State(initialValue: 0)
         self._sketchSplineControlPointSlideDistanceMeters = State(initialValue: editingDefaults.operationStepMeters)
         self._polySplineSurfaceVertexSlideDistanceMeters = State(initialValue: editingDefaults.operationStepMeters)
@@ -458,6 +460,7 @@ public struct MainView: View {
     private var workArea: some View {
         CollapsibleView(isExpanded: $isPreviewExpanded) {
             ZStack {
+                let sectionAnalysis = selectedSectionAnalysisSummary
                 Viewport(
                     document: session.document,
                     currentEvaluation: session.currentEvaluation,
@@ -471,7 +474,8 @@ public struct MainView: View {
                     surfaceAnalysis: selectedSurfaceAnalysisSummary,
                     surfaceAnalysisOptions: surfaceAnalysisOptions,
                     surfaceContinuity: selectedSurfaceContinuitySummary,
-                    sectionAnalysis: selectedSectionAnalysisSummary,
+                    sectionAnalysis: sectionAnalysis,
+                    sectionClippingPlan: selectedSectionClippingPlan(for: sectionAnalysis),
                     curveCurvatureDisplays: session.document.productMetadata.curveCurvatureDisplays,
                     pointDisplays: session.document.productMetadata.pointDisplays,
                     snapResolutionOptions: activeSnapResolutionOptions(),
@@ -4474,6 +4478,17 @@ public struct MainView: View {
 
     private var selectedSectionAnalysisSummary: SectionAnalysisResult? {
         sectionAnalysisStateBuilder.analysisSummary(for: selectedSceneNodes)
+    }
+
+    private func selectedSectionClippingPlan(
+        for analysis: SectionAnalysisResult?
+    ) -> SectionAnalysisClippingPlan? {
+        analysis.map {
+            SectionAnalysisClippingPlan(
+                result: $0,
+                retaining: sectionClippingRetainedSide
+            )
+        }
     }
 
     private func selectedSurfaceAnalysisSummaryResult(

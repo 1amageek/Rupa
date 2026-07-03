@@ -69,6 +69,48 @@ import RupaViewportScene
     #expect(plan.unmappedBodyIDs == ["behind"])
 }
 
+@Test func viewportSectionClippingPlanRemovesHiddenBodiesFromRenderedScene() {
+    let visibleFeatureID = FeatureID()
+    let hiddenFeatureID = FeatureID()
+    let scene = ViewportScene(items: [
+        viewportSectionClippingBodyItem(
+            id: "visible-item",
+            featureID: visibleFeatureID,
+            bodyID: "visible"
+        ),
+        viewportSectionClippingBodyItem(
+            id: "hidden-item",
+            featureID: hiddenFeatureID,
+            bodyID: "hidden"
+        ),
+    ])
+    let sectionPlan = SectionAnalysisClippingPlan(
+        retainedSide: .front,
+        bodies: [
+            SectionAnalysisClippingPlan.Body(
+                bodyID: "visible",
+                name: nil,
+                classification: .inFront,
+                action: .visible
+            ),
+            SectionAnalysisClippingPlan.Body(
+                bodyID: "hidden",
+                name: nil,
+                classification: .behind,
+                action: .hidden
+            ),
+        ]
+    )
+
+    let renderedScene = ViewportSectionClippingPlan(
+        sectionPlan: sectionPlan,
+        scene: scene
+    )
+    .renderedScene(from: scene)
+
+    #expect(renderedScene.items.map(\.id) == ["visible-item"])
+}
+
 private func viewportSectionClippingBodyItem(
     id: String,
     featureID: FeatureID,

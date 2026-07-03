@@ -82,6 +82,12 @@ public struct ViewportSectionClippingPlan: Equatable {
         items.first { $0.sceneItemID == sceneItemID }?.action
     }
 
+    public func renderedScene(from scene: ViewportScene) -> ViewportScene {
+        ViewportScene(items: scene.items.filter { item in
+            action(forSceneItemID: item.id) != .hidden
+        })
+    }
+
     private static func matchingBody(
         item: ViewportSceneItem,
         component: ViewportBodyComponent,

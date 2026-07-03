@@ -332,7 +332,7 @@ import RupaCore
     let section = try #require(result.entries.first { $0.area == .sectionAnalysis })
     #expect(section.currentRating == .partial)
     #expect(section.referenceSources.contains("https://doc.plasticity.xyz/common/section-analysis"))
-    #expect(section.openWork.contains { $0.contains("Rendered mesh clipping") })
+    #expect(section.openWork.contains { $0.contains("Exact clipped cap surfaces") })
     #expect(section.evidence.contains { evidence in
         evidence.sourceFiles.contains("RupaKit/Sources/RupaCore/SectionAnalysisService.swift")
     })
@@ -347,6 +347,9 @@ import RupaCore
     })
     #expect(section.evidence.contains { evidence in
         evidence.sourceFiles.contains("RupaKit/Sources/RupaRendering/ViewportSectionClippingPlan.swift")
+    })
+    #expect(section.evidence.contains { evidence in
+        evidence.sourceFiles.contains("RupaKit/Sources/RupaRendering/ViewportSectionMeshClipper.swift")
     })
     #expect(section.evidence.contains { evidence in
         evidence.sourceFiles.contains("RupaKit/Sources/RupaRendering/ViewportSectionAnalysisOverlay.swift")
@@ -364,6 +367,9 @@ import RupaCore
         evidence.tests.contains("RupaKit/Tests/RupaRenderingTests/ViewportSectionClippingPlanTests.swift")
     })
     #expect(section.evidence.contains { evidence in
+        evidence.tests.contains("RupaKit/Tests/RupaRenderingTests/ViewportSectionMeshClipperTests.swift")
+    })
+    #expect(section.evidence.contains { evidence in
         evidence.tests.contains("RupaKit/Tests/RupaAgentContractTests/AgentCapabilityContractTests.swift")
     })
     #expect(section.evidence.contains { evidence in
@@ -377,6 +383,9 @@ import RupaCore
     })
     #expect(section.evidence.contains { evidence in
         evidence.notes.contains("Agent and Automation analyzeSection requests can ask for a retained clipping side and receive a SectionAnalysisClippingPlan in the same non-mutating result envelope.")
+    })
+    #expect(section.evidence.contains { evidence in
+        evidence.notes.contains("Viewport section clipping now removes hidden bodies from the rendered and pickable scene and culls mesh triangles to the retained section side without allocating replacement mesh buffers.")
     })
     #expect(section.evidence.contains { evidence in
         evidence.notes.contains("Selecting a section or construction plane can drive a non-mutating viewport overlay that renders the section plane frame, closed section fill, hatching, and bounded body intersection segments from the same SectionAnalysisResult contract used by Agent and Automation.")
