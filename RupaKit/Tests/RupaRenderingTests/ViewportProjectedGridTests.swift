@@ -350,9 +350,35 @@ import RupaViewportScene
     })
 }
 
+@Test func viewportProjectedGridKeepsScaleLabelsVisuallySeparated() throws {
+    var document = DesignDocument.empty(named: "Dense Label Grid")
+    try document.setRulerConfiguration(WorkspaceScalePreset.architecture.rulerConfiguration)
+
+    let grid = ViewportProjectedGrid(
+        document: document,
+        size: CGSize(width: 360.0, height: 240.0),
+        camera: .identity,
+        basis: .isometric,
+        visualSpacingMode: .adaptive
+    )
+    let labelsByAxis = Dictionary(grouping: grid.scaleLabels, by: \.axis)
+
+    #expect(!grid.scaleLabels.isEmpty)
+    for labels in labelsByAxis.values {
+        let sorted = labels.sorted { $0.valueMeters < $1.valueMeters }
+        for (previous, current) in zip(sorted, sorted.dropFirst()) {
+            #expect(distance(previous.position, current.position) >= 70.0)
+        }
+    }
+}
+
 private func vector(for line: ViewportProjectedGrid.Line) -> CGVector {
     CGVector(
         dx: line.end.x - line.start.x,
         dy: line.end.y - line.start.y
     )
+}
+
+private func distance(_ first: CGPoint, _ second: CGPoint) -> CGFloat {
+    hypot(first.x - second.x, first.y - second.y)
 }

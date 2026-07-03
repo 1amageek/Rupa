@@ -6,6 +6,7 @@ import RupaViewportScene
 public struct ViewportProjectedGrid: Equatable {
     public typealias Axis = ViewportCoordinateAxis
     private static let maximumGridLineCount = 360
+    private static let minimumScaleLabelSpacingPixels: CGFloat = 72.0
     private static let readableStepMultipliers = [1.0, 2.0, 5.0, 10.0]
 
     public typealias VisualSpacingMode = ViewportGridVisualSpacingMode
@@ -403,6 +404,11 @@ public struct ViewportProjectedGrid: Equatable {
         maximumLabelMeters: Double
     ) -> [ScaleLabel] {
         let step = max(CGFloat(majorStepMeters), 1.0e-12)
+        let labelStride = scaleLabelStride(
+            step: step,
+            layout: layout,
+            plane: plane
+        )
         let minFirstIndex = Int(floor(modelBounds.minX / step))
         let maxFirstIndex = Int(ceil(modelBounds.maxX / step))
         let minSecondIndex = Int(floor(modelBounds.minY / step))
@@ -417,6 +423,9 @@ public struct ViewportProjectedGrid: Equatable {
         labels.reserveCapacity(maxFirstIndex - minFirstIndex + maxSecondIndex - minSecondIndex)
 
         for index in minFirstIndex ... maxFirstIndex where index != 0 {
+            guard shouldShowScaleLabel(index: index, stride: labelStride) else {
+                continue
+            }
             let value = CGFloat(index) * step
             guard shouldShowScaleLabel(valueMeters: Double(value), maximumLabelMeters: maximumLabelMeters) else {
                 continue
@@ -440,6 +449,9 @@ public struct ViewportProjectedGrid: Equatable {
         }
 
         for index in minSecondIndex ... maxSecondIndex where index != 0 {
+            guard shouldShowScaleLabel(index: index, stride: labelStride) else {
+                continue
+            }
             let value = CGFloat(index) * step
             guard shouldShowScaleLabel(valueMeters: Double(value), maximumLabelMeters: maximumLabelMeters) else {
                 continue
@@ -463,6 +475,26 @@ public struct ViewportProjectedGrid: Equatable {
         }
 
         return labels
+    }
+
+    private static func scaleLabelStride(
+        step: CGFloat,
+        layout: ViewportLayout,
+        plane: GridPlane
+    ) -> Int {
+        let firstDirection = layout.basis.direction(for: plane.firstAxis)
+        let secondDirection = layout.basis.direction(for: plane.secondAxis)
+        let firstPixels = hypot(firstDirection.dx, firstDirection.dy) * step * layout.scale
+        let secondPixels = hypot(secondDirection.dx, secondDirection.dy) * step * layout.scale
+        let majorStepPixels = max(min(firstPixels, secondPixels), 1.0e-9)
+        return max(1, Int(ceil(minimumScaleLabelSpacingPixels / majorStepPixels)))
+    }
+
+    private static func shouldShowScaleLabel(
+        index: Int,
+        stride: Int
+    ) -> Bool {
+        index.isMultiple(of: max(stride, 1))
     }
 
     private static func shouldShowScaleLabel(
