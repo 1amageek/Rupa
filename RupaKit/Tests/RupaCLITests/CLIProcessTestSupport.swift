@@ -173,6 +173,7 @@ private func rupaExecutableURL() throws -> URL {
         let productsDirectory = testBundleDirectory.deletingLastPathComponent()
         candidates.append(productsDirectory.appendingPathComponent("rupa"))
     }
+    candidates.append(contentsOf: packageBuildProductCandidates())
 
     for candidate in candidates {
         if fileManager.isExecutableFile(atPath: candidate.path) {
@@ -184,4 +185,29 @@ private func rupaExecutableURL() throws -> URL {
         code: .commandFailed,
         message: "Could not locate the rupa executable in test build products. Checked: \(candidates.map(\.path).joined(separator: ", "))"
     )
+}
+
+private func packageBuildProductCandidates(
+    sourceFilePath: String = #filePath
+) -> [URL] {
+    let sourceFileURL = URL(fileURLWithPath: sourceFilePath)
+    let packageDirectory = sourceFileURL
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+    let buildDirectory = packageDirectory.appendingPathComponent(".build", isDirectory: true)
+    return [
+        buildDirectory
+            .appendingPathComponent("out", isDirectory: true)
+            .appendingPathComponent("Products", isDirectory: true)
+            .appendingPathComponent("Debug", isDirectory: true)
+            .appendingPathComponent("rupa"),
+        buildDirectory
+            .appendingPathComponent("debug", isDirectory: true)
+            .appendingPathComponent("rupa"),
+        buildDirectory
+            .appendingPathComponent("arm64-apple-macosx", isDirectory: true)
+            .appendingPathComponent("debug", isDirectory: true)
+            .appendingPathComponent("rupa"),
+    ]
 }
