@@ -12,6 +12,7 @@ struct ViewportCanvasChromeLayout: Equatable {
 
     var viewportSize: CGSize
     var bottomReservedHeight: CGFloat = 0.0
+    var additionalExclusionRects: [CGRect] = []
 
     var axisControlRect: CGRect {
         clamped(
@@ -53,10 +54,21 @@ struct ViewportCanvasChromeLayout: Equatable {
     }
 
     var inputExclusionRects: [CGRect] {
-        [
+        var rects = [
             viewportBadgeExclusionRect,
             axisControlExclusionRect,
-        ].filter { !$0.isEmpty && !$0.isNull }
+        ]
+        rects.append(contentsOf: additionalExclusionRects.map { rect in
+            clamped(
+                rect.insetBy(
+                    dx: -Self.inputExclusionPadding,
+                    dy: -Self.inputExclusionPadding
+                )
+            )
+        })
+        return rects.filter { rect in
+            !rect.isEmpty && !rect.isNull
+        }
     }
 
     func containsCanvasChrome(_ point: CGPoint) -> Bool {

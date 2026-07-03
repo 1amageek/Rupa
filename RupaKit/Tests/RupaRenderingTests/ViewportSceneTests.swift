@@ -3156,6 +3156,28 @@ import Testing
 }
 
 @MainActor
+@Test func viewportCanvasChromeLayoutMergesExternalOverlayExclusions() {
+    let viewportSize = CGSize(width: 800.0, height: 600.0)
+    let overlayRect = CGRect(x: 612.0, y: 44.0, width: 38.0, height: 210.0)
+    let layout = ViewportCanvasChromeLayout(
+        viewportSize: viewportSize,
+        additionalExclusionRects: [overlayRect]
+    )
+
+    #expect(layout.inputExclusionRects.count == 3)
+    #expect(layout.containsCanvasChrome(CGPoint(x: overlayRect.midX, y: overlayRect.midY)))
+    #expect(layout.containsCanvasChrome(CGPoint(
+        x: overlayRect.minX - ViewportCanvasChromeLayout.inputExclusionPadding / 2.0,
+        y: overlayRect.midY
+    )))
+    #expect(!layout.containsCanvasChrome(CGPoint(
+        x: overlayRect.minX - ViewportCanvasChromeLayout.inputExclusionPadding - 2.0,
+        y: overlayRect.midY
+    )))
+    #expect(layout.intersectsCanvasChrome(overlayRect))
+}
+
+@MainActor
 @Test func viewportAxisTriadReservesBottomOverlayHeight() {
     let viewportSize = CGSize(width: 800.0, height: 600.0)
     let reservedHeight: CGFloat = 48.0

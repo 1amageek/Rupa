@@ -121,6 +121,7 @@ public struct Viewport: View {
     private let projectionRequest: ViewportProjectionRequest?
     private let selectionHitPolicy: ViewportSelectionHitPolicy
     private let bottomChromeReservedHeight: CGFloat
+    private let canvasOverlayExclusionRects: [CGRect]
     private let gridVisualSpacingMode: ViewportProjectedGrid.VisualSpacingMode
     private let cameraResetSignal: Int
     private let hoverClearSignal: Int
@@ -195,6 +196,7 @@ public struct Viewport: View {
         projectionRequest: ViewportProjectionRequest? = nil,
         selectionHitPolicy: ViewportSelectionHitPolicy = .all,
         bottomChromeReservedHeight: CGFloat = 0.0,
+        canvasOverlayExclusionRects: [CGRect] = [],
         gridVisualSpacingMode: ViewportProjectedGrid.VisualSpacingMode = .adaptive,
         cameraResetSignal: Int = 0,
         hoverClearSignal: Int = 0,
@@ -268,6 +270,9 @@ public struct Viewport: View {
         self.projectionRequest = projectionRequest
         self.selectionHitPolicy = selectionHitPolicy
         self.bottomChromeReservedHeight = max(0.0, bottomChromeReservedHeight)
+        self.canvasOverlayExclusionRects = canvasOverlayExclusionRects.filter { rect in
+            rect.isNull == false && rect.isEmpty == false
+        }
         self.gridVisualSpacingMode = gridVisualSpacingMode
         self.cameraResetSignal = cameraResetSignal
         self.hoverClearSignal = hoverClearSignal
@@ -327,7 +332,8 @@ public struct Viewport: View {
                 let basis = projectionBasis(at: timeline.date)
                 let chromeLayout = ViewportCanvasChromeLayout(
                     viewportSize: proxy.size,
-                    bottomReservedHeight: bottomChromeReservedHeight
+                    bottomReservedHeight: bottomChromeReservedHeight,
+                    additionalExclusionRects: canvasOverlayExclusionRects
                 )
                 let projectedGrid = ViewportProjectedGrid(
                     document: document,

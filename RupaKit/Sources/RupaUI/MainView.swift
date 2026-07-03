@@ -8,6 +8,25 @@ import SwiftUI
 private enum WorkspaceCanvasOverlayLayout {
     static let edgePadding: CGFloat = ViewportCanvasChromeMetrics.edgePadding
     static let topChromeHeight: CGFloat = ViewportCanvasChromeMetrics.topControlHeight
+    static let coordinateSpaceName = "WorkspaceCanvasOverlaySpace"
+}
+
+private enum WorkspaceCanvasOverlayChromeID: Hashable {
+    case topBar
+    case toolPalette
+    case utilityRail
+    case contextPanel
+}
+
+private struct WorkspaceCanvasOverlayExclusionRectPreferenceKey: PreferenceKey {
+    static let defaultValue: [WorkspaceCanvasOverlayChromeID: CGRect] = [:]
+
+    static func reduce(
+        value: inout [WorkspaceCanvasOverlayChromeID: CGRect],
+        nextValue: () -> [WorkspaceCanvasOverlayChromeID: CGRect]
+    ) {
+        value.merge(nextValue()) { _, next in next }
+    }
 }
 
 private struct ViewportContextPanelHeightPreferenceKey: PreferenceKey {
@@ -15,6 +34,23 @@ private struct ViewportContextPanelHeightPreferenceKey: PreferenceKey {
 
     static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
         value = max(value, nextValue())
+    }
+}
+
+private extension View {
+    func workspaceCanvasOverlayExclusion(_ id: WorkspaceCanvasOverlayChromeID) -> some View {
+        background {
+            GeometryReader { proxy in
+                Color.clear.preference(
+                    key: WorkspaceCanvasOverlayExclusionRectPreferenceKey.self,
+                    value: [
+                        id: proxy.frame(
+                            in: .named(WorkspaceCanvasOverlayLayout.coordinateSpaceName)
+                        ),
+                    ]
+                )
+            }
+        }
     }
 }
 
@@ -81,6 +117,7 @@ public struct MainView: View {
     @State private var slotProfileCommandState: SlotProfileCommandState
     @State private var viewportProjectionBasis: ViewportProjectionBasis
     @State private var viewportContextPanelHeight: CGFloat
+    @State private var viewportOverlayExclusionRects: [CGRect]
     @State private var viewportCameraResetSignal: Int
     @State private var isUtilityRailExpanded: Bool
     @State private var viewAlignedConstructionPlaneRequest: ViewAlignedConstructionPlaneRequest?
@@ -168,6 +205,7 @@ public struct MainView: View {
         self._slotProfileCommandState = State(initialValue: .inactive)
         self._viewportProjectionBasis = State(initialValue: .isometric)
         self._viewportContextPanelHeight = State(initialValue: 0.0)
+        self._viewportOverlayExclusionRects = State(initialValue: [])
         self._viewportCameraResetSignal = State(initialValue: 0)
         self._isUtilityRailExpanded = State(initialValue: isUtilityRailExpanded)
         self._viewAlignedConstructionPlaneRequest = State(initialValue: nil)
@@ -489,6 +527,7 @@ public struct MainView: View {
                     projectionRequest: viewportProjectionRequest,
                     selectionHitPolicy: selectionScope.viewportSelectionHitPolicy,
                     bottomChromeReservedHeight: viewportContextPanelHeight,
+                    canvasOverlayExclusionRects: viewportOverlayExclusionRects,
                     gridVisualSpacingMode: session.document.productMetadata.viewportGridSettings.visualSpacingMode,
                     cameraResetSignal: viewportCameraResetSignal,
                     hoverClearSignal: viewportHoverClearSignal,
@@ -544,20 +583,24 @@ public struct MainView: View {
                 )
                 .zIndex(0)
             }
+            .coordinateSpace(name: WorkspaceCanvasOverlayLayout.coordinateSpaceName)
             .overlay(alignment: .top) {
                 workspaceTopBar
                     .padding(.top, 8)
                     .padding(.horizontal, 8)
+                    .workspaceCanvasOverlayExclusion(.topBar)
                     .onHover(perform: handleWorkspaceOverlayHover)
             }
             .overlay(alignment: .leading) {
                 floatingToolPalette
                     .padding(.leading, 8)
+                    .workspaceCanvasOverlayExclusion(.toolPalette)
                     .onHover(perform: handleWorkspaceOverlayHover)
             }
             .overlay(alignment: .trailing) {
                 workspaceUtilityRail
                     .padding(.trailing, 8)
+                    .workspaceCanvasOverlayExclusion(.utilityRail)
                     .onHover(perform: handleWorkspaceOverlayHover)
             }
             .overlay(alignment: .bottom) {
@@ -572,6 +615,7 @@ public struct MainView: View {
                             )
                         }
                     }
+                    .workspaceCanvasOverlayExclusion(.contextPanel)
                     .onHover(perform: handleWorkspaceOverlayHover)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -579,6 +623,12 @@ public struct MainView: View {
                 let normalizedHeight = max(0.0, height.rounded(.up))
                 if abs(viewportContextPanelHeight - normalizedHeight) > 0.5 {
                     viewportContextPanelHeight = normalizedHeight
+                }
+            }
+            .onPreferenceChange(WorkspaceCanvasOverlayExclusionRectPreferenceKey.self) { rectsByID in
+                let nextRects = normalizedCanvasOverlayExclusionRects(rectsByID)
+                if viewportOverlayExclusionRects != nextRects {
+                    viewportOverlayExclusionRects = nextRects
                 }
             }
         } content: {
@@ -1216,6 +1266,45 @@ public struct MainView: View {
             true
         case .select, .sweep, .mesh, .measure:
             false
+        }
+    }
+
+    private func normalizedCanvasOverlayExclusionRects(
+        _ rectsByID: [WorkspaceCanvasOverlayChromeID: CGRect]
+    ) -> [CGRect] {
+        rectsByID.values.compactMap { rect in
+            guard rect.isNull == false,
+                  rect.isEmpty == false,
+                  rect.origin.x.isFinite,
+                  rect.origin.y.isFinite,
+                  rect.width.isFinite,
+                  rect.height.isFinite else {
+                return nil
+            }
+
+            let minX = rect.minX.rounded(.down)
+            let minY = rect.minY.rounded(.down)
+            let maxX = rect.maxX.rounded(.up)
+            let maxY = rect.maxY.rounded(.up)
+            let normalized = CGRect(
+                x: minX,
+                y: minY,
+                width: max(0.0, maxX - minX),
+                height: max(0.0, maxY - minY)
+            )
+            return normalized.isEmpty ? nil : normalized
+        }
+        .sorted { left, right in
+            if left.minY != right.minY {
+                return left.minY < right.minY
+            }
+            if left.minX != right.minX {
+                return left.minX < right.minX
+            }
+            if left.width != right.width {
+                return left.width < right.width
+            }
+            return left.height < right.height
         }
     }
 
