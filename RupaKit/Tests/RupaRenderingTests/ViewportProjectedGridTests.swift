@@ -40,6 +40,9 @@ import RupaViewportScene
     #expect(grid.scaleReadout.accessibilityText.contains("mode adaptive"))
     #expect(grid.scaleReadout.accessibilityText.contains(grid.scaleReadout.snapStep.text))
     #expect(grid.scaleReadout.accessibilityText.contains(grid.scaleReadout.visibleSpan.text))
+    #expect(grid.scaleReadout.workspaceSpan.meters == document.ruler.visibleSpanMeters)
+    #expect(grid.scaleReadout.accessibilityText.contains("workspace span"))
+    #expect(grid.scaleReadout.accessibilityText.contains(grid.scaleReadout.workspaceSpan.text))
     #expect(grid.majorStepMeters >= document.ruler.majorTickMeters)
     #expect(grid.minorStepMeters >= document.ruler.minorTickMeters)
     #expect(abs(firstXVector.dx) > 0.0)
@@ -76,6 +79,8 @@ import RupaViewportScene
     #expect(grid.scaleLabels.allSatisfy { abs($0.displayValue) <= 1_000.0 })
     #expect(grid.scaleReadout.majorStep.displayUnit.isMetric)
     #expect(grid.scaleReadout.visibleSpan.displayUnit == .kilometer)
+    #expect(grid.scaleReadout.workspaceSpan.displayUnit == .kilometer)
+    #expect(grid.scaleReadout.workspaceSpan.meters == document.ruler.visibleSpanMeters)
 }
 
 @Test func viewportProjectedGridReportsSitePlanningScaleReadout() throws {
@@ -94,6 +99,9 @@ import RupaViewportScene
     #expect(grid.scaleReadout.majorStep.displayUnit == .kilometer)
     #expect(grid.scaleReadout.snapStep.displayUnit == .kilometer)
     #expect(grid.scaleReadout.visibleSpan.displayUnit == .kilometer)
+    #expect(grid.scaleReadout.workspaceSpan.displayUnit == .kilometer)
+    #expect(grid.scaleReadout.workspaceSpan.meters == document.ruler.visibleSpanMeters)
+    #expect(grid.scaleReadout.workspaceSpan.text == "100km")
     #expect(grid.scaleReadout.compactText.contains("Grid"))
     #expect(grid.scaleReadout.compactText.contains("Snap"))
     #expect(grid.scaleReadout.compactText.contains(grid.scaleReadout.snapStep.text))
@@ -121,6 +129,9 @@ import RupaViewportScene
     #expect(grid.scaleReadout.snapStep.displayUnit == .kilometer)
     #expect(grid.scaleReadout.snapStep.meters == document.ruler.minorTickMeters)
     #expect(grid.scaleReadout.visibleSpan.displayUnit == .kilometer)
+    #expect(grid.scaleReadout.workspaceSpan.displayUnit == .kilometer)
+    #expect(grid.scaleReadout.workspaceSpan.meters == document.ruler.visibleSpanMeters)
+    #expect(grid.scaleReadout.workspaceSpan.text == "1,000km")
     #expect(grid.scaleReadout.compactText.contains("Grid"))
     #expect(grid.scaleReadout.compactText.contains("km"))
     #expect(grid.scaleReadout.accessibilityText.contains(grid.scaleReadout.visibleSpan.text))
@@ -188,6 +199,7 @@ import RupaViewportScene
     #expect(grid.scaleReadout.compactText.contains("capped"))
     #expect(grid.scaleReadout.compactText.contains(grid.scaleReadout.snapStep.text))
     #expect(grid.scaleReadout.accessibilityText.contains("visual grid capped"))
+    #expect(grid.scaleReadout.accessibilityText.contains("workspace span 100km"))
 }
 
 @Test func viewportProjectedGridCapsFixedVisualSpacingForDenseRegionalViews() throws {
@@ -211,6 +223,7 @@ import RupaViewportScene
     #expect(grid.scaleReadout.compactText.contains("capped"))
     #expect(grid.scaleReadout.compactText.contains(grid.scaleReadout.snapStep.text))
     #expect(grid.scaleReadout.accessibilityText.contains("visual grid capped by line budget"))
+    #expect(grid.scaleReadout.accessibilityText.contains("workspace span 1,000km"))
 }
 
 @Test func viewportProjectedGridUsesReadableOneTwoFiveStepProgression() {

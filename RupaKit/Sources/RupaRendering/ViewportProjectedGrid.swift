@@ -81,6 +81,7 @@ public struct ViewportProjectedGrid: Equatable {
         public var majorStep: Length
         public var snapStep: Length
         public var visibleSpan: Length
+        public var workspaceSpan: Length
         public var minorStepPixels: CGFloat
         public var visualSpacingMode: VisualSpacingMode
         public var isVisualStepCapped: Bool
@@ -90,6 +91,7 @@ public struct ViewportProjectedGrid: Equatable {
             majorStep: Length,
             snapStep: Length,
             visibleSpan: Length,
+            workspaceSpan: Length,
             minorStepPixels: CGFloat,
             visualSpacingMode: VisualSpacingMode,
             isVisualStepCapped: Bool
@@ -98,6 +100,7 @@ public struct ViewportProjectedGrid: Equatable {
             self.majorStep = majorStep
             self.snapStep = snapStep
             self.visibleSpan = visibleSpan
+            self.workspaceSpan = workspaceSpan
             self.minorStepPixels = minorStepPixels
             self.visualSpacingMode = visualSpacingMode
             self.isVisualStepCapped = isVisualStepCapped
@@ -120,6 +123,7 @@ public struct ViewportProjectedGrid: Equatable {
                 "snap \(snapStep.text)",
                 "major \(majorStep.text)",
                 "visible span \(visibleSpan.text)",
+                "workspace span \(workspaceSpan.text)",
             ]
             if isVisualStepCapped {
                 components.append("visual grid capped by line budget")
@@ -221,6 +225,7 @@ public struct ViewportProjectedGrid: Equatable {
             majorStepMeters: resolvedMajorStepMeters,
             snapStepMeters: ruler.minorTickMeters,
             visibleSpanMeters: max(Double(modelBounds.width), Double(modelBounds.height)),
+            workspaceSpanMeters: ruler.visibleSpanMeters,
             minorStepPixels: minorStepPixels,
             unit: document.displayUnit,
             visualSpacingMode: visualSpacingMode,
@@ -496,6 +501,7 @@ public struct ViewportProjectedGrid: Equatable {
         majorStepMeters: Double,
         snapStepMeters: Double,
         visibleSpanMeters: Double,
+        workspaceSpanMeters: Double,
         minorStepPixels: CGFloat,
         unit: LengthDisplayUnit,
         visualSpacingMode: VisualSpacingMode,
@@ -505,6 +511,7 @@ public struct ViewportProjectedGrid: Equatable {
         let major = lengthDisplay(valueMeters: majorStepMeters, preferredUnit: unit)
         let snap = lengthDisplay(valueMeters: snapStepMeters, preferredUnit: unit)
         let span = lengthDisplay(valueMeters: visibleSpanMeters, preferredUnit: unit)
+        let workspaceSpan = lengthDisplay(valueMeters: workspaceSpanMeters, preferredUnit: unit)
         return ScaleReadout(
             minorStep: ScaleReadout.Length(
                 meters: minorStepMeters,
@@ -529,6 +536,12 @@ public struct ViewportProjectedGrid: Equatable {
                 displayValue: span.value,
                 displayUnit: span.unit,
                 text: span.text
+            ),
+            workspaceSpan: ScaleReadout.Length(
+                meters: workspaceSpanMeters,
+                displayValue: workspaceSpan.value,
+                displayUnit: workspaceSpan.unit,
+                text: workspaceSpan.text
             ),
             minorStepPixels: minorStepPixels,
             visualSpacingMode: visualSpacingMode,
