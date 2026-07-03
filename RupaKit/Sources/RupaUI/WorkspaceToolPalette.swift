@@ -8,14 +8,14 @@ struct WorkspaceToolPalette: View {
     var accessibilityIdentifier: (ModelingTool) -> String
 
     var body: some View {
-        VStack(spacing: 5) {
+        VStack(spacing: WorkspaceToolPaletteMetrics.itemSpacing) {
             ForEach(ModelingTool.allCases) { tool in
                 toolPaletteButton(tool)
             }
         }
-        .padding(4)
+        .padding(WorkspaceToolPaletteMetrics.containerPadding)
         .glassEffect(.regular, in: Capsule())
-        .shadow(color: .black.opacity(0.16), radius: 18, x: 0, y: 8)
+        .shadow(color: .black.opacity(0.12), radius: 10, x: 0, y: 4)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("CanvasToolPalette")
     }
@@ -37,20 +37,25 @@ struct WorkspaceToolPalette: View {
 
     private func toolPaletteIcon(_ tool: ModelingTool, isSelected: Bool) -> some View {
         Image(systemName: tool.systemImage)
-            .font(.system(size: 15, weight: .semibold))
+            .font(.system(size: WorkspaceToolPaletteMetrics.iconSize, weight: .semibold))
             .symbolRenderingMode(.hierarchical)
             .foregroundStyle(isSelected ? Color.accentColor : Color.primary.opacity(0.72))
-            .frame(width: 36, height: 36)
+            .frame(
+                width: WorkspaceToolPaletteMetrics.buttonSize,
+                height: WorkspaceToolPaletteMetrics.buttonSize
+            )
             .background {
                 Circle()
                     .fill(isSelected ? Color.accentColor.opacity(0.22) : Color.white.opacity(0.001))
             }
             .overlay {
-                Circle()
-                    .strokeBorder(
-                        isSelected ? Color.accentColor.opacity(0.56) : Color.primary.opacity(0.10),
-                        lineWidth: 1
-                    )
+                if isSelected {
+                    Circle()
+                        .strokeBorder(
+                            Color.accentColor.opacity(0.56),
+                            lineWidth: WorkspaceToolPaletteMetrics.selectedStrokeWidth
+                        )
+                }
             }
             .contentShape(Circle())
     }
