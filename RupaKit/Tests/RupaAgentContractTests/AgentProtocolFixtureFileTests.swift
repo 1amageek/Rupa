@@ -54,6 +54,11 @@ struct AgentProtocolFixtureFileTests {
                 #expect(result.workspaceInteractionScale?.slotWidth.meters == 200.0)
                 #expect(result.workspaceBounds?.maximumSpan == 25_000.0)
                 #expect(result.viewportGridSettings?.visualSpacingMode == .adaptive)
+                #expect(result.viewportGridScale?.snapStep.meters == 100.0)
+                #expect(result.viewportGridScale?.snapStep.displayValue == 0.1)
+                #expect(result.viewportGridScale?.snapStep.displayUnitSymbol == "km")
+                #expect(result.viewportGridScale?.configuredMajorStep.text == "1 km")
+                #expect(result.viewportGridScale?.workspaceSpan.text == "100 km")
             case "parameter.setExpression":
                 guard case .command(let result) = response else {
                     Issue.record("parameter.setExpression fixture must decode as AgentResponse.command.")

@@ -37,6 +37,10 @@ import Testing
     #expect(result.workspaceInteractionScale?.operationStep.meters == 1_000.0)
     #expect(result.workspaceInteractionScale?.operationStep.displayValue == 1.0)
     #expect(result.workspaceInteractionScale?.operationStep.displayUnitSymbol == "km")
+    #expect(result.viewportGridScale?.visualSpacingMode == .adaptive)
+    #expect(result.viewportGridScale?.snapStep.meters == 1_000.0)
+    #expect(result.viewportGridScale?.snapStep.displayValue == 1.0)
+    #expect(result.viewportGridScale?.workspaceSpan.text == "1,000 km")
     #expect(result.workspaceScalePresetOptions?.map(\.preset) == WorkspaceScalePreset.allCases)
     #expect(result.workspaceScalePresetOptions?.contains { option in
         option.preset == .regionalPlanning
@@ -77,6 +81,9 @@ import Testing
     #expect(result.didMutate)
     #expect(result.generation == DocumentGeneration(1))
     #expect(result.viewportGridSettings == settings)
+    #expect(result.viewportGridScale?.visualSpacingMode == .fixed)
+    #expect(result.viewportGridScale?.snapStep.meters == session.document.ruler.minorTickMeters)
+    #expect(result.viewportGridScale?.workspaceSpan.meters == session.document.ruler.visibleSpanMeters)
     #expect(session.document.productMetadata.viewportGridSettings == settings)
 }
 
@@ -156,6 +163,9 @@ import Testing
     #expect(result.workspaceScale?.matchedPreset == .sitePlanning)
     #expect(result.workspaceScale?.displayUnit == .kilometer)
     #expect(result.workspaceScale?.visibleSpanDisplayValue == 100.0)
+    #expect(result.viewportGridScale?.snapStep.meters == 100.0)
+    #expect(result.viewportGridScale?.snapStep.displayValue == 0.1)
+    #expect(result.viewportGridScale?.workspaceSpan.text == "100 km")
     #expect(result.workspaceBounds?.maximumSpan == 25_000.0)
     #expect(result.workspaceScaleRecommendation == nil)
     #expect(result.workspaceScalePresetOptions?.map(\.preset) == WorkspaceScalePreset.allCases)

@@ -80,6 +80,39 @@
     },
     "viewportGridSettings": {
       "visualSpacingMode": "adaptive"
+    },
+    "viewportGridScale": {
+      "visualSpacingMode": "adaptive",
+      "displayUnit": "kilometer",
+      "displayUnitSymbol": "km",
+      "snapStep": {
+        "meters": 100,
+        "displayValue": 0.1,
+        "displayUnit": "kilometer",
+        "displayUnitSymbol": "km",
+        "text": "0.1 km"
+      },
+      "configuredMinorStep": {
+        "meters": 100,
+        "displayValue": 0.1,
+        "displayUnit": "kilometer",
+        "displayUnitSymbol": "km",
+        "text": "0.1 km"
+      },
+      "configuredMajorStep": {
+        "meters": 1000,
+        "displayValue": 1,
+        "displayUnit": "kilometer",
+        "displayUnitSymbol": "km",
+        "text": "1 km"
+      },
+      "workspaceSpan": {
+        "meters": 100000,
+        "displayValue": 100,
+        "displayUnit": "kilometer",
+        "displayUnitSymbol": "km",
+        "text": "100 km"
+      }
     }
   }
 }
