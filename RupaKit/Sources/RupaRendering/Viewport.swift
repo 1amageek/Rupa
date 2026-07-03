@@ -620,7 +620,7 @@ public struct Viewport: View {
     private func viewportBadge(
         scaleReadout: ViewportProjectedGrid.ScaleReadout
     ) -> some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 7) {
             Image(systemName: "scope")
                 .symbolRenderingMode(.hierarchical)
             Text(scaleReadout.minorStep.displayUnit.symbol)
@@ -647,14 +647,13 @@ public struct Viewport: View {
                     .lineLimit(1)
             }
         }
-        .padding(.horizontal, 9)
-        .padding(.vertical, 5)
+        .padding(.horizontal, 8)
         .frame(
             width: ViewportCanvasChromeLayout.viewportBadgeSize.width,
             height: ViewportCanvasChromeLayout.viewportBadgeSize.height,
             alignment: .leading
         )
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 6))
+        .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
     }
 
     private var featureCount: Int {

@@ -54,11 +54,7 @@ struct ViewportAxisTriad: View {
         .padding(.horizontal, 7.0)
         .padding(.vertical, 4.0)
         .frame(width: Self.controlSize.width, height: Self.controlSize.height)
-        .background(.regularMaterial, in: Capsule())
-        .overlay(
-            Capsule()
-                .stroke(.white.opacity(0.10), lineWidth: 1.0)
-        )
+        .glassEffect(.regular, in: Capsule())
         .contentShape(Capsule())
         .accessibilityElement(children: .contain)
     }

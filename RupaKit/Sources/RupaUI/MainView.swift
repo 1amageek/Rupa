@@ -7,6 +7,7 @@ import SwiftUI
 
 private enum WorkspaceCanvasOverlayLayout {
     static let edgePadding: CGFloat = 8.0
+    static let topChromeHeight: CGFloat = 30.0
 }
 
 private struct ViewportContextPanelHeightPreferenceKey: PreferenceKey {
@@ -1216,14 +1217,7 @@ public struct MainView: View {
     }
 
     private var workspaceTopBar: some View {
-        HStack(spacing: 10) {
-            Label(documentTitle, systemImage: "cube.transparent")
-                .font(.callout.weight(.semibold))
-                .lineLimit(1)
-                .frame(maxWidth: 220, alignment: .leading)
-
-            workspaceDivider
-
+        HStack(spacing: 8) {
             workspaceStatusChip(
                 evaluationStatusTitle,
                 systemImage: evaluationStatusSystemImage,
@@ -1241,8 +1235,6 @@ public struct MainView: View {
             }
 
             workspaceScaleMenu
-
-            Spacer(minLength: 12)
 
             workspaceIconButton(
                 systemImage: isPreviewExpanded ? "list.bullet.rectangle.fill" : "list.bullet.rectangle",
@@ -1269,8 +1261,8 @@ public struct MainView: View {
             }
         }
         .padding(.horizontal, 8)
-        .padding(.vertical, 6)
-        .frame(maxWidth: 760)
+        .frame(height: WorkspaceCanvasOverlayLayout.topChromeHeight)
+        .fixedSize(horizontal: true, vertical: false)
         .workspaceGlassContainer()
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("WorkspaceTopBar")

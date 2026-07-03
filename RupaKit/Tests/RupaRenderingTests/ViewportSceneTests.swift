@@ -3106,6 +3106,21 @@ import Testing
 }
 
 @MainActor
+@Test func viewportTopChromeUsesCompactCanvasOverlayMetrics() {
+    let viewportSize = CGSize(width: 800.0, height: 600.0)
+    let layout = ViewportCanvasChromeLayout(viewportSize: viewportSize)
+    let rect = layout.viewportBadgeRect
+
+    #expect(ViewportCanvasChromeLayout.viewportBadgeSize.height == 30.0)
+    #expect(ViewportCanvasChromeLayout.viewportBadgeSize.width <= 300.0)
+    #expect(ViewportCanvasChromeLayout.viewportBadgePadding <= 8.0)
+    #expect(rect.minX == ViewportCanvasChromeLayout.viewportBadgePadding)
+    #expect(rect.minY == ViewportCanvasChromeLayout.viewportBadgePadding)
+    #expect(rect.height == ViewportCanvasChromeLayout.viewportBadgeSize.height)
+    #expect(layout.containsCanvasChrome(CGPoint(x: 12.0, y: 12.0)))
+}
+
+@MainActor
 @Test func viewportAxisTriadUsesCompactBottomCenterInputExclusion() {
     let viewportSize = CGSize(width: 800.0, height: 600.0)
     let layout = ViewportCanvasChromeLayout(viewportSize: viewportSize)
