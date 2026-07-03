@@ -205,12 +205,21 @@ public final class AgentCommandController: AgentClientProtocol {
         capability(
             "setParameterExpression",
             category: .parameter,
-            summary: "Parse a user-facing expression string and upsert the resulting typed parameter.",
+            summary: "Parse a user-facing expression string and upsert the resulting typed parameter using document-scale defaults when units are omitted.",
             access: .agentRequest,
             mutatesDocument: true,
             discovery: [.parameters],
             targets: [.document],
-            failureMode: "Rejects parse errors, dependency errors, kind mismatches, and stale generations before mutation."
+            failureMode: "Rejects parse errors, dependency errors, kind mismatches, and stale generations before mutation.",
+            optionMatrix: [
+                AgentCapabilityDescriptor.OptionAxis(
+                    name: "defaults",
+                    supportedValues: [
+                        "omitted uses current document display unit",
+                        "explicit lengthUnit and angleUnit override document defaults",
+                    ]
+                )
+            ]
         ),
         capability(
             "setObjectDimensionExpression",
@@ -232,6 +241,7 @@ public final class AgentCommandController: AgentClientProtocol {
                     notes: [
                         "Expressions resolve through the current document parameter table.",
                         "Length units include micrometers through kilometers plus inches and feet.",
+                        "Omit defaults to use the current document display unit for unitless length literals.",
                     ]
                 )
             ]
@@ -256,6 +266,7 @@ public final class AgentCommandController: AgentClientProtocol {
                     notes: [
                         "Line, radius, and diameter dimensions resolve as lengths.",
                         "Line angle and arc span dimensions resolve as angles.",
+                        "Omit defaults to use the current document display unit for unitless length literals.",
                     ]
                 )
             ]
@@ -276,6 +287,7 @@ public final class AgentCommandController: AgentClientProtocol {
                     notes: [
                         "The existing selection dimension determines whether the expression must resolve to length or angle.",
                         "Length targets share the same explicit-unit and architectural input support as object dimensions.",
+                        "Omit defaults to use the current document display unit for unitless length literals.",
                     ]
                 )
             ]
@@ -2133,7 +2145,7 @@ public final class AgentCommandController: AgentClientProtocol {
                     parameterName: name,
                     parameters: session.document.cadDocument.parameters,
                     targetKind: kind,
-                    defaults: defaults
+                    defaults: expressionDefaults(defaults, session: session)
                 )
                 let result = try runner.execute(
                     .upsertParameter(
@@ -2540,14 +2552,15 @@ public final class AgentCommandController: AgentClientProtocol {
     private func parseDimensionExpression(
         _ expression: String,
         targetKind: QuantityKind,
-        defaults: ParameterExpressionDefaults,
+        defaults: ParameterExpressionDefaults?,
         session: EditorSession
     ) throws -> CADExpression {
+        let resolvedDefaults = expressionDefaults(defaults, session: session)
         switch targetKind {
         case .length:
             return try LengthInputParser().parseExpression(
                 from: expression,
-                defaultUnit: defaults.lengthUnit,
+                defaultUnit: resolvedDefaults.lengthUnit,
                 parameters: session.document.cadDocument.parameters
             )
         case .angle, .scalar:
@@ -2555,9 +2568,19 @@ public final class AgentCommandController: AgentClientProtocol {
                 expression,
                 parameters: session.document.cadDocument.parameters,
                 targetKind: targetKind,
-                defaults: defaults
+                defaults: resolvedDefaults
             )
         }
+    }
+
+    private func expressionDefaults(
+        _ defaults: ParameterExpressionDefaults?,
+        session: EditorSession
+    ) -> ParameterExpressionDefaults {
+        defaults ?? ParameterExpressionDefaults(
+            lengthUnit: session.document.displayUnit,
+            angleUnit: .degree
+        )
     }
 
     private func selectionDimensionQuantityKind(

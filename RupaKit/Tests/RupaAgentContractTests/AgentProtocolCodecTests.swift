@@ -61,6 +61,47 @@ import SwiftCAD
     #expect(params["expectedGeneration"] != nil)
 }
 
+@Test func agentMessageCodecAllowsOmittedExpressionDefaults() async throws {
+    let codec = AgentMessageCodec()
+    let sessionID = UUID(uuidString: "00000000-0000-0000-0000-000000000001")!
+    let requestJSON = """
+    {
+      "jsonrpc": "2.0",
+      "id": "parameter-defaults",
+      "method": "parameter.setExpression",
+      "params": {
+        "sessionID": "00000000-0000-0000-0000-000000000001",
+        "name": "siteWidth",
+        "expression": "12",
+        "kind": "length",
+        "expectedGeneration": {
+          "value": 4
+        }
+      }
+    }
+    """.data(using: .utf8)!
+
+    let decoded = try codec.decodeRequest(from: requestJSON)
+
+    guard case .setParameterExpression(
+        let decodedSessionID,
+        let name,
+        let expression,
+        let kind,
+        let defaults,
+        let expectedGeneration
+    ) = decoded else {
+        #expect(Bool(false))
+        return
+    }
+    #expect(decodedSessionID == sessionID)
+    #expect(name == "siteWidth")
+    #expect(expression == "12")
+    #expect(kind == .length)
+    #expect(defaults == nil)
+    #expect(expectedGeneration == DocumentGeneration(4))
+}
+
 @Test func agentMessageCodecWrapsResponsesInJSONRPCEnvelope() async throws {
     let codec = AgentMessageCodec()
     let response = AgentResponse.status(

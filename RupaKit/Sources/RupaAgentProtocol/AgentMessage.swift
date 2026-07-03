@@ -21,7 +21,7 @@ public enum AgentRequest: Codable, Equatable, Sendable {
         name: String,
         expression: String,
         kind: QuantityKind,
-        defaults: ParameterExpressionDefaults,
+        defaults: ParameterExpressionDefaults?,
         expectedGeneration: DocumentGeneration?
     )
     case setObjectDimensionExpression(
@@ -29,7 +29,7 @@ public enum AgentRequest: Codable, Equatable, Sendable {
         target: SelectionTarget,
         kind: ObjectDimensionKind,
         expression: String,
-        defaults: ParameterExpressionDefaults,
+        defaults: ParameterExpressionDefaults?,
         expectedGeneration: DocumentGeneration?
     )
     case setSketchEntityDimensionExpression(
@@ -37,14 +37,14 @@ public enum AgentRequest: Codable, Equatable, Sendable {
         target: SelectionTarget,
         kind: SketchEntityDimensionKind,
         expression: String,
-        defaults: ParameterExpressionDefaults,
+        defaults: ParameterExpressionDefaults?,
         expectedGeneration: DocumentGeneration?
     )
     case setSelectionDimensionTargetExpression(
         sessionID: UUID,
         id: SelectionDimensionID,
         expression: String,
-        defaults: ParameterExpressionDefaults,
+        defaults: ParameterExpressionDefaults?,
         expectedGeneration: DocumentGeneration?
     )
     case evaluate(

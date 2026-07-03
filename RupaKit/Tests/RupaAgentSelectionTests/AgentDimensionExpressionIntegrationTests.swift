@@ -7,6 +7,157 @@ import SwiftCAD
 @testable import RupaAgent
 
 @MainActor
+@Test func agentDimensionExpressionDefaultsFollowDocumentDisplayUnitWhenOmitted() async throws {
+    var document = DesignDocument.empty(named: "Agent Scale Expression Defaults")
+    try document.setRulerConfiguration(WorkspaceScalePreset.sitePlanning.rulerConfiguration)
+    let lineFeatureID = try document.createLineSketch(
+        name: "Agent Site Line",
+        plane: .xy,
+        start: SketchPoint(
+            x: .length(0.0, .meter),
+            y: .length(0.0, .meter)
+        ),
+        end: SketchPoint(
+            x: .length(10.0, .meter),
+            y: .length(0.0, .meter)
+        )
+    )
+    let server = AgentCommandController()
+    let sessionID = UUID()
+    let session = EditorSession(document: document)
+    server.register(session: session, id: sessionID)
+
+    let createBodyResponse = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .createExtrudedRectangle(
+                name: "Agent Site Box",
+                plane: .xy,
+                width: .length(1.0, .meter),
+                height: .length(1.0, .meter),
+                depth: .length(1.0, .meter),
+                direction: .normal
+            ),
+            expectedGeneration: session.generation
+        )
+    )
+    guard case .command = createBodyResponse else {
+        Issue.record("Agent must create a body before editing object dimensions.")
+        return
+    }
+    let bodyNode = try #require(session.document.productMetadata.sceneNodes.values.first {
+        $0.reference?.kind == .body
+    })
+
+    let parameterResponse = server.handle(
+        .setParameterExpression(
+            sessionID: sessionID,
+            name: "siteWidth",
+            expression: "12",
+            kind: .length,
+            defaults: nil,
+            expectedGeneration: session.generation
+        )
+    )
+    guard case .command = parameterResponse else {
+        Issue.record("Agent must accept omitted expression defaults.")
+        return
+    }
+    let parameter = try #require(session.document.cadDocument.parameters.parameters.values.first {
+        $0.name == "siteWidth"
+    })
+    let resolvedParameter = try session.document.cadDocument.parameters.resolvedValue(for: parameter.expression)
+    #expect(resolvedParameter.kind == .length)
+    #expect(abs(resolvedParameter.value - 12_000.0) <= 1.0e-9)
+
+    let objectDimensionResponse = server.handle(
+        .setObjectDimensionExpression(
+            sessionID: sessionID,
+            target: SelectionTarget(sceneNodeID: bodyNode.id),
+            kind: .sizeX,
+            expression: "6",
+            defaults: nil,
+            expectedGeneration: session.generation
+        )
+    )
+    guard case .command(let objectDimensionResult) = objectDimensionResponse else {
+        Issue.record("Agent must edit object dimensions with omitted defaults.")
+        return
+    }
+    #expect(objectDimensionResult.commandName == "setObjectDimension")
+    let editedBodyNode = try #require(session.document.productMetadata.sceneNodes[bodyNode.id])
+    guard case .length(let sizeX)? = editedBodyNode.object?.properties["size.x"] else {
+        Issue.record("Expected a body size X property.")
+        return
+    }
+    #expect(abs(sizeX - 6_000.0) <= 1.0e-9)
+
+    let lineTarget = try agentLineCurveTarget(in: session.document, featureID: lineFeatureID)
+    let sketchDimensionResponse = server.handle(
+        .setSketchEntityDimensionExpression(
+            sessionID: sessionID,
+            target: lineTarget,
+            kind: .length,
+            expression: "4",
+            defaults: nil,
+            expectedGeneration: session.generation
+        )
+    )
+    guard case .command(let sketchDimensionResult) = sketchDimensionResponse else {
+        Issue.record("Agent must edit sketch dimensions with omitted defaults.")
+        return
+    }
+    #expect(sketchDimensionResult.commandName == "setSketchEntityDimension")
+    let lengthEndpoints = try agentLineEndpoints(in: session.document, featureID: lineFeatureID)
+    let resolvedLineLength = hypot(
+        lengthEndpoints.end.x - lengthEndpoints.start.x,
+        lengthEndpoints.end.y - lengthEndpoints.start.y
+    )
+    #expect(abs(resolvedLineLength - 4_000.0) <= 1.0e-9)
+
+    let endpointTargets = try agentLineEndpointTargets(in: session.document, featureID: lineFeatureID)
+    let addDimensionResponse = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .addSelectionDimension(
+                name: "Agent Site Span",
+                kind: .distance,
+                first: endpointTargets.start,
+                second: endpointTargets.end,
+                target: .length(4.0, .meter)
+            ),
+            expectedGeneration: session.generation
+        )
+    )
+    guard case .command(let addDimensionResult) = addDimensionResponse,
+          let dimensionID = addDimensionResult.addedSelectionDimensionID else {
+        Issue.record("Agent must create a selection dimension.")
+        return
+    }
+
+    let targetResponse = server.handle(
+        .setSelectionDimensionTargetExpression(
+            sessionID: sessionID,
+            id: dimensionID,
+            expression: "3",
+            defaults: nil,
+            expectedGeneration: session.generation
+        )
+    )
+    guard case .command(let targetResult) = targetResponse else {
+        Issue.record("Agent must edit selection dimensions with omitted defaults.")
+        return
+    }
+    #expect(targetResult.commandName == "setSelectionDimensionTarget")
+    let dimension = try #require(
+        session.document.cadDocument.selectionDimensions.first { $0.id == dimensionID }
+    )
+    let quantity = try session.document.cadDocument.parameters.resolvedValue(for: dimension.target)
+    #expect(quantity.kind == .length)
+    #expect(abs(quantity.value - 3_000.0) <= 1.0e-9)
+}
+
+@MainActor
 @Test func agentSetsObjectDimensionExpressionWithKilometerParameter() async throws {
     let server = AgentCommandController()
     let sessionID = UUID()

@@ -610,7 +610,7 @@ private struct SetParameterExpressionParams: AgentRequestParameterPayload, Equat
     var name: String
     var expression: String
     var kind: QuantityKind
-    var defaults: ParameterExpressionDefaults
+    var defaults: ParameterExpressionDefaults?
     var expectedGeneration: DocumentGeneration?
 }
 
@@ -628,7 +628,7 @@ private struct SetObjectDimensionExpressionParams: AgentRequestParameterPayload,
     var target: SelectionTarget
     var kind: ObjectDimensionKind
     var expression: String
-    var defaults: ParameterExpressionDefaults
+    var defaults: ParameterExpressionDefaults?
     var expectedGeneration: DocumentGeneration?
 }
 
@@ -646,7 +646,7 @@ private struct SetSketchEntityDimensionExpressionParams: AgentRequestParameterPa
     var target: SelectionTarget
     var kind: SketchEntityDimensionKind
     var expression: String
-    var defaults: ParameterExpressionDefaults
+    var defaults: ParameterExpressionDefaults?
     var expectedGeneration: DocumentGeneration?
 }
 
@@ -662,7 +662,7 @@ private struct SetSelectionDimensionTargetExpressionParams: AgentRequestParamete
     var sessionID: UUID
     var id: SelectionDimensionID
     var expression: String
-    var defaults: ParameterExpressionDefaults
+    var defaults: ParameterExpressionDefaults?
     var expectedGeneration: DocumentGeneration?
 }
 
