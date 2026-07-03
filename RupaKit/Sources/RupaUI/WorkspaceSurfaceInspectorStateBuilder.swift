@@ -111,6 +111,14 @@ struct WorkspaceSurfaceInspectorStateBuilder {
         }
     }
 
+    func surfaceBasisStateResult(for nodes: [SceneNode]) -> Result<SurfaceBasisInspectorState?, Error> {
+        do {
+            return .success(try resolveSurfaceBasisState(for: nodes))
+        } catch {
+            return .failure(error)
+        }
+    }
+
     func analysisSummary(for nodes: [SceneNode]) -> SurfaceAnalysisResult? {
         switch analysisSummaryResult(for: nodes) {
         case .success(let summary):
@@ -258,6 +266,40 @@ struct WorkspaceSurfaceInspectorStateBuilder {
             return (entry.selectionReference, frameQuery)
         }
         return state.resolvingFrames(try resolvedFrameMap(for: referenceQueries))
+    }
+
+    private func resolveSurfaceBasisState(for nodes: [SceneNode]) throws -> SurfaceBasisInspectorState? {
+        let selectedPersistentNames = generatedTopologyPersistentNames()
+        let hasSurfaceNode = nodes.contains { node in
+            node.object?.geometryRole == .surface
+        }
+        guard hasSurfaceNode || !selectedPersistentNames.isEmpty else {
+            return nil
+        }
+
+        let summary = try SurfaceSourceSummaryService().summarize(document: document)
+        return SurfaceBasisInspectorState(
+            summaryResult: summary,
+            selectedSceneNodeIDs: Set(nodes.map { $0.id.description }),
+            selectedFeatureIDs: selectedSourceFeatureIDs(for: nodes),
+            selectedFacePersistentNames: selectedPersistentNames
+        )
+    }
+
+    private func selectedSourceFeatureIDs(for nodes: [SceneNode]) -> Set<String> {
+        var featureIDs = Set<String>()
+        for node in nodes {
+            if let featureID = node.reference?.featureID {
+                featureIDs.insert(featureID.description)
+            }
+            if let featureID = node.object?.sourceFeatureID {
+                featureIDs.insert(featureID.description)
+            }
+            if let featureID = node.object?.sourceSection?.featureID {
+                featureIDs.insert(featureID.description)
+            }
+        }
+        return featureIDs
     }
 
     private func boundaryContinuityCompatibility(

@@ -2,6 +2,7 @@ import SwiftUI
 import RupaCore
 
 struct WorkspaceSurfaceInspectorView: View {
+    var basisStateResult: Result<SurfaceBasisInspectorState?, Error>
     var analysisResult: Result<InspectorSurfaceAnalysis?, Error>
     var continuityResult: Result<InspectorSurfaceContinuity?, Error>
     var boundaryContinuityStateResult: Result<SurfaceBoundaryContinuityInspectorState?, Error>
@@ -28,11 +29,114 @@ struct WorkspaceSurfaceInspectorView: View {
         Double,
         Double
     ) -> Void
+    var onSelectBasisReference: (SelectionReference) -> Void
 
     var body: some View {
+        surfaceBasisSection
         surfaceAnalysisSection
         surfaceContinuitySection
         surfaceBoundaryContinuitySection
+    }
+
+    @ViewBuilder
+    private var surfaceBasisSection: some View {
+        switch basisStateResult {
+        case .success(let state):
+            if let state {
+                inspectorSection("Surface Basis") {
+                    workspaceInspectorValueRow("Source", state.sourceTitle)
+                    workspaceInspectorValueRow("Patches", state.patchTitle)
+                    workspaceInspectorValueRow("Basis", state.basisTitle)
+                    workspaceInspectorValueRow("Editable", state.editableTitle)
+                    ForEach(state.previewEntries) { entry in
+                        surfaceBasisEntryRow(entry)
+                    }
+                    if state.hiddenEntryCount > 0 {
+                        workspaceInspectorValueRow("More", "\(state.hiddenEntryCount) basis references")
+                    }
+                    surfaceBasisQuickActions(state)
+                }
+            }
+        case .failure(let error):
+            if showsUnavailableSections {
+                inspectorSection("Surface Basis") {
+                    workspaceInspectorValueRow("Status", "Unavailable")
+                    workspaceInspectorValueRow("Reason", error.localizedDescription)
+                }
+            }
+        }
+    }
+
+    private func surfaceBasisEntryRow(
+        _ entry: SurfaceBasisInspectorState.Entry
+    ) -> some View {
+        HStack(spacing: 8) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(entry.title)
+                    .font(.caption)
+                    .fontWeight(.medium)
+                Text(entry.valueTitle)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+            Spacer(minLength: 6)
+            Text(entry.editabilityTitle)
+                .font(.caption2)
+                .foregroundStyle(entry.isEditable ? Color.accentColor : Color.secondary)
+                .lineLimit(1)
+            Button {
+                onSelectBasisReference(entry.selectionReference)
+            } label: {
+                Image(systemName: entry.kind.systemImage)
+                    .frame(width: 16, height: 16)
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+            .help("Select \(entry.title)")
+            .accessibilityLabel("Select \(entry.title)")
+            .accessibilityIdentifier("InspectorSurfaceBasis.entry.select")
+        }
+    }
+
+    @ViewBuilder
+    private func surfaceBasisQuickActions(
+        _ state: SurfaceBasisInspectorState
+    ) -> some View {
+        inspectorActionRow {
+            if let spanReference = state.firstEditableSpanReference {
+                Button {
+                    onSelectBasisReference(spanReference)
+                } label: {
+                    Label("Edit Span", systemImage: "square.split.2x1")
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .accessibilityIdentifier("InspectorSurfaceBasis.editSpan")
+            }
+            if let knotReference = state.firstEditableKnotReference {
+                Button {
+                    onSelectBasisReference(knotReference)
+                } label: {
+                    Label("Edit Knot", systemImage: "circle.grid.cross")
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .accessibilityIdentifier("InspectorSurfaceBasis.editKnot")
+            }
+            if state.firstEditableSpanReference == nil,
+               state.firstEditableKnotReference == nil,
+               let reference = state.firstSelectableReference {
+                Button {
+                    onSelectBasisReference(reference)
+                } label: {
+                    Label("Inspect", systemImage: "scope")
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .accessibilityIdentifier("InspectorSurfaceBasis.inspect")
+            }
+        }
     }
 
     @ViewBuilder

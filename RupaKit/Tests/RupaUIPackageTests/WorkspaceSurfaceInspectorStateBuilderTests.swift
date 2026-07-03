@@ -82,6 +82,92 @@ import Testing
     #expect(state.entries.first?.isBoundary == false)
 }
 
+@Test func workspaceSurfaceInspectorStateBuilderExposesSurfaceBasisSelection() throws {
+    var document = DesignDocument.empty()
+    let featureID = try document.createBSplineSurface(
+        name: "Inspector Basis Surface",
+        surface: workspaceSurfaceInspectorDirectBSplineSurface()
+    )
+    let sceneNode = try workspaceSurfaceInspectorSceneNode(
+        featureID: featureID,
+        in: document
+    )
+    let builder = WorkspaceSurfaceInspectorStateBuilder(
+        document: document,
+        selection: SelectionModel(selectedTargets: [SelectionTarget(sceneNodeID: sceneNode.id)]),
+        currentEvaluation: nil,
+        documentGeneration: DocumentGeneration(),
+        objectRegistry: .builtIn,
+        surfaceAnalysisOptions: SurfaceAnalysisOptions(sampleDensity: .standard)
+    )
+
+    let state = try #require(try builder.surfaceBasisStateResult(for: [sceneNode]).get())
+
+    #expect(state.sourceCount == 1)
+    #expect(state.patchCount == 1)
+    #expect(state.spanCount > 0)
+    #expect(state.knotCount > 0)
+    #expect(state.entries.allSatisfy { $0.sourceID == featureID.description })
+    #expect(state.firstSelectableReference != nil)
+    #expect(state.firstEditableSpanReference != nil)
+}
+
+@Test func workspaceSurfaceInspectorStateBuilderFiltersSurfaceBasisByGeneratedFaceSelection() throws {
+    var document = DesignDocument.empty()
+    let firstFeatureID = try document.createBSplineSurface(
+        name: "First Inspector Basis Surface",
+        surface: workspaceSurfaceInspectorDirectBSplineSurface()
+    )
+    let secondFeatureID = try document.createBSplineSurface(
+        name: "Second Inspector Basis Surface",
+        surface: workspaceSurfaceInspectorOffsetDirectBSplineSurface()
+    )
+    let firstSceneNode = try workspaceSurfaceInspectorSceneNode(
+        featureID: firstFeatureID,
+        in: document
+    )
+    let secondSceneNode = try workspaceSurfaceInspectorSceneNode(
+        featureID: secondFeatureID,
+        in: document
+    )
+    let nodes = [firstSceneNode, secondSceneNode]
+    let objectBuilder = WorkspaceSurfaceInspectorStateBuilder(
+        document: document,
+        selection: SelectionModel(selectedTargets: nodes.map { SelectionTarget(sceneNodeID: $0.id) }),
+        currentEvaluation: nil,
+        documentGeneration: DocumentGeneration(),
+        objectRegistry: .builtIn,
+        surfaceAnalysisOptions: SurfaceAnalysisOptions(sampleDensity: .standard)
+    )
+    let objectState = try #require(try objectBuilder.surfaceBasisStateResult(for: nodes).get())
+    let firstFeatureEntry = try #require(objectState.entries.first { entry in
+        entry.sourceID == firstFeatureID.description
+    })
+    let faceName = try #require(firstFeatureEntry.facePersistentName)
+    let faceTarget = SelectionTarget(
+        sceneNodeID: firstSceneNode.id,
+        component: .face(.generatedTopology(faceName))
+    )
+    let faceBuilder = WorkspaceSurfaceInspectorStateBuilder(
+        document: document,
+        selection: SelectionModel(selectedTargets: [faceTarget]),
+        currentEvaluation: nil,
+        documentGeneration: DocumentGeneration(),
+        objectRegistry: .builtIn,
+        surfaceAnalysisOptions: SurfaceAnalysisOptions(sampleDensity: .standard)
+    )
+
+    let faceState = try #require(try faceBuilder.surfaceBasisStateResult(for: nodes).get())
+
+    #expect(faceState.sourceCount == 1)
+    #expect(faceState.patchCount == 1)
+    #expect(faceState.spanCount > 0)
+    #expect(faceState.knotCount > 0)
+    #expect(faceState.entries.allSatisfy { $0.facePersistentName == faceName })
+    #expect(faceState.entries.allSatisfy { $0.sourceID == firstFeatureID.description })
+    #expect(faceState.entries.count < objectState.entries.count)
+}
+
 @Test func workspaceSurfaceInspectorStateBuilderResolvesBoundaryContinuitySelection() throws {
     var document = DesignDocument.empty()
     let firstFeatureID = try document.createBSplineSurface(
@@ -288,6 +374,15 @@ private func workspaceSurfaceInspectorOffsetDirectBSplineSurface() -> BSplineSur
         topRight: Point3D(x: 0.02, y: 0.06, z: 0.001),
         topLeft: Point3D(x: 0.0, y: 0.06, z: 0.003)
     )
+}
+
+private func workspaceSurfaceInspectorSceneNode(
+    featureID: FeatureID,
+    in document: DesignDocument
+) throws -> SceneNode {
+    try #require(document.productMetadata.sceneNodes.values.first { node in
+        node.reference?.featureID == featureID && node.object?.geometryRole == .surface
+    })
 }
 
 private func workspaceSurfaceInspectorTrimReference(

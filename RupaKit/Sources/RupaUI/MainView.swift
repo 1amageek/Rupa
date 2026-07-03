@@ -4791,6 +4791,12 @@ public struct MainView: View {
         surfaceInspectorStateBuilder.continuityResult(for: nodes)
     }
 
+    private func selectedSurfaceBasisStateResult(
+        for nodes: [SceneNode]
+    ) -> Result<SurfaceBasisInspectorState?, Error> {
+        surfaceInspectorStateBuilder.surfaceBasisStateResult(for: nodes)
+    }
+
     private var defaultFaceOffsetStepMeters: Double {
         workspaceInteractionScaleDefaults.operationStepMeters
     }
@@ -5073,6 +5079,7 @@ public struct MainView: View {
         sectionAnalysisInspectorSection(nodes)
 
         WorkspaceSurfaceInspectorView(
+            basisStateResult: selectedSurfaceBasisStateResult(for: nodes),
             analysisResult: selectedSurfaceAnalysisResult(for: nodes),
             continuityResult: selectedSurfaceContinuityResult(for: nodes),
             boundaryContinuityStateResult: selectedSurfaceBoundaryContinuityStateResult,
@@ -5086,7 +5093,8 @@ public struct MainView: View {
             trimDomainVLowerBound: $surfaceTrimDomainVLowerBound,
             trimDomainVUpperBound: $surfaceTrimDomainVUpperBound,
             onMatchBoundaryContinuity: matchSurfaceBoundaryContinuity,
-            onSetTrimDomain: setSurfaceTrimDomain
+            onSetTrimDomain: setSurfaceTrimDomain,
+            onSelectBasisReference: selectSurfaceBasisReference
         )
 
         projectCurvesToFaceSection()
@@ -5321,6 +5329,15 @@ public struct MainView: View {
             onSetKnotMultiplicity: setSurfaceKnotMultiplicity,
             onSetFrameDisplay: setSurfaceFrameDisplay
         )
+    }
+
+    private func selectSurfaceBasisReference(_ reference: SelectionReference) {
+        guard session.selectReference(reference) else {
+            return
+        }
+        dimensionCommandState.deactivate()
+        syncOffsetCommandAvailability()
+        session.reportToolStatus("Surface basis reference selected.")
     }
 
     @ViewBuilder
