@@ -16,6 +16,7 @@ public struct SectionAnalysisQuery: Codable, Equatable, Sendable {
     public var toleranceMeters: Double?
     public var includesIntersectionSegments: Bool
     public var maximumIntersectionSegments: Int
+    public var clipping: SectionAnalysisClippingRequest?
 
     public init(
         source: Source,
@@ -23,7 +24,8 @@ public struct SectionAnalysisQuery: Codable, Equatable, Sendable {
         flipsNormal: Bool = false,
         toleranceMeters: Double? = nil,
         includesIntersectionSegments: Bool = true,
-        maximumIntersectionSegments: Int = 10_000
+        maximumIntersectionSegments: Int = 10_000,
+        clipping: SectionAnalysisClippingRequest? = nil
     ) {
         self.source = source
         self.offsetMeters = offsetMeters
@@ -31,6 +33,7 @@ public struct SectionAnalysisQuery: Codable, Equatable, Sendable {
         self.toleranceMeters = toleranceMeters
         self.includesIntersectionSegments = includesIntersectionSegments
         self.maximumIntersectionSegments = maximumIntersectionSegments
+        self.clipping = clipping
     }
 }
 

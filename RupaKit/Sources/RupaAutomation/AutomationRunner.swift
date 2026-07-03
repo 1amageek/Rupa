@@ -234,6 +234,7 @@ public struct AutomationRunner {
             )
             return sectionAnalysisAutomationResult(
                 result,
+                clipping: query.clipping,
                 in: session
             )
         case .describeConstructionPlanes:
@@ -1588,11 +1589,21 @@ public struct AutomationRunner {
 
     private func sectionAnalysisAutomationResult(
         _ sectionAnalysis: SectionAnalysisResult,
+        clipping: SectionAnalysisClippingRequest?,
         in session: EditorSession
     ) -> AutomationResult {
         let context = workspaceAutomationContext(in: session)
+        let clippingPlan = clipping.map { clipping in
+            SectionAnalysisClippingPlan(
+                result: sectionAnalysis,
+                retaining: clipping.retainedSide
+            )
+        }
         return AutomationResult(
-            message: "Section analysis completed with \(sectionAnalysis.intersectingBodyCount) intersecting body mesh(es).",
+            message: sectionAnalysisMessage(
+                sectionAnalysis,
+                clippingPlan: clippingPlan
+            ),
             commandName: "analyzeSection",
             generation: session.generation,
             didMutate: false,
@@ -1605,8 +1616,23 @@ public struct AutomationRunner {
             workspaceScalePresetOptions: context.scalePresetOptions,
             viewportGridSettings: context.viewportGridSettings,
             viewportGridScale: context.viewportGridScale,
-            sectionAnalysis: sectionAnalysis
+            sectionAnalysis: sectionAnalysis,
+            sectionClippingPlan: clippingPlan
         )
+    }
+
+    private func sectionAnalysisMessage(
+        _ sectionAnalysis: SectionAnalysisResult,
+        clippingPlan: SectionAnalysisClippingPlan?
+    ) -> String {
+        let analysisSummary = "Section analysis completed with \(sectionAnalysis.intersectingBodyCount) intersecting body mesh(es)."
+        guard let clippingPlan else {
+            return analysisSummary
+        }
+        return [
+            analysisSummary,
+            "Clipping plan retains \(clippingPlan.retainedSide.rawValue) side with \(clippingPlan.visibleBodyCount) visible, \(clippingPlan.hiddenBodyCount) hidden, and \(clippingPlan.clippedBodyCount) clipped body mesh(es).",
+        ].joined(separator: " ")
     }
 
     private func workspaceAutomationContext(

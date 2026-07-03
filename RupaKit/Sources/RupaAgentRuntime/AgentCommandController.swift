@@ -629,6 +629,13 @@ public final class AgentCommandController: AgentClientProtocol {
                     notes: [
                         "Flips front and behind classification while preserving the same section plane origin and in-plane coordinates."
                     ]
+                ),
+                AgentCapabilityDescriptor.OptionAxis(
+                    name: "clipping.retainedSide",
+                    supportedValues: SectionAnalysisRetainedSide.allCases.map(\.rawValue),
+                    notes: [
+                        "When provided, the automation result includes a non-mutating SectionAnalysisClippingPlan that marks viewport bodies as visible, hidden, or clipped for the retained side."
+                    ]
                 )
             ]
         ),

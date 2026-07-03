@@ -1554,7 +1554,12 @@ import SwiftCAD
     #expect(analyzeSection.discovery.contains(.meshSummary))
     #expect(analyzeSection.discovery.contains(.constructionPlaneSummary))
     #expect(analyzeSection.targets == [.body, .constructionPlane, .sceneNode])
-    #expect(analyzeSection.optionMatrix.map(\.name) == ["source", "offsetMeters", "flipsNormal"])
+    #expect(analyzeSection.optionMatrix.map(\.name) == [
+        "source",
+        "offsetMeters",
+        "flipsNormal",
+        "clipping.retainedSide",
+    ])
     #expect(analyzeSection.optionMatrix.contains { axis in
         axis.name == "offsetMeters"
             && axis.supportedValues.contains("finite signed meters")
@@ -1564,6 +1569,11 @@ import SwiftCAD
         axis.name == "flipsNormal"
             && axis.supportedValues == ["true", "false"]
             && axis.notes.contains { $0.contains("front and behind") }
+    })
+    #expect(analyzeSection.optionMatrix.contains { axis in
+        axis.name == "clipping.retainedSide"
+            && axis.supportedValues == ["front", "behind"]
+            && axis.notes.contains { $0.contains("SectionAnalysisClippingPlan") }
     })
 
     #expect(componentInstance.category == .component)

@@ -20,7 +20,8 @@ import Testing
                     source: .sketchPlane(.yz),
                     offsetMeters: 0.25,
                     flipsNormal: true,
-                    toleranceMeters: 1.0e-8
+                    toleranceMeters: 1.0e-8,
+                    clipping: SectionAnalysisClippingRequest(retainedSide: .front)
                 )
             ),
             expectedGeneration: DocumentGeneration(0)
@@ -34,6 +35,7 @@ import Testing
         return
     }
     let sectionAnalysis = try #require(result.sectionAnalysis)
+    let clippingPlan = try #require(result.sectionClippingPlan)
 
     #expect(result.commandName == "analyzeSection")
     #expect(!result.didMutate)
@@ -45,6 +47,9 @@ import Testing
     #expect(sectionAnalysis.intersectionSegments.isEmpty == false)
     #expect(sectionAnalysis.closedIntersectionContourCount >= 1)
     #expect(sectionAnalysis.intersectionContours.contains { $0.isClosed })
+    #expect(clippingPlan.retainedSide == .front)
+    #expect(clippingPlan.clippedBodyCount == 1)
+    #expect(clippingPlan.bodies.first?.persistentName == sectionAnalysis.bodies.first?.persistentName)
     #expect(decodedResponse == response)
 }
 

@@ -18,6 +18,7 @@ public struct AutomationResult: Codable, Equatable, Sendable {
     public var viewportGridSettings: ViewportGridSettings?
     public var viewportGridScale: ViewportGridScaleSnapshot?
     public var sectionAnalysis: SectionAnalysisResult?
+    public var sectionClippingPlan: SectionAnalysisClippingPlan?
 
     public init(
         message: String,
@@ -35,7 +36,8 @@ public struct AutomationResult: Codable, Equatable, Sendable {
         workspaceScalePresetOptions: [WorkspaceScalePresetProfile]? = nil,
         viewportGridSettings: ViewportGridSettings? = nil,
         viewportGridScale: ViewportGridScaleSnapshot? = nil,
-        sectionAnalysis: SectionAnalysisResult? = nil
+        sectionAnalysis: SectionAnalysisResult? = nil,
+        sectionClippingPlan: SectionAnalysisClippingPlan? = nil
     ) {
         self.message = message
         self.commandName = commandName
@@ -53,5 +55,6 @@ public struct AutomationResult: Codable, Equatable, Sendable {
         self.viewportGridSettings = viewportGridSettings
         self.viewportGridScale = viewportGridScale
         self.sectionAnalysis = sectionAnalysis
+        self.sectionClippingPlan = sectionClippingPlan
     }
 }

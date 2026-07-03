@@ -106,7 +106,8 @@ import SwiftCAD
                 flipsNormal: true,
                 toleranceMeters: 1.0e-8,
                 includesIntersectionSegments: false,
-                maximumIntersectionSegments: 256
+                maximumIntersectionSegments: 256,
+                clipping: SectionAnalysisClippingRequest(retainedSide: .front)
             )
         ),
         expectedGeneration: DocumentGeneration(5)

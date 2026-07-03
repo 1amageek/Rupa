@@ -5,6 +5,14 @@ public enum SectionAnalysisRetainedSide: String, Codable, CaseIterable, Sendable
     case behind
 }
 
+public struct SectionAnalysisClippingRequest: Codable, Equatable, Sendable {
+    public var retainedSide: SectionAnalysisRetainedSide
+
+    public init(retainedSide: SectionAnalysisRetainedSide) {
+        self.retainedSide = retainedSide
+    }
+}
+
 public struct SectionAnalysisClippingPlan: Codable, Equatable, Sendable {
     public enum BodyAction: String, Codable, Equatable, Sendable {
         case visible

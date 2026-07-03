@@ -4960,15 +4960,18 @@ import SwiftCAD
                 source: .sketchPlane(.yz),
                 offsetMeters: 0.25,
                 flipsNormal: true,
-                toleranceMeters: 1.0e-8
+                toleranceMeters: 1.0e-8,
+                clipping: SectionAnalysisClippingRequest(retainedSide: .front)
             )
         ),
         in: session
     )
 
     let sectionAnalysis = try #require(result.sectionAnalysis)
+    let clippingPlan = try #require(result.sectionClippingPlan)
 
-    #expect(result.message == "Section analysis completed with 1 intersecting body mesh(es).")
+    #expect(result.message.contains("Section analysis completed with 1 intersecting body mesh(es)."))
+    #expect(result.message.contains("Clipping plan retains front side"))
     #expect(result.commandName == "analyzeSection")
     #expect(!result.didMutate)
     #expect(result.generation == DocumentGeneration(0))
@@ -4980,6 +4983,8 @@ import SwiftCAD
     #expect(sectionAnalysis.intersectionSegments.isEmpty == false)
     #expect(sectionAnalysis.closedIntersectionContourCount >= 1)
     #expect(sectionAnalysis.intersectionContours.contains { $0.isClosed })
+    #expect(clippingPlan.retainedSide == .front)
+    #expect(clippingPlan.clippedBodyCount == 1)
     #expect(result.workspaceScale != nil)
     #expect(result.viewportGridScale != nil)
 }

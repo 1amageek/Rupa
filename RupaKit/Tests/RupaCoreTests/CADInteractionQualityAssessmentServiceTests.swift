@@ -343,6 +343,9 @@ import RupaCore
         evidence.sourceFiles.contains("RupaKit/Sources/RupaCore/SectionAnalysisClippingPlan.swift")
     })
     #expect(section.evidence.contains { evidence in
+        evidence.sourceFiles.contains("RupaKit/Sources/RupaAutomation/AutomationResult.swift")
+    })
+    #expect(section.evidence.contains { evidence in
         evidence.sourceFiles.contains("RupaKit/Sources/RupaRendering/ViewportSectionClippingPlan.swift")
     })
     #expect(section.evidence.contains { evidence in
@@ -361,6 +364,9 @@ import RupaCore
         evidence.tests.contains("RupaKit/Tests/RupaRenderingTests/ViewportSectionClippingPlanTests.swift")
     })
     #expect(section.evidence.contains { evidence in
+        evidence.tests.contains("RupaKit/Tests/RupaAgentContractTests/AgentCapabilityContractTests.swift")
+    })
+    #expect(section.evidence.contains { evidence in
         evidence.notes.contains("Section analysis queries can offset the resolved source plane and flip front/behind classification; the result plane reflects the transformed origin and normal without mutating the section scene node, construction plane, or sketch plane source.")
     })
     #expect(section.evidence.contains { evidence in
@@ -368,6 +374,9 @@ import RupaCore
     })
     #expect(section.evidence.contains { evidence in
         evidence.notes.contains("SectionAnalysisClippingPlan and ViewportSectionClippingPlan classify visible, hidden, and clipped bodies non-mutatingly for retained front or behind section sides.")
+    })
+    #expect(section.evidence.contains { evidence in
+        evidence.notes.contains("Agent and Automation analyzeSection requests can ask for a retained clipping side and receive a SectionAnalysisClippingPlan in the same non-mutating result envelope.")
     })
     #expect(section.evidence.contains { evidence in
         evidence.notes.contains("Selecting a section or construction plane can drive a non-mutating viewport overlay that renders the section plane frame, closed section fill, hatching, and bounded body intersection segments from the same SectionAnalysisResult contract used by Agent and Automation.")
