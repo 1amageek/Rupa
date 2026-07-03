@@ -1,13 +1,22 @@
 import SwiftUI
 
 enum WorkspaceUtilityRailLayout {
-    static let width: CGFloat = 178
+    static let width: CGFloat = expandedWidth
+    static let expandedWidth: CGFloat = 178
+    static let collapsedWidth: CGFloat = 38
     static let contentPadding: CGFloat = 8
+    static let collapsedContentPadding: CGFloat = 6
     static let sectionSpacing: CGFloat = 8
     static let sectionHeaderSpacing: CGFloat = 7
+    static let compactButtonSpacing: CGFloat = 5
+    static let compactButtonSize = CGSize(width: 26.0, height: 26.0)
 
     static var contentWidth: CGFloat {
-        width - contentPadding * 2
+        expandedWidth - contentPadding * 2
+    }
+
+    static var collapsedContentWidth: CGFloat {
+        collapsedWidth - collapsedContentPadding * 2
     }
 }
 

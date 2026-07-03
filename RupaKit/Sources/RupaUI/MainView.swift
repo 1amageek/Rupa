@@ -82,6 +82,7 @@ public struct MainView: View {
     @State private var viewportProjectionBasis: ViewportProjectionBasis
     @State private var viewportContextPanelHeight: CGFloat
     @State private var viewportCameraResetSignal: Int
+    @State private var isUtilityRailExpanded: Bool
     @State private var viewAlignedConstructionPlaneRequest: ViewAlignedConstructionPlaneRequest?
     @State private var viewportProjectionRequest: ViewportProjectionRequest?
     @State private var constructionPlaneRenameTargetID: ConstructionPlaneSourceID?
@@ -100,6 +101,7 @@ public struct MainView: View {
         isPreviewExpanded: Bool = false,
         columnVisibility: NavigationSplitViewVisibility = .all,
         isInspectorPresented: Bool = false,
+        isUtilityRailExpanded: Bool = false,
         objectRegistry: ObjectTypeRegistry = .builtIn,
         agentHost: (any WorkspaceAgentHost)? = nil,
         documentURL: URL? = nil
@@ -167,6 +169,7 @@ public struct MainView: View {
         self._viewportProjectionBasis = State(initialValue: .isometric)
         self._viewportContextPanelHeight = State(initialValue: 0.0)
         self._viewportCameraResetSignal = State(initialValue: 0)
+        self._isUtilityRailExpanded = State(initialValue: isUtilityRailExpanded)
         self._viewAlignedConstructionPlaneRequest = State(initialValue: nil)
         self._viewportProjectionRequest = State(initialValue: nil)
         self._constructionPlaneRenameTargetID = State(initialValue: nil)
@@ -1463,7 +1466,21 @@ public struct MainView: View {
     }
 
     private var workspaceUtilityRail: some View {
+        Group {
+            if isUtilityRailExpanded {
+                expandedWorkspaceUtilityRail
+            } else {
+                collapsedWorkspaceUtilityRail
+            }
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("WorkspaceUtilityRail")
+    }
+
+    private var expandedWorkspaceUtilityRail: some View {
         VStack(alignment: .leading, spacing: WorkspaceUtilityRailLayout.sectionSpacing) {
+            workspaceUtilityRailHeader
+
             workspaceRailSection("Select") {
                 WorkspaceSelectionScopeControl(selection: $selectionScope)
             }
@@ -1541,10 +1558,53 @@ public struct MainView: View {
             }
         }
         .padding(WorkspaceUtilityRailLayout.contentPadding)
-        .frame(width: WorkspaceUtilityRailLayout.width, alignment: .topLeading)
+        .frame(width: WorkspaceUtilityRailLayout.expandedWidth, alignment: .topLeading)
         .workspaceGlassContainer()
-        .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("WorkspaceUtilityRail")
+        .accessibilityIdentifier("WorkspaceUtilityRail.expanded")
+    }
+
+    private var workspaceUtilityRailHeader: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "slider.horizontal.3")
+                .font(.system(size: 12, weight: .semibold))
+                .symbolRenderingMode(.hierarchical)
+            Text("Controls")
+                .font(.caption.weight(.semibold))
+                .lineLimit(1)
+            Spacer(minLength: 4)
+            workspaceIconButton(
+                systemImage: "chevron.right",
+                help: "Collapse Canvas Controls",
+                accessibilityIdentifier: "WorkspaceUtilityRail.collapse"
+            ) {
+                setUtilityRailExpanded(false)
+            }
+        }
+        .foregroundStyle(.secondary)
+    }
+
+    private var collapsedWorkspaceUtilityRail: some View {
+        WorkspaceUtilityRailCompactView(
+            selectionScope: selectionScope,
+            isGridSnapEnabled: isGridSnapEnabled,
+            isObjectTargetingEnabled: isObjectTargetingEnabled,
+            constructionPlaneTitle: constructionPlaneSnapSummary,
+            isConstructionPlaneActive: workspacePlaneMode != .adaptive
+                || session.activeConstructionPlane != nil
+                || viewAlignedConstructionPlaneRequest != nil,
+            surfaceAnalysisTitle: surfaceAnalysisOverlaySummary,
+            isSurfaceAnalysisActive: surfaceAnalysisOverlaySummary != "Off",
+            diagnosticTitle: diagnosticSummary,
+            hasDiagnostics: !session.diagnostics.isEmpty
+        ) {
+            setUtilityRailExpanded(true)
+        }
+    }
+
+    private func setUtilityRailExpanded(_ isExpanded: Bool) {
+        withAnimation(.easeInOut(duration: 0.16)) {
+            isUtilityRailExpanded = isExpanded
+        }
     }
 
     private var viewportContextPanelContainer: some View {

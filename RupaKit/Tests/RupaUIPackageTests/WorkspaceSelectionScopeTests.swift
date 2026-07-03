@@ -27,3 +27,10 @@ import Testing
     #expect(WorkspaceSelectionScopeControlLayout.buttonSize.height == 26.0)
     #expect(WorkspaceUtilityRailLayout.contentWidth == 162.0)
 }
+
+@Test func workspaceUtilityRailDefaultsToCompactCanvasFootprint() {
+    #expect(WorkspaceUtilityRailLayout.collapsedWidth < WorkspaceUtilityRailLayout.expandedWidth)
+    #expect(WorkspaceUtilityRailLayout.collapsedWidth <= 40.0)
+    #expect(WorkspaceUtilityRailLayout.collapsedContentWidth == WorkspaceUtilityRailLayout.compactButtonSize.width)
+    #expect(WorkspaceUtilityRailLayout.compactButtonSize.height <= ViewportCanvasChromeMetrics.topControlHeight)
+}
