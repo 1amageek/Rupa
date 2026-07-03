@@ -4,7 +4,7 @@ import RupaCore
 @Test func cadInteractionQualityAssessmentCoversEveryGateForEachWorkflow() async throws {
     let result = CADInteractionQualityAssessmentService().assess()
 
-    #expect(result.referenceDate == "2026-06-30")
+    #expect(result.referenceDate == "2026-07-03")
     #expect(result.counts.entryCount == result.entries.count)
     #expect(Set(result.entries.map(\.area)) == Set(CADInteractionQualityArea.allCases))
     #expect(result.entries.map(\.area).count == Set(result.entries.map(\.area)).count)
@@ -395,8 +395,16 @@ import RupaCore
         evidence.notes.contains("Generated extrusion-depth edges resolve to object depth dimensions.")
     })
     #expect(dimension.evidence.contains { evidence in
+        evidence.notes.contains("Generated fillet arc edges resolve back to editable source arc radius, diameter, and angle dimensions with radius as the primary target.")
+    })
+    #expect(dimension.evidence.contains { evidence in
+        evidence.notes.contains("Agent expression requests can omit defaults and then resolve unitless length literals through the current document display unit, so site and regional scale edits are not millimeter-locked.")
+    })
+    #expect(dimension.evidence.contains { evidence in
         evidence.notes.contains("Generated solid face pairs resolve to SwiftCAD selection dimensions and evaluate through the shared CAD kernel.")
     })
+    #expect(!dimension.openWork.contains("Fillet-size and sphere dimensions."))
+    #expect(dimension.openWork.contains("Sphere primitive source ownership and sphere radius/diameter dimensions."))
     #expect(!dimension.openWork.contains("Solid face-distance pair dimensions."))
     #expect(!dimension.openWork.contains("Vertical/depth generated Edge dimensions."))
 }

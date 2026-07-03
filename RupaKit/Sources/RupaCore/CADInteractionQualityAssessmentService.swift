@@ -4,7 +4,7 @@ public struct CADInteractionQualityAssessmentService: Sendable {
     public func assess() -> CADInteractionQualityAssessmentResult {
         let entries = Self.entries
         return CADInteractionQualityAssessmentResult(
-            referenceDate: "2026-06-30",
+            referenceDate: "2026-07-03",
             scoringModel: "Average of all gate ratings where missing=0, planned=1, partial=2, implemented=3, verified=4.",
             score: Self.score(for: entries),
             counts: Self.counts(for: entries),
@@ -40,6 +40,7 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                         "RupaKit/Sources/RupaCore/SketchDimensionTargetResolver.swift",
                         "RupaKit/Sources/RupaCore/ObjectDimensionSummaryService.swift",
                         "RupaKit/Sources/RupaCore/ObjectDimensionSourceResolver.swift",
+                        "RupaKit/Sources/RupaCore/DesignDocument+SketchProfileArcRadiusDimension.swift",
                         "RupaKit/Sources/RupaUI/DimensionCommandState.swift",
                         "RupaKit/Sources/RupaUI/MainView.swift",
                         "RupaKit/Sources/RupaAgentRuntime/AgentCommandController.swift",
@@ -54,12 +55,14 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                     notes: [
                         "Generated cap edges resolve back to editable sketch curves.",
                         "Generated extrusion-depth edges resolve to object depth dimensions.",
+                        "Generated fillet arc edges resolve back to editable source arc radius, diameter, and angle dimensions with radius as the primary target.",
                         "Generated solid face pairs resolve to SwiftCAD selection dimensions and evaluate through the shared CAD kernel.",
+                        "Agent expression requests can omit defaults and then resolve unitless length literals through the current document display unit, so site and regional scale edits are not millimeter-locked.",
                     ]
                 ),
             ],
             openWork: [
-                "Fillet-size and sphere dimensions.",
+                "Sphere primitive source ownership and sphere radius/diameter dimensions.",
                 "General multi-reference solver dimensions.",
                 "Drawing annotation dimensions separate from model-driving dimensions.",
             ],
