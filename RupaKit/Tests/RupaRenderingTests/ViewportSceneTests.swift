@@ -3144,6 +3144,18 @@ import Testing
 }
 
 @MainActor
+@Test func viewportCanvasChromeLayoutDetectsScaleLabelOverlap() {
+    let viewportSize = CGSize(width: 800.0, height: 600.0)
+    let layout = ViewportCanvasChromeLayout(viewportSize: viewportSize)
+    let topLabelRect = CGRect(x: 12.0, y: 12.0, width: 80.0, height: 16.0)
+    let centerLabelRect = CGRect(x: 360.0, y: 292.0, width: 80.0, height: 16.0)
+
+    #expect(layout.intersectsCanvasChrome(topLabelRect))
+    #expect(layout.intersectsCanvasChrome(layout.axisControlRect))
+    #expect(!layout.intersectsCanvasChrome(centerLabelRect))
+}
+
+@MainActor
 @Test func viewportAxisTriadReservesBottomOverlayHeight() {
     let viewportSize = CGSize(width: 800.0, height: 600.0)
     let reservedHeight: CGFloat = 48.0

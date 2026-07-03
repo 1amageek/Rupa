@@ -1549,20 +1549,26 @@ public struct MainView: View {
 
     private var viewportContextPanelContainer: some View {
         ViewThatFits(in: .horizontal) {
-            viewportContextPanel
+            viewportContextPanelContent
                 .fixedSize(horizontal: true, vertical: false)
+                .padding(.horizontal, 8)
+                .frame(height: WorkspaceCanvasOverlayLayout.topChromeHeight)
+                .workspaceGlassContainer()
 
             ScrollView(.horizontal) {
-                viewportContextPanel
+                viewportContextPanelContent
                     .fixedSize(horizontal: true, vertical: false)
+                    .padding(.horizontal, 8)
             }
             .scrollIndicators(.hidden)
+            .frame(height: WorkspaceCanvasOverlayLayout.topChromeHeight)
+            .workspaceGlassContainer()
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("ViewportContextPanelContainer")
     }
 
-    private var viewportContextPanel: some View {
+    private var viewportContextPanelContent: some View {
         HStack(spacing: 8) {
             if session.selectedTool == .sweep {
                 let preview = session.sweepSelectionPreview()
@@ -1646,9 +1652,6 @@ public struct MainView: View {
                 )
             }
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, WorkspaceChromeControlMetrics.containerVerticalPadding)
-        .workspaceGlassContainer()
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("ViewportContextPanel")
     }
@@ -1656,13 +1659,6 @@ public struct MainView: View {
     @ViewBuilder
     private func selectionContextPanelContent(_ nodes: [SceneNode]) -> some View {
         let primaryNode = nodes.last
-        Label(primaryNode?.name ?? "Selection", systemImage: "scope")
-            .font(.callout.weight(.semibold))
-            .lineLimit(1)
-            .frame(maxWidth: 180, alignment: .leading)
-
-        workspaceContextDivider
-
         workspaceValuePill("Objects", "\(nodes.count)")
         workspaceValuePill(
             "Target",

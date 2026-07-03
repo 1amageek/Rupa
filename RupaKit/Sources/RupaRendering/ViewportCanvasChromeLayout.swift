@@ -63,6 +63,10 @@ struct ViewportCanvasChromeLayout: Equatable {
         inputExclusionRects.contains { $0.contains(point) }
     }
 
+    func intersectsCanvasChrome(_ rect: CGRect) -> Bool {
+        inputExclusionRects.contains { $0.intersects(rect) }
+    }
+
     private func clamped(_ rect: CGRect) -> CGRect {
         let bounds = CGRect(origin: .zero, size: viewportSize)
         let intersection = rect.intersection(bounds)

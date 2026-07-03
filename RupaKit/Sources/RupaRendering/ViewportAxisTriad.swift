@@ -54,7 +54,7 @@ struct ViewportAxisTriad: View {
         .padding(.horizontal, 7.0)
         .padding(.vertical, 4.0)
         .frame(width: Self.controlSize.width, height: Self.controlSize.height)
-        .glassEffect(.regular, in: Capsule())
+        .viewportCanvasCapsuleGlassChrome()
         .contentShape(Capsule())
         .accessibilityElement(children: .contain)
     }

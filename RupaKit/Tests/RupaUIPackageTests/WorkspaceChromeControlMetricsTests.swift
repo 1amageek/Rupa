@@ -10,6 +10,7 @@ import Testing
     let containedHeight = WorkspaceChromeControlMetrics.controlHeight
         + WorkspaceChromeControlMetrics.containerVerticalPadding * 2.0
     #expect(abs(containedHeight - ViewportCanvasChromeMetrics.topControlHeight) < 1.0e-9)
+    #expect(ViewportCanvasChromeMetrics.topControlHeight == 30.0)
 }
 
 @Test func workspaceChromeControlsUseFillOnlyRegularControlShape() {
