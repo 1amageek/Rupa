@@ -526,7 +526,7 @@ public struct MainView: View {
                     canvasDragSketchPlaneOverride: workspacePlaneMode.sketchPlane,
                     projectionRequest: viewportProjectionRequest,
                     selectionHitPolicy: selectionScope.viewportSelectionHitPolicy,
-                    bottomChromeReservedHeight: viewportContextPanelHeight,
+                    bottomChromeReservedHeight: viewportBottomChromeReservedHeight,
                     canvasOverlayExclusionRects: viewportOverlayExclusionRects,
                     gridVisualSpacingMode: session.document.productMetadata.viewportGridSettings.visualSpacingMode,
                     cameraResetSignal: viewportCameraResetSignal,
@@ -604,19 +604,21 @@ public struct MainView: View {
                     .onHover(perform: handleWorkspaceOverlayHover)
             }
             .overlay(alignment: .bottom) {
-                viewportContextPanelContainer
-                    .padding(.bottom, WorkspaceCanvasOverlayLayout.edgePadding)
-                    .padding(.horizontal, WorkspaceCanvasOverlayLayout.edgePadding)
-                    .background {
-                        GeometryReader { proxy in
-                            Color.clear.preference(
-                                key: ViewportContextPanelHeightPreferenceKey.self,
-                                value: proxy.size.height
-                            )
+                if isViewportContextPanelVisible {
+                    viewportContextPanelContainer
+                        .padding(.bottom, WorkspaceCanvasOverlayLayout.edgePadding)
+                        .padding(.horizontal, WorkspaceCanvasOverlayLayout.edgePadding)
+                        .background {
+                            GeometryReader { proxy in
+                                Color.clear.preference(
+                                    key: ViewportContextPanelHeightPreferenceKey.self,
+                                    value: proxy.size.height
+                                )
+                            }
                         }
-                    }
-                    .workspaceCanvasOverlayExclusion(.contextPanel)
-                    .onHover(perform: handleWorkspaceOverlayHover)
+                        .workspaceCanvasOverlayExclusion(.contextPanel)
+                        .onHover(perform: handleWorkspaceOverlayHover)
+                }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .onPreferenceChange(ViewportContextPanelHeightPreferenceKey.self) { height in
@@ -1694,6 +1696,20 @@ public struct MainView: View {
         withAnimation(.easeInOut(duration: 0.16)) {
             isUtilityRailExpanded = isExpanded
         }
+    }
+
+    private var isViewportContextPanelVisible: Bool {
+        WorkspaceViewportContextPanelVisibility.isVisible(
+            selectedTool: session.selectedTool,
+            selectedTargetCount: session.selection.selectedTargets.count,
+            selectedReferenceCount: session.selection.selectedReferences.count,
+            isDimensionCommandActive: dimensionCommandState.isActive,
+            hasViewAlignedConstructionPlaneRequest: viewAlignedConstructionPlaneRequest != nil
+        )
+    }
+
+    private var viewportBottomChromeReservedHeight: CGFloat {
+        isViewportContextPanelVisible ? viewportContextPanelHeight : 0.0
     }
 
     private var viewportContextPanelContainer: some View {
