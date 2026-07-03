@@ -1310,6 +1310,14 @@ public struct MainView: View {
     }
 
     private var workspaceTopBar: some View {
+        workspaceTopBarContent(
+            presentation: WorkspaceTopBarPresentation(selectedTargetCount: selectedTargetCount)
+        )
+    }
+
+    private func workspaceTopBarContent(
+        presentation: WorkspaceTopBarPresentation
+    ) -> some View {
         HStack(spacing: WorkspaceChromeControlMetrics.itemSpacing) {
             workspaceStatusChip(
                 evaluationStatusTitle,
@@ -1317,11 +1325,13 @@ public struct MainView: View {
                 tint: evaluationStatusTint
             )
 
-            workspaceStatusChip(
-                "\(selectedTargetCount) selected",
-                systemImage: "scope",
-                tint: .secondary
-            )
+            if presentation.showsSelectionCount {
+                workspaceStatusChip(
+                    presentation.selectionTitle,
+                    systemImage: "scope",
+                    tint: .secondary
+                )
+            }
 
             if let scaleFitPromptState = workspaceScaleFitPromptState {
                 workspaceScaleFitPromptButton(scaleFitPromptState)

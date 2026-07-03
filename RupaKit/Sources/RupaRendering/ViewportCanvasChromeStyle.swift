@@ -7,27 +7,12 @@ public extension View {
             style: .continuous
         )
 
-        return glassEffect(
-            .regular,
-            in: shape
-        )
-        .overlay {
-            shape.strokeBorder(
-                Color.primary.opacity(ViewportCanvasChromeMetrics.topControlBorderOpacity),
-                lineWidth: ViewportCanvasChromeMetrics.topControlBorderWidth
-            )
-        }
+        return glassEffect(.regular, in: shape)
     }
 
     func viewportCanvasCapsuleGlassChrome() -> some View {
         let shape = Capsule()
 
         return glassEffect(.regular, in: shape)
-            .overlay {
-                shape.strokeBorder(
-                    Color.primary.opacity(ViewportCanvasChromeMetrics.topControlBorderOpacity),
-                    lineWidth: ViewportCanvasChromeMetrics.topControlBorderWidth
-                )
-            }
     }
 }
