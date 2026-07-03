@@ -3450,6 +3450,9 @@ struct CLICommandApplyTests {
         #expect(presetResponse.workspaceScale?.displayUnitSymbol == "km")
         #expect(presetResponse.workspaceScale?.visibleSpanMeters == 100_000.0)
         #expect(presetResponse.workspaceScale?.visibleSpanDisplayValue == 100.0)
+        #expect(presetResponse.viewportGridScale?.snapStep.meters == 100.0)
+        #expect(presetResponse.viewportGridScale?.snapStep.displayValue == 0.1)
+        #expect(presetResponse.viewportGridScale?.workspaceSpan.text == "100 km")
         #expect(presetResponse.workspaceScalePresetOptions?.map(\.preset) == WorkspaceScalePreset.allCases)
         #expect(presetResponse.workspaceScalePresetOptions?.contains { option in
             option.preset == .regionalPlanning
@@ -3487,11 +3490,14 @@ struct CLICommandApplyTests {
         #expect(describeResponse.workspaceScale?.matchedPreset == .sitePlanning)
         #expect(describeResponse.workspaceScale?.displayUnit == .kilometer)
         #expect(describeResponse.viewportGridSettings == .standard)
+        #expect(describeResponse.viewportGridScale?.configuredMajorStep.text == "1 km")
         #expect(describeResponse.message.contains("Site Planning"))
 
         #expect(gridResult.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: gridResult.standardError))
         #expect(gridResponse.saved)
         #expect(gridResponse.viewportGridSettings?.visualSpacingMode == .fixed)
+        #expect(gridResponse.viewportGridScale?.visualSpacingMode == .fixed)
+        #expect(gridResponse.viewportGridScale?.snapStep.text == "0.1 km")
         #expect(loadedAfterGrid.productMetadata.viewportGridSettings.visualSpacingMode == .fixed)
 
         #expect(rulerResult.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: rulerResult.standardError))
@@ -6342,7 +6348,11 @@ func cliExecutableReturnsDataExitForLiveGenerationMismatch() async throws {
             ruler: WorkspaceScalePreset.sitePlanning.rulerConfiguration
         ),
         workspaceBounds: workspaceBounds,
-        viewportGridSettings: .standard
+        viewportGridSettings: .standard,
+        viewportGridScale: ViewportGridScaleSnapshot(
+            ruler: WorkspaceScalePreset.sitePlanning.rulerConfiguration,
+            settings: .standard
+        )
     )
 
     let response = CLIResponse(
@@ -6357,6 +6367,9 @@ func cliExecutableReturnsDataExitForLiveGenerationMismatch() async throws {
     #expect(response.workspaceInteractionScale?.operationStep.displayUnitSymbol == "km")
     #expect(response.workspaceBounds == workspaceBounds)
     #expect(response.viewportGridSettings == .standard)
+    #expect(response.viewportGridScale?.snapStep.meters == 100.0)
+    #expect(response.viewportGridScale?.snapStep.displayValue == 0.1)
+    #expect(response.viewportGridScale?.workspaceSpan.text == "100 km")
 }
 
 @Test func cliServiceReportsAgentStatus() async throws {

@@ -317,9 +317,11 @@ import SwiftCAD
     #expect(workspaceScaleFit.optionMatrix.contains { axis in
         axis.name == "recommendation"
             && axis.supportedValues.contains("workspaceInteractionScale")
+            && axis.supportedValues.contains("viewportGridScale")
             && axis.supportedValues.contains("workspaceScaleRecommendation")
             && axis.notes.contains { $0.contains("same recommendation service") }
             && axis.notes.contains { $0.contains("scale-appropriate operation distances") }
+            && axis.notes.contains { $0.contains("visual grid spacing from snap spacing") }
     })
     #expect(workspaceOriginRebase.category == .document)
     #expect(workspaceOriginRebase.access == .automationCommand)
@@ -335,11 +337,13 @@ import SwiftCAD
         axis.name == "workspaceFeedback"
             && axis.supportedValues.contains("workspaceScale")
             && axis.supportedValues.contains("workspaceInteractionScale")
+            && axis.supportedValues.contains("viewportGridScale")
             && axis.supportedValues.contains("workspaceBounds")
             && axis.supportedValues.contains("workspaceScaleRecommendation")
             && axis.supportedValues.contains("workspaceScalePresetOptions")
             && axis.supportedValues.contains("workspacePrecision")
             && axis.notes.contains { $0.contains("current ruler step") }
+            && axis.notes.contains { $0.contains("visual grid spacing and snap spacing") }
             && axis.notes.contains { $0.contains("fitWorkspaceScaleToModel") }
             && axis.notes.contains { $0.contains("micro fabrication through regional planning") }
             && axis.notes.contains { $0.contains("rebaseWorkspaceOrigin") }

@@ -44,14 +44,16 @@ public final class AgentCommandController: AgentClientProtocol {
         supportedValues: [
             "workspaceScale",
             "workspaceInteractionScale",
+            "viewportGridScale",
             "workspaceBounds",
             "workspaceScaleRecommendation",
             "workspaceScalePresetOptions",
             "workspacePrecision",
         ],
         notes: [
-            "Workspace-aware command results include the current scale, supported scale preset options, interaction defaults, model bounds, scale recommendations, and precision guidance.",
+            "Workspace-aware command results include the current scale, viewport grid scale, supported scale preset options, interaction defaults, model bounds, scale recommendations, and precision guidance.",
             "Read workspaceInteractionScale before choosing operation distances so generated edits follow the current ruler step instead of hard-coded millimeter defaults.",
+            "Read viewportGridScale before viewport or snapping decisions so visual grid spacing and snap spacing stay distinct when dense wide-range views are capped.",
             "Read workspaceScaleRecommendation before continuing large-model edits; apply fitWorkspaceScaleToModel or setWorkspaceScalePreset when the recommendation is actionable.",
             "Read workspaceScalePresetOptions before choosing custom workspace scale changes; it lists the supported presets from micro fabrication through regional planning.",
             "Read workspacePrecision before precise far-from-origin edits; apply rebaseWorkspaceOrigin when a local-origin translation is recommended.",
@@ -129,12 +131,14 @@ public final class AgentCommandController: AgentClientProtocol {
                     supportedValues: [
                         "workspaceScale",
                         "workspaceInteractionScale",
+                        "viewportGridScale",
                         "workspaceBounds",
                         "workspaceScaleRecommendation",
                     ],
                     notes: [
                         "Uses the same recommendation service exposed by measurement and modeling command feedback.",
                         "Returns workspaceInteractionScale after applying a preset so the next command can use scale-appropriate operation distances.",
+                        "Returns viewportGridScale after applying a preset so the next viewport or snap plan can distinguish visual grid spacing from snap spacing.",
                         "Applies a named workspace scale preset only when the recommendation is actionable.",
                     ]
                 )

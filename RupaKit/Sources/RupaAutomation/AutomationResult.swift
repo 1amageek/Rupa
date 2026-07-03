@@ -16,6 +16,7 @@ public struct AutomationResult: Codable, Equatable, Sendable {
     public var workspaceScaleRecommendation: WorkspaceScaleRecommendation?
     public var workspaceScalePresetOptions: [WorkspaceScalePresetProfile]?
     public var viewportGridSettings: ViewportGridSettings?
+    public var viewportGridScale: ViewportGridScaleSnapshot?
 
     public init(
         message: String,
@@ -31,7 +32,8 @@ public struct AutomationResult: Codable, Equatable, Sendable {
         workspacePrecision: WorkspacePrecisionReport? = nil,
         workspaceScaleRecommendation: WorkspaceScaleRecommendation? = nil,
         workspaceScalePresetOptions: [WorkspaceScalePresetProfile]? = nil,
-        viewportGridSettings: ViewportGridSettings? = nil
+        viewportGridSettings: ViewportGridSettings? = nil,
+        viewportGridScale: ViewportGridScaleSnapshot? = nil
     ) {
         self.message = message
         self.commandName = commandName
@@ -47,5 +49,6 @@ public struct AutomationResult: Codable, Equatable, Sendable {
         self.workspaceScaleRecommendation = workspaceScaleRecommendation
         self.workspaceScalePresetOptions = workspaceScalePresetOptions
         self.viewportGridSettings = viewportGridSettings
+        self.viewportGridScale = viewportGridScale
     }
 }

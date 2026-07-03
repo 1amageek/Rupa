@@ -67,6 +67,11 @@ import SwiftCAD
     #expect(result.workspaceInteractionScale?.operationStep.displayValue == 0.1)
     #expect(result.workspaceInteractionScale?.operationStep.displayUnitSymbol == "km")
     #expect(result.workspaceInteractionScale?.slotWidth.meters == 200.0)
+    #expect(result.viewportGridScale?.visualSpacingMode == .adaptive)
+    #expect(result.viewportGridScale?.snapStep.meters == 100.0)
+    #expect(result.viewportGridScale?.snapStep.displayValue == 0.1)
+    #expect(result.viewportGridScale?.snapStep.displayUnitSymbol == "km")
+    #expect(result.viewportGridScale?.workspaceSpan.text == "100 km")
     #expect(result.message.contains("Site Planning"))
     #expect(result.workspaceScalePresetOptions?.map(\.preset) == WorkspaceScalePreset.allCases)
     #expect(result.workspaceScalePresetOptions?.contains { option in
@@ -95,6 +100,9 @@ import SwiftCAD
     #expect(result.workspaceInteractionScale?.operationStep.meters == 1_000.0)
     #expect(result.workspaceInteractionScale?.operationStep.displayValue == 1.0)
     #expect(result.workspaceInteractionScale?.operationStep.displayUnitSymbol == "km")
+    #expect(result.viewportGridScale?.snapStep.meters == 1_000.0)
+    #expect(result.viewportGridScale?.snapStep.displayValue == 1.0)
+    #expect(result.viewportGridScale?.workspaceSpan.text == "1,000 km")
     #expect(result.message.contains("Regional Planning"))
     #expect(result.workspaceScalePresetOptions?.map(\.preset) == WorkspaceScalePreset.allCases)
 }
@@ -116,6 +124,8 @@ import SwiftCAD
     #expect(result.workspaceScale?.visibleSpanDisplayValue == 100.0)
     #expect(result.workspaceInteractionScale?.operationStep.meters == 100.0)
     #expect(result.workspaceInteractionScale?.slotWidth.meters == 200.0)
+    #expect(result.viewportGridScale?.snapStep.meters == 100.0)
+    #expect(result.viewportGridScale?.workspaceSpan.text == "100 km")
     #expect(result.workspaceScaleRecommendation == nil)
     #expect(result.message.contains("Workspace scale fitted to Site Planning"))
     #expect(result.workspaceScalePresetOptions?.map(\.preset) == WorkspaceScalePreset.allCases)
@@ -157,6 +167,9 @@ import SwiftCAD
     #expect(result.message.contains("Site Planning"))
     #expect(result.message.contains("visible span 100 km"))
     #expect(result.viewportGridSettings == .standard)
+    #expect(result.viewportGridScale?.visualSpacingMode == .adaptive)
+    #expect(result.viewportGridScale?.configuredMajorStep.text == "1 km")
+    #expect(result.viewportGridScale?.workspaceSpan.text == "100 km")
 }
 
 @MainActor
@@ -216,6 +229,8 @@ import SwiftCAD
     #expect(result.commandName == "setViewportGridSettings")
     #expect(result.didMutate)
     #expect(result.viewportGridSettings == settings)
+    #expect(result.viewportGridScale?.visualSpacingMode == .fixed)
+    #expect(result.viewportGridScale?.snapStep.meters == session.document.ruler.minorTickMeters)
     #expect(result.message.contains("fixed"))
 }
 

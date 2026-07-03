@@ -616,7 +616,7 @@ public struct CLIService {
         )
         ensureWorkspaceScaleContext(
             in: &result,
-            ruler: session.document.ruler
+            document: session.document
         )
 
         if !dryRun {
@@ -4329,7 +4329,7 @@ public struct CLIService {
     private func workspaceScaleContextFile(
         at url: URL
     ) throws -> CLIWorkspaceScaleContext {
-        CLIWorkspaceScaleContext(ruler: try fileService.load(from: url).ruler)
+        CLIWorkspaceScaleContext(document: try fileService.load(from: url))
     }
 
     private func workspaceScaleLiveSession(
@@ -4363,7 +4363,9 @@ public struct CLIService {
         return CLIWorkspaceScaleContext(
             scale: workspaceScale,
             interactionScale: result.workspaceInteractionScale,
-            scalePresetOptions: result.workspaceScalePresetOptions
+            scalePresetOptions: result.workspaceScalePresetOptions,
+            viewportGridSettings: result.viewportGridSettings,
+            viewportGridScale: result.viewportGridScale
         )
     }
 
@@ -4523,7 +4525,7 @@ public struct CLIService {
         var result = try AutomationRunner().execute(command, in: session)
         ensureWorkspaceScaleContext(
             in: &result,
-            ruler: session.document.ruler
+            document: session.document
         )
         let shouldSave = !dryRun && result.didMutate
 
@@ -4567,9 +4569,9 @@ public struct CLIService {
 
     private func ensureWorkspaceScaleContext(
         in result: inout AutomationResult,
-        ruler: RulerConfiguration
+        document: DesignDocument
     ) {
-        let context = CLIWorkspaceScaleContext(ruler: ruler)
+        let context = CLIWorkspaceScaleContext(document: document)
         if result.workspaceScale == nil {
             result.workspaceScale = context.scale
         }
@@ -4579,6 +4581,12 @@ public struct CLIService {
         if result.workspaceScalePresetOptions == nil {
             result.workspaceScalePresetOptions = context.scalePresetOptions
         }
+        if result.viewportGridSettings == nil {
+            result.viewportGridSettings = context.viewportGridSettings
+        }
+        if result.viewportGridScale == nil {
+            result.viewportGridScale = context.viewportGridScale
+        }
     }
 
     private func ensureWorkspaceScaleContext(
@@ -4586,20 +4594,35 @@ public struct CLIService {
         sessionID: UUID,
         client: AgentClientProtocol
     ) throws {
-        if result.workspaceInteractionScale == nil,
-           let workspaceScale = result.workspaceScale {
-            result.workspaceInteractionScale = CLIWorkspaceScaleContext(
+        if let workspaceScale = result.workspaceScale,
+           result.workspaceInteractionScale == nil
+                || result.viewportGridSettings == nil
+                || result.viewportGridScale == nil {
+            let context = CLIWorkspaceScaleContext(
                 scale: workspaceScale,
-                interactionScale: nil,
-                scalePresetOptions: result.workspaceScalePresetOptions
-            ).interactionScale
+                interactionScale: result.workspaceInteractionScale,
+                scalePresetOptions: result.workspaceScalePresetOptions,
+                viewportGridSettings: result.viewportGridSettings,
+                viewportGridScale: result.viewportGridScale
+            )
+            if result.workspaceInteractionScale == nil {
+                result.workspaceInteractionScale = context.interactionScale
+            }
+            if result.viewportGridSettings == nil {
+                result.viewportGridSettings = context.viewportGridSettings
+            }
+            if result.viewportGridScale == nil {
+                result.viewportGridScale = context.viewportGridScale
+            }
         }
 
         if result.workspaceScalePresetOptions == nil {
             result.workspaceScalePresetOptions = WorkspaceScalePreset.profiles
         }
 
-        guard result.workspaceScale == nil || result.workspaceInteractionScale == nil else {
+        guard result.workspaceScale == nil
+            || result.workspaceInteractionScale == nil
+            || result.viewportGridScale == nil else {
             return
         }
 
@@ -4613,6 +4636,12 @@ public struct CLIService {
         }
         if result.workspaceInteractionScale == nil {
             result.workspaceInteractionScale = context.interactionScale
+        }
+        if result.viewportGridSettings == nil {
+            result.viewportGridSettings = context.viewportGridSettings
+        }
+        if result.viewportGridScale == nil {
+            result.viewportGridScale = context.viewportGridScale
         }
     }
 
@@ -4782,28 +4811,44 @@ private struct CLIWorkspaceScaleContext {
     var scale: WorkspaceScaleSnapshot
     var interactionScale: WorkspaceInteractionScaleSnapshot
     var scalePresetOptions: [WorkspaceScalePresetProfile]
+    var viewportGridSettings: ViewportGridSettings
+    var viewportGridScale: ViewportGridScaleSnapshot
 
-    init(ruler: RulerConfiguration) {
-        let normalized = ruler.normalizedForWorkspaceScale()
+    init(document: DesignDocument) {
+        let normalized = document.ruler.normalizedForWorkspaceScale()
         self.scale = WorkspaceScaleSnapshot(ruler: normalized)
         self.interactionScale = WorkspaceInteractionScaleSnapshot(ruler: normalized)
         self.scalePresetOptions = WorkspaceScalePreset.profiles
+        self.viewportGridSettings = document.productMetadata.viewportGridSettings
+        self.viewportGridScale = ViewportGridScaleSnapshot(
+            ruler: normalized,
+            settings: document.productMetadata.viewportGridSettings
+        )
     }
 
     init(
         scale: WorkspaceScaleSnapshot,
         interactionScale: WorkspaceInteractionScaleSnapshot?,
-        scalePresetOptions: [WorkspaceScalePresetProfile]? = nil
+        scalePresetOptions: [WorkspaceScalePresetProfile]? = nil,
+        viewportGridSettings: ViewportGridSettings? = nil,
+        viewportGridScale: ViewportGridScaleSnapshot? = nil
     ) {
         self.scale = scale
-        self.interactionScale = interactionScale ?? WorkspaceInteractionScaleSnapshot(
-            ruler: RulerConfiguration(
-                displayUnit: scale.displayUnit,
-                minorTickMeters: scale.minorTickMeters,
-                majorTickMeters: scale.majorTickMeters,
-                visibleSpanMeters: scale.visibleSpanMeters
-            )
+        let ruler = RulerConfiguration(
+            displayUnit: scale.displayUnit,
+            minorTickMeters: scale.minorTickMeters,
+            majorTickMeters: scale.majorTickMeters,
+            visibleSpanMeters: scale.visibleSpanMeters
         )
+        let settings = viewportGridSettings ?? viewportGridScale.map {
+            ViewportGridSettings(visualSpacingMode: $0.visualSpacingMode)
+        } ?? .standard
+        self.interactionScale = interactionScale ?? WorkspaceInteractionScaleSnapshot(ruler: ruler)
         self.scalePresetOptions = scalePresetOptions ?? WorkspaceScalePreset.profiles
+        self.viewportGridSettings = settings
+        self.viewportGridScale = viewportGridScale ?? ViewportGridScaleSnapshot(
+            ruler: ruler,
+            settings: settings
+        )
     }
 }

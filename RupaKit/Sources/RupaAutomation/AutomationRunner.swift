@@ -1510,7 +1510,8 @@ public struct AutomationRunner {
             workspacePrecision: context.precision,
             workspaceScaleRecommendation: context.scaleRecommendation,
             workspaceScalePresetOptions: context.scalePresetOptions,
-            viewportGridSettings: context.viewportGridSettings
+            viewportGridSettings: context.viewportGridSettings,
+            viewportGridScale: context.viewportGridScale
         )
     }
 
@@ -1565,7 +1566,11 @@ public struct AutomationRunner {
             workspacePrecision: measurement.workspacePrecision,
             workspaceScaleRecommendation: measurement.workspaceScaleRecommendation,
             workspaceScalePresetOptions: WorkspaceScalePreset.profiles,
-            viewportGridSettings: session.document.productMetadata.viewportGridSettings
+            viewportGridSettings: session.document.productMetadata.viewportGridSettings,
+            viewportGridScale: ViewportGridScaleSnapshot(
+                ruler: session.document.ruler,
+                settings: session.document.productMetadata.viewportGridSettings
+            )
         )
     }
 
@@ -1594,6 +1599,10 @@ public struct AutomationRunner {
             scaleRecommendation: recommendation,
             scalePresetOptions: WorkspaceScalePreset.profiles,
             viewportGridSettings: session.document.productMetadata.viewportGridSettings,
+            viewportGridScale: ViewportGridScaleSnapshot(
+                ruler: session.document.ruler,
+                settings: session.document.productMetadata.viewportGridSettings
+            ),
             diagnostics: workspaceContextDiagnostics(
                 precision: precision,
                 recommendation: recommendation,
@@ -1697,5 +1706,6 @@ private struct WorkspaceAutomationContext {
     var scaleRecommendation: WorkspaceScaleRecommendation?
     var scalePresetOptions: [WorkspaceScalePresetProfile]
     var viewportGridSettings: ViewportGridSettings
+    var viewportGridScale: ViewportGridScaleSnapshot
     var diagnostics: [EditorDiagnostic]
 }
