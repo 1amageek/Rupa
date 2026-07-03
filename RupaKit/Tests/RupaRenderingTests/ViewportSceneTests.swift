@@ -3120,6 +3120,12 @@ import Testing
             == ViewportCanvasChromeMetrics.topControlMaximumWidth
     )
     #expect(ViewportCanvasChromeLayout.viewportBadgePadding == ViewportCanvasChromeMetrics.edgePadding)
+    #expect(ViewportCanvasChromeMetrics.topControlContentHeight < ViewportCanvasChromeMetrics.topControlHeight)
+    #expect(
+        ViewportCanvasChromeMetrics.topControlDividerHeight
+            <= ViewportCanvasChromeMetrics.topControlContentHeight
+    )
+    #expect(ViewportCanvasChromeMetrics.topControlHorizontalPadding == ViewportCanvasChromeMetrics.edgePadding)
     #expect(rect.minX == ViewportCanvasChromeLayout.viewportBadgePadding)
     #expect(rect.minY == ViewportCanvasChromeLayout.viewportBadgePadding)
     #expect(rect.height == ViewportCanvasChromeLayout.viewportBadgeSize.height)
@@ -3192,6 +3198,27 @@ import Testing
         y: overlayRect.midY
     )))
     #expect(layout.intersectsCanvasChrome(overlayRect))
+}
+
+@MainActor
+@Test func viewportCanvasChromeLayoutPlacesSnapLabelsAwayFromOverlayChrome() {
+    let viewportSize = CGSize(width: 800.0, height: 600.0)
+    let rightOverlayRect = CGRect(x: 700.0, y: 0.0, width: 100.0, height: 600.0)
+    let layout = ViewportCanvasChromeLayout(
+        viewportSize: viewportSize,
+        additionalExclusionRects: [rightOverlayRect]
+    )
+    let labelRect = layout.snapLabelRect(
+        near: CGPoint(x: 690.0, y: 120.0),
+        size: CGSize(width: 72.0, height: 20.0)
+    )
+
+    #expect(labelRect.maxX < rightOverlayRect.minX)
+    #expect(!layout.intersectsCanvasChrome(labelRect))
+    #expect(labelRect.minX >= 0.0)
+    #expect(labelRect.maxX <= viewportSize.width)
+    #expect(labelRect.minY >= 0.0)
+    #expect(labelRect.maxY <= viewportSize.height)
 }
 
 @MainActor

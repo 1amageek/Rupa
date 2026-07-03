@@ -7,7 +7,7 @@ import SwiftUI
 
 private enum WorkspaceCanvasOverlayLayout {
     static let edgePadding: CGFloat = ViewportCanvasChromeMetrics.edgePadding
-    static let topChromeHeight: CGFloat = ViewportCanvasChromeMetrics.topControlHeight
+    static let topChromeHeight: CGFloat = WorkspaceChromeControlMetrics.containerHeight
     static let coordinateSpaceName = "WorkspaceCanvasOverlaySpace"
 }
 
@@ -1309,7 +1309,7 @@ public struct MainView: View {
     }
 
     private var workspaceTopBar: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: WorkspaceChromeControlMetrics.itemSpacing) {
             workspaceStatusChip(
                 evaluationStatusTitle,
                 systemImage: evaluationStatusSystemImage,
@@ -1352,7 +1352,7 @@ public struct MainView: View {
                 isInspectorPresented.toggle()
             }
         }
-        .padding(.horizontal, 8)
+        .padding(.horizontal, WorkspaceChromeControlMetrics.containerHorizontalPadding)
         .frame(height: WorkspaceCanvasOverlayLayout.topChromeHeight)
         .fixedSize(horizontal: true, vertical: false)
         .workspaceGlassContainer()
@@ -1700,14 +1700,14 @@ public struct MainView: View {
         ViewThatFits(in: .horizontal) {
             viewportContextPanelContent
                 .fixedSize(horizontal: true, vertical: false)
-                .padding(.horizontal, 8)
+                .padding(.horizontal, WorkspaceChromeControlMetrics.containerHorizontalPadding)
                 .frame(height: WorkspaceCanvasOverlayLayout.topChromeHeight)
                 .workspaceGlassContainer()
 
             ScrollView(.horizontal) {
                 viewportContextPanelContent
                     .fixedSize(horizontal: true, vertical: false)
-                    .padding(.horizontal, 8)
+                    .padding(.horizontal, WorkspaceChromeControlMetrics.containerHorizontalPadding)
             }
             .scrollIndicators(.hidden)
             .frame(height: WorkspaceCanvasOverlayLayout.topChromeHeight)

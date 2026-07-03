@@ -346,7 +346,13 @@ public struct Viewport: View {
                 Canvas { context, size in
                     drawGrid(projectedGrid, chromeLayout: chromeLayout, in: &context)
                     drawAxes(in: &context, size: size, camera: camera, basis: basis)
-                    drawModel(in: &context, size: size, camera: camera, basis: basis)
+                    drawModel(
+                        in: &context,
+                        size: size,
+                        camera: camera,
+                        basis: basis,
+                        chromeLayout: chromeLayout
+                    )
                     drawReferenceLines(in: &context, size: size, camera: camera, basis: basis)
                 }
                 .background(ViewportTheme.background)
@@ -616,34 +622,34 @@ public struct Viewport: View {
     private func viewportBadge(
         scaleReadout: ViewportProjectedGrid.ScaleReadout
     ) -> some View {
-        HStack(spacing: 7) {
+        HStack(spacing: ViewportCanvasChromeMetrics.topControlItemSpacing) {
             Image(systemName: "scope")
                 .symbolRenderingMode(.hierarchical)
             Text(scaleReadout.minorStep.displayUnit.symbol)
                 .font(.system(.caption, design: .monospaced))
             Divider()
-                .frame(height: 12)
+                .frame(height: ViewportCanvasChromeMetrics.topControlDividerHeight)
             Text(scaleReadout.compactText)
                 .font(.system(.caption, design: .monospaced))
                 .lineLimit(1)
             Divider()
-                .frame(height: 12)
+                .frame(height: ViewportCanvasChromeMetrics.topControlDividerHeight)
             Text(statusTitle)
                 .font(.caption)
                 .lineLimit(1)
             Divider()
-                .frame(height: 12)
+                .frame(height: ViewportCanvasChromeMetrics.topControlDividerHeight)
             Text("\(Int((camera.zoom * 100.0).rounded()))%")
                 .font(.system(.caption, design: .monospaced))
             if featureCount > 0 {
                 Divider()
-                    .frame(height: 12)
+                    .frame(height: ViewportCanvasChromeMetrics.topControlDividerHeight)
                 Text("\(featureCount) features")
                     .font(.caption)
                     .lineLimit(1)
             }
         }
-        .padding(.horizontal, 8)
+        .padding(.horizontal, ViewportCanvasChromeMetrics.topControlHorizontalPadding)
         .frame(
             height: ViewportCanvasChromeLayout.viewportBadgeSize.height,
             alignment: .leading
@@ -926,7 +932,8 @@ public struct Viewport: View {
         in context: inout GraphicsContext,
         size: CGSize,
         camera: ViewportCamera,
-        basis: ViewportProjectionBasis
+        basis: ViewportProjectionBasis,
+        chromeLayout: ViewportCanvasChromeLayout
     ) {
         let sceneContext = makeSceneContext(
             size: size,
@@ -1419,7 +1426,8 @@ public struct Viewport: View {
 
         drawSnapOverlay(
             in: &context,
-            layout: layout
+            layout: layout,
+            chromeLayout: chromeLayout
         )
 
         if let constructionHit,
@@ -1619,7 +1627,8 @@ public struct Viewport: View {
 
     private func drawSnapOverlay(
         in context: inout GraphicsContext,
-        layout: ViewportLayout
+        layout: ViewportLayout,
+        chromeLayout: ViewportCanvasChromeLayout
     ) {
         guard let probe = snapOverlayProbe(layout: layout),
               let result = snapResolution(
@@ -1659,12 +1668,16 @@ public struct Viewport: View {
             let label = Text(candidate.label)
                 .font(.caption2.weight(.semibold))
                 .foregroundStyle(Color.white)
-            let labelPoint = CGPoint(x: projectedPoint.x + 14.0, y: projectedPoint.y - 15.0)
-            let backgroundRect = CGRect(
-                x: labelPoint.x - 7.0,
-                y: labelPoint.y - 10.0,
-                width: max(CGFloat(candidate.label.count) * 6.4 + 14.0, 34.0),
-                height: 20.0
+            let backgroundRect = chromeLayout.snapLabelRect(
+                near: projectedPoint,
+                size: CGSize(
+                    width: max(CGFloat(candidate.label.count) * 6.4 + 14.0, 34.0),
+                    height: 20.0
+                )
+            )
+            let labelPoint = CGPoint(
+                x: backgroundRect.minX + 7.0,
+                y: backgroundRect.midY
             )
             context.fill(
                 Path(roundedRect: backgroundRect, cornerRadius: 6.0),

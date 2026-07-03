@@ -88,6 +88,31 @@ struct ViewportCanvasChromeLayout: Equatable {
         inputExclusionRects.contains { $0.intersects(rect) }
     }
 
+    func snapLabelRect(near point: CGPoint, size: CGSize) -> CGRect {
+        let candidateOffsets = [
+            CGSize(width: 7.0, height: -25.0),
+            CGSize(width: -size.width - 7.0, height: -25.0),
+            CGSize(width: 7.0, height: 5.0),
+            CGSize(width: -size.width - 7.0, height: 5.0),
+        ]
+        let candidates = candidateOffsets.map { offset in
+            rectWithinViewport(CGRect(
+                x: point.x + offset.width,
+                y: point.y + offset.height,
+                width: size.width,
+                height: size.height
+            ))
+        }
+
+        if let clearCandidate = candidates.first(where: { candidate in
+            !intersectsCanvasChrome(candidate)
+        }) {
+            return clearCandidate
+        }
+
+        return candidates.first ?? .zero
+    }
+
     private func clamped(_ rect: CGRect) -> CGRect {
         let bounds = CGRect(origin: .zero, size: viewportSize)
         let intersection = rect.intersection(bounds)
@@ -95,6 +120,20 @@ struct ViewportCanvasChromeLayout: Equatable {
             return .zero
         }
         return intersection
+    }
+
+    private func rectWithinViewport(_ rect: CGRect) -> CGRect {
+        guard !rect.isEmpty, !rect.isNull else {
+            return .zero
+        }
+        let maxOriginX = max(0.0, viewportSize.width - rect.width)
+        let maxOriginY = max(0.0, viewportSize.height - rect.height)
+        return CGRect(
+            x: min(max(0.0, rect.origin.x), maxOriginX),
+            y: min(max(0.0, rect.origin.y), maxOriginY),
+            width: min(rect.width, viewportSize.width),
+            height: min(rect.height, viewportSize.height)
+        )
     }
 
     private func badgeRectAvoidingAdditionalExclusions(_ rect: CGRect) -> CGRect {
