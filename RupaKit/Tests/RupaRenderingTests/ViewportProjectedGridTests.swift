@@ -110,6 +110,28 @@ import RupaViewportScene
     #expect(grid.scaleReadout.accessibilityText.contains("visible span"))
 }
 
+@Test func viewportProjectedGridReportsUrbanPlanningScaleReadout() throws {
+    var document = DesignDocument.empty()
+    try document.setRulerConfiguration(WorkspaceScalePreset.urbanPlanning.rulerConfiguration)
+
+    let grid = ViewportProjectedGrid(
+        document: document,
+        size: CGSize(width: 1_000.0, height: 720.0)
+    )
+
+    #expect(!grid.lines.isEmpty)
+    #expect(grid.lines.count <= 380)
+    #expect(grid.scaleReadout.snapStep.meters == document.ruler.minorTickMeters)
+    #expect(grid.scaleReadout.snapStep.text == "10m")
+    #expect(grid.scaleReadout.majorStep.displayUnit.isMetric)
+    #expect(grid.scaleReadout.visibleSpan.displayUnit == .kilometer)
+    #expect(grid.scaleReadout.workspaceSpan.displayUnit == .kilometer)
+    #expect(grid.scaleReadout.workspaceSpan.meters == document.ruler.visibleSpanMeters)
+    #expect(grid.scaleReadout.workspaceSpan.text == "25km")
+    #expect(grid.scaleReadout.compactText.contains("Grid"))
+    #expect(grid.scaleReadout.accessibilityText.contains("workspace span 25km"))
+}
+
 @Test func viewportProjectedGridReportsRegionalPlanningScaleReadout() throws {
     var document = DesignDocument.empty(named: "Regional Grid")
     try document.setRulerConfiguration(WorkspaceScalePreset.regionalPlanning.rulerConfiguration)

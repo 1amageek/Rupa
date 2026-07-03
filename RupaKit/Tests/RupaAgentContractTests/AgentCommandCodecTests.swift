@@ -68,10 +68,7 @@ import SwiftCAD
     let codec = AgentMessageCodec()
     let sessionID = UUID()
 
-    for preset in [
-        WorkspaceScalePreset.architecture,
-        WorkspaceScalePreset.regionalPlanning,
-    ] {
+    for preset in WorkspaceScalePreset.allCases {
         let request = AgentRequest.execute(
             sessionID: sessionID,
             command: .setWorkspaceScalePreset(preset),

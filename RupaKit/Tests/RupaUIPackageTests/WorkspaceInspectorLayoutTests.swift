@@ -416,6 +416,7 @@ import Testing
     #expect(WorkspaceScalePreset.roomInterior.compactWorkspaceTitle == "Room")
     #expect(WorkspaceScalePreset.architecture.compactWorkspaceTitle == "Arch")
     #expect(WorkspaceScalePreset.architectureImperial.compactWorkspaceTitle == "Arch ft")
+    #expect(WorkspaceScalePreset.urbanPlanning.compactWorkspaceTitle == "Urban")
     #expect(WorkspaceScalePreset.sitePlanning.compactWorkspaceTitle == "Site")
     #expect(WorkspaceScalePreset.regionalPlanning.compactWorkspaceTitle == "Region")
     #expect(WorkspaceScalePreset.sitePlanningImperial.compactWorkspaceTitle == "Site ft")
@@ -436,8 +437,27 @@ import Testing
     #expect(summary.comfortableModelSpanTitle == "1 km to 80 km")
     #expect(summary.detailTitle == "Site Planning, unit km, minor 0.1 km, major 1 km, visible 100 km")
     #expect(summary.accessibilityValue == summary.detailTitle)
-    #expect(summary.smallerPreset == .architecture)
+    #expect(summary.smallerPreset == .urbanPlanning)
     #expect(summary.largerPreset == .regionalPlanning)
+}
+
+@Test func workspaceScaleStatusSummaryReportsUrbanPlanningInKilometers() {
+    let summary = WorkspaceScaleStatusSummary(
+        ruler: WorkspaceScalePreset.urbanPlanning.rulerConfiguration
+    )
+
+    #expect(summary.compactTitle == "Urban · 25 km")
+    #expect(summary.presetTitle == "Urban Planning")
+    #expect(summary.useCaseTitle == "urban districts, campuses, streetscape, and large site coordination")
+    #expect(summary.displayUnitTitle == "km")
+    #expect(summary.minorStepTitle == "10 m")
+    #expect(summary.majorStepTitle == "0.1 km")
+    #expect(summary.visibleSpanTitle == "25 km")
+    #expect(summary.comfortableModelSpanTitle == "0.25 km to 20 km")
+    #expect(summary.detailTitle == "Urban Planning, unit km, minor 10 m, major 0.1 km, visible 25 km")
+    #expect(summary.accessibilityValue == summary.detailTitle)
+    #expect(summary.smallerPreset == .architecture)
+    #expect(summary.largerPreset == .sitePlanning)
 }
 
 @Test func workspaceScaleStatusSummaryReportsRegionalPlanningInKilometers() {
@@ -494,7 +514,7 @@ import Testing
     #expect(product.smallerPreset == .precisionMechanical)
     #expect(product.largerPreset == .roomInterior)
     #expect(architecture.smallerPreset == .roomInterior)
-    #expect(architecture.largerPreset == .sitePlanning)
+    #expect(architecture.largerPreset == .urbanPlanning)
     #expect(imperialSite.smallerPreset == .architectureImperial)
     #expect(imperialSite.largerPreset == nil)
 }
@@ -504,12 +524,18 @@ import Testing
         ruler: WorkspaceScalePreset.regionalPlanning.rulerConfiguration
     )
     let micro = try #require(options.first { $0.preset == .microFabrication })
+    let urban = try #require(options.first { $0.preset == .urbanPlanning })
     let regional = try #require(options.first { $0.preset == .regionalPlanning })
     let selected = try #require(options.first { $0.isSelected })
 
     #expect(options.map(\.preset) == WorkspaceScalePreset.profiles.map(\.preset))
     #expect(micro.visibleSpanTitle == "1 cm")
     #expect(micro.comfortableModelSpanTitle == "100 μm to 8 mm")
+    #expect(urban.title == "Urban Planning")
+    #expect(urban.menuTitle == "Urban Planning · 25 km")
+    #expect(urban.visibleSpanTitle == "25 km")
+    #expect(urban.comfortableModelSpanTitle == "0.25 km to 20 km")
+    #expect(urban.accessibilityValue.contains("large site coordination"))
     #expect(regional.title == "Regional Planning")
     #expect(regional.menuTitle == "Regional Planning · 1,000 km")
     #expect(regional.visibleSpanTitle == "1,000 km")

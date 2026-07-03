@@ -7,6 +7,7 @@ public struct WorkspaceScalePresetProfile: Codable, Equatable, Sendable {
         case product
         case interior
         case building
+        case urban
         case site
         case regional
     }
@@ -126,6 +127,8 @@ public extension WorkspaceScalePreset {
             .interior
         case .architecture, .architectureImperial:
             .building
+        case .urbanPlanning:
+            .urban
         case .sitePlanning, .sitePlanningImperial:
             .site
         case .regionalPlanning:
@@ -147,6 +150,8 @@ public extension WorkspaceScalePreset {
             "buildings, levels, rooms, and architectural components"
         case .architectureImperial:
             "building-scale work using feet and architectural notation"
+        case .urbanPlanning:
+            "urban districts, campuses, streetscape, and large site coordination"
         case .sitePlanning:
             "site, campus, and civil-scale coordination"
         case .regionalPlanning:

@@ -15,6 +15,8 @@ extension WorkspaceScalePreset {
             "Arch"
         case .architectureImperial:
             "Arch ft"
+        case .urbanPlanning:
+            "Urban"
         case .sitePlanning:
             "Site"
         case .regionalPlanning:

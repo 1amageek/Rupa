@@ -42,6 +42,63 @@ import Testing
     #expect(plan.recommendation?.recommendedScale.displayUnit == .kilometer)
 }
 
+@Test func workspaceScaleRecommendationChoosesUrbanPlanningForDistrictScaleModel() throws {
+    let bounds = MeasurementResult.Bounds(
+        minX: 0.0,
+        minY: 0.0,
+        minZ: 0.0,
+        maxX: 5_000.0,
+        maxY: 2_000.0,
+        maxZ: 100.0
+    )
+
+    let recommendation = try #require(WorkspaceScaleRecommendationService().recommendation(
+        for: bounds,
+        currentRuler: WorkspaceScalePreset.architecture.rulerConfiguration
+    ))
+
+    #expect(recommendation.reason == .modelExceedsComfortableSpan)
+    #expect(recommendation.modelSpanMeters == 5_000.0)
+    #expect(recommendation.recommendedPreset == .urbanPlanning)
+    #expect(recommendation.recommendedScale.displayUnit == .kilometer)
+    #expect(recommendation.recommendedScale.visibleSpanMeters == 25_000.0)
+    #expect(recommendation.recommendedScale.visibleSpanDisplayValue == 25.0)
+    #expect(recommendation.currentScaleProfile?.preset == .architecture)
+    #expect(recommendation.currentComfortableModelSpanTitle == "20 m to 1.6 km")
+    #expect(recommendation.recommendedScaleProfile.category == .urban)
+    #expect(recommendation.recommendedScaleProfile.visibleSpanTitle == "25 km")
+    #expect(recommendation.recommendedScaleProfile.comfortableModelSpanTitle == "0.25 km to 20 km")
+}
+
+@Test func workspaceScaleFitPlanAppliesUrbanPlanningForDistrictScaleDocument() throws {
+    var document = DesignDocument.empty(named: "Fit Urban")
+    let profileID = try document.createRectangleSketchFromCorners(
+        name: "Fit Urban Footprint",
+        plane: .xy,
+        firstCorner: SketchPoint(
+            x: .length(0.0, .meter),
+            y: .length(0.0, .meter)
+        ),
+        oppositeCorner: SketchPoint(
+            x: .length(5_000.0, .meter),
+            y: .length(2_000.0, .meter)
+        )
+    )
+    _ = try document.extrudeProfile(
+        name: "Fit Urban Mass",
+        profile: ProfileReference(featureID: profileID),
+        distance: .length(100.0, .meter),
+        direction: .normal
+    )
+
+    let plan = try WorkspaceScaleFitService().plan(document: document)
+
+    #expect(plan.action == .applyPreset(.urbanPlanning))
+    #expect(plan.measurement.bounds?.maximumSpan == 5_000.0)
+    #expect(plan.recommendation?.recommendedPreset == .urbanPlanning)
+    #expect(plan.recommendation?.recommendedScale.displayUnit == .kilometer)
+}
+
 @Test func workspaceScaleFitPlanReportsAlreadyFittingDocument() throws {
     var document = try workspaceScaleFitSiteDocument()
     try document.setRulerConfiguration(WorkspaceScalePreset.sitePlanning.rulerConfiguration)
