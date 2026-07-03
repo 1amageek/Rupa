@@ -82,6 +82,31 @@ import SwiftCAD
 }
 
 @MainActor
+@Test func automationCanApplyUrbanWorkspaceScalePreset() async throws {
+    let session = EditorSession()
+    let runner = AutomationRunner()
+    let preset = WorkspaceScalePreset.urbanPlanning
+
+    let result = try runner.execute(.setWorkspaceScalePreset(preset), in: session)
+
+    #expect(session.document.displayUnit == .kilometer)
+    #expect(session.document.ruler == preset.rulerConfiguration.normalizedForWorkspaceScale())
+    #expect(session.generation == DocumentGeneration(1))
+    #expect(result.commandName == "setRulerConfiguration")
+    #expect(result.didMutate)
+    #expect(result.workspaceScale?.matchedPreset == .urbanPlanning)
+    #expect(result.workspaceScale?.visibleSpanMeters == 25_000.0)
+    #expect(result.workspaceScale?.visibleSpanDisplayValue == 25.0)
+    #expect(result.workspaceInteractionScale?.operationStep.meters == 10.0)
+    #expect(result.workspaceInteractionScale?.operationStep.displayUnitSymbol == "m")
+    #expect(result.viewportGridScale?.snapStep.meters == 10.0)
+    #expect(result.viewportGridScale?.snapStep.text == "10 m")
+    #expect(result.viewportGridScale?.workspaceSpan.text == "25 km")
+    #expect(result.message.contains("Urban Planning"))
+    #expect(result.workspaceScalePresetOptions?.map(\.preset) == WorkspaceScalePreset.allCases)
+}
+
+@MainActor
 @Test func automationCanApplyRegionalWorkspaceScalePreset() async throws {
     let session = EditorSession()
     let runner = AutomationRunner()
@@ -129,6 +154,27 @@ import SwiftCAD
     #expect(result.workspaceScaleRecommendation == nil)
     #expect(result.message.contains("Workspace scale fitted to Site Planning"))
     #expect(result.workspaceScalePresetOptions?.map(\.preset) == WorkspaceScalePreset.allCases)
+}
+
+@MainActor
+@Test func automationCanFitWorkspaceScaleToUrbanModel() async throws {
+    let session = EditorSession(document: try automationUrbanDocument())
+    let runner = AutomationRunner()
+
+    let result = try runner.execute(.fitWorkspaceScaleToModel, in: session)
+
+    #expect(session.document.displayUnit == .kilometer)
+    #expect(session.document.ruler == WorkspaceScalePreset.urbanPlanning.rulerConfiguration.normalizedForWorkspaceScale())
+    #expect(session.generation == DocumentGeneration(1))
+    #expect(result.commandName == "setRulerConfiguration")
+    #expect(result.didMutate)
+    #expect(result.workspaceScale?.matchedPreset == .urbanPlanning)
+    #expect(result.workspaceScale?.visibleSpanDisplayValue == 25.0)
+    #expect(result.viewportGridScale?.snapStep.meters == 10.0)
+    #expect(result.viewportGridScale?.workspaceSpan.text == "25 km")
+    #expect(result.workspaceBounds?.maximumSpan == 5_000.0)
+    #expect(result.workspaceScaleRecommendation == nil)
+    #expect(result.message.contains("Workspace scale fitted to Urban Planning"))
 }
 
 @MainActor
@@ -5166,6 +5212,29 @@ private func automationSiteDocument() throws -> DesignDocument {
     )
     _ = try document.extrudeProfile(
         name: "Automation Site Mass",
+        profile: ProfileReference(featureID: profileID),
+        distance: .length(100.0, .meter),
+        direction: .normal
+    )
+    return document
+}
+
+private func automationUrbanDocument() throws -> DesignDocument {
+    var document = DesignDocument.empty(named: "Automation Urban")
+    let profileID = try document.createRectangleSketchFromCorners(
+        name: "Automation Urban Footprint",
+        plane: .xy,
+        firstCorner: SketchPoint(
+            x: .length(0.0, .meter),
+            y: .length(0.0, .meter)
+        ),
+        oppositeCorner: SketchPoint(
+            x: .length(5_000.0, .meter),
+            y: .length(2_000.0, .meter)
+        )
+    )
+    _ = try document.extrudeProfile(
+        name: "Automation Urban Mass",
         profile: ProfileReference(featureID: profileID),
         distance: .length(100.0, .meter),
         direction: .normal

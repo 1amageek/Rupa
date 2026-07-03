@@ -303,6 +303,15 @@ import SwiftCAD
         axis.name == "preset" && axis.supportedValues.contains(WorkspaceScalePreset.regionalPlanning.rawValue)
     })
     #expect(workspaceScalePreset.optionMatrix.contains { axis in
+        axis.name == "preset" && axis.supportedValues.contains(WorkspaceScalePreset.urbanPlanning.rawValue)
+    })
+    #expect(workspaceScalePreset.optionMatrix.contains { axis in
+        axis.name == "preset"
+            && axis.notes.contains { $0.contains("urbanPlanning") }
+            && axis.notes.contains { $0.contains("visible span 25 km") }
+            && axis.notes.contains { $0.contains("comfortable model span 0.25 km to 20 km") }
+    })
+    #expect(workspaceScalePreset.optionMatrix.contains { axis in
         axis.name == "preset"
             && axis.notes.contains { $0.contains("regionalPlanning") }
             && axis.notes.contains { $0.contains("visible span 1,000 km") }

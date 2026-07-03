@@ -57,6 +57,49 @@ import Testing
 }
 
 @MainActor
+@Test func agentAppliesUrbanWorkspaceScalePresetThroughCommandController() async throws {
+    let server = AgentCommandController()
+    let sessionID = UUID()
+    let session = EditorSession()
+    server.register(session: session, id: sessionID)
+
+    let response = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .setWorkspaceScalePreset(.urbanPlanning),
+            expectedGeneration: DocumentGeneration(0)
+        )
+    )
+    let codec = AgentMessageCodec()
+    let decodedResponse = try codec.decodeResponse(from: try codec.encode(response))
+
+    guard case .command(let result) = response else {
+        Issue.record("Expected urban workspace scale command response.")
+        return
+    }
+
+    #expect(result.commandName == "setRulerConfiguration")
+    #expect(result.didMutate)
+    #expect(result.generation == DocumentGeneration(1))
+    #expect(result.workspaceScale?.matchedPreset == .urbanPlanning)
+    #expect(result.workspaceScale?.displayUnit == .kilometer)
+    #expect(result.workspaceScale?.visibleSpanMeters == 25_000.0)
+    #expect(result.workspaceScale?.visibleSpanDisplayValue == 25.0)
+    #expect(result.workspaceInteractionScale?.operationStep.meters == 10.0)
+    #expect(result.workspaceInteractionScale?.operationStep.displayUnitSymbol == "m")
+    #expect(result.viewportGridScale?.snapStep.meters == 10.0)
+    #expect(result.viewportGridScale?.workspaceSpan.text == "25 km")
+    #expect(result.workspaceScalePresetOptions?.map(\.preset) == WorkspaceScalePreset.allCases)
+    #expect(result.message.contains("Urban Planning"))
+    #expect(decodedResponse == response)
+    #expect(session.document.displayUnit == .kilometer)
+    #expect(
+        session.document.ruler == WorkspaceScalePreset.urbanPlanning.rulerConfiguration
+            .normalizedForWorkspaceScale()
+    )
+}
+
+@MainActor
 @Test func agentSetsViewportGridSettingsThroughCommandController() async throws {
     let server = AgentCommandController()
     let sessionID = UUID()
@@ -179,6 +222,47 @@ import Testing
 }
 
 @MainActor
+@Test func agentFitsWorkspaceScaleToUrbanModelThroughCommandController() async throws {
+    let server = AgentCommandController()
+    let sessionID = UUID()
+    let session = EditorSession(document: try agentUrbanDocument())
+    server.register(session: session, id: sessionID)
+
+    let response = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .fitWorkspaceScaleToModel,
+            expectedGeneration: session.generation
+        )
+    )
+    let codec = AgentMessageCodec()
+    let decodedResponse = try codec.decodeResponse(from: try codec.encode(response))
+
+    guard case .command(let result) = response else {
+        Issue.record("Expected urban workspace scale fit command response.")
+        return
+    }
+
+    #expect(result.commandName == "setRulerConfiguration")
+    #expect(result.didMutate)
+    #expect(result.workspaceScale?.matchedPreset == .urbanPlanning)
+    #expect(result.workspaceScale?.displayUnit == .kilometer)
+    #expect(result.workspaceScale?.visibleSpanDisplayValue == 25.0)
+    #expect(result.viewportGridScale?.snapStep.meters == 10.0)
+    #expect(result.viewportGridScale?.workspaceSpan.text == "25 km")
+    #expect(result.workspaceBounds?.maximumSpan == 5_000.0)
+    #expect(result.workspaceScaleRecommendation == nil)
+    #expect(result.workspaceScalePresetOptions?.map(\.preset) == WorkspaceScalePreset.allCases)
+    #expect(result.message.contains("Workspace scale fitted to Urban Planning"))
+    #expect(session.document.displayUnit == .kilometer)
+    #expect(
+        session.document.ruler == WorkspaceScalePreset.urbanPlanning.rulerConfiguration
+            .normalizedForWorkspaceScale()
+    )
+    #expect(decodedResponse == response)
+}
+
+@MainActor
 @Test func agentDesignDisplaySnapshotReportsWorkspaceScaleRecommendationThroughCommandController() async throws {
     let server = AgentCommandController()
     let sessionID = UUID()
@@ -237,6 +321,29 @@ private func agentSiteDocument() throws -> DesignDocument {
     )
     _ = try document.extrudeProfile(
         name: "Agent Site Mass",
+        profile: ProfileReference(featureID: profileID),
+        distance: .length(100.0, .meter),
+        direction: .normal
+    )
+    return document
+}
+
+private func agentUrbanDocument() throws -> DesignDocument {
+    var document = DesignDocument.empty(named: "Agent Urban")
+    let profileID = try document.createRectangleSketchFromCorners(
+        name: "Agent Urban Footprint",
+        plane: .xy,
+        firstCorner: SketchPoint(
+            x: .length(0.0, .meter),
+            y: .length(0.0, .meter)
+        ),
+        oppositeCorner: SketchPoint(
+            x: .length(5_000.0, .meter),
+            y: .length(2_000.0, .meter)
+        )
+    )
+    _ = try document.extrudeProfile(
+        name: "Agent Urban Mass",
         profile: ProfileReference(featureID: profileID),
         distance: .length(100.0, .meter),
         direction: .normal

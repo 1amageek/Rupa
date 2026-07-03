@@ -40,6 +40,21 @@ import Testing
     #expect(siteImperial.visibleSpanMeters == 100_000.0)
 }
 
+@Test func workspaceScalePresetsOrderMetricLadderBeforeImperialPresets() {
+    #expect(WorkspaceScalePreset.allCases == [
+        .microFabrication,
+        .precisionMechanical,
+        .productDesign,
+        .roomInterior,
+        .architecture,
+        .urbanPlanning,
+        .sitePlanning,
+        .regionalPlanning,
+        .architectureImperial,
+        .sitePlanningImperial,
+    ])
+}
+
 @Test func workspaceScalePresetProfilesExposeAllPresetsInCaseOrder() {
     #expect(WorkspaceScalePreset.profiles.map(\.preset) == WorkspaceScalePreset.allCases)
     #expect(WorkspaceScalePreset.profiles.contains { profile in

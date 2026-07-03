@@ -7,10 +7,10 @@ public enum WorkspaceScalePreset: String, Codable, CaseIterable, Hashable, Ident
     case productDesign
     case roomInterior
     case architecture
-    case architectureImperial
     case urbanPlanning
     case sitePlanning
     case regionalPlanning
+    case architectureImperial
     case sitePlanningImperial
 
     public var id: String {
@@ -29,14 +29,14 @@ public enum WorkspaceScalePreset: String, Codable, CaseIterable, Hashable, Ident
             "Room Interior"
         case .architecture:
             "Architecture"
-        case .architectureImperial:
-            "Architecture (ft)"
         case .urbanPlanning:
             "Urban Planning"
         case .sitePlanning:
             "Site Planning"
         case .regionalPlanning:
             "Regional Planning"
+        case .architectureImperial:
+            "Architecture (ft)"
         case .sitePlanningImperial:
             "Site Planning (ft)"
         }
@@ -79,13 +79,6 @@ public enum WorkspaceScalePreset: String, Codable, CaseIterable, Hashable, Ident
                 majorTickMeters: 1.0,
                 visibleSpanMeters: 2_000.0
             )
-        case .architectureImperial:
-            RulerConfiguration(
-                displayUnit: .foot,
-                minorTickMeters: 0.3048,
-                majorTickMeters: 3.048,
-                visibleSpanMeters: 1_524.0
-            )
         case .urbanPlanning:
             RulerConfiguration(
                 displayUnit: .kilometer,
@@ -106,6 +99,13 @@ public enum WorkspaceScalePreset: String, Codable, CaseIterable, Hashable, Ident
                 minorTickMeters: 1_000.0,
                 majorTickMeters: 10_000.0,
                 visibleSpanMeters: 1_000_000.0
+            )
+        case .architectureImperial:
+            RulerConfiguration(
+                displayUnit: .foot,
+                minorTickMeters: 0.3048,
+                majorTickMeters: 3.048,
+                visibleSpanMeters: 1_524.0
             )
         case .sitePlanningImperial:
             RulerConfiguration(
