@@ -39,12 +39,17 @@ import SwiftCAD
     let documentSnapshots = try service.snapshots(document: session.document)
     let evaluatedDocumentSnapshots = service.snapshots(evaluatedDocument: evaluatedDocument)
 
-    #expect(evaluatedDocumentSnapshots == documentSnapshots)
-
     let snapshots = evaluatedDocumentSnapshots
     let snapshot = try #require(snapshots[bodyFeatureID])
+    let documentSnapshot = try #require(documentSnapshots[bodyFeatureID])
 
     #expect(snapshot.featureID == bodyFeatureID)
+    #expect(snapshot.bodyID?.isEmpty == false)
+    #expect(snapshot.persistentName?.isEmpty == false)
+    #expect(snapshot.persistentName == documentSnapshot.persistentName)
+    #expect(snapshot.mesh == documentSnapshot.mesh)
+    #expect(snapshot.bounds == documentSnapshot.bounds)
+    #expect(snapshot.topology == documentSnapshot.topology)
     #expect(snapshot.mesh.positions.isEmpty == false)
     #expect(snapshot.mesh.indices.count >= 3)
     #expect(snapshot.bounds.maxX > snapshot.bounds.minX)

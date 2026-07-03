@@ -332,12 +332,18 @@ import RupaCore
     let section = try #require(result.entries.first { $0.area == .sectionAnalysis })
     #expect(section.currentRating == .partial)
     #expect(section.referenceSources.contains("https://doc.plasticity.xyz/common/section-analysis"))
-    #expect(section.openWork.contains { $0.contains("Viewport clipping") })
+    #expect(section.openWork.contains { $0.contains("Rendered mesh clipping") })
     #expect(section.evidence.contains { evidence in
         evidence.sourceFiles.contains("RupaKit/Sources/RupaCore/SectionAnalysisService.swift")
     })
     #expect(section.evidence.contains { evidence in
         evidence.sourceFiles.contains("RupaKit/Sources/RupaCore/SectionAnalysisContourBuilder.swift")
+    })
+    #expect(section.evidence.contains { evidence in
+        evidence.sourceFiles.contains("RupaKit/Sources/RupaCore/SectionAnalysisClippingPlan.swift")
+    })
+    #expect(section.evidence.contains { evidence in
+        evidence.sourceFiles.contains("RupaKit/Sources/RupaRendering/ViewportSectionClippingPlan.swift")
     })
     #expect(section.evidence.contains { evidence in
         evidence.sourceFiles.contains("RupaKit/Sources/RupaRendering/ViewportSectionAnalysisOverlay.swift")
@@ -352,7 +358,16 @@ import RupaCore
         evidence.tests.contains("RupaKit/Tests/RupaRenderingTests/ViewportSectionAnalysisOverlayTests.swift")
     })
     #expect(section.evidence.contains { evidence in
+        evidence.tests.contains("RupaKit/Tests/RupaRenderingTests/ViewportSectionClippingPlanTests.swift")
+    })
+    #expect(section.evidence.contains { evidence in
         evidence.notes.contains("Section analysis queries can offset the resolved source plane and flip front/behind classification; the result plane reflects the transformed origin and normal without mutating the section scene node, construction plane, or sketch plane source.")
+    })
+    #expect(section.evidence.contains { evidence in
+        evidence.notes.contains("Body display snapshots and section analysis results preserve generated persistent body identities, source feature IDs, and evaluation-local body IDs so classifications can be mapped back to viewport body items across reevaluation boundaries.")
+    })
+    #expect(section.evidence.contains { evidence in
+        evidence.notes.contains("SectionAnalysisClippingPlan and ViewportSectionClippingPlan classify visible, hidden, and clipped bodies non-mutatingly for retained front or behind section sides.")
     })
     #expect(section.evidence.contains { evidence in
         evidence.notes.contains("Selecting a section or construction plane can drive a non-mutating viewport overlay that renders the section plane frame, closed section fill, hatching, and bounded body intersection segments from the same SectionAnalysisResult contract used by Agent and Automation.")

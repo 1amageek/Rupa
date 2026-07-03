@@ -27,9 +27,13 @@ import Testing
         contour.isClosed && abs(contour.signedAreaSquareMeters) > result.toleranceMeters
     })
     #expect(body.classification == .intersects)
+    #expect(body.sourceFeatureID?.isEmpty == false)
+    #expect(body.persistentName?.contains("feature:") == true)
+    #expect(body.persistentName?.contains(body.sourceFeatureID ?? "") == true)
     #expect(body.frontVertexCount > 0)
     #expect(body.behindVertexCount > 0)
     #expect(body.intersectingTriangleCount > 0)
+    #expect(segment.bodyID == body.bodyID)
     #expect(abs(segment.start.x) <= result.toleranceMeters * 10.0)
     #expect(abs(segment.end.x) <= result.toleranceMeters * 10.0)
 }

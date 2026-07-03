@@ -20,6 +20,7 @@ public struct SectionAnalysisService: Sendable {
     }
 
     private let pipelineOverride: CADPipeline?
+    private let identityResolver = GeneratedBodyIdentityResolver()
 
     public init(pipeline: CADPipeline? = nil) {
         self.pipelineOverride = pipeline
@@ -81,11 +82,15 @@ public struct SectionAnalysisService: Sendable {
         var bodies: [SectionAnalysisResult.Body] = []
         var segments: [SectionAnalysisResult.IntersectionSegment] = []
         var truncatedSegments = false
+        let identitiesByBodyID = identityResolver.bodyIdentityByBodyID(
+            in: evaluatedDocument.generatedNames
+        )
 
         for (bodyID, mesh) in evaluatedDocument.meshes.sorted(by: { $0.key.description < $1.key.description }) {
             let body = evaluatedDocument.brep.bodies[bodyID]
             let analysis = analyzeBody(
                 bodyID: bodyID,
+                identity: identitiesByBodyID[bodyID],
                 body: body,
                 mesh: mesh,
                 plane: plane.coordinateSystem,
@@ -342,6 +347,7 @@ public struct SectionAnalysisService: Sendable {
 
     private func analyzeBody(
         bodyID: BodyID,
+        identity: GeneratedBodyIdentityResolver.Identity?,
         body: Body?,
         mesh: Mesh,
         plane: SketchPlaneCoordinateSystem,
@@ -446,6 +452,8 @@ public struct SectionAnalysisService: Sendable {
         )
         let resultBody = SectionAnalysisResult.Body(
             bodyID: bodyID.description,
+            sourceFeatureID: identity?.sourceFeatureID.description,
+            persistentName: identity?.persistentName,
             name: body?.name,
             kind: body?.kind,
             materialID: mesh.material?.description ?? body?.material?.description,

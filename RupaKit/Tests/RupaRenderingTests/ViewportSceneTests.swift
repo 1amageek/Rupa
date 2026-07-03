@@ -26,6 +26,12 @@ import Testing
         }
         return false
     })
+    #expect(scene.items.contains { item in
+        if case .body(let component) = item.kind {
+            return component.bodyID?.isEmpty == false
+        }
+        return false
+    })
     #expect(scene.modelBounds != nil)
 }
 
@@ -305,7 +311,7 @@ import Testing
         evaluationCache: evaluationCache
     )
 
-    #expect(cachedScene == documentScene)
+    #expect(viewportSceneIgnoringEvaluationLocalBodyIDs(cachedScene) == viewportSceneIgnoringEvaluationLocalBodyIDs(documentScene))
 }
 
 @MainActor
@@ -321,7 +327,7 @@ import Testing
         documentGeneration: session.generation
     )
 
-    #expect(contextScene == documentScene)
+    #expect(viewportSceneIgnoringEvaluationLocalBodyIDs(contextScene) == viewportSceneIgnoringEvaluationLocalBodyIDs(documentScene))
 }
 
 @MainActor
@@ -337,7 +343,7 @@ import Testing
         documentGeneration: DocumentGeneration(session.generation.value + 1)
     )
 
-    #expect(staleScene == documentScene)
+    #expect(viewportSceneIgnoringEvaluationLocalBodyIDs(staleScene) == viewportSceneIgnoringEvaluationLocalBodyIDs(documentScene))
 }
 
 @MainActor
@@ -356,7 +362,7 @@ import Testing
         documentGeneration: rectangleSession.generation
     )
 
-    #expect(mismatchedScene == circleScene)
+    #expect(viewportSceneIgnoringEvaluationLocalBodyIDs(mismatchedScene) == viewportSceneIgnoringEvaluationLocalBodyIDs(circleScene))
 }
 
 @MainActor
@@ -372,7 +378,7 @@ import Testing
         evaluationCache: evaluationCache
     )
 
-    #expect(staleScene == documentScene)
+    #expect(viewportSceneIgnoringEvaluationLocalBodyIDs(staleScene) == viewportSceneIgnoringEvaluationLocalBodyIDs(documentScene))
 }
 
 @MainActor
@@ -391,7 +397,7 @@ import Testing
         evaluationCache: rectangleCache
     )
 
-    #expect(mismatchedScene == circleScene)
+    #expect(viewportSceneIgnoringEvaluationLocalBodyIDs(mismatchedScene) == viewportSceneIgnoringEvaluationLocalBodyIDs(circleScene))
 }
 
 @Test func viewportFaceSurfacePointResolverRestoresPointInsideProjectedFace() throws {
@@ -3658,6 +3664,18 @@ private func viewportBodyItem(
         modelBounds: modelBounds(for: points),
         kind: .body(component: viewportBodyComponent(topology: topology, points: points))
     )
+}
+
+private func viewportSceneIgnoringEvaluationLocalBodyIDs(_ scene: ViewportScene) -> ViewportScene {
+    ViewportScene(items: scene.items.map { item in
+        guard case .body(var component) = item.kind else {
+            return item
+        }
+        component.bodyID = nil
+        var normalizedItem = item
+        normalizedItem.kind = .body(component: component)
+        return normalizedItem
+    })
 }
 
 private func viewportBodyComponent(

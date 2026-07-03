@@ -95,6 +95,8 @@ public struct ViewportSceneBuilder {
                     bounds: bounds,
                     depthMeters: extrudeSnapshot.depthMeters,
                     direction: extrudeSnapshot.direction,
+                    bodyID: bodyDisplaySnapshots[featureID]?.bodyID,
+                    persistentName: bodyDisplaySnapshots[featureID]?.persistentName,
                     declaredObjectTypeID: object?.typeID,
                     declaredProperties: object?.properties ?? ObjectPropertySet()
                 )
@@ -135,6 +137,8 @@ public struct ViewportSceneBuilder {
                         bounds: bounds,
                         depthMeters: sweepSnapshot.depthMeters,
                         direction: sweepSnapshot.direction,
+                        bodyID: bodyDisplaySnapshots[featureID]?.bodyID,
+                        persistentName: bodyDisplaySnapshots[featureID]?.persistentName,
                         declaredObjectTypeID: object?.typeID,
                         declaredProperties: object?.properties ?? ObjectPropertySet()
                     )
@@ -1315,6 +1319,8 @@ public struct ViewportSceneBuilder {
             declaredProperties: object?.properties ?? ObjectPropertySet()
         )
         let component = ViewportBodyComponent(
+            bodyID: snapshot.bodyID,
+            persistentName: snapshot.persistentName,
             typeID: resolvedTypeID,
             properties: properties,
             sizeXMeters: max(snapshot.bounds.maxX - snapshot.bounds.minX, 1.0e-9),
@@ -1374,6 +1380,8 @@ public struct ViewportSceneBuilder {
 
         return BodyDisplaySnapshot(
             featureID: featureID,
+            bodyID: nil,
+            persistentName: nil,
             bounds: BodyDisplaySnapshot.Bounds(
                 minX: bounds.minX,
                 minY: bounds.minY,
@@ -1405,6 +1413,8 @@ public struct ViewportSceneBuilder {
         bounds: CGRect,
         depthMeters: Double,
         direction: ExtrudeDirection,
+        bodyID: String?,
+        persistentName: String?,
         declaredObjectTypeID: ObjectTypeID?,
         declaredProperties: ObjectPropertySet
     ) -> ViewportBodyComponent {
@@ -1426,6 +1436,8 @@ public struct ViewportSceneBuilder {
         }
         if let cylinder {
             return ViewportBodyComponent(
+                bodyID: bodyID,
+                persistentName: persistentName,
                 typeID: resolvedTypeID,
                 properties: properties,
                 sizeXMeters: Double(bounds.width),
@@ -1437,6 +1449,8 @@ public struct ViewportSceneBuilder {
             )
         }
         return ViewportBodyComponent(
+            bodyID: bodyID,
+            persistentName: persistentName,
             typeID: resolvedTypeID,
             properties: properties,
             sizeXMeters: Double(bounds.width),

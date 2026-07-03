@@ -81,6 +81,8 @@ public struct SectionAnalysisResult: Codable, Equatable, Sendable {
 
     public struct Body: Codable, Equatable, Sendable {
         public var bodyID: String
+        public var sourceFeatureID: String?
+        public var persistentName: String?
         public var name: String?
         public var kind: BodyKind?
         public var materialID: String?
@@ -99,6 +101,8 @@ public struct SectionAnalysisResult: Codable, Equatable, Sendable {
 
         public init(
             bodyID: String,
+            sourceFeatureID: String? = nil,
+            persistentName: String? = nil,
             name: String?,
             kind: BodyKind?,
             materialID: String?,
@@ -116,6 +120,8 @@ public struct SectionAnalysisResult: Codable, Equatable, Sendable {
             intersectionSegmentCount: Int
         ) {
             self.bodyID = bodyID
+            self.sourceFeatureID = sourceFeatureID
+            self.persistentName = persistentName
             self.name = name
             self.kind = kind
             self.materialID = materialID

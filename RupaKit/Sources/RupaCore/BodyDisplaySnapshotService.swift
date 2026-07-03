@@ -4,6 +4,7 @@ import RupaCoreTypes
 
 public struct BodyDisplaySnapshotService: Sendable {
     private let pipelineOverride: CADPipeline?
+    private let identityResolver = GeneratedBodyIdentityResolver()
 
     public init(pipeline: CADPipeline? = nil) {
         self.pipelineOverride = pipeline
@@ -31,7 +32,7 @@ public struct BodyDisplaySnapshotService: Sendable {
         evaluatedDocument: EvaluatedDocument
     ) -> [FeatureID: BodyDisplaySnapshot] {
         var snapshots: [FeatureID: BodyDisplaySnapshot] = [:]
-        for featureID in bodyFeatureIDs(in: evaluatedDocument.generatedNames) {
+        for featureID in identityResolver.bodyFeatureIDs(in: evaluatedDocument.generatedNames) {
             guard let snapshot = snapshot(
                 for: featureID,
                 in: evaluatedDocument
@@ -47,17 +48,19 @@ public struct BodyDisplaySnapshotService: Sendable {
         for featureID: FeatureID,
         in evaluatedDocument: EvaluatedDocument
     ) -> BodyDisplaySnapshot? {
-        guard let bodyID = generatedBodyID(
+        guard let identity = identityResolver.firstBodyIdentity(
             for: featureID,
             in: evaluatedDocument.generatedNames
         ),
-              let mesh = evaluatedDocument.meshes[bodyID],
+              let mesh = evaluatedDocument.meshes[identity.bodyID],
               let bounds = bodyBounds(mesh.positions) else {
             return nil
         }
 
         return BodyDisplaySnapshot(
             featureID: featureID,
+            bodyID: identity.bodyID.description,
+            persistentName: identity.persistentName,
             bounds: bounds,
             mesh: BodyDisplaySnapshot.Mesh(
                 positions: mesh.positions,
@@ -70,38 +73,6 @@ public struct BodyDisplaySnapshotService: Sendable {
         )
     }
 
-    private func bodyFeatureIDs(
-        in generatedNames: [PersistentName: TopologyReference]
-    ) -> [FeatureID] {
-        var seen: Set<FeatureID> = []
-        return generatedNames
-            .sorted { persistentNameString($0.key) < persistentNameString($1.key) }
-            .compactMap { name, reference -> FeatureID? in
-                guard case .body = reference,
-                      let featureID = persistentNameSourceFeatureID(name),
-                      seen.insert(featureID).inserted else {
-                    return nil
-                }
-                return featureID
-            }
-    }
-
-    private func generatedBodyID(
-        for featureID: FeatureID,
-        in generatedNames: [PersistentName: TopologyReference]
-    ) -> BodyID? {
-        generatedNames
-            .sorted { persistentNameString($0.key) < persistentNameString($1.key) }
-            .compactMap { entry -> BodyID? in
-                guard persistentNameSourceFeatureID(entry.key) == featureID,
-                      case .body(let bodyID) = entry.value else {
-                    return nil
-                }
-                return bodyID
-            }
-            .first
-    }
-
     private func topology(
         for featureID: FeatureID,
         in evaluatedDocument: EvaluatedDocument
@@ -112,13 +83,13 @@ public struct BodyDisplaySnapshotService: Sendable {
         var vertices: [BodyDisplaySnapshot.Topology.Vertex] = []
 
         for (name, reference) in evaluatedDocument.generatedNames.sorted(by: {
-            persistentNameString($0.key) < persistentNameString($1.key)
+            identityResolver.persistentNameString($0.key) < identityResolver.persistentNameString($1.key)
         }) {
-            guard persistentNameSourceFeatureID(name) == featureID else {
+            guard identityResolver.sourceFeatureID(name) == featureID else {
                 continue
             }
             let componentID = SelectionComponentID.generatedTopology(
-                persistentNameString(name)
+                identityResolver.persistentNameString(name)
             )
             switch reference {
             case .body:
@@ -201,28 +172,4 @@ public struct BodyDisplaySnapshotService: Sendable {
         return bounds
     }
 
-    private func persistentNameSourceFeatureID(_ name: PersistentName) -> FeatureID? {
-        for component in name.components {
-            if case .feature(let featureID) = component {
-                return featureID
-            }
-        }
-        return nil
-    }
-
-    private func persistentNameString(_ name: PersistentName) -> String {
-        name.components.map { component in
-            switch component {
-            case .feature(let featureID):
-                return "feature:\(featureID.description)"
-            case .generated(let value):
-                return "generated:\(value)"
-            case .subshape(let value):
-                return "subshape:\(value)"
-            case .index(let index):
-                return "index:\(index)"
-            }
-        }
-        .joined(separator: "/")
-    }
 }

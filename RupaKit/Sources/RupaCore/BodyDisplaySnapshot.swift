@@ -137,17 +137,23 @@ public struct BodyDisplaySnapshot: Codable, Equatable, Sendable {
     }
 
     public var featureID: FeatureID
+    public var bodyID: String?
+    public var persistentName: String?
     public var bounds: Bounds
     public var mesh: Mesh
     public var topology: Topology
 
     public init(
         featureID: FeatureID,
+        bodyID: String? = nil,
+        persistentName: String? = nil,
         bounds: Bounds,
         mesh: Mesh,
         topology: Topology
     ) {
         self.featureID = featureID
+        self.bodyID = bodyID
+        self.persistentName = persistentName
         self.bounds = bounds
         self.mesh = mesh
         self.topology = topology
