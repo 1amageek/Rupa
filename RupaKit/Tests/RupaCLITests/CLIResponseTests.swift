@@ -654,12 +654,14 @@ struct CLIModelCommandTests {
 
         #expect(result.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: result.standardError))
         #expect(response.saved)
-        #expect(response.workspaceScale?.displayUnit == .meter)
-        #expect(loaded.displayUnit == .meter)
+        #expect(response.workspaceScale?.displayUnit == .kilometer)
+        #expect(response.workspaceScale?.matchedPreset == .sitePlanning)
+        #expect(response.viewportGridScale?.snapStep.text == "0.1 km")
+        #expect(loaded.displayUnit == .kilometer)
         #expect(resolvedDepth.kind == .length)
-        #expect(cliNearlyEqual(resolvedDepth.value, 3.0))
-        #expect(sketchNode.object?.properties["size.x"] == .length(12.0))
-        #expect(sketchNode.object?.properties["size.y"] == .length(8.0))
+        #expect(cliNearlyEqual(resolvedDepth.value, 3_000.0))
+        #expect(sketchNode.object?.properties["size.x"] == .length(12_000.0))
+        #expect(sketchNode.object?.properties["size.y"] == .length(8_000.0))
     }
 
     @Test(.timeLimit(.minutes(1)))
