@@ -37,6 +37,12 @@ import Testing
     #expect(result.workspaceInteractionScale?.operationStep.meters == 1_000.0)
     #expect(result.workspaceInteractionScale?.operationStep.displayValue == 1.0)
     #expect(result.workspaceInteractionScale?.operationStep.displayUnitSymbol == "km")
+    #expect(result.workspaceScalePresetOptions?.map(\.preset) == WorkspaceScalePreset.allCases)
+    #expect(result.workspaceScalePresetOptions?.contains { option in
+        option.preset == .regionalPlanning
+            && option.visibleSpanTitle == "1,000 km"
+            && option.comfortableModelSpanTitle == "10 km to 800 km"
+    } == true)
     #expect(result.message.contains("Regional Planning"))
     #expect(decodedResponse == response)
     #expect(session.document.displayUnit == .kilometer)
@@ -119,6 +125,7 @@ import Testing
     #expect(result.workspaceScaleRecommendation?.reason == .modelExceedsComfortableSpan)
     #expect(result.workspaceScaleRecommendation?.recommendedPreset == .sitePlanning)
     #expect(result.workspaceScaleRecommendation?.recommendedScale.displayUnit == .kilometer)
+    #expect(result.workspaceScalePresetOptions?.map(\.preset) == WorkspaceScalePreset.allCases)
     #expect(decodedResponse == response)
 }
 
@@ -151,6 +158,7 @@ import Testing
     #expect(result.workspaceScale?.visibleSpanDisplayValue == 100.0)
     #expect(result.workspaceBounds?.maximumSpan == 25_000.0)
     #expect(result.workspaceScaleRecommendation == nil)
+    #expect(result.workspaceScalePresetOptions?.map(\.preset) == WorkspaceScalePreset.allCases)
     #expect(result.message.contains("Workspace scale fitted to Site Planning"))
     #expect(session.document.displayUnit == .kilometer)
     #expect(

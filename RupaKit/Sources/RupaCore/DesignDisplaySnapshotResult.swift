@@ -26,9 +26,7 @@ public struct DesignDisplaySnapshotResult: Codable, Equatable, Sendable {
         workspaceBounds: MeasurementResult.Bounds? = nil,
         workspacePrecision: WorkspacePrecisionReport? = nil,
         workspaceScaleRecommendation: WorkspaceScaleRecommendation? = nil,
-        workspaceScalePresetOptions: [WorkspaceScalePresetProfile] = WorkspaceScalePreset
-            .allCases
-            .map(\.profile),
+        workspaceScalePresetOptions: [WorkspaceScalePresetProfile] = WorkspaceScalePreset.profiles,
         sketches: [SketchDisplaySnapshot],
         extrudes: [ExtrudeDisplaySnapshot],
         straightPrismSweeps: [StraightPrismSweepDisplaySnapshot],
@@ -117,7 +115,7 @@ public struct DesignDisplaySnapshotResult: Codable, Equatable, Sendable {
             workspaceScalePresetOptions: try container.decodeIfPresent(
                 [WorkspaceScalePresetProfile].self,
                 forKey: .workspaceScalePresetOptions
-            ) ?? WorkspaceScalePreset.allCases.map(\.profile),
+            ) ?? WorkspaceScalePreset.profiles,
             sketches: try container.decode([SketchDisplaySnapshot].self, forKey: .sketches),
             extrudes: try container.decode([ExtrudeDisplaySnapshot].self, forKey: .extrudes),
             straightPrismSweeps: try container.decode(

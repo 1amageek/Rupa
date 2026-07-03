@@ -13,6 +13,7 @@ public struct CLIResponse: Codable, Equatable, Sendable {
     public var workspaceBounds: MeasurementResult.Bounds?
     public var workspacePrecision: WorkspacePrecisionReport?
     public var workspaceScaleRecommendation: WorkspaceScaleRecommendation?
+    public var workspaceScalePresetOptions: [WorkspaceScalePresetProfile]?
     public var viewportGridSettings: ViewportGridSettings?
 
     public init(
@@ -26,6 +27,7 @@ public struct CLIResponse: Codable, Equatable, Sendable {
         workspaceBounds: MeasurementResult.Bounds? = nil,
         workspacePrecision: WorkspacePrecisionReport? = nil,
         workspaceScaleRecommendation: WorkspaceScaleRecommendation? = nil,
+        workspaceScalePresetOptions: [WorkspaceScalePresetProfile]? = nil,
         viewportGridSettings: ViewportGridSettings? = nil
     ) {
         self.message = message
@@ -38,6 +40,7 @@ public struct CLIResponse: Codable, Equatable, Sendable {
         self.workspaceBounds = workspaceBounds
         self.workspacePrecision = workspacePrecision
         self.workspaceScaleRecommendation = workspaceScaleRecommendation
+        self.workspaceScalePresetOptions = workspaceScalePresetOptions
         self.viewportGridSettings = viewportGridSettings
     }
 }

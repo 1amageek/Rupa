@@ -3450,6 +3450,12 @@ struct CLICommandApplyTests {
         #expect(presetResponse.workspaceScale?.displayUnitSymbol == "km")
         #expect(presetResponse.workspaceScale?.visibleSpanMeters == 100_000.0)
         #expect(presetResponse.workspaceScale?.visibleSpanDisplayValue == 100.0)
+        #expect(presetResponse.workspaceScalePresetOptions?.map(\.preset) == WorkspaceScalePreset.allCases)
+        #expect(presetResponse.workspaceScalePresetOptions?.contains { option in
+            option.preset == .regionalPlanning
+                && option.visibleSpanTitle == "1,000 km"
+                && option.comfortableModelSpanTitle == "10 km to 800 km"
+        } == true)
         #expect(loadedAfterPreset.displayUnit == .kilometer)
         #expect(loadedAfterPreset.ruler == WorkspaceScalePreset.sitePlanning.rulerConfiguration.normalizedForWorkspaceScale())
 
@@ -3506,8 +3512,14 @@ struct CLICommandApplyTests {
         #expect(unitResponse.saved)
         #expect(unitResponse.workspaceScale?.displayUnit == .inch)
         #expect(unitResponse.workspaceScale?.displayUnitSymbol == "in")
+        #expect(cliNearlyEqual(unitResponse.workspaceScale?.minorTickMeters ?? 0.0, 0.3048))
+        #expect(cliNearlyEqual(unitResponse.workspaceScale?.majorTickMeters ?? 0.0, 3.048))
+        #expect(cliNearlyEqual(unitResponse.workspaceScale?.visibleSpanMeters ?? 0.0, 3048.0))
         #expect(loadedAfterUnit.displayUnit == .inch)
-        #expect(loadedAfterUnit.ruler == RulerConfiguration.standard(for: .inch))
+        #expect(loadedAfterUnit.ruler.displayUnit == .inch)
+        #expect(cliNearlyEqual(loadedAfterUnit.ruler.minorTickMeters, 0.3048))
+        #expect(cliNearlyEqual(loadedAfterUnit.ruler.majorTickMeters, 3.048))
+        #expect(cliNearlyEqual(loadedAfterUnit.ruler.visibleSpanMeters, 3048.0))
     }
 
     @Test(.timeLimit(.minutes(1)))
@@ -3561,6 +3573,12 @@ struct CLICommandApplyTests {
         #expect(response.workspaceScaleRecommendation?.reason == .modelExceedsComfortableSpan)
         #expect(response.workspaceScaleRecommendation?.recommendedPreset == .sitePlanning)
         #expect(response.workspaceScaleRecommendation?.recommendedScale.displayUnit == .kilometer)
+        #expect(response.workspaceScalePresetOptions?.map(\.preset) == WorkspaceScalePreset.allCases)
+        #expect(response.workspaceScalePresetOptions?.contains { option in
+            option.preset == .regionalPlanning
+                && option.visibleSpanTitle == "1,000 km"
+                && option.comfortableModelSpanTitle == "10 km to 800 km"
+        } == true)
         #expect(response.workspacePrecision == nil)
     }
 
@@ -3612,6 +3630,7 @@ struct CLICommandApplyTests {
         #expect(response.workspaceScale?.matchedPreset == .sitePlanning)
         #expect(response.workspaceScale?.displayUnit == .kilometer)
         #expect(response.workspaceScale?.visibleSpanDisplayValue == 100.0)
+        #expect(response.workspaceScalePresetOptions?.map(\.preset) == WorkspaceScalePreset.allCases)
         #expect(response.workspaceScaleRecommendation == nil)
         #expect(response.message.contains("Workspace scale fitted to Site Planning"))
         #expect(loaded.displayUnit == .kilometer)
@@ -6523,6 +6542,7 @@ func cliExecutableReturnsDataExitForLiveGenerationMismatch() async throws {
     #expect(response.workspaceInteractionScale?.operationStep.meters == 100.0)
     #expect(response.workspaceInteractionScale?.operationStep.displayValue == 0.1)
     #expect(response.workspaceInteractionScale?.operationStep.displayUnitSymbol == "km")
+    #expect(response.workspaceScalePresetOptions?.map(\.preset) == WorkspaceScalePreset.allCases)
     #expect(client.describeRequestCount == 1)
 }
 

@@ -68,6 +68,12 @@ import SwiftCAD
     #expect(result.workspaceInteractionScale?.operationStep.displayUnitSymbol == "km")
     #expect(result.workspaceInteractionScale?.slotWidth.meters == 200.0)
     #expect(result.message.contains("Site Planning"))
+    #expect(result.workspaceScalePresetOptions?.map(\.preset) == WorkspaceScalePreset.allCases)
+    #expect(result.workspaceScalePresetOptions?.contains { option in
+        option.preset == .regionalPlanning
+            && option.visibleSpanTitle == "1,000 km"
+            && option.comfortableModelSpanTitle == "10 km to 800 km"
+    } == true)
 }
 
 @MainActor
@@ -90,6 +96,7 @@ import SwiftCAD
     #expect(result.workspaceInteractionScale?.operationStep.displayValue == 1.0)
     #expect(result.workspaceInteractionScale?.operationStep.displayUnitSymbol == "km")
     #expect(result.message.contains("Regional Planning"))
+    #expect(result.workspaceScalePresetOptions?.map(\.preset) == WorkspaceScalePreset.allCases)
 }
 
 @MainActor
@@ -111,6 +118,7 @@ import SwiftCAD
     #expect(result.workspaceInteractionScale?.slotWidth.meters == 200.0)
     #expect(result.workspaceScaleRecommendation == nil)
     #expect(result.message.contains("Workspace scale fitted to Site Planning"))
+    #expect(result.workspaceScalePresetOptions?.map(\.preset) == WorkspaceScalePreset.allCases)
 }
 
 @MainActor
@@ -186,6 +194,12 @@ import SwiftCAD
     #expect(result.workspaceScaleRecommendation?.reason == .modelExceedsComfortableSpan)
     #expect(result.workspaceScaleRecommendation?.recommendedPreset == .sitePlanning)
     #expect(result.workspaceScaleRecommendation?.recommendedScale.displayUnit == .kilometer)
+    #expect(result.workspaceScalePresetOptions?.map(\.preset) == WorkspaceScalePreset.allCases)
+    #expect(result.workspaceScalePresetOptions?.contains { option in
+        option.preset == .regionalPlanning
+            && option.visibleSpanTitle == "1,000 km"
+            && option.comfortableModelSpanTitle == "10 km to 800 km"
+    } == true)
     #expect(result.workspacePrecision == nil)
 }
 

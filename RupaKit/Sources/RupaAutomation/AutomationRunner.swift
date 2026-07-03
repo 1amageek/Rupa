@@ -1509,6 +1509,7 @@ public struct AutomationRunner {
             workspaceBounds: context.bounds,
             workspacePrecision: context.precision,
             workspaceScaleRecommendation: context.scaleRecommendation,
+            workspaceScalePresetOptions: context.scalePresetOptions,
             viewportGridSettings: context.viewportGridSettings
         )
     }
@@ -1563,6 +1564,7 @@ public struct AutomationRunner {
             workspaceBounds: measurement.bounds,
             workspacePrecision: measurement.workspacePrecision,
             workspaceScaleRecommendation: measurement.workspaceScaleRecommendation,
+            workspaceScalePresetOptions: WorkspaceScalePreset.profiles,
             viewportGridSettings: session.document.productMetadata.viewportGridSettings
         )
     }
@@ -1590,6 +1592,7 @@ public struct AutomationRunner {
             bounds: bounds,
             precision: precision,
             scaleRecommendation: recommendation,
+            scalePresetOptions: WorkspaceScalePreset.profiles,
             viewportGridSettings: session.document.productMetadata.viewportGridSettings,
             diagnostics: workspaceContextDiagnostics(
                 precision: precision,
@@ -1692,6 +1695,7 @@ private struct WorkspaceAutomationContext {
     var bounds: MeasurementResult.Bounds?
     var precision: WorkspacePrecisionReport?
     var scaleRecommendation: WorkspaceScaleRecommendation?
+    var scalePresetOptions: [WorkspaceScalePresetProfile]
     var viewportGridSettings: ViewportGridSettings
     var diagnostics: [EditorDiagnostic]
 }

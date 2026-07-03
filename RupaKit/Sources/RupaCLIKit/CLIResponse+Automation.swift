@@ -17,6 +17,7 @@ extension CLIResponse {
             workspaceBounds: result.workspaceBounds,
             workspacePrecision: result.workspacePrecision,
             workspaceScaleRecommendation: result.workspaceScaleRecommendation,
+            workspaceScalePresetOptions: result.workspaceScalePresetOptions,
             viewportGridSettings: result.viewportGridSettings
         )
     }

@@ -106,6 +106,10 @@ public extension WorkspaceScalePreset {
         0.80
     }
 
+    static var profiles: [WorkspaceScalePresetProfile] {
+        allCases.map(\.profile)
+    }
+
     var profile: WorkspaceScalePresetProfile {
         WorkspaceScalePresetProfile(preset: self)
     }

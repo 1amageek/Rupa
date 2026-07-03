@@ -36,6 +36,15 @@ import Testing
     #expect(siteImperial.visibleSpanMeters == 100_000.0)
 }
 
+@Test func workspaceScalePresetProfilesExposeAllPresetsInCaseOrder() {
+    #expect(WorkspaceScalePreset.profiles.map(\.preset) == WorkspaceScalePreset.allCases)
+    #expect(WorkspaceScalePreset.profiles.contains { profile in
+        profile.preset == .regionalPlanning
+            && profile.visibleSpanTitle == "1,000 km"
+            && profile.comfortableModelSpanTitle == "10 km to 800 km"
+    })
+}
+
 @Test func workspaceScaleDefaultsFollowSitePlanningPreset() {
     let defaults = WorkspaceScaleDefaults(ruler: WorkspaceScalePreset.sitePlanning.rulerConfiguration)
 

@@ -4362,7 +4362,8 @@ public struct CLIService {
         }
         return CLIWorkspaceScaleContext(
             scale: workspaceScale,
-            interactionScale: result.workspaceInteractionScale
+            interactionScale: result.workspaceInteractionScale,
+            scalePresetOptions: result.workspaceScalePresetOptions
         )
     }
 
@@ -4575,6 +4576,9 @@ public struct CLIService {
         if result.workspaceInteractionScale == nil {
             result.workspaceInteractionScale = context.interactionScale
         }
+        if result.workspaceScalePresetOptions == nil {
+            result.workspaceScalePresetOptions = context.scalePresetOptions
+        }
     }
 
     private func ensureWorkspaceScaleContext(
@@ -4586,8 +4590,13 @@ public struct CLIService {
            let workspaceScale = result.workspaceScale {
             result.workspaceInteractionScale = CLIWorkspaceScaleContext(
                 scale: workspaceScale,
-                interactionScale: nil
+                interactionScale: nil,
+                scalePresetOptions: result.workspaceScalePresetOptions
             ).interactionScale
+        }
+
+        if result.workspaceScalePresetOptions == nil {
+            result.workspaceScalePresetOptions = WorkspaceScalePreset.profiles
         }
 
         guard result.workspaceScale == nil || result.workspaceInteractionScale == nil else {
@@ -4772,16 +4781,19 @@ public struct CLIService {
 private struct CLIWorkspaceScaleContext {
     var scale: WorkspaceScaleSnapshot
     var interactionScale: WorkspaceInteractionScaleSnapshot
+    var scalePresetOptions: [WorkspaceScalePresetProfile]
 
     init(ruler: RulerConfiguration) {
         let normalized = ruler.normalizedForWorkspaceScale()
         self.scale = WorkspaceScaleSnapshot(ruler: normalized)
         self.interactionScale = WorkspaceInteractionScaleSnapshot(ruler: normalized)
+        self.scalePresetOptions = WorkspaceScalePreset.profiles
     }
 
     init(
         scale: WorkspaceScaleSnapshot,
-        interactionScale: WorkspaceInteractionScaleSnapshot?
+        interactionScale: WorkspaceInteractionScaleSnapshot?,
+        scalePresetOptions: [WorkspaceScalePresetProfile]? = nil
     ) {
         self.scale = scale
         self.interactionScale = interactionScale ?? WorkspaceInteractionScaleSnapshot(
@@ -4792,5 +4804,6 @@ private struct CLIWorkspaceScaleContext {
                 visibleSpanMeters: scale.visibleSpanMeters
             )
         )
+        self.scalePresetOptions = scalePresetOptions ?? WorkspaceScalePreset.profiles
     }
 }

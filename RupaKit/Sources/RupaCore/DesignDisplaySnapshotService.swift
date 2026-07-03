@@ -130,7 +130,7 @@ public struct DesignDisplaySnapshotService: Sendable {
                     currentRuler: document.ruler
                 )
             },
-            workspaceScalePresetOptions: WorkspaceScalePreset.allCases.map(\.profile),
+            workspaceScalePresetOptions: WorkspaceScalePreset.profiles,
             sketches: order.compactMap { snapshot.sketches[$0] },
             extrudes: order.compactMap { snapshot.extrudes[$0] },
             straightPrismSweeps: order.compactMap { snapshot.straightPrismSweeps[$0] },
