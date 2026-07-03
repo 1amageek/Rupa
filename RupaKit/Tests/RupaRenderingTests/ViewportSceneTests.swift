@@ -3119,6 +3119,10 @@ import Testing
         ViewportCanvasChromeLayout.viewportBadgeSize.width
             == ViewportCanvasChromeMetrics.topControlMaximumWidth
     )
+    #expect(
+        ViewportCanvasChromeLayout.defaultViewportBadgeWidth
+            < ViewportCanvasChromeMetrics.topControlMaximumWidth
+    )
     #expect(ViewportCanvasChromeLayout.viewportBadgePadding == ViewportCanvasChromeMetrics.edgePadding)
     #expect(ViewportCanvasChromeMetrics.topControlContentHeight < ViewportCanvasChromeMetrics.topControlHeight)
     #expect(
@@ -3128,8 +3132,23 @@ import Testing
     #expect(ViewportCanvasChromeMetrics.topControlHorizontalPadding == ViewportCanvasChromeMetrics.edgePadding)
     #expect(rect.minX == ViewportCanvasChromeLayout.viewportBadgePadding)
     #expect(rect.minY == ViewportCanvasChromeLayout.viewportBadgePadding)
+    #expect(rect.width == ViewportCanvasChromeLayout.defaultViewportBadgeWidth)
     #expect(rect.height == ViewportCanvasChromeLayout.viewportBadgeSize.height)
     #expect(layout.containsCanvasChrome(CGPoint(x: 12.0, y: 12.0)))
+}
+
+@MainActor
+@Test func viewportTopChromeBadgeWidthCanTrackCompactContent() {
+    let viewportSize = CGSize(width: 800.0, height: 600.0)
+    let compactWidth = CGFloat(164.0)
+    let layout = ViewportCanvasChromeLayout(
+        viewportSize: viewportSize,
+        viewportBadgeWidth: compactWidth
+    )
+    let rect = layout.viewportBadgeRect
+
+    #expect(rect.width == compactWidth)
+    #expect(rect.width < ViewportCanvasChromeMetrics.topControlMaximumWidth)
 }
 
 @MainActor

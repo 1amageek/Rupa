@@ -15,8 +15,10 @@ import Testing
     #expect(ViewportCanvasChromeMetrics.topControlContentHeight == 22.0)
 }
 
-@Test func workspaceChromeControlsUseFillOnlyRegularControlShape() {
+@Test func workspaceChromeControlsUseSharedRegularGlassControlShape() {
     #expect(WorkspaceChromeControlMetrics.cornerRadius < ViewportCanvasChromeMetrics.cornerRadius)
+    #expect(ViewportCanvasChromeMetrics.topControlBorderWidth > 0.0)
+    #expect(ViewportCanvasChromeMetrics.topControlBorderOpacity > 0.0)
     #expect(
         WorkspaceChromeControlMetrics.containerHorizontalPadding
             == ViewportCanvasChromeMetrics.topControlHorizontalPadding

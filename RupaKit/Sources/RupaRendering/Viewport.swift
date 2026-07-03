@@ -102,7 +102,6 @@ public struct Viewport: View {
     private let documentGeneration: DocumentGeneration?
     private let evaluationCache: EvaluatedDocumentCache?
     private let objectRegistry: ObjectTypeRegistry
-    private let evaluationStatus: EvaluationStatus
     private let renderInvalidation: RenderInvalidation
     private let selection: SelectionModel
     private let selectionDragPreviewTargets: [SelectionTarget]
@@ -177,7 +176,6 @@ public struct Viewport: View {
         documentGeneration: DocumentGeneration? = nil,
         evaluationCache: EvaluatedDocumentCache? = nil,
         objectRegistry: ObjectTypeRegistry = .builtIn,
-        evaluationStatus: EvaluationStatus = .notEvaluated,
         renderInvalidation: RenderInvalidation = RenderInvalidation(),
         selection: SelectionModel = .empty,
         selectionDragPreviewTargets: [SelectionTarget] = [],
@@ -251,7 +249,6 @@ public struct Viewport: View {
         self.documentGeneration = documentGeneration
         self.evaluationCache = evaluationCache
         self.objectRegistry = objectRegistry
-        self.evaluationStatus = evaluationStatus
         self.renderInvalidation = renderInvalidation
         self.selection = selection
         self.selectionDragPreviewTargets = selectionDragPreviewTargets
@@ -330,17 +327,20 @@ public struct Viewport: View {
         GeometryReader { proxy in
             TimelineView(.animation) { timeline in
                 let basis = projectionBasis(at: timeline.date)
-                let chromeLayout = ViewportCanvasChromeLayout(
-                    viewportSize: proxy.size,
-                    bottomReservedHeight: bottomChromeReservedHeight,
-                    additionalExclusionRects: canvasOverlayExclusionRects
-                )
                 let projectedGrid = ViewportProjectedGrid(
                     document: document,
                     size: proxy.size,
                     camera: camera,
                     basis: basis,
                     visualSpacingMode: gridVisualSpacingMode
+                )
+                let chromeLayout = ViewportCanvasChromeLayout(
+                    viewportSize: proxy.size,
+                    bottomReservedHeight: bottomChromeReservedHeight,
+                    additionalExclusionRects: canvasOverlayExclusionRects,
+                    viewportBadgeWidth: estimatedViewportBadgeWidth(
+                        scaleReadout: projectedGrid.scaleReadout
+                    )
                 )
 
                 Canvas { context, size in
@@ -634,11 +634,6 @@ public struct Viewport: View {
                 .lineLimit(1)
             Divider()
                 .frame(height: ViewportCanvasChromeMetrics.topControlDividerHeight)
-            Text(statusTitle)
-                .font(.caption)
-                .lineLimit(1)
-            Divider()
-                .frame(height: ViewportCanvasChromeMetrics.topControlDividerHeight)
             Text("\(Int((camera.zoom * 100.0).rounded()))%")
                 .font(.system(.caption, design: .monospaced))
             if featureCount > 0 {
@@ -663,12 +658,11 @@ public struct Viewport: View {
     ) -> some View {
         let rect = chromeLayout.viewportBadgeRect
         return viewportBadge(scaleReadout: scaleReadout)
+            .fixedSize(horizontal: true, vertical: false)
             .frame(
-                width: rect.width,
                 height: rect.height,
                 alignment: .leading
             )
-            .clipped()
             .offset(x: rect.minX, y: rect.minY)
             .zIndex(2.0)
             .onHover { isHovered in
@@ -676,6 +670,39 @@ public struct Viewport: View {
                     clearCanvasHover()
                 }
             }
+    }
+
+    private func estimatedViewportBadgeWidth(
+        scaleReadout: ViewportProjectedGrid.ScaleReadout
+    ) -> CGFloat {
+        var textSegments = [
+            scaleReadout.minorStep.displayUnit.symbol,
+            scaleReadout.compactText,
+            "\(Int((camera.zoom * 100.0).rounded()))%",
+        ]
+        if featureCount > 0 {
+            textSegments.append("\(featureCount) features")
+        }
+
+        let dividerCount = max(0, textSegments.count - 1)
+        let childCount = 1 + textSegments.count + dividerCount
+        let averageCaptionGlyphWidth: CGFloat = 7.0
+        let iconWidth: CGFloat = 14.0
+        let textWidth = textSegments.reduce(CGFloat.zero) { width, segment in
+            width + CGFloat(segment.count) * averageCaptionGlyphWidth
+        }
+        let dividerWidth = CGFloat(dividerCount)
+        let spacingWidth = CGFloat(max(0, childCount - 1))
+            * ViewportCanvasChromeMetrics.topControlItemSpacing
+        let width = iconWidth
+            + textWidth
+            + dividerWidth
+            + spacingWidth
+            + ViewportCanvasChromeMetrics.topControlHorizontalPadding * 2.0
+        return min(
+            max(width.rounded(.up), ViewportCanvasChromeLayout.minimumViewportBadgeWidth),
+            ViewportCanvasChromeMetrics.topControlMaximumWidth
+        )
     }
 
     private var featureCount: Int {
@@ -713,21 +740,6 @@ public struct Viewport: View {
             selectedAxis: nil,
             storesOrbitBasis: true
         )
-    }
-
-    private var statusTitle: String {
-        switch evaluationStatus {
-        case .notEvaluated:
-            "Not evaluated"
-        case .valid:
-            if let generation = renderInvalidation.generation {
-                "Gen \(generation.value)"
-            } else {
-                "Valid"
-            }
-        case .failed:
-            "Invalid"
-        }
     }
 
     private func drawGrid(

@@ -1,4 +1,5 @@
 import RupaCore
+import RupaRendering
 import SwiftUI
 
 struct WorkspaceToolPalette: View {
@@ -14,7 +15,7 @@ struct WorkspaceToolPalette: View {
             }
         }
         .padding(WorkspaceToolPaletteMetrics.containerPadding)
-        .glassEffect(.regular, in: Capsule())
+        .viewportCanvasCapsuleGlassChrome()
         .shadow(color: .black.opacity(0.12), radius: 10, x: 0, y: 4)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("CanvasToolPalette")

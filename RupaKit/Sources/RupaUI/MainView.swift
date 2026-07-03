@@ -508,7 +508,6 @@ public struct MainView: View {
                     currentEvaluation: session.currentEvaluation,
                     documentGeneration: session.generation,
                     objectRegistry: objectRegistry,
-                    evaluationStatus: session.evaluationStatus,
                     renderInvalidation: session.renderInvalidation,
                     selection: session.selection,
                     selectionDragPreviewTargets: selectionDragPreviewTargets,

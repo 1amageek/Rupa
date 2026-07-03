@@ -2,16 +2,32 @@ import SwiftUI
 
 public extension View {
     func viewportCanvasGlassChrome() -> some View {
-        glassEffect(
-            .regular,
-            in: RoundedRectangle(
-                cornerRadius: ViewportCanvasChromeMetrics.cornerRadius,
-                style: .continuous
-            )
+        let shape = RoundedRectangle(
+            cornerRadius: ViewportCanvasChromeMetrics.cornerRadius,
+            style: .continuous
         )
+
+        return glassEffect(
+            .regular,
+            in: shape
+        )
+        .overlay {
+            shape.strokeBorder(
+                Color.primary.opacity(ViewportCanvasChromeMetrics.topControlBorderOpacity),
+                lineWidth: ViewportCanvasChromeMetrics.topControlBorderWidth
+            )
+        }
     }
 
     func viewportCanvasCapsuleGlassChrome() -> some View {
-        glassEffect(.regular, in: Capsule())
+        let shape = Capsule()
+
+        return glassEffect(.regular, in: shape)
+            .overlay {
+                shape.strokeBorder(
+                    Color.primary.opacity(ViewportCanvasChromeMetrics.topControlBorderOpacity),
+                    lineWidth: ViewportCanvasChromeMetrics.topControlBorderWidth
+                )
+            }
     }
 }

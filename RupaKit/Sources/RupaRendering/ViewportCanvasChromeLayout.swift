@@ -3,6 +3,8 @@ import CoreGraphics
 struct ViewportCanvasChromeLayout: Equatable {
     static let axisControlSize = CGSize(width: 286.0, height: 42.0)
     static let axisBottomPadding: CGFloat = 14.0
+    static let minimumViewportBadgeWidth: CGFloat = 154.0
+    static let defaultViewportBadgeWidth: CGFloat = 188.0
     static let viewportBadgeSize = CGSize(
         width: ViewportCanvasChromeMetrics.topControlMaximumWidth,
         height: ViewportCanvasChromeMetrics.topControlHeight
@@ -13,6 +15,7 @@ struct ViewportCanvasChromeLayout: Equatable {
     var viewportSize: CGSize
     var bottomReservedHeight: CGFloat = 0.0
     var additionalExclusionRects: [CGRect] = []
+    var viewportBadgeWidth: CGFloat = Self.defaultViewportBadgeWidth
 
     var axisControlRect: CGRect {
         clamped(
@@ -41,7 +44,7 @@ struct ViewportCanvasChromeLayout: Equatable {
                 CGRect(
                     x: Self.viewportBadgePadding,
                     y: Self.viewportBadgePadding,
-                    width: Self.viewportBadgeSize.width,
+                    width: clampedViewportBadgeWidth,
                     height: Self.viewportBadgeSize.height
                 )
             )
@@ -78,6 +81,13 @@ struct ViewportCanvasChromeLayout: Equatable {
         .filter { rect in
             !rect.isEmpty && !rect.isNull
         }
+    }
+
+    private var clampedViewportBadgeWidth: CGFloat {
+        min(
+            max(viewportBadgeWidth, Self.minimumViewportBadgeWidth),
+            Self.viewportBadgeSize.width
+        )
     }
 
     func containsCanvasChrome(_ point: CGPoint) -> Bool {
