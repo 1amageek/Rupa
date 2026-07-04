@@ -7,7 +7,6 @@ import SwiftUI
 
 private enum WorkspaceCanvasOverlayLayout {
     static let edgePadding: CGFloat = ViewportCanvasChromeMetrics.edgePadding
-    static let topChromeHeight: CGFloat = WorkspaceChromeControlMetrics.containerHeight
     static let coordinateSpaceName = "WorkspaceCanvasOverlaySpace"
 }
 
@@ -1395,10 +1394,7 @@ public struct MainView: View {
                 isInspectorPresented.toggle()
             }
         }
-        .padding(.horizontal, WorkspaceChromeControlMetrics.containerHorizontalPadding)
-        .frame(height: WorkspaceCanvasOverlayLayout.topChromeHeight)
-        .fixedSize(horizontal: true, vertical: false)
-        .workspaceGlassContainer()
+        .workspaceCanvasTopChromeContainer()
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("WorkspaceTopBar")
     }
@@ -1686,18 +1682,14 @@ public struct MainView: View {
         ViewThatFits(in: .horizontal) {
             viewportContextPanelContent
                 .fixedSize(horizontal: true, vertical: false)
-                .padding(.horizontal, WorkspaceChromeControlMetrics.containerHorizontalPadding)
-                .frame(height: WorkspaceCanvasOverlayLayout.topChromeHeight)
-                .workspaceGlassContainer()
+                .workspaceCanvasTopChromeContainer()
 
             ScrollView(.horizontal) {
                 viewportContextPanelContent
                     .fixedSize(horizontal: true, vertical: false)
-                    .padding(.horizontal, WorkspaceChromeControlMetrics.containerHorizontalPadding)
             }
             .scrollIndicators(.hidden)
-            .frame(height: WorkspaceCanvasOverlayLayout.topChromeHeight)
-            .workspaceGlassContainer()
+            .workspaceCanvasTopChromeContainer(contentSized: false)
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("ViewportContextPanelContainer")
