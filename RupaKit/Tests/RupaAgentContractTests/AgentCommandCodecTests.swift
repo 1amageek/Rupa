@@ -185,7 +185,8 @@ import SwiftCAD
             evaluationKind: .exactStraightExtrude,
             outputTopologyKind: .exactStraightSolid,
             booleanSupportKind: .newBody,
-            guideStrategies: [.none],
+            guideStrategyCandidates: [.none],
+            resolvedGuideStrategy: nil,
             unsupportedCode: nil,
             message: "Sweep can evaluate as a profile-plane-preserving exact straight extrusion.",
             checks: [

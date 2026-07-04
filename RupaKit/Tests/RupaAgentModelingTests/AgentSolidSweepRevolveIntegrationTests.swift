@@ -119,9 +119,87 @@ import SwiftCAD
     #expect(plan.evaluationKind == .exactStraightExtrude)
     #expect(plan.outputTopologyKind == .exactStraightSolid)
     #expect(plan.booleanSupportKind == .newBody)
-    #expect(plan.guideStrategies == [.none])
+    #expect(plan.guideStrategyCandidates == [.none])
+    #expect(plan.resolvedGuideStrategy == nil)
     #expect(plan.checks.last?.kind == .capabilityDecision)
     #expect(plan.checks.last?.status == .passed)
+    #expect(session.generation == initialGeneration)
+    #expect(session.document.cadDocument.designGraph.order == initialFeatureOrder)
+}
+
+@MainActor
+@Test func agentReturnsGuidedSweepEvaluationPlanWithResolvedGuideStrategy() async throws {
+    var document = DesignDocument.empty()
+    let profileID = try document.createRectangleSketchFromCorners(
+        name: "Agent Guided Sweep Plan Profile",
+        plane: .xy,
+        firstCorner: SketchPoint(
+            x: .length(0.0, .millimeter),
+            y: .length(0.0, .millimeter)
+        ),
+        oppositeCorner: SketchPoint(
+            x: .length(4.0, .millimeter),
+            y: .length(2.0, .millimeter)
+        )
+    )
+    let pathID = try document.createLineSketch(
+        name: "Agent Guided Sweep Plan Path",
+        plane: .yz,
+        start: SketchPoint(
+            x: .length(0.0, .millimeter),
+            y: .length(0.0, .millimeter)
+        ),
+        end: SketchPoint(
+            x: .length(0.0, .millimeter),
+            y: .length(20.0, .millimeter)
+        )
+    )
+    let guideID = try document.createLineSketch(
+        name: "Agent Guided Sweep Plan Guide",
+        plane: .yz,
+        start: SketchPoint(
+            x: .length(2.0, .millimeter),
+            y: .length(0.0, .millimeter)
+        ),
+        end: SketchPoint(
+            x: .length(2.0, .millimeter),
+            y: .length(20.0, .millimeter)
+        )
+    )
+    let server = AgentCommandController()
+    let sessionID = UUID()
+    let session = EditorSession(document: document)
+    server.register(session: session, id: sessionID)
+    let initialGeneration = session.generation
+    let initialFeatureOrder = session.document.cadDocument.designGraph.order
+
+    let response = server.handle(
+        .sweepEvaluationPlan(
+            sessionID: sessionID,
+            sections: [.profile(ProfileReference(featureID: profileID))],
+            path: SweepPathReference(featureID: pathID),
+            guides: [SweepGuideReference(featureID: guideID)],
+            targets: [],
+            options: SweepOptions(guideMethod: .point),
+            expectedGeneration: initialGeneration
+        )
+    )
+
+    guard case .sweepEvaluationPlan(let plan) = response else {
+        Issue.record("Agent must return a guided sweep evaluation plan.")
+        return
+    }
+
+    #expect(plan.status == .supported)
+    #expect(plan.sectionState == .guided)
+    #expect(plan.guideCount == 1)
+    #expect(plan.guideStrategyCandidates == [.pointSimilarity])
+    #expect(plan.resolvedGuideStrategy == .pointSimilarity)
+    #expect(plan.checks.contains {
+        $0.kind == .guideConstraints &&
+            $0.status == .passed &&
+            $0.message.contains("pointSimilarity")
+    })
     #expect(session.generation == initialGeneration)
     #expect(session.document.cadDocument.designGraph.order == initialFeatureOrder)
 }

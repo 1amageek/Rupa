@@ -1566,7 +1566,7 @@ public final class AgentCommandController: AgentClientProtocol {
         capability(
             "sweepEvaluationPlan",
             category: .read,
-            summary: "Preflight a proposed Sweep without mutating the document, returning the resolved path shape, section state, evaluation kind, output topology, boolean support, solved guide strategy, unsupported code, and ordered checks used by the shared sweep evaluation contract.",
+            summary: "Preflight a proposed Sweep without mutating the document, returning the resolved path shape, section state, evaluation kind, output topology, boolean support, guide strategy candidates, resolved guide strategy, unsupported code, and ordered checks used by the shared sweep evaluation contract.",
             access: .agentRequest,
             mutatesDocument: false,
             discovery: [.sketchEntitySummary, .topologySummary, .sweepEvaluationPlan],
@@ -1585,7 +1585,7 @@ public final class AgentCommandController: AgentClientProtocol {
                     ]
                 ),
                 AgentCapabilityDescriptor.OptionAxis(
-                    name: "guideStrategies",
+                    name: "guideStrategyCandidates",
                     supportedValues: [
                         "none",
                         "pointSimilarity",
@@ -1598,7 +1598,7 @@ public final class AgentCommandController: AgentClientProtocol {
                         "curveContact",
                     ],
                     notes: [
-                        "The option axis lists possible guide strategies; guided preflight results report the strategy solved by the shared sweep constraint solver.",
+                        "The option axis lists possible guide strategies; guided preflight results also report resolvedGuideStrategy from the shared sweep constraint solver.",
                     ]
                 ),
             ]
