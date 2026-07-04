@@ -117,6 +117,13 @@ public struct ViewportProjectedGrid: Equatable {
             return "Grid \(minorStep.text) · \(visibleSpan.text)"
         }
 
+        public var canvasHUDText: String {
+            if showsSeparateSnapStep {
+                return "\(minorStep.text)/\(snapStep.text)"
+            }
+            return minorStep.text
+        }
+
         public var accessibilityText: String {
             var components = [
                 "Grid \(minorStep.text)",

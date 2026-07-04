@@ -629,7 +629,7 @@ public struct Viewport: View {
                 .font(.system(.caption, design: .monospaced))
             Divider()
                 .frame(height: ViewportCanvasChromeMetrics.topControlDividerHeight)
-            Text(scaleReadout.compactText)
+            Text(scaleReadout.canvasHUDText)
                 .font(.system(.caption, design: .monospaced))
                 .lineLimit(1)
                 .truncationMode(.middle)
@@ -637,14 +637,6 @@ public struct Viewport: View {
                 .frame(height: ViewportCanvasChromeMetrics.topControlDividerHeight)
             Text("\(Int((camera.zoom * 100.0).rounded()))%")
                 .font(.system(.caption, design: .monospaced))
-            if featureCount > 0 {
-                Divider()
-                    .frame(height: ViewportCanvasChromeMetrics.topControlDividerHeight)
-                Text("\(featureCount) features")
-                    .font(.caption)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-            }
         }
         .padding(.horizontal, ViewportCanvasChromeMetrics.topControlHorizontalPadding)
         .frame(
@@ -652,6 +644,10 @@ public struct Viewport: View {
             alignment: .leading
         )
         .viewportCanvasGlassChrome()
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Canvas Scale")
+        .accessibilityValue(scaleReadout.accessibilityText)
+        .accessibilityIdentifier("CanvasScaleHUD")
     }
 
     private func viewportBadgeOverlay(
@@ -679,12 +675,9 @@ public struct Viewport: View {
     ) -> CGFloat {
         var textSegments = [
             scaleReadout.minorStep.displayUnit.symbol,
-            scaleReadout.compactText,
+            scaleReadout.canvasHUDText,
             "\(Int((camera.zoom * 100.0).rounded()))%",
         ]
-        if featureCount > 0 {
-            textSegments.append("\(featureCount) features")
-        }
 
         let dividerCount = max(0, textSegments.count - 1)
         let childCount = 1 + textSegments.count + dividerCount
@@ -705,10 +698,6 @@ public struct Viewport: View {
             max(width.rounded(.up), ViewportCanvasChromeLayout.minimumViewportBadgeWidth),
             ViewportCanvasChromeMetrics.topControlMaximumWidth
         )
-    }
-
-    private var featureCount: Int {
-        document.cadDocument.designGraph.order.count
     }
 
     private var currentProjectionBasis: ViewportProjectionBasis {

@@ -105,6 +105,8 @@ import RupaViewportScene
     #expect(grid.scaleReadout.compactText.contains("Grid"))
     #expect(grid.scaleReadout.compactText.contains("Snap"))
     #expect(grid.scaleReadout.compactText.contains(grid.scaleReadout.snapStep.text))
+    #expect(grid.scaleReadout.canvasHUDText == "\(grid.scaleReadout.minorStep.text)/\(grid.scaleReadout.snapStep.text)")
+    #expect(!grid.scaleReadout.canvasHUDText.contains("Grid"))
     #expect(grid.scaleReadout.accessibilityText.contains("major"))
     #expect(grid.scaleReadout.accessibilityText.contains("snap"))
     #expect(grid.scaleReadout.accessibilityText.contains("visible span"))
@@ -129,6 +131,11 @@ import RupaViewportScene
     #expect(grid.scaleReadout.workspaceSpan.meters == document.ruler.visibleSpanMeters)
     #expect(grid.scaleReadout.workspaceSpan.text == "25km")
     #expect(grid.scaleReadout.compactText.contains("Grid"))
+    if grid.scaleReadout.showsSeparateSnapStep {
+        #expect(grid.scaleReadout.canvasHUDText == "\(grid.scaleReadout.minorStep.text)/\(grid.scaleReadout.snapStep.text)")
+    } else {
+        #expect(grid.scaleReadout.canvasHUDText == grid.scaleReadout.minorStep.text)
+    }
     #expect(grid.scaleReadout.accessibilityText.contains("workspace span 25km"))
 }
 
@@ -156,6 +163,7 @@ import RupaViewportScene
     #expect(grid.scaleReadout.workspaceSpan.text == "1,000km")
     #expect(grid.scaleReadout.compactText.contains("Grid"))
     #expect(grid.scaleReadout.compactText.contains("km"))
+    #expect(grid.scaleReadout.canvasHUDText.hasSuffix("km"))
     #expect(grid.scaleReadout.accessibilityText.contains(grid.scaleReadout.visibleSpan.text))
     #expect(grid.scaleReadout.minorStep.text.hasSuffix("km"))
     #expect(grid.scaleReadout.majorStep.text.hasSuffix("km"))
@@ -196,6 +204,7 @@ import RupaViewportScene
     #expect(grid.scaleReadout.snapStep.displayUnit == .foot)
     #expect(!grid.scaleReadout.showsSeparateSnapStep)
     #expect(grid.scaleReadout.compactText == "Grid \(grid.scaleReadout.minorStep.text) · \(grid.scaleReadout.visibleSpan.text)")
+    #expect(grid.scaleReadout.canvasHUDText == grid.scaleReadout.minorStep.text)
     #expect(grid.scaleReadout.accessibilityText.contains("mode fixed"))
 }
 
@@ -218,6 +227,7 @@ import RupaViewportScene
     #expect(grid.scaleReadout.snapStep.meters == 100.0)
     #expect(grid.scaleReadout.snapStep.text == "0.1km")
     #expect(grid.scaleReadout.minorStep.meters > grid.scaleReadout.snapStep.meters)
+    #expect(grid.scaleReadout.canvasHUDText == "\(grid.scaleReadout.minorStep.text)/\(grid.scaleReadout.snapStep.text)")
     #expect(grid.scaleReadout.compactText.contains("capped"))
     #expect(grid.scaleReadout.compactText.contains(grid.scaleReadout.snapStep.text))
     #expect(grid.scaleReadout.accessibilityText.contains("visual grid capped"))
@@ -242,6 +252,7 @@ import RupaViewportScene
     #expect(grid.scaleReadout.minorStep.meters == grid.minorStepMeters)
     #expect(grid.scaleReadout.snapStep.meters == document.ruler.minorTickMeters)
     #expect(grid.scaleReadout.showsSeparateSnapStep)
+    #expect(grid.scaleReadout.canvasHUDText == "\(grid.scaleReadout.minorStep.text)/\(grid.scaleReadout.snapStep.text)")
     #expect(grid.scaleReadout.compactText.contains("capped"))
     #expect(grid.scaleReadout.compactText.contains(grid.scaleReadout.snapStep.text))
     #expect(grid.scaleReadout.accessibilityText.contains("visual grid capped by line budget"))

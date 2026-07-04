@@ -3178,8 +3178,8 @@ import Testing
         ViewportCanvasChromeLayout.defaultViewportBadgeWidth
             < ViewportCanvasChromeMetrics.topControlMaximumWidth
     )
-    #expect(ViewportCanvasChromeLayout.defaultViewportBadgeWidth <= 154.0)
-    #expect(ViewportCanvasChromeMetrics.topControlMaximumWidth <= 260.0)
+    #expect(ViewportCanvasChromeLayout.defaultViewportBadgeWidth <= 132.0)
+    #expect(ViewportCanvasChromeMetrics.topControlMaximumWidth <= 190.0)
     #expect(ViewportCanvasChromeLayout.viewportBadgePadding == ViewportCanvasChromeMetrics.edgePadding)
     #expect(ViewportCanvasChromeMetrics.topControlContentHeight < ViewportCanvasChromeMetrics.topControlHeight)
     #expect(
