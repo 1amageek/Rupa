@@ -11,13 +11,13 @@ import Testing
     let containedHeight = WorkspaceChromeControlMetrics.controlHeight
         + WorkspaceChromeControlMetrics.containerVerticalPadding * 2.0
     #expect(abs(containedHeight - WorkspaceChromeControlMetrics.containerHeight) < 1.0e-9)
-    #expect(ViewportCanvasChromeMetrics.topControlHeight == 30.0)
-    #expect(ViewportCanvasChromeMetrics.topControlContentHeight == 22.0)
-    #expect(ViewportCanvasChromeMetrics.edgePadding == 6.0)
+    #expect(ViewportCanvasChromeMetrics.topControlHeight == 28.0)
+    #expect(ViewportCanvasChromeMetrics.topControlContentHeight == 20.0)
+    #expect(ViewportCanvasChromeMetrics.edgePadding == 5.0)
     #expect(ViewportCanvasChromeMetrics.topControlItemSpacing == ViewportCanvasChromeMetrics.edgePadding)
-    #expect(ViewportCanvasChromeMetrics.topControlMaximumWidth == 190.0)
+    #expect(ViewportCanvasChromeMetrics.topControlMaximumWidth == 180.0)
     #expect(WorkspaceChromeControlMetrics.containerHeight == ViewportCanvasChromeLayout.viewportBadgeSize.height)
-    #expect(WorkspaceChromeControlMetrics.containerHeight == 30.0)
+    #expect(WorkspaceChromeControlMetrics.containerHeight == 28.0)
 }
 
 @Test func workspaceChromeControlsUseSharedLiquidGlassControlShape() {
@@ -36,6 +36,8 @@ import Testing
     #expect(ViewportCanvasChromeMetrics.outlineOpacity > 0.0)
     #expect(ViewportCanvasChromeMetrics.outlineOpacity >= 0.22)
     #expect(ViewportCanvasChromeMetrics.outlineOpacity <= 0.24)
+    #expect(ViewportCanvasChromeMetrics.surfaceTintOpacity > 0.0)
+    #expect(ViewportCanvasChromeMetrics.surfaceTintOpacity < ViewportCanvasChromeMetrics.outlineOpacity)
 }
 
 @Test func workspaceChromeControlsStayContentSizedOnCanvas() {
@@ -46,4 +48,15 @@ import Testing
 
     #expect(topBarMinimumContentWidth < viewportBadgeWidth)
     #expect(ViewportCanvasChromeLayout.viewportBadgeSize.width == ViewportCanvasChromeMetrics.topControlMaximumWidth)
+}
+
+@Test func workspaceTopBarPresentationStaysCanvasActionOnly() {
+    let emptyPresentation = WorkspaceTopBarPresentation(selectedTargetCount: 0)
+    let selectedPresentation = WorkspaceTopBarPresentation(selectedTargetCount: 2)
+    let fieldNames = Mirror(reflecting: emptyPresentation).children.compactMap(\.label)
+
+    #expect(emptyPresentation.selectionTitle == nil)
+    #expect(selectedPresentation.selectionTitle == "2 selected")
+    #expect(!fieldNames.contains { $0.localizedCaseInsensitiveContains("document") })
+    #expect(!fieldNames.contains { $0.localizedCaseInsensitiveContains("title") })
 }
