@@ -597,6 +597,7 @@ public struct MainView: View {
                     onPolySplineSurfaceVertexSlideDrag: viewportPolySplineSurfaceVertexSlideDragHandler,
                     onSurfaceControlPointSlideDrag: viewportSurfaceControlPointSlideDragHandler,
                     onSurfaceFrameDrag: viewportSurfaceFrameDragHandler,
+                    onConstructionPlaneHandleDrag: viewportConstructionPlaneHandleDragHandler,
                     onCommandConfirm: viewportCommandConfirmHandler,
                     onFitWorkspaceScaleToModel: fitWorkspaceScaleToModel,
                     onSelectSmallerWorkspaceScale: selectSmallerWorkspaceScalePreset,
@@ -1074,6 +1075,16 @@ public struct MainView: View {
         }
         return { target in
             handleViewportSurfaceFrameDrag(target)
+        }
+    }
+
+    private var viewportConstructionPlaneHandleDragHandler: ((ViewportConstructionPlaneDragTarget) -> Void)? {
+        guard session.selectedTool == .select,
+              selectedConstructionPlaneEntry != nil else {
+            return nil
+        }
+        return { target in
+            handleViewportConstructionPlaneHandleDrag(target)
         }
     }
 
@@ -3520,6 +3531,45 @@ public struct MainView: View {
             vDistanceMeters: vDistance,
             normalDistanceMeters: normalDistance
         )
+    }
+
+    private func handleViewportConstructionPlaneHandleDrag(
+        _ target: ViewportConstructionPlaneDragTarget
+    ) {
+        guard session.selectedTool == .select,
+              let entry = savedConstructionPlaneSummary.planes.first(where: { plane in
+                  plane.id == target.constructionPlaneID && plane.sceneNodeID == target.sceneNodeID
+              }) else {
+            return
+        }
+
+        do {
+            let builder = WorkspaceConstructionPlaneEditBuilder()
+            let plane: SketchPlane
+            let successMessage: String
+            switch target.handle {
+            case .origin:
+                plane = try builder.planeSettingOrigin(target.origin, on: entry.plane)
+                successMessage = "Updated construction plane \(entry.name) origin."
+            case .normal:
+                plane = try builder.planeSettingNormal(target.normal, on: entry.plane)
+                successMessage = "Updated construction plane \(entry.name) normal."
+            }
+            commitConstructionPlaneEdit(
+                entry,
+                plane: plane,
+                successMessage: successMessage
+            )
+        } catch let error as EditorError {
+            session.reportToolStatus(error.message, severity: .warning)
+            isPreviewExpanded = true
+        } catch {
+            session.reportToolStatus(
+                "Construction plane viewport edit failed.",
+                severity: .warning
+            )
+            isPreviewExpanded = true
+        }
     }
 
     private func handleViewportFaceDrag(_ target: ViewportFaceDragTarget) {

@@ -66,6 +66,66 @@ struct ViewportAffordanceDragState: Equatable {
     var baseGroupEdit: ViewportObjectEditState?
 }
 
+struct ViewportConstructionPlaneHandlePlane: Equatable {
+    var constructionPlaneID: ConstructionPlaneSourceID
+    var sceneNodeID: SceneNodeID
+    var origin: Point3D
+    var normal: Vector3D
+    var normalEnd: Point3D
+    var corners: [Point3D]
+    var projectedOrigin: CGPoint
+    var projectedNormalEnd: CGPoint
+
+    func target(
+        handle: ViewportConstructionPlaneHandleKind
+    ) -> ViewportConstructionPlaneHandleTarget {
+        ViewportConstructionPlaneHandleTarget(
+            constructionPlaneID: constructionPlaneID,
+            sceneNodeID: sceneNodeID,
+            handle: handle,
+            origin: origin,
+            normal: normal,
+            normalEnd: normalEnd,
+            corners: corners,
+            projectedOrigin: projectedOrigin,
+            projectedNormalEnd: projectedNormalEnd
+        )
+    }
+}
+
+struct ViewportConstructionPlaneHandleTarget: Equatable {
+    var constructionPlaneID: ConstructionPlaneSourceID
+    var sceneNodeID: SceneNodeID
+    var handle: ViewportConstructionPlaneHandleKind
+    var origin: Point3D
+    var normal: Vector3D
+    var normalEnd: Point3D
+    var corners: [Point3D]
+    var projectedOrigin: CGPoint
+    var projectedNormalEnd: CGPoint
+
+    var identity: ViewportConstructionPlaneHandleIdentity {
+        ViewportConstructionPlaneHandleIdentity(
+            constructionPlaneID: constructionPlaneID,
+            sceneNodeID: sceneNodeID,
+            handle: handle
+        )
+    }
+}
+
+struct ViewportConstructionPlaneHandleIdentity: Equatable {
+    var constructionPlaneID: ConstructionPlaneSourceID
+    var sceneNodeID: SceneNodeID
+    var handle: ViewportConstructionPlaneHandleKind
+}
+
+struct ViewportConstructionPlaneHandleDragState: Equatable {
+    var target: ViewportConstructionPlaneHandleTarget
+    var startPoint: CGPoint
+    var origin: Point3D
+    var normal: Vector3D
+}
+
 struct ViewportSplineControlPointDragState: Equatable {
     var target: ViewportSplineControlPointHandleTarget
     var startPoint: CGPoint

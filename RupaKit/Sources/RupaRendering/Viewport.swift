@@ -32,6 +32,7 @@ public struct Viewport: View {
     @State private var activePatternArrayCopyCountDrag: ViewportPatternArrayCopyCountDragState?
     @State private var activePatternArrayCurveExtentDrag: ViewportPatternArrayCurveExtentDragState?
     @State private var activePatternArrayCurvePathPointDrag: ViewportPatternArrayCurvePathPointDragState?
+    @State private var activeConstructionPlaneHandleDrag: ViewportConstructionPlaneHandleDragState?
     @State private var camera: ViewportCamera = .identity
     @State private var editedBodies: [FeatureID: ViewportObjectEditState] = [:]
     @State private var hoveredAffordance: ViewportAffordanceTarget?
@@ -60,6 +61,7 @@ public struct Viewport: View {
     @State private var hoveredPatternArrayCurveExtentHandle: ViewportPatternArrayCurveExtentHandleTarget?
     @State private var hoveredPatternArrayCurvePathPointHandle: ViewportPatternArrayCurvePathPointHandleTarget?
     @State private var hoveredPatternArrayOutputModeHandle: ViewportPatternArrayOutputModeHandleTarget?
+    @State private var hoveredConstructionPlaneHandle: ViewportConstructionPlaneHandleTarget?
     @State private var pendingAffordance: ViewportAffordanceTarget?
     @State private var pendingSketchCurveHandle: ViewportSketchCurveHandleTarget?
     @State private var pendingSketchDimension: ViewportSketchDimensionTarget?
@@ -86,6 +88,7 @@ public struct Viewport: View {
     @State private var pendingPatternArrayCurveExtentHandle: ViewportPatternArrayCurveExtentHandleTarget?
     @State private var pendingPatternArrayCurvePathPointHandle: ViewportPatternArrayCurvePathPointHandleTarget?
     @State private var pendingPatternArrayOutputModeHandle: ViewportPatternArrayOutputModeHandleTarget?
+    @State private var pendingConstructionPlaneHandle: ViewportConstructionPlaneHandleTarget?
     @State private var orbitBasis: ViewportProjectionBasis?
     @State private var projectionTransition: ViewportProjectionTransition?
     @State private var modifierFlags: ViewportInputModifierFlags = ViewportInputModifierFlags()
@@ -169,6 +172,7 @@ public struct Viewport: View {
     private let onPolySplineSurfaceVertexSlideDrag: ((ViewportPolySplineSurfaceVertexSlideDragTarget) -> Void)?
     private let onSurfaceControlPointSlideDrag: ((ViewportSurfaceControlPointSlideDragTarget) -> Void)?
     private let onSurfaceFrameDrag: ((ViewportSurfaceFrameDragTarget) -> Void)?
+    private let onConstructionPlaneHandleDrag: ((ViewportConstructionPlaneDragTarget) -> Void)?
     private let onCommandConfirm: (() -> Void)?
     private let onFitWorkspaceScaleToModel: (() -> Void)?
     private let onSelectSmallerWorkspaceScale: (() -> Void)?
@@ -250,6 +254,7 @@ public struct Viewport: View {
         onPolySplineSurfaceVertexSlideDrag: ((ViewportPolySplineSurfaceVertexSlideDragTarget) -> Void)? = nil,
         onSurfaceControlPointSlideDrag: ((ViewportSurfaceControlPointSlideDragTarget) -> Void)? = nil,
         onSurfaceFrameDrag: ((ViewportSurfaceFrameDragTarget) -> Void)? = nil,
+        onConstructionPlaneHandleDrag: ((ViewportConstructionPlaneDragTarget) -> Void)? = nil,
         onCommandConfirm: (() -> Void)? = nil,
         onFitWorkspaceScaleToModel: (() -> Void)? = nil,
         onSelectSmallerWorkspaceScale: (() -> Void)? = nil,
@@ -335,6 +340,7 @@ public struct Viewport: View {
         self.onPolySplineSurfaceVertexSlideDrag = onPolySplineSurfaceVertexSlideDrag
         self.onSurfaceControlPointSlideDrag = onSurfaceControlPointSlideDrag
         self.onSurfaceFrameDrag = onSurfaceFrameDrag
+        self.onConstructionPlaneHandleDrag = onConstructionPlaneHandleDrag
         self.onCommandConfirm = onCommandConfirm
         self.onFitWorkspaceScaleToModel = onFitWorkspaceScaleToModel
         self.onSelectSmallerWorkspaceScale = onSelectSmallerWorkspaceScale
@@ -1527,6 +1533,11 @@ public struct Viewport: View {
             chromeLayout: chromeLayout
         )
 
+        drawConstructionPlaneHandleAffordances(
+            in: &context,
+            layout: layout
+        )
+
         if let constructionHit,
            constructionHit.bodyFace != nil {
             drawConstructionFaceHighlight(
@@ -1671,6 +1682,175 @@ public struct Viewport: View {
             with: .color(ViewportTheme.sectionAnalysisNormal.opacity(0.62)),
             style: StrokeStyle(lineWidth: 1.1, lineCap: .round, dash: [5.0, 4.0])
         )
+    }
+
+    private func drawConstructionPlaneHandleAffordances(
+        in context: inout GraphicsContext,
+        layout: ViewportLayout
+    ) {
+        guard onConstructionPlaneHandleDrag != nil else {
+            return
+        }
+        let geometry = ViewportConstructionPlaneHandleGeometry()
+        let targets = geometry.targets(
+            document: document,
+            selection: selection,
+            layout: layout
+        )
+        guard targets.isEmpty == false else {
+            return
+        }
+
+        var drawnPlaneIDs: Set<ConstructionPlaneSourceID> = []
+        for target in targets {
+            let displayTarget = displayedConstructionPlaneHandleTarget(target, layout: layout)
+            guard drawnPlaneIDs.insert(displayTarget.constructionPlaneID).inserted else {
+                continue
+            }
+            drawConstructionPlaneFrame(
+                displayTarget,
+                in: &context,
+                layout: layout
+            )
+            drawConstructionPlaneNormalGuide(
+                displayTarget,
+                in: &context
+            )
+        }
+
+        for target in targets {
+            let displayTarget = displayedConstructionPlaneHandleTarget(target, layout: layout)
+            drawConstructionPlaneHandle(
+                displayTarget,
+                isHighlighted: isConstructionPlaneHandleHighlighted(target),
+                in: &context
+            )
+        }
+    }
+
+    private func displayedConstructionPlaneHandleTarget(
+        _ target: ViewportConstructionPlaneHandleTarget,
+        layout: ViewportLayout
+    ) -> ViewportConstructionPlaneHandleTarget {
+        guard let activeConstructionPlaneHandleDrag,
+              activeConstructionPlaneHandleDrag.target.constructionPlaneID == target.constructionPlaneID,
+              let basis = constructionPlaneBasis(
+                  origin: activeConstructionPlaneHandleDrag.origin,
+                  normal: activeConstructionPlaneHandleDrag.normal
+              ) else {
+            return target
+        }
+
+        let guideLength = max(pointDistance(target.normalEnd, target.origin), 1.0e-9)
+        let halfExtent = max(guideLength * 1.7, 1.0e-9)
+        let origin = basis.origin
+        let normalEnd = pointOffsetBy(origin, scale(basis.normal, by: guideLength))
+        let negativeU = scale(basis.u, by: -halfExtent)
+        let positiveU = scale(basis.u, by: halfExtent)
+        let negativeV = scale(basis.v, by: -halfExtent)
+        let positiveV = scale(basis.v, by: halfExtent)
+        let corners = [
+            pointOffsetBy(pointOffsetBy(origin, negativeU), negativeV),
+            pointOffsetBy(pointOffsetBy(origin, positiveU), negativeV),
+            pointOffsetBy(pointOffsetBy(origin, positiveU), positiveV),
+            pointOffsetBy(pointOffsetBy(origin, negativeU), positiveV),
+        ]
+        return ViewportConstructionPlaneHandleTarget(
+            constructionPlaneID: target.constructionPlaneID,
+            sceneNodeID: target.sceneNodeID,
+            handle: target.handle,
+            origin: origin,
+            normal: basis.normal,
+            normalEnd: normalEnd,
+            corners: corners,
+            projectedOrigin: layout.project(origin),
+            projectedNormalEnd: layout.project(normalEnd)
+        )
+    }
+
+    private func constructionPlaneBasis(
+        origin: Point3D,
+        normal: Vector3D
+    ) -> (origin: Point3D, normal: Vector3D, u: Vector3D, v: Vector3D)? {
+        do {
+            let unitNormal = try normal.normalized(tolerance: 1.0e-12)
+            let helper = abs(unitNormal.z) < 0.9 ? Vector3D.unitZ : Vector3D.unitY
+            let u = try helper.cross(unitNormal).normalized(tolerance: 1.0e-12)
+            let v = unitNormal.cross(u)
+            return (origin, unitNormal, u, v)
+        } catch {
+            return nil
+        }
+    }
+
+    private func drawConstructionPlaneFrame(
+        _ target: ViewportConstructionPlaneHandleTarget,
+        in context: inout GraphicsContext,
+        layout: ViewportLayout
+    ) {
+        guard let firstCorner = target.corners.first else {
+            return
+        }
+        var path = Path()
+        path.move(to: layout.project(firstCorner))
+        for corner in target.corners.dropFirst() {
+            path.addLine(to: layout.project(corner))
+        }
+        path.closeSubpath()
+        context.fill(
+            path,
+            with: .color(ViewportTheme.sectionAnalysisPlane.opacity(0.045))
+        )
+        context.stroke(
+            path,
+            with: .color(ViewportTheme.sectionAnalysisPlane.opacity(0.40)),
+            style: StrokeStyle(lineWidth: 0.9, lineJoin: .round, dash: [7.0, 5.0])
+        )
+    }
+
+    private func drawConstructionPlaneNormalGuide(
+        _ target: ViewportConstructionPlaneHandleTarget,
+        in context: inout GraphicsContext
+    ) {
+        var path = Path()
+        path.move(to: target.projectedOrigin)
+        path.addLine(to: target.projectedNormalEnd)
+        context.stroke(
+            path,
+            with: .color(ViewportTheme.sectionAnalysisNormal.opacity(0.76)),
+            style: StrokeStyle(lineWidth: 1.2, lineCap: .round, dash: [5.0, 4.0])
+        )
+    }
+
+    private func drawConstructionPlaneHandle(
+        _ target: ViewportConstructionPlaneHandleTarget,
+        isHighlighted: Bool,
+        in context: inout GraphicsContext
+    ) {
+        switch target.handle {
+        case .origin:
+            drawTransformHandle(
+                at: target.projectedOrigin,
+                style: .faceCenter,
+                isHighlighted: isHighlighted,
+                in: &context
+            )
+        case .normal:
+            drawTransformHandle(
+                at: target.projectedNormalEnd,
+                style: .vertex,
+                isHighlighted: isHighlighted,
+                in: &context
+            )
+        }
+    }
+
+    private func isConstructionPlaneHandleHighlighted(
+        _ target: ViewportConstructionPlaneHandleTarget
+    ) -> Bool {
+        hoveredConstructionPlaneHandle?.identity == target.identity
+            || pendingConstructionPlaneHandle?.identity == target.identity
+            || activeConstructionPlaneHandleDrag?.target.identity == target.identity
     }
 
     private func drawSurfaceAnalysisOverlay(
@@ -9386,6 +9566,18 @@ public struct Viewport: View {
         if activePatternArrayCurvePathPointDrag != nil {
             return
         }
+        if let start, let current, let pendingConstructionPlaneHandle {
+            updateConstructionPlaneHandleDrag(
+                target: pendingConstructionPlaneHandle,
+                start: start,
+                current: current,
+                size: size
+            )
+            return
+        }
+        if activeConstructionPlaneHandleDrag != nil {
+            return
+        }
         if let start, let current, let pendingSketchVertexOffsetHandle {
             updateSketchVertexOffsetDrag(
                 target: pendingSketchVertexOffsetHandle,
@@ -9487,6 +9679,7 @@ public struct Viewport: View {
         pendingPatternArrayCurveExtentHandle = nil
         pendingPatternArrayCurvePathPointHandle = nil
         pendingPatternArrayOutputModeHandle = nil
+        pendingConstructionPlaneHandle = nil
         activeAffordanceDrag = nil
         activeSketchCurveHandleDrag = nil
         activeSketchDimensionDrag = nil
@@ -9512,6 +9705,7 @@ public struct Viewport: View {
         activePatternArrayCopyCountDrag = nil
         activePatternArrayCurveExtentDrag = nil
         activePatternArrayCurvePathPointDrag = nil
+        activeConstructionPlaneHandleDrag = nil
     }
 
     private func beginViewportPress(at point: CGPoint, size: CGSize) {
@@ -9603,6 +9797,11 @@ public struct Viewport: View {
         }
         if let patternArrayOutputModeTarget = selectedPatternArrayOutputModeAffordanceTarget(at: point, size: size) {
             pendingPatternArrayOutputModeHandle = patternArrayOutputModeTarget
+            activeCanvasDrag = nil
+            return
+        }
+        if let constructionPlaneHandleTarget = selectedConstructionPlaneHandleTarget(at: point, size: size) {
+            pendingConstructionPlaneHandle = constructionPlaneHandleTarget
             activeCanvasDrag = nil
             return
         }
@@ -11171,6 +11370,26 @@ public struct Viewport: View {
         return nil
     }
 
+    private func selectedConstructionPlaneHandleTarget(
+        at point: CGPoint,
+        size: CGSize
+    ) -> ViewportConstructionPlaneHandleTarget? {
+        guard onConstructionPlaneHandleDrag != nil else {
+            return nil
+        }
+        let layout = makeLayout(
+            size: size,
+            camera: camera,
+            basis: currentProjectionBasis
+        )
+        return ViewportConstructionPlaneHandleGeometry().target(
+            at: point,
+            document: document,
+            selection: selection,
+            layout: layout
+        )
+    }
+
     private func selectedSketchVertexOffsetAffordanceTarget(
         at point: CGPoint,
         size: CGSize
@@ -11698,6 +11917,34 @@ public struct Viewport: View {
                 current: current,
                 layout: layout
             )
+        )
+    }
+
+    private func updateConstructionPlaneHandleDrag(
+        target: ViewportConstructionPlaneHandleTarget,
+        start: CGPoint,
+        current: CGPoint,
+        size: CGSize
+    ) {
+        let layout = makeLayout(
+            size: size,
+            camera: camera,
+            basis: currentProjectionBasis
+        )
+        guard let dragTarget = ViewportConstructionPlaneHandleGeometry().draggedTarget(
+            target: target,
+            start: start,
+            current: current,
+            layout: layout
+        ) else {
+            activeConstructionPlaneHandleDrag = nil
+            return
+        }
+        activeConstructionPlaneHandleDrag = ViewportConstructionPlaneHandleDragState(
+            target: target,
+            startPoint: start,
+            origin: dragTarget.origin,
+            normal: dragTarget.normal
         )
     }
 
@@ -12379,6 +12626,12 @@ public struct Viewport: View {
             onPatternArrayOutputModeChange?(pendingPatternArrayOutputModeHandle.commitTarget)
             return
         }
+        if pendingConstructionPlaneHandle != nil {
+            pendingConstructionPlaneHandle = nil
+            activeConstructionPlaneHandleDrag = nil
+            activeCanvasDrag = nil
+            return
+        }
         if pendingAffordance != nil {
             pendingAffordance = nil
             activeAffordanceDrag = nil
@@ -12649,6 +12902,16 @@ public struct Viewport: View {
         if pendingPatternArrayOutputModeHandle != nil {
             pendingPatternArrayOutputModeHandle = nil
             activeCanvasDrag = nil
+            return
+        }
+        if pendingConstructionPlaneHandle != nil || activeConstructionPlaneHandleDrag != nil {
+            let constructionPlaneDragTarget = committedConstructionPlaneHandleDragTarget()
+            pendingConstructionPlaneHandle = nil
+            activeConstructionPlaneHandleDrag = nil
+            activeCanvasDrag = nil
+            if let constructionPlaneDragTarget {
+                onConstructionPlaneHandleDrag?(constructionPlaneDragTarget)
+            }
             return
         }
         if pendingSketchVertexOffsetHandle != nil || activeSketchVertexOffsetDrag != nil {
@@ -13252,6 +13515,70 @@ public struct Viewport: View {
         return (dx * dx + dy * dy + dz * dz).squareRoot()
     }
 
+    private func committedConstructionPlaneHandleDragTarget() -> ViewportConstructionPlaneDragTarget? {
+        guard let activeConstructionPlaneHandleDrag else {
+            return nil
+        }
+        switch activeConstructionPlaneHandleDrag.target.handle {
+        case .origin:
+            guard pointDistance(
+                activeConstructionPlaneHandleDrag.origin,
+                activeConstructionPlaneHandleDrag.target.origin
+            ) > 1.0e-12 else {
+                return nil
+            }
+        case .normal:
+            guard vectorDistance(
+                activeConstructionPlaneHandleDrag.normal,
+                activeConstructionPlaneHandleDrag.target.normal
+            ) > 1.0e-12 else {
+                return nil
+            }
+        }
+        return ViewportConstructionPlaneDragTarget(
+            constructionPlaneID: activeConstructionPlaneHandleDrag.target.constructionPlaneID,
+            sceneNodeID: activeConstructionPlaneHandleDrag.target.sceneNodeID,
+            handle: activeConstructionPlaneHandleDrag.target.handle,
+            origin: activeConstructionPlaneHandleDrag.origin,
+            normal: activeConstructionPlaneHandleDrag.normal
+        )
+    }
+
+    private func pointDistance(_ lhs: Point3D, _ rhs: Point3D) -> Double {
+        vectorDistance(vector(from: rhs, to: lhs), Vector3D(x: 0.0, y: 0.0, z: 0.0))
+    }
+
+    private func vectorDistance(_ lhs: Vector3D, _ rhs: Vector3D) -> Double {
+        let dx = lhs.x - rhs.x
+        let dy = lhs.y - rhs.y
+        let dz = lhs.z - rhs.z
+        return (dx * dx + dy * dy + dz * dz).squareRoot()
+    }
+
+    private func vector(from start: Point3D, to end: Point3D) -> Vector3D {
+        Vector3D(
+            x: end.x - start.x,
+            y: end.y - start.y,
+            z: end.z - start.z
+        )
+    }
+
+    private func pointOffsetBy(_ point: Point3D, _ vector: Vector3D) -> Point3D {
+        Point3D(
+            x: point.x + vector.x,
+            y: point.y + vector.y,
+            z: point.z + vector.z
+        )
+    }
+
+    private func scale(_ vector: Vector3D, by scalar: Double) -> Vector3D {
+        Vector3D(
+            x: vector.x * scalar,
+            y: vector.y * scalar,
+            z: vector.z * scalar
+        )
+    }
+
     private func committedSketchVertexOffsetDragTarget() -> ViewportSketchVertexOffsetDragTarget? {
         guard let activeSketchVertexOffsetDrag else {
             return nil
@@ -13515,6 +13842,7 @@ public struct Viewport: View {
         hoveredPatternArrayCurveExtentHandle = nil
         hoveredPatternArrayCurvePathPointHandle = nil
         hoveredPatternArrayOutputModeHandle = nil
+        hoveredConstructionPlaneHandle = nil
         hoveredSplineControlPointSlideHandle = nil
         hoveredPolySplineSurfaceVertexSlideHandle = nil
         hoveredSurfaceControlPointSlideHandle = nil
@@ -13837,6 +14165,16 @@ public struct Viewport: View {
             return
         }
         hoveredPatternArrayOutputModeHandle = nil
+        if let constructionPlaneHandleTarget = selectedConstructionPlaneHandleTarget(at: point, size: size) {
+            hoveredConstructionPlaneHandle = constructionPlaneHandleTarget
+            hoveredSketchVertexOffsetHandle = nil
+            hoveredAffordance = nil
+            hoveredCanvasHit = nil
+            hoveredModelPoint = nil
+            clearHoverCallbacks()
+            return
+        }
+        hoveredConstructionPlaneHandle = nil
         if let sketchVertexOffsetTarget = selectedSketchVertexOffsetAffordanceTarget(at: point, size: size) {
             hoveredSketchVertexOffsetHandle = sketchVertexOffsetTarget
             hoveredAffordance = nil
@@ -13928,6 +14266,7 @@ public struct Viewport: View {
         hoveredPatternArrayCurveExtentHandle = nil
         hoveredPatternArrayCurvePathPointHandle = nil
         hoveredPatternArrayOutputModeHandle = nil
+        hoveredConstructionPlaneHandle = nil
         hoveredCanvasHit = nil
         hoveredModelPoint = nil
         clearHoverCallbacks()

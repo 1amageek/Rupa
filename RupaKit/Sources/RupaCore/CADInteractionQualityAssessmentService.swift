@@ -696,6 +696,9 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                         "RupaKit/Sources/RupaCore/ConstructionPlaneSource.swift",
                         "RupaKit/Sources/RupaCore/DesignDocument+ConstructionPlane.swift",
                         "RupaKit/Sources/RupaCore/ConstructionPlaneTargetResolver.swift",
+                        "RupaKit/Sources/RupaRendering/ViewportConstructionPlaneDragTarget.swift",
+                        "RupaKit/Sources/RupaRendering/ViewportConstructionPlaneHandleGeometry.swift",
+                        "RupaKit/Sources/RupaRendering/Viewport.swift",
                         "RupaKit/Sources/RupaUI/WorkspacePlaneModeControl.swift",
                         "RupaKit/Sources/RupaUI/WorkspaceConstructionPlaneEditBuilder.swift",
                         "RupaKit/Sources/RupaUI/MainView.swift",
@@ -704,19 +707,21 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                         "RupaKit/Tests/RupaCoreTests/ConstructionPlaneTargetResolverTests.swift",
                         "RupaKit/Tests/RupaCoreTests/CanvasConstructionPlaneSketchWorkflowTests.swift",
                         "RupaKit/Tests/RupaCoreTests/CommandStackTests.swift",
+                        "RupaKit/Tests/RupaRenderingTests/ViewportConstructionPlaneHandleGeometryTests.swift",
                         "RupaKit/Tests/RupaUIPackageTests/WorkspaceConstructionPlaneEditBuilderTests.swift",
                         "RupaKit/Tests/RupaUIPackageTests/WorkspaceSnapOverrideStateTests.swift",
                         "RupaKit/Tests/RupaAgentTests/AgentConstructionPlaneIntegrationTests.swift",
                     ],
                     notes: [
                         "Canvas click and drag sketch tools create rectangle, polygon, arc, spline, and circle sketches on the active saved custom construction plane instead of falling back to the default XY plane.",
+                        "Selected saved construction planes expose viewport Origin and Normal handles that preview a bounded plane frame and commit through the same setConstructionPlane source mutation path used by Inspector edits.",
                     ]
                 ),
             ],
             openWork: [
-                "Direct viewport drag handles for saved construction-plane source edits.",
+                "Broader end-to-end sketch-on-arbitrary-plane workflow coverage.",
             ],
-            next: "Extend Plane rail source edits to direct viewport saved-plane handles while preserving selected-plane sketch routing."
+            next: "Broaden sketch-on-arbitrary-plane workflow coverage while preserving selected-plane sketch routing."
         ),
         entry(
             area: .selection,
