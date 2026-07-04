@@ -94,6 +94,45 @@ import SwiftCAD
     #expect(decodedRequest == request)
 }
 
+@Test func agentMessageCodecRoundTripsSavedViewCommandsAndResult() async throws {
+    let codec = AgentMessageCodec()
+    let sessionID = UUID()
+    let viewID = SavedViewID()
+    let savedView = agentCodecSavedView(id: viewID, name: "Codec Saved View")
+    let commands: [AutomationCommand] = [
+        .describeSavedViews,
+        .createSavedView(savedView),
+        .updateSavedView(savedView),
+        .removeSavedView(id: viewID),
+    ]
+
+    for command in commands {
+        let request = AgentRequest.execute(
+            sessionID: sessionID,
+            command: command,
+            expectedGeneration: DocumentGeneration(5)
+        )
+        let decodedRequest = try codec.decodeRequest(from: try codec.encode(request))
+
+        #expect(decodedRequest == request)
+    }
+
+    let response = AgentResponse.command(
+        AutomationResult(
+            message: "Saved view Codec Saved View created.",
+            commandName: "createSavedView",
+            generation: DocumentGeneration(6),
+            didMutate: true,
+            diagnostics: [],
+            savedViews: [savedView],
+            savedViewID: viewID
+        )
+    )
+    let decodedResponse = try codec.decodeResponse(from: try codec.encode(response))
+
+    #expect(decodedResponse == response)
+}
+
 @Test func agentMessageCodecRoundTripsSectionAnalysisCommand() async throws {
     let codec = AgentMessageCodec()
     let sessionID = UUID()
@@ -2085,4 +2124,25 @@ import SwiftCAD
 
     #expect(decodedRequest == request)
     #expect(decodedResponse == response)
+}
+
+private func agentCodecSavedView(
+    id: SavedViewID,
+    name: String
+) -> SavedView {
+    SavedView(
+        id: id,
+        name: name,
+        camera: SavedViewCamera(
+            target: Point3D(x: 100.0, y: 20.0, z: 300.0),
+            distanceMeters: 1_000.0,
+            yawRadians: 0.2,
+            pitchRadians: -0.4
+        ),
+        projection: .orthographic(heightMeters: 500.0),
+        displayScale: SavedViewDisplayScale(
+            ruler: WorkspaceScalePreset.sitePlanning.rulerConfiguration,
+            scaleBarLengthMeters: 1_000.0
+        )
+    )
 }

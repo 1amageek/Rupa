@@ -109,6 +109,30 @@ import Testing
     #expect(result.viewportGridScale.summary.contains("workspace span 100 km"))
 }
 
+@MainActor
+@Test func designDisplaySnapshotListsSavedViewsForAgentPlanning() async throws {
+    let session = EditorSession()
+    let viewID = SavedViewID()
+    let savedView = designDisplaySavedView(id: viewID, name: " Display Saved View ")
+    _ = try session.execute(.createSavedView(savedView))
+
+    let result = try DesignDisplaySnapshotService().result(
+        document: session.document,
+        currentEvaluation: session.currentEvaluation,
+        generation: session.generation,
+        dirty: session.isDirty
+    )
+    let entry = try #require(result.savedViews.first)
+
+    #expect(result.savedViews.count == 1)
+    #expect(entry.id == viewID)
+    #expect(entry.name == "Display Saved View")
+    #expect(entry.displayScale.displayUnit == .kilometer)
+    #expect(entry.displayScale.scaleBarLengthMeters == 1_000.0)
+    #expect(entry.displayScale.matchedPreset == .sitePlanning)
+    #expect(entry.projection.mode == .orthographic)
+}
+
 @Test func designDisplaySnapshotDecodesMissingWorkspaceInteractionScaleFromWorkspaceScale() throws {
     let json = """
     {
@@ -156,6 +180,7 @@ import Testing
             && option.agentGuidance.contains("regionalPlanning")
             && option.agentGuidance.contains("1,000 km")
     })
+    #expect(result.savedViews.isEmpty)
 }
 
 @MainActor
@@ -521,6 +546,27 @@ private func designDisplayEvaluationContext(
         generation: generation,
         sourceFingerprint: sourceFingerprint,
         evaluatedDocument: evaluatedDocument
+    )
+}
+
+private func designDisplaySavedView(
+    id: SavedViewID,
+    name: String
+) -> SavedView {
+    SavedView(
+        id: id,
+        name: name,
+        camera: SavedViewCamera(
+            target: Point3D(x: 250.0, y: 10.0, z: 500.0),
+            distanceMeters: 2_000.0,
+            yawRadians: 0.35,
+            pitchRadians: -0.45
+        ),
+        projection: .orthographic(heightMeters: 1_000.0),
+        displayScale: SavedViewDisplayScale(
+            ruler: WorkspaceScalePreset.sitePlanning.rulerConfiguration,
+            scaleBarLengthMeters: 1_000.0
+        )
     )
 }
 

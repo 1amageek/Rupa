@@ -17,6 +17,7 @@ public struct DesignDisplaySnapshotResult: Codable, Equatable, Sendable {
     public var componentDefinitions: [ComponentDefinitionDisplaySnapshot]
     public var componentInstances: [ComponentInstanceDisplaySnapshot]
     public var patternArrays: [PatternArrayDisplaySnapshot]
+    public var savedViews: [SavedView]
 
     public init(
         generation: DocumentGeneration,
@@ -35,7 +36,8 @@ public struct DesignDisplaySnapshotResult: Codable, Equatable, Sendable {
         bodies: [BodyDisplaySnapshot],
         componentDefinitions: [ComponentDefinitionDisplaySnapshot] = [],
         componentInstances: [ComponentInstanceDisplaySnapshot] = [],
-        patternArrays: [PatternArrayDisplaySnapshot] = []
+        patternArrays: [PatternArrayDisplaySnapshot] = [],
+        savedViews: [SavedView] = []
     ) {
         self.generation = generation
         self.dirty = dirty
@@ -62,6 +64,7 @@ public struct DesignDisplaySnapshotResult: Codable, Equatable, Sendable {
         self.componentDefinitions = componentDefinitions
         self.componentInstances = componentInstances
         self.patternArrays = patternArrays
+        self.savedViews = savedViews
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -82,6 +85,7 @@ public struct DesignDisplaySnapshotResult: Codable, Equatable, Sendable {
         case componentDefinitions
         case componentInstances
         case patternArrays
+        case savedViews
     }
 
     public init(from decoder: Decoder) throws {
@@ -155,6 +159,10 @@ public struct DesignDisplaySnapshotResult: Codable, Equatable, Sendable {
             patternArrays: try container.decodeIfPresent(
                 [PatternArrayDisplaySnapshot].self,
                 forKey: .patternArrays
+            ) ?? [],
+            savedViews: try container.decodeIfPresent(
+                [SavedView].self,
+                forKey: .savedViews
             ) ?? []
         )
     }

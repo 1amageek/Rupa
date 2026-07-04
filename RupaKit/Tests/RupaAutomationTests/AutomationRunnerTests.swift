@@ -281,6 +281,41 @@ import SwiftCAD
 }
 
 @MainActor
+@Test func automationCanCreateUpdateDescribeAndRemoveSavedViews() async throws {
+    let session = EditorSession()
+    let runner = AutomationRunner()
+    let viewID = SavedViewID()
+    let savedView = automationSavedView(id: viewID, name: " Automation View ")
+
+    let createResult = try runner.execute(.createSavedView(savedView), in: session)
+    let describeResult = try runner.execute(.describeSavedViews, in: session)
+    var updatedView = try #require(session.document.productMetadata.savedViews[viewID])
+    updatedView.name = "Updated Automation View"
+    updatedView.projection = .perspective(fieldOfViewRadians: Double.pi / 4.0)
+    let updateResult = try runner.execute(.updateSavedView(updatedView), in: session)
+    let removeResult = try runner.execute(.removeSavedView(id: viewID), in: session)
+
+    #expect(createResult.commandName == "createSavedView")
+    #expect(createResult.didMutate)
+    #expect(createResult.savedViewID == viewID)
+    #expect(createResult.savedViews?.map(\.id) == [viewID])
+    #expect(createResult.savedViews?.first?.name == "Automation View")
+    #expect(createResult.savedViews?.first?.displayScale.matchedPreset == .sitePlanning)
+    #expect(describeResult.commandName == nil)
+    #expect(!describeResult.didMutate)
+    #expect(describeResult.savedViews?.count == 1)
+    #expect(describeResult.message == "1 saved view(s).")
+    #expect(updateResult.commandName == "updateSavedView")
+    #expect(updateResult.savedViewID == viewID)
+    #expect(updateResult.savedViews?.first?.projection.mode == .perspective)
+    #expect(removeResult.commandName == "removeSavedView")
+    #expect(removeResult.savedViewID == viewID)
+    #expect(removeResult.savedViews?.isEmpty == true)
+    #expect(session.document.productMetadata.savedViews[viewID] == nil)
+    #expect(session.generation == DocumentGeneration(3))
+}
+
+@MainActor
 @Test func automationBatchUsesExpectedGeneration() async throws {
     let session = EditorSession()
     let runner = AutomationRunner()
@@ -6104,6 +6139,31 @@ private func automationSectionAnalysisTestDocument() throws -> DesignDocument {
         direction: .normal
     )
     return document
+}
+
+private func automationSavedView(
+    id: SavedViewID,
+    name: String
+) -> SavedView {
+    SavedView(
+        id: id,
+        name: name,
+        camera: SavedViewCamera(
+            target: Point3D(x: 1_000.0, y: 20.0, z: 500.0),
+            distanceMeters: 4_000.0,
+            yawRadians: 0.25,
+            pitchRadians: -0.35
+        ),
+        projection: .orthographic(heightMeters: 2_000.0),
+        clipping: SavedViewClipping(
+            nearDistanceMeters: 1.0,
+            farDistanceMeters: 10_000.0
+        ),
+        displayScale: SavedViewDisplayScale(
+            ruler: WorkspaceScalePreset.sitePlanning.rulerConfiguration,
+            scaleBarLengthMeters: 1_000.0
+        )
+    )
 }
 
 private extension UUID {

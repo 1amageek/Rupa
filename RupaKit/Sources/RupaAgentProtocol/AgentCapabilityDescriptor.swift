@@ -44,6 +44,7 @@ public struct AgentCapabilityDescriptor: Codable, Equatable, Sendable {
         case constructionPlaneSummary
         case designDisplaySnapshot
         case patternArraySummary
+        case savedViews
         case cadInteractionQualityAssessment
     }
 
@@ -68,6 +69,7 @@ public struct AgentCapabilityDescriptor: Codable, Equatable, Sendable {
         case sketchPointHandle
         case sketchControlPoint
         case constructionPlane
+        case savedView
     }
 
     public struct OptionAxis: Codable, Equatable, Sendable {

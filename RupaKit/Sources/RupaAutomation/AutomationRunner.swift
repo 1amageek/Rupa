@@ -50,6 +50,39 @@ public struct AutomationRunner {
                 commandResult: result,
                 in: session
             )
+        case .describeSavedViews:
+            let savedViews = sortedSavedViews(in: session)
+            return workspaceAutomationResult(
+                message: "\(savedViews.count) saved view(s).",
+                in: session
+            )
+        case .createSavedView(let savedView):
+            let result = try session.execute(.createSavedView(savedView))
+            let createdName = session.document.productMetadata.savedViews[savedView.id]?.name ?? savedView.name
+            return commandAutomationResult(
+                message: "Saved view \(createdName) created.",
+                commandResult: result,
+                savedViewID: savedView.id,
+                in: session
+            )
+        case .updateSavedView(let savedView):
+            let result = try session.execute(.updateSavedView(savedView))
+            let updatedName = session.document.productMetadata.savedViews[savedView.id]?.name ?? savedView.name
+            return commandAutomationResult(
+                message: "Saved view \(updatedName) updated.",
+                commandResult: result,
+                savedViewID: savedView.id,
+                in: session
+            )
+        case .removeSavedView(let id):
+            let removedName = session.document.productMetadata.savedViews[id]?.name ?? id.description
+            let result = try session.execute(.removeSavedView(id: id))
+            return commandAutomationResult(
+                message: "Saved view \(removedName) removed.",
+                commandResult: result,
+                savedViewID: id,
+                in: session
+            )
         case .rebaseWorkspaceOrigin(let translation):
             let result = try session.execute(.rebaseWorkspaceOrigin(translation: translation))
             return workspaceAutomationResult(
@@ -1491,11 +1524,13 @@ public struct AutomationRunner {
     private func commandAutomationResult(
         message: String,
         commandResult: CommandExecutionResult,
+        savedViewID: SavedViewID? = nil,
         in session: EditorSession
     ) -> AutomationResult {
         workspaceAutomationResult(
             message: message,
             commandResult: commandResult,
+            savedViewID: savedViewID,
             in: session
         )
     }
@@ -1503,6 +1538,7 @@ public struct AutomationRunner {
     private func workspaceAutomationResult(
         message: String,
         commandResult: CommandExecutionResult? = nil,
+        savedViewID: SavedViewID? = nil,
         in session: EditorSession
     ) -> AutomationResult {
         let context = workspaceAutomationContext(in: session)
@@ -1524,7 +1560,9 @@ public struct AutomationRunner {
             workspaceScaleRecommendation: context.scaleRecommendation,
             workspaceScalePresetOptions: context.scalePresetOptions,
             viewportGridSettings: context.viewportGridSettings,
-            viewportGridScale: context.viewportGridScale
+            viewportGridScale: context.viewportGridScale,
+            savedViews: context.savedViews,
+            savedViewID: savedViewID
         )
     }
 
@@ -1583,7 +1621,8 @@ public struct AutomationRunner {
             viewportGridScale: ViewportGridScaleSnapshot(
                 ruler: session.document.ruler,
                 settings: session.document.productMetadata.viewportGridSettings
-            )
+            ),
+            savedViews: sortedSavedViews(in: session)
         )
     }
 
@@ -1616,6 +1655,7 @@ public struct AutomationRunner {
             workspaceScalePresetOptions: context.scalePresetOptions,
             viewportGridSettings: context.viewportGridSettings,
             viewportGridScale: context.viewportGridScale,
+            savedViews: context.savedViews,
             sectionAnalysis: sectionAnalysis,
             sectionClippingPlan: clippingPlan
         )
@@ -1664,12 +1704,22 @@ public struct AutomationRunner {
                 ruler: session.document.ruler,
                 settings: session.document.productMetadata.viewportGridSettings
             ),
+            savedViews: sortedSavedViews(in: session),
             diagnostics: workspaceContextDiagnostics(
                 precision: precision,
                 recommendation: recommendation,
                 displayUnit: session.document.displayUnit
             ) + measurementContext.diagnostics
         )
+    }
+
+    private func sortedSavedViews(in session: EditorSession) -> [SavedView] {
+        session.document.productMetadata.savedViews.values.sorted {
+            if $0.name != $1.name {
+                return $0.name < $1.name
+            }
+            return $0.id.description < $1.id.description
+        }
     }
 
     private func workspaceMeasurement(
@@ -1768,5 +1818,6 @@ private struct WorkspaceAutomationContext {
     var scalePresetOptions: [WorkspaceScalePresetProfile]
     var viewportGridSettings: ViewportGridSettings
     var viewportGridScale: ViewportGridScaleSnapshot
+    var savedViews: [SavedView]
     var diagnostics: [EditorDiagnostic]
 }

@@ -44,6 +44,10 @@ import SwiftCAD
     #expect(capabilities.contains("describeConstructionPlanes"))
     #expect(capabilities.contains("constructionPlaneSummary"))
     #expect(capabilities.contains("designDisplaySnapshot"))
+    #expect(capabilities.contains("describeSavedViews"))
+    #expect(capabilities.contains("createSavedView"))
+    #expect(capabilities.contains("updateSavedView"))
+    #expect(capabilities.contains("removeSavedView"))
     #expect(capabilities.contains("createConstructionPlane"))
     #expect(capabilities.contains("createConstructionPlaneFromTarget"))
     #expect(capabilities.contains("createConstructionPlaneFromTargets"))
@@ -392,6 +396,10 @@ import SwiftCAD
     let patternArrayExplode = try #require(descriptors.first { $0.name == "explodePatternArray" })
     let patternArraySummary = try #require(descriptors.first { $0.name == "patternArraySummary" })
     let designDisplaySnapshot = try #require(descriptors.first { $0.name == "designDisplaySnapshot" })
+    let describeSavedViews = try #require(descriptors.first { $0.name == "describeSavedViews" })
+    let createSavedView = try #require(descriptors.first { $0.name == "createSavedView" })
+    let updateSavedView = try #require(descriptors.first { $0.name == "updateSavedView" })
+    let removeSavedView = try #require(descriptors.first { $0.name == "removeSavedView" })
     let qualityAssessment = try #require(descriptors.first { $0.name == "cadInteractionQualityAssessment" })
     let selection = try #require(descriptors.first { $0.name == "selectTargets" })
     let referenceSelection = try #require(descriptors.first { $0.name == "selectReferences" })
@@ -1703,6 +1711,7 @@ import SwiftCAD
     #expect(designDisplaySnapshot.discovery.contains(.designDisplaySnapshot))
     #expect(designDisplaySnapshot.discovery.contains(.sketchEntitySummary))
     #expect(designDisplaySnapshot.discovery.contains(.topologySummary))
+    #expect(designDisplaySnapshot.discovery.contains(.savedViews))
     #expect(designDisplaySnapshot.targets == [
         .document,
         .componentInstance,
@@ -1712,6 +1721,7 @@ import SwiftCAD
         .face,
         .edge,
         .vertex,
+        .savedView,
     ])
     #expect(designDisplaySnapshot.summary.contains("workspace scale"))
     #expect(designDisplaySnapshot.summary.contains("viewport grid scale"))
@@ -1719,12 +1729,37 @@ import SwiftCAD
     #expect(designDisplaySnapshot.summary.contains("UI-visible sketch primitives"))
     #expect(designDisplaySnapshot.summary.contains("component definitions"))
     #expect(designDisplaySnapshot.summary.contains("component instances"))
+    #expect(designDisplaySnapshot.summary.contains("saved views"))
     #expect(designDisplaySnapshot.summary.contains("generated topology"))
     #expect(designDisplaySnapshot.failureMode.contains("normalized workspace scale"))
     #expect(designDisplaySnapshot.failureMode.contains("Core-owned viewport grid and interaction scale defaults"))
     #expect(designDisplaySnapshot.failureMode.contains("display-ready source snapshots"))
     #expect(designDisplaySnapshot.failureMode.contains("reusable component definitions"))
     #expect(designDisplaySnapshot.failureMode.contains("placed component instances"))
+
+    #expect(describeSavedViews.category == .read)
+    #expect(!describeSavedViews.mutatesDocument)
+    #expect(describeSavedViews.access == .automationCommand)
+    #expect(describeSavedViews.discovery.contains(.savedViews))
+    #expect(describeSavedViews.targets == [.savedView])
+    #expect(describeSavedViews.summary.contains("display-scale metadata"))
+
+    #expect(createSavedView.category == .document)
+    #expect(createSavedView.mutatesDocument)
+    #expect(createSavedView.access == .automationCommand)
+    #expect(createSavedView.discovery.contains(.savedViews))
+    #expect(createSavedView.targets == [.document, .savedView])
+    #expect(createSavedView.failureMode.contains("duplicate IDs"))
+
+    #expect(updateSavedView.category == .document)
+    #expect(updateSavedView.mutatesDocument)
+    #expect(updateSavedView.targets == [.savedView])
+    #expect(updateSavedView.failureMode.contains("missing saved view IDs"))
+
+    #expect(removeSavedView.category == .document)
+    #expect(removeSavedView.mutatesDocument)
+    #expect(removeSavedView.targets == [.savedView])
+    #expect(removeSavedView.failureMode.contains("missing saved view IDs"))
 
     #expect(qualityAssessment.category == .read)
     #expect(!qualityAssessment.mutatesDocument)

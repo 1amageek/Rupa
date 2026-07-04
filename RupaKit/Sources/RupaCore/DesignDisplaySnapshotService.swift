@@ -141,7 +141,8 @@ public struct DesignDisplaySnapshotService: Sendable {
             bodies: order.compactMap { snapshot.bodies[$0] },
             componentDefinitions: sortedComponentDefinitionSnapshots(snapshot.componentDefinitions),
             componentInstances: sortedComponentInstanceSnapshots(snapshot.componentInstances),
-            patternArrays: sortedPatternArraySnapshots(snapshot.patternArrays)
+            patternArrays: sortedPatternArraySnapshots(snapshot.patternArrays),
+            savedViews: sortedSavedViews(document.productMetadata.savedViews)
         )
     }
 
@@ -628,6 +629,17 @@ public struct DesignDisplaySnapshotService: Sendable {
         snapshots.values.sorted {
             if $0.name == $1.name {
                 return $0.instanceID.description < $1.instanceID.description
+            }
+            return $0.name < $1.name
+        }
+    }
+
+    private func sortedSavedViews(
+        _ savedViews: [SavedViewID: SavedView]
+    ) -> [SavedView] {
+        savedViews.values.sorted {
+            if $0.name == $1.name {
+                return $0.id.description < $1.id.description
             }
             return $0.name < $1.name
         }

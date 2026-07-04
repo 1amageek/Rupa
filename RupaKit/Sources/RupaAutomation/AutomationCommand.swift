@@ -8,6 +8,10 @@ public enum AutomationCommand: Codable, Equatable, Sendable {
     case setWorkspaceScalePreset(WorkspaceScalePreset)
     case fitWorkspaceScaleToModel
     case setViewportGridSettings(ViewportGridSettings)
+    case describeSavedViews
+    case createSavedView(SavedView)
+    case updateSavedView(SavedView)
+    case removeSavedView(id: SavedViewID)
     case rebaseWorkspaceOrigin(translation: Vector3D)
     case renameDocument(name: String)
     case upsertParameter(name: String, expression: CADExpression, kind: QuantityKind)
@@ -376,6 +380,14 @@ public enum AutomationCommand: Codable, Equatable, Sendable {
             nil
         case .setViewportGridSettings(let settings):
             .setViewportGridSettings(settings)
+        case .describeSavedViews:
+            nil
+        case .createSavedView(let savedView):
+            .createSavedView(savedView)
+        case .updateSavedView(let savedView):
+            .updateSavedView(savedView)
+        case .removeSavedView(let id):
+            .removeSavedView(id: id)
         case .rebaseWorkspaceOrigin(let translation):
             .rebaseWorkspaceOrigin(translation: translation)
         case .renameDocument(let name):

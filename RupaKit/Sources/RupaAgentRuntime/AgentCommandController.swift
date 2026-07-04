@@ -662,12 +662,52 @@ public final class AgentCommandController: AgentClientProtocol {
         capability(
             "designDisplaySnapshot",
             category: .read,
-            summary: "Return workspace scale, viewport grid scale, interaction scale defaults, ordered UI-visible sketch primitives, profile regions, component definitions, component instances, pattern arrays, extrude and straight-prism sweep display bodies, evaluated body meshes, and generated topology for Agent viewport planning.",
+            summary: "Return workspace scale, viewport grid scale, interaction scale defaults, ordered UI-visible sketch primitives, profile regions, component definitions, component instances, pattern arrays, saved views, extrude and straight-prism sweep display bodies, evaluated body meshes, and generated topology for Agent viewport planning.",
             access: .agentRequest,
             mutatesDocument: false,
-            discovery: [.designDisplaySnapshot, .sketchEntitySummary, .topologySummary],
-            targets: [.document, .componentInstance, .sketchEntity, .region, .body, .face, .edge, .vertex],
+            discovery: [.designDisplaySnapshot, .sketchEntitySummary, .topologySummary, .savedViews],
+            targets: [.document, .componentInstance, .sketchEntity, .region, .body, .face, .edge, .vertex, .savedView],
             failureMode: "Rejects stale generations before reading; reports normalized workspace scale, Core-owned viewport grid and interaction scale defaults, display-ready source snapshots, reusable component definitions, placed component instances, and generated pattern sources, not raw CAD kernel internals."
+        ),
+        capability(
+            "describeSavedViews",
+            category: .read,
+            summary: "Read saved view camera, projection, clipping, visibility, section, and display-scale metadata without mutating source.",
+            access: .automationCommand,
+            mutatesDocument: false,
+            discovery: [.designDisplaySnapshot, .savedViews],
+            targets: [.savedView],
+            failureMode: "Rejects stale generations before reading."
+        ),
+        capability(
+            "createSavedView",
+            category: .document,
+            summary: "Create a source-owned saved view with camera, projection, clipping, visibility, section state, and scale-bar metadata.",
+            access: .automationCommand,
+            mutatesDocument: true,
+            discovery: [.designDisplaySnapshot, .savedViews],
+            targets: [.document, .savedView],
+            failureMode: "Rejects duplicate IDs, empty names, invalid camera/projection/scale metadata, missing visibility references, missing section references, and stale generations before mutation."
+        ),
+        capability(
+            "updateSavedView",
+            category: .document,
+            summary: "Replace a saved view's source metadata through the shared undoable command path.",
+            access: .automationCommand,
+            mutatesDocument: true,
+            discovery: [.designDisplaySnapshot, .savedViews],
+            targets: [.savedView],
+            failureMode: "Rejects missing saved view IDs, empty names, invalid camera/projection/scale metadata, missing visibility references, missing section references, and stale generations before mutation."
+        ),
+        capability(
+            "removeSavedView",
+            category: .document,
+            summary: "Remove a saved view from product metadata through the shared undoable command path.",
+            access: .automationCommand,
+            mutatesDocument: true,
+            discovery: [.designDisplaySnapshot, .savedViews],
+            targets: [.savedView],
+            failureMode: "Rejects missing saved view IDs and stale generations before mutation."
         ),
         capability(
             "createConstructionPlane",
