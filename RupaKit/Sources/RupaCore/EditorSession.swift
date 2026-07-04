@@ -749,6 +749,30 @@ public final class EditorSession {
         }
     }
 
+    public func createSavedView(_ savedView: SavedView) {
+        do {
+            try execute(.createSavedView(savedView))
+        } catch {
+            record(error)
+        }
+    }
+
+    public func updateSavedView(_ savedView: SavedView) {
+        do {
+            try execute(.updateSavedView(savedView))
+        } catch {
+            record(error)
+        }
+    }
+
+    public func removeSavedView(id: SavedViewID) {
+        do {
+            try execute(.removeSavedView(id: id))
+        } catch {
+            record(error)
+        }
+    }
+
     public func rebaseWorkspaceOrigin(translation: Vector3D) {
         do {
             try execute(.rebaseWorkspaceOrigin(translation: translation))

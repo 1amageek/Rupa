@@ -149,6 +149,27 @@ public final class CADDocumentStore {
             document.setViewportGridSettings(settings)
             try commitMutation()
             evaluateCurrentDocument()
+        case .createSavedView(let savedView):
+            try document.createSavedView(
+                savedView,
+                objectRegistry: objectRegistry
+            )
+            try commitMutation()
+            evaluateCurrentDocument()
+        case .updateSavedView(let savedView):
+            try document.updateSavedView(
+                savedView,
+                objectRegistry: objectRegistry
+            )
+            try commitMutation()
+            evaluateCurrentDocument()
+        case .removeSavedView(let id):
+            try document.removeSavedView(
+                id: id,
+                objectRegistry: objectRegistry
+            )
+            try commitMutation()
+            evaluateCurrentDocument()
         case .rebaseWorkspaceOrigin(let translation):
             try document.rebaseWorkspaceOrigin(
                 translation: translation,

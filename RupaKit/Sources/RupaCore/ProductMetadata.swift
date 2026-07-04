@@ -20,6 +20,7 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
     public var surfaceControlPointDisplays: [SurfaceControlPointDisplayID: SurfaceControlPointDisplay]
     public var surfaceFrameDisplays: [SurfaceFrameDisplayID: SurfaceFrameDisplay]
     public var measurements: [MeasurementAnnotationID: MeasurementAnnotation]
+    public var savedViews: [SavedViewID: SavedView]
     public var viewportGridSettings: ViewportGridSettings
     public var templateDefaults: TemplateDefaults
 
@@ -42,6 +43,7 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
         surfaceControlPointDisplays: [SurfaceControlPointDisplayID: SurfaceControlPointDisplay] = [:],
         surfaceFrameDisplays: [SurfaceFrameDisplayID: SurfaceFrameDisplay] = [:],
         measurements: [MeasurementAnnotationID: MeasurementAnnotation] = [:],
+        savedViews: [SavedViewID: SavedView] = [:],
         viewportGridSettings: ViewportGridSettings = .standard,
         templateDefaults: TemplateDefaults = TemplateDefaults()
     ) {
@@ -63,6 +65,7 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
         self.surfaceControlPointDisplays = surfaceControlPointDisplays
         self.surfaceFrameDisplays = surfaceFrameDisplays
         self.measurements = measurements
+        self.savedViews = savedViews
         self.viewportGridSettings = viewportGridSettings
         self.templateDefaults = templateDefaults
     }
@@ -86,6 +89,7 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
         case surfaceControlPointDisplays
         case surfaceFrameDisplays
         case measurements
+        case savedViews
         case viewportGridSettings
         case templateDefaults
     }
@@ -159,6 +163,10 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
                 [MeasurementAnnotationID: MeasurementAnnotation].self,
                 forKey: .measurements
             ) ?? [:],
+            savedViews: try container.decodeIfPresent(
+                [SavedViewID: SavedView].self,
+                forKey: .savedViews
+            ) ?? [:],
             viewportGridSettings: try container.decodeIfPresent(
                 ViewportGridSettings.self,
                 forKey: .viewportGridSettings
@@ -190,6 +198,7 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
         try container.encode(surfaceControlPointDisplays, forKey: .surfaceControlPointDisplays)
         try container.encode(surfaceFrameDisplays, forKey: .surfaceFrameDisplays)
         try container.encode(measurements, forKey: .measurements)
+        try container.encode(savedViews, forKey: .savedViews)
         try container.encode(viewportGridSettings, forKey: .viewportGridSettings)
         try container.encode(templateDefaults, forKey: .templateDefaults)
     }
@@ -223,6 +232,7 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
         try validateSurfaceControlPointDisplays(against: cadDocument)
         try validateSurfaceFrameDisplays()
         try validateMeasurements()
+        try validateSavedViews()
         try validateTemplateDefaults()
     }
 
@@ -996,6 +1006,20 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
                     )
                 }
             }
+        }
+    }
+
+    private func validateSavedViews() throws {
+        for (savedViewID, savedView) in savedViews {
+            guard savedViewID == savedView.id else {
+                throw DocumentValidationError.invalidProductMetadata(
+                    "Saved view keys must match saved view IDs."
+                )
+            }
+            try savedView.validate(
+                sceneNodes: sceneNodes,
+                constructionPlanes: constructionPlanes
+            )
         }
     }
 

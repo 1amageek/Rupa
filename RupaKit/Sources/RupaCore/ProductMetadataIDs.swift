@@ -11,6 +11,7 @@ public enum JoinedCurveSourceTag {}
 public enum JoinedCurveGroupSourceTag {}
 public enum ConstructionPlaneSourceTag {}
 public enum MeasurementAnnotationTag {}
+public enum SavedViewTag {}
 
 public typealias SceneNodeID = TaggedID<SceneNodeTag>
 public typealias ComponentDefinitionID = TaggedID<ComponentDefinitionTag>
@@ -23,3 +24,4 @@ public typealias JoinedCurveSourceID = TaggedID<JoinedCurveSourceTag>
 public typealias JoinedCurveGroupSourceID = TaggedID<JoinedCurveGroupSourceTag>
 public typealias ConstructionPlaneSourceID = TaggedID<ConstructionPlaneSourceTag>
 public typealias MeasurementAnnotationID = TaggedID<MeasurementAnnotationTag>
+public typealias SavedViewID = TaggedID<SavedViewTag>

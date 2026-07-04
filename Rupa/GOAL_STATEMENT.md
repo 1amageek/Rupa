@@ -58,7 +58,7 @@ A task is done only when all of these statements are true.
 | Architecture | The app host remains thin, RupaKit owns product behavior, and Swift-CAD remains the CAD foundation. |
 | Generality | The solution supports the universal CAD direction and does not encode video, printing, or architecture as separate product forks. |
 | Design process | The feature has an explicit design packet or an assessment entry that covers the same DBN artifacts. |
-| Units and precision | Length display and modeling behavior remain valid across micrometer-to-meter workflows. |
+| Units and precision | Length display and modeling behavior remain valid across micrometer-detail through kilometer-scale workflows. |
 | Errors | Failure paths are explicit, typed where applicable, and not silently discarded. |
 | Tests | Relevant unit, integration, UI, CLI, or automation tests exist and pass for the changed behavior. |
 | Review | Code and documentation are reviewed against `PHILOSOPHY.md`, `SPEC.md`, `PRODUCT_REQUIREMENTS.md`, and `UNIVERSAL_CAD_REQUIREMENTS.md`. |

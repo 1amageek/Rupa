@@ -6,6 +6,9 @@ public enum EditorCommand: Codable, Equatable, Sendable {
     case setDisplayUnit(LengthDisplayUnit)
     case setRulerConfiguration(RulerConfiguration)
     case setViewportGridSettings(ViewportGridSettings)
+    case createSavedView(SavedView)
+    case updateSavedView(SavedView)
+    case removeSavedView(id: SavedViewID)
     case rebaseWorkspaceOrigin(translation: Vector3D)
     case renameDocument(name: String)
     case resetDocument(name: String)
@@ -409,6 +412,12 @@ public enum EditorCommand: Codable, Equatable, Sendable {
             "setRulerConfiguration"
         case .setViewportGridSettings:
             "setViewportGridSettings"
+        case .createSavedView:
+            "createSavedView"
+        case .updateSavedView:
+            "updateSavedView"
+        case .removeSavedView:
+            "removeSavedView"
         case .rebaseWorkspaceOrigin:
             "rebaseWorkspaceOrigin"
         case .renameDocument:
@@ -649,6 +658,9 @@ public enum EditorCommand: Codable, Equatable, Sendable {
         case .setDisplayUnit,
              .setRulerConfiguration,
              .setViewportGridSettings,
+             .createSavedView,
+             .updateSavedView,
+             .removeSavedView,
              .rebaseWorkspaceOrigin,
              .renameDocument,
              .resetDocument,
