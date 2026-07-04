@@ -13,6 +13,7 @@ import Testing
     #expect(abs(containedHeight - WorkspaceChromeControlMetrics.containerHeight) < 1.0e-9)
     #expect(ViewportCanvasChromeMetrics.topControlHeight == 30.0)
     #expect(ViewportCanvasChromeMetrics.topControlContentHeight == 22.0)
+    #expect(ViewportCanvasChromeMetrics.edgePadding == 6.0)
 }
 
 @Test func workspaceChromeControlsUseSharedLiquidGlassControlShape() {
@@ -25,5 +26,9 @@ import Testing
         WorkspaceChromeControlMetrics.itemSpacing
             == ViewportCanvasChromeMetrics.topControlItemSpacing
     )
-    #expect(WorkspaceChromeControlMetrics.horizontalPadding <= ViewportCanvasChromeMetrics.edgePadding)
+    #expect(WorkspaceChromeControlMetrics.horizontalPadding == ViewportCanvasChromeMetrics.edgePadding)
+    #expect(ViewportCanvasChromeMetrics.outlineWidth > 0.0)
+    #expect(ViewportCanvasChromeMetrics.outlineWidth <= 1.0)
+    #expect(ViewportCanvasChromeMetrics.outlineOpacity > 0.0)
+    #expect(ViewportCanvasChromeMetrics.outlineOpacity <= 0.18)
 }

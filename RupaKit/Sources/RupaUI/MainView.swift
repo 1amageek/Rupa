@@ -585,20 +585,20 @@ public struct MainView: View {
             .coordinateSpace(name: WorkspaceCanvasOverlayLayout.coordinateSpaceName)
             .overlay(alignment: .top) {
                 workspaceTopBar
-                    .padding(.top, 8)
-                    .padding(.horizontal, 8)
+                    .padding(.top, WorkspaceCanvasOverlayLayout.edgePadding)
+                    .padding(.horizontal, WorkspaceCanvasOverlayLayout.edgePadding)
                     .workspaceCanvasOverlayExclusion(.topBar)
                     .onHover(perform: handleWorkspaceOverlayHover)
             }
             .overlay(alignment: .leading) {
                 floatingToolPalette
-                    .padding(.leading, 8)
+                    .padding(.leading, WorkspaceCanvasOverlayLayout.edgePadding)
                     .workspaceCanvasOverlayExclusion(.toolPalette)
                     .onHover(perform: handleWorkspaceOverlayHover)
             }
             .overlay(alignment: .trailing) {
                 workspaceUtilityRail
-                    .padding(.trailing, 8)
+                    .padding(.trailing, WorkspaceCanvasOverlayLayout.edgePadding)
                     .workspaceCanvasOverlayExclusion(.utilityRail)
                     .onHover(perform: handleWorkspaceOverlayHover)
             }
