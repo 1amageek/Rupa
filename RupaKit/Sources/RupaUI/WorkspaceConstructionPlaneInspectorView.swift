@@ -14,10 +14,14 @@ struct WorkspaceConstructionPlaneInspectorView: View {
         if let state {
             inspectorSection("Construction Plane") {
                 workspaceInspectorValueRow("Name", state.name)
+                    .accessibilityIdentifier("InspectorConstructionPlane.name")
                 workspaceInspectorValueRow("Kind", state.planeKindTitle)
+                    .accessibilityIdentifier("InspectorConstructionPlane.kind")
                 workspaceInspectorValueRow("Active", state.isActive ? "Yes" : "No")
+                    .accessibilityIdentifier("InspectorConstructionPlane.active")
                 if let sceneNodeID = state.sceneNodeID {
                     workspaceInspectorValueRow("Scene Node", shortID(sceneNodeID))
+                        .accessibilityIdentifier("InspectorConstructionPlane.sceneNode")
                 }
 
                 workspaceLengthControl(
@@ -28,6 +32,7 @@ struct WorkspaceConstructionPlaneInspectorView: View {
                 ) { meters in
                     onSetOriginComponent(.x, meters)
                 }
+                .accessibilityIdentifier("InspectorConstructionPlane.origin.x")
                 workspaceLengthControl(
                     "Origin Y",
                     values: [state.origin.y],
@@ -36,6 +41,7 @@ struct WorkspaceConstructionPlaneInspectorView: View {
                 ) { meters in
                     onSetOriginComponent(.y, meters)
                 }
+                .accessibilityIdentifier("InspectorConstructionPlane.origin.y")
                 workspaceLengthControl(
                     "Origin Z",
                     values: [state.origin.z],
@@ -44,6 +50,7 @@ struct WorkspaceConstructionPlaneInspectorView: View {
                 ) { meters in
                     onSetOriginComponent(.z, meters)
                 }
+                .accessibilityIdentifier("InspectorConstructionPlane.origin.z")
 
                 numericControl(
                     "Normal X",
@@ -52,6 +59,7 @@ struct WorkspaceConstructionPlaneInspectorView: View {
                 ) { value in
                     onSetNormalComponent(.x, value)
                 }
+                .accessibilityIdentifier("InspectorConstructionPlane.normal.x")
                 numericControl(
                     "Normal Y",
                     values: [state.normal.y],
@@ -59,6 +67,7 @@ struct WorkspaceConstructionPlaneInspectorView: View {
                 ) { value in
                     onSetNormalComponent(.y, value)
                 }
+                .accessibilityIdentifier("InspectorConstructionPlane.normal.y")
                 numericControl(
                     "Normal Z",
                     values: [state.normal.z],
@@ -66,16 +75,19 @@ struct WorkspaceConstructionPlaneInspectorView: View {
                 ) { value in
                     onSetNormalComponent(.z, value)
                 }
+                .accessibilityIdentifier("InspectorConstructionPlane.normal.z")
 
                 inspectorActionRow {
                     Button("Activate") {
                         onActivate()
                     }
                     .disabled(state.isActive)
+                    .accessibilityIdentifier("InspectorConstructionPlane.activate")
 
                     Button("From View") {
                         onUpdateFromView()
                     }
+                    .accessibilityIdentifier("InspectorConstructionPlane.fromView")
                 }
             }
         }

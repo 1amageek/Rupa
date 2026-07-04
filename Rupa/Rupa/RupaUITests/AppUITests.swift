@@ -235,6 +235,49 @@ final class AppUITests: XCTestCase {
     }
 
     @MainActor
+    func testSelectedCustomConstructionPlaneLaunchFixtureExposesInspectorEditingControls() throws {
+        let app = launchApp(arguments: ["--rupa-ui-fixture=selected-custom-cplane"])
+        let canvas = app.otherElements["CanvasViewport"]
+        XCTAssertTrue(canvas.waitForExistence(timeout: 8))
+
+        let inspectorButton = app.buttons["WorkspaceCommand.inspector"]
+        XCTAssertTrue(inspectorButton.waitForExistence(timeout: 3))
+        inspectorButton.click()
+
+        XCTAssertTrue(app.otherElements["InspectorPane"].waitForExistence(timeout: 3))
+        XCTAssertTrue(
+            app.descendants(matching: .any)["InspectorConstructionPlane.name"]
+                .waitForExistence(timeout: 3)
+        )
+        XCTAssertTrue(
+            app.descendants(matching: .any)["InspectorConstructionPlane.origin.x"]
+                .waitForExistence(timeout: 3)
+        )
+        XCTAssertTrue(
+            app.descendants(matching: .any)["InspectorConstructionPlane.origin.y"]
+                .waitForExistence(timeout: 3)
+        )
+        XCTAssertTrue(
+            app.descendants(matching: .any)["InspectorConstructionPlane.origin.z"]
+                .waitForExistence(timeout: 3)
+        )
+        XCTAssertTrue(
+            app.descendants(matching: .any)["InspectorConstructionPlane.normal.x"]
+                .waitForExistence(timeout: 3)
+        )
+        XCTAssertTrue(
+            app.descendants(matching: .any)["InspectorConstructionPlane.normal.y"]
+                .waitForExistence(timeout: 3)
+        )
+        XCTAssertTrue(
+            app.descendants(matching: .any)["InspectorConstructionPlane.normal.z"]
+                .waitForExistence(timeout: 3)
+        )
+        XCTAssertFalse(app.buttons["InspectorConstructionPlane.activate"].isEnabled)
+        XCTAssertTrue(app.buttons["InspectorConstructionPlane.fromView"].exists)
+    }
+
+    @MainActor
     func testSelectingObjectShowsViewportAffordance() throws {
         let app = launchApp()
         let canvas = app.otherElements["CanvasViewport"]
