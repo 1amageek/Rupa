@@ -665,7 +665,7 @@ public struct Viewport: View {
                         "CanvasConstructionPlaneHandle.\(target.handle.rawValue)"
                     )
                     .accessibilityLabel(constructionPlaneHandleAccessibilityLabel(target))
-                    .accessibilityValue(String(describing: target.constructionPlaneID))
+                    .accessibilityValue(constructionPlaneHandleAccessibilityValue(target))
                     .allowsHitTesting(false)
             }
         }
@@ -691,6 +691,29 @@ public struct Viewport: View {
         case .normal:
             return "Construction plane normal handle"
         }
+    }
+
+    private func constructionPlaneHandleAccessibilityValue(
+        _ target: ViewportConstructionPlaneHandleTarget
+    ) -> String {
+        switch target.handle {
+        case .origin:
+            return [
+                "x \(accessibilityNumber(target.origin.x))",
+                "y \(accessibilityNumber(target.origin.y))",
+                "z \(accessibilityNumber(target.origin.z))",
+            ].joined(separator: ", ")
+        case .normal:
+            return [
+                "x \(accessibilityNumber(target.normal.x))",
+                "y \(accessibilityNumber(target.normal.y))",
+                "z \(accessibilityNumber(target.normal.z))",
+            ].joined(separator: ", ")
+        }
+    }
+
+    private func accessibilityNumber(_ value: Double) -> String {
+        value.formatted(.number.precision(.fractionLength(0...6)))
     }
 
     private var hasSelectedAffordance: Bool {

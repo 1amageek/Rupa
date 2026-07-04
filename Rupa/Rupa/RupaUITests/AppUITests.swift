@@ -27,6 +27,32 @@ final class AppUITests: XCTestCase {
     }
 
     @MainActor
+    private func accessibilityValue(of element: XCUIElement) -> String {
+        (element.value as? String) ?? ""
+    }
+
+    @MainActor
+    private func dragElement(_ element: XCUIElement, by offset: CGVector) {
+        let start = element.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+        start.press(forDuration: 0.12, thenDragTo: start.withOffset(offset))
+    }
+
+    @MainActor
+    private func waitForAccessibilityValueChange(
+        of element: XCUIElement,
+        from initialValue: String
+    ) {
+        let predicate = NSPredicate { candidate, _ in
+            guard let element = candidate as? XCUIElement else {
+                return false
+            }
+            return (element.value as? String) != initialValue
+        }
+        expectation(for: predicate, evaluatedWith: element)
+        waitForExpectations(timeout: 3)
+    }
+
+    @MainActor
     func testExample() throws {
         let app = launchApp()
 
@@ -283,6 +309,25 @@ final class AppUITests: XCTestCase {
         )
         XCTAssertFalse(app.buttons["InspectorConstructionPlane.activate"].isEnabled)
         XCTAssertTrue(app.buttons["InspectorConstructionPlane.fromView"].exists)
+    }
+
+    @MainActor
+    func testSelectedCustomConstructionPlaneViewportHandlesCommitDragEdits() throws {
+        let app = launchApp(arguments: ["--rupa-ui-fixture=selected-custom-cplane"])
+        let canvas = app.otherElements["CanvasViewport"]
+        XCTAssertTrue(canvas.waitForExistence(timeout: 8))
+
+        let originHandle = app.descendants(matching: .any)["CanvasConstructionPlaneHandle.origin"]
+        XCTAssertTrue(originHandle.waitForExistence(timeout: 3))
+        let initialOriginValue = accessibilityValue(of: originHandle)
+        dragElement(originHandle, by: CGVector(dx: 72.0, dy: -28.0))
+        waitForAccessibilityValueChange(of: originHandle, from: initialOriginValue)
+
+        let normalHandle = app.descendants(matching: .any)["CanvasConstructionPlaneHandle.normal"]
+        XCTAssertTrue(normalHandle.waitForExistence(timeout: 3))
+        let initialNormalValue = accessibilityValue(of: normalHandle)
+        dragElement(normalHandle, by: CGVector(dx: -48.0, dy: -44.0))
+        waitForAccessibilityValueChange(of: normalHandle, from: initialNormalValue)
     }
 
     @MainActor
