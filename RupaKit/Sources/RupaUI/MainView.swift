@@ -1880,6 +1880,17 @@ public struct MainView: View {
             workspaceValuePill("Z", formatted(nodeTranslation.z))
         }
 
+        if selectedConstructionPlaneTargets != nil {
+            workspaceContextDivider
+            workspaceIconButton(
+                systemImage: "rectangle.dashed",
+                help: "Create Construction Plane",
+                accessibilityIdentifier: "WorkspaceConstructionPlane.createFromSelection"
+            ) {
+                _ = createConstructionPlaneFromSelectedTargets(alignsView: true)
+            }
+        }
+
         workspaceContextDivider
 
         workspaceIconButton(

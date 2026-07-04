@@ -310,6 +310,44 @@ final class AppUITests: XCTestCase {
     }
 
     @MainActor
+    func testFaceSelectionCreatesSavedConstructionPlaneFromContextPanel() throws {
+        let app = launchApp()
+        let canvas = app.otherElements["CanvasViewport"]
+        XCTAssertTrue(canvas.waitForExistence(timeout: 8))
+
+        let solidTool = app.buttons["CanvasTool.solid"]
+        XCTAssertTrue(solidTool.waitForExistence(timeout: 3))
+        solidTool.click()
+        canvas.coordinate(withNormalizedOffset: CGVector(dx: 0.50, dy: 0.50)).click()
+
+        let box = app.outlines.staticTexts["Box"].firstMatch
+        XCTAssertTrue(box.waitForExistence(timeout: 3))
+
+        let selectTool = app.buttons["CanvasTool.select"]
+        XCTAssertTrue(selectTool.waitForExistence(timeout: 3))
+        selectTool.click()
+
+        let faceScope = app.buttons["WorkspaceSelectionScope.face"]
+        XCTAssertTrue(faceScope.waitForExistence(timeout: 3))
+        faceScope.click()
+        XCTAssertEqual(faceScope.value as? String, "Selected")
+
+        let frontFace = app.descendants(matching: .any)["CanvasBodyFace.front"]
+        XCTAssertTrue(frontFace.waitForExistence(timeout: 3))
+        frontFace.click()
+
+        let createPlane = app.buttons["WorkspaceConstructionPlane.createFromSelection"]
+        XCTAssertTrue(createPlane.waitForExistence(timeout: 3))
+        createPlane.click()
+
+        expandUtilityRailIfNeeded(in: app)
+        let activePlane = app.descendants(matching: .any)["WorkspacePlane.activeName"]
+        XCTAssertTrue(activePlane.waitForExistence(timeout: 3))
+        XCTAssertEqual(activePlane.value as? String, "Custom Plane")
+        XCTAssertTrue(app.buttons["Select Custom Plane"].waitForExistence(timeout: 3))
+    }
+
+    @MainActor
     func testSelectingObjectShowsViewportAffordance() throws {
         let app = launchApp()
         let canvas = app.otherElements["CanvasViewport"]
