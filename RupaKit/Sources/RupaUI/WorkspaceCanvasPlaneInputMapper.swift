@@ -65,4 +65,19 @@ struct WorkspaceCanvasPlaneInputMapper: Sendable {
             worldPoint: worldPoint
         )
     }
+
+    func resolvedWorldPoint(
+        for point: Point2D,
+        topologyWorldPoint: Point3D?,
+        fallbackWorldPoint: Point3D?,
+        sketchPlane: SketchPlane
+    ) throws -> Point3D? {
+        if let topologyWorldPoint {
+            return topologyWorldPoint
+        }
+        guard case .plane = sketchPlane else {
+            return fallbackWorldPoint
+        }
+        return try SketchPlaneCoordinateSystem(plane: sketchPlane).point(from: point)
+    }
 }

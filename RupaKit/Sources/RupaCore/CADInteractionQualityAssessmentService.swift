@@ -700,6 +700,7 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                         "RupaKit/Sources/RupaRendering/ViewportConstructionPlaneHandleGeometry.swift",
                         "RupaKit/Sources/RupaRendering/Viewport.swift",
                         "RupaKit/Sources/RupaUI/WorkspacePlaneModeControl.swift",
+                        "RupaKit/Sources/RupaUI/WorkspaceCanvasPlaneInputMapper.swift",
                         "RupaKit/Sources/RupaUI/WorkspaceConstructionPlaneEditBuilder.swift",
                         "RupaKit/Sources/RupaUI/MainView.swift",
                     ],
@@ -708,12 +709,14 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                         "RupaKit/Tests/RupaCoreTests/CanvasConstructionPlaneSketchWorkflowTests.swift",
                         "RupaKit/Tests/RupaCoreTests/CommandStackTests.swift",
                         "RupaKit/Tests/RupaRenderingTests/ViewportConstructionPlaneHandleGeometryTests.swift",
+                        "RupaKit/Tests/RupaUIPackageTests/WorkspaceCanvasPlaneInputMapperTests.swift",
                         "RupaKit/Tests/RupaUIPackageTests/WorkspaceConstructionPlaneEditBuilderTests.swift",
                         "RupaKit/Tests/RupaUIPackageTests/WorkspaceSnapOverrideStateTests.swift",
                         "RupaKit/Tests/RupaAgentTests/AgentConstructionPlaneIntegrationTests.swift",
                     ],
                     notes: [
                         "Canvas click and drag sketch tools create rectangle, polygon, arc, spline, and circle sketches on the active saved custom construction plane instead of falling back to the default XY plane.",
+                        "WorkspaceCanvasPlaneInputMapper owns custom-plane world-point recovery, and RupaUIPackageTests cover raw viewport footprint click and drag input flowing through the mapper into EditorSession sketch creation on the active custom construction plane.",
                         "Selected saved construction planes expose viewport Origin and Normal handles that preview a bounded plane frame and commit through the same setConstructionPlane source mutation path used by Inspector edits.",
                     ]
                 ),

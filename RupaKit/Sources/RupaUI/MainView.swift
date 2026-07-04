@@ -3284,6 +3284,7 @@ public struct MainView: View {
         guard let origin = resolvedSketchPlaneWorldPoint(
             for: snappedInput.point,
             topologyWorldPoint: snappedInput.topologyWorldPoint,
+            fallbackWorldPoint: canvasInput.worldPoint,
             sketchPlane: sketchPlane
         ) else {
             viewAlignedConstructionPlaneRequest = nil
@@ -4058,15 +4059,10 @@ public struct MainView: View {
         fallbackWorldPoint: Point3D?,
         sketchPlane: SketchPlane
     ) -> Point3D? {
-        if let topologyWorldPoint {
-            return topologyWorldPoint
-        }
-        guard case .plane = sketchPlane else {
-            return fallbackWorldPoint
-        }
         return resolvedSketchPlaneWorldPoint(
             for: point,
-            topologyWorldPoint: nil,
+            topologyWorldPoint: topologyWorldPoint,
+            fallbackWorldPoint: fallbackWorldPoint,
             sketchPlane: sketchPlane
         )
     }
@@ -4081,6 +4077,7 @@ public struct MainView: View {
         return resolvedSketchPlaneWorldPoint(
             for: point,
             topologyWorldPoint: nil,
+            fallbackWorldPoint: nil,
             sketchPlane: sketchPlane
         )
     }
@@ -4088,13 +4085,18 @@ public struct MainView: View {
     private func resolvedSketchPlaneWorldPoint(
         for point: Point2D,
         topologyWorldPoint: Point3D?,
+        fallbackWorldPoint: Point3D?,
         sketchPlane: SketchPlane
     ) -> Point3D? {
-        if let topologyWorldPoint {
-            return topologyWorldPoint
-        }
         do {
-            return try SketchPlaneCoordinateSystem(plane: sketchPlane).point(from: point)
+            return try WorkspaceCanvasPlaneInputMapper(
+                projectionBasis: viewportProjectionBasis
+            ).resolvedWorldPoint(
+                for: point,
+                topologyWorldPoint: topologyWorldPoint,
+                fallbackWorldPoint: fallbackWorldPoint,
+                sketchPlane: sketchPlane
+            )
         } catch {
             session.reportToolStatus(
                 "Canvas input world point could not be resolved on the active construction plane.",

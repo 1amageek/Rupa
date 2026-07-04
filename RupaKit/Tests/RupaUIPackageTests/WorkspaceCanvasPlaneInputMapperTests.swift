@@ -61,6 +61,92 @@ import Testing
     #expect(pointIsApproximatelyEqual(result.point, coordinateSystem.project(worldPoint).point))
 }
 
+@MainActor
+@Test func workspaceCanvasPlaneInputMapperFeedsEditorSessionClickOnCustomPlane() throws {
+    let session = EditorSession()
+    let plane = try workspaceCanvasCustomPlane()
+    _ = try #require(session.createConstructionPlane(name: "Click CPlane", plane: plane))
+    let activePlane = try #require(session.activeConstructionPlane?.plane)
+    let coordinateSystem = try SketchPlaneCoordinateSystem(plane: activePlane)
+    let mapper = WorkspaceCanvasPlaneInputMapper(projectionBasis: .axisFront(.z))
+    let canvasInput = try mapper.map(
+        modelPoint: Point2D(x: 0.018, y: -0.012),
+        modelWorldPoint: nil,
+        sketchPlane: activePlane
+    )
+    let resolvedWorldPoint = try mapper.resolvedWorldPoint(
+        for: canvasInput.point,
+        topologyWorldPoint: nil,
+        fallbackWorldPoint: canvasInput.worldPoint,
+        sketchPlane: activePlane
+    )
+    let worldPoint = try #require(resolvedWorldPoint)
+
+    _ = session.activateTool(.sketch)
+    let result = session.activateSelectedToolFromCanvas(
+        targetSceneNodeID: nil,
+        modelPoint: canvasInput.point,
+        modelWorldPoint: worldPoint,
+        sketchPlane: activePlane
+    )
+
+    #expect(result.didMutate)
+    #expect(result.tool == .sketch)
+    #expect(session.selectedTool == .select)
+    #expect(try latestSketch(in: session).plane == activePlane)
+    #expect(pointIsApproximatelyEqual(coordinateSystem.project(worldPoint).point, canvasInput.point))
+}
+
+@MainActor
+@Test func workspaceCanvasPlaneInputMapperFeedsEditorSessionDragOnCustomPlane() throws {
+    let session = EditorSession()
+    let plane = try workspaceCanvasCustomPlane()
+    _ = try #require(session.createConstructionPlane(name: "Drag CPlane", plane: plane))
+    let activePlane = try #require(session.activeConstructionPlane?.plane)
+    let coordinateSystem = try SketchPlaneCoordinateSystem(plane: activePlane)
+    let mapper = WorkspaceCanvasPlaneInputMapper(projectionBasis: .axisFront(.z))
+    let startCanvasInput = try mapper.map(
+        modelPoint: Point2D(x: 0.005, y: 0.004),
+        modelWorldPoint: nil,
+        sketchPlane: activePlane
+    )
+    let endCanvasInput = try mapper.map(
+        modelPoint: Point2D(x: 0.031, y: 0.017),
+        modelWorldPoint: nil,
+        sketchPlane: activePlane
+    )
+    let resolvedStartWorldPoint = try mapper.resolvedWorldPoint(
+        for: startCanvasInput.point,
+        topologyWorldPoint: nil,
+        fallbackWorldPoint: startCanvasInput.worldPoint,
+        sketchPlane: activePlane
+    )
+    let resolvedEndWorldPoint = try mapper.resolvedWorldPoint(
+        for: endCanvasInput.point,
+        topologyWorldPoint: nil,
+        fallbackWorldPoint: endCanvasInput.worldPoint,
+        sketchPlane: activePlane
+    )
+    let startWorldPoint = try #require(resolvedStartWorldPoint)
+    let endWorldPoint = try #require(resolvedEndWorldPoint)
+
+    _ = session.activateTool(.sketch)
+    let result = session.activateSelectedToolFromCanvasDrag(
+        startModelPoint: startCanvasInput.point,
+        endModelPoint: endCanvasInput.point,
+        sketchPlane: activePlane,
+        startWorldPoint: startWorldPoint,
+        endWorldPoint: endWorldPoint
+    )
+
+    #expect(result.didMutate)
+    #expect(result.tool == .sketch)
+    #expect(session.selectedTool == .select)
+    #expect(try latestSketch(in: session).plane == activePlane)
+    #expect(pointIsApproximatelyEqual(coordinateSystem.project(startWorldPoint).point, startCanvasInput.point))
+    #expect(pointIsApproximatelyEqual(coordinateSystem.project(endWorldPoint).point, endCanvasInput.point))
+}
+
 @Test func workspaceCanvasPlaneInputMapperRejectsCustomPlaneParallelToViewRay() throws {
     let plane = SketchPlane.plane(
         Plane3D(
@@ -80,6 +166,27 @@ import Testing
     } catch let failure as WorkspaceCanvasPlaneInputMapper.Failure {
         #expect(failure == .viewRayParallelToPlane)
     }
+}
+
+private func workspaceCanvasCustomPlane() throws -> SketchPlane {
+    .plane(
+        Plane3D(
+            origin: Point3D(x: 0.125, y: -0.040, z: 0.075),
+            normal: try Vector3D(x: 0.0, y: 1.0, z: 1.0).normalized(tolerance: 1.0e-12)
+        )
+    )
+}
+
+private func latestSketch(in session: EditorSession) throws -> Sketch {
+    let featureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let feature = try #require(session.document.cadDocument.designGraph.nodes[featureID])
+    let sketch: Sketch?
+    if case .sketch(let latestSketch) = feature.operation {
+        sketch = latestSketch
+    } else {
+        sketch = nil
+    }
+    return try #require(sketch)
 }
 
 private func pointIsApproximatelyEqual(
