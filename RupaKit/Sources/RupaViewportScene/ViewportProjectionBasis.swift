@@ -87,8 +87,8 @@ public struct ViewportProjectionBasis: Equatable, Sendable {
     }
 
     public func orbited(by delta: CGSize) -> ViewportProjectionBasis {
-        let nextYaw = orbitYaw - delta.width * Self.orbitYawSensitivity
-        let nextElevation = orbitElevation + delta.height * Self.orbitElevationSensitivity
+        let nextYaw = orbitYawRadians - delta.width * Self.orbitYawSensitivity
+        let nextElevation = orbitElevationRadians + delta.height * Self.orbitElevationSensitivity
 
         return Self.orbit(yaw: nextYaw, elevation: nextElevation)
     }
@@ -155,7 +155,7 @@ public struct ViewportProjectionBasis: Equatable, Sendable {
         }
     }
 
-    private var orbitYaw: CGFloat {
+    public var orbitYawRadians: CGFloat {
         let yaw = atan2(-zDirection.dx, xDirection.dx)
         guard yaw.isFinite else {
             return Self.defaultOrbitYaw
@@ -163,8 +163,8 @@ public struct ViewportProjectionBasis: Equatable, Sendable {
         return yaw
     }
 
-    private var orbitElevation: CGFloat {
-        let yaw = orbitYaw
+    public var orbitElevationRadians: CGFloat {
+        let yaw = orbitYawRadians
         let sinYaw = sin(yaw)
         let cosYaw = cos(yaw)
         let epsilon: CGFloat = 1.0e-6

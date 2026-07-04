@@ -4,6 +4,7 @@ enum WorkspaceUtilityRailLayout {
     static let width: CGFloat = expandedWidth
     static let expandedWidth: CGFloat = 178
     static let collapsedWidth: CGFloat = 38
+    static let maximumExpandedHeight: CGFloat = 620
     static let contentPadding: CGFloat = 8
     static let collapsedContentPadding: CGFloat = 6
     static let sectionSpacing: CGFloat = 8

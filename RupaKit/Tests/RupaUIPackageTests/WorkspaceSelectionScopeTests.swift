@@ -31,6 +31,7 @@ import Testing
 @Test func workspaceUtilityRailDefaultsToCompactCanvasFootprint() {
     #expect(WorkspaceUtilityRailLayout.collapsedWidth < WorkspaceUtilityRailLayout.expandedWidth)
     #expect(WorkspaceUtilityRailLayout.collapsedWidth <= 40.0)
+    #expect(WorkspaceUtilityRailLayout.maximumExpandedHeight <= 620.0)
     #expect(WorkspaceUtilityRailLayout.collapsedContentWidth == WorkspaceUtilityRailLayout.compactButtonSize.width)
     #expect(WorkspaceUtilityRailLayout.compactButtonSize.height <= ViewportCanvasChromeMetrics.topControlHeight)
 }

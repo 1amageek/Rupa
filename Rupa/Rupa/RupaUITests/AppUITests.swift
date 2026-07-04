@@ -114,6 +114,42 @@ final class AppUITests: XCTestCase {
     }
 
     @MainActor
+    func testWorkspaceSavedViewRailCreatesAndExposesViewActions() throws {
+        let app = launchApp()
+
+        XCTAssertTrue(app.buttons["CanvasTool.select"].waitForExistence(timeout: 8))
+        expandUtilityRailIfNeeded(in: app)
+
+        let createButton = app.buttons["WorkspaceSavedView.createCurrent"]
+        XCTAssertTrue(createButton.waitForExistence(timeout: 3))
+        createButton.click()
+
+        let savedViewPredicate = NSPredicate(
+            format: "identifier BEGINSWITH %@",
+            "WorkspaceSavedView.select."
+        )
+        let savedViewRow = app.buttons.matching(savedViewPredicate).firstMatch
+        XCTAssertTrue(savedViewRow.waitForExistence(timeout: 3))
+        XCTAssertTrue(savedViewRow.label.contains("View"))
+
+        let applyPredicate = NSPredicate(
+            format: "identifier BEGINSWITH %@",
+            "WorkspaceSavedView.apply."
+        )
+        let updatePredicate = NSPredicate(
+            format: "identifier BEGINSWITH %@",
+            "WorkspaceSavedView.update."
+        )
+        let removePredicate = NSPredicate(
+            format: "identifier BEGINSWITH %@",
+            "WorkspaceSavedView.remove."
+        )
+        XCTAssertTrue(app.buttons.matching(applyPredicate).firstMatch.exists)
+        XCTAssertTrue(app.buttons.matching(updatePredicate).firstMatch.exists)
+        XCTAssertTrue(app.buttons.matching(removePredicate).firstMatch.exists)
+    }
+
+    @MainActor
     func testFaceSelectionModeShowsSubobjectTarget() throws {
         let app = launchApp()
         let canvas = app.otherElements["CanvasViewport"]

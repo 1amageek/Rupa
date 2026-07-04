@@ -8,6 +8,7 @@ struct WorkspaceUtilityRailCompactView: View {
     var isConstructionPlaneActive: Bool
     var surfaceAnalysisTitle: String
     var isSurfaceAnalysisActive: Bool
+    var savedViewCount: Int
     var diagnosticTitle: String
     var hasDiagnostics: Bool
     var expand: () -> Void
@@ -49,6 +50,13 @@ struct WorkspaceUtilityRailCompactView: View {
                 help: "Surface Analysis: \(surfaceAnalysisTitle)",
                 accessibilityIdentifier: "WorkspaceUtilityRail.analysis",
                 isActive: isSurfaceAnalysisActive,
+                action: expand
+            )
+            WorkspaceUtilityRailCompactButton(
+                systemImage: "viewfinder",
+                help: "Saved Views: \(savedViewCount)",
+                accessibilityIdentifier: "WorkspaceUtilityRail.views",
+                isActive: savedViewCount > 0,
                 action: expand
             )
             WorkspaceUtilityRailCompactButton(

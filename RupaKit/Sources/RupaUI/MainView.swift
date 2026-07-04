@@ -352,6 +352,14 @@ public struct MainView: View {
         ConstructionPlaneSummaryService().summarize(document: session.document)
     }
 
+    private var savedViewBuilder: WorkspaceSavedViewBuilder {
+        WorkspaceSavedViewBuilder()
+    }
+
+    private var savedViews: [SavedView] {
+        savedViewBuilder.sortedSavedViews(in: session.document)
+    }
+
     private var selectedConstructionPlaneEntry: ConstructionPlaneSummaryResult.Entry? {
         let selectedPlaneIDs = session.selection.selectedTargets.compactMap { target in
             if case .constructionPlane(let id) = target.component {
@@ -1523,91 +1531,125 @@ public struct MainView: View {
     }
 
     private var expandedWorkspaceUtilityRail: some View {
-        VStack(alignment: .leading, spacing: WorkspaceUtilityRailLayout.sectionSpacing) {
-            workspaceUtilityRailHeader
+        ScrollView(.vertical) {
+            VStack(alignment: .leading, spacing: WorkspaceUtilityRailLayout.sectionSpacing) {
+                workspaceUtilityRailHeader
 
-            workspaceRailSection("Select") {
-                WorkspaceSelectionScopeControl(selection: $selectionScope)
-            }
-
-            workspaceRailSection("Snap") {
-                HStack(spacing: 6) {
-                    workspaceToggleButton(
-                        isOn: $isGridSnapEnabled,
-                        systemImage: "grid",
-                        title: "Grid",
-                        help: "Grid Snap",
-                        accessibilityIdentifier: "WorkspaceSnap.grid"
-                    )
-                    workspaceToggleButton(
-                        isOn: $isObjectTargetingEnabled,
-                        systemImage: "dot.scope",
-                        title: "Object",
-                        help: "Object Targeting",
-                        accessibilityIdentifier: "WorkspaceSnap.object"
-                    )
-                    workspaceToggleButton(
-                        isOn: fixedGridVisualSpacingBinding,
-                        systemImage: "lock",
-                        title: "Fixed",
-                        help: "Fixed Visual Grid",
-                        accessibilityIdentifier: "WorkspaceGrid.fixed"
-                    )
+                workspaceRailSection("Select") {
+                    WorkspaceSelectionScopeControl(selection: $selectionScope)
                 }
-                let scaleSummary = workspaceScaleSummary
-                workspaceValueRow("Scale", "\(scaleSummary.presetTitle) · \(scaleSummary.displayUnitTitle)")
-                workspaceValueRow("Grid", session.document.productMetadata.viewportGridSettings.visualSpacingMode.title)
-                workspaceValueRow("Step", scaleSummary.minorStepTitle)
-                workspaceValueRow("Major", scaleSummary.majorStepTitle)
-                workspaceValueRow("Visible", scaleSummary.visibleSpanTitle)
-            }
 
-            workspaceRailSection("Plane") {
-                let planeSummary = savedConstructionPlaneSummary
-                WorkspacePlaneModeControl(selection: $workspacePlaneMode)
-                workspaceToggleButton(
-                    isOn: $isConstructionPlaneSnapEnabled,
-                    systemImage: "square.grid.2x2",
-                    title: "2D",
-                    help: "2D Construction Plane Snap",
-                    accessibilityIdentifier: "WorkspacePlane.twoDSnap"
-                )
-                if let activeConstructionPlane = session.activeConstructionPlane {
-                    workspaceValueRow("Active", activeConstructionPlane.name)
-                        .accessibilityElement(children: .ignore)
-                        .accessibilityLabel("Active Construction Plane")
-                        .accessibilityValue(activeConstructionPlane.name)
-                        .accessibilityIdentifier("WorkspacePlane.activeName")
+                workspaceRailSection("Snap") {
+                    HStack(spacing: 6) {
+                        workspaceToggleButton(
+                            isOn: $isGridSnapEnabled,
+                            systemImage: "grid",
+                            title: "Grid",
+                            help: "Grid Snap",
+                            accessibilityIdentifier: "WorkspaceSnap.grid"
+                        )
+                        workspaceToggleButton(
+                            isOn: $isObjectTargetingEnabled,
+                            systemImage: "dot.scope",
+                            title: "Object",
+                            help: "Object Targeting",
+                            accessibilityIdentifier: "WorkspaceSnap.object"
+                        )
+                        workspaceToggleButton(
+                            isOn: fixedGridVisualSpacingBinding,
+                            systemImage: "lock",
+                            title: "Fixed",
+                            help: "Fixed Visual Grid",
+                            accessibilityIdentifier: "WorkspaceGrid.fixed"
+                        )
+                    }
+                    let scaleSummary = workspaceScaleSummary
+                    workspaceValueRow("Scale", "\(scaleSummary.presetTitle) · \(scaleSummary.displayUnitTitle)")
+                    workspaceValueRow("Grid", session.document.productMetadata.viewportGridSettings.visualSpacingMode.title)
+                    workspaceValueRow("Step", scaleSummary.minorStepTitle)
+                    workspaceValueRow("Major", scaleSummary.majorStepTitle)
+                    workspaceValueRow("Visible", scaleSummary.visibleSpanTitle)
                 }
-                workspaceValueRow("Snap", constructionPlaneSnapSummary)
-                if planeSummary.planes.isEmpty {
-                    workspaceValueRow("Saved", "None")
-                } else {
-                    VStack(spacing: 5) {
-                        ForEach(planeSummary.planes, id: \.id) { plane in
-                            workspaceConstructionPlaneRow(plane)
+
+                workspaceRailSection("Views") {
+                    Button {
+                        createSavedViewFromCurrentViewport()
+                    } label: {
+                        Label("Save Current", systemImage: "plus.viewfinder")
+                            .font(.caption.weight(.medium))
+                            .lineLimit(1)
+                            .frame(maxWidth: .infinity, minHeight: 26)
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(Color.primary.opacity(0.78))
+                    .background {
+                        RoundedRectangle(cornerRadius: 7, style: .continuous)
+                            .fill(Color.primary.opacity(0.06))
+                    }
+                    .help("Save Current View")
+                    .accessibilityLabel("Save Current View")
+                    .accessibilityIdentifier("WorkspaceSavedView.createCurrent")
+
+                    if savedViews.isEmpty {
+                        workspaceValueRow("Saved", "None")
+                    } else {
+                        VStack(spacing: 5) {
+                            ForEach(savedViews) { savedView in
+                                workspaceSavedViewRow(savedView)
+                            }
                         }
                     }
                 }
-                if viewAlignedConstructionPlaneRequest != nil {
-                    workspaceValueRow("Command", "Pick View Origin")
+
+                workspaceRailSection("Plane") {
+                    let planeSummary = savedConstructionPlaneSummary
+                    WorkspacePlaneModeControl(selection: $workspacePlaneMode)
+                    workspaceToggleButton(
+                        isOn: $isConstructionPlaneSnapEnabled,
+                        systemImage: "square.grid.2x2",
+                        title: "2D",
+                        help: "2D Construction Plane Snap",
+                        accessibilityIdentifier: "WorkspacePlane.twoDSnap"
+                    )
+                    if let activeConstructionPlane = session.activeConstructionPlane {
+                        workspaceValueRow("Active", activeConstructionPlane.name)
+                            .accessibilityElement(children: .ignore)
+                            .accessibilityLabel("Active Construction Plane")
+                            .accessibilityValue(activeConstructionPlane.name)
+                            .accessibilityIdentifier("WorkspacePlane.activeName")
+                    }
+                    workspaceValueRow("Snap", constructionPlaneSnapSummary)
+                    if planeSummary.planes.isEmpty {
+                        workspaceValueRow("Saved", "None")
+                    } else {
+                        VStack(spacing: 5) {
+                            ForEach(planeSummary.planes, id: \.id) { plane in
+                                workspaceConstructionPlaneRow(plane)
+                            }
+                        }
+                    }
+                    if viewAlignedConstructionPlaneRequest != nil {
+                        workspaceValueRow("Command", "Pick View Origin")
+                    }
+                }
+
+                workspaceRailSection("Analysis") {
+                    WorkspaceSurfaceAnalysisControl(options: $surfaceAnalysisOptions)
+                    workspaceValueRow("Overlay", surfaceAnalysisOverlaySummary)
+                    workspaceValueRow("Samples", surfaceAnalysisDensitySummary)
+                }
+
+                workspaceRailSection("Scene") {
+                    workspaceValueRow("Bodies", "\(session.evaluatedBodyCount)")
+                    workspaceValueRow("Nodes", "\(session.document.productMetadata.sceneNodes.count)")
+                    workspaceValueRow("Issues", diagnosticSummary)
                 }
             }
-
-            workspaceRailSection("Analysis") {
-                WorkspaceSurfaceAnalysisControl(options: $surfaceAnalysisOptions)
-                workspaceValueRow("Overlay", surfaceAnalysisOverlaySummary)
-                workspaceValueRow("Samples", surfaceAnalysisDensitySummary)
-            }
-
-            workspaceRailSection("Scene") {
-                workspaceValueRow("Bodies", "\(session.evaluatedBodyCount)")
-                workspaceValueRow("Nodes", "\(session.document.productMetadata.sceneNodes.count)")
-                workspaceValueRow("Issues", diagnosticSummary)
-            }
+            .padding(WorkspaceUtilityRailLayout.contentPadding)
         }
-        .padding(WorkspaceUtilityRailLayout.contentPadding)
+        .scrollIndicators(.hidden)
         .frame(width: WorkspaceUtilityRailLayout.expandedWidth, alignment: .topLeading)
+        .frame(maxHeight: WorkspaceUtilityRailLayout.maximumExpandedHeight, alignment: .topLeading)
         .workspaceGlassContainer()
         .accessibilityIdentifier("WorkspaceUtilityRail.expanded")
     }
@@ -1643,6 +1685,7 @@ public struct MainView: View {
                 || viewAlignedConstructionPlaneRequest != nil,
             surfaceAnalysisTitle: surfaceAnalysisOverlaySummary,
             isSurfaceAnalysisActive: surfaceAnalysisOverlaySummary != "Off",
+            savedViewCount: savedViews.count,
             diagnosticTitle: diagnosticSummary,
             hasDiagnostics: !session.diagnostics.isEmpty
         ) {
@@ -2240,6 +2283,84 @@ public struct MainView: View {
                 }
             }
         )
+    }
+
+    private func workspaceSavedViewRow(
+        _ savedView: SavedView
+    ) -> some View {
+        let identifierSuffix = String(describing: savedView.id)
+        return HStack(spacing: 6) {
+            Button {
+                applySavedView(savedView)
+            } label: {
+                Image(systemName: "viewfinder")
+                    .font(.system(size: 11, weight: .semibold))
+                    .frame(width: 22, height: 22)
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(Color.accentColor)
+            .help("Apply Saved View")
+            .accessibilityLabel("Apply \(savedView.name)")
+            .accessibilityIdentifier("WorkspaceSavedView.apply.\(identifierSuffix)")
+
+            Button {
+                applySavedView(savedView)
+            } label: {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(savedView.name)
+                        .font(.caption)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                    Text("\(savedViewBuilder.projectionTitle(for: savedView)) · \(savedViewBuilder.scaleTitle(for: savedView))")
+                        .font(.caption2)
+                        .lineLimit(1)
+                        .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help("Apply Saved View")
+            .accessibilityLabel("Apply \(savedView.name)")
+            .accessibilityValue(savedViewBuilder.scaleTitle(for: savedView))
+            .accessibilityIdentifier("WorkspaceSavedView.select.\(identifierSuffix)")
+
+            Button {
+                updateSavedViewFromCurrentViewport(savedView)
+            } label: {
+                Image(systemName: "arrow.triangle.2.circlepath")
+                    .font(.system(size: 11, weight: .semibold))
+                    .frame(width: 22, height: 22)
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(Color.primary.opacity(0.68))
+            .help("Update Saved View From Current View")
+            .accessibilityLabel("Update \(savedView.name) From Current View")
+            .accessibilityIdentifier("WorkspaceSavedView.update.\(identifierSuffix)")
+
+            Button {
+                removeSavedView(savedView)
+            } label: {
+                Image(systemName: "trash")
+                    .font(.system(size: 11, weight: .semibold))
+                    .frame(width: 22, height: 22)
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(Color.primary.opacity(0.58))
+            .help("Remove Saved View")
+            .accessibilityLabel("Remove \(savedView.name)")
+            .accessibilityIdentifier("WorkspaceSavedView.remove.\(identifierSuffix)")
+        }
+        .padding(.horizontal, 6)
+        .padding(.vertical, 4)
+        .background {
+            RoundedRectangle(cornerRadius: 7, style: .continuous)
+                .fill(Color.primary.opacity(0.05))
+        }
+        .overlay {
+            RoundedRectangle(cornerRadius: 7, style: .continuous)
+                .strokeBorder(Color.primary.opacity(0.10), lineWidth: 1)
+        }
     }
 
     @ViewBuilder
@@ -3221,6 +3342,93 @@ public struct MainView: View {
             )
             isPreviewExpanded = true
         }
+    }
+
+    private func createSavedViewFromCurrentViewport() {
+        let savedView = savedViewBuilder.makeSavedView(
+            name: savedViewBuilder.nextSavedViewName(in: session.document),
+            document: session.document,
+            projectionBasis: viewportProjectionBasis,
+            target: currentSavedViewTarget
+        )
+        do {
+            let result = try session.execute(.createSavedView(savedView))
+            if result.diagnostics.isEmpty {
+                session.reportToolStatus("Saved view \(savedView.name) created.")
+            } else {
+                isPreviewExpanded = true
+            }
+        } catch let error as EditorError {
+            session.reportToolStatus(error.message, severity: .warning)
+            isPreviewExpanded = true
+        } catch {
+            session.reportToolStatus("Saved view creation failed.", severity: .warning)
+            isPreviewExpanded = true
+        }
+    }
+
+    private func updateSavedViewFromCurrentViewport(_ savedView: SavedView) {
+        var updatedView = savedViewBuilder.makeSavedView(
+            name: savedView.name,
+            document: session.document,
+            projectionBasis: viewportProjectionBasis,
+            target: currentSavedViewTarget
+        )
+        updatedView.id = savedView.id
+        do {
+            let result = try session.execute(.updateSavedView(updatedView))
+            if result.diagnostics.isEmpty {
+                session.reportToolStatus("Saved view \(savedView.name) updated.")
+            } else {
+                isPreviewExpanded = true
+            }
+        } catch let error as EditorError {
+            session.reportToolStatus(error.message, severity: .warning)
+            isPreviewExpanded = true
+        } catch {
+            session.reportToolStatus("Saved view update failed.", severity: .warning)
+            isPreviewExpanded = true
+        }
+    }
+
+    private func applySavedView(_ savedView: SavedView) {
+        session.setRulerConfiguration(savedView.displayScale.rulerConfiguration)
+        resetWorkspaceInteractionScaleDefaults()
+        viewportProjectionRequest = ViewportProjectionRequest(
+            basis: savedViewBuilder.projectionBasis(for: savedView)
+        )
+        requestViewportCameraReset()
+        session.reportToolStatus("Saved view \(savedView.name) applied.")
+    }
+
+    private func removeSavedView(_ savedView: SavedView) {
+        do {
+            let result = try session.execute(.removeSavedView(id: savedView.id))
+            if result.diagnostics.isEmpty {
+                session.reportToolStatus("Saved view \(savedView.name) removed.")
+            } else {
+                isPreviewExpanded = true
+            }
+        } catch let error as EditorError {
+            session.reportToolStatus(error.message, severity: .warning)
+            isPreviewExpanded = true
+        } catch {
+            session.reportToolStatus("Saved view removal failed.", severity: .warning)
+            isPreviewExpanded = true
+        }
+    }
+
+    private var currentSavedViewTarget: Point3D {
+        guard let bounds = session.currentEvaluation.flatMap({
+            WorkspaceBoundsService().bounds(for: $0.evaluatedDocument)
+        }) else {
+            return .origin
+        }
+        return Point3D(
+            x: (bounds.minX + bounds.maxX) / 2.0,
+            y: (bounds.minY + bounds.maxY) / 2.0,
+            z: (bounds.minZ + bounds.maxZ) / 2.0
+        )
     }
 
     private func beginConstructionPlaneRename(
