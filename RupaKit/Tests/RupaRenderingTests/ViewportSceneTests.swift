@@ -3227,6 +3227,22 @@ import Testing
 }
 
 @MainActor
+@Test func viewportTopChromeBadgeStaysVisibleBesideTrailingCommandChrome() {
+    let viewportSize = CGSize(width: 800.0, height: 600.0)
+    let trailingOverlayRect = CGRect(x: 620.0, y: 0.0, width: 174.0, height: 42.0)
+    let layout = ViewportCanvasChromeLayout(
+        viewportSize: viewportSize,
+        additionalExclusionRects: [trailingOverlayRect]
+    )
+    let rect = layout.viewportBadgeRect
+
+    #expect(rect.minX == ViewportCanvasChromeLayout.viewportBadgePadding)
+    #expect(rect.minY == ViewportCanvasChromeLayout.viewportBadgePadding)
+    #expect(!rect.intersects(trailingOverlayRect))
+    #expect(layout.containsCanvasChrome(CGPoint(x: trailingOverlayRect.midX, y: trailingOverlayRect.midY)))
+}
+
+@MainActor
 @Test func viewportAxisTriadUsesCompactBottomCenterInputExclusion() {
     let viewportSize = CGSize(width: 800.0, height: 600.0)
     let layout = ViewportCanvasChromeLayout(viewportSize: viewportSize)

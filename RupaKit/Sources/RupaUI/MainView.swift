@@ -583,7 +583,7 @@ public struct MainView: View {
                 .zIndex(0)
             }
             .coordinateSpace(name: WorkspaceCanvasOverlayLayout.coordinateSpaceName)
-            .overlay(alignment: .top) {
+            .overlay(alignment: .topTrailing) {
                 workspaceTopBar
                     .padding(.top, WorkspaceCanvasOverlayLayout.edgePadding)
                     .padding(.horizontal, WorkspaceCanvasOverlayLayout.edgePadding)
