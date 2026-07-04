@@ -632,6 +632,7 @@ public struct Viewport: View {
             Text(scaleReadout.compactText)
                 .font(.system(.caption, design: .monospaced))
                 .lineLimit(1)
+                .truncationMode(.middle)
             Divider()
                 .frame(height: ViewportCanvasChromeMetrics.topControlDividerHeight)
             Text("\(Int((camera.zoom * 100.0).rounded()))%")
@@ -642,6 +643,7 @@ public struct Viewport: View {
                 Text("\(featureCount) features")
                     .font(.caption)
                     .lineLimit(1)
+                    .truncationMode(.middle)
             }
         }
         .padding(.horizontal, ViewportCanvasChromeMetrics.topControlHorizontalPadding)
@@ -658,8 +660,8 @@ public struct Viewport: View {
     ) -> some View {
         let rect = chromeLayout.viewportBadgeRect
         return viewportBadge(scaleReadout: scaleReadout)
-            .fixedSize(horizontal: true, vertical: false)
             .frame(
+                width: rect.width,
                 height: rect.height,
                 alignment: .leading
             )
