@@ -132,7 +132,7 @@ flowchart TD
 
 ## Current Cursor
 
-2026-07-05 CPlane app UI reachability update: selected arbitrary CPlane launch state now exposes Inspector Origin/Normal controls, Plane rail rename labels, and Canvas Origin/Normal handle markers from the same projected layout used for drawing and hit testing. Remaining app workflow work is authorized-runner execution, saved-plane creation automation, and committed viewport handle drag coverage.
+2026-07-05 CPlane app UI reachability update: selected arbitrary CPlane launch state now exposes Inspector Origin/Normal controls, Plane rail rename labels, and Canvas Origin/Normal handle markers from the same projected layout used for drawing and hit testing. Focused package coverage now verifies viewport Origin/Normal drag edits from `ViewportConstructionPlaneDragTarget` through a dedicated commit service into selected saved-plane `EditorSession.setConstructionPlane` source mutation. Remaining app workflow work is authorized-runner execution plus saved-plane creation and rename automation.
 
 | Area | Current cursor | Next non-negotiable result |
 |---|---|---|

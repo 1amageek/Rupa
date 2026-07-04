@@ -3543,29 +3543,21 @@ public struct MainView: View {
     private func handleViewportConstructionPlaneHandleDrag(
         _ target: ViewportConstructionPlaneDragTarget
     ) {
-        guard session.selectedTool == .select,
-              let entry = savedConstructionPlaneSummary.planes.first(where: { plane in
-                  plane.id == target.constructionPlaneID && plane.sceneNodeID == target.sceneNodeID
-              }) else {
+        guard session.selectedTool == .select else {
             return
         }
 
         do {
-            let builder = WorkspaceConstructionPlaneEditBuilder()
-            let plane: SketchPlane
-            let successMessage: String
-            switch target.handle {
-            case .origin:
-                plane = try builder.planeSettingOrigin(target.origin, on: entry.plane)
-                successMessage = "Updated construction plane \(entry.name) origin."
-            case .normal:
-                plane = try builder.planeSettingNormal(target.normal, on: entry.plane)
-                successMessage = "Updated construction plane \(entry.name) normal."
+            guard let edit = try WorkspaceConstructionPlaneViewportDragCommitService().edit(
+                for: target,
+                entries: savedConstructionPlaneSummary.planes
+            ) else {
+                return
             }
             commitConstructionPlaneEdit(
-                entry,
-                plane: plane,
-                successMessage: successMessage
+                edit.entry,
+                plane: edit.plane,
+                successMessage: edit.successMessage
             )
         } catch let error as EditorError {
             session.reportToolStatus(error.message, severity: .warning)
