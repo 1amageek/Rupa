@@ -1478,7 +1478,7 @@ public final class AgentCommandController: AgentClientProtocol {
         capability(
             "booleanEvaluationPlan",
             category: .read,
-            summary: "Preflight a proposed standalone Boolean without mutating the document, returning the exact operand subset, output topology kind, topology name scheme, topology slots, B-rep topology counts, primitive counts, unsupported code, and stage-specific ordered checks used by the shared Boolean evaluation contract.",
+            summary: "Preflight a proposed standalone Boolean without mutating the document, returning the exact operand subset, output topology kind, topology name scheme, topology slots that resolve to post-create persistent names, B-rep topology counts, primitive counts, unsupported code, and stage-specific ordered checks used by the shared Boolean evaluation contract.",
             access: .agentRequest,
             mutatesDocument: false,
             discovery: [.topologySummary, .booleanEvaluationPlan],
@@ -1490,7 +1490,8 @@ public final class AgentCommandController: AgentClientProtocol {
                     supportedValues: ["union", "difference", "intersect", "slice"],
                     notes: [
                         "Use the result before createBoolean to avoid committing unsupported topology.",
-                        "The current exact subset supports axis-aligned box solids, orthogonal cell-union solids, and separated solid-body union."
+                        "The current exact subset supports axis-aligned box solids, orthogonal cell-union solids, and separated solid-body union.",
+                        "Topology slots use the SwiftCAD Boolean slot contract and can be matched against topologySummary after createBoolean returns the new generation."
                     ]
                 ),
                 AgentCapabilityDescriptor.OptionAxis(

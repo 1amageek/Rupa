@@ -580,6 +580,7 @@ import SwiftCAD
     #expect(topology.counts.faceCount == 10)
     #expect(topology.counts.edgeCount == 24)
     #expect(topology.counts.vertexCount == 16)
+    expectAgentPlannedTopologyNames(plan, for: booleanID, in: topology)
     for slot in plannedSlots {
         #expect(topology.entries.contains { entry in
             entry.sourceFeatureID == booleanID.description
@@ -677,6 +678,7 @@ import SwiftCAD
     #expect(commandResult.didMutate)
     #expect(evaluated.brep.bodies.count == 1)
     #expect(evaluated.brep.shells.count == 2)
+    expectAgentPlannedTopologyNames(plan, for: booleanID, in: topology)
     #expect(topology.entries.contains { entry in
         entry.sourceFeatureID == booleanID.description
             && entry.generatedRole == GeneratedSubshapeRole.sideFace.rawValue
@@ -787,6 +789,7 @@ import SwiftCAD
     #expect(commandResult.didMutate)
     #expect(evaluated.brep.bodies.count == 4)
     #expect(evaluated.brep.shells.count == 6)
+    expectAgentPlannedTopologyNames(plan, for: booleanID, in: topology)
     #expect(topology.entries.contains { entry in
         entry.sourceFeatureID == firstTargetID.description
             && entry.generatedRole == GeneratedSubshapeRole.body.rawValue
@@ -955,6 +958,42 @@ private func agentCreateBooleanCylinder(
         distance: .length(depth, .meter),
         direction: .normal
     )
+}
+
+private func expectAgentPlannedTopologyNames(
+    _ plan: BooleanEvaluationPlanResult,
+    for featureID: FeatureID,
+    in topology: TopologySummaryResult
+) {
+    let plannedNames = plan.topologyPersistentNames(featureID: featureID)
+    #expect(Set(plannedNames).count == plannedNames.count)
+    let plannedEntries = zip(plan.topologySlots, plannedNames)
+    for (slot, name) in plannedEntries {
+        let persistentName = agentPersistentNameString(name)
+        #expect(topology.entries.contains { entry in
+            entry.persistentName == persistentName
+                && entry.sourceFeatureID == featureID.description
+                && entry.generatedRole == slot.role.rawValue
+                && entry.subshapeRole == slot.subshape
+                && (slot.role == .body || entry.selectionComponentID != nil)
+        })
+    }
+}
+
+private func agentPersistentNameString(_ name: PersistentName) -> String {
+    name.components.map { component in
+        switch component {
+        case .feature(let featureID):
+            return "feature:\(featureID.description)"
+        case .generated(let value):
+            return "generated:\(value)"
+        case .subshape(let value):
+            return "subshape:\(value)"
+        case .index(let index):
+            return "index:\(index)"
+        }
+    }
+    .joined(separator: "/")
 }
 
 @MainActor

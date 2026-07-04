@@ -231,10 +231,10 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                     notes: [
                         "Standalone Boolean features now own target body references, one tool body reference, operation, and keep-tools policy in source data.",
                         "Core, Automation, and Agent can create exact axis-aligned box, orthogonal cell-union, and separated solid-body union B-rep Boolean results through the shared command path.",
-                        "SwiftCAD exposes the shared Boolean kernel decision, result topology name scheme, generated topology slots, and B-rep topology counts as a non-mutating plan service, and Agent exposes it as document.booleanEvaluationPlan before createBoolean.",
+                        "SwiftCAD exposes the shared Boolean kernel decision, result topology name scheme, generated topology slots, post-create persistent-name resolution for planned slots, and B-rep topology counts as a non-mutating plan service, and Agent exposes it as document.booleanEvaluationPlan before createBoolean.",
                         "SwiftCAD can extract occupied cells from supported orthogonal solid operands, so previous connected orthogonal cell-union Boolean results can become follow-on Boolean targets.",
                         "SwiftCAD can copy separated source B-rep shells into one result body with copied source topology names, so Agent workflows can plan and create separated non-box solid unions without mesh fallback.",
-                        "The separated B-rep union path now verifies multiple target operands with keep-tools enabled, preserving original target and tool bodies while adding the copied-topology result body for Agent follow-on selection.",
+                        "Frame, orthogonal cell-union, and copied-topology Boolean preflight slots now verify against generated post-create topology names, so Agent workflows can plan a Boolean and then target every planned Face/Edge/Vertex through topologySummary.",
                         "Boolean evaluation removes superseded target and tool generated names when keepTools is false, remaps kept tool names when keepTools is true, and returns typed failures for unsupported operands before invalid geometry is committed.",
                     ]
                 ),
