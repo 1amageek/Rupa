@@ -4,11 +4,9 @@ struct ViewportCanvasChromeLayout: Equatable {
     static let axisControlSize = CGSize(width: 286.0, height: 42.0)
     static let axisBottomPadding: CGFloat = 14.0
     static let minimumViewportBadgeWidth: CGFloat = 118.0
+    static let maximumViewportBadgeWidth: CGFloat = ViewportCanvasChromeMetrics.topControlMaximumWidth
     static let defaultViewportBadgeWidth: CGFloat = minimumViewportBadgeWidth
-    static let viewportBadgeSize = CGSize(
-        width: ViewportCanvasChromeMetrics.topControlMaximumWidth,
-        height: ViewportCanvasChromeMetrics.topControlHeight
-    )
+    static let viewportBadgeHeight: CGFloat = ViewportCanvasChromeMetrics.topControlHeight
     static let viewportBadgePadding: CGFloat = ViewportCanvasChromeMetrics.edgePadding
     static let inputExclusionPadding: CGFloat = 6.0
 
@@ -45,7 +43,7 @@ struct ViewportCanvasChromeLayout: Equatable {
                     x: Self.viewportBadgePadding,
                     y: Self.viewportBadgePadding,
                     width: clampedViewportBadgeWidth,
-                    height: Self.viewportBadgeSize.height
+                    height: Self.viewportBadgeHeight
                 )
             )
         )
@@ -86,7 +84,7 @@ struct ViewportCanvasChromeLayout: Equatable {
     private var clampedViewportBadgeWidth: CGFloat {
         min(
             max(viewportBadgeWidth, Self.minimumViewportBadgeWidth),
-            Self.viewportBadgeSize.width
+            Self.maximumViewportBadgeWidth
         )
     }
 

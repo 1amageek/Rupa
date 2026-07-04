@@ -768,7 +768,7 @@ public struct Viewport: View {
         }
         .padding(.horizontal, ViewportCanvasChromeMetrics.topControlHorizontalPadding)
         .frame(
-            height: ViewportCanvasChromeLayout.viewportBadgeSize.height,
+            height: ViewportCanvasChromeLayout.viewportBadgeHeight,
             alignment: .leading
         )
         .viewportCanvasGlassChrome()

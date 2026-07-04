@@ -16,7 +16,7 @@ import Testing
     #expect(ViewportCanvasChromeMetrics.edgePadding == 5.0)
     #expect(ViewportCanvasChromeMetrics.topControlItemSpacing == ViewportCanvasChromeMetrics.edgePadding)
     #expect(ViewportCanvasChromeMetrics.topControlMaximumWidth == 180.0)
-    #expect(WorkspaceChromeControlMetrics.containerHeight == ViewportCanvasChromeLayout.viewportBadgeSize.height)
+    #expect(WorkspaceChromeControlMetrics.containerHeight == ViewportCanvasChromeLayout.viewportBadgeHeight)
     #expect(WorkspaceChromeControlMetrics.containerHeight == 28.0)
 }
 
@@ -45,7 +45,7 @@ import Testing
 
     #expect(topBarMinimumContentWidth < viewportBadgeWidth)
     #expect(ViewportCanvasChromeLayout.defaultViewportBadgeWidth == ViewportCanvasChromeLayout.minimumViewportBadgeWidth)
-    #expect(ViewportCanvasChromeLayout.viewportBadgeSize.width == ViewportCanvasChromeMetrics.topControlMaximumWidth)
+    #expect(ViewportCanvasChromeLayout.maximumViewportBadgeWidth == ViewportCanvasChromeMetrics.topControlMaximumWidth)
 }
 
 @Test func workspaceTopBarPresentationStaysCanvasActionOnly() {

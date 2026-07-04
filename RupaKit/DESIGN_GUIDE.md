@@ -20,13 +20,13 @@ flowchart TD
 | Rule | Guidance |
 |---|---|
 | Prefer compact overlay insets | Canvas overlays should use a 5 pt outer inset by default. Increase only when overlap with system chrome or hit targets is proven. |
-| Keep overlay internals dense | Top/context panels should use a 28 pt container height with 5 pt horizontal padding. Utility rails should default to 8 pt padding. |
+| Keep overlay internals dense | Top/context panels and viewport badges should share a 28 pt container height with 5 pt horizontal padding. Utility rails should default to 8 pt padding. |
 | Keep small repeated pills compact | Status chips and value pills should default to 5 pt horizontal padding inside the shared 20 pt content height. |
 | Keep tool palettes compact | Tool palettes should keep their container padding near 4 pt and item spacing near 5 pt while preserving tappable icon targets. |
 | Do not use decorative spacing on canvas | Extra padding, large card margins, and oversized floating containers hide geometry and reduce picking confidence. |
 | Avoid nested framed surfaces | Canvas overlays may use one Liquid Glass surface. Avoid cards inside cards or decorative wrapper layers on the canvas. |
 | Use shared Liquid Glass chrome | Canvas badges, command chrome, compact rails, and context panels should use the same borderless Liquid Glass container. Do not mix explicit bordered and unbordered canvas chrome. Top and context chrome in `RupaUI` should use `workspaceCanvasTopChromeContainer`. |
-| Keep top chrome content-width | Top command chrome should hug its controls. Do not add spacers or maximum-width frames that create empty canvas-obscuring background. |
+| Keep top chrome content-width | Top command chrome and viewport badges should hug their controls. Clamp to a maximum width only after measuring content; do not add spacers or fixed maximum-width frames that create empty canvas-obscuring background. |
 | Keep document title out of canvas chrome | The document title belongs in navigation/window chrome. Canvas chrome should only show viewport, command, selection, and diagnostic state. |
 
 ## Canvas Chrome Tokens
@@ -39,6 +39,7 @@ flowchart TD
 | `topControlHorizontalPadding` | 5 pt | Avoids large empty Liquid Glass surfaces over geometry. |
 | `borderWidth` | 0 pt | Canvas chrome is borderless; glass treatment supplies depth. |
 | `defaultViewportBadgeWidth` | minimum badge width | The scale badge should grow from measured content, not reserve unused space. |
+| `maximumViewportBadgeWidth` | 180 pt | Caps unusually long readouts without making ordinary HUD chrome occupy the maximum width. |
 
 ## Overlay Priority
 

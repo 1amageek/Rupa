@@ -3167,11 +3167,11 @@ import Testing
     let rect = layout.viewportBadgeRect
 
     #expect(
-        ViewportCanvasChromeLayout.viewportBadgeSize.height
+        ViewportCanvasChromeLayout.viewportBadgeHeight
             == ViewportCanvasChromeMetrics.topControlHeight
     )
     #expect(
-        ViewportCanvasChromeLayout.viewportBadgeSize.width
+        ViewportCanvasChromeLayout.maximumViewportBadgeWidth
             == ViewportCanvasChromeMetrics.topControlMaximumWidth
     )
     #expect(
@@ -3194,7 +3194,7 @@ import Testing
     #expect(rect.minX == ViewportCanvasChromeLayout.viewportBadgePadding)
     #expect(rect.minY == ViewportCanvasChromeLayout.viewportBadgePadding)
     #expect(rect.width == ViewportCanvasChromeLayout.defaultViewportBadgeWidth)
-    #expect(rect.height == ViewportCanvasChromeLayout.viewportBadgeSize.height)
+    #expect(rect.height == ViewportCanvasChromeLayout.viewportBadgeHeight)
     #expect(layout.containsCanvasChrome(CGPoint(x: 12.0, y: 12.0)))
 }
 
