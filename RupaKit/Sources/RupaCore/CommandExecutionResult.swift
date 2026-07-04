@@ -7,6 +7,7 @@ public struct CommandExecutionResult: Equatable, Sendable {
     public var generation: DocumentGeneration
     public var didMutate: Bool
     public var diagnostics: [EditorDiagnostic]
+    public var primaryFeatureID: FeatureID?
     public var curveRebuildReport: CurveRebuildReport?
     public var addedSelectionDimensionID: SelectionDimensionID?
 
@@ -15,6 +16,7 @@ public struct CommandExecutionResult: Equatable, Sendable {
         generation: DocumentGeneration,
         didMutate: Bool,
         diagnostics: [EditorDiagnostic],
+        primaryFeatureID: FeatureID? = nil,
         curveRebuildReport: CurveRebuildReport? = nil,
         addedSelectionDimensionID: SelectionDimensionID? = nil
     ) {
@@ -22,6 +24,7 @@ public struct CommandExecutionResult: Equatable, Sendable {
         self.generation = generation
         self.didMutate = didMutate
         self.diagnostics = diagnostics
+        self.primaryFeatureID = primaryFeatureID
         self.curveRebuildReport = curveRebuildReport
         self.addedSelectionDimensionID = addedSelectionDimensionID
     }

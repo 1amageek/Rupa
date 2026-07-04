@@ -7,6 +7,7 @@ public struct AutomationResult: Codable, Equatable, Sendable {
     public var generation: DocumentGeneration
     public var didMutate: Bool
     public var diagnostics: [EditorDiagnostic]
+    public var primaryFeatureID: FeatureID?
     public var curveRebuildReport: CurveRebuildReport?
     public var addedSelectionDimensionID: SelectionDimensionID?
     public var workspaceScale: WorkspaceScaleSnapshot?
@@ -28,6 +29,7 @@ public struct AutomationResult: Codable, Equatable, Sendable {
         generation: DocumentGeneration = DocumentGeneration(),
         didMutate: Bool = false,
         diagnostics: [EditorDiagnostic] = [],
+        primaryFeatureID: FeatureID? = nil,
         curveRebuildReport: CurveRebuildReport? = nil,
         addedSelectionDimensionID: SelectionDimensionID? = nil,
         workspaceScale: WorkspaceScaleSnapshot? = nil,
@@ -48,6 +50,7 @@ public struct AutomationResult: Codable, Equatable, Sendable {
         self.generation = generation
         self.didMutate = didMutate
         self.diagnostics = diagnostics
+        self.primaryFeatureID = primaryFeatureID
         self.curveRebuildReport = curveRebuildReport
         self.addedSelectionDimensionID = addedSelectionDimensionID
         self.workspaceScale = workspaceScale

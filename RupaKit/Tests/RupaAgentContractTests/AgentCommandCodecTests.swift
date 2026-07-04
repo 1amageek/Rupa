@@ -14,6 +14,7 @@ import SwiftCAD
         command: .renameDocument(name: "Encoded"),
         expectedGeneration: DocumentGeneration(3)
     )
+    let primaryFeatureID = FeatureID()
     let response = AgentResponse.command(
         AutomationResult(
             message: "Encoded",
@@ -26,7 +27,8 @@ import SwiftCAD
                     code: .workspaceScaleWarning,
                     message: "Workspace scale warning."
                 ),
-            ]
+            ],
+            primaryFeatureID: primaryFeatureID
         )
     )
 
@@ -40,6 +42,7 @@ import SwiftCAD
 
     #expect(decodedRequest == request)
     #expect(decodedResponse == response)
+    #expect(result["primaryFeatureID"] as? String == primaryFeatureID.description)
     #expect(firstDiagnostic["code"] as? String == "workspaceScaleWarning")
 }
 

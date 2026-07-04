@@ -491,6 +491,7 @@ extension DesignDocument {
         try requireBodyFeature(featureID, owner: owner)
     }
 
+    @discardableResult
     public mutating func createExtrudedRectangle(
         name: String,
         plane: SketchPlane,
@@ -499,7 +500,7 @@ extension DesignDocument {
         depth: CADExpression,
         direction: ExtrudeDirection,
         objectRegistry: ObjectTypeRegistry = .builtIn
-    ) throws {
+    ) throws -> FeatureID {
         let sketchFeatureID = try createRectangleSketch(
             name: "\(name) Sketch",
             plane: plane,
@@ -507,7 +508,7 @@ extension DesignDocument {
             height: height,
             objectRegistry: objectRegistry
         )
-        try extrudeProfile(
+        return try extrudeProfile(
             name: name,
             profile: ProfileReference(featureID: sketchFeatureID),
             distance: depth,
@@ -517,6 +518,7 @@ extension DesignDocument {
         )
     }
 
+    @discardableResult
     public mutating func createExtrudedRectangleFromCorners(
         name: String,
         plane: SketchPlane,
@@ -525,7 +527,7 @@ extension DesignDocument {
         depth: CADExpression,
         direction: ExtrudeDirection,
         objectRegistry: ObjectTypeRegistry = .builtIn
-    ) throws {
+    ) throws -> FeatureID {
         let sketchFeatureID = try createRectangleSketchFromCorners(
             name: "\(name) Sketch",
             plane: plane,
@@ -533,7 +535,7 @@ extension DesignDocument {
             oppositeCorner: oppositeCorner,
             objectRegistry: objectRegistry
         )
-        try extrudeProfile(
+        return try extrudeProfile(
             name: name,
             profile: ProfileReference(featureID: sketchFeatureID),
             distance: depth,
@@ -543,6 +545,7 @@ extension DesignDocument {
         )
     }
 
+    @discardableResult
     public mutating func createExtrudedCircle(
         name: String,
         plane: SketchPlane,
@@ -551,7 +554,7 @@ extension DesignDocument {
         depth: CADExpression,
         direction: ExtrudeDirection,
         objectRegistry: ObjectTypeRegistry = .builtIn
-    ) throws {
+    ) throws -> FeatureID {
         let sketchFeatureID = try createCircleSketch(
             name: "\(name) Sketch",
             plane: plane,
@@ -559,7 +562,7 @@ extension DesignDocument {
             radius: radius,
             objectRegistry: objectRegistry
         )
-        try extrudeProfile(
+        return try extrudeProfile(
             name: name,
             profile: ProfileReference(featureID: sketchFeatureID),
             distance: depth,

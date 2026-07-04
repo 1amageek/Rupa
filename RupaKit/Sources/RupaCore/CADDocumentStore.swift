@@ -136,6 +136,7 @@ public final class CADDocumentStore {
     public func apply(_ command: EditorCommand) throws -> CommandExecutionResult {
         var curveRebuildReport: CurveRebuildReport?
         var addedSelectionDimensionID: SelectionDimensionID?
+        var primaryFeatureID: FeatureID?
         switch command {
         case .setDisplayUnit(let unit):
             document.setDisplayUnit(unit)
@@ -1048,7 +1049,7 @@ public final class CADDocumentStore {
             evaluateCurrentDocument()
         case .extrudeProfile(let name, let profile, let distance, let direction):
             var updatedDocument = document
-            try updatedDocument.extrudeProfile(
+            primaryFeatureID = try updatedDocument.extrudeProfile(
                 name: name,
                 profile: profile,
                 distance: distance,
@@ -1060,7 +1061,7 @@ public final class CADDocumentStore {
             evaluateCurrentDocument()
         case .createRevolve(let name, let profile, let axis, let angle):
             var updatedDocument = document
-            try updatedDocument.createRevolve(
+            primaryFeatureID = try updatedDocument.createRevolve(
                 name: name,
                 profile: profile,
                 axis: axis,
@@ -1072,7 +1073,7 @@ public final class CADDocumentStore {
             evaluateCurrentDocument()
         case .createSweep(let name, let sections, let path, let guides, let targets, let options):
             var updatedDocument = document
-            try updatedDocument.createSweep(
+            primaryFeatureID = try updatedDocument.createSweep(
                 name: name,
                 sections: sections,
                 path: path,
@@ -1086,7 +1087,7 @@ public final class CADDocumentStore {
             evaluateCurrentDocument()
         case .createLoft(let name, let sections, let guides, let options):
             var updatedDocument = document
-            try updatedDocument.createLoft(
+            primaryFeatureID = try updatedDocument.createLoft(
                 name: name,
                 sections: sections,
                 guides: guides,
@@ -1098,7 +1099,7 @@ public final class CADDocumentStore {
             evaluateCurrentDocument()
         case .createBoolean(let name, let targets, let tool, let operation, let keepTools):
             var updatedDocument = document
-            try updatedDocument.createBoolean(
+            primaryFeatureID = try updatedDocument.createBoolean(
                 name: name,
                 targets: targets,
                 tool: tool,
@@ -1111,7 +1112,7 @@ public final class CADDocumentStore {
             evaluateCurrentDocument()
         case .createBSplineSurface(let name, let surface):
             var updatedDocument = document
-            try updatedDocument.createBSplineSurface(
+            primaryFeatureID = try updatedDocument.createBSplineSurface(
                 name: name,
                 surface: surface,
                 objectRegistry: objectRegistry
@@ -1121,7 +1122,7 @@ public final class CADDocumentStore {
             evaluateCurrentDocument()
         case .createPolySplineSurface(let name, let sourceMesh, let options):
             var updatedDocument = document
-            try updatedDocument.createPolySplineSurface(
+            primaryFeatureID = try updatedDocument.createPolySplineSurface(
                 name: name,
                 sourceMesh: sourceMesh,
                 options: options,
@@ -1382,7 +1383,7 @@ public final class CADDocumentStore {
             evaluateCurrentDocument()
         case .createExtrudedRectangle(let name, let plane, let width, let height, let depth, let direction):
             var updatedDocument = document
-            try updatedDocument.createExtrudedRectangle(
+            primaryFeatureID = try updatedDocument.createExtrudedRectangle(
                 name: name,
                 plane: plane,
                 width: width,
@@ -1403,7 +1404,7 @@ public final class CADDocumentStore {
             let direction
         ):
             var updatedDocument = document
-            try updatedDocument.createExtrudedRectangleFromCorners(
+            primaryFeatureID = try updatedDocument.createExtrudedRectangleFromCorners(
                 name: name,
                 plane: plane,
                 firstCorner: firstCorner,
@@ -1417,7 +1418,7 @@ public final class CADDocumentStore {
             evaluateCurrentDocument()
         case .createExtrudedCircle(let name, let plane, let center, let radius, let depth, let direction):
             var updatedDocument = document
-            try updatedDocument.createExtrudedCircle(
+            primaryFeatureID = try updatedDocument.createExtrudedCircle(
                 name: name,
                 plane: plane,
                 center: center,
@@ -1438,6 +1439,7 @@ public final class CADDocumentStore {
             generation: generation,
             didMutate: command.mutatesDocument,
             diagnostics: diagnostics,
+            primaryFeatureID: primaryFeatureID,
             curveRebuildReport: curveRebuildReport,
             addedSelectionDimensionID: addedSelectionDimensionID
         )

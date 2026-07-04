@@ -405,7 +405,7 @@ import SwiftCAD
         Issue.record("Agent must return a Boolean command result.")
         return
     }
-    let booleanID = try #require(session.document.cadDocument.designGraph.order.last)
+    let booleanID = try #require(result.primaryFeatureID)
     let feature = try #require(session.document.cadDocument.designGraph.nodes[booleanID])
     let evaluated = try CADPipeline.modelingDefault(for: session.document).evaluate(
         session.document.cadDocument
@@ -419,6 +419,7 @@ import SwiftCAD
     #expect(result.commandName == "createBoolean")
     #expect(result.didMutate)
     #expect(result.generation == DocumentGeneration(1))
+    #expect(session.document.cadDocument.designGraph.order.last == booleanID)
     #expect(boolean.targets == [BooleanTargetReference(featureID: targetID)])
     #expect(boolean.tool == BooleanToolReference(featureID: toolID))
     #expect(boolean.operation == .union)
@@ -563,7 +564,8 @@ import SwiftCAD
         Issue.record("Agent must create a Boolean feature.")
         return
     }
-    let booleanID = try #require(session.document.cadDocument.designGraph.order.last)
+    let booleanID = try #require(commandResult.primaryFeatureID)
+    #expect(session.document.cadDocument.designGraph.order.last == booleanID)
 
     let topologyResponse = server.handle(
         .topologySummary(
@@ -660,7 +662,8 @@ import SwiftCAD
         Issue.record("Agent must create a separated B-rep Boolean union.")
         return
     }
-    let booleanID = try #require(session.document.cadDocument.designGraph.order.last)
+    let booleanID = try #require(commandResult.primaryFeatureID)
+    #expect(session.document.cadDocument.designGraph.order.last == booleanID)
     let evaluated = try CADPipeline.modelingDefault(for: session.document).evaluate(
         session.document.cadDocument
     )
@@ -771,7 +774,8 @@ import SwiftCAD
         Issue.record("Agent must create a multi-target separated B-rep Boolean union.")
         return
     }
-    let booleanID = try #require(session.document.cadDocument.designGraph.order.last)
+    let booleanID = try #require(commandResult.primaryFeatureID)
+    #expect(session.document.cadDocument.designGraph.order.last == booleanID)
     let evaluated = try CADPipeline.modelingDefault(for: session.document).evaluate(
         session.document.cadDocument
     )
