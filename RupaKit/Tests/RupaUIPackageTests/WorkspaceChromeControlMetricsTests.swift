@@ -52,6 +52,9 @@ import Testing
 
     #expect(emptyPresentation.selectionTitle == nil)
     #expect(selectedPresentation.selectionTitle == "2 selected")
+    #expect(fieldNames == ["selectedTargetCount"])
     #expect(!fieldNames.contains { $0.localizedCaseInsensitiveContains("document") })
     #expect(!fieldNames.contains { $0.localizedCaseInsensitiveContains("title") })
+    #expect(!fieldNames.contains { $0.localizedCaseInsensitiveContains("evaluation") })
+    #expect(!fieldNames.contains { $0.localizedCaseInsensitiveContains("unit") })
 }

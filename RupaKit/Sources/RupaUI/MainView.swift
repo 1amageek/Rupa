@@ -353,6 +353,26 @@ public struct MainView: View {
         ConstructionPlaneSummaryService().summarize(document: session.document)
     }
 
+    private var selectedConstructionPlaneEntry: ConstructionPlaneSummaryResult.Entry? {
+        let selectedPlaneIDs = session.selection.selectedTargets.compactMap { target in
+            if case .constructionPlane(let id) = target.component {
+                return id
+            }
+            return nil
+        }
+        guard selectedPlaneIDs.count == 1,
+              let selectedPlaneID = selectedPlaneIDs.first else {
+            return nil
+        }
+        return savedConstructionPlaneSummary.planes.first { $0.id == selectedPlaneID }
+    }
+
+    private var selectedConstructionPlaneInspectorState: WorkspaceConstructionPlaneInspectorState? {
+        selectedConstructionPlaneEntry.map { entry in
+            WorkspaceConstructionPlaneInspectorState(entry: entry)
+        }
+    }
+
     private var sceneBrowserRows: [SceneBrowserRow] {
         var rows: [SceneBrowserRow] = []
         let metadata = session.document.productMetadata
@@ -3032,6 +3052,113 @@ public struct MainView: View {
         }
     }
 
+    private func activateSelectedConstructionPlane() {
+        guard let entry = selectedConstructionPlaneEntry else {
+            session.reportToolStatus(
+                "Select one construction plane to activate it.",
+                severity: .warning
+            )
+            isPreviewExpanded = true
+            return
+        }
+        _ = activateConstructionPlane(entry.id)
+    }
+
+    private func updateSelectedConstructionPlaneFromView() {
+        guard let entry = selectedConstructionPlaneEntry else {
+            session.reportToolStatus(
+                "Select one construction plane to update it from the current view.",
+                severity: .warning
+            )
+            isPreviewExpanded = true
+            return
+        }
+        updateConstructionPlaneFromView(entry)
+    }
+
+    private func setSelectedConstructionPlaneOriginComponent(
+        _ component: WorkspaceConstructionPlaneOriginComponent,
+        value: Double
+    ) {
+        guard let entry = selectedConstructionPlaneEntry else {
+            session.reportToolStatus(
+                "Select one construction plane before editing its origin.",
+                severity: .warning
+            )
+            isPreviewExpanded = true
+            return
+        }
+        do {
+            let plane = try WorkspaceConstructionPlaneEditBuilder().planeSettingOriginComponent(
+                component,
+                value: value,
+                on: entry.plane
+            )
+            commitConstructionPlaneEdit(
+                entry,
+                plane: plane,
+                successMessage: "Updated construction plane \(entry.name) origin."
+            )
+        } catch let error as EditorError {
+            session.reportToolStatus(error.message, severity: .warning)
+            isPreviewExpanded = true
+        } catch {
+            session.reportToolStatus(
+                "Construction plane origin update failed.",
+                severity: .warning
+            )
+            isPreviewExpanded = true
+        }
+    }
+
+    private func setSelectedConstructionPlaneNormalComponent(
+        _ component: WorkspaceConstructionPlaneNormalComponent,
+        value: Double
+    ) {
+        guard let entry = selectedConstructionPlaneEntry else {
+            session.reportToolStatus(
+                "Select one construction plane before editing its normal.",
+                severity: .warning
+            )
+            isPreviewExpanded = true
+            return
+        }
+        do {
+            let plane = try WorkspaceConstructionPlaneEditBuilder().planeSettingNormalComponent(
+                component,
+                value: value,
+                on: entry.plane
+            )
+            commitConstructionPlaneEdit(
+                entry,
+                plane: plane,
+                successMessage: "Updated construction plane \(entry.name) normal."
+            )
+        } catch let error as EditorError {
+            session.reportToolStatus(error.message, severity: .warning)
+            isPreviewExpanded = true
+        } catch {
+            session.reportToolStatus(
+                "Construction plane normal update failed.",
+                severity: .warning
+            )
+            isPreviewExpanded = true
+        }
+    }
+
+    private func commitConstructionPlaneEdit(
+        _ entry: ConstructionPlaneSummaryResult.Entry,
+        plane: SketchPlane,
+        successMessage: String
+    ) {
+        let result = session.setConstructionPlane(id: entry.id, plane: plane)
+        if result?.diagnostics.isEmpty == false || result == nil {
+            isPreviewExpanded = true
+        } else {
+            session.reportToolStatus(successMessage)
+        }
+    }
+
     private func selectConstructionPlane(
         _ entry: ConstructionPlaneSummaryResult.Entry
     ) {
@@ -4932,6 +5059,15 @@ public struct MainView: View {
     private func objectInspectorSections(_ nodes: [SceneNode]) -> some View {
         let overviewState = workspaceObjectOverviewInspectorState(for: nodes)
         WorkspaceInspectorTextSectionView(section: overviewState.selectionSection)
+        WorkspaceConstructionPlaneInspectorView(
+            state: selectedConstructionPlaneInspectorState,
+            displayUnit: session.document.displayUnit,
+            originSliderMetersRange: transformPositionSliderMetersRange,
+            onSetOriginComponent: setSelectedConstructionPlaneOriginComponent,
+            onSetNormalComponent: setSelectedConstructionPlaneNormalComponent,
+            onActivate: activateSelectedConstructionPlane,
+            onUpdateFromView: updateSelectedConstructionPlaneFromView
+        )
 
         if let patternArrayState = patternArrayInspectorState(for: nodes) {
             patternArrayInspectorSection(patternArrayState)
