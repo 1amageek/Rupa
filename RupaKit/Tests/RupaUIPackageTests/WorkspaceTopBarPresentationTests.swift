@@ -5,7 +5,7 @@ import Testing
     let presentation = WorkspaceTopBarPresentation(selectedTargetCount: 0)
 
     #expect(!presentation.showsSelectionCount)
-    #expect(presentation.selectionTitle == "0 selected")
+    #expect(presentation.selectionTitle == nil)
 }
 
 @Test func workspaceTopBarPresentationShowsPositiveSelectionCount() {
@@ -20,4 +20,5 @@ import Testing
 
     #expect(presentation.selectedTargetCount == 0)
     #expect(!presentation.showsSelectionCount)
+    #expect(presentation.selectionTitle == nil)
 }

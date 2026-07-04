@@ -1319,15 +1319,9 @@ public struct MainView: View {
         presentation: WorkspaceTopBarPresentation
     ) -> some View {
         HStack(spacing: WorkspaceChromeControlMetrics.itemSpacing) {
-            workspaceStatusChip(
-                evaluationStatusTitle,
-                systemImage: evaluationStatusSystemImage,
-                tint: evaluationStatusTint
-            )
-
-            if presentation.showsSelectionCount {
+            if let selectionTitle = presentation.selectionTitle {
                 workspaceStatusChip(
-                    presentation.selectionTitle,
+                    selectionTitle,
                     systemImage: "scope",
                     tint: .secondary
                 )
@@ -1336,8 +1330,6 @@ public struct MainView: View {
             if let scaleFitPromptState = workspaceScaleFitPromptState {
                 workspaceScaleFitPromptButton(scaleFitPromptState)
             }
-
-            workspaceScaleMenu
 
             workspaceIconButton(
                 systemImage: isPreviewExpanded ? "list.bullet.rectangle.fill" : "list.bullet.rectangle",
@@ -1471,89 +1463,6 @@ public struct MainView: View {
             .accessibilityLabel("Workspace Scale Limit")
             .accessibilityValue(state.accessibilityValue)
         }
-    }
-
-    private var workspaceScaleMenu: some View {
-        let summary = workspaceScaleSummary
-        return Menu {
-            Section("Current") {
-                Text(summary.detailTitle)
-            }
-            if let recommendation = currentWorkspaceScaleRecommendation {
-                Section("Model Fit") {
-                    if recommendation.isActionable {
-                        Button {
-                            fitWorkspaceScaleToModel()
-                        } label: {
-                            Label("Fit to \(recommendation.recommendedPreset.title)", systemImage: "scope")
-                        }
-                    } else {
-                        Text("Beyond supported workspace range")
-                    }
-                }
-            }
-            if summary.smallerPreset != nil || summary.largerPreset != nil {
-                Section("Adjust") {
-                    if let smallerPreset = summary.smallerPreset {
-                        Button {
-                            applyWorkspaceScalePreset(smallerPreset)
-                        } label: {
-                            Label("Smaller Workspace: \(smallerPreset.title)", systemImage: "minus.circle")
-                        }
-                    }
-                    if let largerPreset = summary.largerPreset {
-                        Button {
-                            applyWorkspaceScalePreset(largerPreset)
-                        } label: {
-                            Label("Larger Workspace: \(largerPreset.title)", systemImage: "plus.circle")
-                        }
-                    }
-                }
-            }
-            Section("Scale Preset") {
-                ForEach(WorkspaceScalePreset.profiles, id: \.preset) { profile in
-                    let preset = profile.preset
-                    Button {
-                        applyWorkspaceScalePreset(preset)
-                    } label: {
-                        Text(profile.menuTitle)
-                    }
-                }
-            }
-            Section("Display Unit") {
-                ForEach(LengthDisplayUnit.allCases) { unit in
-                    Button(unit.symbol) {
-                        applyDisplayUnit(unit)
-                    }
-                }
-            }
-        } label: {
-            Label {
-                Text(summary.compactTitle)
-                    .lineLimit(1)
-                    .monospacedDigit()
-            } icon: {
-                Image(systemName: "ruler")
-                    .symbolRenderingMode(.hierarchical)
-            }
-            .font(.caption.weight(.medium))
-            .foregroundStyle(Color.secondary)
-            .padding(.horizontal, WorkspaceChromeControlMetrics.horizontalPadding)
-            .frame(height: WorkspaceChromeControlMetrics.controlHeight)
-            .background {
-                RoundedRectangle(
-                    cornerRadius: WorkspaceChromeControlMetrics.cornerRadius,
-                    style: .continuous
-                )
-                    .fill(Color.secondary.opacity(0.12))
-            }
-        }
-        .menuStyle(.borderlessButton)
-        .fixedSize(horizontal: true, vertical: false)
-        .help("Workspace Scale")
-        .accessibilityIdentifier("WorkspaceScale.menu")
-        .accessibilityLabel("Workspace Scale")
-        .accessibilityValue(summary.accessibilityValue)
     }
 
     private var floatingToolPalette: some View {

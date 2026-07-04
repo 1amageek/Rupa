@@ -9,7 +9,10 @@ struct WorkspaceTopBarPresentation: Equatable, Sendable {
         selectedTargetCount > 0
     }
 
-    var selectionTitle: String {
-        "\(selectedTargetCount) selected"
+    var selectionTitle: String? {
+        guard showsSelectionCount else {
+            return nil
+        }
+        return "\(selectedTargetCount) selected"
     }
 }
