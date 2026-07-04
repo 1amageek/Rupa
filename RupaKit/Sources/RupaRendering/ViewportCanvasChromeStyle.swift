@@ -11,12 +11,6 @@ public extension View {
             shape.fill(Color.primary.opacity(ViewportCanvasChromeMetrics.surfaceTintOpacity))
         }
         .glassEffect(.regular, in: shape)
-            .overlay {
-                shape.strokeBorder(
-                    Color.primary.opacity(ViewportCanvasChromeMetrics.outlineOpacity),
-                    lineWidth: ViewportCanvasChromeMetrics.outlineWidth
-                )
-            }
     }
 
     func viewportCanvasCapsuleGlassChrome() -> some View {
@@ -26,11 +20,5 @@ public extension View {
             shape.fill(Color.primary.opacity(ViewportCanvasChromeMetrics.surfaceTintOpacity))
         }
         .glassEffect(.regular, in: shape)
-            .overlay {
-                shape.strokeBorder(
-                    Color.primary.opacity(ViewportCanvasChromeMetrics.outlineOpacity),
-                    lineWidth: ViewportCanvasChromeMetrics.outlineWidth
-                )
-            }
     }
 }
