@@ -87,6 +87,9 @@ import RupaCore
     #expect(directModeling.evidence.contains { evidence in
         evidence.notes.contains("Workspace Inspector exposes non-healing Delete Face for selected generated face targets and routes it through the same Core command used by Automation and Agent.")
     })
+    #expect(directModeling.evidence.contains { evidence in
+        evidence.notes.contains("Draft Face is available for one or more generated planar side faces plus a same-body neutral face through Core, Automation, Agent, and Workspace Inspector ordered face-selection affordance.")
+    })
 
     let exchange = try #require(result.entries.first { $0.area == .exchangeAndDrawings })
     #expect(exchange.currentRating == .partial)

@@ -413,8 +413,10 @@ import SwiftCAD
     #expect(faceDraft.access == .automationCommand)
     #expect(faceDraft.discovery.contains(.topologySummary))
     #expect(faceDraft.targets == [.face])
+    #expect(faceDraft.summary.contains("one or more generated planar side faces"))
     #expect(faceDraft.summary.contains("source-owned direct-edit solid body"))
     #expect(faceDraft.summary.contains("line-only planar topology"))
+    #expect(faceDraft.failureMode.contains("duplicate target faces"))
     #expect(faceDraft.failureMode.contains("neutral faces on another body"))
 
     #expect(selection.category == .selection)

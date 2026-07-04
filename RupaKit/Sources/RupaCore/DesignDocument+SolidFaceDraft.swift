@@ -26,10 +26,10 @@ extension DesignDocument {
                 message: "\(operationName) angle must be smaller than 90 degrees."
             )
         }
-        guard targets.count == 1 else {
+        guard targets.isEmpty == false else {
             throw EditorError(
                 code: .commandInvalid,
-                message: "\(operationName) currently supports exactly one generated face target."
+                message: "\(operationName) requires at least one generated face target."
             )
         }
 
@@ -41,37 +41,46 @@ extension DesignDocument {
             uniqueKeysWithValues: topology.entries.map { ($0.persistentName, $0) }
         )
         let parser = GeneratedTopologyPersistentNameParser()
-        let targetResolution = try generatedFaceDraftTarget(
-            targets[0],
-            entriesByPersistentName: entriesByPersistentName,
-            parser: parser,
-            operationName: operationName
-        )
+        let targetResolutions = try targets.map { target in
+            try generatedFaceDraftTarget(
+                target,
+                entriesByPersistentName: entriesByPersistentName,
+                parser: parser,
+                operationName: operationName
+            )
+        }
         let neutralResolution = try generatedFaceDraftTarget(
             neutralTarget,
             entriesByPersistentName: entriesByPersistentName,
             parser: parser,
             operationName: operationName
         )
-        guard targetResolution.featureID == neutralResolution.featureID else {
+        guard targetResolutions.allSatisfy({ $0.featureID == neutralResolution.featureID }) else {
             throw EditorError(
                 code: .commandInvalid,
                 message: "\(operationName) target and neutral faces must belong to one body feature."
             )
         }
-        guard targetResolution.sceneNodeID == neutralResolution.sceneNodeID else {
+        guard targetResolutions.allSatisfy({ $0.sceneNodeID == neutralResolution.sceneNodeID }) else {
             throw EditorError(
                 code: .commandInvalid,
                 message: "\(operationName) target and neutral faces must belong to one scene body."
             )
         }
-        guard targetResolution.persistentName != neutralResolution.persistentName else {
+        let targetPersistentNames = targetResolutions.map(\.persistentName)
+        guard Set(targetPersistentNames).count == targetPersistentNames.count else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "\(operationName) target faces must be distinct."
+            )
+        }
+        guard targetPersistentNames.contains(neutralResolution.persistentName) == false else {
             throw EditorError(
                 code: .commandInvalid,
                 message: "\(operationName) target face and neutral face must be distinct."
             )
         }
-        guard let targetFeature = cadDocument.designGraph.nodes[targetResolution.featureID],
+        guard let targetFeature = cadDocument.designGraph.nodes[neutralResolution.featureID],
               targetFeature.outputs.contains(where: { $0.role == .body }) else {
             throw EditorError(
                 code: .referenceUnresolved,
@@ -80,8 +89,8 @@ extension DesignDocument {
         }
 
         let faceDraft = FaceDraftFeature(
-            target: FaceDraftTargetReference(featureID: targetResolution.featureID),
-            facePersistentNames: [targetResolution.persistentName],
+            target: FaceDraftTargetReference(featureID: neutralResolution.featureID),
+            facePersistentNames: targetPersistentNames,
             neutralFacePersistentName: neutralResolution.persistentName,
             angle: angle
         )
@@ -92,7 +101,7 @@ extension DesignDocument {
             id: featureID,
             name: trimmedName,
             operation: .faceDraft(faceDraft),
-            inputs: [FeatureInput(featureID: targetResolution.featureID, role: .target)],
+            inputs: [FeatureInput(featureID: neutralResolution.featureID, role: .target)],
             outputs: [FeatureOutput(role: .body)]
         )
 

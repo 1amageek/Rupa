@@ -304,10 +304,10 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                     notes: [
                         "Face offset, non-healing generated face deletion to sheet bodies, edge chamfer/fillet, generated source line/circle/line-arc-line arc profile edge move, vertex move, and PolySpline surface vertex edits are routed through command contracts.",
                         "Workspace Inspector exposes non-healing Delete Face for selected generated face targets and routes it through the same Core command used by Automation and Agent.",
-                        "Draft Face is available for the current generated planar side-face plus same-body neutral-face subset through Core, Automation, Agent, and Workspace Inspector two-face selection affordance.",
+                        "Draft Face is available for one or more generated planar side faces plus a same-body neutral face through Core, Automation, Agent, and Workspace Inspector ordered face-selection affordance.",
                         "Generated source line, circle, and line-arc-line arc profile edge moves rewrite the owning source sketch, preserve analytic source identity, and keep arc moves tangent-continuous by re-trimming adjacent source lines.",
                         "Healing Delete Face that refills, extends, or shrinks adjacent faces is not yet implemented; current Delete Face intentionally preserves an open sheet body result for the supported non-healing subset.",
-                        "General push/pull, arbitrary edge move, Match Face, broader Draft Face topology, and proportional CV editing are not yet complete.",
+                        "General push/pull, arbitrary edge move, Match Face, arbitrary-topology Draft Face, and proportional CV editing are not yet complete.",
                     ]
                 ),
             ],
@@ -315,7 +315,7 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                 "General push/pull face edits with dependent offset, adjacent-angle, and grow policies.",
                 "Broader edge movement beyond generated source line, circle, and line-arc-line arc profile edges, including arbitrary B-rep edges, non-line adjacent trim healing, and surface-boundary edges.",
                 "Healing Delete Face with refill, adjacent-face extend/shrink, and closed-solid preservation policies.",
-                "Match Face, broader Draft Face topology, and broader surface-CV proportional editing.",
+                "Match Face, arbitrary-topology Draft Face, and broader surface-CV proportional editing.",
                 "Direct edit rollback diagnostics when topology cannot be healed exactly.",
             ],
             next: "Expand direct edits from owned generated topology subsets to general face, edge, vertex, and surface-CV contracts with stable topology names and non-destructive diagnostics."

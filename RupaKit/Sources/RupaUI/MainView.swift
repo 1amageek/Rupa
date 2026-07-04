@@ -4966,9 +4966,9 @@ public struct MainView: View {
                 offsetSelectedFace(target, by: meters)
             },
             onDeleteFaces: deleteSelectedFaces,
-            onDraftFace: { target, neutralTarget, angleDegrees in
-                draftSelectedFace(
-                    target,
+            onDraftFace: { targets, neutralTarget, angleDegrees in
+                draftSelectedFaces(
+                    targets,
                     neutralTarget: neutralTarget,
                     angleDegrees: angleDegrees
                 )
@@ -5835,8 +5835,8 @@ public struct MainView: View {
         }
     }
 
-    private func draftSelectedFace(
-        _ target: SelectionTarget,
+    private func draftSelectedFaces(
+        _ targets: [SelectionTarget],
         neutralTarget: SelectionTarget,
         angleDegrees: Double
     ) {
@@ -5846,7 +5846,7 @@ public struct MainView: View {
             return
         }
         let result = session.draftBodyFaces(
-            targets: [target],
+            targets: targets,
             neutralTarget: neutralTarget,
             angle: .angle(angleDegrees, .degree)
         )

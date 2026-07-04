@@ -37,7 +37,7 @@ import Testing
     #expect(state.isSingleNodeSelection)
     #expect(state.faceTarget == faceTarget)
     #expect(state.faceTargets == [faceTarget])
-    #expect(state.draftFaceTarget == nil)
+    #expect(state.draftFaceTargets.isEmpty)
     #expect(state.draftNeutralFaceTarget == nil)
     #expect(!state.canDraftFace)
     #expect(state.canDeleteFaces)
@@ -87,7 +87,7 @@ import Testing
     #expect(builder.vertexTarget == nil)
     #expect(!state.isSingleNodeSelection)
     #expect(!state.canEditFace)
-    #expect(state.draftFaceTarget == nil)
+    #expect(state.draftFaceTargets.isEmpty)
     #expect(state.draftNeutralFaceTarget == nil)
     #expect(!state.canDraftFace)
     #expect(!state.canDeleteFaces)
@@ -122,7 +122,44 @@ import Testing
     #expect(state.faceTarget == nil)
     #expect(state.faceTargets == [targetFace, neutralFace])
     #expect(!state.canEditFace)
-    #expect(state.draftFaceTarget == targetFace)
+    #expect(state.draftFaceTargets == [targetFace])
+    #expect(state.draftNeutralFaceTarget == neutralFace)
+    #expect(state.canDraftFace)
+    #expect(state.canDeleteFaces)
+}
+
+@Test func workspaceTopologyEditInspectorStateBuilderUsesLastFaceAsDraftNeutralForMultipleTargets() {
+    let sceneNodeID = SceneNodeID()
+    let firstTargetFace = SelectionTarget(
+        sceneNodeID: sceneNodeID,
+        component: .face(.generatedTopology("body:face:firstSide"))
+    )
+    let secondTargetFace = SelectionTarget(
+        sceneNodeID: sceneNodeID,
+        component: .face(.generatedTopology("body:face:secondSide"))
+    )
+    let neutralFace = SelectionTarget(
+        sceneNodeID: sceneNodeID,
+        component: .face(.generatedTopology("body:face:bottom"))
+    )
+    let builder = WorkspaceTopologyEditInspectorStateBuilder(
+        selection: SelectionModel(selectedTargets: [firstTargetFace, secondTargetFace, neutralFace]),
+        selectedTargetSummary: "3 targets",
+        faceOffsetStepMeters: 0.001,
+        edgeChamferStepMeters: 0.001,
+        edgeFilletRadiusMeters: 0.001,
+        vertexMoveStepMeters: 0.001,
+        usesLockedRegionDistance: false,
+        combinesRegions: false
+    )
+
+    let state = builder.state(for: [
+        SceneNode(id: sceneNodeID, name: "Body"),
+    ])
+
+    #expect(state.faceTarget == nil)
+    #expect(state.faceTargets == [firstTargetFace, secondTargetFace, neutralFace])
+    #expect(state.draftFaceTargets == [firstTargetFace, secondTargetFace])
     #expect(state.draftNeutralFaceTarget == neutralFace)
     #expect(state.canDraftFace)
     #expect(state.canDeleteFaces)

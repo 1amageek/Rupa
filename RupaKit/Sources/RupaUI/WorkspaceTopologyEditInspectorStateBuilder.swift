@@ -23,7 +23,7 @@ struct WorkspaceTopologyEditInspectorStateBuilder {
             selectedTargetSummary: selectedTargetSummary,
             faceTarget: faceTarget,
             faceTargets: faceTargets,
-            draftFaceTarget: draftPair?.target,
+            draftFaceTargets: draftPair?.targets ?? [],
             draftNeutralFaceTarget: draftPair?.neutral,
             edgeTargets: edgeTargets,
             projectableEdgeTargets: generatedEdgeProjectionTargets(from: edgeTargets),
@@ -79,11 +79,16 @@ struct WorkspaceTopologyEditInspectorStateBuilder {
 
     private func draftFacePair(
         in targets: [SelectionTarget]
-    ) -> (target: SelectionTarget, neutral: SelectionTarget)? {
-        guard selection.selectedTargets.count == 2,
-              targets.count == 2 else {
+    ) -> (targets: [SelectionTarget], neutral: SelectionTarget)? {
+        guard selection.selectedTargets.count >= 2,
+              targets.count == selection.selectedTargets.count,
+              let neutral = targets.last else {
             return nil
         }
-        return (targets[0], targets[1])
+        let draftTargets = Array(targets.dropLast())
+        guard draftTargets.isEmpty == false else {
+            return nil
+        }
+        return (draftTargets, neutral)
     }
 }

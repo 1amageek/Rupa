@@ -12,7 +12,7 @@ struct WorkspaceTopologyEditInspectorView: View {
     var offsetSliderMetersRange: ClosedRange<Double>
     var onOffsetFace: (SelectionTarget, Double) -> Void
     var onDeleteFaces: ([SelectionTarget]) -> Void
-    var onDraftFace: (SelectionTarget, SelectionTarget, Double) -> Void
+    var onDraftFace: ([SelectionTarget], SelectionTarget, Double) -> Void
     var onOffsetEdges: ([SelectionTarget], Double, OffsetCurveGapFill) -> Void
     var onProjectEdges: ([SelectionTarget]) -> Void
     var onFilletEdges: ([SelectionTarget], Double) -> Void
@@ -82,16 +82,15 @@ struct WorkspaceTopologyEditInspectorView: View {
     @ViewBuilder
     private var faceDraftSection: some View {
         if state.canDraftFace,
-           let draftFaceTarget = state.draftFaceTarget,
            let draftNeutralFaceTarget = state.draftNeutralFaceTarget {
             inspectorSection("Draft Face") {
-                workspaceInspectorValueRow("Target", "First selected face")
-                workspaceInspectorValueRow("Neutral", "Second selected face")
+                workspaceInspectorValueRow("Targets", "\(state.draftFaceTargets.count) selected")
+                workspaceInspectorValueRow("Neutral", "Last selected face")
                 faceDraftAngleControl
                 inspectorActionRow {
                     Button {
                         onDraftFace(
-                            draftFaceTarget,
+                            state.draftFaceTargets,
                             draftNeutralFaceTarget,
                             -draftAngleMagnitudeDegrees
                         )
@@ -105,7 +104,7 @@ struct WorkspaceTopologyEditInspectorView: View {
 
                     Button {
                         onDraftFace(
-                            draftFaceTarget,
+                            state.draftFaceTargets,
                             draftNeutralFaceTarget,
                             draftAngleMagnitudeDegrees
                         )

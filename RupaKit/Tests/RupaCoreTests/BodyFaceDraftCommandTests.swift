@@ -65,6 +65,72 @@ import Testing
 }
 
 @MainActor
+@Test func draftBodyFacesCreatesSourceOwnedSolidBodyFromMultipleGeneratedFaces() async throws {
+    let session = EditorSession()
+    _ = try #require(session.createDefaultExtrudedRectangle())
+    let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let bodySceneNodeID = try #require(draftSceneNodeID(for: bodyFeatureID, in: session.document))
+    let topology = try TopologySummaryService().summarize(document: session.document)
+    let targetEntries = topology.entries
+        .filter {
+            $0.kind == .face &&
+                $0.sceneNodeID == bodySceneNodeID.description &&
+                $0.generatedRole == "sideFace"
+        }
+        .sorted { ($0.index ?? -1) < ($1.index ?? -1) }
+    let firstTarget = try #require(targetEntries.first?.selectionTarget())
+    let secondTarget = try #require(targetEntries.dropFirst().first?.selectionTarget())
+    let neutralEntry = try #require(topology.entries.first {
+        $0.kind == .face &&
+            $0.sceneNodeID == bodySceneNodeID.description &&
+            $0.generatedRole == "startFace"
+    })
+    let neutralTarget = try #require(neutralEntry.selectionTarget())
+
+    let result = try session.execute(
+        .draftBodyFaces(
+            targets: [firstTarget, secondTarget],
+            neutralTarget: neutralTarget,
+            angle: .angle(10.0, .degree)
+        ),
+        expectedGeneration: DocumentGeneration(1)
+    )
+
+    let draftFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let draftSceneNodeID = try #require(draftSceneNodeID(for: draftFeatureID, in: session.document))
+    let draftFeature = try #require(session.document.cadDocument.designGraph.nodes[draftFeatureID])
+    guard case let .faceDraft(faceDraft) = draftFeature.operation else {
+        Issue.record("Draft Face command should create a FaceDraft feature.")
+        return
+    }
+    let evaluation = try #require(session.currentEvaluationCache?.evaluatedDocument)
+    let body = try #require(evaluation.brep.bodies.values.first)
+    let afterTopology = try TopologySummaryService().summarize(document: session.document)
+    let measurement = try MeasurementService().measure(document: session.document)
+    let draftFaces = afterTopology.entries.filter {
+        $0.kind == .face &&
+            $0.sceneNodeID == draftSceneNodeID.description &&
+            $0.generatedRole == "faceDraft"
+    }
+
+    #expect(result.commandName == "draftBodyFaces")
+    #expect(result.didMutate)
+    #expect(result.generation == DocumentGeneration(2))
+    #expect(draftFeature.outputs == [FeatureOutput(role: .body)])
+    #expect(faceDraft.target.featureID == bodyFeatureID)
+    #expect(faceDraft.facePersistentNames.count == 2)
+    #expect(Set(faceDraft.facePersistentNames).count == 2)
+    #expect(body.kind == .solid)
+    #expect(afterTopology.counts.faceCount == 6)
+    #expect(draftFaces.count == 6)
+    #expect(measurement.counts.solids == 1)
+    #expect(measurement.solids.first?.featureID == draftFeatureID.description)
+    #expect((measurement.solids.first?.volumeCubicMeters ?? 0.0) > 0.0)
+    #expect(session.document.productMetadata.sceneNodes[draftSceneNodeID]?.object?.geometryRole == .solid)
+    #expect(session.evaluationStatus == .valid)
+}
+
+@MainActor
 @Test func draftBodyFacesRejectsObjectTargetsBeforeMutation() async throws {
     let session = EditorSession()
     _ = try #require(session.createDefaultExtrudedRectangle())
