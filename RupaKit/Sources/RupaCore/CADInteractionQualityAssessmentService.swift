@@ -716,15 +716,15 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                     ],
                     notes: [
                         "Canvas click and drag sketch tools create rectangle, polygon, arc, spline, and circle sketches on the active saved custom construction plane instead of falling back to the default XY plane.",
-                        "WorkspaceCanvasPlaneInputMapper owns custom-plane world-point recovery, and RupaUIPackageTests cover raw viewport footprint click and drag input flowing through the mapper into EditorSession sketch creation on the active custom construction plane.",
+                        "WorkspaceCanvasPlaneInputMapper owns custom-plane world-point recovery, and RupaUIPackageTests cover raw viewport footprint click and drag input flowing through the mapper into EditorSession rectangle, polygon, arc, spline, circle, and solid creation on the active custom construction plane.",
                         "Selected saved construction planes expose viewport Origin and Normal handles that preview a bounded plane frame and commit through the same setConstructionPlane source mutation path used by Inspector edits.",
                     ]
                 ),
             ],
             openWork: [
-                "Broader end-to-end sketch-on-arbitrary-plane workflow coverage.",
+                "Full app UI automation for arbitrary-plane workflows.",
             ],
-            next: "Broaden sketch-on-arbitrary-plane workflow coverage while preserving selected-plane sketch routing."
+            next: "Add full app-level UI automation for arbitrary-plane creation and edit workflows while preserving selected-plane sketch routing."
         ),
         entry(
             area: .selection,

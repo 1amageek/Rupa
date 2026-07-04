@@ -147,6 +147,128 @@ import Testing
     #expect(pointIsApproximatelyEqual(coordinateSystem.project(endWorldPoint).point, endCanvasInput.point))
 }
 
+@MainActor
+@Test func workspaceCanvasPlaneInputMapperFeedsEditorSessionClickToolsOnCustomPlane() throws {
+    let cases = [
+        CustomPlaneToolCase(tool: .polygon, expectedCommandName: "createPolygonSketch"),
+        CustomPlaneToolCase(tool: .arc, expectedCommandName: "createArcSketch"),
+        CustomPlaneToolCase(tool: .spline, expectedCommandName: "createSplineSketch"),
+        CustomPlaneToolCase(tool: .surface, expectedCommandName: "createCircleSketch"),
+    ]
+
+    for toolCase in cases {
+        try assertCustomPlaneCanvasClickCreatesSketch(toolCase)
+    }
+}
+
+@MainActor
+@Test func workspaceCanvasPlaneInputMapperFeedsEditorSessionDragToolsOnCustomPlane() throws {
+    let cases = [
+        CustomPlaneToolCase(tool: .polygon, expectedCommandName: "createPolygonSketch"),
+        CustomPlaneToolCase(tool: .arc, expectedCommandName: "createArcSketch"),
+        CustomPlaneToolCase(tool: .spline, expectedCommandName: "createSplineSketch"),
+        CustomPlaneToolCase(tool: .surface, expectedCommandName: "createCircleSketch"),
+    ]
+
+    for toolCase in cases {
+        try assertCustomPlaneCanvasDragCreatesSketch(toolCase)
+    }
+}
+
+@MainActor
+@Test func workspaceCanvasPlaneInputMapperFeedsEditorSessionSolidClickOnCustomPlane() throws {
+    let session = EditorSession()
+    let plane = try workspaceCanvasCustomPlane()
+    _ = try #require(session.createConstructionPlane(name: "Solid Click CPlane", plane: plane))
+    let activePlane = try #require(session.activeConstructionPlane?.plane)
+    let mapper = WorkspaceCanvasPlaneInputMapper(projectionBasis: .axisFront(.z))
+    let canvasInput = try mapper.map(
+        modelPoint: Point2D(x: -0.016, y: 0.011),
+        modelWorldPoint: nil,
+        sketchPlane: activePlane
+    )
+    let resolvedWorldPoint = try mapper.resolvedWorldPoint(
+        for: canvasInput.point,
+        topologyWorldPoint: nil,
+        fallbackWorldPoint: canvasInput.worldPoint,
+        sketchPlane: activePlane
+    )
+    let worldPoint = try #require(resolvedWorldPoint)
+
+    _ = session.activateTool(.solid)
+    let result = session.activateSelectedToolFromCanvas(
+        targetSceneNodeID: nil,
+        modelPoint: canvasInput.point,
+        modelWorldPoint: worldPoint,
+        sketchPlane: activePlane
+    )
+
+    let sourceSketch = try firstSketch(in: session)
+    let extrude = try latestExtrude(in: session)
+    #expect(result.commandName == "createExtrudedRectangleFromCorners")
+    #expect(result.didMutate)
+    #expect(result.tool == .solid)
+    #expect(session.selectedTool == .select)
+    #expect(sourceSketch.plane == activePlane)
+    #expect(extrude.profile.featureID == session.document.cadDocument.designGraph.order.first)
+}
+
+@MainActor
+@Test func workspaceCanvasPlaneInputMapperFeedsEditorSessionSolidDragOnCustomPlane() throws {
+    let session = EditorSession()
+    let plane = try workspaceCanvasCustomPlane()
+    _ = try #require(session.createConstructionPlane(name: "Solid Drag CPlane", plane: plane))
+    let activePlane = try #require(session.activeConstructionPlane?.plane)
+    let coordinateSystem = try SketchPlaneCoordinateSystem(plane: activePlane)
+    let mapper = WorkspaceCanvasPlaneInputMapper(projectionBasis: .axisFront(.z))
+    let startCanvasInput = try mapper.map(
+        modelPoint: Point2D(x: -0.024, y: 0.006),
+        modelWorldPoint: nil,
+        sketchPlane: activePlane
+    )
+    let endCanvasInput = try mapper.map(
+        modelPoint: Point2D(x: 0.018, y: 0.034),
+        modelWorldPoint: nil,
+        sketchPlane: activePlane
+    )
+    let startWorldPoint = try #require(
+        try mapper.resolvedWorldPoint(
+            for: startCanvasInput.point,
+            topologyWorldPoint: nil,
+            fallbackWorldPoint: startCanvasInput.worldPoint,
+            sketchPlane: activePlane
+        )
+    )
+    let endWorldPoint = try #require(
+        try mapper.resolvedWorldPoint(
+            for: endCanvasInput.point,
+            topologyWorldPoint: nil,
+            fallbackWorldPoint: endCanvasInput.worldPoint,
+            sketchPlane: activePlane
+        )
+    )
+
+    _ = session.activateTool(.solid)
+    let result = session.activateSelectedToolFromCanvasDrag(
+        startModelPoint: startCanvasInput.point,
+        endModelPoint: endCanvasInput.point,
+        sketchPlane: activePlane,
+        startWorldPoint: startWorldPoint,
+        endWorldPoint: endWorldPoint
+    )
+
+    let sourceSketch = try firstSketch(in: session)
+    let extrude = try latestExtrude(in: session)
+    #expect(result.commandName == "createExtrudedRectangleFromCorners")
+    #expect(result.didMutate)
+    #expect(result.tool == .solid)
+    #expect(session.selectedTool == .select)
+    #expect(sourceSketch.plane == activePlane)
+    #expect(extrude.profile.featureID == session.document.cadDocument.designGraph.order.first)
+    #expect(pointIsApproximatelyEqual(coordinateSystem.project(startWorldPoint).point, startCanvasInput.point))
+    #expect(pointIsApproximatelyEqual(coordinateSystem.project(endWorldPoint).point, endCanvasInput.point))
+}
+
 @Test func workspaceCanvasPlaneInputMapperRejectsCustomPlaneParallelToViewRay() throws {
     let plane = SketchPlane.plane(
         Plane3D(
@@ -168,6 +290,105 @@ import Testing
     }
 }
 
+private struct CustomPlaneToolCase {
+    var tool: ModelingTool
+    var expectedCommandName: String
+}
+
+@MainActor
+private func assertCustomPlaneCanvasClickCreatesSketch(
+    _ toolCase: CustomPlaneToolCase
+) throws {
+    let session = EditorSession()
+    let plane = try workspaceCanvasCustomPlane()
+    _ = try #require(session.createConstructionPlane(name: "\(toolCase.tool.title) Click CPlane", plane: plane))
+    let activePlane = try #require(session.activeConstructionPlane?.plane)
+    let coordinateSystem = try SketchPlaneCoordinateSystem(plane: activePlane)
+    let mapper = WorkspaceCanvasPlaneInputMapper(projectionBasis: .axisFront(.z))
+    let canvasInput = try mapper.map(
+        modelPoint: Point2D(x: 0.022, y: -0.017),
+        modelWorldPoint: nil,
+        sketchPlane: activePlane
+    )
+    let resolvedWorldPoint = try mapper.resolvedWorldPoint(
+        for: canvasInput.point,
+        topologyWorldPoint: nil,
+        fallbackWorldPoint: canvasInput.worldPoint,
+        sketchPlane: activePlane
+    )
+    let worldPoint = try #require(resolvedWorldPoint)
+
+    _ = session.activateTool(toolCase.tool)
+    let result = session.activateSelectedToolFromCanvas(
+        targetSceneNodeID: nil,
+        modelPoint: canvasInput.point,
+        modelWorldPoint: worldPoint,
+        sketchPlane: activePlane
+    )
+
+    #expect(result.commandName == toolCase.expectedCommandName)
+    #expect(result.didMutate)
+    #expect(result.tool == toolCase.tool)
+    #expect(session.selectedTool == .select)
+    #expect(try latestSketch(in: session).plane == activePlane)
+    #expect(pointIsApproximatelyEqual(coordinateSystem.project(worldPoint).point, canvasInput.point))
+}
+
+@MainActor
+private func assertCustomPlaneCanvasDragCreatesSketch(
+    _ toolCase: CustomPlaneToolCase
+) throws {
+    let session = EditorSession()
+    let plane = try workspaceCanvasCustomPlane()
+    _ = try #require(session.createConstructionPlane(name: "\(toolCase.tool.title) Drag CPlane", plane: plane))
+    let activePlane = try #require(session.activeConstructionPlane?.plane)
+    let coordinateSystem = try SketchPlaneCoordinateSystem(plane: activePlane)
+    let mapper = WorkspaceCanvasPlaneInputMapper(projectionBasis: .axisFront(.z))
+    let startCanvasInput = try mapper.map(
+        modelPoint: Point2D(x: -0.018, y: 0.009),
+        modelWorldPoint: nil,
+        sketchPlane: activePlane
+    )
+    let endCanvasInput = try mapper.map(
+        modelPoint: Point2D(x: 0.027, y: 0.031),
+        modelWorldPoint: nil,
+        sketchPlane: activePlane
+    )
+    let startWorldPoint = try #require(
+        try mapper.resolvedWorldPoint(
+            for: startCanvasInput.point,
+            topologyWorldPoint: nil,
+            fallbackWorldPoint: startCanvasInput.worldPoint,
+            sketchPlane: activePlane
+        )
+    )
+    let endWorldPoint = try #require(
+        try mapper.resolvedWorldPoint(
+            for: endCanvasInput.point,
+            topologyWorldPoint: nil,
+            fallbackWorldPoint: endCanvasInput.worldPoint,
+            sketchPlane: activePlane
+        )
+    )
+
+    _ = session.activateTool(toolCase.tool)
+    let result = session.activateSelectedToolFromCanvasDrag(
+        startModelPoint: startCanvasInput.point,
+        endModelPoint: endCanvasInput.point,
+        sketchPlane: activePlane,
+        startWorldPoint: startWorldPoint,
+        endWorldPoint: endWorldPoint
+    )
+
+    #expect(result.commandName == toolCase.expectedCommandName)
+    #expect(result.didMutate)
+    #expect(result.tool == toolCase.tool)
+    #expect(session.selectedTool == .select)
+    #expect(try latestSketch(in: session).plane == activePlane)
+    #expect(pointIsApproximatelyEqual(coordinateSystem.project(startWorldPoint).point, startCanvasInput.point))
+    #expect(pointIsApproximatelyEqual(coordinateSystem.project(endWorldPoint).point, endCanvasInput.point))
+}
+
 private func workspaceCanvasCustomPlane() throws -> SketchPlane {
     .plane(
         Plane3D(
@@ -187,6 +408,30 @@ private func latestSketch(in session: EditorSession) throws -> Sketch {
         sketch = nil
     }
     return try #require(sketch)
+}
+
+private func firstSketch(in session: EditorSession) throws -> Sketch {
+    let featureID = try #require(session.document.cadDocument.designGraph.order.first)
+    let feature = try #require(session.document.cadDocument.designGraph.nodes[featureID])
+    let sketch: Sketch?
+    if case .sketch(let sourceSketch) = feature.operation {
+        sketch = sourceSketch
+    } else {
+        sketch = nil
+    }
+    return try #require(sketch)
+}
+
+private func latestExtrude(in session: EditorSession) throws -> ExtrudeFeature {
+    let featureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let feature = try #require(session.document.cadDocument.designGraph.nodes[featureID])
+    let extrude: ExtrudeFeature?
+    if case .extrude(let latestExtrude) = feature.operation {
+        extrude = latestExtrude
+    } else {
+        extrude = nil
+    }
+    return try #require(extrude)
 }
 
 private func pointIsApproximatelyEqual(
