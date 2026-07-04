@@ -760,7 +760,12 @@ import SwiftCAD
     #expect(booleanEvaluationPlan.summary.contains("topology name scheme"))
     #expect(booleanEvaluationPlan.summary.contains("topology slots"))
     #expect(booleanEvaluationPlan.summary.contains("B-rep topology counts"))
+    #expect(booleanEvaluationPlan.summary.contains("stage-specific ordered checks"))
     #expect(booleanEvaluationPlan.failureMode.contains("structured unsupported results"))
+    #expect(booleanEvaluationPlan.failureMode.contains("requestContract"))
+    #expect(booleanEvaluationPlan.failureMode.contains("sourceBodies"))
+    #expect(booleanEvaluationPlan.failureMode.contains("operandTopology"))
+    #expect(booleanEvaluationPlan.failureMode.contains("capabilityDecision"))
     #expect(booleanEvaluationPlan.failureMode.contains("curved"))
     #expect(booleanEvaluationPlan.optionMatrix.map(\.name) == ["operation", "outputTopologyKind", "keepTools"])
     let booleanPlanOperationAxis = try #require(

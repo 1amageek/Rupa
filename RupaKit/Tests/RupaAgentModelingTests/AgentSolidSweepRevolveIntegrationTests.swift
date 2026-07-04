@@ -494,6 +494,54 @@ import SwiftCAD
 }
 
 @MainActor
+@Test func agentBooleanEvaluationPlanReportsUnsupportedOperandGateWithoutMutatingDocument() async throws {
+    var document = DesignDocument.empty()
+    let targetID = try agentCreateBooleanBox(
+        in: &document,
+        name: "Agent Boolean Unsupported Target",
+        minX: -0.020,
+        minY: -0.020,
+        maxX: 0.020,
+        maxY: 0.020
+    )
+    let toolID = try agentCreateBooleanCylinder(
+        in: &document,
+        name: "Agent Boolean Unsupported Tool",
+        radius: 0.006
+    )
+    let server = AgentCommandController()
+    let sessionID = UUID()
+    let session = EditorSession(document: document)
+    server.register(session: session, id: sessionID)
+    let initialGeneration = session.generation
+    let initialFeatureOrder = session.document.cadDocument.designGraph.order
+
+    let response = server.handle(
+        .booleanEvaluationPlan(
+            sessionID: sessionID,
+            targets: [BooleanTargetReference(featureID: targetID)],
+            tool: BooleanToolReference(featureID: toolID),
+            operation: .difference,
+            keepTools: false,
+            expectedGeneration: initialGeneration
+        )
+    )
+
+    guard case .booleanEvaluationPlan(let plan) = response else {
+        Issue.record("Agent must return an unsupported Boolean evaluation plan.")
+        return
+    }
+
+    #expect(plan.status == .unsupported)
+    #expect(plan.unsupportedCode == .unsupportedOperandTopology)
+    #expect(plan.checks.map(\.kind) == [.requestContract, .sourceBodies, .operandTopology])
+    #expect(plan.checks.last?.status == .unsupported)
+    #expect(plan.topologySlots.isEmpty)
+    #expect(session.generation == initialGeneration)
+    #expect(session.document.cadDocument.designGraph.order == initialFeatureOrder)
+}
+
+@MainActor
 @Test func agentCreatesRevolveSourceThroughAutomationAndCore() async throws {
     var document = DesignDocument.empty()
     let profileID = try document.createRectangleSketchFromCorners(
@@ -564,6 +612,27 @@ private func agentCreateBooleanBox(
         plane: .xy,
         firstCorner: agentSketchPoint(x: minX, y: minY),
         oppositeCorner: agentSketchPoint(x: maxX, y: maxY)
+    )
+    return try document.extrudeProfile(
+        name: name,
+        profile: ProfileReference(featureID: sketchID),
+        distance: .length(depth, .meter),
+        direction: .normal
+    )
+}
+
+@discardableResult
+private func agentCreateBooleanCylinder(
+    in document: inout DesignDocument,
+    name: String,
+    radius: Double,
+    depth: Double = 0.010
+) throws -> FeatureID {
+    let sketchID = try document.createCircleSketch(
+        name: "\(name) Sketch",
+        plane: .xy,
+        center: agentSketchPoint(x: 0.0, y: 0.0),
+        radius: .length(radius, .meter)
     )
     return try document.extrudeProfile(
         name: name,

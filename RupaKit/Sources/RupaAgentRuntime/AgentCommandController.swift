@@ -1438,12 +1438,12 @@ public final class AgentCommandController: AgentClientProtocol {
         capability(
             "booleanEvaluationPlan",
             category: .read,
-            summary: "Preflight a proposed standalone Boolean without mutating the document, returning the exact operand subset, output topology kind, topology name scheme, topology slots, B-rep topology counts, primitive counts, unsupported code, and ordered checks used by the shared Boolean evaluation contract.",
+            summary: "Preflight a proposed standalone Boolean without mutating the document, returning the exact operand subset, output topology kind, topology name scheme, topology slots, B-rep topology counts, primitive counts, unsupported code, and stage-specific ordered checks used by the shared Boolean evaluation contract.",
             access: .agentRequest,
             mutatesDocument: false,
             discovery: [.topologySummary, .booleanEvaluationPlan],
             targets: [.body],
-            failureMode: "Rejects stale generations, missing references, duplicate targets, and a tool that is also a target; returns structured unsupported results for current kernel capability gaps such as curved, non-orthogonal, sheet, empty, or unsupported result topology before createBoolean mutates the document.",
+            failureMode: "Rejects stale generations before evaluation; returns structured unsupported results at requestContract, sourceBodies, operandTopology, or capabilityDecision gates for duplicate targets, a tool that is also a target, missing references, curved, non-orthogonal, sheet, empty, or unsupported result topology before createBoolean mutates the document.",
             optionMatrix: [
                 AgentCapabilityDescriptor.OptionAxis(
                     name: "operation",
