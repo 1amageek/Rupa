@@ -6,6 +6,8 @@ import Testing
 
     #expect(!presentation.showsSelectionCount)
     #expect(presentation.selectionTitle == nil)
+    #expect(Mirror(reflecting: presentation).children.contains { $0.label == "documentName" } == false)
+    #expect(Mirror(reflecting: presentation).children.contains { $0.label == "documentTitle" } == false)
 }
 
 @Test func workspaceTopBarPresentationShowsPositiveSelectionCount() {

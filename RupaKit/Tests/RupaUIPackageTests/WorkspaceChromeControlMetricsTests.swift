@@ -1,4 +1,4 @@
-import RupaRendering
+@testable import RupaRendering
 import Testing
 @testable import RupaUI
 
@@ -16,6 +16,8 @@ import Testing
     #expect(ViewportCanvasChromeMetrics.edgePadding == 6.0)
     #expect(ViewportCanvasChromeMetrics.topControlItemSpacing == ViewportCanvasChromeMetrics.edgePadding)
     #expect(ViewportCanvasChromeMetrics.topControlMaximumWidth == 260.0)
+    #expect(WorkspaceChromeControlMetrics.containerHeight == ViewportCanvasChromeLayout.viewportBadgeSize.height)
+    #expect(WorkspaceChromeControlMetrics.containerHeight == 30.0)
 }
 
 @Test func workspaceChromeControlsUseSharedLiquidGlassControlShape() {
@@ -32,5 +34,16 @@ import Testing
     #expect(ViewportCanvasChromeMetrics.outlineWidth > 0.0)
     #expect(ViewportCanvasChromeMetrics.outlineWidth <= 1.0)
     #expect(ViewportCanvasChromeMetrics.outlineOpacity > 0.0)
-    #expect(ViewportCanvasChromeMetrics.outlineOpacity <= 0.18)
+    #expect(ViewportCanvasChromeMetrics.outlineOpacity >= 0.16)
+    #expect(ViewportCanvasChromeMetrics.outlineOpacity <= 0.20)
+}
+
+@Test func workspaceChromeControlsStayContentSizedOnCanvas() {
+    let viewportBadgeWidth = ViewportCanvasChromeLayout.defaultViewportBadgeWidth
+    let topBarMinimumContentWidth = WorkspaceChromeControlMetrics.iconButtonSize.width * 3.0
+        + WorkspaceChromeControlMetrics.itemSpacing * 2.0
+        + WorkspaceChromeControlMetrics.containerHorizontalPadding * 2.0
+
+    #expect(topBarMinimumContentWidth < viewportBadgeWidth)
+    #expect(ViewportCanvasChromeLayout.viewportBadgeSize.width == ViewportCanvasChromeMetrics.topControlMaximumWidth)
 }

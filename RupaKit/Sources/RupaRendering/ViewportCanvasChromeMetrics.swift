@@ -10,5 +10,5 @@ public enum ViewportCanvasChromeMetrics {
     public static let topControlMaximumWidth: CGFloat = 260.0
     public static let cornerRadius: CGFloat = 8.0
     public static let outlineWidth: CGFloat = 0.75
-    public static let outlineOpacity: Double = 0.12
+    public static let outlineOpacity: Double = 0.16
 }

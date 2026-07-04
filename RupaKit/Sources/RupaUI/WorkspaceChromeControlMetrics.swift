@@ -7,8 +7,8 @@ enum WorkspaceChromeControlMetrics {
         ViewportCanvasChromeMetrics.topControlHorizontalPadding
     static let itemSpacing: CGFloat = ViewportCanvasChromeMetrics.topControlItemSpacing
     static let controlHeight: CGFloat = ViewportCanvasChromeMetrics.topControlContentHeight
-    static let horizontalPadding: CGFloat = 6.0
-    static let cornerRadius: CGFloat = 6.0
+    static let horizontalPadding: CGFloat = ViewportCanvasChromeMetrics.topControlHorizontalPadding
+    static let cornerRadius: CGFloat = ViewportCanvasChromeMetrics.cornerRadius - 2.0
     static let dividerHeight: CGFloat = ViewportCanvasChromeMetrics.topControlDividerHeight
 
     static var iconButtonSize: CGSize {
