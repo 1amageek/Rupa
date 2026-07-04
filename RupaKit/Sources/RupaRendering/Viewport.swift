@@ -122,6 +122,10 @@ public struct Viewport: View {
     private let bottomChromeReservedHeight: CGFloat
     private let canvasOverlayExclusionRects: [CGRect]
     private let gridVisualSpacingMode: ViewportProjectedGrid.VisualSpacingMode
+    private let workspaceScalePresetTitle: String?
+    private let canFitWorkspaceScaleToModel: Bool
+    private let canSelectSmallerWorkspaceScale: Bool
+    private let canSelectLargerWorkspaceScale: Bool
     private let cameraResetSignal: Int
     private let hoverClearSignal: Int
     private let showsConstructionPlaneHover: Bool
@@ -166,6 +170,9 @@ public struct Viewport: View {
     private let onSurfaceControlPointSlideDrag: ((ViewportSurfaceControlPointSlideDragTarget) -> Void)?
     private let onSurfaceFrameDrag: ((ViewportSurfaceFrameDragTarget) -> Void)?
     private let onCommandConfirm: (() -> Void)?
+    private let onFitWorkspaceScaleToModel: (() -> Void)?
+    private let onSelectSmallerWorkspaceScale: (() -> Void)?
+    private let onSelectLargerWorkspaceScale: (() -> Void)?
     private let onHover: ((ViewportHit?) -> Void)?
     private let onSnapCandidateKindChange: ((RupaCore.SnapCandidateKind?) -> Void)?
     private let onProjectionBasisChange: ((ViewportProjectionBasis) -> Void)?
@@ -196,6 +203,10 @@ public struct Viewport: View {
         bottomChromeReservedHeight: CGFloat = 0.0,
         canvasOverlayExclusionRects: [CGRect] = [],
         gridVisualSpacingMode: ViewportProjectedGrid.VisualSpacingMode = .adaptive,
+        workspaceScalePresetTitle: String? = nil,
+        canFitWorkspaceScaleToModel: Bool = false,
+        canSelectSmallerWorkspaceScale: Bool = false,
+        canSelectLargerWorkspaceScale: Bool = false,
         cameraResetSignal: Int = 0,
         hoverClearSignal: Int = 0,
         showsConstructionPlaneHover: Bool = false,
@@ -240,6 +251,9 @@ public struct Viewport: View {
         onSurfaceControlPointSlideDrag: ((ViewportSurfaceControlPointSlideDragTarget) -> Void)? = nil,
         onSurfaceFrameDrag: ((ViewportSurfaceFrameDragTarget) -> Void)? = nil,
         onCommandConfirm: (() -> Void)? = nil,
+        onFitWorkspaceScaleToModel: (() -> Void)? = nil,
+        onSelectSmallerWorkspaceScale: (() -> Void)? = nil,
+        onSelectLargerWorkspaceScale: (() -> Void)? = nil,
         onHover: ((ViewportHit?) -> Void)? = nil,
         onSnapCandidateKindChange: ((RupaCore.SnapCandidateKind?) -> Void)? = nil,
         onProjectionBasisChange: ((ViewportProjectionBasis) -> Void)? = nil
@@ -271,6 +285,10 @@ public struct Viewport: View {
             rect.isNull == false && rect.isEmpty == false
         }
         self.gridVisualSpacingMode = gridVisualSpacingMode
+        self.workspaceScalePresetTitle = workspaceScalePresetTitle
+        self.canFitWorkspaceScaleToModel = canFitWorkspaceScaleToModel
+        self.canSelectSmallerWorkspaceScale = canSelectSmallerWorkspaceScale
+        self.canSelectLargerWorkspaceScale = canSelectLargerWorkspaceScale
         self.cameraResetSignal = cameraResetSignal
         self.hoverClearSignal = hoverClearSignal
         self.showsConstructionPlaneHover = showsConstructionPlaneHover
@@ -318,6 +336,9 @@ public struct Viewport: View {
         self.onSurfaceControlPointSlideDrag = onSurfaceControlPointSlideDrag
         self.onSurfaceFrameDrag = onSurfaceFrameDrag
         self.onCommandConfirm = onCommandConfirm
+        self.onFitWorkspaceScaleToModel = onFitWorkspaceScaleToModel
+        self.onSelectSmallerWorkspaceScale = onSelectSmallerWorkspaceScale
+        self.onSelectLargerWorkspaceScale = onSelectLargerWorkspaceScale
         self.onHover = onHover
         self.onSnapCandidateKindChange = onSnapCandidateKindChange
         self.onProjectionBasisChange = onProjectionBasisChange
@@ -622,6 +643,33 @@ public struct Viewport: View {
     private func viewportBadge(
         scaleReadout: ViewportProjectedGrid.ScaleReadout
     ) -> some View {
+        let menuState = ViewportCanvasScaleMenuState(
+            scaleReadout: scaleReadout,
+            presetTitle: workspaceScalePresetTitle,
+            canFitWorkspaceScaleToModel: canFitWorkspaceScaleToModel
+                && onFitWorkspaceScaleToModel != nil,
+            canSelectSmallerWorkspaceScale: canSelectSmallerWorkspaceScale
+                && onSelectSmallerWorkspaceScale != nil,
+            canSelectLargerWorkspaceScale: canSelectLargerWorkspaceScale
+                && onSelectLargerWorkspaceScale != nil
+        )
+
+        return Menu {
+            viewportBadgeMenuContent(menuState)
+        } label: {
+            viewportBadgeLabel(scaleReadout: scaleReadout)
+        }
+        .menuStyle(.borderlessButton)
+        .buttonStyle(.plain)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Canvas Scale")
+        .accessibilityValue(menuState.accessibilityText)
+        .accessibilityIdentifier("CanvasScaleHUD")
+    }
+
+    private func viewportBadgeLabel(
+        scaleReadout: ViewportProjectedGrid.ScaleReadout
+    ) -> some View {
         HStack(spacing: ViewportCanvasChromeMetrics.topControlItemSpacing) {
             Image(systemName: "scope")
                 .symbolRenderingMode(.hierarchical)
@@ -644,10 +692,46 @@ public struct Viewport: View {
             alignment: .leading
         )
         .viewportCanvasGlassChrome()
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Canvas Scale")
-        .accessibilityValue(scaleReadout.accessibilityText)
-        .accessibilityIdentifier("CanvasScaleHUD")
+    }
+
+    @ViewBuilder
+    private func viewportBadgeMenuContent(
+        _ state: ViewportCanvasScaleMenuState
+    ) -> some View {
+        Section("Canvas Scale") {
+            ForEach(state.rows) { row in
+                Text("\(row.title): \(row.value)")
+            }
+            if state.isVisualStepCapped {
+                Text("Visual grid capped by line budget")
+            }
+        }
+
+        if !state.availableActions.isEmpty {
+            Section("Workspace Scale") {
+                ForEach(state.availableActions) { action in
+                    viewportBadgeActionButton(action)
+                }
+            }
+        }
+    }
+
+    private func viewportBadgeActionButton(
+        _ action: ViewportCanvasScaleMenuState.Action
+    ) -> some View {
+        Button {
+            switch action {
+            case .fitToModel:
+                onFitWorkspaceScaleToModel?()
+            case .smallerPreset:
+                onSelectSmallerWorkspaceScale?()
+            case .largerPreset:
+                onSelectLargerWorkspaceScale?()
+            }
+        } label: {
+            Label(action.title, systemImage: action.systemImage)
+        }
+        .accessibilityIdentifier(action.accessibilityIdentifier)
     }
 
     private func viewportBadgeOverlay(
@@ -673,7 +757,7 @@ public struct Viewport: View {
     private func estimatedViewportBadgeWidth(
         scaleReadout: ViewportProjectedGrid.ScaleReadout
     ) -> CGFloat {
-        var textSegments = [
+        let textSegments = [
             scaleReadout.minorStep.displayUnit.symbol,
             scaleReadout.canvasHUDText,
             "\(Int((camera.zoom * 100.0).rounded()))%",

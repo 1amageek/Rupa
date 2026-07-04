@@ -503,6 +503,8 @@ public struct MainView: View {
         CollapsibleView(isExpanded: $isPreviewExpanded) {
             ZStack {
                 let sectionAnalysis = selectedSectionAnalysisSummary
+                let scaleSummary = workspaceScaleSummary
+                let scaleFitPromptState = workspaceScaleFitPromptState
                 Viewport(
                     document: session.document,
                     currentEvaluation: session.currentEvaluation,
@@ -528,6 +530,10 @@ public struct MainView: View {
                     bottomChromeReservedHeight: viewportBottomChromeReservedHeight,
                     canvasOverlayExclusionRects: viewportOverlayExclusionRects,
                     gridVisualSpacingMode: session.document.productMetadata.viewportGridSettings.visualSpacingMode,
+                    workspaceScalePresetTitle: scaleSummary.presetTitle,
+                    canFitWorkspaceScaleToModel: scaleFitPromptState?.isActionable == true,
+                    canSelectSmallerWorkspaceScale: scaleSummary.smallerPreset != nil,
+                    canSelectLargerWorkspaceScale: scaleSummary.largerPreset != nil,
                     cameraResetSignal: viewportCameraResetSignal,
                     hoverClearSignal: viewportHoverClearSignal,
                     showsConstructionPlaneHover: showsConstructionPlaneHover,
@@ -572,6 +578,9 @@ public struct MainView: View {
                     onSurfaceControlPointSlideDrag: viewportSurfaceControlPointSlideDragHandler,
                     onSurfaceFrameDrag: viewportSurfaceFrameDragHandler,
                     onCommandConfirm: viewportCommandConfirmHandler,
+                    onFitWorkspaceScaleToModel: fitWorkspaceScaleToModel,
+                    onSelectSmallerWorkspaceScale: selectSmallerWorkspaceScalePreset,
+                    onSelectLargerWorkspaceScale: selectLargerWorkspaceScalePreset,
                     onHover: viewportHoverHandler,
                     onSnapCandidateKindChange: { kind in
                         snapOverrideState.updateHoveredCandidateKind(kind)
@@ -7365,6 +7374,20 @@ public struct MainView: View {
         session.setRulerConfiguration(preset.rulerConfiguration.normalizedForWorkspaceScale())
         resetWorkspaceInteractionScaleDefaults()
         requestViewportCameraReset()
+    }
+
+    private func selectSmallerWorkspaceScalePreset() {
+        guard let preset = workspaceScaleSummary.smallerPreset else {
+            return
+        }
+        applyWorkspaceScalePreset(preset)
+    }
+
+    private func selectLargerWorkspaceScalePreset() {
+        guard let preset = workspaceScaleSummary.largerPreset else {
+            return
+        }
+        applyWorkspaceScalePreset(preset)
     }
 
     private func fitWorkspaceScaleToModel() {

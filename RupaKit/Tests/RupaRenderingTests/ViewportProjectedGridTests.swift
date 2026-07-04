@@ -112,6 +112,46 @@ import RupaViewportScene
     #expect(grid.scaleReadout.accessibilityText.contains("visible span"))
 }
 
+@Test func viewportCanvasScaleMenuStateReportsReadoutAndAvailableActions() throws {
+    var document = DesignDocument.empty()
+    try document.setRulerConfiguration(WorkspaceScalePreset.sitePlanning.rulerConfiguration)
+
+    let grid = ViewportProjectedGrid(
+        document: document,
+        size: CGSize(width: 1_200.0, height: 800.0),
+        camera: ViewportCamera(zoom: ViewportCamera.minimumZoom),
+        visualSpacingMode: .fixed
+    )
+    let state = ViewportCanvasScaleMenuState(
+        scaleReadout: grid.scaleReadout,
+        presetTitle: WorkspaceScalePreset.sitePlanning.title,
+        canFitWorkspaceScaleToModel: true,
+        canSelectSmallerWorkspaceScale: true,
+        canSelectLargerWorkspaceScale: false
+    )
+
+    #expect(state.rows.contains {
+        $0.id == "preset" && $0.value == WorkspaceScalePreset.sitePlanning.title
+    })
+    #expect(state.rows.contains {
+        $0.id == "unit" && $0.value == grid.scaleReadout.minorStep.displayUnit.symbol
+    })
+    #expect(state.rows.contains {
+        $0.id == "grid" && $0.value == grid.scaleReadout.minorStep.text
+    })
+    #expect(state.rows.contains {
+        $0.id == "snap" && $0.value == grid.scaleReadout.snapStep.text
+    })
+    #expect(state.rows.contains {
+        $0.id == "visibleSpan" && $0.value == grid.scaleReadout.visibleSpan.text
+    })
+    #expect(state.isVisualStepCapped)
+    #expect(state.availableActions == [.fitToModel, .smallerPreset])
+    #expect(!state.availableActions.contains(.largerPreset))
+    #expect(state.accessibilityText.contains("visual grid capped by line budget"))
+    #expect(state.accessibilityText.contains("Fit Scale to Model"))
+}
+
 @Test func viewportProjectedGridReportsUrbanPlanningScaleReadout() throws {
     var document = DesignDocument.empty()
     try document.setRulerConfiguration(WorkspaceScalePreset.urbanPlanning.rulerConfiguration)
