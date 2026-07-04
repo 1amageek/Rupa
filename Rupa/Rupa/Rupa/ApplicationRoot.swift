@@ -13,10 +13,14 @@ import RupaUI
 struct ApplicationRoot: App {
     @Environment(\.scenePhase) private var scenePhase
     @State private var agentHost = AgentHost()
+    @State private var editorSession = WorkspaceLaunchSessionFactory.makeSession()
 
     var body: some Scene {
         WindowGroup {
-            MainView(agentHost: agentHost)
+            MainView(
+                session: editorSession,
+                agentHost: agentHost
+            )
         }
         .windowResizability(.contentMinSize)
         .onChange(of: scenePhase) { _, phase in

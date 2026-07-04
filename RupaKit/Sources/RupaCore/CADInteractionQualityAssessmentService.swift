@@ -702,7 +702,9 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                         "RupaKit/Sources/RupaUI/WorkspacePlaneModeControl.swift",
                         "RupaKit/Sources/RupaUI/WorkspaceCanvasPlaneInputMapper.swift",
                         "RupaKit/Sources/RupaUI/WorkspaceConstructionPlaneEditBuilder.swift",
+                        "RupaKit/Sources/RupaUI/WorkspaceLaunchSessionFactory.swift",
                         "RupaKit/Sources/RupaUI/MainView.swift",
+                        "Rupa/Rupa/Rupa/ApplicationRoot.swift",
                     ],
                     tests: [
                         "RupaKit/Tests/RupaCoreTests/ConstructionPlaneTargetResolverTests.swift",
@@ -711,20 +713,24 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                         "RupaKit/Tests/RupaRenderingTests/ViewportConstructionPlaneHandleGeometryTests.swift",
                         "RupaKit/Tests/RupaUIPackageTests/WorkspaceCanvasPlaneInputMapperTests.swift",
                         "RupaKit/Tests/RupaUIPackageTests/WorkspaceConstructionPlaneEditBuilderTests.swift",
+                        "RupaKit/Tests/RupaUIPackageTests/WorkspaceLaunchSessionFactoryTests.swift",
                         "RupaKit/Tests/RupaUIPackageTests/WorkspaceSnapOverrideStateTests.swift",
                         "RupaKit/Tests/RupaAgentTests/AgentConstructionPlaneIntegrationTests.swift",
+                        "Rupa/Rupa/RupaUITests/AppUITests.swift",
                     ],
                     notes: [
                         "Canvas click and drag sketch tools create rectangle, polygon, arc, spline, and circle sketches on the active saved custom construction plane instead of falling back to the default XY plane.",
                         "WorkspaceCanvasPlaneInputMapper owns custom-plane world-point recovery, and RupaUIPackageTests cover raw viewport footprint click and drag input flowing through the mapper into EditorSession rectangle, polygon, arc, spline, circle, and solid creation on the active custom construction plane.",
                         "Selected saved construction planes expose viewport Origin and Normal handles that preview a bounded plane frame and commit through the same setConstructionPlane source mutation path used by Inspector edits.",
+                        "WorkspaceLaunchSessionFactory installs an active arbitrary construction-plane launch fixture through the same EditorSession command path, ApplicationRoot injects the resulting session into MainView once, and AppUITests now cover the app-level active-plane readback plus sketch and solid canvas creation path.",
                     ]
                 ),
             ],
             openWork: [
-                "Full app UI automation for arbitrary-plane workflows.",
+                "Execute the focused arbitrary-plane AppUITests workflow on a runner where the macOS UI testing authorization prompt is not blocking initialization.",
+                "Broaden app UI automation from active-plane sketch/solid creation into saved-plane creation, rename, viewport handle drag, and edit workflows.",
             ],
-            next: "Add full app-level UI automation for arbitrary-plane creation and edit workflows while preserving selected-plane sketch routing."
+            next: "Run the focused arbitrary-plane AppUITests workflow on an authorized UI runner, then broaden the same app-level coverage into saved-plane creation and edit workflows."
         ),
         entry(
             area: .selection,

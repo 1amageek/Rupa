@@ -10,11 +10,20 @@ final class AppUITests: XCTestCase {
     }
 
     @MainActor
-    private func launchApp() -> XCUIApplication {
+    private func launchApp(arguments: [String] = []) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchArguments += ["-ApplePersistenceIgnoreState", "YES"]
+        app.launchArguments += arguments
         app.launch()
         return app
+    }
+
+    @MainActor
+    private func expandUtilityRailIfNeeded(in app: XCUIApplication) {
+        let expandButton = app.buttons["WorkspaceUtilityRail.expand"]
+        if expandButton.waitForExistence(timeout: 1) {
+            expandButton.click()
+        }
     }
 
     @MainActor
@@ -197,6 +206,32 @@ final class AppUITests: XCTestCase {
         XCTAssertTrue(meshTool.waitForExistence(timeout: 3))
         meshTool.click()
         XCTAssertEqual(app.buttons["CanvasTool.mesh"].value as? String, "Selected")
+    }
+
+    @MainActor
+    func testActiveCustomConstructionPlaneLaunchFixtureSupportsCanvasCreation() throws {
+        let app = launchApp(arguments: ["--rupa-ui-fixture=active-custom-cplane"])
+        let canvas = app.otherElements["CanvasViewport"]
+        XCTAssertTrue(canvas.waitForExistence(timeout: 8))
+
+        expandUtilityRailIfNeeded(in: app)
+        let activePlane = app.descendants(matching: .any)["WorkspacePlane.activeName"]
+        XCTAssertTrue(activePlane.waitForExistence(timeout: 3))
+        XCTAssertEqual(activePlane.value as? String, "Arbitrary CPlane")
+
+        let sketchTool = app.buttons["CanvasTool.sketch"]
+        XCTAssertTrue(sketchTool.waitForExistence(timeout: 3))
+        sketchTool.click()
+        XCTAssertEqual(sketchTool.value as? String, "Selected")
+        canvas.coordinate(withNormalizedOffset: CGVector(dx: 0.44, dy: 0.56)).click()
+        XCTAssertTrue(app.staticTexts["Rectangle Sketch"].waitForExistence(timeout: 3))
+
+        let solidTool = app.buttons["CanvasTool.solid"]
+        XCTAssertTrue(solidTool.waitForExistence(timeout: 3))
+        solidTool.click()
+        XCTAssertEqual(solidTool.value as? String, "Selected")
+        canvas.coordinate(withNormalizedOffset: CGVector(dx: 0.62, dy: 0.42)).click()
+        XCTAssertTrue(app.staticTexts["Box"].waitForExistence(timeout: 3))
     }
 
     @MainActor

@@ -1578,6 +1578,10 @@ public struct MainView: View {
                 )
                 if let activeConstructionPlane = session.activeConstructionPlane {
                     workspaceValueRow("Active", activeConstructionPlane.name)
+                        .accessibilityElement(children: .ignore)
+                        .accessibilityLabel("Active Construction Plane")
+                        .accessibilityValue(activeConstructionPlane.name)
+                        .accessibilityIdentifier("WorkspacePlane.activeName")
                 }
                 workspaceValueRow("Snap", constructionPlaneSnapSummary)
                 if planeSummary.planes.isEmpty {
