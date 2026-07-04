@@ -798,6 +798,7 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                         "swift-CAD/Sources/CADIR/LoftFeature.swift",
                         "swift-CAD/Sources/CADKernel/LoftFeatureEvaluator.swift",
                         "swift-CAD/Sources/CADKernel/SweepEvaluationCapabilities.swift",
+                        "swift-CAD/Sources/CADKernel/SweepEvaluationPlanService.swift",
                         "swift-CAD/Sources/CADKernel/PlanarSweepFeatureEvaluator.swift",
                         "RupaKit/Sources/RupaCore/DesignDocument.swift",
                         "RupaKit/Sources/RupaCore/DesignDocument+Solid.swift",
@@ -809,6 +810,7 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                     tests: [
                         "swift-CAD/Tests/CADKernelTests/LoftFeatureTests.swift",
                         "swift-CAD/Tests/CADKernelTests/CADKernelTests.swift",
+                        "swift-CAD/Tests/CADKernelTests/SweepEvaluationPlanServiceTests.swift",
                         "RupaKit/Tests/RupaCoreTests/LoftCommandTests.swift",
                         "RupaKit/Tests/RupaCoreTests/SweepCommandTests.swift",
                         "RupaKit/Tests/RupaAutomationTests/LoftAutomationTests.swift",
@@ -817,6 +819,7 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                     ],
                     notes: [
                         "Loft now has a source-owned Swift-CAD IR, same-boundary-count ruled B-spline and smooth cubic section-direction B-spline B-rep evaluator modes, finite positive global and per-section smooth tangent scale control for automatic cubic section-direction handles, automatic or zero section tangent modes for authored section handle boundary conditions, linear section-scale interpolation for guide-inserted intermediate rings, optional guide curve references that lock first and last section seam samples by first-guide endpoint contact when explicit section starts are absent, multi-section multi-guide rail-following intermediate section rings, explicit per-section startSampleIndex seam starts, automatic cyclic section matching for unspecified seams, solid output, open sheet output, closed section-loop sheet output in ruled or smooth mode, RupaCore mutation, Automation, Agent command dispatch, CLI model loft surface-mode, tangent-scale, and tangent-mode creation, measurement, viewport scene display, and Inspector operation summaries.",
+                        "Sweep preflight now reports guide strategy candidates, the resolved strategy, per-candidate resolution status, and typed unsupportedCode values for failed guide-constraint strategies before mutation.",
                     ]
                 ),
             ],

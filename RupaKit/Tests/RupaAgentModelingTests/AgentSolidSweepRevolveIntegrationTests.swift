@@ -219,6 +219,89 @@ import SwiftCAD
 }
 
 @MainActor
+@Test func agentReturnsTypedFailedGuideStrategyResolutionBeforeMutation() async throws {
+    var document = DesignDocument.empty()
+    let profileID = try document.createRectangleSketchFromCorners(
+        name: "Agent Failed Guided Sweep Plan Profile",
+        plane: .xy,
+        firstCorner: SketchPoint(
+            x: .length(0.0, .millimeter),
+            y: .length(0.0, .millimeter)
+        ),
+        oppositeCorner: SketchPoint(
+            x: .length(4.0, .millimeter),
+            y: .length(2.0, .millimeter)
+        )
+    )
+    let pathID = try document.createLineSketch(
+        name: "Agent Failed Guided Sweep Path",
+        plane: .yz,
+        start: SketchPoint(
+            x: .length(0.0, .millimeter),
+            y: .length(0.0, .millimeter)
+        ),
+        end: SketchPoint(
+            x: .length(0.0, .millimeter),
+            y: .length(20.0, .millimeter)
+        )
+    )
+    let guideID = try document.createLineSketch(
+        name: "Agent Failed Guided Sweep Guide",
+        plane: .yz,
+        start: SketchPoint(
+            x: .length(5.0, .millimeter),
+            y: .length(0.0, .millimeter)
+        ),
+        end: SketchPoint(
+            x: .length(5.0, .millimeter),
+            y: .length(20.0, .millimeter)
+        )
+    )
+    let server = AgentCommandController()
+    let sessionID = UUID()
+    let session = EditorSession(document: document)
+    server.register(session: session, id: sessionID)
+    let initialGeneration = session.generation
+    let initialFeatureOrder = session.document.cadDocument.designGraph.order
+
+    let response = server.handle(
+        .sweepEvaluationPlan(
+            sessionID: sessionID,
+            sections: [.profile(ProfileReference(featureID: profileID))],
+            path: SweepPathReference(featureID: pathID),
+            guides: [SweepGuideReference(featureID: guideID)],
+            targets: [],
+            options: SweepOptions(guideMethod: .point),
+            expectedGeneration: initialGeneration
+        )
+    )
+
+    guard case .sweepEvaluationPlan(let plan) = response else {
+        Issue.record("Agent must return a guided sweep evaluation plan.")
+        return
+    }
+
+    #expect(plan.status == .unsupported)
+    #expect(plan.unsupportedCode == .invalidGuideConstraintSet)
+    #expect(plan.guideStrategyCandidates == [.pointSimilarity])
+    #expect(plan.resolvedGuideStrategy == nil)
+    #expect(plan.guideStrategyResolutions == [
+        SweepGuideStrategyResolution(
+            strategy: .pointSimilarity,
+            status: .failed,
+            unsupportedCode: .invalidGuideConstraintSet,
+            message: plan.message
+        ),
+    ])
+    #expect(plan.message.contains("guide constraints do not solve"))
+    #expect(plan.message.contains("initially touch"))
+    #expect(plan.checks.last?.kind == .guideConstraints)
+    #expect(plan.checks.last?.status == .unsupported)
+    #expect(session.generation == initialGeneration)
+    #expect(session.document.cadDocument.designGraph.order == initialFeatureOrder)
+}
+
+@MainActor
 @Test func agentCreatesCurveSectionSheetSweepThroughAutomationAndCore() async throws {
     var document = DesignDocument.empty()
     let sectionID = try document.createLineSketch(

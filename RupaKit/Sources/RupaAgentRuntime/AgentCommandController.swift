@@ -1639,7 +1639,7 @@ public final class AgentCommandController: AgentClientProtocol {
                         "curveContact",
                     ],
                     notes: [
-                        "The option axis lists possible guide strategies; guided preflight results also report resolvedGuideStrategy and guideStrategyResolutions from the shared sweep constraint solver.",
+                        "The option axis lists possible guide strategies; guided preflight results also report resolvedGuideStrategy and guideStrategyResolutions, including typed unsupportedCode values for failed guide strategies, from the shared sweep constraint solver.",
                     ]
                 ),
             ]

@@ -214,32 +214,33 @@ import SwiftCAD
     )
     let response = AgentResponse.sweepEvaluationPlan(
         SweepEvaluationPlanResult(
-            status: .supported,
+            status: .unsupported,
             sectionCount: 1,
             pathSegmentCount: 1,
-            guideCount: 0,
+            guideCount: 1,
             targetCount: 0,
             pathShape: .straight(profileNormalComponent: 1.0),
-            sectionState: .identity,
-            evaluationKind: .exactStraightExtrude,
-            outputTopologyKind: .exactStraightSolid,
-            booleanSupportKind: .newBody,
-            guideStrategyCandidates: [.none],
+            sectionState: .guided,
+            evaluationKind: nil,
+            outputTopologyKind: nil,
+            booleanSupportKind: nil,
+            guideStrategyCandidates: [.pointSimilarity],
             resolvedGuideStrategy: nil,
             guideStrategyResolutions: [
                 SweepGuideStrategyResolution(
-                    strategy: .none,
-                    status: .notRequired,
-                    message: "Sweep has no guide constraints."
+                    strategy: .pointSimilarity,
+                    status: .failed,
+                    unsupportedCode: .invalidGuideConstraintSet,
+                    message: "Sweep guide constraints do not solve before mutation."
                 ),
             ],
-            unsupportedCode: nil,
-            message: "Sweep can evaluate as a profile-plane-preserving exact straight extrusion.",
+            unsupportedCode: .invalidGuideConstraintSet,
+            message: "Sweep guide constraints do not solve before mutation.",
             checks: [
                 SweepEvaluationPreflightCheck(
-                    kind: .capabilityDecision,
-                    status: .passed,
-                    message: "Sweep can evaluate as a profile-plane-preserving exact straight extrusion."
+                    kind: .guideConstraints,
+                    status: .unsupported,
+                    message: "Sweep guide constraints do not solve before mutation."
                 ),
             ]
         )
