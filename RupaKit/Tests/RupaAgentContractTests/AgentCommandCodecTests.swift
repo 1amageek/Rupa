@@ -187,6 +187,13 @@ import SwiftCAD
             booleanSupportKind: .newBody,
             guideStrategyCandidates: [.none],
             resolvedGuideStrategy: nil,
+            guideStrategyResolutions: [
+                SweepGuideStrategyResolution(
+                    strategy: .none,
+                    status: .notRequired,
+                    message: "Sweep has no guide constraints."
+                ),
+            ],
             unsupportedCode: nil,
             message: "Sweep can evaluate as a profile-plane-preserving exact straight extrusion.",
             checks: [

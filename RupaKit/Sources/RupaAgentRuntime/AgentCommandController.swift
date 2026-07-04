@@ -1566,12 +1566,12 @@ public final class AgentCommandController: AgentClientProtocol {
         capability(
             "sweepEvaluationPlan",
             category: .read,
-            summary: "Preflight a proposed Sweep without mutating the document, returning the resolved path shape, section state, evaluation kind, output topology, boolean support, guide strategy candidates, resolved guide strategy, unsupported code, and ordered checks used by the shared sweep evaluation contract.",
+            summary: "Preflight a proposed Sweep without mutating the document, returning the resolved path shape, section state, evaluation kind, output topology, boolean support, guide strategy candidates, resolved guide strategy, per-candidate guide resolution statuses, unsupported code, and ordered checks used by the shared sweep evaluation contract.",
             access: .agentRequest,
             mutatesDocument: false,
             discovery: [.sketchEntitySummary, .topologySummary, .sweepEvaluationPlan],
             targets: [.profile, .sketchEntity, .body],
-            failureMode: "Rejects stale generations, missing references, invalid option quantities, disconnected or branched path chains, and unresolved target bodies; returns structured unsupported results for current kernel capability gaps and geometry contracts such as simplify output, sheet target booleans, profile-plane degenerate parallel alignment, round multi-curve corner-transition topology, and guide constraints that do not solve against the section and path frames before mutation.",
+            failureMode: "Rejects stale generations, missing references, invalid option quantities, disconnected or branched path chains, and unresolved target bodies; returns structured unsupported results for current kernel capability gaps and geometry contracts such as simplify output, sheet target booleans, profile-plane degenerate parallel alignment, round multi-curve corner-transition topology, and guide constraints that do not solve against the section and path frames before mutation, including failed guide strategy candidates.",
             optionMatrix: [
                 AgentCapabilityDescriptor.OptionAxis(
                     name: "evaluationKind",
@@ -1598,7 +1598,7 @@ public final class AgentCommandController: AgentClientProtocol {
                         "curveContact",
                     ],
                     notes: [
-                        "The option axis lists possible guide strategies; guided preflight results also report resolvedGuideStrategy from the shared sweep constraint solver.",
+                        "The option axis lists possible guide strategies; guided preflight results also report resolvedGuideStrategy and guideStrategyResolutions from the shared sweep constraint solver.",
                     ]
                 ),
             ]

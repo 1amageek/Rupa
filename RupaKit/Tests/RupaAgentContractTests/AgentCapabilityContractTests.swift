@@ -794,8 +794,10 @@ import SwiftCAD
     #expect(sweepEvaluationPlan.summary.contains("Preflight"))
     #expect(sweepEvaluationPlan.summary.contains("guide strategy candidates"))
     #expect(sweepEvaluationPlan.summary.contains("resolved guide strategy"))
+    #expect(sweepEvaluationPlan.summary.contains("per-candidate guide resolution statuses"))
     #expect(sweepEvaluationPlan.failureMode.contains("structured unsupported results"))
     #expect(sweepEvaluationPlan.failureMode.contains("guide constraints that do not solve"))
+    #expect(sweepEvaluationPlan.failureMode.contains("failed guide strategy candidates"))
     #expect(sweepEvaluationPlan.optionMatrix.map(\.name) == ["evaluationKind", "guideStrategyCandidates"])
     let sweepPlanKindAxis = try #require(
         sweepEvaluationPlan.optionMatrix.first { $0.name == "evaluationKind" }
@@ -806,6 +808,7 @@ import SwiftCAD
     #expect(sweepPlanKindAxis.supportedValues.contains("exactStraightExtrude"))
     #expect(sweepPlanKindAxis.supportedValues.contains("profilePlaneParallelSweep"))
     #expect(sweepPlanGuideAxis.supportedValues.contains("pointMeanValueCageRail"))
+    #expect(sweepPlanGuideAxis.notes.contains { $0.contains("guideStrategyResolutions") })
     #expect(sweepPlanGuideAxis.supportedValues.contains("pointRadialRail"))
     #expect(sweepPlanGuideAxis.supportedValues.contains("curveContact"))
 

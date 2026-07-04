@@ -121,6 +121,13 @@ import SwiftCAD
     #expect(plan.booleanSupportKind == .newBody)
     #expect(plan.guideStrategyCandidates == [.none])
     #expect(plan.resolvedGuideStrategy == nil)
+    #expect(plan.guideStrategyResolutions == [
+        SweepGuideStrategyResolution(
+            strategy: .none,
+            status: .notRequired,
+            message: "Sweep has no guide constraints."
+        ),
+    ])
     #expect(plan.checks.last?.kind == .capabilityDecision)
     #expect(plan.checks.last?.status == .passed)
     #expect(session.generation == initialGeneration)
@@ -195,6 +202,13 @@ import SwiftCAD
     #expect(plan.guideCount == 1)
     #expect(plan.guideStrategyCandidates == [.pointSimilarity])
     #expect(plan.resolvedGuideStrategy == .pointSimilarity)
+    #expect(plan.guideStrategyResolutions == [
+        SweepGuideStrategyResolution(
+            strategy: .pointSimilarity,
+            status: .resolved,
+            message: "Sweep guide constraints solve as pointSimilarity."
+        ),
+    ])
     #expect(plan.checks.contains {
         $0.kind == .guideConstraints &&
             $0.status == .passed &&
