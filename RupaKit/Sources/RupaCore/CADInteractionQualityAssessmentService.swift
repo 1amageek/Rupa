@@ -50,7 +50,8 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                         "RupaKit/Tests/RupaCoreTests/DesignDocumentTests.swift",
                         "RupaKit/Tests/RupaCoreTests/SelectionDimensionCommandTests.swift",
                         "RupaKit/Tests/RupaUIPackageTests/DimensionCommandStateTests.swift",
-                        "RupaKit/Tests/RupaAgentTests/AgentCommandControllerTests.swift",
+                        "RupaKit/Tests/RupaAgentSelectionTests/AgentDimensionSummaryIntegrationTests.swift",
+                        "RupaKit/Tests/RupaAgentSelectionTests/AgentDimensionExpressionIntegrationTests.swift",
                     ],
                     notes: [
                         "Generated cap edges resolve back to editable sketch curves.",
@@ -106,7 +107,8 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                         "RupaKit/Tests/RupaCoreTests/SketchDimensionSummaryServiceTests.swift",
                         "RupaKit/Tests/RupaCoreTests/SketchEntityEditCommandTests.swift",
                         "RupaKit/Tests/RupaUIPackageTests/DimensionCommandStateTests.swift",
-                        "RupaKit/Tests/RupaAgentTests/AgentCommandControllerTests.swift",
+                        "RupaKit/Tests/RupaAgentSketchTests/AgentSketchCommandIntegrationTests.swift",
+                        "RupaKit/Tests/RupaAgentSketchTests/AgentSketchCurveAnalysisDimensionIntegrationTests.swift",
                     ],
                     notes: [
                         "Source line, circle, arc, rectangle, polygon, spline, and Slot subsets keep typed editable source data.",
@@ -158,7 +160,7 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                     tests: [
                         "RupaKit/Tests/RupaCoreTests/BodyEdgeChamferCommandTests.swift",
                         "RupaKit/Tests/RupaCoreTests/BodyVertexMoveCommandTests.swift",
-                        "RupaKit/Tests/RupaAgentTests/AgentCommandControllerTests.swift",
+                        "RupaKit/Tests/RupaAgentModelingTests/AgentDirectModelingIntegrationTests.swift",
                     ],
                     notes: [
                         "Body edge fillet and chamfer commands exist for generated profile-edge subsets.",
@@ -223,8 +225,8 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                         "RupaKit/Tests/RupaCoreTests/BooleanCommandTests.swift",
                         "RupaKit/Tests/RupaCoreTests/SweepCommandTests.swift",
                         "RupaKit/Tests/RupaCoreTests/RevolveCommandTests.swift",
-                        "RupaKit/Tests/RupaAgentTests/AgentSolidSweepRevolveIntegrationTests.swift",
-                        "RupaKit/Tests/RupaAgentTests/AgentCommandControllerTests.swift",
+                        "RupaKit/Tests/RupaAgentModelingTests/AgentSolidSweepRevolveIntegrationTests.swift",
+                        "RupaKit/Tests/RupaAgentContractTests/AgentCapabilityContractTests.swift",
                     ],
                     notes: [
                         "Standalone Boolean features now own target body references, one tool body reference, operation, and keep-tools policy in source data.",
@@ -232,6 +234,7 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                         "SwiftCAD exposes the shared Boolean kernel decision, result topology name scheme, generated topology slots, and B-rep topology counts as a non-mutating plan service, and Agent exposes it as document.booleanEvaluationPlan before createBoolean.",
                         "SwiftCAD can extract occupied cells from supported orthogonal solid operands, so previous connected orthogonal cell-union Boolean results can become follow-on Boolean targets.",
                         "SwiftCAD can copy separated source B-rep shells into one result body with copied source topology names, so Agent workflows can plan and create separated non-box solid unions without mesh fallback.",
+                        "The separated B-rep union path now verifies multiple target operands with keep-tools enabled, preserving original target and tool bodies while adding the copied-topology result body for Agent follow-on selection.",
                         "Boolean evaluation removes superseded target and tool generated names when keepTools is false, remaps kept tool names when keepTools is true, and returns typed failures for unsupported operands before invalid geometry is committed.",
                     ]
                 ),
@@ -294,8 +297,7 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                         "RupaKit/Tests/RupaCoreTests/BodyVertexMoveCommandTests.swift",
                         "RupaKit/Tests/RupaCoreTests/DesignDocumentTests.swift",
                         "RupaKit/Tests/RupaAutomationTests/AutomationRunnerTests.swift",
-                        "RupaKit/Tests/RupaAgentTests/AgentDirectModelingIntegrationTests.swift",
-                        "RupaKit/Tests/RupaAgentTests/AgentCommandControllerTests.swift",
+                        "RupaKit/Tests/RupaAgentModelingTests/AgentDirectModelingIntegrationTests.swift",
                         "RupaKit/Tests/RupaUIPackageTests/WorkspaceTopologyEditInspectorStateBuilderTests.swift",
                         "swift-CAD/Tests/CADKernelTests/CADKernelTests.swift",
                     ],
@@ -355,7 +357,7 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                     tests: [
                         "RupaKit/Tests/RupaCoreTests/DesignDocumentTests.swift",
                         "swift-CAD/Tests/CADExchangeTests/CADExchangeTests.swift",
-                        "RupaKit/Tests/RupaAgentTests/AgentCommandControllerTests.swift",
+                        "RupaKit/Tests/RupaAgentTopologyPersistenceTests/AgentTopologyPersistenceTransportIntegrationTests.swift",
                     ],
                     notes: [
                         "Export service and exchange-format tests cover file-oriented output paths.",
@@ -474,7 +476,7 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                         "RupaKit/Tests/RupaCoreTests/CommandStackTests.swift",
                         "RupaKit/Tests/RupaCoreTests/PatternArrayOwnershipResolverTests.swift",
                         "RupaKit/Tests/RupaAutomationTests/AutomationRunnerTests.swift",
-                        "RupaKit/Tests/RupaAgentTests/AgentCommandControllerTests.swift",
+                        "RupaKit/Tests/RupaAgentInspectionTests/AgentComponentPatternIntegrationTests.swift",
                         "RupaKit/Tests/RupaUIPackageTests/PatternArrayInspectorStateTests.swift",
                         "RupaKit/Tests/RupaUIPackageTests/PatternArrayEditingServiceTests.swift",
                         "RupaKit/Tests/RupaUIPackageTests/PatternArraySummaryCacheTests.swift",
@@ -598,7 +600,6 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                         "RupaKit/Tests/RupaAutomationTests/AutomationRunnerTests.swift",
                         "RupaKit/Tests/RupaAgentContractTests/AgentCapabilityContractTests.swift",
                         "RupaKit/Tests/RupaAgentInspectionTests/AgentSectionAnalysisIntegrationTests.swift",
-                        "RupaKit/Tests/RupaAgentTests/AgentCommandControllerTests.swift",
                     ],
                     notes: [
                         "Measurement summaries, selection dimensions, surface continuity summaries, and section-plane creation are Agent-readable.",
@@ -653,7 +654,7 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                     tests: [
                         "RupaKit/Tests/RupaCoreTests/SnapResolverTests.swift",
                         "RupaKit/Tests/RupaUIPackageTests/WorkspaceSnapOverrideStateTests.swift",
-                        "RupaKit/Tests/RupaAgentTests/AgentCommandControllerTests.swift",
+                        "RupaKit/Tests/RupaAgentContractTests/AgentCapabilityContractTests.swift",
                     ],
                     notes: [
                         "Visible UVN surface frame displays are resolved through the shared snap resolver as Agent-readable surfaceFrame candidates with query, world point, UV, and local frame axes.",
@@ -811,8 +812,7 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                         "RupaKit/Tests/RupaCoreTests/LoftCommandTests.swift",
                         "RupaKit/Tests/RupaCoreTests/SweepCommandTests.swift",
                         "RupaKit/Tests/RupaAutomationTests/LoftAutomationTests.swift",
-                        "RupaKit/Tests/RupaAgentTests/AgentLoftIntegrationTests.swift",
-                        "RupaKit/Tests/RupaAgentTests/AgentCommandControllerTests.swift",
+                        "RupaKit/Tests/RupaAgentModelingTests/AgentLoftIntegrationTests.swift",
                         "RupaKit/Tests/RupaCLITests/CLIResponseTests.swift",
                     ],
                     notes: [
@@ -888,7 +888,7 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                         "RupaKit/Tests/RupaCoreTests/DesignDocumentTests.swift",
                         "RupaKit/Tests/RupaRenderingTests/ViewportPolySplineSurfaceVertexSlideAffordanceGeometryTests.swift",
                         "RupaKit/Tests/RupaRenderingTests/ViewportSurfaceFrameAxisAffordanceGeometryTests.swift",
-                        "RupaKit/Tests/RupaAgentTests/AgentSurfaceModelingTests.swift",
+                        "RupaKit/Tests/RupaAgentSurfaceTests/AgentSurfaceModelingTests.swift",
                         "RupaKit/Tests/RupaAutomationTests/AutomationRunnerTests.swift",
                         "RupaKit/Tests/RupaCLITests/CLIResponseTests.swift",
                         "RupaKit/Tests/RupaUIPackageTests/SurfaceParameterInspectorStateTests.swift",
@@ -1004,7 +1004,8 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                         "RupaKit/Sources/RupaCore/SketchDisplaySnapshotService.swift",
                     ],
                     tests: [
-                        "RupaKit/Tests/RupaAgentTests/AgentCommandControllerTests.swift",
+                        "RupaKit/Tests/RupaAgentContractTests/AgentCapabilityContractTests.swift",
+                        "RupaKit/Tests/RupaAgentInspectionTests/AgentDisplayIntegrationTests.swift",
                         "RupaKit/Tests/RupaCoreTests/SketchDisplaySnapshotServiceTests.swift",
                     ],
                     notes: [

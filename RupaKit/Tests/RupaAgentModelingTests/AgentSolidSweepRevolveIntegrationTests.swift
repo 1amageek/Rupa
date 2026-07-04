@@ -609,6 +609,121 @@ import SwiftCAD
 }
 
 @MainActor
+@Test func agentPlansAndCreatesMultiTargetSeparatedBRepUnionWithKeptSourceBodies() async throws {
+    var document = DesignDocument.empty()
+    let firstTargetID = try agentCreateBooleanBox(
+        in: &document,
+        name: "Agent Multi Disjoint Union Target A",
+        minX: -0.058,
+        minY: -0.008,
+        maxX: -0.042,
+        maxY: 0.008
+    )
+    let secondTargetID = try agentCreateBooleanBox(
+        in: &document,
+        name: "Agent Multi Disjoint Union Target B",
+        minX: -0.008,
+        minY: -0.008,
+        maxX: 0.008,
+        maxY: 0.008
+    )
+    let toolID = try agentCreateBooleanCylinder(
+        in: &document,
+        name: "Agent Multi Disjoint Union Tool",
+        radius: 0.006,
+        centerX: 0.050
+    )
+    let targetReferences = [
+        BooleanTargetReference(featureID: firstTargetID),
+        BooleanTargetReference(featureID: secondTargetID),
+    ]
+    let server = AgentCommandController()
+    let sessionID = UUID()
+    let session = EditorSession(document: document)
+    server.register(session: session, id: sessionID)
+
+    let planResponse = server.handle(
+        .booleanEvaluationPlan(
+            sessionID: sessionID,
+            targets: targetReferences,
+            tool: BooleanToolReference(featureID: toolID),
+            operation: .union,
+            keepTools: true,
+            expectedGeneration: session.generation
+        )
+    )
+    guard case .booleanEvaluationPlan(let plan) = planResponse else {
+        Issue.record("Agent must return a multi-target separated B-rep Boolean evaluation plan.")
+        return
+    }
+
+    #expect(plan.status == .supported)
+    #expect(plan.keepTools)
+    #expect(plan.targetCount == 2)
+    #expect(plan.resultPrimitiveCount == 3)
+    #expect(plan.operandKind == .separatedSolidBodies)
+    #expect(plan.outputTopologyKind == .disjointSolidUnion)
+    #expect(plan.resultTopologyCounts?.shellCount == 3)
+    #expect(plan.topologySlots.contains(BooleanEvaluationTopologySlot(
+        role: .sideFace,
+        subshape: "copy:target:1:face:0"
+    )))
+
+    let commandResponse = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .createBoolean(
+                name: "Agent Multi Disjoint Union",
+                targets: targetReferences,
+                tool: BooleanToolReference(featureID: toolID),
+                operation: .union,
+                keepTools: true
+            ),
+            expectedGeneration: session.generation
+        )
+    )
+    guard case .command(let commandResult) = commandResponse else {
+        Issue.record("Agent must create a multi-target separated B-rep Boolean union.")
+        return
+    }
+    let booleanID = try #require(session.document.cadDocument.designGraph.order.last)
+    let evaluated = try CADPipeline.modelingDefault(for: session.document).evaluate(
+        session.document.cadDocument
+    )
+    let topologyResponse = server.handle(
+        .topologySummary(
+            sessionID: sessionID,
+            expectedGeneration: commandResult.generation
+        )
+    )
+    guard case .topologySummary(let topology) = topologyResponse else {
+        Issue.record("Agent must return topology summary after multi-target separated B-rep Boolean creation.")
+        return
+    }
+
+    #expect(commandResult.didMutate)
+    #expect(evaluated.brep.bodies.count == 4)
+    #expect(evaluated.brep.shells.count == 6)
+    #expect(topology.entries.contains { entry in
+        entry.sourceFeatureID == firstTargetID.description
+            && entry.generatedRole == GeneratedSubshapeRole.body.rawValue
+            && entry.sceneNodeID != nil
+    })
+    #expect(topology.entries.contains { entry in
+        entry.sourceFeatureID == booleanID.description
+            && entry.generatedRole == GeneratedSubshapeRole.sideFace.rawValue
+            && entry.subshapeRole == "copy:target:1:face:0"
+            && entry.selectionComponentID != nil
+    })
+    #expect(topology.entries.contains { entry in
+        entry.sourceFeatureID == booleanID.description
+            && entry.generatedRole == GeneratedSubshapeRole.edge.rawValue
+            && entry.subshapeRole == "copy:tool:edge:0"
+            && entry.selectionComponentID != nil
+    })
+}
+
+@MainActor
 @Test func agentBooleanEvaluationPlanReportsUnsupportedOperandGateWithoutMutatingDocument() async throws {
     var document = DesignDocument.empty()
     let targetID = try agentCreateBooleanBox(

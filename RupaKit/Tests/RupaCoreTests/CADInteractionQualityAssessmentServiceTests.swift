@@ -259,7 +259,7 @@ import RupaCore
         evidence.tests.contains("RupaKit/Tests/RupaAutomationTests/AutomationRunnerTests.swift")
     })
     #expect(arrays.evidence.contains { evidence in
-        evidence.tests.contains("RupaKit/Tests/RupaAgentTests/AgentCommandControllerTests.swift")
+        evidence.tests.contains("RupaKit/Tests/RupaAgentInspectionTests/AgentComponentPatternIntegrationTests.swift")
     })
     #expect(arrays.evidence.contains { evidence in
         evidence.notes.contains("Pattern Array summaries expose editable fields, lifecycle actions, source-owned scene output policy, cloned feature edit policy, output IDs, independent-copy generation definition identity, per-output source-divergence state, regeneration policy, and diagnostics without forcing CAD evaluation.")

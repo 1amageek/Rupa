@@ -196,6 +196,7 @@ struct CADInteractionDesignProcessSpec: Sendable {
                     caseItem("standalone-target-tool-box-boolean", "Standalone target/tool body references evaluate exact axis-aligned box Boolean subsets through Core, Automation, and Agent.", .supported, .core),
                     caseItem("chained-orthogonal-cell-union-boolean", "Previous orthogonal cell-union Boolean results can become target operands for follow-on Boolean operations.", .supported, .kernel),
                     caseItem("separated-solid-brep-union", "Separated solid target/tool operands can union by copying source B-rep shells into one result body with copied source topology names.", .supported, .kernel),
+                    caseItem("multi-target-separated-solid-union", "Multiple separated solid targets plus a separated tool can preflight and create one copied-topology union while keep-tools preserves source bodies.", .supported, .agent),
                     caseItem("keep-tools-generated-name-policy", "Standalone Boolean removes superseded target/tool generated names or remaps kept tool names according to keep-tools policy.", .supported, .evaluation),
                     caseItem("targetless-rejection", "Invalid targetless/new-body boolean option combinations reject before mutation.", .verified, .core),
                 ],
