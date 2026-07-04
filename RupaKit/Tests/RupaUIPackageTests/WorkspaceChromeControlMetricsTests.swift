@@ -15,7 +15,6 @@ import Testing
     #expect(ViewportCanvasChromeMetrics.topControlContentHeight == 22.0)
     #expect(ViewportCanvasChromeMetrics.edgePadding == 6.0)
     #expect(ViewportCanvasChromeMetrics.topControlItemSpacing == ViewportCanvasChromeMetrics.edgePadding)
-    #expect(WorkspaceChromeControlMetrics.maximumContainerWidth == ViewportCanvasChromeMetrics.topControlMaximumWidth)
     #expect(ViewportCanvasChromeMetrics.topControlMaximumWidth == 260.0)
 }
 

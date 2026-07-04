@@ -1356,11 +1356,8 @@ public struct MainView: View {
             }
         }
         .padding(.horizontal, WorkspaceChromeControlMetrics.containerHorizontalPadding)
-        .frame(
-            maxWidth: WorkspaceChromeControlMetrics.maximumContainerWidth,
-            alignment: .trailing
-        )
         .frame(height: WorkspaceCanvasOverlayLayout.topChromeHeight)
+        .fixedSize(horizontal: true, vertical: false)
         .workspaceGlassContainer()
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("WorkspaceTopBar")
