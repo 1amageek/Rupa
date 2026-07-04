@@ -3178,7 +3178,8 @@ import Testing
         ViewportCanvasChromeLayout.defaultViewportBadgeWidth
             < ViewportCanvasChromeMetrics.topControlMaximumWidth
     )
-    #expect(ViewportCanvasChromeLayout.defaultViewportBadgeWidth <= 126.0)
+    #expect(ViewportCanvasChromeLayout.defaultViewportBadgeWidth == ViewportCanvasChromeLayout.minimumViewportBadgeWidth)
+    #expect(ViewportCanvasChromeLayout.defaultViewportBadgeWidth <= 118.0)
     #expect(ViewportCanvasChromeMetrics.topControlMaximumWidth <= 180.0)
     #expect(ViewportCanvasChromeLayout.viewportBadgePadding == ViewportCanvasChromeMetrics.edgePadding)
     #expect(ViewportCanvasChromeMetrics.topControlContentHeight < ViewportCanvasChromeMetrics.topControlHeight)
@@ -3188,6 +3189,8 @@ import Testing
     )
     #expect(ViewportCanvasChromeMetrics.topControlHorizontalPadding == ViewportCanvasChromeMetrics.edgePadding)
     #expect(ViewportCanvasChromeMetrics.topControlItemSpacing <= ViewportCanvasChromeMetrics.edgePadding)
+    #expect(ViewportCanvasChromeMetrics.borderWidth == 0.0)
+    #expect(ViewportCanvasChromeMetrics.borderOpacity == 0.0)
     #expect(rect.minX == ViewportCanvasChromeLayout.viewportBadgePadding)
     #expect(rect.minY == ViewportCanvasChromeLayout.viewportBadgePadding)
     #expect(rect.width == ViewportCanvasChromeLayout.defaultViewportBadgeWidth)

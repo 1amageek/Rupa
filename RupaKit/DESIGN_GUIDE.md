@@ -29,6 +29,17 @@ flowchart TD
 | Keep top chrome content-width | Top command chrome should hug its controls. Do not add spacers or maximum-width frames that create empty canvas-obscuring background. |
 | Keep document title out of canvas chrome | The document title belongs in navigation/window chrome. Canvas chrome should only show viewport, command, selection, and diagnostic state. |
 
+## Canvas Chrome Tokens
+
+| Token | Value | Reason |
+|---|---:|---|
+| `edgePadding` | 5 pt | Keeps controls close to the canvas edge without touching system chrome. |
+| `topControlHeight` | 28 pt | Keeps top chrome visually light while leaving a 20 pt content slot. |
+| `topControlContentHeight` | 20 pt | Aligns status chips, icon buttons, and viewport badge content. |
+| `topControlHorizontalPadding` | 5 pt | Avoids large empty Liquid Glass surfaces over geometry. |
+| `borderWidth` | 0 pt | Canvas chrome is borderless; glass treatment supplies depth. |
+| `defaultViewportBadgeWidth` | minimum badge width | The scale badge should grow from measured content, not reserve unused space. |
+
 ## Overlay Priority
 
 | Priority | UI | Expected behavior |

@@ -9,5 +9,7 @@ public enum ViewportCanvasChromeMetrics {
     public static let topControlDividerHeight: CGFloat = 16.0
     public static let topControlMaximumWidth: CGFloat = 180.0
     public static let cornerRadius: CGFloat = 8.0
-    public static let surfaceTintOpacity: Double = 0.025
+    public static let surfaceTintOpacity: Double = 0.018
+    public static let borderWidth: CGFloat = 0.0
+    public static let borderOpacity: Double = 0.0
 }

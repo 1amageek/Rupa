@@ -4,7 +4,7 @@ struct ViewportCanvasChromeLayout: Equatable {
     static let axisControlSize = CGSize(width: 286.0, height: 42.0)
     static let axisBottomPadding: CGFloat = 14.0
     static let minimumViewportBadgeWidth: CGFloat = 118.0
-    static let defaultViewportBadgeWidth: CGFloat = 126.0
+    static let defaultViewportBadgeWidth: CGFloat = minimumViewportBadgeWidth
     static let viewportBadgeSize = CGSize(
         width: ViewportCanvasChromeMetrics.topControlMaximumWidth,
         height: ViewportCanvasChromeMetrics.topControlHeight

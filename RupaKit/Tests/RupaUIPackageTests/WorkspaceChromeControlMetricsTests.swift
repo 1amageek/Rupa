@@ -33,6 +33,8 @@ import Testing
     #expect(WorkspaceChromeControlMetrics.horizontalPadding == ViewportCanvasChromeMetrics.edgePadding)
     #expect(ViewportCanvasChromeMetrics.surfaceTintOpacity > 0.0)
     #expect(ViewportCanvasChromeMetrics.surfaceTintOpacity <= 0.03)
+    #expect(ViewportCanvasChromeMetrics.borderWidth == 0.0)
+    #expect(ViewportCanvasChromeMetrics.borderOpacity == 0.0)
 }
 
 @Test func workspaceChromeControlsStayContentSizedOnCanvas() {
@@ -42,6 +44,7 @@ import Testing
         + WorkspaceChromeControlMetrics.containerHorizontalPadding * 2.0
 
     #expect(topBarMinimumContentWidth < viewportBadgeWidth)
+    #expect(ViewportCanvasChromeLayout.defaultViewportBadgeWidth == ViewportCanvasChromeLayout.minimumViewportBadgeWidth)
     #expect(ViewportCanvasChromeLayout.viewportBadgeSize.width == ViewportCanvasChromeMetrics.topControlMaximumWidth)
 }
 
