@@ -1552,6 +1552,7 @@ public struct AutomationRunner {
                 context.diagnostics
             ),
             primaryFeatureID: commandResult?.primaryFeatureID,
+            createdFeatureIDs: commandResult?.createdFeatureIDs ?? [],
             curveRebuildReport: commandResult?.curveRebuildReport,
             addedSelectionDimensionID: commandResult?.addedSelectionDimensionID,
             workspaceScale: context.scale,

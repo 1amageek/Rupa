@@ -1450,7 +1450,7 @@ public final class AgentCommandController: AgentClientProtocol {
         capability(
             "createBoolean",
             category: .solid,
-            summary: "Create a standalone source-owned Boolean feature from target body references, one tool body reference, an operation, and keep-tools policy, returning the created feature ID as primaryFeatureID for follow-on topologySummary targeting.",
+            summary: "Create a standalone source-owned Boolean feature from target body references, one tool body reference, an operation, and keep-tools policy, returning primaryFeatureID plus createdFeatureIDs for follow-on topologySummary targeting.",
             access: .automationCommand,
             mutatesDocument: true,
             discovery: [.topologySummary, .booleanEvaluationPlan, .designDisplaySnapshot],

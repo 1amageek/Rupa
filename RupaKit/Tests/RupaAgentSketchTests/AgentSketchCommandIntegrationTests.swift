@@ -35,10 +35,13 @@ import SwiftCAD
         #expect(Bool(false))
         return
     }
+    let bodyFeatureID = try #require(result.primaryFeatureID)
     #expect(result.commandName == "createExtrudedCircle")
     #expect(result.didMutate)
     #expect(result.generation == DocumentGeneration(1))
     #expect(session.document.cadDocument.designGraph.order.count == 2)
+    #expect(result.createdFeatureIDs == session.document.cadDocument.designGraph.order)
+    #expect(bodyFeatureID == session.document.cadDocument.designGraph.order.last)
     #expect(session.evaluatedBodyCount == 1)
 }
 
@@ -68,10 +71,13 @@ import SwiftCAD
         #expect(Bool(false))
         return
     }
+    let featureID = try #require(session.document.cadDocument.designGraph.order.first)
     #expect(result.commandName == "createCircleSketch")
     #expect(result.didMutate)
     #expect(result.generation == DocumentGeneration(1))
     #expect(session.document.cadDocument.designGraph.order.count == 1)
+    #expect(result.primaryFeatureID == featureID)
+    #expect(result.createdFeatureIDs == [featureID])
     #expect(session.evaluationStatus == .valid)
     #expect(session.evaluatedBodyCount == 0)
 }

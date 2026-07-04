@@ -137,6 +137,7 @@ public final class CADDocumentStore {
         var curveRebuildReport: CurveRebuildReport?
         var addedSelectionDimensionID: SelectionDimensionID?
         var primaryFeatureID: FeatureID?
+        let previousFeatureIDs = Set(document.cadDocument.designGraph.nodes.keys)
         switch command {
         case .setDisplayUnit(let unit):
             document.setDisplayUnit(unit)
@@ -1434,12 +1435,16 @@ public final class CADDocumentStore {
             evaluateCurrentDocument()
         }
 
+        let createdFeatureIDs = document.cadDocument.designGraph.order.filter {
+            previousFeatureIDs.contains($0) == false
+        }
         return CommandExecutionResult(
             commandName: command.name,
             generation: generation,
             didMutate: command.mutatesDocument,
             diagnostics: diagnostics,
             primaryFeatureID: primaryFeatureID,
+            createdFeatureIDs: createdFeatureIDs,
             curveRebuildReport: curveRebuildReport,
             addedSelectionDimensionID: addedSelectionDimensionID
         )
