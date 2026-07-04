@@ -228,16 +228,17 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                     ],
                     notes: [
                         "Standalone Boolean features now own target body references, one tool body reference, operation, and keep-tools policy in source data.",
-                        "Core, Automation, and Agent can create exact axis-aligned box and orthogonal cell-union B-rep Boolean union, difference, intersect, and slice results through the shared command path.",
+                        "Core, Automation, and Agent can create exact axis-aligned box, orthogonal cell-union, and separated solid-body union B-rep Boolean results through the shared command path.",
                         "SwiftCAD exposes the shared Boolean kernel decision, result topology name scheme, generated topology slots, and B-rep topology counts as a non-mutating plan service, and Agent exposes it as document.booleanEvaluationPlan before createBoolean.",
                         "SwiftCAD can extract occupied cells from supported orthogonal solid operands, so previous connected orthogonal cell-union Boolean results can become follow-on Boolean targets.",
+                        "SwiftCAD can copy separated source B-rep shells into one result body with copied source topology names, so Agent workflows can plan and create separated non-box solid unions without mesh fallback.",
                         "Boolean evaluation removes superseded target and tool generated names when keepTools is false, remaps kept tool names when keepTools is true, and returns typed failures for unsupported operands before invalid geometry is committed.",
                     ]
                 ),
             ],
             openWork: [
-                "Union, difference, intersect, and slice support across general non-orthogonal Solid and Sheet topology beyond the current orthogonal cell-union subset.",
-                "Curved, non-planar, and non-axis-aligned operands with exact topology rather than cell decomposition.",
+                "Union, difference, intersect, and slice support across intersecting general non-orthogonal Solid and Sheet topology beyond the current orthogonal cell-union and separated-copy subsets.",
+                "Curved, non-planar, and non-axis-aligned intersecting operands with exact topology rather than cell decomposition.",
                 "Targetless creation policies where the product workflow needs Boolean-style creation without replacing existing targets.",
                 "Exact post-boolean topology naming for arbitrary follow-on selection, dimensions, and direct edits.",
             ],

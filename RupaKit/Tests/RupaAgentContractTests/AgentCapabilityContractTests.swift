@@ -737,13 +737,14 @@ import SwiftCAD
     #expect(boolean.summary.contains("standalone"))
     #expect(boolean.summary.contains("keep-tools"))
     #expect(boolean.failureMode.contains("duplicate targets"))
-    #expect(boolean.failureMode.contains("non-box operands"))
+    #expect(boolean.failureMode.contains("separated solid-body union"))
     #expect(boolean.failureMode.contains("orthogonal cell-union"))
     #expect(boolean.optionMatrix.map(\.name) == ["operation", "keepTools"])
     let booleanOperationAxis = try #require(boolean.optionMatrix.first { $0.name == "operation" })
     let booleanKeepToolsAxis = try #require(boolean.optionMatrix.first { $0.name == "keepTools" })
     #expect(booleanOperationAxis.supportedValues == ["union", "difference", "intersect", "slice"])
     #expect(booleanOperationAxis.notes.contains { $0.contains("axis-aligned box") })
+    #expect(booleanOperationAxis.notes.contains { $0.contains("separated solid-body union") })
     #expect(booleanOperationAxis.notes.contains { $0.contains("mesh-only fallback") })
     #expect(booleanKeepToolsAxis.supportedValues == ["false", "true"])
     #expect(booleanKeepToolsAxis.notes.contains { $0.contains("replaces target and tool") })
@@ -766,7 +767,7 @@ import SwiftCAD
     #expect(booleanEvaluationPlan.failureMode.contains("sourceBodies"))
     #expect(booleanEvaluationPlan.failureMode.contains("operandTopology"))
     #expect(booleanEvaluationPlan.failureMode.contains("capabilityDecision"))
-    #expect(booleanEvaluationPlan.failureMode.contains("curved"))
+    #expect(booleanEvaluationPlan.failureMode.contains("intersecting curved"))
     #expect(booleanEvaluationPlan.optionMatrix.map(\.name) == ["operation", "outputTopologyKind", "keepTools"])
     let booleanPlanOperationAxis = try #require(
         booleanEvaluationPlan.optionMatrix.first { $0.name == "operation" }
@@ -780,6 +781,8 @@ import SwiftCAD
     #expect(booleanPlanOperationAxis.supportedValues == ["union", "difference", "intersect", "slice"])
     #expect(booleanPlanTopologyAxis.supportedValues.contains("orthogonalCellUnion"))
     #expect(booleanPlanTopologyAxis.supportedValues.contains("zThroughFrame"))
+    #expect(booleanPlanTopologyAxis.supportedValues.contains("disjointSolidUnion"))
+    #expect(booleanPlanTopologyAxis.notes.contains { $0.contains("copiedSourceTopology") })
     #expect(booleanPlanKeepToolsAxis.supportedValues == ["false", "true"])
 
     #expect(sweepEvaluationPlan.category == .read)

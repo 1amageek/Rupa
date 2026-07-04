@@ -508,6 +508,107 @@ import SwiftCAD
 }
 
 @MainActor
+@Test func agentPlansAndCreatesSeparatedBRepUnionWithCopiedTopologyNames() async throws {
+    var document = DesignDocument.empty()
+    let targetID = try agentCreateBooleanBox(
+        in: &document,
+        name: "Agent Disjoint Union Target",
+        minX: -0.020,
+        minY: -0.020,
+        maxX: 0.020,
+        maxY: 0.020
+    )
+    let toolID = try agentCreateBooleanCylinder(
+        in: &document,
+        name: "Agent Disjoint Union Tool",
+        radius: 0.006,
+        centerX: 0.060
+    )
+    let server = AgentCommandController()
+    let sessionID = UUID()
+    let session = EditorSession(document: document)
+    server.register(session: session, id: sessionID)
+
+    let planResponse = server.handle(
+        .booleanEvaluationPlan(
+            sessionID: sessionID,
+            targets: [BooleanTargetReference(featureID: targetID)],
+            tool: BooleanToolReference(featureID: toolID),
+            operation: .union,
+            keepTools: false,
+            expectedGeneration: session.generation
+        )
+    )
+    guard case .booleanEvaluationPlan(let plan) = planResponse else {
+        Issue.record("Agent must return a separated B-rep Boolean evaluation plan.")
+        return
+    }
+
+    #expect(plan.status == .supported)
+    #expect(plan.operandKind == .separatedSolidBodies)
+    #expect(plan.outputTopologyKind == .disjointSolidUnion)
+    #expect(plan.topologyNameSchemes.contains(.copiedSourceTopology))
+    #expect(plan.resultTopologyCounts?.bodyCount == 1)
+    #expect(plan.resultTopologyCounts?.shellCount == 2)
+    #expect(plan.topologySlots.contains(BooleanEvaluationTopologySlot(
+        role: .sideFace,
+        subshape: "copy:target:0:face:0"
+    )))
+    #expect(plan.topologySlots.contains(BooleanEvaluationTopologySlot(
+        role: .sideFace,
+        subshape: "copy:tool:face:0"
+    )))
+
+    let commandResponse = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .createBoolean(
+                name: "Agent Disjoint Union",
+                targets: [BooleanTargetReference(featureID: targetID)],
+                tool: BooleanToolReference(featureID: toolID),
+                operation: .union,
+                keepTools: false
+            ),
+            expectedGeneration: session.generation
+        )
+    )
+    guard case .command(let commandResult) = commandResponse else {
+        Issue.record("Agent must create a separated B-rep Boolean union.")
+        return
+    }
+    let booleanID = try #require(session.document.cadDocument.designGraph.order.last)
+    let evaluated = try CADPipeline.modelingDefault(for: session.document).evaluate(
+        session.document.cadDocument
+    )
+    let topologyResponse = server.handle(
+        .topologySummary(
+            sessionID: sessionID,
+            expectedGeneration: commandResult.generation
+        )
+    )
+    guard case .topologySummary(let topology) = topologyResponse else {
+        Issue.record("Agent must return topology summary after separated B-rep Boolean creation.")
+        return
+    }
+
+    #expect(commandResult.didMutate)
+    #expect(evaluated.brep.bodies.count == 1)
+    #expect(evaluated.brep.shells.count == 2)
+    #expect(topology.entries.contains { entry in
+        entry.sourceFeatureID == booleanID.description
+            && entry.generatedRole == GeneratedSubshapeRole.sideFace.rawValue
+            && entry.subshapeRole == "copy:tool:face:0"
+            && entry.selectionComponentID != nil
+    })
+    #expect(topology.entries.contains { entry in
+        entry.sourceFeatureID == booleanID.description
+            && entry.generatedRole == GeneratedSubshapeRole.edge.rawValue
+            && entry.subshapeRole == "copy:target:0:edge:0"
+            && entry.selectionComponentID != nil
+    })
+}
+
+@MainActor
 @Test func agentBooleanEvaluationPlanReportsUnsupportedOperandGateWithoutMutatingDocument() async throws {
     var document = DesignDocument.empty()
     let targetID = try agentCreateBooleanBox(
@@ -640,12 +741,14 @@ private func agentCreateBooleanCylinder(
     in document: inout DesignDocument,
     name: String,
     radius: Double,
+    centerX: Double = 0.0,
+    centerY: Double = 0.0,
     depth: Double = 0.010
 ) throws -> FeatureID {
     let sketchID = try document.createCircleSketch(
         name: "\(name) Sketch",
         plane: .xy,
-        center: agentSketchPoint(x: 0.0, y: 0.0),
+        center: agentSketchPoint(x: centerX, y: centerY),
         radius: .length(radius, .meter)
     )
     return try document.extrudeProfile(

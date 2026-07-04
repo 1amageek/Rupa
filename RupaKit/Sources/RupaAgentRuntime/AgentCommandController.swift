@@ -1354,7 +1354,7 @@ public final class AgentCommandController: AgentClientProtocol {
             mutatesDocument: true,
             discovery: [.sketchEntitySummary],
             targets: [.profile, .sketchEntity, .body],
-            failureMode: "Rejects missing section, path, guide, or target body features, solid output from curve sections, duplicate references, invalid option quantities, disconnected or branched open path chains, closed path chains, round corner style on multi-curve paths until corner-transition blend topology exists, profile-plane degenerate parallel alignment, simplify output, boolean target operations with sheet output, stale generations, targetless boolean operations, new-body target references, collapsed section scale, non-contacting point/chord guide starts, curve-guide path/section contact failures, conflicting signed-axis rail guides, flipped or self-intersecting bilinear quadrilateral or mean-value cage rail guides, overconstrained guide sets, and degenerate swept topology before committing invalid geometry through the shared typed sweep evaluation contract; evaluates mitre corner style for connected open single- or multi-curve path chains; evaluates round corner style for single-curve paths where no corner-transition topology is required; evaluates straight-path normal alignment as a path-normal section sweep, straight-path parallel identity sections as profile-plane-preserving exact extrusion when the path has a profile-normal component, straight-path parallel transformed or guided sections as profile-plane parallel section sweeps when the path has a profile-normal component, curve sections as new-body sheet sweeps, curved-path parallel alignment as a profile-plane parallel section sweep with twist, scale, and profile-plane guide projection, straight-path exact swept-sheet side surfaces for identity section transforms without guides, polygonal swept-solid new-body subsets for connected open curved or multi-curve paths, twisted, scaled, compatible multiple point/chord guide constraints, non-uniform affine, signed-axis, convex quadrilateral bilinear, convex mean-value cage, radial point-guide rail deformation, and curve-guide contact constraints, and polygonal swept-sheet subsets for curved, transformed, or guided sheet inputs; evaluates exact box-prism union, difference, intersection, and slice boolean sweeps with target replacement, separated-fragment difference output, z-through rectangular-frame difference output, orthogonal cell-union connected box difference output, or keep-tools generated-name coverage; reports unsupported evaluation for non-box boolean operands, connected boolean topology outside the axis-aligned box cell-union subset, exact swept surfaces outside the straight identity analytic-boundary subset, corner-transition blend topology outside the current single-curve round subset, and guide constraints outside the affine, signed-axis, convex quadrilateral bilinear, convex mean-value cage, radial point rail, chord, or curve-contact subsets.",
+            failureMode: "Rejects missing section, path, guide, or target body features, solid output from curve sections, duplicate references, invalid option quantities, disconnected or branched open path chains, closed path chains, round corner style on multi-curve paths until corner-transition blend topology exists, profile-plane degenerate parallel alignment, simplify output, boolean target operations with sheet output, stale generations, targetless boolean operations, new-body target references, collapsed section scale, non-contacting point/chord guide starts, curve-guide path/section contact failures, conflicting signed-axis rail guides, flipped or self-intersecting bilinear quadrilateral or mean-value cage rail guides, overconstrained guide sets, and degenerate swept topology before committing invalid geometry through the shared typed sweep evaluation contract; evaluates mitre corner style for connected open single- or multi-curve path chains; evaluates round corner style for single-curve paths where no corner-transition topology is required; evaluates straight-path normal alignment as a path-normal section sweep, straight-path parallel identity sections as profile-plane-preserving exact extrusion when the path has a profile-normal component, straight-path parallel transformed or guided sections as profile-plane parallel section sweeps when the path has a profile-normal component, curve sections as new-body sheet sweeps, curved-path parallel alignment as a profile-plane parallel section sweep with twist, scale, and profile-plane guide projection, straight-path exact swept-sheet side surfaces for identity section transforms without guides, polygonal swept-solid new-body subsets for connected open curved or multi-curve paths, twisted, scaled, compatible multiple point/chord guide constraints, non-uniform affine, signed-axis, convex quadrilateral bilinear, convex mean-value cage, radial point-guide rail deformation, and curve-guide contact constraints, and polygonal swept-sheet subsets for curved, transformed, or guided sheet inputs; evaluates exact box-prism union, difference, intersection, and slice boolean sweeps with target replacement, separated-fragment difference output, z-through rectangular-frame difference output, orthogonal cell-union connected box difference output, separated solid-body union by copied B-rep topology, or keep-tools generated-name coverage; reports unsupported evaluation for intersecting non-box boolean operands, connected boolean topology outside the axis-aligned box cell-union subset, exact swept surfaces outside the straight identity analytic-boundary subset, corner-transition blend topology outside the current single-curve round subset, and guide constraints outside the affine, signed-axis, convex quadrilateral bilinear, convex mean-value cage, radial point rail, chord, or curve-contact subsets.",
             optionMatrix: [
                 AgentCapabilityDescriptor.OptionAxis(
                     name: "alignment",
@@ -1415,13 +1415,13 @@ public final class AgentCommandController: AgentClientProtocol {
             mutatesDocument: true,
             discovery: [.topologySummary, .booleanEvaluationPlan, .designDisplaySnapshot],
             targets: [.body],
-            failureMode: "Rejects missing targets, duplicate targets, a tool that is also a target, non-body references, stale generations, unsupported sheet operands, non-box operands, collapsed empty results, and connected boolean topology outside the current exact axis-aligned box and orthogonal cell-union subset before committing invalid geometry.",
+            failureMode: "Rejects missing targets, duplicate targets, a tool that is also a target, non-body references, stale generations, unsupported sheet operands, collapsed empty results, intersecting curved or non-orthogonal topology outside the current exact axis-aligned box, orthogonal cell-union, and separated solid-body union subsets before committing invalid geometry.",
             optionMatrix: [
                 AgentCapabilityDescriptor.OptionAxis(
                     name: "operation",
                     supportedValues: ["union", "difference", "intersect", "slice"],
                     notes: [
-                        "the first supported kernel subset uses exact axis-aligned box B-rep operands",
+                        "supported exact subsets include axis-aligned box B-rep operands, orthogonal cell-union solids, and separated solid-body union by copied B-rep topology",
                         "unsupported topology returns diagnostics instead of mesh-only fallback"
                     ]
                 ),
@@ -1443,23 +1443,24 @@ public final class AgentCommandController: AgentClientProtocol {
             mutatesDocument: false,
             discovery: [.topologySummary, .booleanEvaluationPlan],
             targets: [.body],
-            failureMode: "Rejects stale generations before evaluation; returns structured unsupported results at requestContract, sourceBodies, operandTopology, or capabilityDecision gates for duplicate targets, a tool that is also a target, missing references, curved, non-orthogonal, sheet, empty, or unsupported result topology before createBoolean mutates the document.",
+            failureMode: "Rejects stale generations before evaluation; returns structured unsupported results at requestContract, sourceBodies, operandTopology, or capabilityDecision gates for duplicate targets, a tool that is also a target, missing references, sheet operands, empty results, or intersecting curved and non-orthogonal result topology outside the supported subsets before createBoolean mutates the document.",
             optionMatrix: [
                 AgentCapabilityDescriptor.OptionAxis(
                     name: "operation",
                     supportedValues: ["union", "difference", "intersect", "slice"],
                     notes: [
                         "Use the result before createBoolean to avoid committing unsupported topology.",
-                        "The current exact subset supports axis-aligned box solids and orthogonal cell-union solids."
+                        "The current exact subset supports axis-aligned box solids, orthogonal cell-union solids, and separated solid-body union."
                     ]
                 ),
                 AgentCapabilityDescriptor.OptionAxis(
                     name: "outputTopologyKind",
-                    supportedValues: ["singleBox", "separatedBoxes", "orthogonalCellUnion", "zThroughFrame"],
+                    supportedValues: ["singleBox", "separatedBoxes", "orthogonalCellUnion", "zThroughFrame", "disjointSolidUnion"],
                     notes: [
                         "singleBox and separatedBoxes keep box primitives explicit",
                         "orthogonalCellUnion preserves connected orthogonal solid results",
-                        "zThroughFrame reports exact through-cut frame topology"
+                        "zThroughFrame reports exact through-cut frame topology",
+                        "disjointSolidUnion copies separated source B-rep topology into one result body with copiedSourceTopology names"
                     ]
                 ),
                 AgentCapabilityDescriptor.OptionAxis(

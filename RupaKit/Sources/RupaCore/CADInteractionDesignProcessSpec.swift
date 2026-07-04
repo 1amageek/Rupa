@@ -195,11 +195,12 @@ struct CADInteractionDesignProcessSpec: Sendable {
                     caseItem("sweep-integrated-box-boolean", "Sweep-integrated axis-aligned box-prism boolean subsets evaluate exactly.", .supported, .kernel),
                     caseItem("standalone-target-tool-box-boolean", "Standalone target/tool body references evaluate exact axis-aligned box Boolean subsets through Core, Automation, and Agent.", .supported, .core),
                     caseItem("chained-orthogonal-cell-union-boolean", "Previous orthogonal cell-union Boolean results can become target operands for follow-on Boolean operations.", .supported, .kernel),
+                    caseItem("separated-solid-brep-union", "Separated solid target/tool operands can union by copying source B-rep shells into one result body with copied source topology names.", .supported, .kernel),
                     caseItem("keep-tools-generated-name-policy", "Standalone Boolean removes superseded target/tool generated names or remaps kept tool names according to keep-tools policy.", .supported, .evaluation),
                     caseItem("targetless-rejection", "Invalid targetless/new-body boolean option combinations reject before mutation.", .verified, .core),
                 ],
                 boundaryCases: [
-                    caseItem("general-solid-sheet-target-tool", "General non-orthogonal Solid and Sheet target/tool operands must preserve exact topology and diagnostics beyond the current orthogonal subset.", .planned, .kernel),
+                    caseItem("general-solid-sheet-target-tool", "Intersecting non-orthogonal Solid and Sheet target/tool operands must preserve exact topology and diagnostics beyond the current orthogonal and separated-copy subsets.", .planned, .kernel),
                 ],
                 degenerateCases: [
                     caseItem("empty-result", "Empty or separated-fragment results require typed result diagnostics.", .planned, .evaluation),
@@ -208,7 +209,7 @@ struct CADInteractionDesignProcessSpec: Sendable {
                     caseItem("mesh-boolean-only", "Mesh-only booleans do not satisfy exact CAD boolean support.", .rejected, .kernel),
                 ],
                 performanceCases: [
-                    caseItem("dense-boolean-operands", "Dense and non-box operands need measured intersection budgets.", .planned, .measurement),
+                    caseItem("dense-boolean-operands", "Dense intersecting operands need measured intersection and copy budgets.", .planned, .measurement),
                 ],
                 surfaces: RouteSurface(
                     documentation: "Boolean reference contract",
@@ -548,7 +549,7 @@ struct CADInteractionDesignProcessSpec: Sendable {
                     caseItem("straight-exact-and-polygonal-sweep", "Supported straight exact and curved polygonal sweep outputs evaluate with topology names.", .supported, .kernel),
                 ],
                 boundaryCases: [
-                    caseItem("non-box-boolean-operands", "Non-box boolean operands and broader exact surfaces remain explicit work.", .planned, .kernel),
+                    caseItem("intersecting-non-box-boolean-operands", "Intersecting non-box boolean operands and broader exact surfaces remain explicit work beyond separated solid union.", .planned, .kernel),
                 ],
                 degenerateCases: [
                     caseItem("collapsed-guide-section", "Collapsed, flipped, or self-intersecting guided sections reject.", .verified, .kernel),
