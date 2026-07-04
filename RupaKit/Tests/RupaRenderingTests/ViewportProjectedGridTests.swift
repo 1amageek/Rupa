@@ -45,6 +45,8 @@ import RupaViewportScene
     #expect(grid.scaleReadout.accessibilityText.contains(grid.scaleReadout.workspaceSpan.text))
     #expect(grid.majorStepMeters >= document.ruler.majorTickMeters)
     #expect(grid.minorStepMeters >= document.ruler.minorTickMeters)
+    #expect(grid.layout.viewportSize == CGSize(width: 800.0, height: 600.0))
+    #expect(grid.layout.basis == grid.basis)
     #expect(abs(firstXVector.dx) > 0.0)
     #expect(abs(firstXVector.dy) > 0.0)
     #expect(abs(firstZVector.dx) > 0.0)

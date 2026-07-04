@@ -400,6 +400,9 @@ public struct Viewport: View {
                     selectionAffordanceAccessibilityMarker
                 }
                 .overlay {
+                    constructionPlaneHandleAccessibilityMarkers(layout: projectedGrid.layout)
+                }
+                .overlay {
                     gridAccessibilityMarkers(readout: projectedGrid.scaleReadout)
                 }
                 .overlay {
@@ -639,6 +642,54 @@ public struct Viewport: View {
                 .accessibilityIdentifier("CanvasSelectionAffordance")
                 .accessibilityLabel("Selected target affordance")
                 .allowsHitTesting(false)
+        }
+    }
+
+    @ViewBuilder private func constructionPlaneHandleAccessibilityMarkers(
+        layout: ViewportLayout
+    ) -> some View {
+        if onConstructionPlaneHandleDrag != nil {
+            let targets = ViewportConstructionPlaneHandleGeometry().targets(
+                document: document,
+                selection: selection,
+                layout: layout
+            )
+            ForEach(Array(targets.enumerated()), id: \.offset) { _, target in
+                let point = constructionPlaneHandleMarkerPoint(target)
+                Rectangle()
+                    .fill(Color.clear)
+                    .frame(width: 24.0, height: 24.0)
+                    .position(point)
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityIdentifier(
+                        "CanvasConstructionPlaneHandle.\(target.handle.rawValue)"
+                    )
+                    .accessibilityLabel(constructionPlaneHandleAccessibilityLabel(target))
+                    .accessibilityValue(String(describing: target.constructionPlaneID))
+                    .allowsHitTesting(false)
+            }
+        }
+    }
+
+    private func constructionPlaneHandleMarkerPoint(
+        _ target: ViewportConstructionPlaneHandleTarget
+    ) -> CGPoint {
+        switch target.handle {
+        case .origin:
+            return target.projectedOrigin
+        case .normal:
+            return target.projectedNormalEnd
+        }
+    }
+
+    private func constructionPlaneHandleAccessibilityLabel(
+        _ target: ViewportConstructionPlaneHandleTarget
+    ) -> String {
+        switch target.handle {
+        case .origin:
+            return "Construction plane origin handle"
+        case .normal:
+            return "Construction plane normal handle"
         }
     }
 

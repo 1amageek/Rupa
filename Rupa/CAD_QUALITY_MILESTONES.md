@@ -132,6 +132,8 @@ flowchart TD
 
 ## Current Cursor
 
+2026-07-05 CPlane app UI reachability update: selected arbitrary CPlane launch state now exposes Inspector Origin/Normal controls, Plane rail rename labels, and Canvas Origin/Normal handle markers from the same projected layout used for drawing and hit testing. Remaining app workflow work is authorized-runner execution, saved-plane creation automation, and committed viewport handle drag coverage.
+
 | Area | Current cursor | Next non-negotiable result |
 |---|---|---|
 | Design process | D5 packet calibration implemented | `DESIGN_PROCESS.md` defines the DBN-aligned process, and RupaCore exposes Codable design process packets on every CAD quality assessment entry. `CADInteractionDesignProcessSpec` authors per-capability source entities, target entities, generated topology, tolerances, ownership boundaries, supported/boundary/degenerate/rejected/performance cases, route surfaces, invariants, and decision conflicts. Assessment packets use those specs for CaseSet, route matrix, constraint binding, resolved route IDs, and FlowGraph nodes from documentation through product, UI, Core, Automation, Agent, CLI, kernel, evaluation, measurement, and diagnostics. `CADInteractionDesignProcessObservationSet` ingests open work, gate ratings, test evidence, route status, performance status, and FlowGraph validation into structured observations, and confidence carries calibration anchors plus performance measurement records. CAD interaction packets now include measured Agent JSON payload-size benchmarks plus deterministic dense geometry operation, wall-clock, and resident-memory fixture budgets for every capability; remaining performance work is host-measured runtime samples for heavy geometry paths. |

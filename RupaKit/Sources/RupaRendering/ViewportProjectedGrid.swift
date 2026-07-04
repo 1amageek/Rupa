@@ -151,6 +151,7 @@ public struct ViewportProjectedGrid: Equatable {
     public var lines: [Line]
     public var scaleLabels: [ScaleLabel]
     public var scaleReadout: ScaleReadout
+    public var layout: ViewportLayout
 
     public init(
         document: DesignDocument,
@@ -208,6 +209,7 @@ public struct ViewportProjectedGrid: Equatable {
         )
 
         self.basis = basis
+        self.layout = layout
         self.minorStepMeters = minorStepMeters
         self.majorStepMeters = resolvedMajorStepMeters
         self.minorStepPixels = minorStepPixels

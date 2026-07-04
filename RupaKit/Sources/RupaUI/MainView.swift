@@ -2117,6 +2117,7 @@ public struct MainView: View {
                 .buttonStyle(.plain)
                 .foregroundStyle(Color.primary.opacity(0.68))
                 .help("Activate and Align View")
+                .accessibilityLabel("Align View To \(entry.name)")
                 .accessibilityIdentifier("WorkspacePlane.alignView.\(identifierSuffix)")
 
                 Button {
@@ -2129,6 +2130,7 @@ public struct MainView: View {
                 .buttonStyle(.plain)
                 .foregroundStyle(Color.primary.opacity(0.68))
                 .help("Update Plane From View")
+                .accessibilityLabel("Update \(entry.name) From View")
                 .accessibilityIdentifier("WorkspacePlane.updateFromView.\(identifierSuffix)")
             }
 
@@ -2146,6 +2148,8 @@ public struct MainView: View {
                 .onSubmit {
                     commitConstructionPlaneRename()
                 }
+                .accessibilityLabel("Construction Plane Name")
+                .accessibilityValue(constructionPlaneRenameText)
                 .accessibilityIdentifier("WorkspacePlane.renameField.\(identifierSuffix)")
             } else {
                 Button {
@@ -2160,6 +2164,8 @@ public struct MainView: View {
                 }
                 .buttonStyle(.plain)
                 .help("Select Construction Plane")
+                .accessibilityLabel("Select \(entry.name)")
+                .accessibilityValue(isSelected ? "Selected" : "Available")
                 .accessibilityIdentifier("WorkspacePlane.select.\(identifierSuffix)")
             }
 
@@ -2177,6 +2183,9 @@ public struct MainView: View {
             .buttonStyle(.plain)
             .foregroundStyle(Color.primary.opacity(0.72))
             .help(isRenaming ? "Commit Construction Plane Name" : "Rename Construction Plane")
+            .accessibilityLabel(
+                isRenaming ? "Commit Construction Plane Name" : "Rename \(entry.name)"
+            )
             .accessibilityIdentifier("WorkspacePlane.rename.\(identifierSuffix)")
 
             if isRenaming {
@@ -2190,6 +2199,7 @@ public struct MainView: View {
                 .buttonStyle(.plain)
                 .foregroundStyle(Color.primary.opacity(0.56))
                 .help("Cancel Construction Plane Rename")
+                .accessibilityLabel("Cancel Construction Plane Rename")
                 .accessibilityIdentifier("WorkspacePlane.renameCancel.\(identifierSuffix)")
             }
         }

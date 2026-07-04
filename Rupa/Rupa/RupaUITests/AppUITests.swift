@@ -239,6 +239,14 @@ final class AppUITests: XCTestCase {
         let app = launchApp(arguments: ["--rupa-ui-fixture=selected-custom-cplane"])
         let canvas = app.otherElements["CanvasViewport"]
         XCTAssertTrue(canvas.waitForExistence(timeout: 8))
+        XCTAssertTrue(
+            app.descendants(matching: .any)["CanvasConstructionPlaneHandle.origin"]
+                .waitForExistence(timeout: 3)
+        )
+        XCTAssertTrue(
+            app.descendants(matching: .any)["CanvasConstructionPlaneHandle.normal"]
+                .waitForExistence(timeout: 3)
+        )
 
         let inspectorButton = app.buttons["WorkspaceCommand.inspector"]
         XCTAssertTrue(inspectorButton.waitForExistence(timeout: 3))
@@ -275,6 +283,30 @@ final class AppUITests: XCTestCase {
         )
         XCTAssertFalse(app.buttons["InspectorConstructionPlane.activate"].isEnabled)
         XCTAssertTrue(app.buttons["InspectorConstructionPlane.fromView"].exists)
+    }
+
+    @MainActor
+    func testSelectedCustomConstructionPlaneLaunchFixtureSupportsPlaneRailRename() throws {
+        let app = launchApp(arguments: ["--rupa-ui-fixture=selected-custom-cplane"])
+        let canvas = app.otherElements["CanvasViewport"]
+        XCTAssertTrue(canvas.waitForExistence(timeout: 8))
+
+        expandUtilityRailIfNeeded(in: app)
+        let renameButton = app.buttons["Rename Arbitrary CPlane"]
+        XCTAssertTrue(renameButton.waitForExistence(timeout: 3))
+        renameButton.click()
+
+        let renameField = app.textFields["Construction Plane Name"]
+        XCTAssertTrue(renameField.waitForExistence(timeout: 3))
+        renameField.click()
+        renameField.typeKey("a", modifierFlags: .command)
+        renameField.typeText("Renamed CPlane")
+
+        let commitButton = app.buttons["Commit Construction Plane Name"]
+        XCTAssertTrue(commitButton.waitForExistence(timeout: 3))
+        commitButton.click()
+
+        XCTAssertTrue(app.buttons["Select Renamed CPlane"].waitForExistence(timeout: 3))
     }
 
     @MainActor
