@@ -11,13 +11,13 @@ import Testing
     let containedHeight = WorkspaceChromeControlMetrics.controlHeight
         + WorkspaceChromeControlMetrics.containerVerticalPadding * 2.0
     #expect(abs(containedHeight - WorkspaceChromeControlMetrics.containerHeight) < 1.0e-9)
-    #expect(ViewportCanvasChromeMetrics.topControlHeight == 28.0)
-    #expect(ViewportCanvasChromeMetrics.topControlContentHeight == 20.0)
-    #expect(ViewportCanvasChromeMetrics.edgePadding == 5.0)
+    #expect(ViewportCanvasChromeMetrics.topControlHeight == 26.0)
+    #expect(ViewportCanvasChromeMetrics.topControlContentHeight == 18.0)
+    #expect(ViewportCanvasChromeMetrics.edgePadding == 4.0)
     #expect(ViewportCanvasChromeMetrics.topControlItemSpacing == ViewportCanvasChromeMetrics.edgePadding)
-    #expect(ViewportCanvasChromeMetrics.topControlMaximumWidth == 180.0)
+    #expect(ViewportCanvasChromeMetrics.topControlMaximumWidth == 168.0)
     #expect(WorkspaceChromeControlMetrics.containerHeight == ViewportCanvasChromeLayout.viewportBadgeHeight)
-    #expect(WorkspaceChromeControlMetrics.containerHeight == 28.0)
+    #expect(WorkspaceChromeControlMetrics.containerHeight == 26.0)
 }
 
 @Test func workspaceChromeControlsUseSharedBorderlessLiquidGlassControlShape() {
@@ -45,6 +45,7 @@ import Testing
 
     #expect(topBarMinimumContentWidth < viewportBadgeWidth)
     #expect(ViewportCanvasChromeLayout.defaultViewportBadgeWidth == ViewportCanvasChromeLayout.minimumViewportBadgeWidth)
+    #expect(ViewportCanvasChromeLayout.defaultViewportBadgeWidth == 112.0)
     #expect(ViewportCanvasChromeLayout.maximumViewportBadgeWidth == ViewportCanvasChromeMetrics.topControlMaximumWidth)
 }
 

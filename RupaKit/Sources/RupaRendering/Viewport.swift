@@ -772,11 +772,14 @@ public struct Viewport: View {
             Text(scaleReadout.canvasHUDText)
                 .font(.system(.caption, design: .monospaced))
                 .lineLimit(1)
+                .minimumScaleFactor(0.85)
                 .truncationMode(.middle)
             Divider()
                 .frame(height: ViewportCanvasChromeMetrics.topControlDividerHeight)
             Text("\(Int((camera.zoom * 100.0).rounded()))%")
                 .font(.system(.caption, design: .monospaced))
+                .lineLimit(1)
+                .minimumScaleFactor(0.85)
         }
         .padding(.horizontal, ViewportCanvasChromeMetrics.topControlHorizontalPadding)
         .frame(

@@ -19,10 +19,10 @@ flowchart TD
 
 | Rule | Guidance |
 |---|---|
-| Prefer compact overlay insets | Canvas overlays should use a 5 pt outer inset by default. Increase only when overlap with system chrome or hit targets is proven. |
-| Keep overlay internals dense | Top/context panels and viewport badges should share a 28 pt container height with 5 pt horizontal padding. Utility rails should default to 8 pt padding. |
-| Keep small repeated pills compact | Status chips and value pills should default to 5 pt horizontal padding inside the shared 20 pt content height. |
-| Keep tool palettes compact | Tool palettes should keep their container padding near 4 pt and item spacing near 5 pt while preserving tappable icon targets. |
+| Prefer compact overlay insets | Canvas overlays should use a 4 pt outer inset by default. Increase only when overlap with system chrome or hit targets is proven. |
+| Keep overlay internals dense | Top/context panels and viewport badges should share a 26 pt container height with 4 pt horizontal padding. Utility rails should default to 8 pt padding. |
+| Keep small repeated pills compact | Status chips and value pills should default to 4 pt horizontal padding inside the shared 18 pt content height. |
+| Keep tool palettes compact | Tool palettes should keep their container padding near 2 pt and item spacing near 4 pt while preserving tappable icon targets. |
 | Do not use decorative spacing on canvas | Extra padding, large card margins, and oversized floating containers hide geometry and reduce picking confidence. |
 | Avoid nested framed surfaces | Canvas overlays may use one Liquid Glass surface. Avoid cards inside cards or decorative wrapper layers on the canvas. |
 | Use shared Liquid Glass chrome | Canvas badges, command chrome, compact rails, and context panels should use the same borderless Liquid Glass container. Do not mix explicit bordered and unbordered canvas chrome. Top and context chrome in `RupaUI` should use `workspaceCanvasTopChromeContainer`. |
@@ -33,13 +33,13 @@ flowchart TD
 
 | Token | Value | Reason |
 |---|---:|---|
-| `edgePadding` | 5 pt | Keeps controls close to the canvas edge without touching system chrome. |
-| `topControlHeight` | 28 pt | Keeps top chrome visually light while leaving a 20 pt content slot. |
-| `topControlContentHeight` | 20 pt | Aligns status chips, icon buttons, and viewport badge content. |
-| `topControlHorizontalPadding` | 5 pt | Avoids large empty Liquid Glass surfaces over geometry. |
+| `edgePadding` | 4 pt | Keeps controls close to the canvas edge without touching system chrome. |
+| `topControlHeight` | 26 pt | Keeps top chrome visually light while leaving an 18 pt content slot. |
+| `topControlContentHeight` | 18 pt | Aligns status chips, icon buttons, and viewport badge content. |
+| `topControlHorizontalPadding` | 4 pt | Avoids large empty Liquid Glass surfaces over geometry. |
 | `borderWidth` | 0 pt | Canvas chrome is borderless; glass treatment supplies depth. |
 | `defaultViewportBadgeWidth` | minimum badge width | The scale badge should grow from measured content, not reserve unused space. |
-| `maximumViewportBadgeWidth` | 180 pt | Caps unusually long readouts without making ordinary HUD chrome occupy the maximum width. |
+| `maximumViewportBadgeWidth` | 168 pt | Caps unusually long readouts without making ordinary HUD chrome occupy the maximum width. |
 
 ## Overlay Priority
 
@@ -54,13 +54,13 @@ flowchart TD
 
 | Component | Outer placement | Internal spacing |
 |---|---:|---:|
-| `workspaceTopBar` | 5 pt top and horizontal overlay inset | `workspaceCanvasTopChromeContainer`, content-width, no document title |
-| `viewportBadge` | 5 pt top-leading overlay inset | 28 pt borderless Liquid Glass container; compact unit/status/zoom plus one resolved-grid readout |
-| `floatingToolPalette` | 5 pt leading overlay inset | 4 pt container padding, 5 pt item spacing |
-| `workspaceUtilityRail` | 5 pt trailing overlay inset | 8 pt container padding, 8 pt section spacing |
-| `viewportContextPanel` | 5 pt bottom and horizontal overlay inset | `workspaceCanvasTopChromeContainer`, scrolls horizontally only when content cannot fit |
-| `workspaceValuePill` | Inline in compact panels | 5 pt horizontal padding inside the shared 20 pt content height |
-| `workspaceStatusChip` | Inline in compact panels | 5 pt horizontal padding inside the shared 20 pt content height |
+| `workspaceTopBar` | 4 pt top and horizontal overlay inset | `workspaceCanvasTopChromeContainer`, content-width, no document title |
+| `viewportBadge` | 4 pt top-leading overlay inset | 26 pt borderless Liquid Glass container; compact unit/status/zoom plus one resolved-grid readout |
+| `floatingToolPalette` | 4 pt leading overlay inset | 2 pt container padding, 4 pt item spacing |
+| `workspaceUtilityRail` | 4 pt trailing overlay inset | 8 pt container padding, 8 pt section spacing |
+| `viewportContextPanel` | 4 pt bottom and horizontal overlay inset | `workspaceCanvasTopChromeContainer`, scrolls horizontally only when content cannot fit |
+| `workspaceValuePill` | Inline in compact panels | 4 pt horizontal padding inside the shared 18 pt content height |
+| `workspaceStatusChip` | Inline in compact panels | 4 pt horizontal padding inside the shared 18 pt content height |
 | `WorkspaceSelectionScopeControl` | Utility rail `Select` section | One fixed-width icon rail; full labels belong in tooltips and accessibility metadata |
 
 ## Affordance Rules
