@@ -3896,6 +3896,7 @@ struct CLIViewCommandTests {
         _ = try session.execute(.createSavedView(savedView))
         try DocumentFileService().save(session.document, to: documentURL)
         let outputURL = temporaryDirectory.appendingPathComponent("projection.svg")
+        let pdfOutputURL = temporaryDirectory.appendingPathComponent("projection.pdf")
 
         let result = try await runCLI([
             "view",
@@ -3907,6 +3908,8 @@ struct CLIViewCommandTests {
             "100",
             "--svg-output",
             outputURL.path,
+            "--pdf-output",
+            pdfOutputURL.path,
             "--mode",
             "file",
             "--json",
@@ -3922,12 +3925,20 @@ struct CLIViewCommandTests {
         #expect(response.saved == false)
         #expect(response.drawingProjectionSVGPath == outputURL.path)
         #expect((response.drawingProjectionSVGByteCount ?? 0) > 0)
+        #expect(response.drawingProjectionPDFPath == pdfOutputURL.path)
+        #expect((response.drawingProjectionPDFByteCount ?? 0) > 0)
         #expect(FileManager.default.fileExists(atPath: outputURL.path))
+        #expect(FileManager.default.fileExists(atPath: pdfOutputURL.path))
         let svg = String(decoding: try Data(contentsOf: outputURL), as: UTF8.self)
         #expect(svg.contains(#"<svg xmlns="http://www.w3.org/2000/svg""#))
         #expect(svg.contains(#"id="visible-segments" data-visibility="visible""#))
         #expect(svg.contains(#"id="hidden-segments" data-visibility="hidden""#))
         #expect(svg.contains(#"stroke-dasharray="6 4""#))
+        let pdf = String(decoding: try Data(contentsOf: pdfOutputURL), as: UTF8.self)
+        #expect(pdf.hasPrefix("%PDF-1.4"))
+        #expect(pdf.contains("% layer visible-segments"))
+        #expect(pdf.contains("% layer hidden-segments"))
+        #expect(pdf.contains("[6 4] 0 d"))
         #expect(drawingProjection.savedViewID == savedView.id)
         #expect(drawingProjection.strokeCount == 12)
         #expect(drawingProjection.visibilitySegmentCount >= drawingProjection.strokeCount)

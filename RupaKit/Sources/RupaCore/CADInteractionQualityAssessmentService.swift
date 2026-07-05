@@ -353,6 +353,7 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                         "RupaKit/Sources/RupaCore/ExportResult.swift",
                         "RupaKit/Sources/RupaCore/DrawingProjectionService.swift",
                         "RupaKit/Sources/RupaCore/DrawingProjectionSVGExporter.swift",
+                        "RupaKit/Sources/RupaCore/DrawingProjectionPDFExporter.swift",
                         "swift-CAD/Sources/CADExchange/OfficialFormatExchange.swift",
                         "swift-CAD/Sources/CADExchange/PDFExporter.swift",
                         "RupaKit/Sources/RupaAgentRuntime/AgentCommandController.swift",
@@ -361,23 +362,25 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                         "RupaKit/Tests/RupaCoreTests/DesignDocumentTests.swift",
                         "RupaKit/Tests/RupaCoreTests/DrawingProjectionServiceTests.swift",
                         "RupaKit/Tests/RupaCoreTests/DrawingProjectionSVGExporterTests.swift",
+                        "RupaKit/Tests/RupaCoreTests/DrawingProjectionPDFExporterTests.swift",
                         "swift-CAD/Tests/CADExchangeTests/CADExchangeTests.swift",
                         "RupaKit/Tests/RupaAgentTopologyPersistenceTests/AgentTopologyPersistenceTransportIntegrationTests.swift",
                     ],
                     notes: [
                         "Export service and exchange-format tests cover file-oriented output paths.",
-                        "Saved-view drawing projection now generates structured hidden-line strokes plus section contours and hatch segments for SVG export.",
-                        "PDF export, drawing annotation workflows, radial hatching, and parametric material hatching remain separate gaps.",
+                        "Saved-view drawing projection now generates structured hidden-line strokes plus section contours and hatch segments for SVG and PDF export.",
+                        "Drawing page/style presets, drawing annotation workflows, radial hatching, and parametric material hatching remain separate gaps.",
                     ]
                 ),
             ],
             openWork: [
                 "Hidden-line export from selected views with broader occluded-line and style controls.",
+                "Drawing page and style presets for SVG and PDF output.",
                 "Radial hatching and parametric material hatching for technical drawings.",
                 "Drawing-space annotations that are distinct from model-driving dimensions.",
                 "Agent-readable import contract for supported exchange formats and failure recovery.",
             ],
-            next: "Broaden drawing export from structured SVG into PDF output, style presets, annotations, and curved analytic hidden-line support."
+            next: "Broaden drawing export from structured SVG/PDF into page presets, style presets, annotations, and curved analytic hidden-line support."
         ),
         entry(
             area: .patternsAndArrays,

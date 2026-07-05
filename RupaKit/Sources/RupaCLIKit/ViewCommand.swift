@@ -137,6 +137,9 @@ public struct ViewProjectionCommand: ParsableCommand {
     @Option(help: "Optional SVG output path for the generated hidden-line drawing.")
     public var svgOutput: String?
 
+    @Option(help: "Optional PDF output path for the generated hidden-line drawing.")
+    public var pdfOutput: String?
+
     public init() {}
 
     public func run() throws {
@@ -160,14 +163,26 @@ public struct ViewProjectionCommand: ParsableCommand {
                     )
                 )
             )
-            if let svgOutput {
+            if svgOutput != nil || pdfOutput != nil {
                 let drawingProjection = try requiredDrawingProjection(response)
-                let output = try writeSVG(
-                    DrawingProjectionSVGExporter().svg(for: drawingProjection),
-                    to: svgOutput
-                )
-                response.drawingProjectionSVGPath = output.path
-                response.drawingProjectionSVGByteCount = output.byteCount
+                if let svgOutput {
+                    let output = try writeArtifact(
+                        Data(DrawingProjectionSVGExporter().svg(for: drawingProjection).utf8),
+                        artifactName: "SVG",
+                        to: svgOutput
+                    )
+                    response.drawingProjectionSVGPath = output.path
+                    response.drawingProjectionSVGByteCount = output.byteCount
+                }
+                if let pdfOutput {
+                    let output = try writeArtifact(
+                        DrawingProjectionPDFExporter().pdf(for: drawingProjection),
+                        artifactName: "PDF",
+                        to: pdfOutput
+                    )
+                    response.drawingProjectionPDFPath = output.path
+                    response.drawingProjectionPDFByteCount = output.byteCount
+                }
             }
             try CLIOutput.write(response: response, asJSON: document.json)
         }
@@ -179,24 +194,24 @@ public struct ViewProjectionCommand: ParsableCommand {
         guard let drawingProjection = response.drawingProjection else {
             throw EditorError(
                 code: .exportFailed,
-                message: "Drawing projection SVG export requires a generated drawing projection result."
+                message: "Drawing projection export requires a generated drawing projection result."
             )
         }
         return drawingProjection
     }
 
-    private func writeSVG(
-        _ svg: String,
+    private func writeArtifact(
+        _ data: Data,
+        artifactName: String,
         to path: String
     ) throws -> (path: String, byteCount: UInt64) {
         let outputURL = URL(fileURLWithPath: path)
-        let data = Data(svg.utf8)
         do {
             try data.write(to: outputURL, options: .atomic)
         } catch {
             throw EditorError(
                 code: .exportFailed,
-                message: "Drawing projection SVG export failed at \(outputURL.path): \(String(describing: error))"
+                message: "Drawing projection \(artifactName) export failed at \(outputURL.path): \(String(describing: error))"
             )
         }
         return (outputURL.path, UInt64(data.count))
