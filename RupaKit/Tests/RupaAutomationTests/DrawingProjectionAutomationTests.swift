@@ -45,8 +45,11 @@ import RupaCore
     #expect(result.savedViews?.map(\.id).contains(savedView.id) == true)
     #expect(projection.savedViewID == savedView.id)
     #expect(projection.strokeCount == 12)
-    #expect(projection.visibleStrokeCount > 0)
-    #expect(projection.hiddenStrokeCount > 0)
     #expect(projection.unclassifiedStrokeCount == 0)
+    #expect(projection.visibilitySegmentCount >= projection.strokeCount)
+    #expect(projection.visibleSegmentCount > 0)
+    #expect(projection.hiddenSegmentCount > 0)
+    #expect(projection.unclassifiedSegmentCount == 0)
     #expect(result.message.contains("12 stroke"))
+    #expect(result.message.contains("visibility segment"))
 }

@@ -20,6 +20,40 @@ public struct DrawingProjectionResult: Codable, Equatable, Sendable {
         case unclassified
     }
 
+    public struct VisibilitySegment: Codable, Equatable, Sendable {
+        public var id: String
+        public var visibility: Visibility
+        public var startFraction: Double
+        public var endFraction: Double
+        public var start2D: Point2D
+        public var end2D: Point2D
+        public var minimumDepthMeters: Double
+        public var maximumDepthMeters: Double
+        public var lengthMeters: Double
+
+        public init(
+            id: String,
+            visibility: Visibility,
+            startFraction: Double,
+            endFraction: Double,
+            start2D: Point2D,
+            end2D: Point2D,
+            minimumDepthMeters: Double,
+            maximumDepthMeters: Double,
+            lengthMeters: Double
+        ) {
+            self.id = id
+            self.visibility = visibility
+            self.startFraction = startFraction
+            self.endFraction = endFraction
+            self.start2D = start2D
+            self.end2D = end2D
+            self.minimumDepthMeters = minimumDepthMeters
+            self.maximumDepthMeters = maximumDepthMeters
+            self.lengthMeters = lengthMeters
+        }
+    }
+
     public struct ViewFrame: Codable, Equatable, Sendable {
         public var target: Point3D
         public var right: Vector3D
@@ -76,6 +110,7 @@ public struct DrawingProjectionResult: Codable, Equatable, Sendable {
         public var minimumDepthMeters: Double
         public var maximumDepthMeters: Double
         public var lengthMeters: Double
+        public var visibilitySegments: [VisibilitySegment]
 
         public init(
             id: String,
@@ -88,7 +123,8 @@ public struct DrawingProjectionResult: Codable, Equatable, Sendable {
             end2D: Point2D,
             minimumDepthMeters: Double,
             maximumDepthMeters: Double,
-            lengthMeters: Double
+            lengthMeters: Double,
+            visibilitySegments: [VisibilitySegment]
         ) {
             self.id = id
             self.bodyID = bodyID
@@ -101,6 +137,7 @@ public struct DrawingProjectionResult: Codable, Equatable, Sendable {
             self.minimumDepthMeters = minimumDepthMeters
             self.maximumDepthMeters = maximumDepthMeters
             self.lengthMeters = lengthMeters
+            self.visibilitySegments = visibilitySegments
         }
     }
 
@@ -117,6 +154,11 @@ public struct DrawingProjectionResult: Codable, Equatable, Sendable {
     public var hiddenStrokeCount: Int
     public var partiallyHiddenStrokeCount: Int
     public var unclassifiedStrokeCount: Int
+    public var visibilitySegmentCount: Int
+    public var visibleSegmentCount: Int
+    public var hiddenSegmentCount: Int
+    public var partiallyHiddenSegmentCount: Int
+    public var unclassifiedSegmentCount: Int
     public var truncatedStrokes: Bool
     public var bounds: Bounds2D?
     public var strokes: [Stroke]
@@ -137,6 +179,7 @@ public struct DrawingProjectionResult: Codable, Equatable, Sendable {
         diagnostics: [EditorDiagnostic]
     ) {
         let visibilityCounts = Self.visibilityCounts(strokes)
+        let visibilitySegmentCounts = Self.visibilitySegmentCounts(strokes)
         self.displayUnit = displayUnit
         self.savedViewID = savedViewID
         self.savedViewName = savedViewName
@@ -150,6 +193,11 @@ public struct DrawingProjectionResult: Codable, Equatable, Sendable {
         self.hiddenStrokeCount = visibilityCounts.hidden
         self.partiallyHiddenStrokeCount = visibilityCounts.partiallyHidden
         self.unclassifiedStrokeCount = visibilityCounts.unclassified
+        self.visibilitySegmentCount = visibilitySegmentCounts.total
+        self.visibleSegmentCount = visibilitySegmentCounts.visible
+        self.hiddenSegmentCount = visibilitySegmentCounts.hidden
+        self.partiallyHiddenSegmentCount = visibilitySegmentCounts.partiallyHidden
+        self.unclassifiedSegmentCount = visibilitySegmentCounts.unclassified
         self.truncatedStrokes = truncatedStrokes
         self.bounds = bounds
         self.strokes = strokes
@@ -176,5 +224,31 @@ public struct DrawingProjectionResult: Codable, Equatable, Sendable {
             }
         }
         return (visible, hidden, partiallyHidden, unclassified)
+    }
+
+    private static func visibilitySegmentCounts(
+        _ strokes: [Stroke]
+    ) -> (total: Int, visible: Int, hidden: Int, partiallyHidden: Int, unclassified: Int) {
+        var visible = 0
+        var hidden = 0
+        var partiallyHidden = 0
+        var unclassified = 0
+        var total = 0
+        for stroke in strokes {
+            for segment in stroke.visibilitySegments {
+                total += 1
+                switch segment.visibility {
+                case .visible:
+                    visible += 1
+                case .hidden:
+                    hidden += 1
+                case .partiallyHidden:
+                    partiallyHidden += 1
+                case .unclassified:
+                    unclassified += 1
+                }
+            }
+        }
+        return (total, visible, hidden, partiallyHidden, unclassified)
     }
 }

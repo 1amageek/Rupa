@@ -2197,7 +2197,20 @@ private func agentCodecDrawingProjection(
                 end2D: Point2D(x: 1.0, y: 0.0),
                 minimumDepthMeters: 0.0,
                 maximumDepthMeters: 0.0,
-                lengthMeters: 1.0
+                lengthMeters: 1.0,
+                visibilitySegments: [
+                    DrawingProjectionResult.VisibilitySegment(
+                        id: "\(savedView.id.description):stroke:0:segment:0",
+                        visibility: .visible,
+                        startFraction: 0.0,
+                        endFraction: 1.0,
+                        start2D: Point2D(x: 0.0, y: 0.0),
+                        end2D: Point2D(x: 1.0, y: 0.0),
+                        minimumDepthMeters: 0.0,
+                        maximumDepthMeters: 0.0,
+                        lengthMeters: 1.0
+                    ),
+                ]
             ),
         ],
         diagnostics: []

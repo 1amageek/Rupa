@@ -1700,7 +1700,7 @@ public struct AutomationRunner {
         _ drawingProjection: DrawingProjectionResult
     ) -> String {
         let suffix = drawingProjection.truncatedStrokes ? " Result was truncated." : ""
-        return "Drawing projection generated \(drawingProjection.strokeCount) stroke(s) for saved view \(drawingProjection.savedViewName): \(drawingProjection.visibleStrokeCount) visible, \(drawingProjection.hiddenStrokeCount) hidden, \(drawingProjection.partiallyHiddenStrokeCount) partially hidden.\(suffix)"
+        return "Drawing projection generated \(drawingProjection.strokeCount) stroke(s) and \(drawingProjection.visibilitySegmentCount) visibility segment(s) for saved view \(drawingProjection.savedViewName): \(drawingProjection.visibleStrokeCount) visible, \(drawingProjection.hiddenStrokeCount) hidden, \(drawingProjection.partiallyHiddenStrokeCount) partially hidden.\(suffix)"
     }
 
     private func sectionAnalysisMessage(

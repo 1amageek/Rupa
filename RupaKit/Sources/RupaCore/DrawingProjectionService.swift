@@ -74,6 +74,11 @@ public struct DrawingProjectionService: Sendable {
         var maxY: Double
     }
 
+    private struct FractionInterval {
+        var start: Double
+        var end: Double
+    }
+
     private struct BoundsAccumulator {
         var minX = Double.infinity
         var minY = Double.infinity
@@ -225,13 +230,14 @@ public struct DrawingProjectionService: Sendable {
                 ) else {
                     continue
                 }
-                stroke.visibility = classifyVisibility(
+                stroke.visibilitySegments = visibilitySegments(
                     stroke: stroke,
                     triangles: occludingTriangles,
                     savedView: savedView,
                     basis: basis,
                     tolerance: tolerance
                 )
+                stroke.visibility = visibility(from: stroke.visibilitySegments)
                 bounds.include(stroke.start2D)
                 bounds.include(stroke.end2D)
                 strokes.append(stroke)
@@ -428,90 +434,334 @@ public struct DrawingProjectionService: Sendable {
         return triangles
     }
 
-    private func classifyVisibility(
+    private func visibilitySegments(
         stroke: DrawingProjectionResult.Stroke,
         triangles: [ProjectedTriangle],
         savedView: SavedView,
         basis: ProjectionBasis,
         tolerance: Double
-    ) -> DrawingProjectionResult.Visibility {
+    ) -> [DrawingProjectionResult.VisibilitySegment] {
         guard triangles.isEmpty == false else {
-            return .visible
+            return [
+                visibilitySegment(
+                    stroke: stroke,
+                    index: 0,
+                    visibility: .visible,
+                    startFraction: 0.0,
+                    endFraction: 1.0,
+                    savedView: savedView,
+                    basis: basis
+                ),
+            ]
         }
-        let sampleFractions = [0.125, 0.3125, 0.5, 0.6875, 0.875]
-        var hiddenSampleCount = 0
-        for fraction in sampleFractions {
-            let point = interpolate(stroke.start2D, stroke.end2D, fraction: fraction)
-            let point3D = interpolate(stroke.start, stroke.end, fraction: fraction)
-            let sampleDepth = depth(point3D, savedView: savedView, basis: basis)
-            if isHiddenSample(
-                point: point,
-                depth: sampleDepth,
-                triangles: triangles,
+
+        let hiddenIntervals = hiddenFractionIntervals(
+            stroke: stroke,
+            triangles: triangles,
+            savedView: savedView,
+            basis: basis,
+            tolerance: tolerance
+        )
+        let fractionTolerance = fractionTolerance(for: stroke, tolerance: tolerance)
+        var segments: [DrawingProjectionResult.VisibilitySegment] = []
+        var cursor = 0.0
+
+        for interval in hiddenIntervals {
+            let hiddenStart = max(cursor, interval.start)
+            if hiddenStart > cursor + fractionTolerance {
+                segments.append(visibilitySegment(
+                    stroke: stroke,
+                    index: segments.count,
+                    visibility: .visible,
+                    startFraction: cursor,
+                    endFraction: hiddenStart,
+                    savedView: savedView,
+                    basis: basis
+                ))
+            }
+
+            let hiddenEnd = max(hiddenStart, interval.end)
+            if hiddenEnd > hiddenStart + fractionTolerance {
+                segments.append(visibilitySegment(
+                    stroke: stroke,
+                    index: segments.count,
+                    visibility: .hidden,
+                    startFraction: hiddenStart,
+                    endFraction: hiddenEnd,
+                    savedView: savedView,
+                    basis: basis
+                ))
+            }
+            cursor = max(cursor, hiddenEnd)
+        }
+
+        if cursor < 1.0 - fractionTolerance {
+            segments.append(visibilitySegment(
+                stroke: stroke,
+                index: segments.count,
+                visibility: .visible,
+                startFraction: cursor,
+                endFraction: 1.0,
+                savedView: savedView,
+                basis: basis
+            ))
+        }
+
+        if segments.isEmpty {
+            return [
+                visibilitySegment(
+                    stroke: stroke,
+                    index: 0,
+                    visibility: .visible,
+                    startFraction: 0.0,
+                    endFraction: 1.0,
+                    savedView: savedView,
+                    basis: basis
+                ),
+            ]
+        }
+        return segments
+    }
+
+    private func hiddenFractionIntervals(
+        stroke: DrawingProjectionResult.Stroke,
+        triangles: [ProjectedTriangle],
+        savedView: SavedView,
+        basis: ProjectionBasis,
+        tolerance: Double
+    ) -> [FractionInterval] {
+        var intervals: [FractionInterval] = []
+        intervals.reserveCapacity(triangles.count)
+        for triangle in triangles {
+            if let interval = hiddenFractionInterval(
+                stroke: stroke,
+                triangle: triangle,
+                savedView: savedView,
+                basis: basis,
                 tolerance: tolerance
             ) {
-                hiddenSampleCount += 1
+                intervals.append(interval)
             }
         }
-        if hiddenSampleCount == 0 {
-            return .visible
-        }
-        if hiddenSampleCount == sampleFractions.count {
-            return .hidden
-        }
-        return .partiallyHidden
+        return mergedIntervals(
+            intervals,
+            tolerance: fractionTolerance(for: stroke, tolerance: tolerance)
+        )
     }
 
-    private func isHiddenSample(
-        point: Point2D,
-        depth: Double,
-        triangles: [ProjectedTriangle],
+    private func hiddenFractionInterval(
+        stroke: DrawingProjectionResult.Stroke,
+        triangle: ProjectedTriangle,
+        savedView: SavedView,
+        basis: ProjectionBasis,
         tolerance: Double
-    ) -> Bool {
+    ) -> FractionInterval? {
         let boundsTolerance = max(tolerance, 1.0e-9)
-        let depthTolerance = max(tolerance * 8.0, 1.0e-9)
-        for triangle in triangles {
-            guard point.x >= triangle.minX - boundsTolerance,
-                  point.x <= triangle.maxX + boundsTolerance,
-                  point.y >= triangle.minY - boundsTolerance,
-                  point.y <= triangle.maxY + boundsTolerance,
-                  let triangleDepth = projectedTriangleDepth(
-                    at: point,
-                    triangle: triangle
-                  ) else {
-                continue
-            }
-            if triangleDepth > depth + depthTolerance {
-                return true
+        let strokeMinX = min(stroke.start2D.x, stroke.end2D.x)
+        let strokeMaxX = max(stroke.start2D.x, stroke.end2D.x)
+        let strokeMinY = min(stroke.start2D.y, stroke.end2D.y)
+        let strokeMaxY = max(stroke.start2D.y, stroke.end2D.y)
+        guard strokeMaxX >= triangle.minX - boundsTolerance,
+              strokeMinX <= triangle.maxX + boundsTolerance,
+              strokeMaxY >= triangle.minY - boundsTolerance,
+              strokeMinY <= triangle.maxY + boundsTolerance,
+              let startCoordinates = barycentricCoordinates(
+                stroke.start2D,
+                first: triangle.first2D,
+                second: triangle.second2D,
+                third: triangle.third2D
+              ),
+              let endCoordinates = barycentricCoordinates(
+                stroke.end2D,
+                first: triangle.first2D,
+                second: triangle.second2D,
+                third: triangle.third2D
+              ) else {
+            return nil
+        }
+
+        var interval = FractionInterval(start: 0.0, end: 1.0)
+        let barycentricTolerance = 1.0e-7
+        for coordinatePair in [
+            (startCoordinates.first, endCoordinates.first),
+            (startCoordinates.second, endCoordinates.second),
+            (startCoordinates.third, endCoordinates.third),
+        ] {
+            guard clipLinearLowerBound(
+                startValue: coordinatePair.0,
+                endValue: coordinatePair.1,
+                minimum: -barycentricTolerance,
+                interval: &interval
+            ),
+            clipLinearUpperBound(
+                startValue: coordinatePair.0,
+                endValue: coordinatePair.1,
+                maximum: 1.0 + barycentricTolerance,
+                interval: &interval
+            ) else {
+                return nil
             }
         }
-        return false
-    }
 
-    private func projectedTriangleDepth(
-        at point: Point2D,
-        triangle: ProjectedTriangle
-    ) -> Double? {
-        guard let coordinates = barycentricCoordinates(
-            point,
-            first: triangle.first2D,
-            second: triangle.second2D,
-            third: triangle.third2D
+        let strokeStartDepth = depth(stroke.start, savedView: savedView, basis: basis)
+        let strokeEndDepth = depth(stroke.end, savedView: savedView, basis: basis)
+        let triangleStartDepth = triangleDepth(
+            coordinates: startCoordinates,
+            triangle: triangle
+        )
+        let triangleEndDepth = triangleDepth(
+            coordinates: endCoordinates,
+            triangle: triangle
+        )
+        let depthTolerance = max(tolerance * 8.0, 1.0e-9)
+        guard clipLinearLowerBound(
+            startValue: triangleStartDepth - strokeStartDepth,
+            endValue: triangleEndDepth - strokeEndDepth,
+            minimum: depthTolerance,
+            interval: &interval
         ) else {
             return nil
         }
-        let barycentricTolerance = 1.0e-7
-        guard coordinates.first >= -barycentricTolerance,
-              coordinates.second >= -barycentricTolerance,
-              coordinates.third >= -barycentricTolerance,
-              coordinates.first <= 1.0 + barycentricTolerance,
-              coordinates.second <= 1.0 + barycentricTolerance,
-              coordinates.third <= 1.0 + barycentricTolerance else {
+
+        interval.start = min(max(interval.start, 0.0), 1.0)
+        interval.end = min(max(interval.end, 0.0), 1.0)
+        guard interval.end > interval.start + fractionTolerance(for: stroke, tolerance: tolerance) else {
             return nil
         }
-        return coordinates.first * triangle.firstDepth
+        return interval
+    }
+
+    private func triangleDepth(
+        coordinates: (first: Double, second: Double, third: Double),
+        triangle: ProjectedTriangle
+    ) -> Double {
+        coordinates.first * triangle.firstDepth
             + coordinates.second * triangle.secondDepth
             + coordinates.third * triangle.thirdDepth
+    }
+
+    private func clipLinearLowerBound(
+        startValue: Double,
+        endValue: Double,
+        minimum: Double,
+        interval: inout FractionInterval
+    ) -> Bool {
+        let slope = endValue - startValue
+        guard abs(slope) > 1.0e-18 else {
+            return startValue >= minimum
+        }
+        let crossing = (minimum - startValue) / slope
+        if slope > 0.0 {
+            interval.start = max(interval.start, crossing)
+        } else {
+            interval.end = min(interval.end, crossing)
+        }
+        return interval.end >= interval.start
+    }
+
+    private func clipLinearUpperBound(
+        startValue: Double,
+        endValue: Double,
+        maximum: Double,
+        interval: inout FractionInterval
+    ) -> Bool {
+        let slope = endValue - startValue
+        guard abs(slope) > 1.0e-18 else {
+            return startValue <= maximum
+        }
+        let crossing = (maximum - startValue) / slope
+        if slope > 0.0 {
+            interval.end = min(interval.end, crossing)
+        } else {
+            interval.start = max(interval.start, crossing)
+        }
+        return interval.end >= interval.start
+    }
+
+    private func mergedIntervals(
+        _ intervals: [FractionInterval],
+        tolerance: Double
+    ) -> [FractionInterval] {
+        let normalized = intervals
+            .map { interval in
+                FractionInterval(
+                    start: min(max(interval.start, 0.0), 1.0),
+                    end: min(max(interval.end, 0.0), 1.0)
+                )
+            }
+            .filter { $0.end > $0.start + tolerance }
+            .sorted {
+                if $0.start != $1.start {
+                    return $0.start < $1.start
+                }
+                return $0.end < $1.end
+            }
+        guard var current = normalized.first else {
+            return []
+        }
+        var merged: [FractionInterval] = []
+        for interval in normalized.dropFirst() {
+            if interval.start <= current.end + tolerance {
+                current.end = max(current.end, interval.end)
+            } else {
+                merged.append(current)
+                current = interval
+            }
+        }
+        merged.append(current)
+        return merged
+    }
+
+    private func visibilitySegment(
+        stroke: DrawingProjectionResult.Stroke,
+        index: Int,
+        visibility: DrawingProjectionResult.Visibility,
+        startFraction: Double,
+        endFraction: Double,
+        savedView: SavedView,
+        basis: ProjectionBasis
+    ) -> DrawingProjectionResult.VisibilitySegment {
+        let clampedStart = min(max(startFraction, 0.0), 1.0)
+        let clampedEnd = min(max(endFraction, clampedStart), 1.0)
+        let startPoint = interpolate(stroke.start, stroke.end, fraction: clampedStart)
+        let endPoint = interpolate(stroke.start, stroke.end, fraction: clampedEnd)
+        let startDepth = depth(startPoint, savedView: savedView, basis: basis)
+        let endDepth = depth(endPoint, savedView: savedView, basis: basis)
+        return DrawingProjectionResult.VisibilitySegment(
+            id: "\(stroke.id):segment:\(index)",
+            visibility: visibility,
+            startFraction: clampedStart,
+            endFraction: clampedEnd,
+            start2D: interpolate(stroke.start2D, stroke.end2D, fraction: clampedStart),
+            end2D: interpolate(stroke.start2D, stroke.end2D, fraction: clampedEnd),
+            minimumDepthMeters: min(startDepth, endDepth),
+            maximumDepthMeters: max(startDepth, endDepth),
+            lengthMeters: distance(startPoint, endPoint)
+        )
+    }
+
+    private func visibility(
+        from segments: [DrawingProjectionResult.VisibilitySegment]
+    ) -> DrawingProjectionResult.Visibility {
+        let hasVisible = segments.contains { $0.visibility == .visible }
+        let hasHidden = segments.contains { $0.visibility == .hidden }
+        if hasVisible && hasHidden {
+            return .partiallyHidden
+        }
+        if hasHidden {
+            return .hidden
+        }
+        if hasVisible {
+            return .visible
+        }
+        return .unclassified
+    }
+
+    private func fractionTolerance(
+        for stroke: DrawingProjectionResult.Stroke,
+        tolerance: Double
+    ) -> Double {
+        min(0.01, max(1.0e-9, tolerance / max(stroke.lengthMeters, tolerance)))
     }
 
     private func barycentricCoordinates(
@@ -632,7 +882,8 @@ public struct DrawingProjectionService: Sendable {
             end2D: end2D,
             minimumDepthMeters: min(startDepth, endDepth),
             maximumDepthMeters: max(startDepth, endDepth),
-            lengthMeters: lengthMeters
+            lengthMeters: lengthMeters,
+            visibilitySegments: []
         )
     }
 
@@ -708,6 +959,9 @@ public struct DrawingProjectionService: Sendable {
         maximumStrokeCount: Int
     ) -> [EditorDiagnostic] {
         let visibilityCounts = visibilityCounts(strokes)
+        let visibilitySegmentCount = strokes.reduce(0) { count, stroke in
+            count + stroke.visibilitySegments.count
+        }
         var diagnostics = [
             EditorDiagnostic(
                 severity: .info,
@@ -725,7 +979,7 @@ public struct DrawingProjectionService: Sendable {
         diagnostics.append(
             EditorDiagnostic(
                 severity: .info,
-                message: "Drawing projection hidden-line classified \(visibilityCounts.visible) visible, \(visibilityCounts.hidden) hidden, \(visibilityCounts.partiallyHidden) partially hidden, and \(visibilityCounts.unclassified) unclassified stroke(s)."
+                message: "Drawing projection hidden-line classified \(visibilityCounts.visible) visible, \(visibilityCounts.hidden) hidden, \(visibilityCounts.partiallyHidden) partially hidden, and \(visibilityCounts.unclassified) unclassified stroke(s), split into \(visibilitySegmentCount) visibility segment(s)."
             )
         )
         return diagnostics

@@ -687,7 +687,7 @@ public final class AgentCommandController: AgentClientProtocol {
             mutatesDocument: false,
             discovery: [.designDisplaySnapshot, .savedViews, .drawingProjection, .meshSummary, .topologySummary],
             targets: [.document, .savedView, .body, .edge],
-            failureMode: "Rejects missing saved view IDs, invalid tolerances, invalid stroke limits, perspective views, evaluation failures, and stale generations before reading; reports stroke-level sampled hidden-line visibility as visible, hidden, partiallyHidden, or unclassified."
+            failureMode: "Rejects missing saved view IDs, invalid tolerances, invalid stroke limits, perspective views, evaluation failures, and stale generations before reading; reports projected-triangle hidden-line visibility as stroke summaries plus visible and hidden visibility segments."
         ),
         capability(
             "createSavedView",
