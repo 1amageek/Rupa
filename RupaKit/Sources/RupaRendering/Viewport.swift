@@ -127,6 +127,7 @@ public struct Viewport: View {
     private let canvasOverlayExclusionRects: [CGRect]
     private let gridVisualSpacingMode: ViewportProjectedGrid.VisualSpacingMode
     private let workspaceScalePresetTitle: String?
+    private let workspaceScalePresetOptions: [WorkspaceScalePresetProfile]
     private let canFitWorkspaceScaleToModel: Bool
     private let canSelectSmallerWorkspaceScale: Bool
     private let canSelectLargerWorkspaceScale: Bool
@@ -178,6 +179,7 @@ public struct Viewport: View {
     private let onFitWorkspaceScaleToModel: (() -> Void)?
     private let onSelectSmallerWorkspaceScale: (() -> Void)?
     private let onSelectLargerWorkspaceScale: (() -> Void)?
+    private let onSelectWorkspaceScalePreset: ((WorkspaceScalePreset) -> Void)?
     private let onHover: ((ViewportHit?) -> Void)?
     private let onSnapCandidateKindChange: ((RupaCore.SnapCandidateKind?) -> Void)?
     private let onProjectionBasisChange: ((ViewportProjectionBasis) -> Void)?
@@ -211,6 +213,7 @@ public struct Viewport: View {
         canvasOverlayExclusionRects: [CGRect] = [],
         gridVisualSpacingMode: ViewportProjectedGrid.VisualSpacingMode = .adaptive,
         workspaceScalePresetTitle: String? = nil,
+        workspaceScalePresetOptions: [WorkspaceScalePresetProfile] = [],
         canFitWorkspaceScaleToModel: Bool = false,
         canSelectSmallerWorkspaceScale: Bool = false,
         canSelectLargerWorkspaceScale: Bool = false,
@@ -262,6 +265,7 @@ public struct Viewport: View {
         onFitWorkspaceScaleToModel: (() -> Void)? = nil,
         onSelectSmallerWorkspaceScale: (() -> Void)? = nil,
         onSelectLargerWorkspaceScale: (() -> Void)? = nil,
+        onSelectWorkspaceScalePreset: ((WorkspaceScalePreset) -> Void)? = nil,
         onHover: ((ViewportHit?) -> Void)? = nil,
         onSnapCandidateKindChange: ((RupaCore.SnapCandidateKind?) -> Void)? = nil,
         onProjectionBasisChange: ((ViewportProjectionBasis) -> Void)? = nil,
@@ -296,6 +300,7 @@ public struct Viewport: View {
         }
         self.gridVisualSpacingMode = gridVisualSpacingMode
         self.workspaceScalePresetTitle = workspaceScalePresetTitle
+        self.workspaceScalePresetOptions = workspaceScalePresetOptions
         self.canFitWorkspaceScaleToModel = canFitWorkspaceScaleToModel
         self.canSelectSmallerWorkspaceScale = canSelectSmallerWorkspaceScale
         self.canSelectLargerWorkspaceScale = canSelectLargerWorkspaceScale
@@ -350,6 +355,7 @@ public struct Viewport: View {
         self.onFitWorkspaceScaleToModel = onFitWorkspaceScaleToModel
         self.onSelectSmallerWorkspaceScale = onSelectSmallerWorkspaceScale
         self.onSelectLargerWorkspaceScale = onSelectLargerWorkspaceScale
+        self.onSelectWorkspaceScalePreset = onSelectWorkspaceScalePreset
         self.onHover = onHover
         self.onSnapCandidateKindChange = onSnapCandidateKindChange
         self.onProjectionBasisChange = onProjectionBasisChange
@@ -738,6 +744,10 @@ public struct Viewport: View {
         let menuState = ViewportCanvasScaleMenuState(
             scaleReadout: scaleReadout,
             presetTitle: workspaceScalePresetTitle,
+            selectedPreset: WorkspaceScalePreset.matching(
+                document.ruler.normalizedForWorkspaceScale()
+            ),
+            presetProfiles: workspaceScalePresetOptions,
             canFitWorkspaceScaleToModel: canFitWorkspaceScaleToModel
                 && onFitWorkspaceScaleToModel != nil,
             canSelectSmallerWorkspaceScale: canSelectSmallerWorkspaceScale
@@ -799,6 +809,25 @@ public struct Viewport: View {
             }
             if state.isVisualStepCapped {
                 Text("Visual grid capped by line budget")
+            }
+        }
+
+        if !state.presetOptions.isEmpty, onSelectWorkspaceScalePreset != nil {
+            Section("Scale Presets") {
+                ForEach(state.presetOptions) { option in
+                    Button {
+                        onSelectWorkspaceScalePreset?(option.preset)
+                    } label: {
+                        HStack {
+                            Text(option.menuTitle)
+                            if option.isSelected {
+                                Image(systemName: "checkmark")
+                            }
+                        }
+                    }
+                    .help("Comfortable model span \(option.comfortTitle)")
+                    .accessibilityIdentifier(option.accessibilityIdentifier)
+                }
             }
         }
 

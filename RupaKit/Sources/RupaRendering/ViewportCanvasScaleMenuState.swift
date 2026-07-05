@@ -2,6 +2,37 @@ import Foundation
 import RupaCore
 
 public struct ViewportCanvasScaleMenuState: Equatable, Sendable {
+    public struct PresetOption: Equatable, Identifiable, Sendable {
+        public var preset: WorkspaceScalePreset
+        public var title: String
+        public var visibleSpanTitle: String
+        public var comfortTitle: String
+        public var isSelected: Bool
+
+        public var id: WorkspaceScalePreset {
+            preset
+        }
+
+        public init(
+            profile: WorkspaceScalePresetProfile,
+            isSelected: Bool
+        ) {
+            self.preset = profile.preset
+            self.title = profile.title
+            self.visibleSpanTitle = profile.visibleSpanTitle
+            self.comfortTitle = profile.comfortableModelSpanTitle
+            self.isSelected = isSelected
+        }
+
+        public var menuTitle: String {
+            "\(title) · \(visibleSpanTitle)"
+        }
+
+        public var accessibilityIdentifier: String {
+            "CanvasScaleMenu.preset.\(preset.rawValue)"
+        }
+    }
+
     public struct Row: Equatable, Identifiable, Sendable {
         public var id: String
         public var title: String
@@ -51,6 +82,7 @@ public struct ViewportCanvasScaleMenuState: Equatable, Sendable {
     }
 
     public var rows: [Row]
+    public var presetOptions: [PresetOption]
     public var isVisualStepCapped: Bool
     public var availableActions: [Action]
     public var accessibilityText: String
@@ -58,6 +90,8 @@ public struct ViewportCanvasScaleMenuState: Equatable, Sendable {
     public init(
         scaleReadout: ViewportProjectedGrid.ScaleReadout,
         presetTitle: String? = nil,
+        selectedPreset: WorkspaceScalePreset? = nil,
+        presetProfiles: [WorkspaceScalePresetProfile] = [],
         canFitWorkspaceScaleToModel: Bool,
         canSelectSmallerWorkspaceScale: Bool,
         canSelectLargerWorkspaceScale: Bool
@@ -108,6 +142,12 @@ public struct ViewportCanvasScaleMenuState: Equatable, Sendable {
             ),
         ])
         self.rows = rows
+        self.presetOptions = presetProfiles.map { profile in
+            PresetOption(
+                profile: profile,
+                isSelected: profile.preset == selectedPreset
+            )
+        }
         isVisualStepCapped = scaleReadout.isVisualStepCapped
 
         var actions: [Action] = []
@@ -131,6 +171,11 @@ public struct ViewportCanvasScaleMenuState: Equatable, Sendable {
         if !actions.isEmpty {
             accessibilityComponents.append(
                 "actions \(actions.map(\.title).joined(separator: ", "))"
+            )
+        }
+        if !presetOptions.isEmpty {
+            accessibilityComponents.append(
+                "presets \(presetOptions.map(\.menuTitle).joined(separator: ", "))"
             )
         }
         accessibilityText = accessibilityComponents.joined(separator: ", ")

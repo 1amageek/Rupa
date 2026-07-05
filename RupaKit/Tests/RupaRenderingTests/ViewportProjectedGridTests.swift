@@ -127,6 +127,8 @@ import RupaViewportScene
     let state = ViewportCanvasScaleMenuState(
         scaleReadout: grid.scaleReadout,
         presetTitle: WorkspaceScalePreset.sitePlanning.title,
+        selectedPreset: .sitePlanning,
+        presetProfiles: WorkspaceScalePreset.profiles,
         canFitWorkspaceScaleToModel: true,
         canSelectSmallerWorkspaceScale: true,
         canSelectLargerWorkspaceScale: false
@@ -148,10 +150,23 @@ import RupaViewportScene
         $0.id == "visibleSpan" && $0.value == grid.scaleReadout.visibleSpan.text
     })
     #expect(state.isVisualStepCapped)
+    #expect(state.presetOptions.map(\.preset) == WorkspaceScalePreset.allCases)
+    #expect(state.presetOptions.contains {
+        $0.preset == .regionalPlanning
+            && $0.visibleSpanTitle == "1,000 km"
+            && !$0.isSelected
+            && $0.accessibilityIdentifier == "CanvasScaleMenu.preset.regionalPlanning"
+    })
+    #expect(state.presetOptions.contains {
+        $0.preset == .sitePlanning
+            && $0.isSelected
+            && $0.menuTitle.contains("100 km")
+    })
     #expect(state.availableActions == [.fitToModel, .smallerPreset])
     #expect(!state.availableActions.contains(.largerPreset))
     #expect(state.accessibilityText.contains("visual grid capped by line budget"))
     #expect(state.accessibilityText.contains("Fit Scale to Model"))
+    #expect(state.accessibilityText.contains("Regional Planning"))
 }
 
 @Test func viewportProjectedGridReportsUrbanPlanningScaleReadout() throws {

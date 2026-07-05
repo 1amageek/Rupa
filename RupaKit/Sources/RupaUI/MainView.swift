@@ -568,6 +568,7 @@ public struct MainView: View {
                     canvasOverlayExclusionRects: viewportOverlayExclusionRects,
                     gridVisualSpacingMode: session.document.productMetadata.viewportGridSettings.visualSpacingMode,
                     workspaceScalePresetTitle: scaleSummary.presetTitle,
+                    workspaceScalePresetOptions: WorkspaceScalePreset.profiles,
                     canFitWorkspaceScaleToModel: scaleFitPromptState?.isActionable == true,
                     canSelectSmallerWorkspaceScale: scaleSummary.smallerPreset != nil,
                     canSelectLargerWorkspaceScale: scaleSummary.largerPreset != nil,
@@ -619,6 +620,7 @@ public struct MainView: View {
                     onFitWorkspaceScaleToModel: fitWorkspaceScaleToModel,
                     onSelectSmallerWorkspaceScale: selectSmallerWorkspaceScalePreset,
                     onSelectLargerWorkspaceScale: selectLargerWorkspaceScalePreset,
+                    onSelectWorkspaceScalePreset: applyWorkspaceScalePreset,
                     onHover: viewportHoverHandler,
                     onSnapCandidateKindChange: { kind in
                         snapOverrideState.updateHoveredCandidateKind(kind)
