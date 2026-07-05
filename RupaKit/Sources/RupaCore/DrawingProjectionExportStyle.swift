@@ -5,6 +5,7 @@ public struct DrawingProjectionExportStyle: Codable, Equatable, Sendable {
     public var unclassified: DrawingProjectionLayerStyle
     public var sectionHatch: DrawingProjectionLayerStyle
     public var sectionContour: DrawingProjectionLayerStyle
+    public var annotation: DrawingProjectionLayerStyle
 
     public init(
         visible: DrawingProjectionLayerStyle,
@@ -12,7 +13,8 @@ public struct DrawingProjectionExportStyle: Codable, Equatable, Sendable {
         partiallyHidden: DrawingProjectionLayerStyle,
         unclassified: DrawingProjectionLayerStyle,
         sectionHatch: DrawingProjectionLayerStyle,
-        sectionContour: DrawingProjectionLayerStyle
+        sectionContour: DrawingProjectionLayerStyle,
+        annotation: DrawingProjectionLayerStyle
     ) {
         self.visible = visible
         self.hidden = hidden
@@ -20,6 +22,7 @@ public struct DrawingProjectionExportStyle: Codable, Equatable, Sendable {
         self.unclassified = unclassified
         self.sectionHatch = sectionHatch
         self.sectionContour = sectionContour
+        self.annotation = annotation
     }
 
     public static func preset(_ preset: DrawingProjectionStylePreset) -> DrawingProjectionExportStyle {
@@ -37,7 +40,8 @@ public struct DrawingProjectionExportStyle: Codable, Equatable, Sendable {
         partiallyHiddenStrokeWidth: Double = 1.0,
         unclassifiedStrokeWidth: Double = 0.8,
         sectionHatchStrokeWidth: Double = 0.6,
-        sectionContourStrokeWidth: Double = 1.3
+        sectionContourStrokeWidth: Double = 1.3,
+        annotationStrokeWidth: Double = 0.9
     ) -> DrawingProjectionExportStyle {
         DrawingProjectionExportStyle(
             visible: DrawingProjectionLayerStyle(
@@ -66,6 +70,10 @@ public struct DrawingProjectionExportStyle: Codable, Equatable, Sendable {
             sectionContour: DrawingProjectionLayerStyle(
                 color: DrawingProjectionColor(hexRed: 17, green: 24, blue: 39),
                 strokeWidth: sectionContourStrokeWidth
+            ),
+            annotation: DrawingProjectionLayerStyle(
+                color: DrawingProjectionColor(hexRed: 37, green: 99, blue: 235),
+                strokeWidth: annotationStrokeWidth
             )
         )
     }
@@ -98,6 +106,10 @@ public struct DrawingProjectionExportStyle: Codable, Equatable, Sendable {
             sectionContour: DrawingProjectionLayerStyle(
                 color: DrawingProjectionColor(hexRed: 15, green: 23, blue: 42),
                 strokeWidth: 1.6
+            ),
+            annotation: DrawingProjectionLayerStyle(
+                color: DrawingProjectionColor(hexRed: 6, green: 182, blue: 212),
+                strokeWidth: 1.0
             )
         )
     }
@@ -109,7 +121,8 @@ public struct DrawingProjectionExportStyle: Codable, Equatable, Sendable {
             partiallyHidden: partiallyHidden.normalized(fallback: fallback.partiallyHidden),
             unclassified: unclassified.normalized(fallback: fallback.unclassified),
             sectionHatch: sectionHatch.normalized(fallback: fallback.sectionHatch),
-            sectionContour: sectionContour.normalized(fallback: fallback.sectionContour)
+            sectionContour: sectionContour.normalized(fallback: fallback.sectionContour),
+            annotation: annotation.normalized(fallback: fallback.annotation)
         )
     }
 }

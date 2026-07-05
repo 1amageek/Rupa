@@ -1656,456 +1656,19 @@ public struct SnapResolver: Sendable {
         topology: TopologySummaryResult?,
         constructionPlane: SketchPlaneCoordinateSystem?
     ) throws -> (worldPoint: Point3D, point: Point2D)? {
-        let worldPoint: Point3D?
-        switch anchor.kind {
-        case .worldPoint:
-            worldPoint = anchor.worldPoint
-        case .sketchReference:
-            guard let sketchReference = anchor.sketchReference else {
-                return nil
-            }
-            worldPoint = try measurementWorldPoint(
-                for: sketchReference,
-                in: document
-            )
-        case .sketchCurveParameter:
-            guard let sketchCurveParameter = anchor.sketchCurveParameter else {
-                return nil
-            }
-            worldPoint = try measurementWorldPoint(
-                for: sketchCurveParameter,
-                in: document
-            )
-        case .topologyReference:
-            guard let topologyReference = anchor.topologyReference,
-                  let topology else {
-                return nil
-            }
-            worldPoint = measurementWorldPoint(
-                for: topologyReference,
-                role: anchor.role,
-                in: topology
-            )
-        case .topologyEdgeParameter:
-            guard let topologyEdgeParameter = anchor.topologyEdgeParameter,
-                  let topology else {
-                return nil
-            }
-            worldPoint = measurementWorldPoint(
-                for: topologyEdgeParameter,
-                in: topology
-            )
-        }
-        guard let worldPoint,
-              finiteWorldPoint(worldPoint) else {
+        guard let worldPoint = try MeasurementAnchorWorldPointResolver(
+            curveSampler: curveSampler
+        ).worldPoint(
+            for: anchor,
+            in: document,
+            topology: topology
+        ) else {
             return nil
         }
         return (
             worldPoint: worldPoint,
             point: projectedMeasurementPoint(worldPoint, onto: constructionPlane)
         )
-    }
-
-    private func measurementWorldPoint(
-        for anchor: MeasurementSketchAnchor,
-        in document: DesignDocument
-    ) throws -> Point3D? {
-        guard let feature = document.cadDocument.designGraph.nodes[anchor.featureID],
-              case .sketch(let sketch) = feature.operation,
-              let localPoint = try measurementLocalPoint(
-                  for: anchor.reference,
-                  in: sketch,
-                  parameters: document.cadDocument.parameters
-              ) else {
-            return nil
-        }
-        let sourceSystem = try SketchPlaneCoordinateSystem(plane: sketch.plane)
-        return sourceSystem.point(from: localPoint)
-    }
-
-    private func measurementWorldPoint(
-        for anchor: MeasurementSketchCurveAnchor,
-        in document: DesignDocument
-    ) throws -> Point3D? {
-        guard let feature = document.cadDocument.designGraph.nodes[anchor.featureID],
-              case .sketch(let sketch) = feature.operation,
-              let entity = sketch.entities[anchor.entityID],
-              let localPoint = try measurementLocalPoint(
-                  for: entity,
-                  parameter: anchor.parameter,
-                  parameters: document.cadDocument.parameters
-              ) else {
-            return nil
-        }
-        let sourceSystem = try SketchPlaneCoordinateSystem(plane: sketch.plane)
-        return sourceSystem.point(from: localPoint)
-    }
-
-    private func measurementLocalPoint(
-        for reference: SketchReference,
-        in sketch: Sketch,
-        parameters: ParameterTable
-    ) throws -> Point2D? {
-        switch reference {
-        case let .entity(entityID):
-            guard let entity = sketch.entities[entityID],
-                  case let .point(point) = entity else {
-                return nil
-            }
-            return try localPoint(from: point, parameters: parameters)
-        case let .lineStart(entityID):
-            guard let entity = sketch.entities[entityID],
-                  case let .line(line) = entity else {
-                return nil
-            }
-            return try localPoint(from: line.start, parameters: parameters)
-        case let .lineEnd(entityID):
-            guard let entity = sketch.entities[entityID],
-                  case let .line(line) = entity else {
-                return nil
-            }
-            return try localPoint(from: line.end, parameters: parameters)
-        case let .circleCenter(entityID):
-            guard let entity = sketch.entities[entityID],
-                  case let .circle(circle) = entity else {
-                return nil
-            }
-            return try localPoint(from: circle.center, parameters: parameters)
-        case let .arcCenter(entityID):
-            guard let entity = sketch.entities[entityID],
-                  case let .arc(arc) = entity else {
-                return nil
-            }
-            return try localPoint(from: arc.center, parameters: parameters)
-        case let .arcStart(entityID):
-            guard let entity = sketch.entities[entityID],
-                  case let .arc(arc) = entity else {
-                return nil
-            }
-            return try measurementArcEndpoint(
-                arc,
-                angle: arc.startAngle,
-                parameters: parameters
-            )
-        case let .arcEnd(entityID):
-            guard let entity = sketch.entities[entityID],
-                  case let .arc(arc) = entity else {
-                return nil
-            }
-            return try measurementArcEndpoint(
-                arc,
-                angle: arc.endAngle,
-                parameters: parameters
-            )
-        case let .splineControlPoint(entityID, index):
-            guard let entity = sketch.entities[entityID],
-                  case let .spline(spline) = entity,
-                  spline.controlPoints.indices.contains(index) else {
-                return nil
-            }
-            return try localPoint(
-                from: spline.controlPoints[index],
-                parameters: parameters
-            )
-        case .circleRadius, .arcRadius:
-            return nil
-        }
-    }
-
-    private func measurementLocalPoint(
-        for entity: SketchEntity,
-        parameter: Double,
-        parameters: ParameterTable
-    ) throws -> Point2D? {
-        guard let normalizedParameter = normalizedMeasurementParameter(parameter) else {
-            return nil
-        }
-        switch entity {
-        case .point:
-            return nil
-        case let .line(line):
-            return try measurementLinePoint(
-                line,
-                parameter: normalizedParameter,
-                parameters: parameters
-            )
-        case let .circle(circle):
-            return try measurementCirclePoint(
-                circle,
-                parameter: normalizedParameter,
-                parameters: parameters
-            )
-        case let .arc(arc):
-            return try measurementArcPoint(
-                arc,
-                parameter: normalizedParameter,
-                parameters: parameters
-            )
-        case let .spline(spline):
-            return try measurementSplinePoint(
-                spline,
-                parameter: normalizedParameter,
-                parameters: parameters
-            )
-        }
-    }
-
-    private func measurementLinePoint(
-        _ line: SketchLine,
-        parameter: Double,
-        parameters: ParameterTable
-    ) throws -> Point2D {
-        let start = try localPoint(from: line.start, parameters: parameters)
-        let end = try localPoint(from: line.end, parameters: parameters)
-        return Point2D(
-            x: start.x + (end.x - start.x) * parameter,
-            y: start.y + (end.y - start.y) * parameter
-        )
-    }
-
-    private func measurementCirclePoint(
-        _ circle: SketchCircle,
-        parameter: Double,
-        parameters: ParameterTable
-    ) throws -> Point2D? {
-        let center = try localPoint(from: circle.center, parameters: parameters)
-        let radius = try resolvedValue(circle.radius, kind: .length, parameters: parameters)
-        guard radius.isFinite,
-              radius > 1.0e-12 else {
-            return nil
-        }
-        return offset(center, radius: radius, angle: parameter * Double.pi * 2.0)
-    }
-
-    private func measurementArcPoint(
-        _ arc: SketchArc,
-        parameter: Double,
-        parameters: ParameterTable
-    ) throws -> Point2D? {
-        let center = try localPoint(from: arc.center, parameters: parameters)
-        let radius = try resolvedValue(arc.radius, kind: .length, parameters: parameters)
-        let startAngle = try resolvedValue(arc.startAngle, kind: .angle, parameters: parameters)
-        let endAngle = try resolvedValue(arc.endAngle, kind: .angle, parameters: parameters)
-        guard radius.isFinite,
-              radius > 1.0e-12,
-              startAngle.isFinite,
-              endAngle.isFinite else {
-            return nil
-        }
-        let angle = startAngle + normalizedArcSpan(startAngle: startAngle, endAngle: endAngle) * parameter
-        return offset(center, radius: radius, angle: angle)
-    }
-
-    private func measurementSplinePoint(
-        _ spline: SketchSpline,
-        parameter: Double,
-        parameters: ParameterTable
-    ) throws -> Point2D? {
-        let controlPoints = try spline.controlPoints.map { point in
-            try localPoint(from: point, parameters: parameters)
-        }
-        guard controlPoints.count >= 4,
-              (controlPoints.count - 1).isMultiple(of: 3) else {
-            return nil
-        }
-        let segmentCount = (controlPoints.count - 1) / 3
-        let scaledParameter = parameter * Double(segmentCount)
-        let segmentIndex: Int
-        let localParameter: Double
-        if parameter >= 1.0 {
-            segmentIndex = segmentCount - 1
-            localParameter = 1.0
-        } else {
-            segmentIndex = min(max(Int(floor(scaledParameter)), 0), segmentCount - 1)
-            localParameter = scaledParameter - Double(segmentIndex)
-        }
-        return curveSampler.splineSegmentSample(
-            for: controlPoints,
-            segmentIndex: segmentIndex,
-            t: localParameter
-        )?.point
-    }
-
-    private func measurementArcEndpoint(
-        _ arc: SketchArc,
-        angle: CADExpression,
-        parameters: ParameterTable
-    ) throws -> Point2D {
-        let center = try localPoint(from: arc.center, parameters: parameters)
-        let radius = try resolvedValue(arc.radius, kind: .length, parameters: parameters)
-        let resolvedAngle = try resolvedValue(angle, kind: .angle, parameters: parameters)
-        return offset(center, radius: radius, angle: resolvedAngle)
-    }
-
-    private func measurementWorldPoint(
-        for anchor: MeasurementTopologyAnchor,
-        role: MeasurementAnchor.Role,
-        in topology: TopologySummaryResult
-    ) -> Point3D? {
-        guard let entry = topologyEntry(for: anchor, in: topology) else {
-            return nil
-        }
-        switch entry.kind {
-        case .body:
-            return nil
-        case .face:
-            return entry.center.map { point3D($0) }
-        case .edge:
-            guard let start = entry.start,
-                  let end = entry.end else {
-                return nil
-            }
-            switch role {
-            case .start:
-                return point3D(start)
-            case .end:
-                return point3D(end)
-            case .point, .center:
-                return Point3D(
-                    x: (start.x + end.x) * 0.5,
-                    y: (start.y + end.y) * 0.5,
-                    z: (start.z + end.z) * 0.5
-                )
-            }
-        case .vertex:
-            return (entry.start ?? entry.center).map { point3D($0) }
-        }
-    }
-
-    private func measurementWorldPoint(
-        for anchor: MeasurementTopologyEdgeAnchor,
-        in topology: TopologySummaryResult
-    ) -> Point3D? {
-        guard let parameter = normalizedMeasurementParameter(anchor.parameter),
-              let entry = topologyEdgeEntry(for: anchor, in: topology) else {
-            return nil
-        }
-        switch entry.curveKind {
-        case "line":
-            return measurementLineEdgeWorldPoint(for: entry, parameter: parameter)
-        case "circle":
-            return measurementCircleEdgeWorldPoint(for: entry, parameter: parameter)
-        default:
-            return nil
-        }
-    }
-
-    private func measurementLineEdgeWorldPoint(
-        for entry: TopologySummaryResult.Entry,
-        parameter: Double
-    ) -> Point3D? {
-        guard let origin = entry.curveOrigin,
-              let direction = entry.curveDirection,
-              let range = entry.edgeParameterRange,
-              range.start.isFinite,
-              range.end.isFinite else {
-            return nil
-        }
-        let curveParameter = range.start + (range.end - range.start) * parameter
-        guard curveParameter.isFinite else {
-            return nil
-        }
-        let point = Point3D(
-            x: origin.x + direction.x * curveParameter,
-            y: origin.y + direction.y * curveParameter,
-            z: origin.z + direction.z * curveParameter
-        )
-        guard finiteWorldPoint(point) else {
-            return nil
-        }
-        return point
-    }
-
-    private func measurementCircleEdgeWorldPoint(
-        for entry: TopologySummaryResult.Entry,
-        parameter: Double
-    ) -> Point3D? {
-        guard let center = entry.curveCenter,
-              let xAxis = entry.curveParameterXAxis,
-              let yAxis = entry.curveParameterYAxis,
-              let radius = entry.curveRadius,
-              let range = entry.edgeParameterRange,
-              radius.isFinite,
-              radius > 1.0e-12,
-              range.start.isFinite,
-              range.end.isFinite else {
-            return nil
-        }
-        let curveParameter = range.start + (range.end - range.start) * parameter
-        guard curveParameter.isFinite else {
-            return nil
-        }
-        let cosine = cos(curveParameter)
-        let sine = sin(curveParameter)
-        let point = Point3D(
-            x: center.x + (xAxis.x * cosine + yAxis.x * sine) * radius,
-            y: center.y + (xAxis.y * cosine + yAxis.y * sine) * radius,
-            z: center.z + (xAxis.z * cosine + yAxis.z * sine) * radius
-        )
-        guard finiteWorldPoint(point) else {
-            return nil
-        }
-        return point
-    }
-
-    private func topologyEntry(
-        for anchor: MeasurementTopologyAnchor,
-        in topology: TopologySummaryResult
-    ) -> TopologySummaryResult.Entry? {
-        topology.entries.first { entry in
-            guard entry.kind == anchor.kind,
-                  entry.persistentName == anchor.persistentName else {
-                return false
-            }
-            guard let target = entry.selectionTarget() else {
-                return false
-            }
-            // Generated topology reference IDs can be evaluation-local. The stable identity is
-            // the persistent topology name plus the selection component.
-            return target.sceneNodeID == anchor.sceneNodeID &&
-                target.component == anchor.component
-        }
-    }
-
-    private func topologyEdgeEntry(
-        for anchor: MeasurementTopologyEdgeAnchor,
-        in topology: TopologySummaryResult
-    ) -> TopologySummaryResult.Entry? {
-        topology.entries.first { entry in
-            guard entry.kind == .edge,
-                  entry.persistentName == anchor.persistentName else {
-                return false
-            }
-            guard let target = entry.selectionTarget() else {
-                return false
-            }
-            return target.sceneNodeID == anchor.sceneNodeID &&
-                target.component == anchor.component
-        }
-    }
-
-    private func point3D(
-        _ point: TopologySummaryResult.Entry.Point
-    ) -> Point3D {
-        Point3D(x: point.x, y: point.y, z: point.z)
-    }
-
-    private func normalizedMeasurementParameter(_ parameter: Double) -> Double? {
-        guard parameter.isFinite,
-              parameter >= 0.0,
-              parameter <= 1.0 else {
-            return nil
-        }
-        return parameter
-    }
-
-    private func finiteWorldPoint(_ point: Point3D) -> Bool {
-        do {
-            try point.validate()
-            return true
-        } catch {
-            return false
-        }
     }
 
     private func topologyCandidate(
@@ -2161,7 +1724,7 @@ public struct SnapResolver: Sendable {
             y: frame.position.y,
             z: frame.position.z
         )
-        guard finiteWorldPoint(worldPoint) else {
+        guard isFinite(worldPoint) else {
             return nil
         }
         let snapPoint = projectedSurfaceFramePoint(worldPoint, onto: constructionPlane)
@@ -2263,7 +1826,7 @@ public struct SnapResolver: Sendable {
         }
         let geometry = try surface.differentialGeometry(atU: parameter.u, v: parameter.v)
         let worldPoint = geometry.position
-        guard finiteWorldPoint(worldPoint),
+        guard isFinite(worldPoint),
               let uAxis = normalized(geometry.tangentU),
               let vAxis = normalized(geometry.tangentV),
               let normal = normalized(uAxis.cross(vAxis)) else {
@@ -3535,6 +3098,15 @@ public struct SnapResolver: Sendable {
 
     private func isFinite(_ point: Point2D) -> Bool {
         point.x.isFinite && point.y.isFinite
+    }
+
+    private func isFinite(_ point: Point3D) -> Bool {
+        do {
+            try point.validate()
+            return true
+        } catch {
+            return false
+        }
     }
 
     private func uniquePoints(

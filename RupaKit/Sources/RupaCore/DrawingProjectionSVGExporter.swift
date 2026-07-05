@@ -12,6 +12,7 @@ public struct DrawingProjectionSVGExporter: Sendable {
         public var unclassifiedStrokeWidth: Double
         public var sectionHatchStrokeWidth: Double
         public var sectionContourStrokeWidth: Double
+        public var annotationStrokeWidth: Double
         public var pagePreset: DrawingProjectionPagePreset?
         public var style: DrawingProjectionExportStyle
 
@@ -26,6 +27,7 @@ public struct DrawingProjectionSVGExporter: Sendable {
             unclassifiedStrokeWidth: Double = 1.0,
             sectionHatchStrokeWidth: Double = 0.85,
             sectionContourStrokeWidth: Double = 1.6,
+            annotationStrokeWidth: Double = 1.0,
             style: DrawingProjectionExportStyle? = nil
         ) {
             if let pagePreset {
@@ -43,6 +45,7 @@ public struct DrawingProjectionSVGExporter: Sendable {
             self.unclassifiedStrokeWidth = unclassifiedStrokeWidth
             self.sectionHatchStrokeWidth = sectionHatchStrokeWidth
             self.sectionContourStrokeWidth = sectionContourStrokeWidth
+            self.annotationStrokeWidth = annotationStrokeWidth
             self.pagePreset = pagePreset
             self.style = style ?? .technical(
                 visibleStrokeWidth: visibleStrokeWidth,
@@ -50,7 +53,8 @@ public struct DrawingProjectionSVGExporter: Sendable {
                 partiallyHiddenStrokeWidth: partiallyHiddenStrokeWidth,
                 unclassifiedStrokeWidth: unclassifiedStrokeWidth,
                 sectionHatchStrokeWidth: sectionHatchStrokeWidth,
-                sectionContourStrokeWidth: sectionContourStrokeWidth
+                sectionContourStrokeWidth: sectionContourStrokeWidth,
+                annotationStrokeWidth: annotationStrokeWidth
             )
         }
     }
@@ -128,7 +132,8 @@ public struct DrawingProjectionSVGExporter: Sendable {
             reportedBounds: result.bounds,
             segments: segments,
             sectionContours: result.sectionContours,
-            sectionHatches: result.sectionHatches
+            sectionHatches: result.sectionHatches,
+            annotations: result.annotations
         )
         let transform = transform(
             options: options,
@@ -181,6 +186,12 @@ public struct DrawingProjectionSVGExporter: Sendable {
             contours: result.sectionContours,
             transform: transform,
             style: options.style.sectionContour,
+            to: &lines
+        )
+        appendAnnotationLayer(
+            annotations: result.annotations,
+            transform: transform,
+            style: options.style.annotation,
             to: &lines
         )
 
@@ -253,6 +264,46 @@ public struct DrawingProjectionSVGExporter: Sendable {
         lines.append("    </g>")
     }
 
+    private func appendAnnotationLayer(
+        annotations: [DrawingProjectionResult.Annotation],
+        transform: Transform,
+        style: DrawingProjectionLayerStyle,
+        to lines: inout [String]
+    ) {
+        lines.append(
+            #"    <g id="drawing-annotations" data-kind="drawingAnnotation" stroke="\#(style.color.hexString)" stroke-width="\#(format(style.strokeWidth))" fill="\#(style.color.hexString)" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke">"#
+        )
+        for annotation in annotations {
+            appendAnnotation(annotation, transform: transform, to: &lines)
+        }
+        lines.append("    </g>")
+    }
+
+    private func appendAnnotation(
+        _ annotation: DrawingProjectionResult.Annotation,
+        transform: Transform,
+        to lines: inout [String]
+    ) {
+        let points = annotation.anchors.map { transform.point($0.point2D) }
+        if points.count >= 2 {
+            let path = points.map { point in
+                "\(format(point.x)) \(format(point.y))"
+            }.joined(separator: " L ")
+            lines.append(
+                #"      <path d="M \#(path)" data-annotation-id="\#(escaped(annotation.id))" data-measurement-id="\#(escaped(annotation.measurementID.description))" data-kind="\#(annotation.kind.rawValue)" />"#
+            )
+        }
+        for (index, point) in points.enumerated() {
+            lines.append(
+                #"      <circle cx="\#(format(point.x))" cy="\#(format(point.y))" r="2.500000" data-annotation-id="\#(escaped(annotation.id))" data-anchor-index="\#(index)" />"#
+            )
+        }
+        let label = transform.point(annotation.labelPoint2D)
+        lines.append(
+            #"      <text x="\#(format(label.x))" y="\#(format(label.y))" font-family="SFMono-Regular, Menlo, monospace" font-size="11" text-anchor="middle" dominant-baseline="middle" data-annotation-id="\#(escaped(annotation.id))">\#(escaped(annotation.displayText))</text>"#
+        )
+    }
+
     private func renderableSegments(
         from result: DrawingProjectionResult
     ) -> [RenderableSegment] {
@@ -287,7 +338,8 @@ public struct DrawingProjectionSVGExporter: Sendable {
         reportedBounds: DrawingProjectionResult.Bounds2D?,
         segments: [RenderableSegment],
         sectionContours: [DrawingProjectionResult.SectionContour],
-        sectionHatches: [DrawingProjectionResult.SectionHatchSegment]
+        sectionHatches: [DrawingProjectionResult.SectionHatchSegment],
+        annotations: [DrawingProjectionResult.Annotation]
     ) -> Bounds {
         if let reportedBounds,
            reportedBounds.minX.isFinite,
@@ -322,6 +374,12 @@ public struct DrawingProjectionSVGExporter: Sendable {
         for hatch in sectionHatches {
             bounds.include(hatch.start2D)
             bounds.include(hatch.end2D)
+        }
+        for annotation in annotations {
+            bounds.include(annotation.labelPoint2D)
+            for anchor in annotation.anchors {
+                bounds.include(anchor.point2D)
+            }
         }
 
         guard bounds.minX.isFinite,
@@ -364,13 +422,15 @@ public struct DrawingProjectionSVGExporter: Sendable {
         let unclassifiedStrokeWidth = finitePositive(options.unclassifiedStrokeWidth, fallback: 1.0)
         let sectionHatchStrokeWidth = finitePositive(options.sectionHatchStrokeWidth, fallback: 0.85)
         let sectionContourStrokeWidth = finitePositive(options.sectionContourStrokeWidth, fallback: 1.6)
+        let annotationStrokeWidth = finitePositive(options.annotationStrokeWidth, fallback: 1.0)
         let fallbackStyle = DrawingProjectionExportStyle.technical(
             visibleStrokeWidth: visibleStrokeWidth,
             hiddenStrokeWidth: hiddenStrokeWidth,
             partiallyHiddenStrokeWidth: partiallyHiddenStrokeWidth,
             unclassifiedStrokeWidth: unclassifiedStrokeWidth,
             sectionHatchStrokeWidth: sectionHatchStrokeWidth,
-            sectionContourStrokeWidth: sectionContourStrokeWidth
+            sectionContourStrokeWidth: sectionContourStrokeWidth,
+            annotationStrokeWidth: annotationStrokeWidth
         )
         return Options(
             width: finitePositive(options.width, fallback: 1024.0),
@@ -383,6 +443,7 @@ public struct DrawingProjectionSVGExporter: Sendable {
             unclassifiedStrokeWidth: unclassifiedStrokeWidth,
             sectionHatchStrokeWidth: sectionHatchStrokeWidth,
             sectionContourStrokeWidth: sectionContourStrokeWidth,
+            annotationStrokeWidth: annotationStrokeWidth,
             style: options.style.normalized(fallback: fallbackStyle)
         )
     }

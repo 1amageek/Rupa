@@ -368,19 +368,17 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                     ],
                     notes: [
                         "Export service and exchange-format tests cover file-oriented output paths.",
-                        "Saved-view drawing projection now generates structured hidden-line strokes plus section contours and hatch segments for SVG and PDF export.",
-                        "Drawing page/style presets, drawing annotation workflows, radial hatching, and parametric material hatching remain separate gaps.",
+                        "Saved-view drawing projection now generates structured hidden-line strokes plus section contours, hatch segments, and measurement-backed drawing annotations for SVG and PDF export.",
+                        "Drawing page/style presets are implemented for SVG/PDF output; radial hatching, parametric material hatching, and curved analytic hidden-line support remain separate gaps.",
                     ]
                 ),
             ],
             openWork: [
                 "Hidden-line export from selected views with broader occluded-line and style controls.",
-                "Drawing page and style presets for SVG and PDF output.",
                 "Radial hatching and parametric material hatching for technical drawings.",
-                "Drawing-space annotations that are distinct from model-driving dimensions.",
                 "Agent-readable import contract for supported exchange formats and failure recovery.",
             ],
-            next: "Broaden drawing export from structured SVG/PDF into page presets, style presets, annotations, and curved analytic hidden-line support."
+            next: "Broaden drawing export from structured SVG/PDF into curved analytic hidden-line support, richer hatching policies, and exchange failure recovery."
         ),
         entry(
             area: .patternsAndArrays,
@@ -621,7 +619,7 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                         "Viewport section clipping now removes hidden bodies from the rendered and pickable scene and clips mesh triangles into retained-side display polygons without allocating replacement mesh buffers.",
                         "The Section Analysis Inspector exposes off, front, and behind clipping modes so viewport clipping can be toggled without adding more canvas chrome.",
                         "Selecting a section or construction plane can drive a non-mutating viewport overlay that renders the section plane frame, closed section fill, hatching, and bounded body intersection segments from the same SectionAnalysisResult contract used by Agent and Automation.",
-                        "DrawingProjectionService now consumes saved-view section scene nodes through SectionAnalysisService and emits structured drawing section contours and hatch segments for SVG export.",
+                        "DrawingProjectionService now consumes saved-view section scene nodes through SectionAnalysisService and emits structured drawing section contours, hatch segments, and measurement-backed drawing annotations for SVG/PDF export.",
                         "Exact clipped cap surfaces, interference highlighting, and persistent section-distance controls remain incomplete.",
                     ]
                 ),

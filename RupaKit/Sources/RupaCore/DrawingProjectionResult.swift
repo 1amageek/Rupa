@@ -221,6 +221,65 @@ public struct DrawingProjectionResult: Codable, Equatable, Sendable {
         }
     }
 
+    public struct AnnotationAnchor: Codable, Equatable, Sendable {
+        public var role: MeasurementAnchor.Role
+        public var kind: MeasurementAnchor.Kind
+        public var worldPoint: Point3D
+        public var point2D: Point2D
+
+        public init(
+            role: MeasurementAnchor.Role,
+            kind: MeasurementAnchor.Kind,
+            worldPoint: Point3D,
+            point2D: Point2D
+        ) {
+            self.role = role
+            self.kind = kind
+            self.worldPoint = worldPoint
+            self.point2D = point2D
+        }
+    }
+
+    public struct Annotation: Codable, Equatable, Sendable {
+        public var id: String
+        public var measurementID: MeasurementAnnotationID
+        public var sceneNodeID: SceneNodeID?
+        public var name: String
+        public var kind: MeasurementAnnotation.Kind
+        public var anchors: [AnnotationAnchor]
+        public var labelWorldPoint: Point3D?
+        public var labelPoint2D: Point2D
+        public var measurementMeters: Double?
+        public var measurementDegrees: Double?
+        public var displayText: String
+
+        public init(
+            id: String,
+            measurementID: MeasurementAnnotationID,
+            sceneNodeID: SceneNodeID?,
+            name: String,
+            kind: MeasurementAnnotation.Kind,
+            anchors: [AnnotationAnchor],
+            labelWorldPoint: Point3D?,
+            labelPoint2D: Point2D,
+            measurementMeters: Double? = nil,
+            measurementDegrees: Double? = nil,
+            displayText: String
+        ) {
+            self.id = id
+            self.measurementID = measurementID
+            self.sceneNodeID = sceneNodeID
+            self.name = name
+            self.kind = kind
+            self.anchors = anchors
+            self.labelWorldPoint = labelWorldPoint
+            self.labelPoint2D = labelPoint2D
+            self.measurementMeters = measurementMeters
+            self.measurementDegrees = measurementDegrees
+            self.displayText = displayText
+        }
+    }
+
     public var displayUnit: LengthDisplayUnit
     public var savedViewID: SavedViewID
     public var savedViewName: String
@@ -247,6 +306,8 @@ public struct DrawingProjectionResult: Codable, Equatable, Sendable {
     public var truncatedSectionHatches: Bool
     public var sectionContours: [SectionContour]
     public var sectionHatches: [SectionHatchSegment]
+    public var annotationCount: Int
+    public var annotations: [Annotation]
     public var diagnostics: [EditorDiagnostic]
 
     public init(
@@ -264,6 +325,7 @@ public struct DrawingProjectionResult: Codable, Equatable, Sendable {
         sectionContours: [SectionContour] = [],
         sectionHatches: [SectionHatchSegment] = [],
         truncatedSectionHatches: Bool = false,
+        annotations: [Annotation] = [],
         diagnostics: [EditorDiagnostic]
     ) {
         let visibilityCounts = Self.visibilityCounts(strokes)
@@ -294,6 +356,8 @@ public struct DrawingProjectionResult: Codable, Equatable, Sendable {
         self.truncatedSectionHatches = truncatedSectionHatches
         self.sectionContours = sectionContours
         self.sectionHatches = sectionHatches
+        self.annotationCount = annotations.count
+        self.annotations = annotations
         self.diagnostics = diagnostics
     }
 
@@ -324,6 +388,8 @@ public struct DrawingProjectionResult: Codable, Equatable, Sendable {
         case truncatedSectionHatches
         case sectionContours
         case sectionHatches
+        case annotationCount
+        case annotations
         case diagnostics
     }
 
@@ -353,6 +419,10 @@ public struct DrawingProjectionResult: Codable, Equatable, Sendable {
                 Bool.self,
                 forKey: .truncatedSectionHatches
             ) ?? false,
+            annotations: try container.decodeIfPresent(
+                [Annotation].self,
+                forKey: .annotations
+            ) ?? [],
             diagnostics: try container.decode([EditorDiagnostic].self, forKey: .diagnostics)
         )
     }
@@ -385,6 +455,8 @@ public struct DrawingProjectionResult: Codable, Equatable, Sendable {
         try container.encode(truncatedSectionHatches, forKey: .truncatedSectionHatches)
         try container.encode(sectionContours, forKey: .sectionContours)
         try container.encode(sectionHatches, forKey: .sectionHatches)
+        try container.encode(annotationCount, forKey: .annotationCount)
+        try container.encode(annotations, forKey: .annotations)
         try container.encode(diagnostics, forKey: .diagnostics)
     }
 

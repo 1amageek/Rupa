@@ -201,6 +201,24 @@ import Testing
     #expect(!svg.localizedCaseInsensitiveContains("inf"))
 }
 
+@Test func drawingProjectionSVGExporterCreatesDrawingAnnotationLayer() {
+    let result = drawingProjectionAnnotationResult()
+
+    let svg = DrawingProjectionSVGExporter(
+        options: DrawingProjectionSVGExporter.Options(width: 200.0, height: 120.0, padding: 10.0)
+    ).svg(for: result)
+
+    #expect(svg.contains(#"id="drawing-annotations" data-kind="drawingAnnotation""#))
+    #expect(svg.contains(#"data-annotation-id="annotation-a""#))
+    #expect(svg.contains(#"data-kind="distance""#))
+    #expect(svg.contains(#"<text"#))
+    #expect(svg.contains(#"2 &lt;m&gt;"#))
+    #expect(svg.contains(#"data-anchor-index="0""#))
+    #expect(svg.contains(#"data-anchor-index="1""#))
+    #expect(!svg.localizedCaseInsensitiveContains("nan"))
+    #expect(!svg.localizedCaseInsensitiveContains("inf"))
+}
+
 @Test func drawingProjectionSVGExporterCreatesSectionHatchLayers() {
     let sectionContour = DrawingProjectionResult.SectionContour(
         id: "section-contour",
@@ -278,4 +296,55 @@ import Testing
     #expect(svg.contains(#"data-angle-degrees="45.000000""#))
     #expect(!svg.localizedCaseInsensitiveContains("nan"))
     #expect(!svg.localizedCaseInsensitiveContains("inf"))
+}
+
+private func drawingProjectionAnnotationResult() -> DrawingProjectionResult {
+    let measurementID = MeasurementAnnotationID()
+    let annotation = DrawingProjectionResult.Annotation(
+        id: "annotation-a",
+        measurementID: measurementID,
+        sceneNodeID: nil,
+        name: "Overall Width",
+        kind: .distance,
+        anchors: [
+            DrawingProjectionResult.AnnotationAnchor(
+                role: .start,
+                kind: .worldPoint,
+                worldPoint: Point3D(x: -1.0, y: 0.0, z: 0.0),
+                point2D: Point2D(x: -1.0, y: 0.0)
+            ),
+            DrawingProjectionResult.AnnotationAnchor(
+                role: .end,
+                kind: .worldPoint,
+                worldPoint: Point3D(x: 1.0, y: 0.0, z: 0.0),
+                point2D: Point2D(x: 1.0, y: 0.0)
+            ),
+        ],
+        labelWorldPoint: Point3D(x: 0.0, y: 0.2, z: 0.0),
+        labelPoint2D: Point2D(x: 0.0, y: 0.2),
+        measurementMeters: 2.0,
+        displayText: "2 <m>"
+    )
+    return DrawingProjectionResult(
+        displayUnit: .meter,
+        savedViewID: SavedViewID(),
+        savedViewName: "Annotated View",
+        projectionMode: .orthographic,
+        viewFrame: DrawingProjectionResult.ViewFrame(
+            target: .origin,
+            right: Vector3D(x: 1.0, y: 0.0, z: 0.0),
+            up: Vector3D(x: 0.0, y: 1.0, z: 0.0),
+            viewNormal: Vector3D(x: 0.0, y: 0.0, z: 1.0),
+            visibleHeightMeters: 2.0,
+            scaleBarLengthMeters: 1.0
+        ),
+        bodyCount: 0,
+        triangleCount: 0,
+        candidateEdgeCount: 0,
+        truncatedStrokes: false,
+        bounds: nil,
+        strokes: [],
+        annotations: [annotation],
+        diagnostics: []
+    )
 }

@@ -167,8 +167,22 @@ public struct DrawingProjectionService: Sendable {
                 ?? savedView.camera.distanceMeters,
             scaleBarLengthMeters: savedView.displayScale.scaleBarLengthMeters
         )
+        let topologySummary = try topologySummaryForAnnotations(
+            document: document,
+            objectRegistry: objectRegistry,
+            currentEvaluation: currentEvaluation,
+            currentGeneration: currentGeneration
+        )
+        let annotations = try drawingAnnotations(
+            document: document,
+            savedView: savedView,
+            basis: basis,
+            topology: topologySummary
+        )
 
         guard document.cadDocument.hasActiveRenderableTopologyFeatures else {
+            var annotationBounds = BoundsAccumulator()
+            includeAnnotations(annotations, in: &annotationBounds)
             return DrawingProjectionResult(
                 displayUnit: document.displayUnit,
                 savedViewID: savedView.id,
@@ -179,14 +193,15 @@ public struct DrawingProjectionService: Sendable {
                 triangleCount: 0,
                 candidateEdgeCount: 0,
                 truncatedStrokes: false,
-                bounds: nil,
+                bounds: annotationBounds.bounds,
                 strokes: [],
+                annotations: annotations,
                 diagnostics: [
                     EditorDiagnostic(
                         severity: .info,
                         message: "Drawing projection completed with no generated body meshes."
                     ),
-                ]
+                ] + annotationDiagnostics(annotations)
             )
         }
 
@@ -279,6 +294,7 @@ public struct DrawingProjectionService: Sendable {
             bounds.include(hatch.start2D)
             bounds.include(hatch.end2D)
         }
+        includeAnnotations(annotations, in: &bounds)
 
         return DrawingProjectionResult(
             displayUnit: document.displayUnit,
@@ -295,13 +311,14 @@ public struct DrawingProjectionService: Sendable {
             sectionContours: sectionArtifacts.contours,
             sectionHatches: sectionArtifacts.hatches,
             truncatedSectionHatches: sectionArtifacts.truncatedHatches,
+            annotations: annotations,
             diagnostics: diagnostics(
                 result: strokes,
                 candidateEdgeCount: candidateEdgeCount,
                 truncatedStrokes: truncatedStrokes,
                 maximumStrokeCount: query.maximumStrokeCount,
                 sectionArtifacts: sectionArtifacts
-            ) + sectionArtifacts.diagnostics
+            ) + sectionArtifacts.diagnostics + annotationDiagnostics(annotations)
         )
     }
 
@@ -342,6 +359,314 @@ public struct DrawingProjectionService: Sendable {
         case .perspective:
             return .perspective
         }
+    }
+
+    private func topologySummaryForAnnotations(
+        document: DesignDocument,
+        objectRegistry: ObjectTypeRegistry,
+        currentEvaluation: DocumentEvaluationContext?,
+        currentGeneration: DocumentGeneration?
+    ) throws -> TopologySummaryResult? {
+        guard measurementAnnotationsRequireTopology(in: document),
+              document.cadDocument.hasActiveRenderableTopologyFeatures else {
+            return nil
+        }
+        return try TopologySummaryService(pipeline: pipelineOverride).summarize(
+            document: document,
+            objectRegistry: objectRegistry,
+            currentEvaluation: currentEvaluation,
+            currentGeneration: currentGeneration
+        )
+    }
+
+    private func measurementAnnotationsRequireTopology(
+        in document: DesignDocument
+    ) -> Bool {
+        document.productMetadata.measurements.values.contains { measurement in
+            measurement.anchors.contains { anchor in
+                anchor.kind == .topologyReference || anchor.kind == .topologyEdgeParameter
+            }
+        }
+    }
+
+    private func drawingAnnotations(
+        document: DesignDocument,
+        savedView: SavedView,
+        basis: ProjectionBasis,
+        topology: TopologySummaryResult?
+    ) throws -> [DrawingProjectionResult.Annotation] {
+        let resolver = MeasurementAnchorWorldPointResolver()
+        let sortedMeasurements = document.productMetadata.measurements.values.sorted {
+            if $0.name != $1.name {
+                return $0.name < $1.name
+            }
+            return $0.id.description < $1.id.description
+        }
+
+        var annotations: [DrawingProjectionResult.Annotation] = []
+        annotations.reserveCapacity(sortedMeasurements.count)
+        for measurement in sortedMeasurements {
+            let anchors = try resolvedAnnotationAnchors(
+                measurement.anchors,
+                resolver: resolver,
+                document: document,
+                savedView: savedView,
+                basis: basis,
+                topology: topology
+            )
+            guard anchors.isEmpty == false else {
+                continue
+            }
+            let metrics = annotationMetrics(
+                kind: measurement.kind,
+                anchors: anchors,
+                displayUnit: document.displayUnit,
+                fallbackName: measurement.name
+            )
+            let label = annotationLabelPoint(
+                measurement: measurement,
+                anchors: anchors,
+                savedView: savedView,
+                basis: basis
+            )
+            annotations.append(DrawingProjectionResult.Annotation(
+                id: "\(measurement.id.description):drawing",
+                measurementID: measurement.id,
+                sceneNodeID: measurement.sceneNodeID,
+                name: measurement.name,
+                kind: measurement.kind,
+                anchors: anchors,
+                labelWorldPoint: measurement.labelPosition,
+                labelPoint2D: label,
+                measurementMeters: metrics.measurementMeters,
+                measurementDegrees: metrics.measurementDegrees,
+                displayText: metrics.displayText
+            ))
+        }
+        return annotations
+    }
+
+    private func resolvedAnnotationAnchors(
+        _ sourceAnchors: [MeasurementAnchor],
+        resolver: MeasurementAnchorWorldPointResolver,
+        document: DesignDocument,
+        savedView: SavedView,
+        basis: ProjectionBasis,
+        topology: TopologySummaryResult?
+    ) throws -> [DrawingProjectionResult.AnnotationAnchor] {
+        var anchors: [DrawingProjectionResult.AnnotationAnchor] = []
+        anchors.reserveCapacity(sourceAnchors.count)
+        for sourceAnchor in sourceAnchors {
+            guard let resolved = try resolver.resolvedAnchor(
+                sourceAnchor,
+                in: document,
+                topology: topology
+            ) else {
+                continue
+            }
+            anchors.append(DrawingProjectionResult.AnnotationAnchor(
+                role: resolved.role,
+                kind: resolved.kind,
+                worldPoint: resolved.worldPoint,
+                point2D: project(resolved.worldPoint, savedView: savedView, basis: basis)
+            ))
+        }
+        return anchors
+    }
+
+    private func annotationMetrics(
+        kind: MeasurementAnnotation.Kind,
+        anchors: [DrawingProjectionResult.AnnotationAnchor],
+        displayUnit: LengthDisplayUnit,
+        fallbackName: String
+    ) -> (measurementMeters: Double?, measurementDegrees: Double?, displayText: String) {
+        switch kind {
+        case .distance:
+            guard anchors.count >= 2 else {
+                return (nil, nil, fallbackName)
+            }
+            let endpoints = preferredMeasurementEndpoints(in: anchors)
+            let length = distance(endpoints.first.worldPoint, endpoints.second.worldPoint)
+            return (
+                length,
+                nil,
+                LengthDisplayText.readableLengthString(
+                    fromMeters: length,
+                    preferredUnit: displayUnit,
+                    maximumFractionDigits: 3
+                )
+            )
+        case .radius:
+            guard let radius = radiusMeters(from: anchors) else {
+                return (nil, nil, fallbackName)
+            }
+            return (
+                radius,
+                nil,
+                "R \(LengthDisplayText.readableLengthString(fromMeters: radius, preferredUnit: displayUnit, maximumFractionDigits: 3))"
+            )
+        case .diameter:
+            guard let diameter = diameterMeters(from: anchors) else {
+                return (nil, nil, fallbackName)
+            }
+            return (
+                diameter,
+                nil,
+                "Dia \(LengthDisplayText.readableLengthString(fromMeters: diameter, preferredUnit: displayUnit, maximumFractionDigits: 3))"
+            )
+        case .angle:
+            guard let degrees = angleDegrees(from: anchors) else {
+                return (nil, nil, fallbackName)
+            }
+            return (
+                nil,
+                degrees,
+                "\(LengthDisplayText.numberString(from: degrees, maximumFractionDigits: 2)) deg"
+            )
+        }
+    }
+
+    private func preferredMeasurementEndpoints(
+        in anchors: [DrawingProjectionResult.AnnotationAnchor]
+    ) -> (
+        first: DrawingProjectionResult.AnnotationAnchor,
+        second: DrawingProjectionResult.AnnotationAnchor
+    ) {
+        let start = anchors.first { $0.role == .start }
+        let end = anchors.first { $0.role == .end }
+        if let start, let end {
+            return (start, end)
+        }
+        return (anchors[0], anchors[1])
+    }
+
+    private func radiusMeters(
+        from anchors: [DrawingProjectionResult.AnnotationAnchor]
+    ) -> Double? {
+        guard anchors.count >= 2 else {
+            return nil
+        }
+        if let center = anchors.first(where: { $0.role == .center }),
+           let boundary = anchors.first(where: { $0.role != .center }) {
+            return distance(center.worldPoint, boundary.worldPoint)
+        }
+        let endpoints = preferredMeasurementEndpoints(in: anchors)
+        return distance(endpoints.first.worldPoint, endpoints.second.worldPoint)
+    }
+
+    private func diameterMeters(
+        from anchors: [DrawingProjectionResult.AnnotationAnchor]
+    ) -> Double? {
+        guard anchors.count >= 2 else {
+            return nil
+        }
+        if let center = anchors.first(where: { $0.role == .center }),
+           let boundary = anchors.first(where: { $0.role != .center }) {
+            return distance(center.worldPoint, boundary.worldPoint) * 2.0
+        }
+        let endpoints = preferredMeasurementEndpoints(in: anchors)
+        return distance(endpoints.first.worldPoint, endpoints.second.worldPoint)
+    }
+
+    private func angleDegrees(
+        from anchors: [DrawingProjectionResult.AnnotationAnchor]
+    ) -> Double? {
+        guard anchors.count >= 3 else {
+            return nil
+        }
+        if let center = anchors.first(where: { $0.role == .center }) {
+            let sideAnchors = anchors.filter { $0.role != .center }
+            guard sideAnchors.count >= 2 else {
+                return nil
+            }
+            return angleDegrees(
+                first: sideAnchors[0].worldPoint,
+                center: center.worldPoint,
+                second: sideAnchors[1].worldPoint
+            )
+        }
+        return angleDegrees(
+            first: anchors[0].worldPoint,
+            center: anchors[1].worldPoint,
+            second: anchors[2].worldPoint
+        )
+    }
+
+    private func annotationLabelPoint(
+        measurement: MeasurementAnnotation,
+        anchors: [DrawingProjectionResult.AnnotationAnchor],
+        savedView: SavedView,
+        basis: ProjectionBasis
+    ) -> Point2D {
+        if let labelPosition = measurement.labelPosition {
+            return project(labelPosition, savedView: savedView, basis: basis)
+        }
+        let center = centroid(anchors.map(\.point2D))
+        let defaultOffset = max(savedView.displayScale.scaleBarLengthMeters * 0.08, 0.01)
+        if let placementAxis = measurement.placementAxis,
+           let direction = normalizedProjectedDirection(placementAxis, basis: basis) {
+            return Point2D(
+                x: center.x + direction.x * defaultOffset,
+                y: center.y + direction.y * defaultOffset
+            )
+        }
+        return Point2D(x: center.x, y: center.y + defaultOffset)
+    }
+
+    private func centroid(_ points: [Point2D]) -> Point2D {
+        guard points.isEmpty == false else {
+            return Point2D(x: 0.0, y: 0.0)
+        }
+        let sum = points.reduce(Point2D(x: 0.0, y: 0.0)) { partial, point in
+            Point2D(x: partial.x + point.x, y: partial.y + point.y)
+        }
+        let divisor = Double(points.count)
+        return Point2D(x: sum.x / divisor, y: sum.y / divisor)
+    }
+
+    private func normalizedProjectedDirection(
+        _ vector: Vector3D,
+        basis: ProjectionBasis
+    ) -> Point2D? {
+        let projected = Point2D(
+            x: basis.xDirection.x * vector.x
+                + basis.yDirection.x * vector.y
+                + basis.zDirection.x * vector.z,
+            y: basis.xDirection.y * vector.x
+                + basis.yDirection.y * vector.y
+                + basis.zDirection.y * vector.z
+        )
+        let length = hypot(projected.x, projected.y)
+        guard length > 1.0e-12 else {
+            return nil
+        }
+        return Point2D(x: projected.x / length, y: projected.y / length)
+    }
+
+    private func includeAnnotations(
+        _ annotations: [DrawingProjectionResult.Annotation],
+        in bounds: inout BoundsAccumulator
+    ) {
+        for annotation in annotations {
+            bounds.include(annotation.labelPoint2D)
+            for anchor in annotation.anchors {
+                bounds.include(anchor.point2D)
+            }
+        }
+    }
+
+    private func annotationDiagnostics(
+        _ annotations: [DrawingProjectionResult.Annotation]
+    ) -> [EditorDiagnostic] {
+        guard annotations.isEmpty == false else {
+            return []
+        }
+        return [
+            EditorDiagnostic(
+                severity: .info,
+                message: "Drawing projection generated \(annotations.count) drawing annotation(s) from measurement metadata."
+            ),
+        ]
     }
 
     private func projectionBasis(
@@ -1236,6 +1561,34 @@ public struct DrawingProjectionService: Sendable {
         let y = end.y - start.y
         let z = end.z - start.z
         return sqrt(x * x + y * y + z * z)
+    }
+
+    private func angleDegrees(
+        first: Point3D,
+        center: Point3D,
+        second: Point3D
+    ) -> Double? {
+        let firstVector = Vector3D(
+            x: first.x - center.x,
+            y: first.y - center.y,
+            z: first.z - center.z
+        )
+        let secondVector = Vector3D(
+            x: second.x - center.x,
+            y: second.y - center.y,
+            z: second.z - center.z
+        )
+        let firstLength = firstVector.length
+        let secondLength = secondVector.length
+        guard firstLength > 1.0e-12,
+              secondLength > 1.0e-12 else {
+            return nil
+        }
+        let cosine = min(
+            max(dot(firstVector, secondVector) / (firstLength * secondLength), -1.0),
+            1.0
+        )
+        return acos(cosine) * 180.0 / .pi
     }
 
     private func dot(

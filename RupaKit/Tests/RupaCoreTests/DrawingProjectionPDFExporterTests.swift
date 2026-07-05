@@ -83,6 +83,28 @@ import Testing
     #expect(!pdf.localizedCaseInsensitiveContains("inf"))
 }
 
+@Test func drawingProjectionPDFExporterCreatesDrawingAnnotationLayer() {
+    let result = drawingProjectionPDFAnnotationFixture()
+
+    let data = DrawingProjectionPDFExporter(
+        options: DrawingProjectionPDFExporter.Options(
+            pageWidth: 200.0,
+            pageHeight: 120.0,
+            padding: 10.0
+        )
+    ).pdf(for: result)
+    let pdf = String(decoding: data, as: UTF8.self)
+
+    #expect(pdf.contains("% layer drawing-annotations"))
+    #expect(pdf.contains("/Font << /F1 5 0 R >>"))
+    #expect(pdf.contains("/BaseFont /Helvetica"))
+    #expect(pdf.contains("BT"))
+    #expect(pdf.contains("/F1 9 Tf"))
+    #expect(pdf.contains("(2 \\(m\\)) Tj"))
+    #expect(!pdf.localizedCaseInsensitiveContains("nan"))
+    #expect(!pdf.localizedCaseInsensitiveContains("inf"))
+}
+
 private func drawingProjectionPDFExporterFixture() -> DrawingProjectionResult {
     let sectionContour = DrawingProjectionResult.SectionContour(
         id: "section-contour",
@@ -200,6 +222,57 @@ private func drawingProjectionPDFExporterFixture() -> DrawingProjectionResult {
         ],
         sectionContours: [sectionContour],
         sectionHatches: [sectionHatch],
+        diagnostics: []
+    )
+}
+
+private func drawingProjectionPDFAnnotationFixture() -> DrawingProjectionResult {
+    let measurementID = MeasurementAnnotationID()
+    let annotation = DrawingProjectionResult.Annotation(
+        id: "annotation-a",
+        measurementID: measurementID,
+        sceneNodeID: nil,
+        name: "Overall Width",
+        kind: .distance,
+        anchors: [
+            DrawingProjectionResult.AnnotationAnchor(
+                role: .start,
+                kind: .worldPoint,
+                worldPoint: Point3D(x: -1.0, y: 0.0, z: 0.0),
+                point2D: Point2D(x: -1.0, y: 0.0)
+            ),
+            DrawingProjectionResult.AnnotationAnchor(
+                role: .end,
+                kind: .worldPoint,
+                worldPoint: Point3D(x: 1.0, y: 0.0, z: 0.0),
+                point2D: Point2D(x: 1.0, y: 0.0)
+            ),
+        ],
+        labelWorldPoint: Point3D(x: 0.0, y: 0.2, z: 0.0),
+        labelPoint2D: Point2D(x: 0.0, y: 0.2),
+        measurementMeters: 2.0,
+        displayText: "2 (m)"
+    )
+    return DrawingProjectionResult(
+        displayUnit: .meter,
+        savedViewID: SavedViewID(),
+        savedViewName: "Annotated PDF View",
+        projectionMode: .orthographic,
+        viewFrame: DrawingProjectionResult.ViewFrame(
+            target: .origin,
+            right: Vector3D(x: 1.0, y: 0.0, z: 0.0),
+            up: Vector3D(x: 0.0, y: 1.0, z: 0.0),
+            viewNormal: Vector3D(x: 0.0, y: 0.0, z: 1.0),
+            visibleHeightMeters: 2.0,
+            scaleBarLengthMeters: 1.0
+        ),
+        bodyCount: 0,
+        triangleCount: 0,
+        candidateEdgeCount: 0,
+        truncatedStrokes: false,
+        bounds: nil,
+        strokes: [],
+        annotations: [annotation],
         diagnostics: []
     )
 }

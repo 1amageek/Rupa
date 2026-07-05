@@ -12,6 +12,7 @@ public struct DrawingProjectionPDFExporter: Sendable {
         public var unclassifiedStrokeWidth: Double
         public var sectionHatchStrokeWidth: Double
         public var sectionContourStrokeWidth: Double
+        public var annotationStrokeWidth: Double
         public var pagePreset: DrawingProjectionPagePreset?
         public var style: DrawingProjectionExportStyle
 
@@ -26,6 +27,7 @@ public struct DrawingProjectionPDFExporter: Sendable {
             unclassifiedStrokeWidth: Double = 0.8,
             sectionHatchStrokeWidth: Double = 0.6,
             sectionContourStrokeWidth: Double = 1.3,
+            annotationStrokeWidth: Double = 0.9,
             style: DrawingProjectionExportStyle? = nil
         ) {
             if let pagePreset {
@@ -43,6 +45,7 @@ public struct DrawingProjectionPDFExporter: Sendable {
             self.unclassifiedStrokeWidth = unclassifiedStrokeWidth
             self.sectionHatchStrokeWidth = sectionHatchStrokeWidth
             self.sectionContourStrokeWidth = sectionContourStrokeWidth
+            self.annotationStrokeWidth = annotationStrokeWidth
             self.pagePreset = pagePreset
             self.style = style ?? .technical(
                 visibleStrokeWidth: visibleStrokeWidth,
@@ -50,7 +53,8 @@ public struct DrawingProjectionPDFExporter: Sendable {
                 partiallyHiddenStrokeWidth: partiallyHiddenStrokeWidth,
                 unclassifiedStrokeWidth: unclassifiedStrokeWidth,
                 sectionHatchStrokeWidth: sectionHatchStrokeWidth,
-                sectionContourStrokeWidth: sectionContourStrokeWidth
+                sectionContourStrokeWidth: sectionContourStrokeWidth,
+                annotationStrokeWidth: annotationStrokeWidth
             )
         }
     }
@@ -125,7 +129,8 @@ public struct DrawingProjectionPDFExporter: Sendable {
             reportedBounds: result.bounds,
             segments: segments,
             sectionContours: result.sectionContours,
-            sectionHatches: result.sectionHatches
+            sectionHatches: result.sectionHatches,
+            annotations: result.annotations
         )
         let transform = transform(options: options, bounds: bounds)
         let content = contentStream(
@@ -190,6 +195,12 @@ public struct DrawingProjectionPDFExporter: Sendable {
             style: options.style.sectionContour,
             to: &lines
         )
+        appendAnnotations(
+            result.annotations,
+            transform: transform,
+            style: options.style.annotation,
+            to: &lines
+        )
         lines.append("Q")
         lines.append("")
         return lines.joined(separator: "\n")
@@ -244,6 +255,51 @@ public struct DrawingProjectionPDFExporter: Sendable {
         lines.append(pdfDashPattern(style.dashPattern))
     }
 
+    private func appendAnnotations(
+        _ annotations: [DrawingProjectionResult.Annotation],
+        transform: Transform,
+        style: DrawingProjectionLayerStyle,
+        to lines: inout [String]
+    ) {
+        lines.append("% layer drawing-annotations")
+        append(style: style, to: &lines)
+        for annotation in annotations {
+            appendAnnotation(annotation, transform: transform, style: style, to: &lines)
+        }
+    }
+
+    private func appendAnnotation(
+        _ annotation: DrawingProjectionResult.Annotation,
+        transform: Transform,
+        style: DrawingProjectionLayerStyle,
+        to lines: inout [String]
+    ) {
+        let points = annotation.anchors.map { transform.point($0.point2D) }
+        if points.count >= 2 {
+            let first = points[0]
+            lines.append("\(format(first.x)) \(format(first.y)) m")
+            for point in points.dropFirst() {
+                lines.append("\(format(point.x)) \(format(point.y)) l")
+            }
+            lines.append("S")
+        }
+        for point in points {
+            let radius = 2.0
+            lines.append("\(format(point.x - radius)) \(format(point.y)) m")
+            lines.append("\(format(point.x + radius)) \(format(point.y)) l")
+            lines.append("\(format(point.x)) \(format(point.y - radius)) m")
+            lines.append("\(format(point.x)) \(format(point.y + radius)) l")
+            lines.append("S")
+        }
+        let label = transform.point(annotation.labelPoint2D)
+        lines.append("\(format(style.color.red)) \(format(style.color.green)) \(format(style.color.blue)) rg")
+        lines.append("BT")
+        lines.append("/F1 9 Tf")
+        lines.append("\(format(label.x)) \(format(label.y)) Td")
+        lines.append("(\(pdfString(annotation.displayText))) Tj")
+        lines.append("ET")
+    }
+
     private func appendLine(
         start: Point2D,
         end: Point2D,
@@ -285,8 +341,9 @@ public struct DrawingProjectionPDFExporter: Sendable {
         let objects = [
             "1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj\n",
             "2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj\n",
-            "3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 \(format(options.pageWidth)) \(format(options.pageHeight))] /Resources << >> /Contents 4 0 R >> endobj\n",
+            "3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 \(format(options.pageWidth)) \(format(options.pageHeight))] /Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >> endobj\n",
             "4 0 obj << /Length \(content.utf8.count) >> stream\n\(content)endstream endobj\n",
+            "5 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> endobj\n",
         ]
         var result = "%PDF-1.4\n"
         var offsets: [Int] = [0]
@@ -333,7 +390,8 @@ public struct DrawingProjectionPDFExporter: Sendable {
         reportedBounds: DrawingProjectionResult.Bounds2D?,
         segments: [RenderableSegment],
         sectionContours: [DrawingProjectionResult.SectionContour],
-        sectionHatches: [DrawingProjectionResult.SectionHatchSegment]
+        sectionHatches: [DrawingProjectionResult.SectionHatchSegment],
+        annotations: [DrawingProjectionResult.Annotation]
     ) -> Bounds {
         if let reportedBounds,
            reportedBounds.minX.isFinite,
@@ -368,6 +426,12 @@ public struct DrawingProjectionPDFExporter: Sendable {
         for hatch in sectionHatches {
             bounds.include(hatch.start2D)
             bounds.include(hatch.end2D)
+        }
+        for annotation in annotations {
+            bounds.include(annotation.labelPoint2D)
+            for anchor in annotation.anchors {
+                bounds.include(anchor.point2D)
+            }
         }
 
         guard bounds.minX.isFinite,
@@ -410,13 +474,15 @@ public struct DrawingProjectionPDFExporter: Sendable {
         let unclassifiedStrokeWidth = finitePositive(options.unclassifiedStrokeWidth, fallback: 0.8)
         let sectionHatchStrokeWidth = finitePositive(options.sectionHatchStrokeWidth, fallback: 0.6)
         let sectionContourStrokeWidth = finitePositive(options.sectionContourStrokeWidth, fallback: 1.3)
+        let annotationStrokeWidth = finitePositive(options.annotationStrokeWidth, fallback: 0.9)
         let fallbackStyle = DrawingProjectionExportStyle.technical(
             visibleStrokeWidth: visibleStrokeWidth,
             hiddenStrokeWidth: hiddenStrokeWidth,
             partiallyHiddenStrokeWidth: partiallyHiddenStrokeWidth,
             unclassifiedStrokeWidth: unclassifiedStrokeWidth,
             sectionHatchStrokeWidth: sectionHatchStrokeWidth,
-            sectionContourStrokeWidth: sectionContourStrokeWidth
+            sectionContourStrokeWidth: sectionContourStrokeWidth,
+            annotationStrokeWidth: annotationStrokeWidth
         )
         return Options(
             pageWidth: finitePositive(options.pageWidth, fallback: 792.0),
@@ -429,6 +495,7 @@ public struct DrawingProjectionPDFExporter: Sendable {
             unclassifiedStrokeWidth: unclassifiedStrokeWidth,
             sectionHatchStrokeWidth: sectionHatchStrokeWidth,
             sectionContourStrokeWidth: sectionContourStrokeWidth,
+            annotationStrokeWidth: annotationStrokeWidth,
             style: options.style.normalized(fallback: fallbackStyle)
         )
     }
@@ -488,6 +555,26 @@ public struct DrawingProjectionPDFExporter: Sendable {
                 output.unicodeScalars.append(scalar)
             default:
                 output += "_"
+            }
+        }
+        return output
+    }
+
+    private func pdfString(_ value: String) -> String {
+        var output = ""
+        output.reserveCapacity(value.count)
+        for scalar in value.unicodeScalars {
+            switch scalar.value {
+            case 0x28:
+                output += "\\("
+            case 0x29:
+                output += "\\)"
+            case 0x5c:
+                output += "\\\\"
+            case 0x20...0x7e:
+                output.unicodeScalars.append(scalar)
+            default:
+                output += "?"
             }
         }
         return output

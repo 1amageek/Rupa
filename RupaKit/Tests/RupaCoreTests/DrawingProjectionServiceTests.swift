@@ -265,6 +265,93 @@ import Testing
 }
 
 @MainActor
+@Test func drawingProjectionGeneratesDrawingAnnotationsFromMeasurementMetadataWithoutBodies() throws {
+    let session = EditorSession()
+    var document = session.document
+    document.displayUnit = .meter
+    let measurementID = try document.addMeasurementAnnotation(
+        MeasurementAnnotation(
+            name: "Overall Width",
+            kind: .distance,
+            anchors: [
+                .worldPoint(Point3D(x: -1.0, y: 0.0, z: 0.0), role: .start),
+                .worldPoint(Point3D(x: 1.0, y: 0.0, z: 0.0), role: .end),
+            ],
+            labelPosition: Point3D(x: 0.0, y: 0.25, z: 0.0)
+        ),
+        objectRegistry: session.objectRegistry
+    )
+    let savedView = SavedView(
+        name: "Annotated Drawing View",
+        camera: SavedViewCamera(
+            target: .origin,
+            distanceMeters: 4.0,
+            yawRadians: 0.0,
+            pitchRadians: 0.0
+        ),
+        projection: .orthographic(heightMeters: 4.0),
+        displayScale: SavedViewDisplayScale(ruler: .standard(for: .meter))
+    )
+    _ = try document.createSavedView(savedView, objectRegistry: session.objectRegistry)
+
+    let result = try DrawingProjectionService().generate(
+        document: document,
+        query: DrawingProjectionQuery(savedViewID: savedView.id),
+        objectRegistry: session.objectRegistry,
+        currentEvaluation: session.currentEvaluation,
+        currentGeneration: session.generation
+    )
+
+    let annotation = try #require(result.annotations.first)
+    #expect(result.bodyCount == 0)
+    #expect(result.strokeCount == 0)
+    #expect(result.annotationCount == 1)
+    #expect(annotation.measurementID == measurementID)
+    #expect(annotation.name == "Overall Width")
+    #expect(annotation.kind == .distance)
+    #expect(annotation.anchors.count == 2)
+    #expect(annotation.measurementMeters == 2.0)
+    #expect(annotation.displayText == "2 m")
+    #expect(annotation.labelPoint2D == Point2D(x: 0.0, y: -0.25))
+    #expect(result.bounds != nil)
+    #expect(result.diagnostics.contains {
+        $0.message.contains("drawing annotation")
+    })
+}
+
+@MainActor
+@Test func drawingProjectionDiameterAnnotationUsesCenterBoundaryRoles() throws {
+    let result = try drawingProjectionResultWithMeasurement(
+        name: "Hole Diameter",
+        kind: .diameter,
+        anchors: [
+            .worldPoint(Point3D(x: 0.0, y: 0.0, z: 0.0), role: .center),
+            .worldPoint(Point3D(x: 0.75, y: 0.0, z: 0.0), role: .point),
+        ]
+    )
+
+    let annotation = try #require(result.annotations.first)
+    #expect(annotation.measurementMeters == 1.5)
+    #expect(annotation.displayText == "Dia 1.5 m")
+}
+
+@MainActor
+@Test func drawingProjectionDiameterAnnotationUsesEndpointRoles() throws {
+    let result = try drawingProjectionResultWithMeasurement(
+        name: "Shaft Diameter",
+        kind: .diameter,
+        anchors: [
+            .worldPoint(Point3D(x: -0.75, y: 0.0, z: 0.0), role: .start),
+            .worldPoint(Point3D(x: 0.75, y: 0.0, z: 0.0), role: .end),
+        ]
+    )
+
+    let annotation = try #require(result.annotations.first)
+    #expect(annotation.measurementMeters == 1.5)
+    #expect(annotation.displayText == "Dia 1.5 m")
+}
+
+@MainActor
 @Test func drawingProjectionRejectsPerspectiveSavedViewsBeforeProjection() throws {
     let session = EditorSession()
     let savedView = SavedView(
@@ -289,6 +376,46 @@ import Testing
             currentGeneration: session.generation
         )
     }
+}
+
+@MainActor
+private func drawingProjectionResultWithMeasurement(
+    name: String,
+    kind: MeasurementAnnotation.Kind,
+    anchors: [MeasurementAnchor]
+) throws -> DrawingProjectionResult {
+    let session = EditorSession()
+    var document = session.document
+    document.displayUnit = .meter
+    _ = try document.addMeasurementAnnotation(
+        MeasurementAnnotation(
+            name: name,
+            kind: kind,
+            anchors: anchors,
+            labelPosition: Point3D(x: 0.0, y: 0.25, z: 0.0)
+        ),
+        objectRegistry: session.objectRegistry
+    )
+    let savedView = SavedView(
+        name: "Annotated Drawing View",
+        camera: SavedViewCamera(
+            target: .origin,
+            distanceMeters: 4.0,
+            yawRadians: 0.0,
+            pitchRadians: 0.0
+        ),
+        projection: .orthographic(heightMeters: 4.0),
+        displayScale: SavedViewDisplayScale(ruler: .standard(for: .meter))
+    )
+    _ = try document.createSavedView(savedView, objectRegistry: session.objectRegistry)
+
+    return try DrawingProjectionService().generate(
+        document: document,
+        query: DrawingProjectionQuery(savedViewID: savedView.id),
+        objectRegistry: session.objectRegistry,
+        currentEvaluation: session.currentEvaluation,
+        currentGeneration: session.generation
+    )
 }
 
 private func drawingProjectionSketchPoint(
