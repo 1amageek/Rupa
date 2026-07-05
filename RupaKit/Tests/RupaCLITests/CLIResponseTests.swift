@@ -3895,6 +3895,7 @@ struct CLIViewCommandTests {
         )
         _ = try session.execute(.createSavedView(savedView))
         try DocumentFileService().save(session.document, to: documentURL)
+        let outputURL = temporaryDirectory.appendingPathComponent("projection.svg")
 
         let result = try await runCLI([
             "view",
@@ -3904,6 +3905,8 @@ struct CLIViewCommandTests {
             savedView.id.description,
             "--maximum-stroke-count",
             "100",
+            "--svg-output",
+            outputURL.path,
             "--mode",
             "file",
             "--json",
@@ -3917,6 +3920,14 @@ struct CLIViewCommandTests {
         #expect(result.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: result.standardError))
         #expect(response.message.contains("Drawing projection generated"))
         #expect(response.saved == false)
+        #expect(response.drawingProjectionSVGPath == outputURL.path)
+        #expect((response.drawingProjectionSVGByteCount ?? 0) > 0)
+        #expect(FileManager.default.fileExists(atPath: outputURL.path))
+        let svg = String(decoding: try Data(contentsOf: outputURL), as: UTF8.self)
+        #expect(svg.contains(#"<svg xmlns="http://www.w3.org/2000/svg""#))
+        #expect(svg.contains(#"id="visible-segments" data-visibility="visible""#))
+        #expect(svg.contains(#"id="hidden-segments" data-visibility="hidden""#))
+        #expect(svg.contains(#"stroke-dasharray="6 4""#))
         #expect(drawingProjection.savedViewID == savedView.id)
         #expect(drawingProjection.strokeCount == 12)
         #expect(drawingProjection.visibilitySegmentCount >= drawingProjection.strokeCount)

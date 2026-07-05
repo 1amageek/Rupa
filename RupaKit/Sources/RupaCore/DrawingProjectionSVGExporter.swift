@@ -1,0 +1,343 @@
+import Foundation
+import SwiftCAD
+
+public struct DrawingProjectionSVGExporter: Sendable {
+    public struct Options: Codable, Equatable, Sendable {
+        public var width: Double
+        public var height: Double
+        public var padding: Double
+        public var visibleStrokeWidth: Double
+        public var hiddenStrokeWidth: Double
+        public var partiallyHiddenStrokeWidth: Double
+        public var unclassifiedStrokeWidth: Double
+
+        public init(
+            width: Double = 1024.0,
+            height: Double = 1024.0,
+            padding: Double = 32.0,
+            visibleStrokeWidth: Double = 1.45,
+            hiddenStrokeWidth: Double = 1.0,
+            partiallyHiddenStrokeWidth: Double = 1.2,
+            unclassifiedStrokeWidth: Double = 1.0
+        ) {
+            self.width = width
+            self.height = height
+            self.padding = padding
+            self.visibleStrokeWidth = visibleStrokeWidth
+            self.hiddenStrokeWidth = hiddenStrokeWidth
+            self.partiallyHiddenStrokeWidth = partiallyHiddenStrokeWidth
+            self.unclassifiedStrokeWidth = unclassifiedStrokeWidth
+        }
+    }
+
+    private struct RenderableSegment {
+        var strokeID: String
+        var bodyID: String
+        var kind: DrawingProjectionResult.StrokeKind
+        var visibility: DrawingProjectionResult.Visibility
+        var start: Point2D
+        var end: Point2D
+    }
+
+    private struct Bounds {
+        var minX: Double
+        var minY: Double
+        var maxX: Double
+        var maxY: Double
+
+        var width: Double {
+            maxX - minX
+        }
+
+        var height: Double {
+            maxY - minY
+        }
+
+        mutating func include(_ point: Point2D) {
+            minX = min(minX, point.x)
+            minY = min(minY, point.y)
+            maxX = max(maxX, point.x)
+            maxY = max(maxY, point.y)
+        }
+    }
+
+    private struct Transform {
+        var canvasWidth: Double
+        var canvasHeight: Double
+        var bounds: Bounds
+        var scale: Double
+        var offsetX: Double
+        var offsetY: Double
+
+        func point(_ point: Point2D) -> Point2D {
+            let x: Double
+            if abs(bounds.width) <= Self.minimumSpan {
+                x = canvasWidth / 2.0
+            } else {
+                x = offsetX + (point.x - bounds.minX) * scale
+            }
+
+            let y: Double
+            if abs(bounds.height) <= Self.minimumSpan {
+                y = canvasHeight / 2.0
+            } else {
+                y = offsetY + (bounds.maxY - point.y) * scale
+            }
+
+            return Point2D(x: x, y: y)
+        }
+
+        private static let minimumSpan = 1.0e-12
+    }
+
+    public var options: Options
+
+    public init(options: Options = Options()) {
+        self.options = options
+    }
+
+    public func svg(for result: DrawingProjectionResult) -> String {
+        let options = normalizedOptions()
+        let segments = renderableSegments(from: result)
+        let bounds = normalizedBounds(
+            reportedBounds: result.bounds,
+            segments: segments
+        )
+        let transform = transform(
+            options: options,
+            bounds: bounds
+        )
+
+        var lines: [String] = [
+            #"<?xml version="1.0" encoding="UTF-8"?>"#,
+            #"<svg xmlns="http://www.w3.org/2000/svg" version="1.1" width="\#(format(options.width))" height="\#(format(options.height))" viewBox="0 0 \#(format(options.width)) \#(format(options.height))" fill="none">"#,
+            #"  <title>\#(escaped(result.savedViewName))</title>"#,
+            #"  <desc>Rupa drawing projection, \#(result.projectionMode.rawValue), \#(result.strokeCount) strokes, \#(result.visibilitySegmentCount) visibility segments.</desc>"#,
+            #"  <g id="drawing-projection" data-saved-view-id="\#(escaped(result.savedViewID.description))" data-display-unit="\#(escaped(result.displayUnit.symbol))" data-body-count="\#(result.bodyCount)" data-triangle-count="\#(result.triangleCount)" data-candidate-edge-count="\#(result.candidateEdgeCount)" data-truncated="\#(result.truncatedStrokes)">"#,
+        ]
+
+        appendLayer(
+            visibility: .visible,
+            segments: segments,
+            transform: transform,
+            strokeWidth: options.visibleStrokeWidth,
+            strokeColor: "#111827",
+            dashArray: nil,
+            to: &lines
+        )
+        appendLayer(
+            visibility: .hidden,
+            segments: segments,
+            transform: transform,
+            strokeWidth: options.hiddenStrokeWidth,
+            strokeColor: "#6b7280",
+            dashArray: "6 4",
+            to: &lines
+        )
+        appendLayer(
+            visibility: .partiallyHidden,
+            segments: segments,
+            transform: transform,
+            strokeWidth: options.partiallyHiddenStrokeWidth,
+            strokeColor: "#374151",
+            dashArray: "10 4 2 4",
+            to: &lines
+        )
+        appendLayer(
+            visibility: .unclassified,
+            segments: segments,
+            transform: transform,
+            strokeWidth: options.unclassifiedStrokeWidth,
+            strokeColor: "#f59e0b",
+            dashArray: "2 3",
+            to: &lines
+        )
+
+        lines.append("  </g>")
+        lines.append("</svg>")
+        lines.append("")
+        return lines.joined(separator: "\n")
+    }
+
+    private func appendLayer(
+        visibility: DrawingProjectionResult.Visibility,
+        segments: [RenderableSegment],
+        transform: Transform,
+        strokeWidth: Double,
+        strokeColor: String,
+        dashArray: String?,
+        to lines: inout [String]
+    ) {
+        let layerSegments = segments.filter { $0.visibility == visibility }
+        let dashAttribute = dashArray.map { #" stroke-dasharray="\#($0)""# } ?? ""
+        lines.append(
+            #"    <g id="\#(visibility.rawValue)-segments" data-visibility="\#(visibility.rawValue)" stroke="\#(strokeColor)" stroke-width="\#(format(strokeWidth))" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"\#(dashAttribute)>"#
+        )
+        for segment in layerSegments {
+            let start = transform.point(segment.start)
+            let end = transform.point(segment.end)
+            lines.append(
+                #"      <path d="M \#(format(start.x)) \#(format(start.y)) L \#(format(end.x)) \#(format(end.y))" data-stroke-id="\#(escaped(segment.strokeID))" data-body-id="\#(escaped(segment.bodyID))" data-kind="\#(segment.kind.rawValue)" />"#
+            )
+        }
+        lines.append("    </g>")
+    }
+
+    private func renderableSegments(
+        from result: DrawingProjectionResult
+    ) -> [RenderableSegment] {
+        result.strokes.flatMap { stroke in
+            if stroke.visibilitySegments.isEmpty {
+                return [
+                    RenderableSegment(
+                        strokeID: stroke.id,
+                        bodyID: stroke.bodyID,
+                        kind: stroke.kind,
+                        visibility: stroke.visibility,
+                        start: stroke.start2D,
+                        end: stroke.end2D
+                    ),
+                ]
+            }
+
+            return stroke.visibilitySegments.map { segment in
+                RenderableSegment(
+                    strokeID: stroke.id,
+                    bodyID: stroke.bodyID,
+                    kind: stroke.kind,
+                    visibility: segment.visibility,
+                    start: segment.start2D,
+                    end: segment.end2D
+                )
+            }
+        }
+    }
+
+    private func normalizedBounds(
+        reportedBounds: DrawingProjectionResult.Bounds2D?,
+        segments: [RenderableSegment]
+    ) -> Bounds {
+        if let reportedBounds,
+           reportedBounds.minX.isFinite,
+           reportedBounds.minY.isFinite,
+           reportedBounds.maxX.isFinite,
+           reportedBounds.maxY.isFinite,
+           reportedBounds.maxX >= reportedBounds.minX,
+           reportedBounds.maxY >= reportedBounds.minY {
+            return Bounds(
+                minX: reportedBounds.minX,
+                minY: reportedBounds.minY,
+                maxX: reportedBounds.maxX,
+                maxY: reportedBounds.maxY
+            )
+        }
+
+        var bounds = Bounds(
+            minX: Double.infinity,
+            minY: Double.infinity,
+            maxX: -Double.infinity,
+            maxY: -Double.infinity
+        )
+        for segment in segments {
+            bounds.include(segment.start)
+            bounds.include(segment.end)
+        }
+
+        guard bounds.minX.isFinite,
+              bounds.minY.isFinite,
+              bounds.maxX.isFinite,
+              bounds.maxY.isFinite else {
+            return Bounds(minX: -0.5, minY: -0.5, maxX: 0.5, maxY: 0.5)
+        }
+        return bounds
+    }
+
+    private func transform(
+        options: Options,
+        bounds: Bounds
+    ) -> Transform {
+        let availableWidth = max(1.0, options.width - options.padding * 2.0)
+        let availableHeight = max(1.0, options.height - options.padding * 2.0)
+        let boundedWidth = max(abs(bounds.width), 1.0e-12)
+        let boundedHeight = max(abs(bounds.height), 1.0e-12)
+        let scale = min(
+            availableWidth / boundedWidth,
+            availableHeight / boundedHeight
+        )
+        let contentWidth = abs(bounds.width) <= 1.0e-12 ? 0.0 : bounds.width * scale
+        let contentHeight = abs(bounds.height) <= 1.0e-12 ? 0.0 : bounds.height * scale
+        return Transform(
+            canvasWidth: options.width,
+            canvasHeight: options.height,
+            bounds: bounds,
+            scale: scale,
+            offsetX: (options.width - contentWidth) / 2.0,
+            offsetY: (options.height - contentHeight) / 2.0
+        )
+    }
+
+    private func normalizedOptions() -> Options {
+        Options(
+            width: finitePositive(options.width, fallback: 1024.0),
+            height: finitePositive(options.height, fallback: 1024.0),
+            padding: finiteNonnegative(options.padding, fallback: 32.0),
+            visibleStrokeWidth: finitePositive(options.visibleStrokeWidth, fallback: 1.45),
+            hiddenStrokeWidth: finitePositive(options.hiddenStrokeWidth, fallback: 1.0),
+            partiallyHiddenStrokeWidth: finitePositive(options.partiallyHiddenStrokeWidth, fallback: 1.2),
+            unclassifiedStrokeWidth: finitePositive(options.unclassifiedStrokeWidth, fallback: 1.0)
+        )
+    }
+
+    private func finitePositive(
+        _ value: Double,
+        fallback: Double
+    ) -> Double {
+        guard value.isFinite,
+              value > 0.0 else {
+            return fallback
+        }
+        return value
+    }
+
+    private func finiteNonnegative(
+        _ value: Double,
+        fallback: Double
+    ) -> Double {
+        guard value.isFinite,
+              value >= 0.0 else {
+            return fallback
+        }
+        return value
+    }
+
+    private func format(_ value: Double) -> String {
+        let normalized = abs(value) < 0.0000005 ? 0.0 : value
+        return String(
+            format: "%.6f",
+            locale: Locale(identifier: "en_US_POSIX"),
+            normalized
+        )
+    }
+
+    private func escaped(_ value: String) -> String {
+        var output = ""
+        output.reserveCapacity(value.count)
+        for character in value {
+            switch character {
+            case "&":
+                output += "&amp;"
+            case "<":
+                output += "&lt;"
+            case ">":
+                output += "&gt;"
+            case "\"":
+                output += "&quot;"
+            case "'":
+                output += "&apos;"
+            default:
+                output.append(character)
+            }
+        }
+        return output
+    }
+}

@@ -34,17 +34,41 @@ enum CLIAutomationCommandRunner {
         command: AutomationCommand
     ) throws {
         try CLIExitCode.run {
-            let response = try CLIService().applyAutomationCommand(
-                target: document.target(sessionID: sessionID),
-                command: command,
-                mode: document.mode,
-                expectedGeneration: document.generation(),
-                dryRun: document.dryRun,
-                forceFileEdit: document.forceFileEdit,
-                client: document.agentClient(sessionID: sessionID)
+            let response = try response(
+                document: document,
+                sessionID: sessionID,
+                command: command
             )
             try CLIOutput.write(response: response, asJSON: document.json)
         }
+    }
+
+    static func response(
+        document: CLIWriteDocumentOptions,
+        command: AutomationCommand
+    ) throws -> CLIResponse {
+        let sessionID = try document.resolvedSessionID()
+        return try response(
+            document: document,
+            sessionID: sessionID,
+            command: command
+        )
+    }
+
+    private static func response(
+        document: CLIWriteDocumentOptions,
+        sessionID: UUID?,
+        command: AutomationCommand
+    ) throws -> CLIResponse {
+        try CLIService().applyAutomationCommand(
+            target: document.target(sessionID: sessionID),
+            command: command,
+            mode: document.mode,
+            expectedGeneration: document.generation(),
+            dryRun: document.dryRun,
+            forceFileEdit: document.forceFileEdit,
+            client: document.agentClient(sessionID: sessionID)
+        )
     }
 
     static func lengthUnit(

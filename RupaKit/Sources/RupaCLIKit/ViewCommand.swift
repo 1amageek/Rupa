@@ -134,28 +134,72 @@ public struct ViewProjectionCommand: ParsableCommand {
     @Option(help: "Maximum number of projection strokes to return.")
     public var maximumStrokeCount: Int = 10_000
 
+    @Option(help: "Optional SVG output path for the generated hidden-line drawing.")
+    public var svgOutput: String?
+
     public init() {}
 
     public func run() throws {
-        guard maximumStrokeCount > 0 else {
-            throw ValidationError("--maximum-stroke-count must be positive.")
-        }
-        if let toleranceMeters {
-            guard toleranceMeters.isFinite,
-                  toleranceMeters > 0.0 else {
-                throw ValidationError("--tolerance-meters must be finite and positive.")
+        try CLIExitCode.run {
+            guard maximumStrokeCount > 0 else {
+                throw ValidationError("--maximum-stroke-count must be positive.")
             }
-        }
-        try CLIAutomationCommandRunner.run(
-            document: document,
-            command: .generateDrawingProjection(
-                query: DrawingProjectionQuery(
-                    savedViewID: try CLISavedViewIDParser.id(id),
-                    toleranceMeters: toleranceMeters,
-                    maximumStrokeCount: maximumStrokeCount
+            if let toleranceMeters {
+                guard toleranceMeters.isFinite,
+                      toleranceMeters > 0.0 else {
+                    throw ValidationError("--tolerance-meters must be finite and positive.")
+                }
+            }
+            var response = try CLIAutomationCommandRunner.response(
+                document: document,
+                command: .generateDrawingProjection(
+                    query: DrawingProjectionQuery(
+                        savedViewID: try CLISavedViewIDParser.id(id),
+                        toleranceMeters: toleranceMeters,
+                        maximumStrokeCount: maximumStrokeCount
+                    )
                 )
             )
-        )
+            if let svgOutput {
+                let drawingProjection = try requiredDrawingProjection(response)
+                let output = try writeSVG(
+                    DrawingProjectionSVGExporter().svg(for: drawingProjection),
+                    to: svgOutput
+                )
+                response.drawingProjectionSVGPath = output.path
+                response.drawingProjectionSVGByteCount = output.byteCount
+            }
+            try CLIOutput.write(response: response, asJSON: document.json)
+        }
+    }
+
+    private func requiredDrawingProjection(
+        _ response: CLIResponse
+    ) throws -> DrawingProjectionResult {
+        guard let drawingProjection = response.drawingProjection else {
+            throw EditorError(
+                code: .exportFailed,
+                message: "Drawing projection SVG export requires a generated drawing projection result."
+            )
+        }
+        return drawingProjection
+    }
+
+    private func writeSVG(
+        _ svg: String,
+        to path: String
+    ) throws -> (path: String, byteCount: UInt64) {
+        let outputURL = URL(fileURLWithPath: path)
+        let data = Data(svg.utf8)
+        do {
+            try data.write(to: outputURL, options: .atomic)
+        } catch {
+            throw EditorError(
+                code: .exportFailed,
+                message: "Drawing projection SVG export failed at \(outputURL.path): \(String(describing: error))"
+            )
+        }
+        return (outputURL.path, UInt64(data.count))
     }
 }
 
