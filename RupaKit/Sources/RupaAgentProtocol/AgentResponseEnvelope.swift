@@ -244,7 +244,9 @@ public struct AgentResponseEnvelope: Codable, Equatable, Sendable {
                 try container.decode(CADInteractionQualityAssessmentResult.self, forKey: .result)
             )
         case "command.apply",
-             "parameter.setExpression":
+             "parameter.setExpression",
+             "document.setSurfaceFrameDisplay",
+             "document.movePolySplineSurfaceVertex":
             return .command(try container.decode(AutomationResult.self, forKey: .result))
         case "document.parameters":
             return .parameters(try container.decode(ParameterListResult.self, forKey: .result))
@@ -412,6 +414,8 @@ public struct AgentResponseEnvelope: Codable, Equatable, Sendable {
              ("agent.cadInteractionQualityAssessment", .cadInteractionQualityAssessment),
              ("command.apply", .command),
              ("parameter.setExpression", .command),
+             ("document.setSurfaceFrameDisplay", .command),
+             ("document.movePolySplineSurfaceVertex", .command),
              ("document.parameters", .parameters),
              ("document.evaluate", .evaluation),
              ("document.measure", .measurement),

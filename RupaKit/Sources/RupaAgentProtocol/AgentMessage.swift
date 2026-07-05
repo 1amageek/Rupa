@@ -47,6 +47,20 @@ public enum AgentRequest: Codable, Equatable, Sendable {
         defaults: ParameterExpressionDefaults?,
         expectedGeneration: DocumentGeneration?
     )
+    case setSurfaceFrameDisplay(
+        sessionID: UUID,
+        query: SurfaceFrameQuery,
+        isVisible: Bool?,
+        expectedGeneration: DocumentGeneration?
+    )
+    case movePolySplineSurfaceVertex(
+        sessionID: UUID,
+        target: SelectionTarget,
+        deltaX: CADExpression,
+        deltaY: CADExpression,
+        deltaZ: CADExpression,
+        expectedGeneration: DocumentGeneration?
+    )
     case evaluate(
         sessionID: UUID,
         expectedGeneration: DocumentGeneration?
@@ -237,6 +251,10 @@ public extension AgentRequest {
             "sketchEntityDimension.setExpression"
         case .setSelectionDimensionTargetExpression:
             "selectionDimension.setTargetExpression"
+        case .setSurfaceFrameDisplay:
+            "document.setSurfaceFrameDisplay"
+        case .movePolySplineSurfaceVertex:
+            "document.movePolySplineSurfaceVertex"
         case .evaluate:
             "document.evaluate"
         case .measure:

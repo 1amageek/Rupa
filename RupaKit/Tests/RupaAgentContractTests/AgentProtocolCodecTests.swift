@@ -241,6 +241,76 @@ import SwiftCAD
     #expect(result["didMutate"] as? Bool == true)
 }
 
+@Test func agentMessageCodecRoundTripsDedicatedSurfaceMutationMethods() async throws {
+    let codec = AgentMessageCodec()
+    let sessionID = UUID()
+
+    let frameDisplayRequest = AgentRequest.setSurfaceFrameDisplay(
+        sessionID: sessionID,
+        query: SurfaceFrameQuery(faceID: "face-1", u: 0.25, v: 0.75),
+        isVisible: true,
+        expectedGeneration: DocumentGeneration(7)
+    )
+    let frameEncoded = try codec.encode(frameDisplayRequest, id: "frame-display-1")
+    let frameEnvelope = try codec.decodeRequestEnvelope(from: frameEncoded)
+    let frameDecoded = try codec.decodeRequest(from: frameEncoded)
+    #expect(frameEnvelope.method == "document.setSurfaceFrameDisplay")
+    #expect(frameEnvelope.params.methodName == "document.setSurfaceFrameDisplay")
+    #expect(frameDecoded == frameDisplayRequest)
+
+    let vertexMoveRequest = AgentRequest.movePolySplineSurfaceVertex(
+        sessionID: sessionID,
+        target: SelectionTarget(sceneNodeID: SceneNodeID()),
+        deltaX: .length(0.0, .millimeter),
+        deltaY: .length(0.0, .millimeter),
+        deltaZ: .length(1.0, .millimeter),
+        expectedGeneration: DocumentGeneration(5)
+    )
+    let vertexEncoded = try codec.encode(vertexMoveRequest, id: "vertex-move-1")
+    let vertexEnvelope = try codec.decodeRequestEnvelope(from: vertexEncoded)
+    let vertexDecoded = try codec.decodeRequest(from: vertexEncoded)
+    #expect(vertexEnvelope.method == "document.movePolySplineSurfaceVertex")
+    #expect(vertexEnvelope.params.methodName == "document.movePolySplineSurfaceVertex")
+    #expect(vertexDecoded == vertexMoveRequest)
+}
+
+@Test func agentMessageCodecTreatsDedicatedSurfaceMutationResponsesAsCommandResults() async throws {
+    let codec = AgentMessageCodec()
+    let cases: [(method: String, commandName: String)] = [
+        ("document.setSurfaceFrameDisplay", "setSurfaceFrameDisplay"),
+        ("document.movePolySplineSurfaceVertex", "movePolySplineSurfaceVertex"),
+    ]
+    for entry in cases {
+        let response = AgentResponse.command(
+            AutomationResult(
+                message: "Surface mutated.",
+                commandName: entry.commandName,
+                generation: DocumentGeneration(2),
+                didMutate: true
+            )
+        )
+        let encoded = try codec.encode(
+            response,
+            id: "response-1",
+            method: entry.method
+        )
+        let decoded = try codec.decodeResponse(
+            from: encoded,
+            expectedID: "response-1",
+            expectedMethod: entry.method
+        )
+        let json = try #require(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+        #expect(json["method"] as? String == entry.method)
+        #expect(decoded == response)
+    }
+}
+
+@Test func agentCapabilitiesIncludeDedicatedSurfaceMutationMethods() async throws {
+    let capabilities = AgentCommandController().capabilities()
+    #expect(capabilities.contains("setSurfaceFrameDisplay"))
+    #expect(capabilities.contains("movePolySplineSurfaceVertex"))
+}
+
 @Test func agentProtocolRawJSONFixturesDecodeRepresentativeRequests() async throws {
     let codec = AgentMessageCodec()
     let sessionID = try #require(UUID(uuidString: "00000000-0000-0000-0000-000000000001"))

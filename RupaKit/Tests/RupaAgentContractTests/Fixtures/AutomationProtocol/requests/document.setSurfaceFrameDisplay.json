@@ -1,0 +1,17 @@
+{
+  "jsonrpc": "2.0",
+  "id": "document.setSurfaceFrameDisplay-1",
+  "method": "document.setSurfaceFrameDisplay",
+  "params": {
+    "sessionID": "00000000-0000-0000-0000-000000000001",
+    "query": {
+      "faceID": "face-1",
+      "u": 0.25,
+      "v": 0.75
+    },
+    "isVisible": true,
+    "expectedGeneration": {
+      "value": 7
+    }
+  }
+}

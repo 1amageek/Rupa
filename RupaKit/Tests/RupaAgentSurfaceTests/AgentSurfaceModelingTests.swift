@@ -1516,6 +1516,71 @@ import SwiftCAD
     #expect(session.evaluationStatus == .valid)
 }
 
+@Test func agentMovesPolySplineSurfaceVertexThroughDedicatedMethod() async throws {
+    let server = AgentCommandController()
+    let sessionID = UUID()
+    let session = EditorSession()
+    server.register(session: session, id: sessionID)
+    let createResponse = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .createPolySplineSurface(
+                name: "Agent Editable Surface",
+                sourceMesh: agentPolySplineQuadMesh(),
+                options: PolySplineOptions()
+            ),
+            expectedGeneration: DocumentGeneration(0)
+        )
+    )
+    guard case .command(let createResult) = createResponse else {
+        Issue.record("Agent must create a PolySpline surface.")
+        return
+    }
+    #expect(createResult.didMutate)
+
+    let topologyResponse = server.handle(
+        .topologySummary(
+            sessionID: sessionID,
+            expectedGeneration: DocumentGeneration(1)
+        )
+    )
+    guard case .topologySummary(let topology) = topologyResponse else {
+        Issue.record("Agent must return a topology summary.")
+        return
+    }
+    let vertexEntry = try #require(topology.entries.first {
+        $0.kind == .vertex
+            && $0.subshapeRole == "patch:0:vertex:uMax:vMax"
+    })
+    let target = try #require(vertexEntry.selectionTarget())
+
+    let moveResponse = server.handle(
+        .movePolySplineSurfaceVertex(
+            sessionID: sessionID,
+            target: target,
+            deltaX: .length(0.0, .millimeter),
+            deltaY: .length(0.0, .millimeter),
+            deltaZ: .length(1.0, .millimeter),
+            expectedGeneration: DocumentGeneration(1)
+        )
+    )
+    guard case .command(let moveResult) = moveResponse else {
+        Issue.record("Agent must move a PolySpline surface vertex through the dedicated method.")
+        return
+    }
+    let featureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let feature = try #require(session.document.cadDocument.designGraph.nodes[featureID])
+    guard case let .polySpline(polySpline) = feature.operation else {
+        Issue.record("Agent must keep a PolySpline feature.")
+        return
+    }
+    #expect(moveResult.commandName == "movePolySplineSurfaceVertex")
+    #expect(moveResult.didMutate)
+    #expect(moveResult.generation == DocumentGeneration(2))
+    #expect(abs(polySpline.sourceMesh.positions[2].z - 0.005) <= 1.0e-12)
+    #expect(session.evaluationStatus == .valid)
+}
+
 @MainActor
 @Test func agentMovesSurfaceControlPointThroughSurfaceSourceReference() async throws {
     let server = AgentCommandController()

@@ -133,6 +133,28 @@ public struct AgentRequestEnvelope: Codable, Equatable, Sendable {
                 ),
                 forKey: .params
             )
+        case let .setSurfaceFrameDisplay(sessionID, query, isVisible, expectedGeneration):
+            try container.encode(
+                SetSurfaceFrameDisplayParams(
+                    sessionID: sessionID,
+                    query: query,
+                    isVisible: isVisible,
+                    expectedGeneration: expectedGeneration
+                ),
+                forKey: .params
+            )
+        case let .movePolySplineSurfaceVertex(sessionID, target, deltaX, deltaY, deltaZ, expectedGeneration):
+            try container.encode(
+                MovePolySplineSurfaceVertexParams(
+                    sessionID: sessionID,
+                    target: target,
+                    deltaX: deltaX,
+                    deltaY: deltaY,
+                    deltaZ: deltaZ,
+                    expectedGeneration: expectedGeneration
+                ),
+                forKey: .params
+            )
         case let .evaluate(sessionID, expectedGeneration),
              let .measure(sessionID, expectedGeneration),
              let .constructionPlaneSummary(sessionID, expectedGeneration),
@@ -352,6 +374,24 @@ public struct AgentRequestEnvelope: Codable, Equatable, Sendable {
                 id: payload.id,
                 expression: payload.expression,
                 defaults: payload.defaults,
+                expectedGeneration: payload.expectedGeneration
+            )
+        case "document.setSurfaceFrameDisplay":
+            let payload = try decodeParams(SetSurfaceFrameDisplayParams.self, from: container, method: method)
+            return .setSurfaceFrameDisplay(
+                sessionID: payload.sessionID,
+                query: payload.query,
+                isVisible: payload.isVisible,
+                expectedGeneration: payload.expectedGeneration
+            )
+        case "document.movePolySplineSurfaceVertex":
+            let payload = try decodeParams(MovePolySplineSurfaceVertexParams.self, from: container, method: method)
+            return .movePolySplineSurfaceVertex(
+                sessionID: payload.sessionID,
+                target: payload.target,
+                deltaX: payload.deltaX,
+                deltaY: payload.deltaY,
+                deltaZ: payload.deltaZ,
                 expectedGeneration: payload.expectedGeneration
             )
         case "document.evaluate":
@@ -663,6 +703,38 @@ private struct SetSelectionDimensionTargetExpressionParams: AgentRequestParamete
     var id: SelectionDimensionID
     var expression: String
     var defaults: ParameterExpressionDefaults?
+    var expectedGeneration: DocumentGeneration?
+}
+
+private struct SetSurfaceFrameDisplayParams: AgentRequestParameterPayload, Equatable {
+    static let allowedKeys: Set<String> = [
+        "sessionID",
+        "query",
+        "isVisible",
+        "expectedGeneration",
+    ]
+
+    var sessionID: UUID
+    var query: SurfaceFrameQuery
+    var isVisible: Bool?
+    var expectedGeneration: DocumentGeneration?
+}
+
+private struct MovePolySplineSurfaceVertexParams: AgentRequestParameterPayload, Equatable {
+    static let allowedKeys: Set<String> = [
+        "sessionID",
+        "target",
+        "deltaX",
+        "deltaY",
+        "deltaZ",
+        "expectedGeneration",
+    ]
+
+    var sessionID: UUID
+    var target: SelectionTarget
+    var deltaX: CADExpression
+    var deltaY: CADExpression
+    var deltaZ: CADExpression
     var expectedGeneration: DocumentGeneration?
 }
 

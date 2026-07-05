@@ -2313,6 +2313,30 @@ public final class AgentCommandController: AgentClientProtocol {
                     in: session
                 )
                 return .command(result)
+            case let .setSurfaceFrameDisplay(sessionID, query, isVisible, expectedGeneration):
+                let session = try registry.session(id: sessionID)
+                try session.store.requireGeneration(expectedGeneration)
+                let result = try runner.execute(
+                    .setSurfaceFrameDisplay(
+                        query: query,
+                        isVisible: isVisible
+                    ),
+                    in: session
+                )
+                return .command(result)
+            case let .movePolySplineSurfaceVertex(sessionID, target, deltaX, deltaY, deltaZ, expectedGeneration):
+                let session = try registry.session(id: sessionID)
+                try session.store.requireGeneration(expectedGeneration)
+                let result = try runner.execute(
+                    .movePolySplineSurfaceVertex(
+                        target: target,
+                        deltaX: deltaX,
+                        deltaY: deltaY,
+                        deltaZ: deltaZ
+                    ),
+                    in: session
+                )
+                return .command(result)
             case let .evaluate(sessionID, expectedGeneration):
                 let session = try registry.session(id: sessionID)
                 let result = try runner.executeBatch(

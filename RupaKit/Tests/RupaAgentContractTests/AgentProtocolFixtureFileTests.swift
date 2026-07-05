@@ -115,6 +115,8 @@ struct AgentProtocolFixtureFileTests {
         "sessions.list",
         "command.apply",
         "parameter.setExpression",
+        "document.setSurfaceFrameDisplay",
+        "document.movePolySplineSurfaceVertex",
         "document.parameters",
         "document.evaluate",
         "document.measure",

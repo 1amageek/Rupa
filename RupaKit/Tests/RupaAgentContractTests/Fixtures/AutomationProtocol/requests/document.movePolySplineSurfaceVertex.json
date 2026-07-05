@@ -1,0 +1,38 @@
+{
+  "jsonrpc": "2.0",
+  "id": "document.movePolySplineSurfaceVertex-1",
+  "method": "document.movePolySplineSurfaceVertex",
+  "params": {
+    "sessionID": "00000000-0000-0000-0000-000000000001",
+    "target": {
+      "sceneNodeID": "00000000-0000-0000-0000-000000000201",
+      "component": {
+        "object": {}
+      }
+    },
+    "deltaX": {
+      "kind": "constant",
+      "quantity": {
+        "value": 0,
+        "kind": "length"
+      }
+    },
+    "deltaY": {
+      "kind": "constant",
+      "quantity": {
+        "value": 0,
+        "kind": "length"
+      }
+    },
+    "deltaZ": {
+      "kind": "constant",
+      "quantity": {
+        "value": 0.001,
+        "kind": "length"
+      }
+    },
+    "expectedGeneration": {
+      "value": 5
+    }
+  }
+}
