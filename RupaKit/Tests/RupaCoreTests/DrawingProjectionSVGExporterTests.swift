@@ -98,6 +98,77 @@ import Testing
     #expect(!svg.localizedCaseInsensitiveContains("inf"))
 }
 
+@Test func drawingProjectionSVGExporterAppliesPageAndStylePresets() {
+    let result = DrawingProjectionResult(
+        displayUnit: .meter,
+        savedViewID: SavedViewID(),
+        savedViewName: "Styled Drawing",
+        projectionMode: .orthographic,
+        viewFrame: DrawingProjectionResult.ViewFrame(
+            target: .origin,
+            right: Vector3D(x: 1.0, y: 0.0, z: 0.0),
+            up: Vector3D(x: 0.0, y: 1.0, z: 0.0),
+            viewNormal: Vector3D(x: 0.0, y: 0.0, z: 1.0),
+            visibleHeightMeters: 2.0,
+            scaleBarLengthMeters: 1.0
+        ),
+        bodyCount: 1,
+        triangleCount: 2,
+        candidateEdgeCount: 2,
+        truncatedStrokes: false,
+        bounds: DrawingProjectionResult.Bounds2D(
+            minX: -1.0,
+            minY: -1.0,
+            maxX: 1.0,
+            maxY: 1.0
+        ),
+        strokes: [
+            DrawingProjectionResult.Stroke(
+                id: "visible-edge",
+                bodyID: "body-a",
+                kind: .crease,
+                visibility: .visible,
+                start: Point3D(x: -1.0, y: 0.0, z: 0.0),
+                end: Point3D(x: 1.0, y: 0.0, z: 0.0),
+                start2D: Point2D(x: -1.0, y: 0.0),
+                end2D: Point2D(x: 1.0, y: 0.0),
+                minimumDepthMeters: 0.0,
+                maximumDepthMeters: 0.0,
+                lengthMeters: 2.0,
+                visibilitySegments: []
+            ),
+            DrawingProjectionResult.Stroke(
+                id: "hidden-edge",
+                bodyID: "body-a",
+                kind: .boundary,
+                visibility: .hidden,
+                start: Point3D(x: 0.0, y: -1.0, z: 0.0),
+                end: Point3D(x: 0.0, y: 1.0, z: 0.0),
+                start2D: Point2D(x: 0.0, y: -1.0),
+                end2D: Point2D(x: 0.0, y: 1.0),
+                minimumDepthMeters: 1.0,
+                maximumDepthMeters: 1.0,
+                lengthMeters: 2.0,
+                visibilitySegments: []
+            ),
+        ],
+        diagnostics: []
+    )
+
+    let svg = DrawingProjectionSVGExporter(
+        options: DrawingProjectionSVGExporter.Options(
+            pagePreset: .a4Landscape,
+            style: .preset(.presentation)
+        )
+    ).svg(for: result)
+
+    #expect(svg.contains(#"width="841.889764" height="595.275590""#))
+    #expect(svg.contains(##"stroke="#2563eb""##))
+    #expect(svg.contains(#"stroke-dasharray="4 3""#))
+    #expect(!svg.localizedCaseInsensitiveContains("nan"))
+    #expect(!svg.localizedCaseInsensitiveContains("inf"))
+}
+
 @Test func drawingProjectionSVGExporterHandlesEmptyProjection() {
     let result = DrawingProjectionResult(
         displayUnit: .millimeter,

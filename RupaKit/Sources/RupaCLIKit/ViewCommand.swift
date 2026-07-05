@@ -4,6 +4,9 @@ import RupaAutomation
 import RupaCore
 import SwiftCAD
 
+extension DrawingProjectionPagePreset: ExpressibleByArgument {}
+extension DrawingProjectionStylePreset: ExpressibleByArgument {}
+
 public struct ViewCommand: ParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "view",
@@ -140,6 +143,12 @@ public struct ViewProjectionCommand: ParsableCommand {
     @Option(help: "Optional PDF output path for the generated hidden-line drawing.")
     public var pdfOutput: String?
 
+    @Option(help: "Drawing page preset used by SVG and PDF exports.")
+    public var drawingPage: DrawingProjectionPagePreset = .letterLandscape
+
+    @Option(help: "Drawing line/color style preset used by SVG and PDF exports.")
+    public var drawingStyle: DrawingProjectionStylePreset = .technical
+
     public init() {}
 
     public func run() throws {
@@ -165,9 +174,16 @@ public struct ViewProjectionCommand: ParsableCommand {
             )
             if svgOutput != nil || pdfOutput != nil {
                 let drawingProjection = try requiredDrawingProjection(response)
+                let exportStyle = DrawingProjectionExportStyle.preset(drawingStyle)
                 if let svgOutput {
                     let output = try writeArtifact(
-                        Data(DrawingProjectionSVGExporter().svg(for: drawingProjection).utf8),
+                        Data(DrawingProjectionSVGExporter(
+                            options: DrawingProjectionSVGExporter.Options(
+                                padding: 36.0,
+                                pagePreset: drawingPage,
+                                style: exportStyle
+                            )
+                        ).svg(for: drawingProjection).utf8),
                         artifactName: "SVG",
                         to: svgOutput
                     )
@@ -176,7 +192,12 @@ public struct ViewProjectionCommand: ParsableCommand {
                 }
                 if let pdfOutput {
                     let output = try writeArtifact(
-                        DrawingProjectionPDFExporter().pdf(for: drawingProjection),
+                        DrawingProjectionPDFExporter(
+                            options: DrawingProjectionPDFExporter.Options(
+                                pagePreset: drawingPage,
+                                style: exportStyle
+                            )
+                        ).pdf(for: drawingProjection),
                         artifactName: "PDF",
                         to: pdfOutput
                     )

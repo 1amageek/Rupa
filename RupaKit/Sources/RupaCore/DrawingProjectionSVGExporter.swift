@@ -12,20 +12,30 @@ public struct DrawingProjectionSVGExporter: Sendable {
         public var unclassifiedStrokeWidth: Double
         public var sectionHatchStrokeWidth: Double
         public var sectionContourStrokeWidth: Double
+        public var pagePreset: DrawingProjectionPagePreset?
+        public var style: DrawingProjectionExportStyle
 
         public init(
             width: Double = 1024.0,
             height: Double = 1024.0,
             padding: Double = 32.0,
+            pagePreset: DrawingProjectionPagePreset? = nil,
             visibleStrokeWidth: Double = 1.45,
             hiddenStrokeWidth: Double = 1.0,
             partiallyHiddenStrokeWidth: Double = 1.2,
             unclassifiedStrokeWidth: Double = 1.0,
             sectionHatchStrokeWidth: Double = 0.85,
-            sectionContourStrokeWidth: Double = 1.6
+            sectionContourStrokeWidth: Double = 1.6,
+            style: DrawingProjectionExportStyle? = nil
         ) {
-            self.width = width
-            self.height = height
+            if let pagePreset {
+                let page = pagePreset.page
+                self.width = page.width
+                self.height = page.height
+            } else {
+                self.width = width
+                self.height = height
+            }
             self.padding = padding
             self.visibleStrokeWidth = visibleStrokeWidth
             self.hiddenStrokeWidth = hiddenStrokeWidth
@@ -33,6 +43,15 @@ public struct DrawingProjectionSVGExporter: Sendable {
             self.unclassifiedStrokeWidth = unclassifiedStrokeWidth
             self.sectionHatchStrokeWidth = sectionHatchStrokeWidth
             self.sectionContourStrokeWidth = sectionContourStrokeWidth
+            self.pagePreset = pagePreset
+            self.style = style ?? .technical(
+                visibleStrokeWidth: visibleStrokeWidth,
+                hiddenStrokeWidth: hiddenStrokeWidth,
+                partiallyHiddenStrokeWidth: partiallyHiddenStrokeWidth,
+                unclassifiedStrokeWidth: unclassifiedStrokeWidth,
+                sectionHatchStrokeWidth: sectionHatchStrokeWidth,
+                sectionContourStrokeWidth: sectionContourStrokeWidth
+            )
         }
     }
 
@@ -127,49 +146,41 @@ public struct DrawingProjectionSVGExporter: Sendable {
         appendSectionHatchLayer(
             hatches: result.sectionHatches,
             transform: transform,
-            strokeWidth: options.sectionHatchStrokeWidth,
+            style: options.style.sectionHatch,
             to: &lines
         )
         appendLayer(
             visibility: .hidden,
             segments: segments,
             transform: transform,
-            strokeWidth: options.hiddenStrokeWidth,
-            strokeColor: "#6b7280",
-            dashArray: "6 4",
+            style: options.style.hidden,
             to: &lines
         )
         appendLayer(
             visibility: .partiallyHidden,
             segments: segments,
             transform: transform,
-            strokeWidth: options.partiallyHiddenStrokeWidth,
-            strokeColor: "#374151",
-            dashArray: "10 4 2 4",
+            style: options.style.partiallyHidden,
             to: &lines
         )
         appendLayer(
             visibility: .unclassified,
             segments: segments,
             transform: transform,
-            strokeWidth: options.unclassifiedStrokeWidth,
-            strokeColor: "#f59e0b",
-            dashArray: "2 3",
+            style: options.style.unclassified,
             to: &lines
         )
         appendLayer(
             visibility: .visible,
             segments: segments,
             transform: transform,
-            strokeWidth: options.visibleStrokeWidth,
-            strokeColor: "#111827",
-            dashArray: nil,
+            style: options.style.visible,
             to: &lines
         )
         appendSectionContourLayer(
             contours: result.sectionContours,
             transform: transform,
-            strokeWidth: options.sectionContourStrokeWidth,
+            style: options.style.sectionContour,
             to: &lines
         )
 
@@ -182,11 +193,11 @@ public struct DrawingProjectionSVGExporter: Sendable {
     private func appendSectionHatchLayer(
         hatches: [DrawingProjectionResult.SectionHatchSegment],
         transform: Transform,
-        strokeWidth: Double,
+        style: DrawingProjectionLayerStyle,
         to lines: inout [String]
     ) {
         lines.append(
-            ##"    <g id="section-hatches" data-kind="sectionHatch" stroke="#9ca3af" stroke-width="\##(format(strokeWidth))" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke">"##
+            #"    <g id="section-hatches" data-kind="sectionHatch" stroke="\#(style.color.hexString)" stroke-width="\#(format(style.strokeWidth))" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke">"#
         )
         for hatch in hatches {
             let start = transform.point(hatch.start2D)
@@ -201,11 +212,11 @@ public struct DrawingProjectionSVGExporter: Sendable {
     private func appendSectionContourLayer(
         contours: [DrawingProjectionResult.SectionContour],
         transform: Transform,
-        strokeWidth: Double,
+        style: DrawingProjectionLayerStyle,
         to lines: inout [String]
     ) {
         lines.append(
-            ##"    <g id="section-contours" data-kind="sectionContour" stroke="#111827" stroke-width="\##(format(strokeWidth))" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke">"##
+            #"    <g id="section-contours" data-kind="sectionContour" stroke="\#(style.color.hexString)" stroke-width="\#(format(style.strokeWidth))" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke">"#
         )
         for contour in contours where contour.projectedPoints2D.count >= 2 {
             let path = pathData(
@@ -224,15 +235,13 @@ public struct DrawingProjectionSVGExporter: Sendable {
         visibility: DrawingProjectionResult.Visibility,
         segments: [RenderableSegment],
         transform: Transform,
-        strokeWidth: Double,
-        strokeColor: String,
-        dashArray: String?,
+        style: DrawingProjectionLayerStyle,
         to lines: inout [String]
     ) {
         let layerSegments = segments.filter { $0.visibility == visibility }
-        let dashAttribute = dashArray.map { #" stroke-dasharray="\#($0)""# } ?? ""
+        let dashAttribute = svgDashAttribute(style.dashPattern)
         lines.append(
-            #"    <g id="\#(visibility.rawValue)-segments" data-visibility="\#(visibility.rawValue)" stroke="\#(strokeColor)" stroke-width="\#(format(strokeWidth))" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"\#(dashAttribute)>"#
+            #"    <g id="\#(visibility.rawValue)-segments" data-visibility="\#(visibility.rawValue)" stroke="\#(style.color.hexString)" stroke-width="\#(format(style.strokeWidth))" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"\#(dashAttribute)>"#
         )
         for segment in layerSegments {
             let start = transform.point(segment.start)
@@ -349,16 +358,32 @@ public struct DrawingProjectionSVGExporter: Sendable {
     }
 
     private func normalizedOptions() -> Options {
-        Options(
+        let visibleStrokeWidth = finitePositive(options.visibleStrokeWidth, fallback: 1.45)
+        let hiddenStrokeWidth = finitePositive(options.hiddenStrokeWidth, fallback: 1.0)
+        let partiallyHiddenStrokeWidth = finitePositive(options.partiallyHiddenStrokeWidth, fallback: 1.2)
+        let unclassifiedStrokeWidth = finitePositive(options.unclassifiedStrokeWidth, fallback: 1.0)
+        let sectionHatchStrokeWidth = finitePositive(options.sectionHatchStrokeWidth, fallback: 0.85)
+        let sectionContourStrokeWidth = finitePositive(options.sectionContourStrokeWidth, fallback: 1.6)
+        let fallbackStyle = DrawingProjectionExportStyle.technical(
+            visibleStrokeWidth: visibleStrokeWidth,
+            hiddenStrokeWidth: hiddenStrokeWidth,
+            partiallyHiddenStrokeWidth: partiallyHiddenStrokeWidth,
+            unclassifiedStrokeWidth: unclassifiedStrokeWidth,
+            sectionHatchStrokeWidth: sectionHatchStrokeWidth,
+            sectionContourStrokeWidth: sectionContourStrokeWidth
+        )
+        return Options(
             width: finitePositive(options.width, fallback: 1024.0),
             height: finitePositive(options.height, fallback: 1024.0),
             padding: finiteNonnegative(options.padding, fallback: 32.0),
-            visibleStrokeWidth: finitePositive(options.visibleStrokeWidth, fallback: 1.45),
-            hiddenStrokeWidth: finitePositive(options.hiddenStrokeWidth, fallback: 1.0),
-            partiallyHiddenStrokeWidth: finitePositive(options.partiallyHiddenStrokeWidth, fallback: 1.2),
-            unclassifiedStrokeWidth: finitePositive(options.unclassifiedStrokeWidth, fallback: 1.0),
-            sectionHatchStrokeWidth: finitePositive(options.sectionHatchStrokeWidth, fallback: 0.85),
-            sectionContourStrokeWidth: finitePositive(options.sectionContourStrokeWidth, fallback: 1.6)
+            pagePreset: options.pagePreset,
+            visibleStrokeWidth: visibleStrokeWidth,
+            hiddenStrokeWidth: hiddenStrokeWidth,
+            partiallyHiddenStrokeWidth: partiallyHiddenStrokeWidth,
+            unclassifiedStrokeWidth: unclassifiedStrokeWidth,
+            sectionHatchStrokeWidth: sectionHatchStrokeWidth,
+            sectionContourStrokeWidth: sectionContourStrokeWidth,
+            style: options.style.normalized(fallback: fallbackStyle)
         )
     }
 
@@ -391,6 +416,21 @@ public struct DrawingProjectionSVGExporter: Sendable {
             locale: Locale(identifier: "en_US_POSIX"),
             normalized
         )
+    }
+
+    private func svgDashAttribute(_ dashPattern: [Double]) -> String {
+        guard !dashPattern.isEmpty else {
+            return ""
+        }
+        return #" stroke-dasharray="\#(dashPattern.map(formatDashValue).joined(separator: " "))""#
+    }
+
+    private func formatDashValue(_ value: Double) -> String {
+        let rounded = value.rounded()
+        if abs(value - rounded) <= 1.0e-9 {
+            return String(Int(rounded))
+        }
+        return format(value)
     }
 
     private func escaped(_ value: String) -> String {

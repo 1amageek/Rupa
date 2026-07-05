@@ -32,6 +32,24 @@ import Testing
     #expect(!pdf.localizedCaseInsensitiveContains("inf"))
 }
 
+@Test func drawingProjectionPDFExporterAppliesPageAndStylePresets() {
+    let result = drawingProjectionPDFExporterFixture()
+
+    let data = DrawingProjectionPDFExporter(
+        options: DrawingProjectionPDFExporter.Options(
+            pagePreset: .a4Portrait,
+            style: .preset(.presentation)
+        )
+    ).pdf(for: result)
+    let pdf = String(decoding: data, as: UTF8.self)
+
+    #expect(pdf.contains("/MediaBox [0 0 595.275590 841.889764]"))
+    #expect(pdf.contains("0.145098 0.388235 0.921569 RG"))
+    #expect(pdf.contains("[4 3] 0 d"))
+    #expect(!pdf.localizedCaseInsensitiveContains("nan"))
+    #expect(!pdf.localizedCaseInsensitiveContains("inf"))
+}
+
 @Test func drawingProjectionPDFExporterHandlesEmptyProjection() {
     let result = DrawingProjectionResult(
         displayUnit: .millimeter,

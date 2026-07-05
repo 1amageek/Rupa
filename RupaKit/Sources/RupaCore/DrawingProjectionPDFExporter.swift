@@ -12,20 +12,30 @@ public struct DrawingProjectionPDFExporter: Sendable {
         public var unclassifiedStrokeWidth: Double
         public var sectionHatchStrokeWidth: Double
         public var sectionContourStrokeWidth: Double
+        public var pagePreset: DrawingProjectionPagePreset?
+        public var style: DrawingProjectionExportStyle
 
         public init(
             pageWidth: Double = 792.0,
             pageHeight: Double = 612.0,
             padding: Double = 36.0,
+            pagePreset: DrawingProjectionPagePreset? = nil,
             visibleStrokeWidth: Double = 1.2,
             hiddenStrokeWidth: Double = 0.8,
             partiallyHiddenStrokeWidth: Double = 1.0,
             unclassifiedStrokeWidth: Double = 0.8,
             sectionHatchStrokeWidth: Double = 0.6,
-            sectionContourStrokeWidth: Double = 1.3
+            sectionContourStrokeWidth: Double = 1.3,
+            style: DrawingProjectionExportStyle? = nil
         ) {
-            self.pageWidth = pageWidth
-            self.pageHeight = pageHeight
+            if let pagePreset {
+                let page = pagePreset.page
+                self.pageWidth = page.width
+                self.pageHeight = page.height
+            } else {
+                self.pageWidth = pageWidth
+                self.pageHeight = pageHeight
+            }
             self.padding = padding
             self.visibleStrokeWidth = visibleStrokeWidth
             self.hiddenStrokeWidth = hiddenStrokeWidth
@@ -33,6 +43,15 @@ public struct DrawingProjectionPDFExporter: Sendable {
             self.unclassifiedStrokeWidth = unclassifiedStrokeWidth
             self.sectionHatchStrokeWidth = sectionHatchStrokeWidth
             self.sectionContourStrokeWidth = sectionContourStrokeWidth
+            self.pagePreset = pagePreset
+            self.style = style ?? .technical(
+                visibleStrokeWidth: visibleStrokeWidth,
+                hiddenStrokeWidth: hiddenStrokeWidth,
+                partiallyHiddenStrokeWidth: partiallyHiddenStrokeWidth,
+                unclassifiedStrokeWidth: unclassifiedStrokeWidth,
+                sectionHatchStrokeWidth: sectionHatchStrokeWidth,
+                sectionContourStrokeWidth: sectionContourStrokeWidth
+            )
         }
     }
 
@@ -93,14 +112,6 @@ public struct DrawingProjectionPDFExporter: Sendable {
         private static let minimumSpan = 1.0e-12
     }
 
-    private struct PDFLayerStyle {
-        var red: Double
-        var green: Double
-        var blue: Double
-        var strokeWidth: Double
-        var dashPattern: String
-    }
-
     public var options: Options
 
     public init(options: Options = Options()) {
@@ -142,77 +153,41 @@ public struct DrawingProjectionPDFExporter: Sendable {
         appendSectionHatches(
             result.sectionHatches,
             transform: transform,
-            style: PDFLayerStyle(
-                red: 0.611765,
-                green: 0.639216,
-                blue: 0.686275,
-                strokeWidth: options.sectionHatchStrokeWidth,
-                dashPattern: "[] 0 d"
-            ),
+            style: options.style.sectionHatch,
             to: &lines
         )
         appendSegments(
             visibility: .hidden,
             segments: segments,
             transform: transform,
-            style: PDFLayerStyle(
-                red: 0.419608,
-                green: 0.447059,
-                blue: 0.501961,
-                strokeWidth: options.hiddenStrokeWidth,
-                dashPattern: "[6 4] 0 d"
-            ),
+            style: options.style.hidden,
             to: &lines
         )
         appendSegments(
             visibility: .partiallyHidden,
             segments: segments,
             transform: transform,
-            style: PDFLayerStyle(
-                red: 0.215686,
-                green: 0.254902,
-                blue: 0.317647,
-                strokeWidth: options.partiallyHiddenStrokeWidth,
-                dashPattern: "[10 4 2 4] 0 d"
-            ),
+            style: options.style.partiallyHidden,
             to: &lines
         )
         appendSegments(
             visibility: .unclassified,
             segments: segments,
             transform: transform,
-            style: PDFLayerStyle(
-                red: 0.960784,
-                green: 0.619608,
-                blue: 0.043137,
-                strokeWidth: options.unclassifiedStrokeWidth,
-                dashPattern: "[2 3] 0 d"
-            ),
+            style: options.style.unclassified,
             to: &lines
         )
         appendSegments(
             visibility: .visible,
             segments: segments,
             transform: transform,
-            style: PDFLayerStyle(
-                red: 0.066667,
-                green: 0.094118,
-                blue: 0.152941,
-                strokeWidth: options.visibleStrokeWidth,
-                dashPattern: "[] 0 d"
-            ),
+            style: options.style.visible,
             to: &lines
         )
         appendSectionContours(
             result.sectionContours,
             transform: transform,
-            style: PDFLayerStyle(
-                red: 0.066667,
-                green: 0.094118,
-                blue: 0.152941,
-                strokeWidth: options.sectionContourStrokeWidth,
-                dashPattern: "[] 0 d"
-            ),
+            style: options.style.sectionContour,
             to: &lines
         )
         lines.append("Q")
@@ -224,7 +199,7 @@ public struct DrawingProjectionPDFExporter: Sendable {
         visibility: DrawingProjectionResult.Visibility,
         segments: [RenderableSegment],
         transform: Transform,
-        style: PDFLayerStyle,
+        style: DrawingProjectionLayerStyle,
         to lines: inout [String]
     ) {
         lines.append("% layer \(visibility.rawValue)-segments")
@@ -237,7 +212,7 @@ public struct DrawingProjectionPDFExporter: Sendable {
     private func appendSectionHatches(
         _ hatches: [DrawingProjectionResult.SectionHatchSegment],
         transform: Transform,
-        style: PDFLayerStyle,
+        style: DrawingProjectionLayerStyle,
         to lines: inout [String]
     ) {
         lines.append("% layer section-hatches")
@@ -250,7 +225,7 @@ public struct DrawingProjectionPDFExporter: Sendable {
     private func appendSectionContours(
         _ contours: [DrawingProjectionResult.SectionContour],
         transform: Transform,
-        style: PDFLayerStyle,
+        style: DrawingProjectionLayerStyle,
         to lines: inout [String]
     ) {
         lines.append("% layer section-contours")
@@ -261,12 +236,12 @@ public struct DrawingProjectionPDFExporter: Sendable {
     }
 
     private func append(
-        style: PDFLayerStyle,
+        style: DrawingProjectionLayerStyle,
         to lines: inout [String]
     ) {
-        lines.append("\(format(style.red)) \(format(style.green)) \(format(style.blue)) RG")
+        lines.append("\(format(style.color.red)) \(format(style.color.green)) \(format(style.color.blue)) RG")
         lines.append("\(format(style.strokeWidth)) w")
-        lines.append(style.dashPattern)
+        lines.append(pdfDashPattern(style.dashPattern))
     }
 
     private func appendLine(
@@ -429,16 +404,32 @@ public struct DrawingProjectionPDFExporter: Sendable {
     }
 
     private func normalizedOptions() -> Options {
-        Options(
+        let visibleStrokeWidth = finitePositive(options.visibleStrokeWidth, fallback: 1.2)
+        let hiddenStrokeWidth = finitePositive(options.hiddenStrokeWidth, fallback: 0.8)
+        let partiallyHiddenStrokeWidth = finitePositive(options.partiallyHiddenStrokeWidth, fallback: 1.0)
+        let unclassifiedStrokeWidth = finitePositive(options.unclassifiedStrokeWidth, fallback: 0.8)
+        let sectionHatchStrokeWidth = finitePositive(options.sectionHatchStrokeWidth, fallback: 0.6)
+        let sectionContourStrokeWidth = finitePositive(options.sectionContourStrokeWidth, fallback: 1.3)
+        let fallbackStyle = DrawingProjectionExportStyle.technical(
+            visibleStrokeWidth: visibleStrokeWidth,
+            hiddenStrokeWidth: hiddenStrokeWidth,
+            partiallyHiddenStrokeWidth: partiallyHiddenStrokeWidth,
+            unclassifiedStrokeWidth: unclassifiedStrokeWidth,
+            sectionHatchStrokeWidth: sectionHatchStrokeWidth,
+            sectionContourStrokeWidth: sectionContourStrokeWidth
+        )
+        return Options(
             pageWidth: finitePositive(options.pageWidth, fallback: 792.0),
             pageHeight: finitePositive(options.pageHeight, fallback: 612.0),
             padding: finiteNonnegative(options.padding, fallback: 36.0),
-            visibleStrokeWidth: finitePositive(options.visibleStrokeWidth, fallback: 1.2),
-            hiddenStrokeWidth: finitePositive(options.hiddenStrokeWidth, fallback: 0.8),
-            partiallyHiddenStrokeWidth: finitePositive(options.partiallyHiddenStrokeWidth, fallback: 1.0),
-            unclassifiedStrokeWidth: finitePositive(options.unclassifiedStrokeWidth, fallback: 0.8),
-            sectionHatchStrokeWidth: finitePositive(options.sectionHatchStrokeWidth, fallback: 0.6),
-            sectionContourStrokeWidth: finitePositive(options.sectionContourStrokeWidth, fallback: 1.3)
+            pagePreset: options.pagePreset,
+            visibleStrokeWidth: visibleStrokeWidth,
+            hiddenStrokeWidth: hiddenStrokeWidth,
+            partiallyHiddenStrokeWidth: partiallyHiddenStrokeWidth,
+            unclassifiedStrokeWidth: unclassifiedStrokeWidth,
+            sectionHatchStrokeWidth: sectionHatchStrokeWidth,
+            sectionContourStrokeWidth: sectionContourStrokeWidth,
+            style: options.style.normalized(fallback: fallbackStyle)
         )
     }
 
@@ -471,6 +462,21 @@ public struct DrawingProjectionPDFExporter: Sendable {
             locale: Locale(identifier: "en_US_POSIX"),
             normalized
         )
+    }
+
+    private func pdfDashPattern(_ dashPattern: [Double]) -> String {
+        guard !dashPattern.isEmpty else {
+            return "[] 0 d"
+        }
+        return "[\(dashPattern.map(formatDashValue).joined(separator: " "))] 0 d"
+    }
+
+    private func formatDashValue(_ value: Double) -> String {
+        let rounded = value.rounded()
+        if abs(value - rounded) <= 1.0e-9 {
+            return String(Int(rounded))
+        }
+        return format(value)
     }
 
     private func sanitizedComment(_ value: String) -> String {

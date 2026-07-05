@@ -3906,6 +3906,10 @@ struct CLIViewCommandTests {
             savedView.id.description,
             "--maximum-stroke-count",
             "100",
+            "--drawing-page",
+            "a4Portrait",
+            "--drawing-style",
+            "presentation",
             "--svg-output",
             outputURL.path,
             "--pdf-output",
@@ -3931,14 +3935,18 @@ struct CLIViewCommandTests {
         #expect(FileManager.default.fileExists(atPath: pdfOutputURL.path))
         let svg = String(decoding: try Data(contentsOf: outputURL), as: UTF8.self)
         #expect(svg.contains(#"<svg xmlns="http://www.w3.org/2000/svg""#))
+        #expect(svg.contains(#"width="595.275590" height="841.889764""#))
         #expect(svg.contains(#"id="visible-segments" data-visibility="visible""#))
         #expect(svg.contains(#"id="hidden-segments" data-visibility="hidden""#))
-        #expect(svg.contains(#"stroke-dasharray="6 4""#))
+        #expect(svg.contains(##"stroke="#2563eb""##))
+        #expect(svg.contains(#"stroke-dasharray="4 3""#))
         let pdf = String(decoding: try Data(contentsOf: pdfOutputURL), as: UTF8.self)
         #expect(pdf.hasPrefix("%PDF-1.4"))
+        #expect(pdf.contains("/MediaBox [0 0 595.275590 841.889764]"))
         #expect(pdf.contains("% layer visible-segments"))
         #expect(pdf.contains("% layer hidden-segments"))
-        #expect(pdf.contains("[6 4] 0 d"))
+        #expect(pdf.contains("0.145098 0.388235 0.921569 RG"))
+        #expect(pdf.contains("[4 3] 0 d"))
         #expect(drawingProjection.savedViewID == savedView.id)
         #expect(drawingProjection.strokeCount == 12)
         #expect(drawingProjection.visibilitySegmentCount >= drawingProjection.strokeCount)
