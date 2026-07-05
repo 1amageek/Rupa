@@ -81,6 +81,8 @@ public struct TopologySummaryResult: Codable, Equatable, Sendable {
         public var surfaceVDegree: Int?
         public var surfaceUControlPointCount: Int?
         public var surfaceVControlPointCount: Int?
+        public var areaSquareMeters: Double?
+        public var lengthMeters: Double?
         public var center: Point?
         public var normal: Point?
         public var start: Point?
@@ -120,6 +122,8 @@ public struct TopologySummaryResult: Codable, Equatable, Sendable {
             surfaceVDegree: Int? = nil,
             surfaceUControlPointCount: Int? = nil,
             surfaceVControlPointCount: Int? = nil,
+            areaSquareMeters: Double? = nil,
+            lengthMeters: Double? = nil,
             center: Point? = nil,
             normal: Point? = nil,
             start: Point? = nil,
@@ -158,6 +162,8 @@ public struct TopologySummaryResult: Codable, Equatable, Sendable {
             self.surfaceVDegree = surfaceVDegree
             self.surfaceUControlPointCount = surfaceUControlPointCount
             self.surfaceVControlPointCount = surfaceVControlPointCount
+            self.areaSquareMeters = areaSquareMeters
+            self.lengthMeters = lengthMeters
             self.center = center
             self.normal = normal
             self.start = start

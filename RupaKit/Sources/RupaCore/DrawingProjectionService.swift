@@ -421,8 +421,9 @@ public struct DrawingProjectionService: Sendable {
                 continue
             }
             let metrics = annotationMetrics(
-                kind: measurement.kind,
+                measurement: measurement,
                 anchors: anchors,
+                topology: topology,
                 displayUnit: document.displayUnit,
                 fallbackName: measurement.name
             )
@@ -479,8 +480,9 @@ public struct DrawingProjectionService: Sendable {
     }
 
     private func annotationMetrics(
-        kind: MeasurementAnnotation.Kind,
+        measurement: MeasurementAnnotation,
         anchors: [DrawingProjectionResult.AnnotationAnchor],
+        topology: TopologySummaryResult?,
         displayUnit: LengthDisplayUnit,
         fallbackName: String
     ) -> (
@@ -489,7 +491,7 @@ public struct DrawingProjectionService: Sendable {
         measurementDegrees: Double?,
         displayText: String
     ) {
-        switch kind {
+        switch measurement.kind {
         case .distance:
             guard anchors.count >= 2 else {
                 return (nil, nil, nil, fallbackName)
@@ -517,7 +519,10 @@ public struct DrawingProjectionService: Sendable {
                 "Perim \(LengthDisplayText.readableLengthString(fromMeters: length, preferredUnit: displayUnit, maximumFractionDigits: 3))"
             )
         case .area:
-            guard let area = areaSquareMeters(from: anchors) else {
+            guard let area = topologyFaceAreaSquareMeters(
+                for: measurement,
+                topology: topology
+            ) ?? areaSquareMeters(from: anchors) else {
                 return (nil, nil, nil, fallbackName)
             }
             return (
@@ -525,6 +530,19 @@ public struct DrawingProjectionService: Sendable {
                 area,
                 nil,
                 "Area \(LengthDisplayText.readableAreaString(fromSquareMeters: area, preferredUnit: displayUnit, maximumFractionDigits: 3))"
+            )
+        case .edgeLength:
+            guard let length = topologyEdgeLengthMeters(
+                for: measurement,
+                topology: topology
+            ) else {
+                return (nil, nil, nil, fallbackName)
+            }
+            return (
+                length,
+                nil,
+                nil,
+                "Edge \(LengthDisplayText.readableLengthString(fromMeters: length, preferredUnit: displayUnit, maximumFractionDigits: 3))"
             )
         case .radius:
             guard let radius = radiusMeters(from: anchors) else {
@@ -557,6 +575,57 @@ public struct DrawingProjectionService: Sendable {
                 "\(LengthDisplayText.numberString(from: degrees, maximumFractionDigits: 2)) deg"
             )
         }
+    }
+
+    private func topologyFaceAreaSquareMeters(
+        for measurement: MeasurementAnnotation,
+        topology: TopologySummaryResult?
+    ) -> Double? {
+        topologyEntry(
+            for: measurement,
+            topologyKind: .face,
+            topology: topology
+        )?.areaSquareMeters
+    }
+
+    private func topologyEdgeLengthMeters(
+        for measurement: MeasurementAnnotation,
+        topology: TopologySummaryResult?
+    ) -> Double? {
+        topologyEntry(
+            for: measurement,
+            topologyKind: .edge,
+            topology: topology
+        )?.lengthMeters
+    }
+
+    private func topologyEntry(
+        for measurement: MeasurementAnnotation,
+        topologyKind: TopologySummaryResult.Entry.Kind,
+        topology: TopologySummaryResult?
+    ) -> TopologySummaryResult.Entry? {
+        guard let topology else {
+            return nil
+        }
+        for anchor in measurement.anchors {
+            guard anchor.kind == .topologyReference,
+                  let topologyReference = anchor.topologyReference,
+                  topologyReference.kind == topologyKind else {
+                continue
+            }
+            if let entry = topology.entries.first(where: { entry in
+                guard entry.kind == topologyKind,
+                      entry.persistentName == topologyReference.persistentName,
+                      let target = entry.selectionTarget() else {
+                    return false
+                }
+                return target.sceneNodeID == topologyReference.sceneNodeID
+                    && target.component == topologyReference.component
+            }) {
+                return entry
+            }
+        }
+        return nil
     }
 
     private func preferredMeasurementEndpoints(

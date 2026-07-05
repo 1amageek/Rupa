@@ -19,7 +19,7 @@ private struct WorkspaceCanvasTopChromeContainer: ViewModifier {
         let chrome = content
             .padding(.horizontal, WorkspaceChromeControlMetrics.containerHorizontalPadding)
             .frame(height: WorkspaceChromeControlMetrics.containerHeight)
-            .workspaceGlassContainer()
+            .viewportCanvasTopChrome()
 
         if contentSized {
             chrome.fixedSize(horizontal: true, vertical: false)

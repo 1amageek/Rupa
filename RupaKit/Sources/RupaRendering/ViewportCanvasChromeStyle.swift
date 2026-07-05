@@ -1,6 +1,10 @@
 import SwiftUI
 
 public extension View {
+    func viewportCanvasTopChrome() -> some View {
+        viewportCanvasCapsuleGlassChrome()
+    }
+
     func viewportCanvasGlassChrome() -> some View {
         let shape = RoundedRectangle(
             cornerRadius: ViewportCanvasChromeMetrics.cornerRadius,

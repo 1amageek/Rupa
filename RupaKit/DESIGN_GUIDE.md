@@ -25,7 +25,7 @@ flowchart TD
 | Keep tool palettes compact | Tool palettes should keep their container padding near 2 pt and item spacing near 4 pt while preserving tappable icon targets. |
 | Do not use decorative spacing on canvas | Extra padding, large card margins, and oversized floating containers hide geometry and reduce picking confidence. |
 | Avoid nested framed surfaces | Canvas overlays may use one Liquid Glass surface. Avoid cards inside cards or decorative wrapper layers on the canvas. |
-| Use shared Liquid Glass chrome | Canvas badges, command chrome, compact rails, and context panels should use the same borderless Liquid Glass container. Do not mix explicit bordered and unbordered canvas chrome. Top and context chrome in `RupaUI` should use `workspaceCanvasTopChromeContainer`. |
+| Use shared Liquid Glass chrome | Canvas badges, command chrome, compact rails, and context panels should use the same borderless Liquid Glass container. Do not mix explicit bordered and unbordered canvas chrome. Top chrome must flow through `viewportCanvasTopChrome`; top and context chrome in `RupaUI` should use `workspaceCanvasTopChromeContainer`. |
 | Keep top chrome content-width | Top command chrome and viewport badges should hug their controls. Clamp to a maximum width only after measuring content; do not add spacers or fixed maximum-width frames that create empty canvas-obscuring background. |
 | Keep document title out of canvas chrome | The document title belongs in navigation/window chrome. Canvas chrome should only show viewport, command, selection, and diagnostic state. |
 
@@ -55,7 +55,7 @@ flowchart TD
 | Component | Outer placement | Internal spacing |
 |---|---:|---:|
 | `workspaceTopBar` | 4 pt top and horizontal overlay inset | `workspaceCanvasTopChromeContainer`, content-width, no document title |
-| `viewportBadge` | 4 pt top-leading overlay inset | 26 pt borderless Liquid Glass container; compact unit/status/zoom plus one resolved-grid readout |
+| `viewportBadge` | 4 pt top-leading overlay inset | 26 pt borderless `viewportCanvasTopChrome` container; compact unit/status/zoom plus one resolved-grid readout |
 | `floatingToolPalette` | 4 pt leading overlay inset | 2 pt container padding, 4 pt item spacing |
 | `workspaceUtilityRail` | 4 pt trailing overlay inset | 8 pt container padding, 8 pt section spacing |
 | `viewportContextPanel` | 4 pt bottom and horizontal overlay inset | `workspaceCanvasTopChromeContainer`, scrolls horizontally only when content cannot fit |
@@ -86,6 +86,6 @@ Before adding or expanding canvas overlay UI:
 | Hit targets | Compact padding does not make controls difficult to click. |
 | Text fit | Labels fit without wrapping into geometry-heavy areas. |
 | Layering | The overlay is a single borderless Liquid Glass surface and does not contain nested cards. |
-| Shared chrome | Top/context overlay chrome in `RupaUI` uses `workspaceCanvasTopChromeContainer` instead of repeating raw padding, height, fixed-size, and glass modifiers. |
+| Shared chrome | Viewport top badges and top/context overlay chrome in `RupaUI` use `viewportCanvasTopChrome` through shared containers instead of repeating raw padding, height, fixed-size, and glass modifiers. |
 | Responsibility | Rendering and hit policy remain in `RupaRendering`/`RupaViewportScene`; workspace state and command callbacks remain in `RupaUI`. |
 | Agent parity | If the control mutates CAD state, the same operation should be available through Automation/Agent when appropriate. |

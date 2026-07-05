@@ -425,6 +425,154 @@ import Testing
     }
 }
 
+@Test func measurementAnnotationRequiresSingleGeneratedTopologyAnchorForTopologyMetrics() throws {
+    let sceneNodeID = SceneNodeID()
+    let faceAnchor = MeasurementAnchor.topologyReference(
+        sceneNodeID: sceneNodeID,
+        component: .face(.generatedTopology("face-a")),
+        kind: .face,
+        persistentName: "face-a"
+    )
+    let edgeAnchor = MeasurementAnchor.topologyReference(
+        sceneNodeID: sceneNodeID,
+        component: .edge(.generatedTopology("edge-a")),
+        kind: .edge,
+        persistentName: "edge-a"
+    )
+    let worldPoint = MeasurementAnchor.worldPoint(
+        Point3D(x: 0.0, y: 0.0, z: 0.0),
+        role: .point
+    )
+
+    try MeasurementAnnotation(
+        name: "Generated Face Area",
+        kind: .area,
+        anchors: [faceAnchor]
+    ).validate()
+    try MeasurementAnnotation(
+        name: "Generated Edge Length",
+        kind: .edgeLength,
+        anchors: [edgeAnchor]
+    ).validate()
+
+    #expect(throws: DocumentValidationError.self) {
+        try MeasurementAnnotation(
+            name: "Ambiguous Face Area",
+            kind: .area,
+            anchors: [faceAnchor, worldPoint]
+        ).validate()
+    }
+    #expect(throws: DocumentValidationError.self) {
+        try MeasurementAnnotation(
+            name: "Ambiguous Edge Length",
+            kind: .edgeLength,
+            anchors: [edgeAnchor, worldPoint]
+        ).validate()
+    }
+    #expect(throws: DocumentValidationError.self) {
+        try MeasurementAnnotation(
+            name: "Wrong Topology Length",
+            kind: .edgeLength,
+            anchors: [faceAnchor]
+        ).validate()
+    }
+}
+
+@MainActor
+@Test func drawingProjectionGeneratesFaceAreaAndEdgeLengthAnnotationsFromGeneratedTopology() throws {
+    let session = EditorSession()
+    _ = try session.execute(
+        .createExtrudedRectangle(
+            name: "Metric Box",
+            plane: .xy,
+            width: .length(2.0, .meter),
+            height: .length(3.0, .meter),
+            depth: .length(4.0, .meter),
+            direction: .normal
+        )
+    )
+    var document = session.document
+    try document.setRulerConfiguration(.standard(for: .meter))
+    let topology = try TopologySummaryService().summarize(document: document)
+    let faceEntry = try #require(topology.entries.first { entry in
+        entry.kind == .face
+            && abs((entry.areaSquareMeters ?? -1.0) - 6.0) <= 1.0e-9
+    })
+    let edgeEntry = try #require(topology.entries.first { entry in
+        entry.kind == .edge
+            && abs((entry.lengthMeters ?? -1.0) - 4.0) <= 1.0e-9
+    })
+    let faceTarget = try #require(faceEntry.selectionTarget())
+    let edgeTarget = try #require(edgeEntry.selectionTarget())
+    guard case .face = faceTarget.component,
+          case .edge = edgeTarget.component else {
+        Issue.record("Generated topology entries must resolve to face and edge selection targets.")
+        return
+    }
+
+    _ = try document.addMeasurementAnnotation(
+        MeasurementAnnotation(
+            name: "Selected Face Area",
+            kind: .area,
+            anchors: [
+                .topologyReference(
+                    sceneNodeID: faceTarget.sceneNodeID,
+                    component: faceTarget.component,
+                    kind: .face,
+                    persistentName: faceEntry.persistentName,
+                    referenceID: faceEntry.referenceID
+                ),
+            ]
+        ),
+        objectRegistry: session.objectRegistry
+    )
+    _ = try document.addMeasurementAnnotation(
+        MeasurementAnnotation(
+            name: "Selected Edge Length",
+            kind: .edgeLength,
+            anchors: [
+                .topologyReference(
+                    sceneNodeID: edgeTarget.sceneNodeID,
+                    component: edgeTarget.component,
+                    kind: .edge,
+                    persistentName: edgeEntry.persistentName,
+                    referenceID: edgeEntry.referenceID
+                ),
+            ]
+        ),
+        objectRegistry: session.objectRegistry
+    )
+    let savedView = SavedView(
+        name: "Metric Drawing View",
+        camera: SavedViewCamera(
+            target: .origin,
+            distanceMeters: 8.0,
+            yawRadians: .pi / 4.0,
+            pitchRadians: 0.45
+        ),
+        projection: .orthographic(heightMeters: 8.0),
+        displayScale: SavedViewDisplayScale(ruler: .standard(for: .meter))
+    )
+    _ = try document.createSavedView(savedView, objectRegistry: session.objectRegistry)
+
+    let result = try DrawingProjectionService().generate(
+        document: document,
+        query: DrawingProjectionQuery(savedViewID: savedView.id),
+        objectRegistry: session.objectRegistry
+    )
+
+    let areaAnnotation = try #require(result.annotations.first { $0.kind == .area })
+    let edgeAnnotation = try #require(result.annotations.first { $0.kind == .edgeLength })
+    #expect(areaAnnotation.anchors.count == 1)
+    #expect(abs((areaAnnotation.measurementSquareMeters ?? -1.0) - 6.0) <= 1.0e-9)
+    #expect(areaAnnotation.measurementMeters == nil)
+    #expect(areaAnnotation.displayText == "Area 6 m^2")
+    #expect(edgeAnnotation.anchors.count == 1)
+    #expect(abs((edgeAnnotation.measurementMeters ?? -1.0) - 4.0) <= 1.0e-9)
+    #expect(edgeAnnotation.measurementSquareMeters == nil)
+    #expect(edgeAnnotation.displayText == "Edge 4 m")
+}
+
 @MainActor
 @Test func drawingProjectionDiameterAnnotationUsesCenterBoundaryRoles() throws {
     let result = try drawingProjectionResultWithMeasurement(

@@ -159,6 +159,9 @@ public struct TopologySummaryService: Sendable {
                 surfaceVDegree: surfaceInfo?.vDegree,
                 surfaceUControlPointCount: surfaceInfo?.uControlPointCount,
                 surfaceVControlPointCount: surfaceInfo?.vControlPointCount,
+                areaSquareMeters: face.flatMap {
+                    faceAreaSquareMeters($0, in: evaluatedDocument.brep)
+                },
                 center: center,
                 normal: normal,
                 loopCount: face?.loops.count,
@@ -204,6 +207,9 @@ public struct TopologySummaryService: Sendable {
                 curveControlPointCount: curveInfo?.controlPointCount,
                 curveIsRational: curveInfo?.isRational,
                 edgeParameterRange: edgeParameterRange,
+                lengthMeters: edge.flatMap {
+                    edgeLengthMeters($0, in: evaluatedDocument.brep)
+                },
                 start: start,
                 end: end
             )
@@ -360,6 +366,118 @@ public struct TopologySummaryService: Sendable {
                 return nil
             }
         }
+    }
+
+    private func faceAreaSquareMeters(
+        _ face: Face,
+        in model: BRepModel
+    ) -> Double? {
+        guard let surface = model.geometry.surfaces[face.surfaceID] else {
+            return nil
+        }
+        switch surface {
+        case .plane(let plane):
+            return planarLineLoopFaceAreaSquareMeters(
+                face,
+                plane: plane,
+                in: model
+            )
+        case .cylinder, .bSpline:
+            return nil
+        }
+    }
+
+    private func planarLineLoopFaceAreaSquareMeters(
+        _ face: Face,
+        plane: Plane3D,
+        in model: BRepModel
+    ) -> Double? {
+        do {
+            try plane.validate(tolerance: .standard)
+            let normal = try plane.normal.normalized(tolerance: ModelingTolerance.standard.distance)
+            var totalArea = 0.0
+            for loopID in face.loops {
+                guard let loop = model.loops[loopID],
+                      loop.edges.isEmpty == false,
+                      loop.edges.allSatisfy({ orientedEdge in
+                          guard let edge = model.edges[orientedEdge.edgeID],
+                                let curve = model.geometry.curves[edge.curveID] else {
+                              return false
+                          }
+                          if case .line = curve {
+                              return true
+                          }
+                          return false
+                      }) else {
+                    return nil
+                }
+                let points = try model.orderedPoints(for: loopID)
+                guard points.count >= 3 else {
+                    return nil
+                }
+                var signedDoubleArea = 0.0
+                for index in points.indices {
+                    let current = points[index] - plane.origin
+                    let next = points[(index + 1) % points.count] - plane.origin
+                    signedDoubleArea += current.cross(next).dot(normal)
+                }
+                let loopArea = abs(signedDoubleArea) * 0.5
+                guard loopArea.isFinite,
+                      loopArea > ModelingTolerance.standard.distance * ModelingTolerance.standard.distance else {
+                    return nil
+                }
+                switch loop.role {
+                case .outer:
+                    totalArea += loopArea
+                case .inner:
+                    totalArea -= loopArea
+                }
+            }
+            guard totalArea.isFinite,
+                  totalArea > ModelingTolerance.standard.distance * ModelingTolerance.standard.distance else {
+                return nil
+            }
+            return totalArea
+        } catch {
+            return nil
+        }
+    }
+
+    private func edgeLengthMeters(
+        _ edge: Edge,
+        in model: BRepModel
+    ) -> Double? {
+        guard let curve = model.geometry.curves[edge.curveID] else {
+            return nil
+        }
+        switch curve {
+        case .line(let line):
+            if let trim = edge.trim {
+                let length = abs(trim.endParameter - trim.startParameter) * line.direction.length
+                return finitePositiveLength(length)
+            }
+            guard let start = model.vertices[edge.startVertexID]?.point,
+                  let end = model.vertices[edge.endVertexID]?.point else {
+                return nil
+            }
+            return finitePositiveLength((end - start).length)
+        case .circle(let circle):
+            guard let trim = edge.trim else {
+                return nil
+            }
+            let length = abs(trim.endParameter - trim.startParameter) * circle.radius
+            return finitePositiveLength(length)
+        case .bSpline:
+            return nil
+        }
+    }
+
+    private func finitePositiveLength(_ length: Double) -> Double? {
+        guard length.isFinite,
+              length > ModelingTolerance.standard.distance else {
+            return nil
+        }
+        return length
     }
 
     private func describeCurve(_ curve: Curve3D) -> CurveSummary {

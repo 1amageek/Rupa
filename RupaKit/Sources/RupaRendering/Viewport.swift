@@ -796,7 +796,7 @@ public struct Viewport: View {
             height: ViewportCanvasChromeLayout.viewportBadgeHeight,
             alignment: .leading
         )
-        .viewportCanvasGlassChrome()
+        .viewportCanvasTopChrome()
     }
 
     @ViewBuilder

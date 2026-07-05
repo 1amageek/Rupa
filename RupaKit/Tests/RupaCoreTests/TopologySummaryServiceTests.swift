@@ -65,6 +65,36 @@ import SwiftCAD
 }
 
 @MainActor
+@Test func topologySummaryServiceReportsExactLineLoopFaceAreasAndEdgeLengths() async throws {
+    let session = EditorSession()
+    _ = try session.execute(
+        .createExtrudedRectangle(
+            name: "Metric Box",
+            plane: .xy,
+            width: .length(2.0, .meter),
+            height: .length(3.0, .meter),
+            depth: .length(4.0, .meter),
+            direction: .normal
+        )
+    )
+
+    let result = try TopologySummaryService().summarize(document: session.document)
+    let faceAreas = result.entries
+        .filter { $0.kind == .face }
+        .compactMap(\.areaSquareMeters)
+        .sorted()
+    let edgeLengths = result.entries
+        .filter { $0.kind == .edge }
+        .compactMap(\.lengthMeters)
+        .sorted()
+
+    #expect(faceAreas.count == 6)
+    #expect(edgeLengths.count == 12)
+    #expect(metricValuesApproximatelyEqual(faceAreas, [6.0, 6.0, 8.0, 8.0, 12.0, 12.0]))
+    #expect(metricValuesApproximatelyEqual(edgeLengths, [2.0, 2.0, 2.0, 2.0, 3.0, 3.0, 3.0, 3.0, 4.0, 4.0, 4.0, 4.0]))
+}
+
+@MainActor
 @Test func topologySummaryServiceReportsEmptySketchOnlyDocumentWithoutEvaluationFailure() async throws {
     let session = EditorSession()
     _ = try #require(session.createDefaultCircleSketch())
@@ -391,6 +421,19 @@ private func hasExpectedCircularEdgeDefinition(_ entry: TopologySummaryResult.En
         && parameterRange.end.isFinite
         && span > 0.0
         && span < Double.pi * 2.0
+}
+
+private func metricValuesApproximatelyEqual(
+    _ actual: [Double],
+    _ expected: [Double],
+    tolerance: Double = 1.0e-9
+) -> Bool {
+    guard actual.count == expected.count else {
+        return false
+    }
+    return zip(actual, expected).allSatisfy { left, right in
+        abs(left - right) <= tolerance
+    }
 }
 
 private func topologySummaryPolySplineQuadMesh() -> Mesh {

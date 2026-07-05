@@ -9,6 +9,7 @@ public struct MeasurementAnnotation: Codable, Hashable, Sendable, Identifiable {
         case angle
         case perimeter
         case area
+        case edgeLength
     }
 
     public var id: MeasurementAnnotationID
@@ -58,9 +59,18 @@ public struct MeasurementAnnotation: Codable, Hashable, Sendable, Identifiable {
                 )
             }
         case .area:
-            guard anchors.count >= 3 else {
+            let hasSingleTopologyFaceAnchor = anchors.count == 1
+                && anchors.first?.referencesTopology(kind: .face) == true
+            guard anchors.count >= 3 || hasSingleTopologyFaceAnchor else {
                 throw DocumentValidationError.invalidProductMetadata(
-                    "Area measurement annotations require at least three anchors."
+                    "Area measurement annotations require at least three boundary anchors or one generated face anchor."
+                )
+            }
+        case .edgeLength:
+            guard anchors.count == 1,
+                  anchors.first?.referencesTopology(kind: .edge) == true else {
+                throw DocumentValidationError.invalidProductMetadata(
+                    "Edge-length measurement annotations require one generated edge anchor."
                 )
             }
         case .radius, .diameter:
@@ -270,6 +280,16 @@ public struct MeasurementAnchor: Codable, Hashable, Sendable {
             }
             try topologyEdgeParameter.validate()
         }
+    }
+
+    fileprivate func referencesTopology(
+        kind topologyKind: TopologySummaryResult.Entry.Kind
+    ) -> Bool {
+        guard kind == .topologyReference,
+              let topologyReference else {
+            return false
+        }
+        return topologyReference.kind == topologyKind
     }
 }
 
