@@ -3719,6 +3719,153 @@ struct CLICommandApplyTests {
 }
 
 @Suite(.serialized)
+struct CLIViewCommandTests {
+    @Test(.timeLimit(.minutes(1)))
+    func executableSavedViewCommandsMutateClosedDocumentAsJSON() async throws {
+        let temporaryDirectory = try makeTemporaryDirectory()
+        defer {
+            removeTemporaryDirectory(temporaryDirectory)
+        }
+        let documentURL = temporaryDirectory.appendingPathComponent("process-view-commands.swcad")
+        try DocumentFileService().save(.empty(named: "Process Views"), to: documentURL)
+
+        let createResult = try await runCLI([
+            "view",
+            "create",
+            documentURL.path,
+            "--name",
+            "Site View",
+            "--target-x",
+            "1",
+            "--target-y",
+            "2",
+            "--target-z",
+            "3",
+            "--unit",
+            "meter",
+            "--distance",
+            "25",
+            "--yaw-degrees",
+            "45",
+            "--pitch-degrees",
+            "35",
+            "--projection",
+            "orthographic",
+            "--orthographic-height",
+            "200",
+            "--scale-preset",
+            "sitePlanning",
+            "--mode",
+            "file",
+            "--json",
+        ])
+        let createResponse = try JSONDecoder().decode(
+            CLIResponse.self,
+            from: createResult.standardOutputData
+        )
+        let viewID = try #require(createResponse.savedViewID)
+        let loadedAfterCreate = try DocumentFileService().load(from: documentURL)
+        let createdView = try #require(loadedAfterCreate.productMetadata.savedViews[viewID])
+
+        let listResult = try await runCLI([
+            "view",
+            "list",
+            documentURL.path,
+            "--mode",
+            "file",
+            "--json",
+        ])
+        let listResponse = try JSONDecoder().decode(
+            CLIResponse.self,
+            from: listResult.standardOutputData
+        )
+
+        let updateResult = try await runCLI([
+            "view",
+            "update",
+            documentURL.path,
+            "--id",
+            viewID.description,
+            "--name",
+            "Regional View",
+            "--target-x",
+            "10",
+            "--target-y",
+            "20",
+            "--target-z",
+            "30",
+            "--unit",
+            "meter",
+            "--distance",
+            "250",
+            "--yaw-degrees",
+            "15",
+            "--pitch-degrees",
+            "20",
+            "--projection",
+            "perspective",
+            "--field-of-view-degrees",
+            "60",
+            "--scale-preset",
+            "regionalPlanning",
+            "--mode",
+            "file",
+            "--json",
+        ])
+        let updateResponse = try JSONDecoder().decode(
+            CLIResponse.self,
+            from: updateResult.standardOutputData
+        )
+        let loadedAfterUpdate = try DocumentFileService().load(from: documentURL)
+        let updatedView = try #require(loadedAfterUpdate.productMetadata.savedViews[viewID])
+
+        let removeResult = try await runCLI([
+            "view",
+            "remove",
+            documentURL.path,
+            "--id",
+            viewID.description,
+            "--mode",
+            "file",
+            "--json",
+        ])
+        let removeResponse = try JSONDecoder().decode(
+            CLIResponse.self,
+            from: removeResult.standardOutputData
+        )
+        let loadedAfterRemove = try DocumentFileService().load(from: documentURL)
+
+        #expect(createResult.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: createResult.standardError))
+        #expect(createResponse.message == "Saved view Site View created.")
+        #expect(createResponse.saved)
+        #expect(createResponse.savedViews?.map(\.id) == [viewID])
+        #expect(createdView.name == "Site View")
+        #expect(createdView.camera.target == Point3D(x: 1.0, y: 2.0, z: 3.0))
+        #expect(createdView.projection.mode == .orthographic)
+        #expect(createdView.projection.orthographicHeightMeters == 200.0)
+        #expect(createdView.displayScale.matchedPreset == .sitePlanning)
+        #expect(listResult.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: listResult.standardError))
+        #expect(listResponse.message == "1 saved view(s).")
+        #expect(listResponse.saved == false)
+        #expect(listResponse.savedViews?.map(\.id) == [viewID])
+        #expect(updateResult.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: updateResult.standardError))
+        #expect(updateResponse.message == "Saved view Regional View updated.")
+        #expect(updateResponse.saved)
+        #expect(updateResponse.savedViewID == viewID)
+        #expect(updatedView.name == "Regional View")
+        #expect(updatedView.projection.mode == .perspective)
+        #expect(abs((updatedView.projection.fieldOfViewRadians ?? 0.0) - Double.pi / 3.0) < 1.0e-9)
+        #expect(updatedView.displayScale.matchedPreset == .regionalPlanning)
+        #expect(removeResult.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: removeResult.standardError))
+        #expect(removeResponse.message == "Saved view Regional View removed.")
+        #expect(removeResponse.saved)
+        #expect(removeResponse.savedViewID == viewID)
+        #expect(removeResponse.savedViews?.isEmpty == true)
+        #expect(loadedAfterRemove.productMetadata.savedViews.isEmpty)
+    }
+}
+
+@Suite(.serialized)
 struct CLIPlaneCommandTests {
     @Test(.timeLimit(.minutes(1)))
     func executableConstructionPlaneCommandsMutateClosedDocumentAsJSON() async throws {
@@ -6372,6 +6519,40 @@ func cliExecutableReturnsDataExitForLiveGenerationMismatch() async throws {
     #expect(response.viewportGridScale?.snapStep.meters == 100.0)
     #expect(response.viewportGridScale?.snapStep.displayValue == 0.1)
     #expect(response.viewportGridScale?.workspaceSpan.text == "100 km")
+}
+
+@Test func cliAutomationResponseCarriesSavedViewFields() {
+    let savedViewID = SavedViewID()
+    let savedView = SavedView(
+        id: savedViewID,
+        name: "Automation Saved View",
+        camera: SavedViewCamera(
+            distanceMeters: 25.0,
+            yawRadians: 0.5,
+            pitchRadians: 0.35
+        ),
+        projection: .orthographic(heightMeters: 100.0),
+        displayScale: SavedViewDisplayScale(
+            ruler: WorkspaceScalePreset.sitePlanning.rulerConfiguration
+        )
+    )
+    let automationResult = AutomationResult(
+        message: "Saved view Automation Saved View created.",
+        generation: DocumentGeneration(4),
+        diagnostics: [],
+        savedViews: [savedView],
+        savedViewID: savedViewID
+    )
+
+    let response = CLIResponse(
+        result: automationResult,
+        dirty: false,
+        saved: true
+    )
+
+    #expect(response.savedViewID == savedViewID)
+    #expect(response.savedViews?.map(\.id) == [savedViewID])
+    #expect(response.savedViews?.first?.displayScale.matchedPreset == .sitePlanning)
 }
 
 @Test func cliServiceReportsAgentStatus() async throws {

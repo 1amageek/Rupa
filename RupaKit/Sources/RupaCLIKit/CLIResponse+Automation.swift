@@ -19,7 +19,9 @@ extension CLIResponse {
             workspaceScaleRecommendation: result.workspaceScaleRecommendation,
             workspaceScalePresetOptions: result.workspaceScalePresetOptions,
             viewportGridSettings: result.viewportGridSettings,
-            viewportGridScale: result.viewportGridScale
+            viewportGridScale: result.viewportGridScale,
+            savedViews: result.savedViews,
+            savedViewID: result.savedViewID
         )
     }
 }

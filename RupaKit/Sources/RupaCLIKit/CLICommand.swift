@@ -32,6 +32,7 @@ public struct CLICommand: ParsableCommand {
             Sessions.self,
             SurfaceCommand.self,
             ValidateDocument.self,
+            ViewCommand.self,
         ],
         defaultSubcommand: Capabilities.self
     )

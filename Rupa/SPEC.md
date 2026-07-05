@@ -1307,6 +1307,10 @@ Currently implemented command groups:
 | `rupa plane create-targets <document> --name <name> --target <json> --target <json>` | Create a saved construction plane from multiple supported selection targets. |
 | `rupa plane set-active <document> --id <uuid>` | Activate a saved construction plane. |
 | `rupa plane rename <document> --id <uuid> --name <name>` | Rename a saved construction plane. |
+| `rupa view list <document>` | List saved views with camera, projection, section, visibility, and display-scale metadata. |
+| `rupa view create <document> --name <name> --distance <value> --yaw-degrees <value> --pitch-degrees <value> --projection <orthographic|perspective> --scale-preset <preset>` | Create a saved view from explicit camera, projection, and workspace-scale data. Orthographic views require `--orthographic-height`; perspective views require `--field-of-view-degrees`. |
+| `rupa view update <document> --id <uuid> --name <name> --distance <value> --yaw-degrees <value> --pitch-degrees <value> --projection <orthographic|perspective> --scale-preset <preset>` | Replace an existing saved view through the shared Automation/Core command path. |
+| `rupa view remove <document> --id <uuid>` | Remove a saved view through the shared Automation/Core command path. |
 | `rupa sketch line <document> --start-x <value> --start-y <value> --end-x <value> --end-y <value>` | Create a line sketch from numeric length literals. |
 | `rupa sketch circle <document> --center-x <value> --center-y <value> --radius <value>` | Create a circle sketch from numeric length literals. |
 | `rupa sketch rectangle <document> --width <value> --height <value>` | Create a closed rectangle sketch profile from numeric length literals. |

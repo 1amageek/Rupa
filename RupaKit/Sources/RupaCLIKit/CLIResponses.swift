@@ -16,6 +16,8 @@ public struct CLIResponse: Codable, Equatable, Sendable {
     public var workspaceScalePresetOptions: [WorkspaceScalePresetProfile]?
     public var viewportGridSettings: ViewportGridSettings?
     public var viewportGridScale: ViewportGridScaleSnapshot?
+    public var savedViews: [SavedView]?
+    public var savedViewID: SavedViewID?
 
     public init(
         message: String,
@@ -30,7 +32,9 @@ public struct CLIResponse: Codable, Equatable, Sendable {
         workspaceScaleRecommendation: WorkspaceScaleRecommendation? = nil,
         workspaceScalePresetOptions: [WorkspaceScalePresetProfile]? = nil,
         viewportGridSettings: ViewportGridSettings? = nil,
-        viewportGridScale: ViewportGridScaleSnapshot? = nil
+        viewportGridScale: ViewportGridScaleSnapshot? = nil,
+        savedViews: [SavedView]? = nil,
+        savedViewID: SavedViewID? = nil
     ) {
         self.message = message
         self.generation = generation
@@ -45,6 +49,8 @@ public struct CLIResponse: Codable, Equatable, Sendable {
         self.workspaceScalePresetOptions = workspaceScalePresetOptions
         self.viewportGridSettings = viewportGridSettings
         self.viewportGridScale = viewportGridScale
+        self.savedViews = savedViews
+        self.savedViewID = savedViewID
     }
 }
 
