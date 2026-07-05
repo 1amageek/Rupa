@@ -1377,49 +1377,33 @@ public struct MainView: View {
         )
     }
 
+    @ViewBuilder
     private func workspaceTopBarContent(
         presentation: WorkspaceTopBarPresentation
     ) -> some View {
-        HStack(spacing: WorkspaceChromeControlMetrics.itemSpacing) {
-            if let selectionTitle = presentation.selectionTitle {
-                workspaceStatusChip(
-                    selectionTitle,
-                    systemImage: "scope",
-                    tint: .secondary
-                )
-            }
+        // Canvas overlay chrome only carries viewport-local state (selection
+        // count and scale). Document/window-level actions (logs, validation,
+        // inspector) live in the Navigation toolbar, so the container is only
+        // rendered when there is viewport-local content to show.
+        let scaleFitPromptState = workspaceScaleFitPromptState
+        if presentation.selectionTitle != nil || scaleFitPromptState != nil {
+            HStack(spacing: WorkspaceChromeControlMetrics.itemSpacing) {
+                if let selectionTitle = presentation.selectionTitle {
+                    workspaceStatusChip(
+                        selectionTitle,
+                        systemImage: "scope",
+                        tint: .secondary
+                    )
+                }
 
-            if let scaleFitPromptState = workspaceScaleFitPromptState {
-                workspaceScaleFitPromptButton(scaleFitPromptState)
+                if let scaleFitPromptState {
+                    workspaceScaleFitPromptButton(scaleFitPromptState)
+                }
             }
-
-            workspaceIconButton(
-                systemImage: isPreviewExpanded ? "list.bullet.rectangle.fill" : "list.bullet.rectangle",
-                help: isPreviewExpanded ? "Hide Logs" : "Show Logs",
-                accessibilityIdentifier: "WorkspaceCommand.logs"
-            ) {
-                isPreviewExpanded.toggle()
-            }
-
-            workspaceIconButton(
-                systemImage: "checkmark.seal",
-                help: "Validate Document",
-                accessibilityIdentifier: "WorkspaceCommand.validate"
-            ) {
-                session.validateDocument()
-            }
-
-            workspaceIconButton(
-                systemImage: isInspectorPresented ? "sidebar.trailing" : "sidebar.trailing",
-                help: "Inspector",
-                accessibilityIdentifier: "WorkspaceCommand.inspector"
-            ) {
-                isInspectorPresented.toggle()
-            }
+            .workspaceCanvasTopChromeContainer()
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier("WorkspaceTopBar")
         }
-        .workspaceCanvasTopChromeContainer()
-        .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("WorkspaceTopBar")
     }
 
     @ToolbarContentBuilder
@@ -1433,11 +1417,20 @@ public struct MainView: View {
             .help("New Document")
 
             Button {
+                isPreviewExpanded.toggle()
+            } label: {
+                Image(systemName: isPreviewExpanded ? "list.bullet.rectangle.fill" : "list.bullet.rectangle")
+            }
+            .help(isPreviewExpanded ? "Hide Logs" : "Show Logs")
+            .accessibilityIdentifier("WorkspaceCommand.logs")
+
+            Button {
                 session.validateDocument()
             } label: {
                 Image(systemName: "checkmark.seal")
             }
             .help("Validate Document")
+            .accessibilityIdentifier("WorkspaceCommand.validate")
 
             Button {
                 isInspectorPresented.toggle()
@@ -1445,7 +1438,7 @@ public struct MainView: View {
                 Image(systemName: "sidebar.trailing")
             }
             .help("Inspector")
-            .accessibilityIdentifier("InspectorToggle")
+            .accessibilityIdentifier("WorkspaceCommand.inspector")
         }
     }
 
