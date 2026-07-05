@@ -99,9 +99,12 @@ import Testing
     #expect(pdf.contains("/Font << /F1 5 0 R >>"))
     #expect(pdf.contains("/BaseFont /Helvetica"))
     #expect(pdf.contains("% annotation annotation-a label manual"))
+    #expect(pdf.contains("% annotation-meters 2.000000"))
+    #expect(pdf.contains("% annotation-square-meters 4.000000"))
     #expect(pdf.contains("BT"))
     #expect(pdf.contains("/F1 9 Tf"))
     #expect(pdf.contains("(2 \\(m\\)) Tj"))
+    #expect(pdf.contains("(Area 4 m^2) Tj"))
     #expect(!pdf.localizedCaseInsensitiveContains("nan"))
     #expect(!pdf.localizedCaseInsensitiveContains("inf"))
 }
@@ -266,6 +269,43 @@ private func drawingProjectionPDFAnnotationFixture() -> DrawingProjectionResult 
             priorityIndex: 0
         )
     )
+    let areaAnnotation = DrawingProjectionResult.Annotation(
+        id: "annotation-area",
+        measurementID: MeasurementAnnotationID(),
+        sceneNodeID: nil,
+        name: "Plate Area",
+        kind: .area,
+        anchors: [
+            DrawingProjectionResult.AnnotationAnchor(
+                role: .start,
+                kind: .worldPoint,
+                worldPoint: Point3D(x: -1.0, y: -1.0, z: 0.0),
+                point2D: Point2D(x: -1.0, y: -1.0)
+            ),
+            DrawingProjectionResult.AnnotationAnchor(
+                role: .point,
+                kind: .worldPoint,
+                worldPoint: Point3D(x: 1.0, y: -1.0, z: 0.0),
+                point2D: Point2D(x: 1.0, y: -1.0)
+            ),
+            DrawingProjectionResult.AnnotationAnchor(
+                role: .point,
+                kind: .worldPoint,
+                worldPoint: Point3D(x: 1.0, y: 1.0, z: 0.0),
+                point2D: Point2D(x: 1.0, y: 1.0)
+            ),
+            DrawingProjectionResult.AnnotationAnchor(
+                role: .end,
+                kind: .worldPoint,
+                worldPoint: Point3D(x: -1.0, y: 1.0, z: 0.0),
+                point2D: Point2D(x: -1.0, y: 1.0)
+            ),
+        ],
+        labelWorldPoint: nil,
+        labelPoint2D: Point2D(x: 0.0, y: 1.25),
+        measurementSquareMeters: 4.0,
+        displayText: "Area 4 m^2"
+    )
     return DrawingProjectionResult(
         displayUnit: .meter,
         savedViewID: SavedViewID(),
@@ -285,7 +325,7 @@ private func drawingProjectionPDFAnnotationFixture() -> DrawingProjectionResult 
         truncatedStrokes: false,
         bounds: nil,
         strokes: [],
-        annotations: [annotation],
+        annotations: [annotation, areaAnnotation],
         diagnostics: []
     )
 }

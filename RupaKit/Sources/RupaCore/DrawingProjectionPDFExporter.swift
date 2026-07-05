@@ -277,6 +277,7 @@ public struct DrawingProjectionPDFExporter: Sendable {
         lines.append(
             "% annotation \(sanitizedComment(annotation.id)) label \(annotation.labelLayout?.placement.rawValue ?? "automatic")"
         )
+        lines.append(contentsOf: annotationMetricComments(annotation))
         let points = annotation.anchors.map { transform.point($0.point2D) }
         if points.count >= 2 {
             let first = points[0]
@@ -310,6 +311,22 @@ public struct DrawingProjectionPDFExporter: Sendable {
         lines.append("\(format(label.x)) \(format(label.y)) Td")
         lines.append("(\(pdfString(annotation.displayText))) Tj")
         lines.append("ET")
+    }
+
+    private func annotationMetricComments(
+        _ annotation: DrawingProjectionResult.Annotation
+    ) -> [String] {
+        var comments: [String] = []
+        if let measurementMeters = annotation.measurementMeters {
+            comments.append("% annotation-meters \(format(measurementMeters))")
+        }
+        if let measurementSquareMeters = annotation.measurementSquareMeters {
+            comments.append("% annotation-square-meters \(format(measurementSquareMeters))")
+        }
+        if let measurementDegrees = annotation.measurementDegrees {
+            comments.append("% annotation-degrees \(format(measurementDegrees))")
+        }
+        return comments
     }
 
     private func appendLine(

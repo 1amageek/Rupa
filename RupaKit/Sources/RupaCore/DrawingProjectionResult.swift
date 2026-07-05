@@ -278,6 +278,7 @@ public struct DrawingProjectionResult: Codable, Equatable, Sendable {
         public var labelWorldPoint: Point3D?
         public var labelPoint2D: Point2D
         public var measurementMeters: Double?
+        public var measurementSquareMeters: Double?
         public var measurementDegrees: Double?
         public var displayText: String
         public var labelLayout: AnnotationLabelLayout?
@@ -292,6 +293,7 @@ public struct DrawingProjectionResult: Codable, Equatable, Sendable {
             labelWorldPoint: Point3D?,
             labelPoint2D: Point2D,
             measurementMeters: Double? = nil,
+            measurementSquareMeters: Double? = nil,
             measurementDegrees: Double? = nil,
             displayText: String,
             labelLayout: AnnotationLabelLayout? = nil
@@ -305,6 +307,7 @@ public struct DrawingProjectionResult: Codable, Equatable, Sendable {
             self.labelWorldPoint = labelWorldPoint
             self.labelPoint2D = labelPoint2D
             self.measurementMeters = measurementMeters
+            self.measurementSquareMeters = measurementSquareMeters
             self.measurementDegrees = measurementDegrees
             self.displayText = displayText
             self.labelLayout = labelLayout

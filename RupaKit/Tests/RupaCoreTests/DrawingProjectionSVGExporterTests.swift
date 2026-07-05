@@ -211,8 +211,12 @@ import Testing
     #expect(svg.contains(#"data-kind="distance""#))
     #expect(svg.contains(#"data-kind="annotationLeader" data-label-placement="manual""#))
     #expect(svg.contains(#"data-label-placement="manual""#))
+    #expect(svg.contains(#"data-measurement-meters="2.000000""#))
+    #expect(svg.contains(#"data-kind="area""#))
+    #expect(svg.contains(#"data-measurement-square-meters="4.000000""#))
     #expect(svg.contains(#"<text"#))
     #expect(svg.contains(#"2 &lt;m&gt;"#))
+    #expect(svg.contains(#"Area 4 m^2"#))
     #expect(svg.contains(#"data-anchor-index="0""#))
     #expect(svg.contains(#"data-anchor-index="1""#))
     #expect(!drawingProjectionSVGContainsNonFiniteNumericToken(svg))
@@ -355,6 +359,43 @@ private func drawingProjectionAnnotationResult() -> DrawingProjectionResult {
             priorityIndex: 0
         )
     )
+    let areaAnnotation = DrawingProjectionResult.Annotation(
+        id: "annotation-area",
+        measurementID: MeasurementAnnotationID(),
+        sceneNodeID: nil,
+        name: "Plate Area",
+        kind: .area,
+        anchors: [
+            DrawingProjectionResult.AnnotationAnchor(
+                role: .start,
+                kind: .worldPoint,
+                worldPoint: Point3D(x: -1.0, y: -1.0, z: 0.0),
+                point2D: Point2D(x: -1.0, y: -1.0)
+            ),
+            DrawingProjectionResult.AnnotationAnchor(
+                role: .point,
+                kind: .worldPoint,
+                worldPoint: Point3D(x: 1.0, y: -1.0, z: 0.0),
+                point2D: Point2D(x: 1.0, y: -1.0)
+            ),
+            DrawingProjectionResult.AnnotationAnchor(
+                role: .point,
+                kind: .worldPoint,
+                worldPoint: Point3D(x: 1.0, y: 1.0, z: 0.0),
+                point2D: Point2D(x: 1.0, y: 1.0)
+            ),
+            DrawingProjectionResult.AnnotationAnchor(
+                role: .end,
+                kind: .worldPoint,
+                worldPoint: Point3D(x: -1.0, y: 1.0, z: 0.0),
+                point2D: Point2D(x: -1.0, y: 1.0)
+            ),
+        ],
+        labelWorldPoint: nil,
+        labelPoint2D: Point2D(x: 0.0, y: 1.25),
+        measurementSquareMeters: 4.0,
+        displayText: "Area 4 m^2"
+    )
     return DrawingProjectionResult(
         displayUnit: .meter,
         savedViewID: SavedViewID(),
@@ -374,7 +415,7 @@ private func drawingProjectionAnnotationResult() -> DrawingProjectionResult {
         truncatedStrokes: false,
         bounds: nil,
         strokes: [],
-        annotations: [annotation],
+        annotations: [annotation, areaAnnotation],
         diagnostics: []
     )
 }

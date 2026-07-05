@@ -368,6 +368,64 @@ import Testing
 }
 
 @MainActor
+@Test func drawingProjectionGeneratesAreaAndPerimeterAnnotationsFromBoundaryAnchors() throws {
+    let boundaryAnchors: [MeasurementAnchor] = [
+        .worldPoint(Point3D(x: 0.0, y: 0.0, z: 0.0), role: .start),
+        .worldPoint(Point3D(x: 2.0, y: 0.0, z: 0.0), role: .point),
+        .worldPoint(Point3D(x: 2.0, y: 0.0, z: 3.0), role: .point),
+        .worldPoint(Point3D(x: 0.0, y: 0.0, z: 3.0), role: .end),
+    ]
+    let result = try drawingProjectionResultWithMeasurements([
+        MeasurementAnnotation(
+            name: "Plate Area",
+            kind: .area,
+            anchors: boundaryAnchors
+        ),
+        MeasurementAnnotation(
+            name: "Plate Perimeter",
+            kind: .perimeter,
+            anchors: boundaryAnchors
+        ),
+    ])
+
+    let areaAnnotation = try #require(result.annotations.first { $0.kind == .area })
+    let perimeterAnnotation = try #require(result.annotations.first { $0.kind == .perimeter })
+
+    #expect(result.annotationCount == 2)
+    #expect(areaAnnotation.measurementMeters == nil)
+    #expect(areaAnnotation.measurementDegrees == nil)
+    #expect(abs((areaAnnotation.measurementSquareMeters ?? -1.0) - 6.0) <= 1.0e-12)
+    #expect(areaAnnotation.displayText == "Area 6 m^2")
+    #expect(areaAnnotation.anchors.count == 4)
+    #expect(perimeterAnnotation.measurementSquareMeters == nil)
+    #expect(perimeterAnnotation.measurementDegrees == nil)
+    #expect(abs((perimeterAnnotation.measurementMeters ?? -1.0) - 10.0) <= 1.0e-12)
+    #expect(perimeterAnnotation.displayText == "Perim 10 m")
+}
+
+@Test func measurementAnnotationRejectsOpenBoundaryMetrics() {
+    let twoPointBoundary: [MeasurementAnchor] = [
+        .worldPoint(Point3D(x: 0.0, y: 0.0, z: 0.0), role: .start),
+        .worldPoint(Point3D(x: 1.0, y: 0.0, z: 0.0), role: .end),
+    ]
+
+    #expect(throws: DocumentValidationError.self) {
+        try MeasurementAnnotation(
+            name: "Open Perimeter",
+            kind: .perimeter,
+            anchors: twoPointBoundary
+        ).validate()
+    }
+    #expect(throws: DocumentValidationError.self) {
+        try MeasurementAnnotation(
+            name: "Open Area",
+            kind: .area,
+            anchors: twoPointBoundary
+        ).validate()
+    }
+}
+
+@MainActor
 @Test func drawingProjectionDiameterAnnotationUsesCenterBoundaryRoles() throws {
     let result = try drawingProjectionResultWithMeasurement(
         name: "Hole Diameter",

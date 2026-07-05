@@ -285,12 +285,13 @@ public struct DrawingProjectionSVGExporter: Sendable {
         to lines: inout [String]
     ) {
         let points = annotation.anchors.map { transform.point($0.point2D) }
+        let metricAttributes = annotationMetricAttributes(annotation)
         if points.count >= 2 {
             let path = points.map { point in
                 "\(format(point.x)) \(format(point.y))"
             }.joined(separator: " L ")
             lines.append(
-                #"      <path d="M \#(path)" data-annotation-id="\#(escaped(annotation.id))" data-measurement-id="\#(escaped(annotation.measurementID.description))" data-kind="\#(annotation.kind.rawValue)" />"#
+                #"      <path d="M \#(path)" data-annotation-id="\#(escaped(annotation.id))" data-measurement-id="\#(escaped(annotation.measurementID.description))" data-kind="\#(annotation.kind.rawValue)"\#(metricAttributes) />"#
             )
         }
         if let leaderStart = annotation.labelLayout?.leaderStart2D,
@@ -308,8 +309,27 @@ public struct DrawingProjectionSVGExporter: Sendable {
         }
         let label = transform.point(annotation.labelPoint2D)
         lines.append(
-            #"      <text x="\#(format(label.x))" y="\#(format(label.y))" font-family="SFMono-Regular, Menlo, monospace" font-size="11" text-anchor="middle" dominant-baseline="middle" data-annotation-id="\#(escaped(annotation.id))" data-label-placement="\#(annotation.labelLayout?.placement.rawValue ?? "automatic")">\#(escaped(annotation.displayText))</text>"#
+            #"      <text x="\#(format(label.x))" y="\#(format(label.y))" font-family="SFMono-Regular, Menlo, monospace" font-size="11" text-anchor="middle" dominant-baseline="middle" data-annotation-id="\#(escaped(annotation.id))" data-label-placement="\#(annotation.labelLayout?.placement.rawValue ?? "automatic")"\#(metricAttributes)>\#(escaped(annotation.displayText))</text>"#
         )
+    }
+
+    private func annotationMetricAttributes(
+        _ annotation: DrawingProjectionResult.Annotation
+    ) -> String {
+        var attributes: [String] = []
+        if let measurementMeters = annotation.measurementMeters {
+            attributes.append(#"data-measurement-meters="\#(format(measurementMeters))""#)
+        }
+        if let measurementSquareMeters = annotation.measurementSquareMeters {
+            attributes.append(#"data-measurement-square-meters="\#(format(measurementSquareMeters))""#)
+        }
+        if let measurementDegrees = annotation.measurementDegrees {
+            attributes.append(#"data-measurement-degrees="\#(format(measurementDegrees))""#)
+        }
+        guard attributes.isEmpty == false else {
+            return ""
+        }
+        return " " + attributes.joined(separator: " ")
     }
 
     private func renderableSegments(

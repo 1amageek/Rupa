@@ -442,6 +442,7 @@ public struct DrawingProjectionService: Sendable {
                 labelWorldPoint: measurement.labelPosition,
                 labelPoint2D: label,
                 measurementMeters: metrics.measurementMeters,
+                measurementSquareMeters: metrics.measurementSquareMeters,
                 measurementDegrees: metrics.measurementDegrees,
                 displayText: metrics.displayText
             ))
@@ -482,16 +483,22 @@ public struct DrawingProjectionService: Sendable {
         anchors: [DrawingProjectionResult.AnnotationAnchor],
         displayUnit: LengthDisplayUnit,
         fallbackName: String
-    ) -> (measurementMeters: Double?, measurementDegrees: Double?, displayText: String) {
+    ) -> (
+        measurementMeters: Double?,
+        measurementSquareMeters: Double?,
+        measurementDegrees: Double?,
+        displayText: String
+    ) {
         switch kind {
         case .distance:
             guard anchors.count >= 2 else {
-                return (nil, nil, fallbackName)
+                return (nil, nil, nil, fallbackName)
             }
             let endpoints = preferredMeasurementEndpoints(in: anchors)
             let length = distance(endpoints.first.worldPoint, endpoints.second.worldPoint)
             return (
                 length,
+                nil,
                 nil,
                 LengthDisplayText.readableLengthString(
                     fromMeters: length,
@@ -499,29 +506,52 @@ public struct DrawingProjectionService: Sendable {
                     maximumFractionDigits: 3
                 )
             )
+        case .perimeter:
+            guard let length = perimeterMeters(from: anchors) else {
+                return (nil, nil, nil, fallbackName)
+            }
+            return (
+                length,
+                nil,
+                nil,
+                "Perim \(LengthDisplayText.readableLengthString(fromMeters: length, preferredUnit: displayUnit, maximumFractionDigits: 3))"
+            )
+        case .area:
+            guard let area = areaSquareMeters(from: anchors) else {
+                return (nil, nil, nil, fallbackName)
+            }
+            return (
+                nil,
+                area,
+                nil,
+                "Area \(LengthDisplayText.readableAreaString(fromSquareMeters: area, preferredUnit: displayUnit, maximumFractionDigits: 3))"
+            )
         case .radius:
             guard let radius = radiusMeters(from: anchors) else {
-                return (nil, nil, fallbackName)
+                return (nil, nil, nil, fallbackName)
             }
             return (
                 radius,
+                nil,
                 nil,
                 "R \(LengthDisplayText.readableLengthString(fromMeters: radius, preferredUnit: displayUnit, maximumFractionDigits: 3))"
             )
         case .diameter:
             guard let diameter = diameterMeters(from: anchors) else {
-                return (nil, nil, fallbackName)
+                return (nil, nil, nil, fallbackName)
             }
             return (
                 diameter,
+                nil,
                 nil,
                 "Dia \(LengthDisplayText.readableLengthString(fromMeters: diameter, preferredUnit: displayUnit, maximumFractionDigits: 3))"
             )
         case .angle:
             guard let degrees = angleDegrees(from: anchors) else {
-                return (nil, nil, fallbackName)
+                return (nil, nil, nil, fallbackName)
             }
             return (
+                nil,
                 nil,
                 degrees,
                 "\(LengthDisplayText.numberString(from: degrees, maximumFractionDigits: 2)) deg"
@@ -541,6 +571,53 @@ public struct DrawingProjectionService: Sendable {
             return (start, end)
         }
         return (anchors[0], anchors[1])
+    }
+
+    private func perimeterMeters(
+        from anchors: [DrawingProjectionResult.AnnotationAnchor]
+    ) -> Double? {
+        guard anchors.count >= 3 else {
+            return nil
+        }
+        var total = 0.0
+        for index in 1..<anchors.count {
+            total += distance(anchors[index - 1].worldPoint, anchors[index].worldPoint)
+        }
+        if anchors.count >= 3,
+           let first = anchors.first,
+           let last = anchors.last {
+            total += distance(last.worldPoint, first.worldPoint)
+        }
+        guard total.isFinite, total > 1.0e-12 else {
+            return nil
+        }
+        return total
+    }
+
+    private func areaSquareMeters(
+        from anchors: [DrawingProjectionResult.AnnotationAnchor]
+    ) -> Double? {
+        guard anchors.count >= 3 else {
+            return nil
+        }
+        var crossX = 0.0
+        var crossY = 0.0
+        var crossZ = 0.0
+        for index in anchors.indices {
+            let current = anchors[index].worldPoint
+            let nextIndex = index == anchors.index(before: anchors.endIndex)
+                ? anchors.startIndex
+                : anchors.index(after: index)
+            let next = anchors[nextIndex].worldPoint
+            crossX += current.y * next.z - current.z * next.y
+            crossY += current.z * next.x - current.x * next.z
+            crossZ += current.x * next.y - current.y * next.x
+        }
+        let area = 0.5 * sqrt(crossX * crossX + crossY * crossY + crossZ * crossZ)
+        guard area.isFinite, area > 1.0e-18 else {
+            return nil
+        }
+        return area
     }
 
     private func radiusMeters(

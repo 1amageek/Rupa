@@ -7,6 +7,8 @@ public struct MeasurementAnnotation: Codable, Hashable, Sendable, Identifiable {
         case radius
         case diameter
         case angle
+        case perimeter
+        case area
     }
 
     public var id: MeasurementAnnotationID
@@ -47,6 +49,18 @@ public struct MeasurementAnnotation: Codable, Hashable, Sendable, Identifiable {
             guard anchors.count >= 2 else {
                 throw DocumentValidationError.invalidProductMetadata(
                     "Distance and angle measurement annotations require at least two anchors."
+                )
+            }
+        case .perimeter:
+            guard anchors.count >= 3 else {
+                throw DocumentValidationError.invalidProductMetadata(
+                    "Perimeter measurement annotations require at least three anchors."
+                )
+            }
+        case .area:
+            guard anchors.count >= 3 else {
+                throw DocumentValidationError.invalidProductMetadata(
+                    "Area measurement annotations require at least three anchors."
                 )
             }
         case .radius, .diameter:

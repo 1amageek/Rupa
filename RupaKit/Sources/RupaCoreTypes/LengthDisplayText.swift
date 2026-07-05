@@ -45,6 +45,36 @@ public enum LengthDisplayText {
         )
     }
 
+    public static func areaString(
+        fromSquareMeters squareMeters: Double,
+        unit: LengthDisplayUnit,
+        maximumFractionDigits: Int = 6
+    ) -> String {
+        let divisor = unit.metersPerUnit * unit.metersPerUnit
+        return "\(numberString(from: squareMeters / divisor, maximumFractionDigits: maximumFractionDigits)) \(unit.symbol)^2"
+    }
+
+    public static func readableAreaString(
+        fromSquareMeters squareMeters: Double,
+        preferredUnit: LengthDisplayUnit,
+        maximumFractionDigits: Int = 6
+    ) -> String {
+        guard squareMeters.isFinite else {
+            return areaString(
+                fromSquareMeters: squareMeters,
+                unit: preferredUnit,
+                maximumFractionDigits: maximumFractionDigits
+            )
+        }
+        let readableLength = sqrt(abs(squareMeters))
+        let unit = preferredUnit.readableUnit(forMeters: readableLength)
+        return areaString(
+            fromSquareMeters: squareMeters,
+            unit: unit,
+            maximumFractionDigits: maximumFractionDigits
+        )
+    }
+
     public static func architecturalString(
         fromMeters meters: Double,
         denominator: Int = 16
