@@ -680,6 +680,16 @@ public final class AgentCommandController: AgentClientProtocol {
             failureMode: "Rejects stale generations before reading."
         ),
         capability(
+            "generateDrawingProjection",
+            category: .read,
+            summary: "Generate structured orthographic drawing strokes from a saved view and evaluated mesh geometry without using viewport screenshots.",
+            access: .automationCommand,
+            mutatesDocument: false,
+            discovery: [.designDisplaySnapshot, .savedViews, .drawingProjection, .meshSummary, .topologySummary],
+            targets: [.document, .savedView, .body, .edge],
+            failureMode: "Rejects missing saved view IDs, invalid tolerances, invalid stroke limits, evaluation failures, and stale generations before reading; reports hidden-line visibility as unclassified until the hidden-line classifier is implemented."
+        ),
+        capability(
             "createSavedView",
             category: .document,
             summary: "Create a source-owned saved view with camera, projection, clipping, visibility, section state, and scale-bar metadata.",

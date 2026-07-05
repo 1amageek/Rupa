@@ -113,6 +113,7 @@ import SwiftCAD
         .createSavedView(savedView),
         .updateSavedView(savedView),
         .removeSavedView(id: viewID),
+        .generateDrawingProjection(query: DrawingProjectionQuery(savedViewID: viewID)),
     ]
 
     for command in commands {
@@ -128,13 +129,14 @@ import SwiftCAD
 
     let response = AgentResponse.command(
         AutomationResult(
-            message: "Saved view Codec Saved View created.",
-            commandName: "createSavedView",
+            message: "Drawing projection generated.",
+            commandName: "generateDrawingProjection",
             generation: DocumentGeneration(6),
-            didMutate: true,
+            didMutate: false,
             diagnostics: [],
             savedViews: [savedView],
-            savedViewID: viewID
+            savedViewID: viewID,
+            drawingProjection: agentCodecDrawingProjection(savedView: savedView)
         )
     )
     let decodedResponse = try codec.decodeResponse(from: try codec.encode(response))
@@ -2154,5 +2156,50 @@ private func agentCodecSavedView(
             ruler: WorkspaceScalePreset.sitePlanning.rulerConfiguration,
             scaleBarLengthMeters: 1_000.0
         )
+    )
+}
+
+private func agentCodecDrawingProjection(
+    savedView: SavedView
+) -> DrawingProjectionResult {
+    DrawingProjectionResult(
+        displayUnit: .meter,
+        savedViewID: savedView.id,
+        savedViewName: savedView.name,
+        projectionMode: .orthographic,
+        viewFrame: DrawingProjectionResult.ViewFrame(
+            target: savedView.camera.target,
+            right: Vector3D(x: 1.0, y: 0.0, z: 0.0),
+            up: Vector3D(x: 0.0, y: 1.0, z: 0.0),
+            viewNormal: Vector3D(x: 0.0, y: 0.0, z: 1.0),
+            visibleHeightMeters: 500.0,
+            scaleBarLengthMeters: 100.0
+        ),
+        bodyCount: 1,
+        triangleCount: 2,
+        candidateEdgeCount: 1,
+        truncatedStrokes: false,
+        bounds: DrawingProjectionResult.Bounds2D(
+            minX: 0.0,
+            minY: 0.0,
+            maxX: 1.0,
+            maxY: 1.0
+        ),
+        strokes: [
+            DrawingProjectionResult.Stroke(
+                id: "\(savedView.id.description):stroke:0",
+                bodyID: "body",
+                kind: .crease,
+                visibility: .unclassified,
+                start: .origin,
+                end: Point3D(x: 1.0, y: 0.0, z: 0.0),
+                start2D: Point2D(x: 0.0, y: 0.0),
+                end2D: Point2D(x: 1.0, y: 0.0),
+                minimumDepthMeters: 0.0,
+                maximumDepthMeters: 0.0,
+                lengthMeters: 1.0
+            ),
+        ],
+        diagnostics: []
     )
 }

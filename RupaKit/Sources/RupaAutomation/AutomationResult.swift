@@ -21,6 +21,7 @@ public struct AutomationResult: Codable, Equatable, Sendable {
     public var viewportGridScale: ViewportGridScaleSnapshot?
     public var savedViews: [SavedView]?
     public var savedViewID: SavedViewID?
+    public var drawingProjection: DrawingProjectionResult?
     public var sectionAnalysis: SectionAnalysisResult?
     public var sectionClippingPlan: SectionAnalysisClippingPlan?
 
@@ -44,6 +45,7 @@ public struct AutomationResult: Codable, Equatable, Sendable {
         viewportGridScale: ViewportGridScaleSnapshot? = nil,
         savedViews: [SavedView]? = nil,
         savedViewID: SavedViewID? = nil,
+        drawingProjection: DrawingProjectionResult? = nil,
         sectionAnalysis: SectionAnalysisResult? = nil,
         sectionClippingPlan: SectionAnalysisClippingPlan? = nil
     ) {
@@ -66,6 +68,7 @@ public struct AutomationResult: Codable, Equatable, Sendable {
         self.viewportGridScale = viewportGridScale
         self.savedViews = savedViews
         self.savedViewID = savedViewID
+        self.drawingProjection = drawingProjection
         self.sectionAnalysis = sectionAnalysis
         self.sectionClippingPlan = sectionClippingPlan
     }
@@ -92,6 +95,7 @@ extension AutomationResult {
         case viewportGridScale
         case savedViews
         case savedViewID
+        case drawingProjection
         case sectionAnalysis
         case sectionClippingPlan
     }
@@ -163,6 +167,10 @@ extension AutomationResult {
             ),
             savedViews: try container.decodeIfPresent([SavedView].self, forKey: .savedViews),
             savedViewID: try container.decodeIfPresent(SavedViewID.self, forKey: .savedViewID),
+            drawingProjection: try container.decodeIfPresent(
+                DrawingProjectionResult.self,
+                forKey: .drawingProjection
+            ),
             sectionAnalysis: try container.decodeIfPresent(
                 SectionAnalysisResult.self,
                 forKey: .sectionAnalysis
@@ -207,6 +215,7 @@ extension AutomationResult {
         try container.encodeIfPresent(viewportGridScale, forKey: .viewportGridScale)
         try container.encodeIfPresent(savedViews, forKey: .savedViews)
         try container.encodeIfPresent(savedViewID, forKey: .savedViewID)
+        try container.encodeIfPresent(drawingProjection, forKey: .drawingProjection)
         try container.encodeIfPresent(sectionAnalysis, forKey: .sectionAnalysis)
         try container.encodeIfPresent(sectionClippingPlan, forKey: .sectionClippingPlan)
     }

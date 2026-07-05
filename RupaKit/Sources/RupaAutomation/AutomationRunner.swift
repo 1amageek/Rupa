@@ -83,6 +83,15 @@ public struct AutomationRunner {
                 savedViewID: id,
                 in: session
             )
+        case .generateDrawingProjection(let query):
+            let result = try DrawingProjectionService().generate(
+                document: session.document,
+                query: query,
+                objectRegistry: session.objectRegistry,
+                currentEvaluation: session.currentEvaluation,
+                currentGeneration: session.generation
+            )
+            return drawingProjectionAutomationResult(result, in: session)
         case .rebaseWorkspaceOrigin(let translation):
             let result = try session.execute(.rebaseWorkspaceOrigin(translation: translation))
             return workspaceAutomationResult(
@@ -1661,6 +1670,37 @@ public struct AutomationRunner {
             sectionAnalysis: sectionAnalysis,
             sectionClippingPlan: clippingPlan
         )
+    }
+
+    private func drawingProjectionAutomationResult(
+        _ drawingProjection: DrawingProjectionResult,
+        in session: EditorSession
+    ) -> AutomationResult {
+        let context = workspaceAutomationContext(in: session)
+        return AutomationResult(
+            message: drawingProjectionMessage(drawingProjection),
+            commandName: "generateDrawingProjection",
+            generation: session.generation,
+            didMutate: false,
+            diagnostics: mergedDiagnostics(drawingProjection.diagnostics, context.diagnostics),
+            workspaceScale: context.scale,
+            workspaceInteractionScale: context.interactionScale,
+            workspaceBounds: context.bounds,
+            workspacePrecision: context.precision,
+            workspaceScaleRecommendation: context.scaleRecommendation,
+            workspaceScalePresetOptions: context.scalePresetOptions,
+            viewportGridSettings: context.viewportGridSettings,
+            viewportGridScale: context.viewportGridScale,
+            savedViews: context.savedViews,
+            drawingProjection: drawingProjection
+        )
+    }
+
+    private func drawingProjectionMessage(
+        _ drawingProjection: DrawingProjectionResult
+    ) -> String {
+        let suffix = drawingProjection.truncatedStrokes ? " Result was truncated." : ""
+        return "Drawing projection generated \(drawingProjection.strokeCount) stroke(s) for saved view \(drawingProjection.savedViewName).\(suffix)"
     }
 
     private func sectionAnalysisMessage(

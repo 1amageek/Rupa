@@ -45,6 +45,7 @@ public struct AgentCapabilityDescriptor: Codable, Equatable, Sendable {
         case designDisplaySnapshot
         case patternArraySummary
         case savedViews
+        case drawingProjection
         case cadInteractionQualityAssessment
     }
 

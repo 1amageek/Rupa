@@ -397,6 +397,9 @@ import SwiftCAD
     let patternArraySummary = try #require(descriptors.first { $0.name == "patternArraySummary" })
     let designDisplaySnapshot = try #require(descriptors.first { $0.name == "designDisplaySnapshot" })
     let describeSavedViews = try #require(descriptors.first { $0.name == "describeSavedViews" })
+    let generateDrawingProjection = try #require(
+        descriptors.first { $0.name == "generateDrawingProjection" }
+    )
     let createSavedView = try #require(descriptors.first { $0.name == "createSavedView" })
     let updateSavedView = try #require(descriptors.first { $0.name == "updateSavedView" })
     let removeSavedView = try #require(descriptors.first { $0.name == "removeSavedView" })
@@ -1743,6 +1746,15 @@ import SwiftCAD
     #expect(describeSavedViews.discovery.contains(.savedViews))
     #expect(describeSavedViews.targets == [.savedView])
     #expect(describeSavedViews.summary.contains("display-scale metadata"))
+
+    #expect(generateDrawingProjection.category == .read)
+    #expect(!generateDrawingProjection.mutatesDocument)
+    #expect(generateDrawingProjection.access == .automationCommand)
+    #expect(generateDrawingProjection.discovery.contains(.savedViews))
+    #expect(generateDrawingProjection.discovery.contains(.drawingProjection))
+    #expect(generateDrawingProjection.targets.contains(.savedView))
+    #expect(generateDrawingProjection.summary.contains("structured orthographic drawing strokes"))
+    #expect(generateDrawingProjection.failureMode.contains("hidden-line visibility as unclassified"))
 
     #expect(createSavedView.category == .document)
     #expect(createSavedView.mutatesDocument)

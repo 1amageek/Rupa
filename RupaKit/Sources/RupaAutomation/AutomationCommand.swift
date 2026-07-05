@@ -12,6 +12,7 @@ public enum AutomationCommand: Codable, Equatable, Sendable {
     case createSavedView(SavedView)
     case updateSavedView(SavedView)
     case removeSavedView(id: SavedViewID)
+    case generateDrawingProjection(query: DrawingProjectionQuery)
     case rebaseWorkspaceOrigin(translation: Vector3D)
     case renameDocument(name: String)
     case upsertParameter(name: String, expression: CADExpression, kind: QuantityKind)
@@ -388,6 +389,8 @@ public enum AutomationCommand: Codable, Equatable, Sendable {
             .updateSavedView(savedView)
         case .removeSavedView(let id):
             .removeSavedView(id: id)
+        case .generateDrawingProjection:
+            nil
         case .rebaseWorkspaceOrigin(let translation):
             .rebaseWorkspaceOrigin(translation: translation)
         case .renameDocument(let name):
