@@ -95,6 +95,35 @@ import SwiftCAD
 }
 
 @MainActor
+@Test func topologySummaryServiceReportsBSplineEdgeLengthsFromSmoothLoft() throws {
+    let document = try topologySummarySmoothLoftDocument()
+
+    let result = try TopologySummaryService().summarize(document: document)
+    let bSplineEdges = result.entries.filter {
+        $0.kind == .edge
+            && $0.curveKind == "bSpline"
+    }
+
+    #expect(bSplineEdges.count == 8)
+    #expect(bSplineEdges.allSatisfy {
+        $0.curveDegree == 3
+            && $0.curveControlPointCount == 4
+            && $0.edgeParameterRange != nil
+            && ($0.lengthMeters ?? 0.0) > 0.0
+    })
+    let curvedEdge = try #require(bSplineEdges.first { entry in
+        guard let length = entry.lengthMeters,
+              let start = entry.start,
+              let end = entry.end else {
+            return false
+        }
+        let chord = topologySummaryDistance(from: start, to: end)
+        return length > chord + ModelingTolerance.standard.distance
+    })
+    #expect(curvedEdge.selectionTarget() != nil)
+}
+
+@MainActor
 @Test func topologySummaryServiceReportsEmptySketchOnlyDocumentWithoutEvaluationFailure() async throws {
     let session = EditorSession()
     _ = try #require(session.createDefaultCircleSketch())
@@ -434,6 +463,80 @@ private func metricValuesApproximatelyEqual(
     return zip(actual, expected).allSatisfy { left, right in
         abs(left - right) <= tolerance
     }
+}
+
+private func topologySummarySmoothLoftDocument() throws -> DesignDocument {
+    var document = DesignDocument.empty()
+    let firstProfileID = try topologySummaryCreateLoftProfile(
+        in: &document,
+        name: "Length Loft Bottom",
+        width: 4.0,
+        height: 2.0,
+        x: 0.0,
+        z: 0.0
+    )
+    let middleProfileID = try topologySummaryCreateLoftProfile(
+        in: &document,
+        name: "Length Loft Middle",
+        width: 5.0,
+        height: 2.5,
+        x: 3.0,
+        z: 5.0
+    )
+    let lastProfileID = try topologySummaryCreateLoftProfile(
+        in: &document,
+        name: "Length Loft Top",
+        width: 4.0,
+        height: 2.0,
+        x: 0.0,
+        z: 10.0
+    )
+    _ = try document.createLoft(
+        name: "Length Smooth Loft",
+        sections: [
+            LoftSectionReference(profile: ProfileReference(featureID: firstProfileID)),
+            LoftSectionReference(profile: ProfileReference(featureID: middleProfileID)),
+            LoftSectionReference(profile: ProfileReference(featureID: lastProfileID)),
+        ],
+        options: LoftOptions(resultKind: .solid, surfaceMode: .smooth)
+    )
+    return document
+}
+
+private func topologySummaryCreateLoftProfile(
+    in document: inout DesignDocument,
+    name: String,
+    width: Double,
+    height: Double,
+    x: Double,
+    z: Double
+) throws -> FeatureID {
+    try document.createRectangleSketch(
+        name: name,
+        plane: topologySummaryLoftPlane(x: x, z: z),
+        width: .length(width, .millimeter),
+        height: .length(height, .millimeter)
+    )
+}
+
+private func topologySummaryLoftPlane(x: Double, z: Double) -> SketchPlane {
+    if x == 0.0 && z == 0.0 {
+        return .xy
+    }
+    return .plane(Plane3D(
+        origin: Point3D(x: x / 1000.0, y: 0.0, z: z / 1000.0),
+        normal: .unitZ
+    ))
+}
+
+private func topologySummaryDistance(
+    from first: TopologySummaryResult.Entry.Point,
+    to second: TopologySummaryResult.Entry.Point
+) -> Double {
+    let x = second.x - first.x
+    let y = second.y - first.y
+    let z = second.z - first.z
+    return (x * x + y * y + z * z).squareRoot()
 }
 
 private func topologySummaryPolySplineQuadMesh() -> Mesh {

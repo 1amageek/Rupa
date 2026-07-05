@@ -3,6 +3,10 @@ import SwiftCAD
 import RupaCoreTypes
 
 public struct TopologySummaryService: Sendable {
+    private static let bSplineLengthAbsoluteTolerance = ModelingTolerance.standard.distance * 0.1
+    private static let bSplineLengthRelativeTolerance = 1.0e-6
+    private static let maximumBSplineLengthIntegrationDepth = 12
+
     private let pipelineOverride: CADPipeline?
 
     public init(pipeline: CADPipeline? = nil) {
@@ -467,9 +471,145 @@ public struct TopologySummaryService: Sendable {
             }
             let length = abs(trim.endParameter - trim.startParameter) * circle.radius
             return finitePositiveLength(length)
-        case .bSpline:
+        case .bSpline(let curve):
+            return bSplineEdgeLengthMeters(curve, trim: edge.trim)
+        }
+    }
+
+    private func bSplineEdgeLengthMeters(
+        _ curve: BSplineCurve3D,
+        trim: CurveTrim?
+    ) -> Double? {
+        do {
+            try curve.validate(tolerance: .standard)
+            let bounds = try bSplineIntegrationBounds(for: curve, trim: trim)
+            var length = 0.0
+            var didIntegrateSpan = false
+            for index in 1..<curve.knots.count {
+                let spanStart = max(bounds.lower, curve.knots[index - 1])
+                let spanEnd = min(bounds.upper, curve.knots[index])
+                guard spanEnd - spanStart > ModelingTolerance.standard.distance else {
+                    continue
+                }
+                length += try adaptiveBSplineSpeedIntegral(
+                    curve,
+                    lower: spanStart,
+                    upper: spanEnd,
+                    depth: 0
+                )
+                didIntegrateSpan = true
+            }
+            if didIntegrateSpan == false {
+                length = try adaptiveBSplineSpeedIntegral(
+                    curve,
+                    lower: bounds.lower,
+                    upper: bounds.upper,
+                    depth: 0
+                )
+            }
+            return finitePositiveLength(length)
+        } catch {
             return nil
         }
+    }
+
+    private func bSplineIntegrationBounds(
+        for curve: BSplineCurve3D,
+        trim: CurveTrim?
+    ) throws -> (lower: Double, upper: Double) {
+        guard case let .closed(domainLower, domainUpper) = curve.domain else {
+            throw GeometryError.invalidDistance(0.0)
+        }
+        let rawStart = trim?.startParameter ?? domainLower
+        let rawEnd = trim?.endParameter ?? domainUpper
+        let lower = max(min(rawStart, rawEnd), min(domainLower, domainUpper))
+        let upper = min(max(rawStart, rawEnd), max(domainLower, domainUpper))
+        guard lower.isFinite,
+              upper.isFinite,
+              upper - lower > ModelingTolerance.standard.distance else {
+            throw GeometryError.invalidDistance(upper - lower)
+        }
+        return (lower, upper)
+    }
+
+    private func adaptiveBSplineSpeedIntegral(
+        _ curve: BSplineCurve3D,
+        lower: Double,
+        upper: Double,
+        depth: Int
+    ) throws -> Double {
+        let whole = try gaussLegendreFivePointSpeedIntegral(curve, lower: lower, upper: upper)
+        let midpoint = (lower + upper) * 0.5
+        let left = try gaussLegendreFivePointSpeedIntegral(curve, lower: lower, upper: midpoint)
+        let right = try gaussLegendreFivePointSpeedIntegral(curve, lower: midpoint, upper: upper)
+        let refined = left + right
+        guard whole.isFinite,
+              refined.isFinite else {
+            throw GeometryError.invalidDistance(refined)
+        }
+        let tolerance = max(
+            Self.bSplineLengthAbsoluteTolerance,
+            abs(refined) * Self.bSplineLengthRelativeTolerance
+        )
+        guard depth < Self.maximumBSplineLengthIntegrationDepth,
+              abs(refined - whole) > tolerance else {
+            return refined
+        }
+        let refinedLeft = try adaptiveBSplineSpeedIntegral(
+            curve,
+            lower: lower,
+            upper: midpoint,
+            depth: depth + 1
+        )
+        let refinedRight = try adaptiveBSplineSpeedIntegral(
+            curve,
+            lower: midpoint,
+            upper: upper,
+            depth: depth + 1
+        )
+        return refinedLeft + refinedRight
+    }
+
+    private func gaussLegendreFivePointSpeedIntegral(
+        _ curve: BSplineCurve3D,
+        lower: Double,
+        upper: Double
+    ) throws -> Double {
+        let halfSpan = (upper - lower) * 0.5
+        guard halfSpan.isFinite,
+              halfSpan > 0.0 else {
+            throw GeometryError.invalidDistance(upper - lower)
+        }
+        let center = (lower + upper) * 0.5
+        let firstNode = 0.5384693101056831
+        let secondNode = 0.9061798459386640
+        let centerWeight = 0.5688888888888889
+        let firstWeight = 0.47862867049936647
+        let secondWeight = 0.23692688505618908
+        let centerSpeed = try bSplineSpeed(curve, at: center)
+        let firstNegativeSpeed = try bSplineSpeed(curve, at: center - halfSpan * firstNode)
+        let firstPositiveSpeed = try bSplineSpeed(curve, at: center + halfSpan * firstNode)
+        let secondNegativeSpeed = try bSplineSpeed(curve, at: center - halfSpan * secondNode)
+        let secondPositiveSpeed = try bSplineSpeed(curve, at: center + halfSpan * secondNode)
+        let weightedSpeed =
+            centerWeight * centerSpeed
+            + firstWeight * (firstNegativeSpeed + firstPositiveSpeed)
+            + secondWeight * (secondNegativeSpeed + secondPositiveSpeed)
+        return weightedSpeed * halfSpan
+    }
+
+    private func bSplineSpeed(
+        _ curve: BSplineCurve3D,
+        at parameter: Double
+    ) throws -> Double {
+        let speed = try curve
+            .differentialGeometry(at: parameter, tolerance: .standard)
+            .firstDerivative
+            .length
+        guard speed.isFinite else {
+            throw GeometryError.invalidDistance(speed)
+        }
+        return speed
     }
 
     private func finitePositiveLength(_ length: Double) -> Double? {

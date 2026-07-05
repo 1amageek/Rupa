@@ -574,6 +574,63 @@ import Testing
 }
 
 @MainActor
+@Test func drawingProjectionGeneratesBSplineEdgeLengthAnnotationFromGeneratedTopology() throws {
+    var document = try drawingProjectionSmoothLoftDocument()
+    try document.setRulerConfiguration(.standard(for: .meter))
+    let topology = try TopologySummaryService().summarize(document: document)
+    let edgeEntry = try #require(topology.entries.first {
+        $0.kind == .edge
+            && $0.curveKind == "bSpline"
+            && ($0.lengthMeters ?? 0.0) > 0.0
+    })
+    let edgeLength = try #require(edgeEntry.lengthMeters)
+    let edgeTarget = try #require(edgeEntry.selectionTarget())
+    guard case .edge = edgeTarget.component else {
+        Issue.record("Generated B-spline topology entry must resolve to an edge selection target.")
+        return
+    }
+    _ = try document.addMeasurementAnnotation(
+        MeasurementAnnotation(
+            name: "Selected B-Spline Edge Length",
+            kind: .edgeLength,
+            anchors: [
+                .topologyReference(
+                    sceneNodeID: edgeTarget.sceneNodeID,
+                    component: edgeTarget.component,
+                    kind: .edge,
+                    persistentName: edgeEntry.persistentName,
+                    referenceID: edgeEntry.referenceID
+                ),
+            ]
+        ),
+        objectRegistry: .builtIn
+    )
+    let savedView = SavedView(
+        name: "Smooth Loft Drawing View",
+        camera: SavedViewCamera(
+            target: Point3D(x: 0.001, y: 0.0, z: 0.005),
+            distanceMeters: 0.05,
+            yawRadians: .pi / 4.0,
+            pitchRadians: 0.45
+        ),
+        projection: .orthographic(heightMeters: 0.03),
+        displayScale: SavedViewDisplayScale(ruler: .standard(for: .meter))
+    )
+    _ = try document.createSavedView(savedView, objectRegistry: .builtIn)
+
+    let result = try DrawingProjectionService().generate(
+        document: document,
+        query: DrawingProjectionQuery(savedViewID: savedView.id),
+        objectRegistry: .builtIn
+    )
+
+    let edgeAnnotation = try #require(result.annotations.first { $0.kind == .edgeLength })
+    #expect(abs((edgeAnnotation.measurementMeters ?? -1.0) - edgeLength) <= 1.0e-9)
+    #expect(edgeAnnotation.measurementSquareMeters == nil)
+    #expect(edgeAnnotation.displayText.hasPrefix("Edge "))
+}
+
+@MainActor
 @Test func drawingProjectionDiameterAnnotationUsesCenterBoundaryRoles() throws {
     let result = try drawingProjectionResultWithMeasurement(
         name: "Hole Diameter",
@@ -709,6 +766,70 @@ private func drawingProjectionPointApproximatelyEqual(
 ) -> Bool {
     abs(first.x - second.x) <= tolerance
         && abs(first.y - second.y) <= tolerance
+}
+
+private func drawingProjectionSmoothLoftDocument() throws -> DesignDocument {
+    var document = DesignDocument.empty()
+    let firstProfileID = try drawingProjectionCreateLoftProfile(
+        in: &document,
+        name: "Drawing Loft Bottom",
+        width: 4.0,
+        height: 2.0,
+        x: 0.0,
+        z: 0.0
+    )
+    let middleProfileID = try drawingProjectionCreateLoftProfile(
+        in: &document,
+        name: "Drawing Loft Middle",
+        width: 5.0,
+        height: 2.5,
+        x: 3.0,
+        z: 5.0
+    )
+    let lastProfileID = try drawingProjectionCreateLoftProfile(
+        in: &document,
+        name: "Drawing Loft Top",
+        width: 4.0,
+        height: 2.0,
+        x: 0.0,
+        z: 10.0
+    )
+    _ = try document.createLoft(
+        name: "Drawing Smooth Loft",
+        sections: [
+            LoftSectionReference(profile: ProfileReference(featureID: firstProfileID)),
+            LoftSectionReference(profile: ProfileReference(featureID: middleProfileID)),
+            LoftSectionReference(profile: ProfileReference(featureID: lastProfileID)),
+        ],
+        options: LoftOptions(resultKind: .solid, surfaceMode: .smooth)
+    )
+    return document
+}
+
+private func drawingProjectionCreateLoftProfile(
+    in document: inout DesignDocument,
+    name: String,
+    width: Double,
+    height: Double,
+    x: Double,
+    z: Double
+) throws -> FeatureID {
+    try document.createRectangleSketch(
+        name: name,
+        plane: drawingProjectionLoftPlane(x: x, z: z),
+        width: .length(width, .millimeter),
+        height: .length(height, .millimeter)
+    )
+}
+
+private func drawingProjectionLoftPlane(x: Double, z: Double) -> SketchPlane {
+    if x == 0.0 && z == 0.0 {
+        return .xy
+    }
+    return .plane(Plane3D(
+        origin: Point3D(x: x / 1000.0, y: 0.0, z: z / 1000.0),
+        normal: .unitZ
+    ))
 }
 
 private func drawingProjectionSketchPoint(
