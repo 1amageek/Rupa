@@ -121,6 +121,7 @@ public struct Viewport: View {
     private let canvasDragAxisConstraint: SketchAxisConstraint?
     private let canvasDragSketchPlaneOverride: SketchPlane?
     private let projectionRequest: ViewportProjectionRequest?
+    private let cameraFrameRequest: ViewportCameraFrameRequest?
     private let selectionHitPolicy: ViewportSelectionHitPolicy
     private let bottomChromeReservedHeight: CGFloat
     private let canvasOverlayExclusionRects: [CGRect]
@@ -180,6 +181,7 @@ public struct Viewport: View {
     private let onHover: ((ViewportHit?) -> Void)?
     private let onSnapCandidateKindChange: ((RupaCore.SnapCandidateKind?) -> Void)?
     private let onProjectionBasisChange: ((ViewportProjectionBasis) -> Void)?
+    private let onCameraFrameChange: ((ViewportCameraFrame) -> Void)?
 
     public init(
         document: DesignDocument,
@@ -203,6 +205,7 @@ public struct Viewport: View {
         canvasDragAxisConstraint: SketchAxisConstraint? = nil,
         canvasDragSketchPlaneOverride: SketchPlane? = nil,
         projectionRequest: ViewportProjectionRequest? = nil,
+        cameraFrameRequest: ViewportCameraFrameRequest? = nil,
         selectionHitPolicy: ViewportSelectionHitPolicy = .all,
         bottomChromeReservedHeight: CGFloat = 0.0,
         canvasOverlayExclusionRects: [CGRect] = [],
@@ -261,7 +264,8 @@ public struct Viewport: View {
         onSelectLargerWorkspaceScale: (() -> Void)? = nil,
         onHover: ((ViewportHit?) -> Void)? = nil,
         onSnapCandidateKindChange: ((RupaCore.SnapCandidateKind?) -> Void)? = nil,
-        onProjectionBasisChange: ((ViewportProjectionBasis) -> Void)? = nil
+        onProjectionBasisChange: ((ViewportProjectionBasis) -> Void)? = nil,
+        onCameraFrameChange: ((ViewportCameraFrame) -> Void)? = nil
     ) {
         self.document = document
         self.currentEvaluation = currentEvaluation
@@ -284,6 +288,7 @@ public struct Viewport: View {
         self.canvasDragAxisConstraint = canvasDragAxisConstraint
         self.canvasDragSketchPlaneOverride = canvasDragSketchPlaneOverride
         self.projectionRequest = projectionRequest
+        self.cameraFrameRequest = cameraFrameRequest
         self.selectionHitPolicy = selectionHitPolicy
         self.bottomChromeReservedHeight = max(0.0, bottomChromeReservedHeight)
         self.canvasOverlayExclusionRects = canvasOverlayExclusionRects.filter { rect in
@@ -348,6 +353,7 @@ public struct Viewport: View {
         self.onHover = onHover
         self.onSnapCandidateKindChange = onSnapCandidateKindChange
         self.onProjectionBasisChange = onProjectionBasisChange
+        self.onCameraFrameChange = onCameraFrameChange
     }
 
     public var body: some View {
@@ -435,14 +441,14 @@ public struct Viewport: View {
                                 clearCanvasHover()
                             }
                         },
-                        onPan: { delta in
-                            panCanvas(by: delta)
+                        onPan: { delta, size in
+                            panCanvas(by: delta, size: size)
                         },
                         onZoom: { factor, anchor, size in
                             zoomCanvas(by: factor, anchor: anchor, size: size)
                         },
-                        onOrbit: { delta in
-                            orbitViewport(by: delta)
+                        onOrbit: { delta, size in
+                            orbitViewport(by: delta, size: size)
                         },
                         onModifierFlagsChange: { flags, size in
                             modifierFlags = flags
@@ -472,7 +478,7 @@ public struct Viewport: View {
                         selectedAxis: selectedAxis,
                         basis: basis,
                         onResetView: {
-                            resetViewportCamera()
+                            resetViewportCamera(size: proxy.size, basis: basis)
                         },
                         onSelectAxis: { axis in
                             selectProjectionAxis(axis)
@@ -495,22 +501,28 @@ public struct Viewport: View {
                 refreshSnapCandidateKind(size: proxy.size)
             }
             .onChange(of: cameraResetSignal) { _, _ in
-                resetViewportCamera()
+                resetViewportCamera(size: proxy.size, basis: currentProjectionBasis)
             }
             .onChange(of: hoverClearSignal) { _, _ in
                 clearCanvasHover()
             }
-        }
-        .onAppear {
-            if let projectionRequest {
-                applyProjectionRequest(projectionRequest)
-            } else {
-                publishProjectionBasis(currentProjectionBasis)
+            .onAppear {
+                if let projectionRequest {
+                    applyProjectionRequest(projectionRequest)
+                } else {
+                    publishProjectionBasis(currentProjectionBasis)
+                }
+                publishCameraFrame(size: proxy.size, basis: currentProjectionBasis)
             }
-        }
-        .onChange(of: projectionRequest) { _, nextRequest in
-            if let nextRequest {
-                applyProjectionRequest(nextRequest)
+            .onChange(of: projectionRequest) { _, nextRequest in
+                if let nextRequest {
+                    applyProjectionRequest(nextRequest)
+                }
+            }
+            .onChange(of: cameraFrameRequest) { _, nextRequest in
+                if let nextRequest {
+                    applyCameraFrameRequest(nextRequest, size: proxy.size)
+                }
             }
         }
     }
@@ -872,6 +884,21 @@ public struct Viewport: View {
         onProjectionBasisChange?(basis)
     }
 
+    private func publishCameraFrame(
+        size: CGSize,
+        basis: ViewportProjectionBasis
+    ) {
+        let resolver = ViewportCameraFrameResolver(
+            workspaceVisibleSpanMeters: document.ruler.normalizedForWorkspaceScale().visibleSpanMeters
+        )
+        let layout = makeLayout(
+            size: size,
+            camera: camera,
+            basis: basis
+        )
+        onCameraFrameChange?(resolver.frame(for: camera, in: layout))
+    }
+
     private func projectionBasis(at date: Date) -> ViewportProjectionBasis {
         guard let projectionTransition else {
             if let orbitBasis {
@@ -895,6 +922,25 @@ public struct Viewport: View {
             selectedAxis: nil,
             storesOrbitBasis: true
         )
+    }
+
+    private func applyCameraFrameRequest(
+        _ request: ViewportCameraFrameRequest,
+        size: CGSize
+    ) {
+        let resolver = ViewportCameraFrameResolver(
+            workspaceVisibleSpanMeters: document.ruler.normalizedForWorkspaceScale().visibleSpanMeters
+        )
+        camera = resolver.camera(framing: request) { frameCamera in
+            makeLayout(
+                size: size,
+                camera: frameCamera,
+                basis: request.basis
+            )
+        }
+        activeCanvasDrag = nil
+        clearCanvasHover()
+        publishCameraFrame(size: size, basis: request.basis)
     }
 
     private func drawGrid(
@@ -14392,10 +14438,14 @@ public struct Viewport: View {
         clearProjectionTransition(transition.id)
     }
 
-    private func resetViewportCamera() {
+    private func resetViewportCamera(
+        size: CGSize,
+        basis: ViewportProjectionBasis
+    ) {
         camera = .identity
         activeCanvasDrag = nil
         clearCanvasHover()
+        publishCameraFrame(size: size, basis: basis)
     }
 
     private func constructionSketchPlane(for hit: ViewportHit?) -> SketchPlane {
@@ -14417,7 +14467,10 @@ public struct Viewport: View {
         canvasDragSketchPlaneOverride ?? constructionSketchPlane(for: hit)
     }
 
-    private func panCanvas(by delta: CGSize) {
+    private func panCanvas(
+        by delta: CGSize,
+        size: CGSize
+    ) {
         camera = ViewportCamera(
             zoom: camera.zoom,
             pan: CGSize(
@@ -14425,9 +14478,13 @@ public struct Viewport: View {
                 height: camera.pan.height + delta.height
             )
         )
+        publishCameraFrame(size: size, basis: currentProjectionBasis)
     }
 
-    private func orbitViewport(by delta: CGSize) {
+    private func orbitViewport(
+        by delta: CGSize,
+        size: CGSize
+    ) {
         let nextBasis = currentProjectionBasis.orbited(by: delta)
         selectedAxis = nil
         orbitBasis = nextBasis
@@ -14435,6 +14492,7 @@ public struct Viewport: View {
         activeCanvasDrag = nil
         clearCanvasHover()
         publishProjectionBasis(nextBasis)
+        publishCameraFrame(size: size, basis: nextBasis)
     }
 
     private func zoomCanvas(
@@ -14467,5 +14525,6 @@ public struct Viewport: View {
         nextCamera.pan.width += anchor.x - projectedAnchor.x
         nextCamera.pan.height += anchor.y - projectedAnchor.y
         camera = nextCamera.clamped(maximumZoom: maximumZoom)
+        publishCameraFrame(size: size, basis: basis)
     }
 }

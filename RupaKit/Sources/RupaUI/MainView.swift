@@ -121,6 +121,8 @@ public struct MainView: View {
     @State private var isUtilityRailExpanded: Bool
     @State private var viewAlignedConstructionPlaneRequest: ViewAlignedConstructionPlaneRequest?
     @State private var viewportProjectionRequest: ViewportProjectionRequest?
+    @State private var viewportCameraFrame: ViewportCameraFrame
+    @State private var viewportCameraFrameRequest: ViewportCameraFrameRequest?
     @State private var constructionPlaneRenameTargetID: ConstructionPlaneSourceID?
     @State private var constructionPlaneRenameText: String
     @State private var hoveredViewportPickingBackend: ViewportPickingBackend?
@@ -143,6 +145,7 @@ public struct MainView: View {
         documentURL: URL? = nil
     ) {
         let editingDefaults = WorkspaceInteractionScaleDefaults(ruler: session.document.ruler)
+        let ruler = session.document.ruler.normalizedForWorkspaceScale()
         self._session = State(initialValue: session)
         self._isPreviewExpanded = State(initialValue: isPreviewExpanded)
         self._columnVisibility = State(initialValue: columnVisibility)
@@ -209,6 +212,12 @@ public struct MainView: View {
         self._isUtilityRailExpanded = State(initialValue: isUtilityRailExpanded)
         self._viewAlignedConstructionPlaneRequest = State(initialValue: nil)
         self._viewportProjectionRequest = State(initialValue: nil)
+        self._viewportCameraFrame = State(initialValue: ViewportCameraFrame(
+            target: .origin,
+            visibleHeightMeters: ruler.visibleSpanMeters,
+            camera: .identity
+        ))
+        self._viewportCameraFrameRequest = State(initialValue: nil)
         self._constructionPlaneRenameTargetID = State(initialValue: nil)
         self._constructionPlaneRenameText = State(initialValue: "")
         self._viewportHoverClearSignal = State(initialValue: 0)
@@ -553,6 +562,7 @@ public struct MainView: View {
                     canvasDragAxisConstraint: activeCanvasDragAxisConstraint,
                     canvasDragSketchPlaneOverride: workspacePlaneMode.sketchPlane,
                     projectionRequest: viewportProjectionRequest,
+                    cameraFrameRequest: viewportCameraFrameRequest,
                     selectionHitPolicy: selectionScope.viewportSelectionHitPolicy,
                     bottomChromeReservedHeight: viewportBottomChromeReservedHeight,
                     canvasOverlayExclusionRects: viewportOverlayExclusionRects,
@@ -615,6 +625,9 @@ public struct MainView: View {
                     },
                     onProjectionBasisChange: { basis in
                         viewportProjectionBasis = basis
+                    },
+                    onCameraFrameChange: { frame in
+                        viewportCameraFrame = frame
                     }
                 )
                 .zIndex(0)
@@ -3349,7 +3362,7 @@ public struct MainView: View {
             name: savedViewBuilder.nextSavedViewName(in: session.document),
             document: session.document,
             projectionBasis: viewportProjectionBasis,
-            target: currentSavedViewTarget
+            cameraFrame: viewportCameraFrame
         )
         do {
             let result = try session.execute(.createSavedView(savedView))
@@ -3372,7 +3385,7 @@ public struct MainView: View {
             name: savedView.name,
             document: session.document,
             projectionBasis: viewportProjectionBasis,
-            target: currentSavedViewTarget
+            cameraFrame: viewportCameraFrame
         )
         updatedView.id = savedView.id
         do {
@@ -3394,10 +3407,9 @@ public struct MainView: View {
     private func applySavedView(_ savedView: SavedView) {
         session.setRulerConfiguration(savedView.displayScale.rulerConfiguration)
         resetWorkspaceInteractionScaleDefaults()
-        viewportProjectionRequest = ViewportProjectionRequest(
-            basis: savedViewBuilder.projectionBasis(for: savedView)
-        )
-        requestViewportCameraReset()
+        let cameraFrameRequest = savedViewBuilder.cameraFrameRequest(for: savedView)
+        viewportProjectionRequest = ViewportProjectionRequest(basis: cameraFrameRequest.basis)
+        viewportCameraFrameRequest = cameraFrameRequest
         session.reportToolStatus("Saved view \(savedView.name) applied.")
     }
 
@@ -3416,19 +3428,6 @@ public struct MainView: View {
             session.reportToolStatus("Saved view removal failed.", severity: .warning)
             isPreviewExpanded = true
         }
-    }
-
-    private var currentSavedViewTarget: Point3D {
-        guard let bounds = session.currentEvaluation.flatMap({
-            WorkspaceBoundsService().bounds(for: $0.evaluatedDocument)
-        }) else {
-            return .origin
-        }
-        return Point3D(
-            x: (bounds.minX + bounds.maxX) / 2.0,
-            y: (bounds.minY + bounds.maxY) / 2.0,
-            z: (bounds.minZ + bounds.maxZ) / 2.0
-        )
     }
 
     private func beginConstructionPlaneRename(

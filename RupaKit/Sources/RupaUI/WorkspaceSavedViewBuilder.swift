@@ -8,18 +8,21 @@ struct WorkspaceSavedViewBuilder: Sendable {
         name: String,
         document: DesignDocument,
         projectionBasis: ViewportProjectionBasis,
-        target: Point3D = .origin
+        cameraFrame: ViewportCameraFrame? = nil
     ) -> SavedView {
         let ruler = document.ruler.normalizedForWorkspaceScale()
+        let visibleHeightMeters = ViewportCameraFrame.normalizedVisibleHeightMeters(
+            cameraFrame?.visibleHeightMeters ?? ruler.visibleSpanMeters
+        )
         return SavedView(
             name: name,
             camera: SavedViewCamera(
-                target: target,
-                distanceMeters: max(ruler.visibleSpanMeters, ruler.majorTickMeters),
+                target: cameraFrame?.target ?? .origin,
+                distanceMeters: visibleHeightMeters,
                 yawRadians: Double(projectionBasis.orbitYawRadians),
                 pitchRadians: Double(projectionBasis.orbitElevationRadians)
             ),
-            projection: .orthographic(heightMeters: ruler.visibleSpanMeters),
+            projection: .orthographic(heightMeters: visibleHeightMeters),
             clipping: SavedViewClipping(),
             visibility: SavedViewVisibility(),
             sectionState: SavedViewSectionState(
@@ -36,6 +39,17 @@ struct WorkspaceSavedViewBuilder: Sendable {
         ViewportProjectionBasis.orbit(
             yaw: CGFloat(savedView.camera.yawRadians),
             elevation: CGFloat(savedView.camera.pitchRadians)
+        )
+    }
+
+    func cameraFrameRequest(for savedView: SavedView) -> ViewportCameraFrameRequest {
+        let basis = projectionBasis(for: savedView)
+        let visibleHeightMeters = savedView.projection.orthographicHeightMeters
+            ?? savedView.camera.distanceMeters
+        return ViewportCameraFrameRequest(
+            target: savedView.camera.target,
+            visibleHeightMeters: visibleHeightMeters,
+            basis: basis
         )
     }
 

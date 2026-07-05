@@ -19,9 +19,9 @@ struct ViewportInputSurface: NSViewRepresentable {
     var onCanvasDrag: (CGPoint, CGPoint, CGSize, ViewportSelectionIntent) -> Void
     var onDragPreview: (CGPoint?, CGPoint?, CGSize) -> Void
     var onHover: (CGPoint?, CGSize) -> Void
-    var onPan: (CGSize) -> Void
+    var onPan: (CGSize, CGSize) -> Void
     var onZoom: (CGFloat, CGPoint, CGSize) -> Void
-    var onOrbit: (CGSize) -> Void
+    var onOrbit: (CGSize, CGSize) -> Void
     var onModifierFlagsChange: (ViewportInputModifierFlags, CGSize) -> Void
     var onSecondaryClick: (CGPoint, CGSize) -> Void
     var onShiftScroll: (ViewportScrollDirection) -> Bool
@@ -59,9 +59,9 @@ extension ViewportInputSurface {
         var onCanvasDrag: ((CGPoint, CGPoint, CGSize, ViewportSelectionIntent) -> Void)?
         var onDragPreview: ((CGPoint?, CGPoint?, CGSize) -> Void)?
         var onHover: ((CGPoint?, CGSize) -> Void)?
-        var onPan: ((CGSize) -> Void)?
+        var onPan: ((CGSize, CGSize) -> Void)?
         var onZoom: ((CGFloat, CGPoint, CGSize) -> Void)?
-        var onOrbit: ((CGSize) -> Void)?
+        var onOrbit: ((CGSize, CGSize) -> Void)?
         var onModifierFlagsChange: ((ViewportInputModifierFlags, CGSize) -> Void)?
         var onSecondaryClick: ((CGPoint, CGSize) -> Void)?
         var onShiftScroll: ((ViewportScrollDirection) -> Bool)?
@@ -286,7 +286,8 @@ extension ViewportInputSurface {
                     CGSize(
                         width: event.scrollingDeltaX,
                         height: event.scrollingDeltaY
-                    )
+                    ),
+                    bounds.size
                 )
             }
         }
@@ -385,7 +386,8 @@ extension ViewportInputSurface {
                 CGSize(
                     width: end.x - start.x,
                     height: end.y - start.y
-                )
+                ),
+                bounds.size
             )
         }
 
@@ -415,7 +417,7 @@ extension ViewportInputSurface {
             guard hypot(delta.width, delta.height) > 0.01 else {
                 return
             }
-            onOrbit?(delta)
+            onOrbit?(delta, bounds.size)
         }
 
         private func endOrbitIfNeeded(_ event: NSEvent) {
