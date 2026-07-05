@@ -141,6 +141,86 @@ public struct DrawingProjectionResult: Codable, Equatable, Sendable {
         }
     }
 
+    public struct SectionContour: Codable, Equatable, Sendable {
+        public var id: String
+        public var sectionSourceID: String?
+        public var sectionSourceName: String?
+        public var bodyID: String
+        public var points: [Point3D]
+        public var sectionPlanePoints2D: [Point2D]
+        public var projectedPoints2D: [Point2D]
+        public var signedAreaSquareMeters: Double
+        public var lengthMeters: Double
+        public var segmentCount: Int
+
+        public init(
+            id: String,
+            sectionSourceID: String?,
+            sectionSourceName: String?,
+            bodyID: String,
+            points: [Point3D],
+            sectionPlanePoints2D: [Point2D],
+            projectedPoints2D: [Point2D],
+            signedAreaSquareMeters: Double,
+            lengthMeters: Double,
+            segmentCount: Int
+        ) {
+            self.id = id
+            self.sectionSourceID = sectionSourceID
+            self.sectionSourceName = sectionSourceName
+            self.bodyID = bodyID
+            self.points = points
+            self.sectionPlanePoints2D = sectionPlanePoints2D
+            self.projectedPoints2D = projectedPoints2D
+            self.signedAreaSquareMeters = signedAreaSquareMeters
+            self.lengthMeters = lengthMeters
+            self.segmentCount = segmentCount
+        }
+    }
+
+    public struct SectionHatchSegment: Codable, Equatable, Sendable {
+        public var id: String
+        public var contourID: String
+        public var sectionSourceID: String?
+        public var sectionSourceName: String?
+        public var bodyID: String
+        public var start: Point3D
+        public var end: Point3D
+        public var start2D: Point2D
+        public var end2D: Point2D
+        public var spacingMeters: Double
+        public var angleDegrees: Double
+        public var lengthMeters: Double
+
+        public init(
+            id: String,
+            contourID: String,
+            sectionSourceID: String?,
+            sectionSourceName: String?,
+            bodyID: String,
+            start: Point3D,
+            end: Point3D,
+            start2D: Point2D,
+            end2D: Point2D,
+            spacingMeters: Double,
+            angleDegrees: Double,
+            lengthMeters: Double
+        ) {
+            self.id = id
+            self.contourID = contourID
+            self.sectionSourceID = sectionSourceID
+            self.sectionSourceName = sectionSourceName
+            self.bodyID = bodyID
+            self.start = start
+            self.end = end
+            self.start2D = start2D
+            self.end2D = end2D
+            self.spacingMeters = spacingMeters
+            self.angleDegrees = angleDegrees
+            self.lengthMeters = lengthMeters
+        }
+    }
+
     public var displayUnit: LengthDisplayUnit
     public var savedViewID: SavedViewID
     public var savedViewName: String
@@ -162,6 +242,11 @@ public struct DrawingProjectionResult: Codable, Equatable, Sendable {
     public var truncatedStrokes: Bool
     public var bounds: Bounds2D?
     public var strokes: [Stroke]
+    public var sectionContourCount: Int
+    public var sectionHatchSegmentCount: Int
+    public var truncatedSectionHatches: Bool
+    public var sectionContours: [SectionContour]
+    public var sectionHatches: [SectionHatchSegment]
     public var diagnostics: [EditorDiagnostic]
 
     public init(
@@ -176,6 +261,9 @@ public struct DrawingProjectionResult: Codable, Equatable, Sendable {
         truncatedStrokes: Bool,
         bounds: Bounds2D?,
         strokes: [Stroke],
+        sectionContours: [SectionContour] = [],
+        sectionHatches: [SectionHatchSegment] = [],
+        truncatedSectionHatches: Bool = false,
         diagnostics: [EditorDiagnostic]
     ) {
         let visibilityCounts = Self.visibilityCounts(strokes)
@@ -201,7 +289,103 @@ public struct DrawingProjectionResult: Codable, Equatable, Sendable {
         self.truncatedStrokes = truncatedStrokes
         self.bounds = bounds
         self.strokes = strokes
+        self.sectionContourCount = sectionContours.count
+        self.sectionHatchSegmentCount = sectionHatches.count
+        self.truncatedSectionHatches = truncatedSectionHatches
+        self.sectionContours = sectionContours
+        self.sectionHatches = sectionHatches
         self.diagnostics = diagnostics
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case displayUnit
+        case savedViewID
+        case savedViewName
+        case projectionMode
+        case viewFrame
+        case bodyCount
+        case triangleCount
+        case candidateEdgeCount
+        case strokeCount
+        case visibleStrokeCount
+        case hiddenStrokeCount
+        case partiallyHiddenStrokeCount
+        case unclassifiedStrokeCount
+        case visibilitySegmentCount
+        case visibleSegmentCount
+        case hiddenSegmentCount
+        case partiallyHiddenSegmentCount
+        case unclassifiedSegmentCount
+        case truncatedStrokes
+        case bounds
+        case strokes
+        case sectionContourCount
+        case sectionHatchSegmentCount
+        case truncatedSectionHatches
+        case sectionContours
+        case sectionHatches
+        case diagnostics
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(
+            displayUnit: try container.decode(LengthDisplayUnit.self, forKey: .displayUnit),
+            savedViewID: try container.decode(SavedViewID.self, forKey: .savedViewID),
+            savedViewName: try container.decode(String.self, forKey: .savedViewName),
+            projectionMode: try container.decode(ProjectionMode.self, forKey: .projectionMode),
+            viewFrame: try container.decode(ViewFrame.self, forKey: .viewFrame),
+            bodyCount: try container.decode(Int.self, forKey: .bodyCount),
+            triangleCount: try container.decode(Int.self, forKey: .triangleCount),
+            candidateEdgeCount: try container.decode(Int.self, forKey: .candidateEdgeCount),
+            truncatedStrokes: try container.decode(Bool.self, forKey: .truncatedStrokes),
+            bounds: try container.decodeIfPresent(Bounds2D.self, forKey: .bounds),
+            strokes: try container.decode([Stroke].self, forKey: .strokes),
+            sectionContours: try container.decodeIfPresent(
+                [SectionContour].self,
+                forKey: .sectionContours
+            ) ?? [],
+            sectionHatches: try container.decodeIfPresent(
+                [SectionHatchSegment].self,
+                forKey: .sectionHatches
+            ) ?? [],
+            truncatedSectionHatches: try container.decodeIfPresent(
+                Bool.self,
+                forKey: .truncatedSectionHatches
+            ) ?? false,
+            diagnostics: try container.decode([EditorDiagnostic].self, forKey: .diagnostics)
+        )
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(displayUnit, forKey: .displayUnit)
+        try container.encode(savedViewID, forKey: .savedViewID)
+        try container.encode(savedViewName, forKey: .savedViewName)
+        try container.encode(projectionMode, forKey: .projectionMode)
+        try container.encode(viewFrame, forKey: .viewFrame)
+        try container.encode(bodyCount, forKey: .bodyCount)
+        try container.encode(triangleCount, forKey: .triangleCount)
+        try container.encode(candidateEdgeCount, forKey: .candidateEdgeCount)
+        try container.encode(strokeCount, forKey: .strokeCount)
+        try container.encode(visibleStrokeCount, forKey: .visibleStrokeCount)
+        try container.encode(hiddenStrokeCount, forKey: .hiddenStrokeCount)
+        try container.encode(partiallyHiddenStrokeCount, forKey: .partiallyHiddenStrokeCount)
+        try container.encode(unclassifiedStrokeCount, forKey: .unclassifiedStrokeCount)
+        try container.encode(visibilitySegmentCount, forKey: .visibilitySegmentCount)
+        try container.encode(visibleSegmentCount, forKey: .visibleSegmentCount)
+        try container.encode(hiddenSegmentCount, forKey: .hiddenSegmentCount)
+        try container.encode(partiallyHiddenSegmentCount, forKey: .partiallyHiddenSegmentCount)
+        try container.encode(unclassifiedSegmentCount, forKey: .unclassifiedSegmentCount)
+        try container.encode(truncatedStrokes, forKey: .truncatedStrokes)
+        try container.encodeIfPresent(bounds, forKey: .bounds)
+        try container.encode(strokes, forKey: .strokes)
+        try container.encode(sectionContourCount, forKey: .sectionContourCount)
+        try container.encode(sectionHatchSegmentCount, forKey: .sectionHatchSegmentCount)
+        try container.encode(truncatedSectionHatches, forKey: .truncatedSectionHatches)
+        try container.encode(sectionContours, forKey: .sectionContours)
+        try container.encode(sectionHatches, forKey: .sectionHatches)
+        try container.encode(diagnostics, forKey: .diagnostics)
     }
 
     private static func visibilityCounts(

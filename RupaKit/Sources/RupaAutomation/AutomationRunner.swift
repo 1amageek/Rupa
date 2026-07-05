@@ -1700,7 +1700,13 @@ public struct AutomationRunner {
         _ drawingProjection: DrawingProjectionResult
     ) -> String {
         let suffix = drawingProjection.truncatedStrokes ? " Result was truncated." : ""
-        return "Drawing projection generated \(drawingProjection.strokeCount) stroke(s) and \(drawingProjection.visibilitySegmentCount) visibility segment(s) for saved view \(drawingProjection.savedViewName): \(drawingProjection.visibleStrokeCount) visible, \(drawingProjection.hiddenStrokeCount) hidden, \(drawingProjection.partiallyHiddenStrokeCount) partially hidden.\(suffix)"
+        let hatchSuffix = drawingProjection.sectionContourCount > 0 || drawingProjection.sectionHatchSegmentCount > 0
+            ? " Section output includes \(drawingProjection.sectionContourCount) contour(s) and \(drawingProjection.sectionHatchSegmentCount) hatch segment(s)."
+            : ""
+        let truncationSuffix = drawingProjection.truncatedSectionHatches
+            ? " Section hatching was truncated."
+            : ""
+        return "Drawing projection generated \(drawingProjection.strokeCount) stroke(s) and \(drawingProjection.visibilitySegmentCount) visibility segment(s) for saved view \(drawingProjection.savedViewName): \(drawingProjection.visibleStrokeCount) visible, \(drawingProjection.hiddenStrokeCount) hidden, \(drawingProjection.partiallyHiddenStrokeCount) partially hidden.\(hatchSuffix)\(suffix)\(truncationSuffix)"
     }
 
     private func sectionAnalysisMessage(

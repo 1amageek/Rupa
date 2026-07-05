@@ -79,6 +79,18 @@ public struct DrawingProjectionService: Sendable {
         var end: Double
     }
 
+    private struct SectionProjectionArtifacts {
+        var contours: [DrawingProjectionResult.SectionContour] = []
+        var hatches: [DrawingProjectionResult.SectionHatchSegment] = []
+        var truncatedHatches = false
+        var diagnostics: [EditorDiagnostic] = []
+    }
+
+    private struct HatchPlaneSegment {
+        var start: Point2D
+        var end: Point2D
+    }
+
     private struct BoundsAccumulator {
         var minX = Double.infinity
         var minY = Double.infinity
@@ -248,6 +260,26 @@ public struct DrawingProjectionService: Sendable {
             }
         }
 
+        let sectionArtifacts = try sectionProjectionArtifacts(
+            document: document,
+            savedView: savedView,
+            basis: basis,
+            tolerance: tolerance,
+            maximumHatchCount: query.maximumStrokeCount,
+            objectRegistry: objectRegistry,
+            currentEvaluation: currentEvaluation,
+            currentGeneration: currentGeneration
+        )
+        for contour in sectionArtifacts.contours {
+            for point in contour.projectedPoints2D {
+                bounds.include(point)
+            }
+        }
+        for hatch in sectionArtifacts.hatches {
+            bounds.include(hatch.start2D)
+            bounds.include(hatch.end2D)
+        }
+
         return DrawingProjectionResult(
             displayUnit: document.displayUnit,
             savedViewID: savedView.id,
@@ -260,12 +292,16 @@ public struct DrawingProjectionService: Sendable {
             truncatedStrokes: truncatedStrokes,
             bounds: bounds.bounds,
             strokes: strokes,
+            sectionContours: sectionArtifacts.contours,
+            sectionHatches: sectionArtifacts.hatches,
+            truncatedSectionHatches: sectionArtifacts.truncatedHatches,
             diagnostics: diagnostics(
                 result: strokes,
                 candidateEdgeCount: candidateEdgeCount,
                 truncatedStrokes: truncatedStrokes,
-                maximumStrokeCount: query.maximumStrokeCount
-            )
+                maximumStrokeCount: query.maximumStrokeCount,
+                sectionArtifacts: sectionArtifacts
+            ) + sectionArtifacts.diagnostics
         )
     }
 
@@ -341,6 +377,263 @@ public struct DrawingProjectionService: Sendable {
 
     private func clampedOrbitElevation(_ elevation: Double) -> Double {
         min(max(elevation, 0.08), 1.42)
+    }
+
+    private func sectionProjectionArtifacts(
+        document: DesignDocument,
+        savedView: SavedView,
+        basis: ProjectionBasis,
+        tolerance: Double,
+        maximumHatchCount: Int,
+        objectRegistry: ObjectTypeRegistry,
+        currentEvaluation: DocumentEvaluationContext?,
+        currentGeneration: DocumentGeneration?
+    ) throws -> SectionProjectionArtifacts {
+        guard savedView.sectionState.sectionSceneNodeIDs.isEmpty == false else {
+            return SectionProjectionArtifacts()
+        }
+
+        var artifacts = SectionProjectionArtifacts()
+        let analysisService = SectionAnalysisService(pipeline: pipelineOverride)
+        for sectionSceneNodeID in savedView.sectionState.sectionSceneNodeIDs {
+            let analysis = try analysisService.analyze(
+                document: document,
+                query: SectionAnalysisQuery(
+                    source: .sceneNode(sectionSceneNodeID),
+                    toleranceMeters: tolerance,
+                    includesIntersectionSegments: true,
+                    maximumIntersectionSegments: max(
+                        min(maximumHatchCount, Int.max / 4) * 4,
+                        maximumHatchCount
+                    )
+                ),
+                objectRegistry: objectRegistry,
+                currentEvaluation: currentEvaluation,
+                currentGeneration: currentGeneration
+            )
+
+            for sourceContour in analysis.intersectionContours where sourceContour.isClosed {
+                let contourID = "\(savedView.id.description):section:\(artifacts.contours.count)"
+                let projectedPoints = sourceContour.points.map { point in
+                    project(point, savedView: savedView, basis: basis)
+                }
+                artifacts.contours.append(DrawingProjectionResult.SectionContour(
+                    id: contourID,
+                    sectionSourceID: analysis.plane.sourceID,
+                    sectionSourceName: analysis.plane.sourceName,
+                    bodyID: sourceContour.bodyID,
+                    points: sourceContour.points,
+                    sectionPlanePoints2D: sourceContour.points2D,
+                    projectedPoints2D: projectedPoints,
+                    signedAreaSquareMeters: sourceContour.signedAreaSquareMeters,
+                    lengthMeters: sourceContour.lengthMeters,
+                    segmentCount: sourceContour.segmentCount
+                ))
+
+                let remainingCapacity = max(0, maximumHatchCount - artifacts.hatches.count)
+                let hatchResult = sectionHatches(
+                    contour: sourceContour,
+                    contourID: contourID,
+                    plane: analysis.plane,
+                    savedView: savedView,
+                    basis: basis,
+                    tolerance: tolerance,
+                    maximumSegmentCount: remainingCapacity
+                )
+                artifacts.hatches.append(contentsOf: hatchResult.segments)
+                artifacts.truncatedHatches = artifacts.truncatedHatches || hatchResult.truncated
+            }
+        }
+
+        if artifacts.contours.isEmpty == false || artifacts.hatches.isEmpty == false {
+            artifacts.diagnostics.append(EditorDiagnostic(
+                severity: artifacts.truncatedHatches ? .warning : .info,
+                message: "Drawing projection generated \(artifacts.contours.count) closed section contour(s) and \(artifacts.hatches.count) section hatch segment(s)."
+            ))
+        }
+        return artifacts
+    }
+
+    private func sectionHatches(
+        contour: SectionAnalysisResult.IntersectionContour,
+        contourID: String,
+        plane: SectionAnalysisResult.Plane,
+        savedView: SavedView,
+        basis: ProjectionBasis,
+        tolerance: Double,
+        maximumSegmentCount: Int
+    ) -> (segments: [DrawingProjectionResult.SectionHatchSegment], truncated: Bool) {
+        guard maximumSegmentCount > 0 else {
+            return ([], true)
+        }
+        let spacing = hatchSpacing(
+            for: contour.points2D,
+            tolerance: tolerance
+        )
+        let angleDegrees = 45.0
+        let planeSegments = hatchPlaneSegments(
+            polygon: contour.points2D,
+            spacing: spacing,
+            angleRadians: angleDegrees * .pi / 180.0,
+            tolerance: tolerance,
+            maximumSegmentCount: maximumSegmentCount
+        )
+
+        var hatches: [DrawingProjectionResult.SectionHatchSegment] = []
+        hatches.reserveCapacity(planeSegments.segments.count)
+        for segment in planeSegments.segments {
+            let start = pointOnPlane(segment.start, plane: plane)
+            let end = pointOnPlane(segment.end, plane: plane)
+            let lengthMeters = distance(start, end)
+            guard lengthMeters > tolerance else {
+                continue
+            }
+            hatches.append(DrawingProjectionResult.SectionHatchSegment(
+                id: "\(contourID):hatch:\(hatches.count)",
+                contourID: contourID,
+                sectionSourceID: plane.sourceID,
+                sectionSourceName: plane.sourceName,
+                bodyID: contour.bodyID,
+                start: start,
+                end: end,
+                start2D: project(start, savedView: savedView, basis: basis),
+                end2D: project(end, savedView: savedView, basis: basis),
+                spacingMeters: spacing,
+                angleDegrees: angleDegrees,
+                lengthMeters: lengthMeters
+            ))
+        }
+        return (hatches, planeSegments.truncated)
+    }
+
+    private func hatchSpacing(
+        for points: [Point2D],
+        tolerance: Double
+    ) -> Double {
+        guard let bounds = planeBounds(points) else {
+            return max(tolerance * 32.0, 1.0e-6)
+        }
+        let span = max(bounds.maxX - bounds.minX, bounds.maxY - bounds.minY)
+        guard span.isFinite, span > tolerance else {
+            return max(tolerance * 32.0, 1.0e-6)
+        }
+        return max(tolerance * 32.0, span / 18.0)
+    }
+
+    private func hatchPlaneSegments(
+        polygon: [Point2D],
+        spacing: Double,
+        angleRadians: Double,
+        tolerance: Double,
+        maximumSegmentCount: Int
+    ) -> (segments: [HatchPlaneSegment], truncated: Bool) {
+        guard polygon.count >= 3,
+              spacing.isFinite,
+              spacing > tolerance,
+              maximumSegmentCount > 0 else {
+            return ([], false)
+        }
+        let cosine = cos(angleRadians)
+        let sine = sin(angleRadians)
+        let rotated = polygon.map { rotate($0, cosine: cosine, sine: sine) }
+        guard let bounds = planeBounds(rotated) else {
+            return ([], false)
+        }
+
+        var segments: [HatchPlaneSegment] = []
+        var scanline = floor(bounds.minY / spacing) * spacing
+        let endLine = ceil(bounds.maxY / spacing) * spacing
+        var truncated = false
+        while scanline <= endLine + tolerance {
+            let intersections = scanlineIntersections(
+                polygon: rotated,
+                y: scanline,
+                tolerance: tolerance
+            )
+            var index = 0
+            while index + 1 < intersections.count {
+                if segments.count >= maximumSegmentCount {
+                    truncated = true
+                    return (segments, truncated)
+                }
+                let start = Point2D(x: intersections[index], y: scanline)
+                let end = Point2D(x: intersections[index + 1], y: scanline)
+                if hypot(end.x - start.x, end.y - start.y) > tolerance {
+                    segments.append(HatchPlaneSegment(
+                        start: unrotate(start, cosine: cosine, sine: sine),
+                        end: unrotate(end, cosine: cosine, sine: sine)
+                    ))
+                }
+                index += 2
+            }
+            scanline += spacing
+        }
+        return (segments, truncated)
+    }
+
+    private func scanlineIntersections(
+        polygon: [Point2D],
+        y: Double,
+        tolerance: Double
+    ) -> [Double] {
+        var intersections: [Double] = []
+        for index in polygon.indices {
+            let start = polygon[index]
+            let end = polygon[(index + 1) % polygon.count]
+            let deltaY = end.y - start.y
+            guard abs(deltaY) > tolerance else {
+                continue
+            }
+            let crosses = (start.y <= y && end.y > y) || (end.y <= y && start.y > y)
+            guard crosses else {
+                continue
+            }
+            let fraction = (y - start.y) / deltaY
+            intersections.append(start.x + (end.x - start.x) * fraction)
+        }
+        return intersections.sorted()
+    }
+
+    private func rotate(
+        _ point: Point2D,
+        cosine: Double,
+        sine: Double
+    ) -> Point2D {
+        Point2D(
+            x: point.x * cosine + point.y * sine,
+            y: -point.x * sine + point.y * cosine
+        )
+    }
+
+    private func unrotate(
+        _ point: Point2D,
+        cosine: Double,
+        sine: Double
+    ) -> Point2D {
+        Point2D(
+            x: point.x * cosine - point.y * sine,
+            y: point.x * sine + point.y * cosine
+        )
+    }
+
+    private func planeBounds(
+        _ points: [Point2D]
+    ) -> (minX: Double, minY: Double, maxX: Double, maxY: Double)? {
+        var bounds = BoundsAccumulator()
+        for point in points {
+            bounds.include(point)
+        }
+        guard let result = bounds.bounds else {
+            return nil
+        }
+        return (result.minX, result.minY, result.maxX, result.maxY)
+    }
+
+    private func pointOnPlane(
+        _ point: Point2D,
+        plane: SectionAnalysisResult.Plane
+    ) -> Point3D {
+        plane.origin + plane.u * point.x + plane.v * point.y
     }
 
     private func drawingEdges(
@@ -956,7 +1249,8 @@ public struct DrawingProjectionService: Sendable {
         result strokes: [DrawingProjectionResult.Stroke],
         candidateEdgeCount: Int,
         truncatedStrokes: Bool,
-        maximumStrokeCount: Int
+        maximumStrokeCount: Int,
+        sectionArtifacts: SectionProjectionArtifacts
     ) -> [EditorDiagnostic] {
         let visibilityCounts = visibilityCounts(strokes)
         let visibilitySegmentCount = strokes.reduce(0) { count, stroke in
@@ -973,6 +1267,14 @@ public struct DrawingProjectionService: Sendable {
                 EditorDiagnostic(
                     severity: .warning,
                     message: "Drawing projection was truncated at \(maximumStrokeCount) stroke(s)."
+                )
+            )
+        }
+        if sectionArtifacts.truncatedHatches {
+            diagnostics.append(
+                EditorDiagnostic(
+                    severity: .warning,
+                    message: "Drawing projection section hatching was truncated at \(maximumStrokeCount) hatch segment(s)."
                 )
             )
         }

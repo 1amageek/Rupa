@@ -80,6 +80,69 @@ import Testing
 }
 
 @MainActor
+@Test func drawingProjectionGeneratesSectionContoursAndHatchesFromSavedViewSectionState() throws {
+    let session = EditorSession()
+    _ = try session.execute(
+        .createExtrudedRectangle(
+            name: "Sectioned Drawing Box",
+            plane: .xy,
+            width: .length(2.0, .meter),
+            height: .length(2.0, .meter),
+            depth: .length(2.0, .meter),
+            direction: .normal
+        )
+    )
+    var document = session.document
+    let sectionNodeID = try document.createSectionPlane(name: "Mid Height Section")
+    try document.setSceneNodeTransform(
+        id: sectionNodeID,
+        localTransform: Transform3D(
+            matrix: try Matrix4x4(values: [
+                1.0, 0.0, 0.0, 0.0,
+                0.0, 1.0, 0.0, 0.0,
+                0.0, 0.0, 1.0, 0.0,
+                0.0, 0.0, 1.0, 1.0,
+            ])
+        )
+    )
+    let savedView = SavedView(
+        name: "Section Drawing View",
+        camera: SavedViewCamera(
+            target: Point3D(x: 0.0, y: 0.0, z: 1.0),
+            distanceMeters: 6.0,
+            yawRadians: .pi / 4.0,
+            pitchRadians: 0.62
+        ),
+        projection: .orthographic(heightMeters: 6.0),
+        sectionState: SavedViewSectionState(sectionSceneNodeIDs: [sectionNodeID]),
+        displayScale: SavedViewDisplayScale(ruler: .standard(for: .meter))
+    )
+    _ = try document.createSavedView(savedView, objectRegistry: session.objectRegistry)
+
+    let result = try DrawingProjectionService().generate(
+        document: document,
+        query: DrawingProjectionQuery(savedViewID: savedView.id),
+        objectRegistry: session.objectRegistry,
+        currentEvaluation: session.currentEvaluation,
+        currentGeneration: session.generation
+    )
+
+    #expect(result.sectionContourCount > 0)
+    #expect(result.sectionHatchSegmentCount > 0)
+    #expect(result.sectionContours.allSatisfy { $0.sectionSourceID == sectionNodeID.description })
+    #expect(result.sectionHatches.allSatisfy { $0.sectionSourceID == sectionNodeID.description })
+    #expect(result.sectionHatches.allSatisfy { $0.lengthMeters > 0.0 })
+    #expect(result.sectionHatches.allSatisfy { $0.spacingMeters > 0.0 })
+    #expect(result.sectionHatches.allSatisfy { $0.angleDegrees == 45.0 })
+    #expect(result.truncatedSectionHatches == false)
+    #expect(result.bounds != nil)
+    #expect(result.diagnostics.contains {
+        $0.message.contains("section contour")
+            && $0.message.contains("section hatch")
+    })
+}
+
+@MainActor
 @Test func drawingProjectionTruncatesAtRequestedStrokeLimit() throws {
     let session = EditorSession()
     _ = try session.execute(

@@ -10,6 +10,8 @@ public struct DrawingProjectionSVGExporter: Sendable {
         public var hiddenStrokeWidth: Double
         public var partiallyHiddenStrokeWidth: Double
         public var unclassifiedStrokeWidth: Double
+        public var sectionHatchStrokeWidth: Double
+        public var sectionContourStrokeWidth: Double
 
         public init(
             width: Double = 1024.0,
@@ -18,7 +20,9 @@ public struct DrawingProjectionSVGExporter: Sendable {
             visibleStrokeWidth: Double = 1.45,
             hiddenStrokeWidth: Double = 1.0,
             partiallyHiddenStrokeWidth: Double = 1.2,
-            unclassifiedStrokeWidth: Double = 1.0
+            unclassifiedStrokeWidth: Double = 1.0,
+            sectionHatchStrokeWidth: Double = 0.85,
+            sectionContourStrokeWidth: Double = 1.6
         ) {
             self.width = width
             self.height = height
@@ -27,6 +31,8 @@ public struct DrawingProjectionSVGExporter: Sendable {
             self.hiddenStrokeWidth = hiddenStrokeWidth
             self.partiallyHiddenStrokeWidth = partiallyHiddenStrokeWidth
             self.unclassifiedStrokeWidth = unclassifiedStrokeWidth
+            self.sectionHatchStrokeWidth = sectionHatchStrokeWidth
+            self.sectionContourStrokeWidth = sectionContourStrokeWidth
         }
     }
 
@@ -101,7 +107,9 @@ public struct DrawingProjectionSVGExporter: Sendable {
         let segments = renderableSegments(from: result)
         let bounds = normalizedBounds(
             reportedBounds: result.bounds,
-            segments: segments
+            segments: segments,
+            sectionContours: result.sectionContours,
+            sectionHatches: result.sectionHatches
         )
         let transform = transform(
             options: options,
@@ -116,13 +124,10 @@ public struct DrawingProjectionSVGExporter: Sendable {
             #"  <g id="drawing-projection" data-saved-view-id="\#(escaped(result.savedViewID.description))" data-display-unit="\#(escaped(result.displayUnit.symbol))" data-body-count="\#(result.bodyCount)" data-triangle-count="\#(result.triangleCount)" data-candidate-edge-count="\#(result.candidateEdgeCount)" data-truncated="\#(result.truncatedStrokes)">"#,
         ]
 
-        appendLayer(
-            visibility: .visible,
-            segments: segments,
+        appendSectionHatchLayer(
+            hatches: result.sectionHatches,
             transform: transform,
-            strokeWidth: options.visibleStrokeWidth,
-            strokeColor: "#111827",
-            dashArray: nil,
+            strokeWidth: options.sectionHatchStrokeWidth,
             to: &lines
         )
         appendLayer(
@@ -152,11 +157,67 @@ public struct DrawingProjectionSVGExporter: Sendable {
             dashArray: "2 3",
             to: &lines
         )
+        appendLayer(
+            visibility: .visible,
+            segments: segments,
+            transform: transform,
+            strokeWidth: options.visibleStrokeWidth,
+            strokeColor: "#111827",
+            dashArray: nil,
+            to: &lines
+        )
+        appendSectionContourLayer(
+            contours: result.sectionContours,
+            transform: transform,
+            strokeWidth: options.sectionContourStrokeWidth,
+            to: &lines
+        )
 
         lines.append("  </g>")
         lines.append("</svg>")
         lines.append("")
         return lines.joined(separator: "\n")
+    }
+
+    private func appendSectionHatchLayer(
+        hatches: [DrawingProjectionResult.SectionHatchSegment],
+        transform: Transform,
+        strokeWidth: Double,
+        to lines: inout [String]
+    ) {
+        lines.append(
+            ##"    <g id="section-hatches" data-kind="sectionHatch" stroke="#9ca3af" stroke-width="\##(format(strokeWidth))" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke">"##
+        )
+        for hatch in hatches {
+            let start = transform.point(hatch.start2D)
+            let end = transform.point(hatch.end2D)
+            lines.append(
+                #"      <path d="M \#(format(start.x)) \#(format(start.y)) L \#(format(end.x)) \#(format(end.y))" data-hatch-id="\#(escaped(hatch.id))" data-contour-id="\#(escaped(hatch.contourID))" data-body-id="\#(escaped(hatch.bodyID))"\#(sectionSourceAttributes(id: hatch.sectionSourceID, name: hatch.sectionSourceName)) data-spacing-meters="\#(format(hatch.spacingMeters))" data-angle-degrees="\#(format(hatch.angleDegrees))" />"#
+            )
+        }
+        lines.append("    </g>")
+    }
+
+    private func appendSectionContourLayer(
+        contours: [DrawingProjectionResult.SectionContour],
+        transform: Transform,
+        strokeWidth: Double,
+        to lines: inout [String]
+    ) {
+        lines.append(
+            ##"    <g id="section-contours" data-kind="sectionContour" stroke="#111827" stroke-width="\##(format(strokeWidth))" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke">"##
+        )
+        for contour in contours where contour.projectedPoints2D.count >= 2 {
+            let path = pathData(
+                points: contour.projectedPoints2D,
+                closes: contour.projectedPoints2D.count >= 3,
+                transform: transform
+            )
+            lines.append(
+                #"      <path d="\#(path)" data-contour-id="\#(escaped(contour.id))" data-body-id="\#(escaped(contour.bodyID))"\#(sectionSourceAttributes(id: contour.sectionSourceID, name: contour.sectionSourceName)) data-segment-count="\#(contour.segmentCount)" />"#
+            )
+        }
+        lines.append("    </g>")
     }
 
     private func appendLayer(
@@ -215,7 +276,9 @@ public struct DrawingProjectionSVGExporter: Sendable {
 
     private func normalizedBounds(
         reportedBounds: DrawingProjectionResult.Bounds2D?,
-        segments: [RenderableSegment]
+        segments: [RenderableSegment],
+        sectionContours: [DrawingProjectionResult.SectionContour],
+        sectionHatches: [DrawingProjectionResult.SectionHatchSegment]
     ) -> Bounds {
         if let reportedBounds,
            reportedBounds.minX.isFinite,
@@ -241,6 +304,15 @@ public struct DrawingProjectionSVGExporter: Sendable {
         for segment in segments {
             bounds.include(segment.start)
             bounds.include(segment.end)
+        }
+        for contour in sectionContours {
+            for point in contour.projectedPoints2D {
+                bounds.include(point)
+            }
+        }
+        for hatch in sectionHatches {
+            bounds.include(hatch.start2D)
+            bounds.include(hatch.end2D)
         }
 
         guard bounds.minX.isFinite,
@@ -284,7 +356,9 @@ public struct DrawingProjectionSVGExporter: Sendable {
             visibleStrokeWidth: finitePositive(options.visibleStrokeWidth, fallback: 1.45),
             hiddenStrokeWidth: finitePositive(options.hiddenStrokeWidth, fallback: 1.0),
             partiallyHiddenStrokeWidth: finitePositive(options.partiallyHiddenStrokeWidth, fallback: 1.2),
-            unclassifiedStrokeWidth: finitePositive(options.unclassifiedStrokeWidth, fallback: 1.0)
+            unclassifiedStrokeWidth: finitePositive(options.unclassifiedStrokeWidth, fallback: 1.0),
+            sectionHatchStrokeWidth: finitePositive(options.sectionHatchStrokeWidth, fallback: 0.85),
+            sectionContourStrokeWidth: finitePositive(options.sectionContourStrokeWidth, fallback: 1.6)
         )
     }
 
@@ -339,5 +413,41 @@ public struct DrawingProjectionSVGExporter: Sendable {
             }
         }
         return output
+    }
+
+    private func sectionSourceAttributes(
+        id: String?,
+        name: String?
+    ) -> String {
+        var attributes = ""
+        if let id {
+            attributes += #" data-section-source-id="\#(escaped(id))""#
+        }
+        if let name {
+            attributes += #" data-section-source-name="\#(escaped(name))""#
+        }
+        return attributes
+    }
+
+    private func pathData(
+        points: [Point2D],
+        closes: Bool,
+        transform: Transform
+    ) -> String {
+        guard let first = points.first else {
+            return ""
+        }
+        let transformedFirst = transform.point(first)
+        var parts = [
+            "M \(format(transformedFirst.x)) \(format(transformedFirst.y))",
+        ]
+        for point in points.dropFirst() {
+            let transformed = transform.point(point)
+            parts.append("L \(format(transformed.x)) \(format(transformed.y))")
+        }
+        if closes {
+            parts.append("Z")
+        }
+        return parts.joined(separator: " ")
     }
 }

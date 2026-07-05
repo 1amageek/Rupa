@@ -351,28 +351,33 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                         "RupaKit/Sources/RupaCore/ExportOptions.swift",
                         "RupaKit/Sources/RupaCore/ExportPreset.swift",
                         "RupaKit/Sources/RupaCore/ExportResult.swift",
+                        "RupaKit/Sources/RupaCore/DrawingProjectionService.swift",
+                        "RupaKit/Sources/RupaCore/DrawingProjectionSVGExporter.swift",
                         "swift-CAD/Sources/CADExchange/OfficialFormatExchange.swift",
                         "swift-CAD/Sources/CADExchange/PDFExporter.swift",
                         "RupaKit/Sources/RupaAgentRuntime/AgentCommandController.swift",
                     ],
                     tests: [
                         "RupaKit/Tests/RupaCoreTests/DesignDocumentTests.swift",
+                        "RupaKit/Tests/RupaCoreTests/DrawingProjectionServiceTests.swift",
+                        "RupaKit/Tests/RupaCoreTests/DrawingProjectionSVGExporterTests.swift",
                         "swift-CAD/Tests/CADExchangeTests/CADExchangeTests.swift",
                         "RupaKit/Tests/RupaAgentTopologyPersistenceTests/AgentTopologyPersistenceTransportIntegrationTests.swift",
                     ],
                     notes: [
                         "Export service and exchange-format tests cover file-oriented output paths.",
-                        "Hidden-line technical drawing generation, section hatching, and drawing annotation workflows remain separate gaps.",
+                        "Saved-view drawing projection now generates structured hidden-line strokes plus section contours and hatch segments for SVG export.",
+                        "PDF export, drawing annotation workflows, radial hatching, and parametric material hatching remain separate gaps.",
                     ]
                 ),
             ],
             openWork: [
-                "Hidden-line export from selected views with occluded-line and style controls.",
-                "Section hatching, radial hatching, and parametric hatching for technical drawings.",
+                "Hidden-line export from selected views with broader occluded-line and style controls.",
+                "Radial hatching and parametric material hatching for technical drawings.",
                 "Drawing-space annotations that are distinct from model-driving dimensions.",
                 "Agent-readable import contract for supported exchange formats and failure recovery.",
             ],
-            next: "Split exchange from drawing generation by adding a hidden-line drawing result contract with view, hatch, annotation, and export diagnostics."
+            next: "Broaden drawing export from structured SVG into PDF output, style presets, annotations, and curved analytic hidden-line support."
         ),
         entry(
             area: .patternsAndArrays,
@@ -613,17 +618,18 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                         "Viewport section clipping now removes hidden bodies from the rendered and pickable scene and clips mesh triangles into retained-side display polygons without allocating replacement mesh buffers.",
                         "The Section Analysis Inspector exposes off, front, and behind clipping modes so viewport clipping can be toggled without adding more canvas chrome.",
                         "Selecting a section or construction plane can drive a non-mutating viewport overlay that renders the section plane frame, closed section fill, hatching, and bounded body intersection segments from the same SectionAnalysisResult contract used by Agent and Automation.",
-                        "Exact clipped cap surfaces, interference highlighting, persistent section-distance controls, and drawing/export section hatching remain incomplete.",
+                        "DrawingProjectionService now consumes saved-view section scene nodes through SectionAnalysisService and emits structured drawing section contours and hatch segments for SVG export.",
+                        "Exact clipped cap surfaces, interference highlighting, and persistent section-distance controls remain incomplete.",
                     ]
                 ),
             ],
             openWork: [
                 "Exact clipped cap surfaces driven by the non-mutating SectionAnalysisResult.",
                 "Selection, CPlane, previous-plane, and persistent distance/flip overlay policies for Section Analysis.",
-                "Interference highlighting and section hatching for drawing/export workflows.",
+                "Interference highlighting plus radial and parametric material hatching policies for drawing/export workflows.",
                 "Persistent inspection overlay controls that share the measurement and topology contracts.",
             ],
-            next: "Extend SectionAnalysisResult from viewport contour overlays to clipping, export hatching, interference diagnostics, selection policies, and persistent inspection overlay controls."
+            next: "Extend SectionAnalysisResult from viewport contour overlays and drawing hatching into clipped cap surfaces, interference diagnostics, selection policies, and persistent inspection overlay controls."
         ),
         entry(
             area: .snapping,

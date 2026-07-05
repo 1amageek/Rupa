@@ -129,3 +129,82 @@ import Testing
     #expect(!svg.localizedCaseInsensitiveContains("nan"))
     #expect(!svg.localizedCaseInsensitiveContains("inf"))
 }
+
+@Test func drawingProjectionSVGExporterCreatesSectionHatchLayers() {
+    let sectionContour = DrawingProjectionResult.SectionContour(
+        id: "section-contour",
+        sectionSourceID: "section-node",
+        sectionSourceName: "Mid Cut",
+        bodyID: "body-a",
+        points: [
+            Point3D(x: -1.0, y: -1.0, z: 0.0),
+            Point3D(x: 1.0, y: -1.0, z: 0.0),
+            Point3D(x: 1.0, y: 1.0, z: 0.0),
+            Point3D(x: -1.0, y: 1.0, z: 0.0),
+        ],
+        sectionPlanePoints2D: [
+            Point2D(x: -1.0, y: -1.0),
+            Point2D(x: 1.0, y: -1.0),
+            Point2D(x: 1.0, y: 1.0),
+            Point2D(x: -1.0, y: 1.0),
+        ],
+        projectedPoints2D: [
+            Point2D(x: -1.0, y: -1.0),
+            Point2D(x: 1.0, y: -1.0),
+            Point2D(x: 1.0, y: 1.0),
+            Point2D(x: -1.0, y: 1.0),
+        ],
+        signedAreaSquareMeters: 4.0,
+        lengthMeters: 8.0,
+        segmentCount: 4
+    )
+    let sectionHatch = DrawingProjectionResult.SectionHatchSegment(
+        id: "section-hatch",
+        contourID: sectionContour.id,
+        sectionSourceID: "section-node",
+        sectionSourceName: "Mid Cut",
+        bodyID: "body-a",
+        start: Point3D(x: -0.5, y: -1.0, z: 0.0),
+        end: Point3D(x: 1.0, y: 0.5, z: 0.0),
+        start2D: Point2D(x: -0.5, y: -1.0),
+        end2D: Point2D(x: 1.0, y: 0.5),
+        spacingMeters: 0.1,
+        angleDegrees: 45.0,
+        lengthMeters: 2.12
+    )
+    let result = DrawingProjectionResult(
+        displayUnit: .meter,
+        savedViewID: SavedViewID(),
+        savedViewName: "Section View",
+        projectionMode: .orthographic,
+        viewFrame: DrawingProjectionResult.ViewFrame(
+            target: .origin,
+            right: Vector3D(x: 1.0, y: 0.0, z: 0.0),
+            up: Vector3D(x: 0.0, y: 1.0, z: 0.0),
+            viewNormal: Vector3D(x: 0.0, y: 0.0, z: 1.0),
+            visibleHeightMeters: 2.0,
+            scaleBarLengthMeters: 1.0
+        ),
+        bodyCount: 1,
+        triangleCount: 2,
+        candidateEdgeCount: 0,
+        truncatedStrokes: false,
+        bounds: nil,
+        strokes: [],
+        sectionContours: [sectionContour],
+        sectionHatches: [sectionHatch],
+        diagnostics: []
+    )
+
+    let svg = DrawingProjectionSVGExporter().svg(for: result)
+
+    #expect(svg.contains(#"id="section-hatches" data-kind="sectionHatch""#))
+    #expect(svg.contains(#"id="section-contours" data-kind="sectionContour""#))
+    #expect(svg.contains(#"data-hatch-id="section-hatch""#))
+    #expect(svg.contains(#"data-contour-id="section-contour""#))
+    #expect(svg.contains(#"data-section-source-id="section-node""#))
+    #expect(svg.contains(#"data-section-source-name="Mid Cut""#))
+    #expect(svg.contains(#"data-angle-degrees="45.000000""#))
+    #expect(!svg.localizedCaseInsensitiveContains("nan"))
+    #expect(!svg.localizedCaseInsensitiveContains("inf"))
+}
