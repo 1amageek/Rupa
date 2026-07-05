@@ -46,21 +46,29 @@ Rupa is organized as a thin app host plus one shared Swift package.
 
 ```mermaid
 flowchart TD
-    App["Rupa.xcodeproj<br/>Rupa.app"] --> UI["RupaUI"]
+    App["Rupa.xcodeproj<br/>Rupa.app"] --> AgentUI["RupaAgentUI"]
+    App --> UI["RupaUI"]
+    AgentUI --> UI
+    AgentUI --> Agent["RupaAgent<br/>(umbrella)"]
     UI --> Core["RupaCore"]
     UI --> Rendering["RupaRendering"]
     UI --> Preview["RupaPreview"]
     CLI["rupa CLI"] --> CLIKit["RupaCLIKit"]
-    CLIKit --> Agent["RupaAgent"]
+    CLIKit --> Agent
     CLIKit --> Automation["RupaAutomation"]
     CLIKit --> Core
     Agent --> Automation
     Agent --> Core
     Automation --> Core
-    Rendering --> Core
+    Rendering --> ViewportScene["RupaViewportScene"]
+    ViewportScene --> Core
     Preview --> Core
+    Core --> CoreTypes["RupaCoreTypes"]
     Core --> SwiftCAD["Swift-CAD"]
+    ViewportScene --> SwiftCAD
 ```
+
+`RupaAgent` is an umbrella that re-exports the split `RupaAgentProtocol`, `RupaAgentRuntime`, and `RupaAgentTransport` targets. The app host composes both `RupaUI` and `RupaAgentUI`; direct agent-in-UI wiring lives in `RupaAgentUI`, not `RupaUI`.
 
 The supported implementation has one editing pipeline:
 
@@ -139,18 +147,37 @@ ApplicationProfile switching is deliberately excluded from the initial package g
     Sources/
       RupaKit/
       RupaCore/
+      RupaCoreTypes/
       RupaUI/
+      RupaAgentUI/
+      RupaViewportScene/
       RupaRendering/
       RupaPreview/
       RupaAutomation/
+      RupaAgentProtocol/
+      RupaAgentRuntime/
+      RupaAgentTransport/
       RupaAgent/
       RupaCLIKit/
       RupaCLI/
     Tests/
+      RupaKitTests/
       RupaCoreTests/
       RupaAutomationTests/
       RupaAgentTests/
+      RupaAgentContractTests/
+      RupaAgentSurfaceTests/
+      RupaAgentSketchTests/
+      RupaAgentModelingTests/
+      RupaAgentSelectionTests/
+      RupaAgentInspectionTests/
+      RupaAgentTopologyPersistenceTests/
+      RupaAgentTransportTests/
+      RupaUIPackageTests/
+      RupaRenderingTests/
       RupaCLITests/
+      RupaAgentTestFixtures/
+      RupaAgentIntegrationTestFixtures/
 
   swift-CAD/
 ```
@@ -165,7 +192,7 @@ ApplicationProfile switching is deliberately excluded from the initial package g
 | Platform integration | WindowGroup, DocumentGroup when introduced, menu commands, app activation. |
 | Security | Entitlements, sandbox, security-scoped file access where required. |
 | Distribution | Assets, signing, provisioning, bundle metadata. |
-| Composition | Import `RupaUI` and start app-level services such as `AgentHost`. |
+| Composition | Import `RupaUI` and `RupaAgentUI`, and start app-level services such as `AgentHost`. |
 
 The app host delegates editor behavior to RupaKit.
 
@@ -194,24 +221,35 @@ struct ApplicationRoot: App {
 }
 ```
 
-When live CLI support is enabled, app startup creates the application model and starts the Agent command service.
+When live CLI support is enabled, the app host imports `RupaAgentUI`, owns an `AgentHost`, and starts or stops the Agent command service across scene-phase transitions.
 
 ```swift
 import SwiftUI
+import RupaAgentUI
 import RupaUI
-import RupaAgent
 
 @main
 struct ApplicationRoot: App {
-    @StateObject private var appModel = AppModel()
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var agentHost = AgentHost()
+    @State private var editorSession = WorkspaceLaunchSessionFactory.makeSession()
 
     var body: some Scene {
         WindowGroup {
-            MainView()
-                .environmentObject(appModel)
-                .task {
-                    await appModel.startAgentCommandServiceIfNeeded()
+            MainView(session: editorSession, agentHost: agentHost)
+        }
+        .windowResizability(.contentMinSize)
+        .onChange(of: scenePhase) { _, phase in
+            Task {
+                switch phase {
+                case .active:
+                    await agentHost.start()
+                case .background:
+                    await agentHost.stop()
+                default:
+                    break
                 }
+            }
         }
     }
 }
@@ -225,10 +263,16 @@ struct ApplicationRoot: App {
 |---|---|---|
 | `RupaKit` | Library | `RupaKit` |
 | `RupaCore` | Library | `RupaCore` |
+| `RupaCoreTypes` | Library | `RupaCoreTypes` |
 | `RupaUI` | Library | `RupaUI` |
+| `RupaAgentUI` | Library | `RupaAgentUI` |
+| `RupaViewportScene` | Library | `RupaViewportScene` |
 | `RupaRendering` | Library | `RupaRendering` |
 | `RupaPreview` | Library | `RupaPreview` |
 | `RupaAutomation` | Library | `RupaAutomation` |
+| `RupaAgentProtocol` | Library | `RupaAgentProtocol` |
+| `RupaAgentRuntime` | Library | `RupaAgentRuntime` |
+| `RupaAgentTransport` | Library | `RupaAgentTransport` |
 | `RupaAgent` | Library | `RupaAgent` |
 | `RupaCLIKit` | Library | `RupaCLIKit` |
 | `rupa` | Executable | `RupaCLI` |
@@ -241,36 +285,61 @@ flowchart TD
     RupaKit --> RupaAutomation["RupaAutomation"]
 
     RupaUI["RupaUI"] --> RupaCore
-    RupaUI --> RupaAgent
     RupaUI --> RupaRendering["RupaRendering"]
     RupaUI --> RupaPreview["RupaPreview"]
 
+    RupaAgentUI["RupaAgentUI"] --> RupaUI
+    RupaAgentUI --> RupaCore
+    RupaAgentUI --> RupaAgentRuntime
+    RupaAgentUI --> RupaAgentTransport
+
     RupaRendering --> RupaCore
+    RupaRendering --> RupaViewportScene["RupaViewportScene"]
+    RupaViewportScene --> RupaCore
+    RupaViewportScene --> SwiftCAD["Swift-CAD"]
     RupaPreview --> RupaCore
     RupaAutomation --> RupaCore
 
-    RupaAgent["RupaAgent"] --> RupaCore
-    RupaAgent --> RupaAutomation
+    RupaAgent["RupaAgent<br/>(umbrella)"] --> RupaAgentProtocol["RupaAgentProtocol"]
+    RupaAgent --> RupaAgentRuntime["RupaAgentRuntime"]
+    RupaAgent --> RupaAgentTransport["RupaAgentTransport"]
+
+    RupaAgentProtocol --> RupaCore
+    RupaAgentProtocol --> RupaAutomation
+    RupaAgentRuntime --> RupaCore
+    RupaAgentRuntime --> RupaAutomation
+    RupaAgentRuntime --> RupaAgentProtocol
+    RupaAgentTransport --> RupaCore
+    RupaAgentTransport --> RupaAgentProtocol
+    RupaAgentTransport --> RupaAgentRuntime
 
     RupaCLI["RupaCLI"] --> RupaCLIKit["RupaCLIKit"]
     RupaCLIKit --> RupaCore
     RupaCLIKit --> RupaAutomation
-    RupaCLIKit --> RupaAgent
+    RupaCLIKit --> RupaAgentProtocol
+    RupaCLIKit --> RupaAgentRuntime
+    RupaCLIKit --> RupaAgentTransport
 
-    RupaCore --> SwiftCAD["Swift-CAD"]
-    RupaRendering --> SwiftCAD
+    RupaCore --> RupaCoreTypes["RupaCoreTypes"]
+    RupaCore --> SwiftCAD
 ```
 
 | Target | Dependencies | Responsibility |
 |---|---|---|
 | `RupaKit` | `RupaCore`, `RupaAutomation` | Umbrella module. |
-| `RupaCore` | Swift-CAD, Collections | Editor sessions, document state, commands, evaluation, services, diagnostics. |
-| `RupaUI` | `RupaCore`, `RupaAgent`, `RupaRendering`, `RupaPreview` | SwiftUI editor interface and app-facing service lifecycle. |
-| `RupaRendering` | `RupaCore`, Swift-CAD | Editor viewport and render-scene extraction from CAD source/evaluated state. |
+| `RupaCore` | `RupaCoreTypes`, Swift-CAD, Collections | Editor sessions, document state, commands, evaluation, services, diagnostics. |
+| `RupaCoreTypes` | none | Swift-CAD-free leaf value types (`SaveResult`, `DocumentGeneration`, `EditorDiagnostic`, `EditorError`, `LengthDisplayUnit`, `LengthDisplayText`). Currently depended on only by `RupaCore`, which re-exports it. |
+| `RupaUI` | `RupaCore`, `RupaRendering`, `RupaPreview`, MacComponent | SwiftUI editor interface. Agent-in-UI wiring is extracted into `RupaAgentUI`. |
+| `RupaAgentUI` | `RupaUI`, `RupaCore`, `RupaAgentRuntime`, `RupaAgentTransport` | App-facing agent-host lifecycle (`AgentHost`) and MainActor-safe session publication over the editor UI. |
+| `RupaRendering` | `RupaCore`, `RupaViewportScene` | Editor viewport and render-scene extraction from CAD source/evaluated state. |
+| `RupaViewportScene` | `RupaCore`, Swift-CAD | CAD-backed viewport scene, camera, and projection basis shared by rendering. |
 | `RupaPreview` | `RupaCore` | RealityKit, Quick Look, USDZ preview. |
 | `RupaAutomation` | `RupaCore` | Codable command schema, batch execution, stable references. |
-| `RupaAgent` | `RupaCore`, `RupaAutomation` | App and CLI coordination over IPC. |
-| `RupaCLIKit` | `RupaCore`, `RupaAutomation`, `RupaAgent`, ArgumentParser | Testable CLI command implementation, CAD inspection, typed AutomationCommand application, sketch/model entrypoints, command-backed document mutation, terminal output, and exit mapping. |
+| `RupaAgent` | `RupaAgentProtocol`, `RupaAgentRuntime`, `RupaAgentTransport` | Umbrella that re-exports the split agent stack. |
+| `RupaAgentProtocol` | `RupaCore`, `RupaAutomation` | JSON-RPC request/response envelopes, method schemas, and client protocol. |
+| `RupaAgentRuntime` | `RupaCore`, `RupaAutomation`, `RupaAgentProtocol` | Agent command controller, `WorkspaceRegistry`, MainActor bridge, and session resolution. |
+| `RupaAgentTransport` | `RupaCore`, `RupaAgentProtocol`, `RupaAgentRuntime` | Unix-domain socket listener/service, client transport, and socket addressing. |
+| `RupaCLIKit` | `RupaCore`, `RupaAutomation`, `RupaAgentProtocol`, `RupaAgentRuntime`, `RupaAgentTransport`, ArgumentParser | Testable CLI command implementation, CAD inspection, typed AutomationCommand application, sketch/model entrypoints, command-backed document mutation, terminal output, and exit mapping. |
 | `RupaCLI` | `RupaCLIKit` | Thin `rupa` executable entry point. |
 
 ## Target Responsibilities
@@ -285,6 +354,20 @@ Umbrella module for common imports.
 ```
 
 `RupaUI` remains separately importable by the app host.
+
+### RupaCoreTypes
+
+Dependency-free leaf target holding document-independent value types that carry no Swift-CAD dependency. In the current graph it is depended on **only** by `RupaCore`, which re-exports it wholesale (`@_exported import RupaCoreTypes`); downstream targets therefore see these types as part of `RupaCore` and none of them import `RupaCoreTypes` directly. The split's only realized effect today is that these value types stay compilable without linking Swift-CAD. Direct consumption by `RupaUI`, the agent stack, or `RupaCLIKit` (to use `SaveResult` / `EditorDiagnostic` / `EditorError` without Swift-CAD) is enabled by the split but not yet wired.
+
+| Type | Responsibility |
+|---|---|
+| `SaveResult` | Reports successful save path, generation, dirty state, and diagnostics without changing document generation. |
+| `DocumentGeneration` | Monotonic generation counter used for staleness and mismatch checks. |
+| `EditorDiagnostic` | Structured error, warning, and note record surfaced to UI, Automation, Agent, and CLI. |
+| `EditorError` | Typed editor error carrying the stable error codes mapped to CLI exit codes. |
+| `LengthDisplayUnit` / `LengthDisplayText` | Display-unit resolution and formatted length text shared by summaries, measurement, and drawing annotations. |
+
+`RupaCore` depends on `RupaCoreTypes` and re-exports these types, so existing `RupaCore.SaveResult` / `RupaCore.EditorDiagnostic` usage keeps compiling.
 
 ### RupaCore
 
@@ -324,14 +407,14 @@ RupaCore owns the editor model and command pipeline.
 | `MeshSummaryResult` | Reports mesh summary totals, per-body mesh details, display unit, bounds, and diagnostics. |
 | `MeasurementService` | Computes structured, non-mutating document measurements from Swift-CAD source intent. |
 | `MeasurementResult` | Reports measurement counts, bounds, profile area, solid volume, measured profile details, measured solid details, display unit, and diagnostics. |
-| `SaveResult` | Reports successful save path, generation, dirty state, and diagnostics without changing document generation. |
+| `SaveResult` | Reports successful save path, generation, dirty state, and diagnostics without changing document generation. (Defined in `RupaCoreTypes`.) |
 | `DocumentPackageStore` | Reads and writes Rupa `.swcad` packages containing Swift-CAD source plus Rupa metadata. |
-| `FileService` | Loads, saves, writes atomically, supports legacy Swift-CAD native packages, and coordinates file access. |
+| `DocumentFileService` | Loads, saves, writes atomically, supports legacy Swift-CAD native packages, and coordinates file access. |
 | `DocumentExportService` | Evaluates a Rupa document and writes Swift-CAD exchange output with typed result metadata. |
 | `SelectionModel` | Owns selected and hovered `SelectionTarget` values, exposes scene-node references as an object-compatible view for existing commands, validates target compatibility against the current document, and prunes stale references after source or metadata changes. |
 | `SnapResolver` | Resolves non-mutating grid and source-sketch input candidates before sketch or dimension commands consume coordinates, returning typed snap kinds, distances, labels, resolved points, source and related-source selection references, source spline CVs, closest points, supported source-curve intersections, and reference-point tangent/perpendicular candidates for UI and Agent callers. |
 | `ToolController` | Converts active tool state and canvas gestures into commands. The initial implementation is `EditorSession.activateTool`, `EditorSession.activateSelectedToolFromCanvas`, and `EditorSession.activateSelectedToolFromCanvasDrag`, keeping canvas toolbar selection, viewport click, and viewport drag behavior testable without importing SwiftUI. |
-| `Diagnostics` | Stores structured errors, warnings, and notes. |
+| `EditorDiagnostic` | Stores structured errors, warnings, and notes. (Defined in `RupaCoreTypes`.) |
 
 Required command flow:
 
@@ -342,7 +425,7 @@ flowchart TD
     Stack --> Store["CADDocumentStore"]
     Store --> Generation["Increment DocumentGeneration"]
     Generation --> Evaluation["EvaluationScheduler"]
-    Evaluation --> Diagnostics["Diagnostics"]
+    Evaluation --> Diagnostics["EditorDiagnostic"]
     Evaluation --> RenderInvalidation["Render invalidation"]
 ```
 
@@ -751,7 +834,7 @@ The initial scheduler is synchronous and deterministic. A later asynchronous sch
 
 ### RupaUI
 
-RupaUI contains the complete SwiftUI editor surface.
+RupaUI contains the complete SwiftUI editor surface. It does not depend on the agent stack directly; app-facing agent-host lifecycle and MainActor session publication are extracted into `RupaAgentUI`.
 
 Canvas overlay chrome is intentionally compact because it covers the modeling surface. Top canvas controls use the shared `ViewportCanvasChromeMetrics` height, content height, padding, and outline policy. `RupaRendering` owns the shared `viewportCanvasTopChrome` Liquid Glass shape for viewport badges and `RupaUI` consumes it through `workspaceCanvasTopChromeContainer` for top command controls and bottom context controls. These controls stay content-sized and do not include document filenames because the active document title belongs to the navigation title.
 
@@ -856,13 +939,13 @@ Viewport framing must use the ruler visible span for empty documents and a ruler
 | File | Responsibility |
 |---|---|
 | `Viewport.swift` | Initial SwiftUI Canvas viewport drawing, axis and coordinate-grid hosting, selection highlighting, click-to-hit and click-to-model bridge, drag-to-model bridge, and camera navigation state ownership. |
-| `ViewportCamera.swift` | Viewport pan and zoom state shared by rendering layout, hit testing, and model coordinate mapping. |
+| `ViewportCamera.swift` | Viewport pan and zoom state shared by rendering layout, hit testing, and model coordinate mapping. (Owned by `RupaViewportScene`.) |
 | `ViewportCameraFrame.swift` | Saved-view camera-frame request/report bridge that maps persistent target plus visible height to transient viewport pan/zoom through `ViewportLayout`. |
 | `ViewportInputSurface.swift` | macOS input bridge for click, drag, hover, scroll pan, mouse-wheel zoom, and trackpad magnification. |
-| `ViewportProjectionBasis.swift` | Shared viewport projection basis; default mode is isometric. |
+| `ViewportProjectionBasis.swift` | Shared viewport projection basis; default mode is isometric. (Owned by `RupaViewportScene`.) |
 | `ViewportCoordinateAxis+Style.swift` | Shared X/Y/Z labels and colors used by Canvas axes, Axis Gizmo, and transform affordances. |
 | `ViewportProjectedGrid.swift` | Unit-aware projected coordinate-grid and in-plane ruler line calculation. |
-| `ViewportScene.swift` | Source-derived viewport scene extraction, projection/unprojection layout, model coordinate mapping, and initial hit testing for selectable sketch/body previews. |
+| `ViewportScene.swift` | Source-derived viewport scene extraction, projection/unprojection layout, model coordinate mapping, and initial hit testing for selectable sketch/body previews. (Owned by `RupaViewportScene`.) |
 | `MetalViewport.swift` | SwiftUI/AppKit bridge for the viewport. |
 | `MetalCADRenderer.swift` | Metal renderer lifecycle and draw loop. |
 | `RenderScene.swift` | Renderable derived scene state. |
@@ -871,7 +954,21 @@ Viewport framing must use the ruler visible span for empty documents and a ruler
 | `SelectionIDBuffer.swift` | Offscreen selection identity rendering. |
 | `CADCamera.swift` | Camera state, projection, and navigation. |
 
-RupaRendering consumes evaluated document state and selection state. It does not own CAD source.
+RupaRendering depends on `RupaViewportScene` for CAD-backed scene extraction, the shared `ViewportCamera`, and the `ViewportProjectionBasis`, and consumes evaluated document state and selection state. It does not own CAD source.
+
+### RupaViewportScene
+
+RupaViewportScene is the CAD-backed scene layer shared by rendering. It is the only rendering-side target that depends on Swift-CAD, so `RupaRendering` can stay focused on the SwiftUI viewport and interaction affordances without linking the kernel directly.
+
+| File | Responsibility |
+|---|---|
+| `ViewportScene.swift` / `ViewportSceneBuilder.swift` | Source-derived viewport scene extraction and conversion from evaluated document state. |
+| `ViewportCamera.swift` / `ViewportCameraZoomPolicy.swift` | Viewport pan/zoom state and zoom policy shared by layout, hit testing, and coordinate mapping. |
+| `ViewportProjectionBasis.swift` | Shared projection basis; default mode is isometric. |
+| `ViewportPickingBackend.swift` / `ViewportSelectionHitPolicy.swift` / `ViewportSketchControlPointHitPolicy.swift` / `ViewportIdentityPickIndex.swift` | Picking backend and hit-selection policies for scene and identity-buffer picking. |
+| `ViewportInputModifierFlags.swift` / `ViewportSceneTransformIndex.swift` / `ViewportTransformUtilities.swift` | Input modifier flags, scene transform indexing, and shared transform math. |
+
+RupaViewportScene owns no SwiftUI, AppKit, or Metal view code; it exposes value types and services that `RupaRendering` draws and hit-tests.
 
 ### RupaPreview
 
@@ -895,7 +992,7 @@ RupaAutomation defines the stable machine-facing command contract.
 | `AutomationBatch` | Ordered command collection with execution options. |
 | `AutomationResult` | Structured success or failure result. |
 | `AutomationError` | Serializable typed errors. |
-| `BatchExecutor` | Applies command batches through RupaCore. |
+| `AutomationRunner` | Applies command batches through RupaCore. |
 | `ReferenceResolver` | Resolves stable user and agent references into document objects. |
 | `AgentSchema` | Versioned machine-readable schema. |
 
@@ -907,7 +1004,15 @@ Surface automation coverage also includes direct B-spline surface source creatio
 
 ### RupaAgent
 
-RupaAgent coordinates the running app and command-line clients.
+RupaAgent coordinates the running app and command-line clients. The target is an umbrella that re-exports three split targets:
+
+| Split target | Owns |
+|---|---|
+| `RupaAgentProtocol` | Request/response/error envelopes, `AgentMessage`, `AgentMessageCodec`, `AgentClientProtocol`, capability descriptors, and `WorkspaceSessionSummary`. |
+| `RupaAgentRuntime` | `AgentCommandController`, `MainActorAgentBridge`, and `WorkspaceRegistry`. |
+| `RupaAgentTransport` | `AgentClient`, `AgentSocketListener`/`AgentSocketService`, `AgentSocketAddress`, `AgentSocketIO`, and `AgentSocketPath`. |
+
+App-facing agent-host wiring lives one layer up in `RupaAgentUI`. The following types are the combined responsibility surface of the umbrella:
 
 | Type | Responsibility |
 |---|---|
@@ -927,6 +1032,16 @@ RupaAgent coordinates the running app and command-line clients.
 
 RupaAgent transports automation requests. It does not implement CAD commands.
 
+`DocumentLock` and `FileChangeBroadcaster` remain required by the locking contract but are not yet implemented; open-document detection currently routes through `WorkspaceRegistry` and per-request `expectedGeneration` validation.
+
+### RupaAgentUI
+
+RupaAgentUI is the app-facing composition target that binds the agent stack to the editor UI. It depends on `RupaUI`, `RupaCore`, `RupaAgentRuntime`, and `RupaAgentTransport`, and lets the app host own agent lifecycle without `RupaUI` depending on the agent stack.
+
+| Type | Responsibility |
+|---|---|
+| `AgentHost` | Starts and stops the socket-backed Agent command service across app scene-phase transitions and publishes registered UI-owned sessions to the `WorkspaceRegistry` on MainActor. |
+
 ### RupaCLIKit
 
 RupaCLIKit provides the testable CLI command implementation used by the `rupa` executable.
@@ -936,8 +1051,8 @@ RupaCLIKit provides the testable CLI command implementation used by the `rupa` e
 | `CLICommand.swift` | ArgumentParser command tree. |
 | `CLIService.swift` | Testable CLI workflow implementation for file mode, live mode, status, sessions, and conflict checks. |
 | `CLIResponses.swift` | Stable Codable response shapes for JSON output. |
-| `CLIOutput.swift` | Human and JSON output formatting. |
-| `ExitCode.swift` | Process exit code mapping. |
+| `CLIOutput+Inspect.swift` / `CLIOutput+SelectionDimension.swift` | Human and JSON output formatting. |
+| `CLIExitCode.swift` | Process exit code mapping. |
 
 The CLI supports both human-readable output and stable JSON output.
 
@@ -973,7 +1088,7 @@ flowchart TD
     Session --> Selection["SelectionModel"]
     Session --> Tools["ToolController"]
     Session --> Eval["EvaluationScheduler"]
-    Eval --> Diagnostics["Diagnostics"]
+    Eval --> Diagnostics["EditorDiagnostic"]
     Eval --> Render["RenderScene update"]
 ```
 
@@ -1443,7 +1558,7 @@ Initial error code families:
 | `evaluation.failed` | Evaluation failed after mutation or dry run. |
 | `export.failed` | Export failed. |
 
-CLI exit codes map from these typed errors through `ExitCode`.
+CLI exit codes map from these typed errors through `CLIExitCode`.
 
 ## Platform Notes
 
@@ -1461,6 +1576,8 @@ If package-wide iOS and visionOS platforms are declared, macOS-only targets and 
 
 ## Package.swift
 
+`RupaKit/Package.swift` is the authoritative manifest. The library/executable target graph is:
+
 ```swift
 // swift-tools-version: 6.3
 
@@ -1474,107 +1591,92 @@ let package = Package(
     products: [
         .library(name: "RupaKit", targets: ["RupaKit"]),
         .library(name: "RupaCore", targets: ["RupaCore"]),
+        .library(name: "RupaCoreTypes", targets: ["RupaCoreTypes"]),
         .library(name: "RupaUI", targets: ["RupaUI"]),
+        .library(name: "RupaAgentUI", targets: ["RupaAgentUI"]),
+        .library(name: "RupaViewportScene", targets: ["RupaViewportScene"]),
         .library(name: "RupaRendering", targets: ["RupaRendering"]),
         .library(name: "RupaPreview", targets: ["RupaPreview"]),
         .library(name: "RupaAutomation", targets: ["RupaAutomation"]),
+        .library(name: "RupaAgentProtocol", targets: ["RupaAgentProtocol"]),
+        .library(name: "RupaAgentRuntime", targets: ["RupaAgentRuntime"]),
+        .library(name: "RupaAgentTransport", targets: ["RupaAgentTransport"]),
         .library(name: "RupaAgent", targets: ["RupaAgent"]),
         .library(name: "RupaCLIKit", targets: ["RupaCLIKit"]),
         .executable(name: "rupa", targets: ["RupaCLI"])
     ],
     dependencies: [
-        .package(path: "../swift-CAD"),
+        .package(name: "swift-CAD", path: "../swift-CAD"),
         .package(url: "https://github.com/1amageek/mac-component", branch: "main"),
         .package(url: "https://github.com/apple/swift-argument-parser", from: "1.5.0"),
         .package(url: "https://github.com/apple/swift-collections", from: "1.1.0")
     ],
     targets: [
-        .target(
-            name: "RupaKit",
-            dependencies: [
-                "RupaCore",
-                "RupaAutomation"
-            ]
-        ),
+        .target(name: "RupaKit", dependencies: ["RupaCore", "RupaAutomation"]),
         .target(
             name: "RupaCore",
             dependencies: [
+                "RupaCoreTypes",
                 .product(name: "SwiftCAD", package: "swift-CAD"),
                 .product(name: "Collections", package: "swift-collections")
             ]
         ),
+        .target(name: "RupaCoreTypes"),
         .target(
             name: "RupaUI",
             dependencies: [
                 "RupaCore",
-                "RupaAgent",
                 "RupaRendering",
                 "RupaPreview",
                 .product(name: "MacComponent", package: "mac-component")
             ]
         ),
         .target(
-            name: "RupaRendering",
-            dependencies: [
-                "RupaCore",
-                .product(name: "SwiftCAD", package: "swift-CAD")
-            ]
+            name: "RupaAgentUI",
+            dependencies: ["RupaAgentRuntime", "RupaAgentTransport", "RupaCore", "RupaUI"]
         ),
+        .target(name: "RupaRendering", dependencies: ["RupaCore", "RupaViewportScene"]),
         .target(
-            name: "RupaPreview",
-            dependencies: [
-                "RupaCore"
-            ]
+            name: "RupaViewportScene",
+            dependencies: ["RupaCore", .product(name: "SwiftCAD", package: "swift-CAD")]
         ),
-        .target(
-            name: "RupaAutomation",
-            dependencies: [
-                "RupaCore"
-            ]
-        ),
+        .target(name: "RupaPreview", dependencies: ["RupaCore"]),
+        .target(name: "RupaAutomation", dependencies: ["RupaCore"]),
         .target(
             name: "RupaAgent",
-            dependencies: [
-                "RupaCore",
-                "RupaAutomation"
-            ]
+            dependencies: ["RupaAgentProtocol", "RupaAgentRuntime", "RupaAgentTransport"]
+        ),
+        .target(name: "RupaAgentProtocol", dependencies: ["RupaCore", "RupaAutomation"]),
+        .target(
+            name: "RupaAgentRuntime",
+            dependencies: ["RupaCore", "RupaAutomation", "RupaAgentProtocol"]
+        ),
+        .target(
+            name: "RupaAgentTransport",
+            dependencies: ["RupaCore", "RupaAgentProtocol", "RupaAgentRuntime"]
         ),
         .target(
             name: "RupaCLIKit",
             dependencies: [
                 "RupaCore",
                 "RupaAutomation",
-                "RupaAgent",
+                "RupaAgentProtocol",
+                "RupaAgentRuntime",
+                "RupaAgentTransport",
                 .product(name: "ArgumentParser", package: "swift-argument-parser")
             ]
         ),
-        .executableTarget(
-            name: "RupaCLI",
-            dependencies: [
-                "RupaCLIKit"
-            ]
-        ),
-        .testTarget(
-            name: "RupaKitTests",
-            dependencies: ["RupaKit"]
-        ),
-        .testTarget(
-            name: "RupaCoreTests",
-            dependencies: ["RupaCore"]
-        ),
-        .testTarget(
-            name: "RupaAutomationTests",
-            dependencies: ["RupaAutomation"]
-        ),
-        .testTarget(
-            name: "RupaAgentTests",
-            dependencies: ["RupaAgent"]
-        ),
-        .testTarget(
-            name: "RupaCLITests",
-            dependencies: ["RupaCLIKit"]
-        ),
-    ]
+        .executableTarget(name: "RupaCLI", dependencies: ["RupaCLIKit"]),
+        // Test targets (see the manifest for full dependency lists):
+        //   RupaKitTests, RupaCoreTests, RupaAutomationTests, RupaAgentTests,
+        //   RupaAgentContractTests, RupaAgentSurfaceTests, RupaAgentSketchTests,
+        //   RupaAgentModelingTests, RupaAgentSelectionTests, RupaAgentInspectionTests,
+        //   RupaAgentTopologyPersistenceTests, RupaAgentTransportTests,
+        //   RupaUIPackageTests, RupaRenderingTests, RupaCLITests
+        // Shared test-fixture library targets (path: Tests/...):
+        //   RupaAgentTestFixtures, RupaAgentIntegrationTestFixtures
+    ],
+    swiftLanguageModes: [.v6]
 )
 ```
 
