@@ -268,7 +268,7 @@ import Testing
 @Test func drawingProjectionGeneratesDrawingAnnotationsFromMeasurementMetadataWithoutBodies() throws {
     let session = EditorSession()
     var document = session.document
-    document.displayUnit = .meter
+    try document.setRulerConfiguration(.standard(for: .meter))
     let measurementID = try document.addMeasurementAnnotation(
         MeasurementAnnotation(
             name: "Overall Width",
@@ -312,10 +312,58 @@ import Testing
     #expect(annotation.anchors.count == 2)
     #expect(annotation.measurementMeters == 2.0)
     #expect(annotation.displayText == "2 m")
-    #expect(annotation.labelPoint2D == Point2D(x: 0.0, y: -0.25))
+    #expect(annotation.labelLayout?.placement == .manual)
+    let labelBounds = try #require(annotation.labelLayout?.bounds2D)
+    #expect(drawingProjectionPointApproximatelyEqual(
+        annotation.labelPoint2D,
+        Point2D(x: 0.0, y: -0.25),
+        tolerance: 1.0e-3
+    ))
+    #expect(drawingProjectionPointApproximatelyEqual(
+        drawingProjectionBoundsCenter(labelBounds),
+        annotation.labelPoint2D
+    ))
     #expect(result.bounds != nil)
     #expect(result.diagnostics.contains {
         $0.message.contains("drawing annotation")
+    })
+}
+
+@MainActor
+@Test func drawingProjectionAdjustsAutomaticAnnotationLabelsToAvoidOverlap() throws {
+    let result = try drawingProjectionResultWithMeasurements([
+        MeasurementAnnotation(
+            name: "A Width",
+            kind: .distance,
+            anchors: [
+                .worldPoint(Point3D(x: -0.6, y: 0.0, z: 0.0), role: .start),
+                .worldPoint(Point3D(x: 0.6, y: 0.0, z: 0.0), role: .end),
+            ]
+        ),
+        MeasurementAnnotation(
+            name: "B Width",
+            kind: .distance,
+            anchors: [
+                .worldPoint(Point3D(x: -0.6, y: 0.02, z: 0.0), role: .start),
+                .worldPoint(Point3D(x: 0.6, y: 0.02, z: 0.0), role: .end),
+            ]
+        ),
+    ])
+
+    let annotations = result.annotations.sorted { $0.name < $1.name }
+    let first = try #require(annotations.first)
+    let second = try #require(annotations.dropFirst().first)
+    let firstBounds = try #require(first.labelLayout?.bounds2D)
+    let secondBounds = try #require(second.labelLayout?.bounds2D)
+
+    #expect(result.annotationCount == 2)
+    #expect(first.labelLayout?.placement == .automatic)
+    #expect(second.labelLayout?.placement == .adjusted)
+    #expect(!drawingProjectionBoundsIntersect(firstBounds, secondBounds))
+    #expect(second.labelLayout?.leaderStart2D != nil)
+    #expect(second.labelLayout?.leaderEnd2D != nil)
+    #expect(result.diagnostics.contains {
+        $0.message.contains("adjusted 1 drawing annotation label")
     })
 }
 
@@ -384,18 +432,29 @@ private func drawingProjectionResultWithMeasurement(
     kind: MeasurementAnnotation.Kind,
     anchors: [MeasurementAnchor]
 ) throws -> DrawingProjectionResult {
-    let session = EditorSession()
-    var document = session.document
-    document.displayUnit = .meter
-    _ = try document.addMeasurementAnnotation(
+    try drawingProjectionResultWithMeasurements([
         MeasurementAnnotation(
             name: name,
             kind: kind,
             anchors: anchors,
             labelPosition: Point3D(x: 0.0, y: 0.25, z: 0.0)
         ),
-        objectRegistry: session.objectRegistry
-    )
+    ])
+}
+
+@MainActor
+private func drawingProjectionResultWithMeasurements(
+    _ annotations: [MeasurementAnnotation]
+) throws -> DrawingProjectionResult {
+    let session = EditorSession()
+    var document = session.document
+    try document.setRulerConfiguration(.standard(for: .meter))
+    for annotation in annotations {
+        _ = try document.addMeasurementAnnotation(
+            annotation,
+            objectRegistry: session.objectRegistry
+        )
+    }
     let savedView = SavedView(
         name: "Annotated Drawing View",
         camera: SavedViewCamera(
@@ -416,6 +475,34 @@ private func drawingProjectionResultWithMeasurement(
         currentEvaluation: session.currentEvaluation,
         currentGeneration: session.generation
     )
+}
+
+private func drawingProjectionBoundsIntersect(
+    _ first: DrawingProjectionResult.Bounds2D,
+    _ second: DrawingProjectionResult.Bounds2D
+) -> Bool {
+    first.minX < second.maxX
+        && first.maxX > second.minX
+        && first.minY < second.maxY
+        && first.maxY > second.minY
+}
+
+private func drawingProjectionBoundsCenter(
+    _ bounds: DrawingProjectionResult.Bounds2D
+) -> Point2D {
+    Point2D(
+        x: (bounds.minX + bounds.maxX) * 0.5,
+        y: (bounds.minY + bounds.maxY) * 0.5
+    )
+}
+
+private func drawingProjectionPointApproximatelyEqual(
+    _ first: Point2D,
+    _ second: Point2D,
+    tolerance: Double = 1.0e-12
+) -> Bool {
+    abs(first.x - second.x) <= tolerance
+        && abs(first.y - second.y) <= tolerance
 }
 
 private func drawingProjectionSketchPoint(

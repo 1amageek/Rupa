@@ -240,6 +240,34 @@ public struct DrawingProjectionResult: Codable, Equatable, Sendable {
         }
     }
 
+    public enum AnnotationLabelPlacement: String, Codable, Equatable, Sendable {
+        case manual
+        case automatic
+        case adjusted
+    }
+
+    public struct AnnotationLabelLayout: Codable, Equatable, Sendable {
+        public var placement: AnnotationLabelPlacement
+        public var bounds2D: Bounds2D
+        public var leaderStart2D: Point2D?
+        public var leaderEnd2D: Point2D?
+        public var priorityIndex: Int
+
+        public init(
+            placement: AnnotationLabelPlacement,
+            bounds2D: Bounds2D,
+            leaderStart2D: Point2D? = nil,
+            leaderEnd2D: Point2D? = nil,
+            priorityIndex: Int
+        ) {
+            self.placement = placement
+            self.bounds2D = bounds2D
+            self.leaderStart2D = leaderStart2D
+            self.leaderEnd2D = leaderEnd2D
+            self.priorityIndex = priorityIndex
+        }
+    }
+
     public struct Annotation: Codable, Equatable, Sendable {
         public var id: String
         public var measurementID: MeasurementAnnotationID
@@ -252,6 +280,7 @@ public struct DrawingProjectionResult: Codable, Equatable, Sendable {
         public var measurementMeters: Double?
         public var measurementDegrees: Double?
         public var displayText: String
+        public var labelLayout: AnnotationLabelLayout?
 
         public init(
             id: String,
@@ -264,7 +293,8 @@ public struct DrawingProjectionResult: Codable, Equatable, Sendable {
             labelPoint2D: Point2D,
             measurementMeters: Double? = nil,
             measurementDegrees: Double? = nil,
-            displayText: String
+            displayText: String,
+            labelLayout: AnnotationLabelLayout? = nil
         ) {
             self.id = id
             self.measurementID = measurementID
@@ -277,6 +307,7 @@ public struct DrawingProjectionResult: Codable, Equatable, Sendable {
             self.measurementMeters = measurementMeters
             self.measurementDegrees = measurementDegrees
             self.displayText = displayText
+            self.labelLayout = labelLayout
         }
     }
 

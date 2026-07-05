@@ -173,11 +173,14 @@ public struct DrawingProjectionService: Sendable {
             currentEvaluation: currentEvaluation,
             currentGeneration: currentGeneration
         )
-        let annotations = try drawingAnnotations(
-            document: document,
-            savedView: savedView,
-            basis: basis,
-            topology: topologySummary
+        let annotations = DrawingAnnotationLayoutService().layout(
+            annotations: try drawingAnnotations(
+                document: document,
+                savedView: savedView,
+                basis: basis,
+                topology: topologySummary
+            ),
+            viewFrame: viewFrame
         )
 
         guard document.cadDocument.hasActiveRenderableTopologyFeatures else {
@@ -648,7 +651,18 @@ public struct DrawingProjectionService: Sendable {
         in bounds: inout BoundsAccumulator
     ) {
         for annotation in annotations {
-            bounds.include(annotation.labelPoint2D)
+            if let labelBounds = annotation.labelLayout?.bounds2D {
+                bounds.include(Point2D(x: labelBounds.minX, y: labelBounds.minY))
+                bounds.include(Point2D(x: labelBounds.maxX, y: labelBounds.maxY))
+            } else {
+                bounds.include(annotation.labelPoint2D)
+            }
+            if let leaderStart = annotation.labelLayout?.leaderStart2D {
+                bounds.include(leaderStart)
+            }
+            if let leaderEnd = annotation.labelLayout?.leaderEnd2D {
+                bounds.include(leaderEnd)
+            }
             for anchor in annotation.anchors {
                 bounds.include(anchor.point2D)
             }
@@ -661,10 +675,22 @@ public struct DrawingProjectionService: Sendable {
         guard annotations.isEmpty == false else {
             return []
         }
-        return [
+        let baseDiagnostics = [
             EditorDiagnostic(
                 severity: .info,
                 message: "Drawing projection generated \(annotations.count) drawing annotation(s) from measurement metadata."
+            ),
+        ]
+        let adjustedCount = annotations.filter {
+            $0.labelLayout?.placement == .adjusted
+        }.count
+        guard adjustedCount > 0 else {
+            return baseDiagnostics
+        }
+        return baseDiagnostics + [
+            EditorDiagnostic(
+                severity: .info,
+                message: "Drawing projection adjusted \(adjustedCount) drawing annotation label(s) to reduce label overlap."
             ),
         ]
     }

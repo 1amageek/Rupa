@@ -293,6 +293,14 @@ public struct DrawingProjectionSVGExporter: Sendable {
                 #"      <path d="M \#(path)" data-annotation-id="\#(escaped(annotation.id))" data-measurement-id="\#(escaped(annotation.measurementID.description))" data-kind="\#(annotation.kind.rawValue)" />"#
             )
         }
+        if let leaderStart = annotation.labelLayout?.leaderStart2D,
+           let leaderEnd = annotation.labelLayout?.leaderEnd2D {
+            let start = transform.point(leaderStart)
+            let end = transform.point(leaderEnd)
+            lines.append(
+                #"      <path d="M \#(format(start.x)) \#(format(start.y)) L \#(format(end.x)) \#(format(end.y))" data-annotation-id="\#(escaped(annotation.id))" data-kind="annotationLeader" data-label-placement="\#(annotation.labelLayout?.placement.rawValue ?? "automatic")" />"#
+            )
+        }
         for (index, point) in points.enumerated() {
             lines.append(
                 #"      <circle cx="\#(format(point.x))" cy="\#(format(point.y))" r="2.500000" data-annotation-id="\#(escaped(annotation.id))" data-anchor-index="\#(index)" />"#
@@ -300,7 +308,7 @@ public struct DrawingProjectionSVGExporter: Sendable {
         }
         let label = transform.point(annotation.labelPoint2D)
         lines.append(
-            #"      <text x="\#(format(label.x))" y="\#(format(label.y))" font-family="SFMono-Regular, Menlo, monospace" font-size="11" text-anchor="middle" dominant-baseline="middle" data-annotation-id="\#(escaped(annotation.id))">\#(escaped(annotation.displayText))</text>"#
+            #"      <text x="\#(format(label.x))" y="\#(format(label.y))" font-family="SFMono-Regular, Menlo, monospace" font-size="11" text-anchor="middle" dominant-baseline="middle" data-annotation-id="\#(escaped(annotation.id))" data-label-placement="\#(annotation.labelLayout?.placement.rawValue ?? "automatic")">\#(escaped(annotation.displayText))</text>"#
         )
     }
 

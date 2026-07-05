@@ -98,6 +98,7 @@ import Testing
     #expect(pdf.contains("% layer drawing-annotations"))
     #expect(pdf.contains("/Font << /F1 5 0 R >>"))
     #expect(pdf.contains("/BaseFont /Helvetica"))
+    #expect(pdf.contains("% annotation annotation-a label manual"))
     #expect(pdf.contains("BT"))
     #expect(pdf.contains("/F1 9 Tf"))
     #expect(pdf.contains("(2 \\(m\\)) Tj"))
@@ -251,7 +252,19 @@ private func drawingProjectionPDFAnnotationFixture() -> DrawingProjectionResult 
         labelWorldPoint: Point3D(x: 0.0, y: 0.2, z: 0.0),
         labelPoint2D: Point2D(x: 0.0, y: 0.2),
         measurementMeters: 2.0,
-        displayText: "2 (m)"
+        displayText: "2 (m)",
+        labelLayout: DrawingProjectionResult.AnnotationLabelLayout(
+            placement: .manual,
+            bounds2D: DrawingProjectionResult.Bounds2D(
+                minX: -0.2,
+                minY: 0.12,
+                maxX: 0.2,
+                maxY: 0.28
+            ),
+            leaderStart2D: Point2D(x: 0.0, y: 0.0),
+            leaderEnd2D: Point2D(x: 0.0, y: 0.12),
+            priorityIndex: 0
+        )
     )
     return DrawingProjectionResult(
         displayUnit: .meter,

@@ -274,6 +274,9 @@ public struct DrawingProjectionPDFExporter: Sendable {
         style: DrawingProjectionLayerStyle,
         to lines: inout [String]
     ) {
+        lines.append(
+            "% annotation \(sanitizedComment(annotation.id)) label \(annotation.labelLayout?.placement.rawValue ?? "automatic")"
+        )
         let points = annotation.anchors.map { transform.point($0.point2D) }
         if points.count >= 2 {
             let first = points[0]
@@ -290,6 +293,15 @@ public struct DrawingProjectionPDFExporter: Sendable {
             lines.append("\(format(point.x)) \(format(point.y - radius)) m")
             lines.append("\(format(point.x)) \(format(point.y + radius)) l")
             lines.append("S")
+        }
+        if let leaderStart = annotation.labelLayout?.leaderStart2D,
+           let leaderEnd = annotation.labelLayout?.leaderEnd2D {
+            appendLine(
+                start: leaderStart,
+                end: leaderEnd,
+                transform: transform,
+                to: &lines
+            )
         }
         let label = transform.point(annotation.labelPoint2D)
         lines.append("\(format(style.color.red)) \(format(style.color.green)) \(format(style.color.blue)) rg")

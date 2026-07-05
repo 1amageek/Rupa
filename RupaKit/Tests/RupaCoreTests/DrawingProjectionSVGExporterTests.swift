@@ -1,3 +1,4 @@
+import Foundation
 import SwiftCAD
 import Testing
 @testable import RupaCore
@@ -94,8 +95,7 @@ import Testing
     #expect(svg.contains(#"stroke-dasharray="6 4""#))
     #expect(svg.contains(#"data-stroke-id="visible-edge""#))
     #expect(svg.contains(#"data-stroke-id="hidden-edge""#))
-    #expect(!svg.localizedCaseInsensitiveContains("nan"))
-    #expect(!svg.localizedCaseInsensitiveContains("inf"))
+    #expect(!drawingProjectionSVGContainsNonFiniteNumericToken(svg))
 }
 
 @Test func drawingProjectionSVGExporterAppliesPageAndStylePresets() {
@@ -165,8 +165,7 @@ import Testing
     #expect(svg.contains(#"width="841.889764" height="595.275590""#))
     #expect(svg.contains(##"stroke="#2563eb""##))
     #expect(svg.contains(#"stroke-dasharray="4 3""#))
-    #expect(!svg.localizedCaseInsensitiveContains("nan"))
-    #expect(!svg.localizedCaseInsensitiveContains("inf"))
+    #expect(!drawingProjectionSVGContainsNonFiniteNumericToken(svg))
 }
 
 @Test func drawingProjectionSVGExporterHandlesEmptyProjection() {
@@ -197,8 +196,7 @@ import Testing
     #expect(svg.contains(#"data-display-unit="mm""#))
     #expect(svg.contains(#"data-body-count="0""#))
     #expect(svg.contains(#"id="visible-segments""#))
-    #expect(!svg.localizedCaseInsensitiveContains("nan"))
-    #expect(!svg.localizedCaseInsensitiveContains("inf"))
+    #expect(!drawingProjectionSVGContainsNonFiniteNumericToken(svg))
 }
 
 @Test func drawingProjectionSVGExporterCreatesDrawingAnnotationLayer() {
@@ -211,12 +209,13 @@ import Testing
     #expect(svg.contains(#"id="drawing-annotations" data-kind="drawingAnnotation""#))
     #expect(svg.contains(#"data-annotation-id="annotation-a""#))
     #expect(svg.contains(#"data-kind="distance""#))
+    #expect(svg.contains(#"data-kind="annotationLeader" data-label-placement="manual""#))
+    #expect(svg.contains(#"data-label-placement="manual""#))
     #expect(svg.contains(#"<text"#))
     #expect(svg.contains(#"2 &lt;m&gt;"#))
     #expect(svg.contains(#"data-anchor-index="0""#))
     #expect(svg.contains(#"data-anchor-index="1""#))
-    #expect(!svg.localizedCaseInsensitiveContains("nan"))
-    #expect(!svg.localizedCaseInsensitiveContains("inf"))
+    #expect(!drawingProjectionSVGContainsNonFiniteNumericToken(svg))
 }
 
 @Test func drawingProjectionSVGExporterCreatesSectionHatchLayers() {
@@ -294,8 +293,27 @@ import Testing
     #expect(svg.contains(#"data-section-source-id="section-node""#))
     #expect(svg.contains(#"data-section-source-name="Mid Cut""#))
     #expect(svg.contains(#"data-angle-degrees="45.000000""#))
-    #expect(!svg.localizedCaseInsensitiveContains("nan"))
-    #expect(!svg.localizedCaseInsensitiveContains("inf"))
+    #expect(!drawingProjectionSVGContainsNonFiniteNumericToken(svg))
+}
+
+private func drawingProjectionSVGContainsNonFiniteNumericToken(_ svg: String) -> Bool {
+    let separators = CharacterSet(charactersIn: " \n\t\r\"'=<>(),")
+    let nonFiniteTokens: Set<String> = [
+        "nan",
+        "+nan",
+        "-nan",
+        "inf",
+        "+inf",
+        "-inf",
+        "infinity",
+        "+infinity",
+        "-infinity",
+    ]
+    return svg
+        .components(separatedBy: separators)
+        .contains { token in
+            nonFiniteTokens.contains(token.lowercased())
+        }
 }
 
 private func drawingProjectionAnnotationResult() -> DrawingProjectionResult {
@@ -323,7 +341,19 @@ private func drawingProjectionAnnotationResult() -> DrawingProjectionResult {
         labelWorldPoint: Point3D(x: 0.0, y: 0.2, z: 0.0),
         labelPoint2D: Point2D(x: 0.0, y: 0.2),
         measurementMeters: 2.0,
-        displayText: "2 <m>"
+        displayText: "2 <m>",
+        labelLayout: DrawingProjectionResult.AnnotationLabelLayout(
+            placement: .manual,
+            bounds2D: DrawingProjectionResult.Bounds2D(
+                minX: -0.2,
+                minY: 0.12,
+                maxX: 0.2,
+                maxY: 0.28
+            ),
+            leaderStart2D: Point2D(x: 0.0, y: 0.0),
+            leaderEnd2D: Point2D(x: 0.0, y: 0.12),
+            priorityIndex: 0
+        )
     )
     return DrawingProjectionResult(
         displayUnit: .meter,
