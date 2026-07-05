@@ -61,6 +61,19 @@ public struct DrawingProjectionService: Sendable {
         }
     }
 
+    private struct ProjectedTriangle {
+        var first2D: Point2D
+        var second2D: Point2D
+        var third2D: Point2D
+        var firstDepth: Double
+        var secondDepth: Double
+        var thirdDepth: Double
+        var minX: Double
+        var minY: Double
+        var maxX: Double
+        var maxY: Double
+    }
+
     private struct BoundsAccumulator {
         var minX = Double.infinity
         var minY = Double.infinity
@@ -170,26 +183,40 @@ public struct DrawingProjectionService: Sendable {
             failurePrefix: "Document must evaluate successfully before drawing projection"
         )
 
+        let sortedMeshes = evaluatedDocument.meshes.sorted {
+            $0.key.description < $1.key.description
+        }
+        var bodyEdges: [(bodyID: BodyID, edges: [EdgeAccumulator])] = []
+        var occludingTriangles: [ProjectedTriangle] = []
         var strokes: [DrawingProjectionResult.Stroke] = []
         var bounds = BoundsAccumulator()
         var candidateEdgeCount = 0
         var triangleCount = 0
         var truncatedStrokes = false
 
-        for (bodyID, mesh) in evaluatedDocument.meshes.sorted(by: { $0.key.description < $1.key.description }) {
-            let bodyEdges = try drawingEdges(
+        for (bodyID, mesh) in sortedMeshes {
+            let edges = try drawingEdges(
                 mesh: mesh,
                 tolerance: tolerance
             )
             triangleCount += mesh.indices.count / 3
-            candidateEdgeCount += bodyEdges.count
+            candidateEdgeCount += edges.count
+            bodyEdges.append((bodyID, edges))
+            occludingTriangles.append(contentsOf: try projectedTriangles(
+                mesh: mesh,
+                savedView: savedView,
+                basis: basis,
+                tolerance: tolerance
+            ))
+        }
 
-            for edge in bodyEdges.sorted(by: { $0.key < $1.key }) {
+        for (bodyID, edges) in bodyEdges {
+            for edge in edges.sorted(by: { $0.key < $1.key }) {
                 if strokes.count >= query.maximumStrokeCount {
                     truncatedStrokes = true
                     break
                 }
-                guard let stroke = stroke(
+                guard var stroke = stroke(
                     edge: edge,
                     bodyID: bodyID,
                     index: strokes.count,
@@ -198,6 +225,13 @@ public struct DrawingProjectionService: Sendable {
                 ) else {
                     continue
                 }
+                stroke.visibility = classifyVisibility(
+                    stroke: stroke,
+                    triangles: occludingTriangles,
+                    savedView: savedView,
+                    basis: basis,
+                    tolerance: tolerance
+                )
                 bounds.include(stroke.start2D)
                 bounds.include(stroke.end2D)
                 strokes.append(stroke)
@@ -342,6 +376,163 @@ public struct DrawingProjectionService: Sendable {
         }
     }
 
+    private func projectedTriangles(
+        mesh: Mesh,
+        savedView: SavedView,
+        basis: ProjectionBasis,
+        tolerance: Double
+    ) throws -> [ProjectedTriangle] {
+        guard mesh.indices.count.isMultiple(of: 3) else {
+            throw EditorError(
+                code: .evaluationFailed,
+                message: "Drawing projection requires triangle mesh indices."
+            )
+        }
+        var triangles: [ProjectedTriangle] = []
+        triangles.reserveCapacity(mesh.indices.count / 3)
+        var triangleStart = 0
+        while triangleStart < mesh.indices.count {
+            let firstIndex = Int(mesh.indices[triangleStart])
+            let secondIndex = Int(mesh.indices[triangleStart + 1])
+            let thirdIndex = Int(mesh.indices[triangleStart + 2])
+            guard firstIndex < mesh.positions.count,
+                  secondIndex < mesh.positions.count,
+                  thirdIndex < mesh.positions.count else {
+                throw EditorError(
+                    code: .evaluationFailed,
+                    message: "Drawing projection mesh index is out of range."
+                )
+            }
+            let first = mesh.positions[firstIndex]
+            let second = mesh.positions[secondIndex]
+            let third = mesh.positions[thirdIndex]
+            if triangleNormal(first, second, third, tolerance: tolerance) != nil {
+                let first2D = project(first, savedView: savedView, basis: basis)
+                let second2D = project(second, savedView: savedView, basis: basis)
+                let third2D = project(third, savedView: savedView, basis: basis)
+                triangles.append(ProjectedTriangle(
+                    first2D: first2D,
+                    second2D: second2D,
+                    third2D: third2D,
+                    firstDepth: depth(first, savedView: savedView, basis: basis),
+                    secondDepth: depth(second, savedView: savedView, basis: basis),
+                    thirdDepth: depth(third, savedView: savedView, basis: basis),
+                    minX: min(first2D.x, second2D.x, third2D.x),
+                    minY: min(first2D.y, second2D.y, third2D.y),
+                    maxX: max(first2D.x, second2D.x, third2D.x),
+                    maxY: max(first2D.y, second2D.y, third2D.y)
+                ))
+            }
+            triangleStart += 3
+        }
+        return triangles
+    }
+
+    private func classifyVisibility(
+        stroke: DrawingProjectionResult.Stroke,
+        triangles: [ProjectedTriangle],
+        savedView: SavedView,
+        basis: ProjectionBasis,
+        tolerance: Double
+    ) -> DrawingProjectionResult.Visibility {
+        guard triangles.isEmpty == false else {
+            return .visible
+        }
+        let sampleFractions = [0.125, 0.3125, 0.5, 0.6875, 0.875]
+        var hiddenSampleCount = 0
+        for fraction in sampleFractions {
+            let point = interpolate(stroke.start2D, stroke.end2D, fraction: fraction)
+            let point3D = interpolate(stroke.start, stroke.end, fraction: fraction)
+            let sampleDepth = depth(point3D, savedView: savedView, basis: basis)
+            if isHiddenSample(
+                point: point,
+                depth: sampleDepth,
+                triangles: triangles,
+                tolerance: tolerance
+            ) {
+                hiddenSampleCount += 1
+            }
+        }
+        if hiddenSampleCount == 0 {
+            return .visible
+        }
+        if hiddenSampleCount == sampleFractions.count {
+            return .hidden
+        }
+        return .partiallyHidden
+    }
+
+    private func isHiddenSample(
+        point: Point2D,
+        depth: Double,
+        triangles: [ProjectedTriangle],
+        tolerance: Double
+    ) -> Bool {
+        let boundsTolerance = max(tolerance, 1.0e-9)
+        let depthTolerance = max(tolerance * 8.0, 1.0e-9)
+        for triangle in triangles {
+            guard point.x >= triangle.minX - boundsTolerance,
+                  point.x <= triangle.maxX + boundsTolerance,
+                  point.y >= triangle.minY - boundsTolerance,
+                  point.y <= triangle.maxY + boundsTolerance,
+                  let triangleDepth = projectedTriangleDepth(
+                    at: point,
+                    triangle: triangle
+                  ) else {
+                continue
+            }
+            if triangleDepth > depth + depthTolerance {
+                return true
+            }
+        }
+        return false
+    }
+
+    private func projectedTriangleDepth(
+        at point: Point2D,
+        triangle: ProjectedTriangle
+    ) -> Double? {
+        guard let coordinates = barycentricCoordinates(
+            point,
+            first: triangle.first2D,
+            second: triangle.second2D,
+            third: triangle.third2D
+        ) else {
+            return nil
+        }
+        let barycentricTolerance = 1.0e-7
+        guard coordinates.first >= -barycentricTolerance,
+              coordinates.second >= -barycentricTolerance,
+              coordinates.third >= -barycentricTolerance,
+              coordinates.first <= 1.0 + barycentricTolerance,
+              coordinates.second <= 1.0 + barycentricTolerance,
+              coordinates.third <= 1.0 + barycentricTolerance else {
+            return nil
+        }
+        return coordinates.first * triangle.firstDepth
+            + coordinates.second * triangle.secondDepth
+            + coordinates.third * triangle.thirdDepth
+    }
+
+    private func barycentricCoordinates(
+        _ point: Point2D,
+        first: Point2D,
+        second: Point2D,
+        third: Point2D
+    ) -> (first: Double, second: Double, third: Double)? {
+        let denominator = (second.y - third.y) * (first.x - third.x)
+            + (third.x - second.x) * (first.y - third.y)
+        guard abs(denominator) > 1.0e-18 else {
+            return nil
+        }
+        let firstWeight = ((second.y - third.y) * (point.x - third.x)
+            + (third.x - second.x) * (point.y - third.y)) / denominator
+        let secondWeight = ((third.y - first.y) * (point.x - third.x)
+            + (first.x - third.x) * (point.y - third.y)) / denominator
+        let thirdWeight = 1.0 - firstWeight - secondWeight
+        return (firstWeight, secondWeight, thirdWeight)
+    }
+
     private func includeEdge(
         start: Point3D,
         end: Point3D,
@@ -459,6 +650,29 @@ public struct DrawingProjectionService: Sendable {
         )
     }
 
+    private func interpolate(
+        _ start: Point2D,
+        _ end: Point2D,
+        fraction: Double
+    ) -> Point2D {
+        Point2D(
+            x: start.x + (end.x - start.x) * fraction,
+            y: start.y + (end.y - start.y) * fraction
+        )
+    }
+
+    private func interpolate(
+        _ start: Point3D,
+        _ end: Point3D,
+        fraction: Double
+    ) -> Point3D {
+        Point3D(
+            x: start.x + (end.x - start.x) * fraction,
+            y: start.y + (end.y - start.y) * fraction,
+            z: start.z + (end.z - start.z) * fraction
+        )
+    }
+
     private func depth(
         _ point: Point3D,
         savedView: SavedView,
@@ -493,6 +707,7 @@ public struct DrawingProjectionService: Sendable {
         truncatedStrokes: Bool,
         maximumStrokeCount: Int
     ) -> [EditorDiagnostic] {
+        let visibilityCounts = visibilityCounts(strokes)
         var diagnostics = [
             EditorDiagnostic(
                 severity: .info,
@@ -510,9 +725,31 @@ public struct DrawingProjectionService: Sendable {
         diagnostics.append(
             EditorDiagnostic(
                 severity: .info,
-                message: "Drawing projection strokes are not hidden-line classified yet."
+                message: "Drawing projection hidden-line classified \(visibilityCounts.visible) visible, \(visibilityCounts.hidden) hidden, \(visibilityCounts.partiallyHidden) partially hidden, and \(visibilityCounts.unclassified) unclassified stroke(s)."
             )
         )
         return diagnostics
+    }
+
+    private func visibilityCounts(
+        _ strokes: [DrawingProjectionResult.Stroke]
+    ) -> (visible: Int, hidden: Int, partiallyHidden: Int, unclassified: Int) {
+        var visible = 0
+        var hidden = 0
+        var partiallyHidden = 0
+        var unclassified = 0
+        for stroke in strokes {
+            switch stroke.visibility {
+            case .visible:
+                visible += 1
+            case .hidden:
+                hidden += 1
+            case .partiallyHidden:
+                partiallyHidden += 1
+            case .unclassified:
+                unclassified += 1
+            }
+        }
+        return (visible, hidden, partiallyHidden, unclassified)
     }
 }

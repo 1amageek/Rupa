@@ -2190,7 +2190,7 @@ private func agentCodecDrawingProjection(
                 id: "\(savedView.id.description):stroke:0",
                 bodyID: "body",
                 kind: .crease,
-                visibility: .unclassified,
+                visibility: .visible,
                 start: .origin,
                 end: Point3D(x: 1.0, y: 0.0, z: 0.0),
                 start2D: Point2D(x: 0.0, y: 0.0),

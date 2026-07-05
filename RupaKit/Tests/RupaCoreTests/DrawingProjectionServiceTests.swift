@@ -43,11 +43,20 @@ import Testing
     #expect(result.triangleCount == 12)
     #expect(result.strokeCount == 12)
     #expect(result.strokes.allSatisfy { $0.kind == .crease })
-    #expect(result.strokes.allSatisfy { $0.visibility == .unclassified })
+    #expect(result.visibleStrokeCount > 0)
+    #expect(result.hiddenStrokeCount > 0)
+    #expect(result.unclassifiedStrokeCount == 0)
+    #expect(
+        result.visibleStrokeCount
+            + result.hiddenStrokeCount
+            + result.partiallyHiddenStrokeCount
+            + result.unclassifiedStrokeCount == result.strokeCount
+    )
+    #expect(result.strokes.allSatisfy { $0.visibility != .unclassified })
     #expect(result.strokes.allSatisfy { $0.lengthMeters > 0.0 })
     #expect(result.bounds != nil)
     #expect(result.diagnostics.contains {
-        $0.message.contains("not hidden-line classified")
+        $0.message.contains("hidden-line classified")
     })
 }
 
@@ -89,6 +98,13 @@ import Testing
     )
 
     #expect(result.strokeCount == 3)
+    #expect(
+        result.visibleStrokeCount
+            + result.hiddenStrokeCount
+            + result.partiallyHiddenStrokeCount
+            + result.unclassifiedStrokeCount == result.strokeCount
+    )
+    #expect(result.unclassifiedStrokeCount == 0)
     #expect(result.truncatedStrokes)
     #expect(result.diagnostics.contains {
         $0.message.contains("truncated")

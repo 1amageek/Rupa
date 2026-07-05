@@ -1754,7 +1754,7 @@ import SwiftCAD
     #expect(generateDrawingProjection.discovery.contains(.drawingProjection))
     #expect(generateDrawingProjection.targets.contains(.savedView))
     #expect(generateDrawingProjection.summary.contains("structured orthographic drawing strokes"))
-    #expect(generateDrawingProjection.failureMode.contains("hidden-line visibility as unclassified"))
+    #expect(generateDrawingProjection.failureMode.contains("sampled hidden-line visibility"))
 
     #expect(createSavedView.category == .document)
     #expect(createSavedView.mutatesDocument)

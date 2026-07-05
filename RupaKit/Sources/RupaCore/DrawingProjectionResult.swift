@@ -14,6 +14,9 @@ public struct DrawingProjectionResult: Codable, Equatable, Sendable {
     }
 
     public enum Visibility: String, Codable, Equatable, Sendable {
+        case visible
+        case hidden
+        case partiallyHidden
         case unclassified
     }
 
@@ -110,6 +113,10 @@ public struct DrawingProjectionResult: Codable, Equatable, Sendable {
     public var triangleCount: Int
     public var candidateEdgeCount: Int
     public var strokeCount: Int
+    public var visibleStrokeCount: Int
+    public var hiddenStrokeCount: Int
+    public var partiallyHiddenStrokeCount: Int
+    public var unclassifiedStrokeCount: Int
     public var truncatedStrokes: Bool
     public var bounds: Bounds2D?
     public var strokes: [Stroke]
@@ -124,12 +131,12 @@ public struct DrawingProjectionResult: Codable, Equatable, Sendable {
         bodyCount: Int,
         triangleCount: Int,
         candidateEdgeCount: Int,
-        strokeCount: Int? = nil,
         truncatedStrokes: Bool,
         bounds: Bounds2D?,
         strokes: [Stroke],
         diagnostics: [EditorDiagnostic]
     ) {
+        let visibilityCounts = Self.visibilityCounts(strokes)
         self.displayUnit = displayUnit
         self.savedViewID = savedViewID
         self.savedViewName = savedViewName
@@ -138,10 +145,36 @@ public struct DrawingProjectionResult: Codable, Equatable, Sendable {
         self.bodyCount = bodyCount
         self.triangleCount = triangleCount
         self.candidateEdgeCount = candidateEdgeCount
-        self.strokeCount = strokeCount ?? strokes.count
+        self.strokeCount = strokes.count
+        self.visibleStrokeCount = visibilityCounts.visible
+        self.hiddenStrokeCount = visibilityCounts.hidden
+        self.partiallyHiddenStrokeCount = visibilityCounts.partiallyHidden
+        self.unclassifiedStrokeCount = visibilityCounts.unclassified
         self.truncatedStrokes = truncatedStrokes
         self.bounds = bounds
         self.strokes = strokes
         self.diagnostics = diagnostics
+    }
+
+    private static func visibilityCounts(
+        _ strokes: [Stroke]
+    ) -> (visible: Int, hidden: Int, partiallyHidden: Int, unclassified: Int) {
+        var visible = 0
+        var hidden = 0
+        var partiallyHidden = 0
+        var unclassified = 0
+        for stroke in strokes {
+            switch stroke.visibility {
+            case .visible:
+                visible += 1
+            case .hidden:
+                hidden += 1
+            case .partiallyHidden:
+                partiallyHidden += 1
+            case .unclassified:
+                unclassified += 1
+            }
+        }
+        return (visible, hidden, partiallyHidden, unclassified)
     }
 }
