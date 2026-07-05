@@ -13,6 +13,7 @@ public struct CLICommand: ParsableCommand {
         subcommands: [
             AgentCommand.self,
             AttachDocument.self,
+            BatchCommand.self,
             Capabilities.self,
             AutomationCommandGroup.self,
             DimensionCommand.self,
@@ -3396,6 +3397,14 @@ public struct ValidateDocument: ParsableCommand {
 
 public enum CLIOutput {
     public static func write(response: CLIResponse, asJSON: Bool) throws {
+        try write(
+            response,
+            fallback: response.message,
+            asJSON: asJSON
+        )
+    }
+
+    public static func write(response: CLIBatchResponse, asJSON: Bool) throws {
         try write(
             response,
             fallback: response.message,

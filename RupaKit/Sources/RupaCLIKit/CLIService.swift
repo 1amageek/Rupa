@@ -4567,6 +4567,155 @@ public struct CLIService {
         )
     }
 
+    public func runBatch(
+        target: CLIDocumentTarget,
+        batch: AutomationBatch,
+        mode: CLIEditMode = .auto,
+        dryRun: Bool = false,
+        forceFileEdit: Bool = false,
+        client: AgentClientProtocol? = nil
+    ) throws -> CLIBatchResponse {
+        switch mode {
+        case .auto:
+            return try runBatchAutomatically(
+                batch,
+                target: target,
+                dryRun: dryRun,
+                forceFileEdit: forceFileEdit,
+                client: client
+            )
+        case .file:
+            guard let url = target.fileURL else {
+                throw invalidCommand("File mode requires a document file path.")
+            }
+            return try runBatchFile(
+                batch,
+                at: url,
+                dryRun: dryRun,
+                forceFileEdit: forceFileEdit,
+                conflictClient: client
+            )
+        case .live:
+            let sessionID = try resolvedLiveSessionID(
+                target: target,
+                client: client
+            )
+            return try runBatchLiveSession(
+                batch,
+                sessionID: sessionID,
+                client: requiredClient(client)
+            )
+        }
+    }
+
+    private func runBatchAutomatically(
+        _ batch: AutomationBatch,
+        target: CLIDocumentTarget,
+        dryRun: Bool,
+        forceFileEdit: Bool,
+        client: AgentClientProtocol?
+    ) throws -> CLIBatchResponse {
+        if let sessionID = target.sessionID {
+            return try runBatchLiveSession(
+                batch,
+                sessionID: sessionID,
+                client: requiredClient(client)
+            )
+        }
+
+        if let url = target.fileURL,
+           !forceFileEdit,
+           let client,
+           let session = try openSession(for: url, client: client) {
+            guard !dryRun else {
+                throw invalidCommand("Dry-run is not supported for live document mutation.")
+            }
+            return try runBatchLiveSession(
+                batch,
+                sessionID: session.id,
+                client: client
+            )
+        }
+
+        guard let url = target.fileURL else {
+            throw invalidCommand("Batch application requires a document file path or live session ID.")
+        }
+        return try runBatchFile(
+            batch,
+            at: url,
+            dryRun: dryRun,
+            forceFileEdit: forceFileEdit,
+            conflictClient: client
+        )
+    }
+
+    private func runBatchFile(
+        _ batch: AutomationBatch,
+        at url: URL,
+        dryRun: Bool,
+        forceFileEdit: Bool,
+        conflictClient: AgentClientProtocol?
+    ) throws -> CLIBatchResponse {
+        try rejectOpenDocumentConflict(
+            fileURL: url,
+            forceFileEdit: forceFileEdit,
+            client: conflictClient
+        )
+
+        let session = EditorSession(document: try fileService.load(from: url))
+        var results = try AutomationRunner().executeBatch(batch, in: session)
+        for index in results.indices {
+            ensureWorkspaceScaleContext(
+                in: &results[index],
+                document: session.document
+            )
+        }
+        let didMutate = results.contains { $0.didMutate }
+        let shouldSave = !dryRun && didMutate
+
+        if shouldSave {
+            try fileService.save(session.document, to: url)
+            session.store.markClean()
+        }
+
+        return CLIBatchResponse(
+            results: results,
+            generation: session.generation,
+            dirty: session.isDirty,
+            saved: shouldSave
+        )
+    }
+
+    private func runBatchLiveSession(
+        _ batch: AutomationBatch,
+        sessionID: UUID,
+        client: AgentClientProtocol
+    ) throws -> CLIBatchResponse {
+        var results: [AutomationResult] = []
+        var expectedGeneration = batch.expectedGeneration
+        for command in batch.commands {
+            let execution = try executeAutomationMutationLiveSession(
+                command,
+                sessionID: sessionID,
+                expectedGeneration: expectedGeneration,
+                client: client
+            )
+            results.append(execution.result)
+            // Generation is validated once against the pre-batch state; later
+            // commands run against the generation advanced by earlier ones.
+            expectedGeneration = nil
+        }
+        guard let generation = results.last?.generation else {
+            throw invalidCommand("Batch application requires at least one command.")
+        }
+        return CLIBatchResponse(
+            results: results,
+            generation: generation,
+            dirty: results.contains { $0.didMutate },
+            saved: false
+        )
+    }
+
     private func ensureWorkspaceScaleContext(
         in result: inout AutomationResult,
         document: DesignDocument

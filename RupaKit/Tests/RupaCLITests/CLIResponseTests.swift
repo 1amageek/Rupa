@@ -3288,6 +3288,49 @@ struct CLIModelDirectEditCommandTests {
 @Suite(.serialized)
 struct CLICommandApplyTests {
     @Test(.timeLimit(.minutes(1)))
+    func executableAppliesAutomationBatchInFileModeAsJSON() async throws {
+        let temporaryDirectory = try makeTemporaryDirectory()
+        defer {
+            removeTemporaryDirectory(temporaryDirectory)
+        }
+        let documentURL = temporaryDirectory.appendingPathComponent("process-batch-apply.swcad")
+        let batchURL = temporaryDirectory.appendingPathComponent("plane-batch.json")
+        try DocumentFileService().save(.empty(named: "Process Batch Apply"), to: documentURL)
+
+        let batch = AutomationBatch(
+            commands: [
+                .createConstructionPlane(name: "Batch Plane A", plane: .xy, activates: true),
+                .createConstructionPlane(name: "Batch Plane B", plane: .yz, activates: false),
+            ]
+        )
+        try JSONEncoder().encode(batch).write(to: batchURL)
+
+        let result = try await runCLI([
+            "batch",
+            documentURL.path,
+            "--input",
+            batchURL.path,
+            "--mode",
+            "file",
+            "--json",
+        ])
+        let response = try JSONDecoder().decode(
+            CLIBatchResponse.self,
+            from: result.standardOutputData
+        )
+        let loaded = try DocumentFileService().load(from: documentURL)
+
+        #expect(result.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: result.standardError))
+        #expect(response.commandCount == 2)
+        #expect(response.results.count == 2)
+        #expect(response.didMutate)
+        #expect(response.saved)
+        #expect(response.results.allSatisfy { $0.didMutate })
+        #expect(loaded.productMetadata.constructionPlanes.values.contains { $0.name == "Batch Plane A" })
+        #expect(loaded.productMetadata.constructionPlanes.values.contains { $0.name == "Batch Plane B" })
+    }
+
+    @Test(.timeLimit(.minutes(1)))
     func executableAppliesAutomationCommandPayloadsAsJSON() async throws {
         let temporaryDirectory = try makeTemporaryDirectory()
         defer {
