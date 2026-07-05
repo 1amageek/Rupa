@@ -276,7 +276,8 @@ public final class EditorSession {
         targetSceneNodeID: SceneNodeID?,
         modelPoint: Point2D? = nil,
         modelWorldPoint: Point3D? = nil,
-        sketchPlane: SketchPlane = .xy
+        sketchPlane: SketchPlane = .xy,
+        placementCellMeters: Double? = nil
     ) -> ModelingToolActivationResult {
         switch selectedTool {
         case .select:
@@ -325,7 +326,8 @@ public final class EditorSession {
             }
             let result = createExtrudedRectangleFromCanvasClick(
                 centerModelPoint: modelPoint,
-                sketchPlane: sketchPlane
+                sketchPlane: sketchPlane,
+                cellMeters: placementCellMeters
             )
             if result != nil {
                 selectNewestSceneNode()
@@ -1974,7 +1976,8 @@ public final class EditorSession {
     @discardableResult
     public func createExtrudedRectangleFromCanvasClick(
         centerModelPoint: Point2D,
-        sketchPlane: SketchPlane = .xy
+        sketchPlane: SketchPlane = .xy,
+        cellMeters: Double? = nil
     ) -> CommandExecutionResult? {
         guard centerModelPoint.x.isFinite,
               centerModelPoint.y.isFinite else {
@@ -1985,7 +1988,16 @@ public final class EditorSession {
             return nil
         }
 
-        let sideMeters = document.workspaceScaleDefaults.placedSolidSideMeters
+        // Prefer the host-supplied visible grid cell size when it is valid, otherwise fall
+        // back to the ruler-derived workspace default. This mirrors the host-supplied
+        // interaction defaults (slotWidthMeters / sketchVertexOffsetDistanceMeters /
+        // edgeOffsetDistanceMeters) that the viewport resolves against the ruler.
+        let sideMeters: Double
+        if let cellMeters, cellMeters.isFinite, cellMeters > 0.0 {
+            sideMeters = cellMeters
+        } else {
+            sideMeters = document.workspaceScaleDefaults.placedSolidSideMeters
+        }
         let halfSideMeters = sideMeters / 2.0
         let center = sketchPoint2D(from: centerModelPoint, on: sketchPlane)
         return perform(

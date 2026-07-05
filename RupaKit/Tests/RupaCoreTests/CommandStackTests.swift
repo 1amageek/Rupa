@@ -6568,6 +6568,101 @@ private func twoCircleConstraintCommandDocument(
     return (document, featureID, firstCircleID, secondCircleID)
 }
 
+@MainActor
+@Test func editorSessionCanvasSolidClickUsesSuppliedPlacementCellSide() async throws {
+    let session = EditorSession()
+
+    session.selectTool(.solid)
+    let result = session.activateSelectedToolFromCanvas(
+        targetSceneNodeID: nil,
+        modelPoint: Point2D(x: 0.0, y: 0.0),
+        placementCellMeters: 1.0
+    )
+
+    let order = session.document.cadDocument.designGraph.order
+    let sketchFeatureID = try #require(order.first)
+    let bodyFeatureID = try #require(order.last)
+    let sketchFeature = try #require(session.document.cadDocument.designGraph.nodes[sketchFeatureID])
+    guard case let .sketch(sketch) = sketchFeature.operation else {
+        Issue.record("Canvas click should create a source sketch feature.")
+        return
+    }
+    let bodyFeature = try #require(session.document.cadDocument.designGraph.nodes[bodyFeatureID])
+    guard case let .extrude(extrude) = bodyFeature.operation else {
+        Issue.record("Canvas click should create a body feature.")
+        return
+    }
+    let points = try resolvedLinePoints(
+        in: sketch,
+        parameters: session.document.cadDocument.parameters
+    )
+    let distance = try resolvedLength(
+        extrude.distance,
+        parameters: session.document.cadDocument.parameters
+    )
+
+    #expect(result.didMutate)
+    #expect(session.selectedTool == .select)
+    #expect(order.count == 2)
+    // Supplied cell of 1 m must produce a 1 m cube centered on the click.
+    #expect(points == Set([
+        Point2D(x: -0.5, y: -0.5),
+        Point2D(x: 0.5, y: -0.5),
+        Point2D(x: 0.5, y: 0.5),
+        Point2D(x: -0.5, y: 0.5),
+    ]))
+    #expect(abs(distance - 1.0) < 0.000_000_000_001)
+}
+
+@MainActor
+@Test func editorSessionCanvasSolidClickFallsBackToWorkspaceScaleForInvalidCell() async throws {
+    // Default (millimeter) ruler places a 0.04 m cube; half-side is 0.02 m.
+    let fallbackSideMeters = EditorSession().document.workspaceScaleDefaults.placedSolidSideMeters
+    let halfFallback = fallbackSideMeters / 2.0
+
+    // nil = not supplied; 0 / negative / non-finite = rejected. All must fall back.
+    let invalidCells: [Double?] = [nil, 0.0, -4.0, Double.nan]
+    for cellMeters in invalidCells {
+        let session = EditorSession()
+        _ = try #require(
+            session.createExtrudedRectangleFromCanvasClick(
+                centerModelPoint: Point2D(x: 0.0, y: 0.0),
+                cellMeters: cellMeters
+            )
+        )
+
+        let order = session.document.cadDocument.designGraph.order
+        let sketchFeatureID = try #require(order.first)
+        let bodyFeatureID = try #require(order.last)
+        let sketchFeature = try #require(session.document.cadDocument.designGraph.nodes[sketchFeatureID])
+        guard case let .sketch(sketch) = sketchFeature.operation else {
+            Issue.record("Canvas click should create a source sketch feature.")
+            return
+        }
+        let bodyFeature = try #require(session.document.cadDocument.designGraph.nodes[bodyFeatureID])
+        guard case let .extrude(extrude) = bodyFeature.operation else {
+            Issue.record("Canvas click should create a body feature.")
+            return
+        }
+        let points = try resolvedLinePoints(
+            in: sketch,
+            parameters: session.document.cadDocument.parameters
+        )
+        let distance = try resolvedLength(
+            extrude.distance,
+            parameters: session.document.cadDocument.parameters
+        )
+
+        #expect(points == Set([
+            Point2D(x: -halfFallback, y: -halfFallback),
+            Point2D(x: halfFallback, y: -halfFallback),
+            Point2D(x: halfFallback, y: halfFallback),
+            Point2D(x: -halfFallback, y: halfFallback),
+        ]))
+        #expect(abs(distance - fallbackSideMeters) < 0.000_000_000_001)
+    }
+}
+
 private func resolvedLinePoints(
     in sketch: Sketch,
     parameters: ParameterTable

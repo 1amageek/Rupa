@@ -123,6 +123,7 @@ public struct MainView: View {
     @State private var viewportProjectionRequest: ViewportProjectionRequest?
     @State private var viewportCameraFrame: ViewportCameraFrame
     @State private var viewportCameraFrameRequest: ViewportCameraFrameRequest?
+    @State private var viewportProjectedGridStepMeters: Double?
     @State private var constructionPlaneRenameTargetID: ConstructionPlaneSourceID?
     @State private var constructionPlaneRenameText: String
     @State private var hoveredViewportPickingBackend: ViewportPickingBackend?
@@ -218,6 +219,7 @@ public struct MainView: View {
             camera: .identity
         ))
         self._viewportCameraFrameRequest = State(initialValue: nil)
+        self._viewportProjectedGridStepMeters = State(initialValue: nil)
         self._constructionPlaneRenameTargetID = State(initialValue: nil)
         self._constructionPlaneRenameText = State(initialValue: "")
         self._viewportHoverClearSignal = State(initialValue: 0)
@@ -630,6 +632,9 @@ public struct MainView: View {
                     },
                     onCameraFrameChange: { frame in
                         viewportCameraFrame = frame
+                    },
+                    onProjectedGridStepChange: { stepMeters in
+                        viewportProjectedGridStepMeters = stepMeters
                     }
                 )
                 .zIndex(0)
@@ -2747,7 +2752,8 @@ public struct MainView: View {
                 fallbackWorldPoint: canvasInput.worldPoint,
                 sketchPlane: sketchPlane
             ),
-            sketchPlane: sketchPlane
+            sketchPlane: sketchPlane,
+            placementCellMeters: viewportProjectedGridStepMeters
         )
         if result.revealsDiagnostics {
             isPreviewExpanded = true

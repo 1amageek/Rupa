@@ -184,6 +184,7 @@ public struct Viewport: View {
     private let onSnapCandidateKindChange: ((RupaCore.SnapCandidateKind?) -> Void)?
     private let onProjectionBasisChange: ((ViewportProjectionBasis) -> Void)?
     private let onCameraFrameChange: ((ViewportCameraFrame) -> Void)?
+    private let onProjectedGridStepChange: ((Double) -> Void)?
 
     public init(
         document: DesignDocument,
@@ -269,7 +270,8 @@ public struct Viewport: View {
         onHover: ((ViewportHit?) -> Void)? = nil,
         onSnapCandidateKindChange: ((RupaCore.SnapCandidateKind?) -> Void)? = nil,
         onProjectionBasisChange: ((ViewportProjectionBasis) -> Void)? = nil,
-        onCameraFrameChange: ((ViewportCameraFrame) -> Void)? = nil
+        onCameraFrameChange: ((ViewportCameraFrame) -> Void)? = nil,
+        onProjectedGridStepChange: ((Double) -> Void)? = nil
     ) {
         self.document = document
         self.currentEvaluation = currentEvaluation
@@ -360,6 +362,7 @@ public struct Viewport: View {
         self.onSnapCandidateKindChange = onSnapCandidateKindChange
         self.onProjectionBasisChange = onProjectionBasisChange
         self.onCameraFrameChange = onCameraFrameChange
+        self.onProjectedGridStepChange = onProjectedGridStepChange
     }
 
     public var body: some View {
@@ -502,6 +505,12 @@ public struct Viewport: View {
                     }
                 }
                 .frame(width: proxy.size.width, height: proxy.size.height)
+                .onChange(of: projectedGrid.minorStepMeters, initial: true) { _, newValue in
+                    // Report the resolved visible grid cell (meters). `.onChange` fires only
+                    // on an actual value change and runs after the view update, so this never
+                    // mutates SwiftUI state mid-update and cannot form a feedback loop.
+                    onProjectedGridStepChange?(newValue)
+                }
             }
             .onChange(of: snapResolutionOptions) { _, _ in
                 refreshSnapCandidateKind(size: proxy.size)
