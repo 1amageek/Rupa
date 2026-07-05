@@ -18,6 +18,7 @@ public struct CLIResponse: Codable, Equatable, Sendable {
     public var viewportGridScale: ViewportGridScaleSnapshot?
     public var savedViews: [SavedView]?
     public var savedViewID: SavedViewID?
+    public var drawingProjection: DrawingProjectionResult?
 
     public init(
         message: String,
@@ -34,7 +35,8 @@ public struct CLIResponse: Codable, Equatable, Sendable {
         viewportGridSettings: ViewportGridSettings? = nil,
         viewportGridScale: ViewportGridScaleSnapshot? = nil,
         savedViews: [SavedView]? = nil,
-        savedViewID: SavedViewID? = nil
+        savedViewID: SavedViewID? = nil,
+        drawingProjection: DrawingProjectionResult? = nil
     ) {
         self.message = message
         self.generation = generation
@@ -51,6 +53,7 @@ public struct CLIResponse: Codable, Equatable, Sendable {
         self.viewportGridScale = viewportGridScale
         self.savedViews = savedViews
         self.savedViewID = savedViewID
+        self.drawingProjection = drawingProjection
     }
 }
 

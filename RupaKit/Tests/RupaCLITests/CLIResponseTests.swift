@@ -3863,6 +3863,67 @@ struct CLIViewCommandTests {
         #expect(removeResponse.savedViews?.isEmpty == true)
         #expect(loadedAfterRemove.productMetadata.savedViews.isEmpty)
     }
+
+    @Test(.timeLimit(.minutes(1)))
+    func executableSavedViewProjectionReadsClosedDocumentAsJSON() async throws {
+        let temporaryDirectory = try makeTemporaryDirectory()
+        defer {
+            removeTemporaryDirectory(temporaryDirectory)
+        }
+        let documentURL = temporaryDirectory.appendingPathComponent("process-view-projection.swcad")
+        let session = EditorSession(document: .empty(named: "Process Drawing Projection"))
+        _ = try session.execute(
+            .createExtrudedRectangle(
+                name: "Drawing Box",
+                plane: .xy,
+                width: .length(2.0, .meter),
+                height: .length(2.0, .meter),
+                depth: .length(2.0, .meter),
+                direction: .normal
+            )
+        )
+        let savedView = SavedView(
+            name: "CLI Drawing View",
+            camera: SavedViewCamera(
+                target: .origin,
+                distanceMeters: 6.0,
+                yawRadians: .pi / 4.0,
+                pitchRadians: 0.62
+            ),
+            projection: .orthographic(heightMeters: 6.0),
+            displayScale: SavedViewDisplayScale(ruler: .standard(for: .meter))
+        )
+        _ = try session.execute(.createSavedView(savedView))
+        try DocumentFileService().save(session.document, to: documentURL)
+
+        let result = try await runCLI([
+            "view",
+            "projection",
+            documentURL.path,
+            "--id",
+            savedView.id.description,
+            "--maximum-stroke-count",
+            "100",
+            "--mode",
+            "file",
+            "--json",
+        ])
+        let response = try JSONDecoder().decode(
+            CLIResponse.self,
+            from: result.standardOutputData
+        )
+        let drawingProjection = try #require(response.drawingProjection)
+
+        #expect(result.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: result.standardError))
+        #expect(response.message.contains("Drawing projection generated"))
+        #expect(response.saved == false)
+        #expect(drawingProjection.savedViewID == savedView.id)
+        #expect(drawingProjection.strokeCount == 12)
+        #expect(drawingProjection.visibilitySegmentCount >= drawingProjection.strokeCount)
+        #expect(drawingProjection.visibleSegmentCount > 0)
+        #expect(drawingProjection.hiddenSegmentCount > 0)
+        #expect(drawingProjection.unclassifiedSegmentCount == 0)
+    }
 }
 
 @Suite(.serialized)
@@ -6553,6 +6614,79 @@ func cliExecutableReturnsDataExitForLiveGenerationMismatch() async throws {
     #expect(response.savedViewID == savedViewID)
     #expect(response.savedViews?.map(\.id) == [savedViewID])
     #expect(response.savedViews?.first?.displayScale.matchedPreset == .sitePlanning)
+}
+
+@Test func cliAutomationResponseCarriesDrawingProjection() {
+    let savedViewID = SavedViewID()
+    let strokeID = "\(savedViewID.description):stroke:0"
+    let drawingProjection = DrawingProjectionResult(
+        displayUnit: .meter,
+        savedViewID: savedViewID,
+        savedViewName: "Automation Drawing View",
+        projectionMode: .orthographic,
+        viewFrame: DrawingProjectionResult.ViewFrame(
+            target: .origin,
+            right: Vector3D(x: 1.0, y: 0.0, z: 0.0),
+            up: Vector3D(x: 0.0, y: 1.0, z: 0.0),
+            viewNormal: Vector3D(x: 0.0, y: 0.0, z: 1.0),
+            visibleHeightMeters: 10.0,
+            scaleBarLengthMeters: 1.0
+        ),
+        bodyCount: 1,
+        triangleCount: 2,
+        candidateEdgeCount: 1,
+        truncatedStrokes: false,
+        bounds: DrawingProjectionResult.Bounds2D(
+            minX: 0.0,
+            minY: 0.0,
+            maxX: 1.0,
+            maxY: 0.0
+        ),
+        strokes: [
+            DrawingProjectionResult.Stroke(
+                id: strokeID,
+                bodyID: "body",
+                kind: .crease,
+                visibility: .visible,
+                start: .origin,
+                end: Point3D(x: 1.0, y: 0.0, z: 0.0),
+                start2D: Point2D(x: 0.0, y: 0.0),
+                end2D: Point2D(x: 1.0, y: 0.0),
+                minimumDepthMeters: 0.0,
+                maximumDepthMeters: 0.0,
+                lengthMeters: 1.0,
+                visibilitySegments: [
+                    DrawingProjectionResult.VisibilitySegment(
+                        id: "\(strokeID):segment:0",
+                        visibility: .visible,
+                        startFraction: 0.0,
+                        endFraction: 1.0,
+                        start2D: Point2D(x: 0.0, y: 0.0),
+                        end2D: Point2D(x: 1.0, y: 0.0),
+                        minimumDepthMeters: 0.0,
+                        maximumDepthMeters: 0.0,
+                        lengthMeters: 1.0
+                    ),
+                ]
+            ),
+        ],
+        diagnostics: []
+    )
+    let automationResult = AutomationResult(
+        message: "Drawing projection generated.",
+        generation: DocumentGeneration(5),
+        diagnostics: [],
+        drawingProjection: drawingProjection
+    )
+
+    let response = CLIResponse(
+        result: automationResult,
+        dirty: false,
+        saved: false
+    )
+
+    #expect(response.drawingProjection == drawingProjection)
+    #expect(response.drawingProjection?.visibilitySegmentCount == 1)
 }
 
 @Test func cliServiceReportsAgentStatus() async throws {

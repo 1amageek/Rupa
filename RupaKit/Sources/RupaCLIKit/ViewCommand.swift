@@ -13,6 +13,7 @@ public struct ViewCommand: ParsableCommand {
             ViewCreateCommand.self,
             ViewUpdateCommand.self,
             ViewRemoveCommand.self,
+            ViewProjectionCommand.self,
         ],
         defaultSubcommand: ViewListCommand.self
     )
@@ -111,6 +112,49 @@ public struct ViewRemoveCommand: ParsableCommand {
         try CLIAutomationCommandRunner.run(
             document: document,
             command: .removeSavedView(id: try CLISavedViewIDParser.id(id))
+        )
+    }
+}
+
+public struct ViewProjectionCommand: ParsableCommand {
+    public static let configuration = CommandConfiguration(
+        commandName: "projection",
+        abstract: "Generate structured drawing projection strokes from a saved orthographic view."
+    )
+
+    @OptionGroup
+    public var document: CLIWriteDocumentOptions
+
+    @Option(help: "Saved orthographic view UUID.")
+    public var id: String
+
+    @Option(help: "Optional drawing projection tolerance in meters.")
+    public var toleranceMeters: Double?
+
+    @Option(help: "Maximum number of projection strokes to return.")
+    public var maximumStrokeCount: Int = 10_000
+
+    public init() {}
+
+    public func run() throws {
+        guard maximumStrokeCount > 0 else {
+            throw ValidationError("--maximum-stroke-count must be positive.")
+        }
+        if let toleranceMeters {
+            guard toleranceMeters.isFinite,
+                  toleranceMeters > 0.0 else {
+                throw ValidationError("--tolerance-meters must be finite and positive.")
+            }
+        }
+        try CLIAutomationCommandRunner.run(
+            document: document,
+            command: .generateDrawingProjection(
+                query: DrawingProjectionQuery(
+                    savedViewID: try CLISavedViewIDParser.id(id),
+                    toleranceMeters: toleranceMeters,
+                    maximumStrokeCount: maximumStrokeCount
+                )
+            )
         )
     }
 }

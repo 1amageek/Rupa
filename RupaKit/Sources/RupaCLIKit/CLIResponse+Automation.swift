@@ -21,7 +21,8 @@ extension CLIResponse {
             viewportGridSettings: result.viewportGridSettings,
             viewportGridScale: result.viewportGridScale,
             savedViews: result.savedViews,
-            savedViewID: result.savedViewID
+            savedViewID: result.savedViewID,
+            drawingProjection: result.drawingProjection
         )
     }
 }
