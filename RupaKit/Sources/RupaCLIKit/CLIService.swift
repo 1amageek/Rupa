@@ -4686,6 +4686,11 @@ public struct CLIService {
         )
     }
 
+    // Live/auto batch application is NOT atomic: each command is sent to the app
+    // as an independent committed mutation, so a mid-batch failure leaves earlier
+    // commands applied (there is no live rollback). This differs from file mode,
+    // which applies the whole batch in memory and saves only on full success.
+    // Batch undo grouping for live sessions is an open specification decision.
     private func runBatchLiveSession(
         _ batch: AutomationBatch,
         sessionID: UUID,

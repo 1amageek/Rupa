@@ -5,7 +5,13 @@ import RupaAutomation
 public struct BatchCommand: ParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "batch",
-        abstract: "Apply an AutomationBatch JSON file to a file or live document."
+        abstract: """
+        Apply an AutomationBatch JSON file to a file or live document. \
+        File mode is atomic: the batch is applied in memory and saved only if \
+        every command succeeds. Live/auto mode applies each command as an \
+        independent committed mutation, so a mid-batch failure leaves earlier \
+        commands applied (partial application).
+        """
     )
 
     @OptionGroup

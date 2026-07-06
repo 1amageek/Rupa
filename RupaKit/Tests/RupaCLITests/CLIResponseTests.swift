@@ -8865,6 +8865,57 @@ private func cliDefaultBoxFixture() throws -> (
     return (session.document, bodyFeatureID, bodyNodeID)
 }
 
+@Suite struct CLIBatchResponseDiagnosticsTests {
+    @Test func batchResponseDeduplicatesEquivalentDiagnosticsAcrossCommands() throws {
+        // Two commands each surface the same workspace-level warning (distinct
+        // ids, identical content) plus one command adds a unique info diagnostic.
+        let warningA = EditorDiagnostic(
+            severity: .warning,
+            code: .workspacePrecisionWarning,
+            message: "Coordinates are far from the origin."
+        )
+        let warningB = EditorDiagnostic(
+            severity: .warning,
+            code: .workspacePrecisionWarning,
+            message: "Coordinates are far from the origin."
+        )
+        let unique = EditorDiagnostic(
+            severity: .info,
+            code: nil,
+            message: "Command applied."
+        )
+        let result1 = AutomationResult(
+            message: "one",
+            generation: DocumentGeneration(1),
+            didMutate: true,
+            diagnostics: [warningA, unique]
+        )
+        let result2 = AutomationResult(
+            message: "two",
+            generation: DocumentGeneration(2),
+            didMutate: true,
+            diagnostics: [warningB]
+        )
+
+        let response = CLIBatchResponse(
+            results: [result1, result2],
+            generation: DocumentGeneration(2),
+            dirty: false,
+            saved: true
+        )
+
+        // Per-command diagnostics stay authoritative and un-deduped.
+        #expect(response.results[0].diagnostics.count == 2)
+        #expect(response.results[1].diagnostics.count == 1)
+        // Top-level aggregate deduplicates the equivalent warning to one entry.
+        #expect(response.diagnostics.count == 2)
+        #expect(response.diagnostics.filter { $0.code == .workspacePrecisionWarning }.count == 1)
+        #expect(response.diagnostics.contains { $0.severity == .info && $0.message == "Command applied." })
+        #expect(response.commandCount == 2)
+        #expect(response.didMutate)
+    }
+}
+
 private func cliFarFromOriginRectangleDocument() throws -> (
     document: DesignDocument,
     bodyFeatureID: FeatureID
