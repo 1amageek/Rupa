@@ -13,7 +13,7 @@ public struct SketchInsertControlPointCommand: ParsableCommand {
     @OptionGroup
     public var selection: CLISelectionTargetOptions
 
-    @Option(help: "Scalar fraction along the selected spline.")
+    @Option(parsing: .unconditional, help: "Scalar fraction along the selected spline.")
     public var fraction: Double
 
     public init() {}

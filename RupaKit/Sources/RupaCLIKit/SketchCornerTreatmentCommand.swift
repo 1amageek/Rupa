@@ -37,7 +37,7 @@ public struct SketchCornerTreatmentCommand: ParsableCommand {
     @Option(help: "JSON file containing one optional adjacent SelectionTarget object.")
     public var adjacentTargetFile: String?
 
-    @Option(help: "Fillet radius or chamfer distance numeric literal.")
+    @Option(parsing: .unconditional, help: "Fillet radius or chamfer distance numeric literal.")
     public var distance: Double
 
     @Option(help: "Length unit for the treatment distance. Defaults to the document display unit.")

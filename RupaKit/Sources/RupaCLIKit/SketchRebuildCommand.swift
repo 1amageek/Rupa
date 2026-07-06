@@ -24,10 +24,10 @@ public struct SketchRebuildCommand: ParsableCommand {
     @Option(help: "Rebuild method: points, refit, or explicit-control.")
     public var method: Method
 
-    @Option(help: "Requested control point count for the points method.")
+    @Option(parsing: .unconditional, help: "Requested control point count for the points method.")
     public var controlPointCount: Int?
 
-    @Option(help: "Refit tolerance numeric literal.")
+    @Option(parsing: .unconditional, help: "Refit tolerance numeric literal.")
     public var tolerance: Double?
 
     @Option(help: "Length unit for the refit tolerance. Defaults to the document display unit.")
@@ -36,13 +36,13 @@ public struct SketchRebuildCommand: ParsableCommand {
     @Flag(help: "Keep sharp internal corners during refit when supported.")
     public var keepsCorners: Bool = false
 
-    @Option(help: "Requested degree for explicit-control rebuild.")
+    @Option(parsing: .unconditional, help: "Requested degree for explicit-control rebuild.")
     public var degree: Int?
 
-    @Option(help: "Requested span count for explicit-control rebuild.")
+    @Option(parsing: .unconditional, help: "Requested span count for explicit-control rebuild.")
     public var spanCount: Int?
 
-    @Option(help: "Explicit-control rebuild weight.")
+    @Option(parsing: .unconditional, help: "Explicit-control rebuild weight.")
     public var weight: Double?
 
     public init() {}

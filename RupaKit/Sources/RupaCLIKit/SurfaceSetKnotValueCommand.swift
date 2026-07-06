@@ -18,7 +18,7 @@ public struct SurfaceSetKnotValueCommand: ParsableCommand {
     @Option(help: "JSON file containing one SelectionReference object.")
     public var referenceFile: String?
 
-    @Option(help: "Knot scalar value.")
+    @Option(parsing: .unconditional, help: "Knot scalar value.")
     public var value: Double
 
     @Option(help: "Edit mode: auto, file, or live.")

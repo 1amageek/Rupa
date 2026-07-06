@@ -37,7 +37,7 @@ public struct SketchOffsetCommand: ParsableCommand {
     @OptionGroup
     public var options: CLIOffsetCurveOptions
 
-    @Option(help: "Offset distance numeric literal.")
+    @Option(parsing: .unconditional, help: "Offset distance numeric literal.")
     public var distance: Double
 
     @Option(help: "Length unit for the offset distance. Defaults to the document display unit.")

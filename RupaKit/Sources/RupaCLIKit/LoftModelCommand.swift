@@ -87,7 +87,7 @@ public struct LoftModelCommand: ParsableCommand {
     @Option(help: "Loft surface mode: ruled or smooth.")
     public var surfaceMode: SurfaceMode = .ruled
 
-    @Option(help: "Positive scale applied to smooth Loft section-direction tangents.")
+    @Option(parsing: .unconditional, help: "Positive scale applied to smooth Loft section-direction tangents.")
     public var smoothTangentScale: Double = 1.0
 
     @Option(

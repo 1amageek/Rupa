@@ -29,7 +29,7 @@ public struct DimensionAddSelectionCommand: ParsableCommand {
     @Option(help: "JSON file containing the second SelectionTarget object.")
     public var secondTargetFile: String?
 
-    @Option(help: "Target dimension value numeric literal.")
+    @Option(parsing: .unconditional, help: "Target dimension value numeric literal.")
     public var targetValue: Double
 
     @Option(help: "Length unit for distance dimensions. Defaults to the document display unit.")

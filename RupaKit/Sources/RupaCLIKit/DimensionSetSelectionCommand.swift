@@ -17,7 +17,7 @@ public struct DimensionSetSelectionCommand: ParsableCommand {
     @Option(help: "Selection dimension kind used to parse the target value: distance or angle.")
     public var kind: CLISelectionDimensionKind
 
-    @Option(help: "Target dimension value numeric literal.")
+    @Option(parsing: .unconditional, help: "Target dimension value numeric literal.")
     public var targetValue: Double
 
     @Option(help: "Length unit for distance dimensions. Defaults to the document display unit.")

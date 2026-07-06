@@ -16,31 +16,31 @@ public struct RevolveModelCommand: ParsableCommand {
     @Option(help: "Closed profile sketch feature UUID used as the revolve profile.")
     public var profileFeatureID: String
 
-    @Option(help: "Profile index inside the profile feature.")
+    @Option(parsing: .unconditional, help: "Profile index inside the profile feature.")
     public var profileIndex: Int = 0
 
-    @Option(help: "Axis origin X coordinate.")
+    @Option(parsing: .unconditional, help: "Axis origin X coordinate.")
     public var axisOriginX: Double = 0.0
 
-    @Option(help: "Axis origin Y coordinate.")
+    @Option(parsing: .unconditional, help: "Axis origin Y coordinate.")
     public var axisOriginY: Double = 0.0
 
-    @Option(help: "Axis origin Z coordinate.")
+    @Option(parsing: .unconditional, help: "Axis origin Z coordinate.")
     public var axisOriginZ: Double = 0.0
 
     @Option(help: "Length unit for axis origin coordinates. Defaults to the document display unit.")
     public var axisUnit: String?
 
-    @Option(help: "Axis direction X component.")
+    @Option(parsing: .unconditional, help: "Axis direction X component.")
     public var axisDirectionX: Double = 0.0
 
-    @Option(help: "Axis direction Y component.")
+    @Option(parsing: .unconditional, help: "Axis direction Y component.")
     public var axisDirectionY: Double = 1.0
 
-    @Option(help: "Axis direction Z component.")
+    @Option(parsing: .unconditional, help: "Axis direction Z component.")
     public var axisDirectionZ: Double = 0.0
 
-    @Option(help: "Revolve angle numeric literal.")
+    @Option(parsing: .unconditional, help: "Revolve angle numeric literal.")
     public var angle: Double = 360.0
 
     @Option(help: "Angle unit: degree or radian.")

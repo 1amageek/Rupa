@@ -18,7 +18,7 @@ public struct SurfaceInsertTrimKnotCommand: ParsableCommand {
     @Option(help: "JSON file containing one SelectionReference object.")
     public var referenceFile: String?
 
-    @Option(help: "Inserted trim p-curve knot scalar value.")
+    @Option(parsing: .unconditional, help: "Inserted trim p-curve knot scalar value.")
     public var value: Double
 
     @Option(help: "Edit mode: auto, file, or live.")

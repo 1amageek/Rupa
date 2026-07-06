@@ -74,25 +74,25 @@ public struct PlaneCreateViewCommand: ParsableCommand {
     @Option(help: "Saved construction-plane name.")
     public var name: String
 
-    @Option(help: "Origin X coordinate.")
+    @Option(parsing: .unconditional, help: "Origin X coordinate.")
     public var originX: Double = 0.0
 
-    @Option(help: "Origin Y coordinate.")
+    @Option(parsing: .unconditional, help: "Origin Y coordinate.")
     public var originY: Double = 0.0
 
-    @Option(help: "Origin Z coordinate.")
+    @Option(parsing: .unconditional, help: "Origin Z coordinate.")
     public var originZ: Double = 0.0
 
     @Option(help: "Length unit for the origin coordinates.")
     public var unit: LengthDisplayUnit = .meter
 
-    @Option(help: "View normal X component.")
+    @Option(parsing: .unconditional, help: "View normal X component.")
     public var normalX: Double = 0.0
 
-    @Option(help: "View normal Y component.")
+    @Option(parsing: .unconditional, help: "View normal Y component.")
     public var normalY: Double = 0.0
 
-    @Option(help: "View normal Z component.")
+    @Option(parsing: .unconditional, help: "View normal Z component.")
     public var normalZ: Double = 1.0
 
     @Flag(name: .customLong("no-activate"), help: "Create the plane without making it active.")
@@ -178,13 +178,13 @@ public struct PlaneCreateTargetsCommand: ParsableCommand {
     @OptionGroup
     public var selection: CLISelectionTargetsOptions
 
-    @Option(help: "View normal X component for target combinations that need camera context.")
+    @Option(parsing: .unconditional, help: "View normal X component for target combinations that need camera context.")
     public var viewNormalX: Double?
 
-    @Option(help: "View normal Y component for target combinations that need camera context.")
+    @Option(parsing: .unconditional, help: "View normal Y component for target combinations that need camera context.")
     public var viewNormalY: Double?
 
-    @Option(help: "View normal Z component for target combinations that need camera context.")
+    @Option(parsing: .unconditional, help: "View normal Z component for target combinations that need camera context.")
     public var viewNormalZ: Double?
 
     @Flag(name: .customLong("no-activate"), help: "Create the plane without making it active.")

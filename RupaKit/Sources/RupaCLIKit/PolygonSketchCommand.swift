@@ -16,16 +16,16 @@ public struct PolygonSketchCommand: ParsableCommand {
     @Option(help: "Feature name.")
     public var name: String = "Polygon Sketch"
 
-    @Option(help: "Polygon center X numeric literal.")
+    @Option(parsing: .unconditional, help: "Polygon center X numeric literal.")
     public var centerX: Double
 
-    @Option(help: "Polygon center Y numeric literal.")
+    @Option(parsing: .unconditional, help: "Polygon center Y numeric literal.")
     public var centerY: Double
 
-    @Option(help: "Polygon radius numeric literal.")
+    @Option(parsing: .unconditional, help: "Polygon radius numeric literal.")
     public var radius: Double
 
-    @Option(help: "Polygon side count.")
+    @Option(parsing: .unconditional, help: "Polygon side count.")
     public var sides: Int = PolygonToolState.defaultSideCount
 
     @Option(help: "Length unit for center coordinates and radius. Defaults to the document display unit.")
@@ -40,7 +40,7 @@ public struct PolygonSketchCommand: ParsableCommand {
     @Option(help: "Initial polygon orientation: vertical or horizontal.")
     public var inclinationMode: PolygonInclinationMode = .vertical
 
-    @Option(help: "Additional rotation angle numeric literal.")
+    @Option(parsing: .unconditional, help: "Additional rotation angle numeric literal.")
     public var rotationAngle: Double = 0.0
 
     @Option(help: "Angle unit for rotation: degree or radian.")

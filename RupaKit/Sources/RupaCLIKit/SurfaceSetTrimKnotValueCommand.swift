@@ -18,10 +18,10 @@ public struct SurfaceSetTrimKnotValueCommand: ParsableCommand {
     @Option(help: "JSON file containing one SelectionReference object.")
     public var referenceFile: String?
 
-    @Option(help: "B-spline trim p-curve knot index from surfaceSourceSummary.")
+    @Option(parsing: .unconditional, help: "B-spline trim p-curve knot index from surfaceSourceSummary.")
     public var knotIndex: Int
 
-    @Option(help: "Target trim p-curve knot scalar value.")
+    @Option(parsing: .unconditional, help: "Target trim p-curve knot scalar value.")
     public var value: Double
 
     @Option(help: "Edit mode: auto, file, or live.")

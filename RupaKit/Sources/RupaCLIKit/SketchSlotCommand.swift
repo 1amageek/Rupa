@@ -14,7 +14,7 @@ public struct SketchSlotCommand: ParsableCommand {
     @OptionGroup
     public var selection: CLISelectionTargetOptions
 
-    @Option(help: "Slot width numeric literal.")
+    @Option(parsing: .unconditional, help: "Slot width numeric literal.")
     public var width: Double
 
     @Option(help: "Length unit for the slot width. Defaults to the document display unit.")

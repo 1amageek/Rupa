@@ -11,10 +11,10 @@ public struct InspectSnapCommand: ParsableCommand {
     @OptionGroup
     public var document: CLIReadDocumentOptions
 
-    @Option(help: "Input X coordinate.")
+    @Option(parsing: .unconditional, help: "Input X coordinate.")
     public var x: Double
 
-    @Option(help: "Input Y coordinate.")
+    @Option(parsing: .unconditional, help: "Input Y coordinate.")
     public var y: Double
 
     @Option(help: "Length unit for X and Y.")

@@ -19,7 +19,7 @@ public struct SketchCurvatureDisplayCommand: ParsableCommand {
     @Flag(help: "Hide curvature combs for the selected source curve.")
     public var hide: Bool = false
 
-    @Option(help: "Positive curvature comb scale.")
+    @Option(parsing: .unconditional, help: "Positive curvature comb scale.")
     public var combScale: Double?
 
     public init() {}

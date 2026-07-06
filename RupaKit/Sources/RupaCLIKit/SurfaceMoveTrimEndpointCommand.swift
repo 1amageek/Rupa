@@ -21,10 +21,10 @@ public struct SurfaceMoveTrimEndpointCommand: ParsableCommand {
     @Option(help: "Trim endpoint to move: start or end.")
     public var endpoint: SurfaceTrimEndpoint = .end
 
-    @Option(help: "Target U parameter.")
+    @Option(parsing: .unconditional, help: "Target U parameter.")
     public var u: Double
 
-    @Option(help: "Target V parameter.")
+    @Option(parsing: .unconditional, help: "Target V parameter.")
     public var v: Double
 
     @Option(help: "Edit mode: auto, file, or live.")

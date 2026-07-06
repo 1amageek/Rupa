@@ -18,13 +18,13 @@ public struct SurfaceMoveTrimControlPointCommand: ParsableCommand {
     @Option(help: "JSON file containing one SelectionReference object.")
     public var referenceFile: String?
 
-    @Option(help: "Strict interior p-curve control point index.")
+    @Option(parsing: .unconditional, help: "Strict interior p-curve control point index.")
     public var controlPointIndex: Int
 
-    @Option(help: "Target U parameter.")
+    @Option(parsing: .unconditional, help: "Target U parameter.")
     public var u: Double
 
-    @Option(help: "Target V parameter.")
+    @Option(parsing: .unconditional, help: "Target V parameter.")
     public var v: Double
 
     @Option(help: "Edit mode: auto, file, or live.")

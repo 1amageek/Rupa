@@ -13,7 +13,7 @@ public struct SketchSplitCommand: ParsableCommand {
     @OptionGroup
     public var selection: CLISelectionTargetOptions
 
-    @Option(help: "Split fraction along the selected curve.")
+    @Option(parsing: .unconditional, help: "Split fraction along the selected curve.")
     public var fraction: Double
 
     public init() {}

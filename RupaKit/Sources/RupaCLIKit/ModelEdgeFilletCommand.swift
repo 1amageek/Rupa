@@ -14,13 +14,13 @@ public struct ModelEdgeFilletCommand: ParsableCommand {
     @OptionGroup
     public var selection: CLISelectionTargetsOptions
 
-    @Option(help: "Fillet radius numeric literal.")
+    @Option(parsing: .unconditional, help: "Fillet radius numeric literal.")
     public var radius: Double
 
     @Option(help: "Length unit for the fillet radius. Defaults to the document display unit.")
     public var unit: String?
 
-    @Option(help: "Profile arc segment count.")
+    @Option(parsing: .unconditional, help: "Profile arc segment count.")
     public var segmentCount: Int = 8
 
     public init() {}

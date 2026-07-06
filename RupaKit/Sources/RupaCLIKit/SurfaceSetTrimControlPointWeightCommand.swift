@@ -18,10 +18,10 @@ public struct SurfaceSetTrimControlPointWeightCommand: ParsableCommand {
     @Option(help: "JSON file containing one SelectionReference object.")
     public var referenceFile: String?
 
-    @Option(help: "B-spline p-curve control point index.")
+    @Option(parsing: .unconditional, help: "B-spline p-curve control point index.")
     public var controlPointIndex: Int
 
-    @Option(help: "Positive target weight.")
+    @Option(parsing: .unconditional, help: "Positive target weight.")
     public var weight: Double
 
     @Option(help: "Edit mode: auto, file, or live.")

@@ -24,13 +24,13 @@ public struct CLISketchConstraintTypedOptions: ParsableArguments {
     @Option(help: "Reference kind for fixed constraints.")
     public var referenceKind: CLISketchReferenceKind?
 
-    @Option(help: "Spline control-point index for single-reference constraints.")
+    @Option(parsing: .unconditional, help: "Spline control-point index for single-reference constraints.")
     public var controlPointIndex: Int?
 
-    @Option(help: "First spline control-point index for coincident constraints.")
+    @Option(parsing: .unconditional, help: "First spline control-point index for coincident constraints.")
     public var firstControlPointIndex: Int?
 
-    @Option(help: "Second spline control-point index for coincident constraints.")
+    @Option(parsing: .unconditional, help: "Second spline control-point index for coincident constraints.")
     public var secondControlPointIndex: Int?
 
     @Option(help: "Spline entity ID for spline endpoint tangent constraints.")

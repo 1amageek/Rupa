@@ -716,7 +716,7 @@ public struct DimensionSetSketchCommand: ParsableCommand {
     @Option(help: "Sketch dimension kind: length, radius, diameter, or angle.")
     public var kind: SketchEntityDimensionKind
 
-    @Option(help: "Dimension value numeric literal.")
+    @Option(parsing: .unconditional, help: "Dimension value numeric literal.")
     public var value: Double
 
     @Option(help: "Unit for the value. Length dimensions default to the document display unit; angle dimensions default to degree.")
@@ -810,7 +810,7 @@ public struct DimensionSetObjectCommand: ParsableCommand {
     @Option(help: "Object dimension kind: sizeX, sizeY, sizeZ, radius, or diameter.")
     public var kind: ObjectDimensionKind
 
-    @Option(help: "Dimension value numeric literal.")
+    @Option(parsing: .unconditional, help: "Dimension value numeric literal.")
     public var value: Double
 
     @Option(help: "Length unit for the value. Defaults to the document display unit.")
@@ -1033,13 +1033,13 @@ public struct SurfaceMoveControlPointCommand: ParsableCommand {
     @Option(help: "JSON file containing one SelectionReference object.")
     public var referenceFile: String?
 
-    @Option(help: "Delta X numeric literal.")
+    @Option(parsing: .unconditional, help: "Delta X numeric literal.")
     public var deltaX: Double = 0.0
 
-    @Option(help: "Delta Y numeric literal.")
+    @Option(parsing: .unconditional, help: "Delta Y numeric literal.")
     public var deltaY: Double = 0.0
 
-    @Option(help: "Delta Z numeric literal.")
+    @Option(parsing: .unconditional, help: "Delta Z numeric literal.")
     public var deltaZ: Double = 0.0
 
     @Option(help: "Length unit for delta values. Defaults to the document display unit.")
@@ -1150,7 +1150,7 @@ public struct SurfaceSlideControlPointsCommand: ParsableCommand {
     @Option(help: "Slide direction: positiveU, negativeU, normal, positiveV, or negativeV.")
     public var direction: CLISurfaceSlideDirection
 
-    @Option(help: "Slide distance numeric literal.")
+    @Option(parsing: .unconditional, help: "Slide distance numeric literal.")
     public var distance: Double
 
     @Option(help: "Length unit for slide distance. Defaults to the document display unit.")
@@ -1263,16 +1263,16 @@ public struct LineSketchCommand: ParsableCommand {
     @Option(help: "Feature name.")
     public var name: String = "Line Sketch"
 
-    @Option(help: "Line start X numeric literal.")
+    @Option(parsing: .unconditional, help: "Line start X numeric literal.")
     public var startX: Double
 
-    @Option(help: "Line start Y numeric literal.")
+    @Option(parsing: .unconditional, help: "Line start Y numeric literal.")
     public var startY: Double
 
-    @Option(help: "Line end X numeric literal.")
+    @Option(parsing: .unconditional, help: "Line end X numeric literal.")
     public var endX: Double
 
-    @Option(help: "Line end Y numeric literal.")
+    @Option(parsing: .unconditional, help: "Line end Y numeric literal.")
     public var endY: Double
 
     @Option(help: "Length unit for point coordinates. Defaults to the document display unit.")
@@ -1409,13 +1409,13 @@ public struct CircleSketchCommand: ParsableCommand {
     @Option(help: "Feature name.")
     public var name: String = "Circle Sketch"
 
-    @Option(help: "Circle center X numeric literal.")
+    @Option(parsing: .unconditional, help: "Circle center X numeric literal.")
     public var centerX: Double
 
-    @Option(help: "Circle center Y numeric literal.")
+    @Option(parsing: .unconditional, help: "Circle center Y numeric literal.")
     public var centerY: Double
 
-    @Option(help: "Circle radius numeric literal.")
+    @Option(parsing: .unconditional, help: "Circle radius numeric literal.")
     public var radius: Double
 
     @Option(help: "Length unit for center coordinates and radius. Defaults to the document display unit.")
@@ -1549,10 +1549,10 @@ public struct RectangleSketchCommand: ParsableCommand {
     @Option(help: "Feature name.")
     public var name: String = "Rectangle Sketch"
 
-    @Option(help: "Rectangle width numeric literal.")
+    @Option(parsing: .unconditional, help: "Rectangle width numeric literal.")
     public var width: Double
 
-    @Option(help: "Rectangle height numeric literal.")
+    @Option(parsing: .unconditional, help: "Rectangle height numeric literal.")
     public var height: Double
 
     @Option(help: "Length unit for width and height. Defaults to the document display unit.")
@@ -1683,13 +1683,13 @@ public struct BoxModelCommand: ParsableCommand {
     @Option(help: "Feature name.")
     public var name: String = "Box"
 
-    @Option(help: "Rectangle width numeric literal.")
+    @Option(parsing: .unconditional, help: "Rectangle width numeric literal.")
     public var width: Double
 
-    @Option(help: "Rectangle height numeric literal.")
+    @Option(parsing: .unconditional, help: "Rectangle height numeric literal.")
     public var height: Double
 
-    @Option(help: "Extrude depth numeric literal.")
+    @Option(parsing: .unconditional, help: "Extrude depth numeric literal.")
     public var depth: Double
 
     @Option(help: "Length unit for width, height, and depth. Defaults to the document display unit.")
@@ -1823,19 +1823,19 @@ public struct BoxCornersModelCommand: ParsableCommand {
     @Option(help: "Feature name.")
     public var name: String = "Box"
 
-    @Option(help: "First footprint corner X numeric literal.")
+    @Option(parsing: .unconditional, help: "First footprint corner X numeric literal.")
     public var firstX: Double
 
-    @Option(help: "First footprint corner Y numeric literal.")
+    @Option(parsing: .unconditional, help: "First footprint corner Y numeric literal.")
     public var firstY: Double
 
-    @Option(help: "Opposite footprint corner X numeric literal.")
+    @Option(parsing: .unconditional, help: "Opposite footprint corner X numeric literal.")
     public var oppositeX: Double
 
-    @Option(help: "Opposite footprint corner Y numeric literal.")
+    @Option(parsing: .unconditional, help: "Opposite footprint corner Y numeric literal.")
     public var oppositeY: Double
 
-    @Option(help: "Extrude depth numeric literal.")
+    @Option(parsing: .unconditional, help: "Extrude depth numeric literal.")
     public var depth: Double
 
     @Option(help: "Length unit for coordinates and depth. Defaults to the document display unit.")
@@ -1979,16 +1979,16 @@ public struct CylinderModelCommand: ParsableCommand {
     @Option(help: "Feature name.")
     public var name: String = "Cylinder"
 
-    @Option(help: "Circle center X numeric literal.")
+    @Option(parsing: .unconditional, help: "Circle center X numeric literal.")
     public var centerX: Double = 0.0
 
-    @Option(help: "Circle center Y numeric literal.")
+    @Option(parsing: .unconditional, help: "Circle center Y numeric literal.")
     public var centerY: Double = 0.0
 
-    @Option(help: "Circle radius numeric literal.")
+    @Option(parsing: .unconditional, help: "Circle radius numeric literal.")
     public var radius: Double
 
-    @Option(help: "Extrude depth numeric literal.")
+    @Option(parsing: .unconditional, help: "Extrude depth numeric literal.")
     public var depth: Double
 
     @Option(help: "Length unit for center, radius, and depth. Defaults to the document display unit.")
@@ -2127,7 +2127,7 @@ public struct ExtrudeModelCommand: ParsableCommand {
     @Option(help: "Sketch feature UUID to extrude.")
     public var profileFeatureID: String
 
-    @Option(help: "Extrude distance numeric literal.")
+    @Option(parsing: .unconditional, help: "Extrude distance numeric literal.")
     public var distance: Double
 
     @Option(help: "Length unit for the distance. Defaults to the document display unit.")

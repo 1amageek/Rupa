@@ -30,13 +30,13 @@ public struct SurfaceMoveControlPointsInFrameCommand: ParsableCommand {
     @Option(help: "JSON file containing one SurfaceFrameQuery object.")
     public var frameQueryFile: String?
 
-    @Option(help: "Distance along the frame U axis.")
+    @Option(parsing: .unconditional, help: "Distance along the frame U axis.")
     public var uDistance: Double = 0.0
 
-    @Option(help: "Distance along the frame V axis.")
+    @Option(parsing: .unconditional, help: "Distance along the frame V axis.")
     public var vDistance: Double = 0.0
 
-    @Option(help: "Distance along the frame normal axis.")
+    @Option(parsing: .unconditional, help: "Distance along the frame normal axis.")
     public var normalDistance: Double = 0.0
 
     @Option(help: "Length unit for frame distances. Defaults to the document display unit.")

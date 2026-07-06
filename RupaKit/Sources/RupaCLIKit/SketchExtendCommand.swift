@@ -37,7 +37,7 @@ public struct SketchExtendCommand: ParsableCommand {
     @OptionGroup
     public var selection: CLISelectionTargetOptions
 
-    @Option(help: "Extension distance numeric literal.")
+    @Option(parsing: .unconditional, help: "Extension distance numeric literal.")
     public var distance: Double
 
     @Option(help: "Length unit for the extension distance. Defaults to the document display unit.")

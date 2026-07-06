@@ -18,16 +18,16 @@ public struct SurfaceSetTrimDomainCommand: ParsableCommand {
     @Option(help: "JSON file containing one SelectionReference object.")
     public var referenceFile: String?
 
-    @Option(help: "Lower U parameter bound.")
+    @Option(parsing: .unconditional, help: "Lower U parameter bound.")
     public var uLower: Double
 
-    @Option(help: "Upper U parameter bound.")
+    @Option(parsing: .unconditional, help: "Upper U parameter bound.")
     public var uUpper: Double
 
-    @Option(help: "Lower V parameter bound.")
+    @Option(parsing: .unconditional, help: "Lower V parameter bound.")
     public var vLower: Double
 
-    @Option(help: "Upper V parameter bound.")
+    @Option(parsing: .unconditional, help: "Upper V parameter bound.")
     public var vUpper: Double
 
     @Option(help: "Edit mode: auto, file, or live.")

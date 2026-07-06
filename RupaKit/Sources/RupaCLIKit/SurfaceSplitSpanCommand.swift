@@ -18,7 +18,7 @@ public struct SurfaceSplitSpanCommand: ParsableCommand {
     @Option(help: "JSON file containing one SelectionReference object.")
     public var referenceFile: String?
 
-    @Option(help: "Normalized split fraction inside the span.")
+    @Option(parsing: .unconditional, help: "Normalized split fraction inside the span.")
     public var fraction: Double = 0.5
 
     @Option(help: "Edit mode: auto, file, or live.")

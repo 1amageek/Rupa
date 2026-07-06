@@ -13,19 +13,19 @@ public struct ArcSketchCommand: ParsableCommand {
     @Option(help: "Feature name.")
     public var name: String = "Arc Sketch"
 
-    @Option(help: "Arc center X numeric literal.")
+    @Option(parsing: .unconditional, help: "Arc center X numeric literal.")
     public var centerX: Double
 
-    @Option(help: "Arc center Y numeric literal.")
+    @Option(parsing: .unconditional, help: "Arc center Y numeric literal.")
     public var centerY: Double
 
-    @Option(help: "Arc radius numeric literal.")
+    @Option(parsing: .unconditional, help: "Arc radius numeric literal.")
     public var radius: Double
 
-    @Option(help: "Arc start angle numeric literal.")
+    @Option(parsing: .unconditional, help: "Arc start angle numeric literal.")
     public var startAngle: Double
 
-    @Option(help: "Arc end angle numeric literal.")
+    @Option(parsing: .unconditional, help: "Arc end angle numeric literal.")
     public var endAngle: Double
 
     @Option(help: "Length unit for center coordinates and radius. Defaults to the document display unit.")

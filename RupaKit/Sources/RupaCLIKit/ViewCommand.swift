@@ -131,10 +131,10 @@ public struct ViewProjectionCommand: ParsableCommand {
     @Option(help: "Saved orthographic view UUID.")
     public var id: String
 
-    @Option(help: "Optional drawing projection tolerance in meters.")
+    @Option(parsing: .unconditional, help: "Optional drawing projection tolerance in meters.")
     public var toleranceMeters: Double?
 
-    @Option(help: "Maximum number of projection strokes to return.")
+    @Option(parsing: .unconditional, help: "Maximum number of projection strokes to return.")
     public var maximumStrokeCount: Int = 10_000
 
     @Option(help: "Optional SVG output path for the generated hidden-line drawing.")
@@ -243,37 +243,37 @@ private struct CLISavedViewDefinitionOptions: ParsableArguments {
     @Option(help: "Saved view name.")
     var name: String
 
-    @Option(help: "Camera target X coordinate in the selected length unit.")
+    @Option(parsing: .unconditional, help: "Camera target X coordinate in the selected length unit.")
     var targetX: Double = 0.0
 
-    @Option(help: "Camera target Y coordinate in the selected length unit.")
+    @Option(parsing: .unconditional, help: "Camera target Y coordinate in the selected length unit.")
     var targetY: Double = 0.0
 
-    @Option(help: "Camera target Z coordinate in the selected length unit.")
+    @Option(parsing: .unconditional, help: "Camera target Z coordinate in the selected length unit.")
     var targetZ: Double = 0.0
 
     @Option(help: "Length unit for target, distance, and orthographic height.")
     var unit: LengthDisplayUnit = .meter
 
-    @Option(help: "Camera distance in the selected length unit.")
+    @Option(parsing: .unconditional, help: "Camera distance in the selected length unit.")
     var distance: Double
 
-    @Option(help: "Camera yaw angle in degrees.")
+    @Option(parsing: .unconditional, help: "Camera yaw angle in degrees.")
     var yawDegrees: Double
 
-    @Option(help: "Camera pitch angle in degrees.")
+    @Option(parsing: .unconditional, help: "Camera pitch angle in degrees.")
     var pitchDegrees: Double
 
-    @Option(help: "Camera roll angle in degrees.")
+    @Option(parsing: .unconditional, help: "Camera roll angle in degrees.")
     var rollDegrees: Double = 0.0
 
     @Option(help: "Projection mode: orthographic or perspective.")
     var projection: CLISavedViewProjectionMode = .orthographic
 
-    @Option(help: "Orthographic view height in the selected length unit.")
+    @Option(parsing: .unconditional, help: "Orthographic view height in the selected length unit.")
     var orthographicHeight: Double?
 
-    @Option(help: "Perspective field of view in degrees.")
+    @Option(parsing: .unconditional, help: "Perspective field of view in degrees.")
     var fieldOfViewDegrees: Double?
 
     @Option(help: "Workspace scale preset to save with the view.")
@@ -282,16 +282,16 @@ private struct CLISavedViewDefinitionOptions: ParsableArguments {
     @Option(help: "Custom display unit when no scale preset is supplied.")
     var displayUnit: LengthDisplayUnit?
 
-    @Option(help: "Custom minor ruler tick in meters.")
+    @Option(parsing: .unconditional, help: "Custom minor ruler tick in meters.")
     var minorTickMeters: Double?
 
-    @Option(help: "Custom major ruler tick in meters.")
+    @Option(parsing: .unconditional, help: "Custom major ruler tick in meters.")
     var majorTickMeters: Double?
 
-    @Option(help: "Custom visible workspace span in meters.")
+    @Option(parsing: .unconditional, help: "Custom visible workspace span in meters.")
     var visibleSpanMeters: Double?
 
-    @Option(help: "Scale bar length in meters.")
+    @Option(parsing: .unconditional, help: "Scale bar length in meters.")
     var scaleBarMeters: Double?
 
     func savedView(id: SavedViewID?) throws -> SavedView {

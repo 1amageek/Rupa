@@ -18,7 +18,7 @@ public struct SurfaceSetControlPointWeightCommand: ParsableCommand {
     @Option(help: "JSON file containing one SelectionReference object.")
     public var referenceFile: String?
 
-    @Option(help: "Control point weight scalar value.")
+    @Option(parsing: .unconditional, help: "Control point weight scalar value.")
     public var weight: Double
 
     @Option(help: "Edit mode: auto, file, or live.")

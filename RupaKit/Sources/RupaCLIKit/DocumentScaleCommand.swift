@@ -158,13 +158,13 @@ public struct SetRulerConfigurationCommand: ParsableCommand {
     @Option(help: "Display unit: micrometer, millimeter, centimeter, meter, kilometer, inch, or foot.")
     public var displayUnit: LengthDisplayUnit
 
-    @Option(help: "Minor ruler tick in meters.")
+    @Option(parsing: .unconditional, help: "Minor ruler tick in meters.")
     public var minorTickMeters: Double
 
-    @Option(help: "Major ruler tick in meters.")
+    @Option(parsing: .unconditional, help: "Major ruler tick in meters.")
     public var majorTickMeters: Double
 
-    @Option(help: "Visible workspace span in meters.")
+    @Option(parsing: .unconditional, help: "Visible workspace span in meters.")
     public var visibleSpanMeters: Double
 
     public init() {}

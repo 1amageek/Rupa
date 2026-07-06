@@ -98,7 +98,7 @@ public struct SweepModelCommand: ParsableCommand {
     @Option(help: "Closed profile sketch feature UUID used as the sweep section.")
     public var profileFeatureID: String?
 
-    @Option(help: "Profile index inside the profile feature.")
+    @Option(parsing: .unconditional, help: "Profile index inside the profile feature.")
     public var profileIndex: Int = 0
 
     @Option(help: "Curve feature UUID used as a sheet sweep section.")
@@ -113,16 +113,16 @@ public struct SweepModelCommand: ParsableCommand {
     @Option(name: .customLong("target-feature-id"), help: "Body feature UUID used as a boolean target. Repeatable.")
     public var targetFeatureIDs: [String] = []
 
-    @Option(help: "Twist angle numeric literal.")
+    @Option(parsing: .unconditional, help: "Twist angle numeric literal.")
     public var twistAngle: Double = 0.0
 
     @Option(help: "Angle unit for twist: degree or radian.")
     public var angleUnit: String = AngleUnit.degree.rawValue
 
-    @Option(help: "End scale scalar.")
+    @Option(parsing: .unconditional, help: "End scale scalar.")
     public var endScale: Double = 1.0
 
-    @Option(help: "Path distance fraction, greater than 0 and at most 1.")
+    @Option(parsing: .unconditional, help: "Path distance fraction, greater than 0 and at most 1.")
     public var distanceFraction: Double = 1.0
 
     @Option(help: "Sweep alignment: normal or parallel.")

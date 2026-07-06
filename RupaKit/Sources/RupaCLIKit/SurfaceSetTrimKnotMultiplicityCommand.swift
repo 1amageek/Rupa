@@ -18,10 +18,10 @@ public struct SurfaceSetTrimKnotMultiplicityCommand: ParsableCommand {
     @Option(help: "JSON file containing one SelectionReference object.")
     public var referenceFile: String?
 
-    @Option(help: "B-spline trim p-curve knot index from surfaceSourceSummary.")
+    @Option(parsing: .unconditional, help: "B-spline trim p-curve knot index from surfaceSourceSummary.")
     public var knotIndex: Int
 
-    @Option(help: "Positive target multiplicity.")
+    @Option(parsing: .unconditional, help: "Positive target multiplicity.")
     public var multiplicity: Int
 
     @Option(help: "Edit mode: auto, file, or live.")

@@ -18,7 +18,7 @@ public struct SurfaceSetKnotMultiplicityCommand: ParsableCommand {
     @Option(help: "JSON file containing one SelectionReference object.")
     public var referenceFile: String?
 
-    @Option(help: "Requested knot multiplicity.")
+    @Option(parsing: .unconditional, help: "Requested knot multiplicity.")
     public var multiplicity: Int
 
     @Option(help: "Edit mode: auto, file, or live.")

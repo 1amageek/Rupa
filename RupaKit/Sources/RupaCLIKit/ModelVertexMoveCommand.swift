@@ -14,10 +14,10 @@ public struct ModelVertexMoveCommand: ParsableCommand {
     @OptionGroup
     public var selection: CLISelectionTargetOptions
 
-    @Option(help: "Delta X numeric literal in the source profile plane.")
+    @Option(parsing: .unconditional, help: "Delta X numeric literal in the source profile plane.")
     public var deltaX: Double = 0.0
 
-    @Option(help: "Delta Y numeric literal in the source profile plane.")
+    @Option(parsing: .unconditional, help: "Delta Y numeric literal in the source profile plane.")
     public var deltaY: Double = 0.0
 
     @Option(help: "Length unit for delta values. Defaults to the document display unit.")
