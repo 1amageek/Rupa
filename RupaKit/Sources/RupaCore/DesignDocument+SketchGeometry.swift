@@ -247,12 +247,11 @@ extension DesignDocument {
         endAngle: Double
     ) -> Double {
         let fullCircle = Double.pi * 2.0
-        var span = endAngle - startAngle
-        while span <= 0.0 {
+        // Remainder-based normalization stays O(1) for arbitrarily large angle
+        // expressions; +/- 2*pi loops hang on huge-but-finite values.
+        var span = (endAngle - startAngle).truncatingRemainder(dividingBy: fullCircle)
+        if span <= 0.0 {
             span += fullCircle
-        }
-        while span > fullCircle {
-            span -= fullCircle
         }
         return span
     }
@@ -317,13 +316,14 @@ extension DesignDocument {
         endAngle: Double
     ) throws -> Double {
         let fullCircle = Double.pi * 2.0
-        var span = endAngle - startAngle
-        while span <= ModelingTolerance.standard.angle {
+        // Remainder-based normalization stays O(1) for arbitrarily large angle
+        // expressions; +/- 2*pi loops hang on huge-but-finite values.
+        var span = (endAngle - startAngle - ModelingTolerance.standard.angle)
+            .truncatingRemainder(dividingBy: fullCircle)
+        if span <= 0.0 {
             span += fullCircle
         }
-        while span > fullCircle + ModelingTolerance.standard.angle {
-            span -= fullCircle
-        }
+        span += ModelingTolerance.standard.angle
         guard span > ModelingTolerance.standard.angle else {
             throw EditorError(
                 code: .commandInvalid,

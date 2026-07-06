@@ -772,13 +772,14 @@ public struct SlotProfileBuilder: Sendable {
             )
         }
         let fullCircle = Double.pi * 2.0
-        var span = endAngle - startAngle
-        while span <= distanceTolerance {
+        // Remainder-based normalization stays O(1) for arbitrarily large angle
+        // expressions; +/- 2*pi loops hang on huge-but-finite values.
+        var span = (endAngle - startAngle - distanceTolerance)
+            .truncatingRemainder(dividingBy: fullCircle)
+        if span <= 0.0 {
             span += fullCircle
         }
-        while span > fullCircle + distanceTolerance {
-            span -= fullCircle
-        }
+        span += distanceTolerance
         guard span > distanceTolerance else {
             throw EditorError(
                 code: .commandInvalid,
@@ -1507,22 +1508,18 @@ private func directedAngleSpan(
     sign: Double
 ) -> Double {
     let fullCircle = Double.pi * 2.0
+    // Remainder-based normalization stays O(1) for arbitrarily large angle
+    // expressions; +/- 2*pi loops hang on huge-but-finite values.
     if sign >= 0.0 {
-        var span = endAngle - startAngle
-        while span <= 0.0 {
+        var span = (endAngle - startAngle).truncatingRemainder(dividingBy: fullCircle)
+        if span <= 0.0 {
             span += fullCircle
-        }
-        while span > fullCircle {
-            span -= fullCircle
         }
         return span
     }
-    var span = startAngle - endAngle
-    while span <= 0.0 {
+    var span = (startAngle - endAngle).truncatingRemainder(dividingBy: fullCircle)
+    if span <= 0.0 {
         span += fullCircle
-    }
-    while span > fullCircle {
-        span -= fullCircle
     }
     return -span
 }

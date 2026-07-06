@@ -270,29 +270,36 @@ extension DesignDocument {
         original: CubicBezierSegment2D,
         rebuilt: CubicBezierSegment2D
     ) -> [Double] {
+        // Rebase both segments to a shared local origin before the power-basis
+        // conversion: its coefficients difference near-equal absolute
+        // coordinates, which cancel catastrophically far from the origin
+        // (deviation noise ~1e-3 m at 1e12 sketch coordinates). The deviation
+        // polynomial is translation invariant, so a shared origin is exact.
+        let originX = original.p0.x
+        let originY = original.p0.y
         let originalX = cubicBezierPowerCoefficients(
-            original.p0.x,
-            original.p1.x,
-            original.p2.x,
-            original.p3.x
+            original.p0.x - originX,
+            original.p1.x - originX,
+            original.p2.x - originX,
+            original.p3.x - originX
         )
         let originalY = cubicBezierPowerCoefficients(
-            original.p0.y,
-            original.p1.y,
-            original.p2.y,
-            original.p3.y
+            original.p0.y - originY,
+            original.p1.y - originY,
+            original.p2.y - originY,
+            original.p3.y - originY
         )
         let rebuiltX = cubicBezierPowerCoefficients(
-            rebuilt.p0.x,
-            rebuilt.p1.x,
-            rebuilt.p2.x,
-            rebuilt.p3.x
+            rebuilt.p0.x - originX,
+            rebuilt.p1.x - originX,
+            rebuilt.p2.x - originX,
+            rebuilt.p3.x - originX
         )
         let rebuiltY = cubicBezierPowerCoefficients(
-            rebuilt.p0.y,
-            rebuilt.p1.y,
-            rebuilt.p2.y,
-            rebuilt.p3.y
+            rebuilt.p0.y - originY,
+            rebuilt.p1.y - originY,
+            rebuilt.p2.y - originY,
+            rebuilt.p3.y - originY
         )
         let deltaX = zip(originalX, rebuiltX).map { $0 - $1 }
         let deltaY = zip(originalY, rebuiltY).map { $0 - $1 }

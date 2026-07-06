@@ -41,12 +41,11 @@ extension DesignDocument {
 
     func normalizedCutAngle(_ angle: Double) -> Double {
         let fullCircle = Double.pi * 2.0
-        var normalized = angle
-        while normalized < 0.0 {
+        // Remainder-based normalization stays O(1) for arbitrarily large angle
+        // expressions; +/- 2*pi loops hang on huge-but-finite values.
+        var normalized = angle.truncatingRemainder(dividingBy: fullCircle)
+        if normalized < 0.0 {
             normalized += fullCircle
-        }
-        while normalized >= fullCircle {
-            normalized -= fullCircle
         }
         if fullCircle - normalized <= 1.0e-10 {
             return 0.0

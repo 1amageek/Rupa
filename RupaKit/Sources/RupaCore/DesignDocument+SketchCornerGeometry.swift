@@ -85,12 +85,15 @@ extension DesignDocument {
             to endAngle: Double
         ) -> Double {
             let fullCircle = Double.pi * 2.0
-            var span = endAngle - startAngle
-            while span < 0.0 {
+            // Remainder-based normalization stays O(1) for arbitrarily large
+            // angle expressions; +/- 2*pi loops hang on huge-but-finite values.
+            let delta = endAngle - startAngle
+            var span = delta.truncatingRemainder(dividingBy: fullCircle)
+            if span < 0.0 {
                 span += fullCircle
             }
-            while span > fullCircle {
-                span -= fullCircle
+            if span == 0.0 && delta > 0.0 {
+                span = fullCircle
             }
             return span
         }
