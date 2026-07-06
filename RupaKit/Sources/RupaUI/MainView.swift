@@ -395,13 +395,23 @@ public struct MainView: View {
         var rows: [SceneBrowserRow] = []
         let metadata = session.document.productMetadata
 
-        func append(_ id: SceneNodeID, depth: Int) {
+        func append(_ id: SceneNodeID, depth: Int, parent: SceneNode? = nil) {
             guard let node = metadata.sceneNodes[id] else {
+                return
+            }
+            // A hidden profile sketch nested under its body is the consumed
+            // source of a combined primitive (box, cylinder). It stays
+            // selectable through the body workflows, so the browser lists the
+            // primitive as one object instead of body-plus-sketch clutter.
+            let isConsumedProfileSketch = node.reference?.kind == .sketch
+                && node.isVisible == false
+                && parent?.reference?.kind == .body
+            if isConsumedProfileSketch {
                 return
             }
             rows.append(SceneBrowserRow(id: id, depth: depth))
             for childID in node.childIDs {
-                append(childID, depth: depth + 1)
+                append(childID, depth: depth + 1, parent: node)
             }
         }
 

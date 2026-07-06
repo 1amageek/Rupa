@@ -6569,6 +6569,41 @@ private func twoCircleConstraintCommandDocument(
 }
 
 @MainActor
+@Test func combinedBoxNestsAndHidesConsumedProfileSketch() async throws {
+    let session = EditorSession()
+
+    _ = try session.execute(
+        .createExtrudedRectangle(
+            name: "Box",
+            plane: .xy,
+            width: .length(40.0, .millimeter),
+            height: .length(30.0, .millimeter),
+            depth: .length(20.0, .millimeter),
+            direction: .normal
+        )
+    )
+
+    let metadata = session.document.productMetadata
+    let sketchEntry = try #require(
+        metadata.sceneNodes.first { $0.value.reference?.kind == .sketch }
+    )
+    let bodyEntry = try #require(
+        metadata.sceneNodes.first { $0.value.reference?.kind == .body }
+    )
+    let rootID = try #require(metadata.rootSceneNodeIDs.first)
+    let root = try #require(metadata.sceneNodes[rootID])
+
+    // The consumed profile sketch nests under the body and is hidden, so a
+    // placed primitive reads as one object while the parametric source stays
+    // in the document.
+    #expect(sketchEntry.value.isVisible == false)
+    #expect(bodyEntry.value.childIDs.contains(sketchEntry.key))
+    #expect(root.childIDs.contains(sketchEntry.key) == false)
+    #expect(root.childIDs.contains(bodyEntry.key))
+    try session.document.validate()
+}
+
+@MainActor
 @Test func editorSessionCanvasSolidClickUsesSuppliedPlacementCellSide() async throws {
     let session = EditorSession()
 

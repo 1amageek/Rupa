@@ -258,6 +258,36 @@ public struct ProductMetadata: Codable, Hashable, Sendable {
         return sceneNode.id
     }
 
+    /// Moves an existing scene node under a new parent, detaching it from its
+    /// current parent. Used by combined primitive commands to nest a consumed
+    /// profile sketch under the body it produced.
+    public mutating func nestSceneNode(
+        _ nodeID: SceneNodeID,
+        under parentID: SceneNodeID
+    ) throws {
+        guard nodeID != parentID else {
+            throw DocumentValidationError.invalidProductMetadata(
+                "A scene node cannot be nested under itself."
+            )
+        }
+        guard sceneNodes[nodeID] != nil else {
+            throw DocumentValidationError.invalidProductMetadata(
+                "Cannot nest a missing scene node."
+            )
+        }
+        guard sceneNodes[parentID] != nil else {
+            throw DocumentValidationError.invalidProductMetadata(
+                "Cannot nest a scene node under a missing parent."
+            )
+        }
+        for (id, node) in sceneNodes where node.childIDs.contains(nodeID) {
+            var updated = node
+            updated.childIDs.removeAll { $0 == nodeID }
+            sceneNodes[id] = updated
+        }
+        sceneNodes[parentID]?.childIDs.append(nodeID)
+    }
+
     private func validateSceneNodes(
         against cadDocument: CADDocument,
         objectRegistry: ObjectTypeRegistry

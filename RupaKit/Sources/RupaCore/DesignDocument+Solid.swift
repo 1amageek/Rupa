@@ -492,6 +492,31 @@ extension DesignDocument {
     }
 
     @discardableResult
+
+    /// Nests the consumed profile sketch scene node under the body scene node
+    /// and hides it, so combined primitives (box, cylinder) read as one object
+    /// in the browser and viewport while the parametric sketch source remains
+    /// selectable and editable through the body workflows.
+    private mutating func nestConsumedProfileSketch(
+        sketchFeatureID: FeatureID,
+        bodyFeatureID: FeatureID
+    ) throws {
+        guard
+            let sketchNodeID = productMetadata.sceneNodes.first(
+                where: { $0.value.reference == .sketch(sketchFeatureID) }
+            )?.key,
+            let bodyNodeID = productMetadata.sceneNodes.first(
+                where: { $0.value.reference == .body(bodyFeatureID) }
+            )?.key
+        else {
+            throw DocumentValidationError.invalidProductMetadata(
+                "Combined primitive creation expected sketch and body scene nodes."
+            )
+        }
+        try productMetadata.nestSceneNode(sketchNodeID, under: bodyNodeID)
+        productMetadata.sceneNodes[sketchNodeID]?.isVisible = false
+    }
+
     public mutating func createExtrudedRectangle(
         name: String,
         plane: SketchPlane,
@@ -508,7 +533,7 @@ extension DesignDocument {
             height: height,
             objectRegistry: objectRegistry
         )
-        return try extrudeProfile(
+        let bodyFeatureID = try extrudeProfile(
             name: name,
             profile: ProfileReference(featureID: sketchFeatureID),
             distance: depth,
@@ -516,6 +541,11 @@ extension DesignDocument {
             typeID: .cube,
             objectRegistry: objectRegistry
         )
+        try nestConsumedProfileSketch(
+            sketchFeatureID: sketchFeatureID,
+            bodyFeatureID: bodyFeatureID
+        )
+        return bodyFeatureID
     }
 
     @discardableResult
@@ -535,7 +565,7 @@ extension DesignDocument {
             oppositeCorner: oppositeCorner,
             objectRegistry: objectRegistry
         )
-        return try extrudeProfile(
+        let bodyFeatureID = try extrudeProfile(
             name: name,
             profile: ProfileReference(featureID: sketchFeatureID),
             distance: depth,
@@ -543,6 +573,11 @@ extension DesignDocument {
             typeID: .cube,
             objectRegistry: objectRegistry
         )
+        try nestConsumedProfileSketch(
+            sketchFeatureID: sketchFeatureID,
+            bodyFeatureID: bodyFeatureID
+        )
+        return bodyFeatureID
     }
 
     @discardableResult
@@ -562,7 +597,7 @@ extension DesignDocument {
             radius: radius,
             objectRegistry: objectRegistry
         )
-        return try extrudeProfile(
+        let bodyFeatureID = try extrudeProfile(
             name: name,
             profile: ProfileReference(featureID: sketchFeatureID),
             distance: depth,
@@ -570,6 +605,11 @@ extension DesignDocument {
             typeID: .cylinder,
             objectRegistry: objectRegistry
         )
+        try nestConsumedProfileSketch(
+            sketchFeatureID: sketchFeatureID,
+            bodyFeatureID: bodyFeatureID
+        )
+        return bodyFeatureID
     }
 }
 

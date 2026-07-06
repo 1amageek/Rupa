@@ -3485,9 +3485,13 @@ public final class EditorSession {
         var newestID: SceneNodeID?
 
         func visit(_ id: SceneNodeID) {
-            newestID = id
             guard let node = metadata.sceneNodes[id] else {
                 return
+            }
+            // Hidden nodes (such as a consumed profile sketch nested under its
+            // body) are not selectable outcomes of a creation gesture.
+            if node.isVisible {
+                newestID = id
             }
             for childID in node.childIDs {
                 visit(childID)
