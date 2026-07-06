@@ -31,8 +31,8 @@ public struct PolygonSketchCommand: ParsableCommand {
     @Option(help: "Length unit for center coordinates and radius. Defaults to the document display unit.")
     public var unit: LengthDisplayUnit?
 
-    @Option(help: "Sketch plane: xy, yz, or zx.")
-    public var plane: CLISketchPlane = .xy
+    @Option(help: "Sketch plane: xy, yz, or zx. Defaults to the active construction plane.")
+    public var plane: CLISketchPlane?
 
     @Option(help: "Radius interpretation: circumradius or inradius.")
     public var sizingMode: PolygonSizingMode = .circumradius
@@ -61,7 +61,7 @@ public struct PolygonSketchCommand: ParsableCommand {
             let response = try CLIService().createPolygonSketch(
                 target: document.target(sessionID: sessionID),
                 name: name,
-                plane: plane.sketchPlane,
+                plane: plane?.sketchPlane,
                 center: input.center,
                 radius: input.radius,
                 sides: sides,

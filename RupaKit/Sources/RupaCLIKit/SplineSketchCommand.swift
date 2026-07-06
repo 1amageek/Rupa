@@ -22,8 +22,8 @@ public struct SplineSketchCommand: ParsableCommand {
     @Option(help: "Length unit for control point coordinates. Defaults to the document display unit.")
     public var unit: LengthDisplayUnit?
 
-    @Option(help: "Sketch plane: xy, yz, or zx.")
-    public var plane: CLISketchPlane = .xy
+    @Option(help: "Sketch plane: xy, yz, or zx. Defaults to the active construction plane.")
+    public var plane: CLISketchPlane?
 
     public init() {}
 
@@ -40,7 +40,7 @@ public struct SplineSketchCommand: ParsableCommand {
             let response = try CLIService().createSplineSketch(
                 target: document.target(sessionID: sessionID),
                 name: name,
-                plane: plane.sketchPlane,
+                plane: plane?.sketchPlane,
                 spline: spline,
                 mode: document.mode,
                 expectedGeneration: document.generation(),

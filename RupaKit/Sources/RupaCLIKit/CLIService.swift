@@ -587,7 +587,7 @@ public struct CLIService {
     public func createExtrudedRectangleFile(
         at url: URL,
         name: String,
-        plane: SketchPlane,
+        plane: SketchPlane?,
         width: CADExpression,
         height: CADExpression,
         depth: CADExpression,
@@ -634,7 +634,7 @@ public struct CLIService {
     public func createExtrudedRectangle(
         target: CLIDocumentTarget,
         name: String,
-        plane: SketchPlane,
+        plane: SketchPlane?,
         width: CADExpression,
         height: CADExpression,
         depth: CADExpression,
@@ -667,7 +667,7 @@ public struct CLIService {
     public func createExtrudedRectangleFromCorners(
         target: CLIDocumentTarget,
         name: String,
-        plane: SketchPlane,
+        plane: SketchPlane?,
         firstCorner: SketchPoint,
         oppositeCorner: SketchPoint,
         depth: CADExpression,
@@ -700,7 +700,7 @@ public struct CLIService {
     public func createExtrudedCircle(
         target: CLIDocumentTarget,
         name: String,
-        plane: SketchPlane,
+        plane: SketchPlane?,
         center: SketchPoint,
         radius: CADExpression,
         depth: CADExpression,
@@ -853,7 +853,7 @@ public struct CLIService {
     public func createLineSketch(
         target: CLIDocumentTarget,
         name: String,
-        plane: SketchPlane,
+        plane: SketchPlane?,
         start: SketchPoint,
         end: SketchPoint,
         mode: CLIEditMode = .auto,
@@ -882,7 +882,7 @@ public struct CLIService {
     public func createCircleSketch(
         target: CLIDocumentTarget,
         name: String,
-        plane: SketchPlane,
+        plane: SketchPlane?,
         center: SketchPoint,
         radius: CADExpression,
         mode: CLIEditMode = .auto,
@@ -911,7 +911,7 @@ public struct CLIService {
     public func createArcSketch(
         target: CLIDocumentTarget,
         name: String,
-        plane: SketchPlane,
+        plane: SketchPlane?,
         center: SketchPoint,
         radius: CADExpression,
         startAngle: CADExpression,
@@ -944,7 +944,7 @@ public struct CLIService {
     public func createSplineSketch(
         target: CLIDocumentTarget,
         name: String,
-        plane: SketchPlane,
+        plane: SketchPlane?,
         spline: SketchSpline,
         mode: CLIEditMode = .auto,
         expectedGeneration: DocumentGeneration? = nil,
@@ -971,7 +971,7 @@ public struct CLIService {
     public func createRectangleSketch(
         target: CLIDocumentTarget,
         name: String,
-        plane: SketchPlane,
+        plane: SketchPlane?,
         width: CADExpression,
         height: CADExpression,
         mode: CLIEditMode = .auto,
@@ -1000,7 +1000,7 @@ public struct CLIService {
     public func createPolygonSketch(
         target: CLIDocumentTarget,
         name: String,
-        plane: SketchPlane,
+        plane: SketchPlane?,
         center: SketchPoint,
         radius: CADExpression,
         sides: Int,
@@ -2877,7 +2877,7 @@ public struct CLIService {
     public func createExtrudedRectangleLiveSession(
         sessionID: UUID,
         name: String,
-        plane: SketchPlane,
+        plane: SketchPlane?,
         width: CADExpression,
         height: CADExpression,
         depth: CADExpression,

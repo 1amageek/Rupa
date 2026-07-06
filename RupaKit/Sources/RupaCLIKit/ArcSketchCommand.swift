@@ -34,8 +34,8 @@ public struct ArcSketchCommand: ParsableCommand {
     @Option(help: "Angle unit for start and end: degree or radian.")
     public var angleUnit: String = AngleUnit.degree.rawValue
 
-    @Option(help: "Sketch plane: xy, yz, or zx.")
-    public var plane: CLISketchPlane = .xy
+    @Option(help: "Sketch plane: xy, yz, or zx. Defaults to the active construction plane.")
+    public var plane: CLISketchPlane?
 
     public init() {}
 
@@ -52,7 +52,7 @@ public struct ArcSketchCommand: ParsableCommand {
             let response = try CLIService().createArcSketch(
                 target: document.target(sessionID: sessionID),
                 name: name,
-                plane: plane.sketchPlane,
+                plane: plane?.sketchPlane,
                 center: input.center,
                 radius: input.radius,
                 startAngle: input.startAngle,

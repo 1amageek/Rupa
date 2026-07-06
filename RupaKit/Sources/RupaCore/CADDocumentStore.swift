@@ -457,7 +457,7 @@ public final class CADDocumentStore {
             var updatedDocument = document
             try updatedDocument.createLineSketch(
                 name: name,
-                plane: plane,
+                plane: plane ?? updatedDocument.activeConstructionPlane?.plane ?? .xy,
                 start: start,
                 end: end,
                 objectRegistry: objectRegistry
@@ -469,7 +469,7 @@ public final class CADDocumentStore {
             var updatedDocument = document
             try updatedDocument.createCircleSketch(
                 name: name,
-                plane: plane,
+                plane: plane ?? updatedDocument.activeConstructionPlane?.plane ?? .xy,
                 center: center,
                 radius: radius,
                 objectRegistry: objectRegistry
@@ -481,7 +481,7 @@ public final class CADDocumentStore {
             var updatedDocument = document
             try updatedDocument.createArcSketch(
                 name: name,
-                plane: plane,
+                plane: plane ?? updatedDocument.activeConstructionPlane?.plane ?? .xy,
                 center: center,
                 radius: radius,
                 startAngle: startAngle,
@@ -495,7 +495,7 @@ public final class CADDocumentStore {
             var updatedDocument = document
             try updatedDocument.createSplineSketch(
                 name: name,
-                plane: plane,
+                plane: plane ?? updatedDocument.activeConstructionPlane?.plane ?? .xy,
                 spline: spline,
                 objectRegistry: objectRegistry
             )
@@ -506,7 +506,7 @@ public final class CADDocumentStore {
             var updatedDocument = document
             try updatedDocument.createRectangleSketch(
                 name: name,
-                plane: plane,
+                plane: plane ?? updatedDocument.activeConstructionPlane?.plane ?? .xy,
                 width: width,
                 height: height,
                 objectRegistry: objectRegistry
@@ -527,7 +527,7 @@ public final class CADDocumentStore {
             var updatedDocument = document
             try updatedDocument.createPolygonSketch(
                 name: name,
-                plane: plane,
+                plane: plane ?? updatedDocument.activeConstructionPlane?.plane ?? .xy,
                 center: center,
                 radius: radius,
                 sides: sides,
@@ -633,7 +633,7 @@ public final class CADDocumentStore {
             var updatedDocument = document
             try updatedDocument.createRectangleSketchFromCorners(
                 name: name,
-                plane: plane,
+                plane: plane ?? updatedDocument.activeConstructionPlane?.plane ?? .xy,
                 firstCorner: firstCorner,
                 oppositeCorner: oppositeCorner,
                 objectRegistry: objectRegistry
@@ -1386,7 +1386,7 @@ public final class CADDocumentStore {
             var updatedDocument = document
             primaryFeatureID = try updatedDocument.createExtrudedRectangle(
                 name: name,
-                plane: plane,
+                plane: plane ?? updatedDocument.activeConstructionPlane?.plane ?? .xy,
                 width: width,
                 height: height,
                 depth: depth,
@@ -1407,7 +1407,7 @@ public final class CADDocumentStore {
             var updatedDocument = document
             primaryFeatureID = try updatedDocument.createExtrudedRectangleFromCorners(
                 name: name,
-                plane: plane,
+                plane: plane ?? updatedDocument.activeConstructionPlane?.plane ?? .xy,
                 firstCorner: firstCorner,
                 oppositeCorner: oppositeCorner,
                 depth: depth,
@@ -1421,7 +1421,7 @@ public final class CADDocumentStore {
             var updatedDocument = document
             primaryFeatureID = try updatedDocument.createExtrudedCircle(
                 name: name,
-                plane: plane,
+                plane: plane ?? updatedDocument.activeConstructionPlane?.plane ?? .xy,
                 center: center,
                 radius: radius,
                 depth: depth,

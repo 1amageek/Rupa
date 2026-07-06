@@ -5114,6 +5114,79 @@ import SwiftCAD
 }
 
 @MainActor
+@Test func automationRoutesPlanelessSketchCreationThroughActivePlane() async throws {
+    let session = EditorSession()
+    let runner = AutomationRunner()
+    let origin = Point3D(x: 0.0, y: 0.0, z: 0.040)
+
+    _ = try runner.execute(
+        .createViewAlignedConstructionPlane(
+            name: "Loft Section Plane",
+            origin: origin,
+            viewNormal: Vector3D(x: 0.0, y: 0.0, z: 1.0),
+            activates: true
+        ),
+        in: session
+    )
+    let activePlane = try #require(session.activeConstructionPlane).plane
+
+    let result = try runner.execute(
+        .createRectangleSketch(
+            name: "Active Plane Section",
+            plane: nil,
+            width: .length(10.0, .millimeter),
+            height: .length(10.0, .millimeter)
+        ),
+        in: session
+    )
+
+    let sketchFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let feature = try #require(session.document.cadDocument.designGraph.nodes[sketchFeatureID])
+    guard case .sketch(let sketch) = feature.operation else {
+        Issue.record("Plane-less rectangle creation must produce a sketch feature.")
+        return
+    }
+    #expect(result.didMutate)
+    // Omitted plane must resolve to the active construction plane, not .xy.
+    #expect(sketch.plane == activePlane)
+}
+
+@MainActor
+@Test func automationKeepsExplicitSketchPlaneWhenActivePlaneExists() async throws {
+    let session = EditorSession()
+    let runner = AutomationRunner()
+
+    _ = try runner.execute(
+        .createViewAlignedConstructionPlane(
+            name: "Ignored Active Plane",
+            origin: Point3D(x: 0.0, y: 0.0, z: 0.040),
+            viewNormal: Vector3D(x: 0.0, y: 0.0, z: 1.0),
+            activates: true
+        ),
+        in: session
+    )
+
+    _ = try runner.execute(
+        .createRectangleSketch(
+            name: "Explicit Plane Section",
+            plane: .yz,
+            width: .length(10.0, .millimeter),
+            height: .length(10.0, .millimeter)
+        ),
+        in: session
+    )
+
+    let sketchFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let feature = try #require(session.document.cadDocument.designGraph.nodes[sketchFeatureID])
+    guard case .sketch(let sketch) = feature.operation else {
+        Issue.record("Explicit-plane rectangle creation must produce a sketch feature.")
+        return
+    }
+    // An explicit plane always wins over the active construction plane.
+    #expect(sketch.plane == .yz)
+}
+
+@MainActor
 @Test func automationCreatesConstructionPlaneFromGeneratedFaceTarget() async throws {
     let session = EditorSession()
     let runner = AutomationRunner()

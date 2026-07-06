@@ -1278,8 +1278,8 @@ public struct LineSketchCommand: ParsableCommand {
     @Option(help: "Length unit for point coordinates. Defaults to the document display unit.")
     public var unit: String?
 
-    @Option(help: "Sketch plane: xy, yz, or zx.")
-    public var plane: CLISketchPlane = .xy
+    @Option(help: "Sketch plane: xy, yz, or zx. Defaults to the active construction plane.")
+    public var plane: CLISketchPlane?
 
     @Option(help: "Edit mode: auto, file, or live.")
     public var mode: CLIEditMode = .auto
@@ -1330,7 +1330,7 @@ public struct LineSketchCommand: ParsableCommand {
             let response = try CLIService().createLineSketch(
                 target: target,
                 name: name,
-                plane: plane.sketchPlane,
+                plane: plane?.sketchPlane,
                 start: points.start,
                 end: points.end,
                 mode: mode,
@@ -1421,8 +1421,8 @@ public struct CircleSketchCommand: ParsableCommand {
     @Option(help: "Length unit for center coordinates and radius. Defaults to the document display unit.")
     public var unit: String?
 
-    @Option(help: "Sketch plane: xy, yz, or zx.")
-    public var plane: CLISketchPlane = .xy
+    @Option(help: "Sketch plane: xy, yz, or zx. Defaults to the active construction plane.")
+    public var plane: CLISketchPlane?
 
     @Option(help: "Edit mode: auto, file, or live.")
     public var mode: CLIEditMode = .auto
@@ -1473,7 +1473,7 @@ public struct CircleSketchCommand: ParsableCommand {
             let response = try CLIService().createCircleSketch(
                 target: target,
                 name: name,
-                plane: plane.sketchPlane,
+                plane: plane?.sketchPlane,
                 center: values.center,
                 radius: values.radius,
                 mode: mode,
@@ -1558,8 +1558,8 @@ public struct RectangleSketchCommand: ParsableCommand {
     @Option(help: "Length unit for width and height. Defaults to the document display unit.")
     public var unit: String?
 
-    @Option(help: "Sketch plane: xy, yz, or zx.")
-    public var plane: CLISketchPlane = .xy
+    @Option(help: "Sketch plane: xy, yz, or zx. Defaults to the active construction plane.")
+    public var plane: CLISketchPlane?
 
     @Option(help: "Edit mode: auto, file, or live.")
     public var mode: CLIEditMode = .auto
@@ -1610,7 +1610,7 @@ public struct RectangleSketchCommand: ParsableCommand {
             let response = try CLIService().createRectangleSketch(
                 target: target,
                 name: name,
-                plane: plane.sketchPlane,
+                plane: plane?.sketchPlane,
                 width: dimensions.width,
                 height: dimensions.height,
                 mode: mode,
@@ -1695,8 +1695,8 @@ public struct BoxModelCommand: ParsableCommand {
     @Option(help: "Length unit for width, height, and depth. Defaults to the document display unit.")
     public var unit: String?
 
-    @Option(help: "Sketch plane: xy, yz, or zx.")
-    public var plane: CLISketchPlane = .xy
+    @Option(help: "Sketch plane: xy, yz, or zx. Defaults to the active construction plane.")
+    public var plane: CLISketchPlane?
 
     @Option(help: "Extrude direction: normal or symmetric.")
     public var direction: CLIExtrudeDirection = .normal
@@ -1750,7 +1750,7 @@ public struct BoxModelCommand: ParsableCommand {
             let response = try CLIService().createExtrudedRectangle(
                 target: target,
                 name: name,
-                plane: plane.sketchPlane,
+                plane: plane?.sketchPlane,
                 width: dimensions.width,
                 height: dimensions.height,
                 depth: dimensions.depth,
@@ -1841,8 +1841,8 @@ public struct BoxCornersModelCommand: ParsableCommand {
     @Option(help: "Length unit for coordinates and depth. Defaults to the document display unit.")
     public var unit: String?
 
-    @Option(help: "Sketch plane: xy, yz, or zx.")
-    public var plane: CLISketchPlane = .xy
+    @Option(help: "Sketch plane: xy, yz, or zx. Defaults to the active construction plane.")
+    public var plane: CLISketchPlane?
 
     @Option(help: "Extrude direction: normal or symmetric.")
     public var direction: CLIExtrudeDirection = .normal
@@ -1896,7 +1896,7 @@ public struct BoxCornersModelCommand: ParsableCommand {
             let response = try CLIService().createExtrudedRectangleFromCorners(
                 target: target,
                 name: name,
-                plane: plane.sketchPlane,
+                plane: plane?.sketchPlane,
                 firstCorner: modelInputs.firstCorner,
                 oppositeCorner: modelInputs.oppositeCorner,
                 depth: modelInputs.depth,
@@ -1994,8 +1994,8 @@ public struct CylinderModelCommand: ParsableCommand {
     @Option(help: "Length unit for center, radius, and depth. Defaults to the document display unit.")
     public var unit: String?
 
-    @Option(help: "Sketch plane: xy, yz, or zx.")
-    public var plane: CLISketchPlane = .xy
+    @Option(help: "Sketch plane: xy, yz, or zx. Defaults to the active construction plane.")
+    public var plane: CLISketchPlane?
 
     @Option(help: "Extrude direction: normal or symmetric.")
     public var direction: CLIExtrudeDirection = .normal
@@ -2049,7 +2049,7 @@ public struct CylinderModelCommand: ParsableCommand {
             let response = try CLIService().createExtrudedCircle(
                 target: target,
                 name: name,
-                plane: plane.sketchPlane,
+                plane: plane?.sketchPlane,
                 center: SketchPoint(x: values.centerX, y: values.centerY),
                 radius: values.radius,
                 depth: values.depth,
