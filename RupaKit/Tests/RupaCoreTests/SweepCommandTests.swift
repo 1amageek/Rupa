@@ -723,6 +723,57 @@ private func sweepBooleanMeasureDocument(
     return (document, targetBodyID, sweepID)
 }
 
+@Test func measureShallowPocketDifferenceRemovesPocketVolume() throws {
+    // A pocket much smaller than the old 1e-6 m^3 volume epsilon: the
+    // rectangularity check used to swallow the cut and return the uncut plate.
+    var document = DesignDocument.empty()
+    let plateProfileID = try document.createRectangleSketch(
+        name: "Pocket Plate Profile",
+        plane: .xy,
+        width: .length(100.0, .millimeter),
+        height: .length(100.0, .millimeter)
+    )
+    let plateBodyID = try document.extrudeProfile(
+        name: "Pocket Plate",
+        profile: ProfileReference(featureID: plateProfileID),
+        distance: .length(10.0, .millimeter),
+        direction: .normal
+    )
+    let toolProfileID = try document.createRectangleSketch(
+        name: "Pocket Tool Profile",
+        plane: .xy,
+        width: .length(20.0, .millimeter),
+        height: .length(20.0, .millimeter)
+    )
+    let pathID = try document.createLineSketch(
+        name: "Pocket Path",
+        plane: .yz,
+        start: SketchPoint(
+            x: .length(0.0, .millimeter),
+            y: .length(0.0, .millimeter)
+        ),
+        end: SketchPoint(
+            x: .length(0.0, .millimeter),
+            y: .length(5.0, .millimeter)
+        )
+    )
+    _ = try document.createSweep(
+        name: "Pocket Difference",
+        sections: [.profile(ProfileReference(featureID: toolProfileID))],
+        path: SweepPathReference(featureID: pathID),
+        targets: [SweepTargetReference(featureID: plateBodyID)],
+        options: SweepOptions(booleanOperation: .difference)
+    )
+
+    let result = try MeasurementService().measure(document: document)
+    let solid = try #require(result.solids.first)
+
+    // 100x100x10 mm plate minus the 20x20x5 mm pocket = 98000 mm^3.
+    #expect(result.counts.solids == 1)
+    #expect(abs(solid.volumeCubicMeters - 9.8e-5) < 1.0e-9)
+    #expect(abs(result.totals.solidVolumeCubicMeters - 9.8e-5) < 1.0e-9)
+}
+
 @Test func measureExcludesSweepBooleanDifferenceTargetBody() throws {
     let fixture = try sweepBooleanMeasureDocument(pathEndYMillimeters: 10.0)
 
