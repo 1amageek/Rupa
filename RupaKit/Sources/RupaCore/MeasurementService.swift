@@ -1355,6 +1355,11 @@ public struct MeasurementService {
 
         var surfaceArea = 0.0
         var signedVolume = 0.0
+        // Shared local origin so the divergence-theorem triple products stay exact
+        // when the mesh is far from the world origin (site-planning ~1e12, where
+        // absolute triple products ~1e36 cancel to noise). Total volume of a closed
+        // mesh is translation invariant, so one shared reference is exact.
+        let volumeOrigin = mesh.positions.first ?? Point3D(x: 0.0, y: 0.0, z: 0.0)
         var index = 0
         while index + 2 < mesh.indices.count {
             let firstIndex = Int(mesh.indices[index])
@@ -1373,7 +1378,10 @@ public struct MeasurementService {
             let third = mesh.positions[thirdIndex]
             let triangleNormal = (second - first).cross(third - first)
             surfaceArea += triangleNormal.length * 0.5
-            signedVolume += vector(first).dot(vector(second).cross(vector(third))) / 6.0
+            let firstRebased = vector(first, from: volumeOrigin)
+            let secondRebased = vector(second, from: volumeOrigin)
+            let thirdRebased = vector(third, from: volumeOrigin)
+            signedVolume += firstRebased.dot(secondRebased.cross(thirdRebased)) / 6.0
             index += 3
         }
 
@@ -1399,6 +1407,10 @@ public struct MeasurementService {
         }
 
         var signedVolume = 0.0
+        // Body-global shared origin so the divergence-theorem triple products stay
+        // exact far from the world origin. The same reference must be used across
+        // every face and shell for the fan sum to remain exact.
+        var volumeOrigin: Point3D?
         for shellID in body.shellIDs {
             guard let shell = model.shells[shellID] else {
                 throw EditorError(
@@ -1424,7 +1436,9 @@ public struct MeasurementService {
                 if (shell.orientation == .reversed) != (face.orientation == .reversed) {
                     points.reverse()
                 }
-                signedVolume += try signedVolumeContribution(points)
+                let origin = volumeOrigin ?? points.first ?? Point3D(x: 0.0, y: 0.0, z: 0.0)
+                volumeOrigin = origin
+                signedVolume += try signedVolumeContribution(points, origin: origin)
             }
         }
 
@@ -1451,18 +1465,21 @@ public struct MeasurementService {
         return true
     }
 
-    private func signedVolumeContribution(_ points: [Point3D]) throws -> Double {
+    private func signedVolumeContribution(
+        _ points: [Point3D],
+        origin: Point3D
+    ) throws -> Double {
         guard points.count >= 3 else {
             throw EditorError(
                 code: .commandFailed,
                 message: "Measurement encountered a degenerate B-rep face."
             )
         }
-        let anchor = vector(points[0])
+        let anchor = vector(points[0], from: origin)
         var signedVolume = 0.0
         for index in 1..<(points.count - 1) {
             signedVolume += anchor.dot(
-                vector(points[index]).cross(vector(points[index + 1]))
+                vector(points[index], from: origin).cross(vector(points[index + 1], from: origin))
             ) / 6.0
         }
         return signedVolume
@@ -1470,6 +1487,14 @@ public struct MeasurementService {
 
     private func vector(_ point: Point3D) -> Vector3D {
         Vector3D(x: point.x, y: point.y, z: point.z)
+    }
+
+    private func vector(_ point: Point3D, from origin: Point3D) -> Vector3D {
+        Vector3D(
+            x: point.x - origin.x,
+            y: point.y - origin.y,
+            z: point.z - origin.z
+        )
     }
 
     private func boundsForSketch(

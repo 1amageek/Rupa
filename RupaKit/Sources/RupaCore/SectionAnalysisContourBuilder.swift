@@ -243,14 +243,21 @@ struct SectionAnalysisContourBuilder: Sendable {
     }
 
     private func signedArea(_ points: [Point2D]) -> Double {
-        guard points.count >= 3 else {
+        guard points.count >= 3, let origin = points.first else {
             return 0.0
         }
         var sum = 0.0
         for index in points.indices {
             let current = points[index]
             let next = points[(index + 1) % points.count]
-            sum += current.x * next.y - next.x * current.y
+            // Rebase to a local origin so the shoelace stays exact when the section
+            // contour is projected on a canonical plane far from the world origin
+            // (site-planning ~1e12). Signed area is translation invariant.
+            let currentX = current.x - origin.x
+            let currentY = current.y - origin.y
+            let nextX = next.x - origin.x
+            let nextY = next.y - origin.y
+            sum += currentX * nextY - nextX * currentY
         }
         return sum * 0.5
     }

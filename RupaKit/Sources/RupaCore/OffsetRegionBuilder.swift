@@ -1009,7 +1009,22 @@ struct OffsetRegionBuilder: Sendable {
     }
 
     private func quantized(_ value: Double) -> Int64 {
-        Int64((value / tolerance).rounded())
+        // Clamp instead of trapping: at site-planning scale a coordinate (~1e12)
+        // divided by the nanometer tolerance overflows Int64 (1e12 / 1e-9 = 1e21
+        // > Int64.max). The quantized value is only a coincidence-dedup key, and
+        // coordinate precision at that magnitude is already coarser than the
+        // tolerance, so clamping is safe where the raw conversion would crash.
+        let scaled = (value / tolerance).rounded()
+        guard scaled.isFinite else {
+            return 0
+        }
+        if scaled >= Double(Int64.max) {
+            return Int64.max
+        }
+        if scaled <= Double(Int64.min) {
+            return Int64.min
+        }
+        return Int64(scaled)
     }
 
     private func appendRemappedSketch(
@@ -1322,11 +1337,22 @@ struct OffsetRegionBuilder: Sendable {
     }
 
     private static func signedArea(of points: [Point2D]) -> Double {
+        guard let origin = points.first else {
+            return 0.0
+        }
         var twiceArea = 0.0
         for index in points.indices {
             let current = points[index]
             let next = points[(index + 1) % points.count]
-            twiceArea += current.x * next.y - next.x * current.y
+            // Rebase to a local origin so the winding sign and area stay correct
+            // far from the world origin; a raw shoelace on ~1e12 coordinates
+            // cancels to a random-sign value, inverting the offset direction and
+            // convexity classification. Signed area is translation invariant.
+            let currentX = current.x - origin.x
+            let currentY = current.y - origin.y
+            let nextX = next.x - origin.x
+            let nextY = next.y - origin.y
+            twiceArea += currentX * nextY - nextX * currentY
         }
         return twiceArea * 0.5
     }

@@ -419,10 +419,15 @@ public struct TopologySummaryService: Sendable {
                 guard points.count >= 3 else {
                     return nil
                 }
+                // Rebase to a loop vertex rather than plane.origin, which may sit on
+                // a world axis far from the loop and leave the cross-products at
+                // ~1e12. A loop vertex is always on the loop, so the relative
+                // coordinates stay small; face area is translation invariant.
+                let areaOrigin = points[0]
                 var signedDoubleArea = 0.0
                 for index in points.indices {
-                    let current = points[index] - plane.origin
-                    let next = points[(index + 1) % points.count] - plane.origin
+                    let current = points[index] - areaOrigin
+                    let next = points[(index + 1) % points.count] - areaOrigin
                     signedDoubleArea += current.cross(next).dot(normal)
                 }
                 let loopArea = abs(signedDoubleArea) * 0.5

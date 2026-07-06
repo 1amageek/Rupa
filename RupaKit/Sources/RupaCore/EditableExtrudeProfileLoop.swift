@@ -1839,11 +1839,21 @@ struct EditableExtrudeProfileLoop: Equatable, Sendable {
     }
 
     private static func signedArea(of vertices: [Point]) -> Double {
+        guard let origin = vertices.first else {
+            return 0.0
+        }
         var area = 0.0
         for index in vertices.indices {
             let nextIndex = (index + 1) % vertices.count
-            area += vertices[index].x * vertices[nextIndex].y
-                - vertices[nextIndex].x * vertices[index].y
+            // Rebase to a local origin so the winding sign stays correct when the
+            // loop sits far from the world origin; a raw shoelace on ~1e12
+            // coordinates cancels to a random-sign value and silently reverses
+            // the loop orientation. Signed area is translation invariant.
+            let currentX = vertices[index].x - origin.x
+            let currentY = vertices[index].y - origin.y
+            let nextX = vertices[nextIndex].x - origin.x
+            let nextY = vertices[nextIndex].y - origin.y
+            area += currentX * nextY - nextX * currentY
         }
         return area / 2.0
     }
