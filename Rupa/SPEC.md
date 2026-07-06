@@ -1269,9 +1269,9 @@ Initial implementation uses a local Unix domain socket.
 |---|---|
 | Transport | Unix domain socket |
 | Message format | JSON-RPC style request and response envelopes |
-| Runtime directory | Per-user application support or temporary runtime directory |
-| Preferred socket path | `~/Library/Application Support/Rupa/Agent/rupa.sock` |
-| Alternate socket path | `$TMPDIR/rupa-agent/rupa.sock` |
+| Runtime directory | Shared app-group container, with a per-process temporary fallback |
+| Canonical socket path | `~/Library/Group Containers/WWCKBW8CKN.team.stamp.rupa/rupa-agent/rupa.sock` — the app-group container is the one location the sandboxed app and unsandboxed CLI/agent clients resolve identically. |
+| Fallback socket path | `$TMPDIR/rupa-agent/rupa.sock`, used only when the app-group container is unavailable. |
 
 The package-level socket listener supports start, stop, stale socket replacement, malformed request recovery, and client/server round trips. App-hosted startup routes open document session mutation through `AgentHost` and `MainActorAgentBridge` so UI-owned `EditorSession` state is read and mutated on MainActor.
 
@@ -1734,7 +1734,7 @@ Initial implementation is accepted when these behavior contracts pass.
 | Topic | Decision needed |
 |---|---|
 | Document format boundary | Confirm whether `.swcad` is a Rupa document package wrapping Swift-CAD source or a direct Swift-CAD native package extension. |
-| App sandbox socket path | Validate the final socket location against sandbox and distribution requirements. |
+| App sandbox socket path | Resolved: the socket lives in the shared app-group container (`WWCKBW8CKN.team.stamp.rupa`) so the sandboxed app and external clients resolve the same path; distribution-signing validation remains before release. |
 | iPadOS and visionOS CLI exclusion | Decide whether `RupaCLI` is macOS-only in a separate package configuration or guarded in the shared package. |
 | XPC migration | Decide the threshold for replacing Unix domain sockets with XPC. |
 | Command schema versioning | Define compatibility policy before exposing automation as a public agent surface. |

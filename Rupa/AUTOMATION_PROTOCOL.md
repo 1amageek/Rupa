@@ -27,8 +27,8 @@ The transport layer is intentionally not the owner of project semantics. It only
 | Field | Contract |
 |---|---|
 | Transport | Local Unix domain socket. |
-| Canonical socket path | `~/Library/Application Support/Rupa/Agent/rupa.sock` |
-| Alternate socket path | `$TMPDIR/rupa-agent/rupa.sock` |
+| Canonical socket path | `~/Library/Group Containers/WWCKBW8CKN.team.stamp.rupa/rupa-agent/rupa.sock` — the app-group container is the one location both the sandboxed app and external clients resolve identically. |
+| Fallback socket path | `$TMPDIR/rupa-agent/rupa.sock`, used only when the app-group container is unavailable. |
 | Encoding | UTF-8 JSON. |
 | Message style | JSON-RPC-style envelopes with Rupa-specific method/result correlation. |
 | Protocol version | `jsonrpc` must be `"2.0"`. |
