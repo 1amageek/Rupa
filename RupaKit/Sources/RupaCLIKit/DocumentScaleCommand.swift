@@ -97,13 +97,17 @@ public struct RebaseWorkspaceOriginCommand: ParsableCommand {
     @OptionGroup
     public var document: CLIWriteDocumentOptions
 
-    @Option(help: "Translation along the world X axis in meters.")
+    // `.unconditional` lets a negative translation (e.g. `--x -1000000000000`)
+    // parse as the option value instead of being mistaken for another flag.
+    // Rebasing a far-from-origin model toward the origin inherently needs
+    // negative translations, so the space-separated negative form must work.
+    @Option(parsing: .unconditional, help: "Translation along the world X axis in meters.")
     public var x: Double = 0.0
 
-    @Option(help: "Translation along the world Y axis in meters.")
+    @Option(parsing: .unconditional, help: "Translation along the world Y axis in meters.")
     public var y: Double = 0.0
 
-    @Option(help: "Translation along the world Z axis in meters.")
+    @Option(parsing: .unconditional, help: "Translation along the world Z axis in meters.")
     public var z: Double = 0.0
 
     public init() {}
