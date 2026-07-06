@@ -48,8 +48,16 @@ extension FeatureOperation {
             return []
         case .revolve:
             return []
-        case .sweep:
-            return []
+        case .sweep(let feature):
+            // A boolean sweep replaces its target bodies (the kernel removes the
+            // target topology unless keep-tools retains both operands), so the
+            // targets must leave the measurable set exactly like standalone
+            // boolean operands below.
+            guard feature.options.booleanOperation != .newBody,
+                  feature.options.keepTools == false else {
+                return []
+            }
+            return Set(feature.targets.map(\.featureID))
         case .loft:
             return []
         case .boolean(let feature):

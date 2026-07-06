@@ -679,6 +679,129 @@ import SwiftCAD
     try document.validate()
 }
 
+private func sweepBooleanMeasureDocument(
+    pathEndYMillimeters: Double
+) throws -> (document: DesignDocument, targetBodyID: FeatureID, sweepID: FeatureID) {
+    var document = DesignDocument.empty()
+    let targetProfileID = try document.createRectangleSketch(
+        name: "Sweep Boolean Measure Target Profile",
+        plane: .xy,
+        width: .length(60.0, .millimeter),
+        height: .length(30.0, .millimeter)
+    )
+    let targetBodyID = try document.extrudeProfile(
+        name: "Sweep Boolean Measure Target",
+        profile: ProfileReference(featureID: targetProfileID),
+        distance: .length(10.0, .millimeter),
+        direction: .normal
+    )
+    let toolProfileID = try document.createRectangleSketch(
+        name: "Sweep Boolean Measure Tool Profile",
+        plane: .xy,
+        width: .length(40.0, .millimeter),
+        height: .length(20.0, .millimeter)
+    )
+    let pathID = try document.createLineSketch(
+        name: "Sweep Boolean Measure Path",
+        plane: .yz,
+        start: SketchPoint(
+            x: .length(0.0, .millimeter),
+            y: .length(0.0, .millimeter)
+        ),
+        end: SketchPoint(
+            x: .length(0.0, .millimeter),
+            y: .length(pathEndYMillimeters, .millimeter)
+        )
+    )
+    let sweepID = try document.createSweep(
+        name: "Sweep Boolean Measure Difference",
+        sections: [.profile(ProfileReference(featureID: toolProfileID))],
+        path: SweepPathReference(featureID: pathID),
+        targets: [SweepTargetReference(featureID: targetBodyID)],
+        options: SweepOptions(booleanOperation: .difference)
+    )
+    return (document, targetBodyID, sweepID)
+}
+
+@Test func measureExcludesSweepBooleanDifferenceTargetBody() throws {
+    let fixture = try sweepBooleanMeasureDocument(pathEndYMillimeters: 10.0)
+
+    let result = try MeasurementService().measure(document: fixture.document)
+    let solid = try #require(result.solids.first)
+
+    // 60x30x10 mm target minus the 40x20 z-through tool = 10000 mm^3 frame.
+    // The replaced target must not be measured alongside the boolean result.
+    #expect(result.counts.solids == 1)
+    #expect(solid.featureID == fixture.sweepID.description)
+    #expect(result.solids.contains { $0.featureID == fixture.targetBodyID.description } == false)
+    #expect(abs(solid.volumeCubicMeters - 1.0e-5) < 1.0e-9)
+    #expect(abs(result.totals.solidVolumeCubicMeters - 1.0e-5) < 1.0e-9)
+}
+
+@Test func measureExcludesSweepBooleanTargetBodyWhenDifferenceToolMissesTarget() throws {
+    // Target replacement supersedes the target even when the tool prism does
+    // not remove any material (tool swept to z in [-10, 0], target in [0, 10]).
+    let fixture = try sweepBooleanMeasureDocument(pathEndYMillimeters: -10.0)
+
+    let result = try MeasurementService().measure(document: fixture.document)
+    let solid = try #require(result.solids.first)
+
+    #expect(result.counts.solids == 1)
+    #expect(solid.featureID == fixture.sweepID.description)
+    #expect(result.solids.contains { $0.featureID == fixture.targetBodyID.description } == false)
+    #expect(abs(solid.volumeCubicMeters - 1.8e-5) < 1.0e-9)
+    #expect(abs(result.totals.solidVolumeCubicMeters - 1.8e-5) < 1.0e-9)
+}
+
+@Test func measureKeepsSweepBooleanTargetBodyWhenKeepToolsIsTrue() throws {
+    var document = DesignDocument.empty()
+    let targetProfileID = try document.createRectangleSketch(
+        name: "Keep Tools Measure Target Profile",
+        plane: .xy,
+        width: .length(60.0, .millimeter),
+        height: .length(30.0, .millimeter)
+    )
+    let targetBodyID = try document.extrudeProfile(
+        name: "Keep Tools Measure Target",
+        profile: ProfileReference(featureID: targetProfileID),
+        distance: .length(10.0, .millimeter),
+        direction: .normal
+    )
+    let toolProfileID = try document.createRectangleSketch(
+        name: "Keep Tools Measure Tool Profile",
+        plane: .xy,
+        width: .length(40.0, .millimeter),
+        height: .length(20.0, .millimeter)
+    )
+    let pathID = try document.createLineSketch(
+        name: "Keep Tools Measure Path",
+        plane: .yz,
+        start: SketchPoint(
+            x: .length(0.0, .millimeter),
+            y: .length(0.0, .millimeter)
+        ),
+        end: SketchPoint(
+            x: .length(0.0, .millimeter),
+            y: .length(10.0, .millimeter)
+        )
+    )
+    let sweepID = try document.createSweep(
+        name: "Keep Tools Measure Union",
+        sections: [.profile(ProfileReference(featureID: toolProfileID))],
+        path: SweepPathReference(featureID: pathID),
+        targets: [SweepTargetReference(featureID: targetBodyID)],
+        options: SweepOptions(booleanOperation: .union, keepTools: true)
+    )
+
+    let result = try MeasurementService().measure(document: document)
+
+    // Keep-tools retains the target body, so it stays measurable alongside
+    // the boolean result.
+    #expect(result.counts.solids == 2)
+    #expect(result.solids.contains { $0.featureID == targetBodyID.description })
+    #expect(result.solids.contains { $0.featureID == sweepID.description })
+}
+
 @Test func createSweepCanCreateSheetSurfaceOutput() throws {
     var document = DesignDocument.empty()
     let profileID = try document.createRectangleSketch(
