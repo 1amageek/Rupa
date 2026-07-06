@@ -1799,11 +1799,24 @@ public struct MeasurementService {
     }
 
     private func polygonArea(_ points: [MeasurementPoint2D]) -> Double {
+        guard let origin = points.first else {
+            return 0.0
+        }
         var twiceArea = 0.0
         for index in points.indices {
             let current = points[index]
             let next = points[(index + 1) % points.count]
-            twiceArea += current.x * next.y - next.x * current.y
+            // Rebase to a local origin before the shoelace products so the area
+            // stays exact even when the polygon sits far from the world origin.
+            // The raw formula multiplies coordinates near 1e12, whose products
+            // (~1e24, ulp ~1.3e8) cancel catastrophically and collapse the true
+            // area to zero for site-planning-scale models. Area is translation
+            // invariant, so subtracting the first vertex is exact.
+            let currentX = current.x - origin.x
+            let currentY = current.y - origin.y
+            let nextX = next.x - origin.x
+            let nextY = next.y - origin.y
+            twiceArea += currentX * nextY - nextX * currentY
         }
         return twiceArea / 2.0
     }

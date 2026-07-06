@@ -54,6 +54,21 @@ func workspaceOriginRebaseRejectsStandardPlaneNormalTranslationWithoutMutation()
     #expect(abs(range.minY - 1.0e12) < 1.0e-3)
 }
 
+@Test(.timeLimit(.minutes(1)))
+func farFromOriginExtrudeMeasuresWithoutUnsupportedProfile() throws {
+    let document = try farFromOriginRectangleDocument()
+    let measurement = try MeasurementService(
+        tolerance: .workspaceScaleAware(for: document)
+    ).measure(document: document)
+
+    // The 10 m x 10 m profile sits at 1e12 coordinates. A raw shoelace area
+    // collapses to zero there (catastrophic cancellation), which used to skip
+    // the extrude as an "unsupported profile". The origin-rebased area keeps it
+    // exact, so the extrude is measured with its true 1000 m^3 volume.
+    #expect(measurement.diagnostics.allSatisfy { !$0.message.contains("unsupported profile") })
+    #expect(abs(measurement.totals.solidVolumeCubicMeters - 1000.0) < 1.0e-3)
+}
+
 private func farFromOriginRectangleDocument() throws -> DesignDocument {
     var document = DesignDocument.empty(named: "Remote Site")
     try document.setRulerConfiguration(WorkspaceScalePreset.sitePlanning.rulerConfiguration)
