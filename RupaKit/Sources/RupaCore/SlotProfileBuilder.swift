@@ -267,11 +267,17 @@ public struct SlotProfileBuilder: Sendable {
                 message: "Slot requires at least one open source curve segment."
             )
         }
+        // Cap arc endpoints: the end cap runs from (lastNormal + pi) — the right
+        // boundary end — to lastNormal — the left boundary end; the start cap
+        // runs from firstNormal — the left boundary start — to (firstNormal + pi)
+        // — the right boundary start. Pair arcStart/arcEnd accordingly (the
+        // curve-chain builder is the reference); swapping them binds points a
+        // full slot width apart and poisons constraint-driven edits.
         constraints.append(contentsOf: [
-            .coincident(.lineEnd(lastLeftLineID), .arcStart(endCapID)),
-            .coincident(.arcEnd(endCapID), .lineStart(firstRightLineID)),
-            .coincident(.lineEnd(lastRightLineID), .arcStart(startCapID)),
-            .coincident(.arcEnd(startCapID), .lineStart(firstLeftLineID)),
+            .coincident(.lineEnd(lastLeftLineID), .arcEnd(endCapID)),
+            .coincident(.arcStart(endCapID), .lineStart(firstRightLineID)),
+            .coincident(.lineEnd(lastRightLineID), .arcEnd(startCapID)),
+            .coincident(.arcStart(startCapID), .lineStart(firstLeftLineID)),
             .equalRadius(endCapID, startCapID),
             .tangent(lastLeftLineID, endCapID),
             .tangent(endCapID, firstRightLineID),
