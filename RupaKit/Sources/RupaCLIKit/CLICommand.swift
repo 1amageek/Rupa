@@ -15,6 +15,7 @@ public struct CLICommand: ParsableCommand {
             AttachDocument.self,
             BatchCommand.self,
             Capabilities.self,
+            NewDocumentCommand.self,
             AutomationCommandGroup.self,
             DimensionCommand.self,
             EvaluateDocument.self,

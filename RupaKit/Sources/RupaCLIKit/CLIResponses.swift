@@ -7,6 +7,8 @@ public struct CLIResponse: Codable, Equatable, Sendable {
     public var generation: UInt64
     public var dirty: Bool
     public var saved: Bool
+    public var primaryFeatureID: FeatureID?
+    public var createdFeatureIDs: [FeatureID]?
     public var diagnostics: [EditorDiagnostic]
     public var workspaceScale: WorkspaceScaleSnapshot?
     public var workspaceInteractionScale: WorkspaceInteractionScaleSnapshot?
@@ -29,6 +31,8 @@ public struct CLIResponse: Codable, Equatable, Sendable {
         generation: UInt64,
         dirty: Bool,
         saved: Bool = false,
+        primaryFeatureID: FeatureID? = nil,
+        createdFeatureIDs: [FeatureID]? = nil,
         diagnostics: [EditorDiagnostic],
         workspaceScale: WorkspaceScaleSnapshot? = nil,
         workspaceInteractionScale: WorkspaceInteractionScaleSnapshot? = nil,
@@ -50,6 +54,8 @@ public struct CLIResponse: Codable, Equatable, Sendable {
         self.generation = generation
         self.dirty = dirty
         self.saved = saved
+        self.primaryFeatureID = primaryFeatureID
+        self.createdFeatureIDs = createdFeatureIDs
         self.diagnostics = diagnostics
         self.workspaceScale = workspaceScale
         self.workspaceInteractionScale = workspaceInteractionScale

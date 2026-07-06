@@ -11,6 +11,8 @@ extension CLIResponse {
             generation: result.generation.value,
             dirty: dirty,
             saved: saved,
+            primaryFeatureID: result.primaryFeatureID,
+            createdFeatureIDs: result.createdFeatureIDs.isEmpty ? nil : result.createdFeatureIDs,
             diagnostics: result.diagnostics,
             workspaceScale: result.workspaceScale,
             workspaceInteractionScale: result.workspaceInteractionScale,
