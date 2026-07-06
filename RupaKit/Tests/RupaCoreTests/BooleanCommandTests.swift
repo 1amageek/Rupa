@@ -194,6 +194,44 @@ import SwiftCAD
     #expect(document.cadDocument.designGraph.order == initialOrder)
 }
 
+@Test func measureExcludesStandaloneBooleanOperands() throws {
+    var document = DesignDocument.empty()
+    let targetID = try createBooleanBox(
+        in: &document,
+        name: "Boolean Measure Target",
+        minX: -20.0,
+        minY: -10.0,
+        maxX: 20.0,
+        maxY: 10.0
+    )
+    let toolID = try createBooleanBox(
+        in: &document,
+        name: "Boolean Measure Tool",
+        minX: 0.0,
+        minY: -10.0,
+        maxX: 20.0,
+        maxY: 10.0
+    )
+    let booleanID = try document.createBoolean(
+        name: "Boolean Measure Difference",
+        targets: [BooleanTargetReference(featureID: targetID)],
+        tool: BooleanToolReference(featureID: toolID),
+        operation: .difference
+    )
+
+    let result = try MeasurementService().measure(document: document)
+    let solid = try #require(result.solids.first)
+
+    // 40x20x10 mm target minus the overlapping 20x20x10 mm tool half leaves
+    // 4000 mm^3; both consumed operands must leave the measurable set.
+    #expect(result.counts.solids == 1)
+    #expect(solid.featureID == booleanID.description)
+    #expect(result.solids.contains { $0.featureID == targetID.description } == false)
+    #expect(result.solids.contains { $0.featureID == toolID.description } == false)
+    #expect(abs(solid.volumeCubicMeters - 4.0e-6) < 1.0e-9)
+    #expect(abs(result.totals.solidVolumeCubicMeters - 4.0e-6) < 1.0e-9)
+}
+
 @discardableResult
 private func createBooleanBox(
     in document: inout DesignDocument,

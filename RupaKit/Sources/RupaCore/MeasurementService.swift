@@ -1144,7 +1144,7 @@ public struct MeasurementService {
             unsupportedReason = "The sweep path length could not be measured."
             return nil
         }
-        let meshMeasurement = try evaluatedMeshMeasurement(mesh)
+        let meshMeasurement = try evaluatedMeshMeasurement(mesh, requiresClosedMesh: true)
         let brepVolume = try evaluatedBRepVolume(bodyID: bodyID, in: evaluatedDocument.brep)
         let volumeCubicMeters = brepVolume ?? meshMeasurement.volumeCubicMeters
         guard volumeCubicMeters > tolerance.distance * tolerance.distance * tolerance.distance else {
@@ -1292,7 +1292,7 @@ public struct MeasurementService {
             unsupportedReason = "The evaluated document is missing the generated body mesh."
             return nil
         }
-        let meshMeasurement = try evaluatedMeshMeasurement(mesh)
+        let meshMeasurement = try evaluatedMeshMeasurement(mesh, requiresClosedMesh: true)
         let brepVolume = try evaluatedBRepVolume(bodyID: bodyID, in: evaluatedDocument.brep)
         let volumeCubicMeters = brepVolume ?? meshMeasurement.volumeCubicMeters
         guard volumeCubicMeters > tolerance.distance * tolerance.distance * tolerance.distance else {
@@ -1325,7 +1325,10 @@ public struct MeasurementService {
         return bodyID
     }
 
-    private func evaluatedMeshMeasurement(_ mesh: Mesh) throws -> EvaluatedMeshMeasurement {
+    private func evaluatedMeshMeasurement(
+        _ mesh: Mesh,
+        requiresClosedMesh: Bool = false
+    ) throws -> EvaluatedMeshMeasurement {
         guard !mesh.positions.isEmpty,
               !mesh.indices.isEmpty,
               mesh.indices.count.isMultiple(of: 3) else {
@@ -1355,6 +1358,7 @@ public struct MeasurementService {
 
         var surfaceArea = 0.0
         var signedVolume = 0.0
+        var orientedAreaSum = Vector3D(x: 0.0, y: 0.0, z: 0.0)
         // Shared local origin so the divergence-theorem triple products stay exact
         // when the mesh is far from the world origin (site-planning ~1e12, where
         // absolute triple products ~1e36 cancel to noise). Total volume of a closed
@@ -1378,11 +1382,26 @@ public struct MeasurementService {
             let third = mesh.positions[thirdIndex]
             let triangleNormal = (second - first).cross(third - first)
             surfaceArea += triangleNormal.length * 0.5
+            orientedAreaSum = orientedAreaSum + triangleNormal * 0.5
             let firstRebased = vector(first, from: volumeOrigin)
             let secondRebased = vector(second, from: volumeOrigin)
             let thirdRebased = vector(third, from: volumeOrigin)
             signedVolume += firstRebased.dot(secondRebased.cross(thirdRebased)) / 6.0
             index += 3
+        }
+
+        if requiresClosedMesh {
+            // A closed mesh's oriented triangle areas sum to zero regardless of
+            // discretization. A significant residual means part of the surface
+            // is wound inconsistently, so the divergence volume is meaningless;
+            // fail loudly instead of reporting a silently wrong number.
+            let residual = orientedAreaSum.length
+            guard residual <= max(surfaceArea * 1.0e-6, 1.0e-12) else {
+                throw EditorError(
+                    code: .commandFailed,
+                    message: "Measurement rejected an inconsistently oriented solid mesh (oriented-area residual \(residual))."
+                )
+            }
         }
 
         return EvaluatedMeshMeasurement(
