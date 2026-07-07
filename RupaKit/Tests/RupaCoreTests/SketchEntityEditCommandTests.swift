@@ -8292,6 +8292,102 @@ import Testing
 }
 
 @MainActor
+@Test func cutSketchCurveSplitsMultiSegmentSplineAtBothCircleCutterIntersections() async throws {
+    let session = EditorSession()
+    _ = try session.execute(
+        .createSplineSketch(
+            name: "Cut Multi Segment Spline Target",
+            plane: .xy,
+            spline: SketchSpline(controlPoints: [
+                SketchPoint(x: .length(0.0, .millimeter), y: .length(0.0, .millimeter)),
+                SketchPoint(x: .length(10.0 / 3.0, .millimeter), y: .length(0.0, .millimeter)),
+                SketchPoint(x: .length(20.0 / 3.0, .millimeter), y: .length(0.0, .millimeter)),
+                SketchPoint(x: .length(10.0, .millimeter), y: .length(0.0, .millimeter)),
+                SketchPoint(x: .length(10.0, .millimeter), y: .length(10.0 / 3.0, .millimeter)),
+                SketchPoint(x: .length(10.0, .millimeter), y: .length(20.0 / 3.0, .millimeter)),
+                SketchPoint(x: .length(10.0, .millimeter), y: .length(10.0, .millimeter)),
+            ])
+        )
+    )
+    _ = try session.execute(
+        .createCircleSketch(
+            name: "Cut Multi Segment Spline Cutter",
+            plane: .xy,
+            center: SketchPoint(
+                x: .length(10.0, .millimeter),
+                y: .length(0.0, .millimeter)
+            ),
+            radius: .length(5.0, .millimeter)
+        )
+    )
+    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let targetSpline = try #require(
+        before.entries.first { $0.sourceFeatureName == "Cut Multi Segment Spline Target" }
+    )
+    let cutterCircle = try #require(
+        before.entries.first { $0.sourceFeatureName == "Cut Multi Segment Spline Cutter" }
+    )
+    let target = try #require(targetSpline.selectionTarget())
+    let cutter = try #require(cutterCircle.selectionTarget())
+
+    let result = try session.execute(
+        .cutSketchCurve(
+            target: target,
+            cutter: cutter,
+            options: CutCurveOptions()
+        )
+    )
+
+    // The cutter crosses the ORIGINAL two-segment L-spline at global fractions
+    // 0.25 and 0.75, i.e. at (0.005, 0) and (0.010, 0.005) meters. The buggy
+    // linear remap placed the second cut at original 0.667 -> (0.010, 0.00333),
+    // 1.67 mm off the cutter.
+    let updatedSummary = try SketchEntitySummaryService().summarize(document: session.document)
+    let targetSegments = updatedSummary.entries.filter {
+        $0.sourceFeatureName == "Cut Multi Segment Spline Target"
+    }
+    #expect(result.commandName == "cutSketchCurve")
+    #expect(result.didMutate)
+    #expect(result.generation == DocumentGeneration(3))
+    #expect(targetSegments.count == 3)
+    #expect(targetSegments.allSatisfy { $0.entityKind == "spline" })
+    #expect(targetSegments.contains {
+        splineSegmentMatches($0, startX: 0.0, startY: 0.0, endX: 0.005, endY: 0.0)
+    })
+    #expect(targetSegments.contains {
+        splineSegmentMatches($0, startX: 0.005, startY: 0.0, endX: 0.010, endY: 0.005)
+    })
+    #expect(targetSegments.contains {
+        splineSegmentMatches($0, startX: 0.010, startY: 0.005, endX: 0.010, endY: 0.010)
+    })
+
+    // Every interior piece boundary must lie ON the cutter circle within 1e-9.
+    let tolerance = 1.0e-9
+    let centerX = 0.010
+    let centerY = 0.0
+    let radius = 0.005
+    var boundaryPoints: [(x: Double, y: Double)] = []
+    for segment in targetSegments {
+        let start = try #require(segment.controlPoints.first)
+        let end = try #require(segment.controlPoints.last)
+        boundaryPoints.append((x: start.x, y: start.y))
+        boundaryPoints.append((x: end.x, y: end.y))
+    }
+    let cutPoints = boundaryPoints.filter { point in
+        let isOriginalStart = abs(point.x) < tolerance && abs(point.y) < tolerance
+        let isOriginalEnd = abs(point.x - 0.010) < tolerance && abs(point.y - 0.010) < tolerance
+        return isOriginalStart == false && isOriginalEnd == false
+    }
+    #expect(cutPoints.count == 4)
+    for point in cutPoints {
+        let distance = ((point.x - centerX) * (point.x - centerX)
+            + (point.y - centerY) * (point.y - centerY)).squareRoot()
+        #expect(abs(distance - radius) < tolerance)
+    }
+    #expect(session.evaluationStatus == .valid)
+}
+
+@MainActor
 @Test func cutSketchCurveSplitsTargetSplineAtCircleCutterIntersections() async throws {
     let session = EditorSession()
     _ = try session.execute(

@@ -376,6 +376,14 @@ extension DesignDocument {
             parameter,
             owner: "Bridge curve endpoint parameter"
         )
+        if let splineResolution = split.splineResolution {
+            return remappedSplineBridgeEndpoint(
+                endpoint,
+                resolvedParameter: resolvedParameter,
+                resolution: splineResolution,
+                split: split
+            )
+        }
         let splitExpression = CADExpression.scalar(split.fraction)
         if resolvedParameter <= split.fraction {
             return BridgeCurveEndpoint(
@@ -399,6 +407,97 @@ extension DesignDocument {
             trimSide: endpoint.trimSide,
             tension: endpoint.tension
         )
+    }
+
+
+    /// Splines use a uniform-per-segment global parameter, and splitSpline keeps
+    /// trailing segments subdivided while the split segment's head and tail
+    /// collapse into single renormalized segments. The remapped parameter is
+    /// therefore piecewise (it contains a floor over segments), so it is emitted
+    /// as a resolved scalar; the linear symbolic remap remains valid only for
+    /// lines and arcs.
+    private func remappedSplineBridgeEndpoint(
+        _ endpoint: BridgeCurveEndpoint,
+        resolvedParameter: Double,
+        resolution: SketchSplineSplitResolution,
+        split: SketchCurveSegmentSplitResult
+    ) -> BridgeCurveEndpoint {
+        let remap = remappedSplineBridgeEndpointParameter(
+            resolvedParameter,
+            resolution: resolution,
+            splitFraction: split.fraction
+        )
+        if remap.movesToNewEntity {
+            return BridgeCurveEndpoint(
+                reference: rewriteBridgeParametricReferenceToNewSplitEntity(
+                    endpoint.reference,
+                    split: split
+                ),
+                parameter: .scalar(remap.parameter),
+                reversesSense: endpoint.reversesSense,
+                trimSide: endpoint.trimSide,
+                tension: endpoint.tension
+            )
+        }
+        return BridgeCurveEndpoint(
+            reference: endpoint.reference,
+            parameter: .scalar(remap.parameter),
+            reversesSense: endpoint.reversesSense,
+            trimSide: endpoint.trimSide,
+            tension: endpoint.tension
+        )
+    }
+
+    private func remappedSplineBridgeEndpointParameter(
+        _ resolvedParameter: Double,
+        resolution: SketchSplineSplitResolution,
+        splitFraction: Double
+    ) -> (parameter: Double, movesToNewEntity: Bool) {
+        switch resolution {
+        case .interior(let segmentCount, let splitSegmentIndex, let splitSegmentLocal):
+            let scaled = resolvedParameter * Double(segmentCount)
+            let segmentIndex = min(Int(floor(scaled)), segmentCount - 1)
+            let segmentLocal = scaled - Double(segmentIndex)
+            if resolvedParameter <= splitFraction {
+                let retainedSegmentCount = Double(splitSegmentIndex + 1)
+                let retainedGlobal: Double
+                if segmentIndex < splitSegmentIndex {
+                    retainedGlobal = (Double(segmentIndex) + segmentLocal) / retainedSegmentCount
+                } else {
+                    retainedGlobal = (
+                        Double(splitSegmentIndex) + min(segmentLocal / splitSegmentLocal, 1.0)
+                    ) / retainedSegmentCount
+                }
+                return (parameter: clampedUnitParameter(retainedGlobal), movesToNewEntity: false)
+            }
+            let newSegmentCount = Double(segmentCount - splitSegmentIndex)
+            let newGlobal: Double
+            if segmentIndex == splitSegmentIndex {
+                newGlobal = ((segmentLocal - splitSegmentLocal) / (1.0 - splitSegmentLocal)) /
+                    newSegmentCount
+            } else {
+                newGlobal = (
+                    Double(segmentIndex - splitSegmentIndex) + segmentLocal
+                ) / newSegmentCount
+            }
+            return (parameter: clampedUnitParameter(newGlobal), movesToNewEntity: true)
+        case .knot(let segmentCount, let knotSegmentIndex):
+            let scaled = resolvedParameter * Double(segmentCount)
+            let segmentIndex = min(Int(floor(scaled)), segmentCount - 1)
+            let segmentLocal = scaled - Double(segmentIndex)
+            if resolvedParameter <= splitFraction {
+                let retainedGlobal = (Double(segmentIndex) + segmentLocal) /
+                    Double(knotSegmentIndex)
+                return (parameter: clampedUnitParameter(retainedGlobal), movesToNewEntity: false)
+            }
+            let newGlobal = (Double(segmentIndex - knotSegmentIndex) + segmentLocal) /
+                Double(segmentCount - knotSegmentIndex)
+            return (parameter: clampedUnitParameter(newGlobal), movesToNewEntity: true)
+        }
+    }
+
+    private func clampedUnitParameter(_ value: Double) -> Double {
+        min(max(value, 0.0), 1.0)
     }
 
     private func rewriteBridgeParametricReferenceToNewSplitEntity(

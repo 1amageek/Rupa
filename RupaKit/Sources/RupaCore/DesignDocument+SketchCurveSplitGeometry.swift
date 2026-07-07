@@ -3,6 +3,11 @@ import SwiftCAD
 import RupaCoreTypes
 
 extension DesignDocument {
+    enum SketchSplineSplitResolution {
+        case interior(segmentCount: Int, segmentIndex: Int, segmentLocal: Double)
+        case knot(segmentCount: Int, knotSegmentIndex: Int)
+    }
+
     struct SketchCurveSegmentSplitResult {
         var originalEntityID: SketchEntityID
         var newEntityID: SketchEntityID
@@ -13,6 +18,7 @@ extension DesignDocument {
         var insertedNewReference: SketchReference
         var originalEndReference: SketchReference
         var migratedEndReference: SketchReference
+        var splineResolution: SketchSplineSplitResolution? = nil
     }
 
     func splitSketchCurveEntity(
@@ -66,7 +72,8 @@ extension DesignDocument {
                 migratedEndReference: .splineControlPoint(
                     entity: newEntityID,
                     index: split.new.controlPoints.count - 1
-                )
+                ),
+                splineResolution: split.resolution
             )
         case .arc(let arc):
             let split = try splitArc(
@@ -149,7 +156,7 @@ extension DesignDocument {
         _ spline: SketchSpline,
         fraction: Double,
         owner: String
-    ) throws -> (retained: SketchSpline, new: SketchSpline) {
+    ) throws -> (retained: SketchSpline, new: SketchSpline, resolution: SketchSplineSplitResolution) {
         let controlPoints = spline.controlPoints
         guard controlPoints.count >= 4,
               (controlPoints.count - 1).isMultiple(of: 3) else {
@@ -171,10 +178,15 @@ extension DesignDocument {
                     message: "\(owner) fraction must not resolve to the spline start."
                 )
             }
-            return splitSplineAtExistingKnot(
+            let knotSplit = splitSplineAtExistingKnot(
                 spline,
                 knotIndex: segmentIndex * 3,
                 owner: owner
+            )
+            return (
+                retained: knotSplit.retained,
+                new: knotSplit.new,
+                resolution: .knot(segmentCount: segmentCount, knotSegmentIndex: segmentIndex)
             )
         }
         if localFraction >= 1.0 - tolerance {
@@ -185,10 +197,15 @@ extension DesignDocument {
                     message: "\(owner) fraction must not resolve to the spline end."
                 )
             }
-            return splitSplineAtExistingKnot(
+            let knotSplit = splitSplineAtExistingKnot(
                 spline,
                 knotIndex: segmentIndex * 3,
                 owner: owner
+            )
+            return (
+                retained: knotSplit.retained,
+                new: knotSplit.new,
+                resolution: .knot(segmentCount: segmentCount, knotSegmentIndex: segmentIndex)
             )
         }
 
@@ -219,7 +236,12 @@ extension DesignDocument {
         }
         return (
             retained: SketchSpline(controlPoints: retained),
-            new: SketchSpline(controlPoints: next)
+            new: SketchSpline(controlPoints: next),
+            resolution: .interior(
+                segmentCount: segmentCount,
+                segmentIndex: segmentIndex,
+                segmentLocal: localFraction
+            )
         )
     }
 
