@@ -80,6 +80,30 @@ public struct ViewportIdentityPickRenderPlan: Equatable, Sendable {
     }
 }
 
+/// Counts identity-picking render work without allocating projected primitive arrays.
+public struct ViewportIdentityPickRenderPlanEstimate: Equatable, Sendable {
+    public var drawItemCount: Int
+    public var encodedPointCount: Int
+
+    public init(drawItemCount: Int = 0, encodedPointCount: Int = 0) {
+        self.drawItemCount = max(drawItemCount, 0)
+        self.encodedPointCount = max(encodedPointCount, 0)
+    }
+
+    mutating func appendDrawItem(encodedPointCount: Int) {
+        drawItemCount = Self.saturatedAdd(drawItemCount, 1)
+        self.encodedPointCount = Self.saturatedAdd(
+            self.encodedPointCount,
+            encodedPointCount
+        )
+    }
+
+    private static func saturatedAdd(_ lhs: Int, _ rhs: Int) -> Int {
+        let result = max(lhs, 0).addingReportingOverflow(max(rhs, 0))
+        return result.overflow ? Int.max : result.partialValue
+    }
+}
+
 public struct ViewportIdentityPickRenderPlanBuilder: Sendable {
     public var curveRadius: CGFloat
     public var pointRadius: CGFloat
@@ -146,6 +170,42 @@ public struct ViewportIdentityPickRenderPlanBuilder: Sendable {
         return ViewportIdentityPickRenderPlan(index: pickIndex, drawItems: drawItems)
     }
 
+    /// Estimates render-plan cost using the same target traversal as `build`.
+    public func estimate(
+        scene: ViewportScene,
+        layout: ViewportLayout,
+        index: ViewportIdentityPickIndex? = nil,
+        selectionHitPolicy: ViewportSelectionHitPolicy = .all
+    ) -> ViewportIdentityPickRenderPlanEstimate {
+        let pickIndex = (index ?? ViewportIdentityPickIndexBuilder(
+            selectionHitPolicy: selectionHitPolicy
+        ).build(scene: scene))
+        .filtered(selectionHitPolicy: selectionHitPolicy)
+        var estimate = ViewportIdentityPickRenderPlanEstimate()
+
+        for item in scene.items {
+            switch item.kind {
+            case .sketch(let primitives):
+                estimateSketchDrawItems(
+                    item: item,
+                    primitives: primitives,
+                    index: pickIndex,
+                    estimate: &estimate
+                )
+            case .body(let component):
+                estimateBodyDrawItems(
+                    item: item,
+                    component: component,
+                    layout: layout,
+                    index: pickIndex,
+                    estimate: &estimate
+                )
+            }
+        }
+
+        return estimate
+    }
+
     private func appendSketchDrawItems(
         item: ViewportSceneItem,
         primitives: [ViewportSketchPrimitive],
@@ -187,6 +247,39 @@ public struct ViewportIdentityPickRenderPlanBuilder: Sendable {
         }
     }
 
+    private func estimateSketchDrawItems(
+        item: ViewportSceneItem,
+        primitives: [ViewportSketchPrimitive],
+        index: ViewportIdentityPickIndex,
+        estimate: inout ViewportIdentityPickRenderPlanEstimate
+    ) {
+        for primitive in primitives {
+            estimateSketchEntityDrawItem(
+                item: item,
+                primitive: primitive,
+                index: index,
+                estimate: &estimate
+            )
+            estimateSketchControlPointDrawItems(
+                item: item,
+                primitive: primitive,
+                index: index,
+                estimate: &estimate
+            )
+        }
+
+        for region in item.sketchRegions {
+            guard record(
+                for: item,
+                geometry: .sketchRegion(region.componentID),
+                in: index
+            ) != nil else {
+                continue
+            }
+            estimate.appendDrawItem(encodedPointCount: region.points.count)
+        }
+    }
+
     private func appendSketchEntityDrawItem(
         item: ViewportSceneItem,
         primitive: ViewportSketchPrimitive,
@@ -204,6 +297,21 @@ public struct ViewportIdentityPickRenderPlanBuilder: Sendable {
             primitive: pickPrimitive,
             depth: nil,
             drawItems: &drawItems
+        )
+    }
+
+    private func estimateSketchEntityDrawItem(
+        item: ViewportSceneItem,
+        primitive: ViewportSketchPrimitive,
+        index: ViewportIdentityPickIndex,
+        estimate: inout ViewportIdentityPickRenderPlanEstimate
+    ) {
+        let geometry = ViewportIdentityPickGeometry.sketchEntity(primitive.entityID)
+        guard record(for: item, geometry: geometry, in: index) != nil else {
+            return
+        }
+        estimate.appendDrawItem(
+            encodedPointCount: sketchPrimitiveEncodedPointCount(primitive)
         )
     }
 
@@ -234,6 +342,27 @@ public struct ViewportIdentityPickRenderPlanBuilder: Sendable {
                 depth: nil,
                 drawItems: &drawItems
             )
+        }
+    }
+
+    private func estimateSketchControlPointDrawItems(
+        item: ViewportSceneItem,
+        primitive: ViewportSketchPrimitive,
+        index: ViewportIdentityPickIndex,
+        estimate: inout ViewportIdentityPickRenderPlanEstimate
+    ) {
+        guard case .spline(let entityID, _, let controlPoints, _) = primitive else {
+            return
+        }
+        for controlPointIndex in controlPoints.indices {
+            let geometry = ViewportIdentityPickGeometry.sketchControlPoint(
+                entityID: entityID,
+                controlPointIndex: controlPointIndex
+            )
+            guard record(for: item, geometry: geometry, in: index) != nil else {
+                continue
+            }
+            estimate.appendDrawItem(encodedPointCount: 1)
         }
     }
 
@@ -274,6 +403,44 @@ public struct ViewportIdentityPickRenderPlanBuilder: Sendable {
             layout: layout,
             index: index,
             drawItems: &drawItems
+        )
+    }
+
+    private func estimateBodyDrawItems(
+        item: ViewportSceneItem,
+        component: ViewportBodyComponent,
+        layout: ViewportLayout,
+        index: ViewportIdentityPickIndex,
+        estimate: inout ViewportIdentityPickRenderPlanEstimate
+    ) {
+        estimateBodyObjectDrawItems(
+            item: item,
+            component: component,
+            layout: layout,
+            index: index,
+            estimate: &estimate
+        )
+        if let topology = component.topology,
+           topologyHasTargets(topology) {
+            estimateGeneratedTopologyDrawItems(
+                item: item,
+                topology: topology,
+                index: index,
+                estimate: &estimate
+            )
+        } else {
+            estimateProjectedBodySubobjectDrawItems(
+                item: item,
+                layout: layout,
+                index: index,
+                estimate: &estimate
+            )
+        }
+        estimateSurfaceTrimParameterDrawItems(
+            item: item,
+            component: component,
+            index: index,
+            estimate: &estimate
         )
     }
 
@@ -346,6 +513,42 @@ public struct ViewportIdentityPickRenderPlanBuilder: Sendable {
         }
     }
 
+    private func estimateSurfaceTrimParameterDrawItems(
+        item: ViewportSceneItem,
+        component: ViewportBodyComponent,
+        index: ViewportIdentityPickIndex,
+        estimate: inout ViewportIdentityPickRenderPlanEstimate
+    ) {
+        for display in component.surfaceKnotDisplays {
+            let geometry = ViewportIdentityPickGeometry.surfaceKnot(display.selectionReference)
+            guard record(for: item, geometry: geometry, in: index) != nil else {
+                continue
+            }
+            estimate.appendDrawItem(encodedPointCount: 1)
+        }
+        for display in component.surfaceSpanDisplays {
+            let geometry = ViewportIdentityPickGeometry.surfaceSpan(display.selectionReference)
+            guard record(for: item, geometry: geometry, in: index) != nil else {
+                continue
+            }
+            estimate.appendDrawItem(encodedPointCount: 1)
+        }
+        for display in component.surfaceTrimKnotDisplays {
+            let geometry = ViewportIdentityPickGeometry.surfaceTrimKnot(display.selectionReference)
+            guard record(for: item, geometry: geometry, in: index) != nil else {
+                continue
+            }
+            estimate.appendDrawItem(encodedPointCount: 1)
+        }
+        for display in component.surfaceTrimSpanDisplays {
+            let geometry = ViewportIdentityPickGeometry.surfaceTrimSpan(display.selectionReference)
+            guard record(for: item, geometry: geometry, in: index) != nil else {
+                continue
+            }
+            estimate.appendDrawItem(encodedPointCount: 1)
+        }
+    }
+
     private func appendBodyObjectDrawItems(
         item: ViewportSceneItem,
         component: ViewportBodyComponent,
@@ -398,6 +601,38 @@ public struct ViewportIdentityPickRenderPlanBuilder: Sendable {
         }
     }
 
+    private func estimateBodyObjectDrawItems(
+        item: ViewportSceneItem,
+        component: ViewportBodyComponent,
+        layout: ViewportLayout,
+        index: ViewportIdentityPickIndex,
+        estimate: inout ViewportIdentityPickRenderPlanEstimate
+    ) {
+        guard record(for: item, geometry: .body, in: index) != nil else {
+            return
+        }
+
+        if let topology = component.topology,
+           topology.faces.isEmpty == false {
+            for face in topology.faces where face.points.count >= 3 {
+                estimate.appendDrawItem(encodedPointCount: face.points.count)
+            }
+            return
+        }
+
+        if let mesh = component.mesh {
+            estimateMeshDrawItems(mesh: mesh, estimate: &estimate)
+            return
+        }
+
+        guard layout.bodyProjection(for: item) != nil else {
+            return
+        }
+        for _ in projectedBodyFaceCases {
+            estimate.appendDrawItem(encodedPointCount: 4)
+        }
+    }
+
     private func appendMeshDrawItems(
         item: ViewportSceneItem,
         record: ViewportIdentityPickRecord,
@@ -431,6 +666,27 @@ public struct ViewportIdentityPickRenderPlanBuilder: Sendable {
                 depth: averageDepth(points, item: item, layout: layout),
                 drawItems: &drawItems
             )
+            index += 3
+        }
+    }
+
+    private func estimateMeshDrawItems(
+        mesh: ViewportBodyMesh,
+        estimate: inout ViewportIdentityPickRenderPlanEstimate
+    ) {
+        var index = 0
+        while index + 2 < mesh.indices.count {
+            let firstIndex = Int(mesh.indices[index])
+            let secondIndex = Int(mesh.indices[index + 1])
+            let thirdIndex = Int(mesh.indices[index + 2])
+            guard firstIndex < mesh.positions.count,
+                  secondIndex < mesh.positions.count,
+                  thirdIndex < mesh.positions.count else {
+                index += 3
+                continue
+            }
+
+            estimate.appendDrawItem(encodedPointCount: 3)
             index += 3
         }
     }
@@ -487,6 +743,38 @@ public struct ViewportIdentityPickRenderPlanBuilder: Sendable {
                 depth: layout.projectedDepth(vertex.point, in: item),
                 drawItems: &drawItems
             )
+        }
+    }
+
+    private func estimateGeneratedTopologyDrawItems(
+        item: ViewportSceneItem,
+        topology: ViewportBodyTopology,
+        index: ViewportIdentityPickIndex,
+        estimate: inout ViewportIdentityPickRenderPlanEstimate
+    ) {
+        for face in topology.faces {
+            let geometry = ViewportIdentityPickGeometry.generatedFace(face.componentID)
+            guard record(for: item, geometry: geometry, in: index) != nil,
+                  face.points.count >= 3 else {
+                continue
+            }
+            estimate.appendDrawItem(encodedPointCount: face.points.count)
+        }
+
+        for edge in topology.edges {
+            let geometry = ViewportIdentityPickGeometry.generatedEdge(edge.componentID)
+            guard record(for: item, geometry: geometry, in: index) != nil else {
+                continue
+            }
+            estimate.appendDrawItem(encodedPointCount: 2)
+        }
+
+        for vertex in topology.vertices {
+            let geometry = ViewportIdentityPickGeometry.generatedVertex(vertex.componentID)
+            guard record(for: item, geometry: geometry, in: index) != nil else {
+                continue
+            }
+            estimate.appendDrawItem(encodedPointCount: 1)
         }
     }
 
@@ -547,6 +835,40 @@ public struct ViewportIdentityPickRenderPlanBuilder: Sendable {
         }
     }
 
+    private func estimateProjectedBodySubobjectDrawItems(
+        item: ViewportSceneItem,
+        layout: ViewportLayout,
+        index: ViewportIdentityPickIndex,
+        estimate: inout ViewportIdentityPickRenderPlanEstimate
+    ) {
+        guard layout.bodyProjection(for: item) != nil else {
+            return
+        }
+        for face in projectedBodyFaceCases {
+            let geometry = ViewportIdentityPickGeometry.projectedBodyFace(face)
+            guard record(for: item, geometry: geometry, in: index) != nil else {
+                continue
+            }
+            estimate.appendDrawItem(encodedPointCount: 4)
+        }
+
+        for edge in ViewportBodyEdge.verticalCases {
+            let geometry = ViewportIdentityPickGeometry.projectedBodyEdge(edge)
+            guard record(for: item, geometry: geometry, in: index) != nil else {
+                continue
+            }
+            estimate.appendDrawItem(encodedPointCount: 2)
+        }
+
+        for vertex in ViewportBodyVertex.allCases {
+            let geometry = ViewportIdentityPickGeometry.projectedBodyVertex(vertex)
+            guard record(for: item, geometry: geometry, in: index) != nil else {
+                continue
+            }
+            estimate.appendDrawItem(encodedPointCount: 1)
+        }
+    }
+
     private func sketchPrimitive(
         _ primitive: ViewportSketchPrimitive,
         layout: ViewportLayout
@@ -591,6 +913,24 @@ public struct ViewportIdentityPickRenderPlanBuilder: Sendable {
         }
     }
 
+    private func sketchPrimitiveEncodedPointCount(_ primitive: ViewportSketchPrimitive) -> Int {
+        switch primitive {
+        case .point:
+            return 1
+        case .line:
+            return 2
+        case .circle:
+            return max(circleSampleCount, 8)
+        case .arc(_, _, _, let startAngle, let endAngle):
+            return arcEncodedPointCount(
+                startAngleRadians: startAngle,
+                endAngleRadians: endAngle
+            )
+        case .spline(_, let points, _, _):
+            return points.count
+        }
+    }
+
     private func circlePoints(
         center: CGPoint,
         radiusMeters: Double,
@@ -619,7 +959,10 @@ public struct ViewportIdentityPickRenderPlanBuilder: Sendable {
             startAngleRadians: startAngleRadians,
             endAngleRadians: endAngleRadians
         )
-        let sampleCount = max(Int(ceil(abs(span) / (Double.pi / 24.0))), 2)
+        let sampleCount = arcEncodedPointCount(
+            startAngleRadians: startAngleRadians,
+            endAngleRadians: endAngleRadians
+        ) - 1
         return (0 ... sampleCount).map { index in
             let fraction = Double(index) / Double(sampleCount)
             let angle = CGFloat(startAngleRadians + span * fraction)
@@ -628,6 +971,18 @@ public struct ViewportIdentityPickRenderPlanBuilder: Sendable {
                 y: center.y + sin(angle) * radius
             ))
         }
+    }
+
+    private func arcEncodedPointCount(
+        startAngleRadians: Double,
+        endAngleRadians: Double
+    ) -> Int {
+        let span = normalizedArcSpan(
+            startAngleRadians: startAngleRadians,
+            endAngleRadians: endAngleRadians
+        )
+        let sampleCount = max(Int(ceil(abs(span) / (Double.pi / 24.0))), 2)
+        return sampleCount + 1
     }
 
     private func normalizedArcSpan(
@@ -656,11 +1011,11 @@ public struct ViewportIdentityPickRenderPlanBuilder: Sendable {
         geometry: ViewportIdentityPickGeometry,
         in index: ViewportIdentityPickIndex
     ) -> ViewportIdentityPickRecord? {
-        index.records.first { record in
-            record.featureID == item.featureID
-                && record.geometry == geometry
-                && record.hit.sceneNodeID == item.sceneNodeID
-        }
+        index.record(
+            featureID: item.featureID,
+            sceneNodeID: item.sceneNodeID,
+            geometry: geometry
+        )
     }
 
     private func appendDrawItem(

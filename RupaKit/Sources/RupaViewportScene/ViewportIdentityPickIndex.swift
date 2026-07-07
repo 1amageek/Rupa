@@ -21,7 +21,7 @@ public struct ViewportPickIdentity: RawRepresentable, Codable, Hashable, Compara
     }
 }
 
-public enum ViewportIdentityPickGeometry: Equatable, Sendable {
+public enum ViewportIdentityPickGeometry: Hashable, Sendable {
     case sketchEntity(SketchEntityID)
     case sketchControlPoint(entityID: SketchEntityID, controlPointIndex: Int)
     case sketchRegion(SelectionComponentID)
@@ -60,6 +60,8 @@ public struct ViewportIdentityPickRecord: Equatable, Sendable {
 public struct ViewportIdentityPickIndex: Equatable, Sendable {
     public private(set) var records: [ViewportIdentityPickRecord]
     private var recordsByIdentity: [ViewportPickIdentity: ViewportIdentityPickRecord]
+    private var recordsByLookupKey: [RecordLookupKey: ViewportIdentityPickRecord]
+    private var recordsByFeatureID: [FeatureID: [ViewportIdentityPickRecord]]
 
     fileprivate init(records: [ViewportIdentityPickRecord]) {
         self.records = records
@@ -68,6 +70,23 @@ public struct ViewportIdentityPickIndex: Equatable, Sendable {
                 (record.identity, record)
             }
         )
+        var recordsByLookupKey: [RecordLookupKey: ViewportIdentityPickRecord] = [:]
+        var recordsByFeatureID: [FeatureID: [ViewportIdentityPickRecord]] = [:]
+        recordsByLookupKey.reserveCapacity(records.count)
+        recordsByFeatureID.reserveCapacity(records.count)
+        for record in records {
+            let lookupKey = RecordLookupKey(
+                featureID: record.featureID,
+                sceneNodeID: record.hit.sceneNodeID,
+                geometry: record.geometry
+            )
+            if recordsByLookupKey[lookupKey] == nil {
+                recordsByLookupKey[lookupKey] = record
+            }
+            recordsByFeatureID[record.featureID, default: []].append(record)
+        }
+        self.recordsByLookupKey = recordsByLookupKey
+        self.recordsByFeatureID = recordsByFeatureID
     }
 
     public var count: Int {
@@ -86,8 +105,20 @@ public struct ViewportIdentityPickIndex: Equatable, Sendable {
         record(for: identity)?.hit
     }
 
+    public func record(
+        featureID: FeatureID,
+        sceneNodeID: SceneNodeID?,
+        geometry: ViewportIdentityPickGeometry
+    ) -> ViewportIdentityPickRecord? {
+        recordsByLookupKey[RecordLookupKey(
+            featureID: featureID,
+            sceneNodeID: sceneNodeID,
+            geometry: geometry
+        )]
+    }
+
     public func records(for featureID: FeatureID) -> [ViewportIdentityPickRecord] {
-        records.filter { $0.featureID == featureID }
+        recordsByFeatureID[featureID] ?? []
     }
 
     public func filtered(selectionHitPolicy: ViewportSelectionHitPolicy) -> ViewportIdentityPickIndex {
@@ -98,6 +129,12 @@ public struct ViewportIdentityPickIndex: Equatable, Sendable {
             records: records.filter { selectionHitPolicy.allows(geometry: $0.geometry) }
         )
     }
+}
+
+private struct RecordLookupKey: Hashable, Sendable {
+    var featureID: FeatureID
+    var sceneNodeID: SceneNodeID?
+    var geometry: ViewportIdentityPickGeometry
 }
 
 public struct ViewportIdentityPickIndexBuilder: Sendable {

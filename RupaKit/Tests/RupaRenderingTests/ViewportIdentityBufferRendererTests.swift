@@ -74,6 +74,60 @@ import Testing
     #expect(allSample.hit?.selectionComponent == .vertex(vertexComponentID))
 }
 
+@Test func viewportIdentityPickIndexLooksUpRecordsByFeatureSceneAndGeometry() throws {
+    let scene = identityBufferGeneratedTopologyScene()
+    let item = try #require(scene.items.first)
+    let faceComponentID = SelectionComponentID.generatedTopology(
+        "feature:body:subshape:identity:face:front"
+    )
+    let index = ViewportIdentityPickIndexBuilder().build(scene: scene)
+
+    let record = index.record(
+        featureID: item.featureID,
+        sceneNodeID: item.sceneNodeID,
+        geometry: .generatedFace(faceComponentID)
+    )
+
+    #expect(record?.featureID == item.featureID)
+    #expect(record?.hit.sceneNodeID == item.sceneNodeID)
+    #expect(record?.hit.selectionComponent == .face(faceComponentID))
+}
+
+@Test func viewportIdentityPickRenderPlanEstimateMatchesBuiltPlanBySelectionPolicy() throws {
+    let scene = identityBufferGeneratedTopologyScene()
+    let viewportSize = CGSize(width: 240.0, height: 180.0)
+    let layout = try #require(ViewportLayout(scene: scene, size: viewportSize))
+    let builder = ViewportIdentityPickRenderPlanBuilder()
+    let policies: [ViewportSelectionHitPolicy] = [
+        .all,
+        .object,
+        .face,
+        .edge,
+        .vertex,
+    ]
+
+    for policy in policies {
+        let index = ViewportIdentityPickIndexBuilder(selectionHitPolicy: policy)
+            .build(scene: scene)
+        let estimate = builder.estimate(
+            scene: scene,
+            layout: layout,
+            index: index,
+            selectionHitPolicy: policy
+        )
+        let plan = builder.build(
+            scene: scene,
+            layout: layout,
+            index: index,
+            selectionHitPolicy: policy
+        )
+
+        #expect(estimate.drawItemCount == plan.drawItems.count)
+        #expect(estimate.encodedPointCount == plan.encodedPointCount)
+        #expect(plan.index.count == index.count)
+    }
+}
+
 @Test func viewportIdentityBufferRendererReportsRenderReadbackMetrics() throws {
     let scene = identityBufferGeneratedTopologyScene()
     let viewportSize = CGSize(width: 240.0, height: 180.0)

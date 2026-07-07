@@ -459,20 +459,20 @@ public final class ViewportIdentityHitResolver {
             selectionHitPolicy: selectionHitPolicy
         )
         .build(scene: scene)
-        let plan = ViewportIdentityPickRenderPlanBuilder()
-            .build(
-                scene: scene,
-                layout: layout,
-                index: index,
-                selectionHitPolicy: selectionHitPolicy
-            )
+        let planBuilder = ViewportIdentityPickRenderPlanBuilder()
+        let planEstimate = planBuilder.estimate(
+            scene: scene,
+            layout: layout,
+            index: index,
+            selectionHitPolicy: selectionHitPolicy
+        )
         let cost = RenderCost(
             viewportWidth: renderSize.width,
             viewportHeight: renderSize.height,
             pixelCount: RenderCost.saturatedProduct(renderSize.width, renderSize.height),
-            drawItemCount: plan.drawItems.count,
-            encodedPointCount: plan.encodedPointCount,
-            identityRecordCount: plan.index.count
+            drawItemCount: planEstimate.drawItemCount,
+            encodedPointCount: planEstimate.encodedPointCount,
+            identityRecordCount: index.count
         )
         lastRenderCost = cost
         lastRenderMetrics = nil
@@ -486,6 +486,12 @@ public final class ViewportIdentityHitResolver {
             )
             throw ResolverError.budgetExceeded(rejection)
         }
+        let plan = planBuilder.build(
+            scene: scene,
+            layout: layout,
+            index: index,
+            selectionHitPolicy: selectionHitPolicy
+        )
         let buffer = try identityRenderer().render(
             plan: plan,
             viewportSize: layout.viewportSize

@@ -66,8 +66,8 @@ public struct ViewportPickingReadinessService: Sendable {
     ) -> ViewportIdentityHitResolver.RenderCost {
         let renderWidth = max(Int(layout.viewportSize.width.rounded(.up)), 1)
         let renderHeight = max(Int(layout.viewportSize.height.rounded(.up)), 1)
-        let plan = ViewportIdentityPickRenderPlanBuilder()
-            .build(
+        let planEstimate = ViewportIdentityPickRenderPlanBuilder()
+            .estimate(
                 scene: scene,
                 layout: layout,
                 index: index,
@@ -80,9 +80,9 @@ public struct ViewportPickingReadinessService: Sendable {
                 renderWidth,
                 renderHeight
             ),
-            drawItemCount: plan.drawItems.count,
-            encodedPointCount: plan.encodedPointCount,
-            identityRecordCount: plan.index.count
+            drawItemCount: planEstimate.drawItemCount,
+            encodedPointCount: planEstimate.encodedPointCount,
+            identityRecordCount: index.count
         )
     }
 }

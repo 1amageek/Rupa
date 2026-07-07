@@ -7,7 +7,7 @@ public enum ViewportSelectableKind: String, Equatable, Sendable {
     case body
 }
 
-public enum ViewportBodyFace: String, CaseIterable, Equatable, Sendable {
+public enum ViewportBodyFace: String, CaseIterable, Hashable, Sendable {
     case front
     case back
     case top
@@ -17,14 +17,14 @@ public enum ViewportBodyFace: String, CaseIterable, Equatable, Sendable {
     case side
 }
 
-public enum ViewportBodyEdge: String, CaseIterable, Equatable, Sendable {
+public enum ViewportBodyEdge: String, CaseIterable, Hashable, Sendable {
     case leftBottom
     case rightBottom
     case rightTop
     case leftTop
 }
 
-public enum ViewportBodyVertex: String, CaseIterable, Equatable, Sendable {
+public enum ViewportBodyVertex: String, CaseIterable, Hashable, Sendable {
     case frontBottomLeft
     case frontBottomRight
     case frontTopRight
