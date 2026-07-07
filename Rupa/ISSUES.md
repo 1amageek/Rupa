@@ -52,6 +52,18 @@ workflow) > `ergonomics` (usable but hostile) > `hardening` (defense in depth).
 | R-14 | Sweep frame transport falls back discontinuously | When the path turns into the previous frame normal, projection transport silently snaps to a fallback normal (up to ~90 degrees of roll in one span), producing twisted spans. Use rotation-minimizing double-reflection or reject beyond an angle threshold. | 2026-07-07 sweep/boolean audit |
 | R-15 | Curved-sweep sections are placed by absolute sketch-plane coordinates | Off-origin profiles teleport between the exact straight-extrude plan (extrudes in place) and curved plans (re-express plane-origin offsets in every frame), and lose precision at site scale. Rebase sections about a consistent anchor in all plans. | 2026-07-07 sweep/boolean audit |
 
+## UI Consistency
+
+| ID | Issue | Detail | Found |
+|---|---|---|---|
+| U-1 | Object transform gizmo commits nothing | Select-tool translate/rotate/scale/vertexMove/faceMove gizmo actions have no commit callback; only the ghost gizmo moves and the document never changes (ghost-state leak fixed 2026-07-07; the commit wiring itself is still missing). Sketch selection gizmo is drawn but never hit-tested. | 2026-07-07 UI audit |
+| U-2 | Drag-creation previews ignore commit snapping and plane mapping | drawCanvasDragPreview uses raw unsnapped model drag on the ground plane; the commit snaps both endpoints and maps through the active sketch plane, so outlines shift on release and lie flat when drawing on non-ground planes. | 2026-07-07 UI audit |
+| U-3 | Placement highlight is centered on the raw hover point | Click placement snaps the center via snappedModelInput (ruler minor tick) while the highlight uses the unsnapped point; also the same one-cell highlight shows for every placement tool though only the solid tool places a cell-sized box. Center the highlight on the snap-resolved point and shape it per tool. | 2026-07-07 UI audit |
+| U-4 | Profile-corner drag drifts off-cursor in isometric views | profileCornerDragDelta/moveVertex decompose the screen delta by independent per-axis projections; non-orthogonal projected axes cross-bleed (~0.5 z per x). Use the planar 2x2 solve (ViewportPlanarHandleDragGeometry.localPlanarDelta) instead. | 2026-07-07 UI audit |
+| U-5 | Hover and press resolve overlapping handles in opposite orders | hover() checks control-point handles before offset/pattern handles; beginViewportPress checks the reverse, so the highlighted target and the grabbed target can differ. Extract one shared ordered resolver. | 2026-07-07 UI audit |
+| U-6 | Chamfer/fillet affordance drags give no live feedback | applying() ignores .profileEdgeChamfer/.profileEdgeFillet, so geometry jumps only at mouse-up. | 2026-07-07 UI audit |
+| U-7 | Snap indicator/application divergences | Construction-plane snap marker shows for clicks that will not apply it (snappedModelInput guard omits the toggle); on SnapResolver throw the input silently falls back to ruler rounding while the indicator shows nil (silent fallback). | 2026-07-07 UI audit |
+
 ## Hardening
 
 | ID | Issue | Detail | Found |
