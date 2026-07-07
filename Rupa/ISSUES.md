@@ -17,7 +17,6 @@ workflow) > `ergonomics` (usable but hostile) > `hardening` (defense in depth).
 | ID | Issue | Detail | Found |
 |---|---|---|---|
 | W-1 | Sketch commands cannot reference a saved construction plane by ID | Plane-less creation now routes through the ACTIVE plane, but there is no `--construction-plane-id` to sketch on a specific saved plane without activating it first. | 2026-07-06 CLI verification |
-| W-2 | `rupa feature suppress` missing | SPEC-required command group; needs a Core feature-suppression command first. | SPEC gap audit |
 | W-3 | `--in-place` / `--output` file-mode flags missing | SPEC CLI Modes table lists them; semantics overlap with the unresolved `--force` open decision. | SPEC gap audit |
 | W-4 | Live/auto batch is non-atomic | Documented in `rupa batch` help: per-command commits, partial application on mid-batch failure. A server-side transactional batch (AgentRequest.executeBatch) would close it. | batch review |
 | W-5 | MCP bridge not implemented | The protocol names MCP clients as a target consumer; no bridge exists, so vision-LLM agents cannot consume capabilities/renders directly. | agent harness review |

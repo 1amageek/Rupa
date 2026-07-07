@@ -137,6 +137,7 @@ public final class CADDocumentStore {
         var curveRebuildReport: CurveRebuildReport?
         var addedSelectionDimensionID: SelectionDimensionID?
         var primaryFeatureID: FeatureID?
+        var didMutate = command.mutatesDocument
         let previousFeatureIDs = Set(document.cadDocument.designGraph.nodes.keys)
         switch command {
         case .setDisplayUnit(let unit):
@@ -216,6 +217,20 @@ public final class CADDocumentStore {
             document = updatedDocument
             try commitMutation()
             evaluateCurrentDocument()
+        case .setFeatureSuppression(let featureID, let isSuppressed):
+            var updatedDocument = document
+            let changed = try updatedDocument.setFeatureSuppression(
+                featureID: featureID,
+                isSuppressed: isSuppressed,
+                objectRegistry: objectRegistry
+            )
+            document = updatedDocument
+            primaryFeatureID = featureID
+            didMutate = changed
+            if changed {
+                try commitMutation()
+                evaluateCurrentDocument()
+            }
         case .createComponentDefinition(let name, let rootSceneNodeIDs):
             var updatedDocument = document
             try updatedDocument.createComponentDefinition(
@@ -1462,7 +1477,7 @@ public final class CADDocumentStore {
         return CommandExecutionResult(
             commandName: command.name,
             generation: generation,
-            didMutate: command.mutatesDocument,
+            didMutate: didMutate,
             diagnostics: diagnostics,
             primaryFeatureID: primaryFeatureID,
             createdFeatureIDs: createdFeatureIDs,

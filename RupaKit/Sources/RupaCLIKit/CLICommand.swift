@@ -20,6 +20,7 @@ public struct CLICommand: ParsableCommand {
             DimensionCommand.self,
             EvaluateDocument.self,
             ExportDocument.self,
+            FeatureCommand.self,
             InspectCommand.self,
             MeasureDocument.self,
             MeshDocument.self,

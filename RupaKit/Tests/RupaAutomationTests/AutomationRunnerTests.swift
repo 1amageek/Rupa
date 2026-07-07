@@ -683,6 +683,60 @@ import SwiftCAD
 }
 
 @MainActor
+@Test func automationCanSetFeatureSuppression() async throws {
+    let session = EditorSession()
+    let runner = AutomationRunner()
+    _ = try runner.execute(
+        .createExtrudedRectangle(
+            name: "Suppressible Automation Box",
+            plane: .xy,
+            width: .length(30.0, .millimeter),
+            height: .length(12.0, .millimeter),
+            depth: .length(6.0, .millimeter),
+            direction: .normal
+        ),
+        in: session
+    )
+    let featureID = try #require(session.document.cadDocument.designGraph.order.last)
+
+    let suppressResult = try runner.execute(
+        .setFeatureSuppression(featureID: featureID, isSuppressed: true),
+        in: session
+    )
+    let suppressedFeature = try #require(session.document.cadDocument.designGraph.nodes[featureID])
+
+    #expect(suppressResult.message == "Feature \(featureID.description) suppressed.")
+    #expect(suppressResult.commandName == "setFeatureSuppression")
+    #expect(suppressResult.didMutate)
+    #expect(suppressResult.primaryFeatureID == featureID)
+    #expect(suppressResult.generation == DocumentGeneration(2))
+    #expect(suppressedFeature.isSuppressed)
+    #expect(session.evaluationStatus == .valid)
+    #expect(session.evaluatedBodyCount == 0)
+
+    let noOpResult = try runner.execute(
+        .setFeatureSuppression(featureID: featureID, isSuppressed: true),
+        in: session
+    )
+
+    #expect(!noOpResult.didMutate)
+    #expect(noOpResult.generation == DocumentGeneration(2))
+
+    let unsuppressResult = try runner.execute(
+        .setFeatureSuppression(featureID: featureID, isSuppressed: false),
+        in: session
+    )
+    let unsuppressedFeature = try #require(session.document.cadDocument.designGraph.nodes[featureID])
+
+    #expect(unsuppressResult.message == "Feature \(featureID.description) unsuppressed.")
+    #expect(unsuppressResult.didMutate)
+    #expect(unsuppressResult.generation == DocumentGeneration(3))
+    #expect(!unsuppressedFeature.isSuppressed)
+    #expect(session.evaluationStatus == .valid)
+    #expect(session.evaluatedBodyCount == 1)
+}
+
+@MainActor
 @Test func automationCanSetCubeDimensions() async throws {
     let session = EditorSession()
     let runner = AutomationRunner()

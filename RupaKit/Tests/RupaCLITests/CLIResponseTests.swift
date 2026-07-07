@@ -444,6 +444,75 @@ func cliExecutableSketchRectangleClosedDocumentAsJSON() async throws {
 }
 
 @Test(.timeLimit(.minutes(1)))
+func cliExecutableFeatureSuppressClosedDocumentAsJSON() async throws {
+    let temporaryDirectory = try makeTemporaryDirectory()
+    defer {
+        removeTemporaryDirectory(temporaryDirectory)
+    }
+    let documentURL = temporaryDirectory.appendingPathComponent("process-feature-suppress.swcad")
+    var document = DesignDocument.empty(named: "Process Feature Suppress")
+    let featureID = try document.createRectangleSketchFromCorners(
+        name: "Suppressible Profile",
+        plane: .xy,
+        firstCorner: SketchPoint(
+            x: .length(0.0, .millimeter),
+            y: .length(0.0, .millimeter)
+        ),
+        oppositeCorner: SketchPoint(
+            x: .length(10.0, .millimeter),
+            y: .length(8.0, .millimeter)
+        )
+    )
+    try DocumentFileService().save(document, to: documentURL)
+
+    let result = try await runCLI([
+        "feature",
+        "suppress",
+        documentURL.path,
+        featureID.description,
+        "--mode",
+        "file",
+        "--json",
+    ])
+    let response = try JSONDecoder().decode(
+        CLIResponse.self,
+        from: result.standardOutputData
+    )
+    let loaded = try DocumentFileService().load(from: documentURL)
+    let feature = try #require(loaded.cadDocument.designGraph.nodes[featureID])
+
+    #expect(result.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: result.standardError))
+    #expect(response.message == "Feature \(featureID.description) suppressed.")
+    #expect(response.generation == 1)
+    #expect(response.saved)
+    #expect(response.primaryFeatureID == featureID)
+    #expect(feature.isSuppressed)
+
+    let unsuppressResult = try await runCLI([
+        "feature",
+        "unsuppress",
+        documentURL.path,
+        featureID.description,
+        "--mode",
+        "file",
+        "--json",
+    ])
+    let unsuppressResponse = try JSONDecoder().decode(
+        CLIResponse.self,
+        from: unsuppressResult.standardOutputData
+    )
+    let unsuppressed = try DocumentFileService().load(from: documentURL)
+    let unsuppressedFeature = try #require(unsuppressed.cadDocument.designGraph.nodes[featureID])
+
+    #expect(unsuppressResult.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: unsuppressResult.standardError))
+    #expect(unsuppressResponse.message == "Feature \(featureID.description) unsuppressed.")
+    #expect(unsuppressResponse.generation == 2)
+    #expect(unsuppressResponse.saved)
+    #expect(unsuppressResponse.primaryFeatureID == featureID)
+    #expect(!unsuppressedFeature.isSuppressed)
+}
+
+@Test(.timeLimit(.minutes(1)))
 func cliExecutableModelEvaluateAndExportClosedDocumentAsJSON() async throws {
     let temporaryDirectory = try makeTemporaryDirectory()
     defer {

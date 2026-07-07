@@ -16,6 +16,7 @@ public enum EditorCommand: Codable, Equatable, Sendable {
     case upsertParameter(name: String, expression: CADExpression, kind: QuantityKind)
     case renameParameter(currentName: String, newName: String)
     case deleteParameter(name: String)
+    case setFeatureSuppression(featureID: FeatureID, isSuppressed: Bool)
     case createComponentDefinition(name: String, rootSceneNodeIDs: [SceneNodeID])
     case createComponentInstance(
         name: String,
@@ -433,6 +434,8 @@ public enum EditorCommand: Codable, Equatable, Sendable {
             "renameParameter"
         case .deleteParameter:
             "deleteParameter"
+        case .setFeatureSuppression:
+            "setFeatureSuppression"
         case .createComponentDefinition:
             "createComponentDefinition"
         case .createComponentInstance:
@@ -671,6 +674,7 @@ public enum EditorCommand: Codable, Equatable, Sendable {
              .upsertParameter,
              .renameParameter,
              .deleteParameter,
+             .setFeatureSuppression,
              .createComponentDefinition,
              .createComponentInstance,
              .createPatternArray,

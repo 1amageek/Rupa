@@ -149,6 +149,18 @@ public struct AutomationRunner {
                 commandResult: result,
                 in: session
             )
+        case .setFeatureSuppression(let featureID, let isSuppressed):
+            let result = try session.execute(
+                .setFeatureSuppression(
+                    featureID: featureID,
+                    isSuppressed: isSuppressed
+                )
+            )
+            return commandAutomationResult(
+                message: "Feature \(featureID.description) \(isSuppressed ? "suppressed" : "unsuppressed").",
+                commandResult: result,
+                in: session
+            )
         case .createComponentDefinition(let name, let rootSceneNodeIDs):
             let result = try session.execute(
                 .createComponentDefinition(

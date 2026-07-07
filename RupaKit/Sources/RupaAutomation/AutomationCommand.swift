@@ -23,6 +23,7 @@ public enum AutomationCommand: Codable, Equatable, Sendable {
     case upsertParameter(name: String, expression: CADExpression, kind: QuantityKind)
     case renameParameter(currentName: String, newName: String)
     case deleteParameter(name: String)
+    case setFeatureSuppression(featureID: FeatureID, isSuppressed: Bool)
     case createComponentDefinition(name: String, rootSceneNodeIDs: [SceneNodeID])
     case createComponentInstance(
         name: String,
@@ -414,6 +415,11 @@ public enum AutomationCommand: Codable, Equatable, Sendable {
             )
         case .deleteParameter(let name):
             .deleteParameter(name: name)
+        case .setFeatureSuppression(let featureID, let isSuppressed):
+            .setFeatureSuppression(
+                featureID: featureID,
+                isSuppressed: isSuppressed
+            )
         case .createComponentDefinition(let name, let rootSceneNodeIDs):
             .createComponentDefinition(
                 name: name,
