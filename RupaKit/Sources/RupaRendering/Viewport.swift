@@ -9859,6 +9859,7 @@ public struct Viewport: View {
         pendingPatternArrayCurvePathPointHandle = nil
         pendingPatternArrayOutputModeHandle = nil
         pendingConstructionPlaneHandle = nil
+        clearAffordanceGhostEdits()
         activeAffordanceDrag = nil
         activeSketchCurveHandleDrag = nil
         activeSketchDimensionDrag = nil
@@ -11858,6 +11859,20 @@ public struct Viewport: View {
         .min() ?? CGFloat.greatestFiniteMagnitude
     }
 
+
+    /// Gizmo actions without a commit path (translate, rotate, scale) must not
+    /// leave their drag preview behind: a stale editedBodies entry permanently
+    /// displaces the gizmo, the face and edge highlights, and the affordance
+    /// hit areas for the body, making it look unselectable.
+    private func clearAffordanceGhostEdits() {
+        guard let activeAffordanceDrag else {
+            return
+        }
+        for featureID in activeAffordanceDrag.baseEdits.keys {
+            editedBodies.removeValue(forKey: featureID)
+        }
+    }
+
     private func updateAffordanceDrag(
         target: ViewportAffordanceTarget,
         start: CGPoint,
@@ -12813,6 +12828,7 @@ public struct Viewport: View {
         }
         if pendingAffordance != nil {
             pendingAffordance = nil
+            clearAffordanceGhostEdits()
             activeAffordanceDrag = nil
             return
         }
@@ -13114,6 +13130,9 @@ public struct Viewport: View {
             return
         }
         if pendingAffordance != nil || activeAffordanceDrag != nil {
+            // Capture every body the drag ghosted before the state is cleared;
+            // non-committing gizmo actions must fully revert their preview.
+            let ghostFeatureIDs = activeAffordanceDrag.map { Array($0.baseEdits.keys) } ?? []
             let vertexDragTarget = committedVertexDragTarget(to: end, size: size)
             let faceDragTarget = committedFaceDragTarget(to: end, size: size)
             let edgeChamferDragTarget = committedEdgeChamferDragTarget(to: end, size: size)
@@ -13136,6 +13155,9 @@ public struct Viewport: View {
             if let edgeFilletDragTarget {
                 editedBodies.removeValue(forKey: edgeFilletDragTarget.featureID)
                 onEdgeFilletDrag?(edgeFilletDragTarget.target)
+            }
+            for featureID in ghostFeatureIDs {
+                editedBodies.removeValue(forKey: featureID)
             }
             return
         }
