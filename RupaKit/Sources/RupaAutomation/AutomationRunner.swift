@@ -24,7 +24,7 @@ public struct AutomationRunner {
                 in: session
             )
         case .setRulerConfiguration(let configuration):
-            let normalized = configuration.normalizedForWorkspaceScale()
+            let normalized = try normalizedRulerConfiguration(for: configuration)
             let result = try session.execute(.setRulerConfiguration(normalized))
             let scale = WorkspaceScaleSnapshot(ruler: session.document.ruler)
             return workspaceAutomationResult(
@@ -1759,6 +1759,25 @@ public struct AutomationRunner {
                 displayUnit: session.document.displayUnit
             ) + measurementContext.diagnostics
         )
+    }
+
+    private func normalizedRulerConfiguration(
+        for configuration: RulerConfiguration
+    ) throws -> RulerConfiguration {
+        guard configuration.minorTickMeters.isFinite,
+              configuration.majorTickMeters.isFinite,
+              configuration.visibleSpanMeters.isFinite,
+              configuration.minorTickMeters > 0.0,
+              configuration.majorTickMeters > 0.0,
+              configuration.visibleSpanMeters > 0.0 else {
+            throw DocumentValidationError.invalidProductMetadata(
+                "Ruler distances must be finite and positive before workspace scale normalization."
+            )
+        }
+
+        let normalized = configuration.normalizedForWorkspaceScale()
+        try normalized.validate()
+        return normalized
     }
 
     private func sortedSavedViews(in session: EditorSession) -> [SavedView] {

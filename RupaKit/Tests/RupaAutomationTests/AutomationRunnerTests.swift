@@ -48,6 +48,35 @@ import SwiftCAD
 }
 
 @MainActor
+@Test func automationRejectsNonFiniteRulerConfigurationBeforeNormalization() async throws {
+    let session = EditorSession()
+    let runner = AutomationRunner()
+    let originalRuler = session.document.ruler
+
+    do {
+        _ = try runner.execute(
+            .setRulerConfiguration(
+                RulerConfiguration(
+                    displayUnit: .meter,
+                    minorTickMeters: .nan,
+                    majorTickMeters: 10.0,
+                    visibleSpanMeters: .infinity
+                )
+            ),
+            in: session
+        )
+        Issue.record("Expected non-finite ruler configuration to be rejected.")
+    } catch DocumentValidationError.invalidProductMetadata(let message) {
+        #expect(message.contains("finite and positive"))
+    } catch {
+        Issue.record("Expected invalidProductMetadata, got \(error).")
+    }
+
+    #expect(session.document.ruler == originalRuler)
+    #expect(session.generation == DocumentGeneration(0))
+}
+
+@MainActor
 @Test func automationCanApplyWorkspaceScalePreset() async throws {
     let session = EditorSession()
     let runner = AutomationRunner()
