@@ -15,6 +15,39 @@ import Testing
     #expect(LengthDisplayUnit.kilometer.metersPerUnit == 1_000.0)
 }
 
+@Test(.timeLimit(.minutes(1)))
+func extrudedCircleCreationSupportsMeterScaleInMillimeterWorkspace() throws {
+    var document = DesignDocument.empty()
+    try document.createExtrudedCircle(
+        name: "Meter Scale Cylinder",
+        plane: .xy,
+        center: SketchPoint(
+            x: .length(0.0, .meter),
+            y: .length(0.0, .meter)
+        ),
+        radius: .length(1.0, .meter),
+        depth: .length(2.0, .meter),
+        direction: .normal
+    )
+
+    let evaluated = try CADPipeline
+        .modelingDefault(for: document)
+        .evaluate(document.cadDocument)
+    let bodyNode = try #require(document.productMetadata.sceneNodes.values.first {
+        $0.reference?.kind == .body && $0.object?.typeID == .cylinder
+    })
+
+    #expect(evaluated.brep.bodies.count == 1)
+    #expect(evaluated.brep.geometry.surfaces.values.filter {
+        if case .cylinder = $0 {
+            return true
+        }
+        return false
+    }.count == 4)
+    #expect(bodyNode.object?.properties["radius"] == .length(1.0))
+    #expect(bodyNode.object?.properties["size.z"] == .length(2.0))
+}
+
 @Test func lengthDisplayUnitsChooseReadableMetricScale() async throws {
     #expect(LengthDisplayUnit.millimeter.readableUnit(forMeters: 0.25) == .millimeter)
     #expect(LengthDisplayUnit.millimeter.readableUnit(forMeters: 1.0) == .meter)
