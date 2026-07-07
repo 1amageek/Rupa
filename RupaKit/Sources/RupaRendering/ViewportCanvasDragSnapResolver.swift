@@ -53,7 +53,7 @@ public struct ViewportCanvasDragSnapResolver: Sendable {
         modifierFlags: ViewportInputModifierFlags
     ) -> Point2D {
         guard var snapOptions,
-              shouldResolve(snapOptions, modifierFlags: modifierFlags) else {
+              snapOptions.shouldResolve(for: modifierFlags) else {
             return point
         }
         if modifierFlags.containsControl {
@@ -69,17 +69,5 @@ public struct ViewportCanvasDragSnapResolver: Sendable {
         } catch {
             return point
         }
-    }
-
-    private func shouldResolve(
-        _ snapOptions: SnapResolutionOptions,
-        modifierFlags: ViewportInputModifierFlags
-    ) -> Bool {
-        snapOptions.usesGrid
-            || snapOptions.usesObjects
-            || snapOptions.usesConstructionPlaneProjection
-            || snapOptions.objectTargetingOverride == .forceEnabled
-            || modifierFlags.containsControl
-            || !snapOptions.referenceLineAnchors.isEmpty
     }
 }

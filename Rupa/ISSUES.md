@@ -59,7 +59,6 @@ workflow) > `ergonomics` (usable but hostile) > `hardening` (defense in depth).
 | U-4 | Profile-corner drag drifts off-cursor in isometric views | profileCornerDragDelta/moveVertex decompose the screen delta by independent per-axis projections; non-orthogonal projected axes cross-bleed (~0.5 z per x). Use the planar 2x2 solve (ViewportPlanarHandleDragGeometry.localPlanarDelta) instead. | 2026-07-07 UI audit |
 | U-5 | Hover and press resolve overlapping handles in opposite orders | hover() checks control-point handles before offset/pattern handles; beginViewportPress checks the reverse, so the highlighted target and the grabbed target can differ. Extract one shared ordered resolver. | 2026-07-07 UI audit |
 | U-6 | Chamfer/fillet affordance drags give no live feedback | applying() ignores .profileEdgeChamfer/.profileEdgeFillet, so geometry jumps only at mouse-up. | 2026-07-07 UI audit |
-| U-7 | Snap indicator/application divergences | Construction-plane snap marker shows for clicks that will not apply it (snappedModelInput guard omits the toggle); on SnapResolver throw the input silently falls back to ruler rounding while the indicator shows nil (silent fallback). | 2026-07-07 UI audit |
 
 ## Hardening
 

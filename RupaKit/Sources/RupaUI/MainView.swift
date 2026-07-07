@@ -4417,40 +4417,23 @@ public struct MainView: View {
         referencePoint: Point2D? = nil,
         modifierFlags: ViewportInputModifierFlags = ViewportInputModifierFlags()
     ) -> SnappedModelInput {
-        // Construction-plane snap must be part of this gate: omitting it made
-        // the hover indicator advertise a snap the click would never apply.
-        guard isGridSnapEnabled
-            || isObjectTargetingEnabled
-            || isConstructionPlaneSnapEnabled
-            || modifierFlags.containsControl
-            || !session.sketchInputState.referenceLineAnchors.isEmpty else {
-            return SnappedModelInput(point: point)
-        }
-        do {
-            let result = try SnapResolver().resolve(
-                point: point,
-                in: session.document,
-                options: snapResolutionOptions(
-                    referencePoint: referencePoint,
-                    modifierFlags: modifierFlags
-                )
-            )
-            return SnappedModelInput(
-                point: result.resolvedPoint,
-                worldPoint: result.selectedWorldPoint
-            )
-        } catch {
-            // Do not silently degrade to plain grid rounding: the viewport
-            // indicator shows nothing for a failed resolution, so a silent
-            // fallback applies a snap no feedback ever advertised. Surface
-            // the failure and use the raw point, which matches the (empty)
-            // indicator.
+        let resolution = WorkspaceSnapInputResolver().resolve(
+            point,
+            in: session.document,
+            options: snapResolutionOptions(
+                referencePoint: referencePoint,
+                modifierFlags: modifierFlags
+            ),
+            referencePoint: referencePoint,
+            modifierFlags: modifierFlags
+        )
+        if let failureMessage = resolution.failureMessage {
             session.reportToolStatus(
-                "Snapping failed and was skipped: \(error.localizedDescription)",
+                "Snapping failed and was skipped: \(failureMessage)",
                 severity: .warning
             )
-            return SnappedModelInput(point: point)
         }
+        return resolution.input
     }
 
     private func snapResolutionOptions(
@@ -4472,17 +4455,6 @@ public struct MainView: View {
 
     private func activeSnapResolutionOptions() -> SnapResolutionOptions? {
         return snapResolutionOptions()
-    }
-
-    private func gridSnappedModelPoint(_ point: Point2D) -> Point2D {
-        guard isGridSnapEnabled else {
-            return point
-        }
-        let interval = max(session.document.ruler.minorTickMeters, 1.0e-9)
-        return Point2D(
-            x: (point.x / interval).rounded() * interval,
-            y: (point.y / interval).rounded() * interval
-        )
     }
 
     private func effectiveSketchPlane(fallback: SketchPlane) -> SketchPlane {

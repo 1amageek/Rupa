@@ -2336,6 +2336,13 @@ public struct Viewport: View {
                 previewKind: previewKind
             )
         }
+        guard options.shouldResolve(for: modifierFlags) else {
+            return ViewportPlacementHighlight(
+                point: point,
+                sketchPlane: sketchPlane,
+                previewKind: previewKind
+            )
+        }
         if modifierFlags.containsControl {
             options.objectTargetingOverride = .forceEnabled
         }
@@ -2364,6 +2371,9 @@ public struct Viewport: View {
         referencePoint: Point2D? = nil
     ) -> SnapResolutionResult? {
         guard var snapResolutionOptions else {
+            return nil
+        }
+        guard snapResolutionOptions.shouldResolve(for: modifierFlags) else {
             return nil
         }
         if modifierFlags.containsControl {

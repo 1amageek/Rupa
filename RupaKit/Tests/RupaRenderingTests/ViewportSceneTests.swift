@@ -3329,6 +3329,24 @@ import Testing
     #expect(pointIsApproximatelyEqual(resolved.end, Point2D(x: drag.end.x, y: drag.start.y)))
 }
 
+@Test func viewportSnapResolutionOptionsUsesSharedAvailabilityContract() {
+    let disabled = SnapResolutionOptions(
+        usesGrid: false,
+        usesObjects: false,
+        usesConstructionPlaneProjection: false
+    )
+    let constructionPlaneOnly = SnapResolutionOptions(
+        usesGrid: false,
+        usesObjects: false,
+        usesConstructionPlaneProjection: true,
+        constructionPlane: .xy
+    )
+
+    #expect(!disabled.shouldResolve())
+    #expect(disabled.shouldResolve(for: ViewportInputModifierFlags(containsControl: true)))
+    #expect(constructionPlaneOnly.shouldResolve())
+}
+
 @Test func viewportCanvasArcDragPreviewUsesSharedCurveConstruction() throws {
     let layout = ViewportLayout(
         modelBounds: CGRect(x: -0.1, y: -0.1, width: 0.2, height: 0.2),

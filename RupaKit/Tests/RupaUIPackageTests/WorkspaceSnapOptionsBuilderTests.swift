@@ -52,3 +52,65 @@ import Testing
     #expect(!options.usesConstructionPlaneProjection)
     #expect(options.constructionPlane == nil)
 }
+
+@Test func workspaceSnapInputResolverAttemptsConstructionPlaneOnlySnap() {
+    let point = Point2D(x: 0.013, y: -0.027)
+    let options = WorkspaceSnapOptionsBuilder(
+        isGridSnapEnabled: false,
+        isObjectTargetingEnabled: false,
+        isConstructionPlaneSnapEnabled: true,
+        constructionPlane: .xy,
+        overrideState: WorkspaceSnapOverrideState(),
+        referenceLineAnchors: []
+    ).options()
+
+    let resolution = WorkspaceSnapInputResolver().resolve(
+        point,
+        in: .empty(),
+        options: options
+    )
+
+    #expect(resolution.didAttemptResolution)
+    #expect(resolution.failureMessage == nil)
+    #expect(resolution.input.point == point)
+}
+
+@Test func workspaceSnapInputResolverReturnsRawPointWhenResolutionFails() {
+    let point = Point2D(x: 0.013, y: -0.027)
+    let options = SnapResolutionOptions(
+        usesGrid: true,
+        usesObjects: false,
+        gridIntervalMeters: -1.0
+    )
+
+    let resolution = WorkspaceSnapInputResolver().resolve(
+        point,
+        in: .empty(),
+        options: options
+    )
+
+    #expect(resolution.didAttemptResolution)
+    #expect(resolution.failureMessage != nil)
+    #expect(resolution.input.point == point)
+    #expect(resolution.input.worldPoint == nil)
+}
+
+@Test func workspaceSnapInputResolverSkipsWhenAllSnapRoutesAreDisabled() {
+    let point = Point2D(x: 0.013, y: -0.027)
+    let options = SnapResolutionOptions(
+        usesGrid: false,
+        usesObjects: false,
+        usesConstructionPlaneProjection: false,
+        referenceLineAnchors: []
+    )
+
+    let resolution = WorkspaceSnapInputResolver().resolve(
+        point,
+        in: .empty(),
+        options: options
+    )
+
+    #expect(!resolution.didAttemptResolution)
+    #expect(resolution.failureMessage == nil)
+    #expect(resolution.input.point == point)
+}
