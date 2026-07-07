@@ -141,6 +141,49 @@ import Testing
     #expect(ViewportInteractionTarget.patternArrayOutputMode(target).activeDragKind == nil)
 }
 
+@Test func viewportInteractionDragFinishResolverReturnsNoneWithoutPendingOrActiveDrag() {
+    let request = ViewportInteractionDragFinishResolver.request(
+        pendingTarget: nil,
+        activeInteractionDrags: ViewportActiveInteractionDrags()
+    )
+
+    #expect(request == .none)
+}
+
+@Test func viewportInteractionDragFinishResolverFinishesActiveDragWithoutPendingTarget() {
+    let request = ViewportInteractionDragFinishResolver.request(
+        pendingTarget: nil,
+        activeInteractionDrags: ViewportActiveInteractionDrags(affordance: affordanceDragState())
+    )
+
+    #expect(request == .finish(.affordance))
+}
+
+@Test func viewportInteractionDragFinishResolverPrefersPendingTargetOverActiveDrag() {
+    let request = ViewportInteractionDragFinishResolver.request(
+        pendingTarget: .sketchCurveHandle(sketchCurveHandleTarget()),
+        activeInteractionDrags: ViewportActiveInteractionDrags(affordance: affordanceDragState())
+    )
+
+    #expect(request == .finish(.sketchCurveHandle))
+}
+
+@Test func viewportInteractionDragFinishResolverClearsCanvasDragForPendingNonDragTarget() {
+    let target = ViewportPatternArrayOutputModeHandleTarget(
+        sourceID: PatternArraySourceID(),
+        currentOutputMode: .componentInstance,
+        nextOutputMode: .independentCopy,
+        center: .zero,
+        hitRect: .zero
+    )
+    let request = ViewportInteractionDragFinishResolver.request(
+        pendingTarget: .patternArrayOutputMode(target),
+        activeInteractionDrags: ViewportActiveInteractionDrags(affordance: affordanceDragState())
+    )
+
+    #expect(request == .clearCanvasDrag)
+}
+
 private func affordanceDragState(featureID: FeatureID = FeatureID()) -> ViewportAffordanceDragState {
     ViewportAffordanceDragState(
         target: ViewportAffordanceTarget(

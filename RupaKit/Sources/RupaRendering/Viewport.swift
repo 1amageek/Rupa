@@ -12651,11 +12651,7 @@ public struct Viewport: View {
         size: CGSize,
         selectionIntent: ViewportSelectionIntent
     ) {
-        if let pendingInteractionTarget {
-            finishPendingInteractionDrag(pendingInteractionTarget, end: end, size: size)
-            return
-        }
-        if finishActiveInteractionDrag(end: end, size: size) {
+        if finishInteractionDragIfNeeded(end: end, size: size) {
             return
         }
         defer {
@@ -12704,25 +12700,26 @@ public struct Viewport: View {
         onCanvasDrag(drag)
     }
 
-    private func finishPendingInteractionDrag(
-        _ target: ViewportInteractionTarget,
-        end: CGPoint,
-        size: CGSize
-    ) {
-        pendingInteractionTarget = nil
-        guard let finishKind = target.activeDragKind else {
-            activeCanvasDrag = nil
-            return
+    private func finishInteractionDragIfNeeded(end: CGPoint, size: CGSize) -> Bool {
+        let hasPendingTarget = pendingInteractionTarget != nil
+        let request = ViewportInteractionDragFinishResolver.request(
+            pendingTarget: pendingInteractionTarget,
+            activeInteractionDrags: activeInteractionDrags
+        )
+        if hasPendingTarget {
+            pendingInteractionTarget = nil
         }
-        finishInteractionDrag(finishKind, end: end, size: size)
-    }
 
-    private func finishActiveInteractionDrag(end: CGPoint, size: CGSize) -> Bool {
-        guard let finishKind = activeInteractionDrags.nextFinishKind else {
+        switch request {
+        case .none:
             return false
+        case .clearCanvasDrag:
+            activeCanvasDrag = nil
+            return true
+        case .finish(let finishKind):
+            finishInteractionDrag(finishKind, end: end, size: size)
+            return true
         }
-        finishInteractionDrag(finishKind, end: end, size: size)
-        return true
     }
 
     private func finishInteractionDrag(
