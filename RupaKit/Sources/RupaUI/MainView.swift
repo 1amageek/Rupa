@@ -571,6 +571,7 @@ public struct MainView: View {
                     pointDisplays: session.document.productMetadata.pointDisplays,
                     snapResolutionOptions: activeSnapResolutionOptions(),
                     canvasDragPreviewKind: canvasDragPreviewKind,
+                    canvasPlacementPreviewKind: canvasPlacementPreviewKind,
                     canvasDragAxisConstraint: activeCanvasDragAxisConstraint,
                     canvasDragSketchPlaneOverride: workspacePlaneMode.sketchPlane,
                     projectionRequest: viewportProjectionRequest,
@@ -1201,7 +1202,43 @@ public struct MainView: View {
             )
         case .spline:
             .spline
+        case .surface:
+            .circle(radiusMeters: activeSketchLengthInputMeters)
         default:
+            nil
+        }
+    }
+
+    private var canvasPlacementPreviewKind: ViewportCanvasPlacementPreviewKind? {
+        switch session.selectedTool {
+        case .sketch:
+            .rectangle(
+                widthMeters: activeSketchWidthInputMeters,
+                heightMeters: activeSketchHeightInputMeters,
+                fallback: .workspaceDefault
+            )
+        case .solid:
+            .rectangle(
+                widthMeters: activeSketchWidthInputMeters,
+                heightMeters: activeSketchHeightInputMeters,
+                fallback: .visibleCell
+            )
+        case .polygon:
+            .polygon(
+                session.polygonToolState,
+                radiusMeters: activeSketchLengthInputMeters,
+                rotationAngleRadians: activeSketchAngleInputRadians
+            )
+        case .arc:
+            .arc(
+                radiusMeters: activeSketchLengthInputMeters,
+                spanAngleRadians: activeSketchAngleInputRadians
+            )
+        case .spline:
+            .spline
+        case .surface:
+            .circle(radiusMeters: activeSketchLengthInputMeters)
+        case .select, .sweep, .mesh, .measure, .section:
             nil
         }
     }

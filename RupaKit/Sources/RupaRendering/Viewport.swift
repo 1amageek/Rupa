@@ -118,6 +118,7 @@ public struct Viewport: View {
     private let pointDisplays: [SelectionComponentID: PointDisplay]
     private let snapResolutionOptions: SnapResolutionOptions?
     private let canvasDragPreviewKind: ViewportCanvasDragPreviewKind?
+    private let canvasPlacementPreviewKind: ViewportCanvasPlacementPreviewKind?
     private let canvasDragAxisConstraint: SketchAxisConstraint?
     private let canvasDragSketchPlaneOverride: SketchPlane?
     private let projectionRequest: ViewportProjectionRequest?
@@ -206,6 +207,7 @@ public struct Viewport: View {
         pointDisplays: [SelectionComponentID: PointDisplay] = [:],
         snapResolutionOptions: SnapResolutionOptions? = nil,
         canvasDragPreviewKind: ViewportCanvasDragPreviewKind? = .rectangle(widthMeters: nil, heightMeters: nil),
+        canvasPlacementPreviewKind: ViewportCanvasPlacementPreviewKind? = nil,
         canvasDragAxisConstraint: SketchAxisConstraint? = nil,
         canvasDragSketchPlaneOverride: SketchPlane? = nil,
         projectionRequest: ViewportProjectionRequest? = nil,
@@ -293,6 +295,7 @@ public struct Viewport: View {
         self.pointDisplays = pointDisplays
         self.snapResolutionOptions = snapResolutionOptions
         self.canvasDragPreviewKind = canvasDragPreviewKind
+        self.canvasPlacementPreviewKind = canvasPlacementPreviewKind
         self.canvasDragAxisConstraint = canvasDragAxisConstraint
         self.canvasDragSketchPlaneOverride = canvasDragSketchPlaneOverride
         self.projectionRequest = projectionRequest
@@ -1255,13 +1258,14 @@ public struct Viewport: View {
            constructionHit?.bodyEdge == nil,
            constructionHit?.bodyVertex == nil,
            let constructionModelPoint,
+           canvasPlacementPreviewKind != nil,
            let placementHighlight = placementHighlight(
                 around: constructionModelPoint,
                 hit: constructionHit
            ) {
-            drawZeroCoordinateFieldHighlight(
+            drawPlacementHighlight(
                 placementHighlight,
-                sideMeters: placementCellSideMeters,
+                visibleCellMeters: placementCellSideMeters,
                 in: &context,
                 layout: layout
             )
@@ -2321,11 +2325,15 @@ public struct Viewport: View {
         around point: Point2D,
         hit: ViewportHit?
     ) -> ViewportPlacementHighlight? {
+        guard let previewKind = canvasPlacementPreviewKind else {
+            return nil
+        }
         let sketchPlane = canvasDragSketchPlane(for: hit)
         guard var options = snapResolutionOptions else {
             return ViewportPlacementHighlight(
                 point: point,
-                sketchPlane: sketchPlane
+                sketchPlane: sketchPlane,
+                previewKind: previewKind
             )
         }
         if modifierFlags.containsControl {
@@ -2339,12 +2347,14 @@ public struct Viewport: View {
             )
             return ViewportPlacementHighlight(
                 point: resolution.resolvedPoint,
-                sketchPlane: sketchPlane
+                sketchPlane: sketchPlane,
+                previewKind: previewKind
             )
         } catch {
             return ViewportPlacementHighlight(
                 point: point,
-                sketchPlane: sketchPlane
+                sketchPlane: sketchPlane,
+                previewKind: previewKind
             )
         }
     }
@@ -4765,24 +4775,81 @@ public struct Viewport: View {
         return edit.projectedBodyProjection(layout: layout)
     }
 
-    private func drawZeroCoordinateFieldHighlight(
+    private func drawPlacementHighlight(
         _ placement: ViewportPlacementHighlight,
-        sideMeters: Double,
+        visibleCellMeters: Double,
         in context: inout GraphicsContext,
         layout: ViewportLayout
     ) {
-        guard let footprint = ViewportPlacementFootprint(
-            centeredAt: placement.point,
-            sideMeters: sideMeters,
-            sketchPlane: placement.sketchPlane
+        guard let geometry = ViewportPlacementPreviewGeometry(
+            placement: placement,
+            layout: layout,
+            defaults: document.workspaceScaleDefaults,
+            visibleCellMeters: visibleCellMeters
         ) else {
             return
         }
 
-        let highlightPath = path(for: footprint.projected(in: layout))
-
-        context.fill(highlightPath, with: .color(Color.cyan.opacity(0.12)))
-        context.stroke(highlightPath, with: .color(Color.cyan.opacity(0.62)), lineWidth: 1.6)
+        switch geometry.shape {
+        case .rectangle(let footprint):
+            let highlightPath = path(for: footprint)
+            context.fill(highlightPath, with: .color(Color.cyan.opacity(0.12)))
+            context.stroke(highlightPath, with: .color(Color.cyan.opacity(0.62)), lineWidth: 1.6)
+        case .polygon(let center, let vertices, let radiusEnd):
+            let polygonPath = polylinePath(for: vertices + vertices.prefix(1))
+            let radiusPath = polylinePath(for: [center, radiusEnd])
+            context.stroke(
+                radiusPath,
+                with: .color(Color.white.opacity(0.22)),
+                style: StrokeStyle(lineWidth: 1.0, lineCap: .round, dash: [4.0, 4.0])
+            )
+            context.fill(polygonPath, with: .color(Color.cyan.opacity(0.10)))
+            context.stroke(
+                polygonPath,
+                with: .color(Color.cyan.opacity(0.68)),
+                style: StrokeStyle(lineWidth: 1.6, lineCap: .round, lineJoin: .round)
+            )
+        case .arc(let center, let points, let radiusEnd):
+            let arcPath = polylinePath(for: points)
+            let radiusPath = polylinePath(for: [center, radiusEnd])
+            context.stroke(
+                radiusPath,
+                with: .color(Color.white.opacity(0.22)),
+                style: StrokeStyle(lineWidth: 1.0, lineCap: .round, dash: [4.0, 4.0])
+            )
+            context.stroke(
+                arcPath,
+                with: .color(Color.cyan.opacity(0.76)),
+                style: StrokeStyle(lineWidth: 1.8, lineCap: .round, lineJoin: .round)
+            )
+        case .spline(let controlPoints, let curvePoints):
+            let controlPath = polylinePath(for: controlPoints)
+            let curvePath = polylinePath(for: curvePoints)
+            context.stroke(
+                controlPath,
+                with: .color(Color.white.opacity(0.20)),
+                style: StrokeStyle(lineWidth: 1.0, lineCap: .round, lineJoin: .round, dash: [4.0, 4.0])
+            )
+            context.stroke(
+                curvePath,
+                with: .color(Color.cyan.opacity(0.76)),
+                style: StrokeStyle(lineWidth: 1.8, lineCap: .round, lineJoin: .round)
+            )
+        case .circle(let center, let points, let radiusEnd):
+            let circlePath = polylinePath(for: points)
+            let radiusPath = polylinePath(for: [center, radiusEnd])
+            context.stroke(
+                radiusPath,
+                with: .color(Color.white.opacity(0.22)),
+                style: StrokeStyle(lineWidth: 1.0, lineCap: .round, dash: [4.0, 4.0])
+            )
+            context.fill(circlePath, with: .color(Color.cyan.opacity(0.08)))
+            context.stroke(
+                circlePath,
+                with: .color(Color.cyan.opacity(0.72)),
+                style: StrokeStyle(lineWidth: 1.8, lineCap: .round, lineJoin: .round)
+            )
+        }
     }
 
     private func drawConstructionFaceHighlight(
@@ -7552,6 +7619,8 @@ public struct Viewport: View {
             drawArcDragPreview(preview, in: &context)
         case .spline(let preview):
             drawSplineDragPreview(preview, in: &context)
+        case .circle(let preview):
+            drawCircleDragPreview(preview, in: &context)
         }
     }
 
@@ -7660,6 +7729,35 @@ public struct Viewport: View {
                 in: &context
             )
         }
+    }
+
+    private func drawCircleDragPreview(
+        _ preview: ViewportCanvasCircleDragPreview,
+        in context: inout GraphicsContext
+    ) {
+        let circlePath = polylinePath(for: preview.projectedPoints)
+        let radiusPath = polylinePath(for: [
+            preview.projectedCenter,
+            preview.projectedRadiusEnd,
+        ])
+        context.stroke(
+            radiusPath,
+            with: .color(Color.white.opacity(0.28)),
+            style: StrokeStyle(lineWidth: 1.0, lineCap: .round, dash: [4.0, 4.0])
+        )
+        context.fill(circlePath, with: .color(Color.accentColor.opacity(0.10)))
+        context.stroke(
+            circlePath,
+            with: .color(Color.black.opacity(0.56)),
+            style: StrokeStyle(lineWidth: 4.4, lineCap: .round, lineJoin: .round)
+        )
+        context.stroke(
+            circlePath,
+            with: .color(Color.accentColor.opacity(0.92)),
+            style: StrokeStyle(lineWidth: 2.4, lineCap: .round, lineJoin: .round)
+        )
+        drawPreviewHandle(at: preview.projectedCenter, radius: 4.6, in: &context)
+        drawPreviewHandle(at: preview.projectedRadiusEnd, radius: 4.2, in: &context)
     }
 
     private func drawPreviewHandle(

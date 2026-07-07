@@ -755,6 +755,7 @@ public struct ViewportCanvasDragPlaceholder: Equatable {
             start: drag.start,
             end: drag.end,
             layout: layout,
+            sketchPlane: drag.sketchPlane,
             widthMeters: widthOverrideMeters,
             heightMeters: heightOverrideMeters
         )
@@ -764,6 +765,7 @@ public struct ViewportCanvasDragPlaceholder: Equatable {
         start: Point2D,
         end: Point2D,
         layout: ViewportLayout,
+        sketchPlane: SketchPlane = .defaultWorkspacePlane,
         widthMeters widthOverrideMeters: Double? = nil,
         heightMeters heightOverrideMeters: Double? = nil
     ) {
@@ -784,12 +786,19 @@ public struct ViewportCanvasDragPlaceholder: Equatable {
               height > 0.0 else {
             return nil
         }
-        let endX = start.x + Self.signedDimension(width, following: deltaX)
-        let endY = start.y + Self.signedDimension(height, following: deltaY)
-        let minX = min(start.x, endX)
-        let minY = min(start.y, endY)
-        let maxX = max(start.x, endX)
-        let maxY = max(start.y, endY)
+        guard let projection = ViewportSketchPlaneProjection(sketchPlane: sketchPlane) else {
+            return nil
+        }
+        let localStart = projection.localPoint(fromCanvas: start)
+        let localEnd = projection.localPoint(fromCanvas: end)
+        let localDeltaX = localEnd.x - localStart.x
+        let localDeltaY = localEnd.y - localStart.y
+        let endX = localStart.x + Self.signedDimension(width, following: localDeltaX)
+        let endY = localStart.y + Self.signedDimension(height, following: localDeltaY)
+        let minX = min(localStart.x, endX)
+        let minY = min(localStart.y, endY)
+        let maxX = max(localStart.x, endX)
+        let maxY = max(localStart.y, endY)
         guard minX < maxX, minY < maxY else {
             return nil
         }
@@ -800,8 +809,19 @@ public struct ViewportCanvasDragPlaceholder: Equatable {
             width: CGFloat(maxX - minX),
             height: CGFloat(maxY - minY)
         )
+        guard let bottomLeft = projection.project(localPoint: Point2D(x: minX, y: minY), layout: layout),
+              let bottomRight = projection.project(localPoint: Point2D(x: maxX, y: minY), layout: layout),
+              let topRight = projection.project(localPoint: Point2D(x: maxX, y: maxY), layout: layout),
+              let topLeft = projection.project(localPoint: Point2D(x: minX, y: maxY), layout: layout) else {
+            return nil
+        }
         self.modelBounds = modelBounds
-        self.footprint = layout.projectedFootprint(modelBounds)
+        self.footprint = ViewportProjectedRect(
+            bottomLeft: bottomLeft,
+            bottomRight: bottomRight,
+            topRight: topRight,
+            topLeft: topLeft
+        )
     }
 
     private static func signedDimension(_ dimension: Double, following delta: Double) -> Double {
@@ -814,6 +834,7 @@ public enum ViewportCanvasDragPreviewKind: Equatable, Sendable {
     case polygon(PolygonToolState, radiusMeters: Double?, rotationAngleRadians: Double?)
     case arc(radiusMeters: Double?, spanAngleRadians: Double?)
     case spline
+    case circle(radiusMeters: Double?)
 }
 
 public enum ViewportCanvasDragPreview: Equatable {
@@ -821,6 +842,7 @@ public enum ViewportCanvasDragPreview: Equatable {
     case polygon(ViewportCanvasPolygonDragPreview)
     case arc(ViewportCanvasArcDragPreview)
     case spline(ViewportCanvasSplineDragPreview)
+    case circle(ViewportCanvasCircleDragPreview)
 
     public init?(
         kind: ViewportCanvasDragPreviewKind,
@@ -869,6 +891,15 @@ public enum ViewportCanvasDragPreview: Equatable {
                 return nil
             }
             self = .spline(preview)
+        case .circle(let radiusMeters):
+            guard let preview = ViewportCanvasCircleDragPreview(
+                drag: drag,
+                layout: layout,
+                radiusMeters: radiusMeters
+            ) else {
+                return nil
+            }
+            self = .circle(preview)
         }
     }
 }
@@ -896,11 +927,16 @@ public struct ViewportCanvasPolygonDragPreview: Equatable {
         radiusMeters radiusOverrideMeters: Double? = nil,
         rotationAngleRadians rotationAngleOverrideRadians: Double? = nil
     ) {
+        guard let projection = ViewportSketchPlaneProjection(sketchPlane: drag.sketchPlane) else {
+            return nil
+        }
+        let center = projection.localPoint(fromCanvas: drag.start)
+        let radiusPoint = projection.localPoint(fromCanvas: drag.end)
         let draft: CanvasSketchCurveDrafts.Polygon
         do {
             draft = try CanvasSketchCurveDrafts.polygon(
-                fromCenter: drag.start,
-                toRadiusPoint: drag.end,
+                fromCenter: center,
+                toRadiusPoint: radiusPoint,
                 sides: sideCount,
                 sizingMode: sizingMode,
                 inclinationMode: inclinationMode,
@@ -908,6 +944,22 @@ public struct ViewportCanvasPolygonDragPreview: Equatable {
                 rotationAngleRadians: rotationAngleOverrideRadians
             )
         } catch {
+            return nil
+        }
+        guard let projectedCenter = projection.project(localPoint: draft.center, layout: layout),
+              let projectedRadiusEnd = projection.project(
+                  localPoint: Point2D(
+                      x: draft.center.x + cos(draft.rotationAngleRadians) * draft.circumradiusMeters,
+                      y: draft.center.y + sin(draft.rotationAngleRadians) * draft.circumradiusMeters
+                  ),
+                  layout: layout
+              ) else {
+            return nil
+        }
+        let projectedVertices = draft.vertices.compactMap {
+            projection.project(localPoint: $0, layout: layout)
+        }
+        guard projectedVertices.count == draft.vertices.count else {
             return nil
         }
 
@@ -919,16 +971,9 @@ public struct ViewportCanvasPolygonDragPreview: Equatable {
         self.sides = draft.sides
         self.rotationAngleRadians = draft.rotationAngleRadians
         self.modelVertices = draft.vertices
-        self.projectedCenter = layout.project(modelCenter)
-        self.projectedVertices = draft.vertices.map {
-            layout.project(CGPoint(x: $0.x, y: $0.y))
-        }
-        self.projectedRadiusEnd = layout.project(
-            CGPoint(
-                x: draft.center.x + cos(draft.rotationAngleRadians) * draft.circumradiusMeters,
-                y: draft.center.y + sin(draft.rotationAngleRadians) * draft.circumradiusMeters
-            )
-        )
+        self.projectedCenter = projectedCenter
+        self.projectedVertices = projectedVertices
+        self.projectedRadiusEnd = projectedRadiusEnd
         self.modelBounds = bounds(
             for: draft.vertices.map {
                 CGPoint(x: $0.x, y: $0.y)
@@ -953,11 +998,16 @@ public struct ViewportCanvasArcDragPreview: Equatable {
         radiusMeters radiusOverrideMeters: Double? = nil,
         spanAngleRadians spanAngleOverrideRadians: Double? = nil
     ) {
+        guard let projection = ViewportSketchPlaneProjection(sketchPlane: drag.sketchPlane) else {
+            return nil
+        }
+        let centerPoint = projection.localPoint(fromCanvas: drag.start)
+        let radiusPoint = projection.localPoint(fromCanvas: drag.end)
         let draft: CanvasSketchCurveDrafts.Arc
         do {
             draft = try CanvasSketchCurveDrafts.arc(
-                fromCenter: drag.start,
-                toRadiusPoint: drag.end,
+                fromCenter: centerPoint,
+                toRadiusPoint: radiusPoint,
                 radiusMeters: radiusOverrideMeters,
                 spanAngleRadians: spanAngleOverrideRadians
             )
@@ -972,25 +1022,39 @@ public struct ViewportCanvasArcDragPreview: Equatable {
             startAngleRadians: draft.startAngleRadians,
             endAngleRadians: draft.endAngleRadians
         )
-        self.modelCenter = center
-        self.modelRadiusMeters = draft.radiusMeters
-        self.startAngleRadians = draft.startAngleRadians
-        self.endAngleRadians = draft.endAngleRadians
-        self.projectedCenter = layout.project(center)
-        self.projectedPoints = viewportSceneProjectedArcPoints(
+        let arcSamplePoints = viewportSceneArcSamplePoints(
             center: center,
             radiusMeters: draft.radiusMeters,
             startAngleRadians: draft.startAngleRadians,
             endAngleRadians: draft.endAngleRadians,
-            layout: layout,
             segmentCount: 24
         )
-        self.projectedRadiusEnd = layout.project(
-            CGPoint(
-                x: draft.center.x + cos(draft.endAngleRadians) * draft.radiusMeters,
-                y: draft.center.y + sin(draft.endAngleRadians) * draft.radiusMeters
+        guard let projectedCenter = projection.project(localPoint: draft.center, layout: layout),
+              let projectedRadiusEnd = projection.project(
+                  localPoint: Point2D(
+                      x: draft.center.x + cos(draft.endAngleRadians) * draft.radiusMeters,
+                      y: draft.center.y + sin(draft.endAngleRadians) * draft.radiusMeters
+                  ),
+                  layout: layout
+              ) else {
+            return nil
+        }
+        let projectedPoints = arcSamplePoints.compactMap {
+            projection.project(
+                localPoint: Point2D(x: Double($0.x), y: Double($0.y)),
+                layout: layout
             )
-        )
+        }
+        guard projectedPoints.count == arcSamplePoints.count else {
+            return nil
+        }
+        self.modelCenter = center
+        self.modelRadiusMeters = draft.radiusMeters
+        self.startAngleRadians = draft.startAngleRadians
+        self.endAngleRadians = draft.endAngleRadians
+        self.projectedCenter = projectedCenter
+        self.projectedPoints = projectedPoints
+        self.projectedRadiusEnd = projectedRadiusEnd
         self.modelBounds = bounds(for: boundsPoints)
     }
 }
@@ -1006,11 +1070,16 @@ public struct ViewportCanvasSplineDragPreview: Equatable {
         drag: ViewportModelDrag,
         layout: ViewportLayout
     ) {
+        guard let projection = ViewportSketchPlaneProjection(sketchPlane: drag.sketchPlane) else {
+            return nil
+        }
+        let start = projection.localPoint(fromCanvas: drag.start)
+        let end = projection.localPoint(fromCanvas: drag.end)
         let draft: CanvasSketchCurveDrafts.Spline
         do {
             draft = try CanvasSketchCurveDrafts.spline(
-                from: drag.start,
-                to: drag.end
+                from: start,
+                to: end
             )
         } catch {
             return nil
@@ -1020,13 +1089,78 @@ public struct ViewportCanvasSplineDragPreview: Equatable {
             controlPoints: draft.controlPoints,
             segmentCount: 32
         )
+        let projectedControlPoints = draft.controlPoints.compactMap {
+            projection.project(localPoint: $0, layout: layout)
+        }
+        let projectedCurvePoints = curvePoints.compactMap {
+            projection.project(
+                localPoint: Point2D(x: Double($0.x), y: Double($0.y)),
+                layout: layout
+            )
+        }
+        guard projectedControlPoints.count == draft.controlPoints.count,
+              projectedCurvePoints.count == curvePoints.count else {
+            return nil
+        }
         self.modelControlPoints = draft.controlPoints
         self.modelCurvePoints = curvePoints
-        self.projectedControlPoints = draft.controlPoints.map {
-            layout.project(CGPoint(x: $0.x, y: $0.y))
-        }
-        self.projectedCurvePoints = curvePoints.map(layout.project)
+        self.projectedControlPoints = projectedControlPoints
+        self.projectedCurvePoints = projectedCurvePoints
         self.modelBounds = bounds(for: curvePoints)
+    }
+}
+
+public struct ViewportCanvasCircleDragPreview: Equatable {
+    public var modelCenter: CGPoint
+    public var modelRadiusMeters: Double
+    public var projectedCenter: CGPoint
+    public var projectedPoints: [CGPoint]
+    public var projectedRadiusEnd: CGPoint
+    public var modelBounds: CGRect
+
+    public init?(
+        drag: ViewportModelDrag,
+        layout: ViewportLayout,
+        radiusMeters radiusOverrideMeters: Double? = nil
+    ) {
+        guard let projection = ViewportSketchPlaneProjection(sketchPlane: drag.sketchPlane) else {
+            return nil
+        }
+        let center = projection.localPoint(fromCanvas: drag.start)
+        let edge = projection.localPoint(fromCanvas: drag.end)
+        let deltaX = edge.x - center.x
+        let deltaY = edge.y - center.y
+        let fallbackRadius = sqrt(deltaX * deltaX + deltaY * deltaY)
+        let radius = radiusOverrideMeters ?? fallbackRadius
+        guard radius.isFinite, radius > 1.0e-12,
+              let projectedCenter = projection.project(localPoint: center, layout: layout),
+              let projectedRadiusEnd = projection.project(
+                  localPoint: Point2D(x: center.x + radius, y: center.y),
+                  layout: layout
+              ) else {
+            return nil
+        }
+        let localPoints = (0 ... 48).map { index in
+            let angle = Double(index) / 48.0 * Double.pi * 2.0
+            return Point2D(
+                x: center.x + cos(angle) * radius,
+                y: center.y + sin(angle) * radius
+            )
+        }
+        let projectedPoints = localPoints.compactMap {
+            projection.project(localPoint: $0, layout: layout)
+        }
+        guard projectedPoints.count == localPoints.count else {
+            return nil
+        }
+        self.modelCenter = CGPoint(x: center.x, y: center.y)
+        self.modelRadiusMeters = radius
+        self.projectedCenter = projectedCenter
+        self.projectedPoints = projectedPoints
+        self.projectedRadiusEnd = projectedRadiusEnd
+        self.modelBounds = bounds(
+            for: localPoints.map { CGPoint(x: $0.x, y: $0.y) }
+        )
     }
 }
 
@@ -3389,6 +3523,34 @@ private func bounds(for points: [CGPoint]) -> CGRect {
         width: maxX - minX,
         height: maxY - minY
     )
+}
+
+private struct ViewportSketchPlaneProjection {
+    private var coordinateSystem: SketchPlaneCoordinateSystem
+    private var canvasMapper: SketchPlaneCanvasMapper
+
+    init?(sketchPlane: SketchPlane) {
+        do {
+            self.coordinateSystem = try SketchPlaneCoordinateSystem(plane: sketchPlane)
+            self.canvasMapper = SketchPlaneCanvasMapper(sketchPlane: sketchPlane)
+        } catch {
+            return nil
+        }
+    }
+
+    func localPoint(fromCanvas point: Point2D) -> Point2D {
+        canvasMapper.localPoint(fromCanvas: point)
+    }
+
+    func project(
+        localPoint: Point2D,
+        layout: ViewportLayout
+    ) -> CGPoint? {
+        guard localPoint.x.isFinite, localPoint.y.isFinite else {
+            return nil
+        }
+        return layout.project(coordinateSystem.point(from: localPoint))
+    }
 }
 
 private extension CGPoint {

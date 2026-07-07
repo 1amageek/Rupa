@@ -33,6 +33,8 @@ struct ViewportActiveDrag: Equatable {
             "Canvas arc drag preview"
         case .creation(.spline):
             "Canvas spline drag preview"
+        case .creation(.circle):
+            "Canvas circle drag preview"
         case .selection:
             "Canvas selection rectangle"
         }

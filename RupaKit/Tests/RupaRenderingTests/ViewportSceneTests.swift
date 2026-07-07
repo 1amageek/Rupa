@@ -3131,6 +3131,136 @@ import Testing
     #expect(abs(polygonPreview.rotationAngleRadians - angle) < 1.0e-12)
 }
 
+@Test func viewportCanvasRectangleDragPreviewProjectsOntoSketchPlane() throws {
+    let layout = ViewportLayout(
+        modelBounds: CGRect(x: -0.1, y: -0.1, width: 0.2, height: 0.2),
+        size: CGSize(width: 800.0, height: 600.0),
+        basis: .axisFront(.z),
+        verticalBounds: -0.1 ... 0.1
+    )
+    let drag = ViewportModelDrag(
+        start: Point2D(x: 0.01, y: -0.02),
+        end: Point2D(x: 0.04, y: 0.03),
+        sketchPlane: .xy
+    )
+
+    let placeholder = try #require(
+        ViewportCanvasDragPlaceholder(drag: drag, layout: layout)
+    )
+
+    let expectedBottomLeft = layout.project(Point3D(x: 0.01, y: -0.02, z: 0.0))
+    #expect(pointIsApproximatelyEqual(placeholder.footprint.bottomLeft, expectedBottomLeft))
+}
+
+@Test func viewportCanvasPolygonDragPreviewProjectsVerticesOntoSketchPlane() throws {
+    let layout = ViewportLayout(
+        modelBounds: CGRect(x: -0.1, y: -0.1, width: 0.2, height: 0.2),
+        size: CGSize(width: 800.0, height: 600.0),
+        basis: .axisFront(.z),
+        verticalBounds: -0.1 ... 0.1
+    )
+    let drag = ViewportModelDrag(
+        start: Point2D(x: 0.0, y: 0.0),
+        end: Point2D(x: 0.02, y: 0.0),
+        sketchPlane: .xy
+    )
+
+    let preview = try #require(
+        ViewportCanvasPolygonDragPreview(
+            drag: drag,
+            layout: layout,
+            sideCount: 4
+        )
+    )
+    let firstVertex = try #require(preview.modelVertices.first)
+    let expectedFirstVertex = layout.project(Point3D(x: firstVertex.x, y: firstVertex.y, z: 0.0))
+
+    #expect(pointIsApproximatelyEqual(preview.projectedVertices[0], expectedFirstVertex))
+}
+
+@Test func viewportCanvasCircleDragPreviewProjectsOntoSketchPlane() throws {
+    let layout = ViewportLayout(
+        modelBounds: CGRect(x: -0.1, y: -0.1, width: 0.2, height: 0.2),
+        size: CGSize(width: 800.0, height: 600.0),
+        basis: .axisFront(.z),
+        verticalBounds: -0.1 ... 0.1
+    )
+    let drag = ViewportModelDrag(
+        start: Point2D(x: 0.01, y: 0.02),
+        end: Point2D(x: 0.04, y: 0.02),
+        sketchPlane: .xy
+    )
+
+    let preview = try #require(
+        ViewportCanvasCircleDragPreview(drag: drag, layout: layout)
+    )
+
+    #expect(pointIsApproximatelyEqual(preview.projectedCenter, layout.project(Point3D(x: 0.01, y: 0.02, z: 0.0))))
+    #expect(pointIsApproximatelyEqual(preview.projectedRadiusEnd, layout.project(Point3D(x: 0.04, y: 0.02, z: 0.0))))
+    #expect(preview.projectedPoints.count == 49)
+}
+
+@Test func viewportPlacementPreviewGeometryBuildsToolSpecificCircle() throws {
+    let layout = ViewportLayout(
+        modelBounds: CGRect(x: -0.1, y: -0.1, width: 0.2, height: 0.2),
+        size: CGSize(width: 800.0, height: 600.0),
+        basis: .axisFront(.z),
+        verticalBounds: -0.1 ... 0.1
+    )
+    let placement = ViewportPlacementHighlight(
+        point: Point2D(x: 0.01, y: 0.02),
+        sketchPlane: .xy,
+        previewKind: .circle(radiusMeters: 0.03)
+    )
+
+    let geometry = try #require(
+        ViewportPlacementPreviewGeometry(
+            placement: placement,
+            layout: layout,
+            defaults: .standard,
+            visibleCellMeters: 0.01
+        )
+    )
+
+    guard case .circle(let center, let points, let radiusEnd) = geometry.shape else {
+        Issue.record("Expected circle placement preview.")
+        return
+    }
+    #expect(pointIsApproximatelyEqual(center, layout.project(Point3D(x: 0.01, y: 0.02, z: 0.0))))
+    #expect(pointIsApproximatelyEqual(radiusEnd, layout.project(Point3D(x: 0.04, y: 0.02, z: 0.0))))
+    #expect(points.count == 49)
+}
+
+@Test func viewportPlacementPreviewGeometryUsesVisibleCellForSolidRectangle() throws {
+    let layout = ViewportLayout(
+        modelBounds: CGRect(x: -0.1, y: -0.1, width: 0.2, height: 0.2),
+        size: CGSize(width: 800.0, height: 600.0),
+        basis: .axisFront(.z),
+        verticalBounds: -0.1 ... 0.1
+    )
+    let placement = ViewportPlacementHighlight(
+        point: Point2D(x: 0.0, y: 0.0),
+        sketchPlane: .xy,
+        previewKind: .rectangle(widthMeters: nil, heightMeters: nil, fallback: .visibleCell)
+    )
+
+    let geometry = try #require(
+        ViewportPlacementPreviewGeometry(
+            placement: placement,
+            layout: layout,
+            defaults: .standard,
+            visibleCellMeters: 0.04
+        )
+    )
+
+    guard case .rectangle(let footprint) = geometry.shape else {
+        Issue.record("Expected rectangle placement preview.")
+        return
+    }
+    #expect(pointIsApproximatelyEqual(footprint.bottomLeft, layout.project(Point3D(x: -0.02, y: -0.02, z: 0.0))))
+    #expect(pointIsApproximatelyEqual(footprint.topRight, layout.project(Point3D(x: 0.02, y: 0.02, z: 0.0))))
+}
+
 @Test func viewportModelDragAppliesSketchAxisConstraint() {
     let drag = ViewportModelDrag(
         start: Point2D(x: 0.01, y: -0.02),
@@ -4228,6 +4358,14 @@ private func pointIsApproximatelyEqual(
     _ lhs: Point2D,
     _ rhs: Point2D,
     tolerance: Double = 1.0e-12
+) -> Bool {
+    abs(lhs.x - rhs.x) <= tolerance && abs(lhs.y - rhs.y) <= tolerance
+}
+
+private func pointIsApproximatelyEqual(
+    _ lhs: CGPoint,
+    _ rhs: CGPoint,
+    tolerance: CGFloat = 1.0e-9
 ) -> Bool {
     abs(lhs.x - rhs.x) <= tolerance && abs(lhs.y - rhs.y) <= tolerance
 }
