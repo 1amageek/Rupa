@@ -1,21 +1,27 @@
 import RupaCore
-import RupaRendering
+import RupaViewportScene
+import SwiftCAD
 
-struct WorkspaceCanvasPlaneInputMapper: Sendable {
-    struct Result: Equatable, Sendable {
-        var point: Point2D
-        var worldPoint: Point3D?
+public struct WorkspaceCanvasPlaneInputMapper: Sendable {
+    public struct Result: Equatable, Sendable {
+        public var point: Point2D
+        public var worldPoint: Point3D?
+
+        public init(point: Point2D, worldPoint: Point3D?) {
+            self.point = point
+            self.worldPoint = worldPoint
+        }
     }
 
-    enum Failure: Error, Equatable {
+    public enum Failure: Error, Equatable {
         case unresolvedViewNormal
         case viewRayParallelToPlane
     }
 
-    var projectionBasis: ViewportProjectionBasis
-    var tolerance: Double
+    public var projectionBasis: ViewportProjectionBasis
+    public var tolerance: Double
 
-    init(
+    public init(
         projectionBasis: ViewportProjectionBasis,
         tolerance: Double = 1.0e-10
     ) {
@@ -23,7 +29,7 @@ struct WorkspaceCanvasPlaneInputMapper: Sendable {
         self.tolerance = tolerance
     }
 
-    func map(
+    public func map(
         modelPoint: Point2D,
         modelWorldPoint: Point3D?,
         sketchPlane: SketchPlane
@@ -66,7 +72,7 @@ struct WorkspaceCanvasPlaneInputMapper: Sendable {
         )
     }
 
-    func resolvedWorldPoint(
+    public func resolvedWorldPoint(
         for point: Point2D,
         topologyWorldPoint: Point3D?,
         fallbackWorldPoint: Point3D?,

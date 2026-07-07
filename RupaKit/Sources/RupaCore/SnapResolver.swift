@@ -2155,33 +2155,16 @@ public struct SnapResolver: Sendable {
         from localPoint: Point2D,
         on plane: SketchPlane
     ) -> Point2D {
-        switch plane {
-        case .xy, .yz, .plane:
-            localPoint
-        case .zx:
-            Point2D(x: localPoint.y, y: localPoint.x)
-        }
+        SketchPlaneCanvasMapper(sketchPlane: plane)
+            .canvasPoint(fromLocal: localPoint)
     }
 
     private func normalizedCanvasDirection(
         fromLocal direction: Point2D,
         on plane: SketchPlane
     ) -> Point2D? {
-        let canvasDirection: Point2D
-        switch plane {
-        case .xy, .yz, .plane:
-            canvasDirection = direction
-        case .zx:
-            canvasDirection = Point2D(x: direction.y, y: direction.x)
-        }
-        let length = hypot(canvasDirection.x, canvasDirection.y)
-        guard length > 1.0e-12 else {
-            return nil
-        }
-        return Point2D(
-            x: canvasDirection.x / length,
-            y: canvasDirection.y / length
-        )
+        SketchPlaneCanvasMapper(sketchPlane: plane)
+            .normalizedCanvasDirection(fromLocal: direction)
     }
 
     private func resolvedValue(

@@ -4374,8 +4374,11 @@ public struct MainView: View {
         referencePoint: Point2D? = nil,
         modifierFlags: ViewportInputModifierFlags = ViewportInputModifierFlags()
     ) -> SnappedModelInput {
+        // Construction-plane snap must be part of this gate: omitting it made
+        // the hover indicator advertise a snap the click would never apply.
         guard isGridSnapEnabled
             || isObjectTargetingEnabled
+            || isConstructionPlaneSnapEnabled
             || modifierFlags.containsControl
             || !session.sketchInputState.referenceLineAnchors.isEmpty else {
             return SnappedModelInput(point: point)
@@ -4394,7 +4397,16 @@ public struct MainView: View {
                 topologyWorldPoint: result.selectedTopologyWorldPoint
             )
         } catch {
-            return SnappedModelInput(point: gridSnappedModelPoint(point))
+            // Do not silently degrade to plain grid rounding: the viewport
+            // indicator shows nothing for a failed resolution, so a silent
+            // fallback applies a snap no feedback ever advertised. Surface
+            // the failure and use the raw point, which matches the (empty)
+            // indicator.
+            session.reportToolStatus(
+                "Snapping failed and was skipped: \(error.localizedDescription)",
+                severity: .warning
+            )
+            return SnappedModelInput(point: point)
         }
     }
 

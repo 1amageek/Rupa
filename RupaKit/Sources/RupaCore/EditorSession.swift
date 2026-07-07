@@ -3674,16 +3674,8 @@ public final class EditorSession {
         from modelPoint: Point2D,
         on plane: SketchPlane
     ) -> Point2D {
-        let localPoint: Point2D
-        switch plane {
-        case .xy, .yz, .plane:
-            localPoint = modelPoint
-        case .zx:
-            localPoint = Point2D(
-                x: modelPoint.y,
-                y: modelPoint.x
-            )
-        }
+        let localPoint = SketchPlaneCanvasMapper(sketchPlane: plane)
+            .localPoint(fromCanvas: modelPoint)
         return CADInputValueNormalizer.standard.point(localPoint)
     }
 

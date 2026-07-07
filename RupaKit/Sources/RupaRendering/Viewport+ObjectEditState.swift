@@ -605,10 +605,28 @@ struct ViewportObjectEditState: Equatable {
         current: CGPoint,
         layout: ViewportLayout
     ) -> (x: CGFloat, y: CGFloat) {
-        (
-            x: dragAmount(axis: .x, start: start, current: current, layout: layout),
-            y: dragAmount(axis: .z, start: start, current: current, layout: layout)
-        )
+        // Solve the 2x2 system delta = a * vx + b * vz instead of projecting
+        // the screen delta onto each axis independently: the projected x/z
+        // axes are not orthogonal on screen in isometric views, so independent
+        // projections cross-bleed (dragging along the x grid direction also
+        // moved the corner in z) and the corner drifted off the cursor.
+        let xVector = projectedAxisVector(.x, layout: layout)
+        let zVector = projectedAxisVector(.z, layout: layout)
+        let delta = CGVector(dx: current.x - start.x, dy: current.y - start.y)
+        let determinant = xVector.dx * zVector.dy - xVector.dy * zVector.dx
+        let degenerateDeterminant = 1.0e-6 * xVector.length * zVector.length
+        guard abs(determinant) > degenerateDeterminant else {
+            // Edge-on view: the axes project to near-parallel screen
+            // directions and the planar system has no unique solution; keep
+            // the independent projections there.
+            return (
+                x: dragAmount(axis: .x, start: start, current: current, layout: layout),
+                y: dragAmount(axis: .z, start: start, current: current, layout: layout)
+            )
+        }
+        let xAmount = (delta.dx * zVector.dy - delta.dy * zVector.dx) / determinant
+        let zAmount = (xVector.dx * delta.dy - xVector.dy * delta.dx) / determinant
+        return (x: xAmount, y: zAmount)
     }
 
     func profileFaceDragDistance(

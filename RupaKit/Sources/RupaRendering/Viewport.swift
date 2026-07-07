@@ -1254,9 +1254,13 @@ public struct Viewport: View {
         if constructionHit?.bodyFace == nil,
            constructionHit?.bodyEdge == nil,
            constructionHit?.bodyVertex == nil,
-           let constructionModelPoint {
-            drawZeroCoordinateFieldHighlight(
+           let constructionModelPoint,
+           let placementHighlight = placementHighlight(
                 around: constructionModelPoint,
+                hit: constructionHit
+           ) {
+            drawZeroCoordinateFieldHighlight(
+                placementHighlight,
                 sideMeters: placementCellSideMeters,
                 in: &context,
                 layout: layout
@@ -2240,6 +2244,53 @@ public struct Viewport: View {
             return nil
         }
         return (point: hoveredModelPoint, referencePoint: nil)
+    }
+
+    /// Resolves the same plane mapping and snap the click commit applies, so
+    /// the placement highlight is centered on the point the click will use.
+    private func placementHighlight(
+        around point: Point2D,
+        hit: ViewportHit?
+    ) -> ViewportPlacementHighlight? {
+        let sketchPlane = canvasDragSketchPlane(for: hit)
+        let canvasInput: WorkspaceCanvasPlaneInputMapper.Result
+        do {
+            canvasInput = try WorkspaceCanvasPlaneInputMapper(
+                projectionBasis: currentProjectionBasis
+            ).map(
+                modelPoint: point,
+                modelWorldPoint: nil,
+                sketchPlane: sketchPlane
+            )
+        } catch {
+            return nil
+        }
+
+        guard var options = snapResolutionOptions else {
+            return ViewportPlacementHighlight(
+                point: canvasInput.point,
+                sketchPlane: sketchPlane
+            )
+        }
+        if modifierFlags.containsControl {
+            options.objectTargetingOverride = .forceEnabled
+        }
+        do {
+            let resolution = try SnapResolver().resolve(
+                point: canvasInput.point,
+                in: document,
+                options: options
+            )
+            return ViewportPlacementHighlight(
+                point: resolution.resolvedPoint,
+                sketchPlane: sketchPlane
+            )
+        } catch {
+            return ViewportPlacementHighlight(
+                point: canvasInput.point,
+                sketchPlane: sketchPlane
+            )
+        }
     }
 
     private func snapResolution(
@@ -4651,52 +4702,23 @@ public struct Viewport: View {
     }
 
     private func drawZeroCoordinateFieldHighlight(
-        around modelPoint: Point2D,
+        _ placement: ViewportPlacementHighlight,
         sideMeters: Double,
         in context: inout GraphicsContext,
         layout: ViewportLayout
     ) {
-        guard modelPoint.x.isFinite,
-              modelPoint.y.isFinite else {
+        guard let footprint = ViewportPlacementFootprint(
+            centeredAt: placement.point,
+            sideMeters: sideMeters,
+            sketchPlane: placement.sketchPlane
+        ) else {
             return
         }
 
-        // The highlight must show exactly where a click will land: click
-        // placement centers one visible-grid cell on the cursor point, so the
-        // highlight is that same footprint. The previous origin-aligned
-        // floor(point / majorTick * 2^n) field cell had a different size and a
-        // different anchor from the placed geometry, so the highlight and the
-        // result disagreed on both position and scale.
-        let footprintBounds = Self.placementFootprintBounds(
-            around: modelPoint,
-            sideMeters: sideMeters
-        )
-        guard let footprintBounds else {
-            return
-        }
-        let footprint = layout.projectedFootprint(footprintBounds)
-        let highlightPath = path(for: footprint)
+        let highlightPath = path(for: footprint.projected(in: layout))
 
         context.fill(highlightPath, with: .color(Color.cyan.opacity(0.12)))
         context.stroke(highlightPath, with: .color(Color.cyan.opacity(0.62)), lineWidth: 1.6)
-    }
-
-    /// The footprint a canvas click will occupy: one visible-grid cell
-    /// centered on the cursor point, matching the click-placement sizing.
-    static func placementFootprintBounds(
-        around modelPoint: Point2D,
-        sideMeters: Double
-    ) -> CGRect? {
-        guard sideMeters.isFinite, sideMeters > 0.0 else {
-            return nil
-        }
-        let side = CGFloat(sideMeters)
-        return CGRect(
-            x: CGFloat(modelPoint.x) - side / 2.0,
-            y: CGFloat(modelPoint.y) - side / 2.0,
-            width: side,
-            height: side
-        )
     }
 
     private func drawConstructionFaceHighlight(
@@ -9933,6 +9955,34 @@ public struct Viewport: View {
             activeCanvasDrag = nil
             return
         }
+        // Control-point handles resolve BEFORE the offset and pattern handles,
+        // matching hover(): where handles overlap, the highlighted target must
+        // be the target the press grabs.
+        if let splineControlPointTarget = selectedSplineControlPointTarget(at: point, size: size) {
+            pendingSplineControlPoint = splineControlPointTarget
+            activeCanvasDrag = nil
+            return
+        }
+        if let polySplineSurfaceVertexTarget = selectedPolySplineSurfaceVertexTarget(at: point, size: size) {
+            pendingPolySplineSurfaceVertex = polySplineSurfaceVertexTarget
+            activeCanvasDrag = nil
+            return
+        }
+        if let surfaceControlPointTarget = selectedSurfaceControlPointTarget(at: point, size: size) {
+            pendingSurfaceControlPoint = surfaceControlPointTarget
+            activeCanvasDrag = nil
+            return
+        }
+        if let surfaceTrimEndpointTarget = selectedSurfaceTrimEndpointTarget(at: point, size: size) {
+            pendingSurfaceTrimEndpoint = surfaceTrimEndpointTarget
+            activeCanvasDrag = nil
+            return
+        }
+        if let surfaceTrimControlPointTarget = selectedSurfaceTrimControlPointTarget(at: point, size: size) {
+            pendingSurfaceTrimControlPoint = surfaceTrimControlPointTarget
+            activeCanvasDrag = nil
+            return
+        }
         if let edgeOffsetTarget = selectedEdgeOffsetAffordanceTarget(at: point, size: size) {
             pendingEdgeOffsetHandle = edgeOffsetTarget
             activeCanvasDrag = nil
@@ -9995,31 +10045,6 @@ public struct Viewport: View {
         }
         if let regionOffsetTarget = selectedRegionOffsetAffordanceTarget(at: point, size: size) {
             pendingRegionOffsetHandle = regionOffsetTarget
-            activeCanvasDrag = nil
-            return
-        }
-        if let splineControlPointTarget = selectedSplineControlPointTarget(at: point, size: size) {
-            pendingSplineControlPoint = splineControlPointTarget
-            activeCanvasDrag = nil
-            return
-        }
-        if let polySplineSurfaceVertexTarget = selectedPolySplineSurfaceVertexTarget(at: point, size: size) {
-            pendingPolySplineSurfaceVertex = polySplineSurfaceVertexTarget
-            activeCanvasDrag = nil
-            return
-        }
-        if let surfaceControlPointTarget = selectedSurfaceControlPointTarget(at: point, size: size) {
-            pendingSurfaceControlPoint = surfaceControlPointTarget
-            activeCanvasDrag = nil
-            return
-        }
-        if let surfaceTrimEndpointTarget = selectedSurfaceTrimEndpointTarget(at: point, size: size) {
-            pendingSurfaceTrimEndpoint = surfaceTrimEndpointTarget
-            activeCanvasDrag = nil
-            return
-        }
-        if let surfaceTrimControlPointTarget = selectedSurfaceTrimControlPointTarget(at: point, size: size) {
-            pendingSurfaceTrimControlPoint = surfaceTrimControlPointTarget
             activeCanvasDrag = nil
             return
         }

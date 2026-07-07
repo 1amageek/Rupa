@@ -21,8 +21,9 @@ public enum SketchAxisConstraint: String, Codable, Equatable, Sendable {
         from reference: Point2D,
         on plane: SketchPlane
     ) -> Point2D {
-        let currentLocalPoint = localPoint(fromCanvas: point, on: plane)
-        let referenceLocalPoint = localPoint(fromCanvas: reference, on: plane)
+        let canvasMapper = SketchPlaneCanvasMapper(sketchPlane: plane)
+        let currentLocalPoint = canvasMapper.localPoint(fromCanvas: point)
+        let referenceLocalPoint = canvasMapper.localPoint(fromCanvas: reference)
         guard let direction = localDirection(on: plane) else {
             return point
         }
@@ -34,7 +35,7 @@ public enum SketchAxisConstraint: String, Codable, Equatable, Sendable {
             x: referenceLocalPoint.x + direction.x * projection,
             y: referenceLocalPoint.y + direction.y * projection
         )
-        return canvasPoint(fromLocal: constrainedLocalPoint, on: plane)
+        return canvasMapper.canvasPoint(fromLocal: constrainedLocalPoint)
     }
 
     private func localDirection(on plane: SketchPlane) -> Point2D? {
@@ -81,24 +82,6 @@ public enum SketchAxisConstraint: String, Codable, Equatable, Sendable {
             } catch {
                 return nil
             }
-        }
-    }
-
-    private func localPoint(fromCanvas point: Point2D, on plane: SketchPlane) -> Point2D {
-        switch plane {
-        case .xy, .yz, .plane:
-            return point
-        case .zx:
-            return Point2D(x: point.y, y: point.x)
-        }
-    }
-
-    private func canvasPoint(fromLocal point: Point2D, on plane: SketchPlane) -> Point2D {
-        switch plane {
-        case .xy, .yz, .plane:
-            return point
-        case .zx:
-            return Point2D(x: point.y, y: point.x)
         }
     }
 }

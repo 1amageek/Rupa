@@ -3,6 +3,34 @@ import SwiftCAD
 import Testing
 @testable import RupaCore
 
+@Test func sketchPlaneCanvasMapperKeepsStandardPlaneContracts() throws {
+    let point = Point2D(x: 1.0, y: 2.0)
+    let direction = Point2D(x: 3.0, y: 4.0)
+
+    for plane in [SketchPlane.xy, .yz, .plane(Plane3D(origin: .origin, normal: .unitZ))] {
+        let mapper = SketchPlaneCanvasMapper(sketchPlane: plane)
+        let normalizedDirection = try #require(mapper.normalizedCanvasDirection(fromLocal: direction))
+
+        #expect(mapper.localPoint(fromCanvas: point) == point)
+        #expect(mapper.canvasPoint(fromLocal: point) == point)
+        #expect(abs(normalizedDirection.x - 0.6) < 1.0e-12)
+        #expect(abs(normalizedDirection.y - 0.8) < 1.0e-12)
+    }
+}
+
+@Test func sketchPlaneCanvasMapperSwapsZXCanvasAndLocalCoordinates() throws {
+    let mapper = SketchPlaneCanvasMapper(sketchPlane: .zx)
+    let normalizedDirection = try #require(
+        mapper.normalizedCanvasDirection(fromLocal: Point2D(x: 3.0, y: 4.0))
+    )
+
+    #expect(mapper.localPoint(fromCanvas: Point2D(x: 1.0, y: 2.0)) == Point2D(x: 2.0, y: 1.0))
+    #expect(mapper.canvasPoint(fromLocal: Point2D(x: 3.0, y: 4.0)) == Point2D(x: 4.0, y: 3.0))
+    #expect(abs(normalizedDirection.x - 0.8) < 1.0e-12)
+    #expect(abs(normalizedDirection.y - 0.6) < 1.0e-12)
+    #expect(mapper.normalizedCanvasDirection(fromLocal: Point2D(x: 0.0, y: 0.0)) == nil)
+}
+
 @Test func sketchAxisConstraintConstrainsXYPlaneCanvasPoints() {
     let reference = Point2D(x: 1.0, y: 2.0)
     let point = Point2D(x: 4.0, y: 7.0)

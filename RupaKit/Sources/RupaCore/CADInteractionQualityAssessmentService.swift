@@ -707,7 +707,7 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                         "RupaKit/Sources/RupaRendering/ViewportConstructionPlaneHandleGeometry.swift",
                         "RupaKit/Sources/RupaRendering/Viewport.swift",
                         "RupaKit/Sources/RupaUI/WorkspacePlaneModeControl.swift",
-                        "RupaKit/Sources/RupaUI/WorkspaceCanvasPlaneInputMapper.swift",
+                        "RupaKit/Sources/RupaRendering/WorkspaceCanvasPlaneInputMapper.swift",
                         "RupaKit/Sources/RupaUI/WorkspaceConstructionPlaneEditBuilder.swift",
                         "RupaKit/Sources/RupaUI/WorkspaceLaunchSessionFactory.swift",
                         "RupaKit/Sources/RupaUI/MainView.swift",
