@@ -776,106 +776,13 @@ public struct Viewport: View {
                 && onSelectLargerWorkspaceScale != nil
         )
 
-        return Menu {
-            viewportBadgeMenuContent(menuState)
-        } label: {
-            viewportBadgeLabel(scaleReadout: scaleReadout)
-        }
-        .menuStyle(.borderlessButton)
-        .buttonStyle(.plain)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Canvas Scale")
-        .accessibilityValue(menuState.accessibilityText)
-        .accessibilityIdentifier("CanvasScaleHUD")
-    }
-
-    private func viewportBadgeLabel(
-        scaleReadout: ViewportProjectedGrid.ScaleReadout
-    ) -> some View {
-        HStack(spacing: ViewportCanvasChromeMetrics.topControlItemSpacing) {
-            Image(systemName: "scope")
-                .symbolRenderingMode(.hierarchical)
-            Text(scaleReadout.minorStep.displayUnit.symbol)
-                .font(.system(.caption, design: .monospaced))
-            Divider()
-                .frame(height: ViewportCanvasChromeMetrics.topControlDividerHeight)
-            Text(scaleReadout.canvasHUDText)
-                .font(.system(.caption, design: .monospaced))
-                .lineLimit(1)
-                .minimumScaleFactor(0.85)
-                .truncationMode(.middle)
-            Divider()
-                .frame(height: ViewportCanvasChromeMetrics.topControlDividerHeight)
-            Text("\(Int((camera.zoom * 100.0).rounded()))%")
-                .font(.system(.caption, design: .monospaced))
-                .lineLimit(1)
-                .minimumScaleFactor(0.85)
-        }
-        .padding(.horizontal, ViewportCanvasChromeMetrics.topControlHorizontalPadding)
-        .frame(
-            height: ViewportCanvasChromeLayout.viewportBadgeHeight,
-            alignment: .leading
+        return ViewportCanvasScaleHUD(
+            scaleReadout: scaleReadout,
+            zoomPercentageText: viewportZoomPercentageText,
+            menuState: menuState,
+            onSelectPreset: onSelectWorkspaceScalePreset,
+            onAction: performViewportBadgeAction
         )
-        .viewportCanvasTopChrome()
-    }
-
-    @ViewBuilder
-    private func viewportBadgeMenuContent(
-        _ state: ViewportCanvasScaleMenuState
-    ) -> some View {
-        Section("Canvas Scale") {
-            ForEach(state.rows) { row in
-                Text("\(row.title): \(row.value)")
-            }
-            if state.isVisualStepCapped {
-                Text("Visual grid capped by line budget")
-            }
-        }
-
-        if !state.presetOptions.isEmpty, onSelectWorkspaceScalePreset != nil {
-            Section("Scale Presets") {
-                ForEach(state.presetOptions) { option in
-                    Button {
-                        onSelectWorkspaceScalePreset?(option.preset)
-                    } label: {
-                        HStack {
-                            Text(option.menuTitle)
-                            if option.isSelected {
-                                Image(systemName: "checkmark")
-                            }
-                        }
-                    }
-                    .help("Comfortable model span \(option.comfortTitle)")
-                    .accessibilityIdentifier(option.accessibilityIdentifier)
-                }
-            }
-        }
-
-        if !state.availableActions.isEmpty {
-            Section("Workspace Scale") {
-                ForEach(state.availableActions) { action in
-                    viewportBadgeActionButton(action)
-                }
-            }
-        }
-    }
-
-    private func viewportBadgeActionButton(
-        _ action: ViewportCanvasScaleMenuState.Action
-    ) -> some View {
-        Button {
-            switch action {
-            case .fitToModel:
-                onFitWorkspaceScaleToModel?()
-            case .smallerPreset:
-                onSelectSmallerWorkspaceScale?()
-            case .largerPreset:
-                onSelectLargerWorkspaceScale?()
-            }
-        } label: {
-            Label(action.title, systemImage: action.systemImage)
-        }
-        .accessibilityIdentifier(action.accessibilityIdentifier)
     }
 
     private func viewportBadgeOverlay(
@@ -901,31 +808,27 @@ public struct Viewport: View {
     private func estimatedViewportBadgeWidth(
         scaleReadout: ViewportProjectedGrid.ScaleReadout
     ) -> CGFloat {
-        let textSegments = [
-            scaleReadout.minorStep.displayUnit.symbol,
-            scaleReadout.canvasHUDText,
-            "\(Int((camera.zoom * 100.0).rounded()))%",
-        ]
-
-        let dividerCount = max(0, textSegments.count - 1)
-        let childCount = 1 + textSegments.count + dividerCount
-        let averageCaptionGlyphWidth: CGFloat = 7.0
-        let iconWidth: CGFloat = 14.0
-        let textWidth = textSegments.reduce(CGFloat.zero) { width, segment in
-            width + CGFloat(segment.count) * averageCaptionGlyphWidth
-        }
-        let dividerWidth = CGFloat(dividerCount)
-        let spacingWidth = CGFloat(max(0, childCount - 1))
-            * ViewportCanvasChromeMetrics.topControlItemSpacing
-        let width = iconWidth
-            + textWidth
-            + dividerWidth
-            + spacingWidth
-            + ViewportCanvasChromeMetrics.topControlHorizontalPadding * 2.0
-        return min(
-            max(width.rounded(.up), ViewportCanvasChromeLayout.minimumViewportBadgeWidth),
-            ViewportCanvasChromeMetrics.topControlMaximumWidth
+        ViewportCanvasScaleHUD.estimatedWidth(
+            scaleReadout: scaleReadout,
+            zoomPercentageText: viewportZoomPercentageText
         )
+    }
+
+    private var viewportZoomPercentageText: String {
+        "\(Int((camera.zoom * 100.0).rounded()))%"
+    }
+
+    private func performViewportBadgeAction(
+        _ action: ViewportCanvasScaleMenuState.Action
+    ) {
+        switch action {
+        case .fitToModel:
+            onFitWorkspaceScaleToModel?()
+        case .smallerPreset:
+            onSelectSmallerWorkspaceScale?()
+        case .largerPreset:
+            onSelectLargerWorkspaceScale?()
+        }
     }
 
     private var currentProjectionBasis: ViewportProjectionBasis {

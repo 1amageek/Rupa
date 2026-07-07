@@ -169,6 +169,31 @@ import RupaViewportScene
     #expect(state.accessibilityText.contains("Regional Planning"))
 }
 
+@Test func viewportCanvasScaleHUDEstimatedWidthStaysWithinChromeBounds() throws {
+    var document = DesignDocument.empty()
+    try document.setRulerConfiguration(WorkspaceScalePreset.regionalPlanning.rulerConfiguration)
+    let grid = ViewportProjectedGrid(
+        document: document,
+        size: CGSize(width: 1_200.0, height: 800.0),
+        camera: ViewportCamera(zoom: ViewportCamera.maximumZoom),
+        visualSpacingMode: .adaptive
+    )
+
+    let baseWidth = ViewportCanvasScaleHUD.estimatedWidth(
+        scaleReadout: grid.scaleReadout,
+        zoomPercentageText: "100%"
+    )
+    let zoomedWidth = ViewportCanvasScaleHUD.estimatedWidth(
+        scaleReadout: grid.scaleReadout,
+        zoomPercentageText: "400%"
+    )
+
+    #expect(baseWidth >= ViewportCanvasChromeLayout.minimumViewportBadgeWidth)
+    #expect(baseWidth <= ViewportCanvasChromeMetrics.topControlMaximumWidth)
+    #expect(zoomedWidth >= baseWidth)
+    #expect(zoomedWidth <= ViewportCanvasChromeMetrics.topControlMaximumWidth)
+}
+
 @Test func viewportProjectedGridReportsUrbanPlanningScaleReadout() throws {
     var document = DesignDocument.empty()
     try document.setRulerConfiguration(WorkspaceScalePreset.urbanPlanning.rulerConfiguration)
