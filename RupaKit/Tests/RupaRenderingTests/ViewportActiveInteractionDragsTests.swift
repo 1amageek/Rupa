@@ -36,6 +36,16 @@ import Testing
     #expect(Set(precedence).count == precedence.count)
 }
 
+@Test func viewportActiveInteractionDragCandidatesUseFinishPrecedenceForFirstActiveDrag() {
+    let candidates = ViewportActiveInteractionDragCandidates(
+        affordance: affordanceDragState(),
+        sketchCurveHandle: sketchCurveHandleDragState(),
+        sketchDimension: sketchDimensionDragState()
+    )
+
+    #expect(candidates.firstActiveDrag?.kind == .sketchCurveHandle)
+}
+
 @Test func viewportActiveInteractionDragsKeepsOnlyOneActiveDragWhenSettingNewDrag() {
     var drags = ViewportActiveInteractionDrags()
 
