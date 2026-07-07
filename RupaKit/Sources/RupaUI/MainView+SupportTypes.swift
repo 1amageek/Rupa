@@ -6,10 +6,10 @@ struct ViewAlignedConstructionPlaneRequest: Equatable {
 
 struct SnappedModelInput {
     var point: Point2D
-    var topologyWorldPoint: Point3D?
+    var worldPoint: Point3D?
 
-    init(point: Point2D, topologyWorldPoint: Point3D? = nil) {
+    init(point: Point2D, worldPoint: Point3D? = nil) {
         self.point = point
-        self.topologyWorldPoint = topologyWorldPoint
+        self.worldPoint = worldPoint
     }
 }

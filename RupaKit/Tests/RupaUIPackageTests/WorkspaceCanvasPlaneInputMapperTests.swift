@@ -76,7 +76,7 @@ import Testing
     )
     let resolvedWorldPoint = try mapper.resolvedWorldPoint(
         for: canvasInput.point,
-        topologyWorldPoint: nil,
+        snappedWorldPoint: nil,
         fallbackWorldPoint: canvasInput.worldPoint,
         sketchPlane: activePlane
     )
@@ -117,13 +117,13 @@ import Testing
     )
     let resolvedStartWorldPoint = try mapper.resolvedWorldPoint(
         for: startCanvasInput.point,
-        topologyWorldPoint: nil,
+        snappedWorldPoint: nil,
         fallbackWorldPoint: startCanvasInput.worldPoint,
         sketchPlane: activePlane
     )
     let resolvedEndWorldPoint = try mapper.resolvedWorldPoint(
         for: endCanvasInput.point,
-        topologyWorldPoint: nil,
+        snappedWorldPoint: nil,
         fallbackWorldPoint: endCanvasInput.worldPoint,
         sketchPlane: activePlane
     )
@@ -189,7 +189,7 @@ import Testing
     )
     let resolvedWorldPoint = try mapper.resolvedWorldPoint(
         for: canvasInput.point,
-        topologyWorldPoint: nil,
+        snappedWorldPoint: nil,
         fallbackWorldPoint: canvasInput.worldPoint,
         sketchPlane: activePlane
     )
@@ -234,7 +234,7 @@ import Testing
     let startWorldPoint = try #require(
         try mapper.resolvedWorldPoint(
             for: startCanvasInput.point,
-            topologyWorldPoint: nil,
+            snappedWorldPoint: nil,
             fallbackWorldPoint: startCanvasInput.worldPoint,
             sketchPlane: activePlane
         )
@@ -242,7 +242,7 @@ import Testing
     let endWorldPoint = try #require(
         try mapper.resolvedWorldPoint(
             for: endCanvasInput.point,
-            topologyWorldPoint: nil,
+            snappedWorldPoint: nil,
             fallbackWorldPoint: endCanvasInput.worldPoint,
             sketchPlane: activePlane
         )
@@ -312,7 +312,7 @@ private func assertCustomPlaneCanvasClickCreatesSketch(
     )
     let resolvedWorldPoint = try mapper.resolvedWorldPoint(
         for: canvasInput.point,
-        topologyWorldPoint: nil,
+        snappedWorldPoint: nil,
         fallbackWorldPoint: canvasInput.worldPoint,
         sketchPlane: activePlane
     )
@@ -357,7 +357,7 @@ private func assertCustomPlaneCanvasDragCreatesSketch(
     let startWorldPoint = try #require(
         try mapper.resolvedWorldPoint(
             for: startCanvasInput.point,
-            topologyWorldPoint: nil,
+            snappedWorldPoint: nil,
             fallbackWorldPoint: startCanvasInput.worldPoint,
             sketchPlane: activePlane
         )
@@ -365,7 +365,7 @@ private func assertCustomPlaneCanvasDragCreatesSketch(
     let endWorldPoint = try #require(
         try mapper.resolvedWorldPoint(
             for: endCanvasInput.point,
-            topologyWorldPoint: nil,
+            snappedWorldPoint: nil,
             fallbackWorldPoint: endCanvasInput.worldPoint,
             sketchPlane: activePlane
         )

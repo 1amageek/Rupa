@@ -2769,7 +2769,7 @@ public struct MainView: View {
             modelPoint: snappedInput.point,
             modelWorldPoint: resolvedCanvasWorldPoint(
                 for: snappedInput.point,
-                topologyWorldPoint: snappedInput.topologyWorldPoint,
+                snappedWorldPoint: snappedInput.worldPoint,
                 fallbackWorldPoint: canvasInput.worldPoint,
                 sketchPlane: sketchPlane
             ),
@@ -3529,7 +3529,7 @@ public struct MainView: View {
         let snappedInput = snappedModelInput(canvasInput.point, modifierFlags: target.modifierFlags)
         guard let origin = resolvedSketchPlaneWorldPoint(
             for: snappedInput.point,
-            topologyWorldPoint: snappedInput.topologyWorldPoint,
+            snappedWorldPoint: snappedInput.worldPoint,
             fallbackWorldPoint: canvasInput.worldPoint,
             sketchPlane: sketchPlane
         ) else {
@@ -4255,14 +4255,14 @@ public struct MainView: View {
         ) ?? snappedEndPoint
         let startWorldPoint = resolvedCanvasWorldPoint(
             for: startPoint,
-            topologyWorldPoint: startInput.topologyWorldPoint,
+            snappedWorldPoint: startInput.worldPoint,
             fallbackWorldPoint: startCanvasInput.worldPoint,
             sketchPlane: sketchPlane
         )
         let endWorldPoint = activeCanvasDragAxisConstraint == nil
             ? resolvedCanvasWorldPoint(
                 for: endPoint,
-                topologyWorldPoint: endInput.topologyWorldPoint,
+                snappedWorldPoint: endInput.worldPoint,
                 fallbackWorldPoint: endCanvasInput.worldPoint,
                 sketchPlane: sketchPlane
             )
@@ -4317,13 +4317,13 @@ public struct MainView: View {
 
     private func resolvedCanvasWorldPoint(
         for point: Point2D,
-        topologyWorldPoint: Point3D?,
+        snappedWorldPoint: Point3D?,
         fallbackWorldPoint: Point3D?,
         sketchPlane: SketchPlane
     ) -> Point3D? {
         return resolvedSketchPlaneWorldPoint(
             for: point,
-            topologyWorldPoint: topologyWorldPoint,
+            snappedWorldPoint: snappedWorldPoint,
             fallbackWorldPoint: fallbackWorldPoint,
             sketchPlane: sketchPlane
         )
@@ -4338,7 +4338,7 @@ public struct MainView: View {
         }
         return resolvedSketchPlaneWorldPoint(
             for: point,
-            topologyWorldPoint: nil,
+            snappedWorldPoint: nil,
             fallbackWorldPoint: nil,
             sketchPlane: sketchPlane
         )
@@ -4346,7 +4346,7 @@ public struct MainView: View {
 
     private func resolvedSketchPlaneWorldPoint(
         for point: Point2D,
-        topologyWorldPoint: Point3D?,
+        snappedWorldPoint: Point3D?,
         fallbackWorldPoint: Point3D?,
         sketchPlane: SketchPlane
     ) -> Point3D? {
@@ -4355,7 +4355,7 @@ public struct MainView: View {
                 projectionBasis: viewportProjectionBasis
             ).resolvedWorldPoint(
                 for: point,
-                topologyWorldPoint: topologyWorldPoint,
+                snappedWorldPoint: snappedWorldPoint,
                 fallbackWorldPoint: fallbackWorldPoint,
                 sketchPlane: sketchPlane
             )
@@ -4394,7 +4394,7 @@ public struct MainView: View {
             )
             return SnappedModelInput(
                 point: result.resolvedPoint,
-                topologyWorldPoint: result.selectedTopologyWorldPoint
+                worldPoint: result.selectedWorldPoint
             )
         } catch {
             // Do not silently degrade to plain grid rounding: the viewport

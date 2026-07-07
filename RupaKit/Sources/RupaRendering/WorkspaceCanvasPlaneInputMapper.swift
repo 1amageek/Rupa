@@ -74,12 +74,12 @@ public struct WorkspaceCanvasPlaneInputMapper: Sendable {
 
     public func resolvedWorldPoint(
         for point: Point2D,
-        topologyWorldPoint: Point3D?,
+        snappedWorldPoint: Point3D?,
         fallbackWorldPoint: Point3D?,
         sketchPlane: SketchPlane
     ) throws -> Point3D? {
-        if let topologyWorldPoint {
-            return topologyWorldPoint
+        if let snappedWorldPoint {
+            return snappedWorldPoint
         }
         guard case .plane = sketchPlane else {
             return fallbackWorldPoint

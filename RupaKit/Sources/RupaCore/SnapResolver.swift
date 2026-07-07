@@ -499,6 +499,13 @@ public struct SnapResolutionResult: Codable, Equatable, Sendable {
         return Point3D(x: point.x, y: point.y, z: point.z)
     }
 
+    public var selectedWorldPoint: Point3D? {
+        selectedTopologyWorldPoint
+            ?? selectedCandidate?.measurementSource?.worldPoint
+            ?? selectedSurfaceFrameWorldPoint
+            ?? selectedSurfaceTrimWorldPoint
+    }
+
     public var selectedSurfaceFrameWorldPoint: Point3D? {
         selectedCandidate?.surfaceFrameSource?.worldPoint
     }

@@ -657,16 +657,20 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                     sourceFiles: [
                         "RupaKit/Sources/RupaCore/SnapResolver.swift",
                         "RupaKit/Sources/RupaUI/WorkspaceSnapOverrideState.swift",
+                        "RupaKit/Sources/RupaRendering/ViewportConstructionPlaneDragSnapResolver.swift",
                         "RupaKit/Sources/RupaRendering/Viewport.swift",
                     ],
                     tests: [
                         "RupaKit/Tests/RupaCoreTests/SnapResolverTests.swift",
+                        "RupaKit/Tests/RupaRenderingTests/ViewportConstructionPlaneDragSnapResolverTests.swift",
                         "RupaKit/Tests/RupaUIPackageTests/WorkspaceSnapOverrideStateTests.swift",
                         "RupaKit/Tests/RupaAgentContractTests/AgentCapabilityContractTests.swift",
                     ],
                     notes: [
+                        "SnapResolutionResult now exposes a unified selectedWorldPoint for topology, measurement, surface frame, and surface trim candidates, so UI commit paths and Agent consumers do not need divergent candidate-specific world-point fallbacks.",
                         "Visible UVN surface frame displays are resolved through the shared snap resolver as Agent-readable surfaceFrame candidates with query, world point, UV, and local frame axes.",
                         "Authored direct B-spline trim endpoints and strict interior p-curve control points resolve as Agent-readable surfaceTrim snap candidates with selection reference, UV address, world point, and local U/V/N frame axes.",
+                        "Construction-plane viewport origin and normal handle drags are resolved through SnapResolver; origin drags can use planar grid/reference fallback while normal drags only consume candidates with explicit world points.",
                     ]
                 ),
             ],
@@ -705,6 +709,7 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                         "RupaKit/Sources/RupaCore/ConstructionPlaneTargetResolver.swift",
                         "RupaKit/Sources/RupaRendering/ViewportConstructionPlaneDragTarget.swift",
                         "RupaKit/Sources/RupaRendering/ViewportConstructionPlaneHandleGeometry.swift",
+                        "RupaKit/Sources/RupaRendering/ViewportConstructionPlaneDragSnapResolver.swift",
                         "RupaKit/Sources/RupaRendering/Viewport.swift",
                         "RupaKit/Sources/RupaUI/WorkspacePlaneModeControl.swift",
                         "RupaKit/Sources/RupaRendering/WorkspaceCanvasPlaneInputMapper.swift",
@@ -718,6 +723,7 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                         "RupaKit/Tests/RupaCoreTests/CanvasConstructionPlaneSketchWorkflowTests.swift",
                         "RupaKit/Tests/RupaCoreTests/CommandStackTests.swift",
                         "RupaKit/Tests/RupaRenderingTests/ViewportConstructionPlaneHandleGeometryTests.swift",
+                        "RupaKit/Tests/RupaRenderingTests/ViewportConstructionPlaneDragSnapResolverTests.swift",
                         "RupaKit/Tests/RupaUIPackageTests/WorkspaceCanvasPlaneInputMapperTests.swift",
                         "RupaKit/Tests/RupaUIPackageTests/WorkspaceConstructionPlaneEditBuilderTests.swift",
                         "RupaKit/Tests/RupaUIPackageTests/WorkspaceLaunchSessionFactoryTests.swift",
@@ -729,6 +735,7 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                         "Canvas click and drag sketch tools create rectangle, polygon, arc, spline, and circle sketches on the active saved custom construction plane instead of falling back to the default XY plane.",
                         "WorkspaceCanvasPlaneInputMapper owns custom-plane world-point recovery, and RupaUIPackageTests cover raw viewport footprint click and drag input flowing through the mapper into EditorSession rectangle, polygon, arc, spline, circle, and solid creation on the active custom construction plane.",
                         "Selected saved construction planes expose viewport Origin and Normal handles that preview a bounded plane frame and commit through the same setConstructionPlane source mutation path used by Inspector edits.",
+                        "Viewport construction-plane handle drags share the SnapResolver candidate contract instead of viewport-local snapping: origin handles may use planar fallback, while normal handles require explicit world-point candidates to avoid flattening the normal onto a 2D grid.",
                         "WorkspaceLaunchSessionFactory installs an active arbitrary construction-plane launch fixture through the same EditorSession command path, ApplicationRoot injects the resulting session into MainView once, and AppUITests now cover the app-level active-plane readback plus sketch and solid canvas creation path.",
                     ]
                 ),

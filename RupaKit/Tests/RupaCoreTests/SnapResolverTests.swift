@@ -758,6 +758,7 @@ import Testing
     #expect(candidate.measurementSource?.kind == .distance)
     #expect(candidate.measurementSource?.role == .start)
     #expect(candidate.measurementSource?.worldPoint == Point3D(x: 0.002, y: 0.003, z: 0.0))
+    #expect(result.selectedWorldPoint == Point3D(x: 0.002, y: 0.003, z: 0.0))
     #expect(abs(candidate.point.x - 0.002) <= 1.0e-12)
     #expect(abs(candidate.point.y - 0.003) <= 1.0e-12)
 }
@@ -798,6 +799,7 @@ import Testing
     #expect(abs(candidate.point.x - 0.006) <= 1.0e-12)
     #expect(abs(candidate.point.y - 0.004) <= 1.0e-12)
     #expect(candidate.measurementSource?.worldPoint == Point3D(x: 0.001, y: 0.006, z: 0.004))
+    #expect(result.selectedWorldPoint == Point3D(x: 0.001, y: 0.006, z: 0.004))
 }
 
 @Test func snapResolverResolvesMeasurementSketchReferencesFromCurrentGeometry() async throws {
@@ -1009,12 +1011,14 @@ import Testing
         candidate.kind == .edgeMidpoint &&
             candidate.topologySource?.persistentName == edge.persistentName
     })
-    let selectedWorldPoint = try #require(result.selectedTopologyWorldPoint)
+    let selectedTopologyWorldPoint = try #require(result.selectedTopologyWorldPoint)
+    let selectedWorldPoint = try #require(result.selectedWorldPoint)
     #expect(candidate.label == "Edge Middle")
     #expect(candidate.source == nil)
     #expect(candidate.topologySource?.selectionTarget == edgeTarget)
     #expect(abs(candidate.point.x - midpoint.x) <= 1.0e-12)
     #expect(abs(candidate.point.y - midpoint.y) <= 1.0e-12)
+    #expect(selectedWorldPoint == selectedTopologyWorldPoint)
     #expect(abs(selectedWorldPoint.x - midpoint.x) <= 1.0e-12)
     #expect(abs(selectedWorldPoint.y - midpoint.y) <= 1.0e-12)
     #expect(abs(selectedWorldPoint.z - ((start.z + end.z) * 0.5)) <= 1.0e-12)
@@ -1403,7 +1407,9 @@ import Testing
     #expect(abs(surfaceFrameSource.worldPoint.z - frame.position.z) <= 1.0e-12)
     #expect(abs(candidate.point.x - frame.position.x) <= 1.0e-12)
     #expect(abs(candidate.point.y - frame.position.y) <= 1.0e-12)
-    let selectedWorldPoint = try #require(result.selectedSurfaceFrameWorldPoint)
+    let selectedSurfaceFrameWorldPoint = try #require(result.selectedSurfaceFrameWorldPoint)
+    let selectedWorldPoint = try #require(result.selectedWorldPoint)
+    #expect(selectedWorldPoint == selectedSurfaceFrameWorldPoint)
     #expect(abs(selectedWorldPoint.x - frame.position.x) <= 1.0e-12)
     #expect(abs(selectedWorldPoint.y - frame.position.y) <= 1.0e-12)
     #expect(abs(selectedWorldPoint.z - frame.position.z) <= 1.0e-12)
@@ -1546,7 +1552,8 @@ import Testing
             candidate.surfaceTrimSource?.controlPointIndex == 1
     })
     let source = try #require(candidate.surfaceTrimSource)
-    let selectedWorldPoint = try #require(result.selectedSurfaceTrimWorldPoint)
+    let selectedSurfaceTrimWorldPoint = try #require(result.selectedSurfaceTrimWorldPoint)
+    let selectedWorldPoint = try #require(result.selectedWorldPoint)
     #expect(result.selectedCandidate?.kind == .surfaceTrimControlPoint)
     #expect(candidate.label == "Surface Trim CP")
     #expect(source.kind == .controlPoint)
@@ -1558,6 +1565,7 @@ import Testing
     #expect(abs(source.worldPoint.x - expected.x) <= 1.0e-12)
     #expect(abs(source.worldPoint.y - expected.y) <= 1.0e-12)
     #expect(abs(source.worldPoint.z - expected.z) <= 1.0e-12)
+    #expect(selectedWorldPoint == selectedSurfaceTrimWorldPoint)
     #expect(abs(selectedWorldPoint.x - expected.x) <= 1.0e-12)
     #expect(abs(selectedWorldPoint.y - expected.y) <= 1.0e-12)
     #expect(abs(selectedWorldPoint.z - expected.z) <= 1.0e-12)

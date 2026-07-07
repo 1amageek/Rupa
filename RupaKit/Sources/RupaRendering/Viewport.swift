@@ -12162,11 +12162,19 @@ public struct Viewport: View {
             activeConstructionPlaneHandleDrag = nil
             return
         }
+        let snappedTarget = ViewportConstructionPlaneDragSnapResolver().snappedTarget(
+            dragTarget,
+            sourceTarget: target,
+            screenPoint: current,
+            document: document,
+            options: snapResolutionOptions,
+            layout: layout
+        )
         activeConstructionPlaneHandleDrag = ViewportConstructionPlaneHandleDragState(
             target: target,
             startPoint: start,
-            origin: dragTarget.origin,
-            normal: dragTarget.normal
+            origin: snappedTarget.origin,
+            normal: snappedTarget.normal
         )
     }
 
