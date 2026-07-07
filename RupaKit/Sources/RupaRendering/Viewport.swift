@@ -10,6 +10,14 @@ public struct Viewport: View {
         subsystem: "RupaRendering",
         category: "ViewportSnapOverlay"
     )
+    private static let placementHighlightLogger = Logger(
+        subsystem: "RupaRendering",
+        category: "ViewportPlacementHighlight"
+    )
+    private static let referenceLineAnchorLogger = Logger(
+        subsystem: "RupaRendering",
+        category: "ViewportReferenceLineAnchor"
+    )
 
     @State private var activeCanvasDrag: ViewportActiveDrag?
     @State private var activeAffordanceDrag: ViewportAffordanceDragState?
@@ -100,6 +108,8 @@ public struct Viewport: View {
     @State private var modifierFlags: ViewportInputModifierFlags = ViewportInputModifierFlags()
     @State private var snapOverlayResult: SnapResolutionResult?
     @State private var snapOverlayFailureDescription: String?
+    @State private var placementHighlightState: ViewportPlacementHighlight?
+    @State private var placementHighlightFailureDescription: String?
     @State private var reportedSnapCandidateKind: RupaCore.SnapCandidateKind?
     @State private var selectedAxis: ViewportCoordinateAxis?
     @State private var hoveredCanvasHit: ViewportHit?
@@ -477,6 +487,7 @@ public struct Viewport: View {
                         onModifierFlagsChange: { flags, size in
                             modifierFlags = flags
                             refreshSnapOverlayResolution(size: size)
+                            refreshPlacementHighlight(size: size)
                         },
                         onSecondaryClick: { _, _ in
                             onCommandConfirm?()
@@ -529,6 +540,10 @@ public struct Viewport: View {
             }
             .onChange(of: snapResolutionOptions) { _, _ in
                 refreshSnapOverlayResolution(size: proxy.size)
+                refreshPlacementHighlight(size: proxy.size)
+            }
+            .onChange(of: canvasPlacementPreviewKind) { _, _ in
+                refreshPlacementHighlight(size: proxy.size)
             }
             .onChange(of: cameraResetSignal) { _, _ in
                 resetViewportCamera(size: proxy.size, basis: currentProjectionBasis)
@@ -539,6 +554,7 @@ public struct Viewport: View {
             .onChange(of: documentGeneration) { _, _ in
                 clearDragPreviewDocument()
                 refreshSnapOverlayResolution(size: proxy.size)
+                refreshPlacementHighlight(size: proxy.size)
             }
             .onAppear {
                 if let projectionRequest {
@@ -1140,7 +1156,6 @@ public struct Viewport: View {
             && pendingAffordance == nil
             && activeAffordanceDrag == nil
         let constructionHit = showsConstructionHighlight ? hoveredCanvasHit : nil
-        let constructionModelPoint = showsConstructionHighlight ? hoveredModelPoint : nil
         let sectionDisplayPlan = sectionClippingPlan.map {
             ViewportSectionClippingPlan(
                 sectionPlan: $0,
@@ -1151,12 +1166,8 @@ public struct Viewport: View {
         if constructionHit?.bodyFace == nil,
            constructionHit?.bodyEdge == nil,
            constructionHit?.bodyVertex == nil,
-           let constructionModelPoint,
            canvasPlacementPreviewKind != nil,
-           let placementHighlight = placementHighlight(
-                around: constructionModelPoint,
-                hit: constructionHit
-           ) {
+           let placementHighlight = placementHighlightState {
             drawPlacementHighlight(
                 placementHighlight,
                 visibleCellMeters: placementCellSideMeters,
@@ -2054,7 +2065,7 @@ public struct Viewport: View {
         }
     }
 
-    private func snapOverlayProbe(layout: ViewportLayout) -> ViewportSnapOverlayProbe? {
+    private func snapOverlayQuery(layout: ViewportLayout) -> ViewportSnapQuery? {
         if let activeCanvasDrag {
             guard case .creation = activeCanvasDrag.kind else {
                 return nil
@@ -2079,7 +2090,7 @@ public struct Viewport: View {
                 from: startInput.point,
                 on: sketchPlane
             ) ?? currentInput.point
-            return ViewportSnapOverlayProbe(
+            return ViewportSnapQuery(
                 point: constrainedPoint,
                 referencePoint: startInput.point
             )
@@ -2087,7 +2098,7 @@ public struct Viewport: View {
         guard let hoveredModelPoint else {
             return nil
         }
-        return ViewportSnapOverlayProbe(point: hoveredModelPoint, referencePoint: nil)
+        return ViewportSnapQuery(point: hoveredModelPoint, referencePoint: nil)
     }
 
     private func canvasInput(
@@ -2149,79 +2160,6 @@ public struct Viewport: View {
         )
     }
 
-    /// Resolves the same plane mapping and snap the click commit applies, so
-    /// the placement highlight is centered on the point the click will use.
-    private func placementHighlight(
-        around point: Point2D,
-        hit: ViewportHit?
-    ) -> ViewportPlacementHighlight? {
-        guard let previewKind = canvasPlacementPreviewKind else {
-            return nil
-        }
-        let sketchPlane = canvasDragSketchPlane(for: hit)
-        guard var options = snapResolutionOptions else {
-            return ViewportPlacementHighlight(
-                point: point,
-                sketchPlane: sketchPlane,
-                previewKind: previewKind
-            )
-        }
-        guard options.shouldResolve(for: modifierFlags) else {
-            return ViewportPlacementHighlight(
-                point: point,
-                sketchPlane: sketchPlane,
-                previewKind: previewKind
-            )
-        }
-        if modifierFlags.containsControl {
-            options.objectTargetingOverride = .forceEnabled
-        }
-        do {
-            let resolution = try SnapResolver().resolve(
-                point: point,
-                in: document,
-                options: options
-            )
-            return ViewportPlacementHighlight(
-                point: resolution.resolvedPoint,
-                sketchPlane: sketchPlane,
-                previewKind: previewKind
-            )
-        } catch {
-            return ViewportPlacementHighlight(
-                point: point,
-                sketchPlane: sketchPlane,
-                previewKind: previewKind
-            )
-        }
-    }
-
-    private func snapResolution(
-        for point: Point2D,
-        referencePoint: Point2D? = nil
-    ) -> SnapResolutionResult? {
-        guard var snapResolutionOptions else {
-            return nil
-        }
-        guard snapResolutionOptions.shouldResolve(for: modifierFlags) else {
-            return nil
-        }
-        if modifierFlags.containsControl {
-            snapResolutionOptions.objectTargetingOverride = .forceEnabled
-        }
-        snapResolutionOptions.referencePoint = referencePoint
-        do {
-            let result = try SnapResolver().resolve(
-                point: point,
-                in: document,
-                options: snapResolutionOptions
-            )
-            return result.selectedCandidate == nil ? nil : result
-        } catch {
-            return nil
-        }
-    }
-
     private func publishSnapCandidateKind(_ kind: RupaCore.SnapCandidateKind?) {
         guard reportedSnapCandidateKind != kind else {
             return
@@ -2241,8 +2179,8 @@ public struct Viewport: View {
 
     private func refreshSnapOverlayResolution(layout: ViewportLayout) {
         applySnapOverlayResolution(
-            ViewportSnapOverlayResolutionService().resolution(
-                for: snapOverlayProbe(layout: layout),
+            ViewportSnapResolutionService().resolution(
+                for: snapOverlayQuery(layout: layout),
                 document: document,
                 options: snapResolutionOptions,
                 modifierFlags: modifierFlags
@@ -2250,7 +2188,7 @@ public struct Viewport: View {
         )
     }
 
-    private func applySnapOverlayResolution(_ resolution: ViewportSnapOverlayResolution) {
+    private func applySnapOverlayResolution(_ resolution: ViewportSnapResolution) {
         if snapOverlayResult != resolution.result {
             snapOverlayResult = resolution.result
         }
@@ -2263,6 +2201,68 @@ public struct Viewport: View {
             snapOverlayFailureDescription = resolution.failureDescription
         }
         publishSnapCandidateKind(resolution.publishedKind(context: snapOverlayContext))
+    }
+
+    private func refreshPlacementHighlight(size: CGSize) {
+        let mapper = makeCoordinateMapper(
+            size: size,
+            camera: camera,
+            basis: currentProjectionBasis
+        )
+        refreshPlacementHighlight(layout: mapper.layout)
+    }
+
+    private func refreshPlacementHighlight(layout: ViewportLayout) {
+        guard let previewKind = canvasPlacementPreviewKind,
+              let hoveredModelPoint,
+              hoveredCanvasHit?.bodyFace == nil,
+              hoveredCanvasHit?.bodyEdge == nil,
+              hoveredCanvasHit?.bodyVertex == nil else {
+            clearPlacementHighlight()
+            return
+        }
+
+        let resolution = ViewportSnapResolutionService().resolution(
+            for: ViewportSnapQuery(point: hoveredModelPoint, referencePoint: nil),
+            document: document,
+            options: snapResolutionOptions,
+            modifierFlags: modifierFlags
+        )
+        let sketchPlane = canvasDragSketchPlane(for: hoveredCanvasHit)
+        applyPlacementHighlight(
+            ViewportPlacementHighlight(
+                point: resolution.result?.resolvedPoint ?? hoveredModelPoint,
+                sketchPlane: sketchPlane,
+                previewKind: previewKind
+            ),
+            failureDescription: resolution.failureDescription
+        )
+    }
+
+    private func applyPlacementHighlight(
+        _ placementHighlight: ViewportPlacementHighlight,
+        failureDescription: String?
+    ) {
+        if placementHighlightState != placementHighlight {
+            placementHighlightState = placementHighlight
+        }
+        if placementHighlightFailureDescription != failureDescription {
+            if let failureDescription {
+                Self.placementHighlightLogger.warning(
+                    "Placement highlight snap resolution failed: \(failureDescription, privacy: .public)"
+                )
+            }
+            placementHighlightFailureDescription = failureDescription
+        }
+    }
+
+    private func clearPlacementHighlight() {
+        if placementHighlightState != nil {
+            placementHighlightState = nil
+        }
+        if placementHighlightFailureDescription != nil {
+            placementHighlightFailureDescription = nil
+        }
     }
 
     private func clearSnapOverlayResolution() {
@@ -2293,8 +2293,19 @@ public struct Viewport: View {
         )?.point else {
             return false
         }
-        guard let resolution = snapResolution(for: modelPoint),
-              let selectedCandidate = resolution.selectedCandidate,
+        let resolution = ViewportSnapResolutionService().resolution(
+            for: ViewportSnapQuery(point: modelPoint, referencePoint: nil),
+            document: document,
+            options: snapResolutionOptions,
+            modifierFlags: modifierFlags
+        )
+        if let failureDescription = resolution.failureDescription {
+            Self.referenceLineAnchorLogger.warning(
+                "Reference line anchor snap resolution failed: \(failureDescription, privacy: .public)"
+            )
+        }
+        guard let result = resolution.result,
+              let selectedCandidate = result.selectedCandidate,
               selectedCandidate.kind.isReferenceLineAnchorSource else {
             return false
         }
@@ -14131,6 +14142,7 @@ public struct Viewport: View {
             layout: mapper.layout
         )?.point
         refreshSnapOverlayResolution(layout: mapper.layout)
+        refreshPlacementHighlight(layout: mapper.layout)
         onHover?(hit)
     }
 
@@ -14226,6 +14238,7 @@ public struct Viewport: View {
 
     private func clearHoverCallbacks() {
         clearSnapOverlayResolution()
+        clearPlacementHighlight()
         onHover?(nil)
     }
 

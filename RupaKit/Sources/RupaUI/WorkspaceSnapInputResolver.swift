@@ -1,4 +1,5 @@
 import RupaCore
+import RupaRendering
 import RupaViewportScene
 
 struct WorkspaceSnapInputResolution {
@@ -15,40 +16,26 @@ struct WorkspaceSnapInputResolver {
         referencePoint: Point2D? = nil,
         modifierFlags: ViewportInputModifierFlags = ViewportInputModifierFlags()
     ) -> WorkspaceSnapInputResolution {
-        guard options.shouldResolve(for: modifierFlags) else {
-            return WorkspaceSnapInputResolution(
-                input: SnappedModelInput(point: point),
-                didAttemptResolution: false,
-                failureMessage: nil
-            )
-        }
-
-        var resolvedOptions = options
-        if modifierFlags.containsControl {
-            resolvedOptions.objectTargetingOverride = .forceEnabled
-        }
-        resolvedOptions.referencePoint = referencePoint
-
-        do {
-            let result = try SnapResolver().resolve(
-                point: point,
-                in: document,
-                options: resolvedOptions
-            )
+        let resolution = ViewportSnapResolutionService().resolution(
+            for: ViewportSnapQuery(point: point, referencePoint: referencePoint),
+            document: document,
+            options: options,
+            modifierFlags: modifierFlags
+        )
+        if let result = resolution.result {
             return WorkspaceSnapInputResolution(
                 input: SnappedModelInput(
                     point: result.resolvedPoint,
                     worldPoint: result.selectedWorldPoint
                 ),
-                didAttemptResolution: true,
+                didAttemptResolution: resolution.attemptedResolution,
                 failureMessage: nil
             )
-        } catch {
-            return WorkspaceSnapInputResolution(
-                input: SnappedModelInput(point: point),
-                didAttemptResolution: true,
-                failureMessage: error.localizedDescription
-            )
         }
+        return WorkspaceSnapInputResolution(
+            input: SnappedModelInput(point: point),
+            didAttemptResolution: resolution.attemptedResolution,
+            failureMessage: resolution.failureDescription
+        )
     }
 }

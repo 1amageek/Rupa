@@ -3329,6 +3329,33 @@ import Testing
     #expect(pointIsApproximatelyEqual(resolved.end, Point2D(x: drag.end.x, y: drag.start.y)))
 }
 
+@Test func viewportCanvasDragSnapResolverReportsFailuresWithoutChangingFallbackDrag() {
+    let drag = ViewportModelDrag(
+        start: Point2D(x: .nan, y: 0.018),
+        end: Point2D(x: 0.026, y: 0.037),
+        sketchPlane: .xy
+    )
+    let options = SnapResolutionOptions(
+        usesGrid: true,
+        usesObjects: false,
+        gridIntervalMeters: 0.01
+    )
+
+    let resolution = ViewportCanvasDragSnapResolver().resolution(
+        drag,
+        document: .empty(),
+        snapOptions: options,
+        axisConstraint: .x
+    )
+
+    #expect(resolution.startResolution.attemptedResolution)
+    #expect(resolution.startResolution.failureDescription != nil)
+    #expect(resolution.endResolution.attemptedResolution)
+    #expect(!resolution.failureDescriptions.isEmpty)
+    #expect(resolution.drag.start.x.isNaN)
+    #expect(resolution.drag.start.y == drag.start.y)
+}
+
 @Test func viewportSnapResolutionOptionsUsesSharedAvailabilityContract() {
     let disabled = SnapResolutionOptions(
         usesGrid: false,
@@ -3762,14 +3789,14 @@ import Testing
     #expect(ViewportSnapOverlayPolicy.publishedKind(.lineStart, context: passiveHover) == .lineStart)
 }
 
-@Test func viewportSnapOverlayResolutionServiceResolvesInputOutsideDrawing() {
+@Test func viewportSnapResolutionServiceResolvesInputOutsideDrawing() {
     let options = SnapResolutionOptions(
         usesGrid: true,
         usesObjects: false,
         gridIntervalMeters: 0.01
     )
-    let resolution = ViewportSnapOverlayResolutionService().resolution(
-        for: ViewportSnapOverlayProbe(
+    let resolution = ViewportSnapResolutionService().resolution(
+        for: ViewportSnapQuery(
             point: Point2D(x: 0.012, y: 0.018),
             referencePoint: nil
         ),
@@ -3779,6 +3806,7 @@ import Testing
     )
 
     #expect(resolution.failureDescription == nil)
+    #expect(resolution.attemptedResolution)
     #expect(resolution.result?.selectedCandidate?.kind == .grid)
     #expect(pointIsApproximatelyEqual(
         resolution.result?.resolvedPoint ?? Point2D(x: 0.0, y: 0.0),
@@ -3788,8 +3816,8 @@ import Testing
     #expect(resolution.publishedKind(context: .creationDrag) == .grid)
 }
 
-@Test func viewportSnapOverlayResolutionServiceClearsWhenProbeIsUnavailable() {
-    let resolution = ViewportSnapOverlayResolutionService().resolution(
+@Test func viewportSnapResolutionServiceClearsWhenQueryIsUnavailable() {
+    let resolution = ViewportSnapResolutionService().resolution(
         for: nil,
         document: .empty(),
         options: SnapResolutionOptions(),
@@ -3798,12 +3826,13 @@ import Testing
 
     #expect(resolution.result == nil)
     #expect(resolution.failureDescription == nil)
+    #expect(!resolution.attemptedResolution)
     #expect(resolution.publishedKind(context: .creationDrag) == nil)
 }
 
-@Test func viewportSnapOverlayResolutionServiceReportsResolutionFailures() {
-    let resolution = ViewportSnapOverlayResolutionService().resolution(
-        for: ViewportSnapOverlayProbe(
+@Test func viewportSnapResolutionServiceReportsResolutionFailures() {
+    let resolution = ViewportSnapResolutionService().resolution(
+        for: ViewportSnapQuery(
             point: Point2D(x: .nan, y: 0.0),
             referencePoint: nil
         ),
@@ -3814,6 +3843,7 @@ import Testing
 
     #expect(resolution.result == nil)
     #expect(resolution.failureDescription != nil)
+    #expect(resolution.attemptedResolution)
 }
 
 @Test func viewportSnapOverlayRendererBuildsPolicyCompliantPresentations() {
