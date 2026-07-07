@@ -1941,9 +1941,35 @@ public struct MeasurementService {
     }
 
     private func isClose(_ lhs: MeasurementPoint2D, _ rhs: MeasurementPoint2D) -> Bool {
+        guard lhs.x.isFinite,
+              lhs.y.isFinite,
+              rhs.x.isFinite,
+              rhs.y.isFinite else {
+            return false
+        }
         let dx = lhs.x - rhs.x
         let dy = lhs.y - rhs.y
-        return (dx * dx + dy * dy).squareRoot() <= tolerance.distance
+        return hypot(dx, dy) <= connectionTolerance(between: lhs, and: rhs)
+    }
+
+    private func connectionTolerance(
+        between lhs: MeasurementPoint2D,
+        and rhs: MeasurementPoint2D
+    ) -> Double {
+        let xResolution = coordinateResolutionTolerance(lhs.x, rhs.x)
+        let yResolution = coordinateResolutionTolerance(lhs.y, rhs.y)
+        // Far-origin endpoints can only be distinguished down to the local
+        // coordinate ULP, which may exceed the modeling distance tolerance.
+        return tolerance.distance + hypot(xResolution, yResolution)
+    }
+
+    private func coordinateResolutionTolerance(_ lhs: Double, _ rhs: Double) -> Double {
+        2.0 * max(
+            abs(lhs.nextUp - lhs),
+            abs(lhs - lhs.nextDown),
+            abs(rhs.nextUp - rhs),
+            abs(rhs - rhs.nextDown)
+        )
     }
 
     private func planeFrame(for plane: SketchPlane) throws -> PlaneFrame {

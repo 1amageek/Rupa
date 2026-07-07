@@ -69,6 +69,18 @@ func farFromOriginExtrudeMeasuresWithoutUnsupportedProfile() throws {
     #expect(abs(measurement.totals.solidVolumeCubicMeters - 1000.0) < 1.0e-3)
 }
 
+@Test(.timeLimit(.minutes(1)))
+func farFromOriginLoopStitchingAcceptsCoordinateResolutionGap() throws {
+    let document = try farFromOriginAlmostClosedRectangleDocument()
+    let measurement = try MeasurementService().measure(document: document)
+
+    #expect(measurement.diagnostics.allSatisfy { !$0.message.contains("unsupported profile") })
+    #expect(measurement.counts.solids == 1)
+    // The intentionally retained one-ULP endpoint gap may contribute to area
+    // depending on dictionary iteration order, but the profile must not be skipped.
+    #expect(abs(measurement.totals.solidVolumeCubicMeters - 1000.0) < 1.0e-2)
+}
+
 private func farFromOriginRectangleDocument() throws -> DesignDocument {
     var document = DesignDocument.empty(named: "Remote Site")
     try document.setRulerConfiguration(WorkspaceScalePreset.sitePlanning.rulerConfiguration)
@@ -90,6 +102,79 @@ private func farFromOriginRectangleDocument() throws -> DesignDocument {
         distance: .length(10.0, .meter),
         direction: .normal
     )
+    return document
+}
+
+private func farFromOriginAlmostClosedRectangleDocument() throws -> DesignDocument {
+    var document = DesignDocument.empty(named: "Remote Nearly Closed Profile")
+    let origin = 1.0e12
+    let side = 10.0
+    let high = origin + side
+    let highNext = high.nextUp
+    let sketchFeatureID = FeatureID()
+    let extrudeFeatureID = FeatureID()
+    let sketch = Sketch(
+        plane: .xy,
+        entities: [
+            SketchEntityID(): .line(SketchLine(
+                start: SketchPoint(
+                    x: .length(origin, .meter),
+                    y: .length(origin, .meter)
+                ),
+                end: SketchPoint(
+                    x: .length(high, .meter),
+                    y: .length(origin, .meter)
+                )
+            )),
+            SketchEntityID(): .line(SketchLine(
+                start: SketchPoint(
+                    x: .length(highNext, .meter),
+                    y: .length(origin, .meter)
+                ),
+                end: SketchPoint(
+                    x: .length(high, .meter),
+                    y: .length(high, .meter)
+                )
+            )),
+            SketchEntityID(): .line(SketchLine(
+                start: SketchPoint(
+                    x: .length(high, .meter),
+                    y: .length(high, .meter)
+                ),
+                end: SketchPoint(
+                    x: .length(origin, .meter),
+                    y: .length(high, .meter)
+                )
+            )),
+            SketchEntityID(): .line(SketchLine(
+                start: SketchPoint(
+                    x: .length(origin, .meter),
+                    y: .length(high, .meter)
+                ),
+                end: SketchPoint(
+                    x: .length(origin, .meter),
+                    y: .length(origin, .meter)
+                )
+            )),
+        ]
+    )
+    try document.cadDocument.appendFeature(FeatureNode(
+        id: sketchFeatureID,
+        name: "Remote Almost Closed Profile",
+        operation: .sketch(sketch),
+        outputs: [FeatureOutput(role: .profile)]
+    ))
+    try document.cadDocument.appendFeature(FeatureNode(
+        id: extrudeFeatureID,
+        name: "Remote Almost Closed Solid",
+        operation: .extrude(ExtrudeFeature(
+            profile: ProfileReference(featureID: sketchFeatureID),
+            distance: .length(10.0, .meter),
+            direction: .normal
+        )),
+        inputs: [FeatureInput(featureID: sketchFeatureID, role: .profile)],
+        outputs: [FeatureOutput(role: .body)]
+    ))
     return document
 }
 

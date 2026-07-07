@@ -11,7 +11,6 @@ workflow) > `ergonomics` (usable but hostile) > `hardening` (defense in depth).
 
 | ID | Issue | Detail | Found |
 |---|---|---|---|
-| C-4 | Far-origin loop stitching can drop valid profiles | `MeasurementService` `isClose` compares point gaps against `tolerance.distance`, but at ~1e12 coordinates the coordinate ulp (~2.4e-4 m) exceeds fine CAD tolerances, so truly-coincident endpoints can fail to stitch and the profile is silently skipped. Only bites when tolerance < coordinate ulp. | 2026-07-06 far-origin audit |
 | C-8 | Spline refit with keepsCorners never verifies its tolerance contract | `SketchCurveRebuildDeviation` evaluates each candidate at raw global fractions without remapping into the candidate's local domain, so per-interval deviation is garbage; the loop silently falls back to the original span while reporting success, and the reported max deviation is misaligned. | 2026-07-07 sketch-tools audit |
 | C-12 | Trimmed B-spline faces with two or more holes always fail | The per-hole bridging loop feeds the already-bridged polygon (with corridor edges) back into simple-polygon validation, which reports the corridor as self-intersecting; ≥2 holes deterministically throw `unsupportedFace`. Planar caps reject even one circular hole. | 2026-07-07 tessellator audit |
 
