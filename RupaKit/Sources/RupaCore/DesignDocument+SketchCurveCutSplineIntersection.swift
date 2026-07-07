@@ -6,9 +6,19 @@ extension DesignDocument {
     func cutCurveSplineSampleSegments(
         _ samples: [CurveEvaluationSample]
     ) -> [CutCurveSplineSampleSegment] {
-        zip(samples, samples.dropFirst()).compactMap { start, end in
+        // Drop only truly degenerate chords (near-duplicate samples). The
+        // previous CAD-tolerance floor (1e-6 m) made every Bezier segment
+        // shorter than ~64x tolerance invisible to Cut, silently skipping
+        // intersections on small features while others succeeded. The floor is
+        // relative to the sampled polyline length, so it scales with the curve.
+        var totalLength = 0.0
+        for (start, end) in zip(samples, samples.dropFirst()) {
+            totalLength += hypot(end.point.x - start.point.x, end.point.y - start.point.y)
+        }
+        let degenerateChordFloor = max(totalLength * 1.0e-12, 1.0e-15)
+        return zip(samples, samples.dropFirst()).compactMap { start, end in
             let length = hypot(end.point.x - start.point.x, end.point.y - start.point.y)
-            guard length > ModelingTolerance.standard.distance else {
+            guard length > degenerateChordFloor else {
                 return nil
             }
             return (start: start, end: end)

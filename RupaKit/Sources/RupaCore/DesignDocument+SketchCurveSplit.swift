@@ -166,7 +166,16 @@ extension DesignDocument {
             if id == entityID {
                 throw sketchCurveSplitUnsupportedConstraint("internal spline smooth constraints")
             }
-        case .splineEndpointTangent:
+        case .splineEndpointTangent(_, _, let lineID):
+            // Splitting the referenced tangent LINE cannot be rewritten without
+            // knowing which fragment the spline endpoint touches; the previous
+            // silent pass-through left the constraint on the retained line even
+            // when the attachment migrated to the new entity, so later
+            // constraint-driven edits enforced tangency against the wrong
+            // segment. Splitting the SPLINE side remains supported.
+            if lineID == entityID {
+                throw sketchCurveSplitUnsupportedConstraint("spline endpoint tangent line references")
+            }
             return
         case .tangentSplineEndpoints(let first, let second),
              .smoothSplineEndpoints(let first, let second):

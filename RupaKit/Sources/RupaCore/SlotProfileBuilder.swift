@@ -857,11 +857,35 @@ public struct SlotProfileBuilder: Sendable {
                     elements[index + 1],
                     target: target
                 )
+                let previousEndSpan = elements[index].arcAngleSpan
+                let previousStartSpan = elements[index + 1].arcAngleSpan
                 elements[index].setEnd(join)
                 elements[index + 1].setStart(join)
+                // Trimming to a neighbor intersection must only shorten an arc.
+                // A join landing just past an arc's far endpoint wraps the
+                // directed span to nearly a full circle, silently inflating a
+                // short offset arc into an almost-complete circle.
+                try validateTrimmedArcSpan(elements[index], previousSpan: previousEndSpan)
+                try validateTrimmedArcSpan(elements[index + 1], previousSpan: previousStartSpan)
             }
         }
         return elements
+    }
+
+
+    private func validateTrimmedArcSpan(
+        _ element: OffsetElement,
+        previousSpan: Double?
+    ) throws {
+        guard let previousSpan, let trimmedSpan = element.arcAngleSpan else {
+            return
+        }
+        guard trimmedSpan <= previousSpan + 1.0e-6 else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Slot offset arc trim wrapped past the arc endpoint; the slot width is too large for the source arc."
+            )
+        }
     }
 
     private func offsetElement(
@@ -1442,6 +1466,19 @@ public struct SlotProfileBuilder: Sendable {
             case .arc(var arc):
                 arc.setEnd(point)
                 self = .arc(arc)
+            }
+        }
+
+        var arcAngleSpan: Double? {
+            switch self {
+            case .line:
+                nil
+            case .arc(let arc):
+                abs(directedAngleSpan(
+                    startAngle: arc.startAngle,
+                    endAngle: arc.endAngle,
+                    sign: arc.sweepSign
+                ))
             }
         }
     }
