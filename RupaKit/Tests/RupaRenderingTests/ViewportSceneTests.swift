@@ -9,7 +9,23 @@ import Testing
 @MainActor
 @Test func viewportSceneBuilderCreatesSelectableSketchAndBodyItems() async throws {
     let session = EditorSession()
-    _ = try #require(session.createDefaultExtrudedRectangle())
+    let sketchResult = try session.execute(
+        .createRectangleSketch(
+            name: "Selectable Sketch",
+            plane: .xy,
+            width: .length(20.0, .millimeter),
+            height: .length(10.0, .millimeter)
+        )
+    )
+    let sketchFeatureID = try #require(sketchResult.primaryFeatureID)
+    _ = try session.execute(
+        .extrudeProfile(
+            name: "Selectable Body",
+            profile: ProfileReference(featureID: sketchFeatureID),
+            distance: .length(5.0, .millimeter),
+            direction: .normal
+        )
+    )
 
     let scene = ViewportSceneBuilder().build(document: session.document)
 
@@ -32,6 +48,31 @@ import Testing
         }
         return false
     })
+    #expect(scene.modelBounds != nil)
+}
+
+@MainActor
+@Test func viewportSceneBuilderHidesConsumedProfileSketchOfPlacedPrimitive() async throws {
+    let session = EditorSession()
+    _ = try #require(session.createDefaultExtrudedRectangle())
+
+    let scene = ViewportSceneBuilder().build(document: session.document)
+
+    // A placed primitive reads as one object: its consumed profile sketch is
+    // nested under the body and hidden, so only the body item is built.
+    #expect(scene.items.count == 1)
+    #expect(scene.items.contains { item in
+        if case .body = item.kind {
+            return true
+        }
+        return false
+    })
+    #expect(scene.items.contains { item in
+        if case .sketch = item.kind {
+            return true
+        }
+        return false
+    } == false)
     #expect(scene.modelBounds != nil)
 }
 
@@ -1454,7 +1495,23 @@ import Testing
 @MainActor
 @Test func viewportSceneBuilderPreservesFilletArcPrimitive() async throws {
     let session = EditorSession()
-    _ = try #require(session.createDefaultExtrudedRectangle())
+    let sketchResult = try session.execute(
+        .createRectangleSketch(
+            name: "Fillet Profile",
+            plane: .xy,
+            width: .length(40.0, .millimeter),
+            height: .length(20.0, .millimeter)
+        )
+    )
+    let sketchFeatureID = try #require(sketchResult.primaryFeatureID)
+    _ = try session.execute(
+        .extrudeProfile(
+            name: "Fillet Body",
+            profile: ProfileReference(featureID: sketchFeatureID),
+            distance: .length(10.0, .millimeter),
+            direction: .normal
+        )
+    )
     let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
     let bodyNodeID = try #require(session.document.productMetadata.sceneNodes.first { _, node in
         node.reference == .body(bodyFeatureID)
@@ -2371,7 +2428,23 @@ import Testing
 @MainActor
 @Test func viewportHitTesterSelectsBodyInteriorAndSketchEdges() async throws {
     let session = EditorSession()
-    _ = try #require(session.createDefaultExtrudedRectangle())
+    let sketchResult = try session.execute(
+        .createRectangleSketch(
+            name: "Hit Test Profile",
+            plane: .xy,
+            width: .length(40.0, .millimeter),
+            height: .length(20.0, .millimeter)
+        )
+    )
+    let sketchFeatureID = try #require(sketchResult.primaryFeatureID)
+    _ = try session.execute(
+        .extrudeProfile(
+            name: "Hit Test Body",
+            profile: ProfileReference(featureID: sketchFeatureID),
+            distance: .length(10.0, .millimeter),
+            direction: .normal
+        )
+    )
     let scene = ViewportSceneBuilder().build(document: session.document)
     let size = CGSize(width: 800.0, height: 600.0)
     let layout = try #require(ViewportLayout(scene: scene, size: size))
