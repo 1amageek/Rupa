@@ -12,7 +12,7 @@ public enum AgentHostState: Equatable, Sendable {
 }
 
 @MainActor
-public final class AgentHost: WorkspaceAgentHost {
+public final class AgentHost: WorkspaceAgentSessionPublishing {
     public private(set) var state: AgentHostState
 
     private let bridge: MainActorAgentBridge

@@ -19,7 +19,7 @@ struct ApplicationRoot: App {
         WindowGroup {
             MainView(
                 session: editorSession,
-                agentHost: agentHost
+                agentSessionPublisher: agentHost
             )
         }
         .windowResizability(.contentMinSize)

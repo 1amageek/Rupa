@@ -40,7 +40,7 @@ flowchart LR
 | `RupaAgent` | Compatibility facade that re-exports protocol, runtime, and transport | New implementation ownership |
 | `RupaViewportScene` | Viewport scene data model, scene construction, projection basis, hit policy, identity pick index, and viewport transform utilities | SwiftUI view layout, Metal drawing backend |
 | `RupaRendering` | SwiftUI viewport, drawing backend, interaction geometry, and rendering affordance services | Persistent document mutation |
-| `RupaUI` | SwiftUI workspace state, command panels, inspectors, and `WorkspaceAgentHost` abstraction | Agent socket/runtime implementation or Core CAD algorithms |
+| `RupaUI` | SwiftUI workspace state, command panels, inspectors, and `WorkspaceAgentSessionPublishing` publication abstraction | Agent socket/runtime implementation or Core CAD algorithms |
 | `RupaAgentUI` | Concrete Agent host composition for SwiftUI workspaces | Workspace editing UI or Agent protocol schema |
 | `RupaCLIKit` | Argument parsing and terminal response formatting | Core editing behavior |
 
@@ -51,7 +51,7 @@ flowchart LR
 | `RupaCoreTypes` is below `RupaCore`; it must stay free of SwiftCAD mutation and UI/Agent dependencies. | Sketch, Surface, Automation, Agent, and CLI need stable shared DTOs without pulling modeling services. |
 | `RupaAgentProtocol` must not depend on `RupaAgentRuntime` or `RupaAgentTransport`. | Tooling can encode/decode requests without loading workspace registries or socket code. |
 | `RupaAgentTransport` may depend on runtime, but runtime must not depend on transport. | In-process controllers and tests should run without Unix socket ownership. |
-| `RupaUI` depends on `WorkspaceAgentHost`, not concrete `AgentHost`. | The CAD workspace can be understood and reused without Agent server lifecycle details. |
+| `RupaUI` depends on `WorkspaceAgentSessionPublishing`, not concrete `AgentHost`. | The CAD workspace can publish UI-owned sessions without depending on Agent server lifecycle details. |
 | `RupaRendering` consumes `RupaViewportScene`; scene construction must remain SwiftUI-free. | Viewport scene, projection, and hit policy can be tested without UI composition. |
 
 ## Surface M3 Status

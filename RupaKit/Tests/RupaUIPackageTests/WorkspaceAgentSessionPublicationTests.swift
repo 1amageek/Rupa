@@ -5,63 +5,63 @@ import Testing
 
 @MainActor
 @Test func workspaceAgentSessionPublicationRegistersOnceForStableSession() {
-    let host = RecordingWorkspaceAgentHost()
+    let publisher = RecordingWorkspaceAgentSessionPublisher()
     let session = EditorSession(document: .empty(named: "Agent Publication"))
     var publication = WorkspaceAgentSessionPublication()
 
-    publication.publish(host: host, session: session, path: nil)
-    publication.publish(host: host, session: session, path: nil)
+    publication.publish(publisher: publisher, session: session, path: nil)
+    publication.publish(publisher: publisher, session: session, path: nil)
 
-    #expect(host.registrations.count == 1)
-    #expect(host.unregisteredIDs.isEmpty)
+    #expect(publisher.registrations.count == 1)
+    #expect(publisher.unregisteredIDs.isEmpty)
 }
 
 @MainActor
 @Test func workspaceAgentSessionPublicationRepublishesWhenPathChanges() {
-    let host = RecordingWorkspaceAgentHost()
+    let publisher = RecordingWorkspaceAgentSessionPublisher()
     let session = EditorSession(document: .empty(named: "Agent Publication"))
     let path = URL(fileURLWithPath: "/tmp/rupa-agent-publication.swcad")
     var publication = WorkspaceAgentSessionPublication()
 
-    publication.publish(host: host, session: session, path: nil)
-    let firstID = host.registrations[0].id
-    publication.publish(host: host, session: session, path: path)
+    publication.publish(publisher: publisher, session: session, path: nil)
+    let firstID = publisher.registrations[0].id
+    publication.publish(publisher: publisher, session: session, path: path)
 
-    #expect(host.registrations.count == 2)
-    #expect(host.unregisteredIDs == [firstID])
-    #expect(host.registrations[1].path == path)
+    #expect(publisher.registrations.count == 2)
+    #expect(publisher.unregisteredIDs == [firstID])
+    #expect(publisher.registrations[1].path == path)
 }
 
 @MainActor
-@Test func workspaceAgentSessionPublicationMovesRegistrationWhenHostChanges() {
-    let firstHost = RecordingWorkspaceAgentHost()
-    let secondHost = RecordingWorkspaceAgentHost()
+@Test func workspaceAgentSessionPublicationMovesRegistrationWhenPublisherChanges() {
+    let firstPublisher = RecordingWorkspaceAgentSessionPublisher()
+    let secondPublisher = RecordingWorkspaceAgentSessionPublisher()
     let session = EditorSession(document: .empty(named: "Agent Publication"))
     var publication = WorkspaceAgentSessionPublication()
 
-    publication.publish(host: firstHost, session: session, path: nil)
-    let firstID = firstHost.registrations[0].id
-    publication.publish(host: secondHost, session: session, path: nil)
+    publication.publish(publisher: firstPublisher, session: session, path: nil)
+    let firstID = firstPublisher.registrations[0].id
+    publication.publish(publisher: secondPublisher, session: session, path: nil)
 
-    #expect(firstHost.unregisteredIDs == [firstID])
-    #expect(secondHost.registrations.count == 1)
+    #expect(firstPublisher.unregisteredIDs == [firstID])
+    #expect(secondPublisher.registrations.count == 1)
 }
 
 @MainActor
-@Test func workspaceAgentSessionPublicationDeactivatesWhenHostBecomesUnavailable() {
-    let host = RecordingWorkspaceAgentHost()
+@Test func workspaceAgentSessionPublicationDeactivatesWhenPublisherBecomesUnavailable() {
+    let publisher = RecordingWorkspaceAgentSessionPublisher()
     let session = EditorSession(document: .empty(named: "Agent Publication"))
     var publication = WorkspaceAgentSessionPublication()
 
-    publication.publish(host: host, session: session, path: nil)
-    let firstID = host.registrations[0].id
-    publication.publish(host: nil, session: session, path: nil)
+    publication.publish(publisher: publisher, session: session, path: nil)
+    let firstID = publisher.registrations[0].id
+    publication.publish(publisher: nil, session: session, path: nil)
 
-    #expect(host.unregisteredIDs == [firstID])
+    #expect(publisher.unregisteredIDs == [firstID])
 }
 
 @MainActor
-private final class RecordingWorkspaceAgentHost: WorkspaceAgentHost {
+private final class RecordingWorkspaceAgentSessionPublisher: WorkspaceAgentSessionPublishing {
     struct Registration {
         var id: UUID
         var session: EditorSession

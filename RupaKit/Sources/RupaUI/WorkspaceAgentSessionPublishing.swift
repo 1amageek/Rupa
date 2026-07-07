@@ -2,7 +2,7 @@ import Foundation
 import RupaCore
 
 @MainActor
-public protocol WorkspaceAgentHost: AnyObject {
+public protocol WorkspaceAgentSessionPublishing: AnyObject {
     @discardableResult
     func register(
         session: EditorSession,
@@ -13,7 +13,7 @@ public protocol WorkspaceAgentHost: AnyObject {
     func unregister(id: UUID)
 }
 
-public extension WorkspaceAgentHost {
+public extension WorkspaceAgentSessionPublishing {
     @discardableResult
     func register(
         session: EditorSession,

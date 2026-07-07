@@ -83,7 +83,7 @@ public struct MainView: View {
     @FocusState private var isWorkspaceFocused: Bool
 
     private let objectRegistry: ObjectTypeRegistry
-    private let agentHost: (any WorkspaceAgentHost)?
+    private let agentSessionPublisher: (any WorkspaceAgentSessionPublishing)?
     private let documentURL: URL?
 
     public init(
@@ -93,7 +93,7 @@ public struct MainView: View {
         isInspectorPresented: Bool = false,
         isUtilityRailExpanded: Bool = false,
         objectRegistry: ObjectTypeRegistry = .builtIn,
-        agentHost: (any WorkspaceAgentHost)? = nil,
+        agentSessionPublisher: (any WorkspaceAgentSessionPublishing)? = nil,
         documentURL: URL? = nil
     ) {
         let editingDefaults = WorkspaceInteractionScaleDefaults(ruler: session.document.ruler)
@@ -175,7 +175,7 @@ public struct MainView: View {
         self._constructionPlaneRenameText = State(initialValue: "")
         self._viewportHoverClearSignal = State(initialValue: 0)
         self.objectRegistry = objectRegistry
-        self.agentHost = agentHost
+        self.agentSessionPublisher = agentSessionPublisher
         self.documentURL = documentURL
     }
 
@@ -193,7 +193,7 @@ public struct MainView: View {
         .navigationSplitViewStyle(.balanced)
         .frame(minWidth: 1_120, minHeight: 720)
         .workspaceAgentSessionPublisher(
-            host: agentHost,
+            publisher: agentSessionPublisher,
             session: session,
             path: documentURL
         )

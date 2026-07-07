@@ -139,7 +139,7 @@ This table answers the current implementation state for the referenced Plasticit
 | Export service | `DocumentExportService` evaluates Rupa documents and writes Swift-CAD exchange artifacts with preset selection, output-unit override, destination policy resolution, typed result metadata, and dry-run support. |
 | Automation | `AutomationRunner` applies commands and ordered batches through `EditorSession`. |
 | Agent | `AgentCommandController` handles structured capability descriptors, in-memory status, sessions, sketch entity summaries, topology summaries, surface continuity summaries, selection state updates, and command dispatch; `MainActorAgentBridge`, `AgentSocketListener`, `AgentSocketService`, `AgentClientProtocol`, `AgentClient`, socket path, and message codec define the IPC boundary. |
-| UI agent host | `AgentHost` starts and stops the socket listener from app lifecycle, while `RupaUI` registers and unregisters UI-owned sessions through the tested `WorkspaceAgentSessionPublisher` / `WorkspaceAgentHost` publication boundary. |
+| UI agent host | `AgentHost` starts and stops the socket listener from app lifecycle, while `RupaUI` registers and unregisters UI-owned sessions through the tested `WorkspaceAgentSessionPublisher` / `WorkspaceAgentSessionPublishing` publication boundary. |
 | CLI | `RupaCLIKit` provides testable commands and workflow service; `RupaCLI` is a thin executable entry point. |
 | CLI status and sessions | `rupa agent status` and `rupa sessions` route through `AgentClientProtocol`. |
 | CLI attach | `rupa attach` resolves open sessions by file path or explicit session ID and returns typed session metadata. |

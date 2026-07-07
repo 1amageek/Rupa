@@ -3,7 +3,7 @@ import SwiftUI
 
 @MainActor
 struct WorkspaceAgentSessionPublisher: ViewModifier {
-    var host: (any WorkspaceAgentHost)?
+    var publisher: (any WorkspaceAgentSessionPublishing)?
     var session: EditorSession
     var path: URL?
 
@@ -12,12 +12,12 @@ struct WorkspaceAgentSessionPublisher: ViewModifier {
     func body(content: Content) -> some View {
         content
             .task(id: WorkspaceAgentSessionPublication.Key(
-                host: host,
+                publisher: publisher,
                 session: session,
                 path: path
             )) {
                 publication.publish(
-                    host: host,
+                    publisher: publisher,
                     session: session,
                     path: path
                 )
@@ -30,12 +30,12 @@ struct WorkspaceAgentSessionPublisher: ViewModifier {
 
 extension View {
     func workspaceAgentSessionPublisher(
-        host: (any WorkspaceAgentHost)?,
+        publisher: (any WorkspaceAgentSessionPublishing)?,
         session: EditorSession,
         path: URL?
     ) -> some View {
         modifier(WorkspaceAgentSessionPublisher(
-            host: host,
+            publisher: publisher,
             session: session,
             path: path
         ))
