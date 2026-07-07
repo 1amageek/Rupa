@@ -50,7 +50,6 @@ workflow) > `ergonomics` (usable but hostile) > `hardening` (defense in depth).
 | R-12 | Oblique extrude silently falls back from exact boundaries to tessellated polylines | Non-normal directions drop `exactBoundarySegments` with no diagnostic; a circle extruded obliquely becomes a polyhedral prism. Emit a diagnostic or gate behind an option. | 2026-07-07 profile audit |
 | R-13 | Profile indices are order-of-geometry unstable | Canonical loop ordering is tolerance-fuzzy (breaks strict weak ordering) and adding an unrelated loop reindexes existing profiles, silently retargeting `ProfileReference(profileIndex:)`. Resolve references by stable loop identity instead. | 2026-07-07 profile audit |
 | R-14 | Sweep frame transport falls back discontinuously | When the path turns into the previous frame normal, projection transport silently snaps to a fallback normal (up to ~90 degrees of roll in one span), producing twisted spans. Use rotation-minimizing double-reflection or reject beyond an angle threshold. | 2026-07-07 sweep/boolean audit |
-| R-15 | Curved-sweep sections are placed by absolute sketch-plane coordinates | Off-origin profiles teleport between the exact straight-extrude plan (extrudes in place) and curved plans (re-express plane-origin offsets in every frame), and lose precision at site scale. Rebase sections about a consistent anchor in all plans. | 2026-07-07 sweep/boolean audit |
 
 ## UI Consistency
 
