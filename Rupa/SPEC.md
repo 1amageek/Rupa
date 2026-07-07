@@ -192,7 +192,7 @@ ApplicationProfile switching is deliberately excluded from the initial package g
 | Platform integration | WindowGroup, DocumentGroup when introduced, menu commands, app activation. |
 | Security | Entitlements, sandbox, security-scoped file access where required. |
 | Distribution | Assets, signing, provisioning, bundle metadata. |
-| Composition | Import `RupaUI` and `RupaAgentUI`, and start app-level services such as `AgentHost`. |
+| Composition | Import `RupaUI` and `RupaAgentUI`, own app-level services such as `AgentHost`, and pass only UI-facing session publication dependencies into editor views. |
 
 The app host delegates editor behavior to RupaKit.
 
@@ -221,7 +221,7 @@ struct ApplicationRoot: App {
 }
 ```
 
-When live CLI support is enabled, the app host imports `RupaAgentUI`, owns an `AgentHost`, and starts or stops the Agent command service across scene-phase transitions.
+When live CLI support is enabled, the app host imports `RupaAgentUI`, owns an `AgentHost`, and starts or stops the Agent command service across scene-phase transitions. `RupaUI` publishes the UI-owned session through the `WorkspaceAgentHost` protocol but does not control the socket listener lifecycle.
 
 ```swift
 import SwiftUI
@@ -330,7 +330,7 @@ flowchart TD
 | `RupaCore` | `RupaCoreTypes`, Swift-CAD, Collections | Editor sessions, document state, commands, evaluation, services, diagnostics. |
 | `RupaCoreTypes` | none | Swift-CAD-free leaf value types (`SaveResult`, `DocumentGeneration`, `EditorDiagnostic`, `EditorError`, `LengthDisplayUnit`, `LengthDisplayText`). Currently depended on only by `RupaCore`, which re-exports it. |
 | `RupaUI` | `RupaCore`, `RupaRendering`, `RupaPreview`, MacComponent | SwiftUI editor interface. Agent-in-UI wiring is extracted into `RupaAgentUI`. |
-| `RupaAgentUI` | `RupaUI`, `RupaCore`, `RupaAgentRuntime`, `RupaAgentTransport` | App-facing agent-host lifecycle (`AgentHost`) and MainActor-safe session publication over the editor UI. |
+| `RupaAgentUI` | `RupaUI`, `RupaCore`, `RupaAgentRuntime`, `RupaAgentTransport` | App-facing agent-host lifecycle (`AgentHost`) and MainActor-safe session publication bridge for editor-owned sessions. |
 | `RupaRendering` | `RupaCore`, `RupaViewportScene` | Editor viewport and render-scene extraction from CAD source/evaluated state. |
 | `RupaViewportScene` | `RupaCore`, Swift-CAD | CAD-backed viewport scene, camera, and projection basis shared by rendering. |
 | `RupaPreview` | `RupaCore` | RealityKit, Quick Look, USDZ preview. |
@@ -1040,7 +1040,7 @@ RupaAgentUI is the app-facing composition target that binds the agent stack to t
 
 | Type | Responsibility |
 |---|---|
-| `AgentHost` | Starts and stops the socket-backed Agent command service across app scene-phase transitions and publishes registered UI-owned sessions to the `WorkspaceRegistry` on MainActor. |
+| `AgentHost` | Starts and stops the socket-backed Agent command service under app-host lifecycle control and publishes registered UI-owned sessions to the `WorkspaceRegistry` on MainActor. |
 
 ### RupaCLIKit
 

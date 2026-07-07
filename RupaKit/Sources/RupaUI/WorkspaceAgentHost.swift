@@ -3,8 +3,6 @@ import RupaCore
 
 @MainActor
 public protocol WorkspaceAgentHost: AnyObject {
-    func start() async
-
     @discardableResult
     func register(
         session: EditorSession,

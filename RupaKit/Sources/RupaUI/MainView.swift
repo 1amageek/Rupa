@@ -194,7 +194,7 @@ public struct MainView: View {
         .navigationSplitViewStyle(.balanced)
         .frame(minWidth: 1_120, minHeight: 720)
         .task {
-            await activateAgentSessionIfNeeded()
+            registerAgentSessionIfNeeded()
         }
         .onDisappear {
             deactivateAgentSession()
@@ -7970,7 +7970,7 @@ public struct MainView: View {
         return degrees(fromRadians: span)
     }
 
-    private func activateAgentSessionIfNeeded() async {
+    private func registerAgentSessionIfNeeded() {
         guard let agentHost else {
             return
         }
@@ -7981,7 +7981,6 @@ public struct MainView: View {
                 path: documentURL
             )
         }
-        await agentHost.start()
     }
 
     private func deactivateAgentSession() {
