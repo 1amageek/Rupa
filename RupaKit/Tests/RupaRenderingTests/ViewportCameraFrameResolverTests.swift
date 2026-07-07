@@ -6,6 +6,12 @@ import Testing
 @Test func viewportCameraFrameResolverCentersRequestedTargetAndRestoresZoom() {
     let viewportSize = CGSize(width: 900.0, height: 700.0)
     let modelBounds = CGRect(x: -10.0, y: -10.0, width: 20.0, height: 20.0)
+    let fittingInsets = ViewportLayout.FittingInsets(
+        top: 40.0,
+        leading: 70.0,
+        bottom: 60.0,
+        trailing: 20.0
+    )
     let basis = ViewportProjectionBasis.orbit(yaw: 0.35, elevation: 0.45)
     let target = Point3D(x: 4.0, y: 3.0, z: -2.0)
     let request = ViewportCameraFrameRequest(
@@ -21,7 +27,8 @@ import Testing
             size: viewportSize,
             camera: camera,
             basis: basis,
-            maximumZoom: 32.0
+            maximumZoom: 32.0,
+            fittingInsets: fittingInsets
         )
     }
     let layout = ViewportLayout(
@@ -29,18 +36,25 @@ import Testing
         size: viewportSize,
         camera: camera,
         basis: basis,
-        maximumZoom: 32.0
+        maximumZoom: 32.0,
+        fittingInsets: fittingInsets
     )
     let projectedTarget = layout.project(target)
 
     #expect(abs(camera.zoom - 4.0) < 1.0e-9)
-    #expect(abs(projectedTarget.x - viewportSize.width / 2.0) < 1.0e-6)
-    #expect(abs(projectedTarget.y - viewportSize.height / 2.0) < 1.0e-6)
+    #expect(abs(projectedTarget.x - layout.fittingCenter.x) < 1.0e-6)
+    #expect(abs(projectedTarget.y - layout.fittingCenter.y) < 1.0e-6)
 }
 
 @Test func viewportCameraFrameResolverCapturesCurrentFrameFromCameraPanAndZoom() {
     let viewportSize = CGSize(width: 900.0, height: 700.0)
     let modelBounds = CGRect(x: -10.0, y: -10.0, width: 20.0, height: 20.0)
+    let fittingInsets = ViewportLayout.FittingInsets(
+        top: 36.0,
+        leading: 80.0,
+        bottom: 64.0,
+        trailing: 24.0
+    )
     let camera = ViewportCamera(
         zoom: 2.5,
         pan: CGSize(width: -120.0, height: 80.0)
@@ -50,7 +64,8 @@ import Testing
         size: viewportSize,
         camera: camera,
         basis: .isometric,
-        maximumZoom: 32.0
+        maximumZoom: 32.0,
+        fittingInsets: fittingInsets
     )
     let resolver = ViewportCameraFrameResolver(workspaceVisibleSpanMeters: 20.0)
 
@@ -59,6 +74,8 @@ import Testing
 
     #expect(frame.camera == camera)
     #expect(abs(frame.visibleHeightMeters - 8.0) < 1.0e-9)
-    #expect(abs(projectedTarget.x - viewportSize.width / 2.0) < 1.0e-6)
-    #expect(abs(projectedTarget.y - viewportSize.height / 2.0) < 1.0e-6)
+    #expect(abs(projectedTarget.x - layout.fittingCenter.x) < 1.0e-6)
+    #expect(abs(projectedTarget.y - layout.fittingCenter.y) < 1.0e-6)
+    #expect(abs(projectedTarget.x - viewportSize.width / 2.0) > 1.0)
+    #expect(abs(projectedTarget.y - viewportSize.height / 2.0) > 1.0)
 }

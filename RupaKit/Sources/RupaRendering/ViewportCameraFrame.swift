@@ -66,12 +66,8 @@ public struct ViewportCameraFrameResolver: Sendable {
         let requestedZoom = CGFloat(workspaceVisibleSpanMeters / request.visibleHeightMeters)
         var nextCamera = ViewportCamera(zoom: requestedZoom).clamped(maximumZoom: maximumZoom)
         let projectedTarget = layoutForCamera(nextCamera).project(request.target)
-        let viewportCenter = CGPoint(
-            x: identityLayout.viewportSize.width / 2.0,
-            y: identityLayout.viewportSize.height / 2.0
-        )
-        nextCamera.pan.width += viewportCenter.x - projectedTarget.x
-        nextCamera.pan.height += viewportCenter.y - projectedTarget.y
+        nextCamera.pan.width += identityLayout.fittingCenter.x - projectedTarget.x
+        nextCamera.pan.height += identityLayout.fittingCenter.y - projectedTarget.y
         return nextCamera.clamped(maximumZoom: maximumZoom)
     }
 
@@ -79,11 +75,7 @@ public struct ViewportCameraFrameResolver: Sendable {
         for camera: ViewportCamera,
         in layout: ViewportLayout
     ) -> ViewportCameraFrame {
-        let viewportCenter = CGPoint(
-            x: layout.viewportSize.width / 2.0,
-            y: layout.viewportSize.height / 2.0
-        )
-        let center = layout.unproject(viewportCenter)
+        let center = layout.unproject(layout.fittingCenter)
         let visibleHeightMeters = workspaceVisibleSpanMeters / Double(max(camera.zoom, ViewportCamera.minimumZoom))
         return ViewportCameraFrame(
             target: Point3D(

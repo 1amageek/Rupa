@@ -26,8 +26,9 @@ import RupaViewportScene
     #expect(zLines.contains { $0.isOrigin })
     #expect(scaleLabelAxes.contains(.x))
     #expect(scaleLabelAxes.contains(.z))
-    #expect(grid.scaleLabels.contains {
-        abs(abs($0.valueMeters) - grid.majorStepMeters) < 1.0e-12
+    #expect(grid.scaleLabels.allSatisfy {
+        let multiple = abs($0.valueMeters / grid.majorStepMeters)
+        return abs(multiple - multiple.rounded()) < 1.0e-9
     })
     #expect(grid.scaleLabels.allSatisfy { $0.displayUnit.isMetric })
     #expect(grid.scaleLabels.allSatisfy { abs($0.displayValue) <= 1_000.0 })

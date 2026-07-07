@@ -1,4 +1,5 @@
 import CoreGraphics
+import RupaViewportScene
 
 struct ViewportCanvasChromeLayout: Equatable {
     static let axisControlSize = CGSize(width: 286.0, height: 42.0)
@@ -65,6 +66,47 @@ struct ViewportCanvasChromeLayout: Equatable {
         return rects.filter { rect in
             !rect.isEmpty && !rect.isNull
         }
+    }
+
+    var fittingInsets: ViewportLayout.FittingInsets {
+        var top: CGFloat = 0.0
+        var leading: CGFloat = 0.0
+        var bottom: CGFloat = 0.0
+        var trailing: CGFloat = 0.0
+        let edgeTolerance = Self.inputExclusionPadding + 1.0
+        let bottomAnchorTolerance = max(
+            edgeTolerance,
+            Self.axisBottomPadding + Self.inputExclusionPadding + 1.0
+        )
+        let minimumVerticalChromeHeight = min(
+            max(viewportSize.height * 0.20, 80.0),
+            max(viewportSize.height, 0.0)
+        )
+
+        for rect in inputExclusionRects where !rect.isEmpty && !rect.isNull {
+            if rect.minY <= edgeTolerance {
+                top = max(top, rect.maxY)
+            }
+            if viewportSize.height - rect.maxY <= bottomAnchorTolerance {
+                bottom = max(bottom, viewportSize.height - rect.minY)
+            }
+            guard rect.height >= minimumVerticalChromeHeight else {
+                continue
+            }
+            if rect.minX <= edgeTolerance {
+                leading = max(leading, rect.maxX)
+            }
+            if viewportSize.width - rect.maxX <= edgeTolerance {
+                trailing = max(trailing, viewportSize.width - rect.minX)
+            }
+        }
+
+        return ViewportLayout.FittingInsets(
+            top: top,
+            leading: leading,
+            bottom: bottom,
+            trailing: trailing
+        )
     }
 
     private var paddedAdditionalExclusionRects: [CGRect] {

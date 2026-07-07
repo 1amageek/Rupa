@@ -40,7 +40,7 @@ import Testing
     let viewportSize = CGSize(width: 240.0, height: 180.0)
     let layout = try #require(ViewportLayout(scene: scene, size: viewportSize))
     let renderer = try ViewportIdentityBufferRenderer()
-    let samplePoint = layout.project(Point3D(x: -0.018, y: 0.0, z: -0.018))
+    let samplePoint = layout.project(Point3D(x: -0.020, y: 0.0, z: -0.020))
     let faceComponentID = SelectionComponentID.generatedTopology(
         "feature:body:subshape:identity:face:front"
     )

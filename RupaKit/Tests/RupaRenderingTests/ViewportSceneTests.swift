@@ -2682,13 +2682,48 @@ private func viewportSceneSnapshotTestKey(
         basis: layout.basis
     )
     let expectedScale = min(
-        (size.width - 180.0) / expectedBounds.width,
-        (size.height - 140.0) / expectedBounds.height
+        size.width / expectedBounds.width,
+        size.height / expectedBounds.height
     )
 
     #expect(abs(layout.scale - expectedScale) < expectedScale * 1.0e-12)
     #expect(abs(unprojectedPoint.x - modelPoint.x) < 1.0e-15)
     #expect(abs(unprojectedPoint.y - modelPoint.y) < 1.0e-15)
+}
+
+@Test func viewportLayoutAppliesExplicitFittingInsets() {
+    let bounds = CGRect(x: -2.0, y: -1.0, width: 4.0, height: 2.0)
+    let size = CGSize(width: 800.0, height: 600.0)
+    let fittingInsets = ViewportLayout.FittingInsets(
+        top: 30.0,
+        leading: 40.0,
+        bottom: 50.0,
+        trailing: 60.0
+    )
+    let layout = ViewportLayout(
+        modelBounds: bounds,
+        size: size,
+        fittingInsets: fittingInsets
+    )
+    let expectedBounds = projectedBounds(
+        width: bounds.width,
+        height: bounds.height,
+        basis: layout.basis
+    )
+    let fittingSize = CGSize(width: 700.0, height: 520.0)
+    let expectedScale = min(
+        fittingSize.width / expectedBounds.width,
+        fittingSize.height / expectedBounds.height
+    )
+    let expectedCenter = CGPoint(x: 390.0, y: 290.0)
+    let projectedOrigin = layout.project(Point3D.origin)
+
+    #expect(layout.fittingInsets == fittingInsets)
+    #expect(layout.fittingCenter == expectedCenter)
+    #expect(layout.center == expectedCenter)
+    #expect(abs(layout.scale - expectedScale) < expectedScale * 1.0e-12)
+    #expect(abs(projectedOrigin.x - expectedCenter.x) < 1.0e-9)
+    #expect(abs(projectedOrigin.y - expectedCenter.y) < 1.0e-9)
 }
 
 @Test func viewportLayoutProjectsFootprintAlongCoordinateGridBasis() {
@@ -3035,8 +3070,8 @@ private func viewportSceneSnapshotTestKey(
         basis: layout.basis
     )
     let expectedScale = min(
-        (size.width - 180.0) / expectedBounds.width,
-        (size.height - 140.0) / expectedBounds.height
+        size.width / expectedBounds.width,
+        size.height / expectedBounds.height
     )
     let projectedCorners = [
         Point3D(x: Double(bounds.minX), y: verticalBounds.lowerBound, z: Double(bounds.minY)),
@@ -3054,8 +3089,8 @@ private func viewportSceneSnapshotTestKey(
     let projectedHeight = (yValues.max() ?? 0.0) - (yValues.min() ?? 0.0)
 
     #expect(abs(layout.scale - expectedScale) < expectedScale * 1.0e-12)
-    #expect(projectedWidth <= size.width - 180.0 + 1.0e-9)
-    #expect(projectedHeight <= size.height - 140.0 + 1.0e-9)
+    #expect(projectedWidth <= size.width + 1.0e-9)
+    #expect(projectedHeight <= size.height + 1.0e-9)
 }
 
 @MainActor
@@ -3873,6 +3908,40 @@ private func viewportSceneSnapshotTestKey(
         x: viewportSize.width / 2.0,
         y: viewportSize.height - reservedHeight - 24.0
     )))
+}
+
+@MainActor
+@Test func viewportCanvasChromeLayoutReportsCompactFittingInsets() {
+    let viewportSize = CGSize(width: 800.0, height: 600.0)
+    let layout = ViewportCanvasChromeLayout(viewportSize: viewportSize)
+    let insets = layout.fittingInsets
+
+    #expect(insets.top == layout.viewportBadgeExclusionRect.maxY)
+    #expect(insets.bottom == viewportSize.height - layout.axisControlExclusionRect.minY)
+    #expect(insets.leading == 0.0)
+    #expect(insets.trailing == 0.0)
+}
+
+@MainActor
+@Test func viewportCanvasChromeLayoutReportsEdgePanelFittingInsets() {
+    let viewportSize = CGSize(width: 800.0, height: 600.0)
+    let leadingPanel = CGRect(x: 0.0, y: 90.0, width: 48.0, height: 360.0)
+    let trailingPanel = CGRect(x: 760.0, y: 90.0, width: 40.0, height: 360.0)
+    let bottomPanel = CGRect(x: 0.0, y: 540.0, width: 800.0, height: 60.0)
+    let layout = ViewportCanvasChromeLayout(
+        viewportSize: viewportSize,
+        additionalExclusionRects: [
+            leadingPanel,
+            trailingPanel,
+            bottomPanel,
+        ]
+    )
+    let insets = layout.fittingInsets
+
+    #expect(insets.top == layout.viewportBadgeExclusionRect.maxY)
+    #expect(insets.leading == leadingPanel.width + ViewportCanvasChromeLayout.inputExclusionPadding)
+    #expect(insets.trailing == trailingPanel.width + ViewportCanvasChromeLayout.inputExclusionPadding)
+    #expect(insets.bottom == bottomPanel.height + ViewportCanvasChromeLayout.inputExclusionPadding)
 }
 
 @MainActor

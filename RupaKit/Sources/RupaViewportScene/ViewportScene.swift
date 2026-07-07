@@ -1392,20 +1392,65 @@ public struct ViewportBodyProjection: Equatable {
 }
 
 public struct ViewportLayout: Equatable {
+    public struct FittingInsets: Equatable, Sendable {
+        public var top: CGFloat
+        public var leading: CGFloat
+        public var bottom: CGFloat
+        public var trailing: CGFloat
+
+        public init(
+            top: CGFloat = 0.0,
+            leading: CGFloat = 0.0,
+            bottom: CGFloat = 0.0,
+            trailing: CGFloat = 0.0
+        ) {
+            self.top = Self.normalized(top)
+            self.leading = Self.normalized(leading)
+            self.bottom = Self.normalized(bottom)
+            self.trailing = Self.normalized(trailing)
+        }
+
+        public static let zero = FittingInsets()
+
+        fileprivate func fittingRect(in size: CGSize) -> CGRect {
+            let resolvedLeading = min(leading, max(size.width - 1.0, 0.0))
+            let resolvedTrailing = min(trailing, max(size.width - resolvedLeading - 1.0, 0.0))
+            let resolvedTop = min(top, max(size.height - 1.0, 0.0))
+            let resolvedBottom = min(bottom, max(size.height - resolvedTop - 1.0, 0.0))
+            return CGRect(
+                x: resolvedLeading,
+                y: resolvedTop,
+                width: max(size.width - resolvedLeading - resolvedTrailing, 1.0),
+                height: max(size.height - resolvedTop - resolvedBottom, 1.0)
+            )
+        }
+
+        private static func normalized(_ value: CGFloat) -> CGFloat {
+            guard value.isFinite,
+                  value > 0.0 else {
+                return 0.0
+            }
+            return value
+        }
+    }
+
     public var viewportSize: CGSize
     public var modelBounds: CGRect
     public var renderOrigin: Point3D
     public var scale: CGFloat
+    public var fittingCenter: CGPoint
     public var center: CGPoint
     public var basis: ViewportProjectionBasis
     public var maximumZoom: CGFloat
+    public var fittingInsets: FittingInsets
 
     public init?(
         scene: ViewportScene,
         size: CGSize,
         camera: ViewportCamera = .identity,
         basis: ViewportProjectionBasis = .isometric,
-        maximumZoom: CGFloat = ViewportCamera.maximumZoom
+        maximumZoom: CGFloat = ViewportCamera.maximumZoom,
+        fittingInsets: FittingInsets = .zero
     ) {
         guard let modelBounds = scene.modelBounds else {
             return nil
@@ -1416,7 +1461,8 @@ public struct ViewportLayout: Equatable {
             camera: camera,
             basis: basis,
             maximumZoom: maximumZoom,
-            verticalBounds: scene.verticalBounds
+            verticalBounds: scene.verticalBounds,
+            fittingInsets: fittingInsets
         )
     }
 
@@ -1426,7 +1472,8 @@ public struct ViewportLayout: Equatable {
         camera: ViewportCamera = .identity,
         basis: ViewportProjectionBasis = .isometric,
         maximumZoom: CGFloat = ViewportCamera.maximumZoom,
-        verticalBounds: ClosedRange<Double>? = nil
+        verticalBounds: ClosedRange<Double>? = nil,
+        fittingInsets: FittingInsets = .zero
     ) {
         let modelWidth = max(modelBounds.width, 1.0e-9)
         let modelHeight = max(modelBounds.height, 1.0e-9)
@@ -1437,22 +1484,23 @@ public struct ViewportLayout: Equatable {
             verticalHeight: Self.verticalHeight(verticalBounds),
             basis: basis
         )
-        let usableWidth = max(size.width - 180.0, 1.0)
-        let usableHeight = max(size.height - 140.0, 1.0)
+        let fittingRect = fittingInsets.fittingRect(in: size)
 
         self.viewportSize = size
         self.modelBounds = modelBounds
         self.renderOrigin = Self.renderOrigin(modelBounds: modelBounds, verticalBounds: verticalBounds)
         self.scale = min(
-            usableWidth / max(projectedBounds.width, 1.0e-9),
-            usableHeight / max(projectedBounds.height, 1.0e-9)
+            fittingRect.width / max(projectedBounds.width, 1.0e-9),
+            fittingRect.height / max(projectedBounds.height, 1.0e-9)
         ) * clampedCamera.zoom
+        self.fittingCenter = CGPoint(x: fittingRect.midX, y: fittingRect.midY)
         self.center = CGPoint(
-            x: size.width / 2.0 + clampedCamera.pan.width,
-            y: size.height / 2.0 + clampedCamera.pan.height
+            x: fittingCenter.x + clampedCamera.pan.width,
+            y: fittingCenter.y + clampedCamera.pan.height
         )
         self.basis = basis
         self.maximumZoom = max(maximumZoom, ViewportCamera.minimumZoom)
+        self.fittingInsets = fittingInsets
     }
 
     public func project(_ point: CGPoint) -> CGPoint {
@@ -1674,7 +1722,8 @@ public struct ViewportModelCoordinateMapper {
         documentGeneration: DocumentGeneration? = nil,
         evaluationCache: EvaluatedDocumentCache? = nil,
         camera: ViewportCamera = .identity,
-        basis: ViewportProjectionBasis = .isometric
+        basis: ViewportProjectionBasis = .isometric,
+        fittingInsets: ViewportLayout.FittingInsets = .zero
     ) {
         let scene = ViewportSceneBuilder(objectRegistry: objectRegistry).build(
             document: document,
@@ -1687,7 +1736,8 @@ public struct ViewportModelCoordinateMapper {
             scene: scene,
             size: size,
             camera: camera,
-            basis: basis
+            basis: basis,
+            fittingInsets: fittingInsets
         )
     }
 
@@ -1696,7 +1746,8 @@ public struct ViewportModelCoordinateMapper {
         scene: ViewportScene,
         size: CGSize,
         camera: ViewportCamera = .identity,
-        basis: ViewportProjectionBasis = .isometric
+        basis: ViewportProjectionBasis = .isometric,
+        fittingInsets: ViewportLayout.FittingInsets = .zero
     ) {
         let modelBounds = Self.modelBounds(for: document, scene: scene)
         let identityLayout = ViewportLayout(
@@ -1704,7 +1755,8 @@ public struct ViewportModelCoordinateMapper {
             size: size,
             camera: .identity,
             basis: basis,
-            verticalBounds: scene.verticalBounds
+            verticalBounds: scene.verticalBounds,
+            fittingInsets: fittingInsets
         )
         let maximumZoom = ViewportCameraZoomPolicy.maximumZoom(
             for: document,
@@ -1716,7 +1768,8 @@ public struct ViewportModelCoordinateMapper {
             camera: camera,
             basis: basis,
             maximumZoom: maximumZoom,
-            verticalBounds: scene.verticalBounds
+            verticalBounds: scene.verticalBounds,
+            fittingInsets: fittingInsets
         )
     }
 
@@ -1825,7 +1878,8 @@ public struct ViewportSceneContext {
         scene: ViewportScene,
         size: CGSize,
         camera: ViewportCamera = .identity,
-        basis: ViewportProjectionBasis = .isometric
+        basis: ViewportProjectionBasis = .isometric,
+        fittingInsets: ViewportLayout.FittingInsets = .zero
     ) {
         self.scene = scene
         self.mapper = ViewportModelCoordinateMapper(
@@ -1833,7 +1887,8 @@ public struct ViewportSceneContext {
             scene: scene,
             size: size,
             camera: camera,
-            basis: basis
+            basis: basis,
+            fittingInsets: fittingInsets
         )
     }
 
@@ -1845,7 +1900,8 @@ public struct ViewportSceneContext {
         currentEvaluation: DocumentEvaluationContext? = nil,
         evaluationCache: EvaluatedDocumentCache? = nil,
         camera: ViewportCamera = .identity,
-        basis: ViewportProjectionBasis = .isometric
+        basis: ViewportProjectionBasis = .isometric,
+        fittingInsets: ViewportLayout.FittingInsets = .zero
     ) {
         let scene = ViewportSceneBuilder(objectRegistry: objectRegistry).build(
             document: document,
@@ -1859,7 +1915,8 @@ public struct ViewportSceneContext {
             scene: scene,
             size: size,
             camera: camera,
-            basis: basis
+            basis: basis,
+            fittingInsets: fittingInsets
         )
     }
 }

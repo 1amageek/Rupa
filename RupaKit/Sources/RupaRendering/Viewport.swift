@@ -395,10 +395,12 @@ public struct Viewport: View {
         GeometryReader { proxy in
             TimelineView(.animation) { timeline in
                 let basis = projectionBasis(at: timeline.date)
+                let fittingChromeLayout = makeFittingChromeLayout(size: proxy.size)
                 let sceneContext = makeSceneContext(
                     size: proxy.size,
                     camera: camera,
-                    basis: basis
+                    basis: basis,
+                    fittingInsets: fittingChromeLayout.fittingInsets
                 )
                 let projectedGrid = ViewportProjectedGrid(
                     document: sceneDocument(usesDragPreviewDocument: true),
@@ -972,7 +974,8 @@ public struct Viewport: View {
         size: CGSize,
         camera: ViewportCamera,
         basis: ViewportProjectionBasis,
-        usesDragPreviewDocument: Bool = true
+        usesDragPreviewDocument: Bool = true,
+        fittingInsets: ViewportLayout.FittingInsets? = nil
     ) -> ViewportSceneContext {
         let document = sceneDocument(usesDragPreviewDocument: usesDragPreviewDocument)
         let scene = cachedScene(usesDragPreviewDocument: usesDragPreviewDocument)
@@ -981,7 +984,8 @@ public struct Viewport: View {
             scene: scene,
             size: size,
             camera: camera,
-            basis: basis
+            basis: basis,
+            fittingInsets: fittingInsets ?? viewportLayoutFittingInsets(size: size)
         )
     }
 
@@ -1050,7 +1054,8 @@ public struct Viewport: View {
         size: CGSize,
         camera: ViewportCamera,
         basis: ViewportProjectionBasis,
-        usesDragPreviewDocument: Bool = true
+        usesDragPreviewDocument: Bool = true,
+        fittingInsets: ViewportLayout.FittingInsets? = nil
     ) -> ViewportModelCoordinateMapper {
         let document = sceneDocument(usesDragPreviewDocument: usesDragPreviewDocument)
         let scene = cachedScene(usesDragPreviewDocument: usesDragPreviewDocument)
@@ -1059,7 +1064,8 @@ public struct Viewport: View {
             scene: scene,
             size: size,
             camera: camera,
-            basis: basis
+            basis: basis,
+            fittingInsets: fittingInsets ?? viewportLayoutFittingInsets(size: size)
         )
     }
 
@@ -1067,14 +1073,29 @@ public struct Viewport: View {
         size: CGSize,
         camera: ViewportCamera,
         basis: ViewportProjectionBasis,
-        usesDragPreviewDocument: Bool = true
+        usesDragPreviewDocument: Bool = true,
+        fittingInsets: ViewportLayout.FittingInsets? = nil
     ) -> ViewportLayout {
         makeCoordinateMapper(
             size: size,
             camera: camera,
             basis: basis,
-            usesDragPreviewDocument: usesDragPreviewDocument
+            usesDragPreviewDocument: usesDragPreviewDocument,
+            fittingInsets: fittingInsets
         ).layout
+    }
+
+    private func viewportLayoutFittingInsets(size: CGSize) -> ViewportLayout.FittingInsets {
+        makeFittingChromeLayout(size: size).fittingInsets
+    }
+
+    private func makeFittingChromeLayout(size: CGSize) -> ViewportCanvasChromeLayout {
+        ViewportCanvasChromeLayout(
+            viewportSize: size,
+            bottomReservedHeight: bottomChromeReservedHeight,
+            additionalExclusionRects: canvasOverlayExclusionRects,
+            viewportBadgeWidth: ViewportCanvasChromeLayout.maximumViewportBadgeWidth
+        )
     }
 
     private func drawAxes(
