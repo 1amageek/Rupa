@@ -2868,6 +2868,33 @@ func extrudedCircleCreationSupportsMeterScaleInMillimeterWorkspace() throws {
     #expect(!loaded.productMetadata.rootSceneNodeIDs.isEmpty)
 }
 
+@Test func malformedProductPackageArchiveFailsWithoutUnsafeRead() async throws {
+    let temporaryDirectory = try makeTemporaryDirectory()
+    defer {
+        removeTemporaryDirectory(temporaryDirectory)
+    }
+
+    let url = temporaryDirectory.appendingPathComponent("malformed.swcad")
+    var archive = Data(repeating: 0, count: 22)
+    archive[0] = 0x50
+    archive[1] = 0x4b
+    archive[2] = 0x05
+    archive[3] = 0x06
+    archive[10] = 0x01
+    archive[16] = 0xff
+    try archive.write(to: url)
+
+    var caught: EditorError?
+    do {
+        _ = try DocumentFileService().load(from: url)
+    } catch let error as EditorError {
+        caught = error
+    }
+
+    let error = try #require(caught)
+    #expect(error.code == .documentLoadFailed)
+}
+
 @Test func productMetadataRejectsInvalidSceneReference() async throws {
     var document = DesignDocument.empty()
     var metadata = ProductMetadata.empty()

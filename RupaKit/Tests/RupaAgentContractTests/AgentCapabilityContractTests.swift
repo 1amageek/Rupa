@@ -15,6 +15,7 @@ import SwiftCAD
     #expect(capabilities.contains("describeDocument"))
     #expect(capabilities.contains("setDisplayUnit"))
     #expect(capabilities.contains("setRulerConfiguration"))
+    #expect(capabilities.contains("setViewportGridSettings"))
     #expect(capabilities.contains("setWorkspaceScalePreset"))
     #expect(capabilities.contains("fitWorkspaceScaleToModel"))
     #expect(capabilities.contains("rebaseWorkspaceOrigin"))
@@ -168,6 +169,7 @@ import SwiftCAD
     let descriptors = AgentCommandController().capabilityDescriptors()
     let displayUnit = try #require(descriptors.first { $0.name == "setDisplayUnit" })
     let rulerConfiguration = try #require(descriptors.first { $0.name == "setRulerConfiguration" })
+    let viewportGridSettings = try #require(descriptors.first { $0.name == "setViewportGridSettings" })
     let workspaceScalePreset = try #require(descriptors.first { $0.name == "setWorkspaceScalePreset" })
     let workspaceScaleFit = try #require(descriptors.first { $0.name == "fitWorkspaceScaleToModel" })
     let workspaceOriginRebase = try #require(descriptors.first { $0.name == "rebaseWorkspaceOrigin" })
@@ -301,6 +303,20 @@ import SwiftCAD
     #expect(rulerConfiguration.summary.contains("visible workspace span"))
     #expect(rulerConfiguration.failureMode.contains("workspace scale range"))
     #expect(rulerConfiguration.optionMatrix.contains { $0.name == "rulerDistanceMeters" })
+    #expect(viewportGridSettings.category == .document)
+    #expect(viewportGridSettings.access == .automationCommand)
+    #expect(viewportGridSettings.mutatesDocument)
+    #expect(viewportGridSettings.targets == [.document])
+    #expect(viewportGridSettings.summary.contains("visual spacing"))
+    #expect(viewportGridSettings.summary.contains("snap distances"))
+    #expect(viewportGridSettings.optionMatrix.contains { axis in
+        axis.name == "visualSpacingMode"
+            && axis.supportedValues.contains(ViewportGridVisualSpacingMode.adaptive.rawValue)
+            && axis.supportedValues.contains(ViewportGridVisualSpacingMode.fixed.rawValue)
+            && axis.notes.contains { $0.contains("readable on-screen grid density") }
+            && axis.notes.contains { $0.contains("ruler minor tick") }
+            && axis.notes.contains { $0.contains("only changes viewport grid display density") }
+    })
     #expect(workspaceScalePreset.category == .document)
     #expect(workspaceScalePreset.mutatesDocument)
     #expect(workspaceScalePreset.summary.contains("regional planning"))

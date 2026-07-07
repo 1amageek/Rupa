@@ -78,6 +78,26 @@ enum AgentCapabilityCatalog {
             ]
         ),
         capability(
+            "setViewportGridSettings",
+            category: .document,
+            summary: "Set viewport grid visual spacing behavior without changing document units, ruler distances, or snap distances.",
+            access: .automationCommand,
+            mutatesDocument: true,
+            targets: [.document],
+            failureMode: "Rejects stale generations before storing viewport grid settings.",
+            optionMatrix: [
+                AgentCapabilityDescriptor.OptionAxis(
+                    name: "visualSpacingMode",
+                    supportedValues: ViewportGridVisualSpacingMode.allCases.map(\.rawValue),
+                    notes: [
+                        "Adaptive mode preserves readable on-screen grid density across very small and very large workspaces.",
+                        "Fixed mode preserves the configured ruler minor tick as the visual grid cell.",
+                        "Snap distances remain controlled by ruler and snap settings; this command only changes viewport grid display density.",
+                    ]
+                )
+            ]
+        ),
+        capability(
             "setWorkspaceScalePreset",
             category: .document,
             summary: "Apply a named workspace scale preset from micro fabrication through regional planning.",
