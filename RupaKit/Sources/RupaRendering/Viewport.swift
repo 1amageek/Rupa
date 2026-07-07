@@ -9619,32 +9619,7 @@ public struct Viewport: View {
         pendingInteractionTarget = nil
         clearDragPreviewDocument()
         clearAffordanceGhostEdits()
-        activeAffordanceDrag = nil
-        activeSketchCurveHandleDrag = nil
-        activeSketchDimensionDrag = nil
-        activeSketchPointHandleDrag = nil
-        activeBridgeCurveEndpointDrag = nil
-        activeSplineControlPointDrag = nil
-        activeSplineControlPointSlideDrag = nil
-        activePolySplineSurfaceVertexDrag = nil
-        activeSurfaceControlPointDrag = nil
-        activeSurfaceTrimEndpointDrag = nil
-        activeSurfaceTrimControlPointDrag = nil
-        activePolySplineSurfaceVertexSlideDrag = nil
-        activeSurfaceControlPointSlideDrag = nil
-        activeSurfaceFrameDrag = nil
-        activeRegionOffsetDrag = nil
-        activeEdgeOffsetDrag = nil
-        activeSlotWidthDrag = nil
-        activeSketchVertexOffsetDrag = nil
-        activePatternArrayLinearAxisDrag = nil
-        activeIndependentCopyExtrudeDistanceDrag = nil
-        activeIndependentCopyBodyDimensionDrag = nil
-        activePatternArrayRadialAngleDrag = nil
-        activePatternArrayCopyCountDrag = nil
-        activePatternArrayCurveExtentDrag = nil
-        activePatternArrayCurvePathPointDrag = nil
-        activeConstructionPlaneHandleDrag = nil
+        clearActiveInteractionDrags()
     }
 
     private func clearDragPreviewDocument() {
@@ -9793,6 +9768,94 @@ public struct Viewport: View {
         pendingInteractionTarget = target
     }
 
+    private func clearActiveInteractionDrags(except preservedTarget: ViewportInteractionTarget? = nil) {
+        func keeps<State>(
+            _ state: State?,
+            as interactionTarget: (State) -> ViewportInteractionTarget
+        ) -> Bool {
+            state.map(interactionTarget) == preservedTarget
+        }
+
+        if !keeps(activeAffordanceDrag, as: { .affordance($0.target) }) {
+            activeAffordanceDrag = nil
+        }
+        if !keeps(activeSketchCurveHandleDrag, as: { .sketchCurveHandle($0.target) }) {
+            activeSketchCurveHandleDrag = nil
+        }
+        if !keeps(activeSketchDimensionDrag, as: { .sketchDimension($0.target) }) {
+            activeSketchDimensionDrag = nil
+        }
+        if !keeps(activeSketchPointHandleDrag, as: { .sketchPointHandle($0.target) }) {
+            activeSketchPointHandleDrag = nil
+        }
+        if !keeps(activeBridgeCurveEndpointDrag, as: { .bridgeCurveEndpoint($0.target) }) {
+            activeBridgeCurveEndpointDrag = nil
+        }
+        if !keeps(activeSplineControlPointDrag, as: { .splineControlPoint($0.target) }) {
+            activeSplineControlPointDrag = nil
+        }
+        if !keeps(activeSplineControlPointSlideDrag, as: { .splineControlPointSlide($0.target) }) {
+            activeSplineControlPointSlideDrag = nil
+        }
+        if !keeps(activePolySplineSurfaceVertexDrag, as: { .polySplineSurfaceVertex($0.target) }) {
+            activePolySplineSurfaceVertexDrag = nil
+        }
+        if !keeps(activePolySplineSurfaceVertexSlideDrag, as: { .polySplineSurfaceVertexSlide($0.target) }) {
+            activePolySplineSurfaceVertexSlideDrag = nil
+        }
+        if !keeps(activeSurfaceControlPointDrag, as: { .surfaceControlPoint($0.target) }) {
+            activeSurfaceControlPointDrag = nil
+        }
+        if !keeps(activeSurfaceControlPointSlideDrag, as: { .surfaceControlPointSlide($0.target) }) {
+            activeSurfaceControlPointSlideDrag = nil
+        }
+        if !keeps(activeSurfaceTrimEndpointDrag, as: { .surfaceTrimEndpoint($0.target) }) {
+            activeSurfaceTrimEndpointDrag = nil
+        }
+        if !keeps(activeSurfaceTrimControlPointDrag, as: { .surfaceTrimControlPoint($0.target) }) {
+            activeSurfaceTrimControlPointDrag = nil
+        }
+        if !keeps(activeSurfaceFrameDrag, as: { .surfaceFrame($0.target) }) {
+            activeSurfaceFrameDrag = nil
+        }
+        if !keeps(activeRegionOffsetDrag, as: { .regionOffset($0.target) }) {
+            activeRegionOffsetDrag = nil
+        }
+        if !keeps(activeEdgeOffsetDrag, as: { .edgeOffset($0.target) }) {
+            activeEdgeOffsetDrag = nil
+        }
+        if !keeps(activeSlotWidthDrag, as: { .slotWidth($0.target) }) {
+            activeSlotWidthDrag = nil
+        }
+        if !keeps(activeSketchVertexOffsetDrag, as: { .sketchVertexOffset($0.target) }) {
+            activeSketchVertexOffsetDrag = nil
+        }
+        if !keeps(activePatternArrayLinearAxisDrag, as: { .patternArrayLinearAxis($0.target) }) {
+            activePatternArrayLinearAxisDrag = nil
+        }
+        if !keeps(activeIndependentCopyExtrudeDistanceDrag, as: { .independentCopyExtrudeDistance($0.target) }) {
+            activeIndependentCopyExtrudeDistanceDrag = nil
+        }
+        if !keeps(activeIndependentCopyBodyDimensionDrag, as: { .independentCopyBodyDimension($0.target) }) {
+            activeIndependentCopyBodyDimensionDrag = nil
+        }
+        if !keeps(activePatternArrayRadialAngleDrag, as: { .patternArrayRadialAngle($0.target) }) {
+            activePatternArrayRadialAngleDrag = nil
+        }
+        if !keeps(activePatternArrayCopyCountDrag, as: { .patternArrayCopyCount($0.target) }) {
+            activePatternArrayCopyCountDrag = nil
+        }
+        if !keeps(activePatternArrayCurveExtentDrag, as: { .patternArrayCurveExtent($0.target) }) {
+            activePatternArrayCurveExtentDrag = nil
+        }
+        if !keeps(activePatternArrayCurvePathPointDrag, as: { .patternArrayCurvePathPoint($0.target) }) {
+            activePatternArrayCurvePathPointDrag = nil
+        }
+        if !keeps(activeConstructionPlaneHandleDrag, as: { .constructionPlane($0.target) }) {
+            activeConstructionPlaneHandleDrag = nil
+        }
+    }
+
     private var hasActiveInteractionDrag: Bool {
         activeAffordanceDrag != nil
             || activeSketchCurveHandleDrag != nil
@@ -9828,6 +9891,7 @@ public struct Viewport: View {
         current: CGPoint,
         size: CGSize
     ) {
+        clearActiveInteractionDrags(except: target)
         switch target {
         case .sketchCurveHandle(let target):
             updateSketchCurveHandleDrag(target: target, start: start, current: current, size: size)
