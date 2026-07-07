@@ -145,6 +145,7 @@ public struct Viewport: View {
     private let onReferenceLineAnchor: ((Point2D) -> Bool)?
     private let onSelectionDrag: ((ViewportSelectionDragTarget) -> Void)?
     private let onSelectionDragPreview: ((ViewportSelectionDragTarget) -> Void)?
+    private let onBodyMoveDrag: ((ViewportBodyMoveDragTarget) -> Void)?
     private let onVertexDrag: ((ViewportVertexDragTarget) -> Void)?
     private let onFaceDrag: ((ViewportFaceDragTarget) -> Void)?
     private let onEdgeChamferDrag: ((ViewportEdgeChamferDragTarget) -> Void)?
@@ -232,6 +233,7 @@ public struct Viewport: View {
         onReferenceLineAnchor: ((Point2D) -> Bool)? = nil,
         onSelectionDrag: ((ViewportSelectionDragTarget) -> Void)? = nil,
         onSelectionDragPreview: ((ViewportSelectionDragTarget) -> Void)? = nil,
+        onBodyMoveDrag: ((ViewportBodyMoveDragTarget) -> Void)? = nil,
         onVertexDrag: ((ViewportVertexDragTarget) -> Void)? = nil,
         onFaceDrag: ((ViewportFaceDragTarget) -> Void)? = nil,
         onEdgeChamferDrag: ((ViewportEdgeChamferDragTarget) -> Void)? = nil,
@@ -323,6 +325,7 @@ public struct Viewport: View {
         self.onReferenceLineAnchor = onReferenceLineAnchor
         self.onSelectionDrag = onSelectionDrag
         self.onSelectionDragPreview = onSelectionDragPreview
+        self.onBodyMoveDrag = onBodyMoveDrag
         self.onVertexDrag = onVertexDrag
         self.onFaceDrag = onFaceDrag
         self.onEdgeChamferDrag = onEdgeChamferDrag
@@ -13133,6 +13136,7 @@ public struct Viewport: View {
             // Capture every body the drag ghosted before the state is cleared;
             // non-committing gizmo actions must fully revert their preview.
             let ghostFeatureIDs = activeAffordanceDrag.map { Array($0.baseEdits.keys) } ?? []
+            let bodyMoveDragTarget = committedBodyMoveDragTarget()
             let vertexDragTarget = committedVertexDragTarget(to: end, size: size)
             let faceDragTarget = committedFaceDragTarget(to: end, size: size)
             let edgeChamferDragTarget = committedEdgeChamferDragTarget(to: end, size: size)
@@ -13155,6 +13159,10 @@ public struct Viewport: View {
             if let edgeFilletDragTarget {
                 editedBodies.removeValue(forKey: edgeFilletDragTarget.featureID)
                 onEdgeFilletDrag?(edgeFilletDragTarget.target)
+            }
+            if let bodyMoveDragTarget {
+                editedBodies.removeValue(forKey: bodyMoveDragTarget.featureID)
+                onBodyMoveDrag?(bodyMoveDragTarget.target)
             }
             for featureID in ghostFeatureIDs {
                 editedBodies.removeValue(forKey: featureID)
@@ -13817,6 +13825,34 @@ public struct Viewport: View {
         case .zx:
             return CGPoint(x: point.y, y: point.x)
         }
+    }
+
+    /// Commits the transform gizmo's in-plane translate actions: the ghost
+    /// edit's center offset from its base is the profile-sketch translation
+    /// (edit-state x maps to sketch x, edit-state z to sketch y). Height
+    /// translation cannot be expressed as a profile edit and stays a
+    /// non-committing preview.
+    private func committedBodyMoveDragTarget() -> (featureID: FeatureID, target: ViewportBodyMoveDragTarget)? {
+        guard let activeAffordanceDrag,
+              case .translate = activeAffordanceDrag.target.action,
+              activeAffordanceDrag.baseGroupEdit == nil,
+              let baseEdit = activeAffordanceDrag.baseEdits[activeAffordanceDrag.target.featureID],
+              let currentEdit = editedBodies[activeAffordanceDrag.target.featureID] else {
+            return nil
+        }
+        let deltaX = Double(currentEdit.centerPoint.x - baseEdit.centerPoint.x)
+        let deltaY = Double(currentEdit.centerPoint.z - baseEdit.centerPoint.z)
+        guard abs(deltaX) > 1.0e-12 || abs(deltaY) > 1.0e-12 else {
+            return nil
+        }
+        return (
+            activeAffordanceDrag.target.featureID,
+            ViewportBodyMoveDragTarget(
+                featureID: activeAffordanceDrag.target.featureID,
+                deltaX: deltaX,
+                deltaY: deltaY
+            )
+        )
     }
 
     private func committedVertexDragTarget(

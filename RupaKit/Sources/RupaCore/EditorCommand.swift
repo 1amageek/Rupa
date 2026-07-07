@@ -180,6 +180,7 @@ public enum EditorCommand: Codable, Equatable, Sendable {
     case draftBodyFaces(targets: [SelectionTarget], neutralTarget: SelectionTarget, angle: CADExpression)
     case chamferBodyEdges(targets: [SelectionTarget], distance: CADExpression)
     case filletBodyEdges(targets: [SelectionTarget], radius: CADExpression, segmentCount: Int)
+    case moveBody(target: SelectionTarget, deltaX: CADExpression, deltaY: CADExpression)
     case moveBodyEdge(target: SelectionTarget, deltaX: CADExpression, deltaY: CADExpression)
     case moveBodyVertex(target: SelectionTarget, deltaX: CADExpression, deltaY: CADExpression)
     case moveSketchEntityPoint(
@@ -546,6 +547,8 @@ public enum EditorCommand: Codable, Equatable, Sendable {
             "chamferBodyEdges"
         case .filletBodyEdges:
             "filletBodyEdges"
+        case .moveBody:
+            "moveBody"
         case .moveBodyEdge:
             "moveBodyEdge"
         case .moveBodyVertex:
@@ -725,6 +728,7 @@ public enum EditorCommand: Codable, Equatable, Sendable {
              .draftBodyFaces,
              .chamferBodyEdges,
              .filletBodyEdges,
+             .moveBody,
              .moveBodyEdge,
              .moveBodyVertex,
              .moveSketchEntityPoint,

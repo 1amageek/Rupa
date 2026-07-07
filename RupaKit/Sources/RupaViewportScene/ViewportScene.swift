@@ -2046,6 +2046,22 @@ public struct ViewportSelectionDragTarget: Equatable, Sendable {
     }
 }
 
+public struct ViewportBodyMoveDragTarget: Equatable, Sendable {
+    public var featureID: FeatureID
+    public var deltaX: Double
+    public var deltaY: Double
+
+    public init(
+        featureID: FeatureID,
+        deltaX: Double,
+        deltaY: Double
+    ) {
+        self.featureID = featureID
+        self.deltaX = deltaX
+        self.deltaY = deltaY
+    }
+}
+
 public struct ViewportVertexDragTarget: Equatable, Sendable {
     public var target: SelectionTarget
     public var deltaX: Double

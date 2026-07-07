@@ -433,7 +433,7 @@ extension DesignDocument {
         )
     }
 
-    private func translatedSketchPoint(
+    func translatedSketchPoint(
         _ point: SketchPoint,
         deltaX: CADExpression,
         deltaY: CADExpression,
@@ -468,7 +468,7 @@ extension DesignDocument {
         return .angle(atan2(deltaFromCenterY, deltaFromCenterX), .radian)
     }
 
-    private func translatedExpression(
+    func translatedExpression(
         _ expression: CADExpression,
         delta: CADExpression,
         resolvedDelta: Double

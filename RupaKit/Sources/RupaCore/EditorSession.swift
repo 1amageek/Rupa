@@ -3092,6 +3092,20 @@ public final class EditorSession {
     }
 
     @discardableResult
+    public func moveBody(
+        target: SelectionTarget,
+        deltaX: CADExpression,
+        deltaY: CADExpression
+    ) -> CommandExecutionResult? {
+        perform(
+            .moveBody(
+                target: target,
+                deltaX: deltaX,
+                deltaY: deltaY
+            )
+        )
+    }
+
     public func moveBodyVertex(
         target: SelectionTarget,
         deltaX: CADExpression,

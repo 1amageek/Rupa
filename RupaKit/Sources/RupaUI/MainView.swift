@@ -598,6 +598,7 @@ public struct MainView: View {
                     onReferenceLineAnchor: viewportReferenceLineAnchorHandler,
                     onSelectionDrag: handleViewportSelectionDrag,
                     onSelectionDragPreview: viewportSelectionDragPreviewHandler,
+                    onBodyMoveDrag: viewportBodyMoveDragHandler,
                     onVertexDrag: viewportVertexDragHandler,
                     onFaceDrag: viewportFaceDragHandler,
                     onEdgeChamferDrag: viewportEdgeChamferDragHandler,
@@ -774,6 +775,16 @@ public struct MainView: View {
             path: candidate.path,
             title: candidate.title
         )
+    }
+
+    private var viewportBodyMoveDragHandler: ((ViewportBodyMoveDragTarget) -> Void)? {
+        guard session.selectedTool == .select,
+              selectionScope == .object else {
+            return nil
+        }
+        return { target in
+            handleViewportBodyMoveDrag(target)
+        }
     }
 
     private var viewportVertexDragHandler: ((ViewportVertexDragTarget) -> Void)? {
@@ -3636,6 +3647,30 @@ public struct MainView: View {
             return
         }
         selectionDragPreviewTargets = targets
+    }
+
+    private func handleViewportBodyMoveDrag(_ target: ViewportBodyMoveDragTarget) {
+        guard session.selectedTool == .select,
+              selectionScope == .object else {
+            return
+        }
+        guard let bodyNodeID = session.document.productMetadata.sceneNodes.first(
+            where: { $0.value.reference == .body(target.featureID) }
+        )?.key else {
+            session.reportToolStatus(
+                "Body move could not resolve the body scene node.",
+                severity: .warning
+            )
+            return
+        }
+        let result = session.moveBody(
+            target: SelectionTarget(sceneNodeID: bodyNodeID),
+            deltaX: .length(target.deltaX, .meter),
+            deltaY: .length(target.deltaY, .meter)
+        )
+        if result?.diagnostics.isEmpty == false {
+            isPreviewExpanded = true
+        }
     }
 
     private func handleViewportVertexDrag(_ target: ViewportVertexDragTarget) {
