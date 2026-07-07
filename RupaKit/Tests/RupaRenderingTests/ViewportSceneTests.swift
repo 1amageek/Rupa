@@ -3154,6 +3154,51 @@ import Testing
     #expect(constrained.endViewRayAnchorWorldPoint == nil)
 }
 
+@Test func viewportCanvasDragSnapResolverAppliesGridBeforeAxisConstraint() {
+    let drag = ViewportModelDrag(
+        start: Point2D(x: 0.012, y: 0.018),
+        end: Point2D(x: 0.026, y: 0.037),
+        sketchPlane: .xy
+    )
+    let options = SnapResolutionOptions(
+        usesGrid: true,
+        usesObjects: false,
+        gridIntervalMeters: 0.01
+    )
+
+    let resolved = ViewportCanvasDragSnapResolver().resolvedDrag(
+        drag,
+        document: .empty(),
+        snapOptions: options,
+        axisConstraint: .x
+    )
+
+    #expect(pointIsApproximatelyEqual(resolved.start, Point2D(x: 0.01, y: 0.02)))
+    #expect(pointIsApproximatelyEqual(resolved.end, Point2D(x: 0.03, y: 0.02)))
+}
+
+@Test func viewportCanvasDragSnapResolverKeepsAxisConstraintWhenSnapDisabled() {
+    let drag = ViewportModelDrag(
+        start: Point2D(x: 0.012, y: 0.018),
+        end: Point2D(x: 0.026, y: 0.037),
+        sketchPlane: .xy
+    )
+    let options = SnapResolutionOptions(
+        usesGrid: false,
+        usesObjects: false
+    )
+
+    let resolved = ViewportCanvasDragSnapResolver().resolvedDrag(
+        drag,
+        document: .empty(),
+        snapOptions: options,
+        axisConstraint: .x
+    )
+
+    #expect(pointIsApproximatelyEqual(resolved.start, drag.start))
+    #expect(pointIsApproximatelyEqual(resolved.end, Point2D(x: drag.end.x, y: drag.start.y)))
+}
+
 @Test func viewportCanvasArcDragPreviewUsesSharedCurveConstruction() throws {
     let layout = ViewportLayout(
         modelBounds: CGRect(x: -0.1, y: -0.1, width: 0.2, height: 0.2),
@@ -4177,4 +4222,12 @@ private func viewportEditableDirectBSplineSurface() -> BSplineSurface3D {
         vKnots: [0.0, 0.0, 0.0, 0.5, 1.0, 1.0, 1.0],
         controlPoints: baseSurface.controlPoints
     )
+}
+
+private func pointIsApproximatelyEqual(
+    _ lhs: Point2D,
+    _ rhs: Point2D,
+    tolerance: Double = 1.0e-12
+) -> Bool {
+    abs(lhs.x - rhs.x) <= tolerance && abs(lhs.y - rhs.y) <= tolerance
 }

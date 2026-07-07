@@ -7525,10 +7525,15 @@ public struct Viewport: View {
         ) else {
             return
         }
-        let constrainedDrag = drag.constrained(by: canvasDragAxisConstraint)
+        let previewDrag = ViewportCanvasDragSnapResolver().resolvedDrag(
+            drag,
+            document: document,
+            snapOptions: snapResolutionOptions,
+            axisConstraint: canvasDragAxisConstraint
+        )
         guard let preview = ViewportCanvasDragPreview(
             kind: previewKind,
-            drag: constrainedDrag,
+            drag: previewDrag,
             layout: mapper.layout
         ) else {
             return
