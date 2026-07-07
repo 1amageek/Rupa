@@ -48,6 +48,22 @@ import Testing
     #expect(drags.nextFinishKind == .sketchCurveHandle)
 }
 
+@Test func viewportActiveInteractionDragsClearsOnlyMatchingActiveDragWhenSettingNil() {
+    var drags = ViewportActiveInteractionDrags()
+
+    drags.affordance = affordanceDragState()
+    drags.sketchCurveHandle = sketchCurveHandleDragState()
+    drags.affordance = nil
+
+    #expect(drags.sketchCurveHandle != nil)
+    #expect(drags.nextFinishKind == .sketchCurveHandle)
+
+    drags.sketchCurveHandle = nil
+
+    #expect(!drags.hasActiveDrag)
+    #expect(drags.nextFinishKind == nil)
+}
+
 @Test func viewportActiveInteractionDragsInitializerUsesFinishPrecedenceForLegacyMultipleInputs() {
     let drags = ViewportActiveInteractionDrags(
         affordance: affordanceDragState(),

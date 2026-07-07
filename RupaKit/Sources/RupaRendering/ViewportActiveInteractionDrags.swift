@@ -61,132 +61,244 @@ struct ViewportActiveInteractionDrags: Equatable {
 
     var affordance: ViewportAffordanceDragState? {
         get { activeDrag?.affordance }
-        set { activeDrag = newValue.map(ViewportActiveInteractionDragState.affordance) }
+        set {
+            setActiveDrag(newValue.map(ViewportActiveInteractionDragState.affordance), replacing: .affordance)
+        }
     }
 
     var sketchCurveHandle: ViewportSketchCurveHandleDragState? {
         get { activeDrag?.sketchCurveHandle }
-        set { activeDrag = newValue.map(ViewportActiveInteractionDragState.sketchCurveHandle) }
+        set {
+            setActiveDrag(
+                newValue.map(ViewportActiveInteractionDragState.sketchCurveHandle),
+                replacing: .sketchCurveHandle
+            )
+        }
     }
 
     var sketchDimension: ViewportSketchDimensionDragState? {
         get { activeDrag?.sketchDimension }
-        set { activeDrag = newValue.map(ViewportActiveInteractionDragState.sketchDimension) }
+        set {
+            setActiveDrag(newValue.map(ViewportActiveInteractionDragState.sketchDimension), replacing: .sketchDimension)
+        }
     }
 
     var sketchPointHandle: ViewportSketchPointHandleDragState? {
         get { activeDrag?.sketchPointHandle }
-        set { activeDrag = newValue.map(ViewportActiveInteractionDragState.sketchPointHandle) }
+        set {
+            setActiveDrag(
+                newValue.map(ViewportActiveInteractionDragState.sketchPointHandle),
+                replacing: .sketchPointHandle
+            )
+        }
     }
 
     var bridgeCurveEndpoint: ViewportBridgeCurveEndpointDragState? {
         get { activeDrag?.bridgeCurveEndpoint }
-        set { activeDrag = newValue.map(ViewportActiveInteractionDragState.bridgeCurveEndpoint) }
+        set {
+            setActiveDrag(
+                newValue.map(ViewportActiveInteractionDragState.bridgeCurveEndpoint),
+                replacing: .bridgeCurveEndpoint
+            )
+        }
     }
 
     var splineControlPoint: ViewportSplineControlPointDragState? {
         get { activeDrag?.splineControlPoint }
-        set { activeDrag = newValue.map(ViewportActiveInteractionDragState.splineControlPoint) }
+        set {
+            setActiveDrag(
+                newValue.map(ViewportActiveInteractionDragState.splineControlPoint),
+                replacing: .splineControlPoint
+            )
+        }
     }
 
     var splineControlPointSlide: ViewportSplineControlPointSlideDragState? {
         get { activeDrag?.splineControlPointSlide }
-        set { activeDrag = newValue.map(ViewportActiveInteractionDragState.splineControlPointSlide) }
+        set {
+            setActiveDrag(
+                newValue.map(ViewportActiveInteractionDragState.splineControlPointSlide),
+                replacing: .splineControlPointSlide
+            )
+        }
     }
 
     var polySplineSurfaceVertex: ViewportPolySplineSurfaceVertexDragState? {
         get { activeDrag?.polySplineSurfaceVertex }
-        set { activeDrag = newValue.map(ViewportActiveInteractionDragState.polySplineSurfaceVertex) }
+        set {
+            setActiveDrag(
+                newValue.map(ViewportActiveInteractionDragState.polySplineSurfaceVertex),
+                replacing: .polySplineSurfaceVertex
+            )
+        }
     }
 
     var surfaceControlPoint: ViewportSurfaceControlPointDragState? {
         get { activeDrag?.surfaceControlPoint }
-        set { activeDrag = newValue.map(ViewportActiveInteractionDragState.surfaceControlPoint) }
+        set {
+            setActiveDrag(
+                newValue.map(ViewportActiveInteractionDragState.surfaceControlPoint),
+                replacing: .surfaceControlPoint
+            )
+        }
     }
 
     var surfaceTrimEndpoint: ViewportSurfaceTrimEndpointDragState? {
         get { activeDrag?.surfaceTrimEndpoint }
-        set { activeDrag = newValue.map(ViewportActiveInteractionDragState.surfaceTrimEndpoint) }
+        set {
+            setActiveDrag(
+                newValue.map(ViewportActiveInteractionDragState.surfaceTrimEndpoint),
+                replacing: .surfaceTrimEndpoint
+            )
+        }
     }
 
     var surfaceTrimControlPoint: ViewportSurfaceTrimControlPointDragState? {
         get { activeDrag?.surfaceTrimControlPoint }
-        set { activeDrag = newValue.map(ViewportActiveInteractionDragState.surfaceTrimControlPoint) }
+        set {
+            setActiveDrag(
+                newValue.map(ViewportActiveInteractionDragState.surfaceTrimControlPoint),
+                replacing: .surfaceTrimControlPoint
+            )
+        }
     }
 
     var polySplineSurfaceVertexSlide: ViewportPolySplineSurfaceVertexSlideDragState? {
         get { activeDrag?.polySplineSurfaceVertexSlide }
-        set { activeDrag = newValue.map(ViewportActiveInteractionDragState.polySplineSurfaceVertexSlide) }
+        set {
+            setActiveDrag(
+                newValue.map(ViewportActiveInteractionDragState.polySplineSurfaceVertexSlide),
+                replacing: .polySplineSurfaceVertexSlide
+            )
+        }
     }
 
     var surfaceControlPointSlide: ViewportSurfaceControlPointSlideDragState? {
         get { activeDrag?.surfaceControlPointSlide }
-        set { activeDrag = newValue.map(ViewportActiveInteractionDragState.surfaceControlPointSlide) }
+        set {
+            setActiveDrag(
+                newValue.map(ViewportActiveInteractionDragState.surfaceControlPointSlide),
+                replacing: .surfaceControlPointSlide
+            )
+        }
     }
 
     var surfaceFrame: ViewportSurfaceFrameDragState? {
         get { activeDrag?.surfaceFrame }
-        set { activeDrag = newValue.map(ViewportActiveInteractionDragState.surfaceFrame) }
+        set {
+            setActiveDrag(newValue.map(ViewportActiveInteractionDragState.surfaceFrame), replacing: .surfaceFrame)
+        }
     }
 
     var regionOffset: ViewportRegionOffsetDragState? {
         get { activeDrag?.regionOffset }
-        set { activeDrag = newValue.map(ViewportActiveInteractionDragState.regionOffset) }
+        set {
+            setActiveDrag(newValue.map(ViewportActiveInteractionDragState.regionOffset), replacing: .regionOffset)
+        }
     }
 
     var edgeOffset: ViewportEdgeOffsetDragState? {
         get { activeDrag?.edgeOffset }
-        set { activeDrag = newValue.map(ViewportActiveInteractionDragState.edgeOffset) }
+        set {
+            setActiveDrag(newValue.map(ViewportActiveInteractionDragState.edgeOffset), replacing: .edgeOffset)
+        }
     }
 
     var slotWidth: ViewportSlotWidthDragState? {
         get { activeDrag?.slotWidth }
-        set { activeDrag = newValue.map(ViewportActiveInteractionDragState.slotWidth) }
+        set {
+            setActiveDrag(newValue.map(ViewportActiveInteractionDragState.slotWidth), replacing: .slotWidth)
+        }
     }
 
     var sketchVertexOffset: ViewportSketchVertexOffsetDragState? {
         get { activeDrag?.sketchVertexOffset }
-        set { activeDrag = newValue.map(ViewportActiveInteractionDragState.sketchVertexOffset) }
+        set {
+            setActiveDrag(
+                newValue.map(ViewportActiveInteractionDragState.sketchVertexOffset),
+                replacing: .sketchVertexOffset
+            )
+        }
     }
 
     var patternArrayLinearAxis: ViewportPatternArrayLinearAxisDragState? {
         get { activeDrag?.patternArrayLinearAxis }
-        set { activeDrag = newValue.map(ViewportActiveInteractionDragState.patternArrayLinearAxis) }
+        set {
+            setActiveDrag(
+                newValue.map(ViewportActiveInteractionDragState.patternArrayLinearAxis),
+                replacing: .patternArrayLinearAxis
+            )
+        }
     }
 
     var independentCopyExtrudeDistance: ViewportIndependentCopyExtrudeDistanceDragState? {
         get { activeDrag?.independentCopyExtrudeDistance }
-        set { activeDrag = newValue.map(ViewportActiveInteractionDragState.independentCopyExtrudeDistance) }
+        set {
+            setActiveDrag(
+                newValue.map(ViewportActiveInteractionDragState.independentCopyExtrudeDistance),
+                replacing: .independentCopyExtrudeDistance
+            )
+        }
     }
 
     var independentCopyBodyDimension: ViewportIndependentCopyBodyDimensionDragState? {
         get { activeDrag?.independentCopyBodyDimension }
-        set { activeDrag = newValue.map(ViewportActiveInteractionDragState.independentCopyBodyDimension) }
+        set {
+            setActiveDrag(
+                newValue.map(ViewportActiveInteractionDragState.independentCopyBodyDimension),
+                replacing: .independentCopyBodyDimension
+            )
+        }
     }
 
     var patternArrayRadialAngle: ViewportPatternArrayRadialAngleDragState? {
         get { activeDrag?.patternArrayRadialAngle }
-        set { activeDrag = newValue.map(ViewportActiveInteractionDragState.patternArrayRadialAngle) }
+        set {
+            setActiveDrag(
+                newValue.map(ViewportActiveInteractionDragState.patternArrayRadialAngle),
+                replacing: .patternArrayRadialAngle
+            )
+        }
     }
 
     var patternArrayCopyCount: ViewportPatternArrayCopyCountDragState? {
         get { activeDrag?.patternArrayCopyCount }
-        set { activeDrag = newValue.map(ViewportActiveInteractionDragState.patternArrayCopyCount) }
+        set {
+            setActiveDrag(
+                newValue.map(ViewportActiveInteractionDragState.patternArrayCopyCount),
+                replacing: .patternArrayCopyCount
+            )
+        }
     }
 
     var patternArrayCurveExtent: ViewportPatternArrayCurveExtentDragState? {
         get { activeDrag?.patternArrayCurveExtent }
-        set { activeDrag = newValue.map(ViewportActiveInteractionDragState.patternArrayCurveExtent) }
+        set {
+            setActiveDrag(
+                newValue.map(ViewportActiveInteractionDragState.patternArrayCurveExtent),
+                replacing: .patternArrayCurveExtent
+            )
+        }
     }
 
     var patternArrayCurvePathPoint: ViewportPatternArrayCurvePathPointDragState? {
         get { activeDrag?.patternArrayCurvePathPoint }
-        set { activeDrag = newValue.map(ViewportActiveInteractionDragState.patternArrayCurvePathPoint) }
+        set {
+            setActiveDrag(
+                newValue.map(ViewportActiveInteractionDragState.patternArrayCurvePathPoint),
+                replacing: .patternArrayCurvePathPoint
+            )
+        }
     }
 
     var constructionPlane: ViewportConstructionPlaneHandleDragState? {
         get { activeDrag?.constructionPlane }
-        set { activeDrag = newValue.map(ViewportActiveInteractionDragState.constructionPlane) }
+        set {
+            setActiveDrag(
+                newValue.map(ViewportActiveInteractionDragState.constructionPlane),
+                replacing: .constructionPlane
+            )
+        }
     }
 
     var hasActiveDrag: Bool {
@@ -201,5 +313,18 @@ struct ViewportActiveInteractionDrags: Equatable {
         if activeDrag?.interactionTarget != preservedTarget {
             activeDrag = nil
         }
+    }
+
+    private mutating func setActiveDrag(
+        _ newActiveDrag: ViewportActiveInteractionDragState?,
+        replacing kind: ViewportActiveInteractionDragKind
+    ) {
+        guard let newActiveDrag else {
+            if activeDrag?.kind == kind {
+                activeDrag = nil
+            }
+            return
+        }
+        activeDrag = newActiveDrag
     }
 }
