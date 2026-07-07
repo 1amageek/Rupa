@@ -2759,6 +2759,7 @@ public struct MainView: View {
         guard let canvasInput = mappedCanvasInput(
             modelPoint: target.modelPoint,
             modelWorldPoint: target.modelWorldPoint,
+            viewRayAnchorWorldPoint: target.viewRayAnchorWorldPoint,
             sketchPlane: sketchPlane
         ) else {
             return
@@ -3521,6 +3522,7 @@ public struct MainView: View {
         guard let canvasInput = mappedCanvasInput(
             modelPoint: target.modelPoint,
             modelWorldPoint: target.modelWorldPoint,
+            viewRayAnchorWorldPoint: target.viewRayAnchorWorldPoint,
             sketchPlane: sketchPlane
         ) else {
             viewAlignedConstructionPlaneRequest = nil
@@ -4224,6 +4226,7 @@ public struct MainView: View {
         guard let startCanvasInput = mappedCanvasInput(
             modelPoint: drag.start,
             modelWorldPoint: drag.startWorldPoint,
+            viewRayAnchorWorldPoint: drag.startViewRayAnchorWorldPoint,
             sketchPlane: sketchPlane
         ) else {
             return
@@ -4231,6 +4234,7 @@ public struct MainView: View {
         guard let endCanvasInput = mappedCanvasInput(
             modelPoint: drag.end,
             modelWorldPoint: drag.endWorldPoint,
+            viewRayAnchorWorldPoint: drag.endViewRayAnchorWorldPoint,
             sketchPlane: sketchPlane
         ) else {
             return
@@ -4285,6 +4289,7 @@ public struct MainView: View {
     private func mappedCanvasInput(
         modelPoint: Point2D,
         modelWorldPoint: Point3D?,
+        viewRayAnchorWorldPoint: Point3D?,
         sketchPlane: SketchPlane
     ) -> WorkspaceCanvasPlaneInputMapper.Result? {
         do {
@@ -4293,6 +4298,7 @@ public struct MainView: View {
             ).map(
                 modelPoint: modelPoint,
                 modelWorldPoint: modelWorldPoint,
+                viewRayAnchorWorldPoint: viewRayAnchorWorldPoint,
                 sketchPlane: sketchPlane
             )
         } catch WorkspaceCanvasPlaneInputMapper.Failure.unresolvedViewNormal {

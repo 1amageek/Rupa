@@ -359,7 +359,7 @@ public struct ViewportProjectedGrid: Equatable {
     private static func makeLines(
         layout: ViewportLayout,
         size: CGSize,
-        plane: GridPlane,
+        plane: ViewportCanvasPlane,
         modelBounds: CGRect,
         minorStepMeters: Double,
         majorEvery: Int
@@ -406,7 +406,7 @@ public struct ViewportProjectedGrid: Equatable {
     private static func makeScaleLabels(
         layout: ViewportLayout,
         size: CGSize,
-        plane: GridPlane,
+        plane: ViewportCanvasPlane,
         modelBounds: CGRect,
         majorStepMeters: Double,
         unit: LengthDisplayUnit,
@@ -489,7 +489,7 @@ public struct ViewportProjectedGrid: Equatable {
     private static func scaleLabelStride(
         step: CGFloat,
         layout: ViewportLayout,
-        plane: GridPlane
+        plane: ViewportCanvasPlane
     ) -> Int {
         let firstDirection = layout.basis.direction(for: plane.firstAxis)
         let secondDirection = layout.basis.direction(for: plane.secondAxis)
@@ -623,7 +623,7 @@ public struct ViewportProjectedGrid: Equatable {
     private static func visibleModelBounds(
         layout: ViewportLayout,
         size: CGSize,
-        plane: GridPlane,
+        plane: ViewportCanvasPlane,
         step: CGFloat
     ) -> CGRect {
         let viewportCorners = [
@@ -656,26 +656,15 @@ public struct ViewportProjectedGrid: Equatable {
         )
     }
 
-    private static func gridPlane(for basis: ViewportProjectionBasis) -> GridPlane {
-        switch basis.mode {
-        case .isometric:
-            return GridPlane(firstAxis: .x, secondAxis: .z)
-        case .axisFront(.x):
-            return GridPlane(firstAxis: .z, secondAxis: .y)
-        case .axisFront(.y):
-            return GridPlane(firstAxis: .x, secondAxis: .z)
-        case .axisFront(.z):
-            return GridPlane(firstAxis: .x, secondAxis: .y)
-        case .orbit:
-            return GridPlane(firstAxis: .x, secondAxis: .z)
-        }
+    private static func gridPlane(for basis: ViewportProjectionBasis) -> ViewportCanvasPlane {
+        ViewportCanvasPlane.displayed(for: basis)
     }
 
     private static func project(
         first: CGFloat,
         second: CGFloat,
         layout: ViewportLayout,
-        plane: GridPlane
+        plane: ViewportCanvasPlane
     ) -> CGPoint {
         let origin = layout.project(.zero)
         let firstDirection = layout.basis.direction(for: plane.firstAxis)
@@ -689,7 +678,7 @@ public struct ViewportProjectedGrid: Equatable {
     private static func unproject(
         _ point: CGPoint,
         layout: ViewportLayout,
-        plane: GridPlane
+        plane: ViewportCanvasPlane
     ) -> CGPoint? {
         let origin = layout.project(.zero)
         let firstDirection = layout.basis.direction(for: plane.firstAxis)
@@ -704,10 +693,5 @@ public struct ViewportProjectedGrid: Equatable {
             x: (viewportX * secondDirection.dy - secondDirection.dx * viewportY) / determinant,
             y: (firstDirection.dx * viewportY - viewportX * firstDirection.dy) / determinant
         )
-    }
-
-    private struct GridPlane: Equatable {
-        var firstAxis: Axis
-        var secondAxis: Axis
     }
 }

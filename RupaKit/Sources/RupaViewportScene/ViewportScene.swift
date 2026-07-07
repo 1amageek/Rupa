@@ -625,6 +625,8 @@ public struct ViewportModelDrag: Equatable, Sendable {
     public var modifierFlags: ViewportInputModifierFlags
     public var startWorldPoint: Point3D?
     public var endWorldPoint: Point3D?
+    public var startViewRayAnchorWorldPoint: Point3D?
+    public var endViewRayAnchorWorldPoint: Point3D?
 
     public init(
         start: Point2D,
@@ -632,7 +634,9 @@ public struct ViewportModelDrag: Equatable, Sendable {
         sketchPlane: SketchPlane = .defaultWorkspacePlane,
         modifierFlags: ViewportInputModifierFlags = ViewportInputModifierFlags(),
         startWorldPoint: Point3D? = nil,
-        endWorldPoint: Point3D? = nil
+        endWorldPoint: Point3D? = nil,
+        startViewRayAnchorWorldPoint: Point3D? = nil,
+        endViewRayAnchorWorldPoint: Point3D? = nil
     ) {
         self.start = start
         self.end = end
@@ -640,6 +644,8 @@ public struct ViewportModelDrag: Equatable, Sendable {
         self.modifierFlags = modifierFlags
         self.startWorldPoint = startWorldPoint
         self.endWorldPoint = endWorldPoint
+        self.startViewRayAnchorWorldPoint = startViewRayAnchorWorldPoint
+        self.endViewRayAnchorWorldPoint = endViewRayAnchorWorldPoint
     }
 
     public func constrained(by axisConstraint: SketchAxisConstraint?) -> ViewportModelDrag {
@@ -651,7 +657,8 @@ public struct ViewportModelDrag: Equatable, Sendable {
             end: axisConstraint.constrainedCanvasPoint(end, from: start, on: sketchPlane),
             sketchPlane: sketchPlane,
             modifierFlags: modifierFlags,
-            startWorldPoint: startWorldPoint
+            startWorldPoint: startWorldPoint,
+            startViewRayAnchorWorldPoint: startViewRayAnchorWorldPoint
         )
     }
 }
@@ -1376,6 +1383,34 @@ public struct ViewportLayout: Equatable {
         )
     }
 
+    public func unproject(
+        _ point: CGPoint,
+        onto canvasPlane: ViewportCanvasPlane
+    ) -> Point3D? {
+        let origin = project(Point3D.origin)
+        let firstDirection = basis.direction(for: canvasPlane.firstAxis)
+        let secondDirection = basis.direction(for: canvasPlane.secondAxis)
+        let viewportX = (point.x - origin.x) / scale
+        let viewportY = (point.y - origin.y) / scale
+        let determinant = firstDirection.dx * secondDirection.dy - secondDirection.dx * firstDirection.dy
+        guard abs(determinant) > 1.0e-9 else {
+            return nil
+        }
+        let first = (viewportX * secondDirection.dy - secondDirection.dx * viewportY) / determinant
+        let second = (firstDirection.dx * viewportY - viewportX * firstDirection.dy) / determinant
+        return canvasPlane.worldPoint(
+            first: Double(first),
+            second: Double(second)
+        )
+    }
+
+    public func displayedCanvasWorldPoint(for viewportPoint: CGPoint) -> Point3D? {
+        unproject(
+            viewportPoint,
+            onto: ViewportCanvasPlane.displayed(for: basis)
+        )
+    }
+
     public func projectedFootprint(_ itemBounds: CGRect) -> ViewportProjectedRect {
         ViewportProjectedRect(
             bottomLeft: project(CGPoint(x: itemBounds.minX, y: itemBounds.minY)),
@@ -1559,13 +1594,19 @@ public struct ViewportModelCoordinateMapper {
         )
     }
 
+    public func displayedCanvasWorldPoint(for viewportPoint: CGPoint) -> Point3D? {
+        layout.displayedCanvasWorldPoint(for: viewportPoint)
+    }
+
     public func modelDrag(
         from start: CGPoint,
         to end: CGPoint,
         sketchPlane: SketchPlane = .defaultWorkspacePlane,
         modifierFlags: ViewportInputModifierFlags = ViewportInputModifierFlags(),
         startWorldPoint: Point3D? = nil,
-        endWorldPoint: Point3D? = nil
+        endWorldPoint: Point3D? = nil,
+        startViewRayAnchorWorldPoint: Point3D? = nil,
+        endViewRayAnchorWorldPoint: Point3D? = nil
     ) -> ViewportModelDrag {
         ViewportModelDrag(
             start: modelPoint(for: start),
@@ -1573,7 +1614,9 @@ public struct ViewportModelCoordinateMapper {
             sketchPlane: sketchPlane,
             modifierFlags: modifierFlags,
             startWorldPoint: startWorldPoint,
-            endWorldPoint: endWorldPoint
+            endWorldPoint: endWorldPoint,
+            startViewRayAnchorWorldPoint: startViewRayAnchorWorldPoint,
+            endViewRayAnchorWorldPoint: endViewRayAnchorWorldPoint
         )
     }
 
@@ -2012,6 +2055,7 @@ public struct ViewportCanvasTarget: Equatable, Sendable {
     public var hit: ViewportHit?
     public var modelPoint: Point2D
     public var modelWorldPoint: Point3D?
+    public var viewRayAnchorWorldPoint: Point3D?
     public var sketchPlane: SketchPlane
     public var selectionIntent: ViewportSelectionIntent
     public var modifierFlags: ViewportInputModifierFlags
@@ -2020,6 +2064,7 @@ public struct ViewportCanvasTarget: Equatable, Sendable {
         hit: ViewportHit?,
         modelPoint: Point2D,
         modelWorldPoint: Point3D? = nil,
+        viewRayAnchorWorldPoint: Point3D? = nil,
         sketchPlane: SketchPlane = .defaultWorkspacePlane,
         selectionIntent: ViewportSelectionIntent = .replace,
         modifierFlags: ViewportInputModifierFlags = ViewportInputModifierFlags()
@@ -2027,6 +2072,7 @@ public struct ViewportCanvasTarget: Equatable, Sendable {
         self.hit = hit
         self.modelPoint = modelPoint
         self.modelWorldPoint = modelWorldPoint
+        self.viewRayAnchorWorldPoint = viewRayAnchorWorldPoint
         self.sketchPlane = sketchPlane
         self.selectionIntent = selectionIntent
         self.modifierFlags = modifierFlags

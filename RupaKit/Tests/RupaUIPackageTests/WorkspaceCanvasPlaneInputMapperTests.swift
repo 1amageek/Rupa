@@ -1,5 +1,6 @@
 import RupaCore
 import RupaRendering
+import RupaViewportScene
 import SwiftCAD
 import Testing
 @testable import RupaUI
@@ -59,6 +60,103 @@ import Testing
 
     #expect(result.worldPoint == worldPoint)
     #expect(pointIsApproximatelyEqual(result.point, coordinateSystem.project(worldPoint).point))
+}
+
+@Test func workspaceCanvasPlaneInputMapperProjectsViewRayAnchorOntoStandardXYPlane() throws {
+    let mapper = WorkspaceCanvasPlaneInputMapper(projectionBasis: .axisFront(.z))
+    let anchor = Point3D(x: 0.12, y: -0.04, z: 0.0)
+
+    let result = try mapper.map(
+        modelPoint: Point2D(x: 99.0, y: 99.0),
+        modelWorldPoint: nil,
+        viewRayAnchorWorldPoint: anchor,
+        sketchPlane: .xy
+    )
+
+    #expect(result.worldPoint == anchor)
+    #expect(pointIsApproximatelyEqual(result.point, Point2D(x: 0.12, y: -0.04)))
+}
+
+@Test func workspaceCanvasPlaneInputMapperProjectsViewRayAnchorOntoStandardZXCanvasPlane() throws {
+    let mapper = WorkspaceCanvasPlaneInputMapper(projectionBasis: .axisFront(.y))
+    let anchor = Point3D(x: 0.12, y: 0.0, z: -0.04)
+
+    let result = try mapper.map(
+        modelPoint: Point2D(x: 99.0, y: 99.0),
+        modelWorldPoint: nil,
+        viewRayAnchorWorldPoint: anchor,
+        sketchPlane: .zx
+    )
+
+    #expect(result.worldPoint == anchor)
+    #expect(pointIsApproximatelyEqual(result.point, Point2D(x: 0.12, y: -0.04)))
+}
+
+@Test func workspaceCanvasPlaneInputMapperIntersectsStandardPlaneFromViewRayAnchor() throws {
+    let basis = ViewportProjectionBasis.axisFront(.y)
+    let viewNormal = try #require(basis.viewNormal)
+    let mapper = WorkspaceCanvasPlaneInputMapper(projectionBasis: basis)
+    let anchor = Point3D(x: 0.12, y: 0.0, z: -0.04)
+
+    let result = try mapper.map(
+        modelPoint: Point2D(x: 99.0, y: 99.0),
+        modelWorldPoint: nil,
+        viewRayAnchorWorldPoint: anchor,
+        sketchPlane: .xy
+    )
+
+    let worldPoint = try #require(result.worldPoint)
+    let rayOffset = offsetVector(from: anchor, to: worldPoint)
+    let rayCross = rayOffset.cross(viewNormal)
+
+    #expect(abs(worldPoint.z) <= 1.0e-12)
+    #expect(pointIsApproximatelyEqual(result.point, Point2D(x: worldPoint.x, y: worldPoint.y)))
+    #expect(abs(rayCross.x) <= 1.0e-12)
+    #expect(abs(rayCross.y) <= 1.0e-12)
+    #expect(abs(rayCross.z) <= 1.0e-12)
+    #expect(abs(worldPoint.y - anchor.y) > 1.0e-6)
+}
+
+@Test func workspaceCanvasPlaneInputMapperRejectsStandardPlaneParallelToViewRay() throws {
+    let mapper = WorkspaceCanvasPlaneInputMapper(projectionBasis: .axisFront(.z))
+    let anchor = Point3D(x: 0.12, y: -0.04, z: 0.0)
+
+    do {
+        _ = try mapper.map(
+            modelPoint: Point2D(x: 99.0, y: 99.0),
+            modelWorldPoint: nil,
+            viewRayAnchorWorldPoint: anchor,
+            sketchPlane: .yz
+        )
+        Issue.record("Expected mapper to reject a standard plane parallel to the view ray.")
+    } catch let failure as WorkspaceCanvasPlaneInputMapper.Failure {
+        #expect(failure == .viewRayParallelToPlane)
+    }
+}
+
+@Test func workspaceCanvasPlaneInputMapperIntersectsCustomPlaneFromViewRayAnchor() throws {
+    let plane = SketchPlane.plane(
+        Plane3D(
+            origin: Point3D(x: 0.0, y: 0.2, z: 0.0),
+            normal: .unitY
+        )
+    )
+    let coordinateSystem = try SketchPlaneCoordinateSystem(plane: plane)
+    let mapper = WorkspaceCanvasPlaneInputMapper(projectionBasis: .axisFront(.z))
+    let anchor = Point3D(x: 0.04, y: 0.0, z: 0.03)
+
+    let result = try mapper.map(
+        modelPoint: Point2D(x: 99.0, y: 99.0),
+        modelWorldPoint: nil,
+        viewRayAnchorWorldPoint: anchor,
+        sketchPlane: plane
+    )
+
+    let worldPoint = try #require(result.worldPoint)
+    let depth = offsetVector(from: coordinateSystem.origin, to: worldPoint).dot(coordinateSystem.normal)
+    #expect(abs(depth) <= 1.0e-9)
+    #expect(pointIsApproximatelyEqual(result.point, coordinateSystem.project(worldPoint).point))
+    #expect(abs(worldPoint.x - anchor.x) <= 1.0e-12)
 }
 
 @MainActor

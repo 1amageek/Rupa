@@ -32,43 +32,86 @@ public struct WorkspaceCanvasPlaneInputMapper: Sendable {
     public func map(
         modelPoint: Point2D,
         modelWorldPoint: Point3D?,
+        viewRayAnchorWorldPoint: Point3D? = nil,
         sketchPlane: SketchPlane
     ) throws -> Result {
-        guard case .plane = sketchPlane else {
-            return Result(point: modelPoint, worldPoint: modelWorldPoint)
-        }
-
         let coordinateSystem = try SketchPlaneCoordinateSystem(plane: sketchPlane)
         if let modelWorldPoint {
-            return Result(
-                point: coordinateSystem.project(modelWorldPoint).point,
-                worldPoint: modelWorldPoint
+            return mappedResult(
+                for: modelWorldPoint,
+                coordinateSystem: coordinateSystem,
+                sketchPlane: sketchPlane
             )
+        }
+
+        if let viewRayAnchorWorldPoint {
+            guard let viewNormal = projectionBasis.viewNormal else {
+                throw Failure.unresolvedViewNormal
+            }
+            let worldPoint = try intersectPlane(
+                rayOrigin: viewRayAnchorWorldPoint,
+                rayDirection: viewNormal,
+                coordinateSystem: coordinateSystem
+            )
+            return mappedResult(
+                for: worldPoint,
+                coordinateSystem: coordinateSystem,
+                sketchPlane: sketchPlane
+            )
+        }
+
+        guard case .plane = sketchPlane else {
+            return Result(point: modelPoint, worldPoint: nil)
         }
 
         guard let viewNormal = projectionBasis.viewNormal else {
             throw Failure.unresolvedViewNormal
         }
-        let rayOrigin = Point3D(x: modelPoint.x, y: 0.0, z: modelPoint.y)
-        let denominator = viewNormal.dot(coordinateSystem.normal)
+        let rayOrigin = viewRayAnchorWorldPoint ?? Point3D(x: modelPoint.x, y: 0.0, z: modelPoint.y)
+        let worldPoint = try intersectPlane(
+            rayOrigin: rayOrigin,
+            rayDirection: viewNormal,
+            coordinateSystem: coordinateSystem
+        )
+        return mappedResult(
+            for: worldPoint,
+            coordinateSystem: coordinateSystem,
+            sketchPlane: sketchPlane
+        )
+    }
+
+    private func mappedResult(
+        for worldPoint: Point3D,
+        coordinateSystem: SketchPlaneCoordinateSystem,
+        sketchPlane: SketchPlane
+    ) -> Result {
+        let localPoint = coordinateSystem.project(worldPoint).point
+        return Result(
+            point: SketchPlaneCanvasMapper(sketchPlane: sketchPlane)
+                .canvasPoint(fromLocal: localPoint),
+            worldPoint: worldPoint
+        )
+    }
+
+    private func intersectPlane(
+        rayOrigin: Point3D,
+        rayDirection: Vector3D,
+        coordinateSystem: SketchPlaneCoordinateSystem
+    ) throws -> Point3D {
+        let denominator = rayDirection.dot(coordinateSystem.normal)
         guard abs(denominator) > tolerance else {
             throw Failure.viewRayParallelToPlane
         }
-
         let originOffset = Vector3D(
             x: coordinateSystem.origin.x - rayOrigin.x,
             y: coordinateSystem.origin.y - rayOrigin.y,
             z: coordinateSystem.origin.z - rayOrigin.z
         )
         let distance = originOffset.dot(coordinateSystem.normal) / denominator
-        let worldPoint = Point3D(
-            x: rayOrigin.x + viewNormal.x * distance,
-            y: rayOrigin.y + viewNormal.y * distance,
-            z: rayOrigin.z + viewNormal.z * distance
-        )
-        return Result(
-            point: coordinateSystem.project(worldPoint).point,
-            worldPoint: worldPoint
+        return Point3D(
+            x: rayOrigin.x + rayDirection.x * distance,
+            y: rayOrigin.y + rayDirection.y * distance,
+            z: rayOrigin.z + rayDirection.z * distance
         )
     }
 

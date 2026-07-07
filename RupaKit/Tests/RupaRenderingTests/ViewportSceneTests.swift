@@ -2751,6 +2751,40 @@ import Testing
     #expect(drag.start != drag.end)
 }
 
+@Test func viewportLayoutUnprojectsAxisFrontCanvasPlanesThroughDisplayedGridPlane() throws {
+    let layout = ViewportLayout(
+        modelBounds: CGRect(x: -1.0, y: -1.0, width: 2.0, height: 2.0),
+        size: CGSize(width: 800.0, height: 600.0),
+        basis: .axisFront(.z),
+        verticalBounds: -1.0 ... 1.0
+    )
+    let worldPoint = Point3D(x: 0.12, y: 0.34, z: 0.0)
+    let viewportPoint = layout.project(worldPoint)
+
+    let unprojected = try #require(layout.displayedCanvasWorldPoint(for: viewportPoint))
+
+    #expect(abs(unprojected.x - worldPoint.x) < 1.0e-12)
+    #expect(abs(unprojected.y - worldPoint.y) < 1.0e-12)
+    #expect(abs(unprojected.z - worldPoint.z) < 1.0e-12)
+}
+
+@Test func viewportLayoutUnprojectsSideAxisCanvasPlanesThroughDisplayedGridPlane() throws {
+    let layout = ViewportLayout(
+        modelBounds: CGRect(x: -1.0, y: -1.0, width: 2.0, height: 2.0),
+        size: CGSize(width: 800.0, height: 600.0),
+        basis: .axisFront(.x),
+        verticalBounds: -1.0 ... 1.0
+    )
+    let worldPoint = Point3D(x: 0.0, y: -0.18, z: 0.27)
+    let viewportPoint = layout.project(worldPoint)
+
+    let unprojected = try #require(layout.displayedCanvasWorldPoint(for: viewportPoint))
+
+    #expect(abs(unprojected.x - worldPoint.x) < 1.0e-12)
+    #expect(abs(unprojected.y - worldPoint.y) < 1.0e-12)
+    #expect(abs(unprojected.z - worldPoint.z) < 1.0e-12)
+}
+
 @Test func viewportModelCoordinateMapperFramesRemoteSceneWithoutOriginUnion() throws {
     var document = DesignDocument.empty()
     try document.setRulerConfiguration(WorkspaceScalePreset.sitePlanning.rulerConfiguration)
@@ -3101,7 +3135,11 @@ import Testing
     let drag = ViewportModelDrag(
         start: Point2D(x: 0.01, y: -0.02),
         end: Point2D(x: 0.04, y: 0.03),
-        sketchPlane: .yz
+        sketchPlane: .yz,
+        startWorldPoint: Point3D(x: 0.0, y: 0.01, z: -0.02),
+        endWorldPoint: Point3D(x: 0.0, y: 0.04, z: 0.03),
+        startViewRayAnchorWorldPoint: Point3D(x: 0.12, y: 0.01, z: -0.02),
+        endViewRayAnchorWorldPoint: Point3D(x: 0.12, y: 0.04, z: 0.03)
     )
 
     let constrained = drag.constrained(by: .z)
@@ -3110,6 +3148,10 @@ import Testing
     #expect(abs(constrained.end.x - 0.01) < 1.0e-12)
     #expect(abs(constrained.end.y - 0.03) < 1.0e-12)
     #expect(constrained.sketchPlane == .yz)
+    #expect(constrained.startWorldPoint == drag.startWorldPoint)
+    #expect(constrained.endWorldPoint == nil)
+    #expect(constrained.startViewRayAnchorWorldPoint == drag.startViewRayAnchorWorldPoint)
+    #expect(constrained.endViewRayAnchorWorldPoint == nil)
 }
 
 @Test func viewportCanvasArcDragPreviewUsesSharedCurveConstruction() throws {

@@ -239,6 +239,54 @@ public enum ViewportCoordinateAxis: CaseIterable, Hashable, Sendable {
     case z
 }
 
+public struct ViewportCanvasPlane: Equatable, Sendable {
+    public var firstAxis: ViewportCoordinateAxis
+    public var secondAxis: ViewportCoordinateAxis
+
+    public init(
+        firstAxis: ViewportCoordinateAxis,
+        secondAxis: ViewportCoordinateAxis
+    ) {
+        self.firstAxis = firstAxis
+        self.secondAxis = secondAxis
+    }
+
+    public static func displayed(for basis: ViewportProjectionBasis) -> ViewportCanvasPlane {
+        switch basis.mode {
+        case .isometric:
+            return ViewportCanvasPlane(firstAxis: .x, secondAxis: .z)
+        case .axisFront(.x):
+            return ViewportCanvasPlane(firstAxis: .z, secondAxis: .y)
+        case .axisFront(.y):
+            return ViewportCanvasPlane(firstAxis: .x, secondAxis: .z)
+        case .axisFront(.z):
+            return ViewportCanvasPlane(firstAxis: .x, secondAxis: .y)
+        case .orbit:
+            return ViewportCanvasPlane(firstAxis: .x, secondAxis: .z)
+        }
+    }
+
+    public func worldPoint(first: Double, second: Double) -> Point3D {
+        var point = Point3D.origin
+        point.set(value: first, for: firstAxis)
+        point.set(value: second, for: secondAxis)
+        return point
+    }
+}
+
+private extension Point3D {
+    mutating func set(value: Double, for axis: ViewportCoordinateAxis) {
+        switch axis {
+        case .x:
+            x = value
+        case .y:
+            y = value
+        case .z:
+            z = value
+        }
+    }
+}
+
 public extension CGVector {
     static func interpolate(from start: CGVector, to end: CGVector, progress: CGFloat) -> CGVector {
         CGVector(

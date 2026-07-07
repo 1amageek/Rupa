@@ -2225,25 +2225,94 @@ public struct Viewport: View {
             guard case .creation = activeCanvasDrag.kind else {
                 return nil
             }
-            let start = layout.unproject(activeCanvasDrag.startLocation)
-            let current = layout.unproject(activeCanvasDrag.currentLocation)
-            let startPoint = Point2D(x: Double(start.x), y: Double(start.y))
-            let currentPoint = Point2D(x: Double(current.x), y: Double(current.y))
             let sketchPlane = activeCanvasDrag.sketchPlane ?? canvasDragSketchPlane(for: hoveredCanvasHit)
+            guard let startInput = canvasInput(
+                for: activeCanvasDrag.startLocation,
+                exactWorldPoint: nil,
+                sketchPlane: sketchPlane,
+                layout: layout
+            ),
+            let currentInput = canvasInput(
+                for: activeCanvasDrag.currentLocation,
+                exactWorldPoint: nil,
+                sketchPlane: sketchPlane,
+                layout: layout
+            ) else {
+                return nil
+            }
             let constrainedPoint = canvasDragAxisConstraint?.constrainedCanvasPoint(
-                currentPoint,
-                from: startPoint,
+                currentInput.point,
+                from: startInput.point,
                 on: sketchPlane
-            ) ?? currentPoint
+            ) ?? currentInput.point
             return (
                 point: constrainedPoint,
-                referencePoint: startPoint
+                referencePoint: startInput.point
             )
         }
         guard let hoveredModelPoint else {
             return nil
         }
         return (point: hoveredModelPoint, referencePoint: nil)
+    }
+
+    private func canvasInput(
+        for viewportPoint: CGPoint,
+        exactWorldPoint: Point3D?,
+        sketchPlane: SketchPlane,
+        layout: ViewportLayout
+    ) -> WorkspaceCanvasPlaneInputMapper.Result? {
+        let legacyModelPoint = layout.unproject(viewportPoint)
+        do {
+            return try WorkspaceCanvasPlaneInputMapper(
+                projectionBasis: layout.basis
+            ).map(
+                modelPoint: Point2D(
+                    x: Double(legacyModelPoint.x),
+                    y: Double(legacyModelPoint.y)
+                ),
+                modelWorldPoint: exactWorldPoint,
+                viewRayAnchorWorldPoint: layout.displayedCanvasWorldPoint(for: viewportPoint),
+                sketchPlane: sketchPlane
+            )
+        } catch {
+            return nil
+        }
+    }
+
+    private func canvasModelDrag(
+        from start: CGPoint,
+        to end: CGPoint,
+        mapper: ViewportModelCoordinateMapper,
+        sketchPlane: SketchPlane,
+        modifierFlags: ViewportInputModifierFlags = ViewportInputModifierFlags(),
+        startExactWorldPoint: Point3D? = nil,
+        endExactWorldPoint: Point3D? = nil
+    ) -> ViewportModelDrag? {
+        guard let startInput = canvasInput(
+            for: start,
+            exactWorldPoint: startExactWorldPoint,
+            sketchPlane: sketchPlane,
+            layout: mapper.layout
+        ),
+        let endInput = canvasInput(
+            for: end,
+            exactWorldPoint: endExactWorldPoint,
+            sketchPlane: sketchPlane,
+            layout: mapper.layout
+        ) else {
+            return nil
+        }
+        return ViewportModelDrag(
+            start: startInput.point,
+            end: endInput.point,
+            sketchPlane: sketchPlane,
+            modifierFlags: modifierFlags,
+            startWorldPoint: startExactWorldPoint,
+            endWorldPoint: endExactWorldPoint,
+            startViewRayAnchorWorldPoint: mapper.displayedCanvasWorldPoint(for: start),
+            endViewRayAnchorWorldPoint: mapper.displayedCanvasWorldPoint(for: end)
+        )
     }
 
     /// Resolves the same plane mapping and snap the click commit applies, so
@@ -2253,22 +2322,9 @@ public struct Viewport: View {
         hit: ViewportHit?
     ) -> ViewportPlacementHighlight? {
         let sketchPlane = canvasDragSketchPlane(for: hit)
-        let canvasInput: WorkspaceCanvasPlaneInputMapper.Result
-        do {
-            canvasInput = try WorkspaceCanvasPlaneInputMapper(
-                projectionBasis: currentProjectionBasis
-            ).map(
-                modelPoint: point,
-                modelWorldPoint: nil,
-                sketchPlane: sketchPlane
-            )
-        } catch {
-            return nil
-        }
-
         guard var options = snapResolutionOptions else {
             return ViewportPlacementHighlight(
-                point: canvasInput.point,
+                point: point,
                 sketchPlane: sketchPlane
             )
         }
@@ -2277,7 +2333,7 @@ public struct Viewport: View {
         }
         do {
             let resolution = try SnapResolver().resolve(
-                point: canvasInput.point,
+                point: point,
                 in: document,
                 options: options
             )
@@ -2287,7 +2343,7 @@ public struct Viewport: View {
             )
         } catch {
             return ViewportPlacementHighlight(
-                point: canvasInput.point,
+                point: point,
                 sketchPlane: sketchPlane
             )
         }
@@ -2355,7 +2411,15 @@ public struct Viewport: View {
             camera: camera,
             basis: currentProjectionBasis
         )
-        let modelPoint = mapper.modelPoint(for: point)
+        let sketchPlane = canvasDragSketchPlane(for: hoveredCanvasHit)
+        guard let modelPoint = canvasInput(
+            for: point,
+            exactWorldPoint: nil,
+            sketchPlane: sketchPlane,
+            layout: mapper.layout
+        )?.point else {
+            return false
+        }
         guard let resolution = snapResolution(for: modelPoint),
               let selectedCandidate = resolution.selectedCandidate,
               selectedCandidate.kind.isReferenceLineAnchorSource else {
@@ -7453,14 +7517,18 @@ public struct Viewport: View {
             basis: basis
         )
         let sketchPlane = activeDrag.sketchPlane ?? canvasDragSketchPlane(for: hoveredCanvasHit)
-        let drag = mapper.modelDrag(
+        guard let drag = canvasModelDrag(
             from: activeDrag.startLocation,
             to: activeDrag.currentLocation,
+            mapper: mapper,
             sketchPlane: sketchPlane
-        ).constrained(by: canvasDragAxisConstraint)
+        ) else {
+            return
+        }
+        let constrainedDrag = drag.constrained(by: canvasDragAxisConstraint)
         guard let preview = ViewportCanvasDragPreview(
             kind: previewKind,
-            drag: drag,
+            drag: constrainedDrag,
             layout: mapper.layout
         ) else {
             return
@@ -12887,15 +12955,26 @@ public struct Viewport: View {
             layout: mapper.layout
         )
         let sketchPlane = constructionSketchPlane(for: hit)
+        let exactWorldPoint = selectedGeneratedFaceSurfaceWorldPoint(
+            at: point,
+            in: scene,
+            layout: mapper.layout
+        )
+        let input = canvasInput(
+            for: point,
+            exactWorldPoint: exactWorldPoint,
+            sketchPlane: sketchPlane,
+            layout: mapper.layout
+        )
+        guard let input else {
+            return
+        }
         onPick(
             ViewportCanvasTarget(
                 hit: hit,
-                modelPoint: mapper.modelPoint(for: point),
-                modelWorldPoint: selectedGeneratedFaceSurfaceWorldPoint(
-                    at: point,
-                    in: scene,
-                    layout: mapper.layout
-                ),
+                modelPoint: input.point,
+                modelWorldPoint: exactWorldPoint,
+                viewRayAnchorWorldPoint: mapper.displayedCanvasWorldPoint(for: point),
                 sketchPlane: sketchPlane,
                 selectionIntent: selectionIntent,
                 modifierFlags: modifierFlags
@@ -13226,24 +13305,26 @@ public struct Viewport: View {
         let scene = sceneContext.scene
         let mapper = sceneContext.mapper
         let sketchPlane = activeCanvasDrag?.sketchPlane ?? canvasDragSketchPlane(for: hoveredCanvasHit)
-        onCanvasDrag(
-            mapper.modelDrag(
-                from: start,
-                to: end,
-                sketchPlane: sketchPlane,
-                modifierFlags: modifierFlags,
-                startWorldPoint: selectedGeneratedFaceSurfaceWorldPoint(
-                    at: start,
-                    in: scene,
-                    layout: mapper.layout
-                ),
-                endWorldPoint: selectedGeneratedFaceSurfaceWorldPoint(
-                    at: end,
-                    in: scene,
-                    layout: mapper.layout
-                )
-            ).constrained(by: canvasDragAxisConstraint)
-        )
+        guard let drag = canvasModelDrag(
+            from: start,
+            to: end,
+            mapper: mapper,
+            sketchPlane: sketchPlane,
+            modifierFlags: modifierFlags,
+            startExactWorldPoint: selectedGeneratedFaceSurfaceWorldPoint(
+                at: start,
+                in: scene,
+                layout: mapper.layout
+            ),
+            endExactWorldPoint: selectedGeneratedFaceSurfaceWorldPoint(
+                at: end,
+                in: scene,
+                layout: mapper.layout
+            )
+        ) else {
+            return
+        }
+        onCanvasDrag(drag.constrained(by: canvasDragAxisConstraint))
     }
 
     private func committedSketchCurveHandleDragTarget() -> ViewportSketchCurveHandleDragTarget? {
@@ -14499,7 +14580,18 @@ public struct Viewport: View {
             layout: mapper.layout
         )
         hoveredCanvasHit = hit
-        hoveredModelPoint = mapper.modelPoint(for: point)
+        let sketchPlane = canvasDragSketchPlane(for: hit)
+        let exactWorldPoint = selectedGeneratedFaceSurfaceWorldPoint(
+            at: point,
+            in: scene,
+            layout: mapper.layout
+        )
+        hoveredModelPoint = canvasInput(
+            for: point,
+            exactWorldPoint: exactWorldPoint,
+            sketchPlane: sketchPlane,
+            layout: mapper.layout
+        )?.point
         refreshSnapCandidateKind(size: size)
         onHover?(hit)
     }
