@@ -5,54 +5,6 @@ import RupaPreview
 import RupaRendering
 import SwiftUI
 
-private enum WorkspaceCanvasOverlayLayout {
-    static let edgePadding: CGFloat = ViewportCanvasChromeMetrics.edgePadding
-    static let coordinateSpaceName = "WorkspaceCanvasOverlaySpace"
-}
-
-private enum WorkspaceCanvasOverlayChromeID: Hashable {
-    case topBar
-    case toolPalette
-    case utilityRail
-    case contextPanel
-}
-
-private struct WorkspaceCanvasOverlayExclusionRectPreferenceKey: PreferenceKey {
-    static let defaultValue: [WorkspaceCanvasOverlayChromeID: CGRect] = [:]
-
-    static func reduce(
-        value: inout [WorkspaceCanvasOverlayChromeID: CGRect],
-        nextValue: () -> [WorkspaceCanvasOverlayChromeID: CGRect]
-    ) {
-        value.merge(nextValue()) { _, next in next }
-    }
-}
-
-private struct ViewportContextPanelHeightPreferenceKey: PreferenceKey {
-    static let defaultValue: CGFloat = 0.0
-
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        value = max(value, nextValue())
-    }
-}
-
-private extension View {
-    func workspaceCanvasOverlayExclusion(_ id: WorkspaceCanvasOverlayChromeID) -> some View {
-        background {
-            GeometryReader { proxy in
-                Color.clear.preference(
-                    key: WorkspaceCanvasOverlayExclusionRectPreferenceKey.self,
-                    value: [
-                        id: proxy.frame(
-                            in: .named(WorkspaceCanvasOverlayLayout.coordinateSpaceName)
-                        ),
-                    ]
-                )
-            }
-        }
-    }
-}
-
 @MainActor
 public struct MainView: View {
     @State private var session: EditorSession
@@ -549,157 +501,21 @@ public struct MainView: View {
 
     private var workArea: some View {
         CollapsibleView(isExpanded: $isPreviewExpanded) {
-            ZStack {
-                let sectionAnalysis = selectedSectionAnalysisSummary
-                let scaleSummary = workspaceScaleSummary
-                let scaleFitPromptState = workspaceScaleFitPromptState
-                Viewport(
-                    document: session.document,
-                    currentEvaluation: session.currentEvaluation,
-                    documentGeneration: session.generation,
-                    objectRegistry: objectRegistry,
-                    renderInvalidation: session.renderInvalidation,
-                    selection: session.selection,
-                    selectionDragPreviewTargets: selectionDragPreviewTargets,
-                    patternArrayCurvePathReplacementPreviewRequest: patternArrayCurvePathReplacementPreviewRequest,
-                    surfaceAnalysis: selectedSurfaceAnalysisSummary,
-                    surfaceAnalysisOptions: surfaceAnalysisOptions,
-                    surfaceContinuity: selectedSurfaceContinuitySummary,
-                    sectionAnalysis: sectionAnalysis,
-                    sectionClippingPlan: selectedSectionClippingPlan(for: sectionAnalysis),
-                    curveCurvatureDisplays: session.document.productMetadata.curveCurvatureDisplays,
-                    pointDisplays: session.document.productMetadata.pointDisplays,
-                    snapResolutionOptions: activeSnapResolutionOptions(),
-                    canvasDragPreviewKind: canvasDragPreviewKind,
-                    canvasPlacementPreviewKind: canvasPlacementPreviewKind,
-                    canvasDragAxisConstraint: activeCanvasDragAxisConstraint,
-                    canvasDragSketchPlaneOverride: workspacePlaneMode.sketchPlane,
-                    projectionRequest: viewportProjectionRequest,
-                    cameraFrameRequest: viewportCameraFrameRequest,
-                    selectionHitPolicy: selectionScope.viewportSelectionHitPolicy,
-                    bottomChromeReservedHeight: viewportBottomChromeReservedHeight,
-                    canvasOverlayExclusionRects: viewportOverlayExclusionRects,
-                    gridVisualSpacingMode: session.document.productMetadata.viewportGridSettings.visualSpacingMode,
-                    workspaceScalePresetTitle: scaleSummary.presetTitle,
-                    workspaceScalePresetOptions: WorkspaceScalePreset.profiles,
-                    canFitWorkspaceScaleToModel: scaleFitPromptState?.isActionable == true,
-                    canSelectSmallerWorkspaceScale: scaleSummary.smallerPreset != nil,
-                    canSelectLargerWorkspaceScale: scaleSummary.largerPreset != nil,
-                    cameraResetSignal: viewportCameraResetSignal,
-                    hoverClearSignal: viewportHoverClearSignal,
-                    showsConstructionPlaneHover: showsConstructionPlaneHover,
-                    allowsSelectionRectangle: allowsSelectionRectangle,
-                    allowsObjectAffordances: allowsObjectAffordances,
-                    slotWidthMeters: slotProfileWidthMeters,
-                    sketchVertexOffsetDistanceMeters: sketchVertexOffsetDistanceMeters,
-                    edgeOffsetDistanceMeters: edgeOffsetDistanceMeters,
-                    onPick: handleViewportPick,
-                    onCanvasDrag: handleViewportDrag,
-                    onShiftScroll: viewportShiftScrollHandler,
-                    onReferenceLineAnchor: viewportReferenceLineAnchorHandler,
-                    onSelectionDrag: handleViewportSelectionDrag,
-                    onSelectionDragPreview: viewportSelectionDragPreviewHandler,
-                    onBodyMoveDrag: viewportBodyMoveDragHandler,
-                    onVertexDrag: viewportVertexDragHandler,
-                    onFaceDrag: viewportFaceDragHandler,
-                    onEdgeChamferDrag: viewportEdgeChamferDragHandler,
-                    onEdgeFilletDrag: viewportEdgeFilletDragHandler,
-                    onRegionOffsetDrag: viewportRegionOffsetDragHandler,
-                    onEdgeOffsetDrag: viewportEdgeOffsetDragHandler,
-                    onSlotWidthDrag: viewportSlotWidthDragHandler,
-                    onSketchVertexOffsetDrag: viewportSketchVertexOffsetDragHandler,
-                    onPatternArrayLinearAxisDrag: viewportPatternArrayLinearAxisDragHandler,
-                    onIndependentCopyExtrudeDistanceDrag: viewportIndependentCopyExtrudeDistanceDragHandler,
-                    onIndependentCopyBodyDimensionDrag: viewportIndependentCopyBodyDimensionDragHandler,
-                    onPatternArrayRadialAngleDrag: viewportPatternArrayRadialAngleDragHandler,
-                    onPatternArrayCopyCountDrag: viewportPatternArrayCopyCountDragHandler,
-                    onPatternArrayCurveExtentDrag: viewportPatternArrayCurveExtentDragHandler,
-                    onPatternArrayCurvePathPointDrag: viewportPatternArrayCurvePathPointDragHandler,
-                    onPatternArrayOutputModeChange: viewportPatternArrayOutputModeChangeHandler,
-                    onSketchCurveHandleDrag: viewportSketchCurveHandleDragHandler,
-                    onSketchDimensionDrag: viewportSketchDimensionDragHandler,
-                    onSketchPointHandleDrag: viewportSketchPointHandleDragHandler,
-                    onBridgeCurveEndpointDrag: viewportBridgeCurveEndpointDragHandler,
-                    onSplineControlPointDrag: viewportSplineControlPointDragHandler,
-                    onSplineControlPointSlideDrag: viewportSplineControlPointSlideDragHandler,
-                    onPolySplineSurfaceVertexDrag: viewportPolySplineSurfaceVertexDragHandler,
-                    onSurfaceControlPointDrag: viewportSurfaceControlPointDragHandler,
-                    onSurfaceTrimEndpointDrag: viewportSurfaceTrimEndpointDragHandler,
-                    onSurfaceTrimControlPointDrag: viewportSurfaceTrimControlPointDragHandler,
-                    onPolySplineSurfaceVertexSlideDrag: viewportPolySplineSurfaceVertexSlideDragHandler,
-                    onSurfaceControlPointSlideDrag: viewportSurfaceControlPointSlideDragHandler,
-                    onSurfaceFrameDrag: viewportSurfaceFrameDragHandler,
-                    onConstructionPlaneHandleDrag: viewportConstructionPlaneHandleDragHandler,
-                    onCommandConfirm: viewportCommandConfirmHandler,
-                    onFitWorkspaceScaleToModel: fitWorkspaceScaleToModel,
-                    onSelectSmallerWorkspaceScale: selectSmallerWorkspaceScalePreset,
-                    onSelectLargerWorkspaceScale: selectLargerWorkspaceScalePreset,
-                    onSelectWorkspaceScalePreset: applyWorkspaceScalePreset,
-                    onHover: viewportHoverHandler,
-                    onSnapCandidateKindChange: { kind in
-                        snapOverrideState.updateHoveredCandidateKind(kind)
-                    },
-                    onProjectionBasisChange: { basis in
-                        viewportProjectionBasis = basis
-                    },
-                    onCameraFrameChange: { frame in
-                        viewportCameraFrame = frame
-                    },
-                    onProjectedGridStepChange: { stepMeters in
-                        viewportProjectedGridStepMeters = stepMeters
-                    }
-                )
-                .zIndex(0)
-            }
-            .coordinateSpace(name: WorkspaceCanvasOverlayLayout.coordinateSpaceName)
-            .overlay(alignment: .topTrailing) {
+            WorkspaceCanvasOverlayHost(
+                isContextPanelVisible: isViewportContextPanelVisible,
+                onHover: handleWorkspaceOverlayHover,
+                onContextPanelHeightChange: setViewportContextPanelHeight,
+                onExclusionRectsChange: setViewportOverlayExclusionRects
+            ) {
+                viewportCanvas
+            } topBar: {
                 workspaceTopBar
-                    .padding(.top, WorkspaceCanvasOverlayLayout.edgePadding)
-                    .padding(.horizontal, WorkspaceCanvasOverlayLayout.edgePadding)
-                    .workspaceCanvasOverlayExclusion(.topBar)
-                    .onHover(perform: handleWorkspaceOverlayHover)
-            }
-            .overlay(alignment: .leading) {
+            } toolPalette: {
                 floatingToolPalette
-                    .padding(.leading, WorkspaceCanvasOverlayLayout.edgePadding)
-                    .workspaceCanvasOverlayExclusion(.toolPalette)
-                    .onHover(perform: handleWorkspaceOverlayHover)
-            }
-            .overlay(alignment: .trailing) {
+            } utilityRail: {
                 workspaceUtilityRail
-                    .padding(.trailing, WorkspaceCanvasOverlayLayout.edgePadding)
-                    .workspaceCanvasOverlayExclusion(.utilityRail)
-                    .onHover(perform: handleWorkspaceOverlayHover)
-            }
-            .overlay(alignment: .bottom) {
-                if isViewportContextPanelVisible {
-                    viewportContextPanelContainer
-                        .padding(.bottom, WorkspaceCanvasOverlayLayout.edgePadding)
-                        .padding(.horizontal, WorkspaceCanvasOverlayLayout.edgePadding)
-                        .background {
-                            GeometryReader { proxy in
-                                Color.clear.preference(
-                                    key: ViewportContextPanelHeightPreferenceKey.self,
-                                    value: proxy.size.height
-                                )
-                            }
-                        }
-                        .workspaceCanvasOverlayExclusion(.contextPanel)
-                        .onHover(perform: handleWorkspaceOverlayHover)
-                }
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .onPreferenceChange(ViewportContextPanelHeightPreferenceKey.self) { height in
-                let normalizedHeight = max(0.0, height.rounded(.up))
-                if abs(viewportContextPanelHeight - normalizedHeight) > 0.5 {
-                    viewportContextPanelHeight = normalizedHeight
-                }
-            }
-            .onPreferenceChange(WorkspaceCanvasOverlayExclusionRectPreferenceKey.self) { rectsByID in
-                let nextRects = normalizedCanvasOverlayExclusionRects(rectsByID)
-                if viewportOverlayExclusionRects != nextRects {
-                    viewportOverlayExclusionRects = nextRects
-                }
+            } contextPanel: {
+                viewportContextPanelContainer
             }
         } content: {
             PreviewSurface(
@@ -743,6 +559,122 @@ public struct MainView: View {
                 slideCommandState.deactivate()
             }
         }
+    }
+
+    private var viewportCanvas: some View {
+        let sectionAnalysis = selectedSectionAnalysisSummary
+        let scaleSummary = workspaceScaleSummary
+        let scaleFitPromptState = workspaceScaleFitPromptState
+        return Viewport(
+            document: session.document,
+            currentEvaluation: session.currentEvaluation,
+            documentGeneration: session.generation,
+            objectRegistry: objectRegistry,
+            renderInvalidation: session.renderInvalidation,
+            selection: session.selection,
+            selectionDragPreviewTargets: selectionDragPreviewTargets,
+            patternArrayCurvePathReplacementPreviewRequest: patternArrayCurvePathReplacementPreviewRequest,
+            surfaceAnalysis: selectedSurfaceAnalysisSummary,
+            surfaceAnalysisOptions: surfaceAnalysisOptions,
+            surfaceContinuity: selectedSurfaceContinuitySummary,
+            sectionAnalysis: sectionAnalysis,
+            sectionClippingPlan: selectedSectionClippingPlan(for: sectionAnalysis),
+            curveCurvatureDisplays: session.document.productMetadata.curveCurvatureDisplays,
+            pointDisplays: session.document.productMetadata.pointDisplays,
+            snapResolutionOptions: activeSnapResolutionOptions(),
+            canvasDragPreviewKind: canvasDragPreviewKind,
+            canvasPlacementPreviewKind: canvasPlacementPreviewKind,
+            canvasDragAxisConstraint: activeCanvasDragAxisConstraint,
+            canvasDragSketchPlaneOverride: workspacePlaneMode.sketchPlane,
+            projectionRequest: viewportProjectionRequest,
+            cameraFrameRequest: viewportCameraFrameRequest,
+            selectionHitPolicy: selectionScope.viewportSelectionHitPolicy,
+            bottomChromeReservedHeight: viewportBottomChromeReservedHeight,
+            canvasOverlayExclusionRects: viewportOverlayExclusionRects,
+            gridVisualSpacingMode: session.document.productMetadata.viewportGridSettings.visualSpacingMode,
+            workspaceScalePresetTitle: scaleSummary.presetTitle,
+            workspaceScalePresetOptions: WorkspaceScalePreset.profiles,
+            canFitWorkspaceScaleToModel: scaleFitPromptState?.isActionable == true,
+            canSelectSmallerWorkspaceScale: scaleSummary.smallerPreset != nil,
+            canSelectLargerWorkspaceScale: scaleSummary.largerPreset != nil,
+            cameraResetSignal: viewportCameraResetSignal,
+            hoverClearSignal: viewportHoverClearSignal,
+            showsConstructionPlaneHover: showsConstructionPlaneHover,
+            allowsSelectionRectangle: allowsSelectionRectangle,
+            allowsObjectAffordances: allowsObjectAffordances,
+            slotWidthMeters: slotProfileWidthMeters,
+            sketchVertexOffsetDistanceMeters: sketchVertexOffsetDistanceMeters,
+            edgeOffsetDistanceMeters: edgeOffsetDistanceMeters,
+            onPick: handleViewportPick,
+            onCanvasDrag: handleViewportDrag,
+            onShiftScroll: viewportShiftScrollHandler,
+            onReferenceLineAnchor: viewportReferenceLineAnchorHandler,
+            onSelectionDrag: handleViewportSelectionDrag,
+            onSelectionDragPreview: viewportSelectionDragPreviewHandler,
+            onBodyMoveDrag: viewportBodyMoveDragHandler,
+            onVertexDrag: viewportVertexDragHandler,
+            onFaceDrag: viewportFaceDragHandler,
+            onEdgeChamferDrag: viewportEdgeChamferDragHandler,
+            onEdgeFilletDrag: viewportEdgeFilletDragHandler,
+            onRegionOffsetDrag: viewportRegionOffsetDragHandler,
+            onEdgeOffsetDrag: viewportEdgeOffsetDragHandler,
+            onSlotWidthDrag: viewportSlotWidthDragHandler,
+            onSketchVertexOffsetDrag: viewportSketchVertexOffsetDragHandler,
+            onPatternArrayLinearAxisDrag: viewportPatternArrayLinearAxisDragHandler,
+            onIndependentCopyExtrudeDistanceDrag: viewportIndependentCopyExtrudeDistanceDragHandler,
+            onIndependentCopyBodyDimensionDrag: viewportIndependentCopyBodyDimensionDragHandler,
+            onPatternArrayRadialAngleDrag: viewportPatternArrayRadialAngleDragHandler,
+            onPatternArrayCopyCountDrag: viewportPatternArrayCopyCountDragHandler,
+            onPatternArrayCurveExtentDrag: viewportPatternArrayCurveExtentDragHandler,
+            onPatternArrayCurvePathPointDrag: viewportPatternArrayCurvePathPointDragHandler,
+            onPatternArrayOutputModeChange: viewportPatternArrayOutputModeChangeHandler,
+            onSketchCurveHandleDrag: viewportSketchCurveHandleDragHandler,
+            onSketchDimensionDrag: viewportSketchDimensionDragHandler,
+            onSketchPointHandleDrag: viewportSketchPointHandleDragHandler,
+            onBridgeCurveEndpointDrag: viewportBridgeCurveEndpointDragHandler,
+            onSplineControlPointDrag: viewportSplineControlPointDragHandler,
+            onSplineControlPointSlideDrag: viewportSplineControlPointSlideDragHandler,
+            onPolySplineSurfaceVertexDrag: viewportPolySplineSurfaceVertexDragHandler,
+            onSurfaceControlPointDrag: viewportSurfaceControlPointDragHandler,
+            onSurfaceTrimEndpointDrag: viewportSurfaceTrimEndpointDragHandler,
+            onSurfaceTrimControlPointDrag: viewportSurfaceTrimControlPointDragHandler,
+            onPolySplineSurfaceVertexSlideDrag: viewportPolySplineSurfaceVertexSlideDragHandler,
+            onSurfaceControlPointSlideDrag: viewportSurfaceControlPointSlideDragHandler,
+            onSurfaceFrameDrag: viewportSurfaceFrameDragHandler,
+            onConstructionPlaneHandleDrag: viewportConstructionPlaneHandleDragHandler,
+            onCommandConfirm: viewportCommandConfirmHandler,
+            onFitWorkspaceScaleToModel: fitWorkspaceScaleToModel,
+            onSelectSmallerWorkspaceScale: selectSmallerWorkspaceScalePreset,
+            onSelectLargerWorkspaceScale: selectLargerWorkspaceScalePreset,
+            onSelectWorkspaceScalePreset: applyWorkspaceScalePreset,
+            onHover: viewportHoverHandler,
+            onSnapCandidateKindChange: { kind in
+                snapOverrideState.updateHoveredCandidateKind(kind)
+            },
+            onProjectionBasisChange: { basis in
+                viewportProjectionBasis = basis
+            },
+            onCameraFrameChange: { frame in
+                viewportCameraFrame = frame
+            },
+            onProjectedGridStepChange: { stepMeters in
+                viewportProjectedGridStepMeters = stepMeters
+            }
+        )
+    }
+
+    private func setViewportContextPanelHeight(_ height: CGFloat) {
+        guard abs(viewportContextPanelHeight - height) > 0.5 else {
+            return
+        }
+        viewportContextPanelHeight = height
+    }
+
+    private func setViewportOverlayExclusionRects(_ rects: [CGRect]) {
+        guard viewportOverlayExclusionRects != rects else {
+            return
+        }
+        viewportOverlayExclusionRects = rects
     }
 
     private var inspectorPane: some View {
@@ -1392,45 +1324,6 @@ public struct MainView: View {
             true
         case .select, .sweep, .mesh, .measure:
             false
-        }
-    }
-
-    private func normalizedCanvasOverlayExclusionRects(
-        _ rectsByID: [WorkspaceCanvasOverlayChromeID: CGRect]
-    ) -> [CGRect] {
-        rectsByID.values.compactMap { rect in
-            guard rect.isNull == false,
-                  rect.isEmpty == false,
-                  rect.origin.x.isFinite,
-                  rect.origin.y.isFinite,
-                  rect.width.isFinite,
-                  rect.height.isFinite else {
-                return nil
-            }
-
-            let minX = rect.minX.rounded(.down)
-            let minY = rect.minY.rounded(.down)
-            let maxX = rect.maxX.rounded(.up)
-            let maxY = rect.maxY.rounded(.up)
-            let normalized = CGRect(
-                x: minX,
-                y: minY,
-                width: max(0.0, maxX - minX),
-                height: max(0.0, maxY - minY)
-            )
-            return normalized.isEmpty ? nil : normalized
-        }
-        .sorted { left, right in
-            if left.minY != right.minY {
-                return left.minY < right.minY
-            }
-            if left.minX != right.minX {
-                return left.minX < right.minX
-            }
-            if left.width != right.width {
-                return left.width < right.width
-            }
-            return left.height < right.height
         }
     }
 
