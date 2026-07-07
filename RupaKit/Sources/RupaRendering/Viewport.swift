@@ -49,6 +49,7 @@ public struct Viewport: View {
     @State private var camera: ViewportCamera = .identity
     @State private var editedBodies: [FeatureID: ViewportObjectEditState] = [:]
     @State private var dragPreviewDocument: DesignDocument?
+    @State private var dragPreviewRevision: UInt64 = 0
     @State private var hoveredAffordance: ViewportAffordanceTarget?
     @State private var hoveredSketchCurveHandle: ViewportSketchCurveHandleTarget?
     @State private var hoveredSketchDimension: ViewportSketchDimensionTarget?
@@ -117,6 +118,7 @@ public struct Viewport: View {
     @State private var identityHitResolver = ViewportIdentityHitResolver(
         renderBudget: .deviceCalibrated()
     )
+    @State private var sceneSnapshotCache = ViewportSceneSnapshotCache()
 
     private let document: DesignDocument
     private let currentEvaluation: DocumentEvaluationContext?
@@ -393,11 +395,15 @@ public struct Viewport: View {
         GeometryReader { proxy in
             TimelineView(.animation) { timeline in
                 let basis = projectionBasis(at: timeline.date)
-                let projectedGrid = ViewportProjectedGrid(
-                    document: document,
+                let sceneContext = makeSceneContext(
                     size: proxy.size,
                     camera: camera,
-                    basis: basis,
+                    basis: basis
+                )
+                let projectedGrid = ViewportProjectedGrid(
+                    document: sceneDocument(usesDragPreviewDocument: true),
+                    layout: sceneContext.layout,
+                    size: proxy.size,
                     visualSpacingMode: gridVisualSpacingMode
                 )
                 let chromeLayout = ViewportCanvasChromeLayout(
@@ -414,9 +420,7 @@ public struct Viewport: View {
                     drawAxes(in: &context, size: size, camera: camera, basis: basis)
                     drawModel(
                         in: &context,
-                        size: size,
-                        camera: camera,
-                        basis: basis,
+                        sceneContext: sceneContext,
                         chromeLayout: chromeLayout,
                         placementCellSideMeters: projectedGrid.minorStepMeters
                     )
@@ -961,14 +965,7 @@ public struct Viewport: View {
     }
 
     private func makeScene() -> ViewportScene {
-        sceneApplyingSectionClipping(
-            ViewportSceneBuilder(objectRegistry: objectRegistry).build(
-                document: renderingDocument,
-                currentEvaluation: renderingCurrentEvaluation,
-                documentGeneration: renderingDocumentGeneration,
-                evaluationCache: renderingEvaluationCache
-            )
-        )
+        cachedScene(usesDragPreviewDocument: true)
     }
 
     private func makeSceneContext(
@@ -977,18 +974,65 @@ public struct Viewport: View {
         basis: ViewportProjectionBasis,
         usesDragPreviewDocument: Bool = true
     ) -> ViewportSceneContext {
-        var context = ViewportSceneContext(
-            document: sceneDocument(usesDragPreviewDocument: usesDragPreviewDocument),
-            documentGeneration: sceneDocumentGeneration(usesDragPreviewDocument: usesDragPreviewDocument),
+        let document = sceneDocument(usesDragPreviewDocument: usesDragPreviewDocument)
+        let scene = cachedScene(usesDragPreviewDocument: usesDragPreviewDocument)
+        return ViewportSceneContext(
+            document: document,
+            scene: scene,
             size: size,
-            objectRegistry: objectRegistry,
-            currentEvaluation: sceneCurrentEvaluation(usesDragPreviewDocument: usesDragPreviewDocument),
-            evaluationCache: sceneEvaluationCache(usesDragPreviewDocument: usesDragPreviewDocument),
             camera: camera,
             basis: basis
         )
-        context.scene = sceneApplyingSectionClipping(context.scene)
-        return context
+    }
+
+    private func cachedScene(usesDragPreviewDocument: Bool) -> ViewportScene {
+        sceneSnapshotCache.scene(
+            for: sceneSnapshotKey(usesDragPreviewDocument: usesDragPreviewDocument)
+        ) {
+            buildScene(usesDragPreviewDocument: usesDragPreviewDocument)
+        }
+    }
+
+    private func buildScene(usesDragPreviewDocument: Bool) -> ViewportScene {
+        sceneApplyingSectionClipping(
+            ViewportSceneBuilder(objectRegistry: objectRegistry).build(
+                document: sceneDocument(usesDragPreviewDocument: usesDragPreviewDocument),
+                currentEvaluation: sceneCurrentEvaluation(usesDragPreviewDocument: usesDragPreviewDocument),
+                documentGeneration: sceneDocumentGeneration(usesDragPreviewDocument: usesDragPreviewDocument),
+                evaluationCache: sceneEvaluationCache(usesDragPreviewDocument: usesDragPreviewDocument)
+            )
+        )
+    }
+
+    private func sceneSnapshotKey(
+        usesDragPreviewDocument: Bool
+    ) -> ViewportSceneSnapshotKey? {
+        let source: ViewportSceneSnapshotKey.Source
+        if usesDragPreviewDocument,
+           dragPreviewDocument != nil {
+            source = .dragPreview(dragPreviewRevision)
+        } else if let generation = sceneDocumentGeneration(
+            usesDragPreviewDocument: usesDragPreviewDocument
+        ) {
+            source = .document(generation)
+        } else {
+            return nil
+        }
+
+        return ViewportSceneSnapshotKey(
+            source: source,
+            currentEvaluationGeneration: sceneCurrentEvaluation(
+                usesDragPreviewDocument: usesDragPreviewDocument
+            )?.generation,
+            evaluationCacheGeneration: sceneEvaluationCache(
+                usesDragPreviewDocument: usesDragPreviewDocument
+            )?.generation,
+            renderInvalidation: renderInvalidation,
+            sectionClippingPlan: sectionClippingPlan,
+            objectDefinitions: objectRegistry.definitions.values.sorted { lhs, rhs in
+                lhs.id.rawValue < rhs.id.rawValue
+            }
+        )
     }
 
     private func sceneApplyingSectionClipping(_ scene: ViewportScene) -> ViewportScene {
@@ -1008,13 +1052,12 @@ public struct Viewport: View {
         basis: ViewportProjectionBasis,
         usesDragPreviewDocument: Bool = true
     ) -> ViewportModelCoordinateMapper {
-        ViewportModelCoordinateMapper(
-            document: sceneDocument(usesDragPreviewDocument: usesDragPreviewDocument),
+        let document = sceneDocument(usesDragPreviewDocument: usesDragPreviewDocument)
+        let scene = cachedScene(usesDragPreviewDocument: usesDragPreviewDocument)
+        return ViewportModelCoordinateMapper(
+            document: document,
+            scene: scene,
             size: size,
-            objectRegistry: objectRegistry,
-            currentEvaluation: sceneCurrentEvaluation(usesDragPreviewDocument: usesDragPreviewDocument),
-            documentGeneration: sceneDocumentGeneration(usesDragPreviewDocument: usesDragPreviewDocument),
-            evaluationCache: sceneEvaluationCache(usesDragPreviewDocument: usesDragPreviewDocument),
             camera: camera,
             basis: basis
         )
@@ -1101,17 +1144,10 @@ public struct Viewport: View {
 
     private func drawModel(
         in context: inout GraphicsContext,
-        size: CGSize,
-        camera: ViewportCamera,
-        basis: ViewportProjectionBasis,
+        sceneContext: ViewportSceneContext,
         chromeLayout: ViewportCanvasChromeLayout,
         placementCellSideMeters: Double
     ) {
-        let sceneContext = makeSceneContext(
-            size: size,
-            camera: camera,
-            basis: basis
-        )
         let scene = sceneContext.scene
         let layout = sceneContext.layout
         let selectedObjectFeatureIDs = selectedObjectFeatureIDs()
@@ -9963,7 +9999,22 @@ public struct Viewport: View {
     private func clearDragPreviewDocument() {
         if dragPreviewDocument != nil {
             dragPreviewDocument = nil
+            advanceDragPreviewRevision()
         }
+    }
+
+    private func setDragPreviewDocument(_ document: DesignDocument) {
+        dragPreviewDocument = document
+        advanceDragPreviewRevision()
+    }
+
+    private func advanceDragPreviewRevision() {
+        if dragPreviewRevision == UInt64.max {
+            dragPreviewRevision = 1
+        } else {
+            dragPreviewRevision += 1
+        }
+        sceneSnapshotCache.invalidate()
     }
 
     private func beginViewportPress(at point: CGPoint, size: CGSize) {
@@ -11875,11 +11926,13 @@ public struct Viewport: View {
         request: ViewportEdgeTreatmentPreviewRequest
     ) {
         do {
-            dragPreviewDocument = try ViewportEdgeTreatmentPreviewDocumentBuilder(
-                objectRegistry: objectRegistry
-            ).previewDocument(
-                for: request,
-                in: document
+            setDragPreviewDocument(
+                try ViewportEdgeTreatmentPreviewDocumentBuilder(
+                    objectRegistry: objectRegistry
+                ).previewDocument(
+                    for: request,
+                    in: document
+                )
             )
         } catch {
             clearDragPreviewDocument()
@@ -13252,7 +13305,7 @@ public struct Viewport: View {
         ) else {
             return
         }
-        onCanvasDrag(drag.constrained(by: canvasDragAxisConstraint))
+        onCanvasDrag(drag)
     }
 
     private func committedSketchCurveHandleDragTarget() -> ViewportSketchCurveHandleDragTarget? {

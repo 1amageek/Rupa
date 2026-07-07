@@ -4169,49 +4169,39 @@ public struct MainView: View {
         ) else {
             return
         }
-        let startInput = snappedModelInput(startCanvasInput.point, modifierFlags: drag.modifierFlags)
-        let startPoint = startInput.point
-        let constrainedEndPoint = activeCanvasDragAxisConstraint?.constrainedCanvasPoint(
-            endCanvasInput.point,
-            from: startPoint,
-            on: sketchPlane
-        ) ?? endCanvasInput.point
-        let endInput = snappedModelInput(
-            constrainedEndPoint,
-            referencePoint: startPoint,
-            modifierFlags: drag.modifierFlags
+        let resolution = ViewportCanvasDragSnapResolver().resolution(
+            ViewportModelDrag(
+                start: startCanvasInput.point,
+                end: endCanvasInput.point,
+                sketchPlane: sketchPlane,
+                modifierFlags: drag.modifierFlags,
+                startWorldPoint: startCanvasInput.worldPoint,
+                endWorldPoint: endCanvasInput.worldPoint
+            ),
+            document: session.document,
+            snapOptions: snapResolutionOptions(modifierFlags: drag.modifierFlags),
+            axisConstraint: activeCanvasDragAxisConstraint
         )
-        let snappedEndPoint = endInput.point
-        let endPoint = activeCanvasDragAxisConstraint?.constrainedCanvasPoint(
-            snappedEndPoint,
-            from: startPoint,
-            on: sketchPlane
-        ) ?? snappedEndPoint
-        let startWorldPoint = resolvedCanvasWorldPoint(
-            for: startPoint,
-            snappedWorldPoint: startInput.worldPoint,
-            fallbackWorldPoint: startCanvasInput.worldPoint,
-            sketchPlane: sketchPlane
-        )
-        let endWorldPoint = activeCanvasDragAxisConstraint == nil
-            ? resolvedCanvasWorldPoint(
-                for: endPoint,
-                snappedWorldPoint: endInput.worldPoint,
-                fallbackWorldPoint: endCanvasInput.worldPoint,
-                sketchPlane: sketchPlane
-            )
-            : resolvedConstrainedCanvasWorldPoint(
-                for: endPoint,
-                sketchPlane: sketchPlane
-            )
+        reportViewportDragSnapFailures(resolution)
+        let resolvedDrag = resolution.drag
         let result = session.activateSelectedToolFromCanvasDrag(
-            startModelPoint: startPoint,
-            endModelPoint: endPoint,
-            sketchPlane: sketchPlane,
-            startWorldPoint: startWorldPoint,
-            endWorldPoint: endWorldPoint
+            startModelPoint: resolvedDrag.start,
+            endModelPoint: resolvedDrag.end,
+            sketchPlane: resolvedDrag.sketchPlane,
+            startWorldPoint: resolvedDrag.startWorldPoint,
+            endWorldPoint: resolvedDrag.endWorldPoint
         )
         if result.revealsDiagnostics {
+            isPreviewExpanded = true
+        }
+    }
+
+    private func reportViewportDragSnapFailures(_ resolution: ViewportCanvasDragSnapResolution) {
+        for failureDescription in resolution.failureDescriptions {
+            session.reportToolStatus(
+                "Snapping failed and was skipped: \(failureDescription)",
+                severity: .warning
+            )
             isPreviewExpanded = true
         }
     }
@@ -4261,21 +4251,6 @@ public struct MainView: View {
             for: point,
             snappedWorldPoint: snappedWorldPoint,
             fallbackWorldPoint: fallbackWorldPoint,
-            sketchPlane: sketchPlane
-        )
-    }
-
-    private func resolvedConstrainedCanvasWorldPoint(
-        for point: Point2D,
-        sketchPlane: SketchPlane
-    ) -> Point3D? {
-        guard case .plane = sketchPlane else {
-            return nil
-        }
-        return resolvedSketchPlaneWorldPoint(
-            for: point,
-            snappedWorldPoint: nil,
-            fallbackWorldPoint: nil,
             sketchPlane: sketchPlane
         )
     }

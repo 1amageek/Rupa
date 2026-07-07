@@ -2,12 +2,12 @@ import RupaCore
 import RupaViewportScene
 import SwiftCAD
 
-struct ViewportCanvasDragSnapResolution: Equatable {
-    var drag: ViewportModelDrag
-    var startResolution: ViewportSnapResolution
-    var endResolution: ViewportSnapResolution
+public struct ViewportCanvasDragSnapResolution: Equatable, Sendable {
+    public var drag: ViewportModelDrag
+    public var startResolution: ViewportSnapResolution
+    public var endResolution: ViewportSnapResolution
 
-    var failureDescriptions: [String] {
+    public var failureDescriptions: [String] {
         [
             startResolution.failureDescription,
             endResolution.failureDescription,
@@ -18,7 +18,7 @@ struct ViewportCanvasDragSnapResolution: Equatable {
 public struct ViewportCanvasDragSnapResolver: Sendable {
     public init() {}
 
-    func resolution(
+    public func resolution(
         _ drag: ViewportModelDrag,
         document: DesignDocument,
         snapOptions: SnapResolutionOptions?,
@@ -49,6 +49,20 @@ public struct ViewportCanvasDragSnapResolver: Sendable {
             from: startPoint,
             on: drag.sketchPlane
         ) ?? snappedEndPoint
+        let startWorldPoint = resolvedWorldPoint(
+            for: startPoint,
+            resolution: startResolution,
+            fallbackPoint: drag.startWorldPoint,
+            originalPoint: drag.start,
+            sketchPlane: drag.sketchPlane
+        )
+        let endWorldPoint = resolvedWorldPoint(
+            for: endPoint,
+            resolution: endResolution,
+            fallbackPoint: axisConstraint == nil ? drag.endWorldPoint : nil,
+            originalPoint: drag.end,
+            sketchPlane: drag.sketchPlane
+        )
 
         return ViewportCanvasDragSnapResolution(
             drag: ViewportModelDrag(
@@ -56,7 +70,20 @@ public struct ViewportCanvasDragSnapResolver: Sendable {
                 end: endPoint,
                 sketchPlane: drag.sketchPlane,
                 modifierFlags: drag.modifierFlags,
-                startViewRayAnchorWorldPoint: drag.startViewRayAnchorWorldPoint
+                startWorldPoint: startWorldPoint,
+                endWorldPoint: endWorldPoint,
+                startViewRayAnchorWorldPoint: preservedViewRayAnchor(
+                    drag.startViewRayAnchorWorldPoint,
+                    originalPoint: drag.start,
+                    resolvedPoint: startPoint,
+                    resolvedWorldPoint: startWorldPoint
+                ),
+                endViewRayAnchorWorldPoint: preservedViewRayAnchor(
+                    axisConstraint == nil ? drag.endViewRayAnchorWorldPoint : nil,
+                    originalPoint: drag.end,
+                    resolvedPoint: endPoint,
+                    resolvedWorldPoint: endWorldPoint
+                )
             ),
             startResolution: startResolution,
             endResolution: endResolution
@@ -75,5 +102,48 @@ public struct ViewportCanvasDragSnapResolver: Sendable {
             snapOptions: snapOptions,
             axisConstraint: axisConstraint
         ).drag
+    }
+
+    private func resolvedWorldPoint(
+        for point: Point2D,
+        resolution: ViewportSnapResolution,
+        fallbackPoint: Point3D?,
+        originalPoint: Point2D,
+        sketchPlane: SketchPlane
+    ) -> Point3D? {
+        if let selectedWorldPoint = resolution.result?.selectedWorldPoint {
+            return selectedWorldPoint
+        }
+        if case .plane = sketchPlane {
+            do {
+                let localPoint = SketchPlaneCanvasMapper(sketchPlane: sketchPlane)
+                    .localPoint(fromCanvas: point)
+                return try SketchPlaneCoordinateSystem(plane: sketchPlane).point(from: localPoint)
+            } catch {
+                return fallbackPointIfUnchanged(fallbackPoint, originalPoint: originalPoint, resolvedPoint: point)
+            }
+        }
+        return fallbackPointIfUnchanged(fallbackPoint, originalPoint: originalPoint, resolvedPoint: point)
+    }
+
+    private func fallbackPointIfUnchanged(
+        _ fallbackPoint: Point3D?,
+        originalPoint: Point2D,
+        resolvedPoint: Point2D
+    ) -> Point3D? {
+        originalPoint == resolvedPoint ? fallbackPoint : nil
+    }
+
+    private func preservedViewRayAnchor(
+        _ anchor: Point3D?,
+        originalPoint: Point2D,
+        resolvedPoint: Point2D,
+        resolvedWorldPoint: Point3D?
+    ) -> Point3D? {
+        guard resolvedWorldPoint == nil,
+              originalPoint == resolvedPoint else {
+            return nil
+        }
+        return anchor
     }
 }

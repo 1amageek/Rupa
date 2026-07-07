@@ -1822,6 +1822,23 @@ public struct ViewportSceneContext {
 
     public init(
         document: DesignDocument,
+        scene: ViewportScene,
+        size: CGSize,
+        camera: ViewportCamera = .identity,
+        basis: ViewportProjectionBasis = .isometric
+    ) {
+        self.scene = scene
+        self.mapper = ViewportModelCoordinateMapper(
+            document: document,
+            scene: scene,
+            size: size,
+            camera: camera,
+            basis: basis
+        )
+    }
+
+    public init(
+        document: DesignDocument,
         documentGeneration: DocumentGeneration? = nil,
         size: CGSize,
         objectRegistry: ObjectTypeRegistry = .builtIn,

@@ -6,6 +6,134 @@ import SwiftCAD
 import Testing
 @testable import RupaRendering
 
+@Test func viewportSceneSnapshotCacheReusesMatchingKey() {
+    let cache = ViewportSceneSnapshotCache()
+    let key = viewportSceneSnapshotTestKey(generation: 1)
+    var buildCount = 0
+
+    _ = cache.scene(for: key) {
+        buildCount += 1
+        return ViewportScene(items: [])
+    }
+    _ = cache.scene(for: key) {
+        buildCount += 1
+        return ViewportScene(items: [])
+    }
+
+    #expect(buildCount == 1)
+}
+
+@Test func viewportSceneSnapshotCacheRebuildsWhenKeyChanges() {
+    let cache = ViewportSceneSnapshotCache()
+    var buildCount = 0
+
+    _ = cache.scene(for: viewportSceneSnapshotTestKey(generation: 1)) {
+        buildCount += 1
+        return ViewportScene(items: [])
+    }
+    _ = cache.scene(for: viewportSceneSnapshotTestKey(generation: 2)) {
+        buildCount += 1
+        return ViewportScene(items: [])
+    }
+
+    #expect(buildCount == 2)
+}
+
+@Test func viewportSceneSnapshotCacheRetainsMultipleRecentKeys() {
+    let cache = ViewportSceneSnapshotCache()
+    let documentKey = viewportSceneSnapshotTestKey(source: .document(DocumentGeneration(1)))
+    let previewKey = viewportSceneSnapshotTestKey(source: .dragPreview(1))
+    var buildCount = 0
+
+    _ = cache.scene(for: documentKey) {
+        buildCount += 1
+        return ViewportScene(items: [])
+    }
+    _ = cache.scene(for: previewKey) {
+        buildCount += 1
+        return ViewportScene(items: [])
+    }
+    _ = cache.scene(for: documentKey) {
+        buildCount += 1
+        return ViewportScene(items: [])
+    }
+
+    #expect(buildCount == 2)
+}
+
+@Test func viewportSceneSnapshotCacheEvictsLeastRecentKeyWhenCapacityIsExceeded() {
+    let cache = ViewportSceneSnapshotCache(maximumEntryCount: 1)
+    let firstKey = viewportSceneSnapshotTestKey(generation: 1)
+    let secondKey = viewportSceneSnapshotTestKey(generation: 2)
+    var buildCount = 0
+
+    _ = cache.scene(for: firstKey) {
+        buildCount += 1
+        return ViewportScene(items: [])
+    }
+    _ = cache.scene(for: secondKey) {
+        buildCount += 1
+        return ViewportScene(items: [])
+    }
+    _ = cache.scene(for: firstKey) {
+        buildCount += 1
+        return ViewportScene(items: [])
+    }
+
+    #expect(buildCount == 3)
+}
+
+@Test func viewportSceneSnapshotCacheDoesNotReuseMissingKey() {
+    let cache = ViewportSceneSnapshotCache()
+    var buildCount = 0
+
+    _ = cache.scene(for: nil) {
+        buildCount += 1
+        return ViewportScene(items: [])
+    }
+    _ = cache.scene(for: nil) {
+        buildCount += 1
+        return ViewportScene(items: [])
+    }
+
+    #expect(buildCount == 2)
+}
+
+@Test func viewportSceneSnapshotCacheInvalidationDropsCachedScene() {
+    let cache = ViewportSceneSnapshotCache()
+    let key = viewportSceneSnapshotTestKey(generation: 1)
+    var buildCount = 0
+
+    _ = cache.scene(for: key) {
+        buildCount += 1
+        return ViewportScene(items: [])
+    }
+    cache.invalidate()
+    _ = cache.scene(for: key) {
+        buildCount += 1
+        return ViewportScene(items: [])
+    }
+
+    #expect(buildCount == 2)
+}
+
+private func viewportSceneSnapshotTestKey(generation: UInt64) -> ViewportSceneSnapshotKey {
+    viewportSceneSnapshotTestKey(source: .document(DocumentGeneration(generation)))
+}
+
+private func viewportSceneSnapshotTestKey(
+    source: ViewportSceneSnapshotKey.Source
+) -> ViewportSceneSnapshotKey {
+    ViewportSceneSnapshotKey(
+        source: source,
+        currentEvaluationGeneration: nil,
+        evaluationCacheGeneration: nil,
+        renderInvalidation: RenderInvalidation(),
+        sectionClippingPlan: nil,
+        objectDefinitions: []
+    )
+}
+
 @MainActor
 @Test func viewportSceneBuilderCreatesSelectableSketchAndBodyItems() async throws {
     let session = EditorSession()
@@ -3311,7 +3439,11 @@ import Testing
     let drag = ViewportModelDrag(
         start: Point2D(x: 0.012, y: 0.018),
         end: Point2D(x: 0.026, y: 0.037),
-        sketchPlane: .xy
+        sketchPlane: .xy,
+        startWorldPoint: Point3D(x: 0.012, y: 0.018, z: 0.0),
+        endWorldPoint: Point3D(x: 0.026, y: 0.037, z: 0.0),
+        startViewRayAnchorWorldPoint: Point3D(x: 0.012, y: 0.018, z: 0.1),
+        endViewRayAnchorWorldPoint: Point3D(x: 0.026, y: 0.037, z: 0.1)
     )
     let options = SnapResolutionOptions(
         usesGrid: false,
@@ -3327,6 +3459,44 @@ import Testing
 
     #expect(pointIsApproximatelyEqual(resolved.start, drag.start))
     #expect(pointIsApproximatelyEqual(resolved.end, Point2D(x: drag.end.x, y: drag.start.y)))
+    #expect(resolved.startWorldPoint == drag.startWorldPoint)
+    #expect(resolved.endWorldPoint == nil)
+    #expect(resolved.startViewRayAnchorWorldPoint == nil)
+    #expect(resolved.endViewRayAnchorWorldPoint == nil)
+}
+
+@Test func viewportCanvasDragSnapResolverResolvesCustomPlaneWorldPointsAfterGridSnap() throws {
+    let plane = SketchPlane.plane(
+        Plane3D(
+            origin: Point3D(x: 2.0, y: 3.0, z: 4.0),
+            normal: .unitY
+        )
+    )
+    let drag = ViewportModelDrag(
+        start: Point2D(x: 0.012, y: 0.018),
+        end: Point2D(x: 0.026, y: 0.037),
+        sketchPlane: plane,
+        startWorldPoint: Point3D(x: 2.012, y: 3.0, z: 4.018),
+        endWorldPoint: Point3D(x: 2.026, y: 3.0, z: 4.037)
+    )
+    let options = SnapResolutionOptions(
+        usesGrid: true,
+        usesObjects: false,
+        gridIntervalMeters: 0.01
+    )
+
+    let resolved = ViewportCanvasDragSnapResolver().resolvedDrag(
+        drag,
+        document: .empty(),
+        snapOptions: options,
+        axisConstraint: .x
+    )
+    let coordinateSystem = try SketchPlaneCoordinateSystem(plane: plane)
+
+    #expect(pointIsApproximatelyEqual(resolved.start, Point2D(x: 0.01, y: 0.02)))
+    #expect(pointIsApproximatelyEqual(resolved.end, Point2D(x: 0.03, y: 0.02)))
+    #expect(resolved.startWorldPoint == coordinateSystem.point(from: resolved.start))
+    #expect(resolved.endWorldPoint == coordinateSystem.point(from: resolved.end))
 }
 
 @Test func viewportCanvasDragSnapResolverReportsFailuresWithoutChangingFallbackDrag() {

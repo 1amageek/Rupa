@@ -160,13 +160,27 @@ public struct ViewportProjectedGrid: Equatable {
         basis: ViewportProjectionBasis = .isometric,
         visualSpacingMode: VisualSpacingMode = .adaptive
     ) {
-        let ruler = document.ruler.normalizedForWorkspaceScale()
         let layout = ViewportModelCoordinateMapper(
             document: document,
             size: size,
             camera: camera,
             basis: basis
         ).layout
+        self.init(
+            document: document,
+            layout: layout,
+            size: size,
+            visualSpacingMode: visualSpacingMode
+        )
+    }
+
+    public init(
+        document: DesignDocument,
+        layout: ViewportLayout,
+        size: CGSize,
+        visualSpacingMode: VisualSpacingMode = .adaptive
+    ) {
+        let ruler = document.ruler.normalizedForWorkspaceScale()
         let requestedMinorStepMeters = Self.requestedVisualMinorStep(
             ruler: ruler,
             scale: layout.scale,
