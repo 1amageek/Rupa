@@ -18,17 +18,47 @@ import Testing
 }
 
 @Test func viewportActiveInteractionDragsNextFinishKindFollowsViewportCommitPrecedence() {
-    var drags = ViewportActiveInteractionDrags(
+    let drags = ViewportActiveInteractionDrags(
         affordance: affordanceDragState(),
         sketchCurveHandle: sketchCurveHandleDragState(),
         sketchDimension: sketchDimensionDragState()
     )
 
     #expect(drags.nextFinishKind == ViewportActiveInteractionDragKind.sketchCurveHandle)
+}
 
-    drags.sketchCurveHandle = nil
+@Test func viewportActiveInteractionDragKindFinishPrecedenceIsStableAndUnique() {
+    let precedence = ViewportActiveInteractionDragKind.finishPrecedence
 
-    #expect(drags.nextFinishKind == ViewportActiveInteractionDragKind.sketchDimension)
+    #expect(precedence == ViewportActiveInteractionDragKind.allCases)
+    #expect(precedence.first == .sketchCurveHandle)
+    #expect(precedence.last == .affordance)
+    #expect(Set(precedence).count == precedence.count)
+}
+
+@Test func viewportActiveInteractionDragsKeepsOnlyOneActiveDragWhenSettingNewDrag() {
+    var drags = ViewportActiveInteractionDrags()
+
+    drags.affordance = affordanceDragState()
+    drags.sketchCurveHandle = sketchCurveHandleDragState()
+
+    #expect(drags.affordance == nil)
+    #expect(drags.sketchCurveHandle != nil)
+    #expect(drags.hasActiveDrag)
+    #expect(drags.nextFinishKind == .sketchCurveHandle)
+}
+
+@Test func viewportActiveInteractionDragsInitializerUsesFinishPrecedenceForLegacyMultipleInputs() {
+    let drags = ViewportActiveInteractionDrags(
+        affordance: affordanceDragState(),
+        sketchCurveHandle: sketchCurveHandleDragState(),
+        sketchDimension: sketchDimensionDragState()
+    )
+
+    #expect(drags.sketchCurveHandle != nil)
+    #expect(drags.sketchDimension == nil)
+    #expect(drags.affordance == nil)
+    #expect(drags.nextFinishKind == .sketchCurveHandle)
 }
 
 @Test func viewportActiveInteractionDragsClearRemovesEveryDragWhenNoTargetIsPreserved() {
@@ -46,15 +76,11 @@ import Testing
 
 @Test func viewportActiveInteractionDragsClearPreservesOnlyMatchingInteractionTarget() {
     let preserved = affordanceDragState()
-    var drags = ViewportActiveInteractionDrags(
-        affordance: preserved,
-        sketchCurveHandle: sketchCurveHandleDragState()
-    )
+    var drags = ViewportActiveInteractionDrags(affordance: preserved)
 
     drags.clear(except: .affordance(preserved.target))
 
     #expect(drags.affordance == preserved)
-    #expect(drags.sketchCurveHandle == nil)
     #expect(drags.hasActiveDrag)
 }
 
