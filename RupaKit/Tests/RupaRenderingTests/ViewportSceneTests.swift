@@ -4038,6 +4038,55 @@ private func viewportSceneSnapshotTestKey(
     #expect(dragPreviewClearCount == 1)
 }
 
+@MainActor
+@Test func viewportInputSurfaceClearsInteractionStateWhenExclusionMovesUnderTrackedPointer() {
+    let view = ViewportInputSurface.InputView(frame: CGRect(
+        x: 0.0,
+        y: 0.0,
+        width: 800.0,
+        height: 600.0
+    ))
+    var hoverClearCount = 0
+    var dragPreviewClearCount = 0
+    view.onHover = { point, _ in
+        if point == nil {
+            hoverClearCount += 1
+        }
+    }
+    view.onDragPreview = { start, current, _ in
+        if start == nil && current == nil {
+            dragPreviewClearCount += 1
+        }
+    }
+
+    _ = view.hitTest(CGPoint(x: 240.0, y: 160.0))
+    view.inputExclusionRects = [CGRect(x: 200.0, y: 120.0, width: 120.0, height: 80.0)]
+
+    #expect(hoverClearCount == 1)
+    #expect(dragPreviewClearCount == 1)
+}
+
+@MainActor
+@Test func viewportInputSurfaceKeepsInteractionStateWhenExclusionUpdatesAwayFromTrackedPointer() {
+    let view = ViewportInputSurface.InputView(frame: CGRect(
+        x: 0.0,
+        y: 0.0,
+        width: 800.0,
+        height: 600.0
+    ))
+    var hoverClearCount = 0
+    view.onHover = { point, _ in
+        if point == nil {
+            hoverClearCount += 1
+        }
+    }
+
+    _ = view.hitTest(CGPoint(x: 240.0, y: 160.0))
+    view.inputExclusionRects = [CGRect(x: 10.0, y: 10.0, width: 100.0, height: 40.0)]
+
+    #expect(hoverClearCount == 0)
+}
+
 @Test func viewportSnapOverlayPolicySuppressesPassiveGridLabels() {
     let passiveHover = ViewportSnapOverlayContext.passiveHover
     let creationDrag = ViewportSnapOverlayContext.creationDrag

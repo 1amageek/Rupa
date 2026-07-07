@@ -14319,33 +14319,7 @@ public struct Viewport: View {
     }
 
     private func clearCanvasHover() {
-        hoveredAffordance = nil
-        hoveredSketchCurveHandle = nil
-        hoveredSketchDimension = nil
-        hoveredSketchPointHandle = nil
-        hoveredBridgeCurveEndpointHandle = nil
-        hoveredSplineControlPoint = nil
-        hoveredSplineControlPointSlideHandle = nil
-        hoveredPolySplineSurfaceVertexSlideHandle = nil
-        hoveredSurfaceControlPointSlideHandle = nil
-        hoveredSurfaceFrameHandle = nil
-        hoveredPolySplineSurfaceVertex = nil
-        hoveredSurfaceControlPoint = nil
-        hoveredSurfaceTrimEndpoint = nil
-        hoveredSurfaceTrimControlPoint = nil
-        hoveredRegionOffsetHandle = nil
-        hoveredEdgeOffsetHandle = nil
-        hoveredSlotWidthHandle = nil
-        hoveredSketchVertexOffsetHandle = nil
-        hoveredPatternArrayLinearAxisHandle = nil
-        hoveredIndependentCopyExtrudeDistanceHandle = nil
-        hoveredIndependentCopyBodyDimensionHandle = nil
-        hoveredPatternArrayRadialAngleHandle = nil
-        hoveredPatternArrayCopyCountHandle = nil
-        hoveredPatternArrayCurveExtentHandle = nil
-        hoveredPatternArrayCurvePathPointHandle = nil
-        hoveredPatternArrayOutputModeHandle = nil
-        hoveredConstructionPlaneHandle = nil
+        clearHoverInteractionTargets()
         hoveredCanvasHit = nil
         hoveredModelPoint = nil
         clearHoverCallbacks()

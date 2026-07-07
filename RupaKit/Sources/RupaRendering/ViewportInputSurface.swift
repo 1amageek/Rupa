@@ -66,12 +66,20 @@ extension ViewportInputSurface {
         var onSecondaryClick: ((CGPoint, CGSize) -> Void)?
         var onShiftScroll: ((ViewportScrollDirection) -> Bool)?
         var onShiftTap: ((CGPoint, CGSize) -> Bool)?
-        var inputExclusionRects: [CGRect] = []
+        var inputExclusionRects: [CGRect] = [] {
+            didSet {
+                guard oldValue != inputExclusionRects else {
+                    return
+                }
+                reevaluateInputExclusionForTrackedPointer()
+            }
+        }
 
         private var dragStart: CGPoint?
         private var secondaryDragStart: CGPoint?
         private var isOrbiting = false
         private var isInsideInputExclusion = false
+        private var trackedPointerLocation: CGPoint?
         private var lastOrbitCentroid: CGPoint?
         private var shiftScrollAccumulator: CGFloat = 0.0
         private var isShiftPressed = false
@@ -89,6 +97,7 @@ extension ViewportInputSurface {
         }
 
         override func hitTest(_ point: NSPoint) -> NSView? {
+            trackPointer(at: point)
             if inputExclusionRects.contains(where: { $0.contains(point) }) {
                 clearInteractionStateForInputExclusion()
                 return nil
@@ -252,6 +261,7 @@ extension ViewportInputSurface {
         }
 
         override func mouseExited(with event: NSEvent) {
+            trackedPointerLocation = nil
             markCanvasInputActive()
             onHover?(nil, bounds.size)
         }
@@ -430,6 +440,27 @@ extension ViewportInputSurface {
             inputExclusionRects.contains { $0.contains(point) }
         }
 
+        private func trackPointer(at point: CGPoint) {
+            guard point.x.isFinite,
+                  point.y.isFinite,
+                  bounds.contains(point) else {
+                trackedPointerLocation = nil
+                return
+            }
+            trackedPointerLocation = point
+        }
+
+        private func reevaluateInputExclusionForTrackedPointer() {
+            guard let trackedPointerLocation else {
+                return
+            }
+            if isInputExcluded(trackedPointerLocation) {
+                clearInteractionStateForInputExclusion()
+            } else if isInsideInputExclusion {
+                markCanvasInputActive()
+            }
+        }
+
         private func clearInteractionStateForInputExclusion() {
             let shouldPublishClear = !isInsideInputExclusion
                 || dragStart != nil
@@ -478,7 +509,9 @@ extension ViewportInputSurface {
         }
 
         private func location(from event: NSEvent) -> CGPoint {
-            convert(event.locationInWindow, from: nil)
+            let point = convert(event.locationInWindow, from: nil)
+            trackPointer(at: point)
+            return point
         }
 
         private func selectionIntent(from event: NSEvent) -> ViewportSelectionIntent {
