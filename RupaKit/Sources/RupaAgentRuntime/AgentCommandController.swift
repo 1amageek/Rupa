@@ -690,6 +690,16 @@ public final class AgentCommandController: AgentClientProtocol {
             failureMode: "Rejects missing saved view IDs, invalid tolerances, invalid stroke limits, perspective views, evaluation failures, and stale generations before reading; reports projected-triangle hidden-line visibility as stroke summaries plus visible and hidden visibility segments."
         ),
         capability(
+            "generateDrawingProjectionFromView",
+            category: .read,
+            summary: "Generate a one-shot orthographic drawing projection from an explicit transient saved-view definition without mutating the document.",
+            access: .automationCommand,
+            mutatesDocument: false,
+            discovery: [.designDisplaySnapshot, .drawingProjection, .meshSummary, .topologySummary],
+            targets: [.document, .body, .edge],
+            failureMode: "Rejects invalid transient view metadata, invalid tolerances, invalid stroke limits, perspective views, evaluation failures, and stale generations before reading; returns the same hidden-line projection structure as saved-view projection without requiring a saved view ID."
+        ),
+        capability(
             "createSavedView",
             category: .document,
             summary: "Create a source-owned saved view with camera, projection, clipping, visibility, section state, and scale-bar metadata.",

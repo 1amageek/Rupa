@@ -400,6 +400,9 @@ import SwiftCAD
     let generateDrawingProjection = try #require(
         descriptors.first { $0.name == "generateDrawingProjection" }
     )
+    let generateDrawingProjectionFromView = try #require(
+        descriptors.first { $0.name == "generateDrawingProjectionFromView" }
+    )
     let createSavedView = try #require(descriptors.first { $0.name == "createSavedView" })
     let updateSavedView = try #require(descriptors.first { $0.name == "updateSavedView" })
     let removeSavedView = try #require(descriptors.first { $0.name == "removeSavedView" })
@@ -1755,6 +1758,16 @@ import SwiftCAD
     #expect(generateDrawingProjection.targets.contains(.savedView))
     #expect(generateDrawingProjection.summary.contains("structured orthographic drawing strokes"))
     #expect(generateDrawingProjection.failureMode.contains("visibility segments"))
+
+    #expect(generateDrawingProjectionFromView.category == .read)
+    #expect(!generateDrawingProjectionFromView.mutatesDocument)
+    #expect(generateDrawingProjectionFromView.access == .automationCommand)
+    #expect(!generateDrawingProjectionFromView.discovery.contains(.savedViews))
+    #expect(generateDrawingProjectionFromView.discovery.contains(.drawingProjection))
+    #expect(generateDrawingProjectionFromView.targets.contains(.document))
+    #expect(!generateDrawingProjectionFromView.targets.contains(.savedView))
+    #expect(generateDrawingProjectionFromView.summary.contains("one-shot orthographic drawing projection"))
+    #expect(generateDrawingProjectionFromView.failureMode.contains("without requiring a saved view ID"))
 
     #expect(createSavedView.category == .document)
     #expect(createSavedView.mutatesDocument)

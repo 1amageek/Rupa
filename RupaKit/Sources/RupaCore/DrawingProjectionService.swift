@@ -133,23 +133,47 @@ public struct DrawingProjectionService: Sendable {
         currentEvaluation: DocumentEvaluationContext? = nil,
         currentGeneration: DocumentGeneration? = nil
     ) throws -> DrawingProjectionResult {
+        let savedView = try resolvedSavedView(id: query.savedViewID, document: document)
+        return try generate(
+            document: document,
+            savedView: savedView,
+            toleranceMeters: query.toleranceMeters,
+            maximumStrokeCount: query.maximumStrokeCount,
+            objectRegistry: objectRegistry,
+            currentEvaluation: currentEvaluation,
+            currentGeneration: currentGeneration
+        )
+    }
+
+    public func generate(
+        document: DesignDocument,
+        savedView: SavedView,
+        toleranceMeters: Double? = nil,
+        maximumStrokeCount: Int = 10_000,
+        objectRegistry: ObjectTypeRegistry = .builtIn,
+        currentEvaluation: DocumentEvaluationContext? = nil,
+        currentGeneration: DocumentGeneration? = nil
+    ) throws -> DrawingProjectionResult {
         do {
             try document.validate(objectRegistry: objectRegistry)
+            try savedView.validate(
+                sceneNodes: document.productMetadata.sceneNodes,
+                constructionPlanes: document.productMetadata.constructionPlanes
+            )
         } catch {
             throw EditorError(
                 code: .evaluationFailed,
-                message: "Document must validate before drawing projection: \(String(describing: error))"
+                message: "Document and drawing view must validate before drawing projection: \(String(describing: error))"
             )
         }
 
-        guard query.maximumStrokeCount > 0 else {
+        guard maximumStrokeCount > 0 else {
             throw EditorError(
                 code: .commandInvalid,
                 message: "Drawing projection maximum stroke count must be positive."
             )
         }
-        let tolerance = try resolvedTolerance(query.toleranceMeters, document: document)
-        let savedView = try resolvedSavedView(id: query.savedViewID, document: document)
+        let tolerance = try resolvedTolerance(toleranceMeters, document: document)
         guard savedView.projection.mode == .orthographic else {
             throw EditorError(
                 code: .commandInvalid,
@@ -247,7 +271,7 @@ public struct DrawingProjectionService: Sendable {
 
         for (bodyID, edges) in bodyEdges {
             for edge in edges.sorted(by: { $0.key < $1.key }) {
-                if strokes.count >= query.maximumStrokeCount {
+                if strokes.count >= maximumStrokeCount {
                     truncatedStrokes = true
                     break
                 }
@@ -283,7 +307,7 @@ public struct DrawingProjectionService: Sendable {
             savedView: savedView,
             basis: basis,
             tolerance: tolerance,
-            maximumHatchCount: query.maximumStrokeCount,
+            maximumHatchCount: maximumStrokeCount,
             objectRegistry: objectRegistry,
             currentEvaluation: currentEvaluation,
             currentGeneration: currentGeneration
@@ -319,7 +343,7 @@ public struct DrawingProjectionService: Sendable {
                 result: strokes,
                 candidateEdgeCount: candidateEdgeCount,
                 truncatedStrokes: truncatedStrokes,
-                maximumStrokeCount: query.maximumStrokeCount,
+                maximumStrokeCount: maximumStrokeCount,
                 sectionArtifacts: sectionArtifacts
             ) + sectionArtifacts.diagnostics + annotationDiagnostics(annotations)
         )

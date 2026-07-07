@@ -114,6 +114,11 @@ import SwiftCAD
         .updateSavedView(savedView),
         .removeSavedView(id: viewID),
         .generateDrawingProjection(query: DrawingProjectionQuery(savedViewID: viewID)),
+        .generateDrawingProjectionFromView(
+            savedView: savedView,
+            toleranceMeters: nil,
+            maximumStrokeCount: 250
+        ),
     ]
 
     for command in commands {

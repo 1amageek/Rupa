@@ -3997,6 +3997,101 @@ struct CLIViewCommandTests {
         #expect(drawingProjection.hiddenSegmentCount > 0)
         #expect(drawingProjection.unclassifiedSegmentCount == 0)
     }
+
+    @Test(.timeLimit(.minutes(1)))
+    func executableViewRenderReadsClosedDocumentWithoutSavingViewAsJSON() async throws {
+        let temporaryDirectory = try makeTemporaryDirectory()
+        defer {
+            removeTemporaryDirectory(temporaryDirectory)
+        }
+        let documentURL = temporaryDirectory.appendingPathComponent("process-view-render.swcad")
+        let session = EditorSession(document: .empty(named: "Process One Shot Render"))
+        _ = try session.execute(
+            .createExtrudedRectangle(
+                name: "Render Box",
+                plane: .xy,
+                width: .length(2.0, .meter),
+                height: .length(2.0, .meter),
+                depth: .length(2.0, .meter),
+                direction: .normal
+            )
+        )
+        try DocumentFileService().save(session.document, to: documentURL)
+        let outputURL = temporaryDirectory.appendingPathComponent("render.svg")
+        let pdfOutputURL = temporaryDirectory.appendingPathComponent("render.pdf")
+        let pngOutputURL = temporaryDirectory.appendingPathComponent("render.png")
+
+        let result = try await runCLI([
+            "view",
+            "render",
+            documentURL.path,
+            "--name",
+            "One Shot Render",
+            "--target-x",
+            "0",
+            "--target-y",
+            "0",
+            "--target-z",
+            "0",
+            "--unit",
+            "meter",
+            "--distance",
+            "6",
+            "--yaw-degrees",
+            "45",
+            "--pitch-degrees",
+            "35.523",
+            "--projection",
+            "orthographic",
+            "--orthographic-height",
+            "6",
+            "--scale-preset",
+            "sitePlanning",
+            "--maximum-stroke-count",
+            "100",
+            "--drawing-page",
+            "a4Portrait",
+            "--drawing-style",
+            "presentation",
+            "--svg-output",
+            outputURL.path,
+            "--pdf-output",
+            pdfOutputURL.path,
+            "--png-output",
+            pngOutputURL.path,
+            "--mode",
+            "file",
+            "--json",
+        ])
+        let response = try JSONDecoder().decode(
+            CLIResponse.self,
+            from: result.standardOutputData
+        )
+        let drawingProjection = try #require(response.drawingProjection)
+        let loadedAfterRender = try DocumentFileService().load(from: documentURL)
+
+        #expect(result.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: result.standardError))
+        #expect(response.message.contains("Drawing projection generated"))
+        #expect(response.saved == false)
+        #expect(response.drawingProjectionSVGPath == outputURL.path)
+        #expect((response.drawingProjectionSVGByteCount ?? 0) > 0)
+        #expect(response.drawingProjectionPDFPath == pdfOutputURL.path)
+        #expect((response.drawingProjectionPDFByteCount ?? 0) > 0)
+        #expect(response.drawingProjectionPNGPath == pngOutputURL.path)
+        #expect((response.drawingProjectionPNGByteCount ?? 0) > 0)
+        #expect(FileManager.default.fileExists(atPath: outputURL.path))
+        #expect(FileManager.default.fileExists(atPath: pdfOutputURL.path))
+        #expect(FileManager.default.fileExists(atPath: pngOutputURL.path))
+        let png = try Data(contentsOf: pngOutputURL)
+        let pngSignature: [UInt8] = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]
+        #expect(Array(png.prefix(8)) == pngSignature)
+        #expect(loadedAfterRender.productMetadata.savedViews.isEmpty)
+        #expect(drawingProjection.savedViewName == "One Shot Render")
+        #expect(drawingProjection.strokeCount == 12)
+        #expect(drawingProjection.visibilitySegmentCount >= drawingProjection.strokeCount)
+        #expect(drawingProjection.visibleSegmentCount > 0)
+        #expect(drawingProjection.hiddenSegmentCount > 0)
+    }
 }
 
 @Suite(.serialized)

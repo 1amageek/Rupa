@@ -21,7 +21,6 @@ workflow) > `ergonomics` (usable but hostile) > `hardening` (defense in depth).
 | W-3 | `--in-place` / `--output` file-mode flags missing | SPEC CLI Modes table lists them; semantics overlap with the unresolved `--force` open decision. | SPEC gap audit |
 | W-4 | Live/auto batch is non-atomic | Documented in `rupa batch` help: per-command commits, partial application on mid-batch failure. A server-side transactional batch (AgentRequest.executeBatch) would close it. | batch review |
 | W-5 | MCP bridge not implemented | The protocol names MCP clients as a target consumer; no bridge exists, so vision-LLM agents cannot consume capabilities/renders directly. | agent harness review |
-| W-6 | One-shot render command missing | Observing the model requires saved-view + projection (two steps). A `rupa view render` (camera preset -> SVG/PNG, no saved view) would give agents a single observation step. | agent harness review |
 
 ## Ergonomics
 
@@ -62,3 +61,4 @@ workflow) > `ergonomics` (usable but hostile) > `hardening` (defense in depth).
 | H-5 | `AutomationResult` documented shape diverges from implementation | SPEC §Automation Results fields (`success`, `mode`, `generationBefore/After`, `outputs`, `error`) have no matching type; the implemented shape is the response envelope. Decide schema before exposing automation publicly. | SPEC gap audit |
 | H-6 | Named spec abstractions absent | `DocumentLock`, `FileChangeBroadcaster`, `ReferenceResolver`, `AgentSchema` named by SPEC do not exist; functionality is distributed. Implement or amend SPEC. | SPEC gap audit |
 | H-7 | Click-placed box has no upper size clamp | Placement tracks the visible grid cell by design; extreme zoom-out yields proportionally huge cubes. Click depth (= visible cell) also differs from drag depth (`sketchDepthMeters`). | box-scale review |
+| H-8 | Surface trim CLI subprocess tests exceed their 60-second limit in full-target runs | `RupaCLITests` full-target verification reached time limits in `cliExecutableSurfaceTrimControlPointCommandMutatesClosedDocumentAsJSON`, `cliExecutableSurfaceTrimControlPointWeightCommandMutatesClosedDocumentAsJSON`, and `cliExecutableSurfaceTrimKnotCommandMutatesClosedDocumentAsJSON`; isolated view-command verification passes. Split or optimize these subprocess tests. | 2026-07-08 CLI verification |

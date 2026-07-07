@@ -92,6 +92,17 @@ public struct AutomationRunner {
                 currentGeneration: session.generation
             )
             return drawingProjectionAutomationResult(result, in: session)
+        case .generateDrawingProjectionFromView(let savedView, let toleranceMeters, let maximumStrokeCount):
+            let result = try DrawingProjectionService().generate(
+                document: session.document,
+                savedView: savedView,
+                toleranceMeters: toleranceMeters,
+                maximumStrokeCount: maximumStrokeCount,
+                objectRegistry: session.objectRegistry,
+                currentEvaluation: session.currentEvaluation,
+                currentGeneration: session.generation
+            )
+            return drawingProjectionAutomationResult(result, in: session)
         case .rebaseWorkspaceOrigin(let translation):
             let result = try session.execute(.rebaseWorkspaceOrigin(translation: translation))
             return workspaceAutomationResult(

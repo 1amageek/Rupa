@@ -17,6 +17,7 @@ public struct ViewCommand: ParsableCommand {
             ViewUpdateCommand.self,
             ViewRemoveCommand.self,
             ViewProjectionCommand.self,
+            ViewRenderCommand.self,
         ],
         defaultSubcommand: ViewListCommand.self
     )
@@ -143,10 +144,13 @@ public struct ViewProjectionCommand: ParsableCommand {
     @Option(help: "Optional PDF output path for the generated hidden-line drawing.")
     public var pdfOutput: String?
 
-    @Option(help: "Drawing page preset used by SVG and PDF exports.")
+    @Option(help: "Optional PNG output path for the generated hidden-line drawing.")
+    public var pngOutput: String?
+
+    @Option(help: "Drawing page preset used by SVG, PDF, and PNG exports.")
     public var drawingPage: DrawingProjectionPagePreset = .letterLandscape
 
-    @Option(help: "Drawing line/color style preset used by SVG and PDF exports.")
+    @Option(help: "Drawing line/color style preset used by SVG, PDF, and PNG exports.")
     public var drawingStyle: DrawingProjectionStylePreset = .technical
 
     public init() {}
@@ -172,44 +176,147 @@ public struct ViewProjectionCommand: ParsableCommand {
                     )
                 )
             )
-            if svgOutput != nil || pdfOutput != nil {
-                let drawingProjection = try requiredDrawingProjection(response)
-                let exportStyle = DrawingProjectionExportStyle.preset(drawingStyle)
-                if let svgOutput {
-                    let output = try writeArtifact(
-                        Data(DrawingProjectionSVGExporter(
-                            options: DrawingProjectionSVGExporter.Options(
-                                padding: 36.0,
-                                pagePreset: drawingPage,
-                                style: exportStyle
-                            )
-                        ).svg(for: drawingProjection).utf8),
-                        artifactName: "SVG",
-                        to: svgOutput
-                    )
-                    response.drawingProjectionSVGPath = output.path
-                    response.drawingProjectionSVGByteCount = output.byteCount
-                }
-                if let pdfOutput {
-                    let output = try writeArtifact(
-                        DrawingProjectionPDFExporter(
-                            options: DrawingProjectionPDFExporter.Options(
-                                pagePreset: drawingPage,
-                                style: exportStyle
-                            )
-                        ).pdf(for: drawingProjection),
-                        artifactName: "PDF",
-                        to: pdfOutput
-                    )
-                    response.drawingProjectionPDFPath = output.path
-                    response.drawingProjectionPDFByteCount = output.byteCount
-                }
-            }
+            try CLIDrawingProjectionArtifactWriter.writeRequestedArtifacts(
+                svgOutput: svgOutput,
+                pdfOutput: pdfOutput,
+                pngOutput: pngOutput,
+                drawingPage: drawingPage,
+                drawingStyle: drawingStyle,
+                response: &response
+            )
             try CLIOutput.write(response: response, asJSON: document.json)
         }
     }
+}
 
-    private func requiredDrawingProjection(
+public struct ViewRenderCommand: ParsableCommand {
+    public static let configuration = CommandConfiguration(
+        commandName: "render",
+        abstract: "Generate a one-shot drawing projection from explicit camera, projection, and scale data without saving a view."
+    )
+
+    @OptionGroup
+    public var document: CLIWriteDocumentOptions
+
+    @OptionGroup
+    private var definition: CLISavedViewDefinitionOptions
+
+    @Option(parsing: .unconditional, help: "Optional drawing projection tolerance in meters.")
+    public var toleranceMeters: Double?
+
+    @Option(parsing: .unconditional, help: "Maximum number of projection strokes to return.")
+    public var maximumStrokeCount: Int = 10_000
+
+    @Option(help: "Optional SVG output path for the generated hidden-line drawing.")
+    public var svgOutput: String?
+
+    @Option(help: "Optional PDF output path for the generated hidden-line drawing.")
+    public var pdfOutput: String?
+
+    @Option(help: "Optional PNG output path for the generated hidden-line drawing.")
+    public var pngOutput: String?
+
+    @Option(help: "Drawing page preset used by SVG, PDF, and PNG exports.")
+    public var drawingPage: DrawingProjectionPagePreset = .letterLandscape
+
+    @Option(help: "Drawing line/color style preset used by SVG, PDF, and PNG exports.")
+    public var drawingStyle: DrawingProjectionStylePreset = .technical
+
+    public init() {}
+
+    public func run() throws {
+        try CLIExitCode.run {
+            guard maximumStrokeCount > 0 else {
+                throw ValidationError("--maximum-stroke-count must be positive.")
+            }
+            if let toleranceMeters {
+                guard toleranceMeters.isFinite,
+                      toleranceMeters > 0.0 else {
+                    throw ValidationError("--tolerance-meters must be finite and positive.")
+                }
+            }
+            var response = try CLIAutomationCommandRunner.response(
+                document: document,
+                command: .generateDrawingProjectionFromView(
+                    savedView: definition.savedView(id: SavedViewID()),
+                    toleranceMeters: toleranceMeters,
+                    maximumStrokeCount: maximumStrokeCount
+                )
+            )
+            try CLIDrawingProjectionArtifactWriter.writeRequestedArtifacts(
+                svgOutput: svgOutput,
+                pdfOutput: pdfOutput,
+                pngOutput: pngOutput,
+                drawingPage: drawingPage,
+                drawingStyle: drawingStyle,
+                response: &response
+            )
+            try CLIOutput.write(response: response, asJSON: document.json)
+        }
+    }
+}
+
+private enum CLIDrawingProjectionArtifactWriter {
+    static func writeRequestedArtifacts(
+        svgOutput: String?,
+        pdfOutput: String?,
+        pngOutput: String?,
+        drawingPage: DrawingProjectionPagePreset,
+        drawingStyle: DrawingProjectionStylePreset,
+        response: inout CLIResponse
+    ) throws {
+        guard svgOutput != nil || pdfOutput != nil || pngOutput != nil else {
+            return
+        }
+
+        let drawingProjection = try requiredDrawingProjection(response)
+        let exportStyle = DrawingProjectionExportStyle.preset(drawingStyle)
+        if let svgOutput {
+            let output = try writeArtifact(
+                Data(DrawingProjectionSVGExporter(
+                    options: DrawingProjectionSVGExporter.Options(
+                        padding: 36.0,
+                        pagePreset: drawingPage,
+                        style: exportStyle
+                    )
+                ).svg(for: drawingProjection).utf8),
+                artifactName: "SVG",
+                to: svgOutput
+            )
+            response.drawingProjectionSVGPath = output.path
+            response.drawingProjectionSVGByteCount = output.byteCount
+        }
+        if let pdfOutput {
+            let output = try writeArtifact(
+                DrawingProjectionPDFExporter(
+                    options: DrawingProjectionPDFExporter.Options(
+                        pagePreset: drawingPage,
+                        style: exportStyle
+                    )
+                ).pdf(for: drawingProjection),
+                artifactName: "PDF",
+                to: pdfOutput
+            )
+            response.drawingProjectionPDFPath = output.path
+            response.drawingProjectionPDFByteCount = output.byteCount
+        }
+        if let pngOutput {
+            let output = try writeArtifact(
+                DrawingProjectionPNGExporter(
+                    options: DrawingProjectionPNGExporter.Options(
+                        pagePreset: drawingPage,
+                        style: exportStyle
+                    )
+                ).png(for: drawingProjection),
+                artifactName: "PNG",
+                to: pngOutput
+            )
+            response.drawingProjectionPNGPath = output.path
+            response.drawingProjectionPNGByteCount = output.byteCount
+        }
+    }
+
+    private static func requiredDrawingProjection(
         _ response: CLIResponse
     ) throws -> DrawingProjectionResult {
         guard let drawingProjection = response.drawingProjection else {
@@ -221,7 +328,7 @@ public struct ViewProjectionCommand: ParsableCommand {
         return drawingProjection
     }
 
-    private func writeArtifact(
+    private static func writeArtifact(
         _ data: Data,
         artifactName: String,
         to path: String

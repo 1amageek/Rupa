@@ -25,6 +25,8 @@ public struct CLIResponse: Codable, Equatable, Sendable {
     public var drawingProjectionSVGByteCount: UInt64?
     public var drawingProjectionPDFPath: String?
     public var drawingProjectionPDFByteCount: UInt64?
+    public var drawingProjectionPNGPath: String?
+    public var drawingProjectionPNGByteCount: UInt64?
 
     public init(
         message: String,
@@ -48,7 +50,9 @@ public struct CLIResponse: Codable, Equatable, Sendable {
         drawingProjectionSVGPath: String? = nil,
         drawingProjectionSVGByteCount: UInt64? = nil,
         drawingProjectionPDFPath: String? = nil,
-        drawingProjectionPDFByteCount: UInt64? = nil
+        drawingProjectionPDFByteCount: UInt64? = nil,
+        drawingProjectionPNGPath: String? = nil,
+        drawingProjectionPNGByteCount: UInt64? = nil
     ) {
         self.message = message
         self.generation = generation
@@ -72,6 +76,8 @@ public struct CLIResponse: Codable, Equatable, Sendable {
         self.drawingProjectionSVGByteCount = drawingProjectionSVGByteCount
         self.drawingProjectionPDFPath = drawingProjectionPDFPath
         self.drawingProjectionPDFByteCount = drawingProjectionPDFByteCount
+        self.drawingProjectionPNGPath = drawingProjectionPNGPath
+        self.drawingProjectionPNGByteCount = drawingProjectionPNGByteCount
     }
 }
 
