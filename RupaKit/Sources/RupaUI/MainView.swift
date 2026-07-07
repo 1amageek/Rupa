@@ -80,7 +80,6 @@ public struct MainView: View {
     @State private var constructionPlaneRenameText: String
     @State private var hoveredViewportPickingBackend: ViewportPickingBackend?
     @State private var viewportHoverClearSignal: Int
-    @State private var agentSessionID: UUID?
     @FocusState private var isWorkspaceFocused: Bool
 
     private let objectRegistry: ObjectTypeRegistry
@@ -193,12 +192,11 @@ public struct MainView: View {
         }
         .navigationSplitViewStyle(.balanced)
         .frame(minWidth: 1_120, minHeight: 720)
-        .task {
-            registerAgentSessionIfNeeded()
-        }
-        .onDisappear {
-            deactivateAgentSession()
-        }
+        .workspaceAgentSessionPublisher(
+            host: agentHost,
+            session: session,
+            path: documentURL
+        )
     }
 
     private var sidebar: some View {
@@ -7970,25 +7968,4 @@ public struct MainView: View {
         return degrees(fromRadians: span)
     }
 
-    private func registerAgentSessionIfNeeded() {
-        guard let agentHost else {
-            return
-        }
-
-        if agentSessionID == nil {
-            agentSessionID = agentHost.register(
-                session: session,
-                path: documentURL
-            )
-        }
-    }
-
-    private func deactivateAgentSession() {
-        guard let agentHost, let agentSessionID else {
-            return
-        }
-
-        agentHost.unregister(id: agentSessionID)
-        self.agentSessionID = nil
-    }
 }

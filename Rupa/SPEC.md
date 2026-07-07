@@ -221,7 +221,7 @@ struct ApplicationRoot: App {
 }
 ```
 
-When live CLI support is enabled, the app host imports `RupaAgentUI`, owns an `AgentHost`, and starts or stops the Agent command service across scene-phase transitions. `RupaUI` publishes the UI-owned session through the `WorkspaceAgentHost` protocol but does not control the socket listener lifecycle.
+When live CLI support is enabled, the app host imports `RupaAgentUI`, owns an `AgentHost`, and starts or stops the Agent command service across scene-phase transitions. `RupaUI` publishes the UI-owned session through `WorkspaceAgentSessionPublisher` and the `WorkspaceAgentHost` protocol but does not control the socket listener lifecycle.
 
 ```swift
 import SwiftUI
