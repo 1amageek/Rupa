@@ -393,7 +393,8 @@ public struct Viewport: View {
                         size: size,
                         camera: camera,
                         basis: basis,
-                        chromeLayout: chromeLayout
+                        chromeLayout: chromeLayout,
+                        placementCellSideMeters: projectedGrid.minorStepMeters
                     )
                     drawReferenceLines(in: &context, size: size, camera: camera, basis: basis)
                 }
@@ -1187,7 +1188,8 @@ public struct Viewport: View {
         size: CGSize,
         camera: ViewportCamera,
         basis: ViewportProjectionBasis,
-        chromeLayout: ViewportCanvasChromeLayout
+        chromeLayout: ViewportCanvasChromeLayout,
+        placementCellSideMeters: Double
     ) {
         let sceneContext = makeSceneContext(
             size: size,
@@ -1252,6 +1254,7 @@ public struct Viewport: View {
            let constructionModelPoint {
             drawZeroCoordinateFieldHighlight(
                 around: constructionModelPoint,
+                sideMeters: placementCellSideMeters,
                 in: &context,
                 layout: layout
             )
@@ -4646,6 +4649,7 @@ public struct Viewport: View {
 
     private func drawZeroCoordinateFieldHighlight(
         around modelPoint: Point2D,
+        sideMeters: Double,
         in context: inout GraphicsContext,
         layout: ViewportLayout
     ) {
@@ -4654,28 +4658,42 @@ public struct Viewport: View {
             return
         }
 
-        let step = constructionFieldStep(for: layout)
-        let minX = floor(CGFloat(modelPoint.x) / step) * step
-        let minY = floor(CGFloat(modelPoint.y) / step) * step
-        let fieldBounds = CGRect(
-            x: minX,
-            y: minY,
-            width: step,
-            height: step
+        // The highlight must show exactly where a click will land: click
+        // placement centers one visible-grid cell on the cursor point, so the
+        // highlight is that same footprint. The previous origin-aligned
+        // floor(point / majorTick * 2^n) field cell had a different size and a
+        // different anchor from the placed geometry, so the highlight and the
+        // result disagreed on both position and scale.
+        let footprintBounds = Self.placementFootprintBounds(
+            around: modelPoint,
+            sideMeters: sideMeters
         )
-        let footprint = layout.projectedFootprint(fieldBounds)
+        guard let footprintBounds else {
+            return
+        }
+        let footprint = layout.projectedFootprint(footprintBounds)
         let highlightPath = path(for: footprint)
 
         context.fill(highlightPath, with: .color(Color.cyan.opacity(0.12)))
         context.stroke(highlightPath, with: .color(Color.cyan.opacity(0.62)), lineWidth: 1.6)
     }
 
-    private func constructionFieldStep(for layout: ViewportLayout) -> CGFloat {
-        var step = max(CGFloat(document.ruler.majorTickMeters), 1.0e-12)
-        while step * layout.scale < 42.0 {
-            step *= 2.0
+    /// The footprint a canvas click will occupy: one visible-grid cell
+    /// centered on the cursor point, matching the click-placement sizing.
+    static func placementFootprintBounds(
+        around modelPoint: Point2D,
+        sideMeters: Double
+    ) -> CGRect? {
+        guard sideMeters.isFinite, sideMeters > 0.0 else {
+            return nil
         }
-        return step
+        let side = CGFloat(sideMeters)
+        return CGRect(
+            x: CGFloat(modelPoint.x) - side / 2.0,
+            y: CGFloat(modelPoint.y) - side / 2.0,
+            width: side,
+            height: side
+        )
     }
 
     private func drawConstructionFaceHighlight(

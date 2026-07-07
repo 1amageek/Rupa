@@ -63,3 +63,25 @@ private func screenDirection(from start: CGPoint, to end: CGPoint) -> CGVector {
     }
     return CGVector(dx: dx / length, dy: dy / length)
 }
+
+@Test func placementFootprintHighlightMatchesClickPlacement() throws {
+    // The highlight footprint must be one visible-grid cell centered on the
+    // cursor, exactly matching the click-placement sizing contract.
+    let bounds = try #require(Viewport.placementFootprintBounds(
+        around: Point2D(x: 0.010, y: 0.020),
+        sideMeters: 0.004
+    ))
+    #expect(abs(bounds.midX - 0.010) < 1.0e-12)
+    #expect(abs(bounds.midY - 0.020) < 1.0e-12)
+    #expect(abs(bounds.width - 0.004) < 1.0e-12)
+    #expect(abs(bounds.height - 0.004) < 1.0e-12)
+
+    #expect(Viewport.placementFootprintBounds(
+        around: Point2D(x: 0.0, y: 0.0),
+        sideMeters: 0.0
+    ) == nil)
+    #expect(Viewport.placementFootprintBounds(
+        around: Point2D(x: 0.0, y: 0.0),
+        sideMeters: .infinity
+    ) == nil)
+}
