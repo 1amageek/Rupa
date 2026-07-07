@@ -20,32 +20,7 @@ public struct Viewport: View {
     )
 
     @State private var activeCanvasDrag: ViewportActiveDrag?
-    @State private var activeAffordanceDrag: ViewportAffordanceDragState?
-    @State private var activeSketchCurveHandleDrag: ViewportSketchCurveHandleDragState?
-    @State private var activeSketchDimensionDrag: ViewportSketchDimensionDragState?
-    @State private var activeSketchPointHandleDrag: ViewportSketchPointHandleDragState?
-    @State private var activeBridgeCurveEndpointDrag: ViewportBridgeCurveEndpointDragState?
-    @State private var activeSplineControlPointDrag: ViewportSplineControlPointDragState?
-    @State private var activeSplineControlPointSlideDrag: ViewportSplineControlPointSlideDragState?
-    @State private var activePolySplineSurfaceVertexDrag: ViewportPolySplineSurfaceVertexDragState?
-    @State private var activeSurfaceControlPointDrag: ViewportSurfaceControlPointDragState?
-    @State private var activeSurfaceTrimEndpointDrag: ViewportSurfaceTrimEndpointDragState?
-    @State private var activeSurfaceTrimControlPointDrag: ViewportSurfaceTrimControlPointDragState?
-    @State private var activePolySplineSurfaceVertexSlideDrag: ViewportPolySplineSurfaceVertexSlideDragState?
-    @State private var activeSurfaceControlPointSlideDrag: ViewportSurfaceControlPointSlideDragState?
-    @State private var activeSurfaceFrameDrag: ViewportSurfaceFrameDragState?
-    @State private var activeRegionOffsetDrag: ViewportRegionOffsetDragState?
-    @State private var activeEdgeOffsetDrag: ViewportEdgeOffsetDragState?
-    @State private var activeSlotWidthDrag: ViewportSlotWidthDragState?
-    @State private var activeSketchVertexOffsetDrag: ViewportSketchVertexOffsetDragState?
-    @State private var activePatternArrayLinearAxisDrag: ViewportPatternArrayLinearAxisDragState?
-    @State private var activeIndependentCopyExtrudeDistanceDrag: ViewportIndependentCopyExtrudeDistanceDragState?
-    @State private var activeIndependentCopyBodyDimensionDrag: ViewportIndependentCopyBodyDimensionDragState?
-    @State private var activePatternArrayRadialAngleDrag: ViewportPatternArrayRadialAngleDragState?
-    @State private var activePatternArrayCopyCountDrag: ViewportPatternArrayCopyCountDragState?
-    @State private var activePatternArrayCurveExtentDrag: ViewportPatternArrayCurveExtentDragState?
-    @State private var activePatternArrayCurvePathPointDrag: ViewportPatternArrayCurvePathPointDragState?
-    @State private var activeConstructionPlaneHandleDrag: ViewportConstructionPlaneHandleDragState?
+    @State private var activeInteractionDrags = ViewportActiveInteractionDrags()
     @State private var camera: ViewportCamera = .identity
     @State private var editedBodies: [FeatureID: ViewportObjectEditState] = [:]
     @State private var dragPreviewDocument: DesignDocument?
@@ -155,6 +130,136 @@ public struct Viewport: View {
     private let onProjectionBasisChange: ((ViewportProjectionBasis) -> Void)?
     private let onCameraFrameChange: ((ViewportCameraFrame) -> Void)?
     private let onProjectedGridStepChange: ((Double) -> Void)?
+
+    private var activeAffordanceDrag: ViewportAffordanceDragState? {
+        get { activeInteractionDrags.affordance }
+        nonmutating set { activeInteractionDrags.affordance = newValue }
+    }
+
+    private var activeSketchCurveHandleDrag: ViewportSketchCurveHandleDragState? {
+        get { activeInteractionDrags.sketchCurveHandle }
+        nonmutating set { activeInteractionDrags.sketchCurveHandle = newValue }
+    }
+
+    private var activeSketchDimensionDrag: ViewportSketchDimensionDragState? {
+        get { activeInteractionDrags.sketchDimension }
+        nonmutating set { activeInteractionDrags.sketchDimension = newValue }
+    }
+
+    private var activeSketchPointHandleDrag: ViewportSketchPointHandleDragState? {
+        get { activeInteractionDrags.sketchPointHandle }
+        nonmutating set { activeInteractionDrags.sketchPointHandle = newValue }
+    }
+
+    private var activeBridgeCurveEndpointDrag: ViewportBridgeCurveEndpointDragState? {
+        get { activeInteractionDrags.bridgeCurveEndpoint }
+        nonmutating set { activeInteractionDrags.bridgeCurveEndpoint = newValue }
+    }
+
+    private var activeSplineControlPointDrag: ViewportSplineControlPointDragState? {
+        get { activeInteractionDrags.splineControlPoint }
+        nonmutating set { activeInteractionDrags.splineControlPoint = newValue }
+    }
+
+    private var activeSplineControlPointSlideDrag: ViewportSplineControlPointSlideDragState? {
+        get { activeInteractionDrags.splineControlPointSlide }
+        nonmutating set { activeInteractionDrags.splineControlPointSlide = newValue }
+    }
+
+    private var activePolySplineSurfaceVertexDrag: ViewportPolySplineSurfaceVertexDragState? {
+        get { activeInteractionDrags.polySplineSurfaceVertex }
+        nonmutating set { activeInteractionDrags.polySplineSurfaceVertex = newValue }
+    }
+
+    private var activeSurfaceControlPointDrag: ViewportSurfaceControlPointDragState? {
+        get { activeInteractionDrags.surfaceControlPoint }
+        nonmutating set { activeInteractionDrags.surfaceControlPoint = newValue }
+    }
+
+    private var activeSurfaceTrimEndpointDrag: ViewportSurfaceTrimEndpointDragState? {
+        get { activeInteractionDrags.surfaceTrimEndpoint }
+        nonmutating set { activeInteractionDrags.surfaceTrimEndpoint = newValue }
+    }
+
+    private var activeSurfaceTrimControlPointDrag: ViewportSurfaceTrimControlPointDragState? {
+        get { activeInteractionDrags.surfaceTrimControlPoint }
+        nonmutating set { activeInteractionDrags.surfaceTrimControlPoint = newValue }
+    }
+
+    private var activePolySplineSurfaceVertexSlideDrag: ViewportPolySplineSurfaceVertexSlideDragState? {
+        get { activeInteractionDrags.polySplineSurfaceVertexSlide }
+        nonmutating set { activeInteractionDrags.polySplineSurfaceVertexSlide = newValue }
+    }
+
+    private var activeSurfaceControlPointSlideDrag: ViewportSurfaceControlPointSlideDragState? {
+        get { activeInteractionDrags.surfaceControlPointSlide }
+        nonmutating set { activeInteractionDrags.surfaceControlPointSlide = newValue }
+    }
+
+    private var activeSurfaceFrameDrag: ViewportSurfaceFrameDragState? {
+        get { activeInteractionDrags.surfaceFrame }
+        nonmutating set { activeInteractionDrags.surfaceFrame = newValue }
+    }
+
+    private var activeRegionOffsetDrag: ViewportRegionOffsetDragState? {
+        get { activeInteractionDrags.regionOffset }
+        nonmutating set { activeInteractionDrags.regionOffset = newValue }
+    }
+
+    private var activeEdgeOffsetDrag: ViewportEdgeOffsetDragState? {
+        get { activeInteractionDrags.edgeOffset }
+        nonmutating set { activeInteractionDrags.edgeOffset = newValue }
+    }
+
+    private var activeSlotWidthDrag: ViewportSlotWidthDragState? {
+        get { activeInteractionDrags.slotWidth }
+        nonmutating set { activeInteractionDrags.slotWidth = newValue }
+    }
+
+    private var activeSketchVertexOffsetDrag: ViewportSketchVertexOffsetDragState? {
+        get { activeInteractionDrags.sketchVertexOffset }
+        nonmutating set { activeInteractionDrags.sketchVertexOffset = newValue }
+    }
+
+    private var activePatternArrayLinearAxisDrag: ViewportPatternArrayLinearAxisDragState? {
+        get { activeInteractionDrags.patternArrayLinearAxis }
+        nonmutating set { activeInteractionDrags.patternArrayLinearAxis = newValue }
+    }
+
+    private var activeIndependentCopyExtrudeDistanceDrag: ViewportIndependentCopyExtrudeDistanceDragState? {
+        get { activeInteractionDrags.independentCopyExtrudeDistance }
+        nonmutating set { activeInteractionDrags.independentCopyExtrudeDistance = newValue }
+    }
+
+    private var activeIndependentCopyBodyDimensionDrag: ViewportIndependentCopyBodyDimensionDragState? {
+        get { activeInteractionDrags.independentCopyBodyDimension }
+        nonmutating set { activeInteractionDrags.independentCopyBodyDimension = newValue }
+    }
+
+    private var activePatternArrayRadialAngleDrag: ViewportPatternArrayRadialAngleDragState? {
+        get { activeInteractionDrags.patternArrayRadialAngle }
+        nonmutating set { activeInteractionDrags.patternArrayRadialAngle = newValue }
+    }
+
+    private var activePatternArrayCopyCountDrag: ViewportPatternArrayCopyCountDragState? {
+        get { activeInteractionDrags.patternArrayCopyCount }
+        nonmutating set { activeInteractionDrags.patternArrayCopyCount = newValue }
+    }
+
+    private var activePatternArrayCurveExtentDrag: ViewportPatternArrayCurveExtentDragState? {
+        get { activeInteractionDrags.patternArrayCurveExtent }
+        nonmutating set { activeInteractionDrags.patternArrayCurveExtent = newValue }
+    }
+
+    private var activePatternArrayCurvePathPointDrag: ViewportPatternArrayCurvePathPointDragState? {
+        get { activeInteractionDrags.patternArrayCurvePathPoint }
+        nonmutating set { activeInteractionDrags.patternArrayCurvePathPoint = newValue }
+    }
+
+    private var activeConstructionPlaneHandleDrag: ViewportConstructionPlaneHandleDragState? {
+        get { activeInteractionDrags.constructionPlane }
+        nonmutating set { activeInteractionDrags.constructionPlane = newValue }
+    }
 
     public init(
         document: DesignDocument,
@@ -9769,120 +9874,11 @@ public struct Viewport: View {
     }
 
     private func clearActiveInteractionDrags(except preservedTarget: ViewportInteractionTarget? = nil) {
-        func keeps<State>(
-            _ state: State?,
-            as interactionTarget: (State) -> ViewportInteractionTarget
-        ) -> Bool {
-            state.map(interactionTarget) == preservedTarget
-        }
-
-        if !keeps(activeAffordanceDrag, as: { .affordance($0.target) }) {
-            activeAffordanceDrag = nil
-        }
-        if !keeps(activeSketchCurveHandleDrag, as: { .sketchCurveHandle($0.target) }) {
-            activeSketchCurveHandleDrag = nil
-        }
-        if !keeps(activeSketchDimensionDrag, as: { .sketchDimension($0.target) }) {
-            activeSketchDimensionDrag = nil
-        }
-        if !keeps(activeSketchPointHandleDrag, as: { .sketchPointHandle($0.target) }) {
-            activeSketchPointHandleDrag = nil
-        }
-        if !keeps(activeBridgeCurveEndpointDrag, as: { .bridgeCurveEndpoint($0.target) }) {
-            activeBridgeCurveEndpointDrag = nil
-        }
-        if !keeps(activeSplineControlPointDrag, as: { .splineControlPoint($0.target) }) {
-            activeSplineControlPointDrag = nil
-        }
-        if !keeps(activeSplineControlPointSlideDrag, as: { .splineControlPointSlide($0.target) }) {
-            activeSplineControlPointSlideDrag = nil
-        }
-        if !keeps(activePolySplineSurfaceVertexDrag, as: { .polySplineSurfaceVertex($0.target) }) {
-            activePolySplineSurfaceVertexDrag = nil
-        }
-        if !keeps(activePolySplineSurfaceVertexSlideDrag, as: { .polySplineSurfaceVertexSlide($0.target) }) {
-            activePolySplineSurfaceVertexSlideDrag = nil
-        }
-        if !keeps(activeSurfaceControlPointDrag, as: { .surfaceControlPoint($0.target) }) {
-            activeSurfaceControlPointDrag = nil
-        }
-        if !keeps(activeSurfaceControlPointSlideDrag, as: { .surfaceControlPointSlide($0.target) }) {
-            activeSurfaceControlPointSlideDrag = nil
-        }
-        if !keeps(activeSurfaceTrimEndpointDrag, as: { .surfaceTrimEndpoint($0.target) }) {
-            activeSurfaceTrimEndpointDrag = nil
-        }
-        if !keeps(activeSurfaceTrimControlPointDrag, as: { .surfaceTrimControlPoint($0.target) }) {
-            activeSurfaceTrimControlPointDrag = nil
-        }
-        if !keeps(activeSurfaceFrameDrag, as: { .surfaceFrame($0.target) }) {
-            activeSurfaceFrameDrag = nil
-        }
-        if !keeps(activeRegionOffsetDrag, as: { .regionOffset($0.target) }) {
-            activeRegionOffsetDrag = nil
-        }
-        if !keeps(activeEdgeOffsetDrag, as: { .edgeOffset($0.target) }) {
-            activeEdgeOffsetDrag = nil
-        }
-        if !keeps(activeSlotWidthDrag, as: { .slotWidth($0.target) }) {
-            activeSlotWidthDrag = nil
-        }
-        if !keeps(activeSketchVertexOffsetDrag, as: { .sketchVertexOffset($0.target) }) {
-            activeSketchVertexOffsetDrag = nil
-        }
-        if !keeps(activePatternArrayLinearAxisDrag, as: { .patternArrayLinearAxis($0.target) }) {
-            activePatternArrayLinearAxisDrag = nil
-        }
-        if !keeps(activeIndependentCopyExtrudeDistanceDrag, as: { .independentCopyExtrudeDistance($0.target) }) {
-            activeIndependentCopyExtrudeDistanceDrag = nil
-        }
-        if !keeps(activeIndependentCopyBodyDimensionDrag, as: { .independentCopyBodyDimension($0.target) }) {
-            activeIndependentCopyBodyDimensionDrag = nil
-        }
-        if !keeps(activePatternArrayRadialAngleDrag, as: { .patternArrayRadialAngle($0.target) }) {
-            activePatternArrayRadialAngleDrag = nil
-        }
-        if !keeps(activePatternArrayCopyCountDrag, as: { .patternArrayCopyCount($0.target) }) {
-            activePatternArrayCopyCountDrag = nil
-        }
-        if !keeps(activePatternArrayCurveExtentDrag, as: { .patternArrayCurveExtent($0.target) }) {
-            activePatternArrayCurveExtentDrag = nil
-        }
-        if !keeps(activePatternArrayCurvePathPointDrag, as: { .patternArrayCurvePathPoint($0.target) }) {
-            activePatternArrayCurvePathPointDrag = nil
-        }
-        if !keeps(activeConstructionPlaneHandleDrag, as: { .constructionPlane($0.target) }) {
-            activeConstructionPlaneHandleDrag = nil
-        }
+        activeInteractionDrags.clear(except: preservedTarget)
     }
 
     private var hasActiveInteractionDrag: Bool {
-        activeAffordanceDrag != nil
-            || activeSketchCurveHandleDrag != nil
-            || activeSketchDimensionDrag != nil
-            || activeSketchPointHandleDrag != nil
-            || activeBridgeCurveEndpointDrag != nil
-            || activeSplineControlPointDrag != nil
-            || activeSplineControlPointSlideDrag != nil
-            || activePolySplineSurfaceVertexDrag != nil
-            || activeSurfaceControlPointDrag != nil
-            || activeSurfaceTrimEndpointDrag != nil
-            || activeSurfaceTrimControlPointDrag != nil
-            || activePolySplineSurfaceVertexSlideDrag != nil
-            || activeSurfaceControlPointSlideDrag != nil
-            || activeSurfaceFrameDrag != nil
-            || activeRegionOffsetDrag != nil
-            || activeEdgeOffsetDrag != nil
-            || activeSlotWidthDrag != nil
-            || activeSketchVertexOffsetDrag != nil
-            || activePatternArrayLinearAxisDrag != nil
-            || activeIndependentCopyExtrudeDistanceDrag != nil
-            || activeIndependentCopyBodyDimensionDrag != nil
-            || activePatternArrayRadialAngleDrag != nil
-            || activePatternArrayCopyCountDrag != nil
-            || activePatternArrayCurveExtentDrag != nil
-            || activePatternArrayCurvePathPointDrag != nil
-            || activeConstructionPlaneHandleDrag != nil
+        activeInteractionDrags.hasActiveDrag
     }
 
     private func updatePendingInteractionDrag(
