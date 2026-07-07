@@ -55,6 +55,88 @@ struct ViewportActiveInteractionDrags: Equatable {
             || constructionPlane != nil
     }
 
+    var nextFinishKind: ViewportActiveInteractionDragKind? {
+        if sketchCurveHandle != nil {
+            return .sketchCurveHandle
+        }
+        if sketchDimension != nil {
+            return .sketchDimension
+        }
+        if sketchPointHandle != nil {
+            return .sketchPointHandle
+        }
+        if bridgeCurveEndpoint != nil {
+            return .bridgeCurveEndpoint
+        }
+        if splineControlPointSlide != nil {
+            return .splineControlPointSlide
+        }
+        if polySplineSurfaceVertexSlide != nil {
+            return .polySplineSurfaceVertexSlide
+        }
+        if surfaceControlPointSlide != nil {
+            return .surfaceControlPointSlide
+        }
+        if surfaceFrame != nil {
+            return .surfaceFrame
+        }
+        if splineControlPoint != nil {
+            return .splineControlPoint
+        }
+        if polySplineSurfaceVertex != nil {
+            return .polySplineSurfaceVertex
+        }
+        if surfaceControlPoint != nil {
+            return .surfaceControlPoint
+        }
+        if surfaceTrimEndpoint != nil {
+            return .surfaceTrimEndpoint
+        }
+        if surfaceTrimControlPoint != nil {
+            return .surfaceTrimControlPoint
+        }
+        if edgeOffset != nil {
+            return .edgeOffset
+        }
+        if slotWidth != nil {
+            return .slotWidth
+        }
+        if independentCopyExtrudeDistance != nil {
+            return .independentCopyExtrudeDistance
+        }
+        if independentCopyBodyDimension != nil {
+            return .independentCopyBodyDimension
+        }
+        if patternArrayLinearAxis != nil {
+            return .patternArrayLinearAxis
+        }
+        if patternArrayRadialAngle != nil {
+            return .patternArrayRadialAngle
+        }
+        if patternArrayCopyCount != nil {
+            return .patternArrayCopyCount
+        }
+        if patternArrayCurveExtent != nil {
+            return .patternArrayCurveExtent
+        }
+        if patternArrayCurvePathPoint != nil {
+            return .patternArrayCurvePathPoint
+        }
+        if constructionPlane != nil {
+            return .constructionPlane
+        }
+        if sketchVertexOffset != nil {
+            return .sketchVertexOffset
+        }
+        if regionOffset != nil {
+            return .regionOffset
+        }
+        if affordance != nil {
+            return .affordance
+        }
+        return nil
+    }
+
     mutating func clear(except preservedTarget: ViewportInteractionTarget? = nil) {
         if !keeps(affordance, as: { .affordance($0.target) }, preservedTarget: preservedTarget) {
             affordance = nil
@@ -191,4 +273,33 @@ struct ViewportActiveInteractionDrags: Equatable {
     ) -> Bool {
         state.map(interactionTarget) == preservedTarget
     }
+}
+
+enum ViewportActiveInteractionDragKind: Equatable {
+    case sketchCurveHandle
+    case sketchDimension
+    case sketchPointHandle
+    case bridgeCurveEndpoint
+    case splineControlPointSlide
+    case polySplineSurfaceVertexSlide
+    case surfaceControlPointSlide
+    case surfaceFrame
+    case splineControlPoint
+    case polySplineSurfaceVertex
+    case surfaceControlPoint
+    case surfaceTrimEndpoint
+    case surfaceTrimControlPoint
+    case edgeOffset
+    case slotWidth
+    case independentCopyExtrudeDistance
+    case independentCopyBodyDimension
+    case patternArrayLinearAxis
+    case patternArrayRadialAngle
+    case patternArrayCopyCount
+    case patternArrayCurveExtent
+    case patternArrayCurvePathPoint
+    case constructionPlane
+    case sketchVertexOffset
+    case regionOffset
+    case affordance
 }

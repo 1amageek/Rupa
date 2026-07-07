@@ -9,10 +9,26 @@ import Testing
     var drags = ViewportActiveInteractionDrags()
 
     #expect(!drags.hasActiveDrag)
+    #expect(drags.nextFinishKind == nil)
 
     drags.affordance = affordanceDragState()
 
     #expect(drags.hasActiveDrag)
+    #expect(drags.nextFinishKind == .affordance)
+}
+
+@Test func viewportActiveInteractionDragsNextFinishKindFollowsViewportCommitPrecedence() {
+    var drags = ViewportActiveInteractionDrags(
+        affordance: affordanceDragState(),
+        sketchCurveHandle: sketchCurveHandleDragState(),
+        sketchDimension: sketchDimensionDragState()
+    )
+
+    #expect(drags.nextFinishKind == ViewportActiveInteractionDragKind.sketchCurveHandle)
+
+    drags.sketchCurveHandle = nil
+
+    #expect(drags.nextFinishKind == ViewportActiveInteractionDragKind.sketchDimension)
 }
 
 @Test func viewportActiveInteractionDragsClearRemovesEveryDragWhenNoTargetIsPreserved() {
@@ -74,6 +90,29 @@ private func sketchCurveHandleDragState(
         radiusMeters: 2.0,
         startAngleRadians: nil,
         endAngleRadians: nil
+    )
+}
+
+private func sketchDimensionDragState(
+    entityID: SketchEntityID = SketchEntityID()
+) -> ViewportSketchDimensionDragState {
+    ViewportSketchDimensionDragState(
+        target: ViewportSketchDimensionTarget(
+            featureID: FeatureID(),
+            entityID: entityID,
+            target: SelectionTarget(sceneNodeID: SceneNodeID()),
+            kind: .length,
+            sketchPlane: .xy,
+            baselineValue: 1.0,
+            start: CGPoint(x: 0.0, y: 0.0),
+            end: CGPoint(x: 1.0, y: 0.0),
+            center: nil,
+            radiusMeters: nil,
+            startAngleRadians: nil,
+            endAngleRadians: nil
+        ),
+        startPoint: .zero,
+        value: 2.0
     )
 }
 

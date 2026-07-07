@@ -12769,111 +12769,64 @@ public struct Viewport: View {
     }
 
     private func finishActiveInteractionDrag(end: CGPoint, size: CGSize) -> Bool {
-        if activeSketchCurveHandleDrag != nil {
+        guard let finishKind = activeInteractionDrags.nextFinishKind else {
+            return false
+        }
+        switch finishKind {
+        case .sketchCurveHandle:
             finishSketchCurveHandleDrag()
-            return true
-        }
-        if activeSketchDimensionDrag != nil {
+        case .sketchDimension:
             finishSketchDimensionDrag()
-            return true
-        }
-        if activeSketchPointHandleDrag != nil {
+        case .sketchPointHandle:
             finishSketchPointHandleDrag()
-            return true
-        }
-        if activeBridgeCurveEndpointDrag != nil {
+        case .bridgeCurveEndpoint:
             finishBridgeCurveEndpointDrag()
-            return true
-        }
-        if activeSplineControlPointSlideDrag != nil {
+        case .splineControlPointSlide:
             finishSplineControlPointSlideDrag()
-            return true
-        }
-        if activePolySplineSurfaceVertexSlideDrag != nil {
+        case .polySplineSurfaceVertexSlide:
             finishPolySplineSurfaceVertexSlideDrag()
-            return true
-        }
-        if activeSurfaceControlPointSlideDrag != nil {
+        case .surfaceControlPointSlide:
             finishSurfaceControlPointSlideDrag()
-            return true
-        }
-        if activeSurfaceFrameDrag != nil {
+        case .surfaceFrame:
             finishSurfaceFrameDrag()
-            return true
-        }
-        if activeSplineControlPointDrag != nil {
+        case .splineControlPoint:
             finishSplineControlPointDrag()
-            return true
-        }
-        if activePolySplineSurfaceVertexDrag != nil {
+        case .polySplineSurfaceVertex:
             finishPolySplineSurfaceVertexDrag()
-            return true
-        }
-        if activeSurfaceControlPointDrag != nil {
+        case .surfaceControlPoint:
             finishSurfaceControlPointDrag()
-            return true
-        }
-        if activeSurfaceTrimEndpointDrag != nil {
+        case .surfaceTrimEndpoint:
             finishSurfaceTrimEndpointDrag()
-            return true
-        }
-        if activeSurfaceTrimControlPointDrag != nil {
+        case .surfaceTrimControlPoint:
             finishSurfaceTrimControlPointDrag()
-            return true
-        }
-        if activeEdgeOffsetDrag != nil {
+        case .edgeOffset:
             finishEdgeOffsetDrag()
-            return true
-        }
-        if activeSlotWidthDrag != nil {
+        case .slotWidth:
             finishSlotWidthDrag()
-            return true
-        }
-        if activeIndependentCopyExtrudeDistanceDrag != nil {
+        case .independentCopyExtrudeDistance:
             finishIndependentCopyExtrudeDistanceDrag()
-            return true
-        }
-        if activeIndependentCopyBodyDimensionDrag != nil {
+        case .independentCopyBodyDimension:
             finishIndependentCopyBodyDimensionDrag()
-            return true
-        }
-        if activePatternArrayLinearAxisDrag != nil {
+        case .patternArrayLinearAxis:
             finishPatternArrayLinearAxisDrag()
-            return true
-        }
-        if activePatternArrayRadialAngleDrag != nil {
+        case .patternArrayRadialAngle:
             finishPatternArrayRadialAngleDrag()
-            return true
-        }
-        if activePatternArrayCopyCountDrag != nil {
+        case .patternArrayCopyCount:
             finishPatternArrayCopyCountDrag()
-            return true
-        }
-        if activePatternArrayCurveExtentDrag != nil {
+        case .patternArrayCurveExtent:
             finishPatternArrayCurveExtentDrag()
-            return true
-        }
-        if activePatternArrayCurvePathPointDrag != nil {
+        case .patternArrayCurvePathPoint:
             finishPatternArrayCurvePathPointDrag()
-            return true
-        }
-        if activeConstructionPlaneHandleDrag != nil {
+        case .constructionPlane:
             finishConstructionPlaneHandleDrag()
-            return true
-        }
-        if activeSketchVertexOffsetDrag != nil {
+        case .sketchVertexOffset:
             finishSketchVertexOffsetDrag()
-            return true
-        }
-        if activeRegionOffsetDrag != nil {
+        case .regionOffset:
             finishRegionOffsetDrag()
-            return true
-        }
-        if activeAffordanceDrag != nil {
+        case .affordance:
             finishAffordanceInteractionDrag(end: end, size: size)
-            return true
         }
-        return false
+        return true
     }
 
     private func finishSketchCurveHandleDrag() {
