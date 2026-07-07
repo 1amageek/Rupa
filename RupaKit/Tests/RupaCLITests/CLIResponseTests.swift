@@ -7819,6 +7819,48 @@ func cliExecutableReturnsDataExitForLiveGenerationMismatch() async throws {
     #expect(loaded.productMetadata.sceneNodes.values.contains { $0.reference != nil })
 }
 
+@Test func cliServiceFileModelRegionalCylinderPersistsExactBRep() async throws {
+    let temporaryDirectory = try makeTemporaryDirectory()
+    defer {
+        removeTemporaryDirectory(temporaryDirectory)
+    }
+
+    let url = temporaryDirectory.appendingPathComponent("regional-cylinder.swcad")
+    var document = DesignDocument.empty(named: "Before")
+    try document.setRulerConfiguration(WorkspaceScalePreset.regionalPlanning.rulerConfiguration)
+    try DocumentFileService().save(document, to: url)
+
+    let response = try CLIService().createExtrudedCircle(
+        target: CLIDocumentTarget(fileURL: url),
+        name: "CLI Regional Cylinder",
+        plane: .xy,
+        center: SketchPoint(
+            x: .length(0.0, .kilometer),
+            y: .length(0.0, .kilometer)
+        ),
+        radius: .length(25.0, .kilometer),
+        depth: .length(2.0, .kilometer),
+        direction: .normal,
+        mode: .file
+    )
+
+    let loaded = try DocumentFileService().load(from: url)
+    let evaluated = try CADPipeline
+        .modelingDefault(for: loaded)
+        .evaluate(loaded.cadDocument)
+    #expect(response.saved)
+    #expect(!response.dirty)
+    #expect(response.workspaceScale?.matchedPreset == .regionalPlanning)
+    #expect(loaded.ruler == WorkspaceScalePreset.regionalPlanning.rulerConfiguration.normalizedForWorkspaceScale())
+    #expect(evaluated.brep.bodies.count == 1)
+    #expect(evaluated.brep.geometry.surfaces.values.filter {
+        if case .cylinder = $0 {
+            return true
+        }
+        return false
+    }.count == 4)
+}
+
 @Test func cliServiceFileModelExtrudeExistingProfilePersistsClosedDocument() async throws {
     let temporaryDirectory = try makeTemporaryDirectory()
     defer {
