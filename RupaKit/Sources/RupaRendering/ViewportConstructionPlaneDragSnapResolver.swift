@@ -103,18 +103,17 @@ struct ViewportConstructionPlaneDragSnapResolver: Sendable {
 
     private func snapQueryPoint(
         rawWorldPoint: Point3D,
-        screenPoint: CGPoint,
+        screenPoint _: CGPoint,
         document: DesignDocument,
         options: SnapResolutionOptions,
-        layout: ViewportLayout
+        layout _: ViewportLayout
     ) -> Point2D {
         if options.usesConstructionPlaneProjection,
            let sketchPlane = options.constructionPlane ?? document.activeConstructionPlane?.plane,
            let point = projectedPoint(rawWorldPoint, on: sketchPlane) {
             return point
         }
-        let unprojected = layout.unproject(screenPoint)
-        return Point2D(x: Double(unprojected.x), y: Double(unprojected.y))
+        return Point2D(x: rawWorldPoint.x, y: rawWorldPoint.z)
     }
 
     private func planarFallbackWorldPoint(

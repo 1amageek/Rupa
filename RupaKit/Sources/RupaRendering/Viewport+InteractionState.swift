@@ -789,6 +789,36 @@ struct ViewportAffordanceTarget: Equatable {
     var action: ViewportAffordanceAction
 }
 
+enum ViewportInteractionTarget: Equatable {
+    case sketchCurveHandle(ViewportSketchCurveHandleTarget)
+    case sketchDimension(ViewportSketchDimensionTarget)
+    case sketchPointHandle(ViewportSketchPointHandleTarget)
+    case bridgeCurveEndpoint(ViewportBridgeCurveEndpointHandleTarget)
+    case splineControlPoint(ViewportSplineControlPointHandleTarget)
+    case splineControlPointSlide(ViewportSplineControlPointSlideHandleTarget)
+    case polySplineSurfaceVertex(ViewportPolySplineSurfaceVertexHandleTarget)
+    case polySplineSurfaceVertexSlide(ViewportPolySplineSurfaceVertexSlideHandleTarget)
+    case surfaceControlPoint(ViewportSurfaceControlPointHandleTarget)
+    case surfaceControlPointSlide(ViewportSurfaceControlPointSlideHandleTarget)
+    case surfaceTrimEndpoint(ViewportSurfaceTrimEndpointHandleTarget)
+    case surfaceTrimControlPoint(ViewportSurfaceTrimControlPointHandleTarget)
+    case surfaceFrame(ViewportSurfaceFrameHandleTarget)
+    case regionOffset(ViewportRegionOffsetHandleTarget)
+    case edgeOffset(ViewportEdgeOffsetHandleTarget)
+    case slotWidth(ViewportSlotWidthHandleTarget)
+    case sketchVertexOffset(ViewportSketchVertexOffsetHandleTarget)
+    case patternArrayLinearAxis(ViewportPatternArrayLinearAxisHandleTarget)
+    case independentCopyExtrudeDistance(ViewportIndependentCopyExtrudeDistanceHandleTarget)
+    case independentCopyBodyDimension(ViewportIndependentCopyBodyDimensionHandleTarget)
+    case patternArrayRadialAngle(ViewportPatternArrayRadialAngleHandleTarget)
+    case patternArrayCopyCount(ViewportPatternArrayCopyCountHandleTarget)
+    case patternArrayCurveExtent(ViewportPatternArrayCurveExtentHandleTarget)
+    case patternArrayCurvePathPoint(ViewportPatternArrayCurvePathPointHandleTarget)
+    case patternArrayOutputMode(ViewportPatternArrayOutputModeHandleTarget)
+    case constructionPlane(ViewportConstructionPlaneHandleTarget)
+    case affordance(ViewportAffordanceTarget)
+}
+
 enum ViewportAffordanceAction: Equatable {
     case translate(ViewportCoordinateAxis)
     case oneSidedScale(ViewportCoordinateAxis)

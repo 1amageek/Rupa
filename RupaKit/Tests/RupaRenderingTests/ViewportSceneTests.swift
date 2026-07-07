@@ -2999,7 +2999,7 @@ import Testing
         dx: placeholder.footprint.bottomRight.x - placeholder.footprint.bottomLeft.x,
         dy: placeholder.footprint.bottomRight.y - placeholder.footprint.bottomLeft.y
     )
-    let zEdge = CGVector(
+    let yEdge = CGVector(
         dx: placeholder.footprint.topLeft.x - placeholder.footprint.bottomLeft.x,
         dy: placeholder.footprint.topLeft.y - placeholder.footprint.bottomLeft.y
     )
@@ -3007,7 +3007,7 @@ import Testing
     #expect(placeholder.modelBounds.width > 0.0)
     #expect(placeholder.modelBounds.height > 0.0)
     #expect(isParallel(xEdge, mapper.layout.basis.xDirection))
-    #expect(isParallel(zEdge, mapper.layout.basis.zDirection))
+    #expect(isParallel(yEdge, mapper.layout.basis.yDirection))
     #expect(placeholder.footprint.handlePoints.count == 8)
 }
 

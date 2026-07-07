@@ -10095,167 +10095,180 @@ public struct Viewport: View {
     }
 
     private func beginViewportPress(at point: CGPoint, size: CGSize) {
-        if let sketchCurveHandleTarget = selectedSketchCurveHandleTarget(at: point, size: size) {
-            pendingSketchCurveHandle = sketchCurveHandleTarget
-            activeCanvasDrag = nil
+        guard let target = resolvedInteractionTarget(at: point, size: size) else {
+            clearPendingCanvasInteractionTargets()
             return
         }
-        if let sketchPointHandleTarget = selectedSketchPointHandleTarget(at: point, size: size) {
-            pendingSketchPointHandle = sketchPointHandleTarget
-            activeCanvasDrag = nil
-            return
+        clearPendingCanvasInteractionTargets()
+        setPendingInteractionTarget(target)
+        activeCanvasDrag = nil
+    }
+
+    private func resolvedInteractionTarget(
+        at point: CGPoint,
+        size: CGSize,
+        sceneContext: ViewportSceneContext? = nil
+    ) -> ViewportInteractionTarget? {
+        if let target = selectedSketchCurveHandleTarget(at: point, size: size) {
+            return .sketchCurveHandle(target)
         }
-        if let sketchDimensionTarget = selectedSketchDimensionTarget(at: point, size: size) {
-            pendingSketchDimension = sketchDimensionTarget
-            activeCanvasDrag = nil
-            return
+        if let target = selectedSketchPointHandleTarget(at: point, size: size) {
+            return .sketchPointHandle(target)
+        }
+        if let target = selectedSketchDimensionTarget(at: point, size: size) {
+            return .sketchDimension(target)
         }
         if onBridgeCurveEndpointDrag != nil,
-           let bridgeCurveEndpointTarget = selectedBridgeCurveEndpointTarget(at: point, size: size) {
-            pendingBridgeCurveEndpointHandle = bridgeCurveEndpointTarget
-            activeCanvasDrag = nil
-            return
+           let target = selectedBridgeCurveEndpointTarget(at: point, size: size) {
+            return .bridgeCurveEndpoint(target)
         }
-        if let splineControlPointSlideTarget = selectedSplineControlPointSlideAffordanceTarget(at: point, size: size) {
-            pendingSplineControlPointSlideHandle = splineControlPointSlideTarget
-            activeCanvasDrag = nil
-            return
+        if let target = selectedSplineControlPointSlideAffordanceTarget(at: point, size: size) {
+            return .splineControlPointSlide(target)
         }
-        if let polySplineSurfaceVertexSlideTarget = selectedPolySplineSurfaceVertexSlideAffordanceTarget(at: point, size: size) {
-            pendingPolySplineSurfaceVertexSlideHandle = polySplineSurfaceVertexSlideTarget
-            activeCanvasDrag = nil
-            return
+        if let target = selectedPolySplineSurfaceVertexSlideAffordanceTarget(at: point, size: size) {
+            return .polySplineSurfaceVertexSlide(target)
         }
-        if let surfaceControlPointSlideTarget = selectedSurfaceControlPointSlideAffordanceTarget(at: point, size: size) {
-            pendingSurfaceControlPointSlideHandle = surfaceControlPointSlideTarget
-            activeCanvasDrag = nil
-            return
+        if let target = selectedSurfaceControlPointSlideAffordanceTarget(at: point, size: size) {
+            return .surfaceControlPointSlide(target)
         }
-        if let surfaceFrameTarget = selectedSurfaceFrameAffordanceTarget(at: point, size: size) {
-            pendingSurfaceFrameHandle = surfaceFrameTarget
-            activeCanvasDrag = nil
-            return
+        if let target = selectedSurfaceFrameAffordanceTarget(at: point, size: size) {
+            return .surfaceFrame(target)
         }
-        // Control-point handles resolve BEFORE the offset and pattern handles,
-        // matching hover(): where handles overlap, the highlighted target must
-        // be the target the press grabs.
-        if let splineControlPointTarget = selectedSplineControlPointTarget(at: point, size: size) {
-            pendingSplineControlPoint = splineControlPointTarget
-            activeCanvasDrag = nil
-            return
+        if let target = selectedSplineControlPointTarget(at: point, size: size) {
+            return .splineControlPoint(target)
         }
-        if let polySplineSurfaceVertexTarget = selectedPolySplineSurfaceVertexTarget(at: point, size: size) {
-            pendingPolySplineSurfaceVertex = polySplineSurfaceVertexTarget
-            activeCanvasDrag = nil
-            return
+        if let target = selectedPolySplineSurfaceVertexTarget(at: point, size: size) {
+            return .polySplineSurfaceVertex(target)
         }
-        if let surfaceControlPointTarget = selectedSurfaceControlPointTarget(at: point, size: size) {
-            pendingSurfaceControlPoint = surfaceControlPointTarget
-            activeCanvasDrag = nil
-            return
+        if let target = selectedSurfaceControlPointTarget(at: point, size: size) {
+            return .surfaceControlPoint(target)
         }
-        if let surfaceTrimEndpointTarget = selectedSurfaceTrimEndpointTarget(at: point, size: size) {
-            pendingSurfaceTrimEndpoint = surfaceTrimEndpointTarget
-            activeCanvasDrag = nil
-            return
+        if let target = selectedSurfaceTrimEndpointTarget(at: point, size: size) {
+            return .surfaceTrimEndpoint(target)
         }
-        if let surfaceTrimControlPointTarget = selectedSurfaceTrimControlPointTarget(at: point, size: size) {
-            pendingSurfaceTrimControlPoint = surfaceTrimControlPointTarget
-            activeCanvasDrag = nil
-            return
+        if let target = selectedSurfaceTrimControlPointTarget(at: point, size: size) {
+            return .surfaceTrimControlPoint(target)
         }
-        if let edgeOffsetTarget = selectedEdgeOffsetAffordanceTarget(at: point, size: size) {
-            pendingEdgeOffsetHandle = edgeOffsetTarget
-            activeCanvasDrag = nil
-            return
+        if let target = selectedEdgeOffsetAffordanceTarget(at: point, size: size) {
+            return .edgeOffset(target)
         }
-        if let slotWidthTarget = selectedSlotWidthAffordanceTarget(at: point, size: size) {
-            pendingSlotWidthHandle = slotWidthTarget
-            activeCanvasDrag = nil
-            return
+        if let target = selectedSlotWidthAffordanceTarget(at: point, size: size) {
+            return .slotWidth(target)
         }
-        if let independentCopyExtrudeDistanceTarget = selectedIndependentCopyExtrudeDistanceAffordanceTarget(at: point, size: size) {
-            pendingIndependentCopyExtrudeDistanceHandle = independentCopyExtrudeDistanceTarget
-            activeCanvasDrag = nil
-            return
+        if let target = selectedIndependentCopyExtrudeDistanceAffordanceTarget(at: point, size: size) {
+            return .independentCopyExtrudeDistance(target)
         }
-        if let independentCopyBodyDimensionTarget = selectedIndependentCopyBodyDimensionAffordanceTarget(at: point, size: size) {
-            pendingIndependentCopyBodyDimensionHandle = independentCopyBodyDimensionTarget
-            activeCanvasDrag = nil
-            return
+        if let target = selectedIndependentCopyBodyDimensionAffordanceTarget(at: point, size: size) {
+            return .independentCopyBodyDimension(target)
         }
-        if let patternArrayLinearAxisTarget = selectedPatternArrayLinearAxisAffordanceTarget(at: point, size: size) {
-            pendingPatternArrayLinearAxisHandle = patternArrayLinearAxisTarget
-            activeCanvasDrag = nil
-            return
+        if let target = selectedPatternArrayLinearAxisAffordanceTarget(at: point, size: size) {
+            return .patternArrayLinearAxis(target)
         }
-        if let patternArrayRadialAngleTarget = selectedPatternArrayRadialAngleAffordanceTarget(at: point, size: size) {
-            pendingPatternArrayRadialAngleHandle = patternArrayRadialAngleTarget
-            activeCanvasDrag = nil
-            return
+        if let target = selectedPatternArrayRadialAngleAffordanceTarget(at: point, size: size) {
+            return .patternArrayRadialAngle(target)
         }
-        if let patternArrayCopyCountTarget = selectedPatternArrayCopyCountAffordanceTarget(at: point, size: size) {
-            pendingPatternArrayCopyCountHandle = patternArrayCopyCountTarget
-            activeCanvasDrag = nil
-            return
+        if let target = selectedPatternArrayCopyCountAffordanceTarget(at: point, size: size) {
+            return .patternArrayCopyCount(target)
         }
-        if let patternArrayCurveExtentTarget = selectedPatternArrayCurveExtentAffordanceTarget(at: point, size: size) {
-            pendingPatternArrayCurveExtentHandle = patternArrayCurveExtentTarget
-            activeCanvasDrag = nil
-            return
+        if let target = selectedPatternArrayCurveExtentAffordanceTarget(at: point, size: size) {
+            return .patternArrayCurveExtent(target)
         }
-        if let patternArrayCurvePathPointTarget = selectedPatternArrayCurvePathPointAffordanceTarget(at: point, size: size) {
-            pendingPatternArrayCurvePathPointHandle = patternArrayCurvePathPointTarget
-            activeCanvasDrag = nil
-            return
+        if let target = selectedPatternArrayCurvePathPointAffordanceTarget(at: point, size: size) {
+            return .patternArrayCurvePathPoint(target)
         }
-        if let patternArrayOutputModeTarget = selectedPatternArrayOutputModeAffordanceTarget(at: point, size: size) {
-            pendingPatternArrayOutputModeHandle = patternArrayOutputModeTarget
-            activeCanvasDrag = nil
-            return
+        if let target = selectedPatternArrayOutputModeAffordanceTarget(at: point, size: size) {
+            return .patternArrayOutputMode(target)
         }
-        if let constructionPlaneHandleTarget = selectedConstructionPlaneHandleTarget(at: point, size: size) {
-            pendingConstructionPlaneHandle = constructionPlaneHandleTarget
-            activeCanvasDrag = nil
-            return
+        if let target = selectedConstructionPlaneHandleTarget(at: point, size: size) {
+            return .constructionPlane(target)
         }
-        if let sketchVertexOffsetTarget = selectedSketchVertexOffsetAffordanceTarget(at: point, size: size) {
-            pendingSketchVertexOffsetHandle = sketchVertexOffsetTarget
-            activeCanvasDrag = nil
-            return
+        if let target = selectedSketchVertexOffsetAffordanceTarget(at: point, size: size) {
+            return .sketchVertexOffset(target)
         }
-        if let regionOffsetTarget = selectedRegionOffsetAffordanceTarget(at: point, size: size) {
-            pendingRegionOffsetHandle = regionOffsetTarget
-            activeCanvasDrag = nil
-            return
+        if let target = selectedRegionOffsetAffordanceTarget(at: point, size: size) {
+            return .regionOffset(target)
         }
-        if let vertexTarget = selectedVertexAffordanceTarget(at: point, size: size) {
-            pendingAffordance = vertexTarget
-            activeCanvasDrag = nil
-            return
+        if let target = selectedVertexAffordanceTarget(at: point, size: size) {
+            return .affordance(target)
         }
-        if let faceTarget = selectedFaceAffordanceTarget(at: point, size: size) {
-            pendingAffordance = faceTarget
-            activeCanvasDrag = nil
-            return
+        if let target = selectedFaceAffordanceTarget(at: point, size: size) {
+            return .affordance(target)
         }
-        if let edgeFilletTarget = selectedEdgeFilletAffordanceTarget(at: point, size: size) {
-            pendingAffordance = edgeFilletTarget
-            activeCanvasDrag = nil
-            return
+        if let target = selectedEdgeFilletAffordanceTarget(at: point, size: size) {
+            return .affordance(target)
         }
-        if let edgeTarget = selectedEdgeAffordanceTarget(at: point, size: size) {
-            pendingAffordance = edgeTarget
-            activeCanvasDrag = nil
-            return
+        if let target = selectedEdgeAffordanceTarget(at: point, size: size) {
+            return .affordance(target)
         }
         guard allowsObjectAffordances else {
-            pendingAffordance = nil
-            return
+            return nil
         }
-        pendingAffordance = affordanceTarget(at: point, size: size)
-        if pendingAffordance != nil {
-            activeCanvasDrag = nil
+        if let sceneContext {
+            return affordanceTarget(
+                at: point,
+                scene: sceneContext.scene,
+                layout: sceneContext.layout
+            ).map(ViewportInteractionTarget.affordance)
+        }
+        return affordanceTarget(at: point, size: size).map(ViewportInteractionTarget.affordance)
+    }
+
+    private func setPendingInteractionTarget(_ target: ViewportInteractionTarget) {
+        switch target {
+        case .sketchCurveHandle(let target):
+            pendingSketchCurveHandle = target
+        case .sketchDimension(let target):
+            pendingSketchDimension = target
+        case .sketchPointHandle(let target):
+            pendingSketchPointHandle = target
+        case .bridgeCurveEndpoint(let target):
+            pendingBridgeCurveEndpointHandle = target
+        case .splineControlPoint(let target):
+            pendingSplineControlPoint = target
+        case .splineControlPointSlide(let target):
+            pendingSplineControlPointSlideHandle = target
+        case .polySplineSurfaceVertex(let target):
+            pendingPolySplineSurfaceVertex = target
+        case .polySplineSurfaceVertexSlide(let target):
+            pendingPolySplineSurfaceVertexSlideHandle = target
+        case .surfaceControlPoint(let target):
+            pendingSurfaceControlPoint = target
+        case .surfaceControlPointSlide(let target):
+            pendingSurfaceControlPointSlideHandle = target
+        case .surfaceTrimEndpoint(let target):
+            pendingSurfaceTrimEndpoint = target
+        case .surfaceTrimControlPoint(let target):
+            pendingSurfaceTrimControlPoint = target
+        case .surfaceFrame(let target):
+            pendingSurfaceFrameHandle = target
+        case .regionOffset(let target):
+            pendingRegionOffsetHandle = target
+        case .edgeOffset(let target):
+            pendingEdgeOffsetHandle = target
+        case .slotWidth(let target):
+            pendingSlotWidthHandle = target
+        case .sketchVertexOffset(let target):
+            pendingSketchVertexOffsetHandle = target
+        case .patternArrayLinearAxis(let target):
+            pendingPatternArrayLinearAxisHandle = target
+        case .independentCopyExtrudeDistance(let target):
+            pendingIndependentCopyExtrudeDistanceHandle = target
+        case .independentCopyBodyDimension(let target):
+            pendingIndependentCopyBodyDimensionHandle = target
+        case .patternArrayRadialAngle(let target):
+            pendingPatternArrayRadialAngleHandle = target
+        case .patternArrayCopyCount(let target):
+            pendingPatternArrayCopyCountHandle = target
+        case .patternArrayCurveExtent(let target):
+            pendingPatternArrayCurveExtentHandle = target
+        case .patternArrayCurvePathPoint(let target):
+            pendingPatternArrayCurvePathPointHandle = target
+        case .patternArrayOutputMode(let target):
+            pendingPatternArrayOutputModeHandle = target
+        case .constructionPlane(let target):
+            pendingConstructionPlaneHandle = target
+        case .affordance(let target):
+            pendingAffordance = target
         }
     }
 
@@ -14294,395 +14307,14 @@ public struct Viewport: View {
         )
         let scene = sceneContext.scene
         let mapper = sceneContext.mapper
-        hoveredRegionOffsetHandle = nil
-        hoveredEdgeOffsetHandle = nil
-        hoveredSlotWidthHandle = nil
-        hoveredSketchVertexOffsetHandle = nil
-        hoveredPatternArrayLinearAxisHandle = nil
-        hoveredIndependentCopyExtrudeDistanceHandle = nil
-        hoveredIndependentCopyBodyDimensionHandle = nil
-        hoveredPatternArrayRadialAngleHandle = nil
-        hoveredPatternArrayCopyCountHandle = nil
-        hoveredPatternArrayCurveExtentHandle = nil
-        hoveredPatternArrayCurvePathPointHandle = nil
-        hoveredPatternArrayOutputModeHandle = nil
-        hoveredConstructionPlaneHandle = nil
-        hoveredSplineControlPointSlideHandle = nil
-        hoveredPolySplineSurfaceVertexSlideHandle = nil
-        hoveredSurfaceControlPointSlideHandle = nil
-        hoveredSurfaceFrameHandle = nil
-        hoveredSurfaceControlPoint = nil
-        hoveredSurfaceTrimEndpoint = nil
-        hoveredSurfaceTrimControlPoint = nil
-        hoveredBridgeCurveEndpointHandle = nil
-        if let sketchCurveHandleTarget = selectedSketchCurveHandleTarget(at: point, size: size) {
-            hoveredSketchCurveHandle = sketchCurveHandleTarget
-            hoveredSketchDimension = nil
-            hoveredSketchPointHandle = nil
-            hoveredSplineControlPoint = nil
-            hoveredSplineControlPointSlideHandle = nil
-            hoveredPolySplineSurfaceVertexSlideHandle = nil
-            hoveredPolySplineSurfaceVertex = nil
-            hoveredSketchVertexOffsetHandle = nil
-            hoveredAffordance = nil
+        if let target = resolvedInteractionTarget(at: point, size: size, sceneContext: sceneContext) {
+            setHoveredInteractionTarget(target)
             hoveredCanvasHit = nil
             hoveredModelPoint = nil
             clearHoverCallbacks()
             return
         }
-        hoveredSketchCurveHandle = nil
-        if let sketchPointHandleTarget = selectedSketchPointHandleTarget(at: point, size: size) {
-            hoveredSketchPointHandle = sketchPointHandleTarget
-            hoveredSketchDimension = nil
-            hoveredSplineControlPoint = nil
-            hoveredSplineControlPointSlideHandle = nil
-            hoveredPolySplineSurfaceVertexSlideHandle = nil
-            hoveredPolySplineSurfaceVertex = nil
-            hoveredSketchVertexOffsetHandle = nil
-            hoveredAffordance = nil
-            hoveredCanvasHit = nil
-            hoveredModelPoint = nil
-            clearHoverCallbacks()
-            return
-        }
-        hoveredSketchPointHandle = nil
-        if let sketchDimensionTarget = selectedSketchDimensionTarget(at: point, size: size) {
-            hoveredSketchDimension = sketchDimensionTarget
-            hoveredSplineControlPoint = nil
-            hoveredSplineControlPointSlideHandle = nil
-            hoveredPolySplineSurfaceVertexSlideHandle = nil
-            hoveredPolySplineSurfaceVertex = nil
-            hoveredSketchVertexOffsetHandle = nil
-            hoveredAffordance = nil
-            hoveredCanvasHit = nil
-            hoveredModelPoint = nil
-            clearHoverCallbacks()
-            return
-        }
-        hoveredSketchDimension = nil
-        if let bridgeCurveEndpointTarget = selectedBridgeCurveEndpointTarget(at: point, size: size) {
-            hoveredBridgeCurveEndpointHandle = bridgeCurveEndpointTarget
-            hoveredSplineControlPoint = nil
-            hoveredSplineControlPointSlideHandle = nil
-            hoveredPolySplineSurfaceVertexSlideHandle = nil
-            hoveredPolySplineSurfaceVertex = nil
-            hoveredSketchVertexOffsetHandle = nil
-            hoveredAffordance = nil
-            hoveredCanvasHit = nil
-            hoveredModelPoint = nil
-            clearHoverCallbacks()
-            return
-        }
-        hoveredBridgeCurveEndpointHandle = nil
-        if let splineControlPointSlideTarget = selectedSplineControlPointSlideAffordanceTarget(at: point, size: size) {
-            hoveredSplineControlPointSlideHandle = splineControlPointSlideTarget
-            hoveredPolySplineSurfaceVertexSlideHandle = nil
-            hoveredSplineControlPoint = nil
-            hoveredPolySplineSurfaceVertex = nil
-            hoveredSketchVertexOffsetHandle = nil
-            hoveredAffordance = nil
-            hoveredCanvasHit = nil
-            hoveredModelPoint = nil
-            clearHoverCallbacks()
-            return
-        }
-        hoveredSplineControlPointSlideHandle = nil
-        if let polySplineSurfaceVertexSlideTarget = selectedPolySplineSurfaceVertexSlideAffordanceTarget(at: point, size: size) {
-            hoveredPolySplineSurfaceVertexSlideHandle = polySplineSurfaceVertexSlideTarget
-            hoveredSurfaceControlPointSlideHandle = nil
-            hoveredSplineControlPoint = nil
-            hoveredPolySplineSurfaceVertex = nil
-            hoveredSurfaceControlPoint = nil
-            hoveredSketchVertexOffsetHandle = nil
-            hoveredAffordance = nil
-            hoveredCanvasHit = nil
-            hoveredModelPoint = nil
-            clearHoverCallbacks()
-            return
-        }
-        hoveredPolySplineSurfaceVertexSlideHandle = nil
-        if let surfaceControlPointSlideTarget = selectedSurfaceControlPointSlideAffordanceTarget(at: point, size: size) {
-            hoveredSurfaceControlPointSlideHandle = surfaceControlPointSlideTarget
-            hoveredSplineControlPoint = nil
-            hoveredPolySplineSurfaceVertex = nil
-            hoveredSurfaceControlPoint = nil
-            hoveredSketchVertexOffsetHandle = nil
-            hoveredAffordance = nil
-            hoveredCanvasHit = nil
-            hoveredModelPoint = nil
-            clearHoverCallbacks()
-            return
-        }
-        hoveredSurfaceControlPointSlideHandle = nil
-        if let surfaceFrameTarget = selectedSurfaceFrameAffordanceTarget(at: point, size: size) {
-            hoveredSurfaceFrameHandle = surfaceFrameTarget
-            hoveredSplineControlPoint = nil
-            hoveredPolySplineSurfaceVertex = nil
-            hoveredSurfaceControlPoint = nil
-            hoveredSketchVertexOffsetHandle = nil
-            hoveredAffordance = nil
-            hoveredCanvasHit = nil
-            hoveredModelPoint = nil
-            clearHoverCallbacks()
-            return
-        }
-        hoveredSurfaceFrameHandle = nil
-        if let splineControlPointTarget = selectedSplineControlPointTarget(at: point, size: size) {
-            hoveredSplineControlPoint = splineControlPointTarget
-            hoveredPolySplineSurfaceVertexSlideHandle = nil
-            hoveredSurfaceControlPointSlideHandle = nil
-            hoveredPolySplineSurfaceVertex = nil
-            hoveredSurfaceControlPoint = nil
-            hoveredSketchVertexOffsetHandle = nil
-            hoveredAffordance = nil
-            hoveredCanvasHit = nil
-            hoveredModelPoint = nil
-            clearHoverCallbacks()
-            return
-        }
-        hoveredSplineControlPoint = nil
-        if let polySplineSurfaceVertexTarget = selectedPolySplineSurfaceVertexTarget(at: point, size: size) {
-            hoveredPolySplineSurfaceVertex = polySplineSurfaceVertexTarget
-            hoveredPolySplineSurfaceVertexSlideHandle = nil
-            hoveredSurfaceControlPointSlideHandle = nil
-            hoveredSketchVertexOffsetHandle = nil
-            hoveredEdgeOffsetHandle = nil
-            hoveredAffordance = nil
-            hoveredCanvasHit = nil
-            hoveredModelPoint = nil
-            clearHoverCallbacks()
-            return
-        }
-        hoveredPolySplineSurfaceVertex = nil
-        if let surfaceControlPointTarget = selectedSurfaceControlPointTarget(at: point, size: size) {
-            hoveredSurfaceControlPoint = surfaceControlPointTarget
-            hoveredSurfaceControlPointSlideHandle = nil
-            hoveredSketchVertexOffsetHandle = nil
-            hoveredEdgeOffsetHandle = nil
-            hoveredAffordance = nil
-            hoveredCanvasHit = nil
-            hoveredModelPoint = nil
-            clearHoverCallbacks()
-            return
-        }
-        hoveredSurfaceControlPoint = nil
-        if let surfaceTrimEndpointTarget = selectedSurfaceTrimEndpointTarget(at: point, size: size) {
-            hoveredSurfaceTrimEndpoint = surfaceTrimEndpointTarget
-            hoveredSurfaceTrimControlPoint = nil
-            hoveredSurfaceControlPointSlideHandle = nil
-            hoveredSketchVertexOffsetHandle = nil
-            hoveredEdgeOffsetHandle = nil
-            hoveredAffordance = nil
-            hoveredCanvasHit = nil
-            hoveredModelPoint = nil
-            clearHoverCallbacks()
-            return
-        }
-        hoveredSurfaceTrimEndpoint = nil
-        if let surfaceTrimControlPointTarget = selectedSurfaceTrimControlPointTarget(at: point, size: size) {
-            hoveredSurfaceTrimControlPoint = surfaceTrimControlPointTarget
-            hoveredSurfaceControlPointSlideHandle = nil
-            hoveredSketchVertexOffsetHandle = nil
-            hoveredEdgeOffsetHandle = nil
-            hoveredAffordance = nil
-            hoveredCanvasHit = nil
-            hoveredModelPoint = nil
-            clearHoverCallbacks()
-            return
-        }
-        hoveredSurfaceTrimControlPoint = nil
-        if let edgeOffsetTarget = selectedEdgeOffsetAffordanceTarget(at: point, size: size) {
-            hoveredEdgeOffsetHandle = edgeOffsetTarget
-            hoveredSlotWidthHandle = nil
-            hoveredSketchVertexOffsetHandle = nil
-            hoveredAffordance = nil
-            hoveredCanvasHit = nil
-            hoveredModelPoint = nil
-            clearHoverCallbacks()
-            return
-        }
-        hoveredEdgeOffsetHandle = nil
-        if let slotWidthTarget = selectedSlotWidthAffordanceTarget(at: point, size: size) {
-            hoveredSlotWidthHandle = slotWidthTarget
-            hoveredSketchVertexOffsetHandle = nil
-            hoveredPatternArrayLinearAxisHandle = nil
-            hoveredIndependentCopyExtrudeDistanceHandle = nil
-            hoveredIndependentCopyBodyDimensionHandle = nil
-            hoveredPatternArrayRadialAngleHandle = nil
-            hoveredPatternArrayCopyCountHandle = nil
-            hoveredPatternArrayCurveExtentHandle = nil
-            hoveredPatternArrayCurvePathPointHandle = nil
-            hoveredPatternArrayOutputModeHandle = nil
-            hoveredAffordance = nil
-            hoveredCanvasHit = nil
-            hoveredModelPoint = nil
-            clearHoverCallbacks()
-            return
-        }
-        hoveredSlotWidthHandle = nil
-        if let independentCopyExtrudeDistanceTarget = selectedIndependentCopyExtrudeDistanceAffordanceTarget(at: point, size: size) {
-            hoveredIndependentCopyExtrudeDistanceHandle = independentCopyExtrudeDistanceTarget
-            hoveredIndependentCopyBodyDimensionHandle = nil
-            hoveredPatternArrayLinearAxisHandle = nil
-            hoveredPatternArrayRadialAngleHandle = nil
-            hoveredPatternArrayCopyCountHandle = nil
-            hoveredPatternArrayCurveExtentHandle = nil
-            hoveredPatternArrayCurvePathPointHandle = nil
-            hoveredPatternArrayOutputModeHandle = nil
-            hoveredSketchVertexOffsetHandle = nil
-            hoveredAffordance = nil
-            hoveredCanvasHit = nil
-            hoveredModelPoint = nil
-            clearHoverCallbacks()
-            return
-        }
-        hoveredIndependentCopyExtrudeDistanceHandle = nil
-        if let independentCopyBodyDimensionTarget = selectedIndependentCopyBodyDimensionAffordanceTarget(at: point, size: size) {
-            hoveredIndependentCopyBodyDimensionHandle = independentCopyBodyDimensionTarget
-            hoveredPatternArrayLinearAxisHandle = nil
-            hoveredPatternArrayRadialAngleHandle = nil
-            hoveredPatternArrayCopyCountHandle = nil
-            hoveredPatternArrayCurveExtentHandle = nil
-            hoveredPatternArrayCurvePathPointHandle = nil
-            hoveredPatternArrayOutputModeHandle = nil
-            hoveredSketchVertexOffsetHandle = nil
-            hoveredAffordance = nil
-            hoveredCanvasHit = nil
-            hoveredModelPoint = nil
-            clearHoverCallbacks()
-            return
-        }
-        hoveredIndependentCopyBodyDimensionHandle = nil
-        if let patternArrayLinearAxisTarget = selectedPatternArrayLinearAxisAffordanceTarget(at: point, size: size) {
-            hoveredPatternArrayLinearAxisHandle = patternArrayLinearAxisTarget
-            hoveredIndependentCopyExtrudeDistanceHandle = nil
-            hoveredIndependentCopyBodyDimensionHandle = nil
-            hoveredPatternArrayRadialAngleHandle = nil
-            hoveredPatternArrayCopyCountHandle = nil
-            hoveredPatternArrayCurveExtentHandle = nil
-            hoveredPatternArrayCurvePathPointHandle = nil
-            hoveredPatternArrayOutputModeHandle = nil
-            hoveredSketchVertexOffsetHandle = nil
-            hoveredAffordance = nil
-            hoveredCanvasHit = nil
-            hoveredModelPoint = nil
-            clearHoverCallbacks()
-            return
-        }
-        hoveredPatternArrayLinearAxisHandle = nil
-        if let patternArrayRadialAngleTarget = selectedPatternArrayRadialAngleAffordanceTarget(at: point, size: size) {
-            hoveredPatternArrayRadialAngleHandle = patternArrayRadialAngleTarget
-            hoveredPatternArrayCopyCountHandle = nil
-            hoveredPatternArrayCurveExtentHandle = nil
-            hoveredPatternArrayCurvePathPointHandle = nil
-            hoveredPatternArrayOutputModeHandle = nil
-            hoveredSketchVertexOffsetHandle = nil
-            hoveredAffordance = nil
-            hoveredCanvasHit = nil
-            hoveredModelPoint = nil
-            clearHoverCallbacks()
-            return
-        }
-        hoveredPatternArrayRadialAngleHandle = nil
-        if let patternArrayCopyCountTarget = selectedPatternArrayCopyCountAffordanceTarget(at: point, size: size) {
-            hoveredPatternArrayCopyCountHandle = patternArrayCopyCountTarget
-            hoveredPatternArrayCurveExtentHandle = nil
-            hoveredPatternArrayCurvePathPointHandle = nil
-            hoveredPatternArrayOutputModeHandle = nil
-            hoveredSketchVertexOffsetHandle = nil
-            hoveredAffordance = nil
-            hoveredCanvasHit = nil
-            hoveredModelPoint = nil
-            clearHoverCallbacks()
-            return
-        }
-        hoveredPatternArrayCopyCountHandle = nil
-        if let patternArrayCurveExtentTarget = selectedPatternArrayCurveExtentAffordanceTarget(at: point, size: size) {
-            hoveredPatternArrayCurveExtentHandle = patternArrayCurveExtentTarget
-            hoveredPatternArrayCurvePathPointHandle = nil
-            hoveredPatternArrayOutputModeHandle = nil
-            hoveredSketchVertexOffsetHandle = nil
-            hoveredAffordance = nil
-            hoveredCanvasHit = nil
-            hoveredModelPoint = nil
-            clearHoverCallbacks()
-            return
-        }
-        hoveredPatternArrayCurveExtentHandle = nil
-        if let patternArrayCurvePathPointTarget = selectedPatternArrayCurvePathPointAffordanceTarget(at: point, size: size) {
-            hoveredPatternArrayCurvePathPointHandle = patternArrayCurvePathPointTarget
-            hoveredSketchVertexOffsetHandle = nil
-            hoveredAffordance = nil
-            hoveredCanvasHit = nil
-            hoveredModelPoint = nil
-            clearHoverCallbacks()
-            return
-        }
-        hoveredPatternArrayCurvePathPointHandle = nil
-        if let patternArrayOutputModeTarget = selectedPatternArrayOutputModeAffordanceTarget(at: point, size: size) {
-            hoveredPatternArrayOutputModeHandle = patternArrayOutputModeTarget
-            hoveredSketchVertexOffsetHandle = nil
-            hoveredAffordance = nil
-            hoveredCanvasHit = nil
-            hoveredModelPoint = nil
-            clearHoverCallbacks()
-            return
-        }
-        hoveredPatternArrayOutputModeHandle = nil
-        if let constructionPlaneHandleTarget = selectedConstructionPlaneHandleTarget(at: point, size: size) {
-            hoveredConstructionPlaneHandle = constructionPlaneHandleTarget
-            hoveredSketchVertexOffsetHandle = nil
-            hoveredAffordance = nil
-            hoveredCanvasHit = nil
-            hoveredModelPoint = nil
-            clearHoverCallbacks()
-            return
-        }
-        hoveredConstructionPlaneHandle = nil
-        if let sketchVertexOffsetTarget = selectedSketchVertexOffsetAffordanceTarget(at: point, size: size) {
-            hoveredSketchVertexOffsetHandle = sketchVertexOffsetTarget
-            hoveredAffordance = nil
-            hoveredCanvasHit = nil
-            hoveredModelPoint = nil
-            clearHoverCallbacks()
-            return
-        }
-        hoveredSketchVertexOffsetHandle = nil
-        if let regionOffsetTarget = selectedRegionOffsetAffordanceTarget(at: point, size: size) {
-            hoveredRegionOffsetHandle = regionOffsetTarget
-            hoveredAffordance = nil
-            hoveredCanvasHit = nil
-            hoveredModelPoint = nil
-            clearHoverCallbacks()
-            return
-        }
-        if let edgeFilletTarget = selectedEdgeFilletAffordanceTarget(at: point, size: size) {
-            hoveredAffordance = edgeFilletTarget
-            hoveredCanvasHit = nil
-            hoveredModelPoint = nil
-            clearHoverCallbacks()
-            return
-        }
-        if let edgeTarget = selectedEdgeAffordanceTarget(at: point, size: size) {
-            hoveredAffordance = edgeTarget
-            hoveredCanvasHit = nil
-            hoveredModelPoint = nil
-            clearHoverCallbacks()
-            return
-        }
-        if allowsObjectAffordances,
-           let affordanceTarget = affordanceTarget(
-               at: point,
-               scene: scene,
-               layout: mapper.layout
-           ) {
-            hoveredAffordance = affordanceTarget
-            hoveredCanvasHit = nil
-            hoveredModelPoint = nil
-            clearHoverCallbacks()
-            return
-        }
-        hoveredAffordance = nil
+        clearHoverInteractionTargets()
         let hitScene = sceneBySuppressingSketches(
             scene,
             selectedFeatureIDs: selectedTargetFeatureIDs()
@@ -14707,6 +14339,96 @@ public struct Viewport: View {
         )?.point
         refreshSnapCandidateKind(size: size)
         onHover?(hit)
+    }
+
+    private func clearHoverInteractionTargets() {
+        hoveredAffordance = nil
+        hoveredSketchCurveHandle = nil
+        hoveredSketchDimension = nil
+        hoveredSketchPointHandle = nil
+        hoveredBridgeCurveEndpointHandle = nil
+        hoveredSplineControlPoint = nil
+        hoveredSplineControlPointSlideHandle = nil
+        hoveredPolySplineSurfaceVertex = nil
+        hoveredPolySplineSurfaceVertexSlideHandle = nil
+        hoveredSurfaceControlPoint = nil
+        hoveredSurfaceControlPointSlideHandle = nil
+        hoveredSurfaceTrimEndpoint = nil
+        hoveredSurfaceTrimControlPoint = nil
+        hoveredSurfaceFrameHandle = nil
+        hoveredRegionOffsetHandle = nil
+        hoveredEdgeOffsetHandle = nil
+        hoveredSlotWidthHandle = nil
+        hoveredSketchVertexOffsetHandle = nil
+        hoveredPatternArrayLinearAxisHandle = nil
+        hoveredIndependentCopyExtrudeDistanceHandle = nil
+        hoveredIndependentCopyBodyDimensionHandle = nil
+        hoveredPatternArrayRadialAngleHandle = nil
+        hoveredPatternArrayCopyCountHandle = nil
+        hoveredPatternArrayCurveExtentHandle = nil
+        hoveredPatternArrayCurvePathPointHandle = nil
+        hoveredPatternArrayOutputModeHandle = nil
+        hoveredConstructionPlaneHandle = nil
+    }
+
+    private func setHoveredInteractionTarget(_ target: ViewportInteractionTarget) {
+        clearHoverInteractionTargets()
+        switch target {
+        case .sketchCurveHandle(let target):
+            hoveredSketchCurveHandle = target
+        case .sketchDimension(let target):
+            hoveredSketchDimension = target
+        case .sketchPointHandle(let target):
+            hoveredSketchPointHandle = target
+        case .bridgeCurveEndpoint(let target):
+            hoveredBridgeCurveEndpointHandle = target
+        case .splineControlPoint(let target):
+            hoveredSplineControlPoint = target
+        case .splineControlPointSlide(let target):
+            hoveredSplineControlPointSlideHandle = target
+        case .polySplineSurfaceVertex(let target):
+            hoveredPolySplineSurfaceVertex = target
+        case .polySplineSurfaceVertexSlide(let target):
+            hoveredPolySplineSurfaceVertexSlideHandle = target
+        case .surfaceControlPoint(let target):
+            hoveredSurfaceControlPoint = target
+        case .surfaceControlPointSlide(let target):
+            hoveredSurfaceControlPointSlideHandle = target
+        case .surfaceTrimEndpoint(let target):
+            hoveredSurfaceTrimEndpoint = target
+        case .surfaceTrimControlPoint(let target):
+            hoveredSurfaceTrimControlPoint = target
+        case .surfaceFrame(let target):
+            hoveredSurfaceFrameHandle = target
+        case .regionOffset(let target):
+            hoveredRegionOffsetHandle = target
+        case .edgeOffset(let target):
+            hoveredEdgeOffsetHandle = target
+        case .slotWidth(let target):
+            hoveredSlotWidthHandle = target
+        case .sketchVertexOffset(let target):
+            hoveredSketchVertexOffsetHandle = target
+        case .patternArrayLinearAxis(let target):
+            hoveredPatternArrayLinearAxisHandle = target
+        case .independentCopyExtrudeDistance(let target):
+            hoveredIndependentCopyExtrudeDistanceHandle = target
+        case .independentCopyBodyDimension(let target):
+            hoveredIndependentCopyBodyDimensionHandle = target
+        case .patternArrayRadialAngle(let target):
+            hoveredPatternArrayRadialAngleHandle = target
+        case .patternArrayCopyCount(let target):
+            hoveredPatternArrayCopyCountHandle = target
+        case .patternArrayCurveExtent(let target):
+            hoveredPatternArrayCurveExtentHandle = target
+        case .patternArrayCurvePathPoint(let target):
+            hoveredPatternArrayCurvePathPointHandle = target
+        case .patternArrayOutputMode(let target):
+            hoveredPatternArrayOutputModeHandle = target
+        case .constructionPlane(let target):
+            hoveredConstructionPlaneHandle = target
+        case .affordance(let target):
+            hoveredAffordance = target
+        }
     }
 
     private func clearHoverCallbacks() {
