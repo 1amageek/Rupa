@@ -3583,6 +3583,36 @@ import Testing
 }
 
 @MainActor
+@Test func viewportGridRendererHidesScaleLabelsCoveredByCanvasChrome() {
+    let layout = ViewportCanvasChromeLayout(viewportSize: CGSize(width: 800.0, height: 600.0))
+    let coveredLabel = ViewportProjectedGrid.ScaleLabel(
+        axis: .x,
+        valueMeters: 1.0,
+        displayValue: 1.0,
+        displayUnit: .meter,
+        position: CGPoint(x: 20.0, y: 20.0),
+        text: "1m"
+    )
+    let visibleLabel = ViewportProjectedGrid.ScaleLabel(
+        axis: .z,
+        valueMeters: 2.0,
+        displayValue: 2.0,
+        displayUnit: .meter,
+        position: CGPoint(x: 420.0, y: 280.0),
+        text: "2m"
+    )
+
+    let visible = ViewportGridRenderer.visibleScaleLabels(
+        from: [coveredLabel, visibleLabel],
+        chromeLayout: layout
+    )
+
+    #expect(visible == [visibleLabel])
+    #expect(layout.intersectsCanvasChrome(ViewportGridRenderer.scaleLabelRect(for: coveredLabel)))
+    #expect(!layout.intersectsCanvasChrome(ViewportGridRenderer.scaleLabelRect(for: visibleLabel)))
+}
+
+@MainActor
 @Test func viewportCanvasChromeLayoutMergesExternalOverlayExclusions() {
     let viewportSize = CGSize(width: 800.0, height: 600.0)
     let overlayRect = CGRect(x: 612.0, y: 44.0, width: 38.0, height: 210.0)
