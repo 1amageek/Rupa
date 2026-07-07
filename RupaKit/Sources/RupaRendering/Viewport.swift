@@ -1,10 +1,15 @@
 import Foundation
+import OSLog
 import RupaCore
 import SwiftUI
 import RupaViewportScene
 
 public struct Viewport: View {
     private static let projectionAnimationDuration: TimeInterval = 0.34
+    private static let snapOverlayLogger = Logger(
+        subsystem: "RupaRendering",
+        category: "ViewportSnapOverlay"
+    )
 
     @State private var activeCanvasDrag: ViewportActiveDrag?
     @State private var activeAffordanceDrag: ViewportAffordanceDragState?
@@ -93,6 +98,8 @@ public struct Viewport: View {
     @State private var orbitBasis: ViewportProjectionBasis?
     @State private var projectionTransition: ViewportProjectionTransition?
     @State private var modifierFlags: ViewportInputModifierFlags = ViewportInputModifierFlags()
+    @State private var snapOverlayResult: SnapResolutionResult?
+    @State private var snapOverlayFailureDescription: String?
     @State private var reportedSnapCandidateKind: RupaCore.SnapCandidateKind?
     @State private var selectedAxis: ViewportCoordinateAxis?
     @State private var hoveredCanvasHit: ViewportHit?
@@ -469,7 +476,7 @@ public struct Viewport: View {
                         },
                         onModifierFlagsChange: { flags, size in
                             modifierFlags = flags
-                            refreshSnapCandidateKind(size: size)
+                            refreshSnapOverlayResolution(size: size)
                         },
                         onSecondaryClick: { _, _ in
                             onCommandConfirm?()
@@ -521,7 +528,7 @@ public struct Viewport: View {
                 }
             }
             .onChange(of: snapResolutionOptions) { _, _ in
-                refreshSnapCandidateKind(size: proxy.size)
+                refreshSnapOverlayResolution(size: proxy.size)
             }
             .onChange(of: cameraResetSignal) { _, _ in
                 resetViewportCamera(size: proxy.size, basis: currentProjectionBasis)
@@ -531,6 +538,7 @@ public struct Viewport: View {
             }
             .onChange(of: documentGeneration) { _, _ in
                 clearDragPreviewDocument()
+                refreshSnapOverlayResolution(size: proxy.size)
             }
             .onAppear {
                 if let projectionRequest {
@@ -1968,79 +1976,15 @@ public struct Viewport: View {
         layout: ViewportLayout,
         chromeLayout: ViewportCanvasChromeLayout
     ) {
-        guard let probe = snapOverlayProbe(layout: layout),
-              let result = snapResolution(
-                  for: probe.point,
-                  referencePoint: probe.referencePoint
-              ),
-              let candidate = result.selectedCandidate,
-              shouldDrawSnapOverlay(for: candidate) else {
+        guard let snapOverlayResult else {
             return
         }
-        let projectedPoint = layout.project(
-            CGPoint(x: result.resolvedPoint.x, y: result.resolvedPoint.y)
-        )
-        let markerRect = CGRect(
-            x: projectedPoint.x - 4.0,
-            y: projectedPoint.y - 4.0,
-            width: 8.0,
-            height: 8.0
-        )
-        let markerPath = Path(ellipseIn: markerRect)
-        let accent = Color.cyan
-        context.fill(markerPath, with: .color(accent.opacity(0.22)))
-        context.stroke(markerPath, with: .color(accent.opacity(0.92)), lineWidth: 1.5)
-
-        var crosshair = Path()
-        crosshair.move(to: CGPoint(x: projectedPoint.x - 9.0, y: projectedPoint.y))
-        crosshair.addLine(to: CGPoint(x: projectedPoint.x - 5.0, y: projectedPoint.y))
-        crosshair.move(to: CGPoint(x: projectedPoint.x + 5.0, y: projectedPoint.y))
-        crosshair.addLine(to: CGPoint(x: projectedPoint.x + 9.0, y: projectedPoint.y))
-        crosshair.move(to: CGPoint(x: projectedPoint.x, y: projectedPoint.y - 9.0))
-        crosshair.addLine(to: CGPoint(x: projectedPoint.x, y: projectedPoint.y - 5.0))
-        crosshair.move(to: CGPoint(x: projectedPoint.x, y: projectedPoint.y + 5.0))
-        crosshair.addLine(to: CGPoint(x: projectedPoint.x, y: projectedPoint.y + 9.0))
-        context.stroke(crosshair, with: .color(accent.opacity(0.84)), lineWidth: 1.0)
-
-        if shouldDrawSnapLabel(for: candidate) {
-            let label = Text(candidate.label)
-                .font(.caption2.weight(.semibold))
-                .foregroundStyle(Color.white)
-            let backgroundRect = chromeLayout.snapLabelRect(
-                near: projectedPoint,
-                size: CGSize(
-                    width: max(CGFloat(candidate.label.count) * 6.4 + 14.0, 34.0),
-                    height: 20.0
-                )
-            )
-            let labelPoint = CGPoint(
-                x: backgroundRect.minX + 7.0,
-                y: backgroundRect.midY
-            )
-            context.fill(
-                Path(roundedRect: backgroundRect, cornerRadius: 6.0),
-                with: .color(Color.black.opacity(0.72))
-            )
-            context.stroke(
-                Path(roundedRect: backgroundRect, cornerRadius: 6.0),
-                with: .color(accent.opacity(0.45)),
-                lineWidth: 1.0
-            )
-            context.draw(label, at: labelPoint, anchor: .leading)
-        }
-    }
-
-    private func shouldDrawSnapOverlay(for candidate: SnapCandidate) -> Bool {
-        ViewportSnapOverlayPolicy.drawsOverlay(
-            kind: candidate.kind,
-            context: snapOverlayContext
-        )
-    }
-
-    private func shouldDrawSnapLabel(for candidate: SnapCandidate) -> Bool {
-        ViewportSnapOverlayPolicy.drawsLabel(
-            kind: candidate.kind,
-            context: snapOverlayContext
+        ViewportSnapOverlayRenderer.draw(
+            result: snapOverlayResult,
+            layout: layout,
+            chromeLayout: chromeLayout,
+            context: snapOverlayContext,
+            in: &context
         )
     }
 
@@ -2110,7 +2054,7 @@ public struct Viewport: View {
         }
     }
 
-    private func snapOverlayProbe(layout: ViewportLayout) -> (point: Point2D, referencePoint: Point2D?)? {
+    private func snapOverlayProbe(layout: ViewportLayout) -> ViewportSnapOverlayProbe? {
         if let activeCanvasDrag {
             guard case .creation = activeCanvasDrag.kind else {
                 return nil
@@ -2135,7 +2079,7 @@ public struct Viewport: View {
                 from: startInput.point,
                 on: sketchPlane
             ) ?? currentInput.point
-            return (
+            return ViewportSnapOverlayProbe(
                 point: constrainedPoint,
                 referencePoint: startInput.point
             )
@@ -2143,7 +2087,7 @@ public struct Viewport: View {
         guard let hoveredModelPoint else {
             return nil
         }
-        return (point: hoveredModelPoint, referencePoint: nil)
+        return ViewportSnapOverlayProbe(point: hoveredModelPoint, referencePoint: nil)
     }
 
     private func canvasInput(
@@ -2286,26 +2230,49 @@ public struct Viewport: View {
         onSnapCandidateKindChange?(kind)
     }
 
-    private func refreshSnapCandidateKind(size: CGSize) {
+    private func refreshSnapOverlayResolution(size: CGSize) {
         let mapper = makeCoordinateMapper(
             size: size,
             camera: camera,
             basis: currentProjectionBasis
         )
-        guard let probe = snapOverlayProbe(layout: mapper.layout),
-              let result = snapResolution(
-                  for: probe.point,
-                  referencePoint: probe.referencePoint
-              ) else {
-            publishSnapCandidateKind(nil)
-            return
-        }
-        publishSnapCandidateKind(
-            ViewportSnapOverlayPolicy.publishedKind(
-                result.selectedCandidate?.kind,
-                context: snapOverlayContext
+        refreshSnapOverlayResolution(layout: mapper.layout)
+    }
+
+    private func refreshSnapOverlayResolution(layout: ViewportLayout) {
+        applySnapOverlayResolution(
+            ViewportSnapOverlayResolutionService().resolution(
+                for: snapOverlayProbe(layout: layout),
+                document: document,
+                options: snapResolutionOptions,
+                modifierFlags: modifierFlags
             )
         )
+    }
+
+    private func applySnapOverlayResolution(_ resolution: ViewportSnapOverlayResolution) {
+        if snapOverlayResult != resolution.result {
+            snapOverlayResult = resolution.result
+        }
+        if snapOverlayFailureDescription != resolution.failureDescription {
+            if let failureDescription = resolution.failureDescription {
+                Self.snapOverlayLogger.warning(
+                    "Snap overlay resolution failed: \(failureDescription, privacy: .public)"
+                )
+            }
+            snapOverlayFailureDescription = resolution.failureDescription
+        }
+        publishSnapCandidateKind(resolution.publishedKind(context: snapOverlayContext))
+    }
+
+    private func clearSnapOverlayResolution() {
+        if snapOverlayResult != nil {
+            snapOverlayResult = nil
+        }
+        if snapOverlayFailureDescription != nil {
+            snapOverlayFailureDescription = nil
+        }
+        publishSnapCandidateKind(nil)
     }
 
     private func captureReferenceLineAnchor(at point: CGPoint, size: CGSize) -> Bool {
@@ -9571,7 +9538,7 @@ public struct Viewport: View {
         size: CGSize
     ) {
         defer {
-            refreshSnapCandidateKind(size: size)
+            refreshSnapOverlayResolution(size: size)
         }
         if start == nil || current == nil {
             clearPendingCanvasInteractionTargets()
@@ -14163,7 +14130,7 @@ public struct Viewport: View {
             sketchPlane: sketchPlane,
             layout: mapper.layout
         )?.point
-        refreshSnapCandidateKind(size: size)
+        refreshSnapOverlayResolution(layout: mapper.layout)
         onHover?(hit)
     }
 
@@ -14258,7 +14225,7 @@ public struct Viewport: View {
     }
 
     private func clearHoverCallbacks() {
-        publishSnapCandidateKind(nil)
+        clearSnapOverlayResolution()
         onHover?(nil)
     }
 

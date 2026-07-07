@@ -3762,6 +3762,117 @@ import Testing
     #expect(ViewportSnapOverlayPolicy.publishedKind(.lineStart, context: passiveHover) == .lineStart)
 }
 
+@Test func viewportSnapOverlayResolutionServiceResolvesInputOutsideDrawing() {
+    let options = SnapResolutionOptions(
+        usesGrid: true,
+        usesObjects: false,
+        gridIntervalMeters: 0.01
+    )
+    let resolution = ViewportSnapOverlayResolutionService().resolution(
+        for: ViewportSnapOverlayProbe(
+            point: Point2D(x: 0.012, y: 0.018),
+            referencePoint: nil
+        ),
+        document: .empty(),
+        options: options,
+        modifierFlags: ViewportInputModifierFlags()
+    )
+
+    #expect(resolution.failureDescription == nil)
+    #expect(resolution.result?.selectedCandidate?.kind == .grid)
+    #expect(pointIsApproximatelyEqual(
+        resolution.result?.resolvedPoint ?? Point2D(x: 0.0, y: 0.0),
+        Point2D(x: 0.01, y: 0.02)
+    ))
+    #expect(resolution.publishedKind(context: .passiveHover) == nil)
+    #expect(resolution.publishedKind(context: .creationDrag) == .grid)
+}
+
+@Test func viewportSnapOverlayResolutionServiceClearsWhenProbeIsUnavailable() {
+    let resolution = ViewportSnapOverlayResolutionService().resolution(
+        for: nil,
+        document: .empty(),
+        options: SnapResolutionOptions(),
+        modifierFlags: ViewportInputModifierFlags()
+    )
+
+    #expect(resolution.result == nil)
+    #expect(resolution.failureDescription == nil)
+    #expect(resolution.publishedKind(context: .creationDrag) == nil)
+}
+
+@Test func viewportSnapOverlayResolutionServiceReportsResolutionFailures() {
+    let resolution = ViewportSnapOverlayResolutionService().resolution(
+        for: ViewportSnapOverlayProbe(
+            point: Point2D(x: .nan, y: 0.0),
+            referencePoint: nil
+        ),
+        document: .empty(),
+        options: SnapResolutionOptions(),
+        modifierFlags: ViewportInputModifierFlags()
+    )
+
+    #expect(resolution.result == nil)
+    #expect(resolution.failureDescription != nil)
+}
+
+@Test func viewportSnapOverlayRendererBuildsPolicyCompliantPresentations() {
+    let layout = ViewportLayout(
+        modelBounds: CGRect(x: -1.0, y: -1.0, width: 2.0, height: 2.0),
+        size: CGSize(width: 800.0, height: 600.0)
+    )
+    let chromeLayout = ViewportCanvasChromeLayout(viewportSize: CGSize(width: 800.0, height: 600.0))
+    let gridCandidate = SnapCandidate(
+        kind: .grid,
+        point: Point2D(x: 0.0, y: 0.0),
+        distanceMeters: 0.0,
+        label: "Grid"
+    )
+    let lineCandidate = SnapCandidate(
+        kind: .lineStart,
+        point: Point2D(x: 0.0, y: 0.0),
+        distanceMeters: 0.0,
+        label: "Start"
+    )
+    let gridResult = SnapResolutionResult(
+        originalPoint: Point2D(x: 0.0, y: 0.0),
+        resolvedPoint: Point2D(x: 0.0, y: 0.0),
+        selectedCandidate: gridCandidate,
+        candidates: [gridCandidate]
+    )
+    let lineResult = SnapResolutionResult(
+        originalPoint: Point2D(x: 0.0, y: 0.0),
+        resolvedPoint: Point2D(x: 0.0, y: 0.0),
+        selectedCandidate: lineCandidate,
+        candidates: [lineCandidate]
+    )
+
+    #expect(ViewportSnapOverlayRenderer.presentation(
+        result: gridResult,
+        layout: layout,
+        chromeLayout: chromeLayout,
+        context: .passiveHover
+    ) == nil)
+    let gridDragPresentation = ViewportSnapOverlayRenderer.presentation(
+        result: gridResult,
+        layout: layout,
+        chromeLayout: chromeLayout,
+        context: .creationDrag
+    )
+    #expect(gridDragPresentation?.labelText == nil)
+    #expect(gridDragPresentation?.labelBackgroundRect == nil)
+
+    let linePresentation = ViewportSnapOverlayRenderer.presentation(
+        result: lineResult,
+        layout: layout,
+        chromeLayout: chromeLayout,
+        context: .passiveHover
+    )
+    #expect(linePresentation?.labelText == "Start")
+    #expect(linePresentation?.labelBackgroundRect != nil)
+    #expect(linePresentation?.markerRect.width == 8.0)
+}
+
 @MainActor
 private func makeCurvedSweepViewportSession() throws -> (
     session: EditorSession,
