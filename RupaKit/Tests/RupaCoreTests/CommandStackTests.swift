@@ -967,8 +967,13 @@ import Testing
                 y: .length(0.0, .millimeter)
             ),
             radius: .length(60.0, .millimeter),
-            startAngle: .angle(0.0, .degree),
-            endAngle: .angle(90.0, .degree)
+            // Start the arc at 90 degrees so the path start sits directly
+            // above the profile-plane origin: swept sections stay anchored to
+            // the path start, so the origin-centered profile keeps its drawn
+            // position (the former 0-degree start began 60 mm off-plane and
+            // relied on the old recentering behavior).
+            startAngle: .angle(90.0, .degree),
+            endAngle: .angle(180.0, .degree)
         )
     )
     let pathID = try #require(session.document.cadDocument.designGraph.order.last)
@@ -6566,6 +6571,35 @@ private func twoCircleConstraintCommandDocument(
     document.cadDocument.designGraph.nodes[featureID] = feature
     document.cadDocument.designGraph.revision = document.cadDocument.designGraph.revision.advanced()
     return (document, featureID, firstCircleID, secondCircleID)
+}
+
+@MainActor
+@Test func moveBodyTranslatesExtrudedBoxProfileSketch() async throws {
+    let session = EditorSession()
+    _ = try #require(session.createDefaultExtrudedRectangle())
+    let bodyFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let bodyNodeID = try #require(session.document.productMetadata.sceneNodes.first {
+        $0.value.reference == .body(bodyFeatureID)
+    }?.key)
+    let before = try MeasurementService().measure(document: session.document)
+    let beforeBounds = try #require(before.bounds)
+
+    let result = session.moveBody(
+        target: SelectionTarget(sceneNodeID: bodyNodeID),
+        deltaX: .length(5.0, .millimeter),
+        deltaY: .length(3.0, .millimeter)
+    )
+
+    // The gizmo translate commits by translating the consumed profile sketch,
+    // so the rebuilt body shifts by exactly the drag delta (the consumed
+    // sketch itself is hidden and does not appear in sketch summaries).
+    #expect(result != nil)
+    let after = try MeasurementService().measure(document: session.document)
+    let afterBounds = try #require(after.bounds)
+    #expect(abs(afterBounds.minX - beforeBounds.minX - 0.005) < 1.0e-9)
+    #expect(abs(afterBounds.minY - beforeBounds.minY - 0.003) < 1.0e-9)
+    #expect(abs(afterBounds.minZ - beforeBounds.minZ) < 1.0e-9)
+    #expect(session.evaluationStatus == .valid)
 }
 
 @MainActor

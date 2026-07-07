@@ -3518,8 +3518,10 @@ private func makeCurvedSweepViewportSession() throws -> (
             y: .length(0.0, .millimeter)
         ),
         radius: .length(60.0, .millimeter),
-        startAngle: .angle(0.0, .degree),
-        endAngle: .angle(90.0, .degree)
+        // 90-180 degrees keeps the path start directly above the profile-plane
+        // origin under the anchored placement semantics.
+        startAngle: .angle(90.0, .degree),
+        endAngle: .angle(180.0, .degree)
     )
     let session = EditorSession(document: document)
     let result = try session.execute(.createSweep(

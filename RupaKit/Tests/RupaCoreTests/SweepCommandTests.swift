@@ -1141,8 +1141,10 @@ private func sweepBooleanMeasureDocument(
             y: .length(0.0, .millimeter)
         ),
         radius: .length(60.0, .millimeter),
-        startAngle: .angle(0.0, .degree),
-        endAngle: .angle(90.0, .degree)
+        // 90-180 degrees keeps the offset path's start directly above the
+        // profile-plane origin under the anchored placement semantics.
+        startAngle: .angle(90.0, .degree),
+        endAngle: .angle(180.0, .degree)
     )
     let generatedPathID = FeatureID()
     let generatedPath = FeatureNode(
