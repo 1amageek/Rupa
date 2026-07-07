@@ -10163,108 +10163,110 @@ public struct Viewport: View {
         size: CGSize,
         sceneContext: ViewportSceneContext? = nil
     ) -> ViewportInteractionTarget? {
-        if let target = selectedSketchCurveHandleTarget(at: point, size: size) {
+        let sceneContext = sceneContext ?? makeSceneContext(
+            size: size,
+            camera: camera,
+            basis: currentProjectionBasis
+        )
+        if let target = selectedSketchCurveHandleTarget(at: point, sceneContext: sceneContext) {
             return .sketchCurveHandle(target)
         }
-        if let target = selectedSketchPointHandleTarget(at: point, size: size) {
+        if let target = selectedSketchPointHandleTarget(at: point, sceneContext: sceneContext) {
             return .sketchPointHandle(target)
         }
-        if let target = selectedSketchDimensionTarget(at: point, size: size) {
+        if let target = selectedSketchDimensionTarget(at: point, sceneContext: sceneContext) {
             return .sketchDimension(target)
         }
         if onBridgeCurveEndpointDrag != nil,
-           let target = selectedBridgeCurveEndpointTarget(at: point, size: size) {
+           let target = selectedBridgeCurveEndpointTarget(at: point, sceneContext: sceneContext) {
             return .bridgeCurveEndpoint(target)
         }
-        if let target = selectedSplineControlPointSlideAffordanceTarget(at: point, size: size) {
+        if let target = selectedSplineControlPointSlideAffordanceTarget(at: point, sceneContext: sceneContext) {
             return .splineControlPointSlide(target)
         }
-        if let target = selectedPolySplineSurfaceVertexSlideAffordanceTarget(at: point, size: size) {
+        if let target = selectedPolySplineSurfaceVertexSlideAffordanceTarget(at: point, sceneContext: sceneContext) {
             return .polySplineSurfaceVertexSlide(target)
         }
-        if let target = selectedSurfaceControlPointSlideAffordanceTarget(at: point, size: size) {
+        if let target = selectedSurfaceControlPointSlideAffordanceTarget(at: point, sceneContext: sceneContext) {
             return .surfaceControlPointSlide(target)
         }
-        if let target = selectedSurfaceFrameAffordanceTarget(at: point, size: size) {
+        if let target = selectedSurfaceFrameAffordanceTarget(at: point, sceneContext: sceneContext) {
             return .surfaceFrame(target)
         }
-        if let target = selectedSplineControlPointTarget(at: point, size: size) {
+        if let target = selectedSplineControlPointTarget(at: point, sceneContext: sceneContext) {
             return .splineControlPoint(target)
         }
-        if let target = selectedPolySplineSurfaceVertexTarget(at: point, size: size) {
+        if let target = selectedPolySplineSurfaceVertexTarget(at: point, sceneContext: sceneContext) {
             return .polySplineSurfaceVertex(target)
         }
-        if let target = selectedSurfaceControlPointTarget(at: point, size: size) {
+        if let target = selectedSurfaceControlPointTarget(at: point, sceneContext: sceneContext) {
             return .surfaceControlPoint(target)
         }
-        if let target = selectedSurfaceTrimEndpointTarget(at: point, size: size) {
+        if let target = selectedSurfaceTrimEndpointTarget(at: point, sceneContext: sceneContext) {
             return .surfaceTrimEndpoint(target)
         }
-        if let target = selectedSurfaceTrimControlPointTarget(at: point, size: size) {
+        if let target = selectedSurfaceTrimControlPointTarget(at: point, sceneContext: sceneContext) {
             return .surfaceTrimControlPoint(target)
         }
-        if let target = selectedEdgeOffsetAffordanceTarget(at: point, size: size) {
+        if let target = selectedEdgeOffsetAffordanceTarget(at: point, sceneContext: sceneContext) {
             return .edgeOffset(target)
         }
-        if let target = selectedSlotWidthAffordanceTarget(at: point, size: size) {
+        if let target = selectedSlotWidthAffordanceTarget(at: point, sceneContext: sceneContext) {
             return .slotWidth(target)
         }
-        if let target = selectedIndependentCopyExtrudeDistanceAffordanceTarget(at: point, size: size) {
+        if let target = selectedIndependentCopyExtrudeDistanceAffordanceTarget(at: point, sceneContext: sceneContext) {
             return .independentCopyExtrudeDistance(target)
         }
-        if let target = selectedIndependentCopyBodyDimensionAffordanceTarget(at: point, size: size) {
+        if let target = selectedIndependentCopyBodyDimensionAffordanceTarget(at: point, sceneContext: sceneContext) {
             return .independentCopyBodyDimension(target)
         }
-        if let target = selectedPatternArrayLinearAxisAffordanceTarget(at: point, size: size) {
+        if let target = selectedPatternArrayLinearAxisAffordanceTarget(at: point, sceneContext: sceneContext) {
             return .patternArrayLinearAxis(target)
         }
-        if let target = selectedPatternArrayRadialAngleAffordanceTarget(at: point, size: size) {
+        if let target = selectedPatternArrayRadialAngleAffordanceTarget(at: point, sceneContext: sceneContext) {
             return .patternArrayRadialAngle(target)
         }
-        if let target = selectedPatternArrayCopyCountAffordanceTarget(at: point, size: size) {
+        if let target = selectedPatternArrayCopyCountAffordanceTarget(at: point, sceneContext: sceneContext) {
             return .patternArrayCopyCount(target)
         }
-        if let target = selectedPatternArrayCurveExtentAffordanceTarget(at: point, size: size) {
+        if let target = selectedPatternArrayCurveExtentAffordanceTarget(at: point, sceneContext: sceneContext) {
             return .patternArrayCurveExtent(target)
         }
-        if let target = selectedPatternArrayCurvePathPointAffordanceTarget(at: point, size: size) {
+        if let target = selectedPatternArrayCurvePathPointAffordanceTarget(at: point, sceneContext: sceneContext) {
             return .patternArrayCurvePathPoint(target)
         }
-        if let target = selectedPatternArrayOutputModeAffordanceTarget(at: point, size: size) {
+        if let target = selectedPatternArrayOutputModeAffordanceTarget(at: point, sceneContext: sceneContext) {
             return .patternArrayOutputMode(target)
         }
-        if let target = selectedConstructionPlaneHandleTarget(at: point, size: size) {
+        if let target = selectedConstructionPlaneHandleTarget(at: point, sceneContext: sceneContext) {
             return .constructionPlane(target)
         }
-        if let target = selectedSketchVertexOffsetAffordanceTarget(at: point, size: size) {
+        if let target = selectedSketchVertexOffsetAffordanceTarget(at: point, sceneContext: sceneContext) {
             return .sketchVertexOffset(target)
         }
-        if let target = selectedRegionOffsetAffordanceTarget(at: point, size: size) {
+        if let target = selectedRegionOffsetAffordanceTarget(at: point, sceneContext: sceneContext) {
             return .regionOffset(target)
         }
-        if let target = selectedVertexAffordanceTarget(at: point, size: size) {
+        if let target = selectedVertexAffordanceTarget(at: point, sceneContext: sceneContext) {
             return .affordance(target)
         }
-        if let target = selectedFaceAffordanceTarget(at: point, size: size) {
+        if let target = selectedFaceAffordanceTarget(at: point, sceneContext: sceneContext) {
             return .affordance(target)
         }
-        if let target = selectedEdgeFilletAffordanceTarget(at: point, size: size) {
+        if let target = selectedEdgeFilletAffordanceTarget(at: point, sceneContext: sceneContext) {
             return .affordance(target)
         }
-        if let target = selectedEdgeAffordanceTarget(at: point, size: size) {
+        if let target = selectedEdgeAffordanceTarget(at: point, sceneContext: sceneContext) {
             return .affordance(target)
         }
         guard allowsObjectAffordances else {
             return nil
         }
-        if let sceneContext {
-            return affordanceTarget(
-                at: point,
-                scene: sceneContext.scene,
-                layout: sceneContext.layout
-            ).map(ViewportInteractionTarget.affordance)
-        }
-        return affordanceTarget(at: point, size: size).map(ViewportInteractionTarget.affordance)
+        return affordanceTarget(
+            at: point,
+            scene: sceneContext.scene,
+            layout: sceneContext.layout
+        ).map(ViewportInteractionTarget.affordance)
     }
 
     private func setPendingInteractionTarget(_ target: ViewportInteractionTarget) {
@@ -10328,16 +10330,11 @@ public struct Viewport: View {
 
     private func selectedSketchCurveHandleTarget(
         at point: CGPoint,
-        size: CGSize
+        sceneContext: ViewportSceneContext
     ) -> ViewportSketchCurveHandleTarget? {
         guard onSketchCurveHandleDrag != nil else {
             return nil
         }
-        let sceneContext = makeSceneContext(
-            size: size,
-            camera: camera,
-            basis: currentProjectionBasis
-        )
         let scene = sceneContext.scene
         let layout = sceneContext.layout
         let handleTolerance: CGFloat = 12.0
@@ -10382,16 +10379,11 @@ public struct Viewport: View {
 
     private func selectedSketchDimensionTarget(
         at point: CGPoint,
-        size: CGSize
+        sceneContext: ViewportSceneContext
     ) -> ViewportSketchDimensionTarget? {
         guard onSketchDimensionDrag != nil else {
             return nil
         }
-        let sceneContext = makeSceneContext(
-            size: size,
-            camera: camera,
-            basis: currentProjectionBasis
-        )
         let scene = sceneContext.scene
         let layout = sceneContext.layout
         var bestTarget: (target: ViewportSketchDimensionTarget, distance: CGFloat)?
@@ -10620,16 +10612,11 @@ public struct Viewport: View {
 
     private func selectedSketchPointHandleTarget(
         at point: CGPoint,
-        size: CGSize
+        sceneContext: ViewportSceneContext
     ) -> ViewportSketchPointHandleTarget? {
         guard onSketchPointHandleDrag != nil else {
             return nil
         }
-        let sceneContext = makeSceneContext(
-            size: size,
-            camera: camera,
-            basis: currentProjectionBasis
-        )
         let scene = sceneContext.scene
         let layout = sceneContext.layout
         let handleTolerance: CGFloat = 12.0
@@ -10712,16 +10699,11 @@ public struct Viewport: View {
 
     private func selectedSplineControlPointTarget(
         at point: CGPoint,
-        size: CGSize
+        sceneContext: ViewportSceneContext
     ) -> ViewportSplineControlPointHandleTarget? {
         guard onSplineControlPointDrag != nil else {
             return nil
         }
-        let sceneContext = makeSceneContext(
-            size: size,
-            camera: camera,
-            basis: currentProjectionBasis
-        )
         let scene = sceneContext.scene
         let layout = sceneContext.layout
         let handleTolerance: CGFloat = 12.0
@@ -10766,16 +10748,11 @@ public struct Viewport: View {
 
     private func selectedPolySplineSurfaceVertexTarget(
         at point: CGPoint,
-        size: CGSize
+        sceneContext: ViewportSceneContext
     ) -> ViewportPolySplineSurfaceVertexHandleTarget? {
         guard onPolySplineSurfaceVertexDrag != nil else {
             return nil
         }
-        let sceneContext = makeSceneContext(
-            size: size,
-            camera: camera,
-            basis: currentProjectionBasis
-        )
         let scene = sceneContext.scene
         let layout = sceneContext.layout
         let topologyVertices = polySplineSurfaceTopologyVertices(in: scene)
@@ -10823,16 +10800,11 @@ public struct Viewport: View {
 
     private func selectedSurfaceControlPointTarget(
         at point: CGPoint,
-        size: CGSize
+        sceneContext: ViewportSceneContext
     ) -> ViewportSurfaceControlPointHandleTarget? {
         guard onSurfaceControlPointDrag != nil else {
             return nil
         }
-        let sceneContext = makeSceneContext(
-            size: size,
-            camera: camera,
-            basis: currentProjectionBasis
-        )
         let scene = sceneContext.scene
         let layout = sceneContext.layout
         let handleTolerance: CGFloat = 12.0
@@ -10863,16 +10835,11 @@ public struct Viewport: View {
 
     private func selectedSurfaceTrimEndpointTarget(
         at point: CGPoint,
-        size: CGSize
+        sceneContext: ViewportSceneContext
     ) -> ViewportSurfaceTrimEndpointHandleTarget? {
         guard onSurfaceTrimEndpointDrag != nil else {
             return nil
         }
-        let sceneContext = makeSceneContext(
-            size: size,
-            camera: camera,
-            basis: currentProjectionBasis
-        )
         let scene = sceneContext.scene
         let layout = sceneContext.layout
         let handleTolerance: CGFloat = 12.0
@@ -10896,13 +10863,8 @@ public struct Viewport: View {
 
     private func selectedBridgeCurveEndpointTarget(
         at point: CGPoint,
-        size: CGSize
+        sceneContext: ViewportSceneContext
     ) -> ViewportBridgeCurveEndpointHandleTarget? {
-        let sceneContext = makeSceneContext(
-            size: size,
-            camera: camera,
-            basis: currentProjectionBasis
-        )
         let service = ViewportBridgeCurveEndpointAffordanceService()
         let candidates = service.candidatesOrEmpty(
             document: document,
@@ -10915,16 +10877,11 @@ public struct Viewport: View {
 
     private func selectedSurfaceTrimControlPointTarget(
         at point: CGPoint,
-        size: CGSize
+        sceneContext: ViewportSceneContext
     ) -> ViewportSurfaceTrimControlPointHandleTarget? {
         guard onSurfaceTrimControlPointDrag != nil else {
             return nil
         }
-        let sceneContext = makeSceneContext(
-            size: size,
-            camera: camera,
-            basis: currentProjectionBasis
-        )
         let scene = sceneContext.scene
         let layout = sceneContext.layout
         let handleTolerance: CGFloat = 12.0
@@ -10948,16 +10905,11 @@ public struct Viewport: View {
 
     private func selectedPolySplineSurfaceVertexSlideAffordanceTarget(
         at point: CGPoint,
-        size: CGSize
+        sceneContext: ViewportSceneContext
     ) -> ViewportPolySplineSurfaceVertexSlideHandleTarget? {
         guard onPolySplineSurfaceVertexSlideDrag != nil else {
             return nil
         }
-        let sceneContext = makeSceneContext(
-            size: size,
-            camera: camera,
-            basis: currentProjectionBasis
-        )
         let scene = sceneContext.scene
         let layout = sceneContext.layout
         var nearest: (target: ViewportPolySplineSurfaceVertexSlideHandleTarget, distance: CGFloat)?
@@ -10981,16 +10933,11 @@ public struct Viewport: View {
 
     private func selectedSurfaceControlPointSlideAffordanceTarget(
         at point: CGPoint,
-        size: CGSize
+        sceneContext: ViewportSceneContext
     ) -> ViewportSurfaceControlPointSlideHandleTarget? {
         guard onSurfaceControlPointSlideDrag != nil else {
             return nil
         }
-        let sceneContext = makeSceneContext(
-            size: size,
-            camera: camera,
-            basis: currentProjectionBasis
-        )
         let scene = sceneContext.scene
         let layout = sceneContext.layout
         var nearest: (target: ViewportSurfaceControlPointSlideHandleTarget, distance: CGFloat)?
@@ -11014,16 +10961,11 @@ public struct Viewport: View {
 
     private func selectedSurfaceFrameAffordanceTarget(
         at point: CGPoint,
-        size: CGSize
+        sceneContext: ViewportSceneContext
     ) -> ViewportSurfaceFrameHandleTarget? {
         guard onSurfaceFrameDrag != nil else {
             return nil
         }
-        let sceneContext = makeSceneContext(
-            size: size,
-            camera: camera,
-            basis: currentProjectionBasis
-        )
         let scene = sceneContext.scene
         let layout = sceneContext.layout
         var nearest: (target: ViewportSurfaceFrameHandleTarget, distance: CGFloat)?
@@ -11390,16 +11332,11 @@ public struct Viewport: View {
 
     private func selectedVertexAffordanceTarget(
         at point: CGPoint,
-        size: CGSize
+        sceneContext: ViewportSceneContext
     ) -> ViewportAffordanceTarget? {
         guard onVertexDrag != nil else {
             return nil
         }
-        let sceneContext = makeSceneContext(
-            size: size,
-            camera: camera,
-            basis: currentProjectionBasis
-        )
         let scene = sceneContext.scene
         let layout = sceneContext.layout
         let handleTolerance: CGFloat = 12.0
@@ -11424,16 +11361,11 @@ public struct Viewport: View {
 
     private func selectedFaceAffordanceTarget(
         at point: CGPoint,
-        size: CGSize
+        sceneContext: ViewportSceneContext
     ) -> ViewportAffordanceTarget? {
         guard onFaceDrag != nil else {
             return nil
         }
-        let sceneContext = makeSceneContext(
-            size: size,
-            camera: camera,
-            basis: currentProjectionBasis
-        )
         let scene = sceneContext.scene
         let layout = sceneContext.layout
         for target in selection.selectedTargets.reversed() {
@@ -11458,16 +11390,11 @@ public struct Viewport: View {
 
     private func selectedEdgeAffordanceTarget(
         at point: CGPoint,
-        size: CGSize
+        sceneContext: ViewportSceneContext
     ) -> ViewportAffordanceTarget? {
         guard onEdgeChamferDrag != nil else {
             return nil
         }
-        let sceneContext = makeSceneContext(
-            size: size,
-            camera: camera,
-            basis: currentProjectionBasis
-        )
         let scene = sceneContext.scene
         let layout = sceneContext.layout
         for target in selection.selectedTargets.reversed() {
@@ -11491,16 +11418,11 @@ public struct Viewport: View {
 
     private func selectedEdgeFilletAffordanceTarget(
         at point: CGPoint,
-        size: CGSize
+        sceneContext: ViewportSceneContext
     ) -> ViewportAffordanceTarget? {
         guard onEdgeFilletDrag != nil else {
             return nil
         }
-        let sceneContext = makeSceneContext(
-            size: size,
-            camera: camera,
-            basis: currentProjectionBasis
-        )
         let scene = sceneContext.scene
         let layout = sceneContext.layout
         for target in selection.selectedTargets.reversed() {
@@ -11524,16 +11446,11 @@ public struct Viewport: View {
 
     private func selectedRegionOffsetAffordanceTarget(
         at point: CGPoint,
-        size: CGSize
+        sceneContext: ViewportSceneContext
     ) -> ViewportRegionOffsetHandleTarget? {
         guard onRegionOffsetDrag != nil else {
             return nil
         }
-        let sceneContext = makeSceneContext(
-            size: size,
-            camera: camera,
-            basis: currentProjectionBasis
-        )
         let scene = sceneContext.scene
         let layout = sceneContext.layout
         let candidates = regionOffsetAffordanceCandidates(
@@ -11555,16 +11472,11 @@ public struct Viewport: View {
 
     private func selectedEdgeOffsetAffordanceTarget(
         at point: CGPoint,
-        size: CGSize
+        sceneContext: ViewportSceneContext
     ) -> ViewportEdgeOffsetHandleTarget? {
         guard onEdgeOffsetDrag != nil else {
             return nil
         }
-        let sceneContext = makeSceneContext(
-            size: size,
-            camera: camera,
-            basis: currentProjectionBasis
-        )
         let scene = sceneContext.scene
         let layout = sceneContext.layout
         let candidates = edgeOffsetAffordanceCandidates(
@@ -11586,16 +11498,11 @@ public struct Viewport: View {
 
     private func selectedSlotWidthAffordanceTarget(
         at point: CGPoint,
-        size: CGSize
+        sceneContext: ViewportSceneContext
     ) -> ViewportSlotWidthHandleTarget? {
         guard onSlotWidthDrag != nil else {
             return nil
         }
-        let sceneContext = makeSceneContext(
-            size: size,
-            camera: camera,
-            basis: currentProjectionBasis
-        )
         let scene = sceneContext.scene
         let layout = sceneContext.layout
         let candidates = slotWidthAffordanceCandidates(
@@ -11617,16 +11524,11 @@ public struct Viewport: View {
 
     private func selectedPatternArrayLinearAxisAffordanceTarget(
         at point: CGPoint,
-        size: CGSize
+        sceneContext: ViewportSceneContext
     ) -> ViewportPatternArrayLinearAxisHandleTarget? {
         guard onPatternArrayLinearAxisDrag != nil else {
             return nil
         }
-        let sceneContext = makeSceneContext(
-            size: size,
-            camera: camera,
-            basis: currentProjectionBasis
-        )
         let candidates = patternArrayLinearAxisAffordanceCandidates(
             scene: sceneContext.scene,
             layout: sceneContext.layout
@@ -11645,16 +11547,11 @@ public struct Viewport: View {
 
     private func selectedIndependentCopyExtrudeDistanceAffordanceTarget(
         at point: CGPoint,
-        size: CGSize
+        sceneContext: ViewportSceneContext
     ) -> ViewportIndependentCopyExtrudeDistanceHandleTarget? {
         guard onIndependentCopyExtrudeDistanceDrag != nil else {
             return nil
         }
-        let sceneContext = makeSceneContext(
-            size: size,
-            camera: camera,
-            basis: currentProjectionBasis
-        )
         let candidates = independentCopyExtrudeDistanceAffordanceCandidates(
             scene: sceneContext.scene,
             layout: sceneContext.layout
@@ -11673,16 +11570,11 @@ public struct Viewport: View {
 
     private func selectedIndependentCopyBodyDimensionAffordanceTarget(
         at point: CGPoint,
-        size: CGSize
+        sceneContext: ViewportSceneContext
     ) -> ViewportIndependentCopyBodyDimensionHandleTarget? {
         guard onIndependentCopyBodyDimensionDrag != nil else {
             return nil
         }
-        let sceneContext = makeSceneContext(
-            size: size,
-            camera: camera,
-            basis: currentProjectionBasis
-        )
         let candidates = independentCopyBodyDimensionAffordanceCandidates(
             scene: sceneContext.scene,
             layout: sceneContext.layout
@@ -11701,16 +11593,11 @@ public struct Viewport: View {
 
     private func selectedPatternArrayRadialAngleAffordanceTarget(
         at point: CGPoint,
-        size: CGSize
+        sceneContext: ViewportSceneContext
     ) -> ViewportPatternArrayRadialAngleHandleTarget? {
         guard onPatternArrayRadialAngleDrag != nil else {
             return nil
         }
-        let sceneContext = makeSceneContext(
-            size: size,
-            camera: camera,
-            basis: currentProjectionBasis
-        )
         let candidates = patternArrayRadialAngleAffordanceCandidates(
             scene: sceneContext.scene,
             layout: sceneContext.layout
@@ -11728,16 +11615,11 @@ public struct Viewport: View {
 
     private func selectedPatternArrayCopyCountAffordanceTarget(
         at point: CGPoint,
-        size: CGSize
+        sceneContext: ViewportSceneContext
     ) -> ViewportPatternArrayCopyCountHandleTarget? {
         guard onPatternArrayCopyCountDrag != nil else {
             return nil
         }
-        let sceneContext = makeSceneContext(
-            size: size,
-            camera: camera,
-            basis: currentProjectionBasis
-        )
         let candidates = patternArrayCopyCountAffordanceCandidates(
             scene: sceneContext.scene,
             layout: sceneContext.layout
@@ -11754,16 +11636,11 @@ public struct Viewport: View {
 
     private func selectedPatternArrayCurveExtentAffordanceTarget(
         at point: CGPoint,
-        size: CGSize
+        sceneContext: ViewportSceneContext
     ) -> ViewportPatternArrayCurveExtentHandleTarget? {
         guard onPatternArrayCurveExtentDrag != nil else {
             return nil
         }
-        let sceneContext = makeSceneContext(
-            size: size,
-            camera: camera,
-            basis: currentProjectionBasis
-        )
         let candidates = patternArrayCurveExtentAffordanceCandidates(
             scene: sceneContext.scene,
             layout: sceneContext.layout
@@ -11780,16 +11657,11 @@ public struct Viewport: View {
 
     private func selectedPatternArrayCurvePathPointAffordanceTarget(
         at point: CGPoint,
-        size: CGSize
+        sceneContext: ViewportSceneContext
     ) -> ViewportPatternArrayCurvePathPointHandleTarget? {
         guard onPatternArrayCurvePathPointDrag != nil else {
             return nil
         }
-        let sceneContext = makeSceneContext(
-            size: size,
-            camera: camera,
-            basis: currentProjectionBasis
-        )
         let candidates = patternArrayCurvePathPointAffordanceCandidates(
             scene: sceneContext.scene,
             layout: sceneContext.layout
@@ -11804,16 +11676,11 @@ public struct Viewport: View {
 
     private func selectedPatternArrayOutputModeAffordanceTarget(
         at point: CGPoint,
-        size: CGSize
+        sceneContext: ViewportSceneContext
     ) -> ViewportPatternArrayOutputModeHandleTarget? {
         guard onPatternArrayOutputModeChange != nil else {
             return nil
         }
-        let sceneContext = makeSceneContext(
-            size: size,
-            camera: camera,
-            basis: currentProjectionBasis
-        )
         let candidates = patternArrayOutputModeAffordanceCandidates(
             scene: sceneContext.scene,
             layout: sceneContext.layout
@@ -11828,36 +11695,26 @@ public struct Viewport: View {
 
     private func selectedConstructionPlaneHandleTarget(
         at point: CGPoint,
-        size: CGSize
+        sceneContext: ViewportSceneContext
     ) -> ViewportConstructionPlaneHandleTarget? {
         guard onConstructionPlaneHandleDrag != nil else {
             return nil
         }
-        let layout = makeLayout(
-            size: size,
-            camera: camera,
-            basis: currentProjectionBasis
-        )
         return ViewportConstructionPlaneHandleGeometry().target(
             at: point,
             document: document,
             selection: selection,
-            layout: layout
+            layout: sceneContext.layout
         )
     }
 
     private func selectedSketchVertexOffsetAffordanceTarget(
         at point: CGPoint,
-        size: CGSize
+        sceneContext: ViewportSceneContext
     ) -> ViewportSketchVertexOffsetHandleTarget? {
         guard onSketchVertexOffsetDrag != nil else {
             return nil
         }
-        let sceneContext = makeSceneContext(
-            size: size,
-            camera: camera,
-            basis: currentProjectionBasis
-        )
         let scene = sceneContext.scene
         let layout = sceneContext.layout
         let candidates = sketchVertexOffsetAffordanceCandidates(
@@ -11879,16 +11736,11 @@ public struct Viewport: View {
 
     private func selectedSplineControlPointSlideAffordanceTarget(
         at point: CGPoint,
-        size: CGSize
+        sceneContext: ViewportSceneContext
     ) -> ViewportSplineControlPointSlideHandleTarget? {
         guard onSplineControlPointSlideDrag != nil else {
             return nil
         }
-        let sceneContext = makeSceneContext(
-            size: size,
-            camera: camera,
-            basis: currentProjectionBasis
-        )
         let scene = sceneContext.scene
         let layout = sceneContext.layout
         let candidates = splineControlPointSlideAffordanceCandidates(
