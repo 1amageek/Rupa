@@ -68,7 +68,7 @@ public struct MainView: View {
     @State private var slotProfileCommandState: SlotProfileCommandState
     @State private var viewportProjectionBasis: ViewportProjectionBasis
     @State private var viewportContextPanelHeight: CGFloat
-    @State private var viewportOverlayExclusionRects: [CGRect]
+    @State private var viewportOverlayExclusions: [ViewportCanvasOverlayExclusion]
     @State private var viewportCameraResetSignal: Int
     @State private var isUtilityRailExpanded: Bool
     @State private var viewAlignedConstructionPlaneRequest: ViewAlignedConstructionPlaneRequest?
@@ -160,7 +160,7 @@ public struct MainView: View {
         self._slotProfileCommandState = State(initialValue: .inactive)
         self._viewportProjectionBasis = State(initialValue: .isometric)
         self._viewportContextPanelHeight = State(initialValue: 0.0)
-        self._viewportOverlayExclusionRects = State(initialValue: [])
+        self._viewportOverlayExclusions = State(initialValue: [])
         self._viewportCameraResetSignal = State(initialValue: 0)
         self._isUtilityRailExpanded = State(initialValue: isUtilityRailExpanded)
         self._viewAlignedConstructionPlaneRequest = State(initialValue: nil)
@@ -505,7 +505,7 @@ public struct MainView: View {
                 isContextPanelVisible: isViewportContextPanelVisible,
                 onHover: handleWorkspaceOverlayHover,
                 onContextPanelHeightChange: setViewportContextPanelHeight,
-                onExclusionRectsChange: setViewportOverlayExclusionRects
+                onExclusionsChange: setViewportOverlayExclusions
             ) {
                 viewportCanvas
             } topBar: {
@@ -590,7 +590,7 @@ public struct MainView: View {
             cameraFrameRequest: viewportCameraFrameRequest,
             selectionHitPolicy: selectionScope.viewportSelectionHitPolicy,
             bottomChromeReservedHeight: viewportBottomChromeReservedHeight,
-            canvasOverlayExclusionRects: viewportOverlayExclusionRects,
+            canvasOverlayExclusions: viewportOverlayExclusions,
             gridVisualSpacingMode: session.document.productMetadata.viewportGridSettings.visualSpacingMode,
             workspaceScalePresetTitle: scaleSummary.presetTitle,
             workspaceScalePresetOptions: WorkspaceScalePreset.profiles,
@@ -670,11 +670,11 @@ public struct MainView: View {
         viewportContextPanelHeight = height
     }
 
-    private func setViewportOverlayExclusionRects(_ rects: [CGRect]) {
-        guard viewportOverlayExclusionRects != rects else {
+    private func setViewportOverlayExclusions(_ exclusions: [ViewportCanvasOverlayExclusion]) {
+        guard viewportOverlayExclusions != exclusions else {
             return
         }
-        viewportOverlayExclusionRects = rects
+        viewportOverlayExclusions = exclusions
     }
 
     private var inspectorPane: some View {

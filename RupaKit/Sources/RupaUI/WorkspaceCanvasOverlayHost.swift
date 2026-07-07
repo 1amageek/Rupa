@@ -5,7 +5,7 @@ struct WorkspaceCanvasOverlayHost<Content: View, TopBar: View, ToolPalette: View
     var isContextPanelVisible: Bool
     var onHover: (Bool) -> Void
     var onContextPanelHeightChange: (CGFloat) -> Void
-    var onExclusionRectsChange: ([CGRect]) -> Void
+    var onExclusionsChange: ([ViewportCanvasOverlayExclusion]) -> Void
     @ViewBuilder var content: () -> Content
     @ViewBuilder var topBar: () -> TopBar
     @ViewBuilder var toolPalette: () -> ToolPalette
@@ -52,7 +52,7 @@ struct WorkspaceCanvasOverlayHost<Content: View, TopBar: View, ToolPalette: View
             onContextPanelHeightChange(WorkspaceCanvasOverlayGeometry.normalizedHeight(height))
         }
         .onPreferenceChange(WorkspaceCanvasOverlayExclusionRectPreferenceKey.self) { rectsByID in
-            onExclusionRectsChange(WorkspaceCanvasOverlayGeometry.normalizedExclusionRects(rectsByID))
+            onExclusionsChange(WorkspaceCanvasOverlayGeometry.normalizedExclusions(rectsByID))
         }
     }
 }
@@ -62,22 +62,15 @@ private enum WorkspaceCanvasOverlayLayout {
     static let coordinateSpaceName = "WorkspaceCanvasOverlaySpace"
 }
 
-private enum WorkspaceCanvasOverlayChromeID: Hashable {
-    case topBar
-    case toolPalette
-    case utilityRail
-    case contextPanel
-}
-
 private enum WorkspaceCanvasOverlayGeometry {
     static func normalizedHeight(_ height: CGFloat) -> CGFloat {
         max(0.0, height.rounded(.up))
     }
 
-    static func normalizedExclusionRects(
+    static func normalizedExclusions(
         _ rectsByID: [WorkspaceCanvasOverlayChromeID: CGRect]
-    ) -> [CGRect] {
-        rectsByID.values.compactMap { rect in
+    ) -> [ViewportCanvasOverlayExclusion] {
+        rectsByID.compactMap { id, rect in
             guard rect.isNull == false,
                   rect.isEmpty == false,
                   rect.origin.x.isFinite,
@@ -97,19 +90,25 @@ private enum WorkspaceCanvasOverlayGeometry {
                 width: max(0.0, maxX - minX),
                 height: max(0.0, maxY - minY)
             )
-            return normalized.isEmpty ? nil : normalized
+            guard normalized.isEmpty == false else {
+                return nil
+            }
+            return ViewportCanvasOverlayExclusion(
+                rect: normalized,
+                fittingEdges: id.fittingEdges
+            )
         }
         .sorted { left, right in
-            if left.minY != right.minY {
-                return left.minY < right.minY
+            if left.rect.minY != right.rect.minY {
+                return left.rect.minY < right.rect.minY
             }
-            if left.minX != right.minX {
-                return left.minX < right.minX
+            if left.rect.minX != right.rect.minX {
+                return left.rect.minX < right.rect.minX
             }
-            if left.width != right.width {
-                return left.width < right.width
+            if left.rect.width != right.rect.width {
+                return left.rect.width < right.rect.width
             }
-            return left.height < right.height
+            return left.rect.height < right.rect.height
         }
     }
 }

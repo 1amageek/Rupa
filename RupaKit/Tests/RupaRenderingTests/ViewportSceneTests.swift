@@ -3758,7 +3758,9 @@ private func viewportSceneSnapshotTestKey(
     let topOverlayRect = CGRect(x: 0.0, y: 0.0, width: 420.0, height: 46.0)
     let layout = ViewportCanvasChromeLayout(
         viewportSize: viewportSize,
-        additionalExclusionRects: [topOverlayRect]
+        additionalExclusions: [
+            ViewportCanvasOverlayExclusion(rect: topOverlayRect, fittingEdges: .top),
+        ]
     )
     let rect = layout.viewportBadgeRect
 
@@ -3775,7 +3777,9 @@ private func viewportSceneSnapshotTestKey(
     let trailingOverlayRect = CGRect(x: 620.0, y: 0.0, width: 174.0, height: 42.0)
     let layout = ViewportCanvasChromeLayout(
         viewportSize: viewportSize,
-        additionalExclusionRects: [trailingOverlayRect]
+        additionalExclusions: [
+            ViewportCanvasOverlayExclusion(rect: trailingOverlayRect, fittingEdges: .top),
+        ]
     )
     let rect = layout.viewportBadgeRect
 
@@ -3850,7 +3854,9 @@ private func viewportSceneSnapshotTestKey(
     let overlayRect = CGRect(x: 612.0, y: 44.0, width: 38.0, height: 210.0)
     let layout = ViewportCanvasChromeLayout(
         viewportSize: viewportSize,
-        additionalExclusionRects: [overlayRect]
+        additionalExclusions: [
+            ViewportCanvasOverlayExclusion(rect: overlayRect, fittingEdges: []),
+        ]
     )
 
     #expect(layout.inputExclusionRects.count == 3)
@@ -3864,6 +3870,33 @@ private func viewportSceneSnapshotTestKey(
         y: overlayRect.midY
     )))
     #expect(layout.intersectsCanvasChrome(overlayRect))
+    #expect(layout.fittingInsets.leading == 0.0)
+    #expect(layout.fittingInsets.trailing == 0.0)
+}
+
+@MainActor
+@Test func viewportCanvasChromeLayoutIgnoresNonFiniteOverlayExclusions() {
+    let viewportSize = CGSize(width: 800.0, height: 600.0)
+    let layout = ViewportCanvasChromeLayout(
+        viewportSize: viewportSize,
+        additionalExclusions: [
+            ViewportCanvasOverlayExclusion(
+                rect: CGRect(x: CGFloat.nan, y: 0.0, width: 48.0, height: 600.0),
+                fittingEdges: .leading
+            ),
+            ViewportCanvasOverlayExclusion(
+                rect: CGRect(x: 700.0, y: 0.0, width: CGFloat.infinity, height: 600.0),
+                fittingEdges: .trailing
+            ),
+        ]
+    )
+    let insets = layout.fittingInsets
+
+    #expect(layout.inputExclusionRects.count == 2)
+    #expect(insets.top == layout.viewportBadgeExclusionRect.maxY)
+    #expect(insets.leading == 0.0)
+    #expect(insets.trailing == 0.0)
+    #expect(insets.bottom == viewportSize.height - layout.axisControlExclusionRect.minY)
 }
 
 @MainActor
@@ -3872,7 +3905,9 @@ private func viewportSceneSnapshotTestKey(
     let rightOverlayRect = CGRect(x: 700.0, y: 0.0, width: 100.0, height: 600.0)
     let layout = ViewportCanvasChromeLayout(
         viewportSize: viewportSize,
-        additionalExclusionRects: [rightOverlayRect]
+        additionalExclusions: [
+            ViewportCanvasOverlayExclusion(rect: rightOverlayRect, fittingEdges: .trailing),
+        ]
     )
     let labelRect = layout.snapLabelRect(
         near: CGPoint(x: 690.0, y: 120.0),
@@ -3930,10 +3965,10 @@ private func viewportSceneSnapshotTestKey(
     let bottomPanel = CGRect(x: 0.0, y: 540.0, width: 800.0, height: 60.0)
     let layout = ViewportCanvasChromeLayout(
         viewportSize: viewportSize,
-        additionalExclusionRects: [
-            leadingPanel,
-            trailingPanel,
-            bottomPanel,
+        additionalExclusions: [
+            ViewportCanvasOverlayExclusion(rect: leadingPanel, fittingEdges: .leading),
+            ViewportCanvasOverlayExclusion(rect: trailingPanel, fittingEdges: .trailing),
+            ViewportCanvasOverlayExclusion(rect: bottomPanel, fittingEdges: .bottom),
         ]
     )
     let insets = layout.fittingInsets

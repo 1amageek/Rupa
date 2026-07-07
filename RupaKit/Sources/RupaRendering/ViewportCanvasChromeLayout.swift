@@ -2,6 +2,11 @@ import CoreGraphics
 import RupaViewportScene
 
 struct ViewportCanvasChromeLayout: Equatable {
+    private struct ResolvedExclusion {
+        var rect: CGRect
+        var fittingEdges: ViewportCanvasFittingEdges
+    }
+
     static let axisControlSize = CGSize(width: 286.0, height: 42.0)
     static let axisBottomPadding: CGFloat = 14.0
     static let minimumViewportBadgeWidth: CGFloat = 112.0
@@ -13,8 +18,20 @@ struct ViewportCanvasChromeLayout: Equatable {
 
     var viewportSize: CGSize
     var bottomReservedHeight: CGFloat = 0.0
-    var additionalExclusionRects: [CGRect] = []
+    var additionalExclusions: [ViewportCanvasOverlayExclusion] = []
     var viewportBadgeWidth: CGFloat = Self.defaultViewportBadgeWidth
+
+    init(
+        viewportSize: CGSize,
+        bottomReservedHeight: CGFloat = 0.0,
+        additionalExclusions: [ViewportCanvasOverlayExclusion] = [],
+        viewportBadgeWidth: CGFloat = Self.defaultViewportBadgeWidth
+    ) {
+        self.viewportSize = viewportSize
+        self.bottomReservedHeight = bottomReservedHeight
+        self.additionalExclusions = additionalExclusions
+        self.viewportBadgeWidth = viewportBadgeWidth
+    }
 
     var axisControlRect: CGRect {
         clamped(
@@ -62,7 +79,7 @@ struct ViewportCanvasChromeLayout: Equatable {
             viewportBadgeExclusionRect,
             axisControlExclusionRect,
         ]
-        rects.append(contentsOf: paddedAdditionalExclusionRects)
+        rects.append(contentsOf: paddedAdditionalExclusions.map(\.rect))
         return rects.filter { rect in
             !rect.isEmpty && !rect.isNull
         }
@@ -73,30 +90,20 @@ struct ViewportCanvasChromeLayout: Equatable {
         var leading: CGFloat = 0.0
         var bottom: CGFloat = 0.0
         var trailing: CGFloat = 0.0
-        let edgeTolerance = Self.inputExclusionPadding + 1.0
-        let bottomAnchorTolerance = max(
-            edgeTolerance,
-            Self.axisBottomPadding + Self.inputExclusionPadding + 1.0
-        )
-        let minimumVerticalChromeHeight = min(
-            max(viewportSize.height * 0.20, 80.0),
-            max(viewportSize.height, 0.0)
-        )
 
-        for rect in inputExclusionRects where !rect.isEmpty && !rect.isNull {
-            if rect.minY <= edgeTolerance {
+        for exclusion in fittingExclusions where !exclusion.rect.isEmpty && !exclusion.rect.isNull {
+            let rect = exclusion.rect
+            let edges = exclusion.fittingEdges
+            if edges.contains(.top) {
                 top = max(top, rect.maxY)
             }
-            if viewportSize.height - rect.maxY <= bottomAnchorTolerance {
+            if edges.contains(.bottom) {
                 bottom = max(bottom, viewportSize.height - rect.minY)
             }
-            guard rect.height >= minimumVerticalChromeHeight else {
-                continue
-            }
-            if rect.minX <= edgeTolerance {
+            if edges.contains(.leading) {
                 leading = max(leading, rect.maxX)
             }
-            if viewportSize.width - rect.maxX <= edgeTolerance {
+            if edges.contains(.trailing) {
                 trailing = max(trailing, viewportSize.width - rect.minX)
             }
         }
@@ -109,17 +116,31 @@ struct ViewportCanvasChromeLayout: Equatable {
         )
     }
 
-    private var paddedAdditionalExclusionRects: [CGRect] {
-        additionalExclusionRects.map { rect in
-            clamped(
-                rect.insetBy(
-                    dx: -Self.inputExclusionPadding,
-                    dy: -Self.inputExclusionPadding
-                )
+    private var fittingExclusions: [ResolvedExclusion] {
+        [
+            ResolvedExclusion(
+                rect: viewportBadgeExclusionRect,
+                fittingEdges: .top
+            ),
+            ResolvedExclusion(
+                rect: axisControlExclusionRect,
+                fittingEdges: .bottom
+            ),
+        ] + paddedAdditionalExclusions
+    }
+
+    private var paddedAdditionalExclusions: [ResolvedExclusion] {
+        additionalExclusions.compactMap { exclusion in
+            guard let clampedExclusion = exclusion.clamped(
+                to: viewportSize,
+                padding: Self.inputExclusionPadding
+            ) else {
+                return nil
+            }
+            return ResolvedExclusion(
+                rect: clampedExclusion.rect,
+                fittingEdges: clampedExclusion.fittingEdges
             )
-        }
-        .filter { rect in
-            !rect.isEmpty && !rect.isNull
         }
     }
 
@@ -192,7 +213,7 @@ struct ViewportCanvasChromeLayout: Equatable {
         }
 
         var candidate = rect
-        let exclusions = paddedAdditionalExclusionRects.sorted { left, right in
+        let exclusions = paddedAdditionalExclusions.map(\.rect).sorted { left, right in
             if left.minY != right.minY {
                 return left.minY < right.minY
             }

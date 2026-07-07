@@ -145,7 +145,7 @@ public struct Viewport: View {
     private let cameraFrameRequest: ViewportCameraFrameRequest?
     private let selectionHitPolicy: ViewportSelectionHitPolicy
     private let bottomChromeReservedHeight: CGFloat
-    private let canvasOverlayExclusionRects: [CGRect]
+    private let canvasOverlayExclusions: [ViewportCanvasOverlayExclusion]
     private let gridVisualSpacingMode: ViewportProjectedGrid.VisualSpacingMode
     private let workspaceScalePresetTitle: String?
     private let workspaceScalePresetOptions: [WorkspaceScalePresetProfile]
@@ -234,7 +234,7 @@ public struct Viewport: View {
         cameraFrameRequest: ViewportCameraFrameRequest? = nil,
         selectionHitPolicy: ViewportSelectionHitPolicy = .all,
         bottomChromeReservedHeight: CGFloat = 0.0,
-        canvasOverlayExclusionRects: [CGRect] = [],
+        canvasOverlayExclusions: [ViewportCanvasOverlayExclusion] = [],
         gridVisualSpacingMode: ViewportProjectedGrid.VisualSpacingMode = .adaptive,
         workspaceScalePresetTitle: String? = nil,
         workspaceScalePresetOptions: [WorkspaceScalePresetProfile] = [],
@@ -322,8 +322,10 @@ public struct Viewport: View {
         self.cameraFrameRequest = cameraFrameRequest
         self.selectionHitPolicy = selectionHitPolicy
         self.bottomChromeReservedHeight = max(0.0, bottomChromeReservedHeight)
-        self.canvasOverlayExclusionRects = canvasOverlayExclusionRects.filter { rect in
-            rect.isNull == false && rect.isEmpty == false
+        self.canvasOverlayExclusions = canvasOverlayExclusions.filter { exclusion in
+            exclusion.hasFiniteRect
+                && exclusion.rect.isNull == false
+                && exclusion.rect.isEmpty == false
         }
         self.gridVisualSpacingMode = gridVisualSpacingMode
         self.workspaceScalePresetTitle = workspaceScalePresetTitle
@@ -411,7 +413,7 @@ public struct Viewport: View {
                 let chromeLayout = ViewportCanvasChromeLayout(
                     viewportSize: proxy.size,
                     bottomReservedHeight: bottomChromeReservedHeight,
-                    additionalExclusionRects: canvasOverlayExclusionRects,
+                    additionalExclusions: canvasOverlayExclusions,
                     viewportBadgeWidth: estimatedViewportBadgeWidth(
                         scaleReadout: projectedGrid.scaleReadout
                     )
@@ -1093,7 +1095,7 @@ public struct Viewport: View {
         ViewportCanvasChromeLayout(
             viewportSize: size,
             bottomReservedHeight: bottomChromeReservedHeight,
-            additionalExclusionRects: canvasOverlayExclusionRects,
+            additionalExclusions: canvasOverlayExclusions,
             viewportBadgeWidth: ViewportCanvasChromeLayout.maximumViewportBadgeWidth
         )
     }
