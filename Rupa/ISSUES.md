@@ -11,7 +11,6 @@ workflow) > `ergonomics` (usable but hostile) > `hardening` (defense in depth).
 
 | ID | Issue | Detail | Found |
 |---|---|---|---|
-| C-12 | Trimmed B-spline faces with two or more holes always fail | The per-hole bridging loop feeds the already-bridged polygon (with corridor edges) back into simple-polygon validation, which reports the corridor as self-intersecting; ≥2 holes deterministically throw `unsupportedFace`. Planar caps reject even one circular hole. | 2026-07-07 tessellator audit |
 
 ## Workflow
 
