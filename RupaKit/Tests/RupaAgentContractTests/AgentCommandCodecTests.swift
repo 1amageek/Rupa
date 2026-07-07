@@ -197,6 +197,41 @@ import SwiftCAD
     #expect(decodedRequest == request)
 }
 
+@Test func agentMessageCodecEncodesConstructionPlaneSketchReference() async throws {
+    let codec = AgentMessageCodec()
+    let sessionID = UUID()
+    let planeUUID = try #require(UUID(uuidString: "11111111-2222-3333-4444-555555555555"))
+    let planeID = ConstructionPlaneSourceID(planeUUID)
+    let request = AgentRequest.execute(
+        sessionID: sessionID,
+        command: .createLineSketch(
+            name: "Encoded Construction Plane Line",
+            plane: .constructionPlane(planeID),
+            start: SketchPoint(
+                x: .length(0.0, .millimeter),
+                y: .length(0.0, .millimeter)
+            ),
+            end: SketchPoint(
+                x: .length(10.0, .millimeter),
+                y: .length(5.0, .millimeter)
+            )
+        ),
+        expectedGeneration: DocumentGeneration(5)
+    )
+
+    let encoded = try codec.encode(request)
+    let decodedRequest = try codec.decodeRequest(from: encoded)
+    let envelope = try #require(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+    let params = try #require(envelope["params"] as? [String: Any])
+    let commandEnvelope = try #require(params["command"] as? [String: Any])
+    let command = try #require(commandEnvelope["createLineSketch"] as? [String: Any])
+    let plane = try #require(command["plane"] as? [String: Any])
+
+    #expect(decodedRequest == request)
+    #expect(plane["kind"] as? String == "constructionPlane")
+    #expect(plane["constructionPlaneID"] as? String == planeID.description)
+}
+
 @Test func agentMessageCodecRoundTripsExtrudeDistanceCommand() async throws {
     let codec = AgentMessageCodec()
     let sessionID = UUID()

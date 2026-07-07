@@ -34,6 +34,9 @@ public struct PolygonSketchCommand: ParsableCommand {
     @Option(help: "Sketch plane: xy, yz, or zx. Defaults to the active construction plane.")
     public var plane: CLISketchPlane?
 
+    @Option(help: "Saved construction plane UUID. Cannot be combined with --plane.")
+    public var constructionPlaneID: String?
+
     @Option(help: "Radius interpretation: circumradius or inradius.")
     public var sizingMode: PolygonSizingMode = .circumradius
 
@@ -61,7 +64,7 @@ public struct PolygonSketchCommand: ParsableCommand {
             let response = try CLIService().createPolygonSketch(
                 target: document.target(sessionID: sessionID),
                 name: name,
-                plane: plane?.sketchPlane,
+                plane: try CLISketchPlaneReferenceParser.reference(plane: plane, constructionPlaneID: constructionPlaneID),
                 center: input.center,
                 radius: input.radius,
                 sides: sides,

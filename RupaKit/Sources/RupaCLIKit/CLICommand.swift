@@ -1282,6 +1282,9 @@ public struct LineSketchCommand: ParsableCommand {
     @Option(help: "Sketch plane: xy, yz, or zx. Defaults to the active construction plane.")
     public var plane: CLISketchPlane?
 
+    @Option(help: "Saved construction plane UUID. Cannot be combined with --plane.")
+    public var constructionPlaneID: String?
+
     @Option(help: "Edit mode: auto, file, or live.")
     public var mode: CLIEditMode = .auto
 
@@ -1331,7 +1334,7 @@ public struct LineSketchCommand: ParsableCommand {
             let response = try CLIService().createLineSketch(
                 target: target,
                 name: name,
-                plane: plane?.sketchPlane,
+                plane: try CLISketchPlaneReferenceParser.reference(plane: plane, constructionPlaneID: constructionPlaneID),
                 start: points.start,
                 end: points.end,
                 mode: mode,
@@ -1425,6 +1428,9 @@ public struct CircleSketchCommand: ParsableCommand {
     @Option(help: "Sketch plane: xy, yz, or zx. Defaults to the active construction plane.")
     public var plane: CLISketchPlane?
 
+    @Option(help: "Saved construction plane UUID. Cannot be combined with --plane.")
+    public var constructionPlaneID: String?
+
     @Option(help: "Edit mode: auto, file, or live.")
     public var mode: CLIEditMode = .auto
 
@@ -1474,7 +1480,7 @@ public struct CircleSketchCommand: ParsableCommand {
             let response = try CLIService().createCircleSketch(
                 target: target,
                 name: name,
-                plane: plane?.sketchPlane,
+                plane: try CLISketchPlaneReferenceParser.reference(plane: plane, constructionPlaneID: constructionPlaneID),
                 center: values.center,
                 radius: values.radius,
                 mode: mode,
@@ -1562,6 +1568,9 @@ public struct RectangleSketchCommand: ParsableCommand {
     @Option(help: "Sketch plane: xy, yz, or zx. Defaults to the active construction plane.")
     public var plane: CLISketchPlane?
 
+    @Option(help: "Saved construction plane UUID. Cannot be combined with --plane.")
+    public var constructionPlaneID: String?
+
     @Option(help: "Edit mode: auto, file, or live.")
     public var mode: CLIEditMode = .auto
 
@@ -1611,7 +1620,7 @@ public struct RectangleSketchCommand: ParsableCommand {
             let response = try CLIService().createRectangleSketch(
                 target: target,
                 name: name,
-                plane: plane?.sketchPlane,
+                plane: try CLISketchPlaneReferenceParser.reference(plane: plane, constructionPlaneID: constructionPlaneID),
                 width: dimensions.width,
                 height: dimensions.height,
                 mode: mode,
@@ -1699,6 +1708,9 @@ public struct BoxModelCommand: ParsableCommand {
     @Option(help: "Sketch plane: xy, yz, or zx. Defaults to the active construction plane.")
     public var plane: CLISketchPlane?
 
+    @Option(help: "Saved construction plane UUID. Cannot be combined with --plane.")
+    public var constructionPlaneID: String?
+
     @Option(help: "Extrude direction: normal or symmetric.")
     public var direction: CLIExtrudeDirection = .normal
 
@@ -1751,7 +1763,7 @@ public struct BoxModelCommand: ParsableCommand {
             let response = try CLIService().createExtrudedRectangle(
                 target: target,
                 name: name,
-                plane: plane?.sketchPlane,
+                plane: try CLISketchPlaneReferenceParser.reference(plane: plane, constructionPlaneID: constructionPlaneID),
                 width: dimensions.width,
                 height: dimensions.height,
                 depth: dimensions.depth,
@@ -1845,6 +1857,9 @@ public struct BoxCornersModelCommand: ParsableCommand {
     @Option(help: "Sketch plane: xy, yz, or zx. Defaults to the active construction plane.")
     public var plane: CLISketchPlane?
 
+    @Option(help: "Saved construction plane UUID. Cannot be combined with --plane.")
+    public var constructionPlaneID: String?
+
     @Option(help: "Extrude direction: normal or symmetric.")
     public var direction: CLIExtrudeDirection = .normal
 
@@ -1897,7 +1912,7 @@ public struct BoxCornersModelCommand: ParsableCommand {
             let response = try CLIService().createExtrudedRectangleFromCorners(
                 target: target,
                 name: name,
-                plane: plane?.sketchPlane,
+                plane: try CLISketchPlaneReferenceParser.reference(plane: plane, constructionPlaneID: constructionPlaneID),
                 firstCorner: modelInputs.firstCorner,
                 oppositeCorner: modelInputs.oppositeCorner,
                 depth: modelInputs.depth,
@@ -1998,6 +2013,9 @@ public struct CylinderModelCommand: ParsableCommand {
     @Option(help: "Sketch plane: xy, yz, or zx. Defaults to the active construction plane.")
     public var plane: CLISketchPlane?
 
+    @Option(help: "Saved construction plane UUID. Cannot be combined with --plane.")
+    public var constructionPlaneID: String?
+
     @Option(help: "Extrude direction: normal or symmetric.")
     public var direction: CLIExtrudeDirection = .normal
 
@@ -2050,7 +2068,7 @@ public struct CylinderModelCommand: ParsableCommand {
             let response = try CLIService().createExtrudedCircle(
                 target: target,
                 name: name,
-                plane: plane?.sketchPlane,
+                plane: try CLISketchPlaneReferenceParser.reference(plane: plane, constructionPlaneID: constructionPlaneID),
                 center: SketchPoint(x: values.centerX, y: values.centerY),
                 radius: values.radius,
                 depth: values.depth,

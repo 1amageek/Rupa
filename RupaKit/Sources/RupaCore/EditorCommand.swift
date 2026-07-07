@@ -65,21 +65,21 @@ public enum EditorCommand: Codable, Equatable, Sendable {
     case setCurveCurvatureDisplay(target: SelectionTarget, isVisible: Bool?, combScale: Double?)
     case setPointDisplay(target: SelectionTarget, isVisible: Bool?)
     case createSketch(name: String, sketch: Sketch, geometryRole: ObjectDescriptor.GeometryRole)
-    case createLineSketch(name: String, plane: SketchPlane?, start: SketchPoint, end: SketchPoint)
-    case createCircleSketch(name: String, plane: SketchPlane?, center: SketchPoint, radius: CADExpression)
+    case createLineSketch(name: String, plane: SketchPlaneReference?, start: SketchPoint, end: SketchPoint)
+    case createCircleSketch(name: String, plane: SketchPlaneReference?, center: SketchPoint, radius: CADExpression)
     case createArcSketch(
         name: String,
-        plane: SketchPlane?,
+        plane: SketchPlaneReference?,
         center: SketchPoint,
         radius: CADExpression,
         startAngle: CADExpression,
         endAngle: CADExpression
     )
-    case createSplineSketch(name: String, plane: SketchPlane?, spline: SketchSpline)
-    case createRectangleSketch(name: String, plane: SketchPlane?, width: CADExpression, height: CADExpression)
+    case createSplineSketch(name: String, plane: SketchPlaneReference?, spline: SketchSpline)
+    case createRectangleSketch(name: String, plane: SketchPlaneReference?, width: CADExpression, height: CADExpression)
     case createPolygonSketch(
         name: String,
-        plane: SketchPlane?,
+        plane: SketchPlaneReference?,
         center: SketchPoint,
         radius: CADExpression,
         sides: Int,
@@ -90,7 +90,7 @@ public enum EditorCommand: Codable, Equatable, Sendable {
     case createFaceKnife(name: String, target: SelectionTarget, loop: [Point3D])
     case projectSketchCurvesToConstructionPlane(
         targets: [SelectionTarget],
-        plane: SketchPlane?,
+        plane: SketchPlaneReference?,
         name: String?
     )
     case projectCurvesToGeneratedFace(
@@ -100,7 +100,7 @@ public enum EditorCommand: Codable, Equatable, Sendable {
     )
     case projectBodyOutlinesToConstructionPlane(
         targets: [SelectionTarget],
-        plane: SketchPlane?,
+        plane: SketchPlaneReference?,
         name: String?
     )
     case addSketchConstraint(featureID: FeatureID, constraint: SketchConstraint)
@@ -121,7 +121,7 @@ public enum EditorCommand: Codable, Equatable, Sendable {
     )
     case createRectangleSketchFromCorners(
         name: String,
-        plane: SketchPlane?,
+        plane: SketchPlaneReference?,
         firstCorner: SketchPoint,
         oppositeCorner: SketchPoint
     )
@@ -381,7 +381,7 @@ public enum EditorCommand: Codable, Equatable, Sendable {
     )
     case createExtrudedRectangle(
         name: String,
-        plane: SketchPlane?,
+        plane: SketchPlaneReference?,
         width: CADExpression,
         height: CADExpression,
         depth: CADExpression,
@@ -389,7 +389,7 @@ public enum EditorCommand: Codable, Equatable, Sendable {
     )
     case createExtrudedRectangleFromCorners(
         name: String,
-        plane: SketchPlane?,
+        plane: SketchPlaneReference?,
         firstCorner: SketchPoint,
         oppositeCorner: SketchPoint,
         depth: CADExpression,
@@ -397,7 +397,7 @@ public enum EditorCommand: Codable, Equatable, Sendable {
     )
     case createExtrudedCircle(
         name: String,
-        plane: SketchPlane?,
+        plane: SketchPlaneReference?,
         center: SketchPoint,
         radius: CADExpression,
         depth: CADExpression,

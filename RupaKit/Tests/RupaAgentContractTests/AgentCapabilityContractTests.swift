@@ -362,6 +362,26 @@ import SwiftCAD
             && axis.notes.contains { $0.contains("micro fabrication through regional planning") }
             && axis.notes.contains { $0.contains("rebaseWorkspaceOrigin") }
     })
+    let sketchPlaneReferenceCommandNames = [
+        "createLineSketch",
+        "createCircleSketch",
+        "createArcSketch",
+        "createSplineSketch",
+        "createRectangleSketch",
+        "createPolygonSketch",
+        "projectSketchCurvesToConstructionPlane",
+        "projectBodyOutlinesToConstructionPlane",
+        "createExtrudedRectangle",
+        "createExtrudedRectangleFromCorners",
+        "createExtrudedCircle",
+    ]
+    for commandName in sketchPlaneReferenceCommandNames {
+        let descriptor = try #require(descriptors.first { $0.name == commandName })
+        let axis = try #require(descriptor.optionMatrix.first { $0.name == "sketchPlaneReference" })
+        #expect(axis.supportedValues.contains("constructionPlaneID"))
+        #expect(axis.supportedValues.contains("custom sketchPlane origin + normal"))
+        #expect(axis.notes.contains { $0.contains("constructionPlaneSummary") })
+    }
     let measureDocument = try #require(descriptors.first { $0.name == "measureDocument" })
     #expect(measureDocument.discovery.contains(.measurement))
     #expect(measureDocument.summary.contains("workspace precision"))

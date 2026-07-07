@@ -101,15 +101,9 @@ public struct DrawingProjectionPNGExporter: Sendable {
 
     public func png(for result: DrawingProjectionResult) throws -> Data {
         let options = normalizedOptions()
-        let pixelWidth = Int((options.width * options.pixelScale).rounded(.up))
-        let pixelHeight = Int((options.height * options.pixelScale).rounded(.up))
-        guard pixelWidth > 0,
-              pixelHeight > 0 else {
-            throw EditorError(
-                code: .exportFailed,
-                message: "Drawing projection PNG export requires a positive output size."
-            )
-        }
+        let pixelSize = try validatedPixelSize(options)
+        let pixelWidth = pixelSize.width
+        let pixelHeight = pixelSize.height
 
         let colorSpace = CGColorSpaceCreateDeviceRGB()
         guard let context = CGContext(
@@ -447,6 +441,29 @@ public struct DrawingProjectionPNGExporter: Sendable {
         )
     }
 
+    private func validatedPixelSize(_ options: Options) throws -> (width: Int, height: Int) {
+        let pixelWidth = (options.width * options.pixelScale).rounded(.up)
+        let pixelHeight = (options.height * options.pixelScale).rounded(.up)
+        guard pixelWidth.isFinite,
+              pixelHeight.isFinite,
+              pixelWidth > 0.0,
+              pixelHeight > 0.0 else {
+            throw EditorError(
+                code: .exportFailed,
+                message: "Drawing projection PNG export requires a positive output size."
+            )
+        }
+        guard pixelWidth <= Double(Self.maximumPixelDimension),
+              pixelHeight <= Double(Self.maximumPixelDimension),
+              pixelWidth * pixelHeight <= Double(Self.maximumPixelCount) else {
+            throw EditorError(
+                code: .exportFailed,
+                message: "Drawing projection PNG export exceeds the maximum bitmap size."
+            )
+        }
+        return (width: Int(pixelWidth), height: Int(pixelHeight))
+    }
+
     private func normalizedPositive(_ value: Double, fallback: Double) -> Double {
         guard value.isFinite, value > 0.0 else {
             return fallback
@@ -460,4 +477,7 @@ public struct DrawingProjectionPNGExporter: Sendable {
         }
         return min(max(value, 0.0), 1.0)
     }
+
+    private static let maximumPixelDimension = 16_384
+    private static let maximumPixelCount = 67_108_864
 }

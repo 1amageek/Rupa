@@ -8029,6 +8029,63 @@ func cliExecutableReturnsDataExitForLiveGenerationMismatch() async throws {
     #expect(loaded.cadDocument.designGraph.order.count == 1)
 }
 
+@Test(.timeLimit(.minutes(1)))
+func cliExecutableSketchLineAcceptsConstructionPlaneReference() async throws {
+    let temporaryDirectory = try makeTemporaryDirectory()
+    defer {
+        removeTemporaryDirectory(temporaryDirectory)
+    }
+
+    let url = temporaryDirectory.appendingPathComponent("line-construction-plane.swcad")
+    var document = DesignDocument.empty(named: "Before")
+    let planeID = try document.createConstructionPlane(
+        name: "CLI Referenced Plane",
+        plane: .yz,
+        activates: false
+    )
+    try DocumentFileService().save(document, to: url)
+
+    let result = try await runCLI([
+        "sketch",
+        "line",
+        url.path,
+        "--name",
+        "CLI Referenced Line",
+        "--start-x",
+        "0",
+        "--start-y",
+        "0",
+        "--end-x",
+        "10",
+        "--end-y",
+        "5",
+        "--unit",
+        "millimeter",
+        "--construction-plane-id",
+        planeID.description,
+        "--mode",
+        "file",
+        "--json",
+    ])
+    let response = try JSONDecoder().decode(
+        CLIResponse.self,
+        from: result.standardOutputData
+    )
+    let loaded = try DocumentFileService().load(from: url)
+    let featureID = try #require(loaded.cadDocument.designGraph.order.last)
+    let feature = try #require(loaded.cadDocument.designGraph.nodes[featureID])
+    guard case let .sketch(sketch) = feature.operation else {
+        #expect(Bool(false))
+        return
+    }
+
+    #expect(result.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: result.standardError))
+    #expect(response.message == "Line sketch CLI Referenced Line created.")
+    #expect(response.saved)
+    #expect(!response.dirty)
+    #expect(sketch.plane == .yz)
+}
+
 @Test func cliServiceFileSketchRectanglePersistsClosedDocument() async throws {
     let temporaryDirectory = try makeTemporaryDirectory()
     defer {

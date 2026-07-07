@@ -455,9 +455,10 @@ public final class CADDocumentStore {
             evaluateCurrentDocument()
         case .createLineSketch(let name, let plane, let start, let end):
             var updatedDocument = document
+            let resolvedPlane = try updatedDocument.resolveSketchPlane(plane)
             try updatedDocument.createLineSketch(
                 name: name,
-                plane: plane ?? updatedDocument.activeConstructionPlane?.plane ?? .xy,
+                plane: resolvedPlane,
                 start: start,
                 end: end,
                 objectRegistry: objectRegistry
@@ -467,9 +468,10 @@ public final class CADDocumentStore {
             evaluateCurrentDocument()
         case .createCircleSketch(let name, let plane, let center, let radius):
             var updatedDocument = document
+            let resolvedPlane = try updatedDocument.resolveSketchPlane(plane)
             try updatedDocument.createCircleSketch(
                 name: name,
-                plane: plane ?? updatedDocument.activeConstructionPlane?.plane ?? .xy,
+                plane: resolvedPlane,
                 center: center,
                 radius: radius,
                 objectRegistry: objectRegistry
@@ -479,9 +481,10 @@ public final class CADDocumentStore {
             evaluateCurrentDocument()
         case .createArcSketch(let name, let plane, let center, let radius, let startAngle, let endAngle):
             var updatedDocument = document
+            let resolvedPlane = try updatedDocument.resolveSketchPlane(plane)
             try updatedDocument.createArcSketch(
                 name: name,
-                plane: plane ?? updatedDocument.activeConstructionPlane?.plane ?? .xy,
+                plane: resolvedPlane,
                 center: center,
                 radius: radius,
                 startAngle: startAngle,
@@ -493,9 +496,10 @@ public final class CADDocumentStore {
             evaluateCurrentDocument()
         case .createSplineSketch(let name, let plane, let spline):
             var updatedDocument = document
+            let resolvedPlane = try updatedDocument.resolveSketchPlane(plane)
             try updatedDocument.createSplineSketch(
                 name: name,
-                plane: plane ?? updatedDocument.activeConstructionPlane?.plane ?? .xy,
+                plane: resolvedPlane,
                 spline: spline,
                 objectRegistry: objectRegistry
             )
@@ -504,9 +508,10 @@ public final class CADDocumentStore {
             evaluateCurrentDocument()
         case .createRectangleSketch(let name, let plane, let width, let height):
             var updatedDocument = document
+            let resolvedPlane = try updatedDocument.resolveSketchPlane(plane)
             try updatedDocument.createRectangleSketch(
                 name: name,
-                plane: plane ?? updatedDocument.activeConstructionPlane?.plane ?? .xy,
+                plane: resolvedPlane,
                 width: width,
                 height: height,
                 objectRegistry: objectRegistry
@@ -525,9 +530,10 @@ public final class CADDocumentStore {
             let rotationAngle
         ):
             var updatedDocument = document
+            let resolvedPlane = try updatedDocument.resolveSketchPlane(plane)
             try updatedDocument.createPolygonSketch(
                 name: name,
-                plane: plane ?? updatedDocument.activeConstructionPlane?.plane ?? .xy,
+                plane: resolvedPlane,
                 center: center,
                 radius: radius,
                 sides: sides,
@@ -552,9 +558,10 @@ public final class CADDocumentStore {
             evaluateCurrentDocument()
         case .projectSketchCurvesToConstructionPlane(let targets, let plane, let name):
             var updatedDocument = document
+            let resolvedPlane = try updatedDocument.resolveSketchPlane(plane)
             try updatedDocument.projectSketchCurvesToConstructionPlane(
                 targets: targets,
-                plane: plane,
+                plane: resolvedPlane,
                 name: name,
                 objectRegistry: objectRegistry
             )
@@ -574,9 +581,10 @@ public final class CADDocumentStore {
             evaluateCurrentDocument()
         case .projectBodyOutlinesToConstructionPlane(let targets, let plane, let name):
             var updatedDocument = document
+            let resolvedPlane = try updatedDocument.resolveSketchPlane(plane)
             try updatedDocument.projectBodyOutlinesToConstructionPlane(
                 targets: targets,
-                plane: plane,
+                plane: resolvedPlane,
                 name: name,
                 objectRegistry: objectRegistry
             )
@@ -631,9 +639,10 @@ public final class CADDocumentStore {
             evaluateCurrentDocument()
         case .createRectangleSketchFromCorners(let name, let plane, let firstCorner, let oppositeCorner):
             var updatedDocument = document
+            let resolvedPlane = try updatedDocument.resolveSketchPlane(plane)
             try updatedDocument.createRectangleSketchFromCorners(
                 name: name,
-                plane: plane ?? updatedDocument.activeConstructionPlane?.plane ?? .xy,
+                plane: resolvedPlane,
                 firstCorner: firstCorner,
                 oppositeCorner: oppositeCorner,
                 objectRegistry: objectRegistry
@@ -1393,9 +1402,10 @@ public final class CADDocumentStore {
             evaluateCurrentDocument()
         case .createExtrudedRectangle(let name, let plane, let width, let height, let depth, let direction):
             var updatedDocument = document
+            let resolvedPlane = try updatedDocument.resolveSketchPlane(plane)
             primaryFeatureID = try updatedDocument.createExtrudedRectangle(
                 name: name,
-                plane: plane ?? updatedDocument.activeConstructionPlane?.plane ?? .xy,
+                plane: resolvedPlane,
                 width: width,
                 height: height,
                 depth: depth,
@@ -1414,9 +1424,10 @@ public final class CADDocumentStore {
             let direction
         ):
             var updatedDocument = document
+            let resolvedPlane = try updatedDocument.resolveSketchPlane(plane)
             primaryFeatureID = try updatedDocument.createExtrudedRectangleFromCorners(
                 name: name,
-                plane: plane ?? updatedDocument.activeConstructionPlane?.plane ?? .xy,
+                plane: resolvedPlane,
                 firstCorner: firstCorner,
                 oppositeCorner: oppositeCorner,
                 depth: depth,
@@ -1428,9 +1439,10 @@ public final class CADDocumentStore {
             evaluateCurrentDocument()
         case .createExtrudedCircle(let name, let plane, let center, let radius, let depth, let direction):
             var updatedDocument = document
+            let resolvedPlane = try updatedDocument.resolveSketchPlane(plane)
             primaryFeatureID = try updatedDocument.createExtrudedCircle(
                 name: name,
-                plane: plane ?? updatedDocument.activeConstructionPlane?.plane ?? .xy,
+                plane: resolvedPlane,
                 center: center,
                 radius: radius,
                 depth: depth,

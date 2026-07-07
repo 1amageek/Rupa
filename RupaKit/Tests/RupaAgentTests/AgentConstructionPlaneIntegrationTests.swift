@@ -135,6 +135,113 @@ import SwiftCAD
     #expect(session.activeConstructionPlane == nil)
 }
 
+@Test func agentCreatesSketchOnReferencedConstructionPlane() async throws {
+    let server = AgentCommandController()
+    let sessionID = UUID()
+    let session = EditorSession()
+    server.register(session: session, id: sessionID)
+
+    let createPlaneResponse = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .createConstructionPlane(
+                name: "Agent Referenced Sketch Plane",
+                plane: .yz,
+                activates: false
+            ),
+            expectedGeneration: DocumentGeneration(0)
+        )
+    )
+    guard case .command(let createPlaneResult) = createPlaneResponse else {
+        #expect(Bool(false))
+        return
+    }
+    #expect(createPlaneResult.didMutate)
+
+    let summaryResponse = server.handle(
+        .constructionPlaneSummary(
+            sessionID: sessionID,
+            expectedGeneration: createPlaneResult.generation
+        )
+    )
+    guard case .constructionPlaneSummary(let summary) = summaryResponse else {
+        #expect(Bool(false))
+        return
+    }
+    let plane = try #require(summary.planes.first { $0.name == "Agent Referenced Sketch Plane" })
+
+    let sketchResponse = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .createLineSketch(
+                name: "Agent Referenced Plane Line",
+                plane: .constructionPlane(plane.id),
+                start: SketchPoint(
+                    x: .length(0.0, .millimeter),
+                    y: .length(0.0, .millimeter)
+                ),
+                end: SketchPoint(
+                    x: .length(10.0, .millimeter),
+                    y: .length(5.0, .millimeter)
+                )
+            ),
+            expectedGeneration: createPlaneResult.generation
+        )
+    )
+    guard case .command(let sketchResult) = sketchResponse else {
+        #expect(Bool(false))
+        return
+    }
+    let featureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let feature = try #require(session.document.cadDocument.designGraph.nodes[featureID])
+    guard case .sketch(let sketch) = feature.operation else {
+        Issue.record("Agent construction-plane-referenced sketch command must create a sketch feature.")
+        return
+    }
+
+    #expect(sketchResult.commandName == "createLineSketch")
+    #expect(sketchResult.didMutate)
+    #expect(sketchResult.generation == DocumentGeneration(2))
+    #expect(session.activeConstructionPlane == nil)
+    #expect(sketch.plane == .yz)
+}
+
+@Test func agentRejectsUnresolvedConstructionPlaneSketchReferenceBeforeMutation() async throws {
+    let server = AgentCommandController()
+    let sessionID = UUID()
+    let session = EditorSession()
+    let missingID = ConstructionPlaneSourceID()
+    server.register(session: session, id: sessionID)
+
+    let response = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .createLineSketch(
+                name: "Agent Missing Plane Line",
+                plane: .constructionPlane(missingID),
+                start: SketchPoint(
+                    x: .length(0.0, .millimeter),
+                    y: .length(0.0, .millimeter)
+                ),
+                end: SketchPoint(
+                    x: .length(10.0, .millimeter),
+                    y: .length(5.0, .millimeter)
+                )
+            ),
+            expectedGeneration: DocumentGeneration(0)
+        )
+    )
+    guard case .failure(let error) = response else {
+        #expect(Bool(false))
+        return
+    }
+
+    #expect(error.code == .referenceUnresolved)
+    #expect(error.message.contains("construction plane source"))
+    #expect(session.generation == DocumentGeneration(0))
+    #expect(session.document.cadDocument.designGraph.order.isEmpty)
+}
+
 @Test func agentCreatesViewAlignedConstructionPlane() async throws {
     let server = AgentCommandController()
     let sessionID = UUID()

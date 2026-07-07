@@ -560,7 +560,7 @@ import Testing
     let result = try session.execute(
         .projectSketchCurvesToConstructionPlane(
             targets: [try #require(line.selectionTarget())],
-            plane: targetPlane,
+            plane: .sketchPlane(targetPlane),
             name: "Projected Line"
         )
     )

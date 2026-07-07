@@ -814,6 +814,14 @@ public final class EditorSession {
         activeConstructionPlane?.plane ?? fallback
     }
 
+    private func sketchPlaneReference(_ plane: SketchPlane) -> SketchPlaneReference {
+        SketchPlaneReference(sketchPlane: plane)
+    }
+
+    private func sketchPlaneReference(_ plane: SketchPlane?) -> SketchPlaneReference? {
+        plane.map(SketchPlaneReference.init(sketchPlane:))
+    }
+
     @discardableResult
     public func createConstructionPlane(
         name: String,
@@ -1207,7 +1215,7 @@ public final class EditorSession {
         return perform(
             .createRectangleSketch(
                 name: nextFeatureName(prefix: "Rectangle Sketch"),
-                plane: activeSketchPlane(),
+                plane: sketchPlaneReference(activeSketchPlane()),
                 width: lengthExpressionMeters(defaults.sketchWidthMeters),
                 height: lengthExpressionMeters(defaults.sketchHeightMeters)
             )
@@ -1237,7 +1245,7 @@ public final class EditorSession {
         return perform(
             .createRectangleSketchFromCorners(
                 name: nextFeatureName(prefix: "Rectangle Sketch"),
-                plane: sketchPlane,
+                plane: sketchPlaneReference(sketchPlane),
                 firstCorner: SketchPoint(
                     x: lengthExpressionMeters(center.x - halfWidthMeters),
                     y: lengthExpressionMeters(center.y - halfHeightMeters)
@@ -1290,7 +1298,7 @@ public final class EditorSession {
         return perform(
             .createRectangleSketchFromCorners(
                 name: nextFeatureName(prefix: "Rectangle Sketch"),
-                plane: sketchPlane,
+                plane: sketchPlaneReference(sketchPlane),
                 firstCorner: SketchPoint(
                     x: lengthExpressionMeters(minX),
                     y: lengthExpressionMeters(minY)
@@ -1309,7 +1317,7 @@ public final class EditorSession {
         return perform(
             .createCircleSketch(
                 name: nextFeatureName(prefix: "Circle Sketch"),
-                plane: activeSketchPlane(),
+                plane: sketchPlaneReference(activeSketchPlane()),
                 center: SketchPoint(
                     x: lengthExpressionMeters(0.0),
                     y: lengthExpressionMeters(0.0)
@@ -1328,7 +1336,7 @@ public final class EditorSession {
         perform(
             .createSplineSketch(
                 name: name,
-                plane: plane,
+                plane: sketchPlaneReference(plane),
                 spline: spline
             )
         )
@@ -1353,7 +1361,7 @@ public final class EditorSession {
         return perform(
             .createCircleSketch(
                 name: nextFeatureName(prefix: "Circle Sketch"),
-                plane: sketchPlane,
+                plane: sketchPlaneReference(sketchPlane),
                 center: SketchPoint(
                     x: .length(center.x, .meter),
                     y: .length(center.y, .meter)
@@ -1396,7 +1404,7 @@ public final class EditorSession {
         return perform(
             .createCircleSketch(
                 name: nextFeatureName(prefix: "Circle Sketch"),
-                plane: sketchPlane,
+                plane: sketchPlaneReference(sketchPlane),
                 center: SketchPoint(
                     x: .length(center.x, .meter),
                     y: .length(center.y, .meter)
@@ -1420,7 +1428,7 @@ public final class EditorSession {
         let result = perform(
             .createPolygonSketch(
                 name: name,
-                plane: plane,
+                plane: sketchPlaneReference(plane),
                 center: center,
                 radius: radius,
                 sides: sides,
@@ -1513,7 +1521,7 @@ public final class EditorSession {
         let result = perform(
             .createPolygonSketch(
                 name: nextFeatureName(prefix: "Polygon Sketch"),
-                plane: sketchPlane,
+                plane: sketchPlaneReference(sketchPlane),
                 center: sketchPoint(draft.center),
                 radius: lengthExpressionMeters(draft.radiusMeters),
                 sides: draft.sides,
@@ -1614,7 +1622,7 @@ public final class EditorSession {
         let result = perform(
             .createPolygonSketch(
                 name: nextFeatureName(prefix: "Polygon Sketch"),
-                plane: sketchPlane,
+                plane: sketchPlaneReference(sketchPlane),
                 center: sketchPoint(draft.center),
                 radius: lengthExpressionMeters(draft.radiusMeters),
                 sides: draft.sides,
@@ -1657,7 +1665,7 @@ public final class EditorSession {
         perform(
             .projectSketchCurvesToConstructionPlane(
                 targets: targets,
-                plane: plane,
+                plane: sketchPlaneReference(plane),
                 name: name
             )
         )
@@ -1687,7 +1695,7 @@ public final class EditorSession {
         perform(
             .projectBodyOutlinesToConstructionPlane(
                 targets: targets,
-                plane: plane,
+                plane: sketchPlaneReference(plane),
                 name: name
             )
         )
@@ -1796,7 +1804,7 @@ public final class EditorSession {
         return perform(
             .createArcSketch(
                 name: nextFeatureName(prefix: "Arc Sketch"),
-                plane: sketchPlane,
+                plane: sketchPlaneReference(sketchPlane),
                 center: sketchPoint(x: draft.center.x, y: draft.center.y),
                 radius: lengthExpressionMeters(draft.radiusMeters),
                 startAngle: .angle(draft.startAngleRadians, .radian),
@@ -1832,7 +1840,7 @@ public final class EditorSession {
         return perform(
             .createArcSketch(
                 name: nextFeatureName(prefix: "Arc Sketch"),
-                plane: sketchPlane,
+                plane: sketchPlaneReference(sketchPlane),
                 center: sketchPoint(x: draft.center.x, y: draft.center.y),
                 radius: lengthExpressionMeters(draft.radiusMeters),
                 startAngle: .angle(draft.startAngleRadians, .radian),
@@ -1916,7 +1924,7 @@ public final class EditorSession {
         return perform(
             .createSplineSketch(
                 name: nextFeatureName(prefix: "Spline Sketch"),
-                plane: sketchPlane,
+                plane: sketchPlaneReference(sketchPlane),
                 spline: SketchSpline(
                     controlPoints: draft.controlPoints.map(sketchPoint)
                 )
@@ -1950,7 +1958,7 @@ public final class EditorSession {
         return perform(
             .createSplineSketch(
                 name: nextFeatureName(prefix: "Spline Sketch"),
-                plane: sketchPlane,
+                plane: sketchPlaneReference(sketchPlane),
                 spline: SketchSpline(
                     controlPoints: draft.controlPoints.map(sketchPoint)
                 )
@@ -1964,7 +1972,7 @@ public final class EditorSession {
         return perform(
             .createExtrudedRectangle(
                 name: nextFeatureName(prefix: "Box"),
-                plane: activeSketchPlane(),
+                plane: sketchPlaneReference(activeSketchPlane()),
                 width: lengthExpressionMeters(defaults.sketchWidthMeters),
                 height: lengthExpressionMeters(defaults.sketchHeightMeters),
                 depth: lengthExpressionMeters(defaults.sketchDepthMeters),
@@ -2006,7 +2014,7 @@ public final class EditorSession {
         return perform(
             .createExtrudedRectangleFromCorners(
                 name: nextFeatureName(prefix: "Box"),
-                plane: sketchPlane,
+                plane: sketchPlaneReference(sketchPlane),
                 firstCorner: SketchPoint(
                     x: lengthExpressionMeters(center.x - widthMeters / 2.0),
                     y: lengthExpressionMeters(center.y - heightMeters / 2.0)
@@ -2064,7 +2072,7 @@ public final class EditorSession {
         return perform(
             .createExtrudedRectangleFromCorners(
                 name: nextFeatureName(prefix: "Box"),
-                plane: sketchPlane,
+                plane: sketchPlaneReference(sketchPlane),
                 firstCorner: SketchPoint(
                     x: lengthExpressionMeters(minX),
                     y: lengthExpressionMeters(minY)
@@ -3538,7 +3546,7 @@ public final class EditorSession {
         return perform(
             .createExtrudedCircle(
                 name: nextFeatureName(prefix: "Cylinder"),
-                plane: activeSketchPlane(),
+                plane: sketchPlaneReference(activeSketchPlane()),
                 center: SketchPoint(
                     x: lengthExpressionMeters(0.0),
                     y: lengthExpressionMeters(0.0)

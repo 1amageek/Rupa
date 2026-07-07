@@ -80,6 +80,115 @@ import Testing
 }
 
 @MainActor
+@Test func drawingProjectionHonorsExactZeroPitchWithoutOrbitClamp() throws {
+    var document = DesignDocument.empty(named: "Pitch Projection")
+    _ = try document.addMeasurementAnnotation(
+        MeasurementAnnotation(
+            name: "Depth Axis",
+            kind: .distance,
+            anchors: [
+                .worldPoint(.origin, role: .start),
+                .worldPoint(Point3D(x: 0.0, y: 0.0, z: 1.0), role: .end),
+            ],
+            labelPosition: .origin
+        ),
+        objectRegistry: .builtIn
+    )
+    let savedView = SavedView(
+        name: "Exact Zero Pitch",
+        camera: SavedViewCamera(
+            target: .origin,
+            distanceMeters: 4.0,
+            yawRadians: 0.0,
+            pitchRadians: 0.0
+        ),
+        projection: .orthographic(heightMeters: 4.0),
+        displayScale: SavedViewDisplayScale(ruler: .standard(for: .meter))
+    )
+    _ = try document.createSavedView(savedView, objectRegistry: .builtIn)
+
+    let result = try DrawingProjectionService().generate(
+        document: document,
+        query: DrawingProjectionQuery(savedViewID: savedView.id)
+    )
+    let annotation = try #require(result.annotations.first)
+    let start = try #require(annotation.anchors.first)
+    let end = try #require(annotation.anchors.last)
+
+    #expect(abs(start.point2D.x - end.point2D.x) <= 1.0e-12)
+    #expect(abs(start.point2D.y - end.point2D.y) <= 1.0e-12)
+}
+
+@MainActor
+@Test func drawingProjectionHonorsSavedViewRoll() throws {
+    var document = DesignDocument.empty(named: "Roll Projection")
+    _ = try document.addMeasurementAnnotation(
+        MeasurementAnnotation(
+            name: "Rolled X Axis",
+            kind: .distance,
+            anchors: [
+                .worldPoint(.origin, role: .start),
+                .worldPoint(Point3D(x: 1.0, y: 0.0, z: 0.0), role: .end),
+            ],
+            labelPosition: .origin
+        ),
+        objectRegistry: .builtIn
+    )
+    let savedView = SavedView(
+        name: "Rolled View",
+        camera: SavedViewCamera(
+            target: .origin,
+            distanceMeters: 4.0,
+            yawRadians: 0.0,
+            pitchRadians: 0.0,
+            rollRadians: .pi / 2.0
+        ),
+        projection: .orthographic(heightMeters: 4.0),
+        displayScale: SavedViewDisplayScale(ruler: .standard(for: .meter))
+    )
+    _ = try document.createSavedView(savedView, objectRegistry: .builtIn)
+
+    let result = try DrawingProjectionService().generate(
+        document: document,
+        query: DrawingProjectionQuery(savedViewID: savedView.id)
+    )
+    let annotation = try #require(result.annotations.first)
+    let start = try #require(annotation.anchors.first)
+    let end = try #require(annotation.anchors.last)
+
+    #expect(abs((end.point2D.x - start.point2D.x)) <= 1.0e-12)
+    #expect(abs((end.point2D.y - start.point2D.y) + 1.0) <= 1.0e-12)
+}
+
+@MainActor
+@Test func drawingProjectionPNGExporterRejectsOversizedBitmapBeforeContextAllocation() throws {
+    let result = try drawingProjectionResultWithMeasurement(
+        name: "Export Guard",
+        kind: .distance,
+        anchors: [
+            .worldPoint(.origin, role: .start),
+            .worldPoint(Point3D(x: 1.0, y: 0.0, z: 0.0), role: .end),
+        ]
+    )
+    let exporter = DrawingProjectionPNGExporter(
+        options: DrawingProjectionPNGExporter.Options(
+            width: 20_000.0,
+            height: 20_000.0,
+            padding: 32.0,
+            pixelScale: 1.0
+        )
+    )
+
+    do {
+        _ = try exporter.png(for: result)
+        Issue.record("Oversized PNG export should fail before bitmap context allocation.")
+    } catch let error as EditorError {
+        #expect(error.code == .exportFailed)
+        #expect(error.message.contains("maximum bitmap size"))
+    }
+}
+
+@MainActor
 @Test func drawingProjectionGeneratesSectionContoursAndHatchesFromSavedViewSectionState() throws {
     let session = EditorSession()
     _ = try session.execute(

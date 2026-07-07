@@ -37,6 +37,9 @@ public struct ArcSketchCommand: ParsableCommand {
     @Option(help: "Sketch plane: xy, yz, or zx. Defaults to the active construction plane.")
     public var plane: CLISketchPlane?
 
+    @Option(help: "Saved construction plane UUID. Cannot be combined with --plane.")
+    public var constructionPlaneID: String?
+
     public init() {}
 
     public func run() throws {
@@ -52,7 +55,7 @@ public struct ArcSketchCommand: ParsableCommand {
             let response = try CLIService().createArcSketch(
                 target: document.target(sessionID: sessionID),
                 name: name,
-                plane: plane?.sketchPlane,
+                plane: try CLISketchPlaneReferenceParser.reference(plane: plane, constructionPlaneID: constructionPlaneID),
                 center: input.center,
                 radius: input.radius,
                 startAngle: input.startAngle,

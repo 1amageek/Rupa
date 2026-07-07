@@ -76,16 +76,21 @@ struct ViewportPlacementPreviewGeometry: Equatable {
                 )
             )
         case .polygon(let state, let radiusMeters, let rotationAngleRadians):
-            guard let draft = try? CanvasSketchCurveDrafts.polygon(
-                centeredAt: center,
-                sides: state.sideCount,
-                sizingMode: state.sizingMode,
-                inclinationMode: state.inclinationMode,
-                defaults: defaults,
-                radiusMeters: radiusMeters,
-                rotationAngleRadians: rotationAngleRadians
-            ),
-            let projectedCenter = projection.project(localPoint: draft.center, layout: layout),
+            let draft: CanvasSketchCurveDrafts.Polygon
+            do {
+                draft = try CanvasSketchCurveDrafts.polygon(
+                    centeredAt: center,
+                    sides: state.sideCount,
+                    sizingMode: state.sizingMode,
+                    inclinationMode: state.inclinationMode,
+                    defaults: defaults,
+                    radiusMeters: radiusMeters,
+                    rotationAngleRadians: rotationAngleRadians
+                )
+            } catch {
+                return nil
+            }
+            guard let projectedCenter = projection.project(localPoint: draft.center, layout: layout),
             let radiusEnd = projection.project(
                 localPoint: Point2D(
                     x: draft.center.x + cos(draft.rotationAngleRadians) * draft.circumradiusMeters,
@@ -101,13 +106,18 @@ struct ViewportPlacementPreviewGeometry: Equatable {
             }
             shape = .polygon(center: projectedCenter, vertices: vertices, radiusEnd: radiusEnd)
         case .arc(let radiusMeters, let spanAngleRadians):
-            guard let draft = try? CanvasSketchCurveDrafts.arc(
-                centeredAt: center,
-                defaults: defaults,
-                radiusMeters: radiusMeters,
-                spanAngleRadians: spanAngleRadians
-            ),
-            let projectedCenter = projection.project(localPoint: draft.center, layout: layout),
+            let draft: CanvasSketchCurveDrafts.Arc
+            do {
+                draft = try CanvasSketchCurveDrafts.arc(
+                    centeredAt: center,
+                    defaults: defaults,
+                    radiusMeters: radiusMeters,
+                    spanAngleRadians: spanAngleRadians
+                )
+            } catch {
+                return nil
+            }
+            guard let projectedCenter = projection.project(localPoint: draft.center, layout: layout),
             let radiusEnd = projection.project(
                 localPoint: Point2D(
                     x: draft.center.x + cos(draft.endAngleRadians) * draft.radiusMeters,
@@ -131,7 +141,10 @@ struct ViewportPlacementPreviewGeometry: Equatable {
             }
             shape = .arc(center: projectedCenter, points: points, radiusEnd: radiusEnd)
         case .spline:
-            guard let draft = try? CanvasSketchCurveDrafts.spline(centeredAt: center, defaults: defaults) else {
+            let draft: CanvasSketchCurveDrafts.Spline
+            do {
+                draft = try CanvasSketchCurveDrafts.spline(centeredAt: center, defaults: defaults)
+            } catch {
                 return nil
             }
             let curvePoints = Self.cubicBezierSamplePoints(

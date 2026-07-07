@@ -3425,10 +3425,10 @@ import SwiftCAD
     let result = try runner.execute(
         .projectSketchCurvesToConstructionPlane(
             targets: [try #require(spline.selectionTarget())],
-            plane: .plane(Plane3D(
+            plane: .sketchPlane(.plane(Plane3D(
                 origin: Point3D(x: 0.0, y: 0.0, z: 0.020),
                 normal: .unitZ
-            )),
+            ))),
             name: "Automation Projected Spline"
         ),
         in: session
@@ -5213,6 +5213,87 @@ import SwiftCAD
     }
     // An explicit plane always wins over the active construction plane.
     #expect(sketch.plane == .yz)
+}
+
+@MainActor
+@Test func automationCreatesSketchFromConstructionPlaneReference() async throws {
+    let session = EditorSession()
+    let runner = AutomationRunner()
+
+    _ = try runner.execute(
+        .createConstructionPlane(
+            name: "Referenced Sketch Plane",
+            plane: .yz,
+            activates: false
+        ),
+        in: session
+    )
+    let planeID = try #require(
+        session.document.productMetadata.constructionPlanes.values.first {
+            $0.name == "Referenced Sketch Plane"
+        }?.id
+    )
+
+    let result = try runner.execute(
+        .createLineSketch(
+            name: "Referenced Plane Line",
+            plane: .constructionPlane(planeID),
+            start: SketchPoint(
+                x: .length(0.0, .millimeter),
+                y: .length(0.0, .millimeter)
+            ),
+            end: SketchPoint(
+                x: .length(10.0, .millimeter),
+                y: .length(5.0, .millimeter)
+            )
+        ),
+        in: session
+    )
+
+    let sketchFeatureID = try #require(session.document.cadDocument.designGraph.order.last)
+    let feature = try #require(session.document.cadDocument.designGraph.nodes[sketchFeatureID])
+    guard case .sketch(let sketch) = feature.operation else {
+        Issue.record("Construction-plane-referenced line creation must produce a sketch feature.")
+        return
+    }
+
+    #expect(result.message == "Line sketch Referenced Plane Line created.")
+    #expect(result.commandName == "createLineSketch")
+    #expect(result.didMutate)
+    #expect(session.document.productMetadata.activeConstructionPlaneID == nil)
+    #expect(sketch.plane == .yz)
+}
+
+@MainActor
+@Test func automationRejectsUnresolvedConstructionPlaneSketchReferenceBeforeMutation() async throws {
+    let session = EditorSession()
+    let runner = AutomationRunner()
+    let missingID = ConstructionPlaneSourceID()
+
+    do {
+        _ = try runner.execute(
+            .createLineSketch(
+                name: "Missing Referenced Plane Line",
+                plane: .constructionPlane(missingID),
+                start: SketchPoint(
+                    x: .length(0.0, .millimeter),
+                    y: .length(0.0, .millimeter)
+                ),
+                end: SketchPoint(
+                    x: .length(10.0, .millimeter),
+                    y: .length(5.0, .millimeter)
+                )
+            ),
+            in: session
+        )
+        Issue.record("Unresolved construction-plane sketch reference must fail before mutation.")
+    } catch let error as EditorError {
+        #expect(error.code == .referenceUnresolved)
+        #expect(error.message.contains("construction plane source"))
+    }
+
+    #expect(session.generation == DocumentGeneration(0))
+    #expect(session.document.cadDocument.designGraph.order.isEmpty)
 }
 
 @MainActor

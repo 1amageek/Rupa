@@ -869,35 +869,33 @@ public struct DrawingProjectionService: Sendable {
         for savedView: SavedView
     ) throws -> ProjectionBasis {
         let yaw = savedView.camera.yawRadians
-        let elevation = clampedOrbitElevation(savedView.camera.pitchRadians)
+        let elevation = savedView.camera.pitchRadians
         let elevationSine = sin(elevation)
         let elevationCosine = cos(elevation)
-        let xDirection = Point2D(x: cos(yaw), y: elevationSine * sin(yaw))
-        let yDirection = Point2D(x: 0.0, y: -elevationCosine)
-        let zDirection = Point2D(x: -sin(yaw), y: elevationSine * cos(yaw))
-        let right = Vector3D(
-            x: xDirection.x,
-            y: yDirection.x,
-            z: zDirection.x
+        let unrolledRight = Vector3D(
+            x: cos(yaw),
+            y: 0.0,
+            z: -sin(yaw)
         )
-        let up = Vector3D(
-            x: xDirection.y,
-            y: yDirection.y,
-            z: zDirection.y
+        let unrolledUp = Vector3D(
+            x: elevationSine * sin(yaw),
+            y: -elevationCosine,
+            z: elevationSine * cos(yaw)
         )
+        let roll = savedView.camera.rollRadians
+        let rollCosine = cos(roll)
+        let rollSine = sin(roll)
+        let right = unrolledRight * rollCosine + unrolledUp * rollSine
+        let up = -unrolledRight * rollSine + unrolledUp * rollCosine
         let viewNormal = try up.cross(right).normalized(tolerance: 1.0e-12)
         return ProjectionBasis(
-            xDirection: xDirection,
-            yDirection: yDirection,
-            zDirection: zDirection,
+            xDirection: Point2D(x: right.x, y: up.x),
+            yDirection: Point2D(x: right.y, y: up.y),
+            zDirection: Point2D(x: right.z, y: up.z),
             right: right,
             up: up,
             viewNormal: viewNormal
         )
-    }
-
-    private func clampedOrbitElevation(_ elevation: Double) -> Double {
-        min(max(elevation, 0.08), 1.42)
     }
 
     private func sectionProjectionArtifacts(

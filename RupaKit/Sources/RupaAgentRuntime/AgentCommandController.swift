@@ -60,6 +60,22 @@ public final class AgentCommandController: AgentClientProtocol {
         ]
     )
 
+    private static let sketchPlaneReferenceOptionAxis = AgentCapabilityDescriptor.OptionAxis(
+        name: "sketchPlaneReference",
+        supportedValues: [
+            "active",
+            "sketchPlane xy",
+            "sketchPlane yz",
+            "sketchPlane zx",
+            "custom sketchPlane origin + normal",
+            "constructionPlaneID",
+        ],
+        notes: [
+            "Omitted plane resolves through the active construction plane and falls back to xy.",
+            "Use constructionPlaneID after reading constructionPlaneSummary when a sketch or projection must target a saved work plane.",
+        ]
+    )
+
     private static let capabilityCatalog: [AgentCapabilityDescriptor] = [
         capability(
             "describeDocument",
@@ -822,7 +838,8 @@ public final class AgentCommandController: AgentClientProtocol {
             access: .automationCommand,
             mutatesDocument: true,
             targets: [.document],
-            failureMode: "Rejects invalid points, zero-length geometry, and stale generations before mutation."
+            failureMode: "Rejects invalid points, zero-length geometry, and stale generations before mutation.",
+            optionMatrix: [sketchPlaneReferenceOptionAxis]
         ),
         capability(
             "createCircleSketch",
@@ -831,7 +848,8 @@ public final class AgentCommandController: AgentClientProtocol {
             access: .automationCommand,
             mutatesDocument: true,
             targets: [.document],
-            failureMode: "Rejects invalid centers, non-positive radius, and stale generations before mutation."
+            failureMode: "Rejects invalid centers, non-positive radius, and stale generations before mutation.",
+            optionMatrix: [sketchPlaneReferenceOptionAxis]
         ),
         capability(
             "createArcSketch",
@@ -840,7 +858,8 @@ public final class AgentCommandController: AgentClientProtocol {
             access: .automationCommand,
             mutatesDocument: true,
             targets: [.document],
-            failureMode: "Rejects full circles, invalid angles, non-positive radius, and stale generations before mutation."
+            failureMode: "Rejects full circles, invalid angles, non-positive radius, and stale generations before mutation.",
+            optionMatrix: [sketchPlaneReferenceOptionAxis]
         ),
         capability(
             "createSplineSketch",
@@ -849,7 +868,8 @@ public final class AgentCommandController: AgentClientProtocol {
             access: .automationCommand,
             mutatesDocument: true,
             targets: [.document],
-            failureMode: "Rejects invalid cubic control-point counts, non-finite points, and stale generations before mutation."
+            failureMode: "Rejects invalid cubic control-point counts, non-finite points, and stale generations before mutation.",
+            optionMatrix: [sketchPlaneReferenceOptionAxis]
         ),
         capability(
             "createRectangleSketch",
@@ -858,7 +878,8 @@ public final class AgentCommandController: AgentClientProtocol {
             access: .automationCommand,
             mutatesDocument: true,
             targets: [.document],
-            failureMode: "Rejects invalid dimensions and stale generations before mutation."
+            failureMode: "Rejects invalid dimensions and stale generations before mutation.",
+            optionMatrix: [sketchPlaneReferenceOptionAxis]
         ),
         capability(
             "createPolygonSketch",
@@ -867,7 +888,8 @@ public final class AgentCommandController: AgentClientProtocol {
             access: .automationCommand,
             mutatesDocument: true,
             targets: [.document],
-            failureMode: "Rejects invalid centers, non-positive sizing radius, side counts outside 3...256, invalid angles, and stale generations before mutation."
+            failureMode: "Rejects invalid centers, non-positive sizing radius, side counts outside 3...256, invalid angles, and stale generations before mutation.",
+            optionMatrix: [sketchPlaneReferenceOptionAxis]
         ),
         capability(
             "createFaceKnife",
@@ -887,7 +909,8 @@ public final class AgentCommandController: AgentClientProtocol {
             mutatesDocument: true,
             discovery: [.sketchEntitySummary, .topologySummary, .constructionPlaneSummary],
             targets: [.sketchEntity, .edge, .constructionPlane],
-            failureMode: "Rejects empty target lists, duplicate targets, non-curve sketch entities, unresolved source sketches, unresolved generated edges, generated edge targets outside the selected body, generated edge kinds other than line or circle, collapsed projected lines, invalid target planes, nonparallel source or generated circular projections until exact conic projection sources exist, invalid output sketches, and stale generations before mutation."
+            failureMode: "Rejects empty target lists, duplicate targets, non-curve sketch entities, unresolved source sketches, unresolved generated edges, generated edge targets outside the selected body, generated edge kinds other than line or circle, collapsed projected lines, invalid target planes, nonparallel source or generated circular projections until exact conic projection sources exist, invalid output sketches, and stale generations before mutation.",
+            optionMatrix: [sketchPlaneReferenceOptionAxis]
         ),
         capability(
             "projectCurvesToGeneratedFace",
@@ -907,7 +930,8 @@ public final class AgentCommandController: AgentClientProtocol {
             mutatesDocument: true,
             discovery: [.topologySummary, .constructionPlaneSummary],
             targets: [.body, .constructionPlane],
-            failureMode: "Rejects empty target lists, duplicate body targets, subobject targets, non-body scene nodes, bodies without generated edge topology, generated outline edge kinds other than line or circle, invalid target planes, nonparallel circular outline projections until exact conic projection sources exist, empty non-collapsed projected outlines, invalid output sketches, and stale generations before mutation."
+            failureMode: "Rejects empty target lists, duplicate body targets, subobject targets, non-body scene nodes, bodies without generated edge topology, generated outline edge kinds other than line or circle, invalid target planes, nonparallel circular outline projections until exact conic projection sources exist, empty non-collapsed projected outlines, invalid output sketches, and stale generations before mutation.",
+            optionMatrix: [sketchPlaneReferenceOptionAxis]
         ),
         capability(
             "addSketchConstraint",
@@ -1883,7 +1907,7 @@ public final class AgentCommandController: AgentClientProtocol {
             mutatesDocument: true,
             targets: [.document],
             failureMode: "Rejects invalid dimensions and stale generations before mutation.",
-            optionMatrix: [workspaceFeedbackOptionAxis]
+            optionMatrix: [sketchPlaneReferenceOptionAxis, workspaceFeedbackOptionAxis]
         ),
         capability(
             "createExtrudedRectangleFromCorners",
@@ -1893,7 +1917,7 @@ public final class AgentCommandController: AgentClientProtocol {
             mutatesDocument: true,
             targets: [.document],
             failureMode: "Rejects coincident corners, invalid depth, and stale generations before mutation.",
-            optionMatrix: [workspaceFeedbackOptionAxis]
+            optionMatrix: [sketchPlaneReferenceOptionAxis, workspaceFeedbackOptionAxis]
         ),
         capability(
             "createExtrudedCircle",
@@ -1903,7 +1927,7 @@ public final class AgentCommandController: AgentClientProtocol {
             mutatesDocument: true,
             targets: [.document],
             failureMode: "Rejects invalid radius, invalid depth, and stale generations before mutation.",
-            optionMatrix: [workspaceFeedbackOptionAxis]
+            optionMatrix: [sketchPlaneReferenceOptionAxis, workspaceFeedbackOptionAxis]
         ),
         capability(
             "evaluateDocument",
