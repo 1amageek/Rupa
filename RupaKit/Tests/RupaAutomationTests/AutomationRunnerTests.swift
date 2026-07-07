@@ -592,6 +592,56 @@ import SwiftCAD
 }
 
 @MainActor
+@Test func automationCanCreateExactExtrudedCirclesAcrossWorkspaceScaleExtremes() async throws {
+    let cases: [(WorkspaceScalePreset, CADExpression, CADExpression, LengthUnit)] = [
+        (.microFabrication, .length(20.0, .micrometer), .length(50.0, .micrometer), .micrometer),
+        (.regionalPlanning, .length(25.0, .kilometer), .length(2.0, .kilometer), .kilometer),
+    ]
+
+    for (preset, radius, depth, displayUnit) in cases {
+        let session = EditorSession()
+        let runner = AutomationRunner()
+        _ = try runner.execute(.setWorkspaceScalePreset(preset), in: session)
+
+        let result = try runner.execute(
+            .createExtrudedCircle(
+                name: "\(preset.rawValue) Cylinder",
+                plane: .xy,
+                center: SketchPoint(
+                    x: .length(0.0, displayUnit),
+                    y: .length(0.0, displayUnit)
+                ),
+                radius: radius,
+                depth: depth,
+                direction: .normal
+            ),
+            in: session
+        )
+        let evaluated = try CADPipeline
+            .modelingDefault(for: session.document)
+            .evaluate(session.document.cadDocument)
+        let bodyFeatureID = try #require(result.primaryFeatureID)
+        let bodyNode = try #require(session.document.productMetadata.sceneNodes.values.first {
+            $0.reference == .body(bodyFeatureID)
+        })
+
+        #expect(result.commandName == "createExtrudedCircle")
+        #expect(result.didMutate)
+        #expect(result.workspaceScale?.matchedPreset == preset)
+        #expect(session.evaluationStatus == .valid)
+        #expect(session.evaluatedBodyCount == 1)
+        #expect(evaluated.brep.bodies.count == 1)
+        #expect(evaluated.brep.geometry.surfaces.values.filter {
+            if case .cylinder = $0 {
+                return true
+            }
+            return false
+        }.count == 4)
+        #expect(bodyNode.object?.typeID == .cylinder)
+    }
+}
+
+@MainActor
 @Test func automationCanSetExtrudeDistance() async throws {
     let session = EditorSession()
     let runner = AutomationRunner()

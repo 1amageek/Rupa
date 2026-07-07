@@ -45,6 +45,65 @@ import SwiftCAD
     #expect(session.evaluatedBodyCount == 1)
 }
 
+@Test func agentCreatesRegionalScaleCylinderThroughAutomationAndCore() async throws {
+    let server = AgentCommandController()
+    let sessionID = UUID()
+    let session = EditorSession()
+    server.register(session: session, id: sessionID)
+
+    let presetResponse = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .setWorkspaceScalePreset(.regionalPlanning),
+            expectedGeneration: DocumentGeneration(0)
+        )
+    )
+    guard case .command(let presetResult) = presetResponse else {
+        #expect(Bool(false))
+        return
+    }
+
+    let response = server.handle(
+        .execute(
+            sessionID: sessionID,
+            command: .createExtrudedCircle(
+                name: "Agent Regional Cylinder",
+                plane: .xy,
+                center: SketchPoint(
+                    x: .length(0.0, .kilometer),
+                    y: .length(0.0, .kilometer)
+                ),
+                radius: .length(25.0, .kilometer),
+                depth: .length(2.0, .kilometer),
+                direction: .normal
+            ),
+            expectedGeneration: DocumentGeneration(1)
+        )
+    )
+
+    guard case .command(let result) = response else {
+        #expect(Bool(false))
+        return
+    }
+    let evaluated = try CADPipeline
+        .modelingDefault(for: session.document)
+        .evaluate(session.document.cadDocument)
+
+    #expect(presetResult.commandName == "setRulerConfiguration")
+    #expect(presetResult.workspaceScale?.matchedPreset == .regionalPlanning)
+    #expect(result.commandName == "createExtrudedCircle")
+    #expect(result.didMutate)
+    #expect(result.workspaceScale?.matchedPreset == .regionalPlanning)
+    #expect(session.evaluationStatus == .valid)
+    #expect(session.evaluatedBodyCount == 1)
+    #expect(evaluated.brep.geometry.surfaces.values.filter {
+        if case .cylinder = $0 {
+            return true
+        }
+        return false
+    }.count == 4)
+}
+
 @Test func agentDispatchesSketchPrimitiveCommandThroughAutomationAndCore() async throws {
     let server = AgentCommandController()
     let sessionID = UUID()
