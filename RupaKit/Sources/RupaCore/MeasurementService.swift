@@ -478,7 +478,7 @@ public struct MeasurementService {
                     parameters: document.cadDocument.parameters
                 )
                 var evaluatedSweepSkipReason: String?
-                let solid = try straightSolid ?? measureEvaluatedSweepSolid(
+                let measuredSolids = try straightSolid.map { [$0] } ?? measureEvaluatedSweepSolids(
                         featureID: featureID,
                         featureName: node.name,
                         sourceFeatureID: sectionReference.featureID,
@@ -489,7 +489,7 @@ public struct MeasurementService {
                         evaluatedDocument: evaluatedDocument(),
                         unsupportedReason: &evaluatedSweepSkipReason
                     )
-                guard let solid else {
+                guard let measuredSolids, !measuredSolids.isEmpty else {
                     let detail = evaluatedSweepSkipReason.map { " \($0)" } ?? ""
                     diagnostics.append(
                         EditorDiagnostic(
@@ -499,10 +499,12 @@ public struct MeasurementService {
                     )
                     continue
                 }
-                counts.solids += 1
-                solids.append(solid)
-                totals.solidVolumeCubicMeters += solid.volumeCubicMeters
-                bounds.include(solid.bounds)
+                for solid in measuredSolids {
+                    counts.solids += 1
+                    solids.append(solid)
+                    totals.solidVolumeCubicMeters += solid.volumeCubicMeters
+                    bounds.include(solid.bounds)
+                }
             case .loft(let loft):
                 guard !isSupersededInDocumentScope(featureID) else {
                     continue
@@ -1107,7 +1109,7 @@ public struct MeasurementService {
         )
     }
 
-    private func measureEvaluatedSweepSolid(
+    private func measureEvaluatedSweepSolids(
         featureID: FeatureID,
         featureName: String?,
         sourceFeatureID: FeatureID,
@@ -1117,7 +1119,7 @@ public struct MeasurementService {
         parameters: ParameterTable,
         evaluatedDocument: EvaluatedDocument?,
         unsupportedReason: inout String?
-    ) throws -> MeasurementResult.Solid? {
+    ) throws -> [MeasurementResult.Solid]? {
         guard sweep.options.resultKind == .solid else {
             unsupportedReason = "The sweep result kind is not solid."
             return nil
@@ -1126,12 +1128,9 @@ public struct MeasurementService {
             unsupportedReason = "Evaluated geometry is unavailable."
             return nil
         }
-        guard let bodyID = evaluatedBodyID(for: featureID, in: evaluatedDocument) else {
-            unsupportedReason = "The evaluated document is missing the sweep generated body name."
-            return nil
-        }
-        guard let mesh = evaluatedDocument.meshes[bodyID] else {
-            unsupportedReason = "The evaluated document is missing the sweep generated body mesh."
+        let bodyReferences = evaluatedBodyReferences(for: featureID, in: evaluatedDocument)
+        guard !bodyReferences.isEmpty else {
+            unsupportedReason = "The evaluated document is missing sweep generated body names."
             return nil
         }
         let distanceFraction = try resolvedScalar(sweep.options.distanceFraction, parameters: parameters)
@@ -1144,28 +1143,46 @@ public struct MeasurementService {
             unsupportedReason = "The sweep path length could not be measured."
             return nil
         }
-        let meshMeasurement = try evaluatedMeshMeasurement(mesh, requiresClosedMesh: true)
-        let brepVolume = try evaluatedBRepVolume(bodyID: bodyID, in: evaluatedDocument.brep)
-        let volumeCubicMeters = brepVolume ?? meshMeasurement.volumeCubicMeters
-        guard volumeCubicMeters > tolerance.distance * tolerance.distance * tolerance.distance else {
-            unsupportedReason = "The evaluated sweep solid volume is below tolerance."
-            return nil
+        var solids: [MeasurementResult.Solid] = []
+        for bodyReference in bodyReferences {
+            guard let body = evaluatedDocument.brep.bodies[bodyReference.bodyID],
+                  body.kind == .solid else {
+                unsupportedReason = "The evaluated sweep body is not a solid."
+                return nil
+            }
+            guard let mesh = evaluatedDocument.meshes[bodyReference.bodyID] else {
+                unsupportedReason = "The evaluated document is missing a sweep generated body mesh."
+                return nil
+            }
+            let meshMeasurement = try evaluatedMeshMeasurement(mesh, requiresClosedMesh: true)
+            let brepVolume = try evaluatedBRepVolume(
+                bodyID: bodyReference.bodyID,
+                in: evaluatedDocument.brep
+            )
+            let volumeCubicMeters = brepVolume ?? meshMeasurement.volumeCubicMeters
+            guard volumeCubicMeters > tolerance.distance * tolerance.distance * tolerance.distance else {
+                unsupportedReason = "An evaluated sweep solid volume is below tolerance."
+                return nil
+            }
+            solids.append(
+                MeasurementResult.Solid(
+                    featureID: featureID.description,
+                    featureName: featureName,
+                    sourceFeatureID: sourceFeatureID.description,
+                    sourceFeatureName: sourceFeatureName,
+                    linearDimensions: [
+                        MeasurementResult.Solid.LinearDimension(
+                            kind: .sweepPathLength,
+                            meters: pathLength * distanceFraction
+                        ),
+                    ],
+                    volumeCubicMeters: volumeCubicMeters,
+                    surfaceAreaSquareMeters: meshMeasurement.surfaceAreaSquareMeters,
+                    bounds: meshMeasurement.bounds
+                )
+            )
         }
-        return MeasurementResult.Solid(
-            featureID: featureID.description,
-            featureName: featureName,
-            sourceFeatureID: sourceFeatureID.description,
-            sourceFeatureName: sourceFeatureName,
-            linearDimensions: [
-                MeasurementResult.Solid.LinearDimension(
-                    kind: .sweepPathLength,
-                    meters: pathLength * distanceFraction
-                ),
-            ],
-            volumeCubicMeters: volumeCubicMeters,
-            surfaceAreaSquareMeters: meshMeasurement.surfaceAreaSquareMeters,
-            bounds: meshMeasurement.bounds
-        )
+        return solids
     }
 
     private func measureEvaluatedSweepSheet(
@@ -1315,14 +1332,72 @@ public struct MeasurementService {
         for featureID: FeatureID,
         in evaluatedDocument: EvaluatedDocument
     ) -> BodyID? {
-        let bodyName = PersistentName(components: [
-            .feature(featureID),
-            .generated(GeneratedSubshapeRole.body.rawValue),
-        ])
+        evaluatedPrimaryBodyReference(
+            for: featureID,
+            in: evaluatedDocument
+        )?.bodyID
+    }
+
+    private func evaluatedPrimaryBodyReference(
+        for featureID: FeatureID,
+        in evaluatedDocument: EvaluatedDocument
+    ) -> EvaluatedBodyReference? {
+        let bodyName = evaluatedPrimaryBodyName(for: featureID)
         guard case .body(let bodyID) = evaluatedDocument.generatedNames[bodyName] else {
             return nil
         }
-        return bodyID
+        return EvaluatedBodyReference(persistentName: bodyName, bodyID: bodyID)
+    }
+
+    private func evaluatedBodyReferences(
+        for featureID: FeatureID,
+        in evaluatedDocument: EvaluatedDocument
+    ) -> [EvaluatedBodyReference] {
+        let primaryName = evaluatedPrimaryBodyName(for: featureID)
+        let candidates: [EvaluatedBodyReference] = evaluatedDocument.generatedNames.compactMap { entry in
+            let name = entry.key
+            let reference = entry.value
+            guard name.components.first == .feature(featureID),
+                  case .body(let bodyID) = reference else {
+                return nil
+            }
+            return EvaluatedBodyReference(persistentName: name, bodyID: bodyID)
+        }.sorted { lhs, rhs in
+            if lhs.persistentName == primaryName {
+                return true
+            }
+            if rhs.persistentName == primaryName {
+                return false
+            }
+            return evaluatedBodyReferenceSortKey(lhs.persistentName) <
+                evaluatedBodyReferenceSortKey(rhs.persistentName)
+        }
+        var includedBodyIDs: Set<BodyID> = []
+        return candidates.filter { reference in
+            includedBodyIDs.insert(reference.bodyID).inserted
+        }
+    }
+
+    private func evaluatedPrimaryBodyName(for featureID: FeatureID) -> PersistentName {
+        PersistentName(components: [
+            .feature(featureID),
+            .generated(GeneratedSubshapeRole.body.rawValue),
+        ])
+    }
+
+    private func evaluatedBodyReferenceSortKey(_ name: PersistentName) -> String {
+        name.components.map { component in
+            switch component {
+            case .feature(let featureID):
+                return "feature:\(featureID.description)"
+            case .generated(let value):
+                return "generated:\(value)"
+            case .subshape(let value):
+                return "subshape:\(value)"
+            case .index(let index):
+                return "index:\(index)"
+            }
+        }.joined(separator: "/")
     }
 
     private func evaluatedMeshMeasurement(
@@ -1950,6 +2025,11 @@ private struct EvaluatedMeshMeasurement {
     var surfaceAreaSquareMeters: Double
     var volumeCubicMeters: Double
     var bounds: MeasurementResult.Bounds
+}
+
+private struct EvaluatedBodyReference {
+    var persistentName: PersistentName
+    var bodyID: BodyID
 }
 
 private struct PlaneFrame {

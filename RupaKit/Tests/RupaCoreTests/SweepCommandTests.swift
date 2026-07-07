@@ -846,11 +846,16 @@ private func sweepBooleanMeasureDocument(
 
     let result = try MeasurementService().measure(document: document)
 
-    // Keep-tools retains the target body, so it stays measurable alongside
-    // the boolean result.
-    #expect(result.counts.solids == 2)
+    let sweepSolids = result.solids.filter { $0.featureID == sweepID.description }
+
+    // Keep-tools retains the target body and the swept tool body alongside
+    // the Boolean result: target 18000 mm^3 + tool 8000 mm^3 + result 18000 mm^3.
+    #expect(result.counts.solids == 3)
     #expect(result.solids.contains { $0.featureID == targetBodyID.description })
-    #expect(result.solids.contains { $0.featureID == sweepID.description })
+    #expect(sweepSolids.count == 2)
+    #expect(sweepSolids.contains { abs($0.volumeCubicMeters - 1.8e-5) < 1.0e-9 })
+    #expect(sweepSolids.contains { abs($0.volumeCubicMeters - 8.0e-6) < 1.0e-9 })
+    #expect(abs(result.totals.solidVolumeCubicMeters - 4.4e-5) < 1.0e-9)
 }
 
 @Test func createSweepCanCreateSheetSurfaceOutput() throws {
