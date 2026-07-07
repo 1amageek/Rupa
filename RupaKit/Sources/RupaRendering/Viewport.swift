@@ -50,33 +50,7 @@ public struct Viewport: View {
     @State private var editedBodies: [FeatureID: ViewportObjectEditState] = [:]
     @State private var dragPreviewDocument: DesignDocument?
     @State private var dragPreviewRevision: UInt64 = 0
-    @State private var hoveredAffordance: ViewportAffordanceTarget?
-    @State private var hoveredSketchCurveHandle: ViewportSketchCurveHandleTarget?
-    @State private var hoveredSketchDimension: ViewportSketchDimensionTarget?
-    @State private var hoveredSketchPointHandle: ViewportSketchPointHandleTarget?
-    @State private var hoveredBridgeCurveEndpointHandle: ViewportBridgeCurveEndpointHandleTarget?
-    @State private var hoveredSplineControlPoint: ViewportSplineControlPointHandleTarget?
-    @State private var hoveredSplineControlPointSlideHandle: ViewportSplineControlPointSlideHandleTarget?
-    @State private var hoveredPolySplineSurfaceVertex: ViewportPolySplineSurfaceVertexHandleTarget?
-    @State private var hoveredSurfaceControlPoint: ViewportSurfaceControlPointHandleTarget?
-    @State private var hoveredSurfaceTrimEndpoint: ViewportSurfaceTrimEndpointHandleTarget?
-    @State private var hoveredSurfaceTrimControlPoint: ViewportSurfaceTrimControlPointHandleTarget?
-    @State private var hoveredPolySplineSurfaceVertexSlideHandle: ViewportPolySplineSurfaceVertexSlideHandleTarget?
-    @State private var hoveredSurfaceControlPointSlideHandle: ViewportSurfaceControlPointSlideHandleTarget?
-    @State private var hoveredSurfaceFrameHandle: ViewportSurfaceFrameHandleTarget?
-    @State private var hoveredRegionOffsetHandle: ViewportRegionOffsetHandleTarget?
-    @State private var hoveredEdgeOffsetHandle: ViewportEdgeOffsetHandleTarget?
-    @State private var hoveredSlotWidthHandle: ViewportSlotWidthHandleTarget?
-    @State private var hoveredSketchVertexOffsetHandle: ViewportSketchVertexOffsetHandleTarget?
-    @State private var hoveredPatternArrayLinearAxisHandle: ViewportPatternArrayLinearAxisHandleTarget?
-    @State private var hoveredIndependentCopyExtrudeDistanceHandle: ViewportIndependentCopyExtrudeDistanceHandleTarget?
-    @State private var hoveredIndependentCopyBodyDimensionHandle: ViewportIndependentCopyBodyDimensionHandleTarget?
-    @State private var hoveredPatternArrayRadialAngleHandle: ViewportPatternArrayRadialAngleHandleTarget?
-    @State private var hoveredPatternArrayCopyCountHandle: ViewportPatternArrayCopyCountHandleTarget?
-    @State private var hoveredPatternArrayCurveExtentHandle: ViewportPatternArrayCurveExtentHandleTarget?
-    @State private var hoveredPatternArrayCurvePathPointHandle: ViewportPatternArrayCurvePathPointHandleTarget?
-    @State private var hoveredPatternArrayOutputModeHandle: ViewportPatternArrayOutputModeHandleTarget?
-    @State private var hoveredConstructionPlaneHandle: ViewportConstructionPlaneHandleTarget?
+    @State private var hoveredInteractionTarget: ViewportInteractionTarget?
     @State private var pendingAffordance: ViewportAffordanceTarget?
     @State private var pendingSketchCurveHandle: ViewportSketchCurveHandleTarget?
     @State private var pendingSketchDimension: ViewportSketchDimensionTarget?
@@ -14223,93 +14197,11 @@ public struct Viewport: View {
     }
 
     private func clearHoverInteractionTargets() {
-        hoveredAffordance = nil
-        hoveredSketchCurveHandle = nil
-        hoveredSketchDimension = nil
-        hoveredSketchPointHandle = nil
-        hoveredBridgeCurveEndpointHandle = nil
-        hoveredSplineControlPoint = nil
-        hoveredSplineControlPointSlideHandle = nil
-        hoveredPolySplineSurfaceVertex = nil
-        hoveredPolySplineSurfaceVertexSlideHandle = nil
-        hoveredSurfaceControlPoint = nil
-        hoveredSurfaceControlPointSlideHandle = nil
-        hoveredSurfaceTrimEndpoint = nil
-        hoveredSurfaceTrimControlPoint = nil
-        hoveredSurfaceFrameHandle = nil
-        hoveredRegionOffsetHandle = nil
-        hoveredEdgeOffsetHandle = nil
-        hoveredSlotWidthHandle = nil
-        hoveredSketchVertexOffsetHandle = nil
-        hoveredPatternArrayLinearAxisHandle = nil
-        hoveredIndependentCopyExtrudeDistanceHandle = nil
-        hoveredIndependentCopyBodyDimensionHandle = nil
-        hoveredPatternArrayRadialAngleHandle = nil
-        hoveredPatternArrayCopyCountHandle = nil
-        hoveredPatternArrayCurveExtentHandle = nil
-        hoveredPatternArrayCurvePathPointHandle = nil
-        hoveredPatternArrayOutputModeHandle = nil
-        hoveredConstructionPlaneHandle = nil
+        hoveredInteractionTarget = nil
     }
 
     private func setHoveredInteractionTarget(_ target: ViewportInteractionTarget) {
-        clearHoverInteractionTargets()
-        switch target {
-        case .sketchCurveHandle(let target):
-            hoveredSketchCurveHandle = target
-        case .sketchDimension(let target):
-            hoveredSketchDimension = target
-        case .sketchPointHandle(let target):
-            hoveredSketchPointHandle = target
-        case .bridgeCurveEndpoint(let target):
-            hoveredBridgeCurveEndpointHandle = target
-        case .splineControlPoint(let target):
-            hoveredSplineControlPoint = target
-        case .splineControlPointSlide(let target):
-            hoveredSplineControlPointSlideHandle = target
-        case .polySplineSurfaceVertex(let target):
-            hoveredPolySplineSurfaceVertex = target
-        case .polySplineSurfaceVertexSlide(let target):
-            hoveredPolySplineSurfaceVertexSlideHandle = target
-        case .surfaceControlPoint(let target):
-            hoveredSurfaceControlPoint = target
-        case .surfaceControlPointSlide(let target):
-            hoveredSurfaceControlPointSlideHandle = target
-        case .surfaceTrimEndpoint(let target):
-            hoveredSurfaceTrimEndpoint = target
-        case .surfaceTrimControlPoint(let target):
-            hoveredSurfaceTrimControlPoint = target
-        case .surfaceFrame(let target):
-            hoveredSurfaceFrameHandle = target
-        case .regionOffset(let target):
-            hoveredRegionOffsetHandle = target
-        case .edgeOffset(let target):
-            hoveredEdgeOffsetHandle = target
-        case .slotWidth(let target):
-            hoveredSlotWidthHandle = target
-        case .sketchVertexOffset(let target):
-            hoveredSketchVertexOffsetHandle = target
-        case .patternArrayLinearAxis(let target):
-            hoveredPatternArrayLinearAxisHandle = target
-        case .independentCopyExtrudeDistance(let target):
-            hoveredIndependentCopyExtrudeDistanceHandle = target
-        case .independentCopyBodyDimension(let target):
-            hoveredIndependentCopyBodyDimensionHandle = target
-        case .patternArrayRadialAngle(let target):
-            hoveredPatternArrayRadialAngleHandle = target
-        case .patternArrayCopyCount(let target):
-            hoveredPatternArrayCopyCountHandle = target
-        case .patternArrayCurveExtent(let target):
-            hoveredPatternArrayCurveExtentHandle = target
-        case .patternArrayCurvePathPoint(let target):
-            hoveredPatternArrayCurvePathPointHandle = target
-        case .patternArrayOutputMode(let target):
-            hoveredPatternArrayOutputModeHandle = target
-        case .constructionPlane(let target):
-            hoveredConstructionPlaneHandle = target
-        case .affordance(let target):
-            hoveredAffordance = target
-        }
+        hoveredInteractionTarget = target
     }
 
     private func clearHoverCallbacks() {
@@ -14459,5 +14351,196 @@ public struct Viewport: View {
         nextCamera.pan.height += anchor.y - projectedAnchor.y
         camera = nextCamera.clamped(maximumZoom: maximumZoom)
         publishCameraFrame(size: size, basis: basis)
+    }
+}
+
+private extension Viewport {
+    var hoveredAffordance: ViewportAffordanceTarget? {
+        guard case .affordance(let target) = hoveredInteractionTarget else {
+            return nil
+        }
+        return target
+    }
+
+    var hoveredSketchCurveHandle: ViewportSketchCurveHandleTarget? {
+        guard case .sketchCurveHandle(let target) = hoveredInteractionTarget else {
+            return nil
+        }
+        return target
+    }
+
+    var hoveredSketchDimension: ViewportSketchDimensionTarget? {
+        guard case .sketchDimension(let target) = hoveredInteractionTarget else {
+            return nil
+        }
+        return target
+    }
+
+    var hoveredSketchPointHandle: ViewportSketchPointHandleTarget? {
+        guard case .sketchPointHandle(let target) = hoveredInteractionTarget else {
+            return nil
+        }
+        return target
+    }
+
+    var hoveredBridgeCurveEndpointHandle: ViewportBridgeCurveEndpointHandleTarget? {
+        guard case .bridgeCurveEndpoint(let target) = hoveredInteractionTarget else {
+            return nil
+        }
+        return target
+    }
+
+    var hoveredSplineControlPoint: ViewportSplineControlPointHandleTarget? {
+        guard case .splineControlPoint(let target) = hoveredInteractionTarget else {
+            return nil
+        }
+        return target
+    }
+
+    var hoveredSplineControlPointSlideHandle: ViewportSplineControlPointSlideHandleTarget? {
+        guard case .splineControlPointSlide(let target) = hoveredInteractionTarget else {
+            return nil
+        }
+        return target
+    }
+
+    var hoveredPolySplineSurfaceVertex: ViewportPolySplineSurfaceVertexHandleTarget? {
+        guard case .polySplineSurfaceVertex(let target) = hoveredInteractionTarget else {
+            return nil
+        }
+        return target
+    }
+
+    var hoveredPolySplineSurfaceVertexSlideHandle: ViewportPolySplineSurfaceVertexSlideHandleTarget? {
+        guard case .polySplineSurfaceVertexSlide(let target) = hoveredInteractionTarget else {
+            return nil
+        }
+        return target
+    }
+
+    var hoveredSurfaceControlPoint: ViewportSurfaceControlPointHandleTarget? {
+        guard case .surfaceControlPoint(let target) = hoveredInteractionTarget else {
+            return nil
+        }
+        return target
+    }
+
+    var hoveredSurfaceControlPointSlideHandle: ViewportSurfaceControlPointSlideHandleTarget? {
+        guard case .surfaceControlPointSlide(let target) = hoveredInteractionTarget else {
+            return nil
+        }
+        return target
+    }
+
+    var hoveredSurfaceTrimEndpoint: ViewportSurfaceTrimEndpointHandleTarget? {
+        guard case .surfaceTrimEndpoint(let target) = hoveredInteractionTarget else {
+            return nil
+        }
+        return target
+    }
+
+    var hoveredSurfaceTrimControlPoint: ViewportSurfaceTrimControlPointHandleTarget? {
+        guard case .surfaceTrimControlPoint(let target) = hoveredInteractionTarget else {
+            return nil
+        }
+        return target
+    }
+
+    var hoveredSurfaceFrameHandle: ViewportSurfaceFrameHandleTarget? {
+        guard case .surfaceFrame(let target) = hoveredInteractionTarget else {
+            return nil
+        }
+        return target
+    }
+
+    var hoveredRegionOffsetHandle: ViewportRegionOffsetHandleTarget? {
+        guard case .regionOffset(let target) = hoveredInteractionTarget else {
+            return nil
+        }
+        return target
+    }
+
+    var hoveredEdgeOffsetHandle: ViewportEdgeOffsetHandleTarget? {
+        guard case .edgeOffset(let target) = hoveredInteractionTarget else {
+            return nil
+        }
+        return target
+    }
+
+    var hoveredSlotWidthHandle: ViewportSlotWidthHandleTarget? {
+        guard case .slotWidth(let target) = hoveredInteractionTarget else {
+            return nil
+        }
+        return target
+    }
+
+    var hoveredSketchVertexOffsetHandle: ViewportSketchVertexOffsetHandleTarget? {
+        guard case .sketchVertexOffset(let target) = hoveredInteractionTarget else {
+            return nil
+        }
+        return target
+    }
+
+    var hoveredPatternArrayLinearAxisHandle: ViewportPatternArrayLinearAxisHandleTarget? {
+        guard case .patternArrayLinearAxis(let target) = hoveredInteractionTarget else {
+            return nil
+        }
+        return target
+    }
+
+    var hoveredIndependentCopyExtrudeDistanceHandle: ViewportIndependentCopyExtrudeDistanceHandleTarget? {
+        guard case .independentCopyExtrudeDistance(let target) = hoveredInteractionTarget else {
+            return nil
+        }
+        return target
+    }
+
+    var hoveredIndependentCopyBodyDimensionHandle: ViewportIndependentCopyBodyDimensionHandleTarget? {
+        guard case .independentCopyBodyDimension(let target) = hoveredInteractionTarget else {
+            return nil
+        }
+        return target
+    }
+
+    var hoveredPatternArrayRadialAngleHandle: ViewportPatternArrayRadialAngleHandleTarget? {
+        guard case .patternArrayRadialAngle(let target) = hoveredInteractionTarget else {
+            return nil
+        }
+        return target
+    }
+
+    var hoveredPatternArrayCopyCountHandle: ViewportPatternArrayCopyCountHandleTarget? {
+        guard case .patternArrayCopyCount(let target) = hoveredInteractionTarget else {
+            return nil
+        }
+        return target
+    }
+
+    var hoveredPatternArrayCurveExtentHandle: ViewportPatternArrayCurveExtentHandleTarget? {
+        guard case .patternArrayCurveExtent(let target) = hoveredInteractionTarget else {
+            return nil
+        }
+        return target
+    }
+
+    var hoveredPatternArrayCurvePathPointHandle: ViewportPatternArrayCurvePathPointHandleTarget? {
+        guard case .patternArrayCurvePathPoint(let target) = hoveredInteractionTarget else {
+            return nil
+        }
+        return target
+    }
+
+    var hoveredPatternArrayOutputModeHandle: ViewportPatternArrayOutputModeHandleTarget? {
+        guard case .patternArrayOutputMode(let target) = hoveredInteractionTarget else {
+            return nil
+        }
+        return target
+    }
+
+    var hoveredConstructionPlaneHandle: ViewportConstructionPlaneHandleTarget? {
+        guard case .constructionPlane(let target) = hoveredInteractionTarget else {
+            return nil
+        }
+        return target
     }
 }
