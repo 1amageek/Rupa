@@ -1998,19 +1998,22 @@ public final class EditorSession {
         } else {
             sideMeters = document.workspaceScaleDefaults.placedSolidSideMeters
         }
-        let halfSideMeters = sideMeters / 2.0
+        // Typed width/height overrides take precedence over the visible cell,
+        // matching the sketch tool's click placement.
+        let widthMeters = activeSketchWidthInputMeters ?? sideMeters
+        let heightMeters = activeSketchHeightInputMeters ?? sideMeters
         let center = sketchPoint2D(from: centerModelPoint, on: sketchPlane)
         return perform(
             .createExtrudedRectangleFromCorners(
                 name: nextFeatureName(prefix: "Box"),
                 plane: sketchPlane,
                 firstCorner: SketchPoint(
-                    x: lengthExpressionMeters(center.x - halfSideMeters),
-                    y: lengthExpressionMeters(center.y - halfSideMeters)
+                    x: lengthExpressionMeters(center.x - widthMeters / 2.0),
+                    y: lengthExpressionMeters(center.y - heightMeters / 2.0)
                 ),
                 oppositeCorner: SketchPoint(
-                    x: lengthExpressionMeters(center.x + halfSideMeters),
-                    y: lengthExpressionMeters(center.y + halfSideMeters)
+                    x: lengthExpressionMeters(center.x + widthMeters / 2.0),
+                    y: lengthExpressionMeters(center.y + heightMeters / 2.0)
                 ),
                 depth: lengthExpressionMeters(sideMeters),
                 direction: .normal
@@ -2037,10 +2040,19 @@ public final class EditorSession {
 
         let start = sketchPoint2D(from: startModelPoint, on: sketchPlane)
         let end = sketchPoint2D(from: endModelPoint, on: sketchPlane)
-        let minX = normalizedLengthMeters(min(start.x, end.x))
-        let minY = normalizedLengthMeters(min(start.y, end.y))
-        let maxX = normalizedLengthMeters(max(start.x, end.x))
-        let maxY = normalizedLengthMeters(max(start.y, end.y))
+        // Honor typed width/height overrides exactly like the sketch rectangle
+        // drag: the drag preview already locks to the typed size, so ignoring
+        // it here made the created box disagree with the shown outline.
+        let deltaX = end.x - start.x
+        let deltaY = end.y - start.y
+        let widthMeters = activeSketchWidthInputMeters ?? abs(deltaX)
+        let heightMeters = activeSketchHeightInputMeters ?? abs(deltaY)
+        let endX = normalizedLengthMeters(start.x + signedDimension(widthMeters, following: deltaX))
+        let endY = normalizedLengthMeters(start.y + signedDimension(heightMeters, following: deltaY))
+        let minX = normalizedLengthMeters(min(start.x, endX))
+        let minY = normalizedLengthMeters(min(start.y, endY))
+        let maxX = normalizedLengthMeters(max(start.x, endX))
+        let maxY = normalizedLengthMeters(max(start.y, endY))
         guard maxX > minX, maxY > minY else {
             reportToolStatus(
                 "Canvas solid drag requires a non-zero width and height.",
