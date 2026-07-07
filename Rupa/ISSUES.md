@@ -56,7 +56,6 @@ workflow) > `ergonomics` (usable but hostile) > `hardening` (defense in depth).
 | ID | Issue | Detail | Found |
 |---|---|---|---|
 | U-1 | Transform gizmo: height translate, rotate, and scale still revert on release | In-plane translation now commits via moveBody (profile-sketch translation, 2026-07-07); height translation, rotation, scaling, vertexMove/faceMove still have no commit path and revert on release. Sketch selection gizmo is drawn but never hit-tested. | 2026-07-07 UI audit |
-| U-6 | Chamfer/fillet affordance drags give no live feedback | applying() ignores .profileEdgeChamfer/.profileEdgeFillet, so geometry jumps only at mouse-up. | 2026-07-07 UI audit |
 | U-8 | Interaction selectors still rebuild scene context per candidate class | hover() and beginViewportPress now share the same ordered interaction resolver, but the selected*Target helpers still construct their own ViewportSceneContext; pointer-move performance needs a precomputed per-event context and candidate cache. | 2026-07-07 UI audit |
 
 ## Hardening

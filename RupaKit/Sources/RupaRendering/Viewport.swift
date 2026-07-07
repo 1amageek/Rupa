@@ -35,6 +35,7 @@ public struct Viewport: View {
     @State private var activeConstructionPlaneHandleDrag: ViewportConstructionPlaneHandleDragState?
     @State private var camera: ViewportCamera = .identity
     @State private var editedBodies: [FeatureID: ViewportObjectEditState] = [:]
+    @State private var dragPreviewDocument: DesignDocument?
     @State private var hoveredAffordance: ViewportAffordanceTarget?
     @State private var hoveredSketchCurveHandle: ViewportSketchCurveHandleTarget?
     @State private var hoveredSketchDimension: ViewportSketchDimensionTarget?
@@ -527,6 +528,9 @@ public struct Viewport: View {
             }
             .onChange(of: hoverClearSignal) { _, _ in
                 clearCanvasHover()
+            }
+            .onChange(of: documentGeneration) { _, _ in
+                clearDragPreviewDocument()
             }
             .onAppear {
                 if let projectionRequest {
@@ -1054,13 +1058,51 @@ public struct Viewport: View {
         )
     }
 
+    private var renderingDocument: DesignDocument {
+        dragPreviewDocument ?? document
+    }
+
+    private var renderingDocumentGeneration: DocumentGeneration? {
+        dragPreviewDocument == nil ? documentGeneration : nil
+    }
+
+    private var renderingCurrentEvaluation: DocumentEvaluationContext? {
+        dragPreviewDocument == nil ? currentEvaluation : nil
+    }
+
+    private var renderingEvaluationCache: EvaluatedDocumentCache? {
+        dragPreviewDocument == nil ? evaluationCache : nil
+    }
+
+    private func sceneDocument(usesDragPreviewDocument: Bool) -> DesignDocument {
+        usesDragPreviewDocument ? renderingDocument : document
+    }
+
+    private func sceneDocumentGeneration(
+        usesDragPreviewDocument: Bool
+    ) -> DocumentGeneration? {
+        usesDragPreviewDocument ? renderingDocumentGeneration : documentGeneration
+    }
+
+    private func sceneCurrentEvaluation(
+        usesDragPreviewDocument: Bool
+    ) -> DocumentEvaluationContext? {
+        usesDragPreviewDocument ? renderingCurrentEvaluation : currentEvaluation
+    }
+
+    private func sceneEvaluationCache(
+        usesDragPreviewDocument: Bool
+    ) -> EvaluatedDocumentCache? {
+        usesDragPreviewDocument ? renderingEvaluationCache : evaluationCache
+    }
+
     private func makeScene() -> ViewportScene {
         sceneApplyingSectionClipping(
             ViewportSceneBuilder(objectRegistry: objectRegistry).build(
-                document: document,
-                currentEvaluation: currentEvaluation,
-                documentGeneration: documentGeneration,
-                evaluationCache: evaluationCache
+                document: renderingDocument,
+                currentEvaluation: renderingCurrentEvaluation,
+                documentGeneration: renderingDocumentGeneration,
+                evaluationCache: renderingEvaluationCache
             )
         )
     }
@@ -1068,15 +1110,16 @@ public struct Viewport: View {
     private func makeSceneContext(
         size: CGSize,
         camera: ViewportCamera,
-        basis: ViewportProjectionBasis
+        basis: ViewportProjectionBasis,
+        usesDragPreviewDocument: Bool = true
     ) -> ViewportSceneContext {
         var context = ViewportSceneContext(
-            document: document,
-            documentGeneration: documentGeneration,
+            document: sceneDocument(usesDragPreviewDocument: usesDragPreviewDocument),
+            documentGeneration: sceneDocumentGeneration(usesDragPreviewDocument: usesDragPreviewDocument),
             size: size,
             objectRegistry: objectRegistry,
-            currentEvaluation: currentEvaluation,
-            evaluationCache: evaluationCache,
+            currentEvaluation: sceneCurrentEvaluation(usesDragPreviewDocument: usesDragPreviewDocument),
+            evaluationCache: sceneEvaluationCache(usesDragPreviewDocument: usesDragPreviewDocument),
             camera: camera,
             basis: basis
         )
@@ -1098,15 +1141,16 @@ public struct Viewport: View {
     private func makeCoordinateMapper(
         size: CGSize,
         camera: ViewportCamera,
-        basis: ViewportProjectionBasis
+        basis: ViewportProjectionBasis,
+        usesDragPreviewDocument: Bool = true
     ) -> ViewportModelCoordinateMapper {
         ViewportModelCoordinateMapper(
-            document: document,
+            document: sceneDocument(usesDragPreviewDocument: usesDragPreviewDocument),
             size: size,
             objectRegistry: objectRegistry,
-            currentEvaluation: currentEvaluation,
-            documentGeneration: documentGeneration,
-            evaluationCache: evaluationCache,
+            currentEvaluation: sceneCurrentEvaluation(usesDragPreviewDocument: usesDragPreviewDocument),
+            documentGeneration: sceneDocumentGeneration(usesDragPreviewDocument: usesDragPreviewDocument),
+            evaluationCache: sceneEvaluationCache(usesDragPreviewDocument: usesDragPreviewDocument),
             camera: camera,
             basis: basis
         )
@@ -1115,12 +1159,14 @@ public struct Viewport: View {
     private func makeLayout(
         size: CGSize,
         camera: ViewportCamera,
-        basis: ViewportProjectionBasis
+        basis: ViewportProjectionBasis,
+        usesDragPreviewDocument: Bool = true
     ) -> ViewportLayout {
         makeCoordinateMapper(
             size: size,
             camera: camera,
-            basis: basis
+            basis: basis,
+            usesDragPreviewDocument: usesDragPreviewDocument
         ).layout
     }
 
@@ -9689,6 +9735,7 @@ public struct Viewport: View {
         }
         if start == nil || current == nil {
             clearPendingCanvasInteractionTargets()
+            clearDragPreviewDocument()
             activeCanvasDrag = nil
             publishSelectionDragPreview(hits: [])
             return
@@ -10065,6 +10112,7 @@ public struct Viewport: View {
         pendingPatternArrayCurvePathPointHandle = nil
         pendingPatternArrayOutputModeHandle = nil
         pendingConstructionPlaneHandle = nil
+        clearDragPreviewDocument()
         clearAffordanceGhostEdits()
         activeAffordanceDrag = nil
         activeSketchCurveHandleDrag = nil
@@ -10092,6 +10140,12 @@ public struct Viewport: View {
         activePatternArrayCurveExtentDrag = nil
         activePatternArrayCurvePathPointDrag = nil
         activeConstructionPlaneHandleDrag = nil
+    }
+
+    private func clearDragPreviewDocument() {
+        if dragPreviewDocument != nil {
+            dragPreviewDocument = nil
+        }
     }
 
     private func beginViewportPress(at point: CGPoint, size: CGSize) {
@@ -12095,6 +12149,73 @@ public struct Viewport: View {
         }
     }
 
+    private func updateEdgeTreatmentDragPreview(
+        target: ViewportAffordanceTarget,
+        dragState: ViewportAffordanceDragState,
+        current: CGPoint,
+        layout: ViewportLayout
+    ) -> Bool {
+        switch target.action {
+        case .profileEdgeChamfer(let selectionTarget, let edge):
+            guard let baseEdit = dragState.baseEdits[target.featureID],
+                  let distance = baseEdit.profileEdgeChamferDistance(
+                      edge,
+                      start: dragState.startPoint,
+                      current: current,
+                      layout: layout
+                  ),
+                  distance > 1.0e-12 else {
+                clearDragPreviewDocument()
+                return true
+            }
+            updateEdgeTreatmentPreviewDocument(
+                request: .chamfer(
+                    target: selectionTarget,
+                    distance: Double(distance)
+                )
+            )
+            return true
+        case .profileEdgeFillet(let selectionTarget, let edge):
+            guard let baseEdit = dragState.baseEdits[target.featureID],
+                  let radius = baseEdit.profileEdgeFilletRadius(
+                      edge,
+                      start: dragState.startPoint,
+                      current: current,
+                      layout: layout
+                  ),
+                  radius > 1.0e-12 else {
+                clearDragPreviewDocument()
+                return true
+            }
+            updateEdgeTreatmentPreviewDocument(
+                request: .fillet(
+                    target: selectionTarget,
+                    radius: Double(radius),
+                    segmentCount: 8
+                )
+            )
+            return true
+        default:
+            clearDragPreviewDocument()
+            return false
+        }
+    }
+
+    private func updateEdgeTreatmentPreviewDocument(
+        request: ViewportEdgeTreatmentPreviewRequest
+    ) {
+        do {
+            dragPreviewDocument = try ViewportEdgeTreatmentPreviewDocumentBuilder(
+                objectRegistry: objectRegistry
+            ).previewDocument(
+                for: request,
+                in: document
+            )
+        } catch {
+            clearDragPreviewDocument()
+        }
+    }
+
     private func updateAffordanceDrag(
         target: ViewportAffordanceTarget,
         start: CGPoint,
@@ -12104,7 +12225,8 @@ public struct Viewport: View {
         let sceneContext = makeSceneContext(
             size: size,
             camera: camera,
-            basis: currentProjectionBasis
+            basis: currentProjectionBasis,
+            usesDragPreviewDocument: false
         )
         let scene = sceneContext.scene
         let layout = sceneContext.layout
@@ -12140,6 +12262,15 @@ public struct Viewport: View {
                 baseGroupEdit: baseGroupEdit
             )
             activeAffordanceDrag = dragState
+        }
+
+        if updateEdgeTreatmentDragPreview(
+            target: target,
+            dragState: dragState,
+            current: current,
+            layout: layout
+        ) {
+            return
         }
 
         if let baseGroupEdit = dragState.baseGroupEdit {
@@ -13382,6 +13513,7 @@ public struct Viewport: View {
             pendingAffordance = nil
             activeAffordanceDrag = nil
             activeCanvasDrag = nil
+            clearDragPreviewDocument()
             if let vertexDragTarget {
                 editedBodies.removeValue(forKey: vertexDragTarget.featureID)
                 onVertexDrag?(vertexDragTarget.target)
@@ -14173,7 +14305,8 @@ public struct Viewport: View {
         let layout = makeLayout(
             size: size,
             camera: camera,
-            basis: currentProjectionBasis
+            basis: currentProjectionBasis,
+            usesDragPreviewDocument: false
         )
         guard let distance = baseEdit.profileEdgeChamferDistance(
             edge,
@@ -14207,7 +14340,8 @@ public struct Viewport: View {
         let layout = makeLayout(
             size: size,
             camera: camera,
-            basis: currentProjectionBasis
+            basis: currentProjectionBasis,
+            usesDragPreviewDocument: false
         )
         guard let radius = baseEdit.profileEdgeFilletRadius(
             edge,
