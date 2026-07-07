@@ -12710,68 +12710,26 @@ public struct Viewport: View {
         size: CGSize
     ) {
         pendingInteractionTarget = nil
-        switch target {
-        case .sketchCurveHandle:
-            finishSketchCurveHandleDrag()
-        case .sketchDimension:
-            finishSketchDimensionDrag()
-        case .sketchPointHandle:
-            finishSketchPointHandleDrag()
-        case .bridgeCurveEndpoint:
-            finishBridgeCurveEndpointDrag()
-        case .splineControlPoint:
-            finishSplineControlPointDrag()
-        case .splineControlPointSlide:
-            finishSplineControlPointSlideDrag()
-        case .polySplineSurfaceVertex:
-            finishPolySplineSurfaceVertexDrag()
-        case .polySplineSurfaceVertexSlide:
-            finishPolySplineSurfaceVertexSlideDrag()
-        case .surfaceControlPoint:
-            finishSurfaceControlPointDrag()
-        case .surfaceControlPointSlide:
-            finishSurfaceControlPointSlideDrag()
-        case .surfaceTrimEndpoint:
-            finishSurfaceTrimEndpointDrag()
-        case .surfaceTrimControlPoint:
-            finishSurfaceTrimControlPointDrag()
-        case .surfaceFrame:
-            finishSurfaceFrameDrag()
-        case .regionOffset:
-            finishRegionOffsetDrag()
-        case .edgeOffset:
-            finishEdgeOffsetDrag()
-        case .slotWidth:
-            finishSlotWidthDrag()
-        case .sketchVertexOffset:
-            finishSketchVertexOffsetDrag()
-        case .patternArrayLinearAxis:
-            finishPatternArrayLinearAxisDrag()
-        case .independentCopyExtrudeDistance:
-            finishIndependentCopyExtrudeDistanceDrag()
-        case .independentCopyBodyDimension:
-            finishIndependentCopyBodyDimensionDrag()
-        case .patternArrayRadialAngle:
-            finishPatternArrayRadialAngleDrag()
-        case .patternArrayCopyCount:
-            finishPatternArrayCopyCountDrag()
-        case .patternArrayCurveExtent:
-            finishPatternArrayCurveExtentDrag()
-        case .patternArrayCurvePathPoint:
-            finishPatternArrayCurvePathPointDrag()
-        case .patternArrayOutputMode:
+        guard let finishKind = target.activeDragKind else {
             activeCanvasDrag = nil
-        case .constructionPlane:
-            finishConstructionPlaneHandleDrag()
-        case .affordance:
-            finishAffordanceInteractionDrag(end: end, size: size)
+            return
         }
+        finishInteractionDrag(finishKind, end: end, size: size)
     }
 
     private func finishActiveInteractionDrag(end: CGPoint, size: CGSize) -> Bool {
         guard let finishKind = activeInteractionDrags.nextFinishKind else {
             return false
         }
+        finishInteractionDrag(finishKind, end: end, size: size)
+        return true
+    }
+
+    private func finishInteractionDrag(
+        _ finishKind: ViewportActiveInteractionDragKind,
+        end: CGPoint,
+        size: CGSize
+    ) {
         switch finishKind {
         case .sketchCurveHandle:
             finishSketchCurveHandleDrag()
@@ -12826,7 +12784,6 @@ public struct Viewport: View {
         case .affordance:
             finishAffordanceInteractionDrag(end: end, size: size)
         }
-        return true
     }
 
     private func finishSketchCurveHandleDrag() {

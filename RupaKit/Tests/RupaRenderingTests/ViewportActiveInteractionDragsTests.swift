@@ -111,6 +111,26 @@ import Testing
     #expect(!drags.hasActiveDrag)
 }
 
+@Test func viewportInteractionTargetReportsActiveDragKindForDragTargets() {
+    let sketchTarget = sketchCurveHandleTarget()
+    let affordanceTarget = affordanceDragState().target
+
+    #expect(ViewportInteractionTarget.sketchCurveHandle(sketchTarget).activeDragKind == .sketchCurveHandle)
+    #expect(ViewportInteractionTarget.affordance(affordanceTarget).activeDragKind == .affordance)
+}
+
+@Test func viewportInteractionTargetDoesNotReportActiveDragKindForOutputModeChange() {
+    let target = ViewportPatternArrayOutputModeHandleTarget(
+        sourceID: PatternArraySourceID(),
+        currentOutputMode: .componentInstance,
+        nextOutputMode: .independentCopy,
+        center: .zero,
+        hitRect: .zero
+    )
+
+    #expect(ViewportInteractionTarget.patternArrayOutputMode(target).activeDragKind == nil)
+}
+
 private func affordanceDragState(featureID: FeatureID = FeatureID()) -> ViewportAffordanceDragState {
     ViewportAffordanceDragState(
         target: ViewportAffordanceTarget(
