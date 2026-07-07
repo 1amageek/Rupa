@@ -296,6 +296,7 @@ import Testing
     #expect(svg.contains(#"data-contour-id="section-contour""#))
     #expect(svg.contains(#"data-section-source-id="section-node""#))
     #expect(svg.contains(#"data-section-source-name="Mid Cut""#))
+    #expect(svg.contains(#"data-hatch-pattern="linear""#))
     #expect(svg.contains(#"data-angle-degrees="45.000000""#))
     #expect(!drawingProjectionSVGContainsNonFiniteNumericToken(svg))
 }

@@ -368,14 +368,14 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                     ],
                     notes: [
                         "Export service and exchange-format tests cover file-oriented output paths.",
-                        "Saved-view drawing projection now generates structured hidden-line strokes plus section contours, hatch segments, and measurement-backed drawing annotations for SVG and PDF export.",
-                        "Drawing page/style presets are implemented for SVG/PDF output; radial hatching, parametric material hatching, and curved analytic hidden-line support remain separate gaps.",
+                        "Saved-view drawing projection now generates structured hidden-line strokes plus section contours, linear and radial hatch segments, and measurement-backed drawing annotations for SVG and PDF export.",
+                        "Drawing page/style presets are implemented for SVG/PDF output; parametric material hatching and curved analytic hidden-line support remain separate gaps.",
                     ]
                 ),
             ],
             openWork: [
                 "Hidden-line export from selected views with broader occluded-line and style controls.",
-                "Radial hatching and parametric material hatching for technical drawings.",
+                "Parametric material hatching for technical drawings.",
                 "Agent-readable import contract for supported exchange formats and failure recovery.",
             ],
             next: "Broaden drawing export from structured SVG/PDF into curved analytic hidden-line support, richer hatching policies, and exchange failure recovery."
@@ -619,7 +619,7 @@ public struct CADInteractionQualityAssessmentService: Sendable {
                         "Viewport section clipping now removes hidden bodies from the rendered and pickable scene and clips mesh triangles into retained-side display polygons without allocating replacement mesh buffers.",
                         "The Section Analysis Inspector exposes off, front, and behind clipping modes so viewport clipping can be toggled without adding more canvas chrome.",
                         "Selecting a section or construction plane can drive a non-mutating viewport overlay that renders the section plane frame, closed section fill, hatching, and bounded body intersection segments from the same SectionAnalysisResult contract used by Agent and Automation.",
-                        "DrawingProjectionService now consumes saved-view section scene nodes through SectionAnalysisService and emits structured drawing section contours, hatch segments, and measurement-backed drawing annotations for SVG/PDF export.",
+                        "DrawingProjectionService now consumes saved-view section scene nodes through SectionAnalysisService and emits structured drawing section contours, linear and radial hatch segments, and measurement-backed drawing annotations for SVG/PDF export.",
                         "Exact clipped cap surfaces, interference highlighting, and persistent section-distance controls remain incomplete.",
                     ]
                 ),
@@ -627,7 +627,7 @@ public struct CADInteractionQualityAssessmentService: Sendable {
             openWork: [
                 "Exact clipped cap surfaces driven by the non-mutating SectionAnalysisResult.",
                 "Selection, CPlane, previous-plane, and persistent distance/flip overlay policies for Section Analysis.",
-                "Interference highlighting plus radial and parametric material hatching policies for drawing/export workflows.",
+                "Interference highlighting plus parametric material hatching policies for drawing/export workflows.",
                 "Persistent inspection overlay controls that share the measurement and topology contracts.",
             ],
             next: "Extend SectionAnalysisResult from viewport contour overlays and drawing hatching into clipped cap surfaces, interference diagnostics, selection policies, and persistent inspection overlay controls."

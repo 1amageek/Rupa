@@ -95,6 +95,11 @@ import RupaCore
     #expect(exchange.currentRating == .partial)
     #expect(exchange.referenceSources.contains("https://doc.plasticity.xyz/plasticity-essentials/export-hidden-line"))
     #expect(exchange.openWork.contains { $0.contains("Hidden-line export") })
+    #expect(exchange.openWork.contains { $0.contains("Parametric material hatching") })
+    #expect(!exchange.openWork.contains { $0.contains("Radial hatching") })
+    #expect(exchange.evidence.contains { evidence in
+        evidence.notes.contains("Saved-view drawing projection now generates structured hidden-line strokes plus section contours, linear and radial hatch segments, and measurement-backed drawing annotations for SVG and PDF export.")
+    })
 
     let arrays = try #require(result.entries.first { $0.area == .patternsAndArrays })
     let arrayCommandRating = try gateRating(.commandContract, in: arrays)
@@ -339,6 +344,8 @@ import RupaCore
     #expect(section.currentRating == .partial)
     #expect(section.referenceSources.contains("https://doc.plasticity.xyz/common/section-analysis"))
     #expect(section.openWork.contains { $0.contains("Exact clipped cap surfaces") })
+    #expect(section.openWork.contains { $0.contains("parametric material hatching") })
+    #expect(!section.openWork.contains { $0.contains("radial") && $0.contains("hatching") })
     #expect(section.evidence.contains { evidence in
         evidence.sourceFiles.contains("RupaKit/Sources/RupaCore/SectionAnalysisService.swift")
     })

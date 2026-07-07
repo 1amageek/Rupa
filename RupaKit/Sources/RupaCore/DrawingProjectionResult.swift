@@ -20,6 +20,11 @@ public struct DrawingProjectionResult: Codable, Equatable, Sendable {
         case unclassified
     }
 
+    public enum SectionHatchPattern: String, Codable, Equatable, Sendable {
+        case linear
+        case radial
+    }
+
     public struct VisibilitySegment: Codable, Equatable, Sendable {
         public var id: String
         public var visibility: Visibility
@@ -188,6 +193,7 @@ public struct DrawingProjectionResult: Codable, Equatable, Sendable {
         public var end: Point3D
         public var start2D: Point2D
         public var end2D: Point2D
+        public var pattern: SectionHatchPattern
         public var spacingMeters: Double
         public var angleDegrees: Double
         public var lengthMeters: Double
@@ -202,6 +208,7 @@ public struct DrawingProjectionResult: Codable, Equatable, Sendable {
             end: Point3D,
             start2D: Point2D,
             end2D: Point2D,
+            pattern: SectionHatchPattern = .linear,
             spacingMeters: Double,
             angleDegrees: Double,
             lengthMeters: Double
@@ -215,6 +222,7 @@ public struct DrawingProjectionResult: Codable, Equatable, Sendable {
             self.end = end
             self.start2D = start2D
             self.end2D = end2D
+            self.pattern = pattern
             self.spacingMeters = spacingMeters
             self.angleDegrees = angleDegrees
             self.lengthMeters = lengthMeters

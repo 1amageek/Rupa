@@ -89,6 +89,13 @@ public struct DrawingProjectionService: Sendable {
     private struct HatchPlaneSegment {
         var start: Point2D
         var end: Point2D
+        var pattern: DrawingProjectionResult.SectionHatchPattern
+        var angleDegrees: Double
+    }
+
+    private struct CircularHatchProfile {
+        var center: Point2D
+        var radius: Double
     }
 
     private struct BoundsAccumulator {
@@ -989,11 +996,9 @@ public struct DrawingProjectionService: Sendable {
             for: contour.points2D,
             tolerance: tolerance
         )
-        let angleDegrees = 45.0
         let planeSegments = hatchPlaneSegments(
             polygon: contour.points2D,
             spacing: spacing,
-            angleRadians: angleDegrees * .pi / 180.0,
             tolerance: tolerance,
             maximumSegmentCount: maximumSegmentCount
         )
@@ -1017,8 +1022,9 @@ public struct DrawingProjectionService: Sendable {
                 end: end,
                 start2D: project(start, savedView: savedView, basis: basis),
                 end2D: project(end, savedView: savedView, basis: basis),
+                pattern: segment.pattern,
                 spacingMeters: spacing,
-                angleDegrees: angleDegrees,
+                angleDegrees: segment.angleDegrees,
                 lengthMeters: lengthMeters
             ))
         }
@@ -1042,7 +1048,6 @@ public struct DrawingProjectionService: Sendable {
     private func hatchPlaneSegments(
         polygon: [Point2D],
         spacing: Double,
-        angleRadians: Double,
         tolerance: Double,
         maximumSegmentCount: Int
     ) -> (segments: [HatchPlaneSegment], truncated: Bool) {
@@ -1052,6 +1057,20 @@ public struct DrawingProjectionService: Sendable {
               maximumSegmentCount > 0 else {
             return ([], false)
         }
+        if let circularProfile = circularHatchProfile(
+            polygon: polygon,
+            tolerance: tolerance
+        ) {
+            return radialHatchPlaneSegments(
+                polygon: polygon,
+                profile: circularProfile,
+                spacing: spacing,
+                tolerance: tolerance,
+                maximumSegmentCount: maximumSegmentCount
+            )
+        }
+        let angleDegrees = 45.0
+        let angleRadians = angleDegrees * .pi / 180.0
         let cosine = cos(angleRadians)
         let sine = sin(angleRadians)
         let rotated = polygon.map { rotate($0, cosine: cosine, sine: sine) }
@@ -1080,7 +1099,9 @@ public struct DrawingProjectionService: Sendable {
                 if hypot(end.x - start.x, end.y - start.y) > tolerance {
                     segments.append(HatchPlaneSegment(
                         start: unrotate(start, cosine: cosine, sine: sine),
-                        end: unrotate(end, cosine: cosine, sine: sine)
+                        end: unrotate(end, cosine: cosine, sine: sine),
+                        pattern: .linear,
+                        angleDegrees: angleDegrees
                     ))
                 }
                 index += 2
@@ -1088,6 +1109,185 @@ public struct DrawingProjectionService: Sendable {
             scanline += spacing
         }
         return (segments, truncated)
+    }
+
+    private func circularHatchProfile(
+        polygon: [Point2D],
+        tolerance: Double
+    ) -> CircularHatchProfile? {
+        guard polygon.count >= 12,
+              let bounds = planeBounds(polygon) else {
+            return nil
+        }
+        let width = bounds.maxX - bounds.minX
+        let height = bounds.maxY - bounds.minY
+        let largerSpan = max(width, height)
+        let smallerSpan = min(width, height)
+        guard largerSpan.isFinite,
+              smallerSpan.isFinite,
+              largerSpan > tolerance * 8.0,
+              smallerSpan / largerSpan >= 0.86 else {
+            return nil
+        }
+
+        let center = polygonAreaCentroid(polygon) ?? centroid(polygon)
+        let distances = polygon.map { point in
+            hypot(point.x - center.x, point.y - center.y)
+        }
+        let radius = distances.reduce(0.0, +) / Double(distances.count)
+        guard radius.isFinite,
+              radius > tolerance * 8.0 else {
+            return nil
+        }
+
+        let maximumDeviation = distances.reduce(0.0) { current, distance in
+            max(current, abs(distance - radius))
+        }
+        let relativeDeviation = maximumDeviation / radius
+        let polygonArea = abs(signedArea(polygon))
+        let circleArea = Double.pi * radius * radius
+        guard polygonArea.isFinite,
+              circleArea.isFinite,
+              circleArea > tolerance * tolerance,
+              relativeDeviation <= 0.10 else {
+            return nil
+        }
+        let areaRatio = polygonArea / circleArea
+        guard areaRatio >= 0.70,
+              areaRatio <= 1.08 else {
+            return nil
+        }
+
+        return CircularHatchProfile(center: center, radius: radius)
+    }
+
+    private func radialHatchPlaneSegments(
+        polygon: [Point2D],
+        profile: CircularHatchProfile,
+        spacing: Double,
+        tolerance: Double,
+        maximumSegmentCount: Int
+    ) -> (segments: [HatchPlaneSegment], truncated: Bool) {
+        let circumference = 2.0 * Double.pi * profile.radius
+        let targetSegmentCount = min(
+            max(Int(ceil(circumference / max(spacing * 2.0, tolerance * 32.0))), 8),
+            64
+        )
+        let emittedSegmentCount = min(targetSegmentCount, maximumSegmentCount)
+        guard emittedSegmentCount > 0 else {
+            return ([], targetSegmentCount > 0)
+        }
+
+        var segments: [HatchPlaneSegment] = []
+        segments.reserveCapacity(emittedSegmentCount)
+        let angleStep = 2.0 * Double.pi / Double(emittedSegmentCount)
+        for index in 0..<emittedSegmentCount {
+            let angleRadians = Double(index) * angleStep
+            let direction = Point2D(x: cos(angleRadians), y: sin(angleRadians))
+            guard let boundaryDistance = rayPolygonBoundaryDistance(
+                origin: profile.center,
+                direction: direction,
+                polygon: polygon,
+                tolerance: tolerance
+            ) else {
+                continue
+            }
+            let end = Point2D(
+                x: profile.center.x + direction.x * boundaryDistance,
+                y: profile.center.y + direction.y * boundaryDistance
+            )
+            guard hypot(end.x - profile.center.x, end.y - profile.center.y) > tolerance else {
+                continue
+            }
+            segments.append(HatchPlaneSegment(
+                start: profile.center,
+                end: end,
+                pattern: .radial,
+                angleDegrees: normalizedDegrees(angleRadians)
+            ))
+        }
+        return (segments, targetSegmentCount > maximumSegmentCount)
+    }
+
+    private func rayPolygonBoundaryDistance(
+        origin: Point2D,
+        direction: Point2D,
+        polygon: [Point2D],
+        tolerance: Double
+    ) -> Double? {
+        var bestDistance = Double.infinity
+        for index in polygon.indices {
+            let start = polygon[index]
+            let end = polygon[(index + 1) % polygon.count]
+            let edge = Point2D(x: end.x - start.x, y: end.y - start.y)
+            guard hypot(edge.x, edge.y) > tolerance else {
+                continue
+            }
+            let denominator = cross(direction, edge)
+            guard abs(denominator) > tolerance else {
+                continue
+            }
+            let delta = Point2D(x: start.x - origin.x, y: start.y - origin.y)
+            let rayDistance = cross(delta, edge) / denominator
+            let edgeFraction = cross(delta, direction) / denominator
+            guard rayDistance > tolerance,
+                  edgeFraction >= -tolerance,
+                  edgeFraction <= 1.0 + tolerance else {
+                continue
+            }
+            bestDistance = min(bestDistance, rayDistance)
+        }
+        return bestDistance.isFinite ? bestDistance : nil
+    }
+
+    private func polygonAreaCentroid(_ points: [Point2D]) -> Point2D? {
+        guard points.count >= 3 else {
+            return nil
+        }
+        var twiceArea = 0.0
+        var x = 0.0
+        var y = 0.0
+        for index in points.indices {
+            let current = points[index]
+            let next = points[(index + 1) % points.count]
+            let crossValue = current.x * next.y - next.x * current.y
+            twiceArea += crossValue
+            x += (current.x + next.x) * crossValue
+            y += (current.y + next.y) * crossValue
+        }
+        guard abs(twiceArea) > 1.0e-18 else {
+            return nil
+        }
+        let scale = 1.0 / (3.0 * twiceArea)
+        return Point2D(x: x * scale, y: y * scale)
+    }
+
+    private func signedArea(_ points: [Point2D]) -> Double {
+        guard points.count >= 3 else {
+            return 0.0
+        }
+        var twiceArea = 0.0
+        for index in points.indices {
+            let current = points[index]
+            let next = points[(index + 1) % points.count]
+            twiceArea += current.x * next.y - next.x * current.y
+        }
+        return twiceArea * 0.5
+    }
+
+    private func cross(_ left: Point2D, _ right: Point2D) -> Double {
+        left.x * right.y - left.y * right.x
+    }
+
+    private func normalizedDegrees(_ radians: Double) -> Double {
+        var degrees = radians * 180.0 / Double.pi
+        while degrees < 0.0 {
+            degrees += 360.0
+        }
+        while degrees >= 360.0 {
+            degrees -= 360.0
+        }
+        return degrees
     }
 
     private func scanlineIntersections(

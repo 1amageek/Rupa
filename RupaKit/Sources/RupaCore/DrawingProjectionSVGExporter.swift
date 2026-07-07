@@ -214,7 +214,7 @@ public struct DrawingProjectionSVGExporter: Sendable {
             let start = transform.point(hatch.start2D)
             let end = transform.point(hatch.end2D)
             lines.append(
-                #"      <path d="M \#(format(start.x)) \#(format(start.y)) L \#(format(end.x)) \#(format(end.y))" data-hatch-id="\#(escaped(hatch.id))" data-contour-id="\#(escaped(hatch.contourID))" data-body-id="\#(escaped(hatch.bodyID))"\#(sectionSourceAttributes(id: hatch.sectionSourceID, name: hatch.sectionSourceName)) data-spacing-meters="\#(format(hatch.spacingMeters))" data-angle-degrees="\#(format(hatch.angleDegrees))" />"#
+                #"      <path d="M \#(format(start.x)) \#(format(start.y)) L \#(format(end.x)) \#(format(end.y))" data-hatch-id="\#(escaped(hatch.id))" data-contour-id="\#(escaped(hatch.contourID))" data-body-id="\#(escaped(hatch.bodyID))"\#(sectionSourceAttributes(id: hatch.sectionSourceID, name: hatch.sectionSourceName)) data-hatch-pattern="\#(hatch.pattern.rawValue)" data-spacing-meters="\#(format(hatch.spacingMeters))" data-angle-degrees="\#(format(hatch.angleDegrees))" />"#
             )
         }
         lines.append("    </g>")

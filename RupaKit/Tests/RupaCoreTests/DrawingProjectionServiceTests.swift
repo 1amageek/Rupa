@@ -242,6 +242,7 @@ import Testing
     #expect(result.sectionHatches.allSatisfy { $0.sectionSourceID == sectionNodeID.description })
     #expect(result.sectionHatches.allSatisfy { $0.lengthMeters > 0.0 })
     #expect(result.sectionHatches.allSatisfy { $0.spacingMeters > 0.0 })
+    #expect(result.sectionHatches.allSatisfy { $0.pattern == .linear })
     #expect(result.sectionHatches.allSatisfy { $0.angleDegrees == 45.0 })
     #expect(result.truncatedSectionHatches == false)
     #expect(result.bounds != nil)
@@ -249,6 +250,70 @@ import Testing
         $0.message.contains("section contour")
             && $0.message.contains("section hatch")
     })
+}
+
+@MainActor
+@Test func drawingProjectionGeneratesRadialSectionHatchesForCircularSections() throws {
+    let session = EditorSession()
+    _ = try session.execute(
+        .createExtrudedCircle(
+            name: "Sectioned Drawing Cylinder",
+            plane: .xy,
+            center: SketchPoint(
+                x: .length(0.0, .millimeter),
+                y: .length(0.0, .millimeter)
+            ),
+            radius: .length(8.0, .millimeter),
+            depth: .length(12.0, .millimeter),
+            direction: .normal
+        )
+    )
+    var document = session.document
+    let sectionNodeID = try document.createSectionPlane(name: "Cylinder Mid Height Section")
+    try document.setSceneNodeTransform(
+        id: sectionNodeID,
+        localTransform: Transform3D(
+            matrix: try Matrix4x4(values: [
+                1.0, 0.0, 0.0, 0.0,
+                0.0, 1.0, 0.0, 0.0,
+                0.0, 0.0, 1.0, 0.0,
+                0.0, 0.0, 0.006, 1.0,
+            ])
+        )
+    )
+    let savedView = SavedView(
+        name: "Circular Section Drawing View",
+        camera: SavedViewCamera(
+            target: Point3D(x: 0.0, y: 0.0, z: 0.006),
+            distanceMeters: 0.1,
+            yawRadians: .pi / 5.0,
+            pitchRadians: 0.58
+        ),
+        projection: .orthographic(heightMeters: 0.05),
+        sectionState: SavedViewSectionState(sectionSceneNodeIDs: [sectionNodeID]),
+        displayScale: SavedViewDisplayScale(ruler: .standard(for: .meter))
+    )
+    _ = try document.createSavedView(savedView, objectRegistry: session.objectRegistry)
+
+    let result = try DrawingProjectionService().generate(
+        document: document,
+        query: DrawingProjectionQuery(savedViewID: savedView.id),
+        objectRegistry: session.objectRegistry,
+        currentEvaluation: session.currentEvaluation,
+        currentGeneration: session.generation
+    )
+    let radialHatches = result.sectionHatches.filter { $0.pattern == .radial }
+    let angleBuckets = Set(radialHatches.map { Int($0.angleDegrees.rounded()) })
+
+    #expect(result.sectionContourCount > 0)
+    #expect(radialHatches.isEmpty == false)
+    #expect(result.sectionHatches.allSatisfy { $0.pattern == .radial })
+    #expect(radialHatches.allSatisfy { $0.sectionSourceID == sectionNodeID.description })
+    #expect(radialHatches.allSatisfy { $0.lengthMeters > 0.0 })
+    #expect(radialHatches.allSatisfy { $0.spacingMeters > 0.0 })
+    #expect(radialHatches.allSatisfy { $0.angleDegrees >= 0.0 && $0.angleDegrees < 360.0 })
+    #expect(angleBuckets.count >= 8)
+    #expect(result.truncatedSectionHatches == false)
 }
 
 @MainActor
