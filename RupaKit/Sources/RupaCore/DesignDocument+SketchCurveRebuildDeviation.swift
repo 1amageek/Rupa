@@ -6,10 +6,89 @@ extension DesignDocument {
     func sketchSplineDeviation(
         originalControlPoints: [CADCore.Point2D],
         rebuiltControlPoints: [CADCore.Point2D],
+        intervals: [SketchSplineRebuildInterval]
+    ) throws -> SketchSplineRebuildDeviation {
+        let rebuiltSegmentCount = intervals.reduce(0) { $0 + $1.segmentCount }
+        guard rebuiltSegmentCount > 0 else {
+            throw EditorError(
+                code: .commandInvalid,
+                message: "Sketch curve rebuild generated no rebuilt deviation spans."
+            )
+        }
+        var rebuiltStartSegment = 0
+        var components = SketchSplineDeviationComponents()
+        var rangeLength = 0.0
+        for interval in intervals {
+            guard interval.segmentCount > 0,
+                  interval.endFraction > interval.startFraction else {
+                throw EditorError(
+                    code: .commandInvalid,
+                    message: "Sketch curve rebuild generated an invalid deviation interval."
+                )
+            }
+            let rebuiltStartFraction = Double(rebuiltStartSegment) / Double(rebuiltSegmentCount)
+            rebuiltStartSegment += interval.segmentCount
+            let rebuiltEndFraction = Double(rebuiltStartSegment) / Double(rebuiltSegmentCount)
+            let intervalComponents = try sketchSplineDeviationComponents(
+                originalControlPoints: originalControlPoints,
+                rebuiltControlPoints: rebuiltControlPoints,
+                originalStartFraction: interval.startFraction,
+                originalEndFraction: interval.endFraction,
+                rebuiltStartFraction: rebuiltStartFraction,
+                rebuiltEndFraction: rebuiltEndFraction
+            )
+            components.merge(intervalComponents)
+            rangeLength += interval.endFraction - interval.startFraction
+        }
+        return components.result(rangeLength: rangeLength)
+    }
+
+    func sketchSplineDeviation(
+        originalControlPoints: [CADCore.Point2D],
+        rebuiltControlPoints: [CADCore.Point2D],
         startFraction: Double,
         endFraction: Double
     ) throws -> SketchSplineRebuildDeviation {
-        guard endFraction > startFraction else {
+        let components = try sketchSplineDeviationComponents(
+            originalControlPoints: originalControlPoints,
+            rebuiltControlPoints: rebuiltControlPoints,
+            originalStartFraction: startFraction,
+            originalEndFraction: endFraction,
+            rebuiltStartFraction: startFraction,
+            rebuiltEndFraction: endFraction
+        )
+        return components.result(rangeLength: endFraction - startFraction)
+    }
+
+    func sketchSplineDeviation(
+        originalControlPoints: [CADCore.Point2D],
+        rebuiltControlPoints: [CADCore.Point2D],
+        originalStartFraction: Double,
+        originalEndFraction: Double,
+        rebuiltStartFraction: Double,
+        rebuiltEndFraction: Double
+    ) throws -> SketchSplineRebuildDeviation {
+        let components = try sketchSplineDeviationComponents(
+            originalControlPoints: originalControlPoints,
+            rebuiltControlPoints: rebuiltControlPoints,
+            originalStartFraction: originalStartFraction,
+            originalEndFraction: originalEndFraction,
+            rebuiltStartFraction: rebuiltStartFraction,
+            rebuiltEndFraction: rebuiltEndFraction
+        )
+        return components.result(rangeLength: originalEndFraction - originalStartFraction)
+    }
+
+    private func sketchSplineDeviationComponents(
+        originalControlPoints: [CADCore.Point2D],
+        rebuiltControlPoints: [CADCore.Point2D],
+        originalStartFraction: Double,
+        originalEndFraction: Double,
+        rebuiltStartFraction: Double,
+        rebuiltEndFraction: Double
+    ) throws -> SketchSplineDeviationComponents {
+        guard originalEndFraction > originalStartFraction,
+              rebuiltEndFraction > rebuiltStartFraction else {
             throw EditorError(
                 code: .commandInvalid,
                 message: "Sketch curve rebuild generated an invalid deviation range."
@@ -18,17 +97,15 @@ extension DesignDocument {
         let originalSegmentCount = (originalControlPoints.count - 1) / 3
         let rebuiltSegmentCount = (rebuiltControlPoints.count - 1) / 3
         let boundaries = sketchSplineDeviationBoundaries(
-            startFraction: startFraction,
-            endFraction: endFraction,
+            originalStartFraction: originalStartFraction,
+            originalEndFraction: originalEndFraction,
+            rebuiltStartFraction: rebuiltStartFraction,
+            rebuiltEndFraction: rebuiltEndFraction,
             originalSegmentCount: originalSegmentCount,
             rebuiltSegmentCount: rebuiltSegmentCount
         )
 
-        var maximumSquaredDistance = 0.0
-        var maximumDistanceFraction = startFraction
-        var squaredDistanceIntegral = 0.0
-        var criticalPointCount = 0
-        var evaluatedIntervalCount = 0
+        var components = SketchSplineDeviationComponents()
 
         for index in 0 ..< boundaries.count - 1 {
             let intervalStart = boundaries[index]
@@ -41,10 +118,24 @@ extension DesignDocument {
                 startFraction: intervalStart,
                 endFraction: intervalEnd
             )
+            let rebuiltIntervalStart = mapDeviationFraction(
+                intervalStart,
+                sourceStart: originalStartFraction,
+                sourceEnd: originalEndFraction,
+                targetStart: rebuiltStartFraction,
+                targetEnd: rebuiltEndFraction
+            )
+            let rebuiltIntervalEnd = mapDeviationFraction(
+                intervalEnd,
+                sourceStart: originalStartFraction,
+                sourceEnd: originalEndFraction,
+                targetStart: rebuiltStartFraction,
+                targetEnd: rebuiltEndFraction
+            )
             let rebuiltSegment = try cubicBezierSubcurve(
                 controlPoints: rebuiltControlPoints,
-                startFraction: intervalStart,
-                endFraction: intervalEnd
+                startFraction: rebuiltIntervalStart,
+                endFraction: rebuiltIntervalEnd
             )
             let intervalDeviation = analyticCubicBezierDeviation(
                 original: originalSegment,
@@ -52,42 +143,32 @@ extension DesignDocument {
                 globalStartFraction: intervalStart,
                 globalEndFraction: intervalEnd
             )
-            evaluatedIntervalCount += 1
-            criticalPointCount += intervalDeviation.criticalPointCount
-            squaredDistanceIntegral += intervalDeviation.squaredDistanceIntegral
-            if intervalDeviation.maximumSquaredDistance > maximumSquaredDistance {
-                maximumSquaredDistance = intervalDeviation.maximumSquaredDistance
-                maximumDistanceFraction = intervalDeviation.maximumDistanceFraction
-            }
+            components.merge(intervalDeviation)
         }
-        let rangeLength = endFraction - startFraction
-        let meanSquaredDistance = squaredDistanceIntegral / rangeLength
-        return SketchSplineRebuildDeviation(
-            maximumDistance: sqrt(max(0.0, maximumSquaredDistance)),
-            rootMeanSquareDistance: sqrt(max(0.0, meanSquaredDistance)),
-            maximumDistanceFraction: maximumDistanceFraction,
-            evaluatedIntervalCount: evaluatedIntervalCount,
-            criticalPointCount: criticalPointCount
-        )
+        return components
     }
 
     private func sketchSplineDeviationBoundaries(
-        startFraction: Double,
-        endFraction: Double,
+        originalStartFraction: Double,
+        originalEndFraction: Double,
+        rebuiltStartFraction: Double,
+        rebuiltEndFraction: Double,
         originalSegmentCount: Int,
         rebuiltSegmentCount: Int
     ) -> [Double] {
-        var boundaries = [startFraction, endFraction]
+        var boundaries = [originalStartFraction, originalEndFraction]
         appendSplineSegmentBoundaries(
             segmentCount: originalSegmentCount,
-            startFraction: startFraction,
-            endFraction: endFraction,
+            startFraction: originalStartFraction,
+            endFraction: originalEndFraction,
             to: &boundaries
         )
-        appendSplineSegmentBoundaries(
+        appendMappedSplineSegmentBoundaries(
             segmentCount: rebuiltSegmentCount,
-            startFraction: startFraction,
-            endFraction: endFraction,
+            sourceStartFraction: rebuiltStartFraction,
+            sourceEndFraction: rebuiltEndFraction,
+            targetStartFraction: originalStartFraction,
+            targetEndFraction: originalEndFraction,
             to: &boundaries
         )
         return sortedUniqueFractions(boundaries)
@@ -109,6 +190,47 @@ extension DesignDocument {
                 boundaries.append(boundary)
             }
         }
+    }
+
+    private func appendMappedSplineSegmentBoundaries(
+        segmentCount: Int,
+        sourceStartFraction: Double,
+        sourceEndFraction: Double,
+        targetStartFraction: Double,
+        targetEndFraction: Double,
+        to boundaries: inout [Double]
+    ) {
+        guard segmentCount > 1,
+              sourceEndFraction > sourceStartFraction,
+              targetEndFraction > targetStartFraction else {
+            return
+        }
+        for boundaryIndex in 1 ..< segmentCount {
+            let boundary = Double(boundaryIndex) / Double(segmentCount)
+            if boundary > sourceStartFraction + 1.0e-12,
+               boundary < sourceEndFraction - 1.0e-12 {
+                boundaries.append(
+                    mapDeviationFraction(
+                        boundary,
+                        sourceStart: sourceStartFraction,
+                        sourceEnd: sourceEndFraction,
+                        targetStart: targetStartFraction,
+                        targetEnd: targetEndFraction
+                    )
+                )
+            }
+        }
+    }
+
+    private func mapDeviationFraction(
+        _ fraction: Double,
+        sourceStart: Double,
+        sourceEnd: Double,
+        targetStart: Double,
+        targetEnd: Double
+    ) -> Double {
+        let localFraction = (fraction - sourceStart) / (sourceEnd - sourceStart)
+        return targetStart + (targetEnd - targetStart) * localFraction
     }
 
     private func sortedUniqueFractions(_ fractions: [Double]) -> [Double] {
@@ -462,4 +584,45 @@ extension DesignDocument {
         max(1.0e-24, (coefficients.map { abs($0) }.max() ?? 0.0) * 1.0e-12)
     }
 
+}
+
+private struct SketchSplineDeviationComponents {
+    var maximumSquaredDistance = 0.0
+    var maximumDistanceFraction = 0.0
+    var squaredDistanceIntegral = 0.0
+    var criticalPointCount = 0
+    var evaluatedIntervalCount = 0
+
+    mutating func merge(_ deviation: DesignDocument.AnalyticCubicBezierDeviation) {
+        evaluatedIntervalCount += 1
+        criticalPointCount += deviation.criticalPointCount
+        squaredDistanceIntegral += deviation.squaredDistanceIntegral
+        if deviation.maximumSquaredDistance > maximumSquaredDistance {
+            maximumSquaredDistance = deviation.maximumSquaredDistance
+            maximumDistanceFraction = deviation.maximumDistanceFraction
+        }
+    }
+
+    mutating func merge(_ components: SketchSplineDeviationComponents) {
+        evaluatedIntervalCount += components.evaluatedIntervalCount
+        criticalPointCount += components.criticalPointCount
+        squaredDistanceIntegral += components.squaredDistanceIntegral
+        if components.maximumSquaredDistance > maximumSquaredDistance {
+            maximumSquaredDistance = components.maximumSquaredDistance
+            maximumDistanceFraction = components.maximumDistanceFraction
+        }
+    }
+
+    func result(rangeLength: Double) -> DesignDocument.SketchSplineRebuildDeviation {
+        let meanSquaredDistance = rangeLength > 0.0
+            ? squaredDistanceIntegral / rangeLength
+            : 0.0
+        return DesignDocument.SketchSplineRebuildDeviation(
+            maximumDistance: sqrt(max(0.0, maximumSquaredDistance)),
+            rootMeanSquareDistance: sqrt(max(0.0, meanSquaredDistance)),
+            maximumDistanceFraction: maximumDistanceFraction,
+            evaluatedIntervalCount: evaluatedIntervalCount,
+            criticalPointCount: criticalPointCount
+        )
+    }
 }

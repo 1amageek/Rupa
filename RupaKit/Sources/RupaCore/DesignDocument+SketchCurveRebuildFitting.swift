@@ -245,8 +245,7 @@ extension DesignDocument {
         let deviation = try sketchSplineDeviation(
             originalControlPoints: originalControlPoints,
             rebuiltControlPoints: rebuiltControlPointValues,
-            startFraction: 0.0,
-            endFraction: 1.0
+            intervals: intervals
         )
         return RebuiltSketchSpline(
             spline: rebuiltSpline,
@@ -447,8 +446,10 @@ extension DesignDocument {
         try sketchSplineDeviation(
             originalControlPoints: originalControlPoints,
             rebuiltControlPoints: rebuiltControlPoints,
-            startFraction: startFraction,
-            endFraction: endFraction
+            originalStartFraction: startFraction,
+            originalEndFraction: endFraction,
+            rebuiltStartFraction: 0.0,
+            rebuiltEndFraction: 1.0
         ).maximumDistance
     }
 

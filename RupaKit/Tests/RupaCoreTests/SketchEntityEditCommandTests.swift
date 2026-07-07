@@ -5250,6 +5250,57 @@ import Testing
 }
 
 @MainActor
+@Test func rebuildSketchCurveRefitKeepsCornersMeasuresIntervalDeviationInLocalDomain() async throws {
+    let session = EditorSession()
+    _ = try session.execute(
+        .createSplineSketch(
+            name: "Refit Local Domain Corner Spline",
+            plane: .xy,
+            spline: SketchSpline(controlPoints: [
+                sketchTestPoint(x: 0.0, y: 0.0),
+                sketchTestPoint(x: 1.0 / 3.0, y: 0.0),
+                sketchTestPoint(x: 2.0 / 3.0, y: 0.0),
+                sketchTestPoint(x: 1.0, y: 0.0),
+                sketchTestPoint(x: 4.0 / 3.0, y: 0.0),
+                sketchTestPoint(x: 5.0 / 3.0, y: 0.0),
+                sketchTestPoint(x: 2.0, y: 0.0),
+                sketchTestPoint(x: 2.0, y: 1.0 / 3.0),
+                sketchTestPoint(x: 2.0, y: 2.0 / 3.0),
+                sketchTestPoint(x: 2.0, y: 1.0),
+                sketchTestPoint(x: 2.0, y: 4.0 / 3.0),
+                sketchTestPoint(x: 2.0, y: 5.0 / 3.0),
+                sketchTestPoint(x: 2.0, y: 2.0),
+            ])
+        )
+    )
+    let before = try SketchEntitySummaryService().summarize(document: session.document)
+    let spline = try #require(before.entries.first { $0.entityKind == "spline" })
+    let target = try #require(spline.selectionTarget())
+
+    let result = try session.execute(
+        .rebuildSketchCurve(
+            target: target,
+            options: .refit(
+                tolerance: .length(0.001, .millimeter),
+                keepsCorners: true
+            )
+        )
+    )
+
+    let after = try SketchEntitySummaryService().summarize(document: session.document)
+    let rebuilt = try #require(after.entries.first { $0.entityID == spline.entityID })
+    let report = try #require(result.curveRebuildReport)
+    #expect(result.commandName == "rebuildSketchCurve")
+    #expect(result.didMutate)
+    #expect(rebuilt.controlPoints.count == 7)
+    #expect(report.originalSpanCount == 4)
+    #expect(report.rebuiltSpanCount == 2)
+    #expect(report.maximumDeviationMeters <= 1.0e-9)
+    #expect(report.maximumDeviationFraction >= 0.0 && report.maximumDeviationFraction <= 1.0)
+    #expect(session.evaluationStatus == .valid)
+}
+
+@MainActor
 @Test func rebuildSketchCurveExplicitControlUsesRequestedSpansAndWeight() async throws {
     let session = EditorSession()
     _ = try session.execute(
