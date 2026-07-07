@@ -491,8 +491,6 @@ extension DesignDocument {
         try requireBodyFeature(featureID, owner: owner)
     }
 
-    @discardableResult
-
     /// Nests the consumed profile sketch scene node under the body scene node
     /// and hides it, so combined primitives (box, cylinder) read as one object
     /// in the browser and viewport while the parametric sketch source remains
