@@ -722,7 +722,11 @@ struct ViewportObjectEditState: Equatable {
     }
 
     private func normalizedRotationDelta(from startAngle: CGFloat, to currentAngle: CGFloat) -> CGFloat {
-        var delta = startAngle - currentAngle
+        // The rotation must follow the cursor: the delta from start to current
+        // is current - start. The previous start - current applied the
+        // opposite rotation, so dragging the rotation affordance spun the
+        // object against the cursor direction.
+        var delta = currentAngle - startAngle
         while delta > .pi {
             delta -= .pi * 2.0
         }
