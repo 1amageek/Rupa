@@ -51,33 +51,7 @@ public struct Viewport: View {
     @State private var dragPreviewDocument: DesignDocument?
     @State private var dragPreviewRevision: UInt64 = 0
     @State private var hoveredInteractionTarget: ViewportInteractionTarget?
-    @State private var pendingAffordance: ViewportAffordanceTarget?
-    @State private var pendingSketchCurveHandle: ViewportSketchCurveHandleTarget?
-    @State private var pendingSketchDimension: ViewportSketchDimensionTarget?
-    @State private var pendingSketchPointHandle: ViewportSketchPointHandleTarget?
-    @State private var pendingBridgeCurveEndpointHandle: ViewportBridgeCurveEndpointHandleTarget?
-    @State private var pendingSplineControlPoint: ViewportSplineControlPointHandleTarget?
-    @State private var pendingSplineControlPointSlideHandle: ViewportSplineControlPointSlideHandleTarget?
-    @State private var pendingPolySplineSurfaceVertex: ViewportPolySplineSurfaceVertexHandleTarget?
-    @State private var pendingSurfaceControlPoint: ViewportSurfaceControlPointHandleTarget?
-    @State private var pendingSurfaceTrimEndpoint: ViewportSurfaceTrimEndpointHandleTarget?
-    @State private var pendingSurfaceTrimControlPoint: ViewportSurfaceTrimControlPointHandleTarget?
-    @State private var pendingPolySplineSurfaceVertexSlideHandle: ViewportPolySplineSurfaceVertexSlideHandleTarget?
-    @State private var pendingSurfaceControlPointSlideHandle: ViewportSurfaceControlPointSlideHandleTarget?
-    @State private var pendingSurfaceFrameHandle: ViewportSurfaceFrameHandleTarget?
-    @State private var pendingRegionOffsetHandle: ViewportRegionOffsetHandleTarget?
-    @State private var pendingEdgeOffsetHandle: ViewportEdgeOffsetHandleTarget?
-    @State private var pendingSlotWidthHandle: ViewportSlotWidthHandleTarget?
-    @State private var pendingSketchVertexOffsetHandle: ViewportSketchVertexOffsetHandleTarget?
-    @State private var pendingPatternArrayLinearAxisHandle: ViewportPatternArrayLinearAxisHandleTarget?
-    @State private var pendingIndependentCopyExtrudeDistanceHandle: ViewportIndependentCopyExtrudeDistanceHandleTarget?
-    @State private var pendingIndependentCopyBodyDimensionHandle: ViewportIndependentCopyBodyDimensionHandleTarget?
-    @State private var pendingPatternArrayRadialAngleHandle: ViewportPatternArrayRadialAngleHandleTarget?
-    @State private var pendingPatternArrayCopyCountHandle: ViewportPatternArrayCopyCountHandleTarget?
-    @State private var pendingPatternArrayCurveExtentHandle: ViewportPatternArrayCurveExtentHandleTarget?
-    @State private var pendingPatternArrayCurvePathPointHandle: ViewportPatternArrayCurvePathPointHandleTarget?
-    @State private var pendingPatternArrayOutputModeHandle: ViewportPatternArrayOutputModeHandleTarget?
-    @State private var pendingConstructionPlaneHandle: ViewportConstructionPlaneHandleTarget?
+    @State private var pendingInteractionTarget: ViewportInteractionTarget?
     @State private var orbitBasis: ViewportProjectionBasis?
     @State private var projectionTransition: ViewportProjectionTransition?
     @State private var modifierFlags: ViewportInputModifierFlags = ViewportInputModifierFlags()
@@ -9591,315 +9565,21 @@ public struct Viewport: View {
             publishSelectionDragPreview(hits: [])
             return
         }
-        if let start, let current, let pendingSketchCurveHandle {
-            updateSketchCurveHandleDrag(
-                target: pendingSketchCurveHandle,
-                start: start,
-                current: current,
-                size: size
-            )
-            return
-        }
-        if activeSketchCurveHandleDrag != nil {
-            return
-        }
-        if let start, let current, let pendingSketchDimension {
-            updateSketchDimensionDrag(
-                target: pendingSketchDimension,
-                start: start,
-                current: current,
-                size: size
-            )
-            return
-        }
-        if activeSketchDimensionDrag != nil {
-            return
-        }
-        if let start, let current, let pendingSketchPointHandle {
-            updateSketchPointHandleDrag(
-                target: pendingSketchPointHandle,
-                start: start,
-                current: current,
-                size: size
-            )
-            return
-        }
-        if activeSketchPointHandleDrag != nil {
-            return
-        }
-        if let start, let current, let pendingBridgeCurveEndpointHandle {
-            updateBridgeCurveEndpointDrag(
-                target: pendingBridgeCurveEndpointHandle,
-                start: start,
-                current: current,
-                size: size
-            )
-            return
-        }
-        if activeBridgeCurveEndpointDrag != nil {
-            return
-        }
-        if let start, let current, let pendingSplineControlPointSlideHandle {
-            updateSplineControlPointSlideDrag(
-                target: pendingSplineControlPointSlideHandle,
-                start: start,
-                current: current,
-                size: size
-            )
-            return
-        }
-        if activeSplineControlPointSlideDrag != nil {
-            return
-        }
-        if let start, let current, let pendingPolySplineSurfaceVertexSlideHandle {
-            updatePolySplineSurfaceVertexSlideDrag(
-                target: pendingPolySplineSurfaceVertexSlideHandle,
-                start: start,
-                current: current,
-                size: size
-            )
-            return
-        }
-        if activePolySplineSurfaceVertexSlideDrag != nil {
-            return
-        }
-        if let start, let current, let pendingSurfaceControlPointSlideHandle {
-            updateSurfaceControlPointSlideDrag(
-                target: pendingSurfaceControlPointSlideHandle,
-                start: start,
-                current: current,
-                size: size
-            )
-            return
-        }
-        if activeSurfaceControlPointSlideDrag != nil {
-            return
-        }
-        if let start, let current, let pendingSurfaceFrameHandle {
-            updateSurfaceFrameDrag(
-                target: pendingSurfaceFrameHandle,
-                start: start,
-                current: current,
-                size: size
-            )
-            return
-        }
-        if activeSurfaceFrameDrag != nil {
-            return
-        }
-        if let start, let current, let pendingSplineControlPoint {
-            updateSplineControlPointDrag(
-                target: pendingSplineControlPoint,
-                start: start,
-                current: current,
-                size: size
-            )
-            return
-        }
-        if activeSplineControlPointDrag != nil {
-            return
-        }
-        if let start, let current, let pendingPolySplineSurfaceVertex {
-            updatePolySplineSurfaceVertexDrag(
-                target: pendingPolySplineSurfaceVertex,
-                start: start,
-                current: current,
-                size: size
-            )
-            return
-        }
-        if activePolySplineSurfaceVertexDrag != nil {
-            return
-        }
-        if let start, let current, let pendingSurfaceControlPoint {
-            updateSurfaceControlPointDrag(
-                target: pendingSurfaceControlPoint,
-                start: start,
-                current: current,
-                size: size
-            )
-            return
-        }
-        if activeSurfaceControlPointDrag != nil {
-            return
-        }
-        if let start, let current, let pendingSurfaceTrimEndpoint {
-            updateSurfaceTrimEndpointDrag(
-                target: pendingSurfaceTrimEndpoint,
-                start: start,
-                current: current,
-                size: size
-            )
-            return
-        }
-        if activeSurfaceTrimEndpointDrag != nil {
-            return
-        }
-        if let start, let current, let pendingSurfaceTrimControlPoint {
-            updateSurfaceTrimControlPointDrag(
-                target: pendingSurfaceTrimControlPoint,
-                start: start,
-                current: current,
-                size: size
-            )
-            return
-        }
-        if activeSurfaceTrimControlPointDrag != nil {
-            return
-        }
-        if let start, let current, let pendingEdgeOffsetHandle {
-            updateEdgeOffsetDrag(
-                target: pendingEdgeOffsetHandle,
-                start: start,
-                current: current,
-                size: size
-            )
-            return
-        }
-        if activeEdgeOffsetDrag != nil {
-            return
-        }
-        if let start, let current, let pendingSlotWidthHandle {
-            updateSlotWidthDrag(
-                target: pendingSlotWidthHandle,
-                start: start,
-                current: current,
-                size: size
-            )
-            return
-        }
-        if activeSlotWidthDrag != nil {
-            return
-        }
-        if let start, let current, let pendingIndependentCopyExtrudeDistanceHandle {
-            updateIndependentCopyExtrudeDistanceDrag(
-                target: pendingIndependentCopyExtrudeDistanceHandle,
-                start: start,
-                current: current
-            )
-            return
-        }
-        if activeIndependentCopyExtrudeDistanceDrag != nil {
-            return
-        }
-        if let start, let current, let pendingIndependentCopyBodyDimensionHandle {
-            updateIndependentCopyBodyDimensionDrag(
-                target: pendingIndependentCopyBodyDimensionHandle,
-                start: start,
-                current: current
-            )
-            return
-        }
-        if activeIndependentCopyBodyDimensionDrag != nil {
-            return
-        }
-        if let start, let current, let pendingPatternArrayLinearAxisHandle {
-            updatePatternArrayLinearAxisDrag(
-                target: pendingPatternArrayLinearAxisHandle,
-                start: start,
-                current: current
-            )
-            return
-        }
-        if activePatternArrayLinearAxisDrag != nil {
-            return
-        }
-        if let start, let current, let pendingPatternArrayRadialAngleHandle {
-            updatePatternArrayRadialAngleDrag(
-                target: pendingPatternArrayRadialAngleHandle,
-                start: start,
-                current: current
-            )
-            return
-        }
-        if activePatternArrayRadialAngleDrag != nil {
-            return
-        }
-        if let start, let current, let pendingPatternArrayCopyCountHandle {
-            updatePatternArrayCopyCountDrag(
-                target: pendingPatternArrayCopyCountHandle,
-                start: start,
-                current: current
-            )
-            return
-        }
-        if activePatternArrayCopyCountDrag != nil {
-            return
-        }
-        if let start, let current, let pendingPatternArrayCurveExtentHandle {
-            updatePatternArrayCurveExtentDrag(
-                target: pendingPatternArrayCurveExtentHandle,
-                start: start,
-                current: current
-            )
-            return
-        }
-        if activePatternArrayCurveExtentDrag != nil {
-            return
-        }
-        if let start, let current, let pendingPatternArrayCurvePathPointHandle {
-            updatePatternArrayCurvePathPointDrag(
-                target: pendingPatternArrayCurvePathPointHandle,
-                start: start,
-                current: current,
-                size: size
-            )
-            return
-        }
-        if activePatternArrayCurvePathPointDrag != nil {
-            return
-        }
-        if let start, let current, let pendingConstructionPlaneHandle {
-            updateConstructionPlaneHandleDrag(
-                target: pendingConstructionPlaneHandle,
-                start: start,
-                current: current,
-                size: size
-            )
-            return
-        }
-        if activeConstructionPlaneHandleDrag != nil {
-            return
-        }
-        if let start, let current, let pendingSketchVertexOffsetHandle {
-            updateSketchVertexOffsetDrag(
-                target: pendingSketchVertexOffsetHandle,
-                start: start,
-                current: current,
-                size: size
-            )
-            return
-        }
-        if activeSketchVertexOffsetDrag != nil {
-            return
-        }
-        if let start, let current, let pendingRegionOffsetHandle {
-            updateRegionOffsetDrag(
-                target: pendingRegionOffsetHandle,
-                start: start,
-                current: current,
-                size: size
-            )
-            return
-        }
-        if activeRegionOffsetDrag != nil {
-            return
-        }
-        if let start, let current, let pendingAffordance {
-            updateAffordanceDrag(
-                target: pendingAffordance,
-                start: start,
-                current: current,
-                size: size
-            )
-            return
-        }
-        if activeAffordanceDrag != nil {
-            return
-        }
         guard let start, let current else {
             activeCanvasDrag = nil
             publishSelectionDragPreview(hits: [])
+            return
+        }
+        if let pendingInteractionTarget {
+            updatePendingInteractionDrag(
+                pendingInteractionTarget,
+                start: start,
+                current: current,
+                size: size
+            )
+            return
+        }
+        if hasActiveInteractionDrag {
             return
         }
 
@@ -9936,33 +9616,7 @@ public struct Viewport: View {
     }
 
     private func clearPendingCanvasInteractionTargets() {
-        pendingAffordance = nil
-        pendingSketchCurveHandle = nil
-        pendingSketchDimension = nil
-        pendingSketchPointHandle = nil
-        pendingBridgeCurveEndpointHandle = nil
-        pendingSplineControlPoint = nil
-        pendingSplineControlPointSlideHandle = nil
-        pendingPolySplineSurfaceVertex = nil
-        pendingSurfaceControlPoint = nil
-        pendingSurfaceTrimEndpoint = nil
-        pendingSurfaceTrimControlPoint = nil
-        pendingPolySplineSurfaceVertexSlideHandle = nil
-        pendingSurfaceControlPointSlideHandle = nil
-        pendingSurfaceFrameHandle = nil
-        pendingRegionOffsetHandle = nil
-        pendingEdgeOffsetHandle = nil
-        pendingSlotWidthHandle = nil
-        pendingSketchVertexOffsetHandle = nil
-        pendingPatternArrayLinearAxisHandle = nil
-        pendingIndependentCopyExtrudeDistanceHandle = nil
-        pendingIndependentCopyBodyDimensionHandle = nil
-        pendingPatternArrayRadialAngleHandle = nil
-        pendingPatternArrayCopyCountHandle = nil
-        pendingPatternArrayCurveExtentHandle = nil
-        pendingPatternArrayCurvePathPointHandle = nil
-        pendingPatternArrayOutputModeHandle = nil
-        pendingConstructionPlaneHandle = nil
+        pendingInteractionTarget = nil
         clearDragPreviewDocument()
         clearAffordanceGhostEdits()
         activeAffordanceDrag = nil
@@ -10136,61 +9790,99 @@ public struct Viewport: View {
     }
 
     private func setPendingInteractionTarget(_ target: ViewportInteractionTarget) {
+        pendingInteractionTarget = target
+    }
+
+    private var hasActiveInteractionDrag: Bool {
+        activeAffordanceDrag != nil
+            || activeSketchCurveHandleDrag != nil
+            || activeSketchDimensionDrag != nil
+            || activeSketchPointHandleDrag != nil
+            || activeBridgeCurveEndpointDrag != nil
+            || activeSplineControlPointDrag != nil
+            || activeSplineControlPointSlideDrag != nil
+            || activePolySplineSurfaceVertexDrag != nil
+            || activeSurfaceControlPointDrag != nil
+            || activeSurfaceTrimEndpointDrag != nil
+            || activeSurfaceTrimControlPointDrag != nil
+            || activePolySplineSurfaceVertexSlideDrag != nil
+            || activeSurfaceControlPointSlideDrag != nil
+            || activeSurfaceFrameDrag != nil
+            || activeRegionOffsetDrag != nil
+            || activeEdgeOffsetDrag != nil
+            || activeSlotWidthDrag != nil
+            || activeSketchVertexOffsetDrag != nil
+            || activePatternArrayLinearAxisDrag != nil
+            || activeIndependentCopyExtrudeDistanceDrag != nil
+            || activeIndependentCopyBodyDimensionDrag != nil
+            || activePatternArrayRadialAngleDrag != nil
+            || activePatternArrayCopyCountDrag != nil
+            || activePatternArrayCurveExtentDrag != nil
+            || activePatternArrayCurvePathPointDrag != nil
+            || activeConstructionPlaneHandleDrag != nil
+    }
+
+    private func updatePendingInteractionDrag(
+        _ target: ViewportInteractionTarget,
+        start: CGPoint,
+        current: CGPoint,
+        size: CGSize
+    ) {
         switch target {
         case .sketchCurveHandle(let target):
-            pendingSketchCurveHandle = target
+            updateSketchCurveHandleDrag(target: target, start: start, current: current, size: size)
         case .sketchDimension(let target):
-            pendingSketchDimension = target
+            updateSketchDimensionDrag(target: target, start: start, current: current, size: size)
         case .sketchPointHandle(let target):
-            pendingSketchPointHandle = target
+            updateSketchPointHandleDrag(target: target, start: start, current: current, size: size)
         case .bridgeCurveEndpoint(let target):
-            pendingBridgeCurveEndpointHandle = target
+            updateBridgeCurveEndpointDrag(target: target, start: start, current: current, size: size)
         case .splineControlPoint(let target):
-            pendingSplineControlPoint = target
+            updateSplineControlPointDrag(target: target, start: start, current: current, size: size)
         case .splineControlPointSlide(let target):
-            pendingSplineControlPointSlideHandle = target
+            updateSplineControlPointSlideDrag(target: target, start: start, current: current, size: size)
         case .polySplineSurfaceVertex(let target):
-            pendingPolySplineSurfaceVertex = target
+            updatePolySplineSurfaceVertexDrag(target: target, start: start, current: current, size: size)
         case .polySplineSurfaceVertexSlide(let target):
-            pendingPolySplineSurfaceVertexSlideHandle = target
+            updatePolySplineSurfaceVertexSlideDrag(target: target, start: start, current: current, size: size)
         case .surfaceControlPoint(let target):
-            pendingSurfaceControlPoint = target
+            updateSurfaceControlPointDrag(target: target, start: start, current: current, size: size)
         case .surfaceControlPointSlide(let target):
-            pendingSurfaceControlPointSlideHandle = target
+            updateSurfaceControlPointSlideDrag(target: target, start: start, current: current, size: size)
         case .surfaceTrimEndpoint(let target):
-            pendingSurfaceTrimEndpoint = target
+            updateSurfaceTrimEndpointDrag(target: target, start: start, current: current, size: size)
         case .surfaceTrimControlPoint(let target):
-            pendingSurfaceTrimControlPoint = target
+            updateSurfaceTrimControlPointDrag(target: target, start: start, current: current, size: size)
         case .surfaceFrame(let target):
-            pendingSurfaceFrameHandle = target
+            updateSurfaceFrameDrag(target: target, start: start, current: current, size: size)
         case .regionOffset(let target):
-            pendingRegionOffsetHandle = target
+            updateRegionOffsetDrag(target: target, start: start, current: current, size: size)
         case .edgeOffset(let target):
-            pendingEdgeOffsetHandle = target
+            updateEdgeOffsetDrag(target: target, start: start, current: current, size: size)
         case .slotWidth(let target):
-            pendingSlotWidthHandle = target
+            updateSlotWidthDrag(target: target, start: start, current: current, size: size)
         case .sketchVertexOffset(let target):
-            pendingSketchVertexOffsetHandle = target
+            updateSketchVertexOffsetDrag(target: target, start: start, current: current, size: size)
         case .patternArrayLinearAxis(let target):
-            pendingPatternArrayLinearAxisHandle = target
+            updatePatternArrayLinearAxisDrag(target: target, start: start, current: current)
         case .independentCopyExtrudeDistance(let target):
-            pendingIndependentCopyExtrudeDistanceHandle = target
+            updateIndependentCopyExtrudeDistanceDrag(target: target, start: start, current: current)
         case .independentCopyBodyDimension(let target):
-            pendingIndependentCopyBodyDimensionHandle = target
+            updateIndependentCopyBodyDimensionDrag(target: target, start: start, current: current)
         case .patternArrayRadialAngle(let target):
-            pendingPatternArrayRadialAngleHandle = target
+            updatePatternArrayRadialAngleDrag(target: target, start: start, current: current)
         case .patternArrayCopyCount(let target):
-            pendingPatternArrayCopyCountHandle = target
+            updatePatternArrayCopyCountDrag(target: target, start: start, current: current)
         case .patternArrayCurveExtent(let target):
-            pendingPatternArrayCurveExtentHandle = target
+            updatePatternArrayCurveExtentDrag(target: target, start: start, current: current)
         case .patternArrayCurvePathPoint(let target):
-            pendingPatternArrayCurvePathPointHandle = target
-        case .patternArrayOutputMode(let target):
-            pendingPatternArrayOutputModeHandle = target
+            updatePatternArrayCurvePathPointDrag(target: target, start: start, current: current, size: size)
+        case .patternArrayOutputMode:
+            break
         case .constructionPlane(let target):
-            pendingConstructionPlaneHandle = target
+            updateConstructionPlaneHandleDrag(target: target, start: start, current: current, size: size)
         case .affordance(let target):
-            pendingAffordance = target
+            updateAffordanceDrag(target: target, start: start, current: current, size: size)
         }
     }
 
@@ -12779,138 +12471,8 @@ public struct Viewport: View {
         size: CGSize,
         selectionIntent: ViewportSelectionIntent
     ) {
-        if pendingSketchCurveHandle != nil {
-            pendingSketchCurveHandle = nil
-            activeSketchCurveHandleDrag = nil
-            return
-        }
-        if pendingSketchDimension != nil {
-            pendingSketchDimension = nil
-            activeSketchDimensionDrag = nil
-            return
-        }
-        if pendingSketchPointHandle != nil {
-            pendingSketchPointHandle = nil
-            activeSketchPointHandleDrag = nil
-            return
-        }
-        if pendingBridgeCurveEndpointHandle != nil {
-            pendingBridgeCurveEndpointHandle = nil
-            activeBridgeCurveEndpointDrag = nil
-            activeCanvasDrag = nil
-            return
-        }
-        if pendingSplineControlPointSlideHandle != nil {
-            pendingSplineControlPointSlideHandle = nil
-            activeSplineControlPointSlideDrag = nil
-            return
-        }
-        if pendingPolySplineSurfaceVertexSlideHandle != nil {
-            pendingPolySplineSurfaceVertexSlideHandle = nil
-            activePolySplineSurfaceVertexSlideDrag = nil
-            return
-        }
-        if pendingSurfaceControlPointSlideHandle != nil {
-            pendingSurfaceControlPointSlideHandle = nil
-            activeSurfaceControlPointSlideDrag = nil
-            return
-        }
-        if pendingSurfaceFrameHandle != nil {
-            pendingSurfaceFrameHandle = nil
-            activeSurfaceFrameDrag = nil
-            return
-        }
-        if pendingSplineControlPoint != nil {
-            pendingSplineControlPoint = nil
-            activeSplineControlPointDrag = nil
-            return
-        }
-        if pendingPolySplineSurfaceVertex != nil {
-            pendingPolySplineSurfaceVertex = nil
-            activePolySplineSurfaceVertexDrag = nil
-            return
-        }
-        if pendingSurfaceControlPoint != nil {
-            pendingSurfaceControlPoint = nil
-            activeSurfaceControlPointDrag = nil
-            return
-        }
-        if pendingSurfaceTrimEndpoint != nil {
-            pendingSurfaceTrimEndpoint = nil
-            activeSurfaceTrimEndpointDrag = nil
-            return
-        }
-        if pendingSurfaceTrimControlPoint != nil {
-            pendingSurfaceTrimControlPoint = nil
-            activeSurfaceTrimControlPointDrag = nil
-            return
-        }
-        if pendingEdgeOffsetHandle != nil {
-            pendingEdgeOffsetHandle = nil
-            activeEdgeOffsetDrag = nil
-            return
-        }
-        if pendingRegionOffsetHandle != nil {
-            pendingRegionOffsetHandle = nil
-            activeRegionOffsetDrag = nil
-            return
-        }
-        if pendingSketchVertexOffsetHandle != nil {
-            pendingSketchVertexOffsetHandle = nil
-            activeSketchVertexOffsetDrag = nil
-            return
-        }
-        if pendingIndependentCopyExtrudeDistanceHandle != nil {
-            pendingIndependentCopyExtrudeDistanceHandle = nil
-            activeIndependentCopyExtrudeDistanceDrag = nil
-            return
-        }
-        if pendingIndependentCopyBodyDimensionHandle != nil {
-            pendingIndependentCopyBodyDimensionHandle = nil
-            activeIndependentCopyBodyDimensionDrag = nil
-            return
-        }
-        if pendingPatternArrayLinearAxisHandle != nil {
-            pendingPatternArrayLinearAxisHandle = nil
-            activePatternArrayLinearAxisDrag = nil
-            return
-        }
-        if pendingPatternArrayRadialAngleHandle != nil {
-            pendingPatternArrayRadialAngleHandle = nil
-            activePatternArrayRadialAngleDrag = nil
-            return
-        }
-        if pendingPatternArrayCopyCountHandle != nil {
-            pendingPatternArrayCopyCountHandle = nil
-            activePatternArrayCopyCountDrag = nil
-            return
-        }
-        if pendingPatternArrayCurveExtentHandle != nil {
-            pendingPatternArrayCurveExtentHandle = nil
-            activePatternArrayCurveExtentDrag = nil
-            return
-        }
-        if pendingPatternArrayCurvePathPointHandle != nil {
-            pendingPatternArrayCurvePathPointHandle = nil
-            activePatternArrayCurvePathPointDrag = nil
-            return
-        }
-        if let pendingPatternArrayOutputModeHandle {
-            self.pendingPatternArrayOutputModeHandle = nil
-            activeCanvasDrag = nil
-            onPatternArrayOutputModeChange?(pendingPatternArrayOutputModeHandle.commitTarget)
-            return
-        }
-        if pendingConstructionPlaneHandle != nil {
-            pendingConstructionPlaneHandle = nil
-            activeConstructionPlaneHandleDrag = nil
-            activeCanvasDrag = nil
-            return
-        }
-        if pendingAffordance != nil {
-            pendingAffordance = nil
-            clearAffordanceGhostEdits()
-            activeAffordanceDrag = nil
+        if let pendingInteractionTarget {
+            finishPendingInteractionClick(pendingInteractionTarget)
             return
         }
         guard let onPick else {
@@ -12959,304 +12521,81 @@ public struct Viewport: View {
         )
     }
 
+    private func finishPendingInteractionClick(_ target: ViewportInteractionTarget) {
+        pendingInteractionTarget = nil
+        switch target {
+        case .sketchCurveHandle:
+            activeSketchCurveHandleDrag = nil
+        case .sketchDimension:
+            activeSketchDimensionDrag = nil
+        case .sketchPointHandle:
+            activeSketchPointHandleDrag = nil
+        case .bridgeCurveEndpoint:
+            activeBridgeCurveEndpointDrag = nil
+            activeCanvasDrag = nil
+        case .splineControlPoint:
+            activeSplineControlPointDrag = nil
+        case .splineControlPointSlide:
+            activeSplineControlPointSlideDrag = nil
+        case .polySplineSurfaceVertex:
+            activePolySplineSurfaceVertexDrag = nil
+        case .polySplineSurfaceVertexSlide:
+            activePolySplineSurfaceVertexSlideDrag = nil
+        case .surfaceControlPoint:
+            activeSurfaceControlPointDrag = nil
+        case .surfaceControlPointSlide:
+            activeSurfaceControlPointSlideDrag = nil
+        case .surfaceTrimEndpoint:
+            activeSurfaceTrimEndpointDrag = nil
+        case .surfaceTrimControlPoint:
+            activeSurfaceTrimControlPointDrag = nil
+        case .surfaceFrame:
+            activeSurfaceFrameDrag = nil
+        case .regionOffset:
+            activeRegionOffsetDrag = nil
+        case .edgeOffset:
+            activeEdgeOffsetDrag = nil
+        case .slotWidth:
+            activeSlotWidthDrag = nil
+        case .sketchVertexOffset:
+            activeSketchVertexOffsetDrag = nil
+        case .patternArrayLinearAxis:
+            activePatternArrayLinearAxisDrag = nil
+        case .independentCopyExtrudeDistance:
+            activeIndependentCopyExtrudeDistanceDrag = nil
+        case .independentCopyBodyDimension:
+            activeIndependentCopyBodyDimensionDrag = nil
+        case .patternArrayRadialAngle:
+            activePatternArrayRadialAngleDrag = nil
+        case .patternArrayCopyCount:
+            activePatternArrayCopyCountDrag = nil
+        case .patternArrayCurveExtent:
+            activePatternArrayCurveExtentDrag = nil
+        case .patternArrayCurvePathPoint:
+            activePatternArrayCurvePathPointDrag = nil
+        case .patternArrayOutputMode(let target):
+            activeCanvasDrag = nil
+            onPatternArrayOutputModeChange?(target.commitTarget)
+        case .constructionPlane:
+            activeConstructionPlaneHandleDrag = nil
+            activeCanvasDrag = nil
+        case .affordance:
+            clearAffordanceGhostEdits()
+            activeAffordanceDrag = nil
+        }
+    }
+
     private func handleCanvasDrag(
         from start: CGPoint,
         to end: CGPoint,
         size: CGSize,
         selectionIntent: ViewportSelectionIntent
     ) {
-        if pendingSketchCurveHandle != nil || activeSketchCurveHandleDrag != nil {
-            let sketchCurveHandleDragTarget = committedSketchCurveHandleDragTarget()
-            pendingSketchCurveHandle = nil
-            activeSketchCurveHandleDrag = nil
-            activeCanvasDrag = nil
-            if let sketchCurveHandleDragTarget {
-                onSketchCurveHandleDrag?(sketchCurveHandleDragTarget)
-            }
+        if let pendingInteractionTarget {
+            finishPendingInteractionDrag(pendingInteractionTarget, end: end, size: size)
             return
         }
-        if pendingSketchDimension != nil || activeSketchDimensionDrag != nil {
-            let sketchDimensionDragTarget = committedSketchDimensionDragTarget()
-            pendingSketchDimension = nil
-            activeSketchDimensionDrag = nil
-            activeCanvasDrag = nil
-            if let sketchDimensionDragTarget {
-                onSketchDimensionDrag?(sketchDimensionDragTarget)
-            }
-            return
-        }
-        if pendingSketchPointHandle != nil || activeSketchPointHandleDrag != nil {
-            let sketchPointHandleDragTarget = committedSketchPointHandleDragTarget()
-            pendingSketchPointHandle = nil
-            activeSketchPointHandleDrag = nil
-            activeCanvasDrag = nil
-            if let sketchPointHandleDragTarget {
-                onSketchPointHandleDrag?(sketchPointHandleDragTarget)
-            }
-            return
-        }
-        if pendingBridgeCurveEndpointHandle != nil || activeBridgeCurveEndpointDrag != nil {
-            let bridgeCurveEndpointDragTarget = committedBridgeCurveEndpointDragTarget()
-            pendingBridgeCurveEndpointHandle = nil
-            activeBridgeCurveEndpointDrag = nil
-            activeCanvasDrag = nil
-            publishSelectionDragPreview(hits: [])
-            if let bridgeCurveEndpointDragTarget {
-                onBridgeCurveEndpointDrag?(bridgeCurveEndpointDragTarget)
-            }
-            return
-        }
-        if pendingSplineControlPointSlideHandle != nil || activeSplineControlPointSlideDrag != nil {
-            let splineControlPointSlideDragTarget = committedSplineControlPointSlideDragTarget()
-            pendingSplineControlPointSlideHandle = nil
-            activeSplineControlPointSlideDrag = nil
-            activeCanvasDrag = nil
-            if let splineControlPointSlideDragTarget {
-                onSplineControlPointSlideDrag?(splineControlPointSlideDragTarget)
-            }
-            return
-        }
-        if pendingPolySplineSurfaceVertexSlideHandle != nil || activePolySplineSurfaceVertexSlideDrag != nil {
-            let polySplineSurfaceVertexSlideDragTarget = committedPolySplineSurfaceVertexSlideDragTarget()
-            pendingPolySplineSurfaceVertexSlideHandle = nil
-            activePolySplineSurfaceVertexSlideDrag = nil
-            activeCanvasDrag = nil
-            if let polySplineSurfaceVertexSlideDragTarget {
-                onPolySplineSurfaceVertexSlideDrag?(polySplineSurfaceVertexSlideDragTarget)
-            }
-            return
-        }
-        if pendingSurfaceControlPointSlideHandle != nil || activeSurfaceControlPointSlideDrag != nil {
-            let surfaceControlPointSlideDragTarget = committedSurfaceControlPointSlideDragTarget()
-            pendingSurfaceControlPointSlideHandle = nil
-            activeSurfaceControlPointSlideDrag = nil
-            activeCanvasDrag = nil
-            if let surfaceControlPointSlideDragTarget {
-                onSurfaceControlPointSlideDrag?(surfaceControlPointSlideDragTarget)
-            }
-            return
-        }
-        if pendingSurfaceFrameHandle != nil || activeSurfaceFrameDrag != nil {
-            let surfaceFrameDragTarget = committedSurfaceFrameDragTarget()
-            pendingSurfaceFrameHandle = nil
-            activeSurfaceFrameDrag = nil
-            activeCanvasDrag = nil
-            if let surfaceFrameDragTarget {
-                onSurfaceFrameDrag?(surfaceFrameDragTarget)
-            }
-            return
-        }
-        if pendingSplineControlPoint != nil || activeSplineControlPointDrag != nil {
-            let splineControlPointDragTarget = committedSplineControlPointDragTarget()
-            pendingSplineControlPoint = nil
-            activeSplineControlPointDrag = nil
-            activeCanvasDrag = nil
-            if let splineControlPointDragTarget {
-                onSplineControlPointDrag?(splineControlPointDragTarget)
-            }
-            return
-        }
-        if pendingPolySplineSurfaceVertex != nil || activePolySplineSurfaceVertexDrag != nil {
-            let polySplineSurfaceVertexDragTarget = committedPolySplineSurfaceVertexDragTarget()
-            pendingPolySplineSurfaceVertex = nil
-            activePolySplineSurfaceVertexDrag = nil
-            activeCanvasDrag = nil
-            if let polySplineSurfaceVertexDragTarget {
-                onPolySplineSurfaceVertexDrag?(polySplineSurfaceVertexDragTarget)
-            }
-            return
-        }
-        if pendingSurfaceControlPoint != nil || activeSurfaceControlPointDrag != nil {
-            let surfaceControlPointDragTarget = committedSurfaceControlPointDragTarget()
-            pendingSurfaceControlPoint = nil
-            activeSurfaceControlPointDrag = nil
-            activeCanvasDrag = nil
-            if let surfaceControlPointDragTarget {
-                onSurfaceControlPointDrag?(surfaceControlPointDragTarget)
-            }
-            return
-        }
-        if pendingSurfaceTrimEndpoint != nil || activeSurfaceTrimEndpointDrag != nil {
-            let surfaceTrimEndpointDragTarget = committedSurfaceTrimEndpointDragTarget()
-            pendingSurfaceTrimEndpoint = nil
-            activeSurfaceTrimEndpointDrag = nil
-            activeCanvasDrag = nil
-            if let surfaceTrimEndpointDragTarget {
-                onSurfaceTrimEndpointDrag?(surfaceTrimEndpointDragTarget)
-            }
-            return
-        }
-        if pendingSurfaceTrimControlPoint != nil || activeSurfaceTrimControlPointDrag != nil {
-            let surfaceTrimControlPointDragTarget = committedSurfaceTrimControlPointDragTarget()
-            pendingSurfaceTrimControlPoint = nil
-            activeSurfaceTrimControlPointDrag = nil
-            activeCanvasDrag = nil
-            if let surfaceTrimControlPointDragTarget {
-                onSurfaceTrimControlPointDrag?(surfaceTrimControlPointDragTarget)
-            }
-            return
-        }
-        if pendingEdgeOffsetHandle != nil || activeEdgeOffsetDrag != nil {
-            let edgeOffsetDragTarget = committedEdgeOffsetDragTarget()
-            pendingEdgeOffsetHandle = nil
-            activeEdgeOffsetDrag = nil
-            activeCanvasDrag = nil
-            if let edgeOffsetDragTarget {
-                onEdgeOffsetDrag?(edgeOffsetDragTarget)
-            }
-            return
-        }
-        if pendingSlotWidthHandle != nil || activeSlotWidthDrag != nil {
-            let slotWidthDragTarget = committedSlotWidthDragTarget()
-            pendingSlotWidthHandle = nil
-            activeSlotWidthDrag = nil
-            activeCanvasDrag = nil
-            if let slotWidthDragTarget {
-                onSlotWidthDrag?(slotWidthDragTarget)
-            }
-            return
-        }
-        if pendingIndependentCopyExtrudeDistanceHandle != nil || activeIndependentCopyExtrudeDistanceDrag != nil {
-            let independentCopyExtrudeDistanceDragTarget = committedIndependentCopyExtrudeDistanceDragTarget()
-            pendingIndependentCopyExtrudeDistanceHandle = nil
-            activeIndependentCopyExtrudeDistanceDrag = nil
-            activeCanvasDrag = nil
-            if let independentCopyExtrudeDistanceDragTarget {
-                onIndependentCopyExtrudeDistanceDrag?(independentCopyExtrudeDistanceDragTarget)
-            }
-            return
-        }
-        if pendingIndependentCopyBodyDimensionHandle != nil || activeIndependentCopyBodyDimensionDrag != nil {
-            let independentCopyBodyDimensionDragTarget = committedIndependentCopyBodyDimensionDragTarget()
-            pendingIndependentCopyBodyDimensionHandle = nil
-            activeIndependentCopyBodyDimensionDrag = nil
-            activeCanvasDrag = nil
-            if let independentCopyBodyDimensionDragTarget {
-                onIndependentCopyBodyDimensionDrag?(independentCopyBodyDimensionDragTarget)
-            }
-            return
-        }
-        if pendingPatternArrayLinearAxisHandle != nil || activePatternArrayLinearAxisDrag != nil {
-            let patternArrayLinearAxisDragTarget = committedPatternArrayLinearAxisDragTarget()
-            pendingPatternArrayLinearAxisHandle = nil
-            activePatternArrayLinearAxisDrag = nil
-            activeCanvasDrag = nil
-            if let patternArrayLinearAxisDragTarget {
-                onPatternArrayLinearAxisDrag?(patternArrayLinearAxisDragTarget)
-            }
-            return
-        }
-        if pendingPatternArrayRadialAngleHandle != nil || activePatternArrayRadialAngleDrag != nil {
-            let patternArrayRadialAngleDragTarget = committedPatternArrayRadialAngleDragTarget()
-            pendingPatternArrayRadialAngleHandle = nil
-            activePatternArrayRadialAngleDrag = nil
-            activeCanvasDrag = nil
-            if let patternArrayRadialAngleDragTarget {
-                onPatternArrayRadialAngleDrag?(patternArrayRadialAngleDragTarget)
-            }
-            return
-        }
-        if pendingPatternArrayCopyCountHandle != nil || activePatternArrayCopyCountDrag != nil {
-            let patternArrayCopyCountDragTarget = committedPatternArrayCopyCountDragTarget()
-            pendingPatternArrayCopyCountHandle = nil
-            activePatternArrayCopyCountDrag = nil
-            activeCanvasDrag = nil
-            if let patternArrayCopyCountDragTarget {
-                onPatternArrayCopyCountDrag?(patternArrayCopyCountDragTarget)
-            }
-            return
-        }
-        if pendingPatternArrayCurveExtentHandle != nil || activePatternArrayCurveExtentDrag != nil {
-            let patternArrayCurveExtentDragTarget = committedPatternArrayCurveExtentDragTarget()
-            pendingPatternArrayCurveExtentHandle = nil
-            activePatternArrayCurveExtentDrag = nil
-            activeCanvasDrag = nil
-            if let patternArrayCurveExtentDragTarget {
-                onPatternArrayCurveExtentDrag?(patternArrayCurveExtentDragTarget)
-            }
-            return
-        }
-        if pendingPatternArrayCurvePathPointHandle != nil || activePatternArrayCurvePathPointDrag != nil {
-            let patternArrayCurvePathPointDragTarget = committedPatternArrayCurvePathPointDragTarget()
-            pendingPatternArrayCurvePathPointHandle = nil
-            activePatternArrayCurvePathPointDrag = nil
-            activeCanvasDrag = nil
-            if let patternArrayCurvePathPointDragTarget {
-                onPatternArrayCurvePathPointDrag?(patternArrayCurvePathPointDragTarget)
-            }
-            return
-        }
-        if pendingPatternArrayOutputModeHandle != nil {
-            pendingPatternArrayOutputModeHandle = nil
-            activeCanvasDrag = nil
-            return
-        }
-        if pendingConstructionPlaneHandle != nil || activeConstructionPlaneHandleDrag != nil {
-            let constructionPlaneDragTarget = committedConstructionPlaneHandleDragTarget()
-            pendingConstructionPlaneHandle = nil
-            activeConstructionPlaneHandleDrag = nil
-            activeCanvasDrag = nil
-            if let constructionPlaneDragTarget {
-                onConstructionPlaneHandleDrag?(constructionPlaneDragTarget)
-            }
-            return
-        }
-        if pendingSketchVertexOffsetHandle != nil || activeSketchVertexOffsetDrag != nil {
-            let sketchVertexOffsetDragTarget = committedSketchVertexOffsetDragTarget()
-            pendingSketchVertexOffsetHandle = nil
-            activeSketchVertexOffsetDrag = nil
-            activeCanvasDrag = nil
-            if let sketchVertexOffsetDragTarget {
-                onSketchVertexOffsetDrag?(sketchVertexOffsetDragTarget)
-            }
-            return
-        }
-        if pendingRegionOffsetHandle != nil || activeRegionOffsetDrag != nil {
-            let regionOffsetDragTarget = committedRegionOffsetDragTarget()
-            pendingRegionOffsetHandle = nil
-            activeRegionOffsetDrag = nil
-            activeCanvasDrag = nil
-            if let regionOffsetDragTarget {
-                onRegionOffsetDrag?(regionOffsetDragTarget)
-            }
-            return
-        }
-        if pendingAffordance != nil || activeAffordanceDrag != nil {
-            // Capture every body the drag ghosted before the state is cleared;
-            // non-committing gizmo actions must fully revert their preview.
-            let ghostFeatureIDs = activeAffordanceDrag.map { Array($0.baseEdits.keys) } ?? []
-            let bodyMoveDragTarget = committedBodyMoveDragTarget()
-            let vertexDragTarget = committedVertexDragTarget(to: end, size: size)
-            let faceDragTarget = committedFaceDragTarget(to: end, size: size)
-            let edgeChamferDragTarget = committedEdgeChamferDragTarget(to: end, size: size)
-            let edgeFilletDragTarget = committedEdgeFilletDragTarget(to: end, size: size)
-            pendingAffordance = nil
-            activeAffordanceDrag = nil
-            activeCanvasDrag = nil
-            clearDragPreviewDocument()
-            if let vertexDragTarget {
-                editedBodies.removeValue(forKey: vertexDragTarget.featureID)
-                onVertexDrag?(vertexDragTarget.target)
-            }
-            if let faceDragTarget {
-                editedBodies.removeValue(forKey: faceDragTarget.featureID)
-                onFaceDrag?(faceDragTarget.target)
-            }
-            if let edgeChamferDragTarget {
-                editedBodies.removeValue(forKey: edgeChamferDragTarget.featureID)
-                onEdgeChamferDrag?(edgeChamferDragTarget.target)
-            }
-            if let edgeFilletDragTarget {
-                editedBodies.removeValue(forKey: edgeFilletDragTarget.featureID)
-                onEdgeFilletDrag?(edgeFilletDragTarget.target)
-            }
-            if let bodyMoveDragTarget {
-                editedBodies.removeValue(forKey: bodyMoveDragTarget.featureID)
-                onBodyMoveDrag?(bodyMoveDragTarget.target)
-            }
-            for featureID in ghostFeatureIDs {
-                editedBodies.removeValue(forKey: featureID)
-            }
+        if finishActiveInteractionDrag(end: end, size: size) {
             return
         }
         defer {
@@ -13303,6 +12642,439 @@ public struct Viewport: View {
             return
         }
         onCanvasDrag(drag)
+    }
+
+    private func finishPendingInteractionDrag(
+        _ target: ViewportInteractionTarget,
+        end: CGPoint,
+        size: CGSize
+    ) {
+        pendingInteractionTarget = nil
+        switch target {
+        case .sketchCurveHandle:
+            finishSketchCurveHandleDrag()
+        case .sketchDimension:
+            finishSketchDimensionDrag()
+        case .sketchPointHandle:
+            finishSketchPointHandleDrag()
+        case .bridgeCurveEndpoint:
+            finishBridgeCurveEndpointDrag()
+        case .splineControlPoint:
+            finishSplineControlPointDrag()
+        case .splineControlPointSlide:
+            finishSplineControlPointSlideDrag()
+        case .polySplineSurfaceVertex:
+            finishPolySplineSurfaceVertexDrag()
+        case .polySplineSurfaceVertexSlide:
+            finishPolySplineSurfaceVertexSlideDrag()
+        case .surfaceControlPoint:
+            finishSurfaceControlPointDrag()
+        case .surfaceControlPointSlide:
+            finishSurfaceControlPointSlideDrag()
+        case .surfaceTrimEndpoint:
+            finishSurfaceTrimEndpointDrag()
+        case .surfaceTrimControlPoint:
+            finishSurfaceTrimControlPointDrag()
+        case .surfaceFrame:
+            finishSurfaceFrameDrag()
+        case .regionOffset:
+            finishRegionOffsetDrag()
+        case .edgeOffset:
+            finishEdgeOffsetDrag()
+        case .slotWidth:
+            finishSlotWidthDrag()
+        case .sketchVertexOffset:
+            finishSketchVertexOffsetDrag()
+        case .patternArrayLinearAxis:
+            finishPatternArrayLinearAxisDrag()
+        case .independentCopyExtrudeDistance:
+            finishIndependentCopyExtrudeDistanceDrag()
+        case .independentCopyBodyDimension:
+            finishIndependentCopyBodyDimensionDrag()
+        case .patternArrayRadialAngle:
+            finishPatternArrayRadialAngleDrag()
+        case .patternArrayCopyCount:
+            finishPatternArrayCopyCountDrag()
+        case .patternArrayCurveExtent:
+            finishPatternArrayCurveExtentDrag()
+        case .patternArrayCurvePathPoint:
+            finishPatternArrayCurvePathPointDrag()
+        case .patternArrayOutputMode:
+            activeCanvasDrag = nil
+        case .constructionPlane:
+            finishConstructionPlaneHandleDrag()
+        case .affordance:
+            finishAffordanceInteractionDrag(end: end, size: size)
+        }
+    }
+
+    private func finishActiveInteractionDrag(end: CGPoint, size: CGSize) -> Bool {
+        if activeSketchCurveHandleDrag != nil {
+            finishSketchCurveHandleDrag()
+            return true
+        }
+        if activeSketchDimensionDrag != nil {
+            finishSketchDimensionDrag()
+            return true
+        }
+        if activeSketchPointHandleDrag != nil {
+            finishSketchPointHandleDrag()
+            return true
+        }
+        if activeBridgeCurveEndpointDrag != nil {
+            finishBridgeCurveEndpointDrag()
+            return true
+        }
+        if activeSplineControlPointSlideDrag != nil {
+            finishSplineControlPointSlideDrag()
+            return true
+        }
+        if activePolySplineSurfaceVertexSlideDrag != nil {
+            finishPolySplineSurfaceVertexSlideDrag()
+            return true
+        }
+        if activeSurfaceControlPointSlideDrag != nil {
+            finishSurfaceControlPointSlideDrag()
+            return true
+        }
+        if activeSurfaceFrameDrag != nil {
+            finishSurfaceFrameDrag()
+            return true
+        }
+        if activeSplineControlPointDrag != nil {
+            finishSplineControlPointDrag()
+            return true
+        }
+        if activePolySplineSurfaceVertexDrag != nil {
+            finishPolySplineSurfaceVertexDrag()
+            return true
+        }
+        if activeSurfaceControlPointDrag != nil {
+            finishSurfaceControlPointDrag()
+            return true
+        }
+        if activeSurfaceTrimEndpointDrag != nil {
+            finishSurfaceTrimEndpointDrag()
+            return true
+        }
+        if activeSurfaceTrimControlPointDrag != nil {
+            finishSurfaceTrimControlPointDrag()
+            return true
+        }
+        if activeEdgeOffsetDrag != nil {
+            finishEdgeOffsetDrag()
+            return true
+        }
+        if activeSlotWidthDrag != nil {
+            finishSlotWidthDrag()
+            return true
+        }
+        if activeIndependentCopyExtrudeDistanceDrag != nil {
+            finishIndependentCopyExtrudeDistanceDrag()
+            return true
+        }
+        if activeIndependentCopyBodyDimensionDrag != nil {
+            finishIndependentCopyBodyDimensionDrag()
+            return true
+        }
+        if activePatternArrayLinearAxisDrag != nil {
+            finishPatternArrayLinearAxisDrag()
+            return true
+        }
+        if activePatternArrayRadialAngleDrag != nil {
+            finishPatternArrayRadialAngleDrag()
+            return true
+        }
+        if activePatternArrayCopyCountDrag != nil {
+            finishPatternArrayCopyCountDrag()
+            return true
+        }
+        if activePatternArrayCurveExtentDrag != nil {
+            finishPatternArrayCurveExtentDrag()
+            return true
+        }
+        if activePatternArrayCurvePathPointDrag != nil {
+            finishPatternArrayCurvePathPointDrag()
+            return true
+        }
+        if activeConstructionPlaneHandleDrag != nil {
+            finishConstructionPlaneHandleDrag()
+            return true
+        }
+        if activeSketchVertexOffsetDrag != nil {
+            finishSketchVertexOffsetDrag()
+            return true
+        }
+        if activeRegionOffsetDrag != nil {
+            finishRegionOffsetDrag()
+            return true
+        }
+        if activeAffordanceDrag != nil {
+            finishAffordanceInteractionDrag(end: end, size: size)
+            return true
+        }
+        return false
+    }
+
+    private func finishSketchCurveHandleDrag() {
+        let target = committedSketchCurveHandleDragTarget()
+        activeSketchCurveHandleDrag = nil
+        activeCanvasDrag = nil
+        if let target {
+            onSketchCurveHandleDrag?(target)
+        }
+    }
+
+    private func finishSketchDimensionDrag() {
+        let target = committedSketchDimensionDragTarget()
+        activeSketchDimensionDrag = nil
+        activeCanvasDrag = nil
+        if let target {
+            onSketchDimensionDrag?(target)
+        }
+    }
+
+    private func finishSketchPointHandleDrag() {
+        let target = committedSketchPointHandleDragTarget()
+        activeSketchPointHandleDrag = nil
+        activeCanvasDrag = nil
+        if let target {
+            onSketchPointHandleDrag?(target)
+        }
+    }
+
+    private func finishBridgeCurveEndpointDrag() {
+        let target = committedBridgeCurveEndpointDragTarget()
+        activeBridgeCurveEndpointDrag = nil
+        activeCanvasDrag = nil
+        publishSelectionDragPreview(hits: [])
+        if let target {
+            onBridgeCurveEndpointDrag?(target)
+        }
+    }
+
+    private func finishSplineControlPointDrag() {
+        let target = committedSplineControlPointDragTarget()
+        activeSplineControlPointDrag = nil
+        activeCanvasDrag = nil
+        if let target {
+            onSplineControlPointDrag?(target)
+        }
+    }
+
+    private func finishSplineControlPointSlideDrag() {
+        let target = committedSplineControlPointSlideDragTarget()
+        activeSplineControlPointSlideDrag = nil
+        activeCanvasDrag = nil
+        if let target {
+            onSplineControlPointSlideDrag?(target)
+        }
+    }
+
+    private func finishPolySplineSurfaceVertexDrag() {
+        let target = committedPolySplineSurfaceVertexDragTarget()
+        activePolySplineSurfaceVertexDrag = nil
+        activeCanvasDrag = nil
+        if let target {
+            onPolySplineSurfaceVertexDrag?(target)
+        }
+    }
+
+    private func finishPolySplineSurfaceVertexSlideDrag() {
+        let target = committedPolySplineSurfaceVertexSlideDragTarget()
+        activePolySplineSurfaceVertexSlideDrag = nil
+        activeCanvasDrag = nil
+        if let target {
+            onPolySplineSurfaceVertexSlideDrag?(target)
+        }
+    }
+
+    private func finishSurfaceControlPointDrag() {
+        let target = committedSurfaceControlPointDragTarget()
+        activeSurfaceControlPointDrag = nil
+        activeCanvasDrag = nil
+        if let target {
+            onSurfaceControlPointDrag?(target)
+        }
+    }
+
+    private func finishSurfaceControlPointSlideDrag() {
+        let target = committedSurfaceControlPointSlideDragTarget()
+        activeSurfaceControlPointSlideDrag = nil
+        activeCanvasDrag = nil
+        if let target {
+            onSurfaceControlPointSlideDrag?(target)
+        }
+    }
+
+    private func finishSurfaceTrimEndpointDrag() {
+        let target = committedSurfaceTrimEndpointDragTarget()
+        activeSurfaceTrimEndpointDrag = nil
+        activeCanvasDrag = nil
+        if let target {
+            onSurfaceTrimEndpointDrag?(target)
+        }
+    }
+
+    private func finishSurfaceTrimControlPointDrag() {
+        let target = committedSurfaceTrimControlPointDragTarget()
+        activeSurfaceTrimControlPointDrag = nil
+        activeCanvasDrag = nil
+        if let target {
+            onSurfaceTrimControlPointDrag?(target)
+        }
+    }
+
+    private func finishSurfaceFrameDrag() {
+        let target = committedSurfaceFrameDragTarget()
+        activeSurfaceFrameDrag = nil
+        activeCanvasDrag = nil
+        if let target {
+            onSurfaceFrameDrag?(target)
+        }
+    }
+
+    private func finishRegionOffsetDrag() {
+        let target = committedRegionOffsetDragTarget()
+        activeRegionOffsetDrag = nil
+        activeCanvasDrag = nil
+        if let target {
+            onRegionOffsetDrag?(target)
+        }
+    }
+
+    private func finishEdgeOffsetDrag() {
+        let target = committedEdgeOffsetDragTarget()
+        activeEdgeOffsetDrag = nil
+        activeCanvasDrag = nil
+        if let target {
+            onEdgeOffsetDrag?(target)
+        }
+    }
+
+    private func finishSlotWidthDrag() {
+        let target = committedSlotWidthDragTarget()
+        activeSlotWidthDrag = nil
+        activeCanvasDrag = nil
+        if let target {
+            onSlotWidthDrag?(target)
+        }
+    }
+
+    private func finishSketchVertexOffsetDrag() {
+        let target = committedSketchVertexOffsetDragTarget()
+        activeSketchVertexOffsetDrag = nil
+        activeCanvasDrag = nil
+        if let target {
+            onSketchVertexOffsetDrag?(target)
+        }
+    }
+
+    private func finishPatternArrayLinearAxisDrag() {
+        let target = committedPatternArrayLinearAxisDragTarget()
+        activePatternArrayLinearAxisDrag = nil
+        activeCanvasDrag = nil
+        if let target {
+            onPatternArrayLinearAxisDrag?(target)
+        }
+    }
+
+    private func finishIndependentCopyExtrudeDistanceDrag() {
+        let target = committedIndependentCopyExtrudeDistanceDragTarget()
+        activeIndependentCopyExtrudeDistanceDrag = nil
+        activeCanvasDrag = nil
+        if let target {
+            onIndependentCopyExtrudeDistanceDrag?(target)
+        }
+    }
+
+    private func finishIndependentCopyBodyDimensionDrag() {
+        let target = committedIndependentCopyBodyDimensionDragTarget()
+        activeIndependentCopyBodyDimensionDrag = nil
+        activeCanvasDrag = nil
+        if let target {
+            onIndependentCopyBodyDimensionDrag?(target)
+        }
+    }
+
+    private func finishPatternArrayRadialAngleDrag() {
+        let target = committedPatternArrayRadialAngleDragTarget()
+        activePatternArrayRadialAngleDrag = nil
+        activeCanvasDrag = nil
+        if let target {
+            onPatternArrayRadialAngleDrag?(target)
+        }
+    }
+
+    private func finishPatternArrayCopyCountDrag() {
+        let target = committedPatternArrayCopyCountDragTarget()
+        activePatternArrayCopyCountDrag = nil
+        activeCanvasDrag = nil
+        if let target {
+            onPatternArrayCopyCountDrag?(target)
+        }
+    }
+
+    private func finishPatternArrayCurveExtentDrag() {
+        let target = committedPatternArrayCurveExtentDragTarget()
+        activePatternArrayCurveExtentDrag = nil
+        activeCanvasDrag = nil
+        if let target {
+            onPatternArrayCurveExtentDrag?(target)
+        }
+    }
+
+    private func finishPatternArrayCurvePathPointDrag() {
+        let target = committedPatternArrayCurvePathPointDragTarget()
+        activePatternArrayCurvePathPointDrag = nil
+        activeCanvasDrag = nil
+        if let target {
+            onPatternArrayCurvePathPointDrag?(target)
+        }
+    }
+
+    private func finishConstructionPlaneHandleDrag() {
+        let target = committedConstructionPlaneHandleDragTarget()
+        activeConstructionPlaneHandleDrag = nil
+        activeCanvasDrag = nil
+        if let target {
+            onConstructionPlaneHandleDrag?(target)
+        }
+    }
+
+    private func finishAffordanceInteractionDrag(end: CGPoint, size: CGSize) {
+        let ghostFeatureIDs = activeAffordanceDrag.map { Array($0.baseEdits.keys) } ?? []
+        let bodyMoveDragTarget = committedBodyMoveDragTarget()
+        let vertexDragTarget = committedVertexDragTarget(to: end, size: size)
+        let faceDragTarget = committedFaceDragTarget(to: end, size: size)
+        let edgeChamferDragTarget = committedEdgeChamferDragTarget(to: end, size: size)
+        let edgeFilletDragTarget = committedEdgeFilletDragTarget(to: end, size: size)
+        activeAffordanceDrag = nil
+        activeCanvasDrag = nil
+        clearDragPreviewDocument()
+        if let vertexDragTarget {
+            editedBodies.removeValue(forKey: vertexDragTarget.featureID)
+            onVertexDrag?(vertexDragTarget.target)
+        }
+        if let faceDragTarget {
+            editedBodies.removeValue(forKey: faceDragTarget.featureID)
+            onFaceDrag?(faceDragTarget.target)
+        }
+        if let edgeChamferDragTarget {
+            editedBodies.removeValue(forKey: edgeChamferDragTarget.featureID)
+            onEdgeChamferDrag?(edgeChamferDragTarget.target)
+        }
+        if let edgeFilletDragTarget {
+            editedBodies.removeValue(forKey: edgeFilletDragTarget.featureID)
+            onEdgeFilletDrag?(edgeFilletDragTarget.target)
+        }
+        if let bodyMoveDragTarget {
+            editedBodies.removeValue(forKey: bodyMoveDragTarget.featureID)
+            onBodyMoveDrag?(bodyMoveDragTarget.target)
+        }
+        for featureID in ghostFeatureIDs {
+            editedBodies.removeValue(forKey: featureID)
+        }
     }
 
     private func committedSketchCurveHandleDragTarget() -> ViewportSketchCurveHandleDragTarget? {
@@ -14542,5 +14314,250 @@ private extension Viewport {
             return nil
         }
         return target
+    }
+}
+
+private extension Viewport {
+    var pendingAffordance: ViewportAffordanceTarget? {
+        get {
+            guard case .affordance(let target) = pendingInteractionTarget else {
+                return nil
+            }
+            return target
+        }
+    }
+
+    var pendingSketchCurveHandle: ViewportSketchCurveHandleTarget? {
+        get {
+            guard case .sketchCurveHandle(let target) = pendingInteractionTarget else {
+                return nil
+            }
+            return target
+        }
+    }
+
+    var pendingSketchDimension: ViewportSketchDimensionTarget? {
+        get {
+            guard case .sketchDimension(let target) = pendingInteractionTarget else {
+                return nil
+            }
+            return target
+        }
+    }
+
+    var pendingSketchPointHandle: ViewportSketchPointHandleTarget? {
+        get {
+            guard case .sketchPointHandle(let target) = pendingInteractionTarget else {
+                return nil
+            }
+            return target
+        }
+    }
+
+    var pendingBridgeCurveEndpointHandle: ViewportBridgeCurveEndpointHandleTarget? {
+        get {
+            guard case .bridgeCurveEndpoint(let target) = pendingInteractionTarget else {
+                return nil
+            }
+            return target
+        }
+    }
+
+    var pendingSplineControlPoint: ViewportSplineControlPointHandleTarget? {
+        get {
+            guard case .splineControlPoint(let target) = pendingInteractionTarget else {
+                return nil
+            }
+            return target
+        }
+    }
+
+    var pendingSplineControlPointSlideHandle: ViewportSplineControlPointSlideHandleTarget? {
+        get {
+            guard case .splineControlPointSlide(let target) = pendingInteractionTarget else {
+                return nil
+            }
+            return target
+        }
+    }
+
+    var pendingPolySplineSurfaceVertex: ViewportPolySplineSurfaceVertexHandleTarget? {
+        get {
+            guard case .polySplineSurfaceVertex(let target) = pendingInteractionTarget else {
+                return nil
+            }
+            return target
+        }
+    }
+
+    var pendingPolySplineSurfaceVertexSlideHandle: ViewportPolySplineSurfaceVertexSlideHandleTarget? {
+        get {
+            guard case .polySplineSurfaceVertexSlide(let target) = pendingInteractionTarget else {
+                return nil
+            }
+            return target
+        }
+    }
+
+    var pendingSurfaceControlPoint: ViewportSurfaceControlPointHandleTarget? {
+        get {
+            guard case .surfaceControlPoint(let target) = pendingInteractionTarget else {
+                return nil
+            }
+            return target
+        }
+    }
+
+    var pendingSurfaceControlPointSlideHandle: ViewportSurfaceControlPointSlideHandleTarget? {
+        get {
+            guard case .surfaceControlPointSlide(let target) = pendingInteractionTarget else {
+                return nil
+            }
+            return target
+        }
+    }
+
+    var pendingSurfaceTrimEndpoint: ViewportSurfaceTrimEndpointHandleTarget? {
+        get {
+            guard case .surfaceTrimEndpoint(let target) = pendingInteractionTarget else {
+                return nil
+            }
+            return target
+        }
+    }
+
+    var pendingSurfaceTrimControlPoint: ViewportSurfaceTrimControlPointHandleTarget? {
+        get {
+            guard case .surfaceTrimControlPoint(let target) = pendingInteractionTarget else {
+                return nil
+            }
+            return target
+        }
+    }
+
+    var pendingSurfaceFrameHandle: ViewportSurfaceFrameHandleTarget? {
+        get {
+            guard case .surfaceFrame(let target) = pendingInteractionTarget else {
+                return nil
+            }
+            return target
+        }
+    }
+
+    var pendingRegionOffsetHandle: ViewportRegionOffsetHandleTarget? {
+        get {
+            guard case .regionOffset(let target) = pendingInteractionTarget else {
+                return nil
+            }
+            return target
+        }
+    }
+
+    var pendingEdgeOffsetHandle: ViewportEdgeOffsetHandleTarget? {
+        get {
+            guard case .edgeOffset(let target) = pendingInteractionTarget else {
+                return nil
+            }
+            return target
+        }
+    }
+
+    var pendingSlotWidthHandle: ViewportSlotWidthHandleTarget? {
+        get {
+            guard case .slotWidth(let target) = pendingInteractionTarget else {
+                return nil
+            }
+            return target
+        }
+    }
+
+    var pendingSketchVertexOffsetHandle: ViewportSketchVertexOffsetHandleTarget? {
+        get {
+            guard case .sketchVertexOffset(let target) = pendingInteractionTarget else {
+                return nil
+            }
+            return target
+        }
+    }
+
+    var pendingPatternArrayLinearAxisHandle: ViewportPatternArrayLinearAxisHandleTarget? {
+        get {
+            guard case .patternArrayLinearAxis(let target) = pendingInteractionTarget else {
+                return nil
+            }
+            return target
+        }
+    }
+
+    var pendingIndependentCopyExtrudeDistanceHandle: ViewportIndependentCopyExtrudeDistanceHandleTarget? {
+        get {
+            guard case .independentCopyExtrudeDistance(let target) = pendingInteractionTarget else {
+                return nil
+            }
+            return target
+        }
+    }
+
+    var pendingIndependentCopyBodyDimensionHandle: ViewportIndependentCopyBodyDimensionHandleTarget? {
+        get {
+            guard case .independentCopyBodyDimension(let target) = pendingInteractionTarget else {
+                return nil
+            }
+            return target
+        }
+    }
+
+    var pendingPatternArrayRadialAngleHandle: ViewportPatternArrayRadialAngleHandleTarget? {
+        get {
+            guard case .patternArrayRadialAngle(let target) = pendingInteractionTarget else {
+                return nil
+            }
+            return target
+        }
+    }
+
+    var pendingPatternArrayCopyCountHandle: ViewportPatternArrayCopyCountHandleTarget? {
+        get {
+            guard case .patternArrayCopyCount(let target) = pendingInteractionTarget else {
+                return nil
+            }
+            return target
+        }
+    }
+
+    var pendingPatternArrayCurveExtentHandle: ViewportPatternArrayCurveExtentHandleTarget? {
+        get {
+            guard case .patternArrayCurveExtent(let target) = pendingInteractionTarget else {
+                return nil
+            }
+            return target
+        }
+    }
+
+    var pendingPatternArrayCurvePathPointHandle: ViewportPatternArrayCurvePathPointHandleTarget? {
+        get {
+            guard case .patternArrayCurvePathPoint(let target) = pendingInteractionTarget else {
+                return nil
+            }
+            return target
+        }
+    }
+
+    var pendingPatternArrayOutputModeHandle: ViewportPatternArrayOutputModeHandleTarget? {
+        get {
+            guard case .patternArrayOutputMode(let target) = pendingInteractionTarget else {
+                return nil
+            }
+            return target
+        }
+    }
+
+    var pendingConstructionPlaneHandle: ViewportConstructionPlaneHandleTarget? {
+        get {
+            guard case .constructionPlane(let target) = pendingInteractionTarget else {
+                return nil
+            }
+            return target
+        }
     }
 }
