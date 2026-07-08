@@ -17,15 +17,51 @@ struct CLIProcessResult {
 }
 
 actor CLIProcessGate {
-    static let shared = CLIProcessGate()
+    static let shared = CLIProcessGate(
+        limit: min(8, max(2, ProcessInfo.processInfo.activeProcessorCount))
+    )
 
-    func run(_ arguments: [String]) throws -> CLIProcessResult {
-        try runCLIProcess(arguments)
+    private let limit: Int
+    private var availableSlotCount: Int
+    private var waiters: [CheckedContinuation<Void, Never>] = []
+
+    init(limit: Int) {
+        let normalizedLimit = max(1, limit)
+        self.limit = normalizedLimit
+        self.availableSlotCount = normalizedLimit
+    }
+
+    func acquire() async {
+        guard availableSlotCount == 0 else {
+            availableSlotCount -= 1
+            return
+        }
+
+        await withCheckedContinuation { continuation in
+            waiters.append(continuation)
+        }
+    }
+
+    func release() {
+        guard waiters.isEmpty else {
+            waiters.removeFirst().resume()
+            return
+        }
+
+        availableSlotCount = min(limit, availableSlotCount + 1)
     }
 }
 
 func runCLI(_ arguments: [String]) async throws -> CLIProcessResult {
-    try await CLIProcessGate.shared.run(arguments)
+    await CLIProcessGate.shared.acquire()
+    do {
+        let result = try runCLIProcess(arguments)
+        await CLIProcessGate.shared.release()
+        return result
+    } catch {
+        await CLIProcessGate.shared.release()
+        throw error
+    }
 }
 
 private func runCLIProcess(_ arguments: [String]) throws -> CLIProcessResult {

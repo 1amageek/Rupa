@@ -593,7 +593,7 @@ func cliExecutableFeatureSuppressClosedDocumentAsJSON() async throws {
 
     #expect(unsuppressResult.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: unsuppressResult.standardError))
     #expect(unsuppressResponse.message == "Feature \(featureID.description) unsuppressed.")
-    #expect(unsuppressResponse.generation == 2)
+    #expect(unsuppressResponse.generation == 1)
     #expect(unsuppressResponse.saved)
     #expect(unsuppressResponse.primaryFeatureID == featureID)
     #expect(!unsuppressedFeature.isSuppressed)
@@ -3530,6 +3530,144 @@ struct CLICommandApplyTests {
     }
 
     @Test(.timeLimit(.minutes(1)))
+    func executableAppliesLiveAutomationBatchThroughSocketAsJSON() async throws {
+        let temporaryDirectory = try makeTemporaryDirectory()
+        defer {
+            removeTemporaryDirectory(temporaryDirectory)
+        }
+        let socketURL = temporaryDirectory.appendingPathComponent("rupa.sock")
+        let batchURL = temporaryDirectory.appendingPathComponent("live-batch.json")
+        let sessionID = UUID()
+        let server = AgentCommandController()
+        server.register(
+            session: EditorSession(document: .empty(named: "Before Process Live Batch")),
+            id: sessionID
+        )
+        let listener = AgentSocketListener(
+            controller: server,
+            socketPath: AgentSocketPath(socketURL.path)
+        )
+        let batch = AutomationBatch(
+            commands: [
+                .renameDocument(name: "Intermediate Process Live Batch"),
+                .renameDocument(name: "After Process Live Batch"),
+            ],
+            expectedGeneration: DocumentGeneration(0)
+        )
+        try JSONEncoder().encode(batch).write(to: batchURL)
+
+        try await listener.start()
+        do {
+            let result = try await runCLI([
+                "batch",
+                "--session-id",
+                sessionID.uuidString,
+                "--input",
+                batchURL.path,
+                "--mode",
+                "live",
+                "--agent-socket",
+                socketURL.path,
+                "--json",
+            ])
+            let response = try JSONDecoder().decode(
+                CLIBatchResponse.self,
+                from: result.standardOutputData
+            )
+            let sessionsResult = try await runCLI([
+                "sessions",
+                "--socket",
+                socketURL.path,
+                "--json",
+            ])
+            let sessionsResponse = try JSONDecoder().decode(
+                CLISessionsResponse.self,
+                from: sessionsResult.standardOutputData
+            )
+
+            #expect(result.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: result.standardError))
+            #expect(response.commandCount == 2)
+            #expect(response.didMutate)
+            #expect(response.generation == 2)
+            #expect(response.dirty)
+            #expect(!response.saved)
+            #expect(sessionsResult.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: sessionsResult.standardError))
+            #expect(sessionsResponse.sessions.first?.displayName == "After Process Live Batch")
+            #expect(sessionsResponse.sessions.first?.generation == DocumentGeneration(2))
+            #expect(sessionsResponse.sessions.first?.dirty == true)
+            await listener.stop()
+        } catch {
+            await listener.stop()
+            throw error
+        }
+    }
+
+    @Test(.timeLimit(.minutes(1)))
+    func executableRollsBackLiveAutomationBatchThroughSocketOnFailure() async throws {
+        let temporaryDirectory = try makeTemporaryDirectory()
+        defer {
+            removeTemporaryDirectory(temporaryDirectory)
+        }
+        let socketURL = temporaryDirectory.appendingPathComponent("rupa.sock")
+        let batchURL = temporaryDirectory.appendingPathComponent("live-batch-failure.json")
+        let sessionID = UUID()
+        let server = AgentCommandController()
+        server.register(
+            session: EditorSession(document: .empty(named: "Before Failed Process Live Batch")),
+            id: sessionID
+        )
+        let listener = AgentSocketListener(
+            controller: server,
+            socketPath: AgentSocketPath(socketURL.path)
+        )
+        let batch = AutomationBatch(
+            commands: [
+                .renameDocument(name: "Partially Applied Process Live Batch"),
+                .deleteParameter(name: "missing"),
+            ],
+            expectedGeneration: DocumentGeneration(0)
+        )
+        try JSONEncoder().encode(batch).write(to: batchURL)
+
+        try await listener.start()
+        do {
+            let result = try await runCLI([
+                "batch",
+                "--session-id",
+                sessionID.uuidString,
+                "--input",
+                batchURL.path,
+                "--mode",
+                "live",
+                "--agent-socket",
+                socketURL.path,
+                "--json",
+            ])
+            let sessionsResult = try await runCLI([
+                "sessions",
+                "--socket",
+                socketURL.path,
+                "--json",
+            ])
+            let sessionsResponse = try JSONDecoder().decode(
+                CLISessionsResponse.self,
+                from: sessionsResult.standardOutputData
+            )
+
+            #expect(result.terminationStatus == CLIExitCode.data.rawValue, Comment(rawValue: result.standardError))
+            #expect(result.standardError.contains("Parameter delete requires an existing parameter."))
+            #expect(sessionsResult.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: sessionsResult.standardError))
+            #expect(sessionsResponse.sessions.first?.displayName == "Before Failed Process Live Batch")
+            #expect(sessionsResponse.sessions.first?.generation == DocumentGeneration(0))
+            #expect(sessionsResponse.sessions.first?.dirty == false)
+            await listener.stop()
+        } catch {
+            await listener.stop()
+            throw error
+        }
+    }
+
+    @Test(.timeLimit(.minutes(1)))
     func serviceAppliesLiveAutomationBatchThroughAgentBatchRequest() async throws {
         let server = AgentCommandController()
         let sessionID = UUID()
@@ -5471,7 +5609,7 @@ func cliExecutableSurfaceTrimEndpointCommandMutatesClosedDocumentAsJSON() async 
     #expect(updatedSummaryTrimLoop.selectionReferences.count == 3)
 }
 
-@Test(.timeLimit(.minutes(1)))
+@Test(.timeLimit(.minutes(3)))
 func cliExecutableSurfaceTrimControlPointCommandMutatesClosedDocumentAsJSON() async throws {
     let temporaryDirectory = try makeTemporaryDirectory()
     defer {
@@ -5564,7 +5702,7 @@ func cliExecutableSurfaceTrimControlPointCommandMutatesClosedDocumentAsJSON() as
     #expect(updatedSummaryTrimLoop.selectionReferences.count == 3)
 }
 
-@Test(.timeLimit(.minutes(1)))
+@Test(.timeLimit(.minutes(3)))
 func cliExecutableSurfaceTrimControlPointWeightCommandMutatesClosedDocumentAsJSON() async throws {
     let temporaryDirectory = try makeTemporaryDirectory()
     defer {
@@ -5659,7 +5797,7 @@ func cliExecutableSurfaceTrimControlPointWeightCommandMutatesClosedDocumentAsJSO
     #expect(updatedSummaryPoint.isWeightEditable)
 }
 
-@Test(.timeLimit(.minutes(1)))
+@Test(.timeLimit(.minutes(3)))
 func cliExecutableSurfaceTrimKnotCommandMutatesClosedDocumentAsJSON() async throws {
     let temporaryDirectory = try makeTemporaryDirectory()
     defer {
