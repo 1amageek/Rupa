@@ -745,6 +745,9 @@ public struct DimensionSetSketchCommand: ParsableCommand {
     @Flag(help: "Print a JSON result.")
     public var json: Bool = false
 
+    @OptionGroup
+    public var writeDestination: CLIWriteDestinationOptions
+
     public init() {}
 
     public func run() throws {
@@ -756,35 +759,35 @@ public struct DimensionSetSketchCommand: ParsableCommand {
         )
 
         try CLIExitCode.run {
-            let agentClient = CLIAgentClientFactory.makeAgentClient(
+            let context = try CLILegacyMutationContextResolver.resolve(
+                file: file,
                 mode: mode,
                 sessionID: id,
-                socket: agentSocket
-            )
-            let documentTarget = CLIDocumentTarget(
-                fileURL: file.map(URL.init(fileURLWithPath:)),
-                sessionID: id
+                agentSocket: agentSocket,
+                forceFileEdit: forceFileEdit,
+                writeDestination: writeDestination
             )
             let expression = try CLIDimensionExpressionParser.expression(
                 value: value,
                 unitName: unit,
                 sketchKind: kind,
-                target: documentTarget,
+                target: context.target,
                 mode: mode,
                 expectedGeneration: expectedGeneration.map(DocumentGeneration.init),
-                forceFileEdit: forceFileEdit,
-                client: agentClient
+                forceFileEdit: context.forceFileEdit,
+                client: context.agentClient
             )
             let response = try CLIService().setSketchEntityDimension(
-                target: documentTarget,
+                target: context.target,
                 selectionTarget: selectionTarget,
                 kind: kind,
                 value: expression,
                 mode: mode,
                 expectedGeneration: expectedGeneration.map(DocumentGeneration.init),
                 dryRun: dryRun,
+                writePolicy: context.writePolicy,
                 forceFileEdit: forceFileEdit,
-                client: agentClient
+                client: context.agentClient
             )
             try CLIOutput.write(
                 response: response,
@@ -839,6 +842,9 @@ public struct DimensionSetObjectCommand: ParsableCommand {
     @Flag(help: "Print a JSON result.")
     public var json: Bool = false
 
+    @OptionGroup
+    public var writeDestination: CLIWriteDestinationOptions
+
     public init() {}
 
     public func run() throws {
@@ -849,34 +855,34 @@ public struct DimensionSetObjectCommand: ParsableCommand {
             valueName: "SelectionTarget"
         )
         try CLIExitCode.run {
-            let agentClient = CLIAgentClientFactory.makeAgentClient(
+            let context = try CLILegacyMutationContextResolver.resolve(
+                file: file,
                 mode: mode,
                 sessionID: id,
-                socket: agentSocket
-            )
-            let documentTarget = CLIDocumentTarget(
-                fileURL: file.map(URL.init(fileURLWithPath:)),
-                sessionID: id
+                agentSocket: agentSocket,
+                forceFileEdit: forceFileEdit,
+                writeDestination: writeDestination
             )
             let expression = try CLIDimensionExpressionParser.lengthExpression(
                 value: value,
                 unitName: unit,
-                target: documentTarget,
+                target: context.target,
                 mode: mode,
                 expectedGeneration: expectedGeneration.map(DocumentGeneration.init),
-                forceFileEdit: forceFileEdit,
-                client: agentClient
+                forceFileEdit: context.forceFileEdit,
+                client: context.agentClient
             )
             let response = try CLIService().setObjectDimension(
-                target: documentTarget,
+                target: context.target,
                 selectionTarget: selectionTarget,
                 kind: kind,
                 value: expression,
                 mode: mode,
                 expectedGeneration: expectedGeneration.map(DocumentGeneration.init),
                 dryRun: dryRun,
+                writePolicy: context.writePolicy,
                 forceFileEdit: forceFileEdit,
-                client: agentClient
+                client: context.agentClient
             )
             try CLIOutput.write(
                 response: response,
@@ -1068,6 +1074,9 @@ public struct SurfaceMoveControlPointCommand: ParsableCommand {
     @Flag(help: "Print a JSON result.")
     public var json: Bool = false
 
+    @OptionGroup
+    public var writeDestination: CLIWriteDestinationOptions
+
     public init() {}
 
     public func run() throws {
@@ -1079,26 +1088,25 @@ public struct SurfaceMoveControlPointCommand: ParsableCommand {
         )
 
         try CLIExitCode.run {
-            let agentClient = CLIAgentClientFactory.makeAgentClient(
+            let context = try CLILegacyMutationContextResolver.resolve(
+                file: file,
                 mode: mode,
                 sessionID: id,
-                socket: agentSocket
-            )
-            let documentTarget = CLIDocumentTarget(
-                fileURL: file.map(URL.init(fileURLWithPath:)),
-                sessionID: id
+                agentSocket: agentSocket,
+                forceFileEdit: forceFileEdit,
+                writeDestination: writeDestination
             )
             let lengthUnit = try CLILengthUnitResolver.resolve(
                 unitName: unit,
-                target: documentTarget,
+                target: context.target,
                 mode: mode,
                 expectedGeneration: expectedGeneration.map(DocumentGeneration.init),
-                forceFileEdit: forceFileEdit,
-                client: agentClient
+                forceFileEdit: context.forceFileEdit,
+                client: context.agentClient
             )
             let deltas = deltaExpressions(unit: lengthUnit)
             let response = try CLIService().moveSurfaceControlPoint(
-                target: documentTarget,
+                target: context.target,
                 reference: surfaceReference,
                 deltaX: deltas.x,
                 deltaY: deltas.y,
@@ -1106,8 +1114,9 @@ public struct SurfaceMoveControlPointCommand: ParsableCommand {
                 mode: mode,
                 expectedGeneration: expectedGeneration.map(DocumentGeneration.init),
                 dryRun: dryRun,
+                writePolicy: context.writePolicy,
                 forceFileEdit: forceFileEdit,
-                client: agentClient
+                client: context.agentClient
             )
             try CLIOutput.write(
                 response: response,
@@ -1179,6 +1188,9 @@ public struct SurfaceSlideControlPointsCommand: ParsableCommand {
     @Flag(help: "Print a JSON result.")
     public var json: Bool = false
 
+    @OptionGroup
+    public var writeDestination: CLIWriteDestinationOptions
+
     public init() {}
 
     public func run() throws {
@@ -1192,34 +1204,34 @@ public struct SurfaceSlideControlPointsCommand: ParsableCommand {
         )
 
         try CLIExitCode.run {
-            let agentClient = CLIAgentClientFactory.makeAgentClient(
+            let context = try CLILegacyMutationContextResolver.resolve(
+                file: file,
                 mode: mode,
                 sessionID: id,
-                socket: agentSocket
-            )
-            let documentTarget = CLIDocumentTarget(
-                fileURL: file.map(URL.init(fileURLWithPath:)),
-                sessionID: id
+                agentSocket: agentSocket,
+                forceFileEdit: forceFileEdit,
+                writeDestination: writeDestination
             )
             let lengthUnit = try CLILengthUnitResolver.resolve(
                 unitName: unit,
-                target: documentTarget,
+                target: context.target,
                 mode: mode,
                 expectedGeneration: expectedGeneration.map(DocumentGeneration.init),
-                forceFileEdit: forceFileEdit,
-                client: agentClient
+                forceFileEdit: context.forceFileEdit,
+                client: context.agentClient
             )
             let distanceExpression = lengthExpression(unit: lengthUnit)
             let response = try CLIService().slideSurfaceControlPoints(
-                target: documentTarget,
+                target: context.target,
                 references: references,
                 direction: direction.slideDirection,
                 distance: distanceExpression,
                 mode: mode,
                 expectedGeneration: expectedGeneration.map(DocumentGeneration.init),
                 dryRun: dryRun,
+                writePolicy: context.writePolicy,
                 forceFileEdit: forceFileEdit,
-                client: agentClient
+                client: context.agentClient
             )
             try CLIOutput.write(
                 response: response,
@@ -1307,12 +1319,16 @@ public struct LineSketchCommand: ParsableCommand {
     @Flag(help: "Print a JSON result.")
     public var json: Bool = false
 
+    @OptionGroup
+    public var writeDestination: CLIWriteDestinationOptions
+
     public init() {}
 
     public func run() throws {
         let id = try parsedSessionID(sessionID)
 
         try CLIExitCode.run {
+            let writePolicy = try writeDestination.writePolicy(file: file, mode: mode, sessionID: id)
             let url = URL(fileURLWithPath: file)
             let target = CLIDocumentTarget(
                 fileURL: url,
@@ -1328,7 +1344,7 @@ public struct LineSketchCommand: ParsableCommand {
                 target: target,
                 mode: mode,
                 expectedGeneration: expectedGeneration.map(DocumentGeneration.init),
-                forceFileEdit: forceFileEdit,
+                forceFileEdit: forceFileEdit || writePolicy.requiresFileMode,
                 client: agentClient
             )
             let points = pointExpressions(unit: lengthUnit)
@@ -1341,6 +1357,7 @@ public struct LineSketchCommand: ParsableCommand {
                 mode: mode,
                 expectedGeneration: expectedGeneration.map(DocumentGeneration.init),
                 dryRun: dryRun,
+                writePolicy: writePolicy,
                 forceFileEdit: forceFileEdit,
                 client: agentClient
             )
@@ -1453,12 +1470,16 @@ public struct CircleSketchCommand: ParsableCommand {
     @Flag(help: "Print a JSON result.")
     public var json: Bool = false
 
+    @OptionGroup
+    public var writeDestination: CLIWriteDestinationOptions
+
     public init() {}
 
     public func run() throws {
         let id = try parsedSessionID(sessionID)
 
         try CLIExitCode.run {
+            let writePolicy = try writeDestination.writePolicy(file: file, mode: mode, sessionID: id)
             let url = URL(fileURLWithPath: file)
             let target = CLIDocumentTarget(
                 fileURL: url,
@@ -1474,7 +1495,7 @@ public struct CircleSketchCommand: ParsableCommand {
                 target: target,
                 mode: mode,
                 expectedGeneration: expectedGeneration.map(DocumentGeneration.init),
-                forceFileEdit: forceFileEdit,
+                forceFileEdit: forceFileEdit || writePolicy.requiresFileMode,
                 client: agentClient
             )
             let values = circleExpressions(unit: lengthUnit)
@@ -1487,6 +1508,7 @@ public struct CircleSketchCommand: ParsableCommand {
                 mode: mode,
                 expectedGeneration: expectedGeneration.map(DocumentGeneration.init),
                 dryRun: dryRun,
+                writePolicy: writePolicy,
                 forceFileEdit: forceFileEdit,
                 client: agentClient
             )
@@ -1593,12 +1615,16 @@ public struct RectangleSketchCommand: ParsableCommand {
     @Flag(help: "Print a JSON result.")
     public var json: Bool = false
 
+    @OptionGroup
+    public var writeDestination: CLIWriteDestinationOptions
+
     public init() {}
 
     public func run() throws {
         let id = try parsedSessionID(sessionID)
 
         try CLIExitCode.run {
+            let writePolicy = try writeDestination.writePolicy(file: file, mode: mode, sessionID: id)
             let url = URL(fileURLWithPath: file)
             let target = CLIDocumentTarget(
                 fileURL: url,
@@ -1614,7 +1640,7 @@ public struct RectangleSketchCommand: ParsableCommand {
                 target: target,
                 mode: mode,
                 expectedGeneration: expectedGeneration.map(DocumentGeneration.init),
-                forceFileEdit: forceFileEdit,
+                forceFileEdit: forceFileEdit || writePolicy.requiresFileMode,
                 client: agentClient
             )
             let dimensions = dimensionExpressions(unit: lengthUnit)
@@ -1627,6 +1653,7 @@ public struct RectangleSketchCommand: ParsableCommand {
                 mode: mode,
                 expectedGeneration: expectedGeneration.map(DocumentGeneration.init),
                 dryRun: dryRun,
+                writePolicy: writePolicy,
                 forceFileEdit: forceFileEdit,
                 client: agentClient
             )
@@ -1736,12 +1763,16 @@ public struct BoxModelCommand: ParsableCommand {
     @Flag(help: "Print a JSON result.")
     public var json: Bool = false
 
+    @OptionGroup
+    public var writeDestination: CLIWriteDestinationOptions
+
     public init() {}
 
     public func run() throws {
         let id = try parsedSessionID(sessionID)
 
         try CLIExitCode.run {
+            let writePolicy = try writeDestination.writePolicy(file: file, mode: mode, sessionID: id)
             let url = URL(fileURLWithPath: file)
             let target = CLIDocumentTarget(
                 fileURL: url,
@@ -1757,7 +1788,7 @@ public struct BoxModelCommand: ParsableCommand {
                 target: target,
                 mode: mode,
                 expectedGeneration: expectedGeneration.map(DocumentGeneration.init),
-                forceFileEdit: forceFileEdit,
+                forceFileEdit: forceFileEdit || writePolicy.requiresFileMode,
                 client: agentClient
             )
             let dimensions = dimensionExpressions(unit: lengthUnit)
@@ -1772,6 +1803,7 @@ public struct BoxModelCommand: ParsableCommand {
                 mode: mode,
                 expectedGeneration: expectedGeneration.map(DocumentGeneration.init),
                 dryRun: dryRun,
+                writePolicy: writePolicy,
                 forceFileEdit: forceFileEdit,
                 client: agentClient
             )
@@ -1885,12 +1917,16 @@ public struct BoxCornersModelCommand: ParsableCommand {
     @Flag(help: "Print a JSON result.")
     public var json: Bool = false
 
+    @OptionGroup
+    public var writeDestination: CLIWriteDestinationOptions
+
     public init() {}
 
     public func run() throws {
         let id = try parsedSessionID(sessionID)
 
         try CLIExitCode.run {
+            let writePolicy = try writeDestination.writePolicy(file: file, mode: mode, sessionID: id)
             let url = URL(fileURLWithPath: file)
             let target = CLIDocumentTarget(
                 fileURL: url,
@@ -1906,7 +1942,7 @@ public struct BoxCornersModelCommand: ParsableCommand {
                 target: target,
                 mode: mode,
                 expectedGeneration: expectedGeneration.map(DocumentGeneration.init),
-                forceFileEdit: forceFileEdit,
+                forceFileEdit: forceFileEdit || writePolicy.requiresFileMode,
                 client: agentClient
             )
             let modelInputs = modelInputExpressions(unit: lengthUnit)
@@ -1921,6 +1957,7 @@ public struct BoxCornersModelCommand: ParsableCommand {
                 mode: mode,
                 expectedGeneration: expectedGeneration.map(DocumentGeneration.init),
                 dryRun: dryRun,
+                writePolicy: writePolicy,
                 forceFileEdit: forceFileEdit,
                 client: agentClient
             )
@@ -2041,12 +2078,16 @@ public struct CylinderModelCommand: ParsableCommand {
     @Flag(help: "Print a JSON result.")
     public var json: Bool = false
 
+    @OptionGroup
+    public var writeDestination: CLIWriteDestinationOptions
+
     public init() {}
 
     public func run() throws {
         let id = try parsedSessionID(sessionID)
 
         try CLIExitCode.run {
+            let writePolicy = try writeDestination.writePolicy(file: file, mode: mode, sessionID: id)
             let url = URL(fileURLWithPath: file)
             let target = CLIDocumentTarget(
                 fileURL: url,
@@ -2062,7 +2103,7 @@ public struct CylinderModelCommand: ParsableCommand {
                 target: target,
                 mode: mode,
                 expectedGeneration: expectedGeneration.map(DocumentGeneration.init),
-                forceFileEdit: forceFileEdit,
+                forceFileEdit: forceFileEdit || writePolicy.requiresFileMode,
                 client: agentClient
             )
             let values = dimensionExpressions(unit: lengthUnit)
@@ -2077,6 +2118,7 @@ public struct CylinderModelCommand: ParsableCommand {
                 mode: mode,
                 expectedGeneration: expectedGeneration.map(DocumentGeneration.init),
                 dryRun: dryRun,
+                writePolicy: writePolicy,
                 forceFileEdit: forceFileEdit,
                 client: agentClient
             )
@@ -2177,6 +2219,9 @@ public struct ExtrudeModelCommand: ParsableCommand {
     @Flag(help: "Print a JSON result.")
     public var json: Bool = false
 
+    @OptionGroup
+    public var writeDestination: CLIWriteDestinationOptions
+
     public init() {}
 
     public func run() throws {
@@ -2184,6 +2229,7 @@ public struct ExtrudeModelCommand: ParsableCommand {
         let profile = try profileReference()
 
         try CLIExitCode.run {
+            let writePolicy = try writeDestination.writePolicy(file: file, mode: mode, sessionID: id)
             let url = URL(fileURLWithPath: file)
             let target = CLIDocumentTarget(
                 fileURL: url,
@@ -2199,7 +2245,7 @@ public struct ExtrudeModelCommand: ParsableCommand {
                 target: target,
                 mode: mode,
                 expectedGeneration: expectedGeneration.map(DocumentGeneration.init),
-                forceFileEdit: forceFileEdit,
+                forceFileEdit: forceFileEdit || writePolicy.requiresFileMode,
                 client: agentClient
             )
             let distanceExpression = distanceExpression(unit: lengthUnit)
@@ -2212,6 +2258,7 @@ public struct ExtrudeModelCommand: ParsableCommand {
                 mode: mode,
                 expectedGeneration: expectedGeneration.map(DocumentGeneration.init),
                 dryRun: dryRun,
+                writePolicy: writePolicy,
                 forceFileEdit: forceFileEdit,
                 client: agentClient
             )
@@ -2838,44 +2885,47 @@ public struct SetParameterCommand: ParsableCommand {
     @Flag(help: "Print a JSON result.")
     public var json: Bool = false
 
+    @OptionGroup
+    public var writeDestination: CLIWriteDestinationOptions
+
     public init() {}
 
     public func run() throws {
         let id = try parsedSessionID(sessionID)
 
         try CLIExitCode.run {
-            let url = URL(fileURLWithPath: file)
-            let agentClient = makeAgentClient(
+            let context = try CLILegacyMutationContextResolver.resolve(
+                file: file,
                 mode: mode,
                 sessionID: id,
-                socket: agentSocket
-            )
-            let target = CLIDocumentTarget(
-                fileURL: url,
-                sessionID: id
+                agentSocket: agentSocket,
+                forceFileEdit: forceFileEdit,
+                writeDestination: writeDestination
             )
             let service = CLIService()
             let parameter = try parameterInput(
-                target: target,
-                client: agentClient
+                target: context.target,
+                forceFileEdit: context.forceFileEdit,
+                client: context.agentClient
             )
             let response: CLIResponse
             switch parameter {
             case .literal(let expression, let kind):
                 response = try service.setParameter(
-                    target: target,
+                    target: context.target,
                     name: name,
                     expression: expression,
                     kind: kind,
                     mode: mode,
                     expectedGeneration: expectedGeneration.map(DocumentGeneration.init),
                     dryRun: dryRun,
+                    writePolicy: context.writePolicy,
                     forceFileEdit: forceFileEdit,
-                    client: agentClient
+                    client: context.agentClient
                 )
             case .formula(let expression, let kind, let defaults):
                 response = try service.setParameterExpression(
-                    target: target,
+                    target: context.target,
                     name: name,
                     expression: expression,
                     kind: kind,
@@ -2883,8 +2933,9 @@ public struct SetParameterCommand: ParsableCommand {
                     mode: mode,
                     expectedGeneration: expectedGeneration.map(DocumentGeneration.init),
                     dryRun: dryRun,
+                    writePolicy: context.writePolicy,
                     forceFileEdit: forceFileEdit,
-                    client: agentClient
+                    client: context.agentClient
                 )
             }
             try CLIOutput.write(
@@ -2911,6 +2962,7 @@ public struct SetParameterCommand: ParsableCommand {
 
     private func parameterInput(
         target: CLIDocumentTarget,
+        forceFileEdit: Bool,
         client: AgentClientProtocol?
     ) throws -> ParameterInput {
         if let expression {
@@ -2922,12 +2974,14 @@ public struct SetParameterCommand: ParsableCommand {
                 kind.quantityKind,
                 try expressionDefaults(
                     target: target,
+                    forceFileEdit: forceFileEdit,
                     client: client
                 )
             )
         }
         let parsed = try parameterExpression(
             target: target,
+            forceFileEdit: forceFileEdit,
             client: client
         )
         return .literal(parsed.expression, parsed.kind)
@@ -2935,6 +2989,7 @@ public struct SetParameterCommand: ParsableCommand {
 
     private func parameterExpression(
         target: CLIDocumentTarget,
+        forceFileEdit: Bool,
         client: AgentClientProtocol?
     ) throws -> (expression: CADExpression, kind: QuantityKind) {
         guard let value else {
@@ -2981,6 +3036,7 @@ public struct SetParameterCommand: ParsableCommand {
 
     private func expressionDefaults(
         target: CLIDocumentTarget,
+        forceFileEdit: Bool,
         client: AgentClientProtocol?
     ) throws -> ParameterExpressionDefaults {
         switch kind {
@@ -3074,29 +3130,32 @@ public struct DeleteParameterCommand: ParsableCommand {
     @Flag(help: "Print a JSON result.")
     public var json: Bool = false
 
+    @OptionGroup
+    public var writeDestination: CLIWriteDestinationOptions
+
     public init() {}
 
     public func run() throws {
         let id = try parsedSessionID(sessionID)
 
         try CLIExitCode.run {
-            let url = URL(fileURLWithPath: file)
-            let agentClient = makeAgentClient(
+            let context = try CLILegacyMutationContextResolver.resolve(
+                file: file,
                 mode: mode,
                 sessionID: id,
-                socket: agentSocket
+                agentSocket: agentSocket,
+                forceFileEdit: forceFileEdit,
+                writeDestination: writeDestination
             )
             let response = try CLIService().deleteParameter(
-                target: CLIDocumentTarget(
-                    fileURL: url,
-                    sessionID: id
-                ),
+                target: context.target,
                 name: name,
                 mode: mode,
                 expectedGeneration: expectedGeneration.map(DocumentGeneration.init),
                 dryRun: dryRun,
+                writePolicy: context.writePolicy,
                 forceFileEdit: forceFileEdit,
-                client: agentClient
+                client: context.agentClient
             )
             try CLIOutput.write(
                 response: response,
@@ -3170,30 +3229,33 @@ public struct RenameParameterCommand: ParsableCommand {
     @Flag(help: "Print a JSON result.")
     public var json: Bool = false
 
+    @OptionGroup
+    public var writeDestination: CLIWriteDestinationOptions
+
     public init() {}
 
     public func run() throws {
         let id = try parsedSessionID(sessionID)
 
         try CLIExitCode.run {
-            let url = URL(fileURLWithPath: file)
-            let agentClient = makeAgentClient(
+            let context = try CLILegacyMutationContextResolver.resolve(
+                file: file,
                 mode: mode,
                 sessionID: id,
-                socket: agentSocket
+                agentSocket: agentSocket,
+                forceFileEdit: forceFileEdit,
+                writeDestination: writeDestination
             )
             let response = try CLIService().renameParameter(
-                target: CLIDocumentTarget(
-                    fileURL: url,
-                    sessionID: id
-                ),
+                target: context.target,
                 currentName: currentName,
                 newName: newName,
                 mode: mode,
                 expectedGeneration: expectedGeneration.map(DocumentGeneration.init),
                 dryRun: dryRun,
+                writePolicy: context.writePolicy,
                 forceFileEdit: forceFileEdit,
-                client: agentClient
+                client: context.agentClient
             )
             try CLIOutput.write(
                 response: response,
@@ -3264,29 +3326,32 @@ public struct RenameDocument: ParsableCommand {
     @Flag(help: "Print a JSON result.")
     public var json: Bool = false
 
+    @OptionGroup
+    public var writeDestination: CLIWriteDestinationOptions
+
     public init() {}
 
     public func run() throws {
         let id = try parsedSessionID(sessionID)
 
         try CLIExitCode.run {
-            let url = URL(fileURLWithPath: file)
-            let agentClient = makeAgentClient(
+            let context = try CLILegacyMutationContextResolver.resolve(
+                file: file,
                 mode: mode,
                 sessionID: id,
-                socket: agentSocket
+                agentSocket: agentSocket,
+                forceFileEdit: forceFileEdit,
+                writeDestination: writeDestination
             )
             let response = try CLIService().renameDocument(
-                target: CLIDocumentTarget(
-                    fileURL: url,
-                    sessionID: id
-                ),
+                target: context.target,
                 name: name,
                 mode: mode,
                 expectedGeneration: expectedGeneration.map(DocumentGeneration.init),
                 dryRun: dryRun,
+                writePolicy: context.writePolicy,
                 forceFileEdit: forceFileEdit,
-                client: agentClient
+                client: context.agentClient
             )
             try CLIOutput.write(
                 response: response,

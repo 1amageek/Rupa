@@ -84,6 +84,48 @@ func cliExecutableParameterSetPersistsClosedDocumentAsJSON() async throws {
 }
 
 @Test(.timeLimit(.minutes(1)))
+func cliExecutableParameterSetWritesOutputDocumentAsJSON() async throws {
+    let temporaryDirectory = try makeTemporaryDirectory()
+    defer {
+        removeTemporaryDirectory(temporaryDirectory)
+    }
+    let inputURL = temporaryDirectory.appendingPathComponent("process-param-output-input.swcad")
+    let outputURL = temporaryDirectory.appendingPathComponent("process-param-output.swcad")
+    try DocumentFileService().save(.empty(named: "Parameter Source"), to: inputURL)
+
+    let result = try await runCLI([
+        "param",
+        "set",
+        inputURL.path,
+        "width",
+        "12",
+        "--unit",
+        "millimeter",
+        "--output",
+        outputURL.path,
+        "--mode",
+        "file",
+        "--json",
+    ])
+    let response = try JSONDecoder().decode(
+        CLIResponse.self,
+        from: result.standardOutputData
+    )
+    let input = try DocumentFileService().load(from: inputURL)
+    let output = try DocumentFileService().load(from: outputURL)
+    let width = try #require(
+        output.cadDocument.parameters.parameters.values.first { $0.name == "width" }
+    )
+    let resolved = try output.cadDocument.parameters.resolvedValue(for: width.expression)
+
+    #expect(result.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: result.standardError))
+    #expect(response.saved)
+    #expect(input.cadDocument.parameters.parameters.values.allSatisfy { $0.name != "width" })
+    #expect(resolved.kind == .length)
+    #expect(abs(resolved.value - 0.012) < 0.000_000_000_001)
+}
+
+@Test(.timeLimit(.minutes(1)))
 func cliExecutableParameterFormulaAndListClosedDocumentAsJSON() async throws {
     let temporaryDirectory = try makeTemporaryDirectory()
     defer {
@@ -397,6 +439,51 @@ func cliExecutableSketchLineClosedDocumentAsJSON() async throws {
     #expect(response.message == "Line sketch Process Line created.")
     #expect(response.saved)
     #expect(loaded.cadDocument.designGraph.order.count == 1)
+}
+
+@Test(.timeLimit(.minutes(1)))
+func cliExecutableSketchLineWritesOutputDocumentAsJSON() async throws {
+    let temporaryDirectory = try makeTemporaryDirectory()
+    defer {
+        removeTemporaryDirectory(temporaryDirectory)
+    }
+    let inputURL = temporaryDirectory.appendingPathComponent("process-line-output-input.swcad")
+    let outputURL = temporaryDirectory.appendingPathComponent("process-line-output.swcad")
+    try DocumentFileService().save(.empty(named: "Line Source"), to: inputURL)
+
+    let result = try await runCLI([
+        "sketch",
+        "line",
+        inputURL.path,
+        "--name",
+        "Output Line",
+        "--start-x",
+        "0",
+        "--start-y",
+        "0",
+        "--end-x",
+        "12",
+        "--end-y",
+        "6",
+        "--unit",
+        "millimeter",
+        "--output",
+        outputURL.path,
+        "--mode",
+        "file",
+        "--json",
+    ])
+    let response = try JSONDecoder().decode(
+        CLIResponse.self,
+        from: result.standardOutputData
+    )
+    let input = try DocumentFileService().load(from: inputURL)
+    let output = try DocumentFileService().load(from: outputURL)
+
+    #expect(result.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: result.standardError))
+    #expect(response.saved)
+    #expect(input.cadDocument.designGraph.order.isEmpty)
+    #expect(output.cadDocument.designGraph.order.count == 1)
 }
 
 @Test(.timeLimit(.minutes(1)))
@@ -4792,6 +4879,59 @@ func cliExecutableSurfaceMoveControlPointMutatesClosedDocumentAsJSON() async thr
 }
 
 @Test(.timeLimit(.minutes(1)))
+func cliExecutableSurfaceMoveControlPointWritesOutputDocumentAsJSON() async throws {
+    let temporaryDirectory = try makeTemporaryDirectory()
+    defer {
+        removeTemporaryDirectory(temporaryDirectory)
+    }
+    let inputURL = temporaryDirectory.appendingPathComponent("process-surface-move-output-input.swcad")
+    let outputURL = temporaryDirectory.appendingPathComponent("process-surface-move-output.swcad")
+    var document = DesignDocument.empty(named: "Surface Move Source")
+    _ = try document.createPolySplineSurface(
+        name: "CLI Output Move Surface",
+        sourceMesh: cliPolySplinePatchNetworkMesh(centerZ: 0.0),
+        options: PolySplineOptions(mergePatches: false)
+    )
+    let summary = try SurfaceSourceSummaryService().summarize(document: document)
+    let patch = try #require(summary.sources.first?.patches.first)
+    let controlPoint = try #require(patch.controlPoints.first { $0.uIndex == 1 && $0.vIndex == 1 })
+    let referenceJSON = try encodedSelectionReference(controlPoint.selectionReference)
+    try DocumentFileService().save(document, to: inputURL)
+
+    let result = try await runCLI([
+        "surface",
+        "move-control-point",
+        inputURL.path,
+        "--reference",
+        referenceJSON,
+        "--delta-z",
+        "1",
+        "--unit",
+        "millimeter",
+        "--output",
+        outputURL.path,
+        "--mode",
+        "file",
+        "--json",
+    ])
+    let response = try JSONDecoder().decode(
+        CLIResponse.self,
+        from: result.standardOutputData
+    )
+    let input = try DocumentFileService().load(from: inputURL)
+    let output = try DocumentFileService().load(from: outputURL)
+    let inputSummary = try SurfaceSourceSummaryService().summarize(document: input)
+    let outputSummary = try SurfaceSourceSummaryService().summarize(document: output)
+    let inputPoint = try #require(inputSummary.sources.first?.patches.first?.controlPoints.first { $0.uIndex == 1 && $0.vIndex == 1 })
+    let outputPoint = try #require(outputSummary.sources.first?.patches.first?.controlPoints.first { $0.uIndex == 1 && $0.vIndex == 1 })
+
+    #expect(result.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: result.standardError))
+    #expect(response.saved)
+    #expect(abs(inputPoint.point.z - controlPoint.point.z) < 0.000_000_000_001)
+    #expect(abs(outputPoint.point.z - (controlPoint.point.z + 0.001)) < 0.000_000_000_001)
+}
+
+@Test(.timeLimit(.minutes(1)))
 func cliExecutableSurfaceMoveControlPointsInFrameMutatesClosedDocumentAsJSON() async throws {
     let temporaryDirectory = try makeTemporaryDirectory()
     defer {
@@ -5853,6 +5993,74 @@ func cliExecutableSketchDimensionSummaryAndSetMutateClosedDocumentAsJSON() async
     #expect(setResponse.message == "Sketch entity dimension updated.")
     #expect(setResponse.saved)
     #expect(abs(updatedLength.resolvedValue - 0.020) < 0.000_000_000_001)
+}
+
+@Test(.timeLimit(.minutes(1)))
+func cliExecutableSketchDimensionSetWritesOutputDocumentAsJSON() async throws {
+    let temporaryDirectory = try makeTemporaryDirectory()
+    defer {
+        removeTemporaryDirectory(temporaryDirectory)
+    }
+    let inputURL = temporaryDirectory.appendingPathComponent("process-sketch-dimension-output-input.swcad")
+    let outputURL = temporaryDirectory.appendingPathComponent("process-sketch-dimension-output.swcad")
+    var document = DesignDocument.empty(named: "Sketch Dimension Source")
+    _ = try document.createLineSketch(
+        name: "Output Dimension Line",
+        plane: .xy,
+        start: SketchPoint(
+            x: .length(0.0, .millimeter),
+            y: .length(0.0, .millimeter)
+        ),
+        end: SketchPoint(
+            x: .length(10.0, .millimeter),
+            y: .length(0.0, .millimeter)
+        )
+    )
+    let sketchSummary = try SketchEntitySummaryService().summarize(document: document)
+    let line = try #require(sketchSummary.entries.first { $0.entityKind == "line" })
+    let target = try #require(line.selectionTarget())
+    let targetJSON = try encodedSelectionTarget(target)
+    try DocumentFileService().save(document, to: inputURL)
+
+    let result = try await runCLI([
+        "dimension",
+        "set-sketch",
+        inputURL.path,
+        "--target",
+        targetJSON,
+        "--kind",
+        "length",
+        "--value",
+        "20",
+        "--unit",
+        "millimeter",
+        "--output",
+        outputURL.path,
+        "--mode",
+        "file",
+        "--json",
+    ])
+    let response = try JSONDecoder().decode(
+        CLIResponse.self,
+        from: result.standardOutputData
+    )
+    let input = try DocumentFileService().load(from: inputURL)
+    let output = try DocumentFileService().load(from: outputURL)
+    let inputSummary = try SketchDimensionSummaryService().summarize(
+        document: input,
+        targets: [target]
+    )
+    let outputSummary = try SketchDimensionSummaryService().summarize(
+        document: output,
+        targets: [target]
+    )
+    let inputLength = try #require(inputSummary.entries.first { $0.kind == .length })
+    let outputLength = try #require(outputSummary.entries.first { $0.kind == .length })
+
+    #expect(result.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: result.standardError))
+    #expect(response.saved)
+    #expect(abs(inputLength.resolvedValue - 0.010) < 0.000_000_000_001)
+    #expect(abs(outputLength.resolvedValue - 0.020) < 0.000_000_000_001)
 }
 
 @Suite(.serialized)

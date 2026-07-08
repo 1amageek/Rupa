@@ -16,7 +16,6 @@ workflow) > `ergonomics` (usable but hostile) > `hardening` (defense in depth).
 
 | ID | Issue | Detail | Found |
 |---|---|---|---|
-| W-3 | Legacy inline CLI commands still lack shared `--output` file-mode support | `CLIWriteDocumentOptions` machine-facing mutation commands now route through `CLIDocumentWritePolicy` with `.swcad`/existing-output/live-session validation; older inline commands in `CLICommand.swift` still need migration to the shared write target contract. | SPEC gap audit |
 | W-4 | Live/auto batch is non-atomic | Documented in `rupa batch` help: per-command commits, partial application on mid-batch failure. A server-side transactional batch (AgentRequest.executeBatch) would close it. | batch review |
 | W-5 | MCP bridge not implemented | The protocol names MCP clients as a target consumer; no bridge exists, so vision-LLM agents cannot consume capabilities/renders directly. | agent harness review |
 

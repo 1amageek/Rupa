@@ -19,11 +19,8 @@ public struct CLIWriteDocumentOptions: ParsableArguments {
     @Flag(help: "Validate the command without saving the changed file.")
     public var dryRun: Bool = false
 
-    @Flag(name: .customLong("in-place"), help: "Write file-mode mutations back to the input file. This is the default when --output is omitted.")
-    public var inPlace: Bool = false
-
-    @Option(help: "Write file-mode mutations to a new .swcad output file instead of modifying the input file.")
-    public var output: String?
+    @OptionGroup
+    public var destination: CLIWriteDestinationOptions
 
     @Flag(help: "Allow direct file mutation even if the app reports the same file as open.")
     public var forceFileEdit: Bool = false
@@ -41,7 +38,7 @@ public struct CLIWriteDocumentOptions: ParsableArguments {
     }
 
     public func target(sessionID: UUID?) throws -> CLIDocumentTarget {
-        try validateWriteDestination(sessionID: sessionID)
+        try destination.validate(file: file, mode: mode, sessionID: sessionID)
         return CLIDocumentTarget(
             fileURL: file.map(URL.init(fileURLWithPath:)),
             sessionID: sessionID
@@ -49,7 +46,87 @@ public struct CLIWriteDocumentOptions: ParsableArguments {
     }
 
     public func writePolicy(sessionID: UUID?) throws -> CLIDocumentWritePolicy {
-        try validateWriteDestination(sessionID: sessionID)
+        try destination.writePolicy(file: file, mode: mode, sessionID: sessionID)
+    }
+
+    public func generation() -> DocumentGeneration? {
+        expectedGeneration.map(DocumentGeneration.init)
+    }
+
+    public func agentClient(sessionID: UUID?) -> AgentClient? {
+        CLIAgentClientFactory.makeAgentClient(
+            mode: mode,
+            sessionID: sessionID,
+            socket: agentSocket
+        )
+    }
+}
+
+public struct CLIWriteDestinationOptions: ParsableArguments {
+    @Flag(name: .customLong("in-place"), help: "Write file-mode mutations back to the input file. This is the default when --output is omitted.")
+    public var inPlace: Bool = false
+
+    @Option(help: "Write file-mode mutations to a new .swcad output file instead of modifying the input file.")
+    public var output: String?
+
+    public init() {}
+
+    public func validate(
+        file: String?,
+        mode: CLIEditMode,
+        sessionID: UUID?
+    ) throws {
+        try CLIDocumentWritePolicyResolver.validate(
+            inPlace: inPlace,
+            output: output,
+            file: file,
+            mode: mode,
+            sessionID: sessionID
+        )
+    }
+
+    public func writePolicy(
+        file: String?,
+        mode: CLIEditMode,
+        sessionID: UUID?
+    ) throws -> CLIDocumentWritePolicy {
+        try CLIDocumentWritePolicyResolver.writePolicy(
+            inPlace: inPlace,
+            output: output,
+            file: file,
+            mode: mode,
+            sessionID: sessionID
+        )
+    }
+
+    public func forcesFileMode(
+        file: String?,
+        mode: CLIEditMode,
+        sessionID: UUID?
+    ) throws -> Bool {
+        try writePolicy(
+            file: file,
+            mode: mode,
+            sessionID: sessionID
+        ).requiresFileMode
+    }
+}
+
+enum CLIDocumentWritePolicyResolver {
+    static func writePolicy(
+        inPlace: Bool,
+        output: String?,
+        file: String?,
+        mode: CLIEditMode,
+        sessionID: UUID?
+    ) throws -> CLIDocumentWritePolicy {
+        try validate(
+            inPlace: inPlace,
+            output: output,
+            file: file,
+            mode: mode,
+            sessionID: sessionID
+        )
         guard let output else {
             return .inPlace
         }
@@ -60,7 +137,13 @@ public struct CLIWriteDocumentOptions: ParsableArguments {
         return .output(outputURL)
     }
 
-    private func validateWriteDestination(sessionID: UUID?) throws {
+    static func validate(
+        inPlace: Bool,
+        output: String?,
+        file: String?,
+        mode: CLIEditMode,
+        sessionID: UUID?
+    ) throws {
         guard !(inPlace && output != nil) else {
             throw ValidationError("--in-place and --output cannot be combined.")
         }
@@ -79,17 +162,5 @@ public struct CLIWriteDocumentOptions: ParsableArguments {
         guard !(output != nil && file == nil) else {
             throw ValidationError("--output requires an input document file path.")
         }
-    }
-
-    public func generation() -> DocumentGeneration? {
-        expectedGeneration.map(DocumentGeneration.init)
-    }
-
-    public func agentClient(sessionID: UUID?) -> AgentClient? {
-        CLIAgentClientFactory.makeAgentClient(
-            mode: mode,
-            sessionID: sessionID,
-            socket: agentSocket
-        )
     }
 }

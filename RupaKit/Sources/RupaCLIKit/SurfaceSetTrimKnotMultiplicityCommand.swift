@@ -45,6 +45,9 @@ public struct SurfaceSetTrimKnotMultiplicityCommand: ParsableCommand {
     @Flag(help: "Print a JSON result.")
     public var json: Bool = false
 
+    @OptionGroup
+    public var writeDestination: CLIWriteDestinationOptions
+
     public init() {}
 
     public func run() throws {
@@ -56,6 +59,7 @@ public struct SurfaceSetTrimKnotMultiplicityCommand: ParsableCommand {
         )
 
         try CLIExitCode.run {
+            let writePolicy = try writeDestination.writePolicy(file: file, mode: mode, sessionID: id)
             let agentClient = CLIAgentClientFactory.makeAgentClient(
                 mode: mode,
                 sessionID: id,
@@ -72,6 +76,7 @@ public struct SurfaceSetTrimKnotMultiplicityCommand: ParsableCommand {
                 mode: mode,
                 expectedGeneration: expectedGeneration.map(DocumentGeneration.init),
                 dryRun: dryRun,
+                writePolicy: writePolicy,
                 forceFileEdit: forceFileEdit,
                 client: agentClient
             )

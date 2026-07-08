@@ -63,6 +63,9 @@ public struct SurfaceMoveControlPointsInFrameCommand: ParsableCommand {
     @Flag(help: "Print a JSON result.")
     public var json: Bool = false
 
+    @OptionGroup
+    public var writeDestination: CLIWriteDestinationOptions
+
     public init() {}
 
     public func run() throws {
@@ -71,6 +74,7 @@ public struct SurfaceMoveControlPointsInFrameCommand: ParsableCommand {
         let resolvedFrameQuery = try decodedFrameQuery()
 
         try CLIExitCode.run {
+            let writePolicy = try writeDestination.writePolicy(file: file, mode: mode, sessionID: id)
             let agentClient = CLIAgentClientFactory.makeAgentClient(
                 mode: mode,
                 sessionID: id,
@@ -85,7 +89,7 @@ public struct SurfaceMoveControlPointsInFrameCommand: ParsableCommand {
                 target: documentTarget,
                 mode: mode,
                 expectedGeneration: expectedGeneration.map(DocumentGeneration.init),
-                forceFileEdit: forceFileEdit,
+                forceFileEdit: forceFileEdit || writePolicy.requiresFileMode,
                 client: agentClient
             )
             let distances = distanceExpressions(unit: lengthUnit)
@@ -99,6 +103,7 @@ public struct SurfaceMoveControlPointsInFrameCommand: ParsableCommand {
                 mode: mode,
                 expectedGeneration: expectedGeneration.map(DocumentGeneration.init),
                 dryRun: dryRun,
+                writePolicy: writePolicy,
                 forceFileEdit: forceFileEdit,
                 client: agentClient
             )
