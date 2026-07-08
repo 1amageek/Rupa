@@ -78,6 +78,14 @@ public struct AgentRequestEnvelope: Codable, Equatable, Sendable {
                 ),
                 forKey: .params
             )
+        case let .executeBatch(sessionID, batch):
+            try container.encode(
+                ExecuteBatchParams(
+                    sessionID: sessionID,
+                    batch: batch
+                ),
+                forKey: .params
+            )
         case let .parameters(sessionID, expectedGeneration):
             try container.encode(
                 SessionGenerationParams(
@@ -322,6 +330,12 @@ public struct AgentRequestEnvelope: Codable, Equatable, Sendable {
                 sessionID: payload.sessionID,
                 command: payload.command,
                 expectedGeneration: payload.expectedGeneration
+            )
+        case "command.applyBatch":
+            let payload = try decodeParams(ExecuteBatchParams.self, from: container, method: method)
+            return .executeBatch(
+                sessionID: payload.sessionID,
+                batch: payload.batch
             )
         case "document.parameters":
             let payload = try decodeParams(SessionGenerationParams.self, from: container, method: method)
@@ -634,6 +648,13 @@ private struct ExecuteParams: AgentRequestParameterPayload, Equatable {
     var sessionID: UUID
     var command: AutomationCommand
     var expectedGeneration: DocumentGeneration?
+}
+
+private struct ExecuteBatchParams: AgentRequestParameterPayload, Equatable {
+    static let allowedKeys: Set<String> = ["sessionID", "batch"]
+
+    var sessionID: UUID
+    var batch: AutomationBatch
 }
 
 private struct SetParameterExpressionParams: AgentRequestParameterPayload, Equatable {

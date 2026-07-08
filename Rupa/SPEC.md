@@ -77,7 +77,7 @@ The supported implementation has one editing pipeline:
 | GUI tool | RupaCore command through `CommandStack` | Undoable session mutation and UI update. |
 | CLI file mode | RupaCore command on a loaded document | Atomic file write or structured failure. |
 | CLI live mode | RupaAgent request into app `EditorSession` | App session mutation, dirty state, diagnostics, structured CLI result. |
-| Batch automation | Ordered `AutomationCommand` execution | Ordered results with generation and diagnostics. |
+| Batch automation | Ordered `AutomationCommand` execution inside an `EditorSession` transaction | Ordered results with generation and diagnostics; failed batches restore document, selection, and undo/redo state. |
 
 The required product capabilities are defined separately from the implementation graph.
 
@@ -1528,10 +1528,10 @@ All mutating commands accept the relevant mode, save, dry-run, and JSON options.
 |---|---|
 | GUI command | Participates in undo and redo according to its command definition. |
 | Live CLI command | Participates in the app undo stack when the command definition supports undo. |
-| Live batch | Records either one batch undo unit or explicit per-command undo units according to batch options. |
+| Live batch | Applies as one transaction; successful commands currently enter undo history as per-command entries, while failed batches restore document, selection, and undo/redo history. |
 | File mode command | Does not participate in app undo because no app session owns the mutation. |
 
-The concrete batch grouping option is an open design detail, but live mode must not bypass the same undo-capable `CommandStack`.
+The concrete batch grouping option is an open design detail, but live mode must not bypass the same undo-capable `CommandStack` or leave partial session state after a failed batch.
 
 ## Automation Results
 

@@ -102,6 +102,31 @@ public final class EditorSession {
         self.selection = initialSelection
     }
 
+    public func transactionSnapshot() -> EditorSessionTransactionSnapshot {
+        EditorSessionTransactionSnapshot(
+            store: store.transactionSnapshot(),
+            commandStack: commandStack.snapshot(),
+            selection: selection
+        )
+    }
+
+    public func restoreTransactionSnapshot(_ snapshot: EditorSessionTransactionSnapshot) {
+        store.restoreTransactionSnapshot(snapshot.store)
+        commandStack.restore(snapshot.commandStack)
+        selection = snapshot.selection
+        selection.pruneMissingReferences(in: document)
+    }
+
+    public func withTransaction<T>(_ operation: () throws -> T) throws -> T {
+        let snapshot = transactionSnapshot()
+        do {
+            return try operation()
+        } catch {
+            restoreTransactionSnapshot(snapshot)
+            throw error
+        }
+    }
+
     public func selectTool(_ tool: ModelingTool) {
         selectedTool = tool
         clearSketchInputStateIfNeeded(for: tool)

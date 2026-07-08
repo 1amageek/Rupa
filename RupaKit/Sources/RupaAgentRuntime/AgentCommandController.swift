@@ -87,6 +87,16 @@ public final class AgentCommandController: AgentClientProtocol {
                     )
                 }
                 return .command(commandResult)
+            case let .executeBatch(sessionID, batch):
+                let session = try registry.session(id: sessionID)
+                let results = try runner.executeBatch(batch, in: session)
+                return .batch(
+                    AgentBatchResult(
+                        results: results,
+                        generation: session.generation,
+                        dirty: session.isDirty
+                    )
+                )
             case let .parameters(sessionID, expectedGeneration):
                 let session = try registry.session(id: sessionID)
                 try session.store.requireGeneration(expectedGeneration)

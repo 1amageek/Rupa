@@ -39,6 +39,18 @@ public final class CommandStack {
         !redoEntries.isEmpty
     }
 
+    public func snapshot() -> CommandStackSnapshot {
+        CommandStackSnapshot(
+            undoEntries: undoEntries,
+            redoEntries: redoEntries
+        )
+    }
+
+    public func restore(_ snapshot: CommandStackSnapshot) {
+        undoEntries = snapshot.undoEntries
+        redoEntries = snapshot.redoEntries
+    }
+
     @discardableResult
     public func execute(
         _ command: EditorCommand,

@@ -3530,6 +3530,89 @@ struct CLICommandApplyTests {
     }
 
     @Test(.timeLimit(.minutes(1)))
+    func serviceAppliesLiveAutomationBatchThroughAgentBatchRequest() async throws {
+        let server = AgentCommandController()
+        let sessionID = UUID()
+        let session = EditorSession(document: .empty(named: "Before Live Batch"))
+        server.register(session: session, id: sessionID)
+
+        let response = try CLIService().runBatch(
+            target: CLIDocumentTarget(sessionID: sessionID),
+            batch: AutomationBatch(
+                commands: [
+                    .renameDocument(name: "Intermediate Live Batch"),
+                    .renameDocument(name: "After Live Batch"),
+                ],
+                expectedGeneration: DocumentGeneration(0)
+            ),
+            mode: .live,
+            client: server
+        )
+
+        #expect(response.commandCount == 2)
+        #expect(response.didMutate)
+        #expect(response.generation == 2)
+        #expect(response.dirty)
+        #expect(!response.saved)
+        #expect(session.document.cadDocument.metadata.name == "After Live Batch")
+        #expect(session.generation == DocumentGeneration(2))
+    }
+
+    @Test(.timeLimit(.minutes(1)))
+    func serviceAcceptsEmptyLiveAutomationBatch() async throws {
+        let server = AgentCommandController()
+        let sessionID = UUID()
+        let session = EditorSession(document: .empty(named: "Empty Live Batch"))
+        server.register(session: session, id: sessionID)
+
+        let response = try CLIService().runBatch(
+            target: CLIDocumentTarget(sessionID: sessionID),
+            batch: AutomationBatch(commands: [], expectedGeneration: DocumentGeneration(0)),
+            mode: .live,
+            client: server
+        )
+
+        #expect(response.commandCount == 0)
+        #expect(!response.didMutate)
+        #expect(response.generation == 0)
+        #expect(!response.dirty)
+        #expect(!response.saved)
+        #expect(session.document.cadDocument.metadata.name == "Empty Live Batch")
+    }
+
+    @Test(.timeLimit(.minutes(1)))
+    func serviceRollsBackLiveAutomationBatchOnFailure() async throws {
+        let server = AgentCommandController()
+        let sessionID = UUID()
+        let session = EditorSession(document: .empty(named: "Before Failed Live Batch"))
+        server.register(session: session, id: sessionID)
+        var caught: EditorError?
+
+        do {
+            _ = try CLIService().runBatch(
+                target: CLIDocumentTarget(sessionID: sessionID),
+                batch: AutomationBatch(
+                    commands: [
+                        .renameDocument(name: "Partially Applied Live Batch"),
+                        .deleteParameter(name: "missing"),
+                    ],
+                    expectedGeneration: DocumentGeneration(0)
+                ),
+                mode: .live,
+                client: server
+            )
+        } catch let error as EditorError {
+            caught = error
+        }
+
+        #expect(caught?.code == .referenceUnresolved)
+        #expect(session.document.cadDocument.metadata.name == "Before Failed Live Batch")
+        #expect(session.generation == DocumentGeneration(0))
+        #expect(!session.isDirty)
+        #expect(!session.commandStack.canUndo)
+    }
+
+    @Test(.timeLimit(.minutes(1)))
     func executableAppliesAutomationCommandPayloadsAsJSON() async throws {
         let temporaryDirectory = try makeTemporaryDirectory()
         defer {

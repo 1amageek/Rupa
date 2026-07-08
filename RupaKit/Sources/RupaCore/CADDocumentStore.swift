@@ -108,6 +108,24 @@ public final class CADDocumentStore {
         )
     }
 
+    public func transactionSnapshot() -> CADDocumentStoreTransactionSnapshot {
+        CADDocumentStoreTransactionSnapshot(
+            document: snapshot(),
+            evaluationCache: currentEvaluationCache
+        )
+    }
+
+    public func restoreTransactionSnapshot(_ snapshot: CADDocumentStoreTransactionSnapshot) {
+        restore(snapshot.document)
+        evaluationCache = Self.currentValidatedEvaluationCache(
+            cache: snapshot.evaluationCache,
+            document: snapshot.document.document,
+            generation: snapshot.document.generation,
+            evaluationStatus: snapshot.document.evaluationStatus,
+            evaluatedGeneration: snapshot.document.evaluatedGeneration
+        )
+    }
+
     public func restoreAsMutation(_ snapshot: DocumentSnapshot) throws {
         let nextGeneration = try generation.advanced()
         document = snapshot.document

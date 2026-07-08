@@ -1546,11 +1546,13 @@ public struct AutomationRunner {
         in session: EditorSession
     ) throws -> [AutomationResult] {
         try session.store.requireGeneration(batch.expectedGeneration)
-        var results: [AutomationResult] = []
-        for command in batch.commands {
-            results.append(try execute(command, in: session))
+        return try session.withTransaction {
+            var results: [AutomationResult] = []
+            for command in batch.commands {
+                results.append(try execute(command, in: session))
+            }
+            return results
         }
-        return results
     }
 
     private func commandAutomationResult(

@@ -388,6 +388,7 @@ Rupa development should preserve the following contracts:
 | One mutation path | A GUI operation and equivalent CLI command produce the same document generation and diagnostics. |
 | Open documents are session-owned | CLI defaults to live mode when the target document is open in the app. |
 | File mode is atomic | Headless edits either fully succeed or leave the input untouched. |
+| Live batch is atomic | App-session batch edits either fully succeed or restore document, selection, and undo/redo state. |
 | Automation is stable | JSON command schemas are versioned and backward compatibility is intentional. |
 | App shell stays thin | Most behavior can be tested from RupaKit without launching `Rupa.app`. |
 | Rendering is derived | Rebuilding the render scene from evaluated document state yields equivalent visible geometry. |

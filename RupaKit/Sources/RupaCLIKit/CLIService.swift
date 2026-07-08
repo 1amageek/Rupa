@@ -4874,37 +4874,30 @@ public struct CLIService {
         )
     }
 
-    // Live/auto batch application is NOT atomic: each command is sent to the app
-    // as an independent committed mutation, so a mid-batch failure leaves earlier
-    // commands applied (there is no live rollback). This differs from file mode,
-    // which applies the whole batch in memory and saves only on full success.
-    // Batch undo grouping for live sessions is an open specification decision.
     private func runBatchLiveSession(
         _ batch: AutomationBatch,
         sessionID: UUID,
         client: AgentClientProtocol
     ) throws -> CLIBatchResponse {
-        var results: [AutomationResult] = []
-        var expectedGeneration = batch.expectedGeneration
-        for command in batch.commands {
-            let execution = try executeAutomationMutationLiveSession(
-                command,
+        let response = try client.send(
+            .executeBatch(
                 sessionID: sessionID,
-                expectedGeneration: expectedGeneration,
+                batch: batch
+            )
+        )
+        let batchResult = try batchResult(from: response)
+        var results = batchResult.results
+        for index in results.indices {
+            try ensureWorkspaceScaleContext(
+                in: &results[index],
+                sessionID: sessionID,
                 client: client
             )
-            results.append(execution.result)
-            // Generation is validated once against the pre-batch state; later
-            // commands run against the generation advanced by earlier ones.
-            expectedGeneration = nil
-        }
-        guard let generation = results.last?.generation else {
-            throw invalidCommand("Batch application requires at least one command.")
         }
         return CLIBatchResponse(
             results: results,
-            generation: generation,
-            dirty: results.contains { $0.didMutate },
+            generation: batchResult.generation,
+            dirty: batchResult.dirty,
             saved: false
         )
     }
@@ -5106,6 +5099,17 @@ public struct CLIService {
             throw error
         default:
             throw unexpectedResponse("Command request returned an unexpected response.")
+        }
+    }
+
+    private func batchResult(from response: AgentResponse) throws -> AgentBatchResult {
+        switch response {
+        case .batch(let result):
+            return result
+        case .failure(let error):
+            throw error
+        default:
+            throw unexpectedResponse("Batch request returned an unexpected response.")
         }
     }
 

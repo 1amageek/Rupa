@@ -226,8 +226,8 @@ This table answers the current implementation state for the referenced Plasticit
 | CLI file and auto/live CAD inspection returns construction-plane, sketch, topology, snap, selection-measurement, curve, surface, surface-frame, and surface-continuity summaries without mutating source or reading stale persisted files for open sessions | `RupaCLITests` |
 | CLI file and auto/live save workflows preserve generation, persist live state, and enforce open-document safety | `RupaCLITests` |
 | CLI file and auto/live export workflows preserve open-document safety and support dry-run, preset, and destination policy output checks | `RupaCLITests` |
-| Automation batch respects expected generation | `RupaAutomationTests` |
-| Agent lists sessions, dispatches commands, and round-trips message payloads | `RupaAgentTests` |
+| Automation batch respects expected generation and executes inside an `EditorSession` transaction that restores document, selection, and undo/redo state on failure | `RupaAutomationTests`, `RupaAgentTests` |
+| Agent lists sessions, dispatches single commands and atomic `command.applyBatch` requests, and round-trips message payloads | `RupaAgentTests`, `RupaAgentContractTests` |
 | Agent exposes structured capability descriptors for command discovery, access path, mutation behavior, required discovery summaries, target kinds, and failure contracts | `RupaAgentTests` |
 | CLI response JSON is stable and testable through `RupaCLIKit` | `RupaCLITests` |
 | CLI executable starts and returns command output for `rupa capabilities` | `RupaCLITests` |

@@ -61,6 +61,35 @@ import SwiftCAD
     #expect(params["expectedGeneration"] != nil)
 }
 
+@Test func agentMessageCodecUsesMethodSpecificBatchRequestParams() async throws {
+    let codec = AgentMessageCodec()
+    let sessionID = UUID()
+    let batch = AutomationBatch(
+        commands: [
+            .renameDocument(name: "Batch Params"),
+            .validateDocument,
+        ],
+        expectedGeneration: DocumentGeneration(7)
+    )
+    let request = AgentRequest.executeBatch(
+        sessionID: sessionID,
+        batch: batch
+    )
+
+    let encoded = try codec.encode(request, id: "batch-request-params")
+    let decoded = try codec.decodeRequest(from: encoded)
+    let json = try #require(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+    let params = try #require(json["params"] as? [String: Any])
+    let batchJSON = try #require(params["batch"] as? [String: Any])
+
+    #expect(decoded == request)
+    #expect(json["method"] as? String == "command.applyBatch")
+    #expect(params["executeBatch"] == nil)
+    #expect(params["sessionID"] as? String == sessionID.uuidString)
+    #expect(batchJSON["commands"] != nil)
+    #expect(batchJSON["expectedGeneration"] != nil)
+}
+
 @Test func agentMessageCodecAllowsOmittedExpressionDefaults() async throws {
     let codec = AgentMessageCodec()
     let sessionID = UUID(uuidString: "00000000-0000-0000-0000-000000000001")!
@@ -129,6 +158,42 @@ import SwiftCAD
     #expect(result["running"] as? Bool == true)
     #expect(result["socketPath"] as? String == "/tmp/rupa.sock")
     #expect(result["sessionCount"] as? Int == 2)
+}
+
+@Test func agentMessageCodecWrapsBatchResponsesInJSONRPCEnvelope() async throws {
+    let codec = AgentMessageCodec()
+    let response = AgentResponse.batch(
+        AgentBatchResult(
+            results: [
+                AutomationResult(
+                    message: "Document renamed.",
+                    commandName: "renameDocument",
+                    generation: DocumentGeneration(1),
+                    didMutate: true
+                ),
+            ],
+            generation: DocumentGeneration(1),
+            dirty: true
+        )
+    )
+
+    let encoded = try codec.encode(response, id: "batch-response")
+    let decoded = try codec.decodeResponse(
+        from: encoded,
+        expectedID: "batch-response",
+        expectedMethod: "command.applyBatch"
+    )
+    let envelope = try codec.decodeResponseEnvelope(from: encoded)
+    let json = try #require(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+    let result = try #require(json["result"] as? [String: Any])
+
+    #expect(decoded == response)
+    #expect(envelope.method == "command.applyBatch")
+    #expect(json["method"] as? String == "command.applyBatch")
+    #expect(result["batch"] == nil)
+    #expect(result["results"] != nil)
+    #expect(result["generation"] != nil)
+    #expect(result["dirty"] as? Bool == true)
 }
 
 @Test func agentMessageCodecWrapsFailuresAsResponseErrors() async throws {

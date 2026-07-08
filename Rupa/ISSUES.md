@@ -16,7 +16,6 @@ workflow) > `ergonomics` (usable but hostile) > `hardening` (defense in depth).
 
 | ID | Issue | Detail | Found |
 |---|---|---|---|
-| W-4 | Live/auto batch is non-atomic | Documented in `rupa batch` help: per-command commits, partial application on mid-batch failure. A server-side transactional batch (AgentRequest.executeBatch) would close it. | batch review |
 | W-5 | MCP bridge not implemented | The protocol names MCP clients as a target consumer; no bridge exists, so vision-LLM agents cannot consume capabilities/renders directly. | agent harness review |
 
 ## Ergonomics
@@ -27,7 +26,6 @@ workflow) > `ergonomics` (usable but hostile) > `hardening` (defense in depth).
 | E-2 | Sketch-plane 2D→3D axis mapping undocumented | `--plane zx` help does not say which world axes u/v map to; path directions are easy to get wrong (verified by mis-sweeping a boolean tool). | 2026-07-06 CLI verification |
 | E-3 | Same-plane loft rejection message is cryptic | `Loft produced unsupported or invalid geometry: openShell(UUID)` — typed but unactionable; should say the sections are coplanar. | 2026-07-06 CLI verification |
 | E-4 | `--expected-generation` silently overrides the batch file's embedded value | Precedence is intentional but only documented in a code comment, not the flag help. | batch review |
-| E-5 | Empty-batch handling differs between file and live at the `runBatch` API | File mode returns an empty response; live throws. CLI guards it, but the public API contract is inconsistent. | batch review |
 | E-6 | Selection-scope measurement of a superseded body is silent | Selecting a boolean-replaced target reports its pre-boolean analytic volume with no diagnostic (supersede filtering is deliberately disabled under selection). Needs at least an info diagnostic. | 2026-07-06 boolean audit |
 
 ## Numerical Robustness Risks

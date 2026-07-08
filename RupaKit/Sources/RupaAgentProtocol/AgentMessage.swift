@@ -12,6 +12,10 @@ public enum AgentRequest: Codable, Equatable, Sendable {
         command: AutomationCommand,
         expectedGeneration: DocumentGeneration?
     )
+    case executeBatch(
+        sessionID: UUID,
+        batch: AutomationBatch
+    )
     case parameters(
         sessionID: UUID,
         expectedGeneration: DocumentGeneration?
@@ -199,6 +203,7 @@ public enum AgentResponse: Codable, Equatable, Sendable {
     case sessions([WorkspaceSessionSummary])
     case cadInteractionQualityAssessment(CADInteractionQualityAssessmentResult)
     case command(AutomationResult)
+    case batch(AgentBatchResult)
     case parameters(ParameterListResult)
     case evaluation(EvaluationSnapshot)
     case measurement(MeasurementResult)
@@ -241,6 +246,8 @@ public extension AgentRequest {
             "agent.cadInteractionQualityAssessment"
         case .execute:
             "command.apply"
+        case .executeBatch:
+            "command.applyBatch"
         case .parameters:
             "document.parameters"
         case .setParameterExpression:

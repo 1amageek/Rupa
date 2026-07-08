@@ -6,11 +6,10 @@ public struct BatchCommand: ParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "batch",
         abstract: """
-        Apply an AutomationBatch JSON file to a file or live document. \
-        File mode is atomic: the batch is applied in memory and saved only if \
-        every command succeeds. Live/auto mode applies each command as an \
-        independent committed mutation, so a mid-batch failure leaves earlier \
-        commands applied (partial application).
+        Apply an AutomationBatch JSON file to a file or live document. Batch \
+        execution is atomic: file mode saves only after every command succeeds, \
+        and live/auto mode dispatches one app-session transaction that rolls \
+        back document, selection, and undo history on failure.
         """
     )
 

@@ -164,6 +164,8 @@ public struct AgentResponseEnvelope: Codable, Equatable, Sendable {
             try container.encode(value, forKey: .result)
         case .command(let value):
             try container.encode(value, forKey: .result)
+        case .batch(let value):
+            try container.encode(value, forKey: .result)
         case .parameters(let value):
             try container.encode(value, forKey: .result)
         case .evaluation(let value):
@@ -248,6 +250,8 @@ public struct AgentResponseEnvelope: Codable, Equatable, Sendable {
              "document.setSurfaceFrameDisplay",
              "document.movePolySplineSurfaceVertex":
             return .command(try container.decode(AutomationResult.self, forKey: .result))
+        case "command.applyBatch":
+            return .batch(try container.decode(AgentBatchResult.self, forKey: .result))
         case "document.parameters":
             return .parameters(try container.decode(ParameterListResult.self, forKey: .result))
         case "document.evaluate":
@@ -349,6 +353,8 @@ public struct AgentResponseEnvelope: Codable, Equatable, Sendable {
             "agent.cadInteractionQualityAssessment"
         case .command:
             "command.apply"
+        case .batch:
+            "command.applyBatch"
         case .parameters:
             "document.parameters"
         case .evaluation:
@@ -413,6 +419,7 @@ public struct AgentResponseEnvelope: Codable, Equatable, Sendable {
              ("sessions.list", .sessions),
              ("agent.cadInteractionQualityAssessment", .cadInteractionQualityAssessment),
              ("command.apply", .command),
+             ("command.applyBatch", .batch),
              ("parameter.setExpression", .command),
              ("document.setSurfaceFrameDisplay", .command),
              ("document.movePolySplineSurfaceVertex", .command),
