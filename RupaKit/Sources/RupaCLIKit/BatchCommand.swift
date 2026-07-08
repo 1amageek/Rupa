@@ -23,6 +23,7 @@ public struct BatchCommand: ParsableCommand {
 
     public func run() throws {
         let sessionID = try document.resolvedSessionID()
+        try validateDryRunTarget(sessionID: sessionID)
         let batch = try decodedBatch()
 
         try CLIExitCode.run {
@@ -56,5 +57,13 @@ public struct BatchCommand: ParsableCommand {
             commands: decoded.commands,
             expectedGeneration: document.generation() ?? decoded.expectedGeneration
         )
+    }
+
+    private func validateDryRunTarget(sessionID: UUID?) throws {
+        guard document.dryRun,
+              (document.mode == .live || sessionID != nil) else {
+            return
+        }
+        throw ValidationError("Dry-run is not supported for live document mutation.")
     }
 }

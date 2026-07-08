@@ -51,6 +51,24 @@ public final class CommandStack {
         redoEntries = snapshot.redoEntries
     }
 
+    public func markCurrentStateClean() {
+        for index in undoEntries.indices {
+            undoEntries[index].before.isDirty = true
+            undoEntries[index].after.isDirty = true
+        }
+        for index in redoEntries.indices {
+            redoEntries[index].before.isDirty = true
+            redoEntries[index].after.isDirty = true
+        }
+
+        if let currentEntryIndex = undoEntries.indices.last {
+            undoEntries[currentEntryIndex].after.isDirty = false
+        }
+        if let currentEntryIndex = redoEntries.indices.last {
+            redoEntries[currentEntryIndex].before.isDirty = false
+        }
+    }
+
     @discardableResult
     public func execute(
         _ command: EditorCommand,

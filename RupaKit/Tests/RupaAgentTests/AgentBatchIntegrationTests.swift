@@ -23,7 +23,7 @@ import SwiftCAD
     let baselineGeneration = session.generation
     let baselineUndoCount = session.commandStack.undoEntries.count
     let baselineEvaluation = try #require(session.currentEvaluation)
-    session.store.markClean()
+    session.markClean()
     server.register(session: session, id: sessionID)
 
     let response = server.handle(

@@ -509,7 +509,7 @@ public final class AgentCommandController: AgentClientProtocol {
                 try session.store.requireGeneration(expectedGeneration)
                 let url = try registry.documentURL(id: sessionID)
                 try fileService.save(session.document, to: url)
-                session.store.markClean()
+                session.markClean()
                 return .save(
                     SaveResult(
                         message: "Document saved to \(url.path).",

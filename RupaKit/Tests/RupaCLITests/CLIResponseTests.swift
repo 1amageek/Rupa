@@ -3444,6 +3444,26 @@ struct CLIModelDirectEditCommandTests {
 @Suite(.serialized)
 struct CLICommandApplyTests {
     @Test(.timeLimit(.minutes(1)))
+    func batchCommandParsesDryRunForLiveSessionTargets() throws {
+        let sessionID = UUID()
+
+        let command = try BatchCommand.parse([
+            "--session-id",
+            sessionID.uuidString,
+            "--input",
+            "/tmp/batch.json",
+            "--mode",
+            "live",
+            "--dry-run",
+            "--json",
+        ])
+
+        #expect(command.document.dryRun)
+        #expect(command.document.mode == .live)
+        #expect(command.document.sessionID == sessionID.uuidString)
+    }
+
+    @Test(.timeLimit(.minutes(1)))
     func executableAppliesAutomationBatchInFileModeAsJSON() async throws {
         let temporaryDirectory = try makeTemporaryDirectory()
         defer {
@@ -3668,6 +3688,71 @@ struct CLICommandApplyTests {
     }
 
     @Test(.timeLimit(.minutes(1)))
+    func executableRejectsDryRunLiveAutomationBatchThroughSocketWithoutMutation() async throws {
+        let temporaryDirectory = try makeTemporaryDirectory()
+        defer {
+            removeTemporaryDirectory(temporaryDirectory)
+        }
+        let socketURL = temporaryDirectory.appendingPathComponent("rupa.sock")
+        let batchURL = temporaryDirectory.appendingPathComponent("live-batch-dry-run.json")
+        let sessionID = UUID()
+        let server = AgentCommandController()
+        server.register(
+            session: EditorSession(document: .empty(named: "Before Dry Run Process Live Batch")),
+            id: sessionID
+        )
+        let listener = AgentSocketListener(
+            controller: server,
+            socketPath: AgentSocketPath(socketURL.path)
+        )
+        let batch = AutomationBatch(
+            commands: [
+                .renameDocument(name: "Mutated Dry Run Process Live Batch"),
+            ],
+            expectedGeneration: DocumentGeneration(0)
+        )
+        try JSONEncoder().encode(batch).write(to: batchURL)
+
+        try await listener.start()
+        do {
+            let result = try await runCLI([
+                "batch",
+                "--session-id",
+                sessionID.uuidString,
+                "--input",
+                batchURL.path,
+                "--mode",
+                "live",
+                "--dry-run",
+                "--agent-socket",
+                socketURL.path,
+                "--json",
+            ])
+            let sessionsResult = try await runCLI([
+                "sessions",
+                "--socket",
+                socketURL.path,
+                "--json",
+            ])
+            let sessionsResponse = try JSONDecoder().decode(
+                CLISessionsResponse.self,
+                from: sessionsResult.standardOutputData
+            )
+
+            #expect(result.terminationStatus == CLIExitCode.usage.rawValue)
+            #expect(result.standardError.contains("Dry-run is not supported for live document mutation."))
+            #expect(sessionsResult.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: sessionsResult.standardError))
+            #expect(sessionsResponse.sessions.first?.displayName == "Before Dry Run Process Live Batch")
+            #expect(sessionsResponse.sessions.first?.generation == DocumentGeneration(0))
+            #expect(sessionsResponse.sessions.first?.dirty == false)
+            await listener.stop()
+        } catch {
+            await listener.stop()
+            throw error
+        }
+    }
+
+    @Test(.timeLimit(.minutes(1)))
     func serviceAppliesLiveAutomationBatchThroughAgentBatchRequest() async throws {
         let server = AgentCommandController()
         let sessionID = UUID()
@@ -3694,6 +3779,72 @@ struct CLICommandApplyTests {
         #expect(!response.saved)
         #expect(session.document.cadDocument.metadata.name == "After Live Batch")
         #expect(session.generation == DocumentGeneration(2))
+    }
+
+    @Test(.timeLimit(.minutes(1)))
+    func serviceRejectsDryRunAutomaticSessionBatchWithoutMutation() async throws {
+        let server = AgentCommandController()
+        let sessionID = UUID()
+        let session = EditorSession(document: .empty(named: "Before Dry Run Live Batch"))
+        server.register(session: session, id: sessionID)
+        var caught: EditorError?
+
+        do {
+            _ = try CLIService().runBatch(
+                target: CLIDocumentTarget(sessionID: sessionID),
+                batch: AutomationBatch(
+                    commands: [
+                        .renameDocument(name: "Mutated Dry Run Live Batch"),
+                    ],
+                    expectedGeneration: DocumentGeneration(0)
+                ),
+                mode: .auto,
+                dryRun: true,
+                client: server
+            )
+        } catch let error as EditorError {
+            caught = error
+        }
+
+        #expect(caught?.code == .commandInvalid)
+        #expect(caught?.message == "Dry-run is not supported for live document mutation.")
+        #expect(session.document.cadDocument.metadata.name == "Before Dry Run Live Batch")
+        #expect(session.generation == DocumentGeneration(0))
+        #expect(!session.isDirty)
+        #expect(!session.commandStack.canUndo)
+    }
+
+    @Test(.timeLimit(.minutes(1)))
+    func serviceRejectsDryRunExplicitLiveBatchWithoutMutation() async throws {
+        let server = AgentCommandController()
+        let sessionID = UUID()
+        let session = EditorSession(document: .empty(named: "Before Explicit Dry Run Live Batch"))
+        server.register(session: session, id: sessionID)
+        var caught: EditorError?
+
+        do {
+            _ = try CLIService().runBatch(
+                target: CLIDocumentTarget(sessionID: sessionID),
+                batch: AutomationBatch(
+                    commands: [
+                        .renameDocument(name: "Mutated Explicit Dry Run Live Batch"),
+                    ],
+                    expectedGeneration: DocumentGeneration(0)
+                ),
+                mode: .live,
+                dryRun: true,
+                client: server
+            )
+        } catch let error as EditorError {
+            caught = error
+        }
+
+        #expect(caught?.code == .commandInvalid)
+        #expect(caught?.message == "Dry-run is not supported for live document mutation.")
+        #expect(session.document.cadDocument.metadata.name == "Before Explicit Dry Run Live Batch")
+        #expect(session.generation == DocumentGeneration(0))
+        #expect(!session.isDirty)
+        #expect(!session.commandStack.canUndo)
     }
 
     @Test(.timeLimit(.minutes(1)))

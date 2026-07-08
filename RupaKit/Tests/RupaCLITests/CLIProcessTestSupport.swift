@@ -1,3 +1,4 @@
+import Darwin
 import Foundation
 import Testing
 import RupaCore
@@ -23,7 +24,13 @@ actor CLIProcessGate {
 
     private let limit: Int
     private var availableSlotCount: Int
-    private var waiters: [CheckedContinuation<Void, Never>] = []
+    private var waiters: [Waiter] = []
+    private var cancelledWaiterIDs: Set<UUID> = []
+
+    private struct Waiter {
+        var id: UUID
+        var continuation: CheckedContinuation<Bool, Never>
+    }
 
     init(limit: Int) {
         let normalizedLimit = max(1, limit)
@@ -31,31 +38,92 @@ actor CLIProcessGate {
         self.availableSlotCount = normalizedLimit
     }
 
-    func acquire() async {
-        guard availableSlotCount == 0 else {
-            availableSlotCount -= 1
-            return
+    func acquire() async throws {
+        let waiterID = UUID()
+        let acquired = await withTaskCancellationHandler {
+            await acquireSlot(waiterID: waiterID)
+        } onCancel: {
+            Task {
+                await self.cancelWaiter(id: waiterID)
+            }
         }
-
-        await withCheckedContinuation { continuation in
-            waiters.append(continuation)
+        guard acquired else {
+            throw CancellationError()
+        }
+        guard !Task.isCancelled else {
+            release()
+            throw CancellationError()
         }
     }
 
     func release() {
-        guard waiters.isEmpty else {
-            waiters.removeFirst().resume()
+        while !waiters.isEmpty {
+            let waiter = waiters.removeFirst()
+            guard cancelledWaiterIDs.remove(waiter.id) == nil else {
+                waiter.continuation.resume(returning: false)
+                continue
+            }
+            waiter.continuation.resume(returning: true)
             return
         }
 
+        cancelledWaiterIDs.removeAll(keepingCapacity: true)
         availableSlotCount = min(limit, availableSlotCount + 1)
+    }
+
+    private func acquireSlot(waiterID: UUID) async -> Bool {
+        guard !Task.isCancelled else {
+            return false
+        }
+        guard cancelledWaiterIDs.remove(waiterID) == nil else {
+            return false
+        }
+        guard availableSlotCount == 0 else {
+            availableSlotCount -= 1
+            return true
+        }
+
+        return await withCheckedContinuation { continuation in
+            waiters.append(
+                Waiter(
+                    id: waiterID,
+                    continuation: continuation
+                )
+            )
+        }
+    }
+
+    private func cancelWaiter(id: UUID) {
+        guard let index = waiters.firstIndex(where: { $0.id == id }) else {
+            cancelledWaiterIDs.insert(id)
+            return
+        }
+        waiters.remove(at: index).continuation.resume(returning: false)
+    }
+
+    func snapshotForTesting() -> CLIProcessGateSnapshot {
+        CLIProcessGateSnapshot(
+            availableSlotCount: availableSlotCount,
+            waiterCount: waiters.count,
+            cancelledWaiterCount: cancelledWaiterIDs.count
+        )
     }
 }
 
-func runCLI(_ arguments: [String]) async throws -> CLIProcessResult {
-    await CLIProcessGate.shared.acquire()
+struct CLIProcessGateSnapshot: Sendable, Equatable {
+    var availableSlotCount: Int
+    var waiterCount: Int
+    var cancelledWaiterCount: Int
+}
+
+func runCLI(
+    _ arguments: [String],
+    timeout: TimeInterval = 45
+) async throws -> CLIProcessResult {
+    try await CLIProcessGate.shared.acquire()
     do {
-        let result = try runCLIProcess(arguments)
+        try Task.checkCancellation()
+        let result = try runCLIProcess(arguments, timeout: timeout)
         await CLIProcessGate.shared.release()
         return result
     } catch {
@@ -64,7 +132,10 @@ func runCLI(_ arguments: [String]) async throws -> CLIProcessResult {
     }
 }
 
-private func runCLIProcess(_ arguments: [String]) throws -> CLIProcessResult {
+private func runCLIProcess(
+    _ arguments: [String],
+    timeout: TimeInterval
+) throws -> CLIProcessResult {
     let executableURL = try rupaExecutableURL()
     let capture = try makeProcessCapture()
     let outputHandle = try FileHandle(forWritingTo: capture.standardOutputURL)
@@ -88,7 +159,12 @@ private func runCLIProcess(_ arguments: [String]) throws -> CLIProcessResult {
     process.standardError = errorHandle
 
     try process.run()
-    process.waitUntilExit()
+    try waitForProcessExit(
+        process,
+        executableURL: executableURL,
+        arguments: arguments,
+        timeout: timeout
+    )
 
     try closeFileHandle(outputHandle, label: "stdout")
     outputClosed = true
@@ -100,6 +176,53 @@ private func runCLIProcess(_ arguments: [String]) throws -> CLIProcessResult {
         standardOutputData: try Data(contentsOf: capture.standardOutputURL),
         standardErrorData: try Data(contentsOf: capture.standardErrorURL)
     )
+}
+
+private func waitForProcessExit(
+    _ process: Process,
+    executableURL: URL,
+    arguments: [String],
+    timeout: TimeInterval
+) throws {
+    guard timeout > 0 else {
+        throw EditorError(
+            code: .commandFailed,
+            message: "CLI process timeout must be greater than zero."
+        )
+    }
+
+    let deadline = Date().addingTimeInterval(timeout)
+    while process.isRunning {
+        if Date() >= deadline {
+            terminateProcess(process)
+            throw EditorError(
+                code: .commandFailed,
+                message: "CLI process timed out after \(timeout) seconds: \(([executableURL.path] + arguments).joined(separator: " "))"
+            )
+        }
+        Thread.sleep(forTimeInterval: 0.02)
+    }
+}
+
+private func terminateProcess(_ process: Process) {
+    guard process.isRunning else {
+        return
+    }
+
+    process.terminate()
+    let terminateDeadline = Date().addingTimeInterval(1.0)
+    while process.isRunning, Date() < terminateDeadline {
+        Thread.sleep(forTimeInterval: 0.02)
+    }
+    guard process.isRunning else {
+        return
+    }
+
+    kill(process.processIdentifier, SIGKILL)
+    let killDeadline = Date().addingTimeInterval(1.0)
+    while process.isRunning, Date() < killDeadline {
+        Thread.sleep(forTimeInterval: 0.02)
+    }
 }
 
 private struct CLIProcessCapture {
@@ -209,8 +332,6 @@ private func rupaExecutableURL() throws -> URL {
         let productsDirectory = testBundleDirectory.deletingLastPathComponent()
         candidates.append(productsDirectory.appendingPathComponent("rupa"))
     }
-    candidates.append(contentsOf: packageBuildProductCandidates())
-
     for candidate in candidates {
         if fileManager.isExecutableFile(atPath: candidate.path) {
             return candidate
@@ -221,29 +342,4 @@ private func rupaExecutableURL() throws -> URL {
         code: .commandFailed,
         message: "Could not locate the rupa executable in test build products. Checked: \(candidates.map(\.path).joined(separator: ", "))"
     )
-}
-
-private func packageBuildProductCandidates(
-    sourceFilePath: String = #filePath
-) -> [URL] {
-    let sourceFileURL = URL(fileURLWithPath: sourceFilePath)
-    let packageDirectory = sourceFileURL
-        .deletingLastPathComponent()
-        .deletingLastPathComponent()
-        .deletingLastPathComponent()
-    let buildDirectory = packageDirectory.appendingPathComponent(".build", isDirectory: true)
-    return [
-        buildDirectory
-            .appendingPathComponent("out", isDirectory: true)
-            .appendingPathComponent("Products", isDirectory: true)
-            .appendingPathComponent("Debug", isDirectory: true)
-            .appendingPathComponent("rupa"),
-        buildDirectory
-            .appendingPathComponent("debug", isDirectory: true)
-            .appendingPathComponent("rupa"),
-        buildDirectory
-            .appendingPathComponent("arm64-apple-macosx", isDirectory: true)
-            .appendingPathComponent("debug", isDirectory: true)
-            .appendingPathComponent("rupa"),
-    ]
 }

@@ -75,6 +75,7 @@ flowchart TD
 | Tool controls | Use icons for stable tools, short labels only where state would otherwise be ambiguous, and tooltips for explanation. |
 | Selection scopes | Keep scope buttons icon-only inside canvas overlays; text labels may truncate and should be exposed through tooltip/accessibility instead. |
 | Inspector content | Detailed property editing belongs in the inspector, not floating over the canvas. |
+| Input exclusion | Canvas overlay hit regions must cancel active canvas gestures without converting the eventual mouse-up into a pick. If a real canvas drag completes, commit the drag before clearing preview state so downstream interaction controllers still see the active drag. |
 
 ## Review Checklist
 

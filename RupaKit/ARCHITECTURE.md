@@ -54,6 +54,24 @@ flowchart LR
 | `RupaUI` depends on `WorkspaceAgentSessionPublishing`, not concrete `AgentHost`. | The CAD workspace can publish UI-owned sessions without depending on Agent server lifecycle details. |
 | `RupaRendering` consumes `RupaViewportScene`; scene construction must remain SwiftUI-free. | Viewport scene, projection, and hit policy can be tested without UI composition. |
 
+## Editing State Contracts
+
+```mermaid
+flowchart LR
+    Save[Save document] --> Session[EditorSession.markClean]
+    Session --> Store[CADDocumentStore current snapshot]
+    Session --> History[CommandStack history snapshots]
+    Undo[Undo or redo] --> Restore[Restore history snapshot]
+    Restore --> Store
+```
+
+| Contract | Owner | Required behavior |
+|---|---|---|
+| Saved baseline | `EditorSession.markClean()` | Saving a document must mark the current store and the current command-history cursor as clean. Callers must not call `CADDocumentStore.markClean()` directly after a save because undo/redo snapshots would keep stale dirty flags. |
+| Non-mutating command errors | `EditorSession.record(_:)` | UI-friendly command wrappers may record diagnostics, but they must preserve the existing evaluation status and cache generation when the document did not mutate. A command error is not a geometry evaluation failure. |
+| Live mutation dry-run | `RupaCLIKit` | File dry-run means "execute without saving". Live session mutation has no safe dry-run because the app document would be mutated through Agent transport, so live dry-run must be rejected before dispatch. |
+| CLI process tests | `RupaCLITests` | Process E2E tests must execute the current Xcode build product only, must have bounded process timeouts, and must not fall back to package `.build` executables that could be stale. |
+
 ## Surface M3 Status
 
 | Capability | Owner | Agent-facing path |

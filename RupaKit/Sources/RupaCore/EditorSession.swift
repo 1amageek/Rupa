@@ -117,6 +117,11 @@ public final class EditorSession {
         selection.pruneMissingReferences(in: document)
     }
 
+    public func markClean() {
+        store.markClean()
+        commandStack.markCurrentStateClean()
+    }
+
     public func withTransaction<T>(_ operation: () throws -> T) throws -> T {
         let snapshot = transactionSnapshot()
         do {
@@ -3680,7 +3685,7 @@ public final class EditorSession {
                         message: error.localizedDescription
                     ),
                 ],
-                evaluationStatus: .failed(message: error.localizedDescription),
+                evaluationStatus: snapshot.evaluationStatus,
                 evaluatedGeneration: snapshot.evaluatedGeneration,
                 renderInvalidation: snapshot.renderInvalidation,
                 evaluatedBodyCount: snapshot.evaluatedBodyCount

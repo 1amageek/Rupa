@@ -77,6 +77,7 @@ extension ViewportInputSurface {
 
         private var dragStart: CGPoint?
         private var secondaryDragStart: CGPoint?
+        private var primaryDragCancelledByInputExclusion = false
         private var isOrbiting = false
         private var isInsideInputExclusion = false
         private var trackedPointerLocation: CGPoint?
@@ -130,6 +131,7 @@ extension ViewportInputSurface {
         override func mouseDown(with event: NSEvent) {
             publishModifierFlags(from: event)
             window?.makeFirstResponder(self)
+            primaryDragCancelledByInputExclusion = false
             dragStart = location(from: event)
             guard let dragStart,
                   !isInputExcluded(dragStart) else {
@@ -163,18 +165,23 @@ extension ViewportInputSurface {
             markCanvasInputActive()
             let intent = selectionIntent(from: event)
             guard let start = dragStart else {
-                onPick?(end, bounds.size, intent)
+                if !primaryDragCancelledByInputExclusion {
+                    onPick?(end, bounds.size, intent)
+                }
+                primaryDragCancelledByInputExclusion = false
                 return
             }
 
             dragStart = nil
-            onDragPreview?(nil, nil, bounds.size)
             let dragDistance = hypot(end.x - start.x, end.y - start.y)
             if dragDistance <= 4.0 {
+                onDragPreview?(nil, nil, bounds.size)
                 onPick?(end, bounds.size, intent)
             } else {
                 onCanvasDrag?(start, end, bounds.size, intent)
+                onDragPreview?(nil, nil, bounds.size)
             }
+            primaryDragCancelledByInputExclusion = false
         }
 
         override func rightMouseDown(with event: NSEvent) {
@@ -462,6 +469,9 @@ extension ViewportInputSurface {
         }
 
         private func clearInteractionStateForInputExclusion() {
+            if dragStart != nil {
+                primaryDragCancelledByInputExclusion = true
+            }
             let shouldPublishClear = !isInsideInputExclusion
                 || dragStart != nil
                 || secondaryDragStart != nil

@@ -154,7 +154,7 @@ public struct CLIService {
 
         if shouldSave {
             try fileService.save(session.document, to: saveURL)
-            session.store.markClean()
+            session.markClean()
         }
 
         return CLIResponse(
@@ -201,6 +201,7 @@ public struct CLIService {
             )
         case .live:
             try validateLiveMutationWritePolicy(writePolicy)
+            try validateLiveMutationDryRun(dryRun)
             let sessionID = try resolvedLiveSessionID(
                 target: target,
                 client: client
@@ -244,7 +245,7 @@ public struct CLIService {
 
         if shouldSave {
             try fileService.save(session.document, to: saveURL)
-            session.store.markClean()
+            session.markClean()
         }
 
         return CLIResponse(
@@ -294,7 +295,7 @@ public struct CLIService {
 
         if shouldSave {
             try fileService.save(session.document, to: saveURL)
-            session.store.markClean()
+            session.markClean()
         }
 
         return CLIResponse(
@@ -330,7 +331,7 @@ public struct CLIService {
 
         if shouldSave {
             try fileService.save(session.document, to: saveURL)
-            session.store.markClean()
+            session.markClean()
         }
 
         return CLIResponse(
@@ -367,7 +368,7 @@ public struct CLIService {
 
         if shouldSave {
             try fileService.save(session.document, to: saveURL)
-            session.store.markClean()
+            session.markClean()
         }
 
         return CLIResponse(
@@ -420,6 +421,7 @@ public struct CLIService {
             )
         case .live:
             try validateLiveMutationWritePolicy(writePolicy)
+            try validateLiveMutationDryRun(dryRun)
             let sessionID = try resolvedLiveSessionID(
                 target: target,
                 client: client
@@ -479,6 +481,7 @@ public struct CLIService {
             )
         case .live:
             try validateLiveMutationWritePolicy(writePolicy)
+            try validateLiveMutationDryRun(dryRun)
             let sessionID = try resolvedLiveSessionID(
                 target: target,
                 client: client
@@ -681,7 +684,7 @@ public struct CLIService {
 
         if shouldSave {
             try fileService.save(session.document, to: saveURL)
-            session.store.markClean()
+            session.markClean()
         }
 
         return CLIResponse(
@@ -2723,7 +2726,7 @@ public struct CLIService {
 
         let session = EditorSession(document: try fileService.load(from: url))
         try fileService.save(session.document, to: url)
-        session.store.markClean()
+        session.markClean()
         return CLISaveResponse(
             result: SaveResult(
                 message: "Document saved to \(url.path).",
@@ -4709,7 +4712,7 @@ public struct CLIService {
 
         if shouldSave {
             try fileService.save(session.document, to: saveURL)
-            session.store.markClean()
+            session.markClean()
         }
 
         return CLIAutomationMutationExecution(
@@ -4778,6 +4781,7 @@ public struct CLIService {
             )
         case .live:
             try validateLiveMutationWritePolicy(writePolicy)
+            try validateLiveMutationDryRun(dryRun)
             let sessionID = try resolvedLiveSessionID(
                 target: target,
                 client: client
@@ -4800,6 +4804,7 @@ public struct CLIService {
     ) throws -> CLIBatchResponse {
         if let sessionID = target.sessionID {
             try validateLiveMutationWritePolicy(writePolicy)
+            try validateLiveMutationDryRun(dryRun)
             return try runBatchLiveSession(
                 batch,
                 sessionID: sessionID,
@@ -4812,9 +4817,7 @@ public struct CLIService {
            !forceFileEdit,
            let client,
            let session = try openSession(for: url, client: client) {
-            guard !dryRun else {
-                throw invalidCommand("Dry-run is not supported for live document mutation.")
-            }
+            try validateLiveMutationDryRun(dryRun)
             return try runBatchLiveSession(
                 batch,
                 sessionID: session.id,
@@ -4863,7 +4866,7 @@ public struct CLIService {
 
         if shouldSave {
             try fileService.save(session.document, to: saveURL)
-            session.store.markClean()
+            session.markClean()
         }
 
         return CLIBatchResponse(
@@ -5016,6 +5019,12 @@ public struct CLIService {
     ) throws {
         guard !writePolicy.requiresFileMode else {
             throw invalidCommand("--output can only be used in file or auto file mode.")
+        }
+    }
+
+    private func validateLiveMutationDryRun(_ dryRun: Bool) throws {
+        guard !dryRun else {
+            throw invalidCommand("Dry-run is not supported for live document mutation.")
         }
     }
 

@@ -126,6 +126,58 @@ import Testing
 }
 
 @MainActor
+@Test func markCleanKeepsSavedStateCleanAcrossUndoAndRedo() async throws {
+    let session = EditorSession()
+
+    _ = try session.execute(.setDisplayUnit(.meter))
+    session.markClean()
+    #expect(!session.isDirty)
+
+    _ = try session.undo()
+    #expect(session.document.displayUnit == .millimeter)
+    #expect(session.isDirty)
+
+    _ = try session.redo()
+    #expect(session.document.displayUnit == .meter)
+    #expect(!session.isDirty)
+}
+
+@MainActor
+@Test func markCleanAfterUndoKeepsRedoTargetDirtyAndUndoTargetClean() async throws {
+    let session = EditorSession()
+
+    _ = try session.execute(.setDisplayUnit(.meter))
+    _ = try session.execute(.renameDocument(name: "Redo Target"))
+    _ = try session.undo()
+    session.markClean()
+    #expect(!session.isDirty)
+    #expect(session.document.displayUnit == .meter)
+    #expect(session.document.cadDocument.metadata.name == "Untitled")
+
+    _ = try session.redo()
+    #expect(session.document.cadDocument.metadata.name == "Redo Target")
+    #expect(session.isDirty)
+
+    _ = try session.undo()
+    #expect(session.document.cadDocument.metadata.name == "Untitled")
+    #expect(!session.isDirty)
+}
+
+@MainActor
+@Test func recordedCommandErrorsDoNotDiscardValidEvaluationCache() async throws {
+    let session = EditorSession()
+    _ = try #require(session.createDefaultExtrudedRectangle())
+    let cache = try #require(session.currentEvaluationCache)
+
+    let result = session.perform(.deleteParameter(name: "missing"))
+
+    #expect(result == nil)
+    #expect(session.currentEvaluationCache?.generation == cache.generation)
+    #expect(session.evaluationStatus == .valid)
+    #expect(session.diagnostics.first?.severity == .error)
+}
+
+@MainActor
 @Test func validationCommandDoesNotCreateUndoEntry() async throws {
     let session = EditorSession()
 
