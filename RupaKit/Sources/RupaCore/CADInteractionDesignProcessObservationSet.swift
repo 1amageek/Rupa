@@ -539,7 +539,7 @@ private func affectedLayer(
     if lowered.contains("ui") || lowered.contains("viewport") || lowered.contains("inspector") {
         return .ui
     }
-    if lowered.contains("kernel") || lowered.contains("swiftcad") || lowered.contains("brep") {
+    if lowered.contains("kernel") || lowered.contains("cadkernel") || lowered.contains("brep") {
         return .kernel
     }
     if lowered.contains("performance")

@@ -154,7 +154,7 @@ public struct SweepModelCommand: ParsableCommand {
 
         try CLIExitCode.run {
             let response = try CLIService().createSweep(
-                target: document.target(sessionID: sessionID),
+                target: try document.target(sessionID: sessionID),
                 name: name,
                 sections: input.sections,
                 path: input.path,
@@ -164,6 +164,7 @@ public struct SweepModelCommand: ParsableCommand {
                 mode: document.mode,
                 expectedGeneration: document.generation(),
                 dryRun: document.dryRun,
+                writePolicy: try document.writePolicy(sessionID: sessionID),
                 forceFileEdit: document.forceFileEdit,
                 client: document.agentClient(sessionID: sessionID)
             )

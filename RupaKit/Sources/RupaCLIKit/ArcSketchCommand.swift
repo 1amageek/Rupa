@@ -53,7 +53,7 @@ public struct ArcSketchCommand: ParsableCommand {
             )
             let input = try arcInput(unit: lengthUnit)
             let response = try CLIService().createArcSketch(
-                target: document.target(sessionID: sessionID),
+                target: try document.target(sessionID: sessionID),
                 name: name,
                 plane: try CLISketchPlaneReferenceParser.reference(plane: plane, constructionPlaneID: constructionPlaneID),
                 center: input.center,
@@ -63,6 +63,7 @@ public struct ArcSketchCommand: ParsableCommand {
                 mode: document.mode,
                 expectedGeneration: document.generation(),
                 dryRun: document.dryRun,
+                writePolicy: try document.writePolicy(sessionID: sessionID),
                 forceFileEdit: document.forceFileEdit,
                 client: document.agentClient(sessionID: sessionID)
             )

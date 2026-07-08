@@ -41,13 +41,14 @@ public struct SplineSketchCommand: ParsableCommand {
             )
             let spline = try sketchSpline(unit: lengthUnit)
             let response = try CLIService().createSplineSketch(
-                target: document.target(sessionID: sessionID),
+                target: try document.target(sessionID: sessionID),
                 name: name,
                 plane: try CLISketchPlaneReferenceParser.reference(plane: plane, constructionPlaneID: constructionPlaneID),
                 spline: spline,
                 mode: document.mode,
                 expectedGeneration: document.generation(),
                 dryRun: document.dryRun,
+                writePolicy: try document.writePolicy(sessionID: sessionID),
                 forceFileEdit: document.forceFileEdit,
                 client: document.agentClient(sessionID: sessionID)
             )

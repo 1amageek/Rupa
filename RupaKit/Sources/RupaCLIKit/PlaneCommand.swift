@@ -47,13 +47,14 @@ public struct PlaneCreateCommand: ParsableCommand {
 
         try CLIExitCode.run {
             let response = try CLIService().createConstructionPlane(
-                target: document.target(sessionID: id),
+                target: try document.target(sessionID: id),
                 name: name,
                 plane: plane.sketchPlane,
                 activates: !noActivate,
                 mode: document.mode,
                 expectedGeneration: document.generation(),
                 dryRun: document.dryRun,
+                writePolicy: try document.writePolicy(sessionID: id),
                 forceFileEdit: document.forceFileEdit,
                 client: document.agentClient(sessionID: id)
             )
@@ -115,7 +116,7 @@ public struct PlaneCreateViewCommand: ParsableCommand {
 
         try CLIExitCode.run {
             let response = try CLIService().createViewAlignedConstructionPlane(
-                target: document.target(sessionID: id),
+                target: try document.target(sessionID: id),
                 name: name,
                 origin: origin,
                 viewNormal: viewNormal,
@@ -123,6 +124,7 @@ public struct PlaneCreateViewCommand: ParsableCommand {
                 mode: document.mode,
                 expectedGeneration: document.generation(),
                 dryRun: document.dryRun,
+                writePolicy: try document.writePolicy(sessionID: id),
                 forceFileEdit: document.forceFileEdit,
                 client: document.agentClient(sessionID: id)
             )
@@ -244,11 +246,12 @@ public struct PlaneSetActiveCommand: ParsableCommand {
 
         try CLIExitCode.run {
             let response = try CLIService().setActiveConstructionPlane(
-                target: document.target(sessionID: sessionID),
+                target: try document.target(sessionID: sessionID),
                 id: planeID,
                 mode: document.mode,
                 expectedGeneration: document.generation(),
                 dryRun: document.dryRun,
+                writePolicy: try document.writePolicy(sessionID: sessionID),
                 forceFileEdit: document.forceFileEdit,
                 client: document.agentClient(sessionID: sessionID)
             )
@@ -280,12 +283,13 @@ public struct PlaneRenameCommand: ParsableCommand {
 
         try CLIExitCode.run {
             let response = try CLIService().renameConstructionPlane(
-                target: document.target(sessionID: sessionID),
+                target: try document.target(sessionID: sessionID),
                 id: planeID,
                 name: name,
                 mode: document.mode,
                 expectedGeneration: document.generation(),
                 dryRun: document.dryRun,
+                writePolicy: try document.writePolicy(sessionID: sessionID),
                 forceFileEdit: document.forceFileEdit,
                 client: document.agentClient(sessionID: sessionID)
             )

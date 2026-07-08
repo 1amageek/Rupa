@@ -62,7 +62,7 @@ public struct PolygonSketchCommand: ParsableCommand {
             )
             let input = try polygonInput(unit: lengthUnit)
             let response = try CLIService().createPolygonSketch(
-                target: document.target(sessionID: sessionID),
+                target: try document.target(sessionID: sessionID),
                 name: name,
                 plane: try CLISketchPlaneReferenceParser.reference(plane: plane, constructionPlaneID: constructionPlaneID),
                 center: input.center,
@@ -74,6 +74,7 @@ public struct PolygonSketchCommand: ParsableCommand {
                 mode: document.mode,
                 expectedGeneration: document.generation(),
                 dryRun: document.dryRun,
+                writePolicy: try document.writePolicy(sessionID: sessionID),
                 forceFileEdit: document.forceFileEdit,
                 client: document.agentClient(sessionID: sessionID)
             )

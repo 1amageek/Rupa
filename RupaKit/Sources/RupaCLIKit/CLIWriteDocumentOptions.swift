@@ -19,6 +19,12 @@ public struct CLIWriteDocumentOptions: ParsableArguments {
     @Flag(help: "Validate the command without saving the changed file.")
     public var dryRun: Bool = false
 
+    @Flag(name: .customLong("in-place"), help: "Write file-mode mutations back to the input file. This is the default when --output is omitted.")
+    public var inPlace: Bool = false
+
+    @Option(help: "Write file-mode mutations to a new .swcad output file instead of modifying the input file.")
+    public var output: String?
+
     @Flag(help: "Allow direct file mutation even if the app reports the same file as open.")
     public var forceFileEdit: Bool = false
 
@@ -34,11 +40,45 @@ public struct CLIWriteDocumentOptions: ParsableArguments {
         try CLISelectionInputParser.optionalSessionID(sessionID)
     }
 
-    public func target(sessionID: UUID?) -> CLIDocumentTarget {
-        CLIDocumentTarget(
+    public func target(sessionID: UUID?) throws -> CLIDocumentTarget {
+        try validateWriteDestination(sessionID: sessionID)
+        return CLIDocumentTarget(
             fileURL: file.map(URL.init(fileURLWithPath:)),
             sessionID: sessionID
         )
+    }
+
+    public func writePolicy(sessionID: UUID?) throws -> CLIDocumentWritePolicy {
+        try validateWriteDestination(sessionID: sessionID)
+        guard let output else {
+            return .inPlace
+        }
+        let outputURL = URL(fileURLWithPath: output)
+        guard outputURL.pathExtension.lowercased() == "swcad" else {
+            throw ValidationError("--output must use the .swcad document extension.")
+        }
+        return .output(outputURL)
+    }
+
+    private func validateWriteDestination(sessionID: UUID?) throws {
+        guard !(inPlace && output != nil) else {
+            throw ValidationError("--in-place and --output cannot be combined.")
+        }
+        guard !(output != nil && mode == .live) else {
+            throw ValidationError("--output can only be used in file or auto mode.")
+        }
+        guard !(output != nil && sessionID != nil) else {
+            throw ValidationError("--output cannot be combined with --session-id.")
+        }
+        guard !(inPlace && mode == .live) else {
+            throw ValidationError("--in-place can only be used in file or auto mode.")
+        }
+        guard !(inPlace && sessionID != nil) else {
+            throw ValidationError("--in-place cannot be combined with --session-id.")
+        }
+        guard !(output != nil && file == nil) else {
+            throw ValidationError("--output requires an input document file path.")
+        }
     }
 
     public func generation() -> DocumentGeneration? {

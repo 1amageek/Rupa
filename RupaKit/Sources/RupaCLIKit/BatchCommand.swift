@@ -28,10 +28,11 @@ public struct BatchCommand: ParsableCommand {
 
         try CLIExitCode.run {
             let response = try CLIService().runBatch(
-                target: document.target(sessionID: sessionID),
+                target: try document.target(sessionID: sessionID),
                 batch: batch,
                 mode: document.mode,
                 dryRun: document.dryRun,
+                writePolicy: try document.writePolicy(sessionID: sessionID),
                 forceFileEdit: document.forceFileEdit,
                 client: document.agentClient(sessionID: sessionID)
             )

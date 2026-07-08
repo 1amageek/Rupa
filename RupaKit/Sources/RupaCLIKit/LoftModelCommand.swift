@@ -113,7 +113,7 @@ public struct LoftModelCommand: ParsableCommand {
 
         try CLIExitCode.run {
             let response = try CLIService().createLoft(
-                target: document.target(sessionID: sessionID),
+                target: try document.target(sessionID: sessionID),
                 name: name,
                 sections: input.sections,
                 guides: input.guides,
@@ -121,6 +121,7 @@ public struct LoftModelCommand: ParsableCommand {
                 mode: document.mode,
                 expectedGeneration: document.generation(),
                 dryRun: document.dryRun,
+                writePolicy: try document.writePolicy(sessionID: sessionID),
                 forceFileEdit: document.forceFileEdit,
                 client: document.agentClient(sessionID: sessionID)
             )

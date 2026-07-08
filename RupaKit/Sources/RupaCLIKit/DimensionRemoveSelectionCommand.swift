@@ -24,11 +24,12 @@ public struct DimensionRemoveSelectionCommand: ParsableCommand {
 
         try CLIExitCode.run {
             let response = try CLIService().removeSelectionDimension(
-                target: document.target(sessionID: sessionID),
+                target: try document.target(sessionID: sessionID),
                 id: id,
                 mode: document.mode,
                 expectedGeneration: document.generation(),
                 dryRun: document.dryRun,
+                writePolicy: try document.writePolicy(sessionID: sessionID),
                 forceFileEdit: document.forceFileEdit,
                 client: document.agentClient(sessionID: sessionID)
             )

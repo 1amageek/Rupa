@@ -28,11 +28,12 @@ public struct ApplyAutomationCommand: ParsableCommand {
 
         try CLIExitCode.run {
             let response = try CLIService().applyAutomationCommand(
-                target: document.target(sessionID: sessionID),
+                target: try document.target(sessionID: sessionID),
                 command: automationCommand,
                 mode: document.mode,
                 expectedGeneration: document.generation(),
                 dryRun: document.dryRun,
+                writePolicy: try document.writePolicy(sessionID: sessionID),
                 forceFileEdit: document.forceFileEdit,
                 client: document.agentClient(sessionID: sessionID)
             )

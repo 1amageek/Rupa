@@ -3400,6 +3400,49 @@ struct CLICommandApplyTests {
     }
 
     @Test(.timeLimit(.minutes(1)))
+    func executableAppliesAutomationBatchToOutputFileAsJSON() async throws {
+        let temporaryDirectory = try makeTemporaryDirectory()
+        defer {
+            removeTemporaryDirectory(temporaryDirectory)
+        }
+        let inputURL = temporaryDirectory.appendingPathComponent("batch-input.swcad")
+        let outputURL = temporaryDirectory.appendingPathComponent("batch-output.swcad")
+        let batchURL = temporaryDirectory.appendingPathComponent("output-batch.json")
+        try DocumentFileService().save(.empty(named: "Batch Source"), to: inputURL)
+
+        let batch = AutomationBatch(
+            commands: [
+                .createConstructionPlane(name: "Output Batch Plane", plane: .yz, activates: true),
+            ]
+        )
+        try JSONEncoder().encode(batch).write(to: batchURL)
+
+        let result = try await runCLI([
+            "batch",
+            inputURL.path,
+            "--input",
+            batchURL.path,
+            "--output",
+            outputURL.path,
+            "--mode",
+            "file",
+            "--json",
+        ])
+        let response = try JSONDecoder().decode(
+            CLIBatchResponse.self,
+            from: result.standardOutputData
+        )
+        let input = try DocumentFileService().load(from: inputURL)
+        let output = try DocumentFileService().load(from: outputURL)
+
+        #expect(result.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: result.standardError))
+        #expect(response.saved)
+        #expect(response.didMutate)
+        #expect(input.productMetadata.constructionPlanes.isEmpty)
+        #expect(output.productMetadata.constructionPlanes.values.contains { $0.name == "Output Batch Plane" })
+    }
+
+    @Test(.timeLimit(.minutes(1)))
     func executableAppliesAutomationCommandPayloadsAsJSON() async throws {
         let temporaryDirectory = try makeTemporaryDirectory()
         defer {
@@ -3466,6 +3509,151 @@ struct CLICommandApplyTests {
         #expect(renameResponse.message == "Construction plane renamed to Applied Plane Renamed.")
         #expect(renameResponse.saved)
         #expect(loadedAfterRename.productMetadata.constructionPlanes[createdPlane.id]?.name == "Applied Plane Renamed")
+    }
+
+    @Test(.timeLimit(.minutes(1)))
+    func executableAppliesAutomationCommandToOutputFileAsJSON() async throws {
+        let temporaryDirectory = try makeTemporaryDirectory()
+        defer {
+            removeTemporaryDirectory(temporaryDirectory)
+        }
+        let inputURL = temporaryDirectory.appendingPathComponent("command-input.swcad")
+        let outputURL = temporaryDirectory.appendingPathComponent("command-output.swcad")
+        try DocumentFileService().save(.empty(named: "Command Source"), to: inputURL)
+
+        let command = AutomationCommand.renameDocument(name: "Command Output")
+        let payload = String(
+            decoding: try JSONEncoder().encode(command),
+            as: UTF8.self
+        )
+        let result = try await runCLI([
+            "command",
+            "apply",
+            inputURL.path,
+            "--command",
+            payload,
+            "--output",
+            outputURL.path,
+            "--mode",
+            "file",
+            "--json",
+        ])
+        let response = try JSONDecoder().decode(
+            CLIResponse.self,
+            from: result.standardOutputData
+        )
+        let input = try DocumentFileService().load(from: inputURL)
+        let output = try DocumentFileService().load(from: outputURL)
+
+        #expect(result.terminationStatus == CLIExitCode.success.rawValue, Comment(rawValue: result.standardError))
+        #expect(response.saved)
+        #expect(input.cadDocument.metadata.name == "Command Source")
+        #expect(output.cadDocument.metadata.name == "Command Output")
+    }
+
+    @Test(.timeLimit(.minutes(1)))
+    func executableRejectsAutomationCommandOutputWithNonDocumentExtension() async throws {
+        let temporaryDirectory = try makeTemporaryDirectory()
+        defer {
+            removeTemporaryDirectory(temporaryDirectory)
+        }
+        let inputURL = temporaryDirectory.appendingPathComponent("invalid-output-input.swcad")
+        let outputURL = temporaryDirectory.appendingPathComponent("invalid-output.txt")
+        try DocumentFileService().save(.empty(named: "Invalid Output Source"), to: inputURL)
+
+        let command = AutomationCommand.renameDocument(name: "Invalid Output")
+        let payload = String(
+            decoding: try JSONEncoder().encode(command),
+            as: UTF8.self
+        )
+        let result = try await runCLI([
+            "command",
+            "apply",
+            inputURL.path,
+            "--command",
+            payload,
+            "--output",
+            outputURL.path,
+            "--mode",
+            "file",
+            "--json",
+        ])
+        let input = try DocumentFileService().load(from: inputURL)
+
+        #expect(result.terminationStatus == CLIExitCode.usage.rawValue)
+        #expect(result.standardError.contains("--output must use the .swcad document extension."))
+        #expect(!FileManager.default.fileExists(atPath: outputURL.path))
+        #expect(input.cadDocument.metadata.name == "Invalid Output Source")
+    }
+
+    @Test(.timeLimit(.minutes(1)))
+    func executableRejectsAutomationCommandDryRunWhenOutputExists() async throws {
+        let temporaryDirectory = try makeTemporaryDirectory()
+        defer {
+            removeTemporaryDirectory(temporaryDirectory)
+        }
+        let inputURL = temporaryDirectory.appendingPathComponent("existing-output-input.swcad")
+        let outputURL = temporaryDirectory.appendingPathComponent("existing-output.swcad")
+        try DocumentFileService().save(.empty(named: "Existing Output Source"), to: inputURL)
+        try DocumentFileService().save(.empty(named: "Existing Output Destination"), to: outputURL)
+
+        let command = AutomationCommand.renameDocument(name: "Should Not Write")
+        let payload = String(
+            decoding: try JSONEncoder().encode(command),
+            as: UTF8.self
+        )
+        let result = try await runCLI([
+            "command",
+            "apply",
+            inputURL.path,
+            "--command",
+            payload,
+            "--output",
+            outputURL.path,
+            "--dry-run",
+            "--mode",
+            "file",
+            "--json",
+        ])
+        let input = try DocumentFileService().load(from: inputURL)
+        let output = try DocumentFileService().load(from: outputURL)
+
+        #expect(result.terminationStatus == CLIExitCode.usage.rawValue)
+        #expect(result.standardError.contains("Output document already exists"))
+        #expect(input.cadDocument.metadata.name == "Existing Output Source")
+        #expect(output.cadDocument.metadata.name == "Existing Output Destination")
+    }
+
+    @Test(.timeLimit(.minutes(1)))
+    func executableRejectsInPlaceAutomationCommandWithSessionID() async throws {
+        let temporaryDirectory = try makeTemporaryDirectory()
+        defer {
+            removeTemporaryDirectory(temporaryDirectory)
+        }
+        let inputURL = temporaryDirectory.appendingPathComponent("in-place-session-input.swcad")
+        try DocumentFileService().save(.empty(named: "In Place Session Source"), to: inputURL)
+
+        let command = AutomationCommand.renameDocument(name: "Should Not Route Live")
+        let payload = String(
+            decoding: try JSONEncoder().encode(command),
+            as: UTF8.self
+        )
+        let result = try await runCLI([
+            "command",
+            "apply",
+            inputURL.path,
+            "--command",
+            payload,
+            "--in-place",
+            "--session-id",
+            UUID().uuidString,
+            "--json",
+        ])
+        let input = try DocumentFileService().load(from: inputURL)
+
+        #expect(result.terminationStatus == CLIExitCode.usage.rawValue)
+        #expect(result.standardError.contains("--in-place cannot be combined with --session-id."))
+        #expect(input.cadDocument.metadata.name == "In Place Session Source")
     }
 
     @Test(.timeLimit(.minutes(1)))

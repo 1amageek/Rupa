@@ -14,9 +14,30 @@ public struct CLIDocumentTarget: Equatable, Sendable {
     public var fileURL: URL?
     public var sessionID: UUID?
 
-    public init(fileURL: URL? = nil, sessionID: UUID? = nil) {
+    public init(
+        fileURL: URL? = nil,
+        sessionID: UUID? = nil
+    ) {
         self.fileURL = fileURL
         self.sessionID = sessionID
+    }
+}
+
+public enum CLIDocumentWritePolicy: Equatable, Sendable {
+    case inPlace
+    case output(URL)
+
+    var outputURL: URL? {
+        switch self {
+        case .inPlace:
+            return nil
+        case .output(let url):
+            return url
+        }
+    }
+
+    var requiresFileMode: Bool {
+        outputURL != nil
     }
 }
 
@@ -642,6 +663,7 @@ public struct CLIService {
         mode: CLIEditMode = .auto,
         expectedGeneration: DocumentGeneration? = nil,
         dryRun: Bool = false,
+        writePolicy: CLIDocumentWritePolicy = .inPlace,
         forceFileEdit: Bool = false,
         client: AgentClientProtocol? = nil
     ) throws -> CLIResponse {
@@ -659,6 +681,7 @@ public struct CLIService {
             mode: mode,
             expectedGeneration: expectedGeneration,
             dryRun: dryRun,
+            writePolicy: writePolicy,
             forceFileEdit: forceFileEdit,
             client: client
         )
@@ -675,6 +698,7 @@ public struct CLIService {
         mode: CLIEditMode = .auto,
         expectedGeneration: DocumentGeneration? = nil,
         dryRun: Bool = false,
+        writePolicy: CLIDocumentWritePolicy = .inPlace,
         forceFileEdit: Bool = false,
         client: AgentClientProtocol? = nil
     ) throws -> CLIResponse {
@@ -692,6 +716,7 @@ public struct CLIService {
             mode: mode,
             expectedGeneration: expectedGeneration,
             dryRun: dryRun,
+            writePolicy: writePolicy,
             forceFileEdit: forceFileEdit,
             client: client
         )
@@ -708,6 +733,7 @@ public struct CLIService {
         mode: CLIEditMode = .auto,
         expectedGeneration: DocumentGeneration? = nil,
         dryRun: Bool = false,
+        writePolicy: CLIDocumentWritePolicy = .inPlace,
         forceFileEdit: Bool = false,
         client: AgentClientProtocol? = nil
     ) throws -> CLIResponse {
@@ -725,6 +751,7 @@ public struct CLIService {
             mode: mode,
             expectedGeneration: expectedGeneration,
             dryRun: dryRun,
+            writePolicy: writePolicy,
             forceFileEdit: forceFileEdit,
             client: client
         )
@@ -739,6 +766,7 @@ public struct CLIService {
         mode: CLIEditMode = .auto,
         expectedGeneration: DocumentGeneration? = nil,
         dryRun: Bool = false,
+        writePolicy: CLIDocumentWritePolicy = .inPlace,
         forceFileEdit: Bool = false,
         client: AgentClientProtocol? = nil
     ) throws -> CLIResponse {
@@ -754,6 +782,7 @@ public struct CLIService {
             mode: mode,
             expectedGeneration: expectedGeneration,
             dryRun: dryRun,
+            writePolicy: writePolicy,
             forceFileEdit: forceFileEdit,
             client: client
         )
@@ -770,6 +799,7 @@ public struct CLIService {
         mode: CLIEditMode = .auto,
         expectedGeneration: DocumentGeneration? = nil,
         dryRun: Bool = false,
+        writePolicy: CLIDocumentWritePolicy = .inPlace,
         forceFileEdit: Bool = false,
         client: AgentClientProtocol? = nil
     ) throws -> CLIResponse {
@@ -787,6 +817,7 @@ public struct CLIService {
             mode: mode,
             expectedGeneration: expectedGeneration,
             dryRun: dryRun,
+            writePolicy: writePolicy,
             forceFileEdit: forceFileEdit,
             client: client
         )
@@ -801,6 +832,7 @@ public struct CLIService {
         mode: CLIEditMode = .auto,
         expectedGeneration: DocumentGeneration? = nil,
         dryRun: Bool = false,
+        writePolicy: CLIDocumentWritePolicy = .inPlace,
         forceFileEdit: Bool = false,
         client: AgentClientProtocol? = nil
     ) throws -> CLIResponse {
@@ -816,6 +848,7 @@ public struct CLIService {
             mode: mode,
             expectedGeneration: expectedGeneration,
             dryRun: dryRun,
+            writePolicy: writePolicy,
             forceFileEdit: forceFileEdit,
             client: client
         )
@@ -830,6 +863,7 @@ public struct CLIService {
         mode: CLIEditMode = .auto,
         expectedGeneration: DocumentGeneration? = nil,
         dryRun: Bool = false,
+        writePolicy: CLIDocumentWritePolicy = .inPlace,
         forceFileEdit: Bool = false,
         client: AgentClientProtocol? = nil
     ) throws -> CLIResponse {
@@ -845,6 +879,7 @@ public struct CLIService {
             mode: mode,
             expectedGeneration: expectedGeneration,
             dryRun: dryRun,
+            writePolicy: writePolicy,
             forceFileEdit: forceFileEdit,
             client: client
         )
@@ -859,6 +894,7 @@ public struct CLIService {
         mode: CLIEditMode = .auto,
         expectedGeneration: DocumentGeneration? = nil,
         dryRun: Bool = false,
+        writePolicy: CLIDocumentWritePolicy = .inPlace,
         forceFileEdit: Bool = false,
         client: AgentClientProtocol? = nil
     ) throws -> CLIResponse {
@@ -874,6 +910,7 @@ public struct CLIService {
             mode: mode,
             expectedGeneration: expectedGeneration,
             dryRun: dryRun,
+            writePolicy: writePolicy,
             forceFileEdit: forceFileEdit,
             client: client
         )
@@ -888,6 +925,7 @@ public struct CLIService {
         mode: CLIEditMode = .auto,
         expectedGeneration: DocumentGeneration? = nil,
         dryRun: Bool = false,
+        writePolicy: CLIDocumentWritePolicy = .inPlace,
         forceFileEdit: Bool = false,
         client: AgentClientProtocol? = nil
     ) throws -> CLIResponse {
@@ -903,6 +941,7 @@ public struct CLIService {
             mode: mode,
             expectedGeneration: expectedGeneration,
             dryRun: dryRun,
+            writePolicy: writePolicy,
             forceFileEdit: forceFileEdit,
             client: client
         )
@@ -919,6 +958,7 @@ public struct CLIService {
         mode: CLIEditMode = .auto,
         expectedGeneration: DocumentGeneration? = nil,
         dryRun: Bool = false,
+        writePolicy: CLIDocumentWritePolicy = .inPlace,
         forceFileEdit: Bool = false,
         client: AgentClientProtocol? = nil
     ) throws -> CLIResponse {
@@ -936,6 +976,7 @@ public struct CLIService {
             mode: mode,
             expectedGeneration: expectedGeneration,
             dryRun: dryRun,
+            writePolicy: writePolicy,
             forceFileEdit: forceFileEdit,
             client: client
         )
@@ -949,6 +990,7 @@ public struct CLIService {
         mode: CLIEditMode = .auto,
         expectedGeneration: DocumentGeneration? = nil,
         dryRun: Bool = false,
+        writePolicy: CLIDocumentWritePolicy = .inPlace,
         forceFileEdit: Bool = false,
         client: AgentClientProtocol? = nil
     ) throws -> CLIResponse {
@@ -963,6 +1005,7 @@ public struct CLIService {
             mode: mode,
             expectedGeneration: expectedGeneration,
             dryRun: dryRun,
+            writePolicy: writePolicy,
             forceFileEdit: forceFileEdit,
             client: client
         )
@@ -977,6 +1020,7 @@ public struct CLIService {
         mode: CLIEditMode = .auto,
         expectedGeneration: DocumentGeneration? = nil,
         dryRun: Bool = false,
+        writePolicy: CLIDocumentWritePolicy = .inPlace,
         forceFileEdit: Bool = false,
         client: AgentClientProtocol? = nil
     ) throws -> CLIResponse {
@@ -992,6 +1036,7 @@ public struct CLIService {
             mode: mode,
             expectedGeneration: expectedGeneration,
             dryRun: dryRun,
+            writePolicy: writePolicy,
             forceFileEdit: forceFileEdit,
             client: client
         )
@@ -1010,6 +1055,7 @@ public struct CLIService {
         mode: CLIEditMode = .auto,
         expectedGeneration: DocumentGeneration? = nil,
         dryRun: Bool = false,
+        writePolicy: CLIDocumentWritePolicy = .inPlace,
         forceFileEdit: Bool = false,
         client: AgentClientProtocol? = nil
     ) throws -> CLIResponse {
@@ -1029,6 +1075,7 @@ public struct CLIService {
             mode: mode,
             expectedGeneration: expectedGeneration,
             dryRun: dryRun,
+            writePolicy: writePolicy,
             forceFileEdit: forceFileEdit,
             client: client
         )
@@ -1414,6 +1461,7 @@ public struct CLIService {
         mode: CLIEditMode = .auto,
         expectedGeneration: DocumentGeneration? = nil,
         dryRun: Bool = false,
+        writePolicy: CLIDocumentWritePolicy = .inPlace,
         forceFileEdit: Bool = false,
         client: AgentClientProtocol? = nil
     ) throws -> CLIResponse {
@@ -1423,6 +1471,7 @@ public struct CLIService {
             mode: mode,
             expectedGeneration: expectedGeneration,
             dryRun: dryRun,
+            writePolicy: writePolicy,
             forceFileEdit: forceFileEdit,
             client: client,
             missingTargetMessage: "Command application requires a document file path or live session ID."
@@ -1470,6 +1519,7 @@ public struct CLIService {
         mode: CLIEditMode = .auto,
         expectedGeneration: DocumentGeneration? = nil,
         dryRun: Bool = false,
+        writePolicy: CLIDocumentWritePolicy = .inPlace,
         forceFileEdit: Bool = false,
         client: AgentClientProtocol? = nil
     ) throws -> CLIResponse {
@@ -1483,6 +1533,7 @@ public struct CLIService {
             mode: mode,
             expectedGeneration: expectedGeneration,
             dryRun: dryRun,
+            writePolicy: writePolicy,
             forceFileEdit: forceFileEdit,
             client: client,
             missingTargetMessage: "Construction plane mutation requires a document file path or live session ID."
@@ -1498,6 +1549,7 @@ public struct CLIService {
         mode: CLIEditMode = .auto,
         expectedGeneration: DocumentGeneration? = nil,
         dryRun: Bool = false,
+        writePolicy: CLIDocumentWritePolicy = .inPlace,
         forceFileEdit: Bool = false,
         client: AgentClientProtocol? = nil
     ) throws -> CLIResponse {
@@ -1512,6 +1564,7 @@ public struct CLIService {
             mode: mode,
             expectedGeneration: expectedGeneration,
             dryRun: dryRun,
+            writePolicy: writePolicy,
             forceFileEdit: forceFileEdit,
             client: client,
             missingTargetMessage: "Construction plane mutation requires a document file path or live session ID."
@@ -1524,6 +1577,7 @@ public struct CLIService {
         mode: CLIEditMode = .auto,
         expectedGeneration: DocumentGeneration? = nil,
         dryRun: Bool = false,
+        writePolicy: CLIDocumentWritePolicy = .inPlace,
         forceFileEdit: Bool = false,
         client: AgentClientProtocol? = nil
     ) throws -> CLIResponse {
@@ -1533,6 +1587,7 @@ public struct CLIService {
             mode: mode,
             expectedGeneration: expectedGeneration,
             dryRun: dryRun,
+            writePolicy: writePolicy,
             forceFileEdit: forceFileEdit,
             client: client,
             missingTargetMessage: "Construction plane mutation requires a document file path or live session ID."
@@ -1546,6 +1601,7 @@ public struct CLIService {
         mode: CLIEditMode = .auto,
         expectedGeneration: DocumentGeneration? = nil,
         dryRun: Bool = false,
+        writePolicy: CLIDocumentWritePolicy = .inPlace,
         forceFileEdit: Bool = false,
         client: AgentClientProtocol? = nil
     ) throws -> CLIResponse {
@@ -1558,6 +1614,7 @@ public struct CLIService {
             mode: mode,
             expectedGeneration: expectedGeneration,
             dryRun: dryRun,
+            writePolicy: writePolicy,
             forceFileEdit: forceFileEdit,
             client: client,
             missingTargetMessage: "Construction plane mutation requires a document file path or live session ID."
@@ -2475,6 +2532,7 @@ public struct CLIService {
         mode: CLIEditMode = .auto,
         expectedGeneration: DocumentGeneration? = nil,
         dryRun: Bool = false,
+        writePolicy: CLIDocumentWritePolicy = .inPlace,
         forceFileEdit: Bool = false,
         client: AgentClientProtocol? = nil
     ) throws -> CLISelectionDimensionAddResponse {
@@ -2490,6 +2548,7 @@ public struct CLIService {
             mode: mode,
             expectedGeneration: expectedGeneration,
             dryRun: dryRun,
+            writePolicy: writePolicy,
             forceFileEdit: forceFileEdit,
             client: client,
             missingTargetMessage: "Selection dimension mutation requires a document file path or live session ID."
@@ -2508,6 +2567,7 @@ public struct CLIService {
         mode: CLIEditMode = .auto,
         expectedGeneration: DocumentGeneration? = nil,
         dryRun: Bool = false,
+        writePolicy: CLIDocumentWritePolicy = .inPlace,
         forceFileEdit: Bool = false,
         client: AgentClientProtocol? = nil
     ) throws -> CLIResponse {
@@ -2520,6 +2580,7 @@ public struct CLIService {
             mode: mode,
             expectedGeneration: expectedGeneration,
             dryRun: dryRun,
+            writePolicy: writePolicy,
             forceFileEdit: forceFileEdit,
             client: client,
             missingTargetMessage: "Selection dimension mutation requires a document file path or live session ID."
@@ -2532,6 +2593,7 @@ public struct CLIService {
         mode: CLIEditMode = .auto,
         expectedGeneration: DocumentGeneration? = nil,
         dryRun: Bool = false,
+        writePolicy: CLIDocumentWritePolicy = .inPlace,
         forceFileEdit: Bool = false,
         client: AgentClientProtocol? = nil
     ) throws -> CLIResponse {
@@ -2541,6 +2603,7 @@ public struct CLIService {
             mode: mode,
             expectedGeneration: expectedGeneration,
             dryRun: dryRun,
+            writePolicy: writePolicy,
             forceFileEdit: forceFileEdit,
             client: client,
             missingTargetMessage: "Selection dimension mutation requires a document file path or live session ID."
@@ -2553,6 +2616,7 @@ public struct CLIService {
         mode: CLIEditMode = .auto,
         expectedGeneration: DocumentGeneration? = nil,
         dryRun: Bool = false,
+        writePolicy: CLIDocumentWritePolicy = .inPlace,
         forceFileEdit: Bool = false,
         client: AgentClientProtocol? = nil
     ) throws -> CLIResponse {
@@ -2562,6 +2626,7 @@ public struct CLIService {
             mode: mode,
             expectedGeneration: expectedGeneration,
             dryRun: dryRun,
+            writePolicy: writePolicy,
             forceFileEdit: forceFileEdit,
             client: client,
             missingTargetMessage: "Selection dimension mutation requires a document file path or live session ID."
@@ -4260,6 +4325,7 @@ public struct CLIService {
         mode: CLIEditMode,
         expectedGeneration: DocumentGeneration?,
         dryRun: Bool,
+        writePolicy: CLIDocumentWritePolicy = .inPlace,
         forceFileEdit: Bool,
         client: AgentClientProtocol?
     ) throws -> CLIResponse {
@@ -4269,6 +4335,7 @@ public struct CLIService {
             mode: mode,
             expectedGeneration: expectedGeneration,
             dryRun: dryRun,
+            writePolicy: writePolicy,
             forceFileEdit: forceFileEdit,
             client: client,
             missingTargetMessage: "Modeling requires a document file path or live session ID."
@@ -4375,6 +4442,7 @@ public struct CLIService {
         mode: CLIEditMode,
         expectedGeneration: DocumentGeneration?,
         dryRun: Bool,
+        writePolicy: CLIDocumentWritePolicy = .inPlace,
         forceFileEdit: Bool,
         client: AgentClientProtocol?
     ) throws -> CLIResponse {
@@ -4384,6 +4452,7 @@ public struct CLIService {
             mode: mode,
             expectedGeneration: expectedGeneration,
             dryRun: dryRun,
+            writePolicy: writePolicy,
             forceFileEdit: forceFileEdit,
             client: client,
             missingTargetMessage: "Sketch creation requires a document file path or live session ID."
@@ -4396,6 +4465,7 @@ public struct CLIService {
         mode: CLIEditMode,
         expectedGeneration: DocumentGeneration?,
         dryRun: Bool,
+        writePolicy: CLIDocumentWritePolicy = .inPlace,
         forceFileEdit: Bool,
         client: AgentClientProtocol?,
         missingTargetMessage: String
@@ -4406,6 +4476,7 @@ public struct CLIService {
             mode: mode,
             expectedGeneration: expectedGeneration,
             dryRun: dryRun,
+            writePolicy: writePolicy,
             forceFileEdit: forceFileEdit,
             client: client,
             missingTargetMessage: missingTargetMessage
@@ -4423,6 +4494,7 @@ public struct CLIService {
         mode: CLIEditMode,
         expectedGeneration: DocumentGeneration?,
         dryRun: Bool,
+        writePolicy: CLIDocumentWritePolicy = .inPlace,
         forceFileEdit: Bool,
         client: AgentClientProtocol?,
         missingTargetMessage: String
@@ -4434,6 +4506,7 @@ public struct CLIService {
                 target: target,
                 expectedGeneration: expectedGeneration,
                 dryRun: dryRun,
+                writePolicy: writePolicy,
                 forceFileEdit: forceFileEdit,
                 client: client,
                 missingTargetMessage: missingTargetMessage
@@ -4445,11 +4518,13 @@ public struct CLIService {
             return try executeAutomationMutationFile(
                 command,
                 at: url,
+                writePolicy: writePolicy,
                 dryRun: dryRun,
                 forceFileEdit: forceFileEdit,
                 conflictClient: client
             )
         case .live:
+            try validateLiveMutationWritePolicy(writePolicy)
             let sessionID = try resolvedLiveSessionID(
                 target: target,
                 client: client
@@ -4468,11 +4543,13 @@ public struct CLIService {
         target: CLIDocumentTarget,
         expectedGeneration: DocumentGeneration?,
         dryRun: Bool,
+        writePolicy: CLIDocumentWritePolicy,
         forceFileEdit: Bool,
         client: AgentClientProtocol?,
         missingTargetMessage: String
     ) throws -> CLIAutomationMutationExecution {
         if let sessionID = target.sessionID {
+            try validateLiveMutationWritePolicy(writePolicy)
             return try executeAutomationMutationLiveSession(
                 command,
                 sessionID: sessionID,
@@ -4482,6 +4559,7 @@ public struct CLIService {
         }
 
         if let url = target.fileURL,
+           !writePolicy.requiresFileMode,
            !forceFileEdit,
            let client,
            let session = try openSession(for: url, client: client) {
@@ -4502,6 +4580,7 @@ public struct CLIService {
         return try executeAutomationMutationFile(
             command,
             at: url,
+            writePolicy: writePolicy,
             dryRun: dryRun,
             forceFileEdit: forceFileEdit,
             conflictClient: client
@@ -4511,12 +4590,14 @@ public struct CLIService {
     private func executeAutomationMutationFile(
         _ command: AutomationCommand,
         at url: URL,
+        writePolicy: CLIDocumentWritePolicy,
         dryRun: Bool,
         forceFileEdit: Bool,
         conflictClient: AgentClientProtocol?
     ) throws -> CLIAutomationMutationExecution {
-        try rejectOpenDocumentConflict(
-            fileURL: url,
+        let saveURL = try fileMutationDestinationURL(
+            sourceURL: url,
+            writePolicy: writePolicy,
             forceFileEdit: forceFileEdit,
             client: conflictClient
         )
@@ -4527,10 +4608,10 @@ public struct CLIService {
             in: &result,
             document: session.document
         )
-        let shouldSave = !dryRun && result.didMutate
+        let shouldSave = !dryRun && (result.didMutate || writePolicy.outputURL != nil)
 
         if shouldSave {
-            try fileService.save(session.document, to: url)
+            try fileService.save(session.document, to: saveURL)
             session.store.markClean()
         }
 
@@ -4572,6 +4653,7 @@ public struct CLIService {
         batch: AutomationBatch,
         mode: CLIEditMode = .auto,
         dryRun: Bool = false,
+        writePolicy: CLIDocumentWritePolicy = .inPlace,
         forceFileEdit: Bool = false,
         client: AgentClientProtocol? = nil
     ) throws -> CLIBatchResponse {
@@ -4581,6 +4663,7 @@ public struct CLIService {
                 batch,
                 target: target,
                 dryRun: dryRun,
+                writePolicy: writePolicy,
                 forceFileEdit: forceFileEdit,
                 client: client
             )
@@ -4591,11 +4674,13 @@ public struct CLIService {
             return try runBatchFile(
                 batch,
                 at: url,
+                writePolicy: writePolicy,
                 dryRun: dryRun,
                 forceFileEdit: forceFileEdit,
                 conflictClient: client
             )
         case .live:
+            try validateLiveMutationWritePolicy(writePolicy)
             let sessionID = try resolvedLiveSessionID(
                 target: target,
                 client: client
@@ -4612,10 +4697,12 @@ public struct CLIService {
         _ batch: AutomationBatch,
         target: CLIDocumentTarget,
         dryRun: Bool,
+        writePolicy: CLIDocumentWritePolicy,
         forceFileEdit: Bool,
         client: AgentClientProtocol?
     ) throws -> CLIBatchResponse {
         if let sessionID = target.sessionID {
+            try validateLiveMutationWritePolicy(writePolicy)
             return try runBatchLiveSession(
                 batch,
                 sessionID: sessionID,
@@ -4624,6 +4711,7 @@ public struct CLIService {
         }
 
         if let url = target.fileURL,
+           !writePolicy.requiresFileMode,
            !forceFileEdit,
            let client,
            let session = try openSession(for: url, client: client) {
@@ -4643,6 +4731,7 @@ public struct CLIService {
         return try runBatchFile(
             batch,
             at: url,
+            writePolicy: writePolicy,
             dryRun: dryRun,
             forceFileEdit: forceFileEdit,
             conflictClient: client
@@ -4652,12 +4741,14 @@ public struct CLIService {
     private func runBatchFile(
         _ batch: AutomationBatch,
         at url: URL,
+        writePolicy: CLIDocumentWritePolicy,
         dryRun: Bool,
         forceFileEdit: Bool,
         conflictClient: AgentClientProtocol?
     ) throws -> CLIBatchResponse {
-        try rejectOpenDocumentConflict(
-            fileURL: url,
+        let saveURL = try fileMutationDestinationURL(
+            sourceURL: url,
+            writePolicy: writePolicy,
             forceFileEdit: forceFileEdit,
             client: conflictClient
         )
@@ -4671,10 +4762,10 @@ public struct CLIService {
             )
         }
         let didMutate = results.contains { $0.didMutate }
-        let shouldSave = !dryRun && didMutate
+        let shouldSave = !dryRun && (didMutate || writePolicy.outputURL != nil)
 
         if shouldSave {
-            try fileService.save(session.document, to: url)
+            try fileService.save(session.document, to: saveURL)
             session.store.markClean()
         }
 
@@ -4796,6 +4887,45 @@ public struct CLIService {
         }
         if result.viewportGridScale == nil {
             result.viewportGridScale = context.viewportGridScale
+        }
+    }
+
+    private func fileMutationDestinationURL(
+        sourceURL: URL,
+        writePolicy: CLIDocumentWritePolicy,
+        forceFileEdit: Bool,
+        client: AgentClientProtocol?
+    ) throws -> URL {
+        try rejectOpenDocumentConflict(
+            fileURL: sourceURL,
+            forceFileEdit: forceFileEdit,
+            client: client
+        )
+        guard let outputURL = writePolicy.outputURL else {
+            return sourceURL
+        }
+        guard outputURL.pathExtension.lowercased() == "swcad" else {
+            throw invalidCommand("--output must use the .swcad document extension.")
+        }
+        guard canonicalPath(sourceURL) != canonicalPath(outputURL) else {
+            throw invalidCommand("--output must be different from the input document path.")
+        }
+        try rejectOpenDocumentConflict(
+            fileURL: outputURL,
+            forceFileEdit: forceFileEdit,
+            client: client
+        )
+        guard FileManager.default.fileExists(atPath: outputURL.path) == false else {
+            throw invalidCommand("Output document already exists at \(outputURL.path).")
+        }
+        return outputURL
+    }
+
+    private func validateLiveMutationWritePolicy(
+        _ writePolicy: CLIDocumentWritePolicy
+    ) throws {
+        guard !writePolicy.requiresFileMode else {
+            throw invalidCommand("--output can only be used in file or auto file mode.")
         }
     }
 

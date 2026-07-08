@@ -9,12 +9,13 @@ enum CLILengthUnitResolver {
         document: CLIWriteDocumentOptions,
         sessionID: UUID?
     ) throws -> LengthDisplayUnit {
-        try resolve(
+        let writePolicy = try document.writePolicy(sessionID: sessionID)
+        return try resolve(
             unitName: unitName,
-            target: document.target(sessionID: sessionID),
+            target: try document.target(sessionID: sessionID),
             mode: document.mode,
             expectedGeneration: document.generation(),
-            forceFileEdit: document.forceFileEdit,
+            forceFileEdit: document.forceFileEdit || writePolicy.requiresFileMode,
             client: document.agentClient(sessionID: sessionID)
         )
     }

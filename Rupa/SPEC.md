@@ -1166,6 +1166,14 @@ Open document matching uses a canonical document identity before falling back to
 | `--dry-run` | Apply and evaluate without saving. |
 | `--json` | Emit stable JSON output. |
 
+`--output` is a file-mode destination policy: the input document is loaded as the source,
+the mutation is applied in memory, and the result is written to a distinct new `.swcad`
+path. It is rejected with live sessions, with `--in-place`, with `--session-id`, when
+the output path does not use the `.swcad` extension, and when the output file already
+exists. `--dry-run` performs the same destination validation without writing the output
+file. Machine-facing commands using the shared write target contract implement this
+policy; legacy inline commands are being migrated onto that contract.
+
 ### Mode Selection
 
 ```mermaid

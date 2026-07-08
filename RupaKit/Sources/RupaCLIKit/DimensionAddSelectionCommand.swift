@@ -48,7 +48,7 @@ public struct DimensionAddSelectionCommand: ParsableCommand {
         try CLIExitCode.run {
             let targetExpression = try expression(sessionID: sessionID)
             let response = try CLIService().addSelectionDimension(
-                target: document.target(sessionID: sessionID),
+                target: try document.target(sessionID: sessionID),
                 name: name,
                 kind: kind.selectionDimensionKind,
                 first: first,
@@ -57,6 +57,7 @@ public struct DimensionAddSelectionCommand: ParsableCommand {
                 mode: document.mode,
                 expectedGeneration: document.generation(),
                 dryRun: document.dryRun,
+                writePolicy: try document.writePolicy(sessionID: sessionID),
                 forceFileEdit: document.forceFileEdit,
                 client: document.agentClient(sessionID: sessionID)
             )

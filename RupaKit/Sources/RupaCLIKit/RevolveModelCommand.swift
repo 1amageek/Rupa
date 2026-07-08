@@ -59,7 +59,7 @@ public struct RevolveModelCommand: ParsableCommand {
             )
             let input = try revolveInput(axisUnit: lengthUnit)
             let response = try CLIService().createRevolve(
-                target: document.target(sessionID: sessionID),
+                target: try document.target(sessionID: sessionID),
                 name: name,
                 profile: input.profile,
                 axis: input.axis,
@@ -67,6 +67,7 @@ public struct RevolveModelCommand: ParsableCommand {
                 mode: document.mode,
                 expectedGeneration: document.generation(),
                 dryRun: document.dryRun,
+                writePolicy: try document.writePolicy(sessionID: sessionID),
                 forceFileEdit: document.forceFileEdit,
                 client: document.agentClient(sessionID: sessionID)
             )
